@@ -294,7 +294,7 @@ async def persist_original_capture_checkpoint(
         slide_index=slide_index, capture=capture, policy=policy
     )
     async with async_session_maker() as session:
-        job = await owned_job(
+        await owned_job(
             session, job_id, attempt_token, fencing_token=fencing_token
         )
         binding = await public_checkpoint_binding(
@@ -384,7 +384,7 @@ async def load_original_capture_checkpoint(
         renderer_identity=renderer_identity,
     )
     async with async_session_maker() as session:
-        job = await owned_job(
+        await owned_job(
             session, job_id, attempt_token, fencing_token=fencing_token
         )
         binding = await public_checkpoint_binding(

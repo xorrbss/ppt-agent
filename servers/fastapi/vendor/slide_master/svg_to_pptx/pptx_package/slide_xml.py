@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pptx_transitions import TRANSITIONS, create_transition_xml
+from pptx_transitions import TRANSITIONS as TRANSITIONS, create_transition_xml
 
 
 def create_slide_xml_with_svg(
@@ -11,7 +11,7 @@ def create_slide_xml_with_svg(
     svg_rid: str,
     width_emu: int,
     height_emu: int,
-    transition: str | None = 'fade',
+    transition: str | None = "fade",
     transition_duration: float = 0.5,
     auto_advance: float | None = None,
     use_compat_mode: bool = True,
@@ -29,7 +29,7 @@ def create_slide_xml_with_svg(
         auto_advance: Auto-advance interval in seconds.
         use_compat_mode: Whether to use compatibility mode (PNG + SVG dual format).
     """
-    transition_xml = ''
+    transition_xml = ""
     if transition is not None or auto_advance is not None:
         transition_fragment = create_transition_xml(
             effect=transition,
@@ -37,13 +37,14 @@ def create_slide_xml_with_svg(
             advance_after=auto_advance,
         )
         if transition_fragment:
-            transition_xml = '\n' + transition_fragment
+            transition_xml = "\n" + transition_fragment
 
     if use_compat_mode:
         blip_xml = f'''<a:blip r:embed="{png_rid}">
             <a:extLst>
               <a:ext uri="{{96DAC541-7B7A-43D3-8B79-37D633B846F1}}">
-                <asvg:svgBlip xmlns:asvg="http://schemas.microsoft.com/office/drawing/2016/SVG/main" r:embed="{svg_rid}"/>
+                <asvg:svgBlip xmlns:asvg="http://schemas.microsoft.com/office/drawing/2016/SVG/main" r:embed="\
+{svg_rid}"/>
               </a:ext>
             </a:extLst>
           </a:blip>'''
@@ -122,13 +123,18 @@ def create_slide_rels_xml(
     if use_compat_mode:
         return f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="{slide_layout_target}"/>
-  <Relationship Id="{png_rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/{png_filename}"/>
-  <Relationship Id="{svg_rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/{svg_filename}"/>
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayou\
+t" Target="{slide_layout_target}"/>
+  <Relationship Id="{png_rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image\
+" Target="../media/{png_filename}"/>
+  <Relationship Id="{svg_rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image\
+" Target="../media/{svg_filename}"/>
 </Relationships>'''
     else:
         return f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="{slide_layout_target}"/>
-  <Relationship Id="{svg_rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/{svg_filename}"/>
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayou\
+t" Target="{slide_layout_target}"/>
+  <Relationship Id="{svg_rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image\
+" Target="../media/{svg_filename}"/>
 </Relationships>'''

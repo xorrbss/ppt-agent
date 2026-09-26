@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
-import re
 import xml.etree.ElementTree as ET
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -138,17 +137,27 @@ def source_pages(manifest: SourceContentManifest):
                 raise ValueError("svg_source_text_invalid")
             if block.kind == "table":
                 _cells(block)
-            if block.kind == "shape" and block.semantic_role == "connector" and block.payload.get("preset") not in {"line", "straightConnector1"}:
-                raise ValueError(f"svg_source_connector_geometry_unsupported:page={index + 1}:block={block.source_block_id}")
-            if block.kind == "shape" and block.payload.get("preset") not in {"rect", "roundRect", "ellipse", "line", "straightConnector1", "parallelogram"}:
+            if block.kind == "shape" and block.semantic_role == "connector" and block.payload.get("preset") not in {
+                                                                                                  "line",
+                                                                                                      "straightConnector1"}:
+                raise ValueError(
+                    f"svg_source_connector_geometry_unsupported:page={index + 1}:block={block.source_block_id}")
+            if block.kind == "shape" and block.payload.get(
+                "preset") not in {"rect", "roundRect", "ellipse", "line", "straightConnector1", "parallelogram"}:
                 if block.payload.get("preset") is not None or not block.payload.get("customGeometry"):
                     raise ValueError(f"svg_source_shape_unsupported:page={index + 1}:block={block.source_block_id}")
                 validate_custom_geometry(block.payload["customGeometry"])
             geometry = block.payload.get("geometry") or {}
-            transform_keys = ("rotationDegrees",) if block.kind == "shape" and block.semantic_role == "connector" else ("rotationDegrees", "flipH", "flipV")
+            transform_keys = (
+    "rotationDegrees",
+    ) if block.kind == "shape" and block.semantic_role == "connector" else (
+        "rotationDegrees",
+        "flipH",
+         "flipV")
             if block.kind in {"image", "shape"} and any(geometry.get(key) for key in transform_keys):
                 raise ValueError(f"svg_source_transform_unsupported:page={index + 1}:block={block.source_block_id}")
-            if block.kind == "image" and (any((block.payload.get("crop") or {}).values()) or block.payload.get("colorTransforms")):
+            if block.kind == "image" and (any((block.payload.get("crop") or {}).values())
+                                          or block.payload.get("colorTransforms")):
                 raise ValueError("svg_source_image_appearance_unsupported")
     return manifest.units
 
@@ -191,7 +200,8 @@ def assemble_source_svg(manifest, page_index, plan, *, source_images, image_slot
         raise ValueError("svg_source_page_index_invalid")
     page = pages[page_index]
     plan = SvgResolvedLayoutPlan.model_validate(plan)
-    if (plan.schema_version not in {"svg-source-layout/v1", "svg-source-layout/v2"} or plan.source_unit_id != page.source_unit_id
+    if (plan.schema_version not in {"svg-source-layout/v1",
+        "svg-source-layout/v2"} or plan.source_unit_id != page.source_unit_id
             or plan.page_digest != page_digest(manifest, page_index)):
         raise ValueError("svg_source_plan_input_mismatch")
     if not math.isfinite(min_font_size_px) or min_font_size_px <= 0:
@@ -201,7 +211,8 @@ def assemble_source_svg(manifest, page_index, plan, *, source_images, image_slot
     if len(placed) != len(set(placed)) or set(placed) != set(blocks):
         raise ValueError("svg_source_plan_coverage_mismatch")
     image_ids = {key for key, block in blocks.items() if block.kind == "image"}
-    if set(image_slots) != image_ids or len(set(image_slots.values())) != len(image_slots) or set(source_images) != set(image_slots.values()):
+    if set(image_slots) != image_ids or len(set(image_slots.values())) != len(
+        image_slots) or set(source_images) != set(image_slots.values()):
         raise ValueError("svg_source_image_occurrence_mismatch")
     template_evidence = None
     if template_snapshot is not None:
@@ -209,7 +220,11 @@ def assemble_source_svg(manifest, page_index, plan, *, source_images, image_slot
         template_evidence = validate_template_plan(plan, manifest, page_index, template_snapshot)
     elif plan.template_digest:
         raise ValueError("svg_source_template_snapshot_required")
-    root = ET.Element(f"{{{SVG_NS}}}svg", dict(width=str(plan.width), height=str(plan.height), viewBox=f"0 0 {plan.width} {plan.height}"))
+    root = ET.Element(
+    f"{{{SVG_NS}}}svg", dict(
+        width=str(
+            plan.width), height=str(
+                plan.height), viewBox=f"0 0 {plan.width} {plan.height}"))
     _node(root, "rect", x=0, y=0, width=plan.width, height=plan.height, fill=plan.background)
     for decoration in (template_snapshot or {}).get("decorations", []):
         attrs = {k: v for k, v in decoration.items() if k not in {"id", "kind"}}
@@ -227,12 +242,16 @@ def assemble_source_svg(manifest, page_index, plan, *, source_images, image_slot
         from services.svg_source_template_layout import occupied_boxes, source_group_membership, required_content_gap
         content_boxes = occupied_boxes(plan, manifest, page_index)
         layout_rule = next(x for x in template_snapshot["layouts"] if x["id"] == plan.layout_id)
-        group_membership = source_group_membership(manifest,page_index,parallel_only=layout_rule.get("allowed_variations",{}).get("requires_same_source_parallel_group",False))
+        group_membership = source_group_membership(
+    manifest,page_index,parallel_only=layout_rule.get(
+        "allowed_variations",{}).get(
+            "requires_same_source_parallel_group",False))
     for i, a in enumerate(content_boxes):
         for b in content_boxes[i + 1:]:
             if template_snapshot is not None and a.block_id == b.block_id:
                 continue
-            if min(a.x + a.width, b.x + b.width) > max(a.x, b.x) and min(a.y + a.height, b.y + b.height) > max(a.y, b.y):
+            if min(a.x + a.width, b.x + b.width) > max(a.x, b.x) \
+                and min(a.y + a.height, b.y + b.height) > max(a.y, b.y):
                 raise ValueError("svg_source_content_boxes_overlap")
             if template_snapshot is not None:
                 x_overlap = min(a.x+a.width,b.x+b.width) > max(a.x,b.x)
@@ -279,7 +298,8 @@ def assemble_source_svg(manifest, page_index, plan, *, source_images, image_slot
                 width=p.width, height=p.height, ends=p.line_ends)
         elif block.kind == "table":
             rows, cells = _cells(block)
-            known_cells = {cell.get("sourceCellId", f"{block.source_block_id}:row:{r}:column:{c}") for r, c, rs, cs, cell in cells}
+            known_cells = {cell.get("sourceCellId", f"{block.source_block_id}:row:{r}:column:{c}")
+                                    for r, c, rs, cs, cell in cells}
             if set(p.cell_line_ends) - known_cells:
                 raise ValueError("svg_source_unknown_cell_layout")
             cw, rh = p.width / len(rows[0]), p.height / len(rows)
@@ -288,17 +308,35 @@ def assemble_source_svg(manifest, page_index, plan, *, source_images, image_slot
                 x, y, w, h = p.x + c * cw, p.y + r * rh, cs * cw, rs * rh
                 cell_style = (template_snapshot or {}).get("table", {})
                 header = r == 0 and bool(cell_style)
-                cell_p = p.model_copy(update={"fill": cell_style["header_text"], "font_weight": str(cell_style["header_weight"])}) if header else p
+                cell_p = p.model_copy(
+    update={
+        "fill": cell_style["header_text"],
+        "font_weight": str(
+            cell_style["header_weight"])}) if header else p
                 inset_x, inset_y = cell_style.get("cell_padding", 3), cell_style.get("cell_padding", 2)
-                _node(root, "rect", x=x, y=y, width=w, height=h, fill=cell_style["header_fill"] if header else p.background, stroke=p.stroke, stroke_width=1)
-                text_nodes(cell["text"], cell_p, cell_id, "table_cell", x=x + inset_x, y=y + inset_y, width=w - 2*inset_x, height=h - 2*inset_y,
-                    ends=p.cell_line_ends.get(cell_id, ()), metadata=dict(block_id=block.source_block_id, row=r, column=c, row_span=rs, column_span=cs))
+                _node(
+    root,
+    "rect",
+    x=x,
+    y=y,
+    width=w,
+    height=h,
+    fill=cell_style["header_fill"] if header else p.background,
+    stroke=p.stroke,
+     stroke_width=1)
+                text_nodes(cell["text"], cell_p, cell_id, "table_cell", x=x + inset_x,
+                    y=y + inset_y, width=w - 2*inset_x, height=h - 2*inset_y,
+                    ends=p.cell_line_ends.get(cell_id, ()), metadata=dict(block_id=
+                        block.source_block_id, row=r, column=c, row_span=rs, column_span=cs))
         elif block.kind == "image":
             if not p.width.is_integer() or not p.height.is_integer():
                 raise ValueError("svg_source_image_integer_size_required")
             element_id = f"source-element-{len(bindings)}"
             slot = image_slots[block.source_block_id]
-            _node(root, "image", id=element_id, x=p.x, y=p.y, width=int(p.width), height=int(p.height), href=slot, preserveAspectRatio="xMidYMid meet")
+            _node(
+    root, "image", id=element_id, x=p.x, y=p.y, width=int(
+        p.width), height=int(
+            p.height), href=slot, preserveAspectRatio="xMidYMid meet")
             bindings.append(dict(source_id=block.source_block_id, kind="image", element_id=element_id,
                 slot_id=slot, asset_digest=block.payload.get("contentDigest")))
         elif block.kind == "shape":
@@ -311,7 +349,16 @@ def assemble_source_svg(manifest, page_index, plan, *, source_images, image_slot
                     fill=p.background if custom["fill"] == "norm" else "none",
                     stroke=p.stroke if custom["stroke"] else "none")
             elif preset == "ellipse":
-                _node(root, "ellipse", id=element_id, cx=p.x+p.width/2, cy=p.y+p.height/2, rx=p.width/2, ry=p.height/2, fill=p.background, stroke=p.stroke)
+                _node(
+    root,
+    "ellipse",
+    id=element_id,
+    cx=p.x+p.width/2,
+    cy=p.y+p.height/2,
+    rx=p.width/2,
+    ry=p.height/2,
+    fill=p.background,
+     stroke=p.stroke)
             elif preset == "parallelogram":
                 skew = min(p.width / 4, p.height / 2)
                 points = " ".join(f"{_number(x)},{_number(y)}" for x, y in (
@@ -325,17 +372,33 @@ def assemble_source_svg(manifest, page_index, plan, *, source_images, image_slot
                 _node(root, "line", id=element_id, x1=x1, y1=y1, x2=x2, y2=y2, stroke=p.stroke, stroke_width=1)
             else:
                 radius = (template_snapshot or {}).get("shape", {}).get("radius", 8) if preset == "roundRect" else 0
-                _node(root, "rect", id=element_id, x=p.x, y=p.y, width=p.width, height=p.height, rx=radius, fill=p.background, stroke=p.stroke)
+                _node(
+    root,
+    "rect",
+    id=element_id,
+    x=p.x,
+    y=p.y,
+    width=p.width,
+    height=p.height,
+    rx=radius,
+    fill=p.background,
+     stroke=p.stroke)
             bindings.append(dict(source_id=block.source_block_id, kind="shape", element_id=element_id,
                 **({"geometry_digest": digest_json(custom)} if custom else {})))
     svg = ET.tostring(root, encoding="unicode")
-    validate_svg(svg, width=plan.width, height=plan.height, source_manifest=source_images, allow_system_page_number=False)
+    validate_svg(
+    svg,
+    width=plan.width,
+    height=plan.height,
+    source_manifest=source_images,
+     allow_system_page_number=False)
     receipt = dict(contract_version="svg-source-preservation/v1", manifest_digest=manifest.manifest_digest,
         source_digest=manifest.source_digest, source_page_id=page.source_unit_id, source_page_index=page_index,
         page_count=len(pages), page_digest=plan.page_digest, plan_digest=digest_json(plan.model_dump(mode="json")),
         svg_digest=source_digest(svg), style_digest=style_digest, canvas=dict(width=plan.width, height=plan.height),
         font_policy=dict(minimum_px=min_font_size_px, unit="CSS px", policy="existing-svg-generation-policy"),
-        bindings=bindings, checks=dict(source_ids_exact=True, text_exact=True, table_structure_exact=True, image_occurrences_exact=True),
+        bindings=bindings, checks=dict(source_ids_exact=True, text_exact=True,
+                                       table_structure_exact=True, image_occurrences_exact=True),
         rendering_verified=False)
     if template_evidence is not None:
         template_evidence["checks"]["measured_ink_collision"] = True
@@ -360,7 +423,12 @@ def verify_source_receipt(svg, receipt, manifest, page_index, *, _validated_page
     bindings = receipt.get("bindings", [])
     slots = {b["slot_id"]: {"required": True} for b in bindings if b.get("kind") == "image"}
     canvas = receipt["canvas"]
-    validate_svg(svg, width=canvas["width"], height=canvas["height"], source_manifest=slots, allow_system_page_number=False)
+    validate_svg(
+    svg,
+    width=canvas["width"],
+    height=canvas["height"],
+    source_manifest=slots,
+     allow_system_page_number=False)
     root = ET.fromstring(svg)
     elements = {e.get("id"): e for e in root.iter() if e.get("id")}
     bound_ids = [b["element_id"] for b in bindings]
@@ -373,7 +441,15 @@ def verify_source_receipt(svg, receipt, manifest, page_index, *, _validated_page
         if block.kind == "table":
             for r, c, rs, cs, cell in _cells(block)[1]:
                 sid = cell.get("sourceCellId", f"{block.source_block_id}:row:{r}:column:{c}")
-                expected_sources[sid] = ("table_cell", cell["text"], dict(block_id=block.source_block_id, row=r, column=c, row_span=rs, column_span=cs))
+                expected_sources[sid] = (
+    "table_cell",
+    cell["text"],
+    dict(
+        block_id=block.source_block_id,
+        row=r,
+        column=c,
+        row_span=rs,
+         column_span=cs))
         else:
             metadata = {"asset_digest": block.payload.get("contentDigest")} if block.kind == "image" else {}
             if block.kind == "shape" and block.payload.get("customGeometry"):
@@ -392,7 +468,8 @@ def verify_source_receipt(svg, receipt, manifest, page_index, *, _validated_page
                 end = b.get("end")
                 if b.get("start") != cursor or type(end) is not int or not cursor <= end <= len(text):
                     raise ValueError("svg_source_receipt_range_mismatch")
-                if node.tag != f"{{{SVG_NS}}}text" or "".join(node.itertext()) != text[cursor:end] or b.get("text") != text[cursor:end]:
+                if node.tag != f"{{{SVG_NS}}}text" or "".join(
+                    node.itertext()) != text[cursor:end] or b.get("text") != text[cursor:end]:
                     raise ValueError("svg_source_receipt_text_mismatch")
                 cursor = end
             elif len(entries) != 1:

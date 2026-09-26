@@ -60,7 +60,8 @@ def _bounded_local_fit_failure_code(error: BaseException) -> str:
 
 
 def _record_page_fallbacks(
-    evidence: dict[str, object], failed_pages: tuple[Mapping[str, object], ...],
+    evidence: dict[str, object],
+    failed_pages: tuple[Mapping[str, object], ...],
 ) -> None:
     """Merge readback fallbacks into the existing user-visible quality receipt."""
 
@@ -73,32 +74,56 @@ def _record_page_fallbacks(
                 continue
             required = int(slide.get("requiredTargetCount", 0))
             for counts in slide.get("requiredByRole", {}).values():
-                counts.update({"native": 0, "rasterized": counts.get("total", 0), "missing": 0, "occluded": 0, "unknown": 0})
-            slide.update({
-                "nativeCorrespondenceCount": 0, "rasterizedTargetCount": required,
-                "missingTargetCount": 0, "occludedTargetCount": 0,
-                "imageOnly": True, "fullSlideRaster": True, "rasterFragmentCount": 0,
-                "verdict": "not-editable" if required else ("not-applicable" if slide.get("photoOnlyExempt") else "unknown"),
-                "reasons": ["local_fit_readback_failed"],
-            })
-        for key in ("requiredTargetCount", "nativeCorrespondenceCount", "rasterizedTargetCount",
-                    "missingTargetCount", "occludedTargetCount", "unknownTargetCount", "rasterFragmentCount"):
+                counts.update(
+                    {"native": 0, "rasterized": counts.get("total", 0), "missing": 0, "occluded": 0, "unknown": 0}
+                )
+            slide.update(
+                {
+                    "nativeCorrespondenceCount": 0,
+                    "rasterizedTargetCount": required,
+                    "missingTargetCount": 0,
+                    "occludedTargetCount": 0,
+                    "imageOnly": True,
+                    "fullSlideRaster": True,
+                    "rasterFragmentCount": 0,
+                    "verdict": "not-editable"
+                    if required
+                    else ("not-applicable" if slide.get("photoOnlyExempt") else "unknown"),
+                    "reasons": ["local_fit_readback_failed"],
+                }
+            )
+        for key in (
+            "requiredTargetCount",
+            "nativeCorrespondenceCount",
+            "rasterizedTargetCount",
+            "missingTargetCount",
+            "occludedTargetCount",
+            "unknownTargetCount",
+            "rasterFragmentCount",
+        ):
             editability[key] = sum(int(slide.get(key, 0)) for slide in slides)
         editability["fullSlideRasterCount"] = sum(bool(slide.get("fullSlideRaster")) for slide in slides)
         editability["imageOnlyPages"] = [slide["slideNumber"] for slide in slides if slide.get("imageOnly")]
         editability["requiredByRole"] = {
-            role: {key: sum(int(slide.get("requiredByRole", {}).get(role, {}).get(key, 0)) for slide in slides)
-                   for key in ("total", "native", "rasterized", "missing", "occluded", "unknown")}
+            role: {
+                key: sum(int(slide.get("requiredByRole", {}).get(role, {}).get(key, 0)) for slide in slides)
+                for key in ("total", "native", "rasterized", "missing", "occluded", "unknown")
+            }
             for role in ("title", "body", "tableCell", "supportedShape")
         }
         native = editability["nativeCorrespondenceCount"]
         failed = sum(editability[key] for key in ("rasterizedTargetCount", "missingTargetCount", "occludedTargetCount"))
         unknown = editability["unknownTargetCount"] or any(slide.get("verdict") == "unknown" for slide in slides)
         editability["verdict"] = (
-            "partially-editable" if failed and native else
-            "unknown" if unknown else
-            "not-editable" if failed else
-            "fully-editable" if native else "not-applicable"
+            "partially-editable"
+            if failed and native
+            else "unknown"
+            if unknown
+            else "not-editable"
+            if failed
+            else "fully-editable"
+            if native
+            else "not-applicable"
         )
     quality = evidence.get("quality")
     if not isinstance(quality, dict):
@@ -106,8 +131,7 @@ def _record_page_fallbacks(
     fallbacks = quality.get("slideFallbacks")
     if not isinstance(fallbacks, list):
         return
-    additions = [{"n": int(page["slideIndex"]) + 1, "code": str(page["code"])}
-                 for page in failed_pages]
+    additions = [{"n": int(page["slideIndex"]) + 1, "code": str(page["code"])} for page in failed_pages]
     existing = {item.get("n") for item in fallbacks if isinstance(item, Mapping)}
     additions = [item for item in additions if item["n"] not in existing]
     if not additions:
@@ -147,15 +171,17 @@ def _slide_parts(archive: zipfile.ZipFile) -> list[str]:
     relation_path = "ppt/_rels/presentation.xml.rels"
     relations = {
         item.get("Id"): (
-            item.get("Target", "").lstrip("/") if item.get("Target", "").startswith("/")
+            item.get("Target", "").lstrip("/")
+            if item.get("Target", "").startswith("/")
             else posixpath.normpath(posixpath.join("ppt", item.get("Target", "")))
         )
         for item in ET.fromstring(archive.read(relation_path))
         if item.get("TargetMode") != "External"
     }
-    return [relations[slide.get(_OFFICE_REL + "id")]
-            for slide in presentation.findall(
-                ".//{http://schemas.openxmlformats.org/presentationml/2006/main}sldId")]
+    return [
+        relations[slide.get(_OFFICE_REL + "id")]
+        for slide in presentation.findall(".//{http://schemas.openxmlformats.org/presentationml/2006/main}sldId")
+    ]
 
 
 def _slide_rel_path(part: str) -> str:
@@ -164,7 +190,11 @@ def _slide_rel_path(part: str) -> str:
 
 
 def _replace_hybrid_pages_with_verified_raster(
-    *, hybrid: Path, fidelity: Path, slide_indexes: tuple[int, ...], scratch: Path,
+    *,
+    hybrid: Path,
+    fidelity: Path,
+    slide_indexes: tuple[int, ...],
+    scratch: Path,
 ) -> Path:
     """Replace only refused slide parts with their identity-verified raster base.
 
@@ -181,8 +211,10 @@ def _replace_hybrid_pages_with_verified_raster(
             raise ValueError("hybrid_page_fallback_png_content_type_missing")
         base_presentation = ET.fromstring(base.read("ppt/presentation.xml"))
         current_presentation = ET.fromstring(current.read("ppt/presentation.xml"))
-        if (base_presentation.find(".//{http://schemas.openxmlformats.org/presentationml/2006/main}sldSz").attrib
-                != current_presentation.find(".//{http://schemas.openxmlformats.org/presentationml/2006/main}sldSz").attrib):
+        if (
+            base_presentation.find(".//{http://schemas.openxmlformats.org/presentationml/2006/main}sldSz").attrib
+            != current_presentation.find(".//{http://schemas.openxmlformats.org/presentationml/2006/main}sldSz").attrib
+        ):
             raise ValueError("hybrid_page_fallback_canvas_mismatch")
         base_parts, current_parts = _slide_parts(base), _slide_parts(current)
         if len(base_parts) != len(current_parts) or any(
@@ -203,13 +235,16 @@ def _replace_hybrid_pages_with_verified_raster(
                 if relation.get("TargetMode") == "External" or not target:
                     continue
                 source_resource = (
-                    target.lstrip("/") if target.startswith("/")
+                    target.lstrip("/")
+                    if target.startswith("/")
                     else posixpath.normpath(posixpath.join(posixpath.dirname(source_part), target))
                 )
                 if not source_resource.startswith("ppt/media/"):
-                    if (source_resource not in base.namelist()
-                            or source_resource not in current.namelist()
-                            or base.read(source_resource) != current.read(source_resource)):
+                    if (
+                        source_resource not in base.namelist()
+                        or source_resource not in current.namelist()
+                        or base.read(source_resource) != current.read(source_resource)
+                    ):
                         raise ValueError("hybrid_page_fallback_dependency_mismatch")
                     relation.set("Target", posixpath.relpath(source_resource, posixpath.dirname(target_part)))
                     continue
@@ -242,8 +277,7 @@ def _replace_hybrid_pages_with_verified_raster(
         evidence = json.loads(sidecar.read_text(encoding="utf-8"))
         if isinstance(evidence, dict) and isinstance(evidence.get("slides"), list):
             refused = {index + 1 for index in slide_indexes}
-            evidence["slides"] = [slide for slide in evidence["slides"]
-                                  if slide.get("slideNumber") not in refused]
+            evidence["slides"] = [slide for slide in evidence["slides"] if slide.get("slideNumber") not in refused]
             evidence["pptxDigest"] = "sha256:" + hashlib.sha256(output.read_bytes()).hexdigest()
             Path(str(output) + ".local-fit.json").write_text(
                 json.dumps(evidence, ensure_ascii=True, separators=(",", ":")), encoding="utf-8"
@@ -296,9 +330,7 @@ def _read_bundle(
             export_mode = EDITABLE_HYBRID_MODE
             raw_font_embedding = value.get("fontEmbedding")
             if not isinstance(raw_font_embedding, bool):
-                raise PublicWorkerExecutionError(
-                    "public_export_bundle_identity_invalid"
-                )
+                raise PublicWorkerExecutionError("public_export_bundle_identity_invalid")
             font_embedding = raw_font_embedding
         elif raw_mode != FIDELITY_RASTER_MODE:
             raise PublicWorkerExecutionError("public_export_bundle_identity_invalid")
@@ -323,9 +355,7 @@ def _read_bundle(
         try:
             canvas = parse_canvas_metadata(value["canvas"])
         except (TypeError, ValueError) as error:
-            raise PublicWorkerExecutionError(
-                "public_export_canvas_contract_invalid"
-            ) from error
+            raise PublicWorkerExecutionError("public_export_canvas_contract_invalid") from error
     else:
         canvas = canvas_metadata_for_aspect_ratio(LANDSCAPE_ASPECT_RATIO)
     export_format = value.get("exportFormat")
@@ -347,9 +377,7 @@ def _read_bundle(
                 or not _SHA256.fullmatch(raw["validationDigest"])
                 or not isinstance(raw.get("artifactRef"), Mapping)
             ):
-                raise PublicWorkerExecutionError(
-                    "public_export_slide_checkpoint_invalid"
-                )
+                raise PublicWorkerExecutionError("public_export_slide_checkpoint_invalid")
             raw_reference = raw["artifactRef"]
         try:
             reference = ArtifactRef.from_wire(raw_reference)
@@ -370,12 +398,8 @@ def _read_bundle(
         slides.append(reference)
     if export_mode == EDITABLE_HYBRID_MODE and export_format != "pptx":
         raise PublicWorkerExecutionError("public_export_bundle_identity_invalid")
-    semantic_slides, export_attempt_id, renderer_source_digest = _read_declared_graph(
-        value, expected=len(slides)
-    )
-    local_fit_receipts = _read_local_fit_receipts(
-        value, expected=len(slides)
-    )
+    semantic_slides, export_attempt_id, renderer_source_digest = _read_declared_graph(value, expected=len(slides))
+    local_fit_receipts = _read_local_fit_receipts(value, expected=len(slides))
     return ExportBundle(
         export_format=export_format,
         export_mode=export_mode,
@@ -407,12 +431,9 @@ def _read_declared_graph(
     if raw_graph is None:
         renderer_digest = value.get("rendererSourceDigest")
         if renderer_digest is not None and (
-            not isinstance(renderer_digest, str)
-            or not _PREFIXED_SHA256.fullmatch(renderer_digest)
+            not isinstance(renderer_digest, str) or not _PREFIXED_SHA256.fullmatch(renderer_digest)
         ):
-            raise PublicWorkerExecutionError(
-                "public_export_semantic_binding_invalid"
-            )
+            raise PublicWorkerExecutionError("public_export_semantic_binding_invalid")
         return [], None, renderer_digest
     attempt_id = value.get("exportAttemptId")
     renderer_digest = value.get("rendererSourceDigest")
@@ -447,9 +468,7 @@ def _read_local_fit_receipts(
     if raw is None:
         return []
     if not isinstance(raw, list) or len(raw) != expected:
-        raise PublicWorkerExecutionError(
-            "public_export_local_fit_receipts_invalid"
-        )
+        raise PublicWorkerExecutionError("public_export_local_fit_receipts_invalid")
     receipts: list[Mapping[str, object]] = []
     for slide_index, receipt in enumerate(raw):
         if (
@@ -458,9 +477,7 @@ def _read_local_fit_receipts(
             or not isinstance(receipt.get("acceptanceKey"), str)
             or not isinstance(receipt.get("finalHtmlDigest"), str)
         ):
-            raise PublicWorkerExecutionError(
-                "public_export_local_fit_receipts_invalid"
-            )
+            raise PublicWorkerExecutionError("public_export_local_fit_receipts_invalid")
         receipts.append(receipt)
     return receipts
 
@@ -491,18 +508,14 @@ def _read_source_slides(
         try:
             reference = ArtifactRef.from_wire(raw["artifactRef"])
         except IsolatedWorkerContractError as error:
-            raise PublicWorkerExecutionError(
-                "public_export_source_slide_ref_invalid"
-            ) from error
+            raise PublicWorkerExecutionError("public_export_source_slide_ref_invalid") from error
         if (
             reference.owner_id != job.input_artifact.owner_id
             or reference.tenant_id != job.input_artifact.tenant_id
             or reference.kind != "slide-html"
             or reference.media_type != "text/html"
         ):
-            raise PublicWorkerExecutionError(
-                "public_export_source_slide_binding_mismatch"
-            )
+            raise PublicWorkerExecutionError("public_export_source_slide_binding_mismatch")
         store.verified_path(reference)
         sources.append(reference)
     return sources
@@ -516,9 +529,7 @@ def _assert_slide_image_size(
     image_path = store.verified_path(reference)
     with Image.open(image_path) as image:
         if image.size != (canvas.width_px, canvas.height_px):
-            raise PublicWorkerExecutionError(
-                "public_export_slide_canvas_mismatch"
-            )
+            raise PublicWorkerExecutionError("public_export_slide_canvas_mismatch")
     return image_path
 
 
@@ -551,11 +562,7 @@ def _build_pptx(
         readback = Presentation(str(target))
         with zipfile.ZipFile(target) as archive:
             names = archive.namelist()
-            slide_parts = [
-                name
-                for name in names
-                if name.startswith("ppt/slides/slide") and name.endswith(".xml")
-            ]
+            slide_parts = [name for name in names if name.startswith("ppt/slides/slide") and name.endswith(".xml")]
             if (
                 "[Content_Types].xml" not in names
                 or "ppt/presentation.xml" not in names
@@ -587,9 +594,7 @@ def _build_pdf(
                     page = document.new_page(width_pt, height_pt)
                     pdf_image = pdfium.PdfImage.new(document)
                     pdf_image.set_bitmap(bitmap)
-                    pdf_image.set_matrix(
-                        pdfium.PdfMatrix(width_pt, 0, 0, height_pt, 0, 0)
-                    )
+                    pdf_image.set_matrix(pdfium.PdfMatrix(width_pt, 0, 0, height_pt, 0, 0))
                     page.insert_obj(pdf_image)
                     page.gen_content()
                     page.close()
@@ -600,8 +605,7 @@ def _build_pdf(
             page_count = len(readback)
             page_sizes = [readback[index].get_size() for index in range(page_count)]
         if page_count != len(slides) or any(
-            abs(width - width_pt) > 0.01 or abs(height - height_pt) > 0.01
-            for width, height in page_sizes
+            abs(width - width_pt) > 0.01 or abs(height - height_pt) > 0.01 for width, height in page_sizes
         ):
             raise PublicWorkerExecutionError("public_export_pdf_readback_failed")
     finally:
@@ -613,6 +617,7 @@ async def execute_export(
     store: LocalContentAddressedStore,
 ) -> WorkerOutput:
     from workers.public_svg_export_worker import is_svg_export_bundle, execute_svg_export
+
     if is_svg_export_bundle(job, store):
         try:
             return await execute_svg_export(job, store)
@@ -634,16 +639,11 @@ async def execute_export(
         fallback_reason: str | None = None
         if bundle.export_mode == EDITABLE_HYBRID_MODE:
             if not bundle.source_slides:
-                raise PublicWorkerExecutionError(
-                    "public_export_source_slides_required"
-                )
+                raise PublicWorkerExecutionError("public_export_source_slides_required")
             try:
                 outcome = await assemble_hybrid_pptx(
                     base_pptx=target,
-                    html_paths=[
-                        store.verified_path(reference)
-                        for reference in bundle.source_slides
-                    ],
+                    html_paths=[store.verified_path(reference) for reference in bundle.source_slides],
                     scratch=scratch,
                     font_embedding=bundle.font_embedding,
                     canvas=bundle.canvas,
@@ -672,7 +672,8 @@ async def execute_export(
                 delivered_mode = EDITABLE_HYBRID_MODE
         if bundle.local_fit_receipts and export_format == "pptx":
             from services.authored_local_fit_export import (
-                LocalFitPageVerificationError, verify_local_fit_pptx,
+                LocalFitPageVerificationError,
+                verify_local_fit_pptx,
             )
 
             try:
@@ -681,7 +682,8 @@ async def execute_export(
                 # identity failures remain document failures.
                 if delivered_mode == EDITABLE_HYBRID_MODE:
                     verify_local_fit_pptx(
-                        scratch / "result.pptx", bundle.local_fit_receipts,
+                        scratch / "result.pptx",
+                        bundle.local_fit_receipts,
                         mode="fidelity",
                         pngs=[store.read(reference) for reference in bundle.slides],
                         strict_quality=False,
@@ -689,22 +691,13 @@ async def execute_export(
                 local_fit_evidence = verify_local_fit_pptx(
                     target,
                     bundle.local_fit_receipts,
-                    mode=(
-                        "hybrid"
-                        if delivered_mode == EDITABLE_HYBRID_MODE
-                        else "fidelity"
-                    ),
+                    mode=("hybrid" if delivered_mode == EDITABLE_HYBRID_MODE else "fidelity"),
                     pngs=(
-                        [
-                            store.read(reference)
-                            for reference in bundle.slides
-                        ]
+                        [store.read(reference) for reference in bundle.slides]
                         if delivered_mode == FIDELITY_RASTER_MODE
                         else None
                     ),
-                    collect_hybrid_page_failures=(
-                        delivered_mode == EDITABLE_HYBRID_MODE
-                    ),
+                    collect_hybrid_page_failures=(delivered_mode == EDITABLE_HYBRID_MODE),
                     strict_quality=(bundle.export_mode != EDITABLE_HYBRID_MODE),
                 )
             except LocalFitPageVerificationError as error:
@@ -712,8 +705,10 @@ async def execute_export(
                 indexes = tuple(int(page["slideIndex"]) for page in failed_pages)
                 try:
                     target = _replace_hybrid_pages_with_verified_raster(
-                        hybrid=target, fidelity=scratch / "result.pptx",
-                        slide_indexes=indexes, scratch=scratch / "local-fit-page-fallback",
+                        hybrid=target,
+                        fidelity=scratch / "result.pptx",
+                        slide_indexes=indexes,
+                        scratch=scratch / "local-fit-page-fallback",
                     )
                 except (OSError, ValueError, zipfile.BadZipFile) as replacement_error:
                     raise PublicWorkerExecutionError(
@@ -730,11 +725,13 @@ async def execute_export(
                     delivered_mode = FIDELITY_RASTER_MODE
                 try:
                     local_fit_evidence = verify_local_fit_pptx(
-                        target, bundle.local_fit_receipts,
+                        target,
+                        bundle.local_fit_receipts,
                         mode=("fidelity" if delivered_mode == FIDELITY_RASTER_MODE else "hybrid"),
                         pngs=(
                             [store.read(reference) for reference in bundle.slides]
-                            if delivered_mode == FIDELITY_RASTER_MODE else None
+                            if delivered_mode == FIDELITY_RASTER_MODE
+                            else None
                         ),
                         strict_quality=(bundle.export_mode != EDITABLE_HYBRID_MODE),
                     )
@@ -744,15 +741,17 @@ async def execute_export(
                         + _bounded_local_fit_failure_code(retry_error)
                     ) from retry_error
                 evidence["localFitFallbackPages"] = [
-                    {"n": index + 1, "code": str(page["code"]),
-                     **({"diagnostics": page["diagnostics"]} if "diagnostics" in page else {})}
+                    {
+                        "n": index + 1,
+                        "code": str(page["code"]),
+                        **({"diagnostics": page["diagnostics"]} if "diagnostics" in page else {}),
+                    }
                     for index, page in zip(indexes, failed_pages, strict=True)
                 ]
                 _record_page_fallbacks(evidence, failed_pages)
             except (OSError, ValueError, zipfile.BadZipFile) as error:
                 raise PublicWorkerExecutionError(
-                    "public_export_local_fit_readback_failed_"
-                    + _bounded_local_fit_failure_code(error)
+                    "public_export_local_fit_readback_failed_" + _bounded_local_fit_failure_code(error)
                 ) from error
             evidence["localFit"] = local_fit_evidence
         artifact = store.put_path(

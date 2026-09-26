@@ -81,14 +81,13 @@ from services.account_deletion_service import (
 )
 
 
-PPTX_MEDIA_TYPE = (
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-)
+PPTX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 OWNER_ID = uuid.uuid5(uuid.NAMESPACE_URL, "authored-vnext-export-owner-a")
 
 
 class _SceneSnapshot(DeckGenerationSnapshot):
     """Keep the fixture's master aliases while persisting the canonical snapshot."""
+
     @property
     def master_id(self):
         return self.master.master_id
@@ -104,8 +103,11 @@ class _SceneSnapshot(DeckGenerationSnapshot):
 
 def _scene_snapshot(deck, published, *, revision=None):
     from models.authored_vnext.deck.scene import (
-        SceneEditability, SceneTextElement, SceneTextStyle,
-        seal_deck_scene, seal_slide_scene,
+        SceneEditability,
+        SceneTextElement,
+        SceneTextStyle,
+        seal_deck_scene,
+        seal_slide_scene,
     )
     from models.authored_vnext.master.contract import Rect
     from services.authored_vnext.generation.scene_compiler import default_scene_capabilities
@@ -113,44 +115,80 @@ def _scene_snapshot(deck, published, *, revision=None):
     revision = revision or deck.revision
     source_digest = f"sha256:{raw_sha256([s.model_dump(mode='json', by_alias=True) for s in deck.slides])}"
     layout_digest = "sha256:" + "8" * 64
-    scenes = [seal_slide_scene(
-        slide_id=slide.slide_id, revision=slide.revision,
-        elements=[SceneTextElement(
-            kind="text", element_id=f"{slide.slide_id}:title", z_order=1,
-            bounds=Rect(x=60, y=80, width=800, height=140), semantic_role="title",
-            editability=SceneEditability(text=True), text=slide.title.text,
-            style=SceneTextStyle(font_family=slide.title_fit.font_family, font_size=24),
-        ), SceneTextElement(
-            kind="text", element_id=f"{slide.slide_id}:body", z_order=2,
-            bounds=Rect(x=60, y=240, width=800, height=220), semantic_role="body",
-            editability=SceneEditability(text=True), text=slide.body,
-            style=SceneTextStyle(font_family=slide.title_fit.font_family, font_size=16),
-        )],
-    ) for slide in deck.slides]
+    scenes = [
+        seal_slide_scene(
+            slide_id=slide.slide_id,
+            revision=slide.revision,
+            elements=[
+                SceneTextElement(
+                    kind="text",
+                    element_id=f"{slide.slide_id}:title",
+                    z_order=1,
+                    bounds=Rect(x=60, y=80, width=800, height=140),
+                    semantic_role="title",
+                    editability=SceneEditability(text=True),
+                    text=slide.title.text,
+                    style=SceneTextStyle(font_family=slide.title_fit.font_family, font_size=24),
+                ),
+                SceneTextElement(
+                    kind="text",
+                    element_id=f"{slide.slide_id}:body",
+                    z_order=2,
+                    bounds=Rect(x=60, y=240, width=800, height=220),
+                    semantic_role="body",
+                    editability=SceneEditability(text=True),
+                    text=slide.body,
+                    style=SceneTextStyle(font_family=slide.title_fit.font_family, font_size=16),
+                ),
+            ],
+        )
+        for slide in deck.slides
+    ]
     scene = seal_deck_scene(
-        deck_id=deck.deck_id, revision=revision, composition_digest=published.digest,
-        source_digest=source_digest, slides=scenes, capabilities=default_scene_capabilities(),
+        deck_id=deck.deck_id,
+        revision=revision,
+        composition_digest=published.digest,
+        source_digest=source_digest,
+        slides=scenes,
+        capabilities=default_scene_capabilities(),
     )
     snapshot = _SceneSnapshot(
-        deck_id=deck.deck_id, revision=revision, digest=deck.digest,
+        deck_id=deck.deck_id,
+        revision=revision,
+        digest=deck.digest,
         master=MasterDigestPin(
-            master_id=deck.master_id, master_revision=deck.master_revision,
-            master_digest=published.digest, layout_registry_digest=layout_digest,
+            master_id=deck.master_id,
+            master_revision=deck.master_revision,
+            master_digest=published.digest,
+            layout_registry_digest=layout_digest,
             font_manifest_digest=deck.slides[0].title_fit.font_manifest_digest,
         ),
-        source_digest=source_digest, scene=scene,
-        slides=[ValidatedSlideSpecV2(slide=slide, scene=slide_scene,
-            checkpoint=SlideValidationCheckpoint(
-                master_digest=published.digest, layout_registry_digest=layout_digest,
-                font_manifest_digest=slide.title_fit.font_manifest_digest,
-                source_digest=source_digest, visual_plan_digest="sha256:" + "9" * 64,
-                scene_digest=slide_scene.slide_digest, quality_policy_version="quality/v1",
-                layout_id=slide.layout_id, body_slot_id="slot:long-body",
-                validated_at="2026-08-13T12:00:00Z",
-            )) for slide, slide_scene in zip(deck.slides, scenes, strict=True)],
+        source_digest=source_digest,
+        scene=scene,
+        slides=[
+            ValidatedSlideSpecV2(
+                slide=slide,
+                scene=slide_scene,
+                checkpoint=SlideValidationCheckpoint(
+                    master_digest=published.digest,
+                    layout_registry_digest=layout_digest,
+                    font_manifest_digest=slide.title_fit.font_manifest_digest,
+                    source_digest=source_digest,
+                    visual_plan_digest="sha256:" + "9" * 64,
+                    scene_digest=slide_scene.slide_digest,
+                    quality_policy_version="quality/v1",
+                    layout_id=slide.layout_id,
+                    body_slot_id="slot:long-body",
+                    validated_at="2026-08-13T12:00:00Z",
+                ),
+            )
+            for slide, slide_scene in zip(deck.slides, scenes, strict=True)
+        ],
         created_at="2026-08-13T12:00:00Z",
     )
-    return snapshot.model_copy(update={"digest": f"sha256:{raw_sha256(snapshot.model_dump(mode='json', by_alias=True, exclude={'digest'}))}"})
+    return snapshot.model_copy(
+        update={"digest": f"sha256:{raw_sha256(snapshot.model_dump(mode='json', by_alias=True, exclude={'digest'}))}"}
+    )
 
 
 def test_legacy_export_job_identity_is_stable_per_attempt_and_rotates_on_retry() -> None:
@@ -196,9 +234,7 @@ def _create_owner(engine) -> None:
 def _claim_job_in_process(database_path: str, job_id: str, worker_id: str, queue) -> None:
     """Fresh-process claim probe; no engine/session object crosses the boundary."""
 
-    engine = create_engine(
-        f"sqlite:///{database_path}", connect_args={"check_same_thread": False}
-    )
+    engine = create_engine(f"sqlite:///{database_path}", connect_args={"check_same_thread": False})
     repository = AuthoredVNextSqlRepository(
         engine,
         owner_scope=str(OWNER_ID),
@@ -206,9 +242,7 @@ def _claim_job_in_process(database_path: str, job_id: str, worker_id: str, queue
         owner_id=OWNER_ID,
     )
     try:
-        claimed = repository.claim_export_job(
-            uuid.UUID(job_id), worker_id=worker_id
-        )
+        claimed = repository.claim_export_job(uuid.UUID(job_id), worker_id=worker_id)
         queue.put(("claimed", worker_id, claimed.fence_token))
     except OperationFenceError:
         queue.put(("fenced", worker_id, None))
@@ -238,19 +272,24 @@ def _worker_success(
     master = payload.get("master", {})
     furniture = master.get("furniture", [])
     font_files = master.get("fontManifest", {}).get("files", [])
-    master_digest = (
-        f"sha256:{payload.get('digests', {}).get('masterSha256', '0' * 64)}"
-    )
+    master_digest = f"sha256:{payload.get('digests', {}).get('masterSha256', '0' * 64)}"
     scene_receipt = {}
     if payload.get("scene"):
         from services.authored_vnext.ooxml.native_scene import materialize_scene_pptx
+
         # This transport still simulates buffering/fencing failures. Its Scene
         # receipt comes from the real native converter rather than bypassing the
         # newly required Scene/readback contract with a legacy title/body stub.
         _, readback = materialize_scene_pptx(payload["scene"], payload.get("assets", []), master)
-        scene_receipt = {key: readback[key] for key in (
-            "scene", "capabilities", "nativeObjectCounts", "hybridOwnership",
-        )}
+        scene_receipt = {
+            key: readback[key]
+            for key in (
+                "scene",
+                "capabilities",
+                "nativeObjectCounts",
+                "hybridOwnership",
+            )
+        }
     return {
         "schemaVersion": "authored-vnext-ooxml-worker/v1",
         "operation": "EXPORT_PPTX",
@@ -289,9 +328,7 @@ def _worker_success(
                 "semanticDigest": master_digest,
                 "furnitureCount": len(furniture),
                 "logoCount": sum(item.get("kind") == "logo" for item in furniture),
-                "pageNumberCount": sum(
-                    item.get("kind") == "pageNumber" for item in furniture
-                ),
+                "pageNumberCount": sum(item.get("kind") == "pageNumber" for item in furniture),
                 "fontFileCount": len(font_files),
                 "duplicateFurnitureCount": 0,
                 "fontFilesMode": "REFERENCE_METADATA_VERIFIED",
@@ -302,12 +339,25 @@ def _worker_success(
                     "slideId": slide["slideId"],
                     "layoutId": slide["layoutId"],
                     "masterDigest": master_digest,
-                    **({
-                        "slideDigest": readback["scene"]["slides"][index - 1]["slideDigest"],
-                        "elementIds": [item["elementId"] for item in readback["scene"]["slides"][index - 1]["elements"]],
-                        "rasterIslandIds": [item["islandId"] for item in readback["scene"]["slides"][index - 1].get("rasterIslands", [])],
-                        "rasterOwnerIds": sorted(owner for item in readback["scene"]["slides"][index - 1].get("rasterIslands", []) for owner in item["sourceOwnerIds"]),
-                    } if payload.get("scene") else {}),
+                    **(
+                        {
+                            "slideDigest": readback["scene"]["slides"][index - 1]["slideDigest"],
+                            "elementIds": [
+                                item["elementId"] for item in readback["scene"]["slides"][index - 1]["elements"]
+                            ],
+                            "rasterIslandIds": [
+                                item["islandId"]
+                                for item in readback["scene"]["slides"][index - 1].get("rasterIslands", [])
+                            ],
+                            "rasterOwnerIds": sorted(
+                                owner
+                                for item in readback["scene"]["slides"][index - 1].get("rasterIslands", [])
+                                for owner in item["sourceOwnerIds"]
+                            ),
+                        }
+                        if payload.get("scene")
+                        else {}
+                    ),
                 }
                 for index, slide in enumerate(payload["slides"], start=1)
             ],
@@ -322,9 +372,7 @@ class DeterministicWorkerTransport:
         self.outcomes = deque(outcomes)
         self.calls: list[tuple[dict[str, Any], int]] = []
 
-    async def execute(
-        self, payload: dict[str, Any], timeout_ms: int
-    ) -> dict[str, Any]:
+    async def execute(self, payload: dict[str, Any], timeout_ms: int) -> dict[str, Any]:
         self.calls.append((deepcopy(payload), timeout_ms))
         if not self.outcomes:
             raise AssertionError("fake worker received an unexpected call")
@@ -413,9 +461,7 @@ def test_published_master_and_deck_build_exact_versioned_worker_digest_envelope(
     repository = InMemoryAuthoredVNextMasterRepository()
     master_service = AuthoredVNextMasterService(repository)
     draft = master_service.create_draft(
-        CreateDraftRequest(
-            contract=DeckMasterContract.model_validate(master_contract_payload())
-        )
+        CreateDraftRequest(contract=DeckMasterContract.model_validate(master_contract_payload()))
     )
     published = master_service.publish(
         draft.master_id,
@@ -469,14 +515,11 @@ def test_published_master_and_deck_build_exact_versioned_worker_digest_envelope(
         "layout:standard-title",
     ]
     assert all(slide["values"] == {} for slide in payload["slides"])
-    assert [slide["elements"][0]["text"] for slide in payload["scene"]["slides"]] == [slide.title.text for slide in legacy_deck.slides]
-    assert [item["kind"] for item in payload["master"]["furniture"]] == [
-        "logo", "text", "text", "line", "pageNumber"
+    assert [slide["elements"][0]["text"] for slide in payload["scene"]["slides"]] == [
+        slide.title.text for slide in legacy_deck.slides
     ]
-    assert [
-        (item["id"], item["kind"])
-        for item in payload["master"]["layouts"]
-    ] == [
+    assert [item["kind"] for item in payload["master"]["furniture"]] == ["logo", "text", "text", "line", "pageNumber"]
+    assert [(item["id"], item["kind"]) for item in payload["master"]["layouts"]] == [
         ("layout:cover", "cover"),
         ("layout:section", "section"),
         ("layout:standard-title", "standard"),
@@ -484,9 +527,7 @@ def test_published_master_and_deck_build_exact_versioned_worker_digest_envelope(
     ]
     assert payload["master"]["layouts"][2]["placeholders"][0]["textStyle"]["maxLines"] == 2
     assert payload["master"]["layouts"][3]["placeholders"][0]["textStyle"]["maxLines"] >= 3
-    assert payload["master"]["fontManifest"]["files"][0]["path"].endswith(
-        "malgun.ttf"
-    )
+    assert payload["master"]["fontManifest"]["files"][0]["path"].endswith("malgun.ttf")
     assert payload["digests"] == {
         "masterSha256": raw_sha256(payload["master"]),
         "specSha256": deck.scene.scene_digest.removeprefix("sha256:"),
@@ -540,11 +581,7 @@ def _published_sql_deck(
 ):
     master_service = AuthoredVNextMasterService(repository)
     draft = master_service.create_draft(
-        CreateDraftRequest(
-            contract=DeckMasterContract.model_validate(
-                master_payload or master_contract_payload()
-            )
-        )
+        CreateDraftRequest(contract=DeckMasterContract.model_validate(master_payload or master_contract_payload()))
     )
     published = master_service.publish(
         draft.master_id,
@@ -633,15 +670,9 @@ def test_sql_export_publication_is_idempotent_scoped_and_failure_atomic(
 ) -> None:
     engine, repository = _sql_repository(tmp_path)
     try:
-        _master, deck, digests = _published_sql_deck(
-            repository, "deck:durable-export"
-        )
-        job = _create_sql_job(
-            repository, deck=deck, digests=digests, key="first-publication"
-        )
-        duplicate = _create_sql_job(
-            repository, deck=deck, digests=digests, key="first-publication"
-        )
+        _master, deck, digests = _published_sql_deck(repository, "deck:durable-export")
+        job = _create_sql_job(repository, deck=deck, digests=digests, key="first-publication")
+        duplicate = _create_sql_job(repository, deck=deck, digests=digests, key="first-publication")
         assert duplicate.id == job.id
 
         claimed = repository.claim_export_job(job.id, worker_id="worker-a")
@@ -685,9 +716,7 @@ def test_sql_export_publication_is_idempotent_scoped_and_failure_atomic(
             expected_publication_revision=pointer.revision,
             expected_publication_digest=pointer.digest,
         )
-        failed_claim = repository.claim_export_job(
-            failed_job.id, worker_id="worker-b"
-        )
+        failed_claim = repository.claim_export_job(failed_job.id, worker_id="worker-b")
         repository.fail_export_job(
             failed_job.id,
             fence_token=failed_claim.fence_token,
@@ -705,9 +734,7 @@ def test_sql_export_publication_is_idempotent_scoped_and_failure_atomic(
                 ),
             )
 
-        unchanged_pointer, unchanged_active = repository.get_active_artifact(
-            deck.deck_id
-        )
+        unchanged_pointer, unchanged_active = repository.get_active_artifact(deck.deck_id)
         assert (
             unchanged_pointer.revision,
             unchanged_pointer.generation,
@@ -733,9 +760,7 @@ def test_sql_timeout_cancel_retry_resume_never_moves_active_pointer_early(
 ) -> None:
     engine, repository = _sql_repository(tmp_path)
     try:
-        _master, deck, digests = _published_sql_deck(
-            repository, "deck:retry-resume"
-        )
+        _master, deck, digests = _published_sql_deck(repository, "deck:retry-resume")
         job = _create_sql_job(
             repository,
             deck=deck,
@@ -798,9 +823,7 @@ def test_sql_claim_cas_fences_one_of_two_independent_processes(
     tmp_path: Path,
 ) -> None:
     database_path = tmp_path / "multiprocess.sqlite3"
-    engine = create_engine(
-        f"sqlite:///{database_path}", connect_args={"check_same_thread": False}
-    )
+    engine = create_engine(f"sqlite:///{database_path}", connect_args={"check_same_thread": False})
     _create_owner(engine)
     AuthoredVNextSqlRepository.create_schema(engine)
     repository = AuthoredVNextSqlRepository(
@@ -809,12 +832,8 @@ def test_sql_claim_cas_fences_one_of_two_independent_processes(
         tenant_id="tenant-a",
         owner_id=OWNER_ID,
     )
-    _master, deck, digests = _published_sql_deck(
-        repository, "deck:multiprocess-cas"
-    )
-    job = _create_sql_job(
-        repository, deck=deck, digests=digests, key="multiprocess-cas"
-    )
+    _master, deck, digests = _published_sql_deck(repository, "deck:multiprocess-cas")
+    job = _create_sql_job(repository, deck=deck, digests=digests, key="multiprocess-cas")
     engine.dispose()
 
     context = multiprocessing.get_context("spawn")
@@ -896,24 +915,16 @@ def test_export_service_runs_worker_buffer_readback_and_atomic_publication(
 ) -> None:
     engine, repository = _sql_repository(tmp_path)
     try:
-        _master, deck, digests = _published_sql_deck(
-            repository, "deck:service-success"
-        )
+        _master, deck, digests = _published_sql_deck(repository, "deck:service-success")
         artifact = b"PK\x03\x04service-worker-success"
-        worker = DeterministicWorkerTransport(
-            lambda payload: _worker_success(payload, artifact)
-        )
+        worker = DeterministicWorkerTransport(lambda payload: _worker_success(payload, artifact))
         store = BufferedArtifactStore(tmp_path / "service-artifacts")
         service = AuthoredVNextExportService(repository, worker, store)
-        created = _create_service_job(
-            service, deck=deck, digests=digests, key="service-success"
-        )
+        created = _create_service_job(service, deck=deck, digests=digests, key="service-success")
 
         completed = asyncio.run(service.run_job(created.id))
         pointer, receipt = repository.get_active_artifact(deck.deck_id)
-        downloaded = store.open_verified(
-            receipt.storage_key, receipt.artifact_digest, receipt.size_bytes
-        ).read_bytes()
+        downloaded = store.open_verified(receipt.storage_key, receipt.artifact_digest, receipt.size_bytes).read_bytes()
 
         assert completed.state == "succeeded"
         assert pointer.digest == _digest(artifact)
@@ -933,9 +944,7 @@ def test_export_service_resolves_owner_logo_bytes_into_verified_worker_asset(
 ) -> None:
     engine, repository = _sql_repository(tmp_path)
     try:
-        logo_bytes = (
-            Path(__file__).resolve().parents[3] / "nextjs" / "public" / "Logo.png"
-        ).read_bytes()
+        logo_bytes = (Path(__file__).resolve().parents[3] / "nextjs" / "public" / "Logo.png").read_bytes()
         asset_store = OwnerMasterAssetStore(tmp_path / "master-assets" / "owner-a")
         receipt = asset_store.publish_png(logo_bytes)
         contract_payload = master_contract_with_logo_payload()
@@ -956,9 +965,7 @@ def test_export_service_resolves_owner_logo_bytes_into_verified_worker_asset(
             assets=[worker_asset],
         )
         artifact = b"PK\x03\x04service-worker-logo-success"
-        worker = DeterministicWorkerTransport(
-            lambda payload: _worker_success(payload, artifact)
-        )
+        worker = DeterministicWorkerTransport(lambda payload: _worker_success(payload, artifact))
         service = AuthoredVNextExportService(
             repository,
             worker,
@@ -995,12 +1002,8 @@ def test_export_job_accepts_distinct_scene_assets_with_one_digest_pin(
 
     engine, repository = _sql_repository(tmp_path)
     try:
-        _master, deck, _digests = _published_sql_deck(
-            repository, "deck:duplicate-scene-image-bytes"
-        )
-        image_bytes = (
-            Path(__file__).resolve().parents[3] / "nextjs" / "public" / "Logo.png"
-        ).read_bytes()
+        _master, deck, _digests = _published_sql_deck(repository, "deck:duplicate-scene-image-bytes")
+        image_bytes = (Path(__file__).resolve().parents[3] / "nextjs" / "public" / "Logo.png").read_bytes()
         digest = f"sha256:{sha256(image_bytes).hexdigest()}"
         encoded = base64.b64encode(image_bytes).decode("ascii")
         asset_ids = ("asset:scene-image-one", "asset:scene-image-two")
@@ -1043,22 +1046,27 @@ def test_export_job_accepts_distinct_scene_assets_with_one_digest_pin(
             asset_manifest=manifest,
             capabilities=list(deck.scene.capabilities),
         )
-        updated_slide_spec = deck.slides[0].model_copy(update={
-            "scene": updated_slide,
-            "checkpoint": deck.slides[0].checkpoint.model_copy(
-                update={"scene_digest": updated_slide.slide_digest}
-            ),
-        })
-        updated_deck = _SceneSnapshot.model_validate({
-            **deck.model_dump(mode="json", by_alias=True),
-            "revision": deck.revision + 1,
-            "parentRevisionDigest": deck.digest,
-            "scene": updated_scene.model_dump(mode="json", by_alias=True),
-            "slides": [updated_slide_spec.model_dump(mode="json", by_alias=True)],
-        })
-        updated_deck = updated_deck.model_copy(update={
-            "digest": f"sha256:{raw_sha256(updated_deck.model_dump(mode='json', by_alias=True, exclude={'digest'}))}"
-        })
+        updated_slide_spec = deck.slides[0].model_copy(
+            update={
+                "scene": updated_slide,
+                "checkpoint": deck.slides[0].checkpoint.model_copy(update={"scene_digest": updated_slide.slide_digest}),
+            }
+        )
+        updated_deck = _SceneSnapshot.model_validate(
+            {
+                **deck.model_dump(mode="json", by_alias=True),
+                "revision": deck.revision + 1,
+                "parentRevisionDigest": deck.digest,
+                "scene": updated_scene.model_dump(mode="json", by_alias=True),
+                "slides": [updated_slide_spec.model_dump(mode="json", by_alias=True)],
+            }
+        )
+        updated_deck = updated_deck.model_copy(
+            update={
+                "digest":
+                    f"sha256:{raw_sha256(updated_deck.model_dump(mode='json', by_alias=True, exclude={'digest'}))}"
+            }
+        )
         repository.append_deck(
             updated_deck,
             expected_revision=deck.revision,
@@ -1101,9 +1109,7 @@ def test_account_deletion_cancels_active_export_and_fences_late_publication(
     engine, repository = _sql_repository(tmp_path)
     database_path = tmp_path / "authored-vnext.sqlite3"
     try:
-        _master, deck, digests = _published_sql_deck(
-            repository, "deck:account-deletion"
-        )
+        _master, deck, digests = _published_sql_deck(repository, "deck:account-deletion")
         job = _create_sql_job(
             repository,
             deck=deck,
@@ -1123,12 +1129,7 @@ def test_account_deletion_cancels_active_export_and_fences_late_publication(
                     marker = await mark_account_deleting(session, user_id=OWNER_ID)
                     assert marker.generation == 1
                 async with sessions() as session:
-                    assert (
-                        await cancel_authored_vnext_exports_for_account(
-                            session, owner_id=OWNER_ID
-                        )
-                        == 1
-                    )
+                    assert await cancel_authored_vnext_exports_for_account(session, owner_id=OWNER_ID) == 1
                     await session.commit()
             finally:
                 await async_engine.dispose()
@@ -1179,27 +1180,19 @@ def test_worker_failure_preserves_downloadable_last_known_good(
 ) -> None:
     engine, repository = _sql_repository(tmp_path)
     try:
-        _master, deck, digests = _published_sql_deck(
-            repository, "deck:last-known-good"
-        )
+        _master, deck, digests = _published_sql_deck(repository, "deck:last-known-good")
         store = BufferedArtifactStore(tmp_path / "service-artifacts")
         good_bytes = b"PK\x03\x04active-before-failure"
         first_service = AuthoredVNextExportService(
             repository,
-            DeterministicWorkerTransport(
-                lambda payload: _worker_success(payload, good_bytes)
-            ),
+            DeterministicWorkerTransport(lambda payload: _worker_success(payload, good_bytes)),
             store,
         )
-        first = _create_service_job(
-            first_service, deck=deck, digests=digests, key="last-known-good"
-        )
+        first = _create_service_job(first_service, deck=deck, digests=digests, key="last-known-good")
         assert asyncio.run(first_service.run_job(first.id)).state == "succeeded"
         pointer_before, receipt_before = repository.get_active_artifact(deck.deck_id)
 
-        failing_service = AuthoredVNextExportService(
-            repository, DeterministicWorkerTransport(failure), store
-        )
+        failing_service = AuthoredVNextExportService(repository, DeterministicWorkerTransport(failure), store)
         second = _create_service_job(
             failing_service,
             deck=deck,
@@ -1224,11 +1217,14 @@ def test_worker_failure_preserves_downloadable_last_known_good(
             pointer_before.digest,
             receipt_before.id,
         )
-        assert store.open_verified(
-            receipt_after.storage_key,
-            receipt_after.artifact_digest,
-            receipt_after.size_bytes,
-        ).read_bytes() == good_bytes
+        assert (
+            store.open_verified(
+                receipt_after.storage_key,
+                receipt_after.artifact_digest,
+                receipt_after.size_bytes,
+            ).read_bytes()
+            == good_bytes
+        )
     finally:
         engine.dispose()
 
@@ -1238,9 +1234,7 @@ def test_unexpected_worker_failure_is_durably_failed_and_retryable(
 ) -> None:
     engine, repository = _sql_repository(tmp_path)
     try:
-        _master, deck, digests = _published_sql_deck(
-            repository, "deck:unexpected-worker-failure"
-        )
+        _master, deck, digests = _published_sql_deck(repository, "deck:unexpected-worker-failure")
         service = AuthoredVNextExportService(
             repository,
             DeterministicWorkerTransport(RuntimeError("unexpected adapter failure")),
@@ -1272,9 +1266,7 @@ def test_font_asset_and_worker_artifact_digest_mismatch_fail_closed(
 ) -> None:
     engine, repository = _sql_repository(tmp_path)
     try:
-        _master, deck, digests = _published_sql_deck(
-            repository, "deck:digest-fail-closed"
-        )
+        _master, deck, digests = _published_sql_deck(repository, "deck:digest-fail-closed")
         store = BufferedArtifactStore(tmp_path / "service-artifacts")
         service = AuthoredVNextExportService(
             repository,
@@ -1326,9 +1318,7 @@ def test_font_asset_and_worker_artifact_digest_mismatch_fail_closed(
                 )
             )
 
-        created = _create_service_job(
-            service, deck=deck, digests=digests, key="worker-digest-mismatch"
-        )
+        created = _create_service_job(service, deck=deck, digests=digests, key="worker-digest-mismatch")
         failed = asyncio.run(service.run_job(created.id))
         assert failed.state == "failed"
         assert failed.failure_code == "authored_vnext_worker_artifact_digest_mismatch"
@@ -1345,13 +1335,9 @@ def test_http_master_to_export_job_to_downloadable_pptx_and_duplicate_is_stable(
     monkeypatch.setenv("AUTHORED_VNEXT_EXPORT_ENABLED", "true")
     engine, repository = _sql_repository(tmp_path)
     try:
-        _master, deck, digests = _published_sql_deck(
-            repository, "deck:http-download"
-        )
+        _master, deck, digests = _published_sql_deck(repository, "deck:http-download")
         artifact = b"PK\x03\x04http-downloadable-pptx"
-        worker = DeterministicWorkerTransport(
-            lambda payload: _worker_success(payload, artifact)
-        )
+        worker = DeterministicWorkerTransport(lambda payload: _worker_success(payload, artifact))
         service = AuthoredVNextExportService(
             repository,
             worker,
@@ -1377,35 +1363,25 @@ def test_http_master_to_export_job_to_downloadable_pptx_and_duplicate_is_stable(
         }
 
         with TestClient(app) as client:
-            created = client.post(
-                "/api/v1/ppt/authored-vnext/export/jobs", json=request
-            )
+            created = client.post("/api/v1/ppt/authored-vnext/export/jobs", json=request)
             assert created.status_code == 202, created.text
             job = created.json()
             assert job["state"] == "queued"
 
-            duplicate = client.post(
-                "/api/v1/ppt/authored-vnext/export/jobs", json=request
-            )
+            duplicate = client.post("/api/v1/ppt/authored-vnext/export/jobs", json=request)
             assert duplicate.status_code == 202
             assert duplicate.json()["jobId"] == job["jobId"]
 
-            completed = client.post(
-                f"/api/v1/ppt/authored-vnext/export/jobs/{job['jobId']}/run"
-            )
+            completed = client.post(f"/api/v1/ppt/authored-vnext/export/jobs/{job['jobId']}/run")
             assert completed.status_code == 200, completed.text
             assert completed.json()["state"] == "succeeded"
             assert completed.json()["artifact"]["digest"] == _digest(artifact)
 
-            status_response = client.get(
-                f"/api/v1/ppt/authored-vnext/export/jobs/{job['jobId']}"
-            )
+            status_response = client.get(f"/api/v1/ppt/authored-vnext/export/jobs/{job['jobId']}")
             assert status_response.status_code == 200
             assert status_response.json() == completed.json()
 
-            download = client.get(
-                f"/api/v1/ppt/authored-vnext/export/decks/{deck.deck_id}/artifact"
-            )
+            download = client.get(f"/api/v1/ppt/authored-vnext/export/decks/{deck.deck_id}/artifact")
             assert download.status_code == 200, download.text
             assert download.content == artifact
             assert download.headers["content-type"] == PPTX_MEDIA_TYPE
@@ -1424,9 +1400,7 @@ def test_http_rollback_rejects_corrupt_target_and_preserves_lkg(
     monkeypatch.setenv("AUTHORED_VNEXT_EXPORT_ENABLED", "true")
     engine, repository = _sql_repository(tmp_path)
     try:
-        _master, deck, digests = _published_sql_deck(
-            repository, "deck:rollback-readback"
-        )
+        _master, deck, digests = _published_sql_deck(repository, "deck:rollback-readback")
         first_bytes = b"PK\x03\x04rollback-target"
         second_bytes = b"PK\x03\x04last-known-good"
         worker = DeterministicWorkerTransport(
@@ -1461,12 +1435,8 @@ def test_http_rollback_rejects_corrupt_target_and_preserves_lkg(
                 "expectedActiveArtifactDigest": None,
                 "idempotencyKey": "rollback-target",
             }
-            first_job = client.post(
-                "/api/v1/ppt/authored-vnext/export/jobs", json=first_request
-            ).json()
-            first = client.post(
-                f"/api/v1/ppt/authored-vnext/export/jobs/{first_job['jobId']}/run"
-            ).json()["artifact"]
+            first_job = client.post("/api/v1/ppt/authored-vnext/export/jobs", json=first_request).json()
+            first = client.post(f"/api/v1/ppt/authored-vnext/export/jobs/{first_job['jobId']}/run").json()["artifact"]
 
             second_request = {
                 **base_request,
@@ -1474,12 +1444,8 @@ def test_http_rollback_rejects_corrupt_target_and_preserves_lkg(
                 "expectedActiveArtifactDigest": first["digest"],
                 "idempotencyKey": "last-known-good",
             }
-            second_job = client.post(
-                "/api/v1/ppt/authored-vnext/export/jobs", json=second_request
-            ).json()
-            second = client.post(
-                f"/api/v1/ppt/authored-vnext/export/jobs/{second_job['jobId']}/run"
-            ).json()["artifact"]
+            second_job = client.post("/api/v1/ppt/authored-vnext/export/jobs", json=second_request).json()
+            second = client.post(f"/api/v1/ppt/authored-vnext/export/jobs/{second_job['jobId']}/run").json()["artifact"]
 
             target = repository.get_artifact_receipt(
                 deck_id=deck.deck_id,
@@ -1487,8 +1453,7 @@ def test_http_rollback_rejects_corrupt_target_and_preserves_lkg(
             )
             Path(target.storage_key).write_bytes(b"corrupt")
             rollback = client.post(
-                "/api/v1/ppt/authored-vnext/export/decks/"
-                f"{deck.deck_id}/artifacts/{first['artifactId']}/rollback",
+                f"/api/v1/ppt/authored-vnext/export/decks/{deck.deck_id}/artifacts/{first['artifactId']}/rollback",
                 json={
                     "expectedPublicationRevision": second["publicationRevision"],
                     "expectedArtifactDigest": second["digest"],

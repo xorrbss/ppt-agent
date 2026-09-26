@@ -2,6 +2,7 @@
 
 No caller-supplied font paths, URLs, aliases or fallback families are accepted.
 """
+
 from __future__ import annotations
 
 from functools import lru_cache
@@ -58,6 +59,7 @@ def measure_font(family: str, weight: int | str, size: float):
 
     if family == "Pretendard":
         from services.svg_renderer import _trusted_font_materials
+
         normalized = {"normal": 400, "bold": 700}.get(str(weight), int(weight) if str(weight).isdigit() else 0)
         payload = next((data for w, _digest, data in _trusted_font_materials() if w == normalized), None)
         if payload is None:
@@ -68,7 +70,9 @@ def measure_font(family: str, weight: int | str, size: float):
         raise ValueError("svg_template_font_size_invalid")
     face = ImageFont.truetype(BytesIO(payload), size=size)
     if family == FONT_FAMILY:
-        face.set_variation_by_axes([{"normal": 400, "bold": 700}.get(str(weight), int(weight) if str(weight).isdigit() else 400)])
+        face.set_variation_by_axes(
+            [{"normal": 400, "bold": 700}.get(str(weight), int(weight) if str(weight).isdigit() else 400)]
+        )
     return face
 
 

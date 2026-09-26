@@ -77,9 +77,7 @@ class DesignPackPinV1(PublicWireModel):
 
 
 class GenerationRouteReceiptV1(PublicWireModel):
-    schema_version: Literal["generation-route-receipt/v1"] = (
-        "generation-route-receipt/v1"
-    )
+    schema_version: Literal["generation-route-receipt/v1"] = "generation-route-receipt/v1"
     requested_mode: GenerationMode
     selected_route: Literal["source-native", "authored-fallback", "svg-native"]
     design_pack_pin: DesignPackPinV1 | None = None
@@ -99,23 +97,24 @@ class GenerationRouteReceiptV1(PublicWireModel):
             by_alias=True,
             exclude={"receipt_digest"},
         )
-        expected_digest = "sha256:" + sha256(
-            json.dumps(
-                sealed,
-                ensure_ascii=True,
-                sort_keys=True,
-                separators=(",", ":"),
-            ).encode("utf-8")
-        ).hexdigest()
+        expected_digest = (
+            "sha256:"
+            + sha256(
+                json.dumps(
+                    sealed,
+                    ensure_ascii=True,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            ).hexdigest()
+        )
         if self.receipt_digest != expected_digest:
             raise ValueError("receiptDigest does not match generation route payload")
         return self
 
 
 class PresentationGenerationRequestV2(PublicWireModel):
-    schema_version: Literal["presentation-generation-request/v2"] = (
-        "presentation-generation-request/v2"
-    )
+    schema_version: Literal["presentation-generation-request/v2"] = "presentation-generation-request/v2"
     engine: Literal["authored"] = "authored"
     # Omit for the server default (svg) -- see
     # services.generation_core.admission.resolve_generation_strategy. Never
@@ -150,9 +149,12 @@ class PresentationGenerationRequestV2(PublicWireModel):
     @model_serializer(mode="wrap")
     def serialize_canvas_selectors(self, handler):
         payload = handler(self)
-        for key in (("aspectRatio", "aspect_ratio") if self.page_size is not None else ("pageSize", "page_size", "orientation")):
+        for key in (
+            ("aspectRatio", "aspect_ratio") if self.page_size is not None else ("pageSize", "page_size", "orientation")
+        ):
             payload.pop(key, None)
         return payload
+
     master_pin: AuthoredMasterPinInput | None = None
     reference_snapshot_ids: list[str] = Field(default_factory=list, max_length=16)
     source_mode: Literal["source_content_restyle", "raster_reconstruction"] | None = None
@@ -175,16 +177,9 @@ class PresentationGenerationRequestV2(PublicWireModel):
     def validate_generation_mode(self) -> "PresentationGenerationRequestV2":
         if self.generation_mode == "editable-first":
             raise ValueError("capability_not_supported: editable-first")
-        if (
-            self.generation_mode == "registered-template"
-            and self.design_pack_pin is None
-            and self.source_mode is None
-        ):
+        if self.generation_mode == "registered-template" and self.design_pack_pin is None and self.source_mode is None:
             raise ValueError("design_pack_pin_required")
-        if (
-            self.design_pack_pin is not None
-            and self.generation_mode != "registered-template"
-        ):
+        if self.design_pack_pin is not None and self.generation_mode != "registered-template":
             raise ValueError("design_pack_pin_requires_registered_template")
         if self.source_mode is None:
             if (
@@ -203,11 +198,7 @@ class PresentationGenerationRequestV2(PublicWireModel):
                 resolve_generation_strategy,
             )
 
-            if (
-                resolve_generation_strategy(self) != "svg"
-                or self.page_size != "A4"
-                or self.orientation is None
-            ):
+            if resolve_generation_strategy(self) != "svg" or self.page_size != "A4" or self.orientation is None:
                 raise ValueError("raster_a4_svg_required")
             if not self.authored_style or self.slides_markdown is not None or self.quality_policy == "release-v1":
                 raise ValueError("source_content_generation_option_conflict")
@@ -257,9 +248,7 @@ class PresentationGenerationRequestV2(PublicWireModel):
 class PresentationExportOutputV2(PublicWireModel):
     format: Literal["pptx", "pdf"]
     mode: Literal["fidelity-raster", "editable-hybrid"]
-    fallback_policy: Literal[
-        "reject", "per-slide-raster", "whole-deck-fidelity"
-    ] | None = None
+    fallback_policy: Literal["reject", "per-slide-raster", "whole-deck-fidelity"] | None = None
     font_embedding: Literal["none", "subset"] = "none"
     required_capabilities: list[str] = Field(default_factory=list, max_length=64)
 
@@ -297,9 +286,7 @@ class PresentationExportOutputV2(PublicWireModel):
 
 
 class PresentationExportRequestV2(PublicWireModel):
-    schema_version: Literal["presentation-export-request/v2"] = (
-        "presentation-export-request/v2"
-    )
+    schema_version: Literal["presentation-export-request/v2"] = "presentation-export-request/v2"
     source_revision: int = Field(ge=0)
     output: PresentationExportOutputV2
     quality_policy: QualityPolicy = "interactive-v1"
@@ -313,12 +300,7 @@ class OperationLinksV2(PublicWireModel):
     @field_validator("self", "events", "cancel")
     @classmethod
     def validate_relative_api_link(cls, value: str) -> str:
-        if (
-            not value.startswith("/api/v2/")
-            or "://" in value
-            or "\\" in value
-            or ".." in value
-        ):
+        if not value.startswith("/api/v2/") or "://" in value or "\\" in value or ".." in value:
             raise ValueError("operation links must be safe relative v2 API paths")
         return value
 
@@ -383,9 +365,7 @@ class _QualityDomainResult(PublicWireModel):
             "not_assessed",
             "pending",
         }:
-            raise ValueError(
-                f"required quality check cannot have {self.status} status"
-            )
+            raise ValueError(f"required quality check cannot have {self.status} status")
         return self
 
 
@@ -481,18 +461,14 @@ class PublicOperationErrorV2(PublicWireModel):
 
 
 class PublicRenderRuntimeIdentityV1(PublicWireModel):
-    schema_version: Literal["public-render-runtime-binding/v1"] = (
-        "public-render-runtime-binding/v1"
-    )
+    schema_version: Literal["public-render-runtime-binding/v1"] = "public-render-runtime-binding/v1"
     mode: Literal[
         "owned-local-controller-observed",
         "external-deployment-pinned",
     ]
     checkpoint_reuse_eligible: Literal[True]
     release_eligible: Literal[False]
-    release_eligibility_reason: Literal[
-        "runtime-binding-is-not-release-authorization"
-    ]
+    release_eligibility_reason: Literal["runtime-binding-is-not-release-authorization"]
     worker_image_digest: str | None = Field(default=None, pattern=DIGEST_PATTERN)
     font_inventory_digest: str | None = Field(default=None, pattern=DIGEST_PATTERN)
     limitations: list[
@@ -527,32 +503,31 @@ class PublicRenderRuntimeIdentityV1(PublicWireModel):
             by_alias=True,
             exclude={"binding_digest"},
         )
-        expected_digest = "sha256:" + sha256(
-            json.dumps(
-                sealed,
-                ensure_ascii=True,
-                sort_keys=True,
-                separators=(",", ":"),
-            ).encode("utf-8")
-        ).hexdigest()
+        expected_digest = (
+            "sha256:"
+            + sha256(
+                json.dumps(
+                    sealed,
+                    ensure_ascii=True,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            ).hexdigest()
+        )
         if self.binding_digest != expected_digest:
             raise ValueError("render runtime bindingDigest does not match its payload")
         return self
 
 
 class PublicRenderRuntimeIdentityV2(PublicWireModel):
-    schema_version: Literal["public-render-runtime-binding/v2"] = (
-        "public-render-runtime-binding/v2"
-    )
+    schema_version: Literal["public-render-runtime-binding/v2"] = "public-render-runtime-binding/v2"
     mode: Literal[
         "owned-local-controller-observed",
         "external-deployment-pinned",
     ]
     checkpoint_reuse_eligible: bool
     release_eligible: Literal[False]
-    release_eligibility_reason: Literal[
-        "runtime-binding-is-not-release-authorization"
-    ]
+    release_eligibility_reason: Literal["runtime-binding-is-not-release-authorization"]
     worker_image_digest: str | None = Field(default=None, pattern=DIGEST_PATTERN)
     chrome_runtime_digest: str | None = Field(default=None, pattern=DIGEST_PATTERN)
     font_inventory_digest: str = Field(pattern=DIGEST_PATTERN)
@@ -583,32 +558,31 @@ class PublicRenderRuntimeIdentityV2(PublicWireModel):
             or self.checkpoint_reuse_eligible is not False
             or self.limitations != ["worker-result-attestation-unavailable"]
         ):
-            raise ValueError(
-                "external runtime requires pins and disables checkpoint reuse"
-            )
+            raise ValueError("external runtime requires pins and disables checkpoint reuse")
 
         sealed = self.model_dump(
             mode="json",
             by_alias=True,
             exclude={"binding_digest"},
         )
-        expected_digest = "sha256:" + sha256(
-            json.dumps(
-                sealed,
-                ensure_ascii=True,
-                sort_keys=True,
-                separators=(",", ":"),
-            ).encode("utf-8")
-        ).hexdigest()
+        expected_digest = (
+            "sha256:"
+            + sha256(
+                json.dumps(
+                    sealed,
+                    ensure_ascii=True,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            ).hexdigest()
+        )
         if self.binding_digest != expected_digest:
             raise ValueError("render runtime bindingDigest does not match its payload")
         return self
 
 
 class PublicExportExecutionReceiptV1(PublicWireModel):
-    schema_version: Literal["public-export-execution-receipt/v1"] = (
-        "public-export-execution-receipt/v1"
-    )
+    schema_version: Literal["public-export-execution-receipt/v1"] = "public-export-execution-receipt/v1"
     slide_count: int = Field(ge=1, le=100)
     render_concurrency_limit: int = Field(ge=1, le=8)
     render_concurrency_peak: int = Field(ge=0, le=8)
@@ -635,18 +609,13 @@ class PublicExportExecutionReceiptV1(PublicWireModel):
         if self.render_concurrency_peak > self.render_concurrency_limit:
             raise ValueError("renderConcurrencyPeak cannot exceed its limit")
         if (
-            self.render_execution_count
-            + self.render_checkpoint_reuse_count
-            + self.render_singleflight_join_count
+            self.render_execution_count + self.render_checkpoint_reuse_count + self.render_singleflight_join_count
             > self.slide_count * 2
         ):
             raise ValueError("render accounting exceeds the bounded slide count")
         if self.chromium_process_launch_count != self.render_batch_execution_count:
             raise ValueError("each render batch must own exactly one Chromium process")
-        if (
-            self.browser_reuse_count
-            != self.render_execution_count - self.render_batch_execution_count
-        ):
+        if self.browser_reuse_count != self.render_execution_count - self.render_batch_execution_count:
             raise ValueError("browser reuse count must match batched fresh slides")
         return self
 
@@ -655,9 +624,7 @@ class PublicGenerationStageDurationV1(PublicWireModel):
     duration_millis: int = Field(ge=0)
 
 
-PublicGenerationStageValueV1 = (
-    PublicGenerationStageDurationV1 | Literal["not_started"]
-)
+PublicGenerationStageValueV1 = PublicGenerationStageDurationV1 | Literal["not_started"]
 
 
 class PublicGenerationStageTimingsV1(PublicWireModel):
@@ -682,11 +649,7 @@ class PublicGenerationWorkerTimingV1(PublicWireModel):
 
     @model_validator(mode="after")
     def validate_worker_observation(self) -> "PublicGenerationWorkerTimingV1":
-        observed_values = (
-            self.worker is not None
-            or self.peak_memory is not None
-            or self.peak_handles is not None
-        )
+        observed_values = self.worker is not None or self.peak_memory is not None or self.peak_handles is not None
         if self.status == "observed" and not observed_values:
             raise ValueError("observed worker timing requires worker evidence")
         if self.status != "observed" and observed_values:
@@ -697,9 +660,7 @@ class PublicGenerationWorkerTimingV1(PublicWireModel):
 class PublicGenerationTimingV1(PublicWireModel):
     """Terminal public projection of one durable generation attempt."""
 
-    schema_version: Literal["public-generation-timing/v1"] = (
-        "public-generation-timing/v1"
-    )
+    schema_version: Literal["public-generation-timing/v1"] = "public-generation-timing/v1"
     attempt_number: int = Field(ge=0)
     outcome: Literal[
         "succeeded",
@@ -721,9 +682,7 @@ class PublicGenerationTimingV1(PublicWireModel):
 
     @field_validator("queue_wait_millis", "wall_millis", "logical_calls")
     @classmethod
-    def validate_non_negative_or_not_started(
-        cls, value: int | str
-    ) -> int | str:
+    def validate_non_negative_or_not_started(cls, value: int | str) -> int | str:
         if value == "not_started":
             return value
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:
@@ -740,9 +699,7 @@ class PublicGenerationTimingV1(PublicWireModel):
 
 
 class OperationExecutionReceiptV2(PublicWireModel):
-    schema_version: Literal["operation-execution-receipt/v2"] = (
-        "operation-execution-receipt/v2"
-    )
+    schema_version: Literal["operation-execution-receipt/v2"] = "operation-execution-receipt/v2"
     attempt_number: int = Field(ge=0)
     retry_count: int = Field(ge=0)
     max_attempts: int = Field(ge=1)
@@ -805,9 +762,7 @@ class OperationStatusV2(PublicWireModel):
             and self.generation_route_receipt.selected_route == "source-native"
             and self.content_integrity_receipt is None
         ):
-            raise ValueError(
-                "registered-template success requires contentIntegrityReceipt"
-            )
+            raise ValueError("registered-template success requires contentIntegrityReceipt")
         if self.content_integrity_receipt is not None:
             receipt = self.content_integrity_receipt
             if (
@@ -816,68 +771,39 @@ class OperationStatusV2(PublicWireModel):
                 or self.generation_route_receipt is None
                 or self.source_revision is None
             ):
-                raise ValueError(
-                    "contentIntegrityReceipt requires succeeded generation lineage"
-                )
+                raise ValueError("contentIntegrityReceipt requires succeeded generation lineage")
             if str(receipt.operation_id) != self.operation_id:
-                raise ValueError(
-                    "contentIntegrityReceipt must match the status operationId"
-                )
+                raise ValueError("contentIntegrityReceipt must match the status operationId")
             if receipt.result_revision != self.source_revision:
-                raise ValueError(
-                    "contentIntegrityReceipt resultRevision must match sourceRevision"
-                )
-            if (
-                receipt.route_strategy_receipt_digest
-                != self.generation_route_receipt.receipt_digest
-            ):
-                raise ValueError(
-                    "contentIntegrityReceipt route receipt binding mismatch"
-                )
+                raise ValueError("contentIntegrityReceipt resultRevision must match sourceRevision")
+            if receipt.route_strategy_receipt_digest != self.generation_route_receipt.receipt_digest:
+                raise ValueError("contentIntegrityReceipt route receipt binding mismatch")
         if self.release_readiness == "ready" and (
-            self.quality_receipt is None
-            or self.quality_receipt.release_readiness != "ready"
+            self.quality_receipt is None or self.quality_receipt.release_readiness != "ready"
         ):
             raise ValueError("ready operation requires a ready QualityReceiptV3")
         if self.release_readiness == "ready" and not self.fidelity_artifact_ready:
-            raise ValueError(
-                "ready artifact:fidelity status requires fidelityArtifactReady"
-            )
+            raise ValueError("ready artifact:fidelity status requires fidelityArtifactReady")
         if self.fidelity_artifact_ready and (
-            self.status != "succeeded"
-            or self.release_readiness != "ready"
-            or not self.artifacts
+            self.status != "succeeded" or self.release_readiness != "ready" or not self.artifacts
         ):
-            raise ValueError(
-                "fidelityArtifactReady requires one succeeded ready artifact result"
-            )
+            raise ValueError("fidelityArtifactReady requires one succeeded ready artifact result")
         if any(
-            artifact.operation_id != self.operation_id
-            or artifact.presentation_id != self.presentation_id
+            artifact.operation_id != self.operation_id or artifact.presentation_id != self.presentation_id
             for artifact in self.artifacts
         ):
-            raise ValueError(
-                "artifacts must match the status operationId and presentationId"
-            )
+            raise ValueError("artifacts must match the status operationId and presentationId")
         if self.quality_receipt is not None and (
             self.quality_receipt.operation_id != self.operation_id
             or self.quality_receipt.presentation_id != self.presentation_id
         ):
-            raise ValueError(
-                "qualityReceipt must match the status operationId and presentationId"
-            )
+            raise ValueError("qualityReceipt must match the status operationId and presentationId")
         if self.quality_receipt is not None and not self.artifacts:
             raise ValueError("qualityReceipt requires a non-empty artifacts list")
-        if (
-            self.quality_receipt is not None
-            and not any(
-                artifact.digest == self.quality_receipt.artifact_digest
-                for artifact in self.artifacts
-            )
+        if self.quality_receipt is not None and not any(
+            artifact.digest == self.quality_receipt.artifact_digest for artifact in self.artifacts
         ):
-            raise ValueError(
-                "at least one artifact digest must match qualityReceipt.artifactDigest"
-            )
+            raise ValueError("at least one artifact digest must match qualityReceipt.artifactDigest")
         return self
 
 
@@ -903,18 +829,13 @@ class OperationEventPageV2(PublicWireModel):
     def validate_event_binding(self) -> "OperationEventPageV2":
         if any(event.operation_id != self.operation_id for event in self.events):
             raise ValueError("event operationId does not match page operationId")
-        if any(
-            right.sequence <= left.sequence
-            for left, right in zip(self.events, self.events[1:], strict=False)
-        ):
+        if any(right.sequence <= left.sequence for left, right in zip(self.events, self.events[1:], strict=False)):
             raise ValueError("events must be strictly ordered by sequence")
         return self
 
 
 class CancelOperationReceiptV2(PublicWireModel):
-    schema_version: Literal["operation-cancel-receipt/v2"] = (
-        "operation-cancel-receipt/v2"
-    )
+    schema_version: Literal["operation-cancel-receipt/v2"] = "operation-cancel-receipt/v2"
     operation_id: str = Field(pattern=PUBLIC_ID_PATTERN)
     status: OperationState
     cancellation_requested: bool
@@ -949,9 +870,7 @@ class AuthorizedDownloadGrant(PublicWireModel):
             "127.0.0.1",
             "::1",
         }:
-            raise ValueError(
-                "download grant must use HTTPS except for explicit loopback development"
-            )
+            raise ValueError("download grant must use HTTPS except for explicit loopback development")
         return value
 
     @model_validator(mode="after")

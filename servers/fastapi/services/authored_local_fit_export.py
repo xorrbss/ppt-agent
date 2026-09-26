@@ -219,7 +219,8 @@ def _picture_placement(root: ET.Element, picture: ET.Element) -> dict[str, float
             sx, sy = _number(ext, "cx") / cx, _number(ext, "cy") / cy
             if sx <= 0 or not math.isclose(sx, sy, rel_tol=1e-10):
                 _fail("image_transform_mismatch")
-            x, y = _number(off, "x") + (x - _number(ch_off, "x")) * sx, _number(off, "y") + (y - _number(ch_off, "y")) * sy
+            x, y = _number(off, "x") + (x - _number(ch_off, "x")) * \
+                sx, _number(off, "y") + (y - _number(ch_off, "y")) * sy
             width, height = width * sx, height * sy
         parent = parents.get(parent)
     return {"x": x / 12700, "y": y / 12700, "widthPt": width / 12700, "heightPt": height / 12700}
@@ -247,7 +248,6 @@ def _content_digest(text: str, expected: str) -> str:
     for offset in range(0, len(encoded), 2):
         value = ((value ^ int.from_bytes(encoded[offset:offset + 2], "little")) * 16777619) & 0xFFFFFFFF
     return f"fnv1a32:{value:08x}"
-
 
 def _match_native_runs(native: list[tuple[str, float]],
                        originals: list[Mapping[str, Any]],
@@ -293,7 +293,6 @@ def _match_native_runs(native: list[tuple[str, float]],
         ):
             _fail("font_floor_or_shrink_limit")
         cursor = end
-
 
 def _hybrid_text(root: ET.Element, runs: list[Mapping[str, Any]],
                  observation: Mapping[str, Any] | None = None, *,
@@ -347,7 +346,8 @@ def _hybrid_text(root: ET.Element, runs: list[Mapping[str, Any]],
                     # Unspecified shrink is application-dependent, not 100%.
                     body_scale *= _number(autofit, "fontScale") / 100000
                 for paragraph in body.findall("a:p", NS):
-                    level = int(paragraph.find("a:pPr", NS).get("lvl", "0")) if paragraph.find("a:pPr", NS) is not None else 0
+                    level = int(paragraph.find("a:pPr", NS).get("lvl",
+                        "0")) if paragraph.find("a:pPr", NS) is not None else 0
                     default = paragraph.find("a:pPr/a:defRPr", NS)
                     if default is None or default.get("sz") is None:
                         default = body.find(f"a:lstStyle/a:lvl{level + 1}pPr/a:defRPr", NS)
@@ -373,7 +373,6 @@ def _hybrid_text(root: ET.Element, runs: list[Mapping[str, Any]],
         _fail("slide_tree_unavailable")
     walk(tree)
     return measured
-
 
 def verify_local_fit_pptx(path_or_bytes: str | Path | bytes,
                           receipts: Sequence[Mapping[str, Any]], *, mode: str = "fidelity",
@@ -417,7 +416,7 @@ def verify_local_fit_pptx(path_or_bytes: str | Path | bytes,
         slides = presentation.findall("p:sldIdLst/p:sldId", NS)
         if len(slides) != len(receipts):
             _fail("slide_count_mismatch")
-        for index, (slide, receipt) in enumerate(zip(slides, receipts)):
+        for index, (slide, receipt) in enumerate(zip(slides, receipts, strict=False)):
             policy_revision = _check_receipt(receipt)
             quality_pass = receipt_quality_passed(receipt)
             if not quality_pass:
@@ -515,7 +514,8 @@ def verify_local_fit_pptx(path_or_bytes: str | Path | bytes,
                         slide_evidence, runs, manifest, policy_revision=policy_revision,
                         enforce_font_policy=quality_pass and strict_quality,
                     )
-                    for image_index, (image_digest, placement) in enumerate(zip(image_digests, placements, strict=True)):
+                    for image_index, (image_digest,
+                        placement) in enumerate(zip(image_digests, placements, strict=True)):
                         if image_index in fragment_indexes:
                             continue
                         full = placement == {"x":0, "y":0, "widthPt":width / 12700, "heightPt":height / 12700}

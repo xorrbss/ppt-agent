@@ -63,14 +63,10 @@ class PresentationModel(SQLModel, table=True):
     # Canonical document inputs. New upload/outline/generation flows persist
     # only immutable snapshot identities; ``file_paths`` remains a rolling
     # compatibility facade for presentations created by older clients.
-    reference_snapshot_ids: Optional[List[str]] = Field(
-        sa_column=Column(JSON), default=None
-    )
+    reference_snapshot_ids: Optional[List[str]] = Field(sa_column=Column(JSON), default=None)
     outlines: Optional[dict] = Field(sa_column=Column(JSON), default=None)
     created_at: datetime = Field(
-        sa_column=Column(
-            DateTime(timezone=True), nullable=False, default=get_current_utc_datetime
-        ),
+        sa_column=Column(DateTime(timezone=True), nullable=False, default=get_current_utc_datetime),
     )
     updated_at: datetime = Field(
         sa_column=Column(
@@ -106,9 +102,7 @@ class PresentationModel(SQLModel, table=True):
         default=None,
         sa_column=Column(DateTime(timezone=True), nullable=True),
     )
-    community_design_ids: Optional[List[int]] = Field(
-        sa_column=Column(JSON), default=None
-    )
+    community_design_ids: Optional[List[int]] = Field(sa_column=Column(JSON), default=None)
     # Retained nullable compatibility payload. New Authored and Template V2
     # generation never writes a deck plan.
     deck_plan: Optional[dict] = Field(sa_column=Column(JSON), default=None)
@@ -164,9 +158,7 @@ class PresentationModel(SQLModel, table=True):
     # Read-only public share link. NULL = not shared. When set, the unguessable
     # token serves this deck (only) via GET /presentation/public/{share_token}
     # without the admin session (see SessionAuthMiddleware exemption).
-    share_token: Optional[str] = Field(
-        sa_column=Column(String, unique=True, index=True), default=None
-    )
+    share_token: Optional[str] = Field(sa_column=Column(String, unique=True, index=True), default=None)
     # Optional expiry and read counter for the current share token.  NULL expiry
     # preserves the permanent-link behaviour of rows created before this schema
     # was introduced.  A new/rotated token resets its counter to zero.
@@ -238,7 +230,9 @@ class PresentationModel(SQLModel, table=True):
         self.structure = structure.model_dump()
 
     def is_svg(self) -> bool:
-        return self.mode == "svg" or (self.mode is None and isinstance(self.theme, dict) and self.theme.get("mode") == "svg")
+        return self.mode == "svg" or (
+            self.mode is None and isinstance(self.theme, dict) and self.theme.get("mode") == "svg"
+        )
 
     def is_authored(self) -> bool:
         """True for authored-mode decks: the model authored bespoke HTML per slide,
@@ -252,6 +246,7 @@ class PresentationModel(SQLModel, table=True):
         if isinstance(self.theme, dict) and self.theme.get("mode") == "authored":
             return True
         return False
+
 
 # Legacy deck-plan object adapters are intentionally not part of this model.
 __all__ = ["PresentationModel", "PresentationVersion"]

@@ -284,7 +284,7 @@ def _combo_payload(
     colors: list[str] = []
     referenced_axis_ids: set[str] = set()
 
-    for chart, series_indices in zip(chart_nodes, series_indices_by_plot):
+    for chart, series_indices in zip(chart_nodes, series_indices_by_plot, strict=False):
         chart_tag = _local_name(chart.tag)
         if chart_tag == "barChart":
             if _bar_chart_type(chart) != "column":
@@ -1514,7 +1514,7 @@ def _effective_scatter_style(
     series_nodes = plot.findall("c:ser", C_NS)
     if len(series_nodes) != len(visual_styles):
         raise _UnsupportedChart("unsupported-chart-scatter-style")
-    for series, visual_style in zip(series_nodes, visual_styles):
+    for series, visual_style in zip(series_nodes, visual_styles, strict=False):
         line_node = series.find("c:spPr/a:ln", C_NS)
         has_line = plot_has_line if line_node is None else (
             visual_style.stroke is not None
@@ -1604,7 +1604,7 @@ def _validate_chart_semantics(
 ) -> list[SeriesVisualStyle]:
     """Reject valid chart features the compact marker cannot reproduce."""
     chart_type = payload["type"]
-    grouping = payload.get("grouping")
+    payload.get("grouping")
     visual_styles = _chart_visual_styles(payload, plot, palette)
     for tag in (
         "trendline", "errBars", "dropLines", "hiLowLines", "upDownBars",
@@ -1642,7 +1642,7 @@ def _validate_chart_semantics(
         )
         marker_states: set[bool] = set()
         for series in plot.findall("c:ser", C_NS):
-            marker_node = series.find("c:marker", C_NS)
+            series.find("c:marker", C_NS)
             symbol = _element_val(series.find("c:marker/c:symbol", C_NS))
             if symbol not in {None, "circle", "none"}:
                 raise _UnsupportedChart("unsupported-chart-line-style")
@@ -2329,8 +2329,8 @@ def _cache_point_values(cache: ET.Element | None) -> list[str]:
         raw_idx = point.attrib.get("idx")
         try:
             point_idx = int(raw_idx) if raw_idx is not None else idx
-        except ValueError:
-            raise _UnsupportedChart("unsupported-chart-cache")
+        except ValueError as error:
+            raise _UnsupportedChart("unsupported-chart-cache") from error
         if point_idx < 0 or point_idx in points:
             raise _UnsupportedChart("unsupported-chart-cache")
         value = point.findtext("c:v", default="", namespaces=C_NS)
@@ -2340,8 +2340,8 @@ def _cache_point_values(cache: ET.Element | None) -> list[str]:
     if count_elem is not None:
         try:
             point_count = int(count_elem.attrib.get("val", ""))
-        except ValueError:
-            raise _UnsupportedChart("unsupported-chart-cache")
+        except ValueError as error:
+            raise _UnsupportedChart("unsupported-chart-cache") from error
     else:
         point_count = len(points)
     if (

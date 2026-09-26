@@ -93,7 +93,11 @@ def _validate_design_instruction(instructions: str | None) -> None:
 
 
 async def _admit_raster_reconstruction_request(
-    request: Any, *, sql_session: Any, owner_id: str | None, tenant_id: str | None,
+    request: Any,
+    *,
+    sql_session: Any,
+    owner_id: str | None,
+    tenant_id: str | None,
 ) -> None:
     """Bind the approved analysis to one owner-admitted immutable PPTX snapshot."""
 
@@ -117,7 +121,9 @@ async def _admit_raster_reconstruction_request(
     if pin is None:
         raise _source_error("raster_approval_pin_required", status_code=400)
     try:
-        pin = RasterApprovalPin.model_validate(pin.model_dump(mode="json", by_alias=False) if hasattr(pin, "model_dump") else pin)
+        pin = RasterApprovalPin.model_validate(
+            pin.model_dump(mode="json", by_alias=False) if hasattr(pin, "model_dump") else pin
+        )
     except (TypeError, ValueError) as error:
         raise _source_error("raster_approval_pin_invalid", status_code=400) from error
     snapshot_ids = tuple(getattr(request, "reference_snapshot_ids", ()) or ())
@@ -191,7 +197,10 @@ async def admit_source_content_request(
     raster_source = source_mode == RASTER_SOURCE_MODE
     if raster_source:
         await _admit_raster_reconstruction_request(
-            request, sql_session=sql_session, owner_id=owner_id, tenant_id=tenant_id,
+            request,
+            sql_session=sql_session,
+            owner_id=owner_id,
+            tenant_id=tenant_id,
         )
         return None
     svg_source = getattr(request, "strategy", None) == "svg"
@@ -294,7 +303,9 @@ def prepare_source_content_svg_reflow(request: Any) -> str:
         analysis = getattr(request, "_raster_analysis", None)
         if analysis is None or getattr(request, "_svg_source_binding", None) is None:
             raise _source_error("raster_source_binding_mismatch", status_code=409)
-        request.slides_markdown = [f"<!-- approved raster source page {page.page_number} -->" for page in analysis.pages]
+        request.slides_markdown = [
+            f"<!-- approved raster source page {page.page_number} -->" for page in analysis.pages
+        ]
         request.n_slides = len(analysis.pages)
         request.include_title_slide = False
         request.include_table_of_contents = False
@@ -333,10 +344,7 @@ def prepare_source_content_authored_reflow(request: Any) -> str:
         if not code.startswith("source_content_"):
             code = "source_content_outline_invalid"
         raise _source_error(code, status_code=409) from error
-    text_mode = str(
-        getattr(getattr(request, "content_policy", None), "text", "verbatim")
-        or "verbatim"
-    ).strip().lower()
+    text_mode = str(getattr(getattr(request, "content_policy", None), "text", "verbatim") or "verbatim").strip().lower()
     if text_mode == "verbatim":
         contract_instruction = (
             "Treat each page's extracted source text and source images as page-locked "
@@ -370,9 +378,7 @@ def prepare_source_content_authored_reflow(request: Any) -> str:
     contract_instruction += source_reflow_empty_media_instruction(outline)
     existing_instruction = str(getattr(request, "instructions", None) or "").strip()
     request.instructions = (
-        f"{existing_instruction}\n\n{contract_instruction}"
-        if existing_instruction
-        else contract_instruction
+        f"{existing_instruction}\n\n{contract_instruction}" if existing_instruction else contract_instruction
     )
     request.slides_markdown = slides
     request.n_slides = len(slides)
@@ -400,8 +406,7 @@ def _style_tokens(style: Any) -> SourceContentStyleTokens:
 
     scheme = readable_color_scheme(
         normalize_hex(
-            getattr(style, "background_color", None)
-            or getattr(style, "preview_bg", None),
+            getattr(style, "background_color", None) or getattr(style, "preview_bg", None),
             "#FFFFFF",
         )
     )
@@ -421,9 +426,7 @@ def _style_tokens(style: Any) -> SourceContentStyleTokens:
     )
 
 
-def _synthetic_style_master(
-    *, style: Any, style_tokens: SourceContentStyleTokens
-) -> DeckMasterContract:
+def _synthetic_style_master(*, style: Any, style_tokens: SourceContentStyleTokens) -> DeckMasterContract:
     """Create the internal furniture-free master required by Workbench storage."""
 
     base = catalog_seed_contracts(None)[1]  # deterministic clean geometry only
@@ -446,9 +449,7 @@ def _synthetic_style_master(
     )
     furniture = base.furniture.model_copy(
         update={
-            name: getattr(base.furniture, name).model_copy(
-                update={"visibility": "hidden"}
-            )
+            name: getattr(base.furniture, name).model_copy(update={"visibility": "hidden"})
             for name in ("logo", "header", "footer", "divider", "page_number")
         }
     )
@@ -523,9 +524,7 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _compatibility_text_for_slide(
-    *, manifest: SourceContentManifest, source_unit_id: str
-) -> str:
+def _compatibility_text_for_slide(*, manifest: SourceContentManifest, source_unit_id: str) -> str:
     unit = next(
         (item for item in manifest.units if item.source_unit_id == source_unit_id),
         None,
@@ -569,20 +568,12 @@ def _compatibility_body_slot_id(
 
     if planned.placements:
         return next(
-            (
-                item.slot_id
-                for item in planned.placements
-                if not item.slot_id.endswith("title")
-            ),
+            (item.slot_id for item in planned.placements if not item.slot_id.endswith("title")),
             planned.placements[0].slot_id,
         )
     if layouts:
         return next(
-            (
-                slot.slot_id
-                for slot in layouts[0].slots
-                if not slot.slot_id.endswith("title")
-            ),
+            (slot.slot_id for slot in layouts[0].slots if not slot.slot_id.endswith("title")),
             layouts[0].slots[0].slot_id,
         )
     return "slot:source-content-empty"
@@ -624,9 +615,7 @@ def _deck_snapshot(
             "layoutId": planned.layout_id,
             "title": title.model_dump(mode="json", by_alias=True),
             "body": title_text,
-            "ownership": Ownership(locked=False, model_writable=True).model_dump(
-                mode="json", by_alias=True
-            ),
+            "ownership": Ownership(locked=False, model_writable=True).model_dump(mode="json", by_alias=True),
             "masterDigest": master_pin.master_digest,
             "titleFit": title_fit.model_dump(mode="json", by_alias=True),
             "contentDigest": canonical_digest(
@@ -648,18 +637,14 @@ def _deck_snapshot(
             font_manifest_digest=master_pin.font_manifest_digest,
             source_digest=manifest.manifest_digest,
             composition=composition,
-            visual_plan_digest=canonical_digest(
-                planned.model_dump(mode="json", by_alias=True)
-            ),
+            visual_plan_digest=canonical_digest(planned.model_dump(mode="json", by_alias=True)),
             scene_digest=scene.slide_digest,
             quality_policy_version="source-content-preserve/v1",
             layout_id=planned.layout_id,
             body_slot_id=body_slot,
             validated_at=_utc_now(),
         )
-        validated.append(
-            ValidatedSlideSpecV2(slide=slide, checkpoint=checkpoint, scene=scene)
-        )
+        validated.append(ValidatedSlideSpecV2(slide=slide, checkpoint=checkpoint, scene=scene))
     return _seal_deck(
         deck_id=materialized.scene.deck_id,
         revision=1,
@@ -767,7 +752,9 @@ def _layouts_and_canvas(
             WritableSlot(
                 slot_id=raw.id,
                 bounds=raw.bounds,
-                accepted_kinds=("text",) if role == "title" else (
+                accepted_kinds=("text",)
+                if role == "title"
+                else (
                     "text",
                     "table",
                     "chart",
@@ -793,9 +780,7 @@ def _composition_pin(
     style_tokens: SourceContentStyleTokens,
     layouts: list[WritableLayout],
 ) -> PlacementCompositionPin:
-    style_tokens_digest = canonical_digest(
-        style_tokens.model_dump(mode="json", by_alias=True)
-    )
+    style_tokens_digest = canonical_digest(style_tokens.model_dump(mode="json", by_alias=True))
     style_identity = {
         "id": style.id,
         "name": style.name,
@@ -803,20 +788,14 @@ def _composition_pin(
         "styleTokenDigest": style_tokens_digest,
     }
     master_pin = getattr(request, "_authored_master_pin", None)
-    geometry_digest = canonical_digest(
-        [layout.model_dump(mode="json", by_alias=True) for layout in layouts]
-    )
+    geometry_digest = canonical_digest([layout.model_dump(mode="json", by_alias=True) for layout in layouts])
     return PlacementCompositionPin(
         authored_style_id=style.id,
         # Coverage compares this directly to the tokens actually present in Scene.
         authored_style_digest=style_tokens_digest,
         authored_style_pin_digest=canonical_digest(style_identity),
-        company_standard_master_id=(
-            master_pin.master_id if master_pin is not None else None
-        ),
-        company_standard_revision=(
-            master_pin.master_revision if master_pin is not None else None
-        ),
+        company_standard_master_id=(master_pin.master_id if master_pin is not None else None),
+        company_standard_revision=(master_pin.master_revision if master_pin is not None else None),
         master_digest=(master_pin.master_digest if master_pin is not None else None),
         master_geometry_digest=geometry_digest,
     )
@@ -872,9 +851,7 @@ async def build_source_content_staging(
             outline=getattr(request, "_source_document_outline", None),
         )
         expected_units = len(manifest.units)
-        if len(plan.slides) != expected_units or [
-            slide.source_unit_id for slide in plan.slides
-        ] != [
+        if len(plan.slides) != expected_units or [slide.source_unit_id for slide in plan.slides] != [
             unit.source_unit_id
             for unit in sorted(
                 manifest.units,
@@ -951,9 +928,7 @@ async def generate_source_content_restyle_presentation(
                 publish_source_content_generation as publisher,
             )
         except ImportError as error:
-            raise _source_error(
-                "source_content_publication_unavailable", status_code=503
-            ) from error
+            raise _source_error("source_content_publication_unavailable", status_code=503) from error
     result = publisher(
         request=request,
         presentation_id=presentation_id,

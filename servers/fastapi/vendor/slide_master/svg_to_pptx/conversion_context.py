@@ -41,8 +41,9 @@ class ConversionContext:
         return self.emu_per_unit / 127
 
 
+_DEFAULT_CONTEXT = ConversionContext()
 _ACTIVE_CONTEXT: ContextVar[ConversionContext] = ContextVar(
-    "slide_master_conversion_context", default=ConversionContext()
+    "slide_master_conversion_context", default=_DEFAULT_CONTEXT
 )
 
 

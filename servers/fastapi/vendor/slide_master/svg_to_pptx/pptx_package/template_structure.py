@@ -404,7 +404,7 @@ def _is_full_canvas_solid_rect(
         return False
     if corner_radius != (0.0, 0.0):
         return False
-    if any(abs(actual - expected) > 0.5 for actual, expected in zip(geometry, canvas)):
+    if any(abs(actual - expected) > 0.5 for actual, expected in zip(geometry, canvas, strict=False)):
         return False
     fill = (elem.get("fill") or "").strip().lower()
     if not fill or fill == "none" or fill.startswith("url("):

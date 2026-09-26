@@ -10,10 +10,19 @@ from html.parser import HTMLParser
 from typing import Any
 
 from utils.llm_calls.author_slide_patch_contracts import (
-    StructuralRepairScope, _BBOX_KEYS, _MAX_DOM_ELEMENTS, _MAX_DOM_JSON_CHARS,
-    _MAX_SCOPE_EDITABLE_QIDS, _QID_PATTERN, _ROOT_QIDS, _STYLE_KEYS,
-    _TAG_PATTERN, _bounded_number, _bounded_string,
+    StructuralRepairScope as StructuralRepairScope,
+    _BBOX_KEYS,
+    _MAX_DOM_ELEMENTS,
+    _MAX_DOM_JSON_CHARS,
+    _MAX_SCOPE_EDITABLE_QIDS as _MAX_SCOPE_EDITABLE_QIDS,
+    _QID_PATTERN,
+    _ROOT_QIDS,
+    _STYLE_KEYS,
+    _TAG_PATTERN,
+    _bounded_number,
+    _bounded_string,
 )
+
 
 def _normalize_dom_map(
     compact_dom_map: Sequence[Mapping[str, Any]],
@@ -56,30 +65,20 @@ def _normalize_dom_map(
             for key in ("layoutOwnerQid", "clippingAncestorQid", "containingBlockQid", "occludingQid"):
                 if raw.get(key):
                     item[key] = str(raw[key])
-        source_block_id = _bounded_string(
-            raw.get("sourceBlockId") or raw.get("source_block_id"), 160
-        ).strip()
+        source_block_id = _bounded_string(raw.get("sourceBlockId") or raw.get("source_block_id"), 160).strip()
         if source_block_id:
             item["sourceBlockId"] = source_block_id
-        semantic_role = _bounded_string(
-            raw.get("semanticRole") or raw.get("semantic_role"), 80
-        ).strip()
+        semantic_role = _bounded_string(raw.get("semanticRole") or raw.get("semantic_role"), 80).strip()
         if semantic_role:
             item["semanticRole"] = semantic_role
 
         raw_bbox = raw.get("bbox")
         if isinstance(raw_bbox, Mapping):
-            bbox = {
-                key: number
-                for key in _BBOX_KEYS
-                if (number := _bounded_number(raw_bbox.get(key))) is not None
-            }
+            bbox = {key: number for key in _BBOX_KEYS if (number := _bounded_number(raw_bbox.get(key))) is not None}
             if bbox:
                 item["bbox"] = bbox
 
-        raw_style = (
-            raw.get("computedStyle") or raw.get("computed_style") or raw.get("style")
-        )
+        raw_style = raw.get("computedStyle") or raw.get("computed_style") or raw.get("style")
         if isinstance(raw_style, Mapping):
             style = {
                 key: str(raw_style[key]) if full_graph else _bounded_string(raw_style[key], 120)
@@ -95,6 +94,7 @@ def _normalize_dom_map(
 
     return normalized, qids
 
+
 def compact_dom_map_for_prompt(
     compact_dom_map: Sequence[Mapping[str, Any]],
 ) -> tuple[list[dict[str, Any]], set[str]]:
@@ -103,16 +103,13 @@ def compact_dom_map_for_prompt(
 
     # Avoid splitting JSON syntax. Drop entries from the end until the encoded map is
     # under budget; a single oversized entry is already bounded field-by-field above.
-    while (
-        normalized
-        and len(json.dumps(normalized, ensure_ascii=False, separators=(",", ":")))
-        > _MAX_DOM_JSON_CHARS
-    ):
+    while normalized and len(json.dumps(normalized, ensure_ascii=False, separators=(",", ":"))) > _MAX_DOM_JSON_CHARS:
         removed = normalized.pop()
         qids.discard(removed["qid"])
     if not normalized:
         raise ValueError("compact_dom_map exceeds the prompt budget")
     return normalized, qids
+
 
 @dataclass(frozen=True)
 class FullDomGraph:
@@ -120,6 +117,7 @@ class FullDomGraph:
     qids: frozenset[str]
     system_root_qids: frozenset[str]
     verified_content_qids: frozenset[str]
+
 
 class _ScopeHtmlRelations(HTMLParser):
     """Read ancestry without changing HTML or inventing missing measured nodes."""
@@ -137,20 +135,41 @@ class _ScopeHtmlRelations(HTMLParser):
                 raise ValueError("repair_graph_incomplete: duplicate HTML qid")
             parent = next((value for _, value in reversed(self.stack) if value), "")
             markers = {str(values.get("id") or "").lower(), *str(values.get("class") or "").lower().split()}
-            system = tag in {"html", "body"} or qid.lower() in _ROOT_QIDS or bool(
-                markers & {"root", "slide", "slide-root", "slide-canvas", "capture-frame", "slide-frame"}
-            ) or values.get("data-semantic-role") in {"canvas", "slide", "slide-root", "capture-frame"} or "data-slide-canvas" in values
+            system = (
+                tag in {"html", "body"}
+                or qid.lower() in _ROOT_QIDS
+                or bool(markers & {"root", "slide", "slide-root", "slide-canvas", "capture-frame", "slide-frame"})
+                or values.get("data-semantic-role") in {"canvas", "slide", "slide-root", "capture-frame"}
+                or "data-slide-canvas" in values
+            )
             self.nodes[qid] = {
                 "tag": tag,
                 "classes": frozenset(str(values.get("class") or "").split()),
                 "inlineStyle": str(values.get("style") or ""),
-                "headerBandHeight": str(values.get("data-header-band") or "") if values.get("data-header-part") == "band" else "",
+                "headerBandHeight": str(values.get("data-header-band") or "")
+                if values.get("data-header-part") == "band"
+                else "",
                 "parentQid": parent,
                 "systemRoot": system,
                 "insideBody": any(name == "body" for name, _ in self.stack),
                 "wrapperTags": [name for name, value in reversed(self.stack) if not value][:16],
             }
-        if tag not in {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}:
+        if tag not in {
+            "area",
+            "base",
+            "br",
+            "col",
+            "embed",
+            "hr",
+            "img",
+            "input",
+            "link",
+            "meta",
+            "param",
+            "source",
+            "track",
+            "wbr",
+        }:
             self.stack.append((tag, qid))
 
     def handle_startendtag(self, tag, attrs):
@@ -163,8 +182,11 @@ class _ScopeHtmlRelations(HTMLParser):
                 del self.stack[index:]
                 break
 
+
 def build_full_dom_graph(
-    compact_dom_map: Sequence[Mapping[str, Any]], *, html: str | None = None,
+    compact_dom_map: Sequence[Mapping[str, Any]],
+    *,
+    html: str | None = None,
 ) -> FullDomGraph:
     """Validate complete QID topology independently of the 48,000 character prompt."""
     nodes, qids = _normalize_dom_map(compact_dom_map, full_graph=True)

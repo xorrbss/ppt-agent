@@ -30,7 +30,7 @@ from .context import ConvertContext, ShapeResult
 from .theme_colors import color_node_xml
 from .theme_fonts import theme_font_tokens
 from .utils import (
-    SVG_NS, XLINK_NS, ANGLE_UNIT, FONT_PX_TO_HUNDREDTHS_PT, DASH_PRESETS,
+    SVG_NS, XLINK_NS, ANGLE_UNIT, DASH_PRESETS,
     px_to_emu, _f, _get_attr, parse_svg_length,
     svg_length_x, svg_length_y, svg_length_size,
     ctx_x, ctx_y, ctx_w, ctx_h,
@@ -1565,7 +1565,7 @@ def convert_polyline(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | Non
 
     fill_op = get_fill_opacity(elem, ctx)
     stroke_op = get_stroke_opacity(elem, ctx)
-    fill = build_fill_xml(elem, ctx, fill_op)
+    build_fill_xml(elem, ctx, fill_op)
     stroke = build_stroke_xml(elem, ctx, stroke_op)
 
     shape_id = _claim_element_shape_id(elem, ctx)
@@ -2288,8 +2288,8 @@ def convert_text(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | None:
                     (prev_text and is_cjk_char(prev_text[-1]))
                     or (next_text and is_cjk_char(next_text[0]))
                 )
-                if prev and not prev_text.endswith(' ') \
-                        and not next_text.startswith(' ') \
+                if prev and not prev_text.endswith(' ')\
+                        and not next_text.startswith(' ')\
                         and not boundary_is_cjk:
                     prev[-1] = {**prev[-1], 'text': prev_text + ' '}
                 prev.extend(line_runs)
@@ -2436,7 +2436,7 @@ def convert_text(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | None:
         line_spc_val = round(line_height_px * current_conversion_context().hundredths_pt_per_unit)
         ln_spc_xml = f'<a:lnSpc><a:spcPts val="{line_spc_val}"/></a:lnSpc>'
         paragraph_xml_chunks = []
-        for line, extra_px, bullet in zip(paragraph_runs, paragraph_space_before, paragraph_bullets):
+        for line, extra_px, bullet in zip(paragraph_runs, paragraph_space_before, paragraph_bullets, strict=False):
             spc_bef_xml = ''
             if extra_px > 0:
                 spc_bef_val = round(extra_px * current_conversion_context().hundredths_pt_per_unit)
@@ -2981,12 +2981,12 @@ def _compute_slice_src_rect(
     crop_t = crop_h_total * y_anchor
     crop_b = crop_h_total - crop_t
 
-    l = max(0, min(100000, int(round(crop_l / img_w * 100000))))
+    left = max(0, min(100000, int(round(crop_l / img_w * 100000))))
     t = max(0, min(100000, int(round(crop_t / img_h * 100000))))
     r = max(0, min(100000, int(round(crop_r / img_w * 100000))))
     b = max(0, min(100000, int(round(crop_b / img_h * 100000))))
 
-    return (l, t, r, b)
+    return (left, t, r, b)
 
 
 def _resolve_image_src_rect(
@@ -3017,8 +3017,8 @@ def _resolve_image_src_rect(
     if rect is None:
         return ''
 
-    l, t, r, b = rect
-    return f'<a:srcRect l="{l}" t="{t}" r="{r}" b="{b}"/>'
+    left, t, r, b = rect
+    return f'<a:srcRect l="{left}" t="{t}" r="{r}" b="{b}"/>'
 
 
 def _resolve_image_meet_fit(
@@ -3348,12 +3348,12 @@ def convert_nested_svg(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | N
         parts = view_box.strip().split()
         if len(parts) == 4:
             vb_x, vb_y, vb_w, vb_h = (float(p) for p in parts)
-            l = max(0, min(int(round(vb_x * 100000)), 100000))
+            left = max(0, min(int(round(vb_x * 100000)), 100000))
             t = max(0, min(int(round(vb_y * 100000)), 100000))
             r = max(0, min(int(round((1.0 - vb_x - vb_w) * 100000)), 100000))
             b = max(0, min(int(round((1.0 - vb_y - vb_h) * 100000)), 100000))
-            if l or t or r or b:
-                src_rect_xml = f'<a:srcRect l="{l}" t="{t}" r="{r}" b="{b}"/>'
+            if left or t or r or b:
+                src_rect_xml = f'<a:srcRect l="{left}" t="{t}" r="{r}" b="{b}"/>'
 
     if href.startswith('data:'):
         decoded = _decode_data_image_uri(href)

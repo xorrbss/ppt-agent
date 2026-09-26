@@ -109,16 +109,26 @@ async def register_source_images(
     ``ImageAsset`` id, which is the only identifier later stages resolve.
     """
 
-    collected = await _collect_raw_images(upload_paths, include_document_images=include_document_images, registration_report=registration_report)
+    collected = await _collect_raw_images(
+        upload_paths, include_document_images=include_document_images, registration_report=registration_report
+    )
     collected = [
         replace(
             raw,
-            original_name=str((upload_metadata or {}).get(str(raw.source_path), {}).get("original_name") or raw.source_path.name),
+            original_name=str(
+                (upload_metadata or {}).get(str(raw.source_path), {}).get("original_name") or raw.source_path.name
+            ),
             ocr_text=str((upload_metadata or {}).get(str(raw.source_path), {}).get("ocr_text") or "")[:20000] or None,
-        ) if raw.source_path is not None else raw
+        )
+        if raw.source_path is not None
+        else raw
         for raw in collected
     ]
-    kept = [raw for raw in collected if raw.mime_type in SUPPORTED_SOURCE_IMAGE_MIME_TYPES] if include_document_images else _apply_source_image_filters(collected)
+    kept = (
+        [raw for raw in collected if raw.mime_type in SUPPORTED_SOURCE_IMAGE_MIME_TYPES]
+        if include_document_images
+        else _apply_source_image_filters(collected)
+    )
     if registration_report is not None:
         kept_digests = {raw.digest for raw in kept}
         seen_digests: set[str] = set()
@@ -136,22 +146,24 @@ async def register_source_images(
             else:
                 reason = "registered"
             seen_digests.add(raw.digest)
-            registration_report.append({"digest": raw.digest, "original_name": raw.original_name,
-                                        "status": reason})
+            registration_report.append({"digest": raw.digest, "original_name": raw.original_name, "status": reason})
         collected_paths = {raw.source_path for raw in collected if raw.source_path is not None}
         for upload_path in upload_paths:
             path = Path(upload_path)
-            if path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tiff", ".tif"} and path not in collected_paths:
-                registration_report.append({"original_name": (upload_metadata or {}).get(str(path), {}).get("original_name") or path.name,
-                                            "status": "image_read_failed"})
+            if (
+                path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tiff", ".tif"}
+                and path not in collected_paths
+            ):
+                registration_report.append(
+                    {
+                        "original_name": (upload_metadata or {}).get(str(path), {}).get("original_name") or path.name,
+                        "status": "image_read_failed",
+                    }
+                )
     if not kept:
         return []
 
-    storage_dir = Path(
-        await asyncio.to_thread(
-            get_writable_path, f"{_STORAGE_ROOT}/{presentation_id}"
-        )
-    )
+    storage_dir = Path(await asyncio.to_thread(get_writable_path, f"{_STORAGE_ROOT}/{presentation_id}"))
     registered = [
         await _persist_raw_image(
             session,
@@ -217,11 +229,7 @@ async def register_manifest_image_occurrences(
             )
         )
 
-    storage_dir = Path(
-        await asyncio.to_thread(
-            get_writable_path, f"{_STORAGE_ROOT}/{presentation_id}"
-        )
-    )
+    storage_dir = Path(await asyncio.to_thread(get_writable_path, f"{_STORAGE_ROOT}/{presentation_id}"))
     registered = [
         await _persist_raw_image(
             session,
@@ -235,7 +243,12 @@ async def register_manifest_image_occurrences(
     return registered
 
 
-async def _collect_raw_images(upload_paths: Sequence[Path], *, include_document_images: bool = False, registration_report: list[dict] | None = None) -> list[_RawImage]:
+async def _collect_raw_images(
+    upload_paths: Sequence[Path],
+    *,
+    include_document_images: bool = False,
+    registration_report: list[dict] | None = None,
+) -> list[_RawImage]:
     """Expand every upload into the pictures it contributes, in upload order."""
 
     collected: list[_RawImage] = []
@@ -244,14 +257,31 @@ async def _collect_raw_images(upload_paths: Sequence[Path], *, include_document_
         if include_document_images and path.suffix.lower() in {".docx", ".pdf"}:
             result = await asyncio.to_thread(extract_document_images, path)
             if registration_report is not None:
-                registration_report.append({"original_name": path.name, "status": result.status,
-                                            "coverage": result.coverage, "diagnostics": result.diagnostics,
-                                            "asset_count": len(result.assets), "occurrence_count": len(result.occurrences)})
-            collected.extend(_RawImage(mime_type=item.mime_type, width=item.width, height=item.height,
-                                      digest=item.digest, payload=item.payload, source_path=path,
-                                      source_slide_index=item.locator.get("pageIndex"), source_text=item.source_text,
-                                      occurrence_id=item.occurrence_id, source_locator=item.locator)
-                             for item in result.occurrences)
+                registration_report.append(
+                    {
+                        "original_name": path.name,
+                        "status": result.status,
+                        "coverage": result.coverage,
+                        "diagnostics": result.diagnostics,
+                        "asset_count": len(result.assets),
+                        "occurrence_count": len(result.occurrences),
+                    }
+                )
+            collected.extend(
+                _RawImage(
+                    mime_type=item.mime_type,
+                    width=item.width,
+                    height=item.height,
+                    digest=item.digest,
+                    payload=item.payload,
+                    source_path=path,
+                    source_slide_index=item.locator.get("pageIndex"),
+                    source_text=item.source_text,
+                    occurrence_id=item.occurrence_id,
+                    source_locator=item.locator,
+                )
+                for item in result.occurrences
+            )
             continue
         if path.suffix.lower() in _SOURCE_DECK_SUFFIXES:
             # Zip reading plus per-picture decoding is blocking work; keep it
@@ -270,11 +300,24 @@ async def _collect_raw_images(upload_paths: Sequence[Path], *, include_document_
                     source_text=image.source_text,
                     slide_coverage=image.slide_coverage,
                     source_path=path if include_document_images else None,
-                    occurrence_id=(hashlib.sha256(f"{document_digest}:slide/{image.source_slide_index}/image/{index}".encode()).hexdigest() if include_document_images else None),
-                    source_locator=({"sourceDocumentSha256": document_digest, "sourceFormat": "pptx",
-                                     "pageIndex": image.source_slide_index,
-                                     "objectLocator": f"slide/{image.source_slide_index}/image/{index}",
-                                     "extractionKind": "embedded_raster"} if include_document_images else None),
+                    occurrence_id=(
+                        hashlib.sha256(
+                            f"{document_digest}:slide/{image.source_slide_index}/image/{index}".encode()
+                        ).hexdigest()
+                        if include_document_images
+                        else None
+                    ),
+                    source_locator=(
+                        {
+                            "sourceDocumentSha256": document_digest,
+                            "sourceFormat": "pptx",
+                            "pageIndex": image.source_slide_index,
+                            "objectLocator": f"slide/{image.source_slide_index}/image/{index}",
+                            "extractionKind": "embedded_raster",
+                        }
+                        if include_document_images
+                        else None
+                    ),
                 )
                 for index, image in enumerate(extracted)
             )
@@ -319,23 +362,14 @@ def _file_digest(path: Path) -> str:
 def _apply_source_image_filters(collected: Sequence[_RawImage]) -> list[_RawImage]:
     """Reduce the raw pictures to the ones worth offering to the slide author."""
 
-    supported = [
-        raw for raw in collected if raw.mime_type in SUPPORTED_SOURCE_IMAGE_MIME_TYPES
-    ]
-    large_enough = [
-        raw
-        for raw in supported
-        if min(raw.width, raw.height) >= MIN_SOURCE_IMAGE_EDGE_PX
-    ]
+    supported = [raw for raw in collected if raw.mime_type in SUPPORTED_SOURCE_IMAGE_MIME_TYPES]
+    large_enough = [raw for raw in supported if min(raw.width, raw.height) >= MIN_SOURCE_IMAGE_EDGE_PX]
     # A picture covering its whole slide is that slide's backplate. Decks this
     # tool exports through the authored-hybrid path are built that way, so a
     # deck rebuilt from such an export would otherwise offer the author a
     # photograph of an entire old slide as content for a new one.
     content_sized = [
-        raw
-        for raw in large_enough
-        if raw.slide_coverage is None
-        or raw.slide_coverage < FULL_SLIDE_COVERAGE_THRESHOLD
+        raw for raw in large_enough if raw.slide_coverage is None or raw.slide_coverage < FULL_SLIDE_COVERAGE_THRESHOLD
     ]
 
     first_by_digest: dict[str, _RawImage] = {}

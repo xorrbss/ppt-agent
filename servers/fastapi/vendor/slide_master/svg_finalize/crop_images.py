@@ -15,9 +15,6 @@ Usage:
     python3 scripts/svg_finalize/crop_images.py <SVG file or directory> [--dry-run]
 """
 
-import os
-import re
-import hashlib
 import sys
 import argparse
 from pathlib import Path
@@ -177,7 +174,6 @@ def process_svg_images(
             print(f"  [ERROR] Failed to parse SVG: {e}")
         return (0, 1)
     
-    ns = {'svg': 'http://www.w3.org/2000/svg', 'xlink': 'http://www.w3.org/1999/xlink'}
     
     processed_count = 0
     error_count = 0

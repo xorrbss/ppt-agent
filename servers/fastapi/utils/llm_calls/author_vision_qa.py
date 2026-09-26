@@ -10,6 +10,7 @@ import asyncio
 import json
 from functools import partial
 import hashlib
+from importlib import import_module
 import logging
 import math
 import os
@@ -154,29 +155,25 @@ async def review_planned_source_images(
     return result
 
 
-from utils.slide_capture import (
-    ensure_browser_metrics,
-    get_cached_browser_metrics,
-    render_html_to_png,
-    render_html_to_png_with_metrics,
-)
-from utils.llm_calls.author_structural_repair_evidence import (
-    AuthoredVqaResidualDomIssuesError,
-    StructuralRepairBudget,
-    _advance_repair_evaluator,
-    _measured_structural_issue_qids,
-    _repair_evaluator_for,
-    _structural_compact_dom,
-)
-from utils.llm_calls.author_structural_repair_loop import (
-    revise_structural_candidates as _revise_structural_candidates_impl,
-)
-from utils.llm_calls.author_vision_qa_style import (
-    _style_comparison_cache_key,
-    _style_comparison_cached,
-    critique_authored_style_comparison,
-    style_comparison_failure_diagnostic,
-)
+_slide_capture = import_module("utils.slide_capture")
+ensure_browser_metrics = _slide_capture.ensure_browser_metrics
+get_cached_browser_metrics = _slide_capture.get_cached_browser_metrics
+render_html_to_png = _slide_capture.render_html_to_png
+render_html_to_png_with_metrics = _slide_capture.render_html_to_png_with_metrics
+_author_structural_repair_evidence = import_module("utils.llm_calls.author_structural_repair_evidence")
+AuthoredVqaResidualDomIssuesError = _author_structural_repair_evidence.AuthoredVqaResidualDomIssuesError
+StructuralRepairBudget = _author_structural_repair_evidence.StructuralRepairBudget
+_advance_repair_evaluator = _author_structural_repair_evidence._advance_repair_evaluator
+_measured_structural_issue_qids = _author_structural_repair_evidence._measured_structural_issue_qids
+_repair_evaluator_for = _author_structural_repair_evidence._repair_evaluator_for
+_structural_compact_dom = _author_structural_repair_evidence._structural_compact_dom
+_author_structural_repair_loop = import_module("utils.llm_calls.author_structural_repair_loop")
+_revise_structural_candidates_impl = _author_structural_repair_loop.revise_structural_candidates
+_author_vision_qa_style = import_module("utils.llm_calls.author_vision_qa_style")
+_style_comparison_cache_key = _author_vision_qa_style._style_comparison_cache_key
+_style_comparison_cached = _author_vision_qa_style._style_comparison_cached
+critique_authored_style_comparison = _author_vision_qa_style.critique_authored_style_comparison
+style_comparison_failure_diagnostic = _author_vision_qa_style.style_comparison_failure_diagnostic
 
 
 LOGGER = logging.getLogger(__name__)

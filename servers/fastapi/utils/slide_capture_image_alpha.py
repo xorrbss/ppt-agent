@@ -1,7 +1,9 @@
 """Bounded, read-only alpha sampling for source-fit raster images."""
 
-IMAGE_ALPHA_PAINT_JS = r"""
-    const sourceImageAlphaEnabled = Boolean(document.querySelector('[data-source-fit-policy="composer-source-fit/v2"]'));
+IMAGE_ALPHA_PAINT_JS = (
+r"""
+    const sourceImageAlphaEnabled = Boolean(document.querySelector('[data-source-fit-policy="compose"""
+r"""r-source-fit/v2"]'));
     const sourceImageAlphaCache = new WeakMap();
     const sourceImageAlphaData = (node) => {
       if (!sourceImageAlphaEnabled || node.tagName !== 'IMG') return null;
@@ -14,14 +16,16 @@ IMAGE_ALPHA_PAINT_JS = r"""
       // rectangle verdict. Never infer transparent pixels from unsupported CSS.
       if (style.backgroundImage !== 'none' || visibleColor(style.backgroundColor) ||
           style.boxShadow !== 'none' || style.outlineStyle !== 'none' ||
-          ['Top','Right','Bottom','Left'].some(side => px(style['border'+side+'Width']) > 0 || px(style['padding'+side]) > 0)) return null;
+          ['Top','Right','Bottom','Left'].some(side => px(style['border'+side+'Width']) > 0 || px(st"""
+r"""yle['padding'+side]) > 0)) return null;
       let opacity = 1;
       for (let current = node; current; current = current.parentElement) {
         const css = getComputedStyle(current);
         if (css.transform !== 'none' || css.translate !== 'none' || css.rotate !== 'none' ||
             css.scale !== 'none' || css.perspective !== 'none' || !['normal','1'].includes(css.zoom) ||
             css.filter !== 'none' || css.backdropFilter !== 'none' || css.mixBlendMode !== 'normal' ||
-            css.clipPath !== 'none' || (css.maskImage || css.webkitMaskImage || 'none') !== 'none') return null;
+            css.clipPath !== 'none' || (css.maskImage || css.webkitMaskImage || 'none') !== 'none') """
+r"""return null;
         opacity *= Number(css.opacity || 1);
       }
       const rect = node.getBoundingClientRect();
@@ -30,8 +34,10 @@ IMAGE_ALPHA_PAINT_JS = r"""
       if (style.objectFit !== 'fill') {
         const contain = Math.min(rect.width / node.naturalWidth, rect.height / node.naturalHeight);
         const scale = style.objectFit === 'contain' ? contain
-          : style.objectFit === 'cover' ? Math.max(rect.width / node.naturalWidth, rect.height / node.naturalHeight)
-          : style.objectFit === 'none' ? 1 : style.objectFit === 'scale-down' ? Math.min(1, contain) : null;
+          : style.objectFit === 'cover' ? Math.max(rect.width / node.naturalWidth, rect.height / nod"""
+r"""e.naturalHeight)
+          : style.objectFit === 'none' ? 1 : style.objectFit === 'scale-down' ? Math.min(1, contain)"""
+r""" : null;
         if (scale === null) return null;
         width = node.naturalWidth * scale; height = node.naturalHeight * scale;
       }
@@ -59,7 +65,8 @@ IMAGE_ALPHA_PAINT_JS = r"""
       const sx = u * image.naturalWidth - .5, sy = v * image.naturalHeight - .5;
       // Maximum neighbouring alpha is conservative at antialiased boundaries.
       let alpha = 0;
-      for (const yy of [Math.floor(sy), Math.ceil(sy)]) for (const xx of [Math.floor(sx), Math.ceil(sx)]) {
+      for (const yy of [Math.floor(sy), Math.ceil(sy)]) for (const xx of [Math.floor(sx), Math.ceil("""
+r"""sx)]) {
         const px = Math.max(0, Math.min(image.naturalWidth - 1, xx));
         const py = Math.max(0, Math.min(image.naturalHeight - 1, yy));
         alpha = Math.max(alpha, image.pixels[(py * image.naturalWidth + px) * 4 + 3]);
@@ -67,3 +74,4 @@ IMAGE_ALPHA_PAINT_JS = r"""
       return alpha / 255 * image.opacity;
     };
 """
+)

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import math
 import mimetypes
 import os
 import posixpath
@@ -26,7 +25,6 @@ from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape
 
 from pptx import Presentation
-from pptx.util import Emu
 
 from pptx_transitions import (
     TRANSITIONS,
@@ -59,7 +57,6 @@ from ..drawingml.theme_fonts import (
     apply_master_text_style_spec,
     apply_theme_font_spec,
 )
-from ..drawingml.utils import EMU_PER_PX
 from ..conversion_context import ConversionContext, current_conversion_context, scoped_conversion_context
 from ..semantic_markers import (
     chrome_token_from_markers,
@@ -1315,7 +1312,7 @@ def _promote_common_chrome_shapes_to_layouts(
         safe_tokens = list(leading_orders[0])
         for order in leading_orders[1:]:
             common_length = 0
-            for expected, actual in zip(safe_tokens, order):
+            for expected, actual in zip(safe_tokens, order, strict=False):
                 if expected != actual:
                     break
                 common_length += 1
@@ -1794,7 +1791,7 @@ def _move_template_solid_background_shapes(
             f"Cannot install explicit solid background on {target_path.name}"
         )
     target_path.write_text(updated, encoding="utf-8")
-    for state, shape in zip(states, shapes):
+    for state, shape in zip(states, shapes, strict=False):
         _remove_template_shape(state, shape)
     return background_xml
 
@@ -1895,7 +1892,7 @@ def _move_template_static_shape(
         return background_xml
     canonical = {
         _canonical_shape_xml(shape, state.rels)
-        for state, shape in zip(states, resolved_shapes)
+        for state, shape in zip(states, resolved_shapes, strict=False)
     }
     if len(canonical) != 1:
         slide_names = ", ".join(state.spec.svg_path.name for state in states)
@@ -1903,7 +1900,7 @@ def _move_template_static_shape(
             f"Explicit structure element {item.element_id!r} differs across slides: "
             f"{slide_names}"
         )
-    for state, shape in zip(states, resolved_shapes):
+    for state, shape in zip(states, resolved_shapes, strict=False):
         shape_id = _shape_id(shape)
         if shape_id and shape_id in _timing_shape_ids(state.root):
             raise TemplateStructureError(
@@ -1925,7 +1922,7 @@ def _move_template_static_shape(
     )
     _set_shape_name(target_shape, f"{item.element_id} {item.layer.title()}")
     _append_shape_to_part(target_path, target_shape)
-    for state, shape in zip(states, resolved_shapes):
+    for state, shape in zip(states, resolved_shapes, strict=False):
         _remove_template_shape(state, shape)
     return None
 
@@ -2512,7 +2509,7 @@ def _apply_explicit_layout_structure(
                 theme_font_spec,
             )
             _append_shape_to_part(layout_path, layout_placeholder)
-            for state, shape in zip(layout_states, resolved_shapes):
+            for state, shape in zip(layout_states, resolved_shapes, strict=False):
                 if not proxy_binding:
                     _patch_slide_placeholder(
                         shape,
@@ -2787,7 +2784,7 @@ def _promote_common_chrome_shapes_to_masters(
         safe_tokens = list(leading_token_orders[0])
         for order in leading_token_orders[1:]:
             common_length = 0
-            for expected, actual in zip(safe_tokens, order):
+            for expected, actual in zip(safe_tokens, order, strict=False):
                 if expected != actual:
                     break
                 common_length += 1
@@ -4026,7 +4023,7 @@ def create_pptx_with_native_svg(
     if canvas_format is None and custom_pixels is None:
         canvas_format = 'ppt169'
         if verbose:
-            print(f"  Using default format: PPT 16:9")
+            print("  Using default format: PPT 16:9")
 
     width_emu, height_emu = get_slide_dimensions(canvas_format or 'ppt169', custom_pixels)
     pixel_width, pixel_height = get_pixel_dimensions(canvas_format or 'ppt169', custom_pixels)
@@ -4035,7 +4032,7 @@ def create_pptx_with_native_svg(
         print(f"  Slide dimensions: {pixel_width} x {pixel_height} px")
         print(f"  SVG file count: {len(svg_files)}")
         if use_native_shapes:
-            print(f"  Mode: Native DrawingML shapes (directly editable)")
+            print("  Mode: Native DrawingML shapes (directly editable)")
             print(
                 "  Native table/chart objects: "
                 f"{'Enabled' if native_objects else 'Disabled'}"
@@ -4056,19 +4053,19 @@ def create_pptx_with_native_svg(
             else:
                 print("  Image optimization: Disabled")
         elif use_compat_mode:
-            print(f"  Compatibility mode: Enabled (PNG + SVG dual format)")
+            print("  Compatibility mode: Enabled (PNG + SVG dual format)")
             print(f"  PNG renderer: {renderer_name} {renderer_status}")
         else:
-            print(f"  Compatibility mode: Disabled (pure SVG)")
+            print("  Compatibility mode: Disabled (pure SVG)")
         if transition:
             trans_name = TRANSITIONS.get(transition, {}).get('name', transition) if TRANSITIONS else transition
             print(f"  Transition effect: {trans_name}")
         if enable_notes and notes:
             print(f"  Speaker notes: {len(notes)} page(s)")
         elif enable_notes:
-            print(f"  Speaker notes: Enabled (no notes files found)")
+            print("  Speaker notes: Enabled (no notes files found)")
         else:
-            print(f"  Speaker notes: Disabled")
+            print("  Speaker notes: Disabled")
         print()
 
     animation_cli_overrides = animation_cli_overrides or {}
@@ -4857,7 +4854,7 @@ def create_pptx_with_native_svg(
                 print(f"  Trace: {conversion_trace_path}")
             print(f"  Succeeded: {success_count}, Failed: {len(svg_files) - success_count}")
             if use_compat_mode and has_any_image:
-                print(f"  Mode: Office compatibility mode (supports all Office versions)")
+                print("  Mode: Office compatibility mode (supports all Office versions)")
                 if PNG_RENDERER == 'svglib' and renderer_hint:
                     print(f"  [Tip] {renderer_hint}")
 

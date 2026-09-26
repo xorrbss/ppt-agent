@@ -75,8 +75,8 @@ def test_staging_cancellation_drains_copy_and_removes_temporary_file(
             with pytest.raises(asyncio.CancelledError):
                 await asyncio.wait_for(staging, 2)
             assert closed.is_set()
-            assert not destination.exists()
-            assert not list(tmp_path.glob(".*.stage-*.tmp"))
+            assert not await asyncio.to_thread(destination.exists)
+            assert not await asyncio.to_thread(lambda: list(tmp_path.glob(".*.stage-*.tmp")))
         finally:
             release.set()
             if not staging.done():

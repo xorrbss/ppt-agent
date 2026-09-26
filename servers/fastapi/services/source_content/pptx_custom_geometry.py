@@ -1,4 +1,5 @@
 """Bounded numeric DrawingML custom paths, with deterministic SVG flattening."""
+
 from __future__ import annotations
 
 import math
@@ -37,9 +38,14 @@ def extract_custom_geometry(element):
         fill = path.get("fill", "norm")
         if fill not in {"norm", "none"}:
             raise ValueError("svg_source_custom_geometry_fill_unsupported")
-        result = dict(version="numeric-custom-path/v1", width=_number(path.get("w")),
-            height=_number(path.get("h")), fill=fill,
-            stroke=path.get("stroke", "1") not in {"0", "false"}, commands=[])
+        result = dict(
+            version="numeric-custom-path/v1",
+            width=_number(path.get("w")),
+            height=_number(path.get("h")),
+            fill=fill,
+            stroke=path.get("stroke", "1") not in {"0", "false"},
+            commands=[],
+        )
         for node in path:
             command = node.tag.removeprefix(f"{{{_NS}}}")
             if command not in _ARITY or len(node) != _ARITY[command]:
@@ -66,7 +72,11 @@ def validate_custom_geometry(value):
     commands = value.get("commands")
     if not isinstance(commands, list) or not 1 <= len(commands) <= _LIMIT:
         raise ValueError("svg_source_custom_geometry_complexity_limit")
-    if commands[0].get("command") != "moveTo" or value.get("fill") not in {"norm", "none"} or type(value.get("stroke")) is not bool:
+    if (
+        commands[0].get("command") != "moveTo"
+        or value.get("fill") not in {"norm", "none"}
+        or type(value.get("stroke")) is not bool
+    ):
         raise ValueError("svg_source_custom_geometry_invalid")
     for entry in commands:
         command, points = entry.get("command"), entry.get("points")
@@ -80,14 +90,14 @@ def validate_custom_geometry(value):
     return value
 
 
-def flatten_custom_geometry(value, *, x, y, width, height, tolerance_px=.25):
+def flatten_custom_geometry(value, *, x, y, width, height, tolerance_px=0.25):
     """Flatten Bézier segments in target CSS pixels, keeping subpath order.
 
     De Casteljau subdivision stops only when every control point is within the
     tolerance of the chord segment, so loops and overshoot are not lost.
     """
     validate_custom_geometry(value)
-    if not 0 < tolerance_px <= .25:
+    if not 0 < tolerance_px <= 0.25:
         raise ValueError("svg_source_custom_geometry_tolerance_invalid")
     output, point_count = [], 0
     current = origin = None
@@ -97,13 +107,15 @@ def flatten_custom_geometry(value, *, x, y, width, height, tolerance_px=.25):
         point_count += int(point is not None)
         if point_count > 2048:
             raise ValueError("svg_source_custom_geometry_complexity_limit")
-        output.append(command if point is None else command + " ".join(f"{v:.4f}".rstrip("0").rstrip(".") for v in point))
+        output.append(
+            command if point is None else command + " ".join(f"{v:.4f}".rstrip("0").rstrip(".") for v in point)
+        )
 
     def distance(point, a, b):
         dx, dy = b[0] - a[0], b[1] - a[1]
         length = dx * dx + dy * dy
-        fraction = max(0, min(1, ((point[0]-a[0])*dx+(point[1]-a[1])*dy)/length)) if length else 0
-        return math.hypot(point[0]-a[0]-fraction*dx, point[1]-a[1]-fraction*dy)
+        fraction = max(0, min(1, ((point[0] - a[0]) * dx + (point[1] - a[1]) * dy) / length)) if length else 0
+        return math.hypot(point[0] - a[0] - fraction * dx, point[1] - a[1] - fraction * dy)
 
     def curve(points, depth=0):
         if max(distance(p, points[0], points[-1]) for p in points[1:-1]) <= tolerance_px:
@@ -113,7 +125,7 @@ def flatten_custom_geometry(value, *, x, y, width, height, tolerance_px=.25):
             raise ValueError("svg_source_custom_geometry_subdivision_limit")
         left, right, layer = [points[0]], [points[-1]], points
         while len(layer) > 1:
-            layer = [((a[0]+b[0])/2, (a[1]+b[1])/2) for a, b in zip(layer, layer[1:])]
+            layer = [((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) for a, b in zip(layer, layer[1:], strict=False)]
             left.append(layer[0])
             right.append(layer[-1])
         curve(left, depth + 1)

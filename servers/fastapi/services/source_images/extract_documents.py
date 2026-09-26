@@ -3,6 +3,7 @@
 DOCX raster images retain part/block locations. Complex DOCX objects and PDF
 vectors use page appearances through the existing conversion/rendering services.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -15,7 +16,11 @@ from defusedxml import ElementTree as ET
 from PIL import Image
 
 from services.source_images.extract import (
-    MAX_EXPANDED_BYTES, MAX_PPTX_BYTES, MAX_ZIP_MEMBERS, NS, _relationships,
+    MAX_EXPANDED_BYTES,
+    MAX_PPTX_BYTES,
+    MAX_ZIP_MEMBERS,
+    NS,
+    _relationships,
 )
 
 MAX_PIXELS = 40_000_000
@@ -61,8 +66,9 @@ class DocumentImageCollection:
             width, height = image.size
         digest = hashlib.sha256(payload).hexdigest()
         identity = f"{locator['sourceDocumentSha256']}:{locator['objectLocator']}"
-        item = DocumentImage(payload, mime, width, height, digest,
-                             hashlib.sha256(identity.encode()).hexdigest(), locator, text)
+        item = DocumentImage(
+            payload, mime, width, height, digest, hashlib.sha256(identity.encode()).hexdigest(), locator, text
+        )
         self.assets.setdefault(digest, item)
         self.occurrences.append(item)
 
@@ -80,8 +86,7 @@ def extract_document_images(path: Path) -> DocumentImageCollection:
         else:
             raise ValueError("unsupported_document_format")
     except Exception as error:
-        result.diagnostics.append({"code": str(error) if isinstance(error, ValueError)
-                                   else "document_read_failed"})
+        result.diagnostics.append({"code": str(error) if isinstance(error, ValueError) else "document_read_failed"})
     if result.diagnostics:
         result.coverage = "partial"
     return result
@@ -99,8 +104,11 @@ def _docx(path: Path, digest: str, result: DocumentImageCollection) -> None:
         raise ValueError("docx_main_part_missing")
     w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
     mc = "http://schemas.openxmlformats.org/markup-compatibility/2006"
-    parts = ["word/document.xml"] + sorted(p for p in package if p.startswith(
-        ("word/header", "word/footer", "word/footnotes", "word/endnotes")) and p.endswith(".xml"))
+    parts = ["word/document.xml"] + sorted(
+        p
+        for p in package
+        if p.startswith(("word/header", "word/footer", "word/footnotes", "word/endnotes")) and p.endswith(".xml")
+    )
     complex_parts = []
     for part in parts:
         root = ET.fromstring(package[part])
@@ -115,13 +123,21 @@ def _docx(path: Path, digest: str, result: DocumentImageCollection) -> None:
         for block_index, block in enumerate(root.iter(f"{{{w}}}p")):
             text = " ".join(t.text or "" for t in block.iter(f"{{{w}}}t"))[:600] or None
             for index, blip in enumerate(block.iter(f"{{{NS['a']}}}blip")):
-                locator = {"sourceDocumentSha256": digest, "sourceFormat": "docx", "partName": part,
-                           "blockPath": f"paragraph/{block_index}", "pageIndex": None,
-                           "coordinateSystem": "EMU", "objectLocator": f"{part}/paragraph/{block_index}/image/{index}",
-                           "extractionKind": "embedded_raster"}
+                locator = {
+                    "sourceDocumentSha256": digest,
+                    "sourceFormat": "docx",
+                    "partName": part,
+                    "blockPath": f"paragraph/{block_index}",
+                    "pageIndex": None,
+                    "coordinateSystem": "EMU",
+                    "objectLocator": f"{part}/paragraph/{block_index}/image/{index}",
+                    "extractionKind": "embedded_raster",
+                }
                 relation = relations.get(blip.get(f"{{{NS['r']}}}embed", ""))
                 if relation is None or relation[1] not in package:
-                    result.diagnostics.append({"code": "external_or_missing_image_relationship", "sourceLocator": locator})
+                    result.diagnostics.append(
+                        {"code": "external_or_missing_image_relationship", "sourceLocator": locator}
+                    )
                     continue
                 locator["mediaPart"] = relation[1]
                 # Keep crop/transform metadata even though appearance normalization is downstream.
@@ -143,6 +159,7 @@ def _docx(path: Path, digest: str, result: DocumentImageCollection) -> None:
         # object geometry or silently omitting their content.
         import tempfile
         from services.document_conversion_service import DocumentConversionService
+
         try:
             with tempfile.TemporaryDirectory(prefix="svg-docx-appearance-") as temporary:
                 converted = DocumentConversionService().convert_office_to_pdf(str(path), temporary)
@@ -151,10 +168,12 @@ def _docx(path: Path, digest: str, result: DocumentImageCollection) -> None:
             result.diagnostics.append({"code": "docx_complex_object_render_failed"})
 
 
-def _pdf(path: Path, digest: str, result: DocumentImageCollection, *,
-         force_pages: bool = False, source_format: str = "pdf") -> None:
+def _pdf(
+    path: Path, digest: str, result: DocumentImageCollection, *, force_pages: bool = False, source_format: str = "pdf"
+) -> None:
     import pdfplumber
     from pdfminer.pdfdocument import PDFPasswordIncorrect
+
     try:
         document = pdfplumber.open(path)
     except PDFPasswordIncorrect as error:
@@ -167,21 +186,44 @@ def _pdf(path: Path, digest: str, result: DocumentImageCollection, *,
                 raise ValueError("pdf_render_pixel_budget_exceeded")
             images = page.images
             text = (page.extract_text() or "")[:600] or None
-            scanned = not text and any((i["x1"] - i["x0"]) * (i["bottom"] - i["top"]) >= page.width * page.height * .8 for i in images)
+            scanned = not text and any(
+                (i["x1"] - i["x0"]) * (i["bottom"] - i["top"]) >= page.width * page.height * 0.8 for i in images
+            )
             page_appearance = force_pages or scanned or bool(page.curves or page.lines or page.rects)
-            regions = [dict(x0=page.bbox[0], top=page.bbox[1], x1=page.bbox[2], bottom=page.bbox[3], name="page-appearance")] if page_appearance else images
+            regions = (
+                [dict(x0=page.bbox[0], top=page.bbox[1], x1=page.bbox[2], bottom=page.bbox[3], name="page-appearance")]
+                if page_appearance
+                else images
+            )
             if page_appearance:
                 result.coverage = "page_only"
             for index, item in enumerate(regions):
                 if item.get("imagemask"):
                     continue
-                bbox = (max(page.bbox[0], item["x0"]), max(page.bbox[1], item["top"]), min(page.bbox[2], item["x1"]), min(page.bbox[3], item["bottom"]))
-                locator = {"sourceDocumentSha256": digest, "sourceFormat": source_format, "pageIndex": page_index,
-                           "objectLocator": f"page/{page_index}/image/{index}/{item.get('name', 'inline')}",
-                           "bbox": list(bbox), "coordinateSystem": "pdf_points_top_left", "rotation": page.rotation,
-                           "cropBox": list(page.cropbox), "mediaBox": list(page.mediabox),
-                           "extractionKind": "scanned_page" if scanned else "rendered_appearance" if page_appearance else "region_render",
-                           "appearance": "source-appearance", "originalDocumentRequired": True}
+                bbox = (
+                    max(page.bbox[0], item["x0"]),
+                    max(page.bbox[1], item["top"]),
+                    min(page.bbox[2], item["x1"]),
+                    min(page.bbox[3], item["bottom"]),
+                )
+                locator = {
+                    "sourceDocumentSha256": digest,
+                    "sourceFormat": source_format,
+                    "pageIndex": page_index,
+                    "objectLocator": f"page/{page_index}/image/{index}/{item.get('name', 'inline')}",
+                    "bbox": list(bbox),
+                    "coordinateSystem": "pdf_points_top_left",
+                    "rotation": page.rotation,
+                    "cropBox": list(page.cropbox),
+                    "mediaBox": list(page.mediabox),
+                    "extractionKind": "scanned_page"
+                    if scanned
+                    else "rendered_appearance"
+                    if page_appearance
+                    else "region_render",
+                    "appearance": "source-appearance",
+                    "originalDocumentRequired": True,
+                }
                 try:
                     buffer = BytesIO()
                     page.crop(bbox).to_image(resolution=144).original.save(buffer, format="PNG")

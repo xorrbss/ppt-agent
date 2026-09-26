@@ -1,4 +1,5 @@
 """Independent wire fixtures and mode-neutral canvas boundary checks."""
+
 import copy
 import json
 from pathlib import Path
@@ -27,8 +28,9 @@ from services.document_canvas import (
 )
 
 
-FIXTURES = json.loads((Path(__file__).resolve().parents[4] /
-    "contracts/document-canvas/v1/fixtures.json").read_text(encoding="utf-8"))
+FIXTURES = json.loads(
+    (Path(__file__).resolve().parents[4] / "contracts/document-canvas/v1/fixtures.json").read_text(encoding="utf-8")
+)
 
 
 def test_generation_units_preserve_physical_typography_and_reject_canvas_drift():
@@ -36,9 +38,7 @@ def test_generation_units_preserve_physical_typography_and_reject_canvas_drift()
     from utils.authored_font_policy import requested_font_floor_px
 
     canvas = document_canvas_for_orientation("landscape")
-    assert export_size_points(canvas.canvas_contract(), canvas) == pytest.approx(
-        (841.8897637795, 595.2755905512)
-    )
+    assert export_size_points(canvas.canvas_contract(), canvas) == pytest.approx((841.8897637795, 595.2755905512))
     assert generation_font_floor("body 9.5pt", canvas) == pytest.approx(13.405555555556)
     assert generation_font_floor("body 14px", canvas) == 14
     assert requested_font_floor_px("body 9.5pt") == pytest.approx(12.666666666667)
@@ -58,17 +58,20 @@ def test_fixed_canvas_fixture(fixture):
     assert canvas.point_per_unit == pytest.approx(9000 / 12700)
 
 
-@pytest.mark.parametrize("change", [
-    {"contractVersion": "document-canvas/v99"},
-    {"extra": True},
-    {"logicalSize": {"width": True, "height": 840}},
-    {"logicalSize": {"width": "1188", "height": 840}},
-    {"physicalSize": {"widthEmu": 10692000, "heightEmu": 7550000}},
-    {"safeArea": {"x": 0.0000001, "y": 60, "width": 1068, "height": 720}},
-    {"safeArea": {"x": 121, "y": 60, "width": 1068, "height": 720}},
-    {"safeArea": {"x": True, "y": 60, "width": 1068, "height": 720}},
-    {"safeArea": {"x": float("nan"), "y": 60, "width": 1068, "height": 720}},
-])
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"contractVersion": "document-canvas/v99"},
+        {"extra": True},
+        {"logicalSize": {"width": True, "height": 840}},
+        {"logicalSize": {"width": "1188", "height": 840}},
+        {"physicalSize": {"widthEmu": 10692000, "heightEmu": 7550000}},
+        {"safeArea": {"x": 0.0000001, "y": 60, "width": 1068, "height": 720}},
+        {"safeArea": {"x": 121, "y": 60, "width": 1068, "height": 720}},
+        {"safeArea": {"x": True, "y": 60, "width": 1068, "height": 720}},
+        {"safeArea": {"x": float("nan"), "y": 60, "width": 1068, "height": 720}},
+    ],
+)
 def test_strict_canvas_rejects_bad_wire(change):
     wire = copy.deepcopy(FIXTURES["a4"][0]["canvas"])
     wire.update(change)
@@ -101,14 +104,18 @@ def test_source_canvas_preserves_exact_pptx_emu_with_bounded_raster_projection()
     }
 
 
-@pytest.mark.parametrize("selectors", [
-    {"page_size": "A4"}, {"orientation": "portrait"},
-    {"page_size": None, "orientation": None},
-    {"page_size": "A4", "orientation": "landscape", "aspect_ratio": "16:9"},
-    {"page_size": "Letter", "orientation": "landscape"},
-    {"page_size": "A4", "orientation": "square"},
-    {"page_size": "A4", "orientation": []},
-])
+@pytest.mark.parametrize(
+    "selectors",
+    [
+        {"page_size": "A4"},
+        {"orientation": "portrait"},
+        {"page_size": None, "orientation": None},
+        {"page_size": "A4", "orientation": "landscape", "aspect_ratio": "16:9"},
+        {"page_size": "Letter", "orientation": "landscape"},
+        {"page_size": "A4", "orientation": "square"},
+        {"page_size": "A4", "orientation": []},
+    ],
+)
 def test_selector_conflicts_are_checked_before_defaults(selectors):
     from models.workspace import WorkspaceBootstrapRequest
 
@@ -116,7 +123,8 @@ def test_selector_conflicts_are_checked_before_defaults(selectors):
         GeneratePresentationRequest(content="fixture", **selectors)
     with pytest.raises(ValidationError):
         WorkspaceBootstrapRequest(
-            idempotency_key="canvas-selector-fixture", prompt="fixture",
+            idempotency_key="canvas-selector-fixture",
+            prompt="fixture",
             generation_settings=selectors,
         )
 
@@ -178,13 +186,19 @@ def test_a4_writer_stays_closed_until_release_verified(monkeypatch):
         validate_authored_canvas_admission(request, style_id="default")
 
 
-@pytest.mark.parametrize("change,expected", [
-    ({"generation_engine": "deck-ir"}, "document_canvas_generation_combination_not_supported"),
-    ({"generation_mode": "fidelity-first"}, "document_canvas_generation_combination_not_supported"),
-    ({"_authored_master_pin": object()}, "document_canvas_product_readback_pending"),
-    ({"_authored_exact_snapshot_id": "fixture"}, "document_canvas_fixed_source_not_supported"),
-    ({"source_mode": "source_content_restyle", "strategy": "svg"}, "document_canvas_generation_combination_not_supported"),
-])
+@pytest.mark.parametrize(
+    "change,expected",
+    [
+        ({"generation_engine": "deck-ir"}, "document_canvas_generation_combination_not_supported"),
+        ({"generation_mode": "fidelity-first"}, "document_canvas_generation_combination_not_supported"),
+        ({"_authored_master_pin": object()}, "document_canvas_product_readback_pending"),
+        ({"_authored_exact_snapshot_id": "fixture"}, "document_canvas_fixed_source_not_supported"),
+        (
+            {"source_mode": "source_content_restyle", "strategy": "svg"},
+            "document_canvas_generation_combination_not_supported",
+        ),
+    ],
+)
 def test_a4_admission_rejects_unsupported_paths(monkeypatch, change, expected):
     from types import SimpleNamespace
     import services.document_canvas as module
@@ -198,7 +212,9 @@ def test_a4_admission_rejects_unsupported_paths(monkeypatch, change, expected):
         validate_authored_canvas_admission(request, style_id="default")
 
 
-@pytest.mark.parametrize("strategy,source_mode", [("authored", None), ("svg", None), ("authored", "source_content_restyle")])
+@pytest.mark.parametrize(
+    "strategy,source_mode", [("authored", None), ("svg", None), ("authored", "source_content_restyle")]
+)
 def test_a4_admission_accepts_only_reflow_capable_paths(monkeypatch, strategy, source_mode):
     from dataclasses import replace
     from types import SimpleNamespace
@@ -209,15 +225,15 @@ def test_a4_admission_accepts_only_reflow_capable_paths(monkeypatch, strategy, s
     route_id = (
         "source-content-authored-restyle"
         if source_mode is not None
-        else "authored-reflow-svg" if strategy == "svg" else "authored-reflow-html"
+        else "authored-reflow-svg"
+        if strategy == "svg"
+        else "authored-reflow-html"
     )
     monkeypatch.setattr(
         capabilities,
         "A4_ROUTE_POLICIES",
         tuple(
-            replace(policy, implemented=True, verified=True)
-            if policy.route_id == route_id
-            else policy
+            replace(policy, implemented=True, verified=True) if policy.route_id == route_id else policy
             for policy in capabilities.A4_ROUTE_POLICIES
         ),
     )
@@ -234,9 +250,7 @@ def test_release_switch_does_not_open_unverified_a4_route(monkeypatch):
     import services.document_canvas as module
 
     monkeypatch.setattr(module, "DOCUMENT_CANVAS_A4_RELEASE_VERIFIED", True)
-    request = GeneratePresentationRequest(
-        content="fixture", page_size="A4", orientation="portrait"
-    )
+    request = GeneratePresentationRequest(content="fixture", page_size="A4", orientation="portrait")
     request._authored_style_snapshot = SimpleNamespace(reference_mode="style_reference")
     with pytest.raises(ValueError, match="document_canvas_product_readback_pending"):
         validate_authored_canvas_admission(request, style_id="default")
@@ -293,11 +307,7 @@ def test_export_only_readiness_does_not_enable_a4_writer(monkeypatch):
     )
     response = capabilities.a4_canvas_capabilities()
     assert response["enabled"] is False
-    export_route = next(
-        route
-        for route in response["routes"]
-        if route["routeId"] == "authored-vnext-native-export"
-    )
+    export_route = next(route for route in response["routes"] if route["routeId"] == "authored-vnext-native-export")
     assert export_route["enabled"] is True
 
 
@@ -313,7 +323,9 @@ def test_public_v2_request_pair_roundtrip():
 def test_candidate_stage_admits_implemented_routes_without_claiming_verified(monkeypatch):
     import services.document_canvas as module
     from services.document_canvas_capabilities import (
-        DocumentCanvasRouteSelection, a4_canvas_capabilities, evaluate_a4_selection,
+        DocumentCanvasRouteSelection,
+        a4_canvas_capabilities,
+        evaluate_a4_selection,
     )
 
     monkeypatch.setattr(module, "DOCUMENT_CANVAS_A4_RELEASE_VERIFIED", False)
@@ -333,7 +345,9 @@ def test_scene_revision_layout_uses_target_safe_area_and_preserves_master(orient
     from models.authored_vnext.master.contract import DeckMasterContract
     from tests.support.authored_vnext_master_fixture import master_contract_payload
     from services.document_canvas_scene_layout import (
-        document_scene_master, safe_title_bounds, safe_body_bounds,
+        document_scene_master,
+        safe_title_bounds,
+        safe_body_bounds,
     )
 
     master = DeckMasterContract.model_validate(master_contract_payload())
@@ -342,10 +356,12 @@ def test_scene_revision_layout_uses_target_safe_area_and_preserves_master(orient
     target = document_scene_master(master, canvas)
     assert target.canvas == canvas.canvas_contract()
     slots = target.layouts.standard.slots
-    title = safe_title_bounds(next(slot.bounds for slot in slots if slot.role == "title"),
-                              target, slide_role="standard")
-    body = safe_body_bounds(next(slot.bounds for slot in slots if slot.role == "body"),
-                            title_bounds=title, contract=target)
+    title = safe_title_bounds(
+        next(slot.bounds for slot in slots if slot.role == "title"), target, slide_role="standard"
+    )
+    body = safe_body_bounds(
+        next(slot.bounds for slot in slots if slot.role == "body"), title_bounds=title, contract=target
+    )
     assert body.y > title.bottom
     assert body.right <= canvas.safe_area.x + canvas.safe_area.width
     assert body.bottom <= canvas.safe_area.y + canvas.safe_area.height
@@ -378,7 +394,8 @@ async def _assert_revision_snapshot_pairs_server_canvas(monkeypatch):
 
     monkeypatch.setattr(versions, "_prune", no_prune)
     snapshot = await versions.snapshot_slides(
-        Session(), uuid.uuid4(),
+        Session(),
+        uuid.uuid4(),
         [{"index": 0, "html_content": "<div>fixture</div>", "_documentCanvas": {"bad": True}}],
         force=True,
     )

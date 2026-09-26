@@ -39,7 +39,12 @@ class SlideModel(SQLModel, table=True):
             name="ck_slides_svg_source_exclusive",
         ),
         CheckConstraint(
-            "source_format IS NULL OR (source_format = 'svg' AND (html_content IS NULL OR html_content = '') AND ui IS NULL) OR (source_format = 'html' AND (svg_content IS NULL OR svg_content = '') AND ui IS NULL) OR (source_format = 'native' AND (svg_content IS NULL OR svg_content = '') AND (html_content IS NULL OR html_content = ''))",
+            (
+                "source_format IS NULL OR (source_format = 'svg' AND (html_content IS NULL OR html_content "
+                "= '') AND ui IS NULL) OR (source_format = 'html' AND (svg_content IS NULL OR svg_content ="
+                " '') AND ui IS NULL) OR (source_format = 'native' AND (svg_content IS NULL OR svg_content "
+                "= '') AND (html_content IS NULL OR html_content = ''))"
+            ),
             name="ck_slides_source_format",
         ),
         Index("ix_slides_presentation_index", "presentation", "index"),
@@ -53,16 +58,16 @@ class SlideModel(SQLModel, table=True):
         # partial-schema fixtures can create slides independently.
         sa_column=Column(Uuid, nullable=True, index=True),
     )
-    presentation: uuid.UUID = Field(
-        sa_column=Column(ForeignKey("presentations.id", ondelete="CASCADE"), index=True)
-    )
+    presentation: uuid.UUID = Field(sa_column=Column(ForeignKey("presentations.id", ondelete="CASCADE"), index=True))
     layout_group: str
     layout: str
     index: int
     content: dict = Field(sa_column=Column(JSON))
     html_content: Optional[str] = None
     svg_content: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
-    source_format: Optional[Literal["html", "svg", "native"]] = Field(default=None, sa_column=Column(String, nullable=True))
+    source_format: Optional[Literal["html", "svg", "native"]] = Field(
+        default=None, sa_column=Column(String, nullable=True)
+    )
     # Native Template V2 editor payload. It is never projected into legacy
     # content and must not coexist with authored HTML.
     ui: Optional[dict] = Field(
@@ -85,7 +90,9 @@ class SlideModel(SQLModel, table=True):
         return self
 
     def get_source_format(self) -> str | None:
-        return self.source_format or ("svg" if self.svg_content else "html" if self.html_content else "native" if self.ui is not None else None)
+        return self.source_format or (
+            "svg" if self.svg_content else "html" if self.html_content else "native" if self.ui is not None else None
+        )
 
     def is_svg(self) -> bool:
         return self.get_source_format() == "svg" or self.layout_group == "svg"
@@ -103,10 +110,7 @@ class SlideModel(SQLModel, table=True):
         return (
             self.layout_group == "authored"
             or (self.layout or "").startswith("authored:")
-            or (
-                isinstance(self.content, dict)
-                and self.content.get("__authored__") is True
-            )
+            or (isinstance(self.content, dict) and self.content.get("__authored__") is True)
         )
 
     def get_new_slide(self, presentation: uuid.UUID, content: Optional[dict] = None):

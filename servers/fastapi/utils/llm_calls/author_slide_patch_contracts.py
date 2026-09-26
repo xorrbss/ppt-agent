@@ -84,9 +84,8 @@ _LAYOUT_DISPLAYS = frozenset({"grid", "inline-grid", "flex", "inline-flex"})
 
 _ROOT_QIDS = frozenset({"root", "slide", "slide-root", "slide.root"})
 
-_PROTECTED_ROLE_TOKENS = frozenset(
-    {"footer", "header", "page-number", "page_number", "subtitle", "title"}
-)
+_PROTECTED_ROLE_TOKENS = frozenset({"footer", "header", "page-number", "page_number", "subtitle", "title"})
+
 
 class StructuralRepairScope(BaseModel):
     """Bound one structural proposal to an existing layout owner and its group."""
@@ -128,6 +127,7 @@ class StructuralRepairScope(BaseModel):
             raise ValueError("affected_qids and protected_qids must be disjoint")
         return self
 
+
 _SYSTEM = """\
 You are a presentation repair planner. Use the rendered slide IMAGE as visual truth,
 the compact DOM map as the only editable element inventory, and the reviewer critique
@@ -146,7 +146,8 @@ SECURITY AND QUALITY CONTRACT:
 - Use simple px, pt, em, rem, or percent lengths; do not use calc() or var().
 - For structural overflow or overlap, first repair the existing qid-addressed layout:
   adjust grid-template-columns, gap, padding, margins, or existing container
-  dimensions with resize. Never put width or height inside setStyle. Prefer reflowing the existing elements over changing
+  dimensions with resize. Never put width or height inside setStyle. Prefer reflowing the existing elements ov\
+er changing
   their text. Choose strategy=full_reauthor only when the repair truly requires elements
   to be added, removed, or reordered, a URL/image replacement, or has no suitable qid.
 - In exact_reconstruction mode, never use setText; text/fidelity reconstruction defects
@@ -177,6 +178,7 @@ BOUNDED STRUCTURAL REPAIR CONTRACT:
   auto-fill, minmax(), nested repeat(), calc(), or var().
 """
 
+
 def _image_mime_type(image: bytes) -> str:
     if image.startswith(b"\x89PNG\r\n\x1a\n"):
         return "image/png"
@@ -186,9 +188,11 @@ def _image_mime_type(image: bytes) -> str:
         return "image/webp"
     raise ValueError("rendered_image must be non-empty PNG, JPEG, or WebP bytes")
 
+
 def _bounded_string(value: Any, maximum: int) -> str:
     text = str(value or "")
     return text[:maximum]
+
 
 def _bounded_number(value: Any) -> float | int | None:
     if not isinstance(value, (int, float)) or isinstance(value, bool):

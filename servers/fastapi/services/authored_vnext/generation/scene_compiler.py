@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+from services.document_canvas_scene_layout import (
+    canonical_safe_area as _canonical_safe_area,
+    safe_title_bounds as _safe_title_bounds,
+    safe_body_bounds as _safe_body_bounds,
+)
+
 import hashlib
 import math
 import os
@@ -288,13 +294,6 @@ def _intersect_rect(bounds: Rect, fence: Rect, *, consumer: str) -> Rect:
     if right - left < 1 or bottom - top < 1:
         raise ValueError(f"{consumer} has no usable area inside canvas safeArea")
     return Rect(x=left, y=top, width=right - left, height=bottom - top)
-
-
-from services.document_canvas_scene_layout import (
-    canonical_safe_area as _canonical_safe_area,
-    safe_title_bounds as _safe_title_bounds,
-    safe_body_bounds as _safe_body_bounds,
-)
 
 
 def _normalized_font_name(value: str) -> str:

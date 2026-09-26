@@ -21,7 +21,6 @@ of truth ``author_slide_rules`` already states the footer safe zone from.
 
 from __future__ import annotations
 
-from utils.authored_infographic.contracts import content_bottom_px
 
 _HEADER_SENTENCE = (
     "The header band, eyebrow, title, divider, and body wrapper from the "

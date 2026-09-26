@@ -32,7 +32,8 @@ _AUTHORED_AUTHOR_WORKERS = authored_provider_concurrency(_selected_provider)
 
 
 def _resolve_authored_render_workers(
-    author_workers: int, environment: Mapping[str, str] = os.environ,
+    author_workers: int,
+    environment: Mapping[str, str] = os.environ,
 ) -> int:
     """Resolve the authored render queue against the managed Chromium ceiling."""
     raw = environment.get("AUTHORED_SLIDE_RENDER_CONCURRENCY")
@@ -64,8 +65,12 @@ def _local_fit_unresolved_flag(*args, **kwargs):
 
 
 def _reusable_source_repair_scene(
-    *, source_reflow: bool, durable_evidence: Any,
-    original_html: str, scene_html: str, slide_index: int,
+    *,
+    source_reflow: bool,
+    durable_evidence: Any,
+    original_html: str,
+    scene_html: str,
+    slide_index: int,
 ) -> bool:
     """Reuse an admitted source repair only through its validated durable tuple.
 
@@ -161,7 +166,6 @@ async def _author_illustrate_render_pipeline(
         else {"width_px": canvas_width_px, "height_px": canvas_height_px}
     )
 
-
     render_png = partial(
         render_html_to_png,
         **render_kwargs,
@@ -203,19 +207,21 @@ async def _author_illustrate_render_pipeline(
         raise ValueError("source_image_placement_slide_count_mismatch")
     if source_image_placement_plans is not None and len(source_image_placement_plans) != len(plan.contents):
         raise ValueError("source_image_placement_plan_count_mismatch")
-    slide_source_images = list(preplanned_source_images) if preplanned_source_images is not None else plan_slide_source_images(
-        plan.contents,
-        source_images,
-        source_slide_locked=source_images_locked_to_source_slide,
+    slide_source_images = (
+        list(preplanned_source_images)
+        if preplanned_source_images is not None
+        else plan_slide_source_images(
+            plan.contents,
+            source_images,
+            source_slide_locked=source_images_locked_to_source_slide,
+        )
     )
     if capacity_plan is not None:
         if slide_source_images is not None:
             capacity_plan = AuthoredCapacityPlan(
                 profile=capacity_plan.profile,
                 slides=tuple(
-                    capacity_plan.at(index).with_source_images(
-                        len(slide_source_images[index])
-                    )
+                    capacity_plan.at(index).with_source_images(len(slide_source_images[index]))
                     for index in range(len(capacity_plan.slides))
                 ),
             )
@@ -251,15 +257,15 @@ async def _author_illustrate_render_pipeline(
         or source_image_block_bindings is not None
         or source_images_locked_to_source_slide
     )
-    local_fit_enabled = local_fit_applies(
-        reference_mode=plan_reference_mode, source_reflow=source_reflow
-    )
+    local_fit_enabled = local_fit_applies(reference_mode=plan_reference_mode, source_reflow=source_reflow)
     if local_fit_enabled:
         local_fit_policy_revision = requested_font_policy_revision(
             instructions,
             conversion=pt_per_css_px(
-                width_pt=export_width_pt, height_pt=export_height_pt,
-                viewport_width=canvas_width_px, viewport_height=canvas_height_px,
+                width_pt=export_width_pt,
+                height_pt=export_height_pt,
+                viewport_width=canvas_width_px,
+                viewport_height=canvas_height_px,
             ),
             policy_revision=local_fit_policy_revision or POLICY_REVISION,
         )
@@ -336,9 +342,7 @@ async def _author_illustrate_render_pipeline(
             batch_state.profile,
             slides_per_call=min(3, batch_state.profile.slides_per_call),
             initial_wave_concurrency=1,
-            steady_wave_concurrency=min(
-                2, batch_state.profile.steady_wave_concurrency
-            ),
+            steady_wave_concurrency=min(2, batch_state.profile.steady_wave_concurrency),
         )
         batch_state = new_authored_batch_policy_state(portrait_profile)
     schedule = AuthoredWaveSchedule(batch_state)
@@ -353,12 +357,14 @@ async def _author_illustrate_render_pipeline(
         and is_authored_tail_streaming_enabled()
         else None
     )
+
     def _anchor_blocking_defects(html: str) -> tuple[Any, ...]:
         return anchor_blocking_defects(
             html,
             composition_profile=composition_profile,
             reference_mode=plan_reference_mode,
         )
+
     def _checkpoint_provider_attempt_count(checkpoint: object | None) -> int:
         """Provider calls this slide has already spent in *this* attempt.
         Ordinals from an earlier attempt of the operation are history: the
@@ -367,29 +373,42 @@ async def _author_illustrate_render_pipeline(
         ``provider_attempt_total`` when the fencing token advances.
         """
         error = getattr(checkpoint, "error", None)
-        return provider_attempt_count_in_epoch(
-            error if isinstance(error, Mapping) else None, fencing_token
-        )
+        return provider_attempt_count_in_epoch(error if isinstance(error, Mapping) else None, fencing_token)
+
     batch_context = {
-        "generation_job": generation_job, "source_block_bindings": source_block_bindings,
-        "preauthored_htmls": preauthored_htmls, "attempt_token": attempt_token,
-        "fencing_token": fencing_token, "preauthored_attempt_counts": preauthored_attempt_counts,
-        "slide_source_images": slide_source_images, "plan": plan,
+        "generation_job": generation_job,
+        "source_block_bindings": source_block_bindings,
+        "preauthored_htmls": preauthored_htmls,
+        "attempt_token": attempt_token,
+        "fencing_token": fencing_token,
+        "preauthored_attempt_counts": preauthored_attempt_counts,
+        "slide_source_images": slide_source_images,
+        "plan": plan,
         "source_image_placement_plans": source_image_placement_plans,
         "require_all_source_images": require_all_source_images,
         "preauthored_author_work": preauthored_author_work,
         "preauthored_normalization_receipts": preauthored_normalization_receipts,
     }
+
     async def _persist_batch_success(index: int, html: str) -> str:
         return await author_batch_impl.persist_batch_success(
-            index, html, context=batch_context, runtime=sys.modules[__name__],
+            index,
+            html,
+            context=batch_context,
+            runtime=sys.modules[__name__],
         )
+
     async def _run_author_batch(indexes, *, recovery, prior_failures, style_anchor=None):
         return await author_batch_impl.run_author_batch(
-            indexes, recovery=recovery, prior_failures=prior_failures, style_anchor=style_anchor,
-            context=batch_context, runtime=sys.modules[__name__],
+            indexes,
+            recovery=recovery,
+            prior_failures=prior_failures,
+            style_anchor=style_anchor,
+            context=batch_context,
+            runtime=sys.modules[__name__],
             persist_batch_success=_persist_batch_success,
         )
+
     async def _preauthor_missing_slides() -> None:
         if generation_job is None:
             return
@@ -412,20 +431,13 @@ async def _author_illustrate_render_pipeline(
         pending = list(initial)
         # One ledger: a slide this call persisted stops being a failure, and a
         # slide already accepted never becomes one again.
-        _record_initial = batch_recorder(
-            successful=successful, failures=failures, publish=tail_stream
-        )
-        async def _author_anchor(
-            _plan: Any, index: int, *, prior_failure_hint: str | None = None
-        ) -> str:
+        _record_initial = batch_recorder(successful=successful, failures=failures, publish=tail_stream)
+
+        async def _author_anchor(_plan: Any, index: int, *, prior_failure_hint: str | None = None) -> str:
             # G0: the anchor is authored through the ordinary batch path, so it
             # is checkpointed, admitted and counted exactly like any slide.
             prior = (
-                {
-                    index: AuthoredBatchFailure(
-                        RuntimeError("authored_anchor_defective"), prior_failure_hint
-                    )
-                }
+                {index: AuthoredBatchFailure(RuntimeError("authored_anchor_defective"), prior_failure_hint)}
                 if prior_failure_hint
                 else carried_failures
             )
@@ -443,6 +455,7 @@ async def _author_illustrate_render_pipeline(
             # anchor's first call was accepted never re-opens one.
             schedule.advance(outcome, succeeded=_record_initial((index,), outcome))
             return preauthored_htmls.get(index, "")
+
         if pending:
             style_anchor, _anchor_html, anchor_index = await resolve_style_anchor(
                 plan,
@@ -477,9 +490,7 @@ async def _author_illustrate_render_pipeline(
         # A slide whose first call failed reaches the tail only once its one
         # recovery call has persisted HTML; a slide that fails both is never
         # published and fails the deck below.
-        assert_authored_ledger_disjoint(
-            successful, failures, stage="authored_recovery_planning"
-        )
+        assert_authored_ledger_disjoint(successful, failures, stage="authored_recovery_planning")
         await run_authored_recovery_pass(
             [
                 index
@@ -517,17 +528,14 @@ async def _author_illustrate_render_pipeline(
         await report_unresolved_slides(
             len(plan.contents),
             successful=successful,
-            failures={
-                index: failure
-                for index, failure in failures.items()
-                if index not in deferred
-            },
+            failures={index: failure for index, failure in failures.items() if index not in deferred},
             attempt_counts=preauthored_attempt_counts,
             stage_failure=_author_stage_failure,
             generation_job=generation_job,
             attempt_token=attempt_token,
             fencing_token=fencing_token,
         )
+
     # G8: every authoring call of this deck shares one provider cache lane,
     # keyed by the deck-invariant prompt prefix rather than by any slide.
     deck_cache_key = deck_prompt_cache_key(getattr(plan, "design_system", None))
@@ -544,6 +552,7 @@ async def _author_illustrate_render_pipeline(
                     authored_htmls=preauthored_htmls,
                     attempt_counts=preauthored_attempt_counts,
                 )
+
     async def process_slide(index: int) -> SlideStageResult:
         author_work = preauthored_author_work.get(index, 0.0)
         illustration_work = 0.0
@@ -569,9 +578,7 @@ async def _author_illustrate_render_pipeline(
         # The authoring call and the substitution step must see the identical
         # set: substitution resolves a placed id against this mapping, so an id
         # the author was never offered has nowhere to resolve.
-        offered = (
-            slide_source_images[index] if slide_source_images is not None else None
-        )
+        offered = slide_source_images[index] if slide_source_images is not None else None
         checkpoint = (
             await get_checkpoint(
                 generation_job.id,
@@ -583,9 +590,7 @@ async def _author_illustrate_render_pipeline(
             else None
         )
         prior_provider_attempt_count = _checkpoint_provider_attempt_count(checkpoint)
-        author_provider_attempt_count = max(
-            author_provider_attempt_count, prior_provider_attempt_count
-        )
+        author_provider_attempt_count = max(author_provider_attempt_count, prior_provider_attempt_count)
         durable_evidence = None
         if checkpoint is not None and checkpoint.render_status == "completed":
             try:
@@ -624,24 +629,14 @@ async def _author_illustrate_render_pipeline(
                 if checkpoint is not None and checkpoint.author_html
                 else preauthored_htmls.get(index)
             )
-            if (
-                html
-                and checkpoint is not None
-                and checkpoint.author_status == "completed"
-            ):
+            if html and checkpoint is not None and checkpoint.author_status == "completed":
                 # The old checkpoint schema has no slide-scoped provider-call
                 # ordinal. Never risk a third billable call after recovery.
                 if index not in preauthored_attempt_counts:
                     author_provider_attempt_count = 2
             author_completed = bool(
                 html
-                and (
-                    index in preauthored_htmls
-                    or (
-                        checkpoint is not None
-                        and checkpoint.author_status == "completed"
-                    )
-                )
+                and (index in preauthored_htmls or (checkpoint is not None and checkpoint.author_status == "completed"))
             )
             spent_budget: DeferredAuthorBudgetExhausted | None = None
             if not author_completed:
@@ -658,8 +653,7 @@ async def _author_illustrate_render_pipeline(
                 if author_provider_attempt_count >= 2 and spent_budget is None:
                     prior_code = (
                         str(checkpoint.error.get("code") or "")
-                        if checkpoint is not None
-                        and isinstance(checkpoint.error, Mapping)
+                        if checkpoint is not None and isinstance(checkpoint.error, Mapping)
                         else ""
                     )
                     raise AuthoredStageError(
@@ -673,9 +667,7 @@ async def _author_illustrate_render_pipeline(
                         retryable=False,
                         provider_attempt_count=author_provider_attempt_count,
                     )
-                if checkpoint and should_inject_failure(
-                    checkpoint, slide_index=index, stage="author"
-                ):
+                if checkpoint and should_inject_failure(checkpoint, slide_index=index, stage="author"):
                     raise AuthoredStageError(
                         slide_index=index,
                         stage="author",
@@ -697,18 +689,10 @@ async def _author_illustrate_render_pipeline(
                     # downstream, so authoring and rendering overlap.
                     async with author_gate:
                         with provider_usage_scope(
-                            job_id=(
-                                generation_job.id
-                                if generation_job is not None
-                                else None
-                            ),
+                            job_id=(generation_job.id if generation_job is not None else None),
                             operation="authored_generation",
                             stage="author",
-                            attempt_number=(
-                                generation_job.attempt_number
-                                if generation_job
-                                else 0
-                            ),
+                            attempt_number=(generation_job.attempt_number if generation_job else 0),
                             slide_index=index,
                         ):
                             author_kwargs: dict[str, Any] = {}
@@ -717,46 +701,30 @@ async def _author_illustrate_render_pipeline(
                             if generation_job is not None:
                                 author_kwargs["raise_on_failure"] = True
                             if offered:
-                                author_kwargs["source_images"] = tuple(
-                                    offered.values()
-                                )
-                                author_kwargs["require_all_source_images"] = (
-                                    require_all_source_images
-                                )
-                            if "attempt_observer" in inspect.signature(
-                                author_planned_slide
-                            ).parameters:
+                                author_kwargs["source_images"] = tuple(offered.values())
+                                author_kwargs["require_all_source_images"] = require_all_source_images
+                            if "attempt_observer" in inspect.signature(author_planned_slide).parameters:
+
                                 def observe_author_attempt(ordinal: int) -> None:
                                     nonlocal author_provider_attempt_count
-                                    author_provider_attempt_count = max(
-                                        author_provider_attempt_count, int(ordinal)
-                                    )
-                                author_kwargs["attempt_observer"] = (
-                                    observe_author_attempt
-                                )
-                            if "provider_attempt_offset" in inspect.signature(
-                                author_planned_slide
-                            ).parameters:
-                                author_kwargs["provider_attempt_offset"] = (
-                                    prior_provider_attempt_count
-                                )
-                            if style_anchor is not None and accepts_style_anchor(
-                                author_planned_slide
-                            ):
+                                    author_provider_attempt_count = max(author_provider_attempt_count, int(ordinal))
+
+                                author_kwargs["attempt_observer"] = observe_author_attempt
+                            if "provider_attempt_offset" in inspect.signature(author_planned_slide).parameters:
+                                author_kwargs["provider_attempt_offset"] = prior_provider_attempt_count
+                            if style_anchor is not None and accepts_style_anchor(author_planned_slide):
                                 author_kwargs["style_anchor"] = style_anchor
-                            carried_hint = author_correction_from_stored_failure(
-                                getattr(checkpoint, "error", None)
-                            )
-                            if carried_hint and "prior_failure_hint" in inspect.signature(
-                                author_planned_slide
-                            ).parameters:
+                            carried_hint = author_correction_from_stored_failure(getattr(checkpoint, "error", None))
+                            if (
+                                carried_hint
+                                and "prior_failure_hint" in inspect.signature(author_planned_slide).parameters
+                            ):
                                 author_kwargs["prior_failure_hint"] = carried_hint
                             if (
                                 generation_job is not None
-                                and "attempt_reserver" in inspect.signature(
-                                    author_planned_slide
-                                ).parameters
+                                and "attempt_reserver" in inspect.signature(author_planned_slide).parameters
                             ):
+
                                 async def reserve_author_attempt(ordinal: int) -> None:
                                     await reserve_provider_attempt(
                                         job_id=generation_job.id,
@@ -765,29 +733,30 @@ async def _author_illustrate_render_pipeline(
                                         ordinal=ordinal,
                                         fencing_token=fencing_token,
                                     )
-                                author_kwargs["attempt_reserver"] = (
-                                    reserve_author_attempt
-                                )
+
+                                author_kwargs["attempt_reserver"] = reserve_author_attempt
                             try:
                                 if spent_budget is not None:
                                     raise spent_budget
-                                html = await author_planned_slide(
-                                    plan, index, **author_kwargs
-                                )
+                                html = await author_planned_slide(plan, index, **author_kwargs)
                             except Exception as author_error:
                                 rescue = await rescue_author_stage(
-                                    plan, index, author_error,
+                                    plan,
+                                    index,
+                                    author_error,
                                     author_kwargs=author_kwargs,
                                     profile=composition_profile,
                                     reference_mode=plan_reference_mode,
-                                    source_reflow=source_reflow, schedule=schedule,
+                                    source_reflow=source_reflow,
+                                    schedule=schedule,
                                 )
                                 authoring_cooldown_wait_seconds[0] = schedule.cooldown_wait_seconds
                                 if rescue is None:
                                     raise
                                 html = rescue.html
                                 author_provider_attempt_count = max(
-                                    author_provider_attempt_count, rescue.provider_attempt_count,
+                                    author_provider_attempt_count,
+                                    rescue.provider_attempt_count,
                                 )
                                 if rescue.flagged_entry is not None:
                                     author_flagged_slides[index] = rescue.flagged_entry
@@ -821,9 +790,12 @@ async def _author_illustrate_render_pipeline(
                     )
                 try:
                     html = admit_author_html(
-                        html, index=index, normalization_receipt=normalization_receipt,
+                        html,
+                        index=index,
+                        normalization_receipt=normalization_receipt,
                         bindings=source_block_bindings[index] if source_block_bindings is not None else None,
-                        validate=validate_authored_slide_html, stamp=stamp_source_blocks,
+                        validate=validate_authored_slide_html,
+                        stamp=stamp_source_blocks,
                         producer="author_rescue" if rescue is not None else "author",
                     )
                 except RendererPolicyError as exc:
@@ -857,8 +829,11 @@ async def _author_illustrate_render_pipeline(
             else:
                 try:
                     html = admit_author_html(
-                        html, index=index, normalization_receipt=normalization_receipt,
-                        validate=validate_authored_slide_html, fresh=False,
+                        html,
+                        index=index,
+                        normalization_receipt=normalization_receipt,
+                        validate=validate_authored_slide_html,
+                        fresh=False,
                     )
                 except RendererPolicyError as exc:
                     raise AuthoredStageError(
@@ -880,9 +855,7 @@ async def _author_illustrate_render_pipeline(
                 # security boundary. ``None`` means no candidates exist for this
                 # deck at all, which keeps ``data-asset-id`` inert.
                 source_images=offered,
-                slide_content=(
-                    plan.contents[index] if index < len(plan.contents) else ""
-                ),
+                slide_content=(plan.contents[index] if index < len(plan.contents) else ""),
                 # A deck without a plan lets every slide keep the slot it wrote,
                 # which is exactly how this pipeline behaved before plans existed.
                 illustration_allowed=(
@@ -892,9 +865,7 @@ async def _author_illustrate_render_pipeline(
                 ),
                 generation_job=generation_job,
                 attempt_token=attempt_token,
-                infographic=(
-                    infographic_briefs[index] if infographic_briefs else None
-                ),
+                infographic=(infographic_briefs[index] if infographic_briefs else None),
                 infographic_assets=infographic_assets,
             )
             if require_all_source_images:
@@ -918,8 +889,12 @@ async def _author_illustrate_render_pipeline(
             if source_block_bindings is not None and index < len(source_block_bindings):
                 try:
                     illustrated_html = admit_author_html(
-                        illustrated_html, index=index, bindings=source_block_bindings[index],
-                        validate_policy=False, stamp=stamp_source_blocks, producer="illustration",
+                        illustrated_html,
+                        index=index,
+                        bindings=source_block_bindings[index],
+                        validate_policy=False,
+                        stamp=stamp_source_blocks,
+                        producer="illustration",
                     )
                 except BrowserSourceReadbackError as exc:
                     # One slide dropped source text the model was told to copy.
@@ -974,10 +949,7 @@ async def _author_illustrate_render_pipeline(
                     minimum_pt=policy_floor_pt(local_fit_policy_revision or POLICY_REVISION),
                     instructions=instructions,
                 )
-            elif (
-                capacity_plan is not None
-                and plan_reference_mode != EXACT_RECONSTRUCTION
-            ):
+            elif capacity_plan is not None and plan_reference_mode != EXACT_RECONSTRUCTION:
                 # The capacity brief's floor, raised to the fragmentation
                 # gate's floor while that gate is on, so one floor governs
                 # every stage.
@@ -1014,16 +986,8 @@ async def _author_illustrate_render_pipeline(
                     checkpoint=checkpoint,
                     reference_mode=plan_reference_mode,
                     composition_profile=composition_profile,
-                    slide_content=(
-                        plan.contents[index]
-                        if index < len(plan.contents)
-                        else ""
-                    ),
-                    infographic=(
-                        infographic_briefs[index]
-                        if infographic_briefs
-                        else None
-                    ),
+                    slide_content=(plan.contents[index] if index < len(plan.contents) else ""),
+                    infographic=(infographic_briefs[index] if infographic_briefs else None),
                     **quality_loop_kwargs,
                 )
             from services.authored_admission_capture import canonical_capture_html
@@ -1070,8 +1034,7 @@ async def _author_illustrate_render_pipeline(
                                     policy=local_fit_policy_value,
                                     final_png=durable_evidence.png,
                                 )
-                                if durable_evidence is not None
-                                and local_fit_policy_value is not None
+                                if durable_evidence is not None and local_fit_policy_value is not None
                                 else None
                             )
                             if reusable_source_repair:
@@ -1087,9 +1050,7 @@ async def _author_illustrate_render_pipeline(
                                 scene_envelope = scene_state.envelope
                                 local_fit_receipt = dict(reusable_fit)
                                 local_fit_receipt["telemetry"] = {
-                                    **dict(
-                                        local_fit_receipt.get("telemetry") or {}
-                                    ),
+                                    **dict(local_fit_receipt.get("telemetry") or {}),
                                     "evidence_cache_hit": True,
                                 }
                                 accepted_fit = _rehydrate_accepted_local_fit(
@@ -1111,9 +1072,7 @@ async def _author_illustrate_render_pipeline(
                                     illustrated_html,
                                     slide_index=index,
                                 )
-                                persist_scene_envelope(
-                                    generation_job.id, scene_envelope
-                                )
+                                persist_scene_envelope(generation_job.id, scene_envelope)
                         else:
                             scene_envelope = scene_state.envelope
                             reusable_fit = (
@@ -1125,16 +1084,13 @@ async def _author_illustrate_render_pipeline(
                                     policy=local_fit_policy_value,
                                     final_png=durable_evidence.png,
                                 )
-                                if durable_evidence is not None
-                                and local_fit_policy_value is not None
+                                if durable_evidence is not None and local_fit_policy_value is not None
                                 else None
                             )
                             if reusable_fit is not None:
                                 local_fit_receipt = dict(reusable_fit)
                                 local_fit_receipt["telemetry"] = {
-                                    **dict(
-                                        local_fit_receipt.get("telemetry") or {}
-                                    ),
+                                    **dict(local_fit_receipt.get("telemetry") or {}),
                                     "evidence_cache_hit": True,
                                 }
                                 accepted_fit = _rehydrate_accepted_local_fit(
@@ -1203,9 +1159,7 @@ async def _author_illustrate_render_pipeline(
             if png is None or checkpoint.render_status != "completed" or html_changed:
                 if html_changed:
                     browser_metrics = None
-                if checkpoint and should_inject_failure(
-                    checkpoint, slide_index=index, stage="render"
-                ):
+                if checkpoint and should_inject_failure(checkpoint, slide_index=index, stage="render"):
                     raise AuthoredStageError(
                         slide_index=index,
                         stage="render",
@@ -1221,14 +1175,9 @@ async def _author_illustrate_render_pipeline(
                     )
                 render_started = time.monotonic()
                 remaining_operation_seconds = (
-                    remaining_authored_local_fit_seconds(cap=120)
-                    if local_fit_policy_value is not None
-                    else 120.0
+                    remaining_authored_local_fit_seconds(cap=120) if local_fit_policy_value is not None else 120.0
                 )
-                if (
-                    local_fit_policy_value is not None
-                    and remaining_operation_seconds <= 0
-                ):
+                if local_fit_policy_value is not None and remaining_operation_seconds <= 0:
                     raise AuthoredStageError(
                         slide_index=index,
                         stage="render",
@@ -1236,15 +1185,9 @@ async def _author_illustrate_render_pipeline(
                         retryable=False,
                     )
                 local_budget = (
-                    slide_budget(60, remaining_operation_seconds)
-                    if local_fit_policy_value is not None
-                    else None
+                    slide_budget(60, remaining_operation_seconds) if local_fit_policy_value is not None else None
                 )
-                slide_deadline = (
-                    render_started + local_budget["total_seconds"]
-                    if local_budget is not None
-                    else None
-                )
+                slide_deadline = render_started + local_budget["total_seconds"] if local_budget is not None else None
                 try:
                     with provider_usage_scope(
                         job_id=generation_job.id if generation_job is not None else None,
@@ -1269,12 +1212,14 @@ async def _author_illustrate_render_pipeline(
                                     expected_html=fit_source,
                                     policy=local_fit_policy_value,
                                 )
+
                                 async def persist_original(capture, policy):
                                     await persist_original_capture_checkpoint(
                                         **original_checkpoint_args,
                                         capture=capture,
                                         policy=policy,
                                     )
+
                             accepted = await capture_original_first(
                                 original_html=fit_source,
                                 policy=local_fit_policy_value,
@@ -1301,9 +1246,7 @@ async def _author_illustrate_render_pipeline(
                             accepted_fit = accepted
                             unresolved = accepted.receipt.get("unresolvedReasons")
                             if isinstance(unresolved, (list, tuple)) and unresolved:
-                                author_flagged_slides[index] = _local_fit_unresolved_flag(
-                                    index, unresolved
-                                )
+                                author_flagged_slides[index] = _local_fit_unresolved_flag(index, unresolved)
                         elif is_authored_in_render_fit_enabled():
                             # Opt-in in-render card fit (off by default; local-fit
                             # is the active fitter). Q2: sub-floor owners the CSS
@@ -1311,7 +1254,8 @@ async def _author_illustrate_render_pipeline(
                             # rendered once more.
                             async with render_gate:
                                 type_clamp = await render_with_measured_type_clamp(
-                                    illustrated_html, reference_mode=plan_reference_mode,
+                                    illustrated_html,
+                                    reference_mode=plan_reference_mode,
                                     render=render_capture,
                                 )
                             capture = type_clamp.capture
@@ -1348,11 +1292,7 @@ async def _author_illustrate_render_pipeline(
                         stage="render",
                         code=code,
                         cause=exc,
-                        retryable=(
-                            False
-                            if isinstance(exc, AuthoredLocalFitRejected)
-                            else is_retryable_exception(exc)
-                        ),
+                        retryable=(False if isinstance(exc, AuthoredLocalFitRejected) else is_retryable_exception(exc)),
                     ) from exc
                 finally:
                     render_work = time.monotonic() - render_started
@@ -1361,21 +1301,25 @@ async def _author_illustrate_render_pipeline(
                 # Opt-in in-render fit only (local-fit off for this slide):
                 # the fitted document becomes the scene of record.
                 scene_envelope = reseal_scene_envelope_after_fit(
-                    fitted_html=fitted_html, scene_envelope=scene_envelope, slide_index=index,
+                    fitted_html=fitted_html,
+                    scene_envelope=scene_envelope,
+                    slide_index=index,
                     generation_job_id=(generation_job.id if generation_job is not None else None),
                 )
                 illustrated_html = scene_envelope.html_projection
             if illustrated_html != scene_envelope.html_projection:
-                scene_envelope = seal_slide_scene_envelope(
-                    illustrated_html, slide_index=index
-                )
+                scene_envelope = seal_slide_scene_envelope(illustrated_html, slide_index=index)
                 if generation_job is not None:
                     persist_scene_envelope(generation_job.id, scene_envelope)
             if source_reflow and rescue is not None and source_block_bindings is not None:
                 flag = source_reflow_rescue_readback(
-                    index=index, html=illustrated_html, metrics=browser_metrics,
-                    bindings=source_block_bindings[index], profile=composition_profile,
-                    reference_mode=plan_reference_mode, prior_failure=rescue.prior_failure,
+                    index=index,
+                    html=illustrated_html,
+                    metrics=browser_metrics,
+                    bindings=source_block_bindings[index],
+                    profile=composition_profile,
+                    reference_mode=plan_reference_mode,
+                    prior_failure=rescue.prior_failure,
                     provider_attempt_count=author_provider_attempt_count,
                 )
                 if flag is not None:
@@ -1388,13 +1332,18 @@ async def _author_illustrate_render_pipeline(
                             persist_scene_envelope(generation_job.id, scene_envelope)
                     if browser_metrics is None:
                         browser_metrics = await captured_metrics_or_existing(
-                            illustrated_html, index=index, ensure=ensure_metrics,
+                            illustrated_html,
+                            index=index,
+                            ensure=ensure_metrics,
                         )
-                    if validate_visible_source_images(
-                        illustrated_html,
-                        offered or {},
-                        browser_metrics,
-                    ) != illustrated_html:
+                    if (
+                        validate_visible_source_images(
+                            illustrated_html,
+                            offered or {},
+                            browser_metrics,
+                        )
+                        != illustrated_html
+                    ):
                         raise ValueError("source_image_html_changed_after_capture")
                 except ValueError as exc:
                     # Re-open authoring on a durable retry. Marking the author
@@ -1421,8 +1370,7 @@ async def _author_illustrate_render_pipeline(
                 )
                 if local_fit_policy_value is not None and quality_failure is not None:
                     if accepted_fit is not None or (
-                        isinstance(local_fit_receipt, Mapping)
-                        and receipt_is_preserved_original(local_fit_receipt)
+                        isinstance(local_fit_receipt, Mapping) and receipt_is_preserved_original(local_fit_receipt)
                     ):
                         # The local-fit boundary already accepted one exact
                         # html/png/metrics tuple; changed HTML also passed its
@@ -1437,10 +1385,7 @@ async def _author_illustrate_render_pipeline(
                         else:
                             merged_reasons = list(existing.get("reasons") or ())
                             primary = existing.get("reason")
-                            if (
-                                isinstance(primary, str)
-                                and primary not in merged_reasons
-                            ):
+                            if isinstance(primary, str) and primary not in merged_reasons:
                                 merged_reasons.insert(0, primary)
                             for reason in flag["reasons"]:
                                 if reason not in merged_reasons:
@@ -1458,28 +1403,24 @@ async def _author_illustrate_render_pipeline(
                             stage="render",
                             code="authored_local_fit_geometry_unresolved",
                             retryable=False,
-                            message=(
-                                "Local fit left blocking geometry or font issues"
-                            ),
+                            message=("Local fit left blocking geometry or font issues"),
                         )
                 if accepted_fit is not None:
                     # This tuple has passed the local-fit evidence boundary;
                     # any later visual advisory is carried by the slide flag.
                     cache_accepted_capture(
-                        accepted_fit, timeout=60,
-                        width_px=canvas_width_px, height_px=canvas_height_px,
+                        accepted_fit,
+                        timeout=60,
+                        width_px=canvas_width_px,
+                        height_px=canvas_height_px,
                     )
             finally:
                 quality_work = time.monotonic() - quality_started
             # Quality is evaluated against the exact capture before advancing
             # the durable render pointer. Different slides can therefore be in
             # author, Chromium, quality, and checkpoint stages concurrently.
-            if (
-                generation_job is not None
-                and (
-                    checkpoint.render_status != "completed"
-                    or checkpoint_stage_html(checkpoint) != illustrated_html
-                )
+            if generation_job is not None and (
+                checkpoint.render_status != "completed" or checkpoint_stage_html(checkpoint) != illustrated_html
             ):
                 checkpoint = await _complete_stage_after_external_success(
                     job_id=generation_job.id,
@@ -1516,10 +1457,7 @@ async def _author_illustrate_render_pipeline(
                             fencing_token=fencing_token,
                         )
                     finally:
-                        await record_local_stage(
-                            latency_ms=(time.monotonic() - persist_stage_started)
-                            * 1000
-                        )
+                        await record_local_stage(latency_ms=(time.monotonic() - persist_stage_started) * 1000)
             # RenderCapture already collected browser telemetry in the same
             # browser invocation.  Read only the cache here: a cache miss is
             # retained as unavailable evidence and must fail closed downstream,
@@ -1576,6 +1514,7 @@ async def _author_illustrate_render_pipeline(
                     fencing_token=fencing_token,
                 )
             raise
+
     with set_prompt_cache_key(deck_cache_key), set_render_deck_scope(render_deck_scope):
         completed_results = (
             await run_slide_worker_pool(
@@ -1593,8 +1532,12 @@ async def _author_illustrate_render_pipeline(
             )
         )
     return _call_pipeline_helper(
-        "build_pipeline_result", completed_results, plan=plan, started=started,
-        evidence_ledger=evidence_ledger, evidence_attempt_id=evidence_attempt_id,
+        "build_pipeline_result",
+        completed_results,
+        plan=plan,
+        started=started,
+        evidence_ledger=evidence_ledger,
+        evidence_attempt_id=evidence_attempt_id,
         author_flagged_slides=author_flagged_slides,
         authoring_cooldown_wait_seconds=authoring_cooldown_wait_seconds,
     )

@@ -7,13 +7,13 @@ and native export identify the same scene and stable element IDs.
 
 from __future__ import annotations
 
+from .scene_digest import scene_digest
+
 import hashlib
 import base64
 import binascii
-import json
 import math
 import re
-import unicodedata
 from typing import Annotated, Any, Literal, Union
 
 from pydantic import Field, StringConstraints, field_validator, model_validator
@@ -25,9 +25,7 @@ from ..master.contract import Rect
 # A Scene owner ID is the authored QID.  Older generated decks used the
 # ``element:...`` subset; the wider pattern is required so declared HTML QIDs
 # can survive semantic source -> Scene -> Workbench -> OOXML without remapping.
-ElementId = Annotated[
-    str, Field(pattern=r"^[A-Za-z][A-Za-z0-9._:-]{0,127}$")
-]
+ElementId = Annotated[str, Field(pattern=r"^[A-Za-z][A-Za-z0-9._:-]{0,127}$")]
 AssetId = Annotated[str, Field(pattern=r"^asset:[a-z0-9][a-z0-9._-]*$")]
 DataId = Annotated[str, Field(pattern=r"^data:[a-z0-9][a-z0-9._-]*$")]
 
@@ -61,9 +59,6 @@ SCENE_OWNER_CAPABILITY_KINDS: dict[str, frozenset[str]] = {
 }
 
 
-from .scene_digest import _canonical_value, scene_digest
-
-
 class SceneEditability(StrictCamelModel):
     """Independent edit permissions consumed by Workbench and mutation CAS."""
 
@@ -85,21 +80,11 @@ class SceneTextStyle(StrictCamelModel):
     # Canonical font/inset values are CSS points (0.75 per logical CSS pixel).
     # Physical typography intent is normalized before sealing. Export converts
     # CSS points / 0.75 * document pointPerUnit; legacy pointPerUnit is 0.75.
-    line_height: float | None = Field(
-        default=None, ge=0.5, le=5, exclude_if=lambda value: value is None
-    )
-    margin_left_pt: float | None = Field(
-        default=None, ge=0, le=1000, exclude_if=lambda value: value is None
-    )
-    margin_right_pt: float | None = Field(
-        default=None, ge=0, le=1000, exclude_if=lambda value: value is None
-    )
-    margin_top_pt: float | None = Field(
-        default=None, ge=0, le=1000, exclude_if=lambda value: value is None
-    )
-    margin_bottom_pt: float | None = Field(
-        default=None, ge=0, le=1000, exclude_if=lambda value: value is None
-    )
+    line_height: float | None = Field(default=None, ge=0.5, le=5, exclude_if=lambda value: value is None)
+    margin_left_pt: float | None = Field(default=None, ge=0, le=1000, exclude_if=lambda value: value is None)
+    margin_right_pt: float | None = Field(default=None, ge=0, le=1000, exclude_if=lambda value: value is None)
+    margin_top_pt: float | None = Field(default=None, ge=0, le=1000, exclude_if=lambda value: value is None)
+    margin_bottom_pt: float | None = Field(default=None, ge=0, le=1000, exclude_if=lambda value: value is None)
 
 
 class SceneTextRun(StrictCamelModel):
@@ -185,9 +170,7 @@ class SceneImageElement(_SceneElementBase):
 
 class SceneShapeElement(_SceneElementBase):
     kind: Literal["shape"]
-    shape: Literal[
-        "rect", "roundRect", "ellipse", "triangle", "diamond", "chevron", "line"
-    ]
+    shape: Literal["rect", "roundRect", "ellipse", "triangle", "diamond", "chevron", "line"]
     fill: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
     stroke: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
     stroke_width: float | None = Field(default=None, ge=0, le=100)
@@ -205,9 +188,7 @@ class SceneShapeElement(_SceneElementBase):
             or self.editability.geometry
             or self.editability.style
         ):
-            raise ValueError(
-                "canvasBackground must be a filled, non-editable lowest-z rectangle"
-            )
+            raise ValueError("canvasBackground must be a filled, non-editable lowest-z rectangle")
         return self
 
 
@@ -285,9 +266,7 @@ SceneElement = Union[
 class SceneAssetManifestEntry(StrictCamelModel):
     asset_id: AssetId
     asset_digest: Digest
-    media_type: Literal[
-        "image/png", "image/jpeg", "image/svg+xml", "image/webp"
-    ]
+    media_type: Literal["image/png", "image/jpeg", "image/svg+xml", "image/webp"]
     storage_reference: str = Field(min_length=1, max_length=133_334_000)
     size_bytes: int = Field(gt=0, le=100_000_000)
 
@@ -299,9 +278,7 @@ class SceneAssetManifestEntry(StrictCamelModel):
             if not self.storage_reference.startswith(data_prefix):
                 raise ValueError("scene asset data URI media type mismatch")
             try:
-                content = base64.b64decode(
-                    self.storage_reference.removeprefix(data_prefix), validate=True
-                )
+                content = base64.b64decode(self.storage_reference.removeprefix(data_prefix), validate=True)
             except (ValueError, binascii.Error) as error:
                 raise ValueError("scene asset data URI bytes are invalid") from error
             if len(content) != self.size_bytes:
@@ -309,9 +286,7 @@ class SceneAssetManifestEntry(StrictCamelModel):
             if f"sha256:{hashlib.sha256(content).hexdigest()}" != self.asset_digest:
                 raise ValueError("scene asset data URI digest mismatch")
         elif self.storage_reference != asset_store_reference:
-            raise ValueError(
-                "scene asset storageReference must be a sealed data URI or asset-store reference"
-            )
+            raise ValueError("scene asset storageReference must be a sealed data URI or asset-store reference")
         return self
 
 
@@ -324,18 +299,19 @@ class SceneDataManifestEntry(StrictCamelModel):
     @model_validator(mode="after")
     def _payload_digest_matches(self) -> "SceneDataManifestEntry":
         if self.kind == "table":
-            if not set(self.payload).issubset(
-                {
-                    "cells",
-                    "cellStyles",
-                    "columnWidthsPt",
-                    "rowHeightsPt",
-                    "mergedCells",
-                }
-            ) or "cells" not in self.payload:
-                raise ValueError(
-                    "scene table data payload fields are invalid"
+            if (
+                not set(self.payload).issubset(
+                    {
+                        "cells",
+                        "cellStyles",
+                        "columnWidthsPt",
+                        "rowHeightsPt",
+                        "mergedCells",
+                    }
                 )
+                or "cells" not in self.payload
+            ):
+                raise ValueError("scene table data payload fields are invalid")
             cells = self.payload.get("cells")
             if (
                 not isinstance(cells, list)
@@ -347,11 +323,7 @@ class SceneDataManifestEntry(StrictCamelModel):
             column_count = len(cells[0])
             if column_count > 30 or any(len(row) != column_count for row in cells):
                 raise ValueError("scene table data cells must be rectangular")
-            if any(
-                not isinstance(cell, str) or len(cell) > 5000
-                for row in cells
-                for cell in row
-            ):
+            if any(not isinstance(cell, str) or len(cell) > 5000 for row in cells for cell in row):
                 raise ValueError("scene table data cells must be bounded strings")
             widths = self.payload.get("columnWidthsPt")
             if widths is not None and (
@@ -371,10 +343,7 @@ class SceneDataManifestEntry(StrictCamelModel):
                 if (
                     not isinstance(styles, list)
                     or len(styles) != len(cells)
-                    or any(
-                        not isinstance(row, list) or len(row) != column_count
-                        for row in styles
-                    )
+                    or any(not isinstance(row, list) or len(row) != column_count for row in styles)
                 ):
                     raise ValueError("scene table cellStyles must match cells")
                 for row in styles:
@@ -407,9 +376,7 @@ class SceneDataManifestEntry(StrictCamelModel):
                     }:
                         raise ValueError("scene table mergedCells are invalid")
                     if any(
-                        isinstance(raw_merge[key], bool)
-                        or not isinstance(raw_merge[key], int)
-                        for key in raw_merge
+                        isinstance(raw_merge[key], bool) or not isinstance(raw_merge[key], int) for key in raw_merge
                     ):
                         raise ValueError("scene table mergedCells are invalid")
                     row = raw_merge["row"]
@@ -435,12 +402,10 @@ class SceneDataManifestEntry(StrictCamelModel):
                         raise ValueError("scene table mergedCells overlap")
                     occupied.update(covered)
         else:
-            if not {"categories", "series"}.issubset(self.payload) or not set(
-                self.payload
-            ).issubset({"categories", "series", "style"}):
-                raise ValueError(
-                    "scene chart data payload fields are invalid"
-                )
+            if not {"categories", "series"}.issubset(self.payload) or not set(self.payload).issubset(
+                {"categories", "series", "style"}
+            ):
+                raise ValueError("scene chart data payload fields are invalid")
             categories = self.payload.get("categories")
             series = self.payload.get("series")
             if (
@@ -478,9 +443,7 @@ class SceneDataManifestEntry(StrictCamelModel):
                 raise ValueError("scene chart series names must be unique")
             style = self.payload.get("style")
             if style is not None:
-                if not isinstance(style, dict) or not set(style).issubset(
-                    {"chartStyle", "seriesColors", "legend"}
-                ):
+                if not isinstance(style, dict) or not set(style).issubset({"chartStyle", "seriesColors", "legend"}):
                     raise ValueError("scene chart style is invalid")
                 chart_style = style.get("chartStyle", 2)
                 legend = style.get("legend")
@@ -496,8 +459,7 @@ class SceneDataManifestEntry(StrictCamelModel):
                         not isinstance(colors, list)
                         or len(colors) != len(series)
                         or any(
-                            not isinstance(color, str)
-                            or re.fullmatch(r"#[0-9A-Fa-f]{6}", color) is None
+                            not isinstance(color, str) or re.fullmatch(r"#[0-9A-Fa-f]{6}", color) is None
                             for color in colors
                         )
                     )
@@ -521,9 +483,7 @@ class SceneCapability(StrictCamelModel):
         if "unsupported" in states and self.reason is None:
             raise ValueError("unsupported scene capability requires a reason")
         if self.kind in {"connector", "group"} and self.native_pptx_export != "unsupported":
-            raise ValueError(
-                f"{self.kind} native PPTX export must remain explicitly unsupported"
-            )
+            raise ValueError(f"{self.kind} native PPTX export must remain explicitly unsupported")
         return self
 
 
@@ -554,9 +514,7 @@ class SceneOwnerDecision(StrictCamelModel):
         max_length=128,
         pattern=r"^(?:editable|css)\.[a-z0-9][a-z0-9._-]*\.v[0-9]+$",
     )
-    reason_code: str | None = Field(
-        default=None, min_length=1, max_length=128, pattern=r"^[a-z0-9][a-z0-9._-]*$"
-    )
+    reason_code: str | None = Field(default=None, min_length=1, max_length=128, pattern=r"^[a-z0-9][a-z0-9._-]*$")
 
     @model_validator(mode="after")
     def _non_native_decision_has_reason(self) -> "SceneOwnerDecision":
@@ -597,9 +555,7 @@ class SceneRasterIsland(StrictCamelModel):
 
 
 class SlideHybridExportPlan(StrictCamelModel):
-    schema_version: Literal["slide-hybrid-export-plan/v1"] = (
-        "slide-hybrid-export-plan/v1"
-    )
+    schema_version: Literal["slide-hybrid-export-plan/v1"] = "slide-hybrid-export-plan/v1"
     owner_decisions: list[SceneOwnerDecision] = Field(min_length=1, max_length=500)
     raster_islands: list[SceneRasterIsland] = Field(default_factory=list, max_length=500)
 
@@ -611,22 +567,12 @@ class SlideHybridExportPlan(StrictCamelModel):
         island_ids = [item.island_id for item in self.raster_islands]
         if len(set(island_ids)) != len(island_ids):
             raise ValueError("hybrid raster island IDs must be unique")
-        island_owners = [
-            owner_id
-            for island in self.raster_islands
-            for owner_id in island.source_owner_ids
-        ]
+        island_owners = [owner_id for island in self.raster_islands for owner_id in island.source_owner_ids]
         if len(set(island_owners)) != len(island_owners):
             raise ValueError("hybrid raster island owner sets must be disjoint")
-        raster_decisions = {
-            item.owner_id
-            for item in self.owner_decisions
-            if item.decision == "rasterIsland"
-        }
+        raster_decisions = {item.owner_id for item in self.owner_decisions if item.decision == "rasterIsland"}
         if set(island_owners) != raster_decisions:
-            raise ValueError(
-                "rasterIsland decisions must map to exactly one raster island"
-            )
+            raise ValueError("rasterIsland decisions must map to exactly one raster island")
         return self
 
 
@@ -636,41 +582,25 @@ class SlideSceneIR(StrictCamelModel):
     revision: int = Field(ge=1)
     slide_digest: Digest
     elements: list[SceneElement] = Field(min_length=1, max_length=500)
-    hybrid_export: SlideHybridExportPlan | None = Field(
-        default=None, exclude_if=lambda value: value is None
-    )
+    hybrid_export: SlideHybridExportPlan | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @model_validator(mode="after")
     def _identity_order_and_digest_are_canonical(self) -> "SlideSceneIR":
         ids = [element.element_id for element in self.elements]
         if len(ids) != len(set(ids)):
             raise ValueError("scene element IDs must be unique per slide")
-        if list(self.elements) != sorted(
-            self.elements, key=lambda element: (element.z_order, element.element_id)
-        ):
+        if list(self.elements) != sorted(self.elements, key=lambda element: (element.z_order, element.element_id)):
             raise ValueError("scene elements must be ordered by zOrder and elementId")
         id_set = set(ids)
         if self.hybrid_export is not None:
-            decisions = {
-                item.owner_id: item for item in self.hybrid_export.owner_decisions
-            }
+            decisions = {item.owner_id: item for item in self.hybrid_export.owner_decisions}
             if set(decisions) != id_set:
-                raise ValueError(
-                    "hybrid ownerDecisions must exactly match slide element IDs"
-                )
+                raise ValueError("hybrid ownerDecisions must exactly match slide element IDs")
             for element in self.elements:
                 decision = decisions[element.element_id]
-                if element.kind not in SCENE_OWNER_CAPABILITY_KINDS[
-                    decision.capability_id
-                ]:
-                    raise ValueError(
-                        "hybrid owner capability does not match the Scene element kind"
-                    )
-        backgrounds = [
-            element
-            for element in self.elements
-            if element.semantic_role == "canvasBackground"
-        ]
+                if element.kind not in SCENE_OWNER_CAPABILITY_KINDS[decision.capability_id]:
+                    raise ValueError("hybrid owner capability does not match the Scene element kind")
+        backgrounds = [element for element in self.elements if element.semantic_role == "canvasBackground"]
         if len(backgrounds) > 1:
             raise ValueError("slide scene allows at most one canvasBackground")
         if backgrounds and any(
@@ -681,17 +611,14 @@ class SlideSceneIR(StrictCamelModel):
             raise ValueError("canvasBackground must have the lowest zOrder")
         for element in self.elements:
             if isinstance(element, SceneConnectorElement) and (
-                element.from_element_id not in id_set
-                or element.to_element_id not in id_set
+                element.from_element_id not in id_set or element.to_element_id not in id_set
             ):
                 raise ValueError("connector endpoint does not exist on the slide")
             if isinstance(element, SceneGroupElement) and any(
                 child not in id_set for child in element.child_element_ids
             ):
                 raise ValueError("group child does not exist on the slide")
-        payload = self.model_dump(
-            mode="json", by_alias=True, exclude={"slide_digest"}
-        )
+        payload = self.model_dump(mode="json", by_alias=True, exclude={"slide_digest"})
         if self.slide_digest == scene_digest(payload):
             return self
         legacy_payload = dict(payload)
@@ -712,9 +639,7 @@ class DeckSceneIR(StrictCamelModel):
     composition_digest: Digest
     source_digest: Digest
     scene_digest: Digest
-    document_canvas: dict[str, Any] | None = Field(
-        default=None, exclude_if=lambda value: value is None
-    )
+    document_canvas: dict[str, Any] | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @field_validator("document_canvas", mode="before")
     @classmethod
@@ -724,16 +649,13 @@ class DeckSceneIR(StrictCamelModel):
         from services.document_canvas import DocumentCanvasMetadata
 
         return DocumentCanvasMetadata.model_validate(value).model_dump(mode="json", by_alias=True)
-    hybrid_profile_id: Literal[
-        "authored-editable-hybrid-ko-en-basic-v1"
-    ] | None = Field(default=None, exclude_if=lambda value: value is None)
+
+    hybrid_profile_id: Literal["authored-editable-hybrid-ko-en-basic-v1"] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     slides: list[SlideSceneIR] = Field(min_length=1, max_length=500)
-    asset_manifest: list[SceneAssetManifestEntry] = Field(
-        default_factory=list, max_length=5000
-    )
-    data_manifest: list[SceneDataManifestEntry] = Field(
-        default_factory=list, max_length=5000
-    )
+    asset_manifest: list[SceneAssetManifestEntry] = Field(default_factory=list, max_length=5000)
+    data_manifest: list[SceneDataManifestEntry] = Field(default_factory=list, max_length=5000)
     capabilities: list[SceneCapability] = Field(min_length=7, max_length=7)
 
     @model_validator(mode="after")
@@ -764,51 +686,29 @@ class DeckSceneIR(StrictCamelModel):
                         raise ValueError("image element is not digest-pinned in assetManifest")
                 if isinstance(element, (SceneTableElement, SceneChartElement)):
                     entry = data.get(element.data_id)
-                    if (
-                        entry is None
-                        or entry.data_digest != element.data_digest
-                        or entry.kind != element.kind
-                    ):
+                    if entry is None or entry.data_digest != element.data_digest or entry.kind != element.kind:
                         raise ValueError("data element is not digest-pinned in dataManifest")
                     if isinstance(element, SceneTableElement):
                         cells = entry.payload["cells"]
                         if element.rows != len(cells) or element.columns != len(cells[0]):
-                            raise ValueError(
-                                "table element dimensions do not match dataManifest"
-                            )
-                    elif element.chart_type in {"pie", "donut"} and len(
-                        entry.payload["series"]
-                    ) != 1:
-                        raise ValueError(
-                            "pie and donut chart elements require exactly one series"
-                        )
+                            raise ValueError("table element dimensions do not match dataManifest")
+                    elif element.chart_type in {"pie", "donut"} and len(entry.payload["series"]) != 1:
+                        raise ValueError("pie and donut chart elements require exactly one series")
             if slide.hybrid_export is not None:
                 for island in slide.hybrid_export.raster_islands:
                     entry = assets.get(island.asset_id)
                     if entry is None or entry.asset_digest != island.asset_digest:
-                        raise ValueError(
-                            "raster island is not digest-pinned in assetManifest"
-                        )
-        payload = self.model_dump(
-            mode="json", by_alias=True, exclude={"scene_digest"}
-        )
+                        raise ValueError("raster island is not digest-pinned in assetManifest")
+        payload = self.model_dump(mode="json", by_alias=True, exclude={"scene_digest"})
         if self.scene_digest == scene_digest(payload):
             return self
         legacy_payload = dict(payload)
         legacy_slides = [dict(item) for item in payload["slides"]]
-        for slide, slide_payload in zip(
-            self.slides, legacy_slides, strict=True
-        ):
-            if (
-                slide.hybrid_export is None
-                and "hybrid_export" in slide.model_fields_set
-            ):
+        for slide, slide_payload in zip(self.slides, legacy_slides, strict=True):
+            if slide.hybrid_export is None and "hybrid_export" in slide.model_fields_set:
                 slide_payload["hybridExport"] = None
         legacy_payload["slides"] = legacy_slides
-        if (
-            self.hybrid_profile_id is None
-            and "hybrid_profile_id" in self.model_fields_set
-        ):
+        if self.hybrid_profile_id is None and "hybrid_profile_id" in self.model_fields_set:
             legacy_payload["hybridProfileId"] = None
         if self.scene_digest != scene_digest(legacy_payload):
             raise ValueError("deck scene digest mismatch")
@@ -853,9 +753,7 @@ class DeckSceneIR(StrictCamelModel):
             if state == "unsupported":
                 unsupported.append(f"{kind}:{capability.reason}")
         if unsupported:
-            raise ValueError(
-                f"scene capability unsupported for {consumer}: " + ", ".join(unsupported)
-            )
+            raise ValueError(f"scene capability unsupported for {consumer}: " + ", ".join(unsupported))
 
 
 def seal_slide_scene(
@@ -870,14 +768,10 @@ def seal_slide_scene(
         "schemaVersion": "slide-scene-ir/v1",
         "slideId": slide_id,
         "revision": revision,
-        "elements": [
-            element.model_dump(mode="json", by_alias=True) for element in ordered
-        ],
+        "elements": [element.model_dump(mode="json", by_alias=True) for element in ordered],
     }
     if hybrid_export is not None:
-        payload["hybridExport"] = hybrid_export.model_dump(
-            mode="json", by_alias=True
-        )
+        payload["hybridExport"] = hybrid_export.model_dump(mode="json", by_alias=True)
     return SlideSceneIR(**payload, slideDigest=scene_digest(payload))
 
 
@@ -901,22 +795,16 @@ def seal_deck_scene(
         "compositionDigest": composition_digest,
         "sourceDigest": source_digest,
         "slides": [slide.model_dump(mode="json", by_alias=True) for slide in slides],
-        "assetManifest": [
-            item.model_dump(mode="json", by_alias=True)
-            for item in (asset_manifest or [])
-        ],
-        "dataManifest": [
-            item.model_dump(mode="json", by_alias=True)
-            for item in (data_manifest or [])
-        ],
-        "capabilities": [
-            item.model_dump(mode="json", by_alias=True) for item in capabilities
-        ],
+        "assetManifest": [item.model_dump(mode="json", by_alias=True) for item in (asset_manifest or [])],
+        "dataManifest": [item.model_dump(mode="json", by_alias=True) for item in (data_manifest or [])],
+        "capabilities": [item.model_dump(mode="json", by_alias=True) for item in capabilities],
     }
     if document_canvas is not None:
         from services.document_canvas import DocumentCanvasMetadata
 
-        payload["documentCanvas"] = DocumentCanvasMetadata.model_validate(document_canvas).model_dump(mode="json", by_alias=True)
+        payload["documentCanvas"] = DocumentCanvasMetadata.model_validate(document_canvas).model_dump(
+            mode="json", by_alias=True
+        )
     if hybrid_profile_id is not None:
         payload["hybridProfileId"] = hybrid_profile_id
     return DeckSceneIR(**payload, sceneDigest=scene_digest(payload))

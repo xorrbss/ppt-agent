@@ -27,19 +27,21 @@ from utils.authored_style_catalogue import canonical_authored_style_id
 LOGGER = logging.getLogger(__name__)
 DEFAULT_AUTHORED_STYLE_ID = "default"
 AUTHORED_STYLES_DIRECTORY = Path(__file__).resolve().parent.parent / "authored_styles"
-AUTHORED_STYLE_ASSETS_DIRECTORY = (
-    Path(__file__).resolve().parent.parent / "authored_style_assets"
-)
+AUTHORED_STYLE_ASSETS_DIRECTORY = Path(__file__).resolve().parent.parent / "authored_style_assets"
 DEFAULT_AUTHORED_STYLE_CATEGORY = "general"
-AUTHORED_STYLE_CATEGORIES = frozenset(
-    {"general", "business", "technology", "research", "editorial", "creative"}
-)
+AUTHORED_STYLE_CATEGORIES = frozenset({"general", "business", "technology", "research", "editorial", "creative"})
 _ENGLISH_IDENTIFIER_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 _HEX_COLOR_PATTERN = re.compile(r"^#[0-9A-Fa-f]{6}$")
 _REFERENCE_ROLES = frozenset(
     {
-        "cover", "content", "data", "timeline",
-        "architecture", "closing", "section", "agenda",
+        "cover",
+        "content",
+        "data",
+        "timeline",
+        "architecture",
+        "closing",
+        "section",
+        "agenda",
     }
 )
 
@@ -177,30 +179,22 @@ def _string_list(data: Mapping[str, Any], key: str, source: Path) -> list[str]:
     result: list[str] = []
     for index, item in enumerate(value):
         if not isinstance(item, str) or not item.strip():
-            raise ValueError(
-                f"{source.name}: '{key}[{index}]' must be a non-empty string"
-            )
+            raise ValueError(f"{source.name}: '{key}[{index}]' must be a non-empty string")
         result.append(item.strip())
     return result
 
 
-def _optional_color_list(
-    data: Mapping[str, Any], key: str, source: Path
-) -> Optional[list[str]]:
+def _optional_color_list(data: Mapping[str, Any], key: str, source: Path) -> Optional[list[str]]:
     if key not in data:
         return None
     values = _string_list(data, key, source)
     for index, value in enumerate(values):
         if not _HEX_COLOR_PATTERN.fullmatch(value):
-            raise ValueError(
-                f"{source.name}: '{key}[{index}]' must be a #RRGGBB color"
-            )
+            raise ValueError(f"{source.name}: '{key}[{index}]' must be a #RRGGBB color")
     return values
 
 
-def _optional_identifier(
-    data: Mapping[str, Any], key: str, source: Path
-) -> Optional[str]:
+def _optional_identifier(data: Mapping[str, Any], key: str, source: Path) -> Optional[str]:
     if key not in data:
         return None
     value = _required_string(data, key, source)
@@ -220,9 +214,7 @@ def _reference_mode(data: Mapping[str, Any], source: Path) -> str:
     normalized = value.strip().lower() if isinstance(value, str) else value
     if not isinstance(normalized, str) or normalized not in _REFERENCE_MODES:
         supported = ", ".join(sorted(_REFERENCE_MODES))
-        raise ValueError(
-            f"{source.name}: 'reference_mode' must be one of: {supported}"
-        )
+        raise ValueError(f"{source.name}: 'reference_mode' must be one of: {supported}")
     return normalized
 
 
@@ -240,50 +232,33 @@ def _asset_path(value: Any, source: Path, assets_directory: Path) -> Optional[Pa
     try:
         candidate.relative_to(root)
     except ValueError as exc:
-        raise ValueError(
-            f"{source.name}: reference asset must stay inside {assets_directory.name}"
-        ) from exc
+        raise ValueError(f"{source.name}: reference asset must stay inside {assets_directory.name}") from exc
     if candidate.suffix.lower() not in _REFERENCE_SUFFIXES:
-        raise ValueError(
-            f"{source.name}: unsupported reference asset type '{candidate.suffix}'"
-        )
+        raise ValueError(f"{source.name}: unsupported reference asset type '{candidate.suffix}'")
     if not candidate.is_file():
         # Reference assets can belong to private exact-reconstruction presets.
         # Keep the local asset root/path out of process logs; the preset filename
         # is sufficient for an operator to locate and validate its manifest.
-        LOGGER.warning(
-            "Missing authored style reference asset declared by %s", source.name
-        )
+        LOGGER.warning("Missing authored style reference asset declared by %s", source.name)
         return None
     return candidate
 
 
-def _reference_images(
-    data: Mapping[str, Any], source: Path, assets_directory: Path
-) -> Mapping[str, tuple[Path, ...]]:
+def _reference_images(data: Mapping[str, Any], source: Path, assets_directory: Path) -> Mapping[str, tuple[Path, ...]]:
     raw = data.get("reference_images", {})
     if not isinstance(raw, Mapping):
         raise ValueError(f"{source.name}: 'reference_images' must be a mapping")
     result: dict[str, tuple[Path, ...]] = {}
     for role, values in raw.items():
         if role not in _REFERENCE_ROLES:
-            raise ValueError(
-                f"{source.name}: unsupported reference role '{role}'"
-            )
+            raise ValueError(f"{source.name}: unsupported reference role '{role}'")
         if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
-            raise ValueError(
-                f"{source.name}: reference_images.{role} must be a list"
-            )
+            raise ValueError(f"{source.name}: reference_images.{role} must be a list")
         if len(values) > _MAX_REFERENCES_PER_ROLE:
             raise ValueError(
-                f"{source.name}: reference_images.{role} accepts at most "
-                f"{_MAX_REFERENCES_PER_ROLE} images"
+                f"{source.name}: reference_images.{role} accepts at most {_MAX_REFERENCES_PER_ROLE} images"
             )
-        resolved = tuple(
-            path
-            for value in values
-            if (path := _asset_path(value, source, assets_directory)) is not None
-        )
+        resolved = tuple(path for value in values if (path := _asset_path(value, source, assets_directory)) is not None)
         if resolved:
             result[str(role)] = resolved
     return result
@@ -311,10 +286,7 @@ def _slide_reference_images(
                 )
             declared_index = value.get("slide_index")
             if not isinstance(declared_index, int) or isinstance(declared_index, bool):
-                raise ValueError(
-                    f"{source.name}: slide_reference_images[{index}].slide_index "
-                    "must be an integer"
-                )
+                raise ValueError(f"{source.name}: slide_reference_images[{index}].slide_index must be an integer")
             asset_value = value.get("source")
         else:
             # Scalar entries remain compatible; their stable key is the zero-based
@@ -356,23 +328,13 @@ def _validate_exact_source_image(path: Path, source: Path) -> str:
         # This validation can run inside a background worker whose traceback is
         # logged. Suppress the filesystem exception chain so private asset paths
         # cannot escape through that traceback.
-        raise ValueError(
-            f"{source.name}: exact source image is not readable"
-        ) from None
+        raise ValueError(f"{source.name}: exact source image is not readable") from None
     detected = _image_format_from_magic(payload)
     if detected is None:
-        raise ValueError(
-            f"{source.name}: exact source must contain PNG, JPEG, or WebP magic bytes"
-        )
-    suffix_format = (
-        "jpeg"
-        if path.suffix.lower() in {".jpg", ".jpeg"}
-        else path.suffix.lower()[1:]
-    )
+        raise ValueError(f"{source.name}: exact source must contain PNG, JPEG, or WebP magic bytes")
+    suffix_format = "jpeg" if path.suffix.lower() in {".jpg", ".jpeg"} else path.suffix.lower()[1:]
     if suffix_format != detected:
-        raise ValueError(
-            f"{source.name}: exact source extension does not match its image bytes"
-        )
+        raise ValueError(f"{source.name}: exact source extension does not match its image bytes")
     try:
         with Image.open(BytesIO(payload)) as image:
             size = image.size
@@ -380,16 +342,11 @@ def _validate_exact_source_image(path: Path, source: Path) -> str:
     except (OSError, UnidentifiedImageError):
         raise ValueError(f"{source.name}: exact source image is corrupt") from None
     if size != _EXACT_SOURCE_SIZE:
-        raise ValueError(
-            f"{source.name}: exact source must be 1280x720 pixels, got "
-            f"{size[0]}x{size[1]}"
-        )
+        raise ValueError(f"{source.name}: exact source must be 1280x720 pixels, got {size[0]}x{size[1]}")
     return sha256(payload).hexdigest()
 
 
-def _validate_exact_sources(
-    paths: Sequence[Path], source: Path, assets_directory: Path
-) -> tuple[str, ...]:
+def _validate_exact_sources(paths: Sequence[Path], source: Path, assets_directory: Path) -> tuple[str, ...]:
     root = assets_directory.resolve()
     resolved_paths: list[Path] = []
     digests: list[str] = []
@@ -398,16 +355,10 @@ def _validate_exact_sources(
         try:
             resolved.relative_to(root)
         except ValueError:
-            raise ValueError(
-                f"{source.name}: exact source must stay inside "
-                f"{assets_directory.name}"
-            ) from None
+            raise ValueError(f"{source.name}: exact source must stay inside {assets_directory.name}") from None
         resolved_paths.append(resolved)
         digests.append(_validate_exact_source_image(resolved, source))
-    if (
-        len(set(resolved_paths)) != len(resolved_paths)
-        or len(set(digests)) != len(digests)
-    ):
+    if len(set(resolved_paths)) != len(resolved_paths) or len(set(digests)) != len(digests):
         raise ValueError(
             f"{source.name}: exact reconstruction requires a unique source image "
             "per slide, including slides with the same role"
@@ -419,10 +370,17 @@ def _validate_exact_sources(
 #: SLIDE ARCHETYPES section and its reference images. Unbridged in the prompt, a
 #: PROBLEM/PILLARS/OUTCOMES page was authored against no archetype at all.
 _ROLE_ARCHETYPES: Mapping[str, str] = {
-    "COVER": "cover", "CLOSING": "closing", "SECTION": "section",
-    "AGENDA": "agenda", "ROADMAP": "timeline", "TIMELINE": "timeline",
-    "OUTCOMES": "data", "METRICS": "data", "DATA": "data",
-    "ARCHITECTURE": "architecture", "SYSTEM": "architecture",
+    "COVER": "cover",
+    "CLOSING": "closing",
+    "SECTION": "section",
+    "AGENDA": "agenda",
+    "ROADMAP": "timeline",
+    "TIMELINE": "timeline",
+    "OUTCOMES": "data",
+    "METRICS": "data",
+    "DATA": "data",
+    "ARCHITECTURE": "architecture",
+    "SYSTEM": "architecture",
     "SOLUTION": "architecture",
 }
 
@@ -477,9 +435,7 @@ def _parse_style(
     category = data.get("category", DEFAULT_AUTHORED_STYLE_CATEGORY)
     if not isinstance(category, str) or category not in AUTHORED_STYLE_CATEGORIES:
         supported = ", ".join(sorted(AUTHORED_STYLE_CATEGORIES))
-        raise ValueError(
-            f"{source.name}: 'category' must be one of: {supported}"
-        )
+        raise ValueError(f"{source.name}: 'category' must be one of: {supported}")
 
     tokens = data.get("design_tokens", {})
     if not isinstance(tokens, Mapping):
@@ -497,7 +453,11 @@ def _parse_style(
     composer_profile = data.get("composer_profile")
     svg_overrides = data.get("svg_overrides")
     if svg_overrides is not None:
-        if not isinstance(svg_overrides, Mapping) or set(svg_overrides) - {"layout_hints", "common_guidance", "resolved_sections"}:
+        if not isinstance(svg_overrides, Mapping) or set(svg_overrides) - {
+            "layout_hints",
+            "common_guidance",
+            "resolved_sections",
+        }:
             raise ValueError(f"{source.name}: invalid svg_overrides")
         for key, value in svg_overrides.items():
             if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
@@ -514,10 +474,7 @@ def _parse_style(
         strict=reference_mode == "exact_reconstruction",
     )
     if reference_mode == "exact_reconstruction" and not slide_reference_images:
-        raise ValueError(
-            f"{source.name}: exact_reconstruction requires readable "
-            "slide_reference_images"
-        )
+        raise ValueError(f"{source.name}: exact_reconstruction requires readable slide_reference_images")
     if reference_mode == _EXACT_RECONSTRUCTION:
         _validate_exact_sources(slide_reference_images, source, assets_directory)
 
@@ -570,9 +527,7 @@ def validate_exact_reconstruction_style(
             f"Exact reconstruction style '{style.id}' is disabled or not allow-listed"
         )
     if slide_count < 1 or len(roles) != slide_count:
-        raise ValueError(
-            f"Exact reconstruction style '{style.id}' requires one role per slide"
-        )
+        raise ValueError(f"Exact reconstruction style '{style.id}' requires one role per slide")
 
     paths = tuple(getattr(style, "slide_reference_images", ()))
     indices = tuple(getattr(style, "slide_reference_indices", ()))
@@ -585,9 +540,7 @@ def validate_exact_reconstruction_style(
 
     assets_root = getattr(style, "assets_root", None)
     if not isinstance(assets_root, Path):
-        raise ValueError(
-            f"Exact reconstruction style '{style.id}' has no validated assets root"
-        )
+        raise ValueError(f"Exact reconstruction style '{style.id}' has no validated assets root")
     source = Path(f"{style.id}.yaml")
     digests = _validate_exact_sources(paths, source, assets_root)
 
@@ -597,8 +550,7 @@ def validate_exact_reconstruction_style(
         identity = (path.resolve(), digest)
         if identity in seen_by_role.setdefault(normalized_role, set()):
             raise ValueError(
-                f"Exact reconstruction style '{style.id}' reuses a source for "
-                f"multiple {normalized_role} slides"
+                f"Exact reconstruction style '{style.id}' reuses a source for multiple {normalized_role} slides"
             )
         seen_by_role[normalized_role].add(identity)
 
@@ -613,9 +565,7 @@ def load_authored_styles(
     """
     directory = styles_directory or AUTHORED_STYLES_DIRECTORY
     assets_directory = (
-        AUTHORED_STYLE_ASSETS_DIRECTORY
-        if styles_directory is None
-        else directory.parent / "authored_style_assets"
+        AUTHORED_STYLE_ASSETS_DIRECTORY if styles_directory is None else directory.parent / "authored_style_assets"
     )
     styles: list[AuthoredStyle] = []
     known_ids: set[str] = set()
@@ -633,17 +583,12 @@ def load_authored_styles(
         try:
             data = _read_style_mapping(source)
             declared_exact_id = _declared_exact_style_id(data)
-            if declared_exact_id is not None and not exact_reconstruction_is_allowed(
-                declared_exact_id
-            ):
+            if declared_exact_id is not None and not exact_reconstruction_is_allowed(declared_exact_id):
                 # Exact presets are private rollout artefacts.  Gate-disabled or
                 # non-allow-listed entries must not enter the public catalogue.
                 continue
             style = _parse_style(source, assets_directory, data)
-            if (
-                style.reference_mode == _EXACT_RECONSTRUCTION
-                and not exact_reconstruction_is_allowed(style.id)
-            ):
+            if style.reference_mode == _EXACT_RECONSTRUCTION and not exact_reconstruction_is_allowed(style.id):
                 continue
             if style.id in known_ids:
                 raise ValueError(f"{source.name}: duplicate style id '{style.id}'")
@@ -700,18 +645,14 @@ def resolve_authored_style(
         return resolved
     if requested_id != DEFAULT_AUTHORED_STYLE_ID:
         directory = styles_directory or AUTHORED_STYLES_DIRECTORY
-        known_exact_ids = (
-            _declared_exact_style_ids(directory) | _configured_exact_style_ids()
-        )
+        known_exact_ids = _declared_exact_style_ids(directory) | _configured_exact_style_ids()
         if requested_id in known_exact_ids:
             if not exact_reconstruction_is_allowed(requested_id):
                 raise AuthoredExactReconstructionUnavailableError(
-                    f"Exact reconstruction style '{requested_id}' is disabled or "
-                    "not allow-listed"
+                    f"Exact reconstruction style '{requested_id}' is disabled or not allow-listed"
                 )
             raise AuthoredExactReconstructionUnavailableError(
-                f"Exact reconstruction style '{requested_id}' failed preset "
-                "validation"
+                f"Exact reconstruction style '{requested_id}' failed preset validation"
             )
     if resolved is None and requested_id != DEFAULT_AUTHORED_STYLE_ID:
         # A specific style was asked for but doesn't exist (e.g. a CLI/API typo);

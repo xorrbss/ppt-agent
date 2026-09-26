@@ -94,8 +94,7 @@ def _wait_until(predicate, *, timeout: float, description: str):
             break
         time.sleep(_POLL_INTERVAL)
     raise AssertionError(
-        f"Timed out after {timeout:.0f}s waiting for {description}"
-        f" (last transport error: {last_error!r})"
+        f"Timed out after {timeout:.0f}s waiting for {description} (last transport error: {last_error!r})"
     )
 
 
@@ -120,15 +119,11 @@ def _query(database_path: Path, sql: str) -> list[tuple]:
     deadline = time.monotonic() + _CONDITION_TIMEOUT
     while True:
         try:
-            with closing(
-                sqlite3.connect(database_path, timeout=_SQLITE_BUSY_TIMEOUT)
-            ) as connection:
+            with closing(sqlite3.connect(database_path, timeout=_SQLITE_BUSY_TIMEOUT)) as connection:
                 return [tuple(row) for row in connection.execute(sql)]
         except sqlite3.OperationalError as error:
             if time.monotonic() >= deadline:
-                raise AssertionError(
-                    f"SQLite stayed unreadable for {sql!r}: {error}"
-                ) from error
+                raise AssertionError(f"SQLite stayed unreadable for {sql!r}: {error}") from error
             time.sleep(_POLL_INTERVAL)
 
 
@@ -189,9 +184,7 @@ def _start_server(*, python: Path, env: dict[str, str], description: str):
                 output = process.stdout.read() if process.stdout else ""
                 if "10048" in output or "bind on address" in output:
                     raise _AddressInUse(output)
-                raise AssertionError(
-                    f"Uvicorn subprocess exited early ({process.returncode}): {output}"
-                )
+                raise AssertionError(f"Uvicorn subprocess exited early ({process.returncode}): {output}")
             # The probe itself must not impose a tighter budget than the host
             # can meet: a 500ms read timeout never succeeds on a saturated
             # machine even once the server is fully up.
@@ -215,10 +208,7 @@ def _start_server(*, python: Path, env: dict[str, str], description: str):
             raise
         return process, base_url
 
-    raise AssertionError(
-        f"{description} never bound a free port; last bind failure: "
-        f"{last_bind_failure!r}"
-    )
+    raise AssertionError(f"{description} never bound a free port; last bind failure: {last_bind_failure!r}")
 
 
 def _kill_process_tree(process: subprocess.Popen) -> str:
@@ -240,7 +230,10 @@ def _kill_process_tree(process: subprocess.Popen) -> str:
     return output or ""
 
 
-@pytest.mark.xfail(strict=True, reason="fixture needs current public admission backend + bounded status observation; see handoff x2-tests")
+@pytest.mark.xfail(
+    strict=True,
+    reason="fixture needs current public admission backend + bounded status observation; see handoff x2-tests",
+)
 def test_hard_process_kill_expires_lease_and_resumes_same_job(tmp_path):
     """A new OS process resumes durable checkpoints without duplicate success."""
 
@@ -299,11 +292,7 @@ def test_hard_process_kill_expires_lease_and_resumes_same_job(tmp_path):
         )
         first_runtime_pid = _wait_until(
             lambda: next(
-                (
-                    event["pid"]
-                    for event in _events(event_log)
-                    if event["event"] == "startup"
-                ),
+                (event["pid"] for event in _events(event_log) if event["event"] == "startup"),
                 None,
             ),
             timeout=_CONDITION_TIMEOUT,
@@ -321,9 +310,7 @@ def test_hard_process_kill_expires_lease_and_resumes_same_job(tmp_path):
 
         _wait_until(
             lambda: any(
-                event["event"] == "render_blocked"
-                and event.get("slide_index") == 2
-                for event in _events(event_log)
+                event["event"] == "render_blocked" and event.get("slide_index") == 2 for event in _events(event_log)
             ),
             timeout=_CONDITION_TIMEOUT,
             description="slide 2 to block inside render",
@@ -366,8 +353,7 @@ def test_hard_process_kill_expires_lease_and_resumes_same_job(tmp_path):
 
         crashed_job = _one(
             database_path,
-            "SELECT state, attempt_number, completed_slides "
-            "FROM presentation_generation_jobs",
+            "SELECT state, attempt_number, completed_slides FROM presentation_generation_jobs",
         )
         # A forced process-tree termination normally leaves the leased row
         # running. On Windows the parent can briefly process task cancellation
@@ -398,9 +384,7 @@ def test_hard_process_kill_expires_lease_and_resumes_same_job(tmp_path):
             # reclaimable before the new process performs startup recovery.
             now = datetime.now(timezone.utc)
             leases = (job_lease_expires_at, operation_lease_expires_at)
-            return state if all(
-                value is None or _as_utc(value) <= now for value in leases
-            ) else None
+            return state if all(value is None or _as_utc(value) <= now for value in leases) else None
 
         # Waiting for the recorded expiry instant -- instead of sleeping for a
         # duration that merely tends to exceed the lease -- is what makes the
@@ -424,14 +408,7 @@ def test_hard_process_kill_expires_lease_and_resumes_same_job(tmp_path):
             description="the resuming runtime",
         )
         second_runtime_pid = _wait_until(
-            lambda: (
-                [
-                    event["pid"]
-                    for event in _events(event_log)
-                    if event["event"] == "startup"
-                ]
-                + [None]
-            )[1],
+            lambda: ([event["pid"] for event in _events(event_log) if event["event"] == "startup"] + [None])[1],
             timeout=_CONDITION_TIMEOUT,
             description="the resuming runtime to log its startup pid",
         )
@@ -459,18 +436,12 @@ def test_hard_process_kill_expires_lease_and_resumes_same_job(tmp_path):
                 "SELECT state, attempt_number, completed_slides, "
                 "current_stage, last_error FROM presentation_generation_jobs",
             )
-            raise AssertionError(
-                f"{error}; durable job row={stalled_job!r}"
-            ) from error
+            raise AssertionError(f"{error}; durable job row={stalled_job!r}") from error
         assert completed["progress"]["completed_slides"] == 6
         assert completed["progress"]["percent"] == 100
         assert completed["failure"] is None
-        storage_key = _one(
-            database_path, "SELECT storage_key FROM workspace_artifacts"
-        )[0]
-        assert completed["data"]["path"].replace("\\", "/").endswith(
-            f"/{storage_key}"
-        )
+        storage_key = _one(database_path, "SELECT storage_key FROM workspace_artifacts")[0]
+        assert completed["data"]["path"].replace("\\", "/").endswith(f"/{storage_key}")
         output_path = Path(common_env["APP_DATA_DIRECTORY"]) / storage_key
         assert output_path.exists()
         assert len(PptxPresentation(output_path).slides) == 6
@@ -492,36 +463,32 @@ def test_hard_process_kill_expires_lease_and_resumes_same_job(tmp_path):
         second = None
 
         recorded = _events(event_log)
-        assert Counter(
-            event["slide_index"]
-            for event in recorded
-            if event["event"] == "author_success"
-        ) == Counter({index: 1 for index in range(6)})
-        assert Counter(
-            event["slide_index"]
-            for event in recorded
-            if event["event"] == "render_success"
-        ) == Counter({index: 1 for index in range(6)})
+        assert Counter(event["slide_index"] for event in recorded if event["event"] == "author_success") == Counter(
+            {index: 1 for index in range(6)}
+        )
+        assert Counter(event["slide_index"] for event in recorded if event["event"] == "render_success") == Counter(
+            {index: 1 for index in range(6)}
+        )
         assert sum(event["event"] == "brief_success" for event in recorded) == 1
         assert sum(event["event"] == "outline_success" for event in recorded) == 1
-        assert {
-            event["pid"] for event in recorded if event["event"] == "startup"
-        } == {first_runtime_pid, second_runtime_pid}
+        assert {event["pid"] for event in recorded if event["event"] == "startup"} == {
+            first_runtime_pid,
+            second_runtime_pid,
+        }
 
         published_job = _one(
             database_path,
-            "SELECT state, attempt_number, completed_slides, current_stage "
-            "FROM presentation_generation_jobs",
+            "SELECT state, attempt_number, completed_slides, current_stage FROM presentation_generation_jobs",
         )
         assert published_job == ("published", 2, 6, "completed")
-        assert _one(
-            database_path,
-            "SELECT COUNT(*) FROM authored_slide_checkpoints "
-            "WHERE persist_status = 'completed'",
-        )[0] == 6
-        assert _one(
-            database_path, "SELECT lifecycle_status, n_slides FROM presentations"
-        ) == ("published", 6)
+        assert (
+            _one(
+                database_path,
+                "SELECT COUNT(*) FROM authored_slide_checkpoints WHERE persist_status = 'completed'",
+            )[0]
+            == 6
+        )
+        assert _one(database_path, "SELECT lifecycle_status, n_slides FROM presentations") == ("published", 6)
         assert _one(database_path, "SELECT COUNT(*) FROM slides")[0] == 6
     except Exception as error:
         # Preserve subprocess diagnostics even when the failure happens before
@@ -532,10 +499,7 @@ def test_hard_process_kill_expires_lease_and_resumes_same_job(tmp_path):
         if second is not None:
             second_output = _kill_process_tree(second)
             second = None
-        raise AssertionError(
-            f"subprocess recovery failed; first={first_output!r}, "
-            f"second={second_output!r}"
-        ) from error
+        raise AssertionError(f"subprocess recovery failed; first={first_output!r}, second={second_output!r}") from error
     finally:
         if first is not None:
             _kill_process_tree(first)

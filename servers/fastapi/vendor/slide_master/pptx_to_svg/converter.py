@@ -142,6 +142,7 @@ class ConvertResult:
 # Entry
 # ---------------------------------------------------------------------------
 
+
 def convert_pptx_to_svg(
     pptx_path: Path,
     output_dir: Path | None = None,
@@ -160,10 +161,7 @@ def convert_pptx_to_svg(
     """
     options = options or ConvertOptions()
     if options.inheritance_mode not in {"flat", "layered", "both"}:
-        raise ValueError(
-            f"inheritance_mode must be 'flat', 'layered', or 'both', "
-            f"got {options.inheritance_mode!r}"
-        )
+        raise ValueError(f"inheritance_mode must be 'flat', 'layered', or 'both', got {options.inheritance_mode!r}")
     emit_layered = options.inheritance_mode in {"layered", "both"}
     emit_flat = options.inheritance_mode in {"flat", "both"}
     result = ConvertResult()
@@ -197,9 +195,15 @@ def convert_pptx_to_svg(
         for slide in pkg.iter_slides():
             slide_theme = pkg.resolve_theme(slide.master) or default_theme
             slide_palette = ColorPalette(slide.master, slide_theme)
-            _colors, slide_fonts = _extract_theme_info(slide_theme, slide_palette) if slide_theme is not None else ({}, result.theme_fonts)
+            _colors, slide_fonts = (
+                _extract_theme_info(slide_theme, slide_palette) if slide_theme is not None else ({}, result.theme_fonts)
+            )
             artifact = _convert_slide(
-                pkg, slide, slide_palette, options, slide_fonts,
+                pkg,
+                slide,
+                slide_palette,
+                options,
+                slide_fonts,
                 inheritance_mode=primary_mode,
             )
             result.slides.append(artifact)
@@ -207,9 +211,17 @@ def convert_pptx_to_svg(
             for slide in pkg.iter_slides():
                 slide_theme = pkg.resolve_theme(slide.master) or default_theme
                 slide_palette = ColorPalette(slide.master, slide_theme)
-                _colors, slide_fonts = _extract_theme_info(slide_theme, slide_palette) if slide_theme is not None else ({}, result.theme_fonts)
+                _colors, slide_fonts = (
+                    _extract_theme_info(slide_theme, slide_palette)
+                    if slide_theme is not None
+                    else ({}, result.theme_fonts)
+                )
                 artifact = _convert_slide(
-                    pkg, slide, slide_palette, options, slide_fonts,
+                    pkg,
+                    slide,
+                    slide_palette,
+                    options,
+                    slide_fonts,
                     inheritance_mode="flat",
                 )
                 result.flat_slides.append(artifact)
@@ -245,7 +257,9 @@ def _convert_slide(
     if mode == "both":
         mode = "layered"  # primary view in both-mode
     svg, media = assemble_slide(
-        pkg, slide, palette,
+        pkg,
+        slide,
+        palette,
         theme_fonts=theme_fonts,
         media_subdir=options.media_subdir,
         embed_images=options.embed_images,
@@ -294,19 +308,35 @@ def _convert_inheritance_parts(
         theme = pkg.resolve_theme(part) or default_theme
         palette = ColorPalette(part, theme)
         _colors, fonts = _extract_theme_info(theme, palette) if theme is not None else ({}, result.theme_fonts)
-        result.masters.append(_render_part(
-            pkg, part, palette, options, fonts,
-            role="master", seq=seq, theme_part=theme,
-        ))
+        result.masters.append(
+            _render_part(
+                pkg,
+                part,
+                palette,
+                options,
+                fonts,
+                role="master",
+                seq=seq,
+                theme_part=theme,
+            )
+        )
     for seq, (layout, parent_master) in enumerate(layouts_with_parent, start=1):
         theme = pkg.resolve_theme(parent_master) or default_theme
         palette = ColorPalette(parent_master, theme)
         _colors, fonts = _extract_theme_info(theme, palette) if theme is not None else ({}, result.theme_fonts)
-        result.layouts.append(_render_part(
-            pkg, layout, palette, options, fonts,
-            role="layout", seq=seq, parent_master=parent_master,
-            theme_part=theme,
-        ))
+        result.layouts.append(
+            _render_part(
+                pkg,
+                layout,
+                palette,
+                options,
+                fonts,
+                role="layout",
+                seq=seq,
+                parent_master=parent_master,
+                theme_part=theme,
+            )
+        )
 
 
 def _render_part(
@@ -323,7 +353,9 @@ def _render_part(
 ) -> PartArtifact:
     """Render a master/layout part, returning a PartArtifact with output filename."""
     svg, media = assemble_part_solo(
-        pkg, part, palette,
+        pkg,
+        part,
+        palette,
         role=role,
         parent_master=parent_master,
         theme_fonts=theme_fonts,
@@ -346,8 +378,7 @@ def _render_part(
     )
 
 
-def _write_artifacts(output_dir: Path, result: ConvertResult,
-                     options: ConvertOptions) -> None:
+def _write_artifacts(output_dir: Path, result: ConvertResult, options: ConvertOptions) -> None:
     """Write SVG + media files to output_dir.
 
     Layout:

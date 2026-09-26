@@ -142,9 +142,7 @@ def test_generation_info_prefers_the_original_workspace_generation_prompt(tmp_pa
                     state="succeeded",
                     idempotency_key_hash="a" * 64,
                     request_hash="b" * 64,
-                    request_payload={
-                        "prompt": "첨부한 제안요청서를 바탕으로 구축 제안서를 만들어 줘."
-                    },
+                    request_payload={"prompt": "첨부한 제안요청서를 바탕으로 구축 제안서를 만들어 줘."},
                 )
             )
             await session.commit()
@@ -190,9 +188,7 @@ def test_generation_info_does_not_report_the_attachment_fallback_as_user_prompt(
                     state="succeeded",
                     idempotency_key_hash="c" * 64,
                     request_hash="d" * 64,
-                    request_payload={
-                        "prompt": "Generate a presentation from the attached files."
-                    },
+                    request_payload={"prompt": "Generate a presentation from the attached files."},
                 )
             )
             await session.commit()
@@ -230,25 +226,38 @@ def test_generation_info_returns_404_for_unknown_presentation(tmp_path):
 async def _seed_generation_attempt(session, *, state="failed", owner_id=None, deleted=False):
     if owner_id is not None:
         from models.sql.user import User
+
         session.add(User(id=owner_id, username=f"attempt-owner-{owner_id}", hashed_password="test-only"))
         await session.flush()
     presentation = PresentationModel(
-        id=uuid.uuid4(), content="original request", n_slides=3, language="ko",
-        mode="authored", owner_id=owner_id,
+        id=uuid.uuid4(),
+        content="original request",
+        n_slides=3,
+        language="ko",
+        mode="authored",
+        owner_id=owner_id,
         lifecycle_status="deleted" if deleted else "staging",
     )
     conversation = WorkspaceConversation(
-        presentation_id=presentation.id, owner_id=owner_id,
+        presentation_id=presentation.id,
+        owner_id=owner_id,
         owner_scope=str(owner_id) if owner_id else "anonymous",
     )
     message = WorkspaceMessage(
-        conversation_id=conversation.id, owner_id=owner_id,
-        position=1, role="user", content="original request",
+        conversation_id=conversation.id,
+        owner_id=owner_id,
+        position=1,
+        role="user",
+        content="original request",
     )
     operation = WorkspaceOperation(
-        presentation_id=presentation.id, conversation_id=conversation.id,
-        owner_id=owner_id, owner_scope=conversation.owner_scope,
-        anchor_position=2, kind="presentation.generate", state=state,
+        presentation_id=presentation.id,
+        conversation_id=conversation.id,
+        owner_id=owner_id,
+        owner_scope=conversation.owner_scope,
+        anchor_position=2,
+        kind="presentation.generate",
+        state=state,
         idempotency_key_hash=uuid.uuid4().hex * 2,
         request_hash=uuid.uuid4().hex * 2,
         request_payload={"prompt": "original request", "user_message_id": str(message.id)},
@@ -264,9 +273,11 @@ def test_generation_info_correlates_only_the_owned_operation_message(tmp_path):
         async with AsyncSession(engine, expire_on_commit=False) as session:
             presentation, conversation, message, operation = await _seed_generation_attempt(session)
             info = await get_presentation_generation_info(presentation.id, session)
-            assert (
-                info.conversation_id, info.operation_id, info.first_user_message_id
-            ) == (conversation.id, operation.id, message.id)
+            assert (info.conversation_id, info.operation_id, info.first_user_message_id) == (
+                conversation.id,
+                operation.id,
+                message.id,
+            )
             assert info.can_start_new_attempt is True
             _, _, other_message, _ = await _seed_generation_attempt(session)
             operation.request_payload = {**operation.request_payload, "user_message_id": str(other_message.id)}
@@ -277,6 +288,7 @@ def test_generation_info_correlates_only_the_owned_operation_message(tmp_path):
             assert info.operation_id is None
             assert info.conversation_id is None
         await engine.dispose()
+
     _run(runner())
 
 
@@ -290,8 +302,15 @@ def test_new_attempt_link_is_durable_idempotent_and_owner_filtered(tmp_path, mon
         async with AsyncSession(engine, expire_on_commit=False) as session:
             previous, _, _, _ = await _seed_generation_attempt(session)
             next_id = uuid.uuid4()
-            request = dict(content="changed request", presentation_id=next_id, previous_presentation_id=previous.id,
-                           n_slides=3, language="ko", idempotency_key=f"create:{next_id}", sql_session=session)
+            request = dict(
+                content="changed request",
+                presentation_id=next_id,
+                previous_presentation_id=previous.id,
+                n_slides=3,
+                language="ko",
+                idempotency_key=f"create:{next_id}",
+                sql_session=session,
+            )
             created = await presentation_crud.create_presentation(**request)
             assert created.id == next_id
             repeated = await presentation_crud.create_presentation(**request)
@@ -310,7 +329,10 @@ def test_new_attempt_link_is_durable_idempotent_and_owner_filtered(tmp_path, mon
             await session.commit()
             assert (await get_presentation_generation_info(previous.id, session)).next_presentation_ids == [next_id]
             _, _, _, foreign_operation = await _seed_generation_attempt(session, owner_id=uuid.uuid4())
-            foreign_operation.request_payload = {**foreign_operation.request_payload, "previous_presentation_id": str(previous.id)}
+            foreign_operation.request_payload = {
+                **foreign_operation.request_payload,
+                "previous_presentation_id": str(previous.id),
+            }
             session.add(foreign_operation)
             await session.commit()
             assert (await get_presentation_generation_info(previous.id, session)).next_presentation_ids == [next_id]
@@ -324,6 +346,7 @@ def test_new_attempt_link_is_durable_idempotent_and_owner_filtered(tmp_path, mon
             await session.commit()
             assert (await get_presentation_generation_info(next_id, session)).previous_presentation_id is None
         await engine.dispose()
+
     _run(runner())
 
 
@@ -335,13 +358,17 @@ def test_new_attempt_rejects_unavailable_or_active_predecessor(tmp_path, case):
         engine = await _make_engine(tmp_path / f"attempt-{case}.db")
         async with AsyncSession(engine, expire_on_commit=False) as session:
             previous, _, _, _ = await _seed_generation_attempt(
-                session, state="running" if case == "running" else "failed",
+                session,
+                state="running" if case == "running" else "failed",
                 owner_id=uuid.uuid4() if case == "foreign" else None,
                 deleted=case == "deleted",
             )
             with pytest.raises(HTTPException) as rejected:
-                await validate_previous_attempt(session, previous_presentation_id=previous.id, presentation_id=uuid.uuid4())
+                await validate_previous_attempt(
+                    session, previous_presentation_id=previous.id, presentation_id=uuid.uuid4()
+                )
             assert rejected.value.status_code == (404 if case == "foreign" else 409)
             await session.rollback()
         await engine.dispose()
+
     _run(runner())

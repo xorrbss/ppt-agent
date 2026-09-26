@@ -10,8 +10,8 @@ from ..drawingml.context import ConvertContext, ShapeResult
 from ..drawingml.utils import _xml_escape
 from .chart_data import _chart_data
 from .chart_style import (
-    _axis_titles,
-    _chart_companion_entries,
+    _axis_titles as _axis_titles,
+    _chart_companion_entries as _chart_companion_entries,
     _chart_companion_text_xml,
     _chart_text_sizes,
     _classic_chart_style,

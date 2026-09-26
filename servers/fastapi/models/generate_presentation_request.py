@@ -93,9 +93,7 @@ class RasterApprovalPinInput(BaseModel):
 
 
 class DesignPackPinInput(StrictCamelModel):
-    design_pack_id: str = Field(
-        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
-    )
+    design_pack_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
     version: int = Field(ge=1)
     digest: Digest
 
@@ -149,16 +147,10 @@ class GeneratePresentationRequest(BaseModel):
         default=None,
         description="Request-scoped Codex model and reasoning preset.",
     )
-    slides_markdown: Optional[List[str]] = Field(
-        default=None, description="The markdown for the slides"
-    )
-    instructions: Optional[str] = Field(
-        default=None, description="The instruction for generating the presentation"
-    )
+    slides_markdown: Optional[List[str]] = Field(default=None, description="The markdown for the slides")
+    instructions: Optional[str] = Field(default=None, description="The instruction for generating the presentation")
     tone: Tone = Field(default=Tone.DEFAULT, description="The tone to use for the text")
-    verbosity: Verbosity = Field(
-        default=Verbosity.STANDARD, description="How verbose the presentation should be"
-    )
+    verbosity: Verbosity = Field(default=Verbosity.STANDARD, description="How verbose the presentation should be")
     web_search: bool = Field(default=False, description="Whether to enable web search")
     n_slides: Optional[int] = Field(
         default=None,
@@ -168,9 +160,7 @@ class GeneratePresentationRequest(BaseModel):
         default=None,
         description="Language for the presentation. If omitted, model auto-detects language.",
     )
-    template: str = Field(
-        default="authored", description="Presentation source to use for generation"
-    )
+    template: str = Field(default="authored", description="Presentation source to use for generation")
     aspect_ratio: Literal["16:9", "9:16", "9:13"] = Field(
         default="16:9",
         description="Authored presentation canvas aspect ratio.",
@@ -205,6 +195,7 @@ class GeneratePresentationRequest(BaseModel):
             payload.pop("page_size", None)
             payload.pop("orientation", None)
         return payload
+
     quality_profile: Literal["development", "release"] = Field(
         default="development",
         alias="qualityProfile",
@@ -262,12 +253,8 @@ class GeneratePresentationRequest(BaseModel):
         default=None,
         alias="contentPolicy",
     )
-    include_table_of_contents: bool = Field(
-        default=False, description="Whether to include a table of contents"
-    )
-    include_title_slide: bool = Field(
-        default=True, description="Whether to include a title slide"
-    )
+    include_table_of_contents: bool = Field(default=False, description="Whether to include a table of contents")
+    include_title_slide: bool = Field(default=True, description="Whether to include a title slide")
     files: Optional[List[str]] = Field(
         default=None,
         json_schema_extra={"deprecated": True},
@@ -281,25 +268,18 @@ class GeneratePresentationRequest(BaseModel):
     reference_snapshot_ids: List[uuid.UUID] = Field(
         default_factory=list,
         max_length=16,
-        description=(
-            "Server-created immutable reference snapshots admitted for generation."
-        ),
+        description=("Server-created immutable reference snapshots admitted for generation."),
     )
 
     @field_validator("reference_snapshot_ids")
     @classmethod
-    def validate_unique_reference_snapshot_ids(
-        cls, value: List[uuid.UUID]
-    ) -> List[uuid.UUID]:
+    def validate_unique_reference_snapshot_ids(cls, value: List[uuid.UUID]) -> List[uuid.UUID]:
         if len(set(value)) != len(value):
             raise ValueError("duplicate_reference_snapshot")
         return value
-    export_as: Literal["pptx", "pdf"] = Field(
-        default="pptx", description="Export format"
-    )
-    trigger_webhook: bool = Field(
-        default=False, description="Whether to trigger subscribed webhooks"
-    )
+
+    export_as: Literal["pptx", "pdf"] = Field(default="pptx", description="Export format")
+    trigger_webhook: bool = Field(default=False, description="Whether to trigger subscribed webhooks")
     vision_qa: bool = Field(
         default=False,
         description=(
@@ -313,15 +293,9 @@ class GeneratePresentationRequest(BaseModel):
     primary_color: Optional[str] = Field(
         default=None, description="Authored mode: brand primary colour (hex, e.g. #2563EB)"
     )
-    fonts: Optional[str] = Field(
-        default=None, description="Authored mode: brand font family (e.g. 'Noto Sans KR')"
-    )
-    wordmark: Optional[str] = Field(
-        default=None, description="Authored mode: small footer wordmark text"
-    )
-    authored_style: Optional[str] = Field(
-        default=None, description="Authored mode: authored style preset id"
-    )
+    fonts: Optional[str] = Field(default=None, description="Authored mode: brand font family (e.g. 'Noto Sans KR')")
+    wordmark: Optional[str] = Field(default=None, description="Authored mode: small footer wordmark text")
+    authored_style: Optional[str] = Field(default=None, description="Authored mode: authored style preset id")
     master_pin: Optional[AuthoredMasterPinInput] = Field(
         default=None,
         alias="masterPin",
@@ -344,22 +318,20 @@ class GeneratePresentationRequest(BaseModel):
     def validate_generation_mode(self) -> "GeneratePresentationRequest":
         if self.generation_mode == "editable-first":
             raise ValueError("capability_not_supported: editable-first")
-        if (
-            self.generation_mode == "registered-template"
-            and self.design_pack_pin is None
-        ):
+        if self.generation_mode == "registered-template" and self.design_pack_pin is None:
             raise ValueError("design_pack_pin_required")
-        if (
-            self.design_pack_pin is not None
-            and self.generation_mode != "registered-template"
-        ):
+        if self.design_pack_pin is not None and self.generation_mode != "registered-template":
             raise ValueError("design_pack_pin_requires_registered_template")
         return self
 
     @model_validator(mode="after")
     def validate_source_content_mode(self) -> "GeneratePresentationRequest":
         if self.source_mode is None:
-            if self.source_content_manifest_pin is not None or self.content_policy is not None or self.raster_approval_pin is not None:
+            if (
+                self.source_content_manifest_pin is not None
+                or self.content_policy is not None
+                or self.raster_approval_pin is not None
+            ):
                 raise ValueError("source_content_mode_required")
             return self
         if self.source_mode == "raster_reconstruction":
@@ -373,11 +345,7 @@ class GeneratePresentationRequest(BaseModel):
                 resolve_generation_strategy,
             )
 
-            if (
-                resolve_generation_strategy(self) != "svg"
-                or self.page_size != "A4"
-                or self.orientation is None
-            ):
+            if resolve_generation_strategy(self) != "svg" or self.page_size != "A4" or self.orientation is None:
                 raise ValueError("raster_a4_svg_required")
             if self.template.strip().lower() != "authored" or self.authored_style != "screenshot-blue":
                 raise ValueError("source_content_template_required")
@@ -390,7 +358,9 @@ class GeneratePresentationRequest(BaseModel):
             # reconstruction never sets that marker.
             if (
                 self.export_as not in ("pptx", "pdf")
-                or self.web_search or self.vision_qa or self.slides_markdown is not None
+                or self.web_search
+                or self.vision_qa
+                or self.slides_markdown is not None
             ):
                 raise ValueError("source_content_generation_option_conflict")
             self.include_title_slide = False

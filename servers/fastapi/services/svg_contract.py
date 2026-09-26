@@ -1,4 +1,5 @@
 """Versioned conservative SVG admission shared by generation and export."""
+
 from __future__ import annotations
 
 import hashlib
@@ -18,22 +19,47 @@ RASTER_REDESIGN_ROOT_ID = "svg-raster-redesign"
 _MAX_TSPAN_DY = 1000.0
 ET.register_namespace("", SVG_NS)
 _NUMBER = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
-_NUMERIC = {"x", "y", "width", "height", "rx", "ry", "cx", "cy", "r", "x1", "x2", "y1", "y2", "font-size", "stroke-width", "opacity", "fill-opacity", "stroke-opacity"}
+_NUMERIC = {
+    "x",
+    "y",
+    "width",
+    "height",
+    "rx",
+    "ry",
+    "cx",
+    "cy",
+    "r",
+    "x1",
+    "x2",
+    "y1",
+    "y2",
+    "font-size",
+    "stroke-width",
+    "opacity",
+    "fill-opacity",
+    "stroke-opacity",
+}
 _COMMON = {"id", "fill", "stroke", "stroke-width", "opacity", "fill-opacity", "stroke-opacity", "transform"}
 _TEXT = {"x", "y", "font-family", "font-size", "font-weight", "text-anchor"}
 ELEMENT_ATTRIBUTES = {
-    "svg": {"width", "height", "viewBox"}, "g": set(),
-    "text": _TEXT, "tspan": _TEXT,
+    "svg": {"width", "height", "viewBox"},
+    "g": set(),
+    "text": _TEXT,
+    "tspan": _TEXT,
     "rect": {"x", "y", "width", "height", "rx", "ry"},
-    "circle": {"cx", "cy", "r"}, "ellipse": {"cx", "cy", "rx", "ry"},
-    "line": {"x1", "y1", "x2", "y2"}, "polyline": {"points"},
-    "polygon": {"points"}, "path": {"d"},
+    "circle": {"cx", "cy", "r"},
+    "ellipse": {"cx", "cy", "rx", "ry"},
+    "line": {"x1", "y1", "x2", "y2"},
+    "polyline": {"points"},
+    "polygon": {"points"},
+    "path": {"d"},
     "image": {"x", "y", "width", "height", "href", "preserveAspectRatio"},
 }
 
 
 def validate_raster_data_url(value: str) -> int:
     from PIL import Image
+
     match = re.fullmatch(r"data:image/(png|jpeg);base64,([A-Za-z0-9+/=]+)", value)
     if not match:
         raise ValueError("svg_image_raster_data_required")
@@ -74,9 +100,15 @@ def _numbers(value: str) -> list[float]:
     return result
 
 
-def validate_svg(svg: str, *, width: int = 1280, height: int = 720,
-                 allow_system_page_number: bool = True,
-                 source_manifest: dict | None = None, allow_image_only: bool = False) -> dict:
+def validate_svg(
+    svg: str,
+    *,
+    width: int = 1280,
+    height: int = 720,
+    allow_system_page_number: bool = True,
+    source_manifest: dict | None = None,
+    allow_image_only: bool = False,
+) -> dict:
     if not isinstance(svg, str) or len(svg.encode("utf-8")) > 2 * 1024 * 1024:
         raise ValueError("svg_contract_size_limit")
     if re.search(r"<!|<\?", svg):
@@ -199,15 +231,31 @@ def validate_svg(svg: str, *, width: int = 1280, height: int = 720,
         for slot, item in source_manifest.items()
     ):
         raise ValueError("svg_required_source_image_missing")
-    if not any(t.strip() for t in text_runs) and not (allow_image_only and any(str(node.tag).endswith('}image') or str(node.tag) == 'image' for node in root.iter())):
+    if not any(t.strip() for t in text_runs) and not (
+        allow_image_only and any(str(node.tag).endswith("}image") or str(node.tag) == "image" for node in root.iter())
+    ):
         raise ValueError("svg_contract_visible_text_required")
-    return {"contract_version": SVG_CONTRACT_VERSION, "source_digest": source_digest(svg),
-            "element_count": count, "text": "\n".join(text_runs), "syntax_valid": True}
+    return {
+        "contract_version": SVG_CONTRACT_VERSION,
+        "source_digest": source_digest(svg),
+        "element_count": count,
+        "text": "\n".join(text_runs),
+        "syntax_valid": True,
+    }
 
 
-def finalize_svg(svg: str, *, index: int, n: int, width: int = 1280, height: int = 720,
-                 style_snapshot: dict | None = None, page_number_mode: str = "template",
-                 source_manifest: dict | None = None, allow_image_only: bool = False) -> str:
+def finalize_svg(
+    svg: str,
+    *,
+    index: int,
+    n: int,
+    width: int = 1280,
+    height: int = 720,
+    style_snapshot: dict | None = None,
+    page_number_mode: str = "template",
+    source_manifest: dict | None = None,
+    allow_image_only: bool = False,
+) -> str:
     validate_svg(svg, width=width, height=height, source_manifest=source_manifest, allow_image_only=allow_image_only)
     if not 0 <= index < n:
         raise ValueError("svg_page_index_invalid")
@@ -218,10 +266,19 @@ def finalize_svg(svg: str, *, index: int, n: int, width: int = 1280, height: int
                 parent.remove(child)
     if page_number_mode not in {"none", "hidden", "off"}:
         tokens = (style_snapshot or {}).get("tokens", {})
-        node = ET.SubElement(root, f"{{{SVG_NS}}}text", {
-            "id": PAGE_NUMBER_ID, "x": str(width - 32), "y": str(height - 20),
-            "font-family": tokens.get("body_font") or "Noto Sans KR", "font-size": "12",
-            "fill": tokens.get("primary") or "#2563EB", "text-anchor": "end"})
+        node = ET.SubElement(
+            root,
+            f"{{{SVG_NS}}}text",
+            {
+                "id": PAGE_NUMBER_ID,
+                "x": str(width - 32),
+                "y": str(height - 20),
+                "font-family": tokens.get("body_font") or "Noto Sans KR",
+                "font-size": "12",
+                "fill": tokens.get("primary") or "#2563EB",
+                "text-anchor": "end",
+            },
+        )
         node.text = str(index + 1).zfill(2)
     result = ET.tostring(root, encoding="unicode")
     validate_svg(result, width=width, height=height, source_manifest=source_manifest, allow_image_only=allow_image_only)

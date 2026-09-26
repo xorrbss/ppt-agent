@@ -91,19 +91,18 @@ async def _start_server(app: FastAPI):
     return server, task, f"http://127.0.0.1:{port}"
 
 
-@pytest.mark.xfail(strict=True, reason="fixture needs current public admission backend + bounded status observation; see handoff x2-tests")
-def test_tcp_api_failure_status_same_key_resume_and_pptx(
-    tmp_path, monkeypatch
-):
+@pytest.mark.xfail(
+    strict=True,
+    reason="fixture needs current public admission backend + bounded status observation; see handoff x2-tests",
+)
+def test_tcp_api_failure_status_same_key_resume_and_pptx(tmp_path, monkeypatch):
     """Exercise the product router over a real loopback uvicorn socket."""
 
     from api.v1.ppt.endpoints import presentation_generate as endpoint
     from utils import llm_provider
 
     async def scenario():
-        engine = create_async_engine(
-            f"sqlite+aiosqlite:///{tmp_path / 'authored-http-flow.db'}"
-        )
+        engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'authored-http-flow.db'}")
         async with engine.begin() as connection:
             await connection.exec_driver_sql("PRAGMA journal_mode=WAL")
             await connection.run_sync(
@@ -139,9 +138,7 @@ def test_tcp_api_failure_status_same_key_resume_and_pptx(
 
         def build_app():
             app = FastAPI()
-            app.dependency_overrides[
-                database.get_async_session
-            ] = session_override
+            app.dependency_overrides[database.get_async_session] = session_override
             app.include_router(
                 endpoint.PRESENTATION_GENERATE_ROUTER,
                 prefix="/api/v1/ppt",
@@ -150,9 +147,7 @@ def test_tcp_api_failure_status_same_key_resume_and_pptx(
 
         app_data = tmp_path / "app-data"
         monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
-        monkeypatch.setenv(
-            "AUTHORED_CHECKPOINT_DIRECTORY", str(tmp_path / "checkpoints")
-        )
+        monkeypatch.setenv("AUTHORED_CHECKPOINT_DIRECTORY", str(tmp_path / "checkpoints"))
         monkeypatch.setenv("AUTHORED_TEST_FAILURES_ENABLED", "true")
         monkeypatch.setenv("ENVIRONMENT", "test")
         monkeypatch.setenv("AUTHORED_TEST_FAILURE_SLIDE", "2")
@@ -174,28 +169,17 @@ def test_tcp_api_failure_status_same_key_resume_and_pptx(
         render_calls: list[int] = []
         brief_calls = 0
         outline_calls = 0
-        rendered_pngs = [
-            _png((20 + index * 40, 80, 160)) for index in range(3)
-        ]
+        rendered_pngs = [_png((20 + index * 40, 80, 160)) for index in range(3)]
 
         async def fake_brief(*_args, **_kwargs):
             nonlocal brief_calls
             brief_calls += 1
-            return SimpleNamespace(
-                to_prompt_context=lambda: "deterministic content brief"
-            )
+            return SimpleNamespace(to_prompt_context=lambda: "deterministic content brief")
 
         async def fake_outline(*_args, **_kwargs):
             nonlocal outline_calls
             outline_calls += 1
-            yield json.dumps(
-                {
-                    "slides": [
-                        {"content": f"Slide {index + 1}"}
-                        for index in range(3)
-                    ]
-                }
-            )
+            yield json.dumps({"slides": [{"content": f"Slide {index + 1}"} for index in range(3)]})
 
         async def fake_author(_selected_plan, index, **_options):
             author_calls.append(index)
@@ -233,16 +217,10 @@ def test_tcp_api_failure_status_same_key_resume_and_pptx(
         # rather than by a per-request background task, and this loopback app
         # runs with `lifespan="off"`, so start one here and point both it and the
         # generation handler at the test engine.
-        generation_handler = register_presentation_generation_operation_handler(
-            replace=True
-        )
+        generation_handler = register_presentation_generation_operation_handler(replace=True)
         monkeypatch.setattr(generation_handler, "_session_factory", maker)
-        runner = workspace_runner.WorkspaceOperationRunner(
-            session_factory=maker, poll_seconds=0.02
-        )
-        monkeypatch.setattr(
-            workspace_runner, "_workspace_operation_runner", runner
-        )
+        runner = workspace_runner.WorkspaceOperationRunner(session_factory=maker, poll_seconds=0.02)
+        monkeypatch.setattr(workspace_runner, "_workspace_operation_runner", runner)
         await runner.start()
 
         server = None
@@ -269,9 +247,7 @@ def test_tcp_api_failure_status_same_key_resume_and_pptx(
                 task_id = first.json()["id"]
 
                 async def failed_status():
-                    response = await client.get(
-                        f"/api/v1/ppt/presentation/status/{task_id}"
-                    )
+                    response = await client.get(f"/api/v1/ppt/presentation/status/{task_id}")
                     assert response.status_code == 200
                     body = response.json()
                     return body if body["status"] == "error" else None
@@ -307,9 +283,7 @@ def test_tcp_api_failure_status_same_key_resume_and_pptx(
                 async def finalized_failure():
                     async with maker() as session:
                         job = await session.scalar(
-                            select(PresentationGenerationJob).where(
-                                PresentationGenerationJob.task_id == task_id
-                            )
+                            select(PresentationGenerationJob).where(PresentationGenerationJob.task_id == task_id)
                         )
                         if job is not None and job.state == "failed":
                             return job
@@ -324,9 +298,7 @@ def test_tcp_api_failure_status_same_key_resume_and_pptx(
                 assert render_calls == [0]
 
                 async with maker() as session:
-                    presentation = await session.get(
-                        PresentationModel, failed_job.presentation_id
-                    )
+                    presentation = await session.get(PresentationModel, failed_job.presentation_id)
                 # A bare generate bootstraps its deck up front, so the row now
                 # outlives a failed attempt. What must not happen is publication:
                 # the deck stays staging until the run succeeds.
@@ -344,9 +316,7 @@ def test_tcp_api_failure_status_same_key_resume_and_pptx(
                 jobs._active_jobs.clear()
                 server, server_task, restarted_url = await _start_server(build_app())
 
-                async with httpx.AsyncClient(
-                    base_url=restarted_url
-                ) as restarted_client:
+                async with httpx.AsyncClient(base_url=restarted_url) as restarted_client:
                     resumed = await restarted_client.post(
                         "/api/v1/ppt/presentation/generate/async",
                         json=payload,
@@ -365,15 +335,10 @@ def test_tcp_api_failure_status_same_key_resume_and_pptx(
                     }
 
                     async def completed_status():
-                        response = await restarted_client.get(
-                            f"/api/v1/ppt/presentation/status/{task_id}"
-                        )
+                        response = await restarted_client.get(f"/api/v1/ppt/presentation/status/{task_id}")
                         assert response.status_code == 200
                         body = response.json()
-                        if (
-                            body["status"] == "completed"
-                            and body["progress"]["percent"] == 100
-                        ):
+                        if body["status"] == "completed" and body["progress"]["percent"] == 100:
                             return body
                         return None
 
@@ -410,38 +375,33 @@ def test_tcp_api_failure_status_same_key_resume_and_pptx(
 
             async with maker() as session:
                 job = await session.scalar(
-                    select(PresentationGenerationJob).where(
-                        PresentationGenerationJob.task_id == task_id
-                    )
+                    select(PresentationGenerationJob).where(PresentationGenerationJob.task_id == task_id)
                 )
-                presentation = await session.get(
-                    PresentationModel, job.presentation_id
-                )
+                presentation = await session.get(PresentationModel, job.presentation_id)
                 slide_count = await session.scalar(
-                    select(func.count())
-                    .select_from(SlideModel)
-                    .where(SlideModel.presentation == job.presentation_id)
+                    select(func.count()).select_from(SlideModel).where(SlideModel.presentation == job.presentation_id)
                 )
                 durable_checkpoints = (
-                    await session.execute(
-                        select(AuthoredSlideCheckpoint)
-                        .where(AuthoredSlideCheckpoint.job_id == job.id)
-                        .order_by(AuthoredSlideCheckpoint.slide_index)
+                    (
+                        await session.execute(
+                            select(AuthoredSlideCheckpoint)
+                            .where(AuthoredSlideCheckpoint.job_id == job.id)
+                            .order_by(AuthoredSlideCheckpoint.slide_index)
+                        )
                     )
-                ).scalars().all()
+                    .scalars()
+                    .all()
+                )
                 failure_event_count = await session.scalar(
                     select(func.count())
                     .select_from(WorkspaceOperationEvent)
                     .where(
-                        WorkspaceOperationEvent.operation_id
-                        == job.workspace_operation_id,
+                        WorkspaceOperationEvent.operation_id == job.workspace_operation_id,
                         WorkspaceOperationEvent.event_type == "operation.error",
                     )
                 )
                 artifact = await session.scalar(
-                    select(WorkspaceArtifact).where(
-                        WorkspaceArtifact.presentation_id == job.presentation_id
-                    )
+                    select(WorkspaceArtifact).where(WorkspaceArtifact.presentation_id == job.presentation_id)
                 )
 
             assert job.state == "published"
@@ -453,26 +413,19 @@ def test_tcp_api_failure_status_same_key_resume_and_pptx(
             assert slide_count == 3
             assert failure_event_count == 1
             assert artifact is not None
-            assert completed["data"]["path"].replace("\\", "/").endswith(
-                f"/{artifact.storage_key}"
-            )
+            assert completed["data"]["path"].replace("\\", "/").endswith(f"/{artifact.storage_key}")
             output_path = app_data / artifact.storage_key
             assert output_path.exists()
             assert len(PptxPresentation(output_path).slides) == 3
             assert len(durable_checkpoints) == 3
-            assert all(
-                checkpoint.persist_status == "completed"
-                for checkpoint in durable_checkpoints
-            )
+            assert all(checkpoint.persist_status == "completed" for checkpoint in durable_checkpoints)
         finally:
             await runner.stop()
             for active in list(jobs._active_jobs.values()):
                 if not active.done():
                     active.cancel()
             if jobs._active_jobs:
-                await asyncio.gather(
-                    *list(jobs._active_jobs.values()), return_exceptions=True
-                )
+                await asyncio.gather(*list(jobs._active_jobs.values()), return_exceptions=True)
             jobs._active_jobs.clear()
             if server is not None:
                 server.should_exit = True

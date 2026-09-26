@@ -8,16 +8,25 @@ from typing import Any
 
 from llmai.shared import ImageContentPart, SystemMessage, TextContentPart, UserMessage
 from utils.authored_patch_engine import (
-    EXACT_RECONSTRUCTION, STYLE_REFERENCE, ReferenceMode,
+    EXACT_RECONSTRUCTION,
+    STYLE_REFERENCE,
+    ReferenceMode,
     allowed_patch_style_properties,
 )
 from utils.llm_calls.author_slide_patch_contracts import (
-    StructuralRepairScope, _MAX_CRITIQUE_CHARS, _MAX_DOM_JSON_CHARS,
-    _STRUCTURAL_SCOPE_CONTRACT, _SYSTEM, _bounded_string, _image_mime_type,
+    StructuralRepairScope,
+    _MAX_CRITIQUE_CHARS,
+    _MAX_DOM_JSON_CHARS,
+    _STRUCTURAL_SCOPE_CONTRACT,
+    _SYSTEM,
+    _bounded_string,
+    _image_mime_type,
 )
 from utils.llm_calls.author_slide_patch_dom import (
-    build_full_dom_graph, compact_dom_map_for_prompt,
+    build_full_dom_graph,
+    compact_dom_map_for_prompt,
 )
+
 
 def _critique_payload(critique: Any) -> Any:
     if hasattr(critique, "model_dump"):
@@ -33,6 +42,7 @@ def _critique_payload(critique: Any) -> Any:
         return {"summary": encoded[:_MAX_CRITIQUE_CHARS] + "..."}
     return json.loads(encoded)
 
+
 def _coerce_repair_scope(
     repair_scope: StructuralRepairScope | Mapping[str, Any] | None,
 ) -> StructuralRepairScope | None:
@@ -40,38 +50,64 @@ def _coerce_repair_scope(
         return repair_scope
     return StructuralRepairScope.model_validate(repair_scope)
 
+
 def _structural_prompt_dom(
-    normalized: Sequence[Mapping[str, Any]], scope: StructuralRepairScope,
+    normalized: Sequence[Mapping[str, Any]],
+    scope: StructuralRepairScope,
 ) -> list[dict[str, Any]]:
     """Compress values, never identities/relationships or the tail of a group."""
     affected = set(scope.affected_qids)
     editable = set(scope.editable_qids)
-    direct_children = {
-        item["qid"] for item in normalized
-        if item.get("parentQid") == scope.layout_owner_qid
-    }
+    direct_children = {item["qid"] for item in normalized if item.get("parentQid") == scope.layout_owner_qid}
     detailed = editable | direct_children | {scope.layout_owner_qid}
     layout_style_keys = {
-        "display", "position", "overflow", "overflowX", "overflowY",
-        "width", "height", "minWidth", "minHeight", "maxWidth", "maxHeight",
-        "boxSizing", "gridTemplateColumns", "gridTemplateRows",
-        "flexDirection", "flexWrap", "gap", "rowGap", "columnGap",
-        "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
-        "marginTop", "marginRight", "marginBottom", "marginLeft",
-        "alignItems", "justifyContent", "whiteSpace",
+        "display",
+        "position",
+        "overflow",
+        "overflowX",
+        "overflowY",
+        "width",
+        "height",
+        "minWidth",
+        "minHeight",
+        "maxWidth",
+        "maxHeight",
+        "boxSizing",
+        "gridTemplateColumns",
+        "gridTemplateRows",
+        "flexDirection",
+        "flexWrap",
+        "gap",
+        "rowGap",
+        "columnGap",
+        "paddingTop",
+        "paddingRight",
+        "paddingBottom",
+        "paddingLeft",
+        "marginTop",
+        "marginRight",
+        "marginBottom",
+        "marginLeft",
+        "alignItems",
+        "justifyContent",
+        "whiteSpace",
     }
     text_style_keys = {
-        "fontFamily", "fontSize", "fontWeight", "lineHeight", "whiteSpace",
-        "overflowWrap", "wordBreak", "textAlign",
+        "fontFamily",
+        "fontSize",
+        "fontWeight",
+        "lineHeight",
+        "whiteSpace",
+        "overflowWrap",
+        "wordBreak",
+        "textAlign",
     }
     result = []
     for item in normalized:
         node = dict(item)
         node["editable"] = item["qid"] in scope.editable_qids
         if "text" in node:
-            node["text"] = _bounded_string(
-                node["text"], 160 if item["qid"] in affected else 40
-            )
+            node["text"] = _bounded_string(node["text"], 160 if item["qid"] in affected else 40)
         style = node.get("computedStyle")
         if isinstance(style, Mapping):
             keep = set()
@@ -80,9 +116,7 @@ def _structural_prompt_dom(
             if item.get("sourceBlockId") or node.get("text"):
                 keep |= text_style_keys
             if keep:
-                node["computedStyle"] = {
-                    key: value for key, value in style.items() if key in keep
-                }
+                node["computedStyle"] = {key: value for key, value in style.items() if key in keep}
             else:
                 node.pop("computedStyle", None)
         result.append(node)
@@ -98,7 +132,8 @@ def _structural_prompt_dom(
         style = node.get("computedStyle")
         if isinstance(style, Mapping):
             node["computedStyle"] = {
-                key: value for key, value in style.items()
+                key: value
+                for key, value in style.items()
                 if key not in {"backgroundColor", "borderColor", "borderRadius", "color", "fontStyle", "objectPosition"}
             }
     if fits():
@@ -108,7 +143,11 @@ def _structural_prompt_dom(
     for node in reversed(result):
         parent = by_qid.get(node.get("parentQid"), {})
         style, parent_style = node.get("computedStyle", {}), parent.get("computedStyle", {})
-        inherited = [key for key in ("fontFamily", "fontSize", "fontWeight", "lineHeight", "textAlign", "whiteSpace") if key in style and style[key] == parent_style.get(key)]
+        inherited = [
+            key
+            for key in ("fontFamily", "fontSize", "fontWeight", "lineHeight", "textAlign", "whiteSpace")
+            if key in style and style[key] == parent_style.get(key)
+        ]
         for key in inherited:
             del style[key]
         if inherited:
@@ -116,6 +155,7 @@ def _structural_prompt_dom(
     if fits():
         return result
     raise ValueError("repair_prompt_budget_exceeded: complete structural prompt exceeds 48000 characters")
+
 
 def build_patch_messages(
     rendered_image: bytes,
@@ -138,9 +178,7 @@ def build_patch_messages(
         normalized_dom, qids = list(graph.nodes), set(graph.qids)
     if scope is not None:
         if not allow_source_reflow_safe_styles:
-            raise ValueError(
-                "repair_scope requires allow_source_reflow_safe_styles=True"
-            )
+            raise ValueError("repair_scope requires allow_source_reflow_safe_styles=True")
         scoped_qids = {
             scope.layout_owner_qid,
             *scope.editable_qids,
@@ -149,14 +187,9 @@ def build_patch_messages(
         }
         unknown_scope_qids = sorted(scoped_qids - qids)
         if unknown_scope_qids:
-            raise ValueError(
-                "repair_scope contains qid(s) absent from compact DOM map: "
-                f"{unknown_scope_qids}"
-            )
+            raise ValueError(f"repair_scope contains qid(s) absent from compact DOM map: {unknown_scope_qids}")
         if set(scope.affected_qids) | set(scope.protected_qids) != qids:
-            raise ValueError(
-                "repair_scope must classify every compact DOM qid as affected or protected"
-            )
+            raise ValueError("repair_scope must classify every compact DOM qid as affected or protected")
         normalized_dom = _structural_prompt_dom(normalized_dom, scope)
     payload = {
         "referenceMode": reference_mode,
@@ -165,22 +198,13 @@ def build_patch_messages(
     }
     if scope is not None:
         payload["repairScope"] = scope.model_dump(mode="json")
-        payload["allowedStructuralStyleProperties"] = list(
-            allowed_patch_style_properties(source_reflow=True)
-        )
-    prompt = (
-        "Propose the smallest safe patch for this rendered slide. Input data:\n"
-        + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        payload["allowedStructuralStyleProperties"] = list(allowed_patch_style_properties(source_reflow=True))
+    prompt = "Propose the smallest safe patch for this rendered slide. Input data:\n" + json.dumps(
+        payload, ensure_ascii=False, separators=(",", ":")
     )
     return (
         [
-            SystemMessage(
-                content=(
-                    _SYSTEM + _STRUCTURAL_SCOPE_CONTRACT
-                    if scope is not None
-                    else _SYSTEM
-                )
-            ),
+            SystemMessage(content=(_SYSTEM + _STRUCTURAL_SCOPE_CONTRACT if scope is not None else _SYSTEM)),
             UserMessage(
                 content=[
                     TextContentPart(text=prompt),

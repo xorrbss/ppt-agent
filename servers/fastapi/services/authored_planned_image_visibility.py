@@ -46,7 +46,7 @@ def inspect_planned_source_images(
     assignment_by_id = {str(item.get("asset_id")): item for item in assignments}
     qid_to_asset = {}
     matches = {}
-    for asset_id, assignment in assignment_by_id.items():
+    for asset_id in assignment_by_id:
         candidate = candidate_by_id.get(asset_id)
         expected = candidate.digest.removeprefix("sha256:").lower() if candidate else None
         found = [item for item in elements if expected and item.get("tag") == "img"

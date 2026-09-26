@@ -39,7 +39,7 @@ def _semantic_deck_difference_paths(
         paths = []
         if len(stored) != len(candidate):
             paths.append(f"{path}.length")
-        for index, (left, right) in enumerate(zip(stored, candidate)):
+        for index, (left, right) in enumerate(zip(stored, candidate, strict=False)):
             if len(paths) >= limit:
                 break
             paths.extend(
