@@ -98,8 +98,8 @@ def test_database_admin_bootstrap_runs_during_startup(monkeypatch, tmp_path):
         ),
     )
     async_steps = (
-            "migrate_database_on_startup",
-            "create_db_and_tables",
+        "migrate_database_on_startup",
+        "create_db_and_tables",
         "start_export_retention_sweeper",
         "start_source_locked_maintenance",
         "start_presentation_generation_dispatcher",
@@ -138,9 +138,7 @@ def test_database_admin_bootstrap_runs_during_startup(monkeypatch, tmp_path):
     lifespan.stop_workspace_cleanup_maintenance.assert_awaited_once_with()
     lifespan.start_runtime_settings_coordinator.assert_awaited_once_with()
     lifespan.stop_runtime_settings_coordinator.assert_awaited_once_with()
-    lifespan.start_account_deletion_controller.assert_awaited_once_with(
-        worker_id="embedded-local:account-deletion"
-    )
+    lifespan.start_account_deletion_controller.assert_awaited_once_with(worker_id="embedded-local:account-deletion")
     lifespan.stop_account_deletion_controller.assert_awaited_once_with()
 
     monkeypatch.setenv("ENVIRONMENT", "production")
@@ -207,18 +205,13 @@ def test_chat_first_workers_start_and_stop_in_dependency_order(monkeypatch, tmp_
     monkeypatch.setattr(lifespan, "get_app_data_directory_env", lambda: str(tmp_path))
     monkeypatch.setattr(
         lifespan,
-        "register_presentation_generation_operation_handler",
-        lambda **_kwargs: None,
-    )
-    monkeypatch.setattr(
-        lifespan,
-        "register_presentation_chat_operation_handlers",
-        lambda **_kwargs: None,
+        "register_workspace_operation_handlers",
+        lambda: None,
     )
 
     for name in (
-            "migrate_database_on_startup",
-            "create_db_and_tables",
+        "migrate_database_on_startup",
+        "create_db_and_tables",
         "start_export_retention_sweeper",
         "start_source_locked_maintenance",
         "start_presentation_generation_dispatcher",

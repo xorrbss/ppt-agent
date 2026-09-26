@@ -24,12 +24,6 @@ from services.presentation_generation_job_service import (
     start_presentation_generation_dispatcher,
     stop_presentation_generation_dispatcher,
 )
-from services.presentation_generation_operation_handler import (
-    register_presentation_generation_operation_handler,
-)
-from services.raster_analysis_operation_handler import (
-    register_raster_analysis_operation_handler,
-)
 from services.runtime_settings_coordinator import (
     start_runtime_settings_coordinator,
     stop_runtime_settings_coordinator,
@@ -37,9 +31,6 @@ from services.runtime_settings_coordinator import (
 from services.source_locked.maintenance import (
     start_source_locked_maintenance,
     stop_source_locked_maintenance,
-)
-from services.presentation_deletion_operation_handler import (
-    register_presentation_deletion_operation_handler,
 )
 from services.workspace_operation_outbox_dispatcher import (
     start_workspace_operation_outbox_dispatcher,
@@ -53,6 +44,7 @@ from services.workspace_operation_worker import (
     create_external_export_controller_runtime,
     embedded_workspace_operation_kinds,
     get_workspace_operation_worker_mode,
+    register_workspace_operation_handlers,
     should_start_embedded_workspace_operation_worker,
 )
 from services.artifact_lifecycle_runtime import (
@@ -60,30 +52,9 @@ from services.artifact_lifecycle_runtime import (
     stop_public_artifact_lifecycle_runtime,
 )
 from services.isolated_worker_process import install_trusted_worker_dispatcher
-from services.workspace_chat_operation_handler import (
-    register_presentation_chat_operation_handlers,
-)
 from services.workspace_cleanup_journal_service import (
     start_workspace_cleanup_maintenance,
     stop_workspace_cleanup_maintenance,
-)
-from services.workspace_quality_export_operation_handlers import (
-    register_workspace_quality_export_operation_handlers,
-)
-from services.workspace_page_remake_operation_handler import (
-    register_workspace_page_remake_operation_handler,
-)
-from services.workspace_batch_remake_operation_handler import (
-    register_workspace_batch_remake_operation_handler,
-)
-from services.workspace_authored_preview_operation_handlers import (
-    register_workspace_authored_preview_operation_handlers,
-)
-from services.workspace_slide_order_operation_handler import (
-    register_workspace_slide_order_operation_handler,
-)
-from services.workspace_authored_template_operation_handler import (
-    register_workspace_authored_template_operation_handler,
 )
 from services.workspace_asset_maintenance import (
     start_workspace_asset_maintenance,
@@ -182,25 +153,7 @@ async def app_lifespan(_: FastAPI):
         if should_start_embedded_workspace_operation_worker():
             await start_workspace_cleanup_maintenance()
             workspace_cleanup_maintenance_started = True
-        register_presentation_generation_operation_handler(replace=True)
-        register_raster_analysis_operation_handler(replace=True)
-        register_presentation_deletion_operation_handler(replace=True)
-        register_presentation_chat_operation_handlers(replace=True)
-        register_workspace_page_remake_operation_handler(replace=True)
-        register_workspace_batch_remake_operation_handler(replace=True)
-        # Drifted out of this hand-duplicated list at some point: the durable
-        # preview handlers (single-page and batch) that
-        # services/workspace_operation_worker.py::register_workspace_operation_handlers
-        # already includes for the external-worker path. Without this, both
-        # admit_workspace_authored_task callers (queue_authored_page_remake_preview,
-        # queue_authored_batch_remake_preview) create a WorkspaceOperation the
-        # embedded runner has no handler for, so it sits "queued" forever.
-        # Found live (2026-09-26): a batch preview operation with zero
-        # progress and zero events past admission after 20+ minutes.
-        register_workspace_authored_preview_operation_handlers(replace=True)
-        register_workspace_slide_order_operation_handler(replace=True)
-        register_workspace_quality_export_operation_handlers(replace=True)
-        register_workspace_authored_template_operation_handler(replace=True)
+        register_workspace_operation_handlers()
         if (
             should_start_embedded_workspace_operation_worker()
             and os.getenv("PUBLIC_V2_INTEGRATION_PROFILE", "").strip()

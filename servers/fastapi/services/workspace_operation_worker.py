@@ -30,16 +30,8 @@ from services.account_deletion_controller import (
     stop_account_deletion_controller,
 )
 from services.isolated_worker_process import install_trusted_worker_dispatcher
-from services.presentation_deletion_operation_handler import (
-    register_presentation_deletion_operation_handler,
-)
-from services.raster_analysis_operation_handler import (
-    RASTER_ANALYSIS_OPERATION_KIND,
-    register_raster_analysis_operation_handler,
-)
 from services.presentation_generation_operation_handler import (
     PRESENTATION_GENERATION_OPERATION_KIND,
-    register_presentation_generation_operation_handler,
 )
 from services.runtime_settings_coordinator import (
     start_runtime_settings_coordinator,
@@ -60,9 +52,6 @@ from services.workspace_event_retention import (
     start_workspace_event_retention,
     stop_workspace_event_retention,
 )
-from services.workspace_chat_operation_handler import (
-    register_presentation_chat_operation_handlers,
-)
 from services.workspace_operation_runner import (
     start_workspace_operation_runner,
     stop_workspace_operation_runner,
@@ -70,39 +59,12 @@ from services.workspace_operation_runner import (
 from services.workspace_metrics_exporter import (
     start_workspace_worker_metrics_exporter,
 )
-from services.workspace_quality_export_operation_handlers import (
-    EXPORT_OPERATION_KINDS,
-    register_workspace_quality_export_operation_handlers,
-)
-from services.workspace_quality_operation_handler import (
-    QUALITY_REVIEW_OPERATION_KIND,
-    WorkspaceQualityReviewOperationHandler,
-)
-from services.workspace_page_remake_operation_handler import (
-    OPERATION_KIND as PAGE_REMAKE_OPERATION_KIND,
-    WorkspacePageRemakeOperationHandler,
-    register_workspace_page_remake_operation_handler,
-)
-from services.workspace_batch_remake_operation_handler import (
-    OPERATION_KIND as BATCH_REMAKE_OPERATION_KIND,
-    register_workspace_batch_remake_operation_handler,
-)
-from services.workspace_slide_order_operation_handler import (
-    OPERATION_KIND as SLIDE_ORDER_OPERATION_KIND,
-    register_workspace_slide_order_operation_handler,
-)
 from services.workspace_operation_handler_registry import (
     workspace_operation_handler_registry,
 )
-from services.workspace_authored_preview_operation_handlers import (
-    BATCH_PREVIEW_OPERATION_KIND,
-    PAGE_PREVIEW_OPERATION_KIND,
-    register_workspace_authored_preview_operation_handlers,
-)
-from services.workspace_authored_template_operation_handler import (
-    DESIGN_APPLY_OPERATION_KIND,
-    TEMPLATE_APPLY_OPERATION_KIND,
-    register_workspace_authored_template_operation_handler,
+from services.workspace_operation_catalog import (
+    operation_kinds_for_controller,
+    register_operation_handlers,
 )
 from services.workspace_runtime_profile import require_supported_workspace_runtime
 from services.public_worker_profiles import require_public_worker_profile_from_environment
@@ -149,9 +111,7 @@ def embedded_workspace_operation_kinds() -> tuple[str, ...] | None:
     if mode == EXTERNAL_WORKER_MODE:
         return ()
     return tuple(
-        kind
-        for kind in workspace_operation_handler_registry.kinds
-        if kind != PRESENTATION_GENERATION_OPERATION_KIND
+        kind for kind in workspace_operation_handler_registry.kinds if kind != PRESENTATION_GENERATION_OPERATION_KIND
     )
 
 
@@ -174,20 +134,9 @@ def external_workspace_operation_kinds(profile_role: str) -> tuple[str, ...]:
         # workspace command path like every other mutation, so it needs an
         # external-controller home too; generation is the metadata-authority
         # role, and this claims in well under a second there.
-        return (
-            PRESENTATION_GENERATION_OPERATION_KIND,
-            RASTER_ANALYSIS_OPERATION_KIND,
-            QUALITY_REVIEW_OPERATION_KIND,
-            PAGE_PREVIEW_OPERATION_KIND,
-            PAGE_REMAKE_OPERATION_KIND,
-            BATCH_PREVIEW_OPERATION_KIND,
-            BATCH_REMAKE_OPERATION_KIND,
-            TEMPLATE_APPLY_OPERATION_KIND,
-            DESIGN_APPLY_OPERATION_KIND,
-            SLIDE_ORDER_OPERATION_KIND,
-        )
+        return operation_kinds_for_controller("generation")
     if profile_role == "ppt-core" and controller == EXPORT_CONTROLLER:
-        return EXPORT_OPERATION_KINDS
+        return operation_kinds_for_controller("export")
     raise RuntimeError("workspace_operation_external_controller_required")
 
 
@@ -200,16 +149,7 @@ def create_external_export_controller_runtime() -> TrustedWorkerExecutorRuntime:
 
 
 def register_workspace_operation_handlers() -> None:
-    register_presentation_generation_operation_handler(replace=True)
-    register_raster_analysis_operation_handler(replace=True)
-    register_presentation_deletion_operation_handler(replace=True)
-    register_presentation_chat_operation_handlers(replace=True)
-    register_workspace_page_remake_operation_handler(replace=True)
-    register_workspace_batch_remake_operation_handler(replace=True)
-    register_workspace_slide_order_operation_handler(replace=True)
-    register_workspace_authored_preview_operation_handlers(replace=True)
-    register_workspace_quality_export_operation_handlers(replace=True)
-    register_workspace_authored_template_operation_handler(replace=True)
+    register_operation_handlers()
 
 
 async def run_external_worker(stop: asyncio.Event | None = None) -> None:
@@ -218,11 +158,7 @@ async def run_external_worker(stop: asyncio.Event | None = None) -> None:
     require_supported_workspace_runtime(sql_engine.url)
     profile = require_public_worker_profile_from_environment()
     allowed_kinds = external_workspace_operation_kinds(profile.role)
-    trusted_worker_runtime = (
-        create_external_export_controller_runtime()
-        if profile.role == "ppt-core"
-        else None
-    )
+    trusted_worker_runtime = create_external_export_controller_runtime() if profile.role == "ppt-core" else None
     require_workspace_asset_malware_scan_safety(feature_enabled=True)
     os.makedirs(get_app_data_directory_env(), exist_ok=True)
     await migrate_database_on_startup()
@@ -241,46 +177,10 @@ async def run_external_worker(stop: asyncio.Event | None = None) -> None:
     if trusted_worker_runtime is not None:
         install_trusted_worker_dispatcher(trusted_worker_runtime.dispatcher)
     try:
-        if profile.role == "generation":
-            register_presentation_generation_operation_handler(replace=True)
-            register_raster_analysis_operation_handler(replace=True)
-            register_workspace_authored_template_operation_handler(
-                registry=workspace_operation_handler_registry,
-                replace=True,
-            )
-            workspace_operation_handler_registry.register(
-                QUALITY_REVIEW_OPERATION_KIND,
-                WorkspaceQualityReviewOperationHandler(),
-                replace=True,
-                recovery_policy="automatic",
-            )
-            # Registers both PAGE_PREVIEW_OPERATION_KIND and
-            # BATCH_PREVIEW_OPERATION_KIND; the batch variant was missing
-            # from this process's registrations entirely (found live
-            # 2026-09-26 -- a batch preview operation admitted here had no
-            # handler and sat "queued" forever). Kept as one call instead of
-            # two hand-written registry.register(...) calls so the two
-            # preview kinds cannot drift apart again.
-            register_workspace_authored_preview_operation_handlers(
-                registry=workspace_operation_handler_registry,
-                replace=True,
-            )
-            workspace_operation_handler_registry.register(
-                PAGE_REMAKE_OPERATION_KIND,
-                WorkspacePageRemakeOperationHandler(),
-                replace=True,
-                recovery_policy="automatic",
-            )
-            register_workspace_batch_remake_operation_handler(
-                registry=workspace_operation_handler_registry,
-                replace=True,
-            )
-            register_workspace_slide_order_operation_handler(
-                registry=workspace_operation_handler_registry,
-                replace=True,
-            )
-        else:
-            register_workspace_quality_export_operation_handlers(replace=True)
+        register_operation_handlers(
+            controller="generation" if profile.role == "generation" else "export",
+            registry=workspace_operation_handler_registry,
+        )
         metrics_exporter = await start_workspace_worker_metrics_exporter()
         await start_workspace_operation_runner(allowed_kinds=allowed_kinds)
         runner_started = True
@@ -288,8 +188,7 @@ async def run_external_worker(stop: asyncio.Event | None = None) -> None:
             await start_public_artifact_lifecycle_runtime()
             artifact_lifecycle_started = True
             await start_account_deletion_controller(
-                worker_id=(os.getenv("PUBLIC_WORKER_NODE_ID") or "").strip()
-                + ":account-deletion",
+                worker_id=(os.getenv("PUBLIC_WORKER_NODE_ID") or "").strip() + ":account-deletion",
             )
             account_deletion_controller_started = True
         await start_workspace_cleanup_maintenance()
