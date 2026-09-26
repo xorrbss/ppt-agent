@@ -35,6 +35,7 @@ from models.sql.public_admission import PublicOperationAdmission
 from models.sql.workspace import WorkspaceOperation
 from services import authored_author_stage_rescue as rescue_mod
 from services import authored_checkpoint_service as checkpoints
+from services import authored_checkpoint_fence as checkpoint_fence
 from services import authored_presentation_pipeline as pipeline
 from services.authored_author_stage_deferral import (
     author_failure_is_rescuable,
@@ -248,9 +249,11 @@ def test_a_resumed_slide_keeps_a_recorded_refusal_fail_closed():
 
 async def _checkpoint_database(tmp_path, monkeypatch):
     engine = create_async_engine(
-        f"sqlite+aiosqlite:///{tmp_path / 'authored-author-deferral.db'}"
+        f"sqlite+aiosqlite:///{tmp_path / 'authored-author-deferral.db'}",
+        connect_args={"timeout": 30},
     )
     async with engine.begin() as connection:
+        await connection.exec_driver_sql("PRAGMA journal_mode=WAL")
         await connection.run_sync(
             SQLModel.metadata.create_all,
             tables=[
@@ -263,6 +266,7 @@ async def _checkpoint_database(tmp_path, monkeypatch):
         )
     maker = async_sessionmaker(engine, expire_on_commit=False)
     monkeypatch.setattr(checkpoints, "async_session_maker", maker)
+    monkeypatch.setattr(checkpoint_fence, "async_session_maker", maker)
     monkeypatch.setenv(
         "AUTHORED_CHECKPOINT_DIRECTORY", str(tmp_path / "render-artifacts")
     )
@@ -360,6 +364,9 @@ def _install_pipeline_fakes(monkeypatch, *, plan, batch, rescue):
     async def no_recording(**_kwargs):
         return None
 
+    async def no_original(*_args, **_kwargs):
+        return None
+
     async def unexpected_single(*_args, **_kwargs):
         raise AssertionError("the pool must not author a pre-authored slide itself")
 
@@ -369,6 +376,8 @@ def _install_pipeline_fakes(monkeypatch, *, plan, batch, rescue):
     monkeypatch.setattr(pipeline, "author_planned_batch", batch)
     monkeypatch.setattr(pipeline, "render_html_to_png", render)
     monkeypatch.setattr(pipeline, "record_local_stage", no_recording)
+    monkeypatch.setattr(pipeline, "load_original_capture_checkpoint", no_original)
+    monkeypatch.setattr(pipeline, "persist_original_capture_checkpoint", no_original)
     monkeypatch.setattr(rescue_mod, "author_planned_slide", rescue)
     monkeypatch.setattr(
         pipeline, "get_cached_browser_metrics", lambda _html: {"telemetry": "ok"}
