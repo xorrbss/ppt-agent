@@ -724,6 +724,10 @@ async def _run_worker_lane(
         "AUTHORED_QUALITY_RECEIPT_DIRECTORY", str(tmp_path / "quality-receipts")
     )
     monkeypatch.setenv("DISABLE_IMAGE_GENERATION", "true")
+    # This fixture measures worker scheduling after the outline. A separate
+    # content-brief checkpoint can wait on the process database under the full
+    # suite and leave the provider lane unentered.
+    monkeypatch.setenv("AUTHORED_CONTENT_BRIEF_ENABLED", "false")
     # Publication hands the export to the durable artifact authority; the
     # development backend keeps it on the local filesystem and is only
     # constructed under ``ENVIRONMENT=local``.
@@ -947,5 +951,4 @@ def _expected_wave_shapes(slide_count: int, profile) -> list[tuple[tuple[int, ..
         shapes.append(tuple(batches))
         concurrency = profile.steady_wave_concurrency
     return shapes
-
 
