@@ -176,8 +176,9 @@ def test_missing_metrics_do_not_stop_the_instruments(monkeypatch):
 
 
 def test_sealed_ledger_metrics_are_used_per_slide_and_gaps_are_recollected(monkeypatch):
-    htmls = ["<a>", "<b>"]
-    retained = ({"source_digest": _digest("<a>")}, None)
+    from services.authored_admission_capture import canonical_capture_html
+    htmls = [canonical_capture_html(f"<div>{name}</div>", index=i) for i, name in enumerate("ab")]
+    retained = ({"source_digest": _digest(htmls[0])}, None)
     gathered: list[str] = []
 
     async def fake_ensure(html, *args, **kwargs):
@@ -196,7 +197,7 @@ def test_sealed_ledger_metrics_are_used_per_slide_and_gaps_are_recollected(monke
     # -- and still blocks the gate when Chromium cannot measure the slide, which
     # is what ``ensure_browser_metrics`` returning ``None`` means here.
     assert resolved == [retained[0], None]
-    assert gathered == ["<b>"]
+    assert gathered == [htmls[1]]
 
 
 def test_a_ledger_of_the_wrong_length_is_not_the_decks_evidence():
@@ -206,7 +207,8 @@ def test_a_ledger_of_the_wrong_length_is_not_the_decks_evidence():
 
 
 def test_repair_round_metrics_are_reused_only_when_the_digest_matches(monkeypatch):
-    htmls = ["<a>", "<b>", "<c>"]
+    from services.authored_admission_capture import canonical_capture_html
+    htmls = [canonical_capture_html(f"<div>{name}</div>", index=i) for i, name in enumerate("abc")]
     gathered: list[str] = []
 
     async def fake_ensure(html, *args, **kwargs):
@@ -222,7 +224,7 @@ def test_repair_round_metrics_are_reused_only_when_the_digest_matches(monkeypatc
             htmls,
             retained=None,
             overrides={
-                0: {"source_digest": _digest("<a>"), "from": "repair"},
+                0: {"source_digest": _digest(htmls[0]), "from": "repair"},
                 1: {"source_digest": _digest("STALE"), "from": "repair"},
             },
         )
@@ -231,7 +233,7 @@ def test_repair_round_metrics_are_reused_only_when_the_digest_matches(monkeypatc
     # Slide 0 came from the repair round; 1's metrics were measured from other
     # bytes and 2 had none, so exactly those two were re-collected.
     assert resolved[0]["from"] == "repair"
-    assert gathered == ["<b>", "<c>"]
+    assert gathered == htmls[1:]
     assert resolved[1]["gathered"] and resolved[2]["gathered"]
 
 

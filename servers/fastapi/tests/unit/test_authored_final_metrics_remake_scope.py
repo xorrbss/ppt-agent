@@ -17,6 +17,7 @@ import asyncio
 import hashlib
 
 from services import authored_final_metrics as metrics_mod
+from services.authored_admission_capture import canonical_capture_html
 from services import authored_quality_gate_diagnostics as diagnostics_mod
 
 
@@ -32,11 +33,16 @@ def _digest(html: str) -> str:
     return "sha256:" + hashlib.sha256(html.encode("utf-8")).hexdigest()
 
 
+def _html(index, *, remade=False):
+    label = f"slide {index} remade" if remade else f"slide {index}"
+    return canonical_capture_html(f"<div>{label}</div>", index=index if isinstance(index, int) else 0)
+
+
 def _bench_run_24_deck() -> tuple[list[str], list[dict], dict[int, dict]]:
     """The published deck, its sealed ledger, and the remake round's metrics."""
 
     published = [
-        f"<slide {index} remade>" if index in REMADE else f"<slide {index}>"
+        _html(index, remade=index in REMADE)
         for index in range(DECK_SLIDES)
     ]
     # The ledger entry for a remade slide was measured from the slide as it was
@@ -44,7 +50,7 @@ def _bench_run_24_deck() -> tuple[list[str], list[dict], dict[int, dict]]:
     ledger = [
         {
             "source_digest": _digest(
-                f"<slide {index}>" if index in REMADE else published[index]
+                _html(index) if index in REMADE else published[index]
             ),
             "elements": [],
             "from": "ledger",
@@ -125,9 +131,9 @@ def test_metrics_of_the_wrong_html_are_rejected_from_either_source(monkeypatch):
 
     resolved = _run(
         metrics_mod.resolve_final_browser_metrics(
-            ["<a>"],
-            retained=[{"source_digest": _digest("<old-a>")}],
-            overrides={0: {"source_digest": _digest("<older-a>")}},
+            [_html("a")],
+            retained=[{"source_digest": _digest(_html("old-a"))}],
+            overrides={0: {"source_digest": _digest(_html("older-a"))}},
         )
     )
 
