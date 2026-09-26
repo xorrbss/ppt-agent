@@ -38,6 +38,7 @@ from utils.authored_styles import (
 )
 from utils.authored_ocr_quality import OcrQualityResult
 from utils.llm_calls.author_deck import AuthoredDeckResult
+from utils.owner_context import reset_current_owner_id, set_current_owner_id
 from utils.llm_calls.author_slide import (
     EXACT_RECONSTRUCTION,
     STYLE_REFERENCE,
@@ -509,8 +510,7 @@ def test_exact_generation_provenance_survives_unimportable_review_without_model_
     async def runner():
         engine = await _make_engine(tmp_path / "exact-generation-review.db")
         source_paths = (
-            tmp_path / "private-source-0.png",
-            tmp_path / "private-source-1.png",
+            tmp_path / "private-source-0.png", tmp_path / "private-source-1.png",
         )
         Image.new("RGB", (1280, 720), "white").save(source_paths[0])
         Image.new("RGB", (1280, 720), "navy").save(source_paths[1])
@@ -535,8 +535,8 @@ def test_exact_generation_provenance_survives_unimportable_review_without_model_
         pipeline = authored_service.AuthoredGenerationPipelineResult(
             deck=AuthoredDeckResult(
                 [
-                    "<html><body>generated cover</body></html>",
-                    "<html><body>generated detail</body></html>",
+                    '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><h1 data-qid="slide.0.title">generated cover</h1></body></html>',
+                    '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><h1 data-qid="slide.1.title">generated detail</h1></body></html>',
                 ],
                 "EXACT DESIGN",
             ),
@@ -619,9 +619,7 @@ def test_exact_generation_provenance_survives_unimportable_review_without_model_
             )
 
             saved = await session.get(PresentationModel, presentation_id)
-            provenance = await session.get(
-                AuthoredExactProvenance, presentation_id
-            )
+            provenance = await session.get(AuthoredExactProvenance, presentation_id)
             assert saved.theme["style"] == "exact-source"
             assert "reference_mode" not in saved.theme
             assert str(tmp_path) not in str(saved.theme)
@@ -629,9 +627,7 @@ def test_exact_generation_provenance_survives_unimportable_review_without_model_
             assert str(tmp_path) not in str(provenance.provenance)
             assert provenance.provenance["source_snapshot_id"] == snapshot_id
 
-            task = AsyncPresentationGenerationTaskModel(
-                status="pending", message="queued"
-            )
+            task = AsyncPresentationGenerationTaskModel(status="pending", message="queued")
             session.add(task)
             await session.commit()
             critique_calls = []
@@ -680,15 +676,19 @@ def test_exact_generation_provenance_survives_unimportable_review_without_model_
             assert critique_calls == []
             assert task.data["reviewed_count"] == 1
             assert task.data["fixed_count"] == 0
-            assert task.data["rejection_reasons"] == {"import.dom.empty": 1}
-            assert task.data["metrics"]["automatic_page_regeneration_calls"] == 0
+            assert task.data["rejection_reasons"] == {"legacy_preserved.no_geometry_trigger": 1}
+            assert task.data["metrics"].get("automatic_page_regeneration_calls", 0) == 0
             assert materialize_calls == [
                 ("exact-source", snapshot_id, 2),
             ]
 
         await engine.dispose()
 
-    _run(runner())
+    owner_token = set_current_owner_id(uuid.uuid4())
+    try:
+        _run(runner())
+    finally:
+        reset_current_owner_id(owner_token)
 
 
 def test_unimportable_legacy_exact_theme_stops_before_render_or_model(
