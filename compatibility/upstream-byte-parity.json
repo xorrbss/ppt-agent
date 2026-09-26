@@ -10337,7 +10337,10 @@
       "contracts/authored-renderer/requirements.in",
       "contracts/authored-renderer/requirements.lock",
       "contracts/authored-renderer/run_dynamic_gate.py",
+      "contracts/authored-renderer/source_manifest.py",
+      "contracts/authored-renderer/stage_sources.py",
       "contracts/authored-renderer/verify_contract.py",
+      "contracts/authored-renderer/verify_source_stage.py",
       "contracts/authored_vnext/deck/generate.py",
       "contracts/authored_vnext/deck/v1/deck-quality-report.schema.json",
       "contracts/authored_vnext/deck/v1/generate-deck-request.schema.json",
@@ -12309,6 +12312,7 @@
       "servers/fastapi/tests/regression/test_outline_stream_heartbeat.py",
       "servers/fastapi/tests/support/authored_checkpoint_crash_writer.py",
       "servers/fastapi/tests/support/authored_vnext_master_fixture.py",
+      "servers/fastapi/tests/support/authored_worker_lane_capture.py",
       "servers/fastapi/tests/support/authored_worker_lane_harness.py",
       "servers/fastapi/tests/support/runtime_settings_sync_worker.py",
       "servers/fastapi/tests/support/source_locked_live_http_e2e.py",
@@ -13962,14 +13966,14 @@
     "source": {
       "mode": "tree",
       "ref": "HEAD",
-      "commit": "5b1cd87faf2239b8ac0f1fe818aa54e2f56e59d2"
+      "commit": "c664b0679d3f4f643fdc2f514ad00f9025c09bf8"
     },
     "counts": {
       "upstreamOwned": 10163,
       "identical": 9250,
       "exceptions": 913,
-      "localOnly": 7545
+      "localOnly": 7549
     },
-    "policySha256": "4538a1d2aee2ff985d4d1a1113dfc8e5e949543ef6ef52fe86e42335db65adc5"
+    "policySha256": "5ad0cf87a1e16406139fd2757fe68ef941d3795fe28a76f333819f96a1c20920"
   }
 }
