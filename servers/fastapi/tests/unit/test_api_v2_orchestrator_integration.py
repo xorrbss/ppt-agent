@@ -54,6 +54,7 @@ from services.authored_vnext.narrative_ir.content_graph import (
     seal_content_integrity_receipt,
 )
 from services.authored_vnext.narrative_ir.contracts import model_payload
+from services.authored_vnext.narrative_ir.validation import canonical_digest
 from services.source_content.errors import SourceContentError
 
 
@@ -523,8 +524,7 @@ def test_api_submit_sql_adapter_persists_operation_job_and_admission(
                     len((await verification.scalars(select(PublicOperationAdmission))).all()),
                 )
 
-        # The real admission callable must reject SQLite as a non-authoritative
-        # backend, and the adapter must roll back the provisional rows.
+        # A missing public policy must fail closed without provisional rows.
         before_rows = await _row_counts(maker)
         app.state.public_v2_orchestrator = SqlPublicV2Orchestrator(maker)
         with TestClient(app) as client:
@@ -533,8 +533,8 @@ def test_api_submit_sql_adapter_persists_operation_job_and_admission(
                 json={"schemaVersion": "presentation-generation-request/v2", "content": "must rollback", "slideCount": 5},
             )
         after_rows = await _row_counts(maker)
-        assert unavailable.status_code == 503
-        assert unavailable.json() == {"detail": {"reasonCode": "operation_authority_unavailable"}}
+        assert unavailable.status_code == 409, unavailable.json()
+        assert unavailable.json() == {"detail": {"reasonCode": "public_policy_unavailable"}}
         assert after_rows == before_rows
         await engine.dispose()
 
@@ -606,10 +606,7 @@ def test_sql_adapter_requires_current_publication_and_rejects_unwired_export_cap
             assert rejected.value.status_code == 422
             assert rejected.value.reason_code == "capability_not_supported"
 
-        # Editable hybrid is served by the isolated export worker since
-        # `public-export.hybrid-in-isolated-lane`, so it must no longer be
-        # refused as an unwired capability. Admission may still fail this
-        # fixture for unrelated reasons; it must not fail for that one.
+        # Isolated hybrid export must not fail as an unwired capability.
         hybrid_request = PresentationExportRequestV2.model_validate(
             {
                 "sourceRevision": 3,
@@ -928,12 +925,15 @@ def test_registered_template_export_requires_passed_content_integrity() -> None:
     ).hexdigest()
     receipt = seal_content_integrity_receipt(
         operation_id=operation_id,
+        attempt_binding_digest=canonical_digest({"operationId": str(operation_id), "jobId": "", "attemptId": "", "fencingToken": None}),
         source_revision=1,
         result_revision=2,
         generation_lane="new-authoring",
         content_graph_digest=digest,
         route_strategy_receipt_digest=route_digest,
         narrative_digest="sha256:" + "b" * 64,
+        preserve_source_input_digest=None,
+        provider_call_budget={"actualLogicalCalls": 0, "actualPhysicalCalls": 0},
         pages=[
             {
                 "pageIndex": 0,
@@ -944,6 +944,9 @@ def test_registered_template_export_requires_passed_content_integrity() -> None:
                 "boundDigest": digest,
                 "renderedDigest": digest,
                 "sourceOwnershipDigest": "sha256:" + "c" * 64,
+                "expectedProtectedChromeDigest": digest,
+                "observedProtectedChromeDigest": digest,
+                "browserReadbackDigest": digest,
             }
         ],
     )
@@ -954,7 +957,8 @@ def test_registered_template_export_requires_passed_content_integrity() -> None:
         },
         "narrative_checkpoint": {
             "operationId": str(operation_id),
-            "narrative": {"contentGraphDigest": digest},
+            "narrative": {"contentGraphDigest": digest, "narrativeDigest": "sha256:" + "b" * 64},
+            "providerCallBudget": model_payload(receipt.provider_call_budget),
         },
     }
     missing = SimpleNamespace(
@@ -985,6 +989,7 @@ def test_registered_template_export_requires_passed_content_integrity() -> None:
 
 _SOURCE_RESTYLE_SUBMISSION = {
     "schemaVersion": "presentation-generation-request/v2",
+    "strategy": "authored",
     "content": "restyle the uploaded deck",
     "slideCount": 5,
     "authoredStyle": "default",
@@ -1070,8 +1075,9 @@ async def _submit_source_restyle(
     async def no_references(*args, **kwargs):
         return []
 
-    async def admit_with_owner(candidate, *, sql_session, owner_id):
+    async def admit_with_owner(candidate, *, sql_session, owner_id, tenant_id):
         assert owner_id == owner
+        assert tenant_id == actor.tenant_id
         assert candidate.source_content_manifest_pin.manifest_id == "manifest:source-content"
         assert candidate.reference_snapshot_ids == []
         return await admit_manifest(candidate)
@@ -1081,6 +1087,7 @@ async def _submit_source_restyle(
     monkeypatch.setattr("services.public_v2_orchestrator.claim_reference_snapshots", nothing)
     monkeypatch.setattr("services.public_v2_orchestrator.append_operation_event", nothing)
     monkeypatch.setattr("services.public_v2_orchestrator.wake_workspace_operation_runner", lambda: None)
+    monkeypatch.setattr("api.v1.ppt.endpoints.presentation_generate._validate_authored_master_pin_admission", nothing)
     monkeypatch.setattr(
         "services.public_generation_slide_count.admit_source_content_request",
         admit_with_owner,
@@ -1118,12 +1125,6 @@ def test_api_submit_source_restyle_charges_source_pages_and_pins_master(
 
         submission = dict(_SOURCE_RESTYLE_SUBMISSION)
         if verbatim:
-            # "deck-ir" (formerly asserted here) is retired as an explicit
-            # engine selection; the override this test actually proves --
-            # source-content restyle always resolves to authored regardless
-            # of the requested engine -- holds just as well starting from
-            # the field's own default (see the unconditional
-            # generation_engine == "authored" assertion below).
             submission.update(
                 generationMode="registered-template",
                 contentPolicy={"text": "verbatim", "allowSummarization": False},
@@ -1155,8 +1156,7 @@ def test_api_submit_source_restyle_charges_source_pages_and_pins_master(
         }
         assert generation_settings["master_pin"] == expected_pin
         assert generation_settings["source_mode"] == "source_content_restyle"
-        # The durable job payload is the worker's request; it is persisted by
-        # field name rather than wire alias.
+        # The durable job payload uses field names rather than wire aliases.
         assert job.request_payload["n_slides"] == 43
         assert job.request_payload["master_pin"] == {
             "master_id": "master:company",
