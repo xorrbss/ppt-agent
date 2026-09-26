@@ -125,6 +125,7 @@ def create_app(database_path: Path | None = None):
         WorkspaceBootstrapRequest,
     )
     from services.database import async_session_maker
+    from services.compatibility_migration.admission import stamp_new_authored_presentation
     from services.workspace_operation_handler_registry import (
         NonRetryableWorkspaceOperationError,
         WorkspaceOperationResult,
@@ -318,19 +319,17 @@ def create_app(database_path: Path | None = None):
                     # from partial-fixture ORM metadata, so flush the real
                     # owner before inserting the owner-bound presentation.
                     await session.flush()
-                    session.add(
-                        PresentationModel(
-                            id=PRESENTATION_ID,
-                            owner_id=AUTHORED_OWNER_ID,
-                            content="Live browser workspace fixture",
-                            mode="template",
-                            version="v2-standard",
-                            n_slides=5,
-                            language="ko",
-                            layout={"name": "live-browser"},
-                            revision=0,
-                        )
+                    presentation = PresentationModel(
+                        id=PRESENTATION_ID,
+                        owner_id=AUTHORED_OWNER_ID,
+                        content="Live browser workspace fixture",
+                        n_slides=5,
+                        language="ko",
+                        layout={"name": "live-browser"},
+                        revision=0,
                     )
+                    stamp_new_authored_presentation(presentation)
+                    session.add(presentation)
 
                 async with async_session_maker() as session:
                     browser_asset = WorkspaceAsset(
