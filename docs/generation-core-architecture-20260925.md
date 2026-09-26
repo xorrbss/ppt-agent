@@ -256,8 +256,16 @@ Merge 3: N1, D1, L1, L2 -> `main`; CI (GitHub + Bitbucket) green.
   as a robustness fix for a code-level hazard (second commit rollback erasing
   `async_status.data`) that was reproduced only with a fake session, never
   live.
-- Session handoff notes committed at worktree roots (`C4-HANDOFF.md`, etc.)
-  must be moved under `handoff/` or dropped before Merge 2.
+- Session handoff notes (`C1`–`C4-HANDOFF.md`) were committed at the repo
+  root during Phase 1 and removed on 2026-09-26; they live outside the repo
+  under `handoff/raster-redesign-20260925/repo-root-handoffs/`.
+- Deployment prerequisite for the GPT-6 default (2026-09-26): provider calls
+  whose provider/model pair is missing from `PUBLIC_PROVIDER_PRICING_CATALOG`
+  fail closed, so every deployment adds `codex/gpt-6-sol`, `codex/gpt-6-luna`,
+  `codex/gpt-6-astra` and bumps `PUBLIC_PROVIDER_PRICING_REVISION`
+  consistently; a saved `CODEX_MODEL` overrides the registry default, so a
+  deployment that saved `gpt-5.6-sol` must change it in the settings screen.
+  Done on the shared local stack (revision 72).
 - Design packs (`authored_vnext/design_pack`) are patch-handle based: every
   DesignFrame patches an element of a source-native document, so they cannot
   project onto from-scratch SVG authoring (C2, 2026-09-26). SVG accepts
@@ -274,8 +282,13 @@ Merge 3: N1, D1, L1, L2 -> `main`; CI (GitHub + Bitbucket) green.
   the shared stack after merge; (2) with an alpha-less image provider, icons
   depend on exact library alias matches (a general deck matched 0/45) —
   better matching changes `library.py`, which authored also uses: product
-  decision; (3) every page of general SVG decks carries `font_unresolved`
-  (cause not yet traced; handed to C2 with its font-weight fix).
+  decision; (3) resolved — the `font_unresolved` flag on every page was the
+  renderer not loading Noto Sans KR (Y1 bundles the default fonts before
+  capture) and model-chosen unbundled families (Z2 substitutes them at
+  finalize and records an advisory).
+- Not verified live at completion: the SVG terminal fallback page (no live
+  deck exhausted its author attempts), the gpt-image-2 cut-out/sheet path,
+  and non-400/700 weight normalization (the model never emitted one).
 
 ## 6a. M0 baseline (2026-09-26, `handoff/raster-redesign-20260925/m0-svg-baseline.md`)
 
