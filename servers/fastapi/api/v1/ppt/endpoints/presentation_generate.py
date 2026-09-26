@@ -55,6 +55,7 @@ from api.v1.ppt.endpoints.presentation_generate_admission import (
     _require_local_sync_generation,
 )
 from api.v1.ppt.endpoints.presentation_generate_errors import generation_admission_http_error
+from api.v1.ppt.endpoints.presentation_generation_completion import record_generation_completion
 from constants.presentation import (
     DEFAULT_ATTACHMENT_GENERATION_PROMPT,
     MAX_NUMBER_OF_SLIDES,
@@ -1148,41 +1149,14 @@ async def generate_presentation_handler(
                 sql_session,
                 generation_job,
             )
-            # The single point where "generation finished and an export was
-            # requested" is decided, for the synchronous and the durable path
-            # alike: this is the one successful completion of the handler.
-            if resolved_strategy == "svg" and async_status is not None:
-                # The per-page verdict publication recorded, not the deck mode.
-                from services.generation_core.drivers.svg.publish import svg_completion_status
-
-                message, gate_status, pages = await svg_completion_status(sql_session, presentation_id)
-                async_status.status = "completed"
-                async_status.message = message
-                async_status.data = {
-                    **response.model_dump(mode="json"),
-                    "quality_gate_status": gate_status,
-                    "quality_pages": pages,
-                    "generation_strategy_reason": strategy_reason,
-                }
-                async_status.error, async_status.updated_at = None, datetime.now(timezone.utc)
-                sql_session.add(async_status)
-                # Durable independent of the chained export below: a failure
-                # submitting export_as must never roll back "completed" too
-                # (it used to -- chain_generation_export rolls back the
-                # session on a submission error, discarding whatever else was
-                # pending on it). Commit "completed" on its own first.
-                await sql_session.commit()
-            elif async_status is not None and strategy_reason != "explicit":
-                # An omitted strategy that fell back to authored (a svg
-                # admission violation, registered-template, or a design pack)
-                # is otherwise silent -- additive merge, never overwrites the
-                # status/message the authored pipeline itself manages.
-                data = dict(async_status.data or {})
-                data["generation_strategy_reason"] = strategy_reason
-                async_status.data = data
-                async_status.updated_at = datetime.now(timezone.utc)
-                sql_session.add(async_status)
-                await sql_session.commit()
+            await record_generation_completion(
+                sql_session,
+                async_status=async_status,
+                resolved_strategy=resolved_strategy,
+                strategy_reason=strategy_reason,
+                presentation_id=presentation_id,
+                response=response,
+            )
             response = await finalize_generation_export_chain(
                 sql_session,
                 response=response,
