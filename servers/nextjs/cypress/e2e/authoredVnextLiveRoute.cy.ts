@@ -149,7 +149,7 @@ describe("authored-only vNext live route", () => {
       .its("response.statusCode")
       .should("eq", 201);
     cy.get('[data-testid="master-wysiwyg-workspace"] > header')
-      .contains("button", "Fixed copy")
+      .contains("button", "고정 문구")
       .click();
     cy.get('[data-testid="authored-master-publish"]', { timeout: 60_000 })
       .should("be.enabled")
