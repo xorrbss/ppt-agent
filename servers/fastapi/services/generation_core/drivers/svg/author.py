@@ -170,6 +170,14 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
             return AuthorAttempt(svg=None, retry=True)
     raise_if_fatal()
     svg = authored.svg_content
+    if not (ctx.source_reflow or ctx.raster_reconstruction):
+        from services.svg_default_fonts import normalize_model_font_families
+
+        svg, font_advisories = normalize_model_font_families(svg)
+        if font_advisories:
+            payload["fontAdvisories"] = font_advisories
+        else:
+            payload.pop("fontAdvisories", None)
     payload["attempts"].append({"raw_response": authored.raw_response,
                                 "receipt": authored.receipt,
                                 "kind": "local" if local_authored is not None else "provider"})

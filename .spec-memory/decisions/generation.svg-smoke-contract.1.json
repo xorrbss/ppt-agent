@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "key": "generation.svg-smoke-contract",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Keep admission strategy reason; native charts follow drawn colors and labels while exact values/categories stay guarded; substitute unbundled model fonts.",
+  "scope": [
+    "generation-core",
+    "svg"
+  ],
+  "invariants": [
+    "Durable requests retain the strategy reason recorded at admission in async status.",
+    "SVG native chart values and categories must match the drawing; colors, labels, and chart furniture follow the drawing.",
+    "Non-resolvable model SVG font families use the bundled default and record an advisory."
+  ],
+  "forbidden": [],
+  "evidence": [
+    "servers/fastapi/tests/unit/test_svg_smoke_regressions.py",
+    "servers/fastapi/tests/unit/test_generation_core_admission_strategy.py",
+    "C:\\project\\PPT-agent\\handoff\\codex-reports\\z2-smoke-offline-render.json"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-26T11:27:17.1965671+00:00"
+}

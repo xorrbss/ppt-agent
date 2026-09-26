@@ -1,0 +1,152 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect x="0" y="0" width="1280" height="720" fill="#F8FAFC" />
+
+  <text font-family="Noto Sans KR" font-size="14" font-weight="700" fill="#2563EB" x="56" y="38">성과 분석</text>
+  <rect x="56" y="51" width="38" height="3" fill="#2563EB" />
+  <text font-family="Noto Sans KR" font-size="34" font-weight="700" fill="#0F172A" x="56" y="94">성장성과 수익성 분석</text>
+  <text font-family="Noto Sans KR" font-size="18" font-weight="400" fill="#64748B" x="56" y="126">전 분기 매출이 성장하는 동안 영업이익은 더 빠르게 늘어 영업 레버리지가 확대됐습니다.</text>
+
+  <rect x="56" y="154" width="690" height="382" fill="#FFFFFF" />
+  <rect x="56" y="154" width="4" height="382" fill="#2563EB" />
+
+  <g id="native-chart-quarterly-revenue">
+    <text font-family="Noto Sans KR" font-size="19" font-weight="700" fill="#0F172A" x="80" y="190">분기별 매출 (억원)</text>
+    <rect x="641" y="177" width="12" height="12" fill="#2563EB" />
+    <text font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#64748B" x="661" y="189">매출</text>
+
+    <line x1="84" y1="457" x2="720" y2="457" stroke="#CBD5E1" stroke-width="1" />
+    <line x1="84" y1="352" x2="720" y2="352" stroke="#E2E8F0" stroke-width="1" />
+    <line x1="84" y1="247" x2="720" y2="247" stroke="#E2E8F0" stroke-width="1" />
+
+    <rect x="112" y="321" width="88" height="136" fill="#93C5FD" />
+    <rect x="260" y="292" width="88" height="165" fill="#60A5FA" />
+    <rect x="408" y="275" width="88" height="182" fill="#3B82F6" />
+    <rect x="556" y="247" width="88" height="210" fill="#2563EB" />
+
+    <text font-family="Noto Sans KR" font-size="18" font-weight="700" fill="#0F172A" text-anchor="middle" x="156" y="310">120</text>
+    <text font-family="Noto Sans KR" font-size="18" font-weight="700" fill="#0F172A" text-anchor="middle" x="304" y="281">145</text>
+    <text font-family="Noto Sans KR" font-size="18" font-weight="700" fill="#0F172A" text-anchor="middle" x="452" y="264">160</text>
+    <text font-family="Noto Sans KR" font-size="18" font-weight="700" fill="#0F172A" text-anchor="middle" x="600" y="236">185</text>
+
+    <text font-family="Noto Sans KR" font-size="16" font-weight="400" fill="#0F172A" text-anchor="middle" x="156" y="484">1분기</text>
+    <text font-family="Noto Sans KR" font-size="16" font-weight="400" fill="#0F172A" text-anchor="middle" x="304" y="484">2분기</text>
+    <text font-family="Noto Sans KR" font-size="16" font-weight="400" fill="#0F172A" text-anchor="middle" x="452" y="484">3분기</text>
+    <text font-family="Noto Sans KR" font-size="16" font-weight="400" fill="#0F172A" text-anchor="middle" x="600" y="484">4분기</text>
+  </g>
+
+  <text font-family="Noto Sans KR" font-size="13" font-weight="400" fill="#64748B" text-anchor="middle" x="156" y="515">이익률 10.0%</text>
+  <text font-family="Noto Sans KR" font-size="13" font-weight="400" fill="#64748B" text-anchor="middle" x="304" y="515">이익률 10.3%</text>
+  <text font-family="Noto Sans KR" font-size="13" font-weight="400" fill="#64748B" text-anchor="middle" x="452" y="515">이익률 11.3%</text>
+  <text font-family="Noto Sans KR" font-size="13" font-weight="700" fill="#2563EB" text-anchor="middle" x="600" y="515">이익률 11.9%</text>
+
+  <rect x="770" y="154" width="454" height="382" fill="#FFFFFF" />
+  <text font-family="Noto Sans KR" font-size="19" font-weight="700" fill="#0F172A" x="790" y="190">분기별 실적 데이터</text>
+  <text font-family="Noto Sans KR" font-size="13" font-weight="400" fill="#64748B" text-anchor="end" x="1204" y="190">금액: 억원 · 증가율: 전분기 대비</text>
+
+  <g id="native-table-quarterly-performance">
+    <rect x="790" y="212" width="58" height="56" fill="#EFF6FF" />
+    <rect x="848" y="212" width="65" height="56" fill="#EFF6FF" />
+    <rect x="913" y="212" width="75" height="56" fill="#EFF6FF" />
+    <rect x="988" y="212" width="65" height="56" fill="#EFF6FF" />
+    <rect x="1053" y="212" width="75" height="56" fill="#EFF6FF" />
+    <rect x="1128" y="212" width="76" height="56" fill="#EFF6FF" />
+
+    <rect x="790" y="268" width="58" height="48" fill="#FFFFFF" />
+    <rect x="848" y="268" width="65" height="48" fill="#FFFFFF" />
+    <rect x="913" y="268" width="75" height="48" fill="#FFFFFF" />
+    <rect x="988" y="268" width="65" height="48" fill="#FFFFFF" />
+    <rect x="1053" y="268" width="75" height="48" fill="#FFFFFF" />
+    <rect x="1128" y="268" width="76" height="48" fill="#FFFFFF" />
+
+    <rect x="790" y="316" width="58" height="48" fill="#F8FAFC" />
+    <rect x="848" y="316" width="65" height="48" fill="#F8FAFC" />
+    <rect x="913" y="316" width="75" height="48" fill="#F8FAFC" />
+    <rect x="988" y="316" width="65" height="48" fill="#F8FAFC" />
+    <rect x="1053" y="316" width="75" height="48" fill="#F8FAFC" />
+    <rect x="1128" y="316" width="76" height="48" fill="#F8FAFC" />
+
+    <rect x="790" y="364" width="58" height="48" fill="#FFFFFF" />
+    <rect x="848" y="364" width="65" height="48" fill="#FFFFFF" />
+    <rect x="913" y="364" width="75" height="48" fill="#FFFFFF" />
+    <rect x="988" y="364" width="65" height="48" fill="#FFFFFF" />
+    <rect x="1053" y="364" width="75" height="48" fill="#FFFFFF" />
+    <rect x="1128" y="364" width="76" height="48" fill="#FFFFFF" />
+
+    <rect x="790" y="412" width="58" height="48" fill="#EFF6FF" />
+    <rect x="848" y="412" width="65" height="48" fill="#EFF6FF" />
+    <rect x="913" y="412" width="75" height="48" fill="#EFF6FF" />
+    <rect x="988" y="412" width="65" height="48" fill="#EFF6FF" />
+    <rect x="1053" y="412" width="75" height="48" fill="#EFF6FF" />
+    <rect x="1128" y="412" width="76" height="48" fill="#EFF6FF" />
+
+    <line x1="790" y1="212" x2="1204" y2="212" stroke="#CBD5E1" stroke-width="1" />
+    <line x1="790" y1="268" x2="1204" y2="268" stroke="#CBD5E1" stroke-width="1" />
+    <line x1="790" y1="316" x2="1204" y2="316" stroke="#E2E8F0" stroke-width="1" />
+    <line x1="790" y1="364" x2="1204" y2="364" stroke="#E2E8F0" stroke-width="1" />
+    <line x1="790" y1="412" x2="1204" y2="412" stroke="#E2E8F0" stroke-width="1" />
+    <line x1="790" y1="460" x2="1204" y2="460" stroke="#CBD5E1" stroke-width="1" />
+
+    <line x1="790" y1="212" x2="790" y2="460" stroke="#CBD5E1" stroke-width="1" />
+    <line x1="848" y1="212" x2="848" y2="460" stroke="#E2E8F0" stroke-width="1" />
+    <line x1="913" y1="212" x2="913" y2="460" stroke="#E2E8F0" stroke-width="1" />
+    <line x1="988" y1="212" x2="988" y2="460" stroke="#E2E8F0" stroke-width="1" />
+    <line x1="1053" y1="212" x2="1053" y2="460" stroke="#E2E8F0" stroke-width="1" />
+    <line x1="1128" y1="212" x2="1128" y2="460" stroke="#E2E8F0" stroke-width="1" />
+    <line x1="1204" y1="212" x2="1204" y2="460" stroke="#CBD5E1" stroke-width="1" />
+
+    <text font-family="Noto Sans KR" font-size="13" font-weight="700" fill="#0F172A" text-anchor="middle" x="819" y="245">분기</text>
+    <text font-family="Noto Sans KR" font-size="13" font-weight="700" fill="#0F172A" text-anchor="middle" x="880.5" y="245">매출</text>
+    <text font-family="Noto Sans KR" font-size="13" font-weight="700" fill="#0F172A" text-anchor="middle" x="950.5" y="232"><tspan x="950.5" y="232">매출</tspan><tspan x="950.5" y="250">증가율</tspan></text>
+    <text font-family="Noto Sans KR" font-size="13" font-weight="700" fill="#0F172A" text-anchor="middle" x="1020.5" y="245">영업이익</text>
+    <text font-family="Noto Sans KR" font-size="13" font-weight="700" fill="#0F172A" text-anchor="middle" x="1090.5" y="232"><tspan x="1090.5" y="232">이익</tspan><tspan x="1090.5" y="250">증가율</tspan></text>
+    <text font-family="Noto Sans KR" font-size="13" font-weight="700" fill="#0F172A" text-anchor="middle" x="1166" y="232"><tspan x="1166" y="232">영업</tspan><tspan x="1166" y="250">이익률</tspan></text>
+
+    <text font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#0F172A" text-anchor="middle" x="819" y="298">1분기</text>
+    <text font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#0F172A" text-anchor="middle" x="880.5" y="298">120</text>
+    <text font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#64748B" text-anchor="middle" x="950.5" y="298">-</text>
+    <text font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#0F172A" text-anchor="middle" x="1020.5" y="298">12</text>
+    <text font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#64748B" text-anchor="middle" x="1090.5" y="298">-</text>
+    <text font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#0F172A" text-anchor="middle" x="1166" y="298">10.0%</text>
+
+    <text font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#0F172A" text-anchor="middle" x="819" y="346">2분기</text>
+    <text font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#0F172A" text-anchor="middle" x="880.5" y="346">145</text>
+    <text font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#0F172A" text-anchor="middle" x="950.5" y="346">20.8%</text>
+    <text font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#0F172A" text-anchor="middle" x="1020.5" y="346">15</text>
+    <text font-family="Noto Sans KR" font-size="14" font-weight="700" fill="#2563EB" text-anchor="middle" x="1090.5" y="346">25.0%</text>
+    <text font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#0F172A" text-anchor="middle" x="1166" y="346">10.3%</text>
+
+    <text font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#0F172A" text-anchor="middle" x="819" y="394">3분기</text>
+    <text font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#0F172A" text-anchor="middle" x="880.5" y="394">160</text>
+    <text font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#0F172A" text-anchor="middle" x="950.5" y="394">10.3%</text>
+    <text font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#0F172A" text-anchor="middle" x="1020.5" y="394">18</text>
+    <text font-family="Noto Sans KR" font-size="14" font-weight="700" fill="#2563EB" text-anchor="middle" x="1090.5" y="394">20.0%</text>
+    <text font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#0F172A" text-anchor="middle" x="1166" y="394">11.3%</text>
+
+    <text font-family="Noto Sans KR" font-size="14" font-weight="700" fill="#0F172A" text-anchor="middle" x="819" y="442">4분기</text>
+    <text font-family="Noto Sans KR" font-size="14" font-weight="700" fill="#0F172A" text-anchor="middle" x="880.5" y="442">185</text>
+    <text font-family="Noto Sans KR" font-size="14" font-weight="700" fill="#0F172A" text-anchor="middle" x="950.5" y="442">15.6%</text>
+    <text font-family="Noto Sans KR" font-size="14" font-weight="700" fill="#0F172A" text-anchor="middle" x="1020.5" y="442">22</text>
+    <text font-family="Noto Sans KR" font-size="14" font-weight="700" fill="#2563EB" text-anchor="middle" x="1090.5" y="442">22.2%</text>
+    <text font-family="Noto Sans KR" font-size="14" font-weight="700" fill="#2563EB" text-anchor="middle" x="1166" y="442">11.9%</text>
+  </g>
+
+  <text font-family="Noto Sans KR" font-size="14" font-weight="700" fill="#2563EB" x="790" y="492">전 분기 매출 감소 없음</text>
+  <text font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#64748B" x="790" y="518">2·3·4분기 모두 매출과 영업이익이 동반 성장</text>
+
+  <line x1="56" y1="562" x2="1224" y2="562" stroke="#CBD5E1" stroke-width="1" />
+
+  <rect x="56" y="582" width="4" height="72" fill="#2563EB" />
+  <text font-family="Noto Sans KR" font-size="14" font-weight="700" fill="#2563EB" x="74" y="598">핵심 시사점</text>
+  <text font-family="Noto Sans KR" font-size="21" font-weight="700" fill="#0F172A" x="74" y="626">매 분기 이익 성장률이 매출 성장률을 상회</text>
+  <text font-family="Noto Sans KR" font-size="15" font-weight="400" fill="#64748B" x="74" y="651">영업이익률 10.0% → 11.9% · 연초 대비 약 1.9%p 개선</text>
+
+  <line x1="494" y1="582" x2="494" y2="654" stroke="#E2E8F0" stroke-width="1" />
+  <text font-family="Noto Sans KR" font-size="14" font-weight="700" fill="#64748B" x="518" y="598">하반기 가속</text>
+  <text font-family="Noto Sans KR" font-size="24" font-weight="700" fill="#2563EB" x="518" y="628">매출 +30.2% · 이익 +48.1%</text>
+  <text font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#64748B" x="518" y="652">상반기 265억/27억 → 하반기 345억/40억 · 이익 차이 13억원</text>
+
+  <line x1="836" y1="582" x2="836" y2="654" stroke="#E2E8F0" stroke-width="1" />
+  <text font-family="Noto Sans KR" font-size="14" font-weight="700" fill="#64748B" x="860" y="598">1분기 → 4분기</text>
+  <text font-family="Noto Sans KR" font-size="24" font-weight="700" fill="#0F172A" x="860" y="628">매출 +54.2% · 이익 +83.3%</text>
+  <text font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#64748B" x="860" y="652">120→185억(+65억) / 12→22억(+10억)</text>
+<text id="svg-system-page-number" x="1248" y="700" font-family="Noto Sans KR" font-size="12" fill="#2563EB" text-anchor="end">04</text></svg>

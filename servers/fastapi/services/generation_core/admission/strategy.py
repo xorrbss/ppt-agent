@@ -69,9 +69,16 @@ def resolve_generation_strategy(request: object) -> GenerationStrategy:
     return strategy
 
 
+def recorded_generation_strategy(request: object) -> tuple[GenerationStrategy, str]:
+    """Keep the admission reason when a durable request pins its strategy."""
+    strategy, derived_reason = resolve_generation_strategy_with_reason(request)
+    return strategy, getattr(request, "_generation_strategy_reason", None) or derived_reason
+
+
 __all__ = [
     "GenerationStrategy",
     "StrategyReason",
     "resolve_generation_strategy",
     "resolve_generation_strategy_with_reason",
+    "recorded_generation_strategy",
 ]

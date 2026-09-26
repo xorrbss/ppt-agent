@@ -25,6 +25,8 @@ from the payload, so the payload may only say what the group already shows:
 """
 from __future__ import annotations
 
+import re
+
 from services.generation_core.drivers.svg.native_geometry import (
     GroupPrimitives, NativeRejection, normalize_text, parse_label_number,
 )
@@ -73,6 +75,41 @@ def _series_colors(payload: dict, prims: GroupPrimitives) -> list[str] | None:
     return None
 
 
+def _drawn_series_name(name: str, drawn: set[str]) -> str:
+    exact = normalize_text(name)
+    if exact in drawn:
+        return name
+    # Axis ranges sometimes qualify a declared series name while the legend
+    # draws only its short name. The native legend must keep the drawn wording.
+    short = normalize_text(re.split(r"\s*\(", name, maxsplit=1)[0])
+    if short and short in drawn:
+        return short
+    raise NativeRejection("native_chart_label_not_drawn")
+
+
+def _chart_furniture(text: str) -> bool:
+    return text.startswith(("단위", "좌축", "우축", "축 ", "Axis ")) or "계열별 축" in text
+
+
+def _axis_ticks(payload: dict, prims: GroupPrimitives, indexes: list[int]) -> bool:
+    """Numeric furniture sits together outside the category plot positions."""
+    if len(indexes) < 2:
+        return False
+    categories = {normalize_text(value) for value in payload["categories"]}
+    category_texts = [item for item in prims.texts
+                      if normalize_text(" ".join(item.lines)) in categories]
+    if len(category_texts) != len(categories):
+        return False
+    horizontal = payload["chartType"] == "bar"
+    def coordinate(item):
+        box = item.box()
+        return (box.y0 + box.y1) / 2 if horizontal else (box.x0 + box.x1) / 2
+    positions = [coordinate(prims.texts[index]) for index in indexes]
+    return (max(positions) - min(positions) <= 16
+            and (min(positions) > max(map(coordinate, category_texts)) + 10 if horizontal
+                 else max(positions) < min(map(coordinate, category_texts)) - 10))
+
+
 def chart_object(raw: dict, prims: GroupPrimitives) -> tuple[dict, dict, dict | None]:
     """``(anchor, payload, SVG appearance)`` for one declared chart."""
     if not prims.tags <= CHART_ELEMENTS:
@@ -80,18 +117,30 @@ def chart_object(raw: dict, prims: GroupPrimitives) -> tuple[dict, dict, dict | 
     payload = _model_chart(raw)
     if payload["chartType"] == "pie" and len(payload["series"]) != 1:
         raise NativeRejection("native_chart_pie_series_invalid")
+    drawn = [normalize_text(" ".join(text.lines)) for text in prims.texts]
+    drawn_set = set(drawn)
     labels = {normalize_text(item) for item in payload["categories"]}
+    for item in payload["series"]:
+        item["name"] = _drawn_series_name(item["name"], drawn_set)
     names = {normalize_text(item["name"]) for item in payload["series"]}
     title = {normalize_text(payload["title"])} if payload.get("title") else set()
     values = [value for item in payload["series"] if isinstance(item["values"], list)
               for value in item["values"] if type(value) in (int, float)]
-    drawn = [normalize_text(" ".join(text.lines)) for text in prims.texts]
-    if not (labels | names | title) <= set(drawn):
+    if not (labels | names | title) <= drawn_set:
         raise NativeRejection("native_chart_label_not_drawn")
-    for text in drawn:
+    unknown_numbers = [index for index, text in enumerate(drawn)
+                       if text not in labels | names | title and not _chart_furniture(text)
+                       and (number := parse_label_number(text)) is not None
+                       and not any(abs(number - value) <= 1e-9 * max(1.0, abs(value))
+                                   for value in values)]
+    if unknown_numbers and not _axis_ticks(payload, prims, unknown_numbers):
+        raise NativeRejection("native_chart_text_unaccounted")
+    for index, text in enumerate(drawn):
         if text in labels or text in names or text in title:
             continue
         number = parse_label_number(text)
+        if _chart_furniture(text) or index in unknown_numbers:
+            continue
         if number is None or not any(abs(number - v) <= 1e-9 * max(1.0, abs(v)) for v in values):
             raise NativeRejection("native_chart_text_unaccounted")
     boxes = [shape.box for shape in prims.shapes] + [text.box() for text in prims.texts]

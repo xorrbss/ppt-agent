@@ -157,10 +157,10 @@ def test_chart_appearance_survives_worker_and_pptx_readback(tmp_path):
         _render_evidence(Path(os.environ["Y2_CHART_EVIDENCE_DIR"]), svgs, deck)
 
 
-def test_wrong_drawn_point_color_keeps_svg_and_drops_only_native_annotation():
+def test_wrong_declared_point_color_uses_the_drawn_color():
     svg, content = _publish(_group("bar", wrong_color=True), 0)
-    assert content["nativeObjects"] is None
-    assert content["svgReceipt"]["nativeObjects"]["dropped"][0]["reason"] == "native_chart_point_color_mismatch"
+    assert content["svgReceipt"]["nativeObjects"]["accepted"] == 1
+    assert content["nativeObjects"]["objects"][0]["payload"]["series"][0]["pointColors"][1] == "#AA0000"
     assert "#AA0000" in svg
 
 
@@ -177,3 +177,13 @@ def test_wrong_value_label_position_keeps_the_svg_drawing():
     assert content["svgReceipt"]["nativeObjects"]["dropped"][0]["reason"] == (
         "native_chart_value_label_position_mismatch")
     assert ">40</" in svg
+
+
+def test_wrong_declared_value_drops_the_native_annotation():
+    # The author uses compact JSON; change only the declaration, not drawn text.
+    group = _group("column").replace('"values":[50,80,60,100]', '"values":[51,80,60,100]')
+    _, content = _publish(group, 0)
+    assert content["nativeObjects"] is None
+    assert content["svgReceipt"]["nativeObjects"]["dropped"][0]["reason"] in {
+        "native_chart_text_unaccounted", "native_chart_value_geometry_mismatch",
+        "native_chart_value_labels_mismatch"}

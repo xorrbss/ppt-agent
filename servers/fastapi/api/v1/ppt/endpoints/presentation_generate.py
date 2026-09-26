@@ -123,7 +123,7 @@ from services.database import async_session_maker, get_async_session, sql_engine
 from services.documents_loader import DocumentsLoader
 from services.generation_core.admission.strategy import (
     resolve_generation_strategy,
-    resolve_generation_strategy_with_reason,
+    recorded_generation_strategy,
 )
 from services.generation_provider_admission import generation_provider_admitted
 from services.compatibility_migration.authored_vnext_contract import (
@@ -1134,7 +1134,7 @@ async def generate_presentation_handler(
                 async_status.updated_at = datetime.now(timezone.utc)
                 sql_session.add(async_status)
                 await sql_session.commit()
-            resolved_strategy, strategy_reason = resolve_generation_strategy_with_reason(request)
+            resolved_strategy, strategy_reason = recorded_generation_strategy(request)
             generate_document = generate_authored_presentation
             if resolved_strategy == "svg":
                 from services.svg_presentation_service import generate_svg_presentation

@@ -1,0 +1,164 @@
+{
+  "2": {
+    "chartType": "column",
+    "categories": [
+      "1분기",
+      "2분기",
+      "3분기",
+      "4분기"
+    ],
+    "series": [
+      {
+        "name": "매출(억원)",
+        "values": [
+          120,
+          145,
+          160,
+          185
+        ],
+        "pointColors": [
+          "#2563EB",
+          "#2563EB",
+          "#2563EB",
+          "#2563EB"
+        ]
+      }
+    ],
+    "categoryOrder": "leftToRight",
+    "valueLabels": {
+      "shown": true,
+      "position": "insideEnd"
+    },
+    "markers": false,
+    "title": "분기별 매출"
+  },
+  "3": {
+    "chartType": "column",
+    "categories": [
+      "1분기",
+      "2분기",
+      "3분기",
+      "4분기"
+    ],
+    "series": [
+      {
+        "name": "매출 (좌축 0~200억원)",
+        "values": [
+          120,
+          145,
+          160,
+          185
+        ],
+        "pointColors": [
+          "#2563EB",
+          "#2563EB",
+          "#2563EB",
+          "#2563EB"
+        ]
+      },
+      {
+        "name": "영업이익 (우축 0~25억원)",
+        "values": [
+          12,
+          15,
+          18,
+          22
+        ],
+        "pointColors": [
+          "#94A3B8",
+          "#94A3B8",
+          "#94A3B8",
+          "#94A3B8"
+        ]
+      }
+    ],
+    "categoryOrder": "leftToRight",
+    "valueLabels": {
+      "shown": true,
+      "position": "outsideEnd"
+    },
+    "markers": false,
+    "title": "분기별 매출 및 영업이익"
+  },
+  "4": {
+    "chartType": "column",
+    "categories": [
+      "1분기",
+      "2분기",
+      "3분기",
+      "4분기"
+    ],
+    "series": [
+      {
+        "name": "매출",
+        "values": [
+          120,
+          145,
+          160,
+          185
+        ],
+        "pointColors": [
+          "#93C5FD",
+          "#60A5FA",
+          "#3B82F6",
+          "#2563EB"
+        ]
+      }
+    ],
+    "categoryOrder": "leftToRight",
+    "valueLabels": {
+      "shown": true,
+      "position": "outsideEnd"
+    },
+    "markers": false,
+    "title": "분기별 매출 (억원)"
+  },
+  "5": {
+    "chartType": "column",
+    "categories": [
+      "1분기",
+      "2분기",
+      "3분기",
+      "4분기"
+    ],
+    "series": [
+      {
+        "name": "매출",
+        "values": [
+          120,
+          140,
+          165,
+          185
+        ],
+        "pointColors": [
+          "#94A3B8",
+          "#94A3B8",
+          "#94A3B8",
+          "#94A3B8"
+        ]
+      },
+      {
+        "name": "영업이익",
+        "values": [
+          12,
+          15,
+          18,
+          22
+        ],
+        "pointColors": [
+          "#2563EB",
+          "#2563EB",
+          "#2563EB",
+          "#2563EB"
+        ]
+      }
+    ],
+    "categoryOrder": "leftToRight",
+    "valueLabels": {
+      "shown": true,
+      "position": "outsideEnd"
+    },
+    "markers": false,
+    "title": "분기별 매출·영업이익"
+  }
+}
