@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "key": "svg.default-font-resolution",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "SVG preset fonts resolve to bundled Noto Sans KR or Pretendard; previews embed the selected faces before Chromium measurement.",
+  "scope": [
+    "svg",
+    "fonts",
+    "generation-core"
+  ],
+  "invariants": [
+    "Explicit request and master font families retain their precedence."
+  ],
+  "forbidden": [],
+  "evidence": [
+    "servers/fastapi/services/svg_trusted_fonts.py",
+    "servers/fastapi/services/svg_default_fonts.py",
+    "servers/fastapi/tests/unit/test_svg_trusted_fonts.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-26T05:05:50.5582435+00:00"
+}

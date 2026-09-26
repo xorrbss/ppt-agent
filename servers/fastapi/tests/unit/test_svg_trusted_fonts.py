@@ -12,6 +12,7 @@ import services.svg_trusted_fonts as trusted_fonts
 from services.svg_trusted_fonts import (
     BUNDLED_FACES,
     FONT_DIRECTORY,
+    bundled_svg_font_family,
     declared_weights,
     read_trusted_pretendard_faces,
 )
@@ -52,6 +53,18 @@ def test_declared_weights_matches_the_bundled_faces() -> None:
 def test_declared_weights_is_none_for_an_untrusted_family() -> None:
     assert declared_weights("Poppins") is None
     assert declared_weights("Malgun Gothic") is None
+
+
+@pytest.mark.parametrize(
+    ("preset_stack", "expected"),
+    [
+        ('"Noto Serif KR", "Noto Sans KR", serif', "Noto Sans KR"),
+        ("Pretendard", "Pretendard"),
+        ("DM Sans", "Noto Sans KR"),
+    ],
+)
+def test_preset_font_projection_uses_only_bundled_families(preset_stack, expected):
+    assert bundled_svg_font_family(preset_stack) == expected
 
 
 def test_a_mislabelled_face_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:

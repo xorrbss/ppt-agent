@@ -1,6 +1,6 @@
-"""The bundled Pretendard faces the SVG renderer trusts and embeds.
+"""Bundled font families the SVG style projection and renderer can use.
 
-Only Regular (400) and Bold (700) are bundled.  They are the same files the
+Pretendard Regular (400) and Bold (700) are the same files the
 authored-hybrid exporter ships (``lib/authored-hybrid/bundled-fonts-manifest.ts``)
 and are licensed for embedding under the SIL Open Font License, unlike a
 Windows system face such as Malgun Gothic.
@@ -14,6 +14,7 @@ from typing import Final
 import xml.etree.ElementTree as ET
 
 from services.authored_vnext.semantic.typography import NativeFontByteRegistry
+from utils.svg_template_fonts import FONT_FAMILY as DEFAULT_FONT_FAMILY
 
 #: Repository root: ``servers/fastapi/services/svg_trusted_fonts.py`` -> 3 parents.
 _REPOSITORY_ROOT: Final[Path] = Path(__file__).resolve().parents[3]
@@ -36,6 +37,20 @@ BUNDLED_FACES: Final[tuple[tuple[int, str, str], ...]] = (
 TRUSTED_FONT_WEIGHTS: Final[dict[str, frozenset[int]]] = {
     FONT_FAMILY.casefold(): frozenset(weight for weight, _face, _file in BUNDLED_FACES),
 }
+
+
+def bundled_svg_font_family(font_stack: str | None) -> str:
+    """Choose the first bundled family from a preset CSS stack for SVG text."""
+
+    available = {
+        DEFAULT_FONT_FAMILY.casefold(): DEFAULT_FONT_FAMILY,
+        FONT_FAMILY.casefold(): FONT_FAMILY,
+    }
+    for candidate in (font_stack or "").split(","):
+        family = available.get(candidate.strip().strip("'\"").casefold())
+        if family is not None:
+            return family
+    return DEFAULT_FONT_FAMILY
 
 
 def declared_weights(family: str) -> frozenset[int] | None:
@@ -120,9 +135,11 @@ def read_trusted_pretendard_faces() -> tuple[tuple[int, str, bytes], ...]:
 
 __all__ = [
     "BUNDLED_FACES",
+    "DEFAULT_FONT_FAMILY",
     "FONT_DIRECTORY",
     "FONT_FAMILY",
     "TRUSTED_FONT_WEIGHTS",
+    "bundled_svg_font_family",
     "declared_weights",
     "read_trusted_pretendard_faces",
     "trusted_font_weights_used",

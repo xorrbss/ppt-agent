@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "key": "provider.structured-output-admission",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "A schema-formatted JSON object is provider output even when it has no text field; SVG vision advisory parses the object directly.",
+  "scope": [
+    "provider",
+    "svg",
+    "vision-advisory"
+  ],
+  "invariants": [
+    "Blank text without a structured object remains an empty-output outcome."
+  ],
+  "forbidden": [],
+  "evidence": [
+    "servers/fastapi/utils/provider_idempotency.py",
+    "servers/fastapi/services/generation_core/quality/vision_advisory.py",
+    "servers/fastapi/tests/unit/test_authored_provider_outcomes.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-26T05:06:03.0791244+00:00"
+}

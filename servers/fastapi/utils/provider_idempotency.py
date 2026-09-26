@@ -406,9 +406,13 @@ def provider_generate_call(
                 "public_provider_bridge_exception",
                 recovery_allowed=False,
             ) from error
-        if authored_request and not _content_has_text(
-            getattr(response, "content", None)
-        ):
+        content = getattr(response, "content", None)
+        # llmai returns parsed JSON objects for structured responses. An empty
+        # array inside one of those objects is still a real model answer.
+        structured_output = isinstance(content, Mapping) and bool(
+            generate_kwargs.get("response_format")
+        )
+        if authored_request and not (structured_output or _content_has_text(content)):
             raise ProviderOutcomeError(
                 "public_provider_empty_output",
                 recovery_allowed=True,

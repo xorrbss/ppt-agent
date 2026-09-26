@@ -1,5 +1,6 @@
 """Render a validated SVG through the existing isolated Chromium boundary."""
 from __future__ import annotations
+# ruff: noqa: ASYNC109
 
 from dataclasses import dataclass
 import base64
@@ -13,9 +14,7 @@ from services.svg_trusted_fonts import trusted_font_weights_used as _trusted_fon
 
 SVG_RENDERER_VERSION = "svg-chromium/v1"
 
-# Persisted identity: stored SVG sources carry this marker and re-render only
-# when it matches, so the historical value stays although its original owner
-# (the withdrawn restyle composer) is gone.
+# Keep this persisted profile identity for older SVG previews.
 TRUSTED_FONT_PROFILE = "composer-bundled-pretendard/v1"
 
 
@@ -36,6 +35,9 @@ def _trusted_font_marker() -> str:
 
 def materialize_trusted_svg_fonts(source: str, admitted):
     """Inject fixed bundled faces after normal HTML admission inside the worker."""
+    from services.svg_default_fonts import FONT_PROFILE as DEFAULT_FONT_PROFILE, materialize_default_fonts
+    if f'<html title="{DEFAULT_FONT_PROFILE}|' in source:
+        return materialize_default_fonts(source, admitted)
     from utils.svg_template_fonts import FONT_PROFILE
     if f'<html title="{FONT_PROFILE}|' in source:
         return _materialize_template_font(source, admitted)
@@ -116,20 +118,7 @@ def _materialize_template_font(source: str, admitted):
 
 
 def _materialize_authorized_raster_font(canonical: ET.Element, admitted):
-    """Embed the packaged Noto Sans KR face when the canonical SVG's text
-    actually declares it (redesign pages); a no-op for full_page_preserve,
-    which has no real text at all so ``_template_font_used`` returns False
-    without raising.
-
-    This path (admit_authorized_svg_materialized's own wrapper) never goes
-    through svg_preview_html's ``<html title=...>`` marker, so it cannot
-    reuse ``_materialize_template_font`` verbatim -- but it needs the same
-    embedded ``@font-face``: without it, Chrome falls back to whatever
-    "Noto Sans KR"-ish font the OS happens to have (or none), which is why
-    font_unresolved was nondeterministic here. The existing document.fonts.ready
-    wait in the shared capture pipeline (utils/slide_capture_pipe_render.py)
-    already covers this once the face is actually declared.
-    """
+    """Embed packaged Noto for authorized raster derivatives with real text."""
     if not _template_font_used(canonical):
         return admitted
     from utils.svg_template_fonts import FONT_FAMILY, FONT_PROFILE, font_material
@@ -219,6 +208,10 @@ def svg_preview_html(svg: str, *, width: int = 1280, height: int = 720,
     if template_font:
         from utils.svg_template_fonts import trusted_font_marker
         marker = f' title="{trusted_font_marker()}"'
+    elif source_font_profile is None:
+        from services.svg_default_fonts import font_marker, uses_default_font
+        if uses_default_font(root):
+            marker = f' title="{font_marker()}"'
     return (f'<!DOCTYPE html><html{marker}><head><meta charset="utf-8"><style>'
             f'html,body{{margin:0;width:{width}px;height:{height}px;overflow:hidden}}'
             f'body>svg{{display:block}}</style></head><body>{rendered}</body></html>')
@@ -241,7 +234,7 @@ async def render_svg_with_metrics(svg: str, *, width: int = 1280, height: int = 
                                   physical_canvas: object | None = None,
                                   source_font_profile: str | None = None,
                                   allow_image_only: bool = False) -> SvgRenderResult:
-    from utils.authored_font_policy import MIN_AUTHORED_FONT_SIZE_PX, requested_font_floor_px
+    from utils.authored_font_policy import requested_font_floor_px
     from utils.slide_capture import render_html_to_png_with_metrics
     wrapper = svg_preview_html(svg, width=width, height=height,
                                materialized_svg=materialized_svg, source_font_profile=source_font_profile,
@@ -273,7 +266,9 @@ async def render_svg_with_metrics(svg: str, *, width: int = 1280, height: int = 
     failures, overlaps = [], []
     from services.document_canvas_generation import generation_font_floor
     floor = minimum_font_px if minimum_font_px is not None else generation_font_floor(None, physical_canvas)
-    requested_floor = requested_font_floor_px(instructions, point_per_unit=float(getattr(physical_canvas, "point_per_unit", 0.75)))
+    requested_floor = requested_font_floor_px(
+        instructions, point_per_unit=float(getattr(physical_canvas, "point_per_unit", 0.75))
+    )
     if requested_floor is not None:
         floor = requested_floor
     root = ET.fromstring(svg)
@@ -338,6 +333,11 @@ async def render_svg_with_metrics(svg: str, *, width: int = 1280, height: int = 
         from utils.svg_template_fonts import FONT_DIGEST, FONT_FAMILY, FONT_PROFILE
         font_profile = {"profile": FONT_PROFILE, "family": FONT_FAMILY,
             "font_digests": [FONT_DIGEST],
+            "worker_materialized": bool(text) and all(item.get("font_loaded") is True for item in text)}
+    from services.svg_default_fonts import FONT_PROFILE as DEFAULT_FONT_PROFILE
+    if f'<html title="{DEFAULT_FONT_PROFILE}|' in wrapper:
+        from services.svg_trusted_fonts import DEFAULT_FONT_FAMILY
+        font_profile = {"profile": DEFAULT_FONT_PROFILE, "family": DEFAULT_FONT_FAMILY,
             "worker_materialized": bool(text) and all(item.get("font_loaded") is True for item in text)}
     quality = {"contract_version": SVG_CONTRACT_VERSION, "renderer_version": SVG_RENDERER_VERSION,
                "source_digest": source_digest(svg), "png_digest": capture.png_digest,

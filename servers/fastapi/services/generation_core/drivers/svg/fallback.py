@@ -151,7 +151,8 @@ def fallback_page_svg(*, content: str, role: str, index: int, count: int,
 
     tokens = (style_snapshot or {}).get("tokens", {})
     accent = tokens.get("primary") or "#2563EB"
-    body_font = tokens.get("body_font") or "Noto Sans KR"
+    from services.svg_trusted_fonts import DEFAULT_FONT_FAMILY
+    body_font = tokens.get("body_font") or DEFAULT_FONT_FAMILY
     title_font = tokens.get("heading_font") or body_font
 
     available_width = max(1, width - 2 * _MARGIN_X)
