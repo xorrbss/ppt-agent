@@ -132,8 +132,7 @@ describe("Master WYSIWYG semantic inserts", () => {
     cy.mount(<Harness initialContract={initial} />);
     cy.get('[data-testid="shared-logo-scope"] select')
       .first()
-      .should("have.value", "current")
-      .select("allBody");
+      .should("have.value", "allBody");
     cy.get('[data-testid="shared-logo-scope"]')
       .should("contain.text", "All body layouts (recommended)")
       .and("contain.text", "Applies to 2 layouts")

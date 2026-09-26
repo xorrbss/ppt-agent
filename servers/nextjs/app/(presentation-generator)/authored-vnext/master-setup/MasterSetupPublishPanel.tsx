@@ -100,7 +100,7 @@ export default function MasterSetupPublishPanel({
           role="status"
         >
           <p>
-            {t("phase.published")} · r{published.revision}
+            {t("phase.published")}{t("phase.revisionSuffix", { revision: published.revision })}
           </p>
           {onApply && applyLabel && (
             <button

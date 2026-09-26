@@ -55,14 +55,14 @@ export default function MasterCatalogCard({
         </div>
         <div className="flex items-start justify-between gap-3">
           <h3 className="font-bold text-slate-950">
-            {companyStandardDisplayName(entry.name, entry.masterId)} · v{entry.publishedRevision}
+            {companyStandardDisplayName(entry.name, entry.masterId)}{t("versionSuffix", { revision: entry.publishedRevision ?? "" })}
           </h3>
           <span className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${selectable ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-900"}`}>
             {selectable ? t("published") : t("draft")}
           </span>
         </div>
         <p className="mt-2 text-sm text-slate-600">
-          PPT 마스터 기반 · {t("cardDetails", { version: entry.semanticVersion, layouts: entry.layoutCount })}
+          {t("pptMasterBased")} {t("cardDetails", { version: entry.semanticVersion, layouts: entry.layoutCount })}
         </p>
         <p className="mt-1 text-xs text-slate-500">
           {t("cardStyle", { font: entry.primaryFont, logo: entry.logo ? t("hasLogo") : t("noLogo") })}
