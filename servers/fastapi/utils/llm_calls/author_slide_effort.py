@@ -46,10 +46,8 @@ CODEX_REASONING_CAPABILITIES = {
     # "Supported values are: 'low', 'medium', 'high', 'xhigh', and 'max'."
     "gpt-6-astra": frozenset(("low", "medium", "high", "xhigh", "max")),
     "gpt-6-sol": frozenset(("low", "medium", "high", "xhigh", "max", "ultra")),
-    # gpt-6-luna capability set is UNKNOWN until probed; conservative
-    # intersection of gpt-6-sol and gpt-6-astra as a safe placeholder.
-    # TODO: probe gpt-6-luna directly and replace with its real allowed levels.
-    "gpt-6-luna": frozenset(("low", "medium", "high")),
+    # Direct probe (2026-09-26): "minimal" is rejected; these levels are accepted.
+    "gpt-6-luna": frozenset(("none", "low", "medium", "high", "xhigh", "max")),
 }
 # The provider's own order, cheapest first.
 _LEVELS_CHEAPEST_FIRST = (

@@ -24,5 +24,11 @@ def test_supported_levels_pass_through() -> None:
         assert _normalized_authoring_reasoning_effort("gpt-6-astra", level) == level
 
 
+def test_luna_direct_probe_capabilities() -> None:
+    for level in ("none", "low", "medium", "high", "xhigh", "max"):
+        assert _normalized_authoring_reasoning_effort("gpt-6-luna", level) == level
+    assert _normalized_authoring_reasoning_effort("gpt-6-luna", "minimal") == "none"
+
+
 def test_unknown_model_is_left_alone() -> None:
     assert _normalized_authoring_reasoning_effort("gpt-5.4", "minimal") == "minimal"
