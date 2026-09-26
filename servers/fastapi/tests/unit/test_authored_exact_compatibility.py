@@ -67,7 +67,7 @@ def test_public_style_listing_keeps_exact_mapping_and_mode_private(
 
     response = authored_endpoint.get_authored_styles()
 
-    assert response == [exact.public_dict()]
+    assert response == [{**exact.public_dict(), "supportedAspectRatios": ["16:9"]}]
     assert "reference_mode" not in response[0]
     assert "slide_reference_images" not in response[0]
     assert "reference_images" not in response[0]

@@ -38,7 +38,8 @@ def test_static_registry_composes_declared_modules_in_order() -> None:
 
 def test_ppt_router_is_composed_from_an_explicit_static_feature_tuple() -> None:
     assert PPT_FEATURE_MODULES[0].name == "files"
-    assert PPT_FEATURE_MODULES[-1].name == "community"
+    assert "community" in {module.name for module in PPT_FEATURE_MODULES}
+    assert PPT_FEATURE_MODULES[-1].name == "design-packs"
     assert API_V1_PPT_ROUTER.routes
 
 

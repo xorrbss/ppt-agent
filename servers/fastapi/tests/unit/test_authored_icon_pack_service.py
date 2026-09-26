@@ -41,6 +41,11 @@ def _no_text_ocr(monkeypatch):
     import utils.authored_ocr_quality as ocr_mod
 
     monkeypatch.setattr(ocr_mod, "inspect_authored_ocr", fake)
+    # Keep these sheet-generation checks independent of reusable library hits.
+    monkeypatch.setattr(
+        "services.authored_icon_pack.service.lookup_reusable_icons",
+        lambda _concepts, **_kwargs: {},
+    )
 
 
 def _sheet_png(size: str, count: int, columns: int, rows: int, *, opaque=False) -> bytes:

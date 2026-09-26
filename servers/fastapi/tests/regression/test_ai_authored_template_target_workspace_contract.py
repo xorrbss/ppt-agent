@@ -154,9 +154,10 @@ def test_openapi_requires_idempotency_header_and_excludes_it_from_body():
     assert set(request_schema["required"]) == {
         "source_revision",
         "prompt",
-        "authored_style",
+        "authoredStyle",
     }
     assert "idempotency_key" not in request_schema["properties"]
+    assert "idempotencyKey" not in request_schema["properties"]
     response_schema = app.openapi()["components"]["schemas"][
         "WorkspaceTemplateApplicationResponse"
     ]
@@ -228,7 +229,7 @@ def test_confirmation_is_target_owned_source_immutable_and_idempotent(tmp_path: 
                 assert messages[0].content == _request().prompt
                 assert operations[0].presentation_id == target.id
                 assert operations[0].conversation_id == conversations[0].id
-                assert operations[0].kind == "template.apply"
+                assert operations[0].kind == "design.apply"
                 assert operations[0].state == "queued"
                 assert operations[0].expected_revision == 0
                 assert operations[0].request_payload["source_presentation_id"] == str(

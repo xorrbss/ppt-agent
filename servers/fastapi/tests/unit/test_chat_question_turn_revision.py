@@ -23,6 +23,7 @@ from models.sql.chat_history_message import ChatHistoryMessageModel
 from models.sql.image_asset import ImageAsset
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_export_attempt import PresentationExportAttempt
+from models.sql.public_artifact import PublicArtifact
 from models.sql.user import User
 from models.sql.workspace import (
     WorkspaceActionReceipt,
@@ -55,6 +56,7 @@ TABLES = [
     WorkspaceOperationEvent.__table__,
     WorkspaceOutbox.__table__,
     PresentationExportAttempt.__table__,
+    PublicArtifact.__table__,
     WorkspaceArtifact.__table__,
 ]
 
@@ -90,6 +92,7 @@ async def _seed(maker):
             n_slides=1,
             language="ko",
             layout={"name": "deck"},
+            mode="authored",
             revision=START_REVISION,
         )
         session.add(presentation)

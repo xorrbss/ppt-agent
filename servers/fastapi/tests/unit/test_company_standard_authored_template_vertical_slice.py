@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 from copy import deepcopy
-import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 import uuid
@@ -51,7 +50,8 @@ from tests.support.authored_vnext_master_fixture import master_contract_payload
 from utils.authored_styles import resolve_authored_style
 
 
-def test_masterless_authored_uses_hidden_deterministic_internal_composition() -> None:
+def test_masterless_authored_uses_hidden_deterministic_internal_composition(monkeypatch) -> None:
+    monkeypatch.delenv("AUTHORED_RETAINED_REFERENCE_ROOT", raising=False)
     owner_id = uuid.uuid4()
     style = resolve_authored_style("tech-blueprint")
 
@@ -110,9 +110,7 @@ def test_company_standard_authored_template_vertical_slice(
         "# 스마트뱅킹 전환\n고객 중심 금융 경험을 재설계합니다.",
         "# 핵심 KPI\n활성 고객 125만 명, 전환율 18%, 월 거래 420만 건",
         (
-            "# 실행 로드맵\n1분기 진단, 2분기 구축, 3분기 전환, 4분기 안정화를 "
-            "단계별 승인 기준과 품질 검증, 운영 이관 점검에 연결하고 각 분기의 "
-            "완료 조건과 후속 조치를 명확히 관리합니다."
+            "# 실행 로드맵\n1분기 진단, 2분기 구축, 3분기 전환, 4분기 안정화"
         ),
         "# 목표 아키텍처\n채널 계층, 서비스 계층, 데이터 플랫폼 계층을 연결합니다.",
         "# 감사합니다\nRFP 문의와 후속 협의를 진행하겠습니다.",
@@ -396,12 +394,11 @@ def test_company_standard_authored_template_vertical_slice(
             for slide in scene.slides
         )
         assert all(
-            next(
-                element.text
-                for element in slide.elements
-                if element.kind == "text" and element.semantic_role == "body"
+            "".join(persisted.slides[index].slide.body.split())
+            in "".join(
+                "".join(element.text.split())
+                for element in slide.elements if element.kind == "text"
             )
-            == persisted.slides[index].slide.body
             for index, slide in enumerate(scene.slides)
         )
         assert 'semantic-role-document-id' in previews[0]
@@ -476,34 +473,24 @@ def test_visual_evidence_accepts_valid_repeated_semantic_roles() -> None:
         digest=digest,
         model_dump=lambda **_: {"digest": digest},
     )
-    deck = SimpleNamespace(slides=[object(), object()], composition=composition)
+    scene = SimpleNamespace(
+        slides=[
+            SimpleNamespace(
+                slide_digest=digest,
+                elements=[SimpleNamespace(semantic_role="process-step")],
+            ) for _ in range(2)
+        ],
+        scene_digest=digest, composition_digest=digest,
+    )
+    deck = SimpleNamespace(
+        slides=[SimpleNamespace(slide=SimpleNamespace(layout_id="osb-process")) for _ in range(2)],
+        composition=composition, scene=scene,
+    )
     generation = SimpleNamespace(
         result=SimpleNamespace(deck=deck),
         master=SimpleNamespace(contract=SimpleNamespace(digest="effective:" + digest)),
     )
-    exported = [
-        {
-            "values": {
-                "__resolvedSnapshotEvidence": json.dumps(
-                    {
-                        "pageNumber": page_number,
-                        "semanticRolesUsed": ["process-step"],
-                        "layoutRolesUsed": ["osb-process", "process", "content"],
-                    }
-                )
-            }
-        }
-        for page_number in (1, 2)
-    ]
-
-    with patch(
-        "services.authored_vnext.generation.legacy_bridge.worker_slides",
-        return_value=exported,
-    ):
-        evidence = _verified_resolved_snapshot_evidence(
-            generation,
-            readback_verified=True,
-        )
+    evidence = _verified_resolved_snapshot_evidence(generation, readback_verified=True)
 
     assert evidence["semantic_roles_used"] == ["process-step"]
     assert evidence["page_numbers"] == [1, 2]

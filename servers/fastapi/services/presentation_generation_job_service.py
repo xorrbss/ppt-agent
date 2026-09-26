@@ -688,14 +688,9 @@ async def project_workspace_linked_generation_recovered(
     *,
     expected_job_id: uuid.UUID | None = None,
     expected_attempt_token: str | None = None,
+    capacity_deferred: bool = False,
 ) -> bool:
-    """Atomically release a stale compatibility claim during operation recovery.
-
-    The workspace operation owns the durable lease.  Recovery must therefore
-    clear the mirrored legacy claim in the same transaction; otherwise legacy
-    status readers can report ``running`` throughout the operation backoff
-    window.  A different non-null token is fenced rather than overwritten.
-    """
+    """Release a mirrored claim, fenced by its attempt token."""
 
     now = utc_now()
     statement = (
@@ -723,7 +718,9 @@ async def project_workspace_linked_generation_recovered(
     if task is None:
         return False
 
-    job.state = "awaiting_resume" if job.export_cookie_required else "queued"
+    job.state = "awaiting_resume" if job.export_cookie_required and not capacity_deferred else "queued"
+    if capacity_deferred:
+        job.attempt_number = max(0, job.attempt_number - 1)
     job.attempt_token = None
     job.lease_expires_at = None
     job.heartbeat_at = now
@@ -731,6 +728,8 @@ async def project_workspace_linked_generation_recovered(
     if task.status not in {"completed", "error"}:
         task.status = "pending"
         task.message = (
+            "Waiting for generation capacity"
+            if capacity_deferred else
             "Authentication required to resume generation"
             if job.export_cookie_required
             else "Interrupted; queued for workspace recovery"

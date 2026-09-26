@@ -44,6 +44,14 @@ from services.authored_presentation_generation import (
 )
 from services.source_content.browser_readback import BrowserSourceReadbackError
 from utils.renderer_isolation import admit_authored_html
+from utils.slide_capture_result import RenderCapture
+
+
+def _capture(html, png, metrics):
+    return RenderCapture.from_payload(
+        html_digest="sha256:" + sha256(html.encode()).hexdigest(),
+        png=png, browser_metrics=metrics, runtime_counters={}, prepared_html=html,
+    )
 
 
 def test_bounded_repair_capture_canonicalizes_appended_header_attributes(monkeypatch):
@@ -62,10 +70,8 @@ def test_bounded_repair_capture_canonicalizes_appended_header_attributes(monkeyp
 
     async def fake_capture(html):
         captured.append(html)
-        return SimpleNamespace(
-            png=b"canonical-repair-png",
-            browser_metrics={"html_digest": "sha256:" + sha256(html.encode()).hexdigest()},
-        )
+        metrics = {"html_digest": "sha256:" + sha256(html.encode()).hexdigest()}
+        return _capture(html, b"canonical-repair-png", metrics)
 
     monkeypatch.setattr(
         "services.authored_presentation_generation.render_html_to_png_with_metrics",
@@ -764,15 +770,13 @@ def test_vision_qa_false_gate_repair_normalizes_short_labels_without_qid_loss(
             repair_kwargs=repair_options([4], [False]),
         )
     )
-    # The failed original never enters strict review, and the unmeasured
-    # candidate is not paired with its old PNG or rendered before the bind.
     assert reviews == [] and captures == []
     assert candidate_htmls == [normalized_html] and fixed == []
 
     async def fake_capture(candidate_html):
         captures.append(candidate_html)
         assert candidate_html == normalized_html
-        return SimpleNamespace(png=b"fresh-repair", browser_metrics=normalized_metrics)
+        return _capture(candidate_html, b"fresh-repair", normalized_metrics)
 
     monkeypatch.setattr(
         "services.authored_presentation_generation.render_html_to_png_with_metrics",
@@ -1156,9 +1160,8 @@ def test_semantic_roles_are_stamped_before_owned_text_browser_capacity_gate(monk
 
     async def fake_capture(html):
         assert html == migrated
-        return SimpleNamespace(
-            png=b"repair-png",
-            browser_metrics={
+        return _capture(
+            html, b"repair-png", {
                 "elements": [
                     metric("slide.root", "main", "decoration", "Title Body", False),
                     metric("shape.rule", "div", "decoration", "", False),
@@ -2015,16 +2018,13 @@ def test_bounded_closing_reducer_recaptures_21_targets_and_299_body_chars(
     }
     captures = []
 
-    # The binding step stamps the reducer's exact document. The four ``h2``
-    # owners this fixture declares ``title`` leave that step with one title and
-    # three ``supporting`` owners, which is what the gate and the checkpoint see.
     bound = canonicalize_authored_capacity_html(reduced)
     assert bound.count('data-semantic-role="title"') == 1
 
     async def fake_capture(candidate_html):
         captures.append(candidate_html)
         assert candidate_html == bound
-        return SimpleNamespace(png=b"reduced-closing", browser_metrics=after_metrics)
+        return _capture(candidate_html, b"reduced-closing", after_metrics)
 
     monkeypatch.setattr(
         "services.authored_presentation_generation.render_html_to_png_with_metrics",
@@ -2121,7 +2121,7 @@ def test_bounded_header_eyebrow_fallback_recaptures_exact_qid(monkeypatch):
     async def fake_capture(patched_html):
         admit_authored_html(patched_html)
         captures.append(patched_html)
-        return SimpleNamespace(png=b"eyebrow-repair", browser_metrics=after_metrics)
+        return _capture(patched_html, b"eyebrow-repair", after_metrics)
 
     monkeypatch.setattr(
         "services.authored_presentation_generation.render_html_to_png_with_metrics",

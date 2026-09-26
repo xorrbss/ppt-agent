@@ -1434,6 +1434,16 @@ async def _scenario_postgresql_authority_failure_is_fail_closed() -> None:
 
     # get_bind is checked before any local fallback can begin work.
     class BrokenSession:
+        async def get(self, _model, version):
+            from types import SimpleNamespace
+            from services.public_operation_admission import PUBLIC_DEFAULT_MAX_SLIDES
+
+            return SimpleNamespace(
+                enabled=True,
+                version=version,
+                max_slides=PUBLIC_DEFAULT_MAX_SLIDES,
+            )
+
         def get_bind(self):
             from sqlalchemy import create_engine
 

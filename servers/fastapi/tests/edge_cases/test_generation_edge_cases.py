@@ -20,7 +20,7 @@ def test_empty_input_is_rejected_during_request_validation(fake_async_session):
         n_slides=3,
         language="English",
         export_as="pptx",
-        template="korean-biz",
+        template="authored",
     )
 
     with pytest.raises(HTTPException) as exc:

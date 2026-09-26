@@ -28,11 +28,14 @@ from services import authored_presentation_service as authored_service
 from services import authored_presentation_generation as authored_generation_mod
 from services import authored_presentation_pipeline as authored_pipeline_mod
 from services.authored_presentation_service import resolve_brand
+from services.authored_admission_context import digest_html
 from services.authored_composition_policy import (
     SlideCapacity,
     aggregate_owner_capacity_violations,
 )
 from utils import slide_capture
+from utils.authored_style_exemplars import exemplar_block
+from utils.slide_capture_result import RenderCapture
 from utils.llm_calls import author_deck as author_deck_mod
 from utils.llm_calls import author_slide as author_slide_mod
 from utils.llm_calls import author_vision_qa as author_vision_qa_mod
@@ -1122,13 +1125,13 @@ def test_author_deck_keeps_two_attempt_limit_for_permanent_failures(monkeypatch)
     assert is_fallback_slide_html(htmls[0])
 
 
-def test_default_design_system_is_byte_for_byte_canonical_output():
+def test_default_design_system_keeps_canonical_rules_before_default_exemplar():
     without_style = build_design_system(_brand())
     canonical_default = build_design_system(
         _brand(), SimpleNamespace(id="default", brief="this must not replace legacy")
     )
 
-    assert canonical_default == without_style
+    assert canonical_default == without_style + exemplar_block("default")
     assert "precise bottom" in without_style
     assert "bottom:14px" in without_style
     assert "bottom 72px" in without_style
@@ -1225,7 +1228,7 @@ def test_author_prompt_uses_cover_exception_and_sequential_bottom_center_marker(
 def test_temporary_authored_render_preserves_sub_12px_source_css(monkeypatch):
     captured = []
 
-    async def fake_uncached(html, timeout=60):
+    async def fake_uncached(html, timeout=60, **_kwargs):
         captured.append(html)
         return html.encode("utf-8")
 
@@ -1249,7 +1252,7 @@ def test_authored_render_cache_identity_version_separates_stale_entries(monkeypa
     # pixels rendered under the previous identity.
     calls = 0
 
-    async def fake_uncached(html, timeout=60):
+    async def fake_uncached(html, timeout=60, **_kwargs):
         nonlocal calls
         calls += 1
         return f"render-{calls}".encode()
@@ -2779,7 +2782,7 @@ def test_authored_service_resolves_passes_and_persists_canonical_style(
         captured["header_contract"] = header_contract
         captured["page_number_mode"] = page_number_mode
         return authored_service.AuthoredGenerationPipelineResult(
-            deck=AuthoredDeckResult([_VALID], "SELECTED DESIGN SYSTEM"),
+            deck=AuthoredDeckResult([_CANONICAL_VALID], "SELECTED DESIGN SYSTEM"),
             pngs=[b"png"],
             elapsed=0.1,
             author_work=0.1,
@@ -2891,7 +2894,7 @@ def test_a_design_replay_is_authored_rather_than_dumped_verbatim(
         captured["authored"] = True
         captured["header_contract"] = header_contract
         return authored_service.AuthoredGenerationPipelineResult(
-            deck=AuthoredDeckResult([_VALID], "REPLAY DESIGN SYSTEM"),
+            deck=AuthoredDeckResult([_CANONICAL_VALID], "REPLAY DESIGN SYSTEM"),
             pngs=[b"png"],
             elapsed=0.1,
             author_work=0.1,
@@ -3014,19 +3017,13 @@ def test_authored_service_validates_exact_mapping_before_pipeline(monkeypatch):
 
 
 def _patch_slide_render(monkeypatch, module, plain):
-    """Patch both render entry points with one behaviour.
-
-    The pipeline picks between ``render_html_to_png`` and
-    ``render_html_to_png_with_metrics(fit=True)`` on the in-render fit knob
-    (off by default).  A test about authoring order or worker bounds should
-    hold on whichever call the knob selects, so it stubs both on the service
-    module and lets ``_sync_runtime_dependencies`` carry them to the pipeline.
-    """
+    """Patch both render entry points for pipeline ordering and worker tests."""
 
     async def with_metrics(html, *, fit=False, **_kwargs):
         png = await plain(html)
-        return SimpleNamespace(
-            png=png, browser_metrics=None, fitted_html=None, fit_report=None
+        return RenderCapture.from_payload(
+            html_digest=digest_html(html), png=png, browser_metrics=None,
+            runtime_counters={}, prepared_html=html,
         )
 
     monkeypatch.setattr(module, "render_html_to_png", plain)
@@ -3296,7 +3293,7 @@ def test_render_html_cache_reuses_successful_identical_render(monkeypatch):
     calls = 0
     rendered = _png_1280x720((12, 34, 56))
 
-    async def fake_uncached(html, timeout=60):
+    async def fake_uncached(html, timeout=60, **_kwargs):
         nonlocal calls
         calls += 1
         await asyncio.sleep(0)

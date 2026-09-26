@@ -1,10 +1,5 @@
-"""Contract regression for the one-page remake DOM-quality *warning* path.
-
-A candidate that generates and renders successfully must reach the user even
-when the deterministic DOM sensor flags something.  Only generation, render and
-integrity violations may end the task as ``error``.  These tests are written
-against that contract independently of the service implementation.
-"""
+"""Rendered remake candidates remain reviewable despite DOM findings.
+Generation, render, and integrity failures remain fatal."""
 
 import asyncio
 import json
@@ -28,6 +23,7 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
+from models.sql.workspace import WorkspaceOperation
 from services import authored_page_remake_service as remake
 from services.workspace_operation_runner import sanitize_workspace_event_payload
 from utils.authored_dom_quality import (
@@ -157,9 +153,10 @@ def _install_preview_stubs(
             None,
             STYLE_REFERENCE,
             None,
+            remake.presentation_canvas_contract(_presentation.theme),
         )
 
-    async def default_render(_html):
+    async def default_render(_html, **_kwargs):
         return b"png", {"telemetry_status": "available"}
 
     async def default_revise(*_args, **_kwargs):
@@ -211,7 +208,9 @@ def _preview_task_data(slide, *, candidate_dom: str, issues) -> dict:
         "slide_id": str(slide.id),
         "slide_index": slide.index,
         "source_digest": remake.authored_page_source_digest(slide),
-        "candidate_digest": "sha256:candidate",
+        "candidate_digest": remake._canonical_digest({
+            "html": CANDIDATE_HTML, "image": CANDIDATE_IMAGE, "semanticSource": None,
+        }),
         "candidate_html": CANDIDATE_HTML,
         "candidate_image": CANDIDATE_IMAGE,
         "baseline_issues": [],
@@ -393,7 +392,7 @@ async def test_candidate_render_failure_remains_fatal(tmp_path, monkeypatch):
         presentation, slides, task = await _seed(session)
         calls = {"n": 0}
 
-        async def flaky_render(_html):
+        async def flaky_render(_html, **_kwargs):
             calls["n"] += 1
             if calls["n"] == 1:
                 return b"png", {"telemetry_status": "available"}
@@ -571,7 +570,8 @@ async def test_preview_page_number_is_one_based(tmp_path, monkeypatch):
             presentation.id, 2, request, background, session
         )
         assert "3페이지" in queued.message
-        assert background.tasks[0].args[1] == 2
+        operation = await session.get(WorkspaceOperation, uuid.UUID(queued.id.removeprefix("workspace-page-preview-")))
+        assert operation.request_payload["context"]["slide_index"] == 2
 
         await _run_preview(session, presentation, task, slide_index=2)
 
@@ -589,9 +589,9 @@ async def test_preview_page_number_is_one_based(tmp_path, monkeypatch):
 
 async def _publish(session, presentation, task, slide_index, monkeypatch, report):
     async def fake_context(_session, _presentation, _slides):
-        return SimpleNamespace(), None, STYLE_REFERENCE, None
+        return SimpleNamespace(), None, STYLE_REFERENCE, None, remake.presentation_canvas_contract(_presentation.theme)
 
-    async def fake_render(_html):
+    async def fake_render(_html, **_kwargs):
         return b"png", {"telemetry_status": "available"}
 
     snapshots: list = []
@@ -670,7 +670,7 @@ async def test_publish_post_verify_render_failure_still_blocks(tmp_path, monkeyp
         await session.commit()
         snapshot_called = False
 
-        async def broken_render(_html):
+        async def broken_render(_html, **_kwargs):
             raise RuntimeError("chromium crashed")
 
         async def fake_snapshot(*_args, **_kwargs):

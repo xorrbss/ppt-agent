@@ -246,7 +246,7 @@ def test_chat_first_workers_start_and_stop_in_dependency_order(monkeypatch, tmp_
         monkeypatch.setattr(
             lifespan,
             name,
-            AsyncMock(side_effect=lambda marker=name: calls.append(marker)),
+            AsyncMock(side_effect=lambda *_, marker=name, **__: calls.append(marker)),
         )
 
     async def enter_lifespan() -> None:

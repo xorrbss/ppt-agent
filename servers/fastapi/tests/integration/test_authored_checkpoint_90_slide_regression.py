@@ -20,17 +20,30 @@ from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
+from models.sql.authored_semantic_bundle import (
+    AuthoredDeckEmissionActivePointer,
+    AuthoredDeckEmissionManifestRecord,
+    AuthoredEmissionBundleRecord,
+    AuthoredSemanticArtifact,
+    AuthoredSemanticExportBinding,
+)
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_generation_job import PresentationGenerationJob
+from models.sql.public_admission import AuthoredDeckPlanCheckpoint, PublicOperationAdmission
 from models.sql.slide import SlideModel
+from models.sql.workspace import WorkspaceOperation
 from services import authored_checkpoint_service as checkpoints
 from services import authored_presentation_service as authored
+from services import database
+from services import authored_original_capture_checkpoint as original_capture
 from services import presentation_generation_job_service as jobs
+from tests.support.authored_worker_lane_capture import capture_for_lane
+from utils.owner_context import reset_current_owner_id, set_current_owner_id
 
 
 def _png() -> bytes:
     output = io.BytesIO()
-    Image.new("RGB", (160, 90), (32, 96, 180)).save(output, format="PNG")
+    Image.new("RGB", (1280, 720), (32, 96, 180)).save(output, format="PNG")
     return output.getvalue()
 
 
@@ -41,6 +54,7 @@ def test_90_slide_bounded_workers_resume_without_repeating_successful_work(
     from utils import llm_provider
 
     async def scenario():
+        owner_token = set_current_owner_id(uuid.uuid4())
         engine = create_async_engine(
             f"sqlite+aiosqlite:///{tmp_path / 'authored-90-slide.db'}",
             connect_args={"timeout": 30.0},
@@ -53,7 +67,15 @@ def test_90_slide_bounded_workers_resume_without_repeating_successful_work(
                 tables=[
                     AsyncPresentationGenerationTaskModel.__table__,
                     PresentationGenerationJob.__table__,
+                    AuthoredDeckPlanCheckpoint.__table__,
+                    PublicOperationAdmission.__table__,
+                    WorkspaceOperation.__table__,
                     AuthoredSlideCheckpoint.__table__,
+                    AuthoredSemanticArtifact.__table__,
+                    AuthoredEmissionBundleRecord.__table__,
+                    AuthoredDeckEmissionManifestRecord.__table__,
+                    AuthoredDeckEmissionActivePointer.__table__,
+                    AuthoredSemanticExportBinding.__table__,
                     PresentationModel.__table__,
                     SlideModel.__table__,
                 ],
@@ -61,6 +83,8 @@ def test_90_slide_bounded_workers_resume_without_repeating_successful_work(
         maker = async_sessionmaker(engine, expire_on_commit=False)
         monkeypatch.setattr(checkpoints, "async_session_maker", maker)
         monkeypatch.setattr(jobs, "async_session_maker", maker)
+        monkeypatch.setattr(database, "async_session_maker", maker)
+        monkeypatch.setattr(original_capture, "async_session_maker", maker)
         monkeypatch.setenv("APP_DATA_DIRECTORY", str(tmp_path / "app-data"))
         monkeypatch.setenv(
             "AUTHORED_CHECKPOINT_DIRECTORY", str(tmp_path / "checkpoints")
@@ -105,7 +129,8 @@ def test_90_slide_bounded_workers_resume_without_repeating_successful_work(
                 author_successes[index] += 1
                 return (
                     "<!DOCTYPE html><html><body>"
-                    f"<h1 data-index='{index}'>Slide {index + 1}</h1>"
+                    f'<h1 data-qid="slide-title" data-semantic-role="title">Slide {index + 1}</h1>'
+                    f'<div data-qid="slide-body" data-semantic-role="body">Body {index + 1}</div>'
                     "</body></html>"
                 )
             finally:
@@ -113,7 +138,7 @@ def test_90_slide_bounded_workers_resume_without_repeating_successful_work(
 
         async def fake_render(html):
             nonlocal active_render, max_active_render
-            index = int(html.split("data-index='", 1)[1].split("'", 1)[0])
+            index = int(html.split("Slide ", 1)[1].split("<", 1)[0]) - 1
             active_render += 1
             max_active_render = max(max_active_render, active_render)
             try:
@@ -127,6 +152,11 @@ def test_90_slide_bounded_workers_resume_without_repeating_successful_work(
         monkeypatch.setattr(authored, "author_planned_slide", fake_author)
         monkeypatch.setattr(authored, "is_fallback_slide_html", lambda _: False)
         monkeypatch.setattr(authored, "render_html_to_png", fake_render)
+
+        async def fake_capture(html, **kwargs):
+            return await capture_for_lane(html, await fake_render(html), **kwargs)
+
+        monkeypatch.setattr(authored, "render_html_to_png_with_metrics", fake_capture)
 
         # Make the paid-call/checkpoint race deterministic. While slide 39's
         # successful author result is waiting to become durable, the other
@@ -174,6 +204,9 @@ def test_90_slide_bounded_workers_resume_without_repeating_successful_work(
             _, first_token = first_claim
             async with maker() as session:
                 first_job = await session.get(PresentationGenerationJob, job.id)
+                assert first_job.attempt_token == first_token, (
+                    first_job.state, first_job.attempt_number,
+                )
                 with pytest.raises(checkpoints.AuthoredStageError) as failure:
                     await authored.generate_authored_presentation(
                         request,
@@ -183,7 +216,10 @@ def test_90_slide_bounded_workers_resume_without_repeating_successful_work(
                         session,
                         first_job,
                     )
-            assert failure.value.slide_index == 44
+            assert failure.value.slide_index == 44, (
+                failure.value.stage, failure.value.code,
+                type(failure.value.cause).__name__, str(failure.value.cause),
+            )
             assert failure.value.stage == "render"
             assert max_active_author <= 4
             assert max_active_render <= 4
@@ -258,5 +294,6 @@ def test_90_slide_bounded_workers_resume_without_repeating_successful_work(
             assert checkpoint_count == 90
         finally:
             await engine.dispose()
+            reset_current_owner_id(owner_token)
 
     asyncio.run(scenario())

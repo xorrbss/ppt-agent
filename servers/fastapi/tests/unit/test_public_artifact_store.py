@@ -1085,7 +1085,9 @@ def test_feature_lifecycle_refcount_expiry_and_gc_fail_closed(
 
 def test_durable_artifacts_are_owner_bound_and_export_is_cluster_single_flight(
     tmp_path: Path,
+    monkeypatch,
 ) -> None:
+    monkeypatch.setenv("ENVIRONMENT", "test")
     async def scenario() -> None:
         class TrackingObjectStore(LocalDevelopmentArtifactObjectStore):
             def __init__(self, root: Path) -> None:

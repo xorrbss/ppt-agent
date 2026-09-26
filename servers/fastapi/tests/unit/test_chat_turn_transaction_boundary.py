@@ -32,6 +32,7 @@ from models.sql.image_asset import ImageAsset
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_export_attempt import PresentationExportAttempt
 from models.sql.presentation_version import PresentationVersionModel
+from models.sql.public_artifact import PublicArtifact
 from models.sql.slide import SlideModel
 from models.sql.user import User
 from models.sql.workspace import (
@@ -73,6 +74,7 @@ TABLES = [
     WorkspaceOperationEvent.__table__,
     WorkspaceOutbox.__table__,
     PresentationExportAttempt.__table__,
+    PublicArtifact.__table__,
     WorkspaceArtifact.__table__,
 ]
 
@@ -167,10 +169,8 @@ def _patch_external_side_effects(monkeypatch) -> None:
         return None
 
     async def allow_transaction_fixture(_session, _presentation):
-        # The replay deck intentionally uses native Template V2 UI to exercise
-        # the legacy chat-tool transaction buffer. Authored-only admission has
-        # separate fail-closed tests; this fixture isolates transaction
-        # semantics without weakening the production policy.
+        # This fixture isolates transaction semantics from authored admission.
+        # Authored admission has separate fail-closed tests.
         return SimpleNamespace(driver_id="authored")
 
     monkeypatch.setattr(memory_layer, "process_slide_and_fetch_assets", no_assets)
@@ -208,7 +208,7 @@ async def _seed(
             n_slides=len(slide_titles),
             language="en",
             title="Turn replay fixture",
-            layout={"name": "native-v2", "slides": []},
+            layout={"name": "native-v2", "slides": [{"id": "title-image", "json_schema": {"required": ["hero"]}}]},
             mode="authored",
             revision=presentation_revision,
         )

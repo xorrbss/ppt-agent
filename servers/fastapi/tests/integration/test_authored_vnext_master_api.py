@@ -132,7 +132,7 @@ def test_draft_validate_publish_preview_deck_and_regenerate_conflict(monkeypatch
         "topPt": 3.6,
         "bottomPt": 3.6,
     }
-    assert preview["html"].count("data-master-furniture") == 5
+    assert preview["html"].count('class="master-furniture') == 5
     assert preview["exportPlan"]["compilerPort"] == "OoxmlMasterCompilerPort"
     assert preview["exportPlan"]["compilerVersion"] == "ooxml-master-port/v1"
     assert repository.candidates == {}

@@ -474,7 +474,6 @@ def test_footer_zone_intrusion_feeds_fit_summary_and_keeps_its_rung_wiring():
     assert TEXT_SCALE_MIN_FACTOR <= factor <= TEXT_SCALE_MAX_FACTOR
     assert factor == pytest.approx(1.0 / report.fit_summary["worst_overflow_ratio"])
 
-    # What it is actually handed today: nothing.
     assert text_scale_factor(
         [issue.to_dict() for issue in blocking_safety_issues(report)]
     ) is None
@@ -487,6 +486,7 @@ def test_footer_zone_category_is_advisory_not_blocking():
         "clipping",
         "off_canvas",
         "overlap",
+        "empty_media_panel",
         TEXT_ESCAPE_CATEGORY,
     }
 

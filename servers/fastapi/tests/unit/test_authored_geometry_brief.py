@@ -32,7 +32,7 @@ def test_geometry_brief_states_frame_bottom_line_and_overlap() -> None:
 
     assert brief.startswith("GEOMETRY:")
     assert "1280x720" in brief
-    assert "y=648px" in brief  # default page-number mode == the numbered line
+    assert "y=688px" in brief  # no page-number mode means the wider content field
     assert "overlap" in brief
     assert "overflow:hidden" in brief
     for word in _NO_BUDGET_WORDS:
@@ -107,7 +107,7 @@ def test_relaxed_capacity_brief_degrades_safely_with_no_header_or_mode_info() ->
     brief = author_deck_module._capacity_brief(plan, 0, relaxed.at(0))
 
     assert brief is not None and brief.startswith("GEOMETRY:")
-    assert "y=648px" in brief
+    assert "y=688px" in brief
     assert "header contract" not in brief
 
 

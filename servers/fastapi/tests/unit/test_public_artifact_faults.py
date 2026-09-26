@@ -259,7 +259,9 @@ def test_artifact_fault_boundaries_stream_digest_orphan_gc_and_stale_cas(
 
 def test_publication_pointer_rejects_stale_fence_and_moves_refcount_atomically(
     tmp_path: Path,
+    monkeypatch,
 ) -> None:
+    monkeypatch.setenv("ENVIRONMENT", "test")
     async def scenario() -> None:
         engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'pointer.db'}")
         async with engine.begin() as connection:

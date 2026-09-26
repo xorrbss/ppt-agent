@@ -22,6 +22,7 @@ from services.authored_admission_capture import (
     capture_profile,
     captured_metrics_or_existing,
 )
+from services.authored_admission_context import AdmissionContext, digest_html
 from services.authored_admission_session import AdmissionSession, _SESSION
 from utils.slide_capture_result import RenderCapture
 
@@ -40,11 +41,12 @@ OTHER = "<!doctype html><html><body><h1>다른 원문</h1></body></html>"
 
 def render_capture(html: str, *, png: bytes = b"png", fitted: str | None = None) -> RenderCapture:
     return RenderCapture.from_payload(
-        html_digest="sha256:" + html[:8],
+        html_digest=digest_html(html),
         png=png,
         browser_metrics={"slide": {"sourceDigest": html[:8]}},
         runtime_counters={},
         fitted_html=fitted,
+        fit_report={"changed": True} if fitted and fitted != html else None,
     )
 
 
@@ -61,8 +63,19 @@ class Renderer:
         return render_capture(html, fitted=self._fitted)
 
 
-def session_scope(mode: str = "shadow", slides: int = 0):
-    session = AdmissionSession(mode=mode, contexts=() if not slides else tuple(range(slides)))
+def session_scope(mode: str = "shadow", slides: int = RETAINED_CAPTURES + 4):
+    contexts = tuple(
+        AdmissionContext(
+            presentation_id="capture-test", operation_id="capture-test",
+            slide_index=index, source_unit_id=f"unit-{index}",
+            manifest_digest="sha256:" + "0" * 64, projection_digest="sha256:" + "0" * 64,
+            policy_revision="capture-test/v1", fenced_revision=1,
+            attempt_token="capture-test", reference_mode="style-reference",
+            source_reflow=False, terminal_fallback_eligible=False,
+        )
+        for index in range(slides)
+    )
+    session = AdmissionSession(mode=mode, contexts=contexts)
     return session, _SESSION.set(session)
 
 
@@ -82,7 +95,8 @@ async def test_identical_calls_render_once_in_every_gate_mode(mode):
     finally:
         _SESSION.reset(token)
     assert len(render.calls) == 1
-    assert first is second is third
+    # Binding the prepared HTML creates immutable wrappers; reuse is the render count.
+    assert first == second == third
     assert session.capture_reuses == 2
 
 

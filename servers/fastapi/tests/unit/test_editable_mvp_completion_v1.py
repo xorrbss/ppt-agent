@@ -19,6 +19,7 @@ from models.authored_vnext.semantic.editable_mvp_completion import (
 from models.sql.authored_editable_hybrid_mvp_completion import (
     AuthoredEditableHybridMvpCompletion,
 )
+from models.sql.authored_semantic_bundle import AuthoredDeckEmissionActivePointer
 from models.sql.authored_vnext_repository import (
     AuthoredVNextDeckRevision,
     AuthoredVNextEntityHead,
@@ -245,6 +246,7 @@ def test_editable_mvp_completion_is_single_cas_idempotent_and_current(monkeypatc
         AuthoredVNextEntityHead.__table__,
         AuthoredVNextExportJob.__table__,
         AuthoredEditableHybridMvpCompletion.__table__,
+        AuthoredDeckEmissionActivePointer.__table__,
     ):
         table.create(engine)
     owner_id = uuid.uuid4()

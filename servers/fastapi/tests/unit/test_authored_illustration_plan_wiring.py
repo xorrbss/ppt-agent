@@ -30,6 +30,7 @@ from services import authored_deck_plans as deck_plans_mod
 from services import authored_illustration_stage as illustration_stage_mod
 from services import authored_presentation_pipeline as pipeline_mod
 from services import authored_presentation_service as authored_service
+from services.authored_admission_capture import canonical_capture_html
 from services.authored_deck_illustration_plan import load_illustration_plan
 from services.authored_deck_infographic_plan import load_infographic_plan
 from utils.llm_calls import author_deck as author_deck_mod
@@ -39,6 +40,7 @@ from utils.llm_calls.author_deck import (
     prepare_authored_deck,
 )
 from utils.llm_calls.author_slide import Brand
+from utils.owner_context import reset_current_owner_id, set_current_owner_id
 from models.authored_header_contract import default_header_contract
 
 
@@ -306,7 +308,7 @@ def test_the_plan_round_trips_through_the_persisted_theme(
             slide_indices=(0, 2)
         )
         return authored_service.AuthoredGenerationPipelineResult(
-            deck=AuthoredDeckResult([_slide_html(0, slot=False)], "DESIGN SYSTEM"),
+            deck=AuthoredDeckResult([canonical_capture_html(_slide_html(0, slot=False), index=0)], "DESIGN SYSTEM"),
             pngs=[b"png"],
             elapsed=0.1,
             author_work=0.1,
@@ -330,15 +332,23 @@ def test_the_plan_round_trips_through_the_persisted_theme(
         authored_service, "resolve_header_contract", fake_header_contract
     )
     monkeypatch.setattr(authored_service, "find_chrome", lambda: True)
+    from services import authored_presentation_generation as generation_mod
+    monkeypatch.setattr(generation_mod, "local_fit_applies", lambda **_kwargs: False)
+    async def fake_semantic_publish(*_args, **_kwargs):
+        return SimpleNamespace(canonical_digest="sha256:" + "0" * 64)
+    monkeypatch.setattr(
+        "services.authored_presentation_publication.publish_authored_semantic_bundle_graph",
+        fake_semantic_publish,
+    )
     monkeypatch.setattr(
         authored_service,
         "_save_slide_pngs",
-        lambda presentation_id, pngs: ["slide.png"],
+        lambda presentation_id, pngs, **_kwargs: ["slide.png"],
     )
     monkeypatch.setattr(
         authored_service,
         "_build_authored_export",
-        lambda request, presentation_id, pngs, title: "deck.pptx",
+        lambda request, presentation_id, pngs, title, **_kwargs: "deck.pptx",
     )
 
     from utils import llm_provider
@@ -351,11 +361,13 @@ def test_the_plan_round_trips_through_the_persisted_theme(
     request = GeneratePresentationRequest(
         content="topic", template="authored", authored_style="editorial"
     )
-    _run(
-        authored_service.generate_authored_presentation(
+    owner_token = set_current_owner_id(uuid.uuid4())
+    try:
+        _run(authored_service.generate_authored_presentation(
             request, uuid.uuid4(), _outline(1), "Korean", fake_async_session
-        )
-    )
+        ))
+    finally:
+        reset_current_owner_id(owner_token)
     presentation = next(
         item for item in fake_async_session.added
         if isinstance(item, PresentationModel)

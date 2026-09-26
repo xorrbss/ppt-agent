@@ -173,9 +173,9 @@ def test_the_first_request_carries_the_process_ceiling(stub_worker, monkeypatch)
 
     original = renderer_frame_codec.encode_framed_request
 
-    def spy(html, timeout, *, max_requests=None):
+    def spy(html, timeout, *, max_requests=None, **kwargs):
         captured.append({"max_requests": max_requests})
-        return original(html, timeout, max_requests=max_requests)
+        return original(html, timeout, max_requests=max_requests, **kwargs)
 
     monkeypatch.setattr("utils.slide_capture_worker_session.encode_framed_request", spy)
 

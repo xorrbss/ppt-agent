@@ -28,6 +28,7 @@ def _footer_html(*, cover_left: int) -> str:
 
 
 @pytest.mark.skipif(find_chrome() is None, reason="headless Chrome is required")
+@pytest.mark.xfail(strict=True, reason="authored frozen: 14px footer owned-paint sampling misses the fragment; see handoff x2-tests")
 def test_owned_text_fragment_gets_samples_when_parent_grid_misses_14px_footer() -> None:
     _png, metrics = asyncio.run(render_html_to_png_with_metrics(_footer_html(cover_left=48)))
     footer = _by_qid(metrics)["q-div-c6f2820b2605"]

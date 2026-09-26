@@ -396,6 +396,7 @@ def test_the_job_lane_render_step_strips_authoring_only_image_attributes():
 
     async def render_html(html):
         seen["html"] = html
+        return b"png"
 
     step = stage.anchor_render_step(gate, deck_scope="deck-7", render_html=render_html)
     _run(step(source))
@@ -404,7 +405,6 @@ def test_the_job_lane_render_step_strips_authoring_only_image_attributes():
     assert "data-asset-id" not in seen["html"]
     assert "data-source-slot-id" not in seen["html"]
     assert "alt='skyline'" in seen["html"]
-
 
 def test_the_job_lane_render_step_lets_a_render_failure_reach_the_caller():
     gate = asyncio.Semaphore(1)

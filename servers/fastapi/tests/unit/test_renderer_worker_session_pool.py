@@ -38,13 +38,13 @@ class _FakeSession:
 
     instances: list["_FakeSession"] = []
 
-    def __init__(self, *, max_requests: int = 1000) -> None:
+    def __init__(self, *, max_requests: int = 1000, **_kwargs) -> None:
         self.renders: list[str] = []
         self.is_closed = False
         self.max_requests = max_requests
         _FakeSession.instances.append(self)
 
-    async def render(self, html, timeout):
+    async def render(self, html, timeout, **_kwargs):
         if self.is_closed:
             raise AssertionError("render on a closed session")
         self.renders.append(html)
@@ -236,11 +236,11 @@ def test_a_failed_render_retires_both_the_session_and_the_lease():
 def test_the_slide_capture_call_site_uses_the_lease_only_in_external_worker_mode(monkeypatch):
     scopes: list[str] = []
 
-    async def fake_render_with_lease(deck_scope, html, timeout, render_fn=None):
+    async def fake_render_with_lease(deck_scope, html, timeout, render_fn=None, **_kwargs):
         scopes.append(deck_scope)
         return PNG, None
 
-    async def fake_reusable(html, timeout, *, script_nonce=None, cache_html=None):
+    async def fake_reusable(html, timeout, *, script_nonce=None, cache_html=None, **_kwargs):
         scopes.append("reusable")
         return PNG, None
 
@@ -262,7 +262,7 @@ def test_the_slide_capture_call_site_uses_the_lease_only_in_external_worker_mode
 def test_an_unset_deck_scope_never_reuses_a_worker(monkeypatch):
     scopes: list[str] = []
 
-    async def fake_render_with_lease(deck_scope, html, timeout, render_fn=None):
+    async def fake_render_with_lease(deck_scope, html, timeout, render_fn=None, **_kwargs):
         scopes.append(deck_scope)
         return PNG, None
 
