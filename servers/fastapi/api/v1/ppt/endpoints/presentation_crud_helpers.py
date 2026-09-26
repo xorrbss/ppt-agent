@@ -46,6 +46,8 @@ async def _get_presentation_with_slides(
 async def apply_presentation_delete(
     id: uuid.UUID,
     sql_session: AsyncSession,
+    *,
+    deletion_service_type=PresentationDeletionService,
 ) -> None:
     """Delete a deck and its dependants, mapping service errors to HTTP status.
 
@@ -70,7 +72,7 @@ async def apply_presentation_delete(
             headers={"Retry-After": "1"},
         ) from error
     try:
-        await PresentationDeletionService(sql_session).delete(presentation)
+        await deletion_service_type(sql_session).delete(presentation)
     except PresentationDeleteConflictError as error:
         raise HTTPException(
             status_code=409,

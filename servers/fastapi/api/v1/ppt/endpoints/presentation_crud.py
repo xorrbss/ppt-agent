@@ -17,7 +17,7 @@ from sqlmodel import select
 from api.v1.ppt.endpoints.presentation_helpers import resolve_presentation_fonts
 from api.v1.ppt.endpoints.presentation_crud_helpers import (
     _get_presentation_with_slides as _get_presentation_with_slides,
-    apply_presentation_delete as apply_presentation_delete,
+    apply_presentation_delete as _apply_presentation_delete,
 )
 from api.v1.ppt.endpoints.presentation_generation_context import (
     generation_context_fields,
@@ -55,6 +55,7 @@ from services.authored_canvas import merge_presentation_canvas
 from services.compatibility_migration.admission import (
     stamp_new_authored_presentation,
 )
+from services.presentation_deletion_service import PresentationDeletionService as PresentationDeletionService
 from services.presentation_access_service import require_live_presentation
 from services.presentation_profiles import PresentationProfileError, resolve_presentation_driver
 from services.presentation_export_projection import (
@@ -232,8 +233,6 @@ async def get_all_presentations(
     )
 
 
-
-
 @PRESENTATION_CRUD_ROUTER.get("/{id}", response_model=PresentationWithSlides)
 async def get_presentation(
     id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session),
@@ -348,7 +347,8 @@ async def get_presentation_generation_info(
     )
 
 
-
+async def apply_presentation_delete(id: uuid.UUID, sql_session: AsyncSession) -> None:
+    await _apply_presentation_delete(id, sql_session, deletion_service_type=PresentationDeletionService)
 
 @PRESENTATION_CRUD_ROUTER.delete("/{id}", status_code=204)
 async def delete_presentation(
