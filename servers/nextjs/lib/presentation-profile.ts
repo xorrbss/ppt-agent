@@ -1,7 +1,7 @@
-export const PRESENTATION_DRIVER_IDS = ["template-v2", "authored", "svg-v1"] as const;
+export const PRESENTATION_DRIVER_IDS = ["authored", "svg-v1"] as const;
 
 export type PresentationDriverId = (typeof PRESENTATION_DRIVER_IDS)[number];
-export type PresentationContentModel = "template-v2" | "authored" | "svg";
+export type PresentationContentModel = "authored" | "svg";
 export type PresentationGenerationStrategy = "template" | "authored" | "svg";
 export type PresentationStyleSource = "imported" | "authored";
 export type LegacyGenerationMode = "standard";
@@ -127,7 +127,7 @@ function parseProfile(value: unknown): PresentationProfile {
     );
   }
   if (
-    !["template-v2", "authored", "svg"].includes(String(value.content_model))
+    !["authored", "svg"].includes(String(value.content_model))
   ) {
     throw new PresentationProfileResolutionError(
       "unsupported_presentation_content_model",
@@ -259,25 +259,6 @@ function driver<const Driver extends Omit<PresentationDriver, "validate">>(
 }
 
 export const PRESENTATION_DRIVER_REGISTRY = Object.freeze({
-  "template-v2": driver({
-    driver_id: "template-v2",
-    content_model: "template-v2",
-    generation_strategy: "template",
-    style_sources: ["imported"],
-    renderer_adapter_id: "template-v2",
-    editor_adapter_id: "template-v2",
-    editor: {
-      element_text_edit: true,
-      element_geometry_edit: true,
-      chart_edit: true,
-      theme_apply: true,
-      template_apply: true,
-      slide_image_regenerate: false,
-    },
-    agent_tool_capability: "template-v2",
-    export_adapter_id: "template-v2-general",
-    export_editable_pptx: true,
-  }),
   authored: driver({
     driver_id: "authored",
     content_model: "authored",

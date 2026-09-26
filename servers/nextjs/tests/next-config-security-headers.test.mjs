@@ -147,7 +147,6 @@ test("the report-only CSP skips surfaces that emit their own CSP, via Next's own
     "/dashboard",
     "/presentation",
     "/presentation/workspace",
-    "/template-v2-studio/abc",
     "/settings",
     // Segment-boundary regression: a prefix match on "pdf-maker" must not
     // also swallow an unrelated route that merely starts with that string.

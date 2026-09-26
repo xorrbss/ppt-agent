@@ -22,12 +22,6 @@ export type GenerationStage =
   | "render"
   | "persist"
   | "finalize"
-  | "template_v2_layout_selection"
-  | "template_v2_slide_generation"
-  | "template_v2_pptx_validation"
-  | "template_v2_saving"
-  | "template_v2_exporting"
-  | "template_v2_publishing"
   | "completed";
 
 export type GenerationProgress = {

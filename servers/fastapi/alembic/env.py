@@ -52,14 +52,6 @@ from models.sql.slidespec_publication_attempt import (  # noqa: F401, E402
     SlideSpecPublicationAttempt,
 )
 from models.sql.template import TemplateModel  # noqa: F401, E402
-from models.sql.template_v2 import TemplateV2  # noqa: F401, E402
-from models.sql.template_v2_local_state import (  # noqa: F401, E402
-    TemplateV2LocalState,
-)
-from models.sql.template_v2_pptx_import import (  # noqa: F401, E402
-    TemplateV2PptxImport,
-)
-from models.sql.template_v2_revision import TemplateV2Revision  # noqa: F401, E402
 from models.sql.template_create_info import TemplateCreateInfoModel  # noqa: F401, E402
 from models.sql.webhook_subscription import WebhookSubscription  # noqa: F401, E402
 from models.sql.workspace import (  # noqa: F401, E402
@@ -205,14 +197,6 @@ _ALEMBIC_OWNED_FOREIGN_KEYS = {
         "CASCADE",
     ),
     (
-        "template_v2",
-        "fk_template_v2_owner_id_user",
-        ("owner_id",),
-        "user",
-        ("id",),
-        "CASCADE",
-    ),
-    (
         "imageasset",
         "fk_imageasset_canonical_asset_id",
         ("canonical_asset_id",),
@@ -249,11 +233,6 @@ _ALEMBIC_OWNED_FOREIGN_KEYS = {
 }
 
 _ALEMBIC_OWNED_UNIQUE_CONSTRAINTS = {
-    (
-        "template_v2_pptx_imports",
-        "uq_template_v2_pptx_imports_task_id",
-        ("task_id",),
-    ),
     # The canonical database contract is the named unique index created by
     # e1; the declarative model can only express this field as an unnamed UC.
     ("user", None, ("admin_slot",)),

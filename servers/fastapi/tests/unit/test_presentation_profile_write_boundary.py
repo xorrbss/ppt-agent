@@ -22,8 +22,8 @@ def _presentation(**identity: object) -> PresentationModel:
 @pytest.mark.parametrize(
     ("identity", "expected_driver"),
     [
-        ({"version": "v2-standard", "mode": "template"}, "template-v2"),
         ({"mode": "authored"}, "authored"),
+        ({"mode": "svg", "theme": {"mode": "svg"}}, "svg-v1"),
     ],
 )
 def test_new_presentation_persists_server_derived_profile(
@@ -65,6 +65,11 @@ def test_new_presentation_rejects_unknown_client_profile() -> None:
 
 
 def test_server_owned_identity_transition_restamps_profile() -> None:
+    # Template V2 was removed from the driver registry (2026-09-25), so a
+    # transition to that identity can no longer restamp -- it fails to
+    # resolve, like any other retired driver. svg-v1 is the other
+    # currently-registered driver, so it is what exercises a real,
+    # non-authored transition here.
     engine = create_engine("sqlite://")
     PresentationModel.__table__.create(engine)
     try:
@@ -74,10 +79,10 @@ def test_server_owned_identity_transition_restamps_profile() -> None:
             session.commit()
             assert presentation.profile_driver_id == "authored"
 
-            presentation.version = "v2-standard"
-            presentation.mode = "template"
+            presentation.mode = "svg"
+            presentation.theme = {"mode": "svg"}
             session.commit()
-            assert presentation.profile_driver_id == "template-v2"
+            assert presentation.profile_driver_id == "svg-v1"
             assert presentation.profile_schema_version == 1
     finally:
         engine.dispose()

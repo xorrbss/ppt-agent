@@ -46,23 +46,17 @@ _PUBLIC_GENERATION_STAGE_STATES = {
     "content_brief": "outlining",
     "outline": "outlining",
     "authored_outline": "outlining",
-    "template_v2_layout_selection": "outlining",
     "authored_generation": "authoring",
     "authored_slide_generation": "authoring",
     "authored_author": "authoring",
     "authored_illustrate": "authoring",
-    "template_v2_slide_generation": "authoring",
     "authored_render": "rendering",
-    "template_v2_pptx_validation": "rendering",
     "authored_repair": "quality_gate",
     "authored_checkpoint": "quality_gate",
     "authored_generation_finalizing": "quality_gate",
-    "template_v2_saving": "quality_gate",
-    # Both generators stage an immutable export before the publication CAS.
+    # An immutable export is staged before the publication CAS.
     "authored_export": "staging",
     "authored_publication": "staging",
-    "template_v2_exporting": "staging",
-    "template_v2_publishing": "staging",
 }
 
 

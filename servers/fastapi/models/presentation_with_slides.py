@@ -12,7 +12,7 @@ from services.presentation_profiles import (
     resolve_presentation_driver,
 )
 from services.authored_canvas import merge_presentation_canvas, presentation_canvas_metadata
-from templates.v2.constants import LEGACY_PRESENTATION_VERSION
+from templates.native_ui.constants import LEGACY_PRESENTATION_VERSION
 
 
 class PresentationWithSlides(BaseModel):

@@ -17,7 +17,6 @@ const knownArguments = new Set([
   "--dry-run",
   "--help",
   "--with-cypress",
-  "--with-fidelity",
   "--with-postgres",
 ]);
 
@@ -38,7 +37,6 @@ treated as passed.
 Options:
   --dry-run              Print commands, preconditions, and NOT RUN gates only
   --with-cypress         Run the gated Cypress component specs
-  --with-fidelity        Require visual tools and run host-OS export fidelity
   --with-postgres        Require PPT_AGENT_POSTGRES_TEST_URL and run live DB tests
   --all                  Request every capability gate (fails if one is unavailable)
   --help                 Show this help
@@ -53,7 +51,7 @@ const runtimeRoot = join(tmpdir(), "ppt-agent-ci-local", `run-${process.pid}-${D
 const appDataDirectory = join(runtimeRoot, "app-data");
 const tempDirectory = join(runtimeRoot, "temp");
 const pytestBaseDirectory = join(runtimeRoot, "pytest");
-const artifactDirectory = join(runtimeRoot, "artifacts", `template-v2-${platform()}`);
+const artifactDirectory = join(runtimeRoot, "artifacts", `local-ci-${platform()}`);
 const sqlitePath = join(runtimeRoot, "test.db").replaceAll("\\", "/");
 const fastapiDirectory = join(root, "servers", "fastapi");
 const nextDirectory = join(root, "servers", "nextjs");
@@ -208,23 +206,7 @@ function findBrowser() {
   return null;
 }
 
-function findVisualTool(envName, names) {
-  const configured = process.env[envName];
-  if (configured && existsSync(configured)) return configured;
-  for (const name of names) {
-    const candidate = findOnPath(name);
-    if (candidate) return candidate;
-  }
-  if (isWindows && envName === "SOFFICE_PATH") {
-    const candidate = join(process.env.PROGRAMFILES || "", "LibreOffice", "program", "soffice.exe");
-    if (existsSync(candidate)) return candidate;
-  }
-  return null;
-}
-
 const browserPath = dryRun ? null : findBrowser();
-const sofficePath = dryRun ? null : findVisualTool("SOFFICE_PATH", ["soffice", "libreoffice"]);
-const pdfToCairoPath = dryRun ? null : findVisualTool("PDFTOCAIRO_PATH", ["pdftocairo"]);
 
 const commonEnv = {
   CI: "true",
@@ -466,12 +448,6 @@ const cypressSpecs = [
   "**/ChatSurface.cy.tsx",
   "**/WorkspaceChatPanel.cy.tsx",
   "**/SharePopover.cy.tsx",
-  "**/TemplateV2Studio.cy.tsx",
-  "**/TemplateV2Studio.matrix.cy.tsx",
-  "**/TemplateV2SelectionToolbar.cy.tsx",
-  "**/VectorToolbar.vector-geometry.cy.tsx",
-  "**/ChartTableToolbar.cy.tsx",
-  "**/TemplateV2PptxImportPanel.cy.tsx",
 ].join(",");
 const cypressCommand = !isWindows && findOnPath("xvfb-run") ? "xvfb-run" : npx;
 const cypressArgs = cypressCommand === "xvfb-run"
@@ -488,28 +464,6 @@ runStep({
   preconditionDescription: "Node 22, Cypress binary; xvfb-run on Linux",
 });
 
-const fidelitySelected = requested("--with-fidelity");
-runStep({
-  name: `Template V2 ${platform()} structural + required visual fidelity`,
-  command: npm,
-  args: ["run", "test:template-v2-export-fidelity"],
-  cwd: nextDirectory,
-  selected: fidelitySelected,
-  notRunReason: "requires --with-fidelity; GitHub runs both Ubuntu and Windows independently",
-  env: {
-    REQUIRE_TEMPLATE_V2_VISUAL: "1",
-    TEST_ARTIFACT_DIR: artifactDirectory,
-    ...(sofficePath ? { SOFFICE_PATH: sofficePath } : {}),
-    ...(pdfToCairoPath ? { PDFTOCAIRO_PATH: pdfToCairoPath } : {}),
-  },
-  precondition: withNode22(() => {
-    if (!browserPath) return "Chrome/Chromium not found";
-    if (!sofficePath) return "LibreOffice/soffice not found";
-    if (!pdfToCairoPath) return "Poppler pdftocairo not found";
-    return null;
-  }),
-  preconditionDescription: "Node 22, Chrome/Chromium, LibreOffice, and Poppler pdftocairo",
-});
 const postgresSelected = requested("--with-postgres");
 const postgresUrl = process.env.PPT_AGENT_POSTGRES_TEST_URL;
 runStep({

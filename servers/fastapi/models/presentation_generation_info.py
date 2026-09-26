@@ -3,7 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from templates.v2.constants import LEGACY_PRESENTATION_VERSION
+from templates.native_ui.constants import LEGACY_PRESENTATION_VERSION
 
 
 class PresentationGenerationSettings(BaseModel):

@@ -21,8 +21,7 @@ function runtime(driverId: PresentationDriverId) {
       driver_id: driverId,
       content_model: driver.content_model,
       generation_strategy: driver.generation_strategy,
-      style_source:
-        driverId === "template-v2" ? ("imported" as const) : ("authored" as const),
+      style_source: "authored" as const,
       generation_mode: "standard" as const,
     },
     capabilities: {
@@ -58,35 +57,7 @@ const authoredSlide = {
   html_content: "<section><h1>Authored</h1></section>",
 };
 
-const templateV2Slide = {
-  id: "template-slide",
-  html_content: null,
-  ui: {
-    components: [
-      {
-        id: "body",
-        position: { x: 0, y: 0 },
-        elements: [
-          {
-            type: "text",
-            name: "template-title",
-            position: { x: 40, y: 40 },
-            size: { width: 600, height: 80 },
-            runs: [{ text: "Template V2" }],
-          },
-        ],
-      },
-    ],
-  },
-};
-
 for (const regression of [
-  {
-    name: "template-v2-general",
-    driverId: "template-v2" as const,
-    slide: templateV2Slide,
-    renderer: "template-v2-canonical@1",
-  },
   {
     name: "authored-hybrid",
     driverId: "authored" as const,

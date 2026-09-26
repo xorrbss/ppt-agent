@@ -26,7 +26,6 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "imageGeneration": "unsupported"
     },
     "presentationDrivers": [
-      "template-v2",
       "authored",
       "svg-v1"
     ]
@@ -46,7 +45,6 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "imageGeneration": "supported"
     },
     "presentationDrivers": [
-      "template-v2",
       "authored",
       "svg-v1"
     ]
@@ -66,7 +64,6 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "imageGeneration": "supported"
     },
     "presentationDrivers": [
-      "template-v2",
       "authored",
       "svg-v1"
     ]
@@ -89,7 +86,6 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "imageGeneration": "conditional"
     },
     "presentationDrivers": [
-      "template-v2",
       "authored",
       "svg-v1"
     ]
@@ -112,7 +108,6 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "imageGeneration": "conditional"
     },
     "presentationDrivers": [
-      "template-v2",
       "authored",
       "svg-v1"
     ]
@@ -135,7 +130,6 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "imageGeneration": "conditional"
     },
     "presentationDrivers": [
-      "template-v2",
       "authored",
       "svg-v1"
     ]
@@ -155,7 +149,6 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "imageGeneration": "conditional"
     },
     "presentationDrivers": [
-      "template-v2",
       "authored",
       "svg-v1"
     ]
@@ -174,9 +167,7 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "structuredOutput": "conditional",
       "imageGeneration": "unsupported"
     },
-    "presentationDrivers": [
-      "template-v2"
-    ]
+    "presentationDrivers": []
   },
   {
     "id": "together",
@@ -192,9 +183,7 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "structuredOutput": "conditional",
       "imageGeneration": "unsupported"
     },
-    "presentationDrivers": [
-      "template-v2"
-    ]
+    "presentationDrivers": []
   },
   {
     "id": "cerebras",
@@ -227,7 +216,6 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "imageGeneration": "unsupported"
     },
     "presentationDrivers": [
-      "template-v2",
       "authored",
       "svg-v1"
     ]
@@ -247,7 +235,6 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "imageGeneration": "conditional"
     },
     "presentationDrivers": [
-      "template-v2",
       "authored",
       "svg-v1"
     ]
@@ -266,9 +253,7 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "structuredOutput": "conditional",
       "imageGeneration": "unsupported"
     },
-    "presentationDrivers": [
-      "template-v2"
-    ]
+    "presentationDrivers": []
   },
   {
     "id": "ollama",
@@ -284,9 +269,7 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "structuredOutput": "conditional",
       "imageGeneration": "unsupported"
     },
-    "presentationDrivers": [
-      "template-v2"
-    ]
+    "presentationDrivers": []
   },
   {
     "id": "custom",
@@ -302,9 +285,7 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "structuredOutput": "conditional",
       "imageGeneration": "unsupported"
     },
-    "presentationDrivers": [
-      "template-v2"
-    ]
+    "presentationDrivers": []
   },
   {
     "id": "pexels",
@@ -321,7 +302,6 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "imageGeneration": "supported"
     },
     "presentationDrivers": [
-      "template-v2",
       "authored",
       "svg-v1"
     ]
@@ -341,7 +321,6 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "imageGeneration": "supported"
     },
     "presentationDrivers": [
-      "template-v2",
       "authored",
       "svg-v1"
     ]
@@ -361,7 +340,6 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "imageGeneration": "supported"
     },
     "presentationDrivers": [
-      "template-v2",
       "authored",
       "svg-v1"
     ]
@@ -381,7 +359,6 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "imageGeneration": "supported"
     },
     "presentationDrivers": [
-      "template-v2",
       "authored",
       "svg-v1"
     ]
@@ -401,7 +378,6 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "imageGeneration": "supported"
     },
     "presentationDrivers": [
-      "template-v2",
       "authored",
       "svg-v1"
     ]
@@ -421,7 +397,6 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "imageGeneration": "supported"
     },
     "presentationDrivers": [
-      "template-v2",
       "authored",
       "svg-v1"
     ]
@@ -441,7 +416,6 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "imageGeneration": "supported"
     },
     "presentationDrivers": [
-      "template-v2",
       "authored",
       "svg-v1"
     ]
@@ -461,7 +435,6 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "imageGeneration": "supported"
     },
     "presentationDrivers": [
-      "template-v2",
       "authored",
       "svg-v1"
     ]
@@ -481,7 +454,6 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "imageGeneration": "supported"
     },
     "presentationDrivers": [
-      "template-v2",
       "authored",
       "svg-v1"
     ]
@@ -501,7 +473,6 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "imageGeneration": "supported"
     },
     "presentationDrivers": [
-      "template-v2",
       "authored",
       "svg-v1"
     ]
@@ -524,7 +495,6 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "imageGeneration": "supported"
     },
     "presentationDrivers": [
-      "template-v2",
       "authored",
       "svg-v1"
     ]
@@ -547,7 +517,6 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "imageGeneration": "supported"
     },
     "presentationDrivers": [
-      "template-v2",
       "authored",
       "svg-v1"
     ]
@@ -570,7 +539,6 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "imageGeneration": "supported"
     },
     "presentationDrivers": [
-      "template-v2",
       "authored",
       "svg-v1"
     ]
@@ -590,7 +558,6 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "imageGeneration": "unsupported"
     },
     "presentationDrivers": [
-      "template-v2",
       "authored",
       "svg-v1"
     ]
@@ -610,7 +577,6 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "imageGeneration": "unsupported"
     },
     "presentationDrivers": [
-      "template-v2",
       "authored",
       "svg-v1"
     ]
@@ -630,7 +596,6 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "imageGeneration": "unsupported"
     },
     "presentationDrivers": [
-      "template-v2",
       "authored",
       "svg-v1"
     ]
@@ -650,7 +615,6 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "imageGeneration": "unsupported"
     },
     "presentationDrivers": [
-      "template-v2",
       "authored",
       "svg-v1"
     ]
@@ -670,7 +634,6 @@ export const PUBLIC_PROVIDER_METADATA: readonly PublicProviderMetadata[] = [
       "imageGeneration": "unsupported"
     },
     "presentationDrivers": [
-      "template-v2",
       "authored",
       "svg-v1"
     ]

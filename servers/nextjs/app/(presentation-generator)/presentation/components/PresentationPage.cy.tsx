@@ -22,30 +22,30 @@ type AxeRuntime = typeof import("axe-core");
 const presentationId = "deck-1";
 const presentationUrl = `**/api/v1/ppt/presentation/${presentationId}`;
 
-const templateV2Runtime = {
+const authoredRuntime = {
   profile: {
     schema_version: 1,
-    driver_id: "template-v2",
-    content_model: "template-v2",
-    generation_strategy: "template",
-    style_source: "imported",
+    driver_id: "authored",
+    content_model: "authored",
+    generation_strategy: "authored",
+    style_source: "authored",
     generation_mode: "standard",
   },
   capabilities: {
     schema_version: 1,
-    driver_id: "template-v2",
-    renderer_adapter_id: "template-v2",
-    editor_adapter_id: "template-v2",
+    driver_id: "authored",
+    renderer_adapter_id: "authored",
+    editor_adapter_id: "authored-readonly",
     editor: {
-      element_text_edit: true,
-      element_geometry_edit: true,
-      chart_edit: true,
-      theme_apply: true,
+      element_text_edit: false,
+      element_geometry_edit: false,
+      chart_edit: false,
+      theme_apply: false,
       template_apply: true,
-      slide_image_regenerate: false,
+      slide_image_regenerate: true,
     },
-    agent_tool_capability: "template-v2",
-    export_adapter_id: "template-v2-general",
+    agent_tool_capability: "authored",
+    export_adapter_id: "authored-hybrid",
     export_editable_pptx: true,
   },
 } as const;
@@ -59,16 +59,15 @@ const buildDeck = (slideCount: number) => ({
   revision: 1,
   lifecycle_status: "published",
   theme: null,
-  mode: "template",
-  version: "v2-standard",
-  ...templateV2Runtime,
+  mode: "authored",
+  version: "v1-standard",
+  ...authoredRuntime,
   slides: Array.from({ length: slideCount }, (_, index) =>
     createBlankPresentationSlide({
       id: `slide-${index + 1}`,
       index,
       presentationId,
       templateId: "blank",
-      isTemplateV2: true,
     }),
   ),
 });
@@ -183,7 +182,7 @@ describe("<PresentationPage />", () => {
     cy.get('[data-testid="slides-scroll-container"]').should("be.visible");
     cy.get('main[data-render-artifact-contract="presenton.render-artifact/v1"]')
       .should("have.attr", "data-render-artifact-target", "preview")
-      .and("have.attr", "data-editor-adapter", "template-v2")
+      .and("have.attr", "data-editor-adapter", "authored-readonly")
       .and("have.attr", "data-assistant-adapter", "canonical-workspace");
   });
 

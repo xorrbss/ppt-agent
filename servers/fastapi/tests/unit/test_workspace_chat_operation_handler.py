@@ -20,7 +20,6 @@ from models.sql.presentation import PresentationModel
 from models.sql.presentation_export_attempt import PresentationExportAttempt
 from models.sql.public_artifact import PublicArtifact
 from models.sql.slide import SlideModel
-from models.sql.template_v2 import TemplateV2
 from models.sql.user import User
 from models.sql.workspace import (
     WorkspaceActionReceipt,
@@ -57,7 +56,6 @@ TABLES = [
     ImageAsset.__table__,
     PresentationModel.__table__,
     SlideModel.__table__,
-    TemplateV2.__table__,
     ChatHistoryMessageModel.__table__,
     WorkspaceConversation.__table__,
     WorkspaceMessage.__table__,

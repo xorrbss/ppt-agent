@@ -143,7 +143,14 @@ def test_owner_rls_revision_round_trips_on_sqlite(tmp_path) -> None:
 def test_owner_rls_policy_set_covers_every_owner_scoped_table(
     migration_module,
 ) -> None:
-    frozen_policy = set(migration_module.policy_tables())
+    # ``template_v2`` had a policy from this migration but the table itself
+    # was dropped by f432fc854225 on 2026-09-25; it can never reappear in the
+    # live registry, so it is excluded here rather than from the frozen
+    # historical migration set.
+    tables_removed_after_this_migration = {"template_v2"}
+    frozen_policy = (
+        set(migration_module.policy_tables()) - tables_removed_after_this_migration
+    )
     frozen_tenant = set(migration_module._TENANT_SCOPED_TABLES)
     assert frozen_policy.isdisjoint(frozen_tenant)
     # The tenant-scoped public tables were forced by ff2a6c8e0b14 with a
@@ -153,9 +160,9 @@ def test_owner_rls_policy_set_covers_every_owner_scoped_table(
     # which is how ``template_v2`` was found missing.
     assert frozen_tenant == set(tenant_scoped_table_names())
     assert frozen_policy | frozen_tenant == set(owner_scoped_table_names())
-    assert set(migration_module._CATALOG_SHARED_TABLES) == set(
-        catalog_shared_table_names()
-    )
+    assert (
+        set(migration_module._CATALOG_SHARED_TABLES) - tables_removed_after_this_migration
+    ) == set(catalog_shared_table_names())
 
 
 def test_owner_rls_predicate_is_the_exact_visibility_call(

@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 import uuid
 
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, String, Text, Uuid
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Text, Uuid
 from sqlmodel import Field, SQLModel
 
 from utils.datetime_utils import get_current_utc_datetime
@@ -24,15 +24,6 @@ class ChatHistoryMessageModel(SQLModel, table=True):
         default=None,
         sa_column=Column(
             ForeignKey("presentations.id", ondelete="CASCADE"),
-            index=True,
-            nullable=True,
-        )
-    )
-    template_v2_id: Optional[str] = Field(
-        default=None,
-        sa_column=Column(
-            String,
-            ForeignKey("template_v2.id", ondelete="CASCADE"),
             index=True,
             nullable=True,
         )

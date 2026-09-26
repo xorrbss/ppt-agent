@@ -28,7 +28,6 @@
         "imageGeneration": "unsupported"
       },
       "presentationDrivers": [
-        "template-v2",
         "authored", "svg-v1"
       ]
     },
@@ -54,7 +53,6 @@
         "imageGeneration": "supported"
       },
       "presentationDrivers": [
-        "template-v2",
         "authored", "svg-v1"
       ]
     },
@@ -80,7 +78,6 @@
         "imageGeneration": "supported"
       },
       "presentationDrivers": [
-        "template-v2",
         "authored", "svg-v1"
       ]
     },
@@ -124,7 +121,6 @@
         "imageGeneration": "conditional"
       },
       "presentationDrivers": [
-        "template-v2",
         "authored", "svg-v1"
       ]
     },
@@ -173,7 +169,6 @@
         "imageGeneration": "conditional"
       },
       "presentationDrivers": [
-        "template-v2",
         "authored", "svg-v1"
       ]
     },
@@ -227,7 +222,6 @@
         "imageGeneration": "conditional"
       },
       "presentationDrivers": [
-        "template-v2",
         "authored", "svg-v1"
       ]
     },
@@ -253,7 +247,6 @@
         "imageGeneration": "conditional"
       },
       "presentationDrivers": [
-        "template-v2",
         "authored", "svg-v1"
       ]
     },
@@ -278,9 +271,7 @@
         "structuredOutput": "conditional",
         "imageGeneration": "unsupported"
       },
-      "presentationDrivers": [
-        "template-v2"
-      ]
+      "presentationDrivers": []
     },
     {
       "id": "together",
@@ -303,9 +294,7 @@
         "structuredOutput": "conditional",
         "imageGeneration": "unsupported"
       },
-      "presentationDrivers": [
-        "template-v2"
-      ]
+      "presentationDrivers": []
     },
     {
       "id": "cerebras",
@@ -352,7 +341,6 @@
         "imageGeneration": "unsupported"
       },
       "presentationDrivers": [
-        "template-v2",
         "authored", "svg-v1"
       ]
     },
@@ -383,7 +371,6 @@
         "imageGeneration": "conditional"
       },
       "presentationDrivers": [
-        "template-v2",
         "authored", "svg-v1"
       ]
     },
@@ -413,9 +400,7 @@
         "structuredOutput": "conditional",
         "imageGeneration": "unsupported"
       },
-      "presentationDrivers": [
-        "template-v2"
-      ]
+      "presentationDrivers": []
     },
     {
       "id": "ollama",
@@ -438,9 +423,7 @@
         "structuredOutput": "conditional",
         "imageGeneration": "unsupported"
       },
-      "presentationDrivers": [
-        "template-v2"
-      ]
+      "presentationDrivers": []
     },
     {
       "id": "custom",
@@ -468,9 +451,7 @@
         "structuredOutput": "conditional",
         "imageGeneration": "unsupported"
       },
-      "presentationDrivers": [
-        "template-v2"
-      ]
+      "presentationDrivers": []
     },
     {
       "id": "pexels",
@@ -494,7 +475,6 @@
         "imageGeneration": "supported"
       },
       "presentationDrivers": [
-        "template-v2",
         "authored", "svg-v1"
       ]
     },
@@ -520,7 +500,6 @@
         "imageGeneration": "supported"
       },
       "presentationDrivers": [
-        "template-v2",
         "authored", "svg-v1"
       ]
     },
@@ -546,7 +525,6 @@
         "imageGeneration": "supported"
       },
       "presentationDrivers": [
-        "template-v2",
         "authored", "svg-v1"
       ]
     },
@@ -572,7 +550,6 @@
         "imageGeneration": "supported"
       },
       "presentationDrivers": [
-        "template-v2",
         "authored", "svg-v1"
       ]
     },
@@ -598,7 +575,6 @@
         "imageGeneration": "supported"
       },
       "presentationDrivers": [
-        "template-v2",
         "authored", "svg-v1"
       ]
     },
@@ -624,7 +600,6 @@
         "imageGeneration": "supported"
       },
       "presentationDrivers": [
-        "template-v2",
         "authored", "svg-v1"
       ]
     },
@@ -650,7 +625,6 @@
         "imageGeneration": "supported"
       },
       "presentationDrivers": [
-        "template-v2",
         "authored", "svg-v1"
       ]
     },
@@ -681,7 +655,6 @@
         "imageGeneration": "supported"
       },
       "presentationDrivers": [
-        "template-v2",
         "authored", "svg-v1"
       ]
     },
@@ -707,7 +680,6 @@
         "imageGeneration": "supported"
       },
       "presentationDrivers": [
-        "template-v2",
         "authored", "svg-v1"
       ]
     },
@@ -733,7 +705,6 @@
         "imageGeneration": "supported"
       },
       "presentationDrivers": [
-        "template-v2",
         "authored", "svg-v1"
       ]
     },
@@ -762,7 +733,6 @@
         "imageGeneration": "supported"
       },
       "presentationDrivers": [
-        "template-v2",
         "authored", "svg-v1"
       ]
     },
@@ -796,7 +766,6 @@
         "imageGeneration": "supported"
       },
       "presentationDrivers": [
-        "template-v2",
         "authored", "svg-v1"
       ]
     },
@@ -830,7 +799,6 @@
         "imageGeneration": "supported"
       },
       "presentationDrivers": [
-        "template-v2",
         "authored", "svg-v1"
       ]
     },
@@ -850,7 +818,6 @@
         "imageGeneration": "unsupported"
       },
       "presentationDrivers": [
-        "template-v2",
         "authored", "svg-v1"
       ]
     },
@@ -876,7 +843,6 @@
         "imageGeneration": "unsupported"
       },
       "presentationDrivers": [
-        "template-v2",
         "authored", "svg-v1"
       ]
     },
@@ -902,7 +868,6 @@
         "imageGeneration": "unsupported"
       },
       "presentationDrivers": [
-        "template-v2",
         "authored", "svg-v1"
       ]
     },
@@ -928,7 +893,6 @@
         "imageGeneration": "unsupported"
       },
       "presentationDrivers": [
-        "template-v2",
         "authored", "svg-v1"
       ]
     },
@@ -954,7 +918,6 @@
         "imageGeneration": "unsupported"
       },
       "presentationDrivers": [
-        "template-v2",
         "authored", "svg-v1"
       ]
     }

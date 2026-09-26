@@ -20,18 +20,15 @@ const DEVAX_SHELL_PATHS = [
   "/upload",
   "/outline",
   "/documents-preview",
-  "/templates",
   "/theme",
   "/settings",
   "/admin",
-  "/template-preview",
   "/presentation",
 ] as const;
 
 const navItems = [
   { href: "/upload", labelKey: "newSlide", icon: "icon-new-task.svg" },
   { href: "/dashboard", labelKey: "projects", icon: "icon-folders.svg" },
-  { href: "/templates", labelKey: "templates", icon: "icon-chip-slide.svg" },
   { href: "/theme", labelKey: "themes", icon: "icon-theme.svg" },
 ] as const;
 

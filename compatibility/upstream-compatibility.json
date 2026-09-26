@@ -107,10 +107,7 @@
     "routerSource": "servers/fastapi/api/v1/ppt/router.py",
     "routerIncludes": [
       "PRESENTATION_GENERATE_ROUTER",
-      "PRESENTATION_CRUD_ROUTER",
-      "STRUCTURED_TEMPLATE_IMPORTS_ROUTER",
-      "STRUCTURED_TEMPLATES_ROUTER",
-      "TEMPLATE_V2_COMPAT_ROUTER"
+      "PRESENTATION_CRUD_ROUTER"
     ],
     "keyEndpoints": [
       {
@@ -145,68 +142,6 @@
         "source": "servers/fastapi/api/v1/ppt/endpoints/presentation_crud.py",
         "requiredContains": [
           "@PRESENTATION_CRUD_ROUTER.get(\"/{id}\""
-        ]
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/ppt/structured-templates",
-        "source": "servers/fastapi/api/v1/ppt/endpoints/structured_templates.py",
-        "requiredContains": [
-          "@STRUCTURED_TEMPLATES_ROUTER.post(",
-          "status_code=status.HTTP_201_CREATED"
-        ]
-      },
-      {
-        "method": "PATCH",
-        "path": "/api/v1/ppt/structured-templates/{template_id}",
-        "source": "servers/fastapi/api/v1/ppt/endpoints/structured_templates.py",
-        "requiredContains": [
-          "@STRUCTURED_TEMPLATES_ROUTER.patch(",
-          "\"/{template_id}\""
-        ]
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/ppt/structured-templates/imports",
-        "source": "servers/fastapi/api/v1/ppt/endpoints/structured_template_imports.py",
-        "requiredContains": [
-          "@STRUCTURED_TEMPLATE_IMPORTS_ROUTER.post(",
-          "status_code=status.HTTP_202_ACCEPTED"
-        ]
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/ppt/structured-templates/imports/{import_id}",
-        "source": "servers/fastapi/api/v1/ppt/endpoints/structured_template_imports.py",
-        "requiredContains": [
-          "@STRUCTURED_TEMPLATE_IMPORTS_ROUTER.get(",
-          "\"/{import_id}\""
-        ]
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/ppt/structured-templates/imports/{import_id}/retry",
-        "source": "servers/fastapi/api/v1/ppt/endpoints/structured_template_imports.py",
-        "requiredContains": [
-          "\"/{import_id}/retry\""
-        ]
-      },
-      {
-        "method": "PATCH",
-        "path": "/api/v1/ppt/template/{template_id}",
-        "source": "servers/fastapi/api/v1/ppt/endpoints/template_v2_compat.py",
-        "requiredContains": [
-          "@TEMPLATE_V2_COMPAT_ROUTER.patch(",
-          "\"/{template_id}\""
-        ]
-      },
-      {
-        "method": "DELETE",
-        "path": "/api/v1/ppt/template/{template_id}",
-        "source": "servers/fastapi/api/v1/ppt/endpoints/template_v2_compat.py",
-        "requiredContains": [
-          "@TEMPLATE_V2_COMPAT_ROUTER.delete(",
-          "\"/{template_id}\""
         ]
       }
     ]

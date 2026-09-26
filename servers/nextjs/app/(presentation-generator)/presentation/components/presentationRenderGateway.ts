@@ -33,10 +33,7 @@ export function createPresentationRenderActionFactory(
     async renderProduction(
       action: PresentationRenderAction,
       presentation: unknown,
-      options: Pick<
-        RenderRequest,
-        "expected_artifact_version" | "template_render_plans"
-      > = {},
+      options: Pick<RenderRequest, "expected_artifact_version"> = {},
     ): Promise<RenderArtifact> {
       const source = structuredClone(presentation);
       const encoded = new TextEncoder().encode(JSON.stringify(source));
@@ -49,9 +46,6 @@ export function createPresentationRenderActionFactory(
         source_sha256: sourceSha256,
         service,
         expected_artifact_version: options.expected_artifact_version,
-        request: {
-          template_render_plans: options.template_render_plans,
-        },
       });
     },
   });

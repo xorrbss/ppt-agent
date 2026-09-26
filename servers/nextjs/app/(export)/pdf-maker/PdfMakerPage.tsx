@@ -17,11 +17,6 @@ import { Theme } from "@/app/(presentation-generator)/services/api/types";
 import { applyPresentationThemeTokens } from "@/app/(presentation-generator)/presentation/utils/presentationThemeTokens";
 import SlideScale from "@/app/(presentation-generator)/components/PresentationRender";
 import { normalizeBackendAssetUrls } from "@/utils/api";
-import {
-  resolvePersistedExportStrategy,
-  type PersistedPresentation,
-} from "@/lib/presentation-export-strategy";
-import TemplateV2GeneralSlide from "./TemplateV2GeneralSlide";
 import { ensureTailwindBrowserScript } from "@/lib/tailwind-browser";
 import { useHtmlChartInjection } from "@/app/(presentation-generator)/components/useHtmlChartInjection";
 import {
@@ -315,15 +310,6 @@ const PresentationPage = ({
     ? renderArtifactSlides(renderArtifact)
     : presentationData?.slides ?? [];
   const isLoading = contentLoading || slides.length === 0;
-  const exportStrategy = useMemo(
-    () =>
-      slides.length > 0
-        ? resolvePersistedExportStrategy(
-            presentationData as PersistedPresentation
-          )
-        : null,
-    [presentationData, slides.length]
-  );
 
   // Once slides are rendered, rasterize SVG icons to PNG so the PPTX converter
   // can embed them. Mutating <img> src keeps the converter's image/DOM-idle
@@ -408,9 +394,7 @@ const PresentationPage = ({
                       data-layout={slide.layout}
                       data-group={slide.layout_group}
                     >
-                      {exportStrategy === "template-v2-general" ? (
-                        <TemplateV2GeneralSlide slide={slide} />
-                      ) : typeof slide?.html_content === "string" &&
+                      {typeof slide?.html_content === "string" &&
                         slide.html_content.trim() ? (
                         <AuthoredHtmlPdfSlide slide={slide} index={index} />
                       ) : (

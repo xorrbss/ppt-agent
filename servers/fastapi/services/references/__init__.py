@@ -8,7 +8,6 @@ from services.references.contracts import (
 from services.references.providers import (
     CommunityReferenceProvider,
     ReferenceSourceProviderRegistry,
-    TemplateReferenceProvider,
     UploadedDocumentProvider,
     default_reference_source_registry,
     fit_uploaded_reference_payload,
@@ -28,7 +27,6 @@ __all__ = [
     "ReferenceProviderError",
     "ReferenceSnapshotView",
     "ReferenceSourceProviderRegistry",
-    "TemplateReferenceProvider",
     "UploadedDocumentProvider",
     "admit_reference_snapshot",
     "admit_reference_snapshots",

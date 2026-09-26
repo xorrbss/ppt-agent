@@ -89,8 +89,10 @@ that determination.
 
 When official `main` changes, review the report and scope a manual, minimal
 port. Recompute API endpoints, the complete Alembic revision graph and heads,
-Template V2 discriminators/schema, `presentationExportVersion`, export
-strategy boundaries, and protected invariants. Only after review should the
+`presentationExportVersion`, export strategy boundaries, and protected
+invariants. (Template V2 discriminators/schema were part of this recompute
+until Template V2 was removed from the fork 2026-09-25; there is nothing of
+it left to recompute.) Only after review should the
 baseline SHA/metadata and all affected ledger, protected-patch, and test
 disposition entries be changed together. Never silence a warning by updating
 only an expected SHA, and never use wholesale merge or cherry-pick as the
@@ -227,30 +229,22 @@ paths above), and the grafts go on its non-copied children.
   canary commands also fail closed when a configured required malware scanner
   executable cannot be resolved; rollback drain and cleanup remain available
   during a scanner outage.
-- PostgreSQL is verified by a dedicated live-database CI gate. It runs the
-  official Alembic lineage from an empty database and covers Template V2
-  upgrade/downgrade/re-upgrade, legacy and populated-data preservation,
-  foreign keys, unique constraints, indexes, and child-first delete safety. The
-  canary/rollback suite additionally uses four independent `NullPool` engines
-  to race 12 durable import claims and verifies heartbeat lease extension,
-  exactly-once stale recovery, re-claim, and stale-owner fencing.
+- PostgreSQL compatibility is verified by the `tests/integration/test_postgresql_*`
+  suite (owner row-level security, provider durable runtime, provider settings
+  sync, workspace, public tenant security, async-task read facade, authored
+  cluster quota; run against a disposable database whose name ends in `test`
+  or `tests`, e.g. `uv run pytest -q --no-header tests/integration/test_postgresql_workspace.py`
+  with `PPT_AGENT_POSTGRES_TEST_URL` set). The Template V2 upgrade/downgrade/
+  re-upgrade and import-queue canary/rollback gate this bullet used to describe
+  (`test_postgresql_template_v2_migrations.py`, `test_postgresql_template_v2_canary_rollback.py`)
+  was retired with Template V2 on 2026-09-25; it is not replaced by a successor
+  test, because there is no longer a durable import queue to canary.
 - MySQL and MariaDB are not supported by this compatibility contract. Upstream
   URL adapters and defensive dialect branches are retained, but there is no
   documented server/version/CI contract and a clean Alembic SQL compilation
   fails on unbounded `String` columns (`VARCHAR requires a length`).
 
-Run the PostgreSQL gate locally only against a disposable database whose name
-ends in `test` or `tests`:
-
-```bash
-cd servers/fastapi
-export PPT_AGENT_POSTGRES_TEST_URL='postgresql+psycopg://user:password@127.0.0.1:5432/presenton_test'
-uv run pytest -q --no-header tests/integration/test_postgresql_template_v2_migrations.py tests/integration/test_postgresql_template_v2_canary_rollback.py
-```
-
-Without the URL, local collection skips this destructive integration test with
-an explicit reason. CI also sets `PPT_AGENT_REQUIRE_POSTGRES_INTEGRATION=1`, so
-the dedicated job fails instead of skipping if its service URL is missing.
-This disposable-database gate is local equivalence evidence only; it does not
-replace a non-destructive managed PostgreSQL canary and flag-off rollback
-rehearsal with operator-supplied credentials.
+Without `PPT_AGENT_POSTGRES_TEST_URL`, local collection skips these destructive
+integration tests with an explicit reason. CI also sets
+`PPT_AGENT_REQUIRE_POSTGRES_INTEGRATION=1`, so the dedicated job fails instead
+of skipping if its service URL is missing.

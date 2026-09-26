@@ -47,8 +47,7 @@ function templateV2Slide() {
 function canonicalServerPresentation(
   input: Record<string, unknown>,
 ): PersistedPresentation {
-  const driverId: PresentationDriverId =
-    input.version === "v2-standard" ? "template-v2" : "authored";
+  const driverId: PresentationDriverId = "authored";
   const driver = PRESENTATION_DRIVER_REGISTRY[driverId];
   const presentation = {
     id: "persisted-id",
@@ -60,7 +59,7 @@ function canonicalServerPresentation(
       driver_id: driverId,
       content_model: driver.content_model,
       generation_strategy: driver.generation_strategy,
-      style_source: driverId === "template-v2" ? "imported" : "authored",
+      style_source: "authored",
       generation_mode: "standard",
     },
     capabilities: {
@@ -129,30 +128,26 @@ function boundarySpies(presentation: Record<string, unknown>) {
   };
 }
 
-test("route request fetches persisted V2 identity and calls only general", async () => {
+test("route request rejects a legacy Template V2 identity instead of exporting it", async () => {
   const { calls, dependencies } = boundarySpies({
     version: "v2-standard",
     mode: "template",
     slides: [templateV2Slide()],
   });
 
-  const result = await executeExportPresentationRouteRequest(
-    {
-      format: "pptx",
-      id: "persisted-id",
-      pptxMode: "hybrid",
-    },
-    "session=test",
-    dependencies
+  await assert.rejects(
+    executeExportPresentationRouteRequest(
+      {
+        format: "pptx",
+        id: "persisted-id",
+        pptxMode: "hybrid",
+      },
+      "session=test",
+      dependencies
+    ),
+    /unsupported_presentation_identity/
   );
-
-  assert.equal(result.path, "general.pptx");
-  assert.equal(
-    (result as { renderArtifact?: { driver_id: string; target: string } })
-      .renderArtifact?.driver_id,
-    "template-v2",
-  );
-  assert.deepEqual(calls, { fetch: 1, general: 1, hybrid: 0 });
+  assert.deepEqual(calls, { fetch: 1, general: 0, hybrid: 0 });
 });
 
 test("route request sends authored to hybrid only for explicit hybrid", async () => {
@@ -299,28 +294,6 @@ test("route request rejects font embedding outside hybrid PPTX", async () => {
       "Font embedding requires hybrid PPTX export"
     );
   }
-});
-
-test("persisted identity cannot redirect an embedding request to general export", async () => {
-  const { calls, dependencies } = boundarySpies({
-    version: "v2-standard",
-    mode: "template",
-    slides: [templateV2Slide()],
-  });
-  await assert.rejects(
-    executeExportPresentationRouteRequest(
-      {
-        format: "pptx",
-        id: "persisted-id",
-        pptxMode: "hybrid",
-        fontEmbedding: true,
-      },
-      "session=test",
-      dependencies
-    ),
-    /font_embedding_requires_authored_hybrid_export/
-  );
-  assert.deepEqual(calls, { fetch: 1, general: 0, hybrid: 0 });
 });
 
 test("route request preserves additive hybrid quality metadata", async () => {
@@ -773,9 +746,9 @@ test("presentation fetch forwards only configured auth and cookie headers", asyn
 
 test("general export receives the exact persisted snapshot digest", async () => {
   const body = JSON.stringify(canonicalServerPresentation({
-    version: "v2-standard",
-    mode: "template",
-    slides: [templateV2Slide()],
+    version: "v1-standard",
+    mode: "authored",
+    slides: [{ ui: null, html_content: "<section>editable</section>" }],
   }));
   const presentation = await fetchPersistedPresentationForExport(
     "persisted-id",

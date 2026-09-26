@@ -1200,34 +1200,6 @@ def _event_to_wire(
     }
 
 
-def _is_retryable_template_v2_outline_admission(operation: WorkspaceOperation) -> bool:
-    """Recognize grounded Template V2 rows stranded by repaired admission gates.
-
-    Older chat-first admissions copied the deck's immutable attachment snapshot
-    IDs into a request that already contained grounded ``slides_markdown``.  The
-    old validator rejected that harmless combination as a source-mode conflict
-    and the generation adapter also misclassified valid reconstructed publication
-    metadata as a missing native-clone source.  Both persisted
-    ``retryable=false``.  Keep the exception narrow so genuinely unsupported
-    raw-reference requests and unrelated native-source failures remain terminal.
-    """
-
-    if operation.error_code not in {
-        "template_v2_source_mode_not_supported",
-        "template_v2_native_source_invalid",
-    }:
-        return False
-    payload = operation.request_payload
-    generation_request = (
-        payload.get("generation_request") if isinstance(payload, dict) else None
-    )
-    return bool(
-        isinstance(generation_request, dict)
-        and generation_request.get("strategy") == "template_v2"
-        and generation_request.get("slides_markdown")
-    )
-
-
 def _is_retryable_raster_tenant_handoff(operation: WorkspaceOperation) -> bool:
     if operation.kind != "presentation.generate" or operation.error_code != "raster_tenant_required":
         return False
@@ -1273,8 +1245,7 @@ def _operation_retryable(operation: WorkspaceOperation) -> bool | None:
     """Project only the safe retry decision, never raw error details."""
 
     if operation.state in {"failed", "dead_letter"}:
-        if (_is_retryable_template_v2_outline_admission(operation)
-                or _is_retryable_raster_tenant_handoff(operation)):
+        if _is_retryable_raster_tenant_handoff(operation):
             return True
         detail = operation.error_detail
         return not (isinstance(detail, dict) and detail.get("retryable") is False)
@@ -2210,7 +2181,6 @@ async def apply_workspace_action(
             operation.state in {"failed", "dead_letter"}
             and isinstance(operation.error_detail, dict)
             and operation.error_detail.get("retryable") is False
-            and not _is_retryable_template_v2_outline_admission(operation)
             and not raster_tenant_recovery
             and not explicit_capacity_recovery
             and not explicit_checkpoint_recovery

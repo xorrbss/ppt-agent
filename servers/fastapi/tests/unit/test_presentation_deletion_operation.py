@@ -24,15 +24,11 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.presentation import (
     PRESENTATION_LIFECYCLE_DELETED,
-    PRESENTATION_LIFECYCLE_GENERATION_FAILED,
     PRESENTATION_LIFECYCLE_STAGING,
     PresentationModel,
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.slide import SlideModel
-from models.sql.template_v2 import TemplateV2
-from models.sql.template_v2_local_state import TemplateV2LocalState
-from models.sql.template_v2_revision import TemplateV2Revision
 from models.sql.user import User
 from models.sql.workspace import (
     WorkspaceActionReceipt,
@@ -46,7 +42,6 @@ from models.sql.workspace import (
     WorkspaceOperationEvent,
 )
 from models.workspace import WorkspaceCommandRequest, WorkspaceOperationActionRequest
-from services.account_deletion_service import delete_account_restricted_dependents
 from services.presentation_deletion_operation_handler import (
     register_presentation_deletion_operation_handler,
 )
@@ -64,7 +59,6 @@ from services.workspace_cleanup_journal_service import (
     redrive_workspace_cleanup_dead_letter,
     snapshot_account_workspace_cleanup_targets,
     sweep_workspace_cleanup_journal,
-    template_v2_native_cleanup_target,
     workspace_artifact_cleanup_target,
     workspace_asset_cleanup_target,
 )
@@ -232,12 +226,11 @@ async def _approved_delete_runner_tombstones_staging_and_failed_all_modes(
         )
 
         # Every mode this fork can persist, in both lifecycles that a delete
-        # has to cope with. A third case seeded an "adaptive" deck, one of the
-        # retired React-template formats: no such deck can exist here any more,
-        # and the profile resolver refuses to describe one.
+        # has to cope with. Retired formats -- the React-template "adaptive"
+        # deck and the Template V2 "template" deck -- cannot exist here any
+        # more, and the profile resolver refuses to describe one.
         cases = (
             ("authored", PRESENTATION_LIFECYCLE_STAGING),
-            ("template", PRESENTATION_LIFECYCLE_GENERATION_FAILED),
         )
         for case_index, (mode, lifecycle_status) in enumerate(cases):
             async with maker() as session, session.begin():
@@ -254,9 +247,7 @@ async def _approved_delete_runner_tombstones_staging_and_failed_all_modes(
                     theme={"mode": mode, "secret": "brand"},
                     deck_plan=None,
                     mode=mode,
-                    # Identity is the pair, not the mode alone: a template deck
-                    # is only resolvable as template-v2 at the v2 version.
-                    version="v2-standard" if mode == "template" else "v1-standard",
+                    version="v1-standard",
                     lifecycle_status=lifecycle_status,
                     revision=4,
                     share_token=f"private-share-{case_index}",
@@ -390,47 +381,6 @@ async def _approved_delete_runner_tombstones_staging_and_failed_all_modes(
                     )
                     authored_image_path.parent.mkdir(parents=True, exist_ok=True)
                     authored_image_path.write_bytes(b"immutable-authored-image")
-                elif mode == "template":
-                    template_id = f"template-{uuid.uuid4()}"
-                    native_payload = b"native-template-source"
-                    native_digest = sha256(native_payload).hexdigest()
-                    native_key = (
-                        f"template-v2/native/{template_id}/revision-1/source.pptx"
-                    )
-                    mode_path = app_data / Path(*PurePosixPath(native_key).parts)
-                    mode_path.parent.mkdir(parents=True, exist_ok=True)
-                    mode_path.write_bytes(native_payload)
-                    native_assets = {
-                        "native_pptx": {
-                            "storage_key": native_key,
-                            "source_sha256": native_digest,
-                            "source_size_bytes": len(native_payload),
-                        }
-                    }
-                    session.add_all(
-                        (
-                            TemplateV2(
-                                id=template_id,
-                                presentation_id=presentation_id,
-                                name="private template",
-                                assets=native_assets,
-                                revision=1,
-                            ),
-                            TemplateV2LocalState(
-                                template_id=template_id,
-                                presentation_id=presentation_id,
-                                revision=1,
-                            ),
-                            TemplateV2Revision(
-                                template_id=template_id,
-                                revision=1,
-                                reason="create",
-                                name="private template",
-                                assets=native_assets,
-                                is_default=False,
-                            ),
-                        )
-                    )
 
             action_request = WorkspaceOperationActionRequest(
                 action="approve",
@@ -535,15 +485,6 @@ async def _approved_delete_runner_tombstones_staging_and_failed_all_modes(
                             select(PresentationGenerationJob).where(
                                 PresentationGenerationJob.presentation_id
                                 == presentation_id
-                            )
-                        )
-                    )
-                elif mode == "template":
-                    expected_namespaces.add("template_v2_native")
-                    assert not list(
-                        await session.scalars(
-                            select(TemplateV2).where(
-                                TemplateV2.presentation_id == presentation_id
                             )
                         )
                     )
@@ -1106,22 +1047,6 @@ async def _account_cascade_keeps_cleanup_snapshot_recoverable(
             session.add(presentation)
             await session.flush()
             presentation_id = presentation.id
-            template_id = f"account-template-{uuid.uuid4()}"
-            session.add(
-                TemplateV2(
-                    id=template_id,
-                    presentation_id=presentation_id,
-                    name="Account private template",
-                    revision=1,
-                )
-            )
-            session.add(
-                TemplateV2LocalState(
-                    template_id=template_id,
-                    presentation_id=presentation_id,
-                    revision=1,
-                )
-            )
             conversation = WorkspaceConversation(presentation_id=presentation_id)
             session.add(conversation)
             await session.flush()
@@ -1201,20 +1126,11 @@ async def _account_cascade_keeps_cleanup_snapshot_recoverable(
                 )
                 == 9
             )
-            assert (
-                await delete_account_restricted_dependents(
-                    session,
-                    owner_id=OWNER_ID,
-                )
-                == 1
-            )
             await session.execute(delete(User).where(User.id == OWNER_ID))
 
         async with maker() as session:
             assert await session.get(User, OWNER_ID) is None
             assert await session.get(PresentationModel, presentation_id) is None
-            assert await session.get(TemplateV2, template_id) is None
-            assert await session.get(TemplateV2LocalState, template_id) is None
             assert await session.get(WorkspaceAsset, asset_id) is None
             assert await session.get(WorkspaceAsset, legacy_asset_id) is None
             assert await session.get(WorkspaceArtifact, legacy_artifact_id) is None
@@ -1850,10 +1766,8 @@ async def _cleanup_targets_use_snapshot_after_storage_root_rotation(
     asset_id = uuid.uuid4()
     artifact_id = uuid.uuid4()
     job_id = uuid.uuid4()
-    template_id = f"template-{uuid.uuid4()}"
     asset_payload = b"root-generation-asset"
     artifact_payload = b"root-generation-artifact"
-    template_payload = b"root-generation-template"
     asset_key, asset_digest, old_asset_path = _asset_file(
         old_app_data,
         owner_id=OWNER_ID,
@@ -1870,10 +1784,6 @@ async def _cleanup_targets_use_snapshot_after_storage_root_rotation(
     old_checkpoint_path = old_checkpoints / str(job_id) / "slide-0.png"
     old_checkpoint_path.parent.mkdir(parents=True)
     old_checkpoint_path.write_bytes(b"checkpoint")
-    template_key = f"template-v2/native/{template_id}/revision-1/source.pptx"
-    old_template_path = old_app_data / Path(*PurePosixPath(template_key).parts)
-    old_template_path.parent.mkdir(parents=True)
-    old_template_path.write_bytes(template_payload)
     old_authored_path = (
         old_app_data
         / "images"
@@ -1924,15 +1834,6 @@ async def _cleanup_targets_use_snapshot_after_storage_root_rotation(
                 presentation_id=presentation_id,
                 operation_id=operation_id,
             ),
-            template_v2_native_cleanup_target(
-                template_id=template_id,
-                revision=1,
-                storage_key=template_key,
-                sha256_value=sha256(template_payload).hexdigest(),
-                size_bytes=len(template_payload),
-                owner_id=OWNER_ID,
-                presentation_id=presentation_id,
-            ),
             authored_image_tree_cleanup_target(
                 owner_id=OWNER_ID,
                 presentation_id=presentation_id,
@@ -1979,11 +1880,6 @@ async def _cleanup_targets_use_snapshot_after_storage_root_rotation(
         new_checkpoint_path = new_checkpoints / str(job_id) / "slide-0.png"
         new_checkpoint_path.parent.mkdir(parents=True)
         new_checkpoint_path.write_bytes(b"checkpoint")
-        new_template_path = new_app_data / Path(
-            *PurePosixPath(template_key).parts
-        )
-        new_template_path.parent.mkdir(parents=True)
-        new_template_path.write_bytes(template_payload)
         new_authored_path = (
             new_app_data
             / "images"
@@ -2010,7 +1906,6 @@ async def _cleanup_targets_use_snapshot_after_storage_root_rotation(
                 old_asset_path,
                 old_artifact_path,
                 old_checkpoint_path,
-                old_template_path,
                 old_authored_path,
             )
         )
@@ -2020,7 +1915,6 @@ async def _cleanup_targets_use_snapshot_after_storage_root_rotation(
                 new_asset_path,
                 new_artifact_path,
                 new_checkpoint_path,
-                new_template_path,
                 new_authored_path,
             )
         )
@@ -2048,7 +1942,6 @@ async def _cleanup_targets_use_snapshot_after_storage_root_rotation(
                 new_asset_path,
                 new_artifact_path,
                 new_checkpoint_path,
-                new_template_path,
                 new_authored_path,
             )
         )

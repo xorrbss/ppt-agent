@@ -1,8 +1,3 @@
-import {
-  TEMPLATE_V2_DATA_LABEL_POSITIONS,
-  type TemplateV2DataLabelPosition,
-} from "./template-v2-html/template-v2-contract.generated.ts";
-
 export const CHART_BROWSER_SCRIPT_URL = "/vendor/chart-4.5.1.umd.min.js";
 export const CHART_DATALABELS_SCRIPT_URL =
   "/vendor/chartjs-plugin-datalabels-2.2.0.min.js";
@@ -62,9 +57,10 @@ export type PresentonDataLabelOptions = {
   position?: DataLabelPosition;
 };
 
-export type DataLabelPosition = TemplateV2DataLabelPosition;
+export const DATA_LABEL_POSITION_VALUES = Object.freeze(["base", "mid", "top", "outside"] as const);
+export type DataLabelPosition = (typeof DATA_LABEL_POSITION_VALUES)[number];
 
-const DATA_LABEL_POSITIONS = new Set<string>(TEMPLATE_V2_DATA_LABEL_POSITIONS);
+const DATA_LABEL_POSITIONS = new Set<string>(DATA_LABEL_POSITION_VALUES);
 
 type Point = { x: number; y: number };
 type Bounds = { left: number; right: number; top: number; bottom: number };
