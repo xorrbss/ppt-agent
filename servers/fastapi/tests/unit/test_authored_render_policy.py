@@ -213,11 +213,11 @@ def test_windows_headless_shell_preserves_font_metrics_text_and_table_chart_geom
     assert image.getpixel((1000, 350)) == (0, 114, 206)  # chart bar remains exact
 
 
-def test_render_cache_hits_and_render_policy_version_invalidates(monkeypatch: pytest.MonkeyPatch):
-    """A policy version change must not reuse an older rendered PNG."""
+def test_render_cache_hits_and_identity_version_invalidates(monkeypatch: pytest.MonkeyPatch):
+    """A cache identity change must not reuse an older rendered PNG."""
     calls = 0
 
-    async def fake_uncached(html: str, timeout: int = 60) -> bytes:
+    async def fake_uncached(html: str, timeout: int = 60, **_kwargs) -> bytes:
         nonlocal calls
         calls += 1
         return f"png-{calls}:{html}:{timeout}".encode()
@@ -235,8 +235,8 @@ def test_render_cache_hits_and_render_policy_version_invalidates(monkeypatch: py
 
         monkeypatch.setattr(
             slide_capture,
-            "RENDER_CACHE_VERSION",
-            f"{slide_capture.RENDER_CACHE_VERSION}-test-next-policy",
+            "CACHE_IDENTITY_VERSION",
+            f"{slide_capture.CACHE_IDENTITY_VERSION}-test-next-policy",
         )
         assert asyncio.run(slide_capture.render_html_to_png("<p>8px</p>")) != first
         assert calls == 2
