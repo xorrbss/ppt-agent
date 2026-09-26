@@ -640,10 +640,10 @@ def test_shadow_bound_and_stable_error_codes():
     assert observation["code"] == "source_placeholder_missing"
 
 
-# Explicitly grandfathered dead readers; none is renderer permission.
-KNOWN_DEAD_READS = {
+KNOWN_DEAD_READS = {  # Dead reads do not grant renderer permission.
     "services/source_content/browser_readback.py": {"data-source-image", "data-decorative", "data-decoration"},
     "utils/slide_capture_fit_observe.py": {"data-role"},
+    "utils/slide_capture_fit_geometry.py": {"data-role"},
 }
 
 

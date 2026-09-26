@@ -150,7 +150,7 @@ def test_authored_capability_mismatch_fails_before_invocation() -> None:
                 "theme": {},
             },
             required_capabilities=("structuredOutput",),
-            settings=_settings("cerebras"),
+            settings=_settings("azure"),
         ):
             invoked = True
 
@@ -164,7 +164,7 @@ def test_client_factory_is_not_constructed_before_runtime_policy_passes(
     settings = RuntimeSettings.from_sources(
         environ={},
         user_config={
-            "LLM": "cerebras",
+            "LLM": "azure",
             "OPENAI_API_KEY": "secret-must-not-reach-client",
         },
     )

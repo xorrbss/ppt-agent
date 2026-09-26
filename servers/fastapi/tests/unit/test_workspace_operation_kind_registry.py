@@ -27,7 +27,10 @@ class _PersistenceForbidden:
 
 def test_workspace_operation_kind_catalog_is_closed_and_partitioned() -> None:
     assert set(WORKSPACE_OPERATION_KIND_REGISTRY) == set(WORKSPACE_OPERATION_KINDS)
-    assert set(WORKSPACE_BOOTSTRAP_KINDS) == set(WORKSPACE_OPERATION_KINDS)
+    # Raster review stages are internal operations, not public bootstrap kinds.
+    assert set(WORKSPACE_BOOTSTRAP_KINDS) == set(WORKSPACE_OPERATION_KINDS) - {
+        "raster.analysis", "raster.review"
+    }
     assert set(WORKSPACE_COMMAND_KINDS) == {
         "presentation.edit",
         "presentation.delete",
@@ -43,6 +46,7 @@ def test_workspace_operation_kind_catalog_is_closed_and_partitioned() -> None:
         "quality.review",
         "export.pptx",
         "export.pdf",
+        "presentation.slides.reorder",
     }
     assert WORKSPACE_DESTRUCTIVE_OPERATION_KINDS == {
         "presentation.delete",
