@@ -459,9 +459,7 @@ def test_importer_v4_infers_only_baseline_supported_relational_intent(
             min(1, layout.bounds.height + 0.25)
         )
 
-    # A confirmed owned-paint defect makes its ancestry branch an invalid
-    # source for aesthetic alignment/gap preferences. Structural hard
-    # non-overlap/order constraints remain available.
+    # A clipped branch cannot supply aesthetic alignment or gap preferences.
     by_metric_qid = {item["qid"]: item for item in metrics["elements"]}
     by_metric_qid["body"].update(
         {
@@ -474,6 +472,7 @@ def test_importer_v4_infers_only_baseline_supported_relational_intent(
         }
     )
     by_metric_qid["title"]["has_owned_paint"] = True
+    by_metric_qid["body"]["clipped"] = True
     defective_request, _defective_image, defective_evidence = asyncio.run(
         build_authored_import_request(_slide(html))
     )
