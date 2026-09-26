@@ -6,6 +6,7 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   {
+    files: ["**/*.{js,jsx,mjs,ts,tsx,mts,cts}"],
     // Preserve the existing lint baseline while moving off the removed `next lint` command.
     rules: {
       "@typescript-eslint/no-empty-object-type": "off",
