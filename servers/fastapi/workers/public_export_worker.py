@@ -6,7 +6,6 @@ import re
 import time
 import zipfile
 import tempfile
-from dataclasses import dataclass
 from pathlib import Path
 from collections.abc import Mapping
 
@@ -147,7 +146,6 @@ def _record_page_fallbacks(
     evidence.pop("structural", None)
 
 
-@dataclass(frozen=True, slots=True)
 
 
 
