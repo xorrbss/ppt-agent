@@ -34,6 +34,8 @@ const auditedFiles = [
   "app/(presentation-generator)/presentation/components/header/MasterLayoutBadge.tsx",
   "app/(presentation-generator)/presentation/workspace/WorkspaceMessage.tsx",
   "app/(presentation-generator)/presentation/workspace/WorkspaceTimelineOperation.tsx",
+  "app/(presentation-generator)/presentation/components/header/HybridCoverageDialog.tsx",
+  "app/(presentation-generator)/presentation/components/header/HybridExportHistoryDialog.tsx",
   "components/slide-editor/shortcuts/ShortcutKeys.tsx",
   "components/slide-editor/shortcuts/editorShortcuts.ts",
 ];
