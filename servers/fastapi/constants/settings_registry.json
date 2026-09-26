@@ -446,7 +446,7 @@
     {
       "key": "CODEX_MODEL",
       "type": "string",
-      "default": "gpt-5.6-sol",
+      "default": "gpt-6-sol",
       "secret": false,
       "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
       "group": "llm.codex",
