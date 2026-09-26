@@ -915,12 +915,10 @@ def test_a_non_overload_status_with_an_unrelated_number_stays_non_overload():
     assert is_provider_overload(InvalidRequest("max_output_tokens must be <= 500")) is False
 
 
-def test_run22_usage_limit_shape_is_a_durable_deck_pause():
-    fixture = (
-        Path(__file__).parents[1]
-        / "fixtures"
-        / "authored_provider_usage_limit_run22.txt"
-    ).read_text(encoding="utf-8")
+def test_run22_usage_limit_shape_is_a_durable_deck_pause(monkeypatch):
+    monkeypatch.setattr("utils.provider_overload.time.time", lambda: 1789437216)
+    fixture_path = Path(__file__).parents[1] / "fixtures" / "authored_provider_usage_limit_run22.txt"
+    fixture = fixture_path.read_text(encoding="utf-8")
 
     class UsageLimit(RuntimeError):
         status_code = 429
