@@ -1,12 +1,8 @@
 """Static first-party import closure walker for the authored renderer image.
 
-The renderer's production image copies a hand-picked list of ``servers/fastapi``
-files into ``authored-renderer-runtime`` (see the ``Dockerfile`` stage of that
-name) and records the same list in ``attestation.IMAGE_SOURCES`` so the digest
-changes whenever any of them changes. That list has drifted from what
-``utils.authored_renderer_worker`` actually imports: a module can be missed
-because it is only imported lazily inside a function, which still executes
-inside the built image at run time.
+The renderer source stage derives its copied ``servers/fastapi`` files from
+this closure. The attestation uses that same set, so a lazy import changes the
+runtime image and its source digest together.
 
 This module computes the *real* transitive import closure of a first-party
 entry point by parsing its AST (``ast.walk`` so nested/lazy imports inside

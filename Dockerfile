@@ -75,6 +75,16 @@ RUN uv pip install --python /opt/venv/bin/python --require-hashes \
       -r /tmp/authored-renderer-requirements.lock
 
 
+FROM python:3.11-slim-trixie AS authored-renderer-sources
+
+COPY contracts/authored-renderer/import_closure.py /tmp/renderer-source-manifest/import_closure.py
+COPY contracts/authored-renderer/source_manifest.py /tmp/renderer-source-manifest/source_manifest.py
+COPY contracts/authored-renderer/stage_sources.py /tmp/renderer-source-manifest/stage_sources.py
+COPY servers/fastapi /src/servers/fastapi
+RUN python /tmp/renderer-source-manifest/stage_sources.py \
+    /src/servers/fastapi /out/servers/fastapi
+
+
 FROM python:3.11-slim-trixie AS authored-renderer-runtime
 
 ARG SOURCE_REVISION=unknown
@@ -93,71 +103,7 @@ RUN apt-get update \
     && useradd --uid 65532 --gid 65532 --no-create-home --home-dir /tmp/home authored
 
 COPY --from=authored-renderer-builder /opt/venv /opt/venv
-COPY servers/fastapi/utils/__init__.py /app/servers/fastapi/utils/__init__.py
-COPY servers/fastapi/utils/authored_renderer_worker.py /app/servers/fastapi/utils/authored_renderer_worker.py
-COPY servers/fastapi/utils/renderer_isolation.py /app/servers/fastapi/utils/renderer_isolation.py
-COPY servers/fastapi/utils/renderer_worker_policy.py /app/servers/fastapi/utils/renderer_worker_policy.py
-COPY servers/fastapi/utils/renderer_static_policy.py /app/servers/fastapi/utils/renderer_static_policy.py
-COPY servers/fastapi/utils/renderer_internal_capability.py /app/servers/fastapi/utils/renderer_internal_capability.py
-COPY servers/fastapi/utils/renderer_markup_policy.py /app/servers/fastapi/utils/renderer_markup_policy.py
-COPY servers/fastapi/utils/renderer_css_policy.py /app/servers/fastapi/utils/renderer_css_policy.py
-COPY servers/fastapi/utils/renderer_frame_codec.py /app/servers/fastapi/utils/renderer_frame_codec.py
-COPY servers/fastapi/utils/renderer_worker_response.py /app/servers/fastapi/utils/renderer_worker_response.py
-COPY servers/fastapi/utils/authored_renderer_session.py /app/servers/fastapi/utils/authored_renderer_session.py
-COPY servers/fastapi/utils/authored_dom_quality.py /app/servers/fastapi/utils/authored_dom_quality.py
-COPY servers/fastapi/utils/authored_dom_categories.py /app/servers/fastapi/utils/authored_dom_categories.py
-COPY servers/fastapi/utils/authored_dom_fit_magnitude.py /app/servers/fastapi/utils/authored_dom_fit_magnitude.py
-COPY servers/fastapi/utils/authored_dom_footer_zone.py /app/servers/fastapi/utils/authored_dom_footer_zone.py
-COPY servers/fastapi/utils/authored_fragmentation_gate.py /app/servers/fastapi/utils/authored_fragmentation_gate.py
-COPY servers/fastapi/utils/process_kill_on_parent_death.py /app/servers/fastapi/utils/process_kill_on_parent_death.py
-COPY servers/fastapi/utils/authored_dom_tags.py /app/servers/fastapi/utils/authored_dom_tags.py
-COPY servers/fastapi/utils/authored_dom_text_escape.py /app/servers/fastapi/utils/authored_dom_text_escape.py
-COPY servers/fastapi/utils/authored_qid_namespace.py /app/servers/fastapi/utils/authored_qid_namespace.py
-COPY servers/fastapi/utils/authored_metrics_cache_policy.py /app/servers/fastapi/utils/authored_metrics_cache_policy.py
-COPY servers/fastapi/utils/render_cache_budget.py /app/servers/fastapi/utils/render_cache_budget.py
-COPY servers/fastapi/utils/runtime_settings.py /app/servers/fastapi/utils/runtime_settings.py
-COPY servers/fastapi/utils/get_env.py /app/servers/fastapi/utils/get_env.py
-COPY servers/fastapi/utils/get_env_programme.py /app/servers/fastapi/utils/get_env_programme.py
-COPY servers/fastapi/utils/db_utils.py /app/servers/fastapi/utils/db_utils.py
-COPY servers/fastapi/utils/owner_context.py /app/servers/fastapi/utils/owner_context.py
-COPY servers/fastapi/utils/datetime_utils.py /app/servers/fastapi/utils/datetime_utils.py
-COPY servers/fastapi/utils/parsers.py /app/servers/fastapi/utils/parsers.py
-COPY servers/fastapi/utils/slide_capture.py /app/servers/fastapi/utils/slide_capture.py
-COPY servers/fastapi/utils/slide_capture_assets.py /app/servers/fastapi/utils/slide_capture_assets.py
-COPY servers/fastapi/utils/slide_capture_batch.py /app/servers/fastapi/utils/slide_capture_batch.py
-COPY servers/fastapi/utils/slide_capture_chrome_discovery.py /app/servers/fastapi/utils/slide_capture_chrome_discovery.py
-COPY servers/fastapi/utils/slide_capture_deck_scope.py /app/servers/fastapi/utils/slide_capture_deck_scope.py
-COPY servers/fastapi/utils/slide_capture_glyph_probe.py /app/servers/fastapi/utils/slide_capture_glyph_probe.py
-COPY servers/fastapi/utils/slide_capture_hit_test.py /app/servers/fastapi/utils/slide_capture_hit_test.py
-COPY servers/fastapi/utils/slide_capture_pipe.py /app/servers/fastapi/utils/slide_capture_pipe.py
-COPY servers/fastapi/utils/slide_capture_pipe_render.py /app/servers/fastapi/utils/slide_capture_pipe_render.py
-COPY servers/fastapi/utils/slide_capture_pixel_probe.py /app/servers/fastapi/utils/slide_capture_pixel_probe.py
-COPY servers/fastapi/utils/slide_capture_polygon_paint.py /app/servers/fastapi/utils/slide_capture_polygon_paint.py
-COPY servers/fastapi/utils/slide_capture_reusable_render.py /app/servers/fastapi/utils/slide_capture_reusable_render.py
-COPY servers/fastapi/utils/slide_capture_rounded_paint.py /app/servers/fastapi/utils/slide_capture_rounded_paint.py
-COPY servers/fastapi/utils/slide_capture_worker_client.py /app/servers/fastapi/utils/slide_capture_worker_client.py
-COPY servers/fastapi/utils/authored_fit_edits.py /app/servers/fastapi/utils/authored_fit_edits.py
-COPY servers/fastapi/utils/slide_capture_fit.py /app/servers/fastapi/utils/slide_capture_fit.py
-COPY servers/fastapi/utils/slide_capture_fit_script.py /app/servers/fastapi/utils/slide_capture_fit_script.py
-COPY servers/fastapi/utils/slide_capture_worker_lease.py /app/servers/fastapi/utils/slide_capture_worker_lease.py
-COPY servers/fastapi/utils/slide_capture_worker_session.py /app/servers/fastapi/utils/slide_capture_worker_session.py
-COPY servers/fastapi/services/__init__.py /app/servers/fastapi/services/__init__.py
-COPY servers/fastapi/services/provider_credential_vault.py /app/servers/fastapi/services/provider_credential_vault.py
-COPY servers/fastapi/services/provider_secure_runtime.py /app/servers/fastapi/services/provider_secure_runtime.py
-COPY servers/fastapi/services/provider_settings_values.py /app/servers/fastapi/services/provider_settings_values.py
-COPY servers/fastapi/services/authored_vnext/__init__.py /app/servers/fastapi/services/authored_vnext/__init__.py
-COPY servers/fastapi/services/authored_vnext/capability_registry.py /app/servers/fastapi/services/authored_vnext/capability_registry.py
-COPY servers/fastapi/models/__init__.py /app/servers/fastapi/models/__init__.py
-COPY servers/fastapi/models/user_config.py /app/servers/fastapi/models/user_config.py
-COPY servers/fastapi/models/sql/provider_credential_reference.py /app/servers/fastapi/models/sql/provider_credential_reference.py
-COPY servers/fastapi/models/authored_vnext/__init__.py /app/servers/fastapi/models/authored_vnext/__init__.py
-COPY servers/fastapi/models/authored_vnext/deck/__init__.py /app/servers/fastapi/models/authored_vnext/deck/__init__.py
-COPY servers/fastapi/models/authored_vnext/deck/scene.py /app/servers/fastapi/models/authored_vnext/deck/scene.py
-COPY servers/fastapi/models/authored_vnext/master/__init__.py /app/servers/fastapi/models/authored_vnext/master/__init__.py
-COPY servers/fastapi/models/authored_vnext/master/base.py /app/servers/fastapi/models/authored_vnext/master/base.py
-COPY servers/fastapi/models/authored_vnext/master/contract.py /app/servers/fastapi/models/authored_vnext/master/contract.py
-COPY servers/fastapi/constants/__init__.py /app/servers/fastapi/constants/__init__.py
-COPY servers/fastapi/constants/settings_registry.py /app/servers/fastapi/constants/settings_registry.py
+COPY --from=authored-renderer-sources /out/servers/fastapi /app/servers/fastapi
 
 ENV HOME=/tmp/home \
     XDG_RUNTIME_DIR=/tmp/runtime \

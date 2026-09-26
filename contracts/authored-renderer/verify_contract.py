@@ -16,11 +16,9 @@ REPOSITORY_ROOT = ROOT.parents[1]
 # verifiable as a standalone script regardless of the caller's cwd.
 sys.path.insert(0, str(ROOT))
 import attestation  # noqa: E402
-from import_closure import compute_closure  # noqa: E402
+from source_manifest import source_files  # noqa: E402
+from verify_source_stage import verify_source_stage  # noqa: E402
 
-WORKER_IMPORT_CLOSURE_FIRST_PARTY_ROOTS = frozenset(
-    {"utils", "services", "models", "enums", "constants"}
-)
 PROVIDER_ENV = re.compile(
     r"(?:API_KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|OPENAI|ANTHROPIC|GOOGLE|AZURE|"
     r"BEDROCK|VERTEX|OLLAMA|OPENROUTER|FIREWORKS|TOGETHER|CEREBRAS|LITELLM|"
@@ -76,6 +74,7 @@ def verify() -> list[dict[str, Any]]:
         (fastapi_utils / name).read_text(encoding="utf-8")
         for name in slide_capture_files
     )
+    renderer_sources = set(source_files(REPOSITORY_ROOT / "servers" / "fastapi"))
     next_isolation_source = (
         REPOSITORY_ROOT
         / "servers"
@@ -102,10 +101,10 @@ def verify() -> list[dict[str, Any]]:
     ])
     check("worker-module-packaged", (
         (REPOSITORY_ROOT / "servers" / "fastapi" / "utils" / "authored_renderer_worker.py").is_file()
-        and "COPY servers/fastapi/utils/authored_renderer_worker.py" in dockerfile
-        and "COPY servers/fastapi/utils/renderer_internal_capability.py" in dockerfile
-        and "COPY servers/fastapi/utils/renderer_static_policy.py" in dockerfile
-        and all(f"COPY servers/fastapi/utils/{name}" in dockerfile for name in slide_capture_files)
+        and "COPY --from=authored-renderer-sources /out/servers/fastapi /app/servers/fastapi" in dockerfile
+        and all(f"utils/{name}" in renderer_sources
+                for name in ("authored_renderer_worker.py", "renderer_internal_capability.py",
+                             "renderer_static_policy.py", *slide_capture_files))
     ))
     check("runtime-python-path", (
         "COPY --from=authored-renderer-builder /opt/venv /opt/venv" in dockerfile
@@ -307,38 +306,16 @@ def verify() -> list[dict[str, Any]]:
 
     # The worker imports first-party modules both eagerly and lazily (a lazy
     # import inside a request-handling function still runs inside the built
-    # image the first time it is reached), so the Dockerfile COPY list and
-    # attestation.IMAGE_SOURCES must cover the module's real, transitive
-    # first-party import closure -- not just what someone remembered to add
-    # when the worker last changed. Missing a copy fails at runtime, not at
-    # build time, because Docker never sees the absent import.
-    worker_entry = REPOSITORY_ROOT / "servers" / "fastapi" / "utils" / "authored_renderer_worker.py"
-    closure = compute_closure(
-        worker_entry,
+    # Lazy imports are included by the same closure used at Docker build time.
+    source_stage_valid, source_stage_detail = verify_source_stage(
+        dockerfile,
+        set(attestation.IMAGE_SOURCES),
         REPOSITORY_ROOT / "servers" / "fastapi",
-        WORKER_IMPORT_CLOSURE_FIRST_PARTY_ROOTS,
     )
-    runtime_stage_marker = "AS authored-renderer-runtime"
-    stage_start = dockerfile.index(runtime_stage_marker)
-    next_stage = dockerfile.find("\nFROM ", stage_start + 1)
-    runtime_stage = dockerfile[stage_start:] if next_stage == -1 else dockerfile[stage_start:next_stage]
-    image_sources = set(attestation.IMAGE_SOURCES)
-    missing_copy: list[str] = []
-    missing_attestation: list[str] = []
-    for relative in sorted(closure.files):
-        source_path = f"servers/fastapi/{relative}"
-        copy_line = f"COPY {source_path} /app/{source_path}"
-        if copy_line not in runtime_stage:
-            missing_copy.append(source_path)
-        if source_path not in image_sources:
-            missing_attestation.append(source_path)
     check(
         "product-image-import-closure",
-        not missing_copy and not missing_attestation,
-        detail=(
-            f"missing COPY in authored-renderer-runtime: {missing_copy}; "
-            f"missing from attestation.IMAGE_SOURCES: {missing_attestation}"
-        ) if (missing_copy or missing_attestation) else None,
+        source_stage_valid,
+        detail=source_stage_detail,
     )
     return checks
 
