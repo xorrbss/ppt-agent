@@ -26,7 +26,13 @@ from models.sql.workspace import (
 )
 from services.chat.chat_memory_store import CHAT_MEMORY_STORE, ChatMemoryStore
 from services.database import async_session_maker
+from services.workspace_operation_principal import (
+    PRINCIPAL_TENANT_PAYLOAD_KEY,
+    operation_principal,
+    payload_tenants,
+)
 from utils.datetime_utils import get_current_utc_datetime
+from utils.owner_context import get_current_tenant_id
 
 
 WORKSPACE_CHAT_MEMORY_TOPIC = "workspace.chat.memory"
@@ -211,8 +217,13 @@ async def enqueue_workspace_chat_memory_delivery(
 ) -> WorkspaceOutbox:
     """Stage a memory delivery in the same transaction as publication."""
 
+    tenant_id = (get_current_tenant_id() or "").strip() or None
+    if (owner_id is None) != (tenant_id is None):
+        raise ValueError("workspace_chat_memory_principal_required")
     payload = {
         "operation_id": str(operation_id),
+        **({"owner_id": str(owner_id), PRINCIPAL_TENANT_PAYLOAD_KEY: tenant_id}
+           if owner_id is not None else {}),
         "presentation_id": str(presentation_id),
         "conversation_id": str(conversation_id),
         "result_revision": result_revision,
@@ -250,6 +261,26 @@ async def deliver_workspace_chat_memory(
 ) -> None:
     """Deliver one committed turn behind a durable unique/CAS receipt."""
 
+    owner_id = _uuid_field(payload, "owner_id") if "owner_id" in payload else None
+    tenant_id = payload.get(PRINCIPAL_TENANT_PAYLOAD_KEY)
+    if (owner_id is None) != (not isinstance(tenant_id, str) or not tenant_id.strip()):
+        raise ValueError("workspace_chat_memory_principal_required")
+    tenant_id = tenant_id.strip() if isinstance(tenant_id, str) else None
+    with operation_principal(owner_id, tenant_id):
+        await _deliver_workspace_chat_memory_scoped(
+            payload, owner_id=owner_id, tenant_id=tenant_id,
+            session_factory=session_factory, memory_store=memory_store,
+        )
+
+
+async def _deliver_workspace_chat_memory_scoped(
+    payload: Mapping[str, Any],
+    *,
+    owner_id: uuid.UUID | None,
+    tenant_id: str | None,
+    session_factory: async_sessionmaker[AsyncSession],
+    memory_store: ChatMemoryStore,
+) -> None:
     operation_id = _uuid_field(payload, "operation_id")
     presentation_id = _uuid_field(payload, "presentation_id")
     conversation_id = _uuid_field(payload, "conversation_id")
@@ -269,11 +300,16 @@ async def deliver_workspace_chat_memory(
                     WorkspaceOperation.state == "succeeded",
                     WorkspaceOperation.result_revision == result_revision,
                 )
-                .execution_options(skip_owner_scope=True)
             )
         ).scalar_one_or_none()
 
-    if operation is None:
+    if (
+        operation is None
+        or operation.owner_id != owner_id
+        or payload_tenants(operation.request_payload) != (
+            {tenant_id} if tenant_id is not None else set()
+        )
+    ):
         # A memory side effect must never outrun or contradict publication.
         raise ValueError("workspace_chat_memory_publication_missing")
 
