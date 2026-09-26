@@ -27,12 +27,16 @@ from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.slide import SlideModel
 from services import authored_checkpoint_service as checkpoints
 from services import authored_presentation_service as authored
+from services import authored_original_capture_checkpoint as original_capture
+from services import database
 from services import presentation_generation_job_service as jobs
+from tests.support.authored_worker_lane_capture import capture_for_lane
+from utils.owner_context import reset_current_owner_id, set_current_owner_id
 
 
 def _png(color: tuple[int, int, int]) -> bytes:
     output = io.BytesIO()
-    Image.new("RGB", (160, 90), color).save(output, format="PNG")
+    Image.new("RGB", (1280, 720), color).save(output, format="PNG")
     return output.getvalue()
 
 
@@ -41,19 +45,12 @@ async def _database(tmp_path, monkeypatch):
         f"sqlite+aiosqlite:///{tmp_path / 'authored-resume-flow.db'}"
     )
     async with engine.begin() as connection:
-        await connection.run_sync(
-            SQLModel.metadata.create_all,
-            tables=[
-                AsyncPresentationGenerationTaskModel.__table__,
-                PresentationGenerationJob.__table__,
-                AuthoredSlideCheckpoint.__table__,
-                PresentationModel.__table__,
-                SlideModel.__table__,
-            ],
-        )
+        await connection.run_sync(SQLModel.metadata.create_all)
     maker = async_sessionmaker(engine, expire_on_commit=False)
     monkeypatch.setattr(checkpoints, "async_session_maker", maker)
     monkeypatch.setattr(jobs, "async_session_maker", maker)
+    monkeypatch.setattr(database, "async_session_maker", maker)
+    monkeypatch.setattr(original_capture, "async_session_maker", maker)
     return engine, maker
 
 
@@ -64,6 +61,7 @@ def test_render_failure_resumes_same_job_without_regenerating_completed_slide(
     from utils import llm_provider
 
     async def scenario():
+        owner_token = set_current_owner_id(uuid.uuid4())
         engine, maker = await _database(tmp_path, monkeypatch)
         try:
             app_data = tmp_path / "app-data"
@@ -105,7 +103,8 @@ def test_render_failure_resumes_same_job_without_regenerating_completed_slide(
                 author_calls.append(index)
                 return (
                     "<!DOCTYPE html><html><head><meta charset='utf-8'></head>"
-                    f"<body><h1>Slide {index + 1}</h1></body></html>"
+                    f'<body><h1 data-qid="slide-title" data-semantic-role="title">Slide {index + 1}</h1>'
+                    f'<div data-qid="slide-body" data-semantic-role="body">Body {index + 1}</div></body></html>'
                 )
 
             async def fake_render(html):
@@ -113,10 +112,15 @@ def test_render_failure_resumes_same_job_without_regenerating_completed_slide(
                 render_calls.append(index)
                 return rendered_pngs[index]
 
-            monkeypatch.setattr(authored, "prepare_authored_deck", lambda *_: plan)
+            monkeypatch.setattr(authored, "prepare_authored_deck", lambda *_, **__: plan)
             monkeypatch.setattr(authored, "author_planned_slide", fake_author)
             monkeypatch.setattr(authored, "is_fallback_slide_html", lambda _: False)
             monkeypatch.setattr(authored, "render_html_to_png", fake_render)
+
+            async def fake_capture(html, **kwargs):
+                return await capture_for_lane(html, await fake_render(html), **kwargs)
+
+            monkeypatch.setattr(authored, "render_html_to_png_with_metrics", fake_capture)
 
             status = AsyncPresentationGenerationTaskModel(
                 status="pending", message="Queued for generation"
@@ -328,5 +332,6 @@ def test_render_failure_resumes_same_job_without_regenerating_completed_slide(
             )
         finally:
             await engine.dispose()
+            reset_current_owner_id(owner_token)
 
     asyncio.run(scenario())
