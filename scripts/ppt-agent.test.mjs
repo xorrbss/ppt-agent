@@ -118,6 +118,41 @@ test("forwards --style to the local generation API", async (t) => {
   assert.match(result.stdout, new RegExp(`export op: +${OPERATION_ID}`));
 });
 
+test("omits strategy from the request body by default (server default is svg)", async (t) => {
+  const mock = await startMockServer({
+    "/api/v1/ppt/presentation/generate": (res) => json(res, generateResponse()),
+  });
+  t.after(() => mock.server.close());
+
+  const result = await runCli(["--content", "default strategy deck", "--base", mock.base]);
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(mock.requests.length, 1);
+  assert.ok(!("strategy" in mock.requests[0].body));
+});
+
+test("--strategy authored sends an explicit strategy override", async (t) => {
+  const mock = await startMockServer({
+    "/api/v1/ppt/presentation/generate": (res) => json(res, generateResponse()),
+  });
+  t.after(() => mock.server.close());
+
+  const result = await runCli([
+    "--content", "authored deck",
+    "--strategy", "authored",
+    "--base", mock.base,
+  ]);
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(mock.requests[0].body.strategy, "authored");
+});
+
+test("--strategy rejects an unknown value", async (t) => {
+  const result = await runCli(["--content", "x", "--strategy", "deck-ir"]);
+  assert.equal(result.code, 1);
+  assert.match(result.stderr, /--strategy must be one of svg, authored/);
+});
+
 test("--out follows the chained export operation to its artifact", async (t) => {
   let polls = 0;
   const mock = await startMockServer({
