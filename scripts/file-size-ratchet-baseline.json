@@ -9,7 +9,6 @@
     "scripts/authored-vnext-quality/visual_parity_gate.py": 762,
     "scripts/benchmarks/authored_bundle_benchmark/run.py": 685,
     "scripts/intake-upstream-main.mjs": 615,
-    "scripts/ppt-agent.mjs": 607,
     "scripts/public-service-crash-recovery.py": 820,
     "scripts/public-service-product-evidence.mjs": 555,
     "scripts/public-service-release-gate.mjs": 797,
