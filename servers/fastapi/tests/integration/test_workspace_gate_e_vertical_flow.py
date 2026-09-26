@@ -123,6 +123,8 @@ async def _exercise_vertical_flow(tmp_path: Path, monkeypatch) -> None:
                 n_slides=5,
                 language="ko",
                 layout={"name": "gate-e"},
+                mode="authored",
+                theme={"mode": "authored"},
                 revision=0,
             )
             session.add(presentation)
