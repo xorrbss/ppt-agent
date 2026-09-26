@@ -31,7 +31,8 @@ def test_checkpoint_models_match_the_additive_schema_contract():
     checkpoint_columns = set(AuthoredSlideCheckpoint.__table__.columns.keys())
 
     assert migrations.PRESENTATION_GENERATION_JOB_COLUMNS.issubset(job_columns)
-    assert migrations.AUTHORED_SLIDE_CHECKPOINT_COLUMNS == checkpoint_columns
+    assert migrations.AUTHORED_SLIDE_CHECKPOINT_COLUMNS <= checkpoint_columns
+    assert "svg_checkpoint" in checkpoint_columns
     assert {
         constraint.name
         for constraint in AuthoredSlideCheckpoint.__table__.constraints

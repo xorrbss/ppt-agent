@@ -1,4 +1,5 @@
 import asyncio
+from io import BytesIO
 import hashlib
 import json
 import os
@@ -9,6 +10,7 @@ import uuid
 from types import SimpleNamespace
 
 import pytest
+from PIL import Image
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
@@ -30,6 +32,16 @@ from services.authored_checkpoint_html import checkpoint_stage_html
 from utils.llm_calls.author_slide import Brand
 from utils.runtime_settings import replace_process_runtime_settings
 from utils.renderer_isolation import RendererPolicyError
+
+
+def _png(color):
+    stream = BytesIO()
+    Image.new("RGB", (1280, 720), color).save(stream, format="PNG")
+    return stream.getvalue()
+
+
+_STALE_PNG = _png("red")
+_RENDERED_PNG = _png("blue")
 
 
 async def _checkpoint_database(tmp_path, monkeypatch):
@@ -106,7 +118,7 @@ def _install_one_slide_pipeline_fakes(monkeypatch, *, rendered_html):
 
     async def fake_render(html):
         rendered_html.append(html)
-        return b"rendered-png"
+        return _RENDERED_PNG
     async def fake_capture(html: str, **_kwargs):
         from services.authored_local_fit_policy import html_digest
         from utils.slide_capture_result import RenderCapture
@@ -114,7 +126,7 @@ def _install_one_slide_pipeline_fakes(monkeypatch, *, rendered_html):
         return RenderCapture.from_payload(
             html_digest=html_digest(html),
             png=await fake_render(html),
-            browser_metrics={},
+            browser_metrics={"width": 1280, "height": 720},
             runtime_counters={},
             prepared_html=html,
         )
@@ -141,22 +153,7 @@ def _install_one_slide_pipeline_fakes(monkeypatch, *, rendered_html):
 def test_sealed_scene_envelope_recaptures_stale_role_evidence_once(
     tmp_path, monkeypatch
 ):
-    """Evidence that predates role stamping is recaptured once, then reused.
-
-    This replaces ``test_semantic_gate_recaptures_stale_role_metrics_once``,
-    which drove ``pipeline._refresh_semantic_gate_evidence`` -- a whole-deck,
-    gate-time recapture that commit ``5218198f3`` removed when it sealed the
-    scene envelope before Chromium instead. The intent it protected survives
-    unchanged and is what this test asserts against the new model:
-
-    * A durable render checkpoint written under an older semantic-role policy
-      is not authoritative merely because its pixels survived. The sealed
-      envelope's HTML projection is the render input, and a checkpoint whose
-      stage HTML differs from it has its PNG discarded and recaptured.
-    * The recapture is bounded: it happens exactly once. Completing the render
-      stage rebinds the durable evidence to the sealed projection, so a later
-      resume of the same job finds them equal and renders nothing.
-    """
+    """Stale role evidence is recaptured once, then reused on resume."""
 
     stale_role_html = (
         "<!doctype html><html><head><meta charset='utf-8'></head><body>"
@@ -190,7 +187,7 @@ def test_sealed_scene_envelope_recaptures_stale_role_evidence_once(
             for stage, kwargs in (
                 ("author", {"html": stale_role_html}),
                 ("illustrate", {"skipped": True}),
-                ("render", {"png": b"stale-role-png"}),
+                ("render", {"png": _STALE_PNG}),
                 ("persist", {}),
             ):
                 await checkpoints.start_stage(
@@ -216,12 +213,12 @@ def test_sealed_scene_envelope_recaptures_stale_role_evidence_once(
             assert 'data-semantic-role="body"' not in rendered_html[0]
             assert 'data-semantic-role="decoration"' in rendered_html[0]
             assert first.deck.htmls == rendered_html
-            assert first.pngs == [b"rendered-png"]
+            assert first.pngs == [_RENDERED_PNG]
 
             # The durable evidence is rebound to the sealed scene: the
             # stale-role PNG is gone and the stage HTML is the projection.
             recaptured = await checkpoints.get_checkpoint(job.id, 0)
-            assert checkpoints.read_valid_render(recaptured) == b"rendered-png"
+            assert checkpoints.read_valid_render(recaptured) == _RENDERED_PNG
             assert checkpoint_stage_html(recaptured) == rendered_html[0]
 
             # Once. A second resume finds the durable evidence already bound to
