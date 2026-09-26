@@ -8,6 +8,7 @@ import { collectHardcodedUiText } from "../scripts/check-i18n-hardcoding.mjs";
 const root = process.cwd();
 const auditedFiles = [
   "app/(presentation-generator)/components/DevaxWorkspaceShell.tsx",
+  "app/(presentation-generator)/authored-vnext/master-setup/MasterWysiwygWorkspace.tsx",
   "app/(presentation-generator)/upload/components/UploadDesignGallery.tsx",
   "app/not-found.tsx",
   "app/global-error.tsx",

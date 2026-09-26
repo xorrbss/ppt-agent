@@ -322,14 +322,14 @@ export default function MasterWysiwygWorkspace(
           className="rounded border px-2 py-1"
           onClick={() => addFurniture("text", "fixed-copy")}
         >
-          Fixed copy
+          {t("extra.fixedCopy")}
         </button>
         <button
           type="button"
           className="rounded border border-violet-300 bg-violet-50 px-2 py-1 text-violet-900"
           onClick={addAiEditZone}
         >
-          AI 편집존
+          {t("extra.aiEditZone")}
         </button>
         <button
           type="button"
@@ -346,14 +346,14 @@ export default function MasterWysiwygWorkspace(
           className="rounded border px-2 py-1"
           onClick={() => addFurniture("shape", "background-decoration", { shape: "rect" })}
         >
-          Background decoration
+          {t("extra.backgroundDecoration")}
         </button>
         <button
           type="button"
           className="rounded border px-2 py-1"
           onClick={() => addFurniture("shape", "background-decoration", { shape: "ellipse" })}
         >
-          Background decoration (circle)
+          {t("extra.backgroundDecorationCircle")}
         </button>
         <button
           type="button"
@@ -646,7 +646,7 @@ export default function MasterWysiwygWorkspace(
                       {t("sharedLogo.override")}
                     </button>
                   )}
-                  {sharedLogoGroupId && <input aria-label="Shared logo group" readOnly className="w-full rounded border border-blue-100 bg-white px-1 text-[10px] text-slate-500" value={sharedLogoGroupId} />}
+                  {sharedLogoGroupId && <input aria-label={t("extra.sharedLogoGroup")} readOnly className="w-full rounded border border-blue-100 bg-white px-1 text-[10px] text-slate-500" value={sharedLogoGroupId} />}
                 </fieldset>
               )}
               <fieldset className="grid grid-cols-2 gap-2">
@@ -667,7 +667,7 @@ export default function MasterWysiwygWorkspace(
                   </label>
                 ))}
                 {!isAiEditZone && <label>
-                  deg
+                  {t("extra.degrees")}
                   <input
                     className="mt-0.5 w-full rounded border px-1 py-1"
                     type="number"
@@ -680,91 +680,91 @@ export default function MasterWysiwygWorkspace(
               </fieldset>
               {isAiEditZone && aiEditZone && (
                 <fieldset className="space-y-2 rounded border border-violet-200 bg-violet-50 p-2" data-testid="ai-edit-zone-inspector">
-                  <legend className="px-1 font-semibold text-violet-950">AI 편집존 설정</legend>
-                  <p className="text-violet-900">선택한 템플릿의 색상·글꼴·간격·카드 문법을 상속해 이 영역 안에만 생성합니다.</p>
+                  <legend className="px-1 font-semibold text-violet-950">{t("extra.aiZoneSettings")}</legend>
+                  <p className="text-violet-900">{t("extra.aiZoneInheritance")}</p>
                   {aiEditZone.scope.kind === "common" && (
                     <div className="space-y-2 rounded border border-amber-300 bg-amber-50 p-2 text-amber-950">
-                      <p>현재 영역은 모든 레이아웃이 공유하므로 한 곳을 수정하면 표지·섹션·본문에 동일하게 반영됩니다.</p>
+                      <p>{t("extra.sharedZoneExplanation")}</p>
                       <button
                         type="button"
                         data-testid="split-ai-edit-zone-by-layout"
                         className="rounded border border-amber-400 bg-white px-2 py-1 font-medium"
                         onClick={splitAiEditZoneByLayout}
                       >
-                        레이아웃별 독립 영역으로 분리
+                        {t("extra.splitByLayout")}
                       </button>
                     </div>
                   )}
                   <label className="block">
-                    생성 지시어
+                    {t("extra.generationInstruction")}
                     <textarea
-                      aria-label="AI 편집존 생성 지시어"
+                      aria-label={t("extra.generationInstructionAria")}
                       className="mt-1 min-h-20 w-full rounded border border-violet-200 bg-white p-1"
                       maxLength={4000}
-                      placeholder="예: 핵심 요구사항을 3개의 번호 카드로 구성"
+                      placeholder={t("extra.generationInstructionPlaceholder")}
                       value={aiEditZone.instruction ?? ""}
                       onChange={(event) => updateAiEditZone({ instruction: event.target.value })}
                     />
-                    <span className="text-[10px] text-slate-500">비워 두면 기존 예약 영역처럼 유지됩니다.</span>
+                    <span className="text-[10px] text-slate-500">{t("extra.emptyInstructionHint")}</span>
                   </label>
                   <div className="grid grid-cols-2 gap-2">
                     <label>
-                      콘텐츠 유형
+                      {t("extra.contentType")}
                       <select
                         className="mt-0.5 w-full rounded border bg-white px-1 py-1"
                         value={aiEditZone.contentType ?? "auto"}
                         onChange={(event) => updateAiEditZone({ contentType: event.target.value })}
                       >
-                        <option value="auto">자동</option>
-                        <option value="text">텍스트</option>
-                        <option value="cards">카드</option>
-                        <option value="list">목록</option>
-                        <option value="table">표</option>
-                        <option value="chart">차트</option>
-                        <option value="mixed">혼합</option>
+                        <option value="auto">{t("extra.automatic")}</option>
+                        <option value="text">{t("extra.text")}</option>
+                        <option value="cards">{t("extra.cards")}</option>
+                        <option value="list">{t("extra.list")}</option>
+                        <option value="table">{t("extra.table")}</option>
+                        <option value="chart">{t("extra.chart")}</option>
+                        <option value="mixed">{t("extra.mixed")}</option>
                       </select>
                     </label>
                     <label>
-                      구성 패턴
+                      {t("extra.compositionPattern")}
                       <select
                         className="mt-0.5 w-full rounded border bg-white px-1 py-1"
                         value={aiEditZone.pattern ?? "auto"}
                         onChange={(event) => updateAiEditZone({ pattern: event.target.value })}
                       >
-                        <option value="auto">자동</option>
-                        <option value="numberedCards">번호 카드</option>
-                        <option value="bulletList">글머리 목록</option>
-                        <option value="comparisonTable">비교 표</option>
-                        <option value="metricChart">지표 차트</option>
-                        <option value="iconCards">아이콘 카드</option>
+                        <option value="auto">{t("extra.automatic")}</option>
+                        <option value="numberedCards">{t("extra.numberedCards")}</option>
+                        <option value="bulletList">{t("extra.bulletedList")}</option>
+                        <option value="comparisonTable">{t("extra.comparisonTable")}</option>
+                        <option value="metricChart">{t("extra.metricsChart")}</option>
+                        <option value="iconCards">{t("extra.iconCards")}</option>
                       </select>
                     </label>
                     <label>
-                      근거 사용
+                      {t("extra.evidenceUse")}
                       <select
                         className="mt-0.5 w-full rounded border bg-white px-1 py-1"
                         value={aiEditZone.sourcePolicy ?? "promptAndDocument"}
                         onChange={(event) => updateAiEditZone({ sourcePolicy: event.target.value })}
                       >
-                        <option value="documentOnly">문서 근거만</option>
-                        <option value="promptAndDocument">지시어와 문서</option>
-                        <option value="promptOnly">지시어만</option>
+                        <option value="documentOnly">{t("extra.documentEvidenceOnly")}</option>
+                        <option value="promptAndDocument">{t("extra.instructionAndDocument")}</option>
+                        <option value="promptOnly">{t("extra.instructionOnly")}</option>
                       </select>
                     </label>
                     <label>
-                      밀도
+                      {t("extra.density")}
                       <select
                         className="mt-0.5 w-full rounded border bg-white px-1 py-1"
                         value={aiEditZone.density ?? "balanced"}
                         onChange={(event) => updateAiEditZone({ density: event.target.value })}
                       >
-                        <option value="sparse">여백 우선</option>
-                        <option value="balanced">균형</option>
-                        <option value="dense">정보 밀도 높음</option>
+                        <option value="sparse">{t("extra.spacingFirst")}</option>
+                        <option value="balanced">{t("extra.balanced")}</option>
+                        <option value="dense">{t("extra.highInformationDensity")}</option>
                       </select>
                     </label>
                     <label>
-                      비어 있을 때
+                      {t("extra.whenEmpty")}
                       <select
                         className="mt-0.5 w-full rounded border bg-white px-1 py-1"
                         value={aiEditZone.emptyBehavior ?? "hidden"}
@@ -777,13 +777,13 @@ export default function MasterWysiwygWorkspace(
                               : {}),
                         })}
                       >
-                        <option value="hidden">숨김</option>
-                        <option value="blank">빈 영역 유지</option>
-                        <option value="fallback">대체 문구</option>
+                        <option value="hidden">{t("extra.hide")}</option>
+                        <option value="blank">{t("extra.keepEmptyArea")}</option>
+                        <option value="fallback">{t("extra.fallbackText")}</option>
                       </select>
                     </label>
                     <label>
-                      스타일
+                      {t("extra.style")}
                       <input
                         className="mt-0.5 w-full rounded border bg-slate-100 px-1 py-1 text-slate-600"
                         readOnly
@@ -791,25 +791,25 @@ export default function MasterWysiwygWorkspace(
                       />
                     </label>
                     <label>
-                      텍스트 정렬
+                      {t("extra.textAlignment")}
                       <select
-                        aria-label="AI 편집존 텍스트 정렬"
+                        aria-label={t("extra.textAlignmentAria")}
                         className="mt-0.5 w-full rounded border bg-white px-1 py-1"
                         value={aiEditZone.textAlign ?? "inherit"}
                         onChange={(event) => updateAiEditZone({
                           textAlign: event.target.value === "inherit" ? null : event.target.value,
                         })}
                       >
-                        <option value="inherit">템플릿 상속</option>
-                        <option value="left">왼쪽</option>
-                        <option value="center">가운데</option>
-                        <option value="right">오른쪽</option>
+                        <option value="inherit">{t("extra.inheritTemplate")}</option>
+                        <option value="left">{t("extra.left")}</option>
+                        <option value="center">{t("extra.center")}</option>
+                        <option value="right">{t("extra.right")}</option>
                       </select>
                     </label>
                     <label>
-                      최대 글자 수
+                      {t("extra.maxCharacters")}
                       <input
-                        aria-label="AI 편집존 최대 글자 수"
+                        aria-label={t("extra.maxCharactersAria")}
                         className="mt-0.5 w-full rounded border bg-white px-1 py-1"
                         min="1"
                         max="10000"
@@ -821,9 +821,9 @@ export default function MasterWysiwygWorkspace(
                       />
                     </label>
                     <label>
-                      최대 항목 수
+                      {t("extra.maxItems")}
                       <input
-                        aria-label="AI 편집존 최대 항목 수"
+                        aria-label={t("extra.maxItemsAria")}
                         className="mt-0.5 w-full rounded border bg-white px-1 py-1"
                         min="1"
                         max="24"
@@ -837,9 +837,9 @@ export default function MasterWysiwygWorkspace(
                   </div>
                   {aiEditZone.emptyBehavior === "fallback" && (
                     <label className="block">
-                      대체 문구
+                      {t("extra.fallbackText")}
                       <input
-                        aria-label="AI 편집존 대체 문구"
+                        aria-label={t("extra.fallbackTextAria")}
                         className="mt-0.5 w-full rounded border bg-white px-1 py-1"
                         maxLength={10000}
                         value={aiEditZone.fallbackText ?? ""}
@@ -848,22 +848,22 @@ export default function MasterWysiwygWorkspace(
                     </label>
                   )}
                   <label className="block">
-                    적용 범위
+                    {t("extra.scope")}
                     <select
                       className="mt-0.5 w-full rounded border bg-white px-1 py-1"
                       disabled
                       value="layout"
                     >
-                      <option value="layout">현재 레이아웃만</option>
+                      <option value="layout">{t("extra.currentLayoutOnly")}</option>
                     </select>
-                    <span className="text-[10px] text-slate-500">AI 편집존은 레이아웃별로 독립 저장됩니다.</span>
+                    <span className="text-[10px] text-slate-500">{t("extra.independentByLayout")}</span>
                   </label>
                   <button
                     type="button"
                     className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-slate-700"
                     onClick={fitAiEditZoneToSafeArea}
                   >
-                    회사 표준 안전 영역 안으로 맞추기
+                    {t("extra.fitSafeArea")}
                   </button>
                 </fieldset>
               )}
