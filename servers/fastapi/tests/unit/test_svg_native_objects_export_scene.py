@@ -201,8 +201,9 @@ def test_native_objects_bind_pptx_bundle_identity_and_semantic_digest_only():
     assert bundle("pdf", entries) == bundle("pdf", None)  # vector PDF: no native objects
 
     def digests(native):
-        return build_svg_export_evidence_digests(svgs=["<svg/>"], notes=[""], native_objects=native,
-                                                 quality_receipt={}, converter_version="v", converter_digest="d")
+        return build_svg_export_evidence_digests(svgs=["<svg/>"], notes=[""], canvas={"w": 1}, native_objects=native,
+                                                 quality_inputs={}, converter_version="v", converter_digest="d",
+                                                 contract_version="c")
 
     without, with_native = digests(None), digests(entries)
     assert without.semantic_digest == without.scene_digest

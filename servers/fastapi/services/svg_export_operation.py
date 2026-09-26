@@ -1,5 +1,6 @@
 """SVG export admission using the existing fenced worker and artifact authority."""
 from __future__ import annotations
+import hashlib
 import json
 import logging
 from datetime import datetime, timezone
@@ -27,7 +28,6 @@ from workers.public_svg_export_worker import (
     SVG_EXPORT_SCHEMA_V2,
     SVG_EXPORT_SCHEMA_V3,
     CONVERTER_VERSION,
-    converter_digest,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -59,7 +59,9 @@ def _native_object_entries(slides):
 
 async def render_and_export_svgs(claim, *, tenant_id, svgs, notes, export_format, canvas, session_factory,
                                  asset_bindings=None, source_preservation=None, deadline_grant=None,
-                                 font_embedding=False, native_objects=None):
+                                 font_embedding=False, native_objects=None, slide_refs=None):
+    """Run the svg worker; ``slide_refs`` are pre-persisted slide svg checkpoints
+    (``services.svg_export_identity``), otherwise the sources persist ephemeral."""
     if (claim.owner_id is None or claim.kind != f"export.{export_format}"
             or not 1 <= len(svgs) <= 100 or len(notes) != len(svgs)):
         raise PublicExportOperationError("svg_export_input_invalid")
@@ -73,6 +75,10 @@ async def render_and_export_svgs(claim, *, tenant_id, svgs, notes, export_format
         raise PublicExportOperationError("svg_font_embedding_pptx_only")
     if native_objects is not None and len(native_objects) != len(svgs):
         raise PublicExportOperationError("svg_export_native_objects_count_invalid")
+    if slide_refs is not None and (len(slide_refs) != len(svgs) or any(
+            ref.kind != "slide-svg" or ref.sha256 != hashlib.sha256(source.encode()).hexdigest()
+            for ref, source in zip(slide_refs, svgs, strict=True))):
+        raise PublicExportOperationError("svg_export_slide_checkpoint_binding_invalid")
     resolved_canvas = parse_canvas_metadata(canvas)
     canvas = resolved_canvas.model_dump(mode="json", by_alias=True)
     for index, source in enumerate(svgs):
@@ -98,7 +104,7 @@ async def render_and_export_svgs(claim, *, tenant_id, svgs, notes, export_format
                 asset_refs.extend(bound)
             else:
                 assets.append(None)
-            refs.append(await service.persist_bytes(
+            refs.append(slide_refs[index] if slide_refs is not None else await service.persist_bytes(
                 session, owner_id=claim.owner_id, tenant_id=tenant_id, kind="slide-svg",
                 payload=source.encode(), media_type="image/svg+xml",
                 created_by_operation_id=claim.operation_id, retention_class="ephemeral"))
@@ -225,24 +231,39 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
         grant = await load_public_export_deadline_grant(session_factory, operation_id=claim.operation_id)
         _require_deadline_budget(grant)
         await context.progress(stage="export_rendering", percent=10)
-        asset_bindings = None
-        if any((slide.content or {}).get("svgAssetManifest") is not None for slide in slides):
-            from services.svg_export_assets import build_slide_export_assets
-            service = configured_public_artifact_service()
-            asset_bindings = []
-            async with session_factory() as session:
-                for slide in slides:
-                    await context.raise_if_cancelled()
-                    _require_deadline_budget(grant)
-                    asset_bindings.append(await build_slide_export_assets(
-                        slide, service=service, session=session, claim=claim, tenant_id=admission.tenant_id,
-                        export_format=fmt, canvas=canvas))
-                await session.commit()
-        result = await render_and_export_svgs(
-            claim, tenant_id=admission.tenant_id, svgs=svgs, notes=notes, export_format=fmt, canvas=canvas,
-            session_factory=session_factory, asset_bindings=asset_bindings,
-            source_preservation=source_preservation, deadline_grant=grant, font_embedding=font_embedding,
-            native_objects=native_objects)
+        advisory = ((presentation.theme or {}).get("svg") or {}).get("advisory")
+
+        async def run_worker(slide_refs):
+            asset_bindings = None
+            if any(asset is not None for asset in source_assets):
+                from services.svg_export_assets import build_slide_export_assets
+                service = configured_public_artifact_service()
+                asset_bindings = []
+                async with session_factory() as session:
+                    for slide in slides:
+                        await context.raise_if_cancelled()
+                        _require_deadline_budget(grant)
+                        asset_bindings.append(await build_slide_export_assets(
+                            slide, service=service, session=session, claim=claim, tenant_id=admission.tenant_id,
+                            export_format=fmt, canvas=canvas))
+                    await session.commit()
+            return await render_and_export_svgs(
+                claim, tenant_id=admission.tenant_id, svgs=svgs, notes=notes, export_format=fmt, canvas=canvas,
+                session_factory=session_factory, asset_bindings=asset_bindings,
+                source_preservation=source_preservation, deadline_grant=grant, font_embedding=font_embedding,
+                native_objects=native_objects, slide_refs=slide_refs)
+
+        # One export per identity: a completed identity is reused without the
+        # worker or asset derivation; only a claimed one runs ``run_worker``.
+        from services.svg_export_identity import SvgExportRequest, export_svg_through_identity
+        result, identity = await export_svg_through_identity(claim, tenant_id=admission.tenant_id,
+            request=SvgExportRequest(
+                export_format=fmt, svgs=svgs, notes=notes,
+                canvas=parse_canvas_metadata(canvas).model_dump(mode="json", by_alias=True), slides=slides,
+                source_assets=source_assets if any(asset is not None for asset in source_assets) else None,
+                source_preservation=source_preservation, native_objects=native_objects,
+                font_embedding=font_embedding, advisory=advisory, quality_policy=quality_policy),
+            session_factory=session_factory, grant=grant, execute=run_worker)
         ref = result.artifact
         receipt_args = dict(
             quality_receipt_id=f"quality:{claim.operation_id}:{ref.artifact_id}",
@@ -250,19 +271,17 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
             artifact_digest=f"sha256:{ref.sha256}", source_revision=claim.expected_revision,
             scene_digest=f"sha256:{source_digest}", evaluated_at=datetime.now(timezone.utc))
         from services.svg_export_quality import svg_public_quality_receipt
-        receipt = svg_public_quality_receipt(slides=slides, advisory=((presentation.theme or {}).get("svg")
-            or {}).get("advisory"), source_preservation=source_preservation,
+        receipt = svg_public_quality_receipt(slides=slides, advisory=advisory, source_preservation=source_preservation,
             worker_metrics=result.resource_metrics, exporter_version=CONVERTER_VERSION, **receipt_args)
+        # release-v1 stays a receipt-content gate; the identity join decides
+        # only whether bytes are produced or reused, not whether they release.
         if quality_policy == "release-v1":
             from services.svg_export_release_gate import require_release_v1_receipt
             require_release_v1_receipt(receipt)
+        # Post-export: the receipt's own digest is the publication quality
+        # digest. ``evidenceDigests`` are the pre-export identity inputs.
         quality_digest = _digest(receipt)
-        from services.generation_core.export.svg_evidence import build_svg_export_evidence_digests
-        receipt["evidenceDigests"] = build_svg_export_evidence_digests(
-            svgs=svgs, notes=notes, source_assets=source_assets, source_preservation=source_preservation,
-            native_objects=native_objects if fmt == "pptx" else None, quality_receipt=receipt,
-            converter_version=CONVERTER_VERSION, converter_digest=converter_digest(),
-        ).to_wire()
+        receipt["evidenceDigests"] = identity.evidence.to_wire()
         provenance["freshness"].update({"package_sha256": ref.sha256, "package_digest_match": True})
         await context.raise_if_cancelled()
         async with session_factory() as session:

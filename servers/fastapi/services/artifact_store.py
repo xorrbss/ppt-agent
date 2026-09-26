@@ -2117,7 +2117,7 @@ class ExportIdentityKey:
     quality_digest: str
     exporter_digest: str
     export_mode: Literal["pptx", "pdf"]
-    output_mode: Literal["fidelity-raster", "editable-hybrid"]
+    output_mode: Literal["fidelity-raster", "editable-hybrid", "svg-native"]
     font_manifest_digest: str
     exporter_version: str
     render_adapter: str
@@ -2138,9 +2138,9 @@ class ExportIdentityKey:
             raise ValueError("export render adapter is invalid")
         if self.export_mode not in {"pptx", "pdf"}:
             raise ValueError("export format is invalid")
-        if self.output_mode not in {"fidelity-raster", "editable-hybrid"}:
+        if self.output_mode not in {"fidelity-raster", "editable-hybrid", "svg-native"}:
             raise ValueError("export output mode is invalid")
-        if self.export_mode == "pdf" and self.output_mode != "fidelity-raster":
+        if self.export_mode == "pdf" and self.output_mode not in {"fidelity-raster", "svg-native"}:
             raise ValueError("PDF export output mode is invalid")
         return ExportIdentityKey(
             owner_id=self.owner_id,

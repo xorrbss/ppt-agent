@@ -476,7 +476,7 @@ class SlideCheckpointArtifact:
     def __post_init__(self) -> None:
         if self.slide_index < 0:
             raise ValueError("slide checkpoint index must be nonnegative")
-        if self.artifact.kind != "slide-png":
+        if self.artifact.kind not in {"slide-png", "slide-svg"}:  # svg-native slides are svg sources
             raise PublicExportIdentityBindingError(
                 "public_export_checkpoint_kind_invalid"
             )

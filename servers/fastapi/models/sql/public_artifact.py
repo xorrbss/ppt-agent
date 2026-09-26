@@ -303,7 +303,7 @@ class PublicExportIdentity(SQLModel, table=True):
             name="ck_public_export_identity_mode",
         ),
         CheckConstraint(
-            "output_mode IN ('fidelity-raster', 'editable-hybrid')",
+            "output_mode IN ('fidelity-raster', 'editable-hybrid', 'svg-native')",
             name="ck_public_export_identity_output_mode",
         ),
         CheckConstraint(
