@@ -280,7 +280,11 @@ def test_parentless_content_owner_requires_html_and_keeps_system_roots_readonly(
     for node in dom:
         if node.get("parentQid") == "slide":
             node.pop("parentQid")
-    html = '<html><body><section data-qid="cards"><article data-qid="card-a"><p data-qid="copy-a"></p></article><article data-qid="card-b"><p data-qid="copy-b"></p></article></section><footer data-qid="footer"></footer></body></html>'
+    html = (
+        '<html><body><section data-qid="cards"><article data-qid="card-a"><p data-qid="copy-a"></p>'
+        '</article><article data-qid="card-b"><p data-qid="copy-b"></p></article></section><footer '
+        'data-qid="footer"></footer></body></html>'
+           )
     assert patch_mod.build_structural_repair_scope(dom, issue_qids=("copy-a",)) is None
     scope = patch_mod.build_structural_repair_scope(dom, issue_qids=("copy-a",), html=html)
     assert scope is not None
@@ -331,7 +335,8 @@ def test_structural_prompt_compacts_values_without_losing_any_qid(monkeypatch):
         node["text"] = "long text " * 100
     scope = patch_mod.build_structural_repair_scope(dom, issue_qids=("copy-b",))
     monkeypatch.setattr(patch_mod, "_MAX_DOM_JSON_CHARS", 2300)
-    messages, qids = patch_mod.build_patch_messages(PNG, dom, "fix", allow_source_reflow_safe_styles=True, repair_scope=scope)
+    messages, qids = patch_mod.build_patch_messages(PNG, dom, "fix",
+        allow_source_reflow_safe_styles=True, repair_scope=scope)
     payload = json.loads(messages[1].content[0].text.split("Input data:\n", 1)[1])
     assert {node["qid"] for node in payload["compactDomMap"]} == qids == {node["qid"] for node in dom}
     assert len(json.dumps(payload["compactDomMap"], ensure_ascii=False, separators=(",", ":"))) <= 2300
@@ -395,7 +400,8 @@ def test_slide_protected_inventory_excludes_all_independent_repair_groups():
 def test_exact_header_overlap_repair_scopes_preserve_independent_groups(slide):
     from utils.llm_calls.author_vision_qa import _structural_compact_dom
 
-    artifact = Path(__file__).resolve().parents[4] / "artifacts/authored-full-product-validation-20260910/run-2-repair-six"
+    artifact = Path(__file__).resolve().parents[4] / \
+        "artifacts/authored-full-product-validation-20260910/run-2-repair-six"
     if not (artifact / f"slide-{slide}-baseline.html").is_file():
         pytest.skip("identical source regression capture is available only locally")
     html = (artifact / f"slide-{slide}-baseline.html").read_text(encoding="utf-8")
@@ -710,22 +716,16 @@ def test_model_failure_returns_observable_fallback(monkeypatch):
 
 def test_invalid_image_or_empty_dom_is_rejected_before_model_call(monkeypatch):
     calls = _install_fake_model(monkeypatch, response={})
-
     bad_image = _run(
         patch_mod.propose_authored_slide_patch(b"not-an-image", DOM, "fix")
     )
     bad_dom = _run(patch_mod.propose_authored_slide_patch(PNG, [], "fix"))
-
     assert bad_image.fallback_reason == "invalid_patch_input"
     assert bad_dom.fallback_reason == "invalid_patch_input"
     assert calls == []
-
-
 def test_duplicate_dom_ids_are_rejected_before_model_call(monkeypatch):
     calls = _install_fake_model(monkeypatch, response={})
     duplicate = [DOM[0], dict(DOM[0])]
-
     result = _run(patch_mod.propose_authored_slide_patch(PNG, duplicate, "fix"))
-
     assert result.fallback_reason == "invalid_patch_input"
     assert calls == []

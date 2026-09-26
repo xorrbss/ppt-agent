@@ -393,8 +393,8 @@ def test_transport_cancel_releases_staging_reservation_and_removes_attempt_tree(
 
         async def stage(self, *, reference: ArtifactRef, destination: Path) -> None:
             self.calls += 1
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_bytes(payload)
+            await asyncio.to_thread(destination.parent.mkdir, parents=True, exist_ok=True)
+            await asyncio.to_thread(destination.write_bytes, payload)
             raise asyncio.CancelledError
 
         async def publish(self, *, reference: ArtifactRef, source: Path) -> None:

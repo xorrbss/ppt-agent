@@ -12,20 +12,35 @@ from services.svg_contract import source_digest
 @pytest.mark.parametrize("mutation", [None, "reorder", "delete", "content", "marker", "receipt", "unverified"])
 def test_source_publication_preserves_verified_svg_and_rejects_mutations(monkeypatch, mutation):
     canvas = SimpleNamespace(width_px=1280, height_px=720)
-    marker = {"schemaVersion": "svg-source-preservation/v1", "manifestDigest": "sha256:" + "a" * 64,
-              "pageCount": 2}
-    presentation = SimpleNamespace(id="presentation", theme={"svg": {"sourcePreservation": marker}},
-                                   is_svg=lambda: True)
+    marker = {"schemaVersion": "svg-source-preservation/v1", "manifestDigest": "sha256:" + "a" * 64, "pageCount": 2}
+    presentation = SimpleNamespace(
+        id="presentation", theme={"svg": {"sourcePreservation": marker}}, is_svg=lambda: True
+    )
     slides = []
     for index in range(2):
         svg = f'<svg xmlns="http://www.w3.org/2000/svg"><text>Original {index}</text></svg>'
-        receipt = {"contract_version": "svg-source-preservation/v1", "manifest_digest": marker["manifestDigest"],
-                   "source_page_index": index, "source_page_id": f"page-{index}", "page_count": 2,
-                   "svg_digest": source_digest(svg), "canvas": {"width": 1280, "height": 720},
-                   "rendering_verified": True,
-                   "checks": {key: True for key in ("source_ids_exact", "text_exact", "table_structure_exact", "image_occurrences_exact")}}
-        slides.append(SimpleNamespace(index=index, svg_content=svg, is_svg=lambda: True,
-                                      content={"svgReceipt": {"source_preservation": receipt}}))
+        receipt = {
+            "contract_version": "svg-source-preservation/v1",
+            "manifest_digest": marker["manifestDigest"],
+            "source_page_index": index,
+            "source_page_id": f"page-{index}",
+            "page_count": 2,
+            "svg_digest": source_digest(svg),
+            "canvas": {"width": 1280, "height": 720},
+            "rendering_verified": True,
+            "checks": {
+                key: True
+                for key in ("source_ids_exact", "text_exact", "table_structure_exact", "image_occurrences_exact")
+            },
+        }
+        slides.append(
+            SimpleNamespace(
+                index=index,
+                svg_content=svg,
+                is_svg=lambda: True,
+                content={"svgReceipt": {"source_preservation": receipt}},
+            )
+        )
     originals = [(slide.svg_content, deepcopy(slide.content)) for slide in slides]
     if mutation == "reorder":
         slides.reverse()

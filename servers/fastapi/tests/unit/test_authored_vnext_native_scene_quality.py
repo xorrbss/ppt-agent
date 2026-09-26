@@ -57,16 +57,8 @@ def _capabilities() -> list[SceneCapability]:
                 if kind in {"connector", "table", "chart"}
                 else "readOnly"
             ),
-            native_pptx_export=(
-                "supported"
-                if kind in {"text", "image", "shape", "table", "chart"}
-                else "unsupported"
-            ),
-            reason=(
-                "native connector/group export is not implemented"
-                if kind in {"connector", "group"}
-                else None
-            ),
+            native_pptx_export=("supported" if kind in {"text", "image", "shape", "table", "chart"} else "unsupported"),
+            reason=("native connector/group export is not implemented" if kind in {"connector", "group"} else None),
         )
         for kind in ("text", "image", "shape", "connector", "table", "chart", "group")
     ]
@@ -76,21 +68,39 @@ def test_document_canvas_is_sealed_and_scene_output_uses_physical_units() -> Non
     from services.document_canvas import document_canvas_for_orientation
 
     slide = seal_slide_scene(
-        slide_id="slide:document-canvas", revision=1,
-        elements=[SceneShapeElement(
-            kind="shape", element_id="element:canvas-shape", z_order=1,
-            bounds=Rect(x=60, y=60, width=100, height=100), semantic_role="metricMarker",
-            editability=SceneEditability(geometry=True), shape="rect", fill="#1463FF",
-        ), SceneTextElement(
-            kind="text", element_id="element:canvas-text", z_order=2,
-            bounds=Rect(x=60, y=200, width=300, height=80), semantic_role="body",
-            editability=SceneEditability(text=True), text="A4 native text",
-            style=SceneTextStyle(font_family="Arial", font_size=10.054166666666667),
-        )],
+        slide_id="slide:document-canvas",
+        revision=1,
+        elements=[
+            SceneShapeElement(
+                kind="shape",
+                element_id="element:canvas-shape",
+                z_order=1,
+                bounds=Rect(x=60, y=60, width=100, height=100),
+                semantic_role="metricMarker",
+                editability=SceneEditability(geometry=True),
+                shape="rect",
+                fill="#1463FF",
+            ),
+            SceneTextElement(
+                kind="text",
+                element_id="element:canvas-text",
+                z_order=2,
+                bounds=Rect(x=60, y=200, width=300, height=80),
+                semantic_role="body",
+                editability=SceneEditability(text=True),
+                text="A4 native text",
+                style=SceneTextStyle(font_family="Arial", font_size=10.054166666666667),
+            ),
+        ],
     )
-    arguments = dict(deck_id="deck:document-canvas", revision=1,
-                     composition_digest=f"sha256:{'1' * 64}", source_digest=f"sha256:{'2' * 64}",
-                     slides=[slide], capabilities=_capabilities())
+    arguments = dict(
+        deck_id="deck:document-canvas",
+        revision=1,
+        composition_digest=f"sha256:{'1' * 64}",
+        source_digest=f"sha256:{'2' * 64}",
+        slides=[slide],
+        capabilities=_capabilities(),
+    )
     legacy = seal_deck_scene(**arguments)
     assert "documentCanvas" not in legacy.model_dump(mode="json", by_alias=True)
     for orientation in ("landscape", "portrait"):
@@ -99,25 +109,37 @@ def test_document_canvas_is_sealed_and_scene_output_uses_physical_units() -> Non
         wire = scene.model_dump(mode="json", by_alias=True)
         assert wire["documentCanvas"] == metadata
         assert scene.scene_digest != legacy.scene_digest
-        content, receipt = materialize_scene_pptx(wire, [], {
-            "slideSizePx": {"width": 1280, "height": 720},
-            "tokens": {"color.background": "#FFFFFF"}, "furniture": [],
-        })
+        content, receipt = materialize_scene_pptx(
+            wire,
+            [],
+            {
+                "slideSizePx": {"width": 1280, "height": 720},
+                "tokens": {"color.background": "#FFFFFF"},
+                "furniture": [],
+            },
+        )
         deck = Presentation(BytesIO(content))
         expected_size = (10692000, 7560000) if orientation == "landscape" else (7560000, 10692000)
         assert (deck.slide_width, deck.slide_height) == expected_size
-        marker = next(shape for shape in deck.slides[0].shapes if shape.name == "DevAX hybrid shape element:canvas-shape")
+        marker = next(
+            shape for shape in deck.slides[0].shapes if shape.name == "DevAX hybrid shape element:canvas-shape"
+        )
         assert (marker.left, marker.top, marker.width, marker.height) == (540000, 540000, 900000, 900000)
-        text_shape = next(shape for shape in deck.slides[0].shapes if shape.has_text_frame and shape.text == "A4 native text")
+        text_shape = next(
+            shape for shape in deck.slides[0].shapes if shape.has_text_frame and shape.text == "A4 native text"
+        )
         assert text_shape.text_frame.paragraphs[0].runs[0].font.size.pt == 9.5
         assert receipt["scene"]["documentCanvas"] == metadata
         assert readback_scene_pptx(content) == receipt  # independent call restores its context
         assert wire == scene.model_dump(mode="json", by_alias=True)
         conflicting = {**wire, "canvas": {"width": 1280, "height": 720}}
-        conflicting["sceneDigest"] = scene_digest({key: value for key, value in conflicting.items() if key != "sceneDigest"})
+        conflicting["sceneDigest"] = scene_digest(
+            {key: value for key, value in conflicting.items() if key != "sceneDigest"}
+        )
         with pytest.raises(NativeSceneError, match="document_canvas_geometry_mismatch"):
             materialize_scene_pptx(conflicting, [], {"slideSizePx": {"width": 1280, "height": 720}})
     from services.authored_vnext.ooxml.scene_canvas import scene_px
+
     assert scene_px(100) == 952500  # no A4 conversion leaks to later legacy exports
 
 
@@ -300,9 +322,7 @@ def test_scene_materializes_digest_verified_image_table_and_chart_as_native_obje
                 asset_id=asset_id,
                 asset_digest=image_digest,
                 media_type="image/png",
-                storage_reference=(
-                    "data:image/png;base64," + base64.b64encode(_PNG_BYTES).decode("ascii")
-                ),
+                storage_reference=("data:image/png;base64," + base64.b64encode(_PNG_BYTES).decode("ascii")),
                 size_bytes=len(_PNG_BYTES),
             )
         ],
@@ -421,9 +441,7 @@ def test_editable_hybrid_scene_emits_native_subset_raster_island_and_qid_tags() 
             [
                 {
                     "fill": "#1463FF",
-                    "borders": {
-                        "bottom": {"color": "#0B1830", "widthPt": 1}
-                    },
+                    "borders": {"bottom": {"color": "#0B1830", "widthPt": 1}},
                     "horizontalAlign": "center",
                     "verticalAlign": "middle",
                 },
@@ -491,9 +509,7 @@ def test_editable_hybrid_scene_emits_native_subset_raster_island_and_qid_tags() 
             asset_digest=asset_digest,
             alt_text="교체 이미지",
             crop="cover",
-            crop_geometry=SceneImageCropGeometry(
-                left=0.1, top=0.05, right=0.1, bottom=0.05
-            ),
+            crop_geometry=SceneImageCropGeometry(left=0.1, top=0.05, right=0.1, bottom=0.05),
         ),
         SceneTableElement(
             kind="table",
@@ -613,10 +629,7 @@ def test_editable_hybrid_scene_emits_native_subset_raster_island_and_qid_tags() 
                 asset_id=asset_id,
                 asset_digest=asset_digest,
                 media_type="image/png",
-                storage_reference=(
-                    "data:image/png;base64,"
-                    + base64.b64encode(_PNG_BYTES).decode("ascii")
-                ),
+                storage_reference=("data:image/png;base64," + base64.b64encode(_PNG_BYTES).decode("ascii")),
                 size_bytes=len(_PNG_BYTES),
             )
         ],
@@ -652,9 +665,7 @@ def test_editable_hybrid_scene_emits_native_subset_raster_island_and_qid_tags() 
     advanced_table_payload = copy.deepcopy(table_payload)
     advanced_table_payload["cells"][0][1] = ""
     advanced_table_payload["rowHeightsPt"] = [45, 105]
-    advanced_table_payload["mergedCells"] = [
-        {"row": 0, "column": 0, "rowSpan": 1, "columnSpan": 2}
-    ]
+    advanced_table_payload["mergedCells"] = [{"row": 0, "column": 0, "rowSpan": 1, "columnSpan": 2}]
     advanced_table_digest = scene_digest(advanced_table_payload)
     advanced_line_payload = copy.deepcopy(line_chart_payload)
     advanced_line_payload["style"] = {
@@ -670,9 +681,7 @@ def test_editable_hybrid_scene_emits_native_subset_raster_island_and_qid_tags() 
         "legend": True,
     }
     advanced_pie_digest = scene_digest(advanced_pie_payload)
-    table_manifest = next(
-        item for item in scene_payload["dataManifest"] if item["kind"] == "table"
-    )
+    table_manifest = next(item for item in scene_payload["dataManifest"] if item["kind"] == "table")
     table_manifest["payload"] = advanced_table_payload
     table_manifest["dataDigest"] = advanced_table_digest
     line_manifest = next(
@@ -690,28 +699,18 @@ def test_editable_hybrid_scene_emits_native_subset_raster_island_and_qid_tags() 
     pie_manifest["payload"] = advanced_pie_payload
     pie_manifest["dataDigest"] = advanced_pie_digest
     table_element = next(
-        item
-        for item in scene_payload["slides"][0]["elements"]
-        if item["elementId"] == "table.metrics"
+        item for item in scene_payload["slides"][0]["elements"] if item["elementId"] == "table.metrics"
     )
     table_element["dataDigest"] = advanced_table_digest
     line_element = next(
-        item
-        for item in scene_payload["slides"][0]["elements"]
-        if item["elementId"] == "chart.native-line"
+        item for item in scene_payload["slides"][0]["elements"] if item["elementId"] == "chart.native-line"
     )
     line_element["dataDigest"] = advanced_line_digest
     pie_element = next(
-        item
-        for item in scene_payload["slides"][0]["elements"]
-        if item["elementId"] == "chart.native-pie"
+        item for item in scene_payload["slides"][0]["elements"] if item["elementId"] == "chart.native-pie"
     )
     pie_element["dataDigest"] = advanced_pie_digest
-    title_payload = next(
-        item
-        for item in scene_payload["slides"][0]["elements"]
-        if item["elementId"] == "title.main"
-    )
+    title_payload = next(item for item in scene_payload["slides"][0]["elements"] if item["elementId"] == "title.main")
     title_payload["content"] = {
         "runs": [
             {"text": "긴 한글 English ", "fontFamily": "Malgun Gothic", "bold": True},
@@ -762,13 +761,9 @@ def test_editable_hybrid_scene_emits_native_subset_raster_island_and_qid_tags() 
         "nativeRasterDuplicateOwners": 0,
         "missingOrGhostQids": 0,
     }
-    assert receipt["scene"]["slides"][0]["rasterIslands"][0][
-        "sourceOwnerIds"
-    ] == ["chart.unsupported"]
+    assert receipt["scene"]["slides"][0]["rasterIslands"][0]["sourceOwnerIds"] == ["chart.unsupported"]
     title_receipt = next(
-        item
-        for item in receipt["scene"]["slides"][0]["elements"]
-        if item["elementId"] == "title.main"
+        item for item in receipt["scene"]["slides"][0]["elements"] if item["elementId"] == "title.main"
     )
     assert title_receipt["autoFit"] == "shrink"
     assert title_receipt["textRunMap"][1]["utf16Length"] == 0
@@ -778,23 +773,17 @@ def test_editable_hybrid_scene_emits_native_subset_raster_island_and_qid_tags() 
     )
     with ZipFile(BytesIO(content)) as package:
         chart_parts = [
-            name
-            for name in package.namelist()
-            if name.startswith("ppt/charts/chart") and name.endswith(".xml")
+            name for name in package.namelist() if name.startswith("ppt/charts/chart") and name.endswith(".xml")
         ]
         assert len(chart_parts) == 2
-        chart_xml = "\n".join(
-            package.read(name).decode("utf-8") for name in chart_parts
-        )
+        chart_xml = "\n".join(package.read(name).decode("utf-8") for name in chart_parts)
         assert "<c:lineChart>" in chart_xml
         assert "<c:pieChart>" in chart_xml
         assert chart_xml.count("<c:strCache>") >= 2
         assert chart_xml.count("<c:numCache>") >= 2
         assert "Revenue" in chart_xml
         assert "Share" in chart_xml
-        tag_parts = sorted(
-            name for name in package.namelist() if name.startswith("ppt/tags/tag")
-        )
+        tag_parts = sorted(name for name in package.namelist() if name.startswith("ppt/tags/tag"))
         assert len(tag_parts) == 6
         tag_xml = package.read(tag_parts[0]).decode("utf-8")
         assert "PRESENTON_QID_V2" in tag_xml
@@ -816,19 +805,13 @@ def test_editable_hybrid_scene_emits_native_subset_raster_island_and_qid_tags() 
     assert [round(row.height / 12700) for row in native_table.rows] == [45, 105]
 
     invalid = copy.deepcopy(scene_payload)
-    invalid["slides"][0]["hybridExport"]["rasterIslands"][0][
-        "sourceOwnerIds"
-    ].append("title.main")
+    invalid["slides"][0]["hybridExport"]["rasterIslands"][0]["sourceOwnerIds"].append("title.main")
     invalid_slide = invalid["slides"][0]
     invalid_slide["slideDigest"] = scene_digest(
         {key: value for key, value in invalid_slide.items() if key != "slideDigest"}
     )
-    invalid["sceneDigest"] = scene_digest(
-        {key: value for key, value in invalid.items() if key != "sceneDigest"}
-    )
-    with pytest.raises(
-        NativeSceneError, match="authored_vnext_hybrid_raster_island_invalid"
-    ):
+    invalid["sceneDigest"] = scene_digest({key: value for key, value in invalid.items() if key != "sceneDigest"})
+    with pytest.raises(NativeSceneError, match="authored_vnext_hybrid_raster_island_invalid"):
         materialize_scene_pptx(
             invalid,
             assets,

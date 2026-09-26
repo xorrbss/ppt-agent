@@ -15,35 +15,87 @@ from services.svg_export_quality import SOURCE_CHECKS, TEMPLATE_CHECKS, source_s
 def evidence_fixture():
     canvas = canvas_metadata_for_aspect_ratio("16:9")
     svg = '<svg xmlns="http://www.w3.org/2000/svg"/>'
-    receipt = dict(contract_version="svg-source-preservation/v1", manifest_digest="sha256:" + "1" * 64,
-        source_digest="sha256:" + "2" * 64, source_page_id="page-1", source_page_index=0, page_count=1,
-        page_digest="sha256:" + "3" * 64, plan_digest="sha256:" + "4" * 64,
-        svg_digest=source_digest(svg), style_digest="sha256:" + "5" * 64,
-        template_digest="sha256:" + "6" * 64, layout_id="content-stack", layout_schema_version="svg-source-layout/v2",
-        canvas=dict(width=canvas.width_px, height=canvas.height_px), rendering_verified=True,
+    receipt = dict(
+        contract_version="svg-source-preservation/v1",
+        manifest_digest="sha256:" + "1" * 64,
+        source_digest="sha256:" + "2" * 64,
+        source_page_id="page-1",
+        source_page_index=0,
+        page_count=1,
+        page_digest="sha256:" + "3" * 64,
+        plan_digest="sha256:" + "4" * 64,
+        svg_digest=source_digest(svg),
+        style_digest="sha256:" + "5" * 64,
+        template_digest="sha256:" + "6" * 64,
+        layout_id="content-stack",
+        layout_schema_version="svg-source-layout/v2",
+        canvas=dict(width=canvas.width_px, height=canvas.height_px),
+        rendering_verified=True,
         bindings=[dict(source_id="block-1", kind="text", element_id="text-1", text="원문")],
-        checks={c: True for c in SOURCE_CHECKS})
-    receipt["template_application"] = dict(template_digest=receipt["template_digest"], layout_id=receipt["layout_id"],
-        constraints_verified=True, passed=True, checks={c: True for c in TEMPLATE_CHECKS}, visual_review_verified=False)
-    quality = dict(passed=True, geometry_passed=True, measurement_complete=True, source_digest=receipt["svg_digest"],
-        trusted_font_materialization=dict(worker_materialized=True))
+        checks={c: True for c in SOURCE_CHECKS},
+    )
+    receipt["template_application"] = dict(
+        template_digest=receipt["template_digest"],
+        layout_id=receipt["layout_id"],
+        constraints_verified=True,
+        passed=True,
+        checks={c: True for c in TEMPLATE_CHECKS},
+        visual_review_verified=False,
+    )
+    quality = dict(
+        passed=True,
+        geometry_passed=True,
+        measurement_complete=True,
+        source_digest=receipt["svg_digest"],
+        trusted_font_materialization=dict(worker_materialized=True),
+    )
     slide = SimpleNamespace(svg_content=svg, content={"svgReceipt": dict(source_preservation=receipt, quality=quality)})
-    presentation = SimpleNamespace(theme={"svg": dict(sourcePreservation=dict(schemaVersion=receipt["contract_version"],
-        manifestDigest=receipt["manifest_digest"], pageCount=1), styleSnapshot=dict(digest=receipt["style_digest"],
-        source_template=dict(digest=receipt["template_digest"], layouts=[dict(id="content-stack")])) )})
-    readback = dict(schemaVersion="svg-source-preservation-export-readback/v1", passed=True,
-        manifestDigest=receipt["manifest_digest"], sourceDigest=receipt["source_digest"],
-        pages=[dict(sourcePageIndex=0, sourcePageId=receipt["source_page_id"], svgDigest=receipt["svg_digest"],
-            text=dict(matchedBindingCount=1), tables=dict(matchedCellValueCount=0), images=dict(matchedOccurrenceCount=0))])
+    presentation = SimpleNamespace(
+        theme={
+            "svg": dict(
+                sourcePreservation=dict(
+                    schemaVersion=receipt["contract_version"], manifestDigest=receipt["manifest_digest"], pageCount=1
+                ),
+                styleSnapshot=dict(
+                    digest=receipt["style_digest"],
+                    source_template=dict(digest=receipt["template_digest"], layouts=[dict(id="content-stack")]),
+                ),
+            )
+        }
+    )
+    readback = dict(
+        schemaVersion="svg-source-preservation-export-readback/v1",
+        passed=True,
+        manifestDigest=receipt["manifest_digest"],
+        sourceDigest=receipt["source_digest"],
+        pages=[
+            dict(
+                sourcePageIndex=0,
+                sourcePageId=receipt["source_page_id"],
+                svgDigest=receipt["svg_digest"],
+                text=dict(matchedBindingCount=1),
+                tables=dict(matchedCellValueCount=0),
+                images=dict(matchedOccurrenceCount=0),
+            )
+        ],
+    )
     return canvas, presentation, slide, receipt, readback
 
 
 def public_receipt(slide, receipt, readback):
-    return source_svg_public_quality_receipt(slides=[slide], source_preservation=[receipt],
+    return source_svg_public_quality_receipt(
+        slides=[slide],
+        source_preservation=[receipt],
         worker_metrics=dict(public_export_worker_evidence=dict(structuralReadback=dict(sourcePreservation=readback))),
-        quality_receipt_id="quality-test", operation_id="operation-test", presentation_id="presentation-test",
-        artifact_digest="sha256:" + "a" * 64, source_revision=1, scene_digest="sha256:" + "b" * 64,
-        evaluated_at=datetime.now(timezone.utc), exporter_version="test-converter/v1")
+        quality_receipt_id="quality-test",
+        operation_id="operation-test",
+        presentation_id="presentation-test",
+        artifact_digest="sha256:" + "a" * 64,
+        source_revision=1,
+        scene_digest="sha256:" + "b" * 64,
+        evaluated_at=datetime.now(timezone.utc),
+        exporter_version="test-converter/v1",
+    )
 
 
 def test_persisted_domains_are_connected_without_claiming_visual_or_native_acceptance():

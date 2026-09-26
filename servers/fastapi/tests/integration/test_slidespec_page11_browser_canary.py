@@ -99,11 +99,7 @@ def _report(*issues: DomQualityIssue) -> DomQualityReport:
 
 
 def test_authored_overlap_is_canonical_geometry_evidence_with_its_peer() -> None:
-    report = _report(
-        DomQualityIssue(
-            "overlap", "medium", "intent is visually ambiguous", ("q-a", "q-b")
-        )
-    )
+    report = _report(DomQualityIssue("overlap", "medium", "intent is visually ambiguous", ("q-a", "q-b")))
 
     evidence = _dom_evidence(report, {"q-a": "sem:a", "q-b": "sem:b"})
 
@@ -145,9 +141,7 @@ def test_imported_overflow_expands_by_measured_pixels_not_fifty_percent() -> Non
                         qid="title",
                         tag="h1",
                         bounds=title.bounds,
-                        sourceBoundsPx=ImportedPixelBounds(
-                            x=100, y=10, width=800, height=15
-                        ),
+                        sourceBoundsPx=ImportedPixelBounds(x=100, y=10, width=800, height=15),
                         position="absolute",
                     ),
                 ),
@@ -184,11 +178,7 @@ def test_overlap_has_no_unsafe_common_ancestor_resize_candidate() -> None:
     context = _repair_context(
         _page_11_spec(),
         _dom_evidence(
-            _report(
-                DomQualityIssue(
-                    "overlap", "medium", "unsafe", ("title", "peer")
-                )
-            ),
+            _report(DomQualityIssue("overlap", "medium", "unsafe", ("title", "peer"))),
             {
                 "title": "sem:synthetic-page-11/title",
                 "peer": "sem:peer",
@@ -223,7 +213,9 @@ async def _inspect(request: RenderRequest):
 
 
 @pytest.mark.skipif(find_chrome() is None, reason="headless Chrome is required")
-@pytest.mark.xfail(strict=True, reason="authored frozen: page-11 browser clipping repair remains unresolved; see handoff x2-tests")
+@pytest.mark.xfail(
+    strict=True, reason="authored frozen: page-11 browser clipping repair remains unresolved; see handoff x2-tests"
+)
 def test_real_browser_page_11_clipping_is_repaired_without_regression() -> None:
     assert PAGE_11_SLIDE_INDEX == 10
     base = _page_11_spec()
@@ -240,9 +232,7 @@ def test_real_browser_page_11_clipping_is_repaired_without_regression() -> None:
         applied = apply_repair_plan(base, plan)
         candidate_request = request.model_copy(update={"spec": applied.spec})
         candidate_png, candidate = asyncio.run(_inspect(candidate_request))
-        candidate_evidence = _dom_evidence(
-            candidate, _qid_to_semantic(candidate_request)
-        )
+        candidate_evidence = _dom_evidence(candidate, _qid_to_semantic(candidate_request))
         if not candidate_evidence.hard_failure:
             accepted = (applied, candidate_png, candidate)
             break
@@ -292,9 +282,7 @@ def test_native_connector_reroute_uses_chrome_endpoints_and_avoids_obstacle() ->
                                     FocalPoint(x=1, y=0.5),
                                 )
                             ),
-                            constraints=LayoutConstraints(
-                                allowedOperations=("rerouteConnector",)
-                            ),
+                            constraints=LayoutConstraints(allowedOperations=("rerouteConnector",)),
                         ),
                         LayoutNode(
                             layoutId="lay:synthetic-page-11/obstacle",
@@ -332,25 +320,15 @@ def test_native_connector_reroute_uses_chrome_endpoints_and_avoids_obstacle() ->
     assert connector_context["measurement"]["minimumClearancePx"] >= 1
     assert connector_context["measurement"]["endpointAnchors"]["maxErrorPx"] <= 0.5
     plans = build_deterministic_cascade(context)
-    reroute = next(
-        plan for plan in plans if plan.operations[0].op == "rerouteConnector"
-    )
+    reroute = next(plan for plan in plans if plan.operations[0].op == "rerouteConnector")
     assert reroute.operations[0].value.points[0] == FocalPoint(x=0, y=0.5)
     assert reroute.operations[0].value.points[-1] == FocalPoint(x=1, y=0.5)
     assert len(reroute.operations[0].value.points) == 4
 
     repaired = apply_repair_plan(spec, reroute).spec
     rerendered = render_slidespec(request.model_copy(update={"spec": repaired}))
-    _, repaired_metrics = asyncio.run(
-        render_html_to_png_with_metrics(rerendered.html)
-    )
-    connector_qid = next(
-        entry.qid
-        for entry in rerendered.semanticDom
-        if entry.semanticId == connector_semantic
-    )
-    repaired_metric = next(
-        item for item in repaired_metrics["elements"] if item["qid"] == connector_qid
-    )
+    _, repaired_metrics = asyncio.run(render_html_to_png_with_metrics(rerendered.html))
+    connector_qid = next(entry.qid for entry in rerendered.semanticDom if entry.semanticId == connector_semantic)
+    repaired_metric = next(item for item in repaired_metrics["elements"] if item["qid"] == connector_qid)
     assert repaired_metric["connector_geometry"]["measured"] is True
     assert len(repaired_metric["connector_geometry"]["pointsPx"]) == 4

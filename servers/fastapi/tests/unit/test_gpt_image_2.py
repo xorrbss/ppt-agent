@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import json
 from pathlib import Path
@@ -52,7 +53,7 @@ async def test_generate_gpt_image_2_uses_configured_quality(tmp_path, model, qua
             with patch("services.image_generation_service.AsyncOpenAI", return_value=client):
                 result = await service.image_gen_func("prompt", str(tmp_path))
 
-    assert Path(result).read_bytes() == image_bytes
+    assert await asyncio.to_thread(Path(result).read_bytes) == image_bytes
     assert len(requests) == 1
     assert requests[0].url.path == "/v1/images/generations"
     payload = json.loads(requests[0].content)

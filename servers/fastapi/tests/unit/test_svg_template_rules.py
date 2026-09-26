@@ -3,8 +3,14 @@ from dataclasses import dataclass
 import pytest
 
 from utils.svg_style_adapter import adapt_svg_style
-from utils.svg_template_fonts import (FONT_DIGEST, FONT_FAMILY, font_material,
-    measure_font, require_font_coverage, source_font_profile)
+from utils.svg_template_fonts import (
+    FONT_DIGEST,
+    FONT_FAMILY,
+    font_material,
+    measure_font,
+    require_font_coverage,
+    source_font_profile,
+)
 from utils.svg_template_rules import resolve_source_template_style, template_snapshot
 from services.svg_renderer import materialize_trusted_svg_fonts, svg_preview_html
 
@@ -90,7 +96,11 @@ class Admitted:
 
 def test_only_pinned_template_wrapper_materializes_one_fixed_variable_face():
     spec = adapt_svg_style(resolve_source_template_style("default"), source_template=True)
-    svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"><rect width="1280" height="720" fill="#FFFFFF"/><text x="40" y="60" font-family="Noto Sans KR" font-size="24" font-weight="800" fill="#0F172A">한글</text></svg>'
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"><'
+        'rect width="1280" height="720" fill="#FFFFFF"/><text x="40" y="60" font-family="Noto Sans '
+        'KR" font-size="24" font-weight="800" fill="#0F172A">한글</text></svg>'
+          )
     profile = source_font_profile(spec)
     wrapper = svg_preview_html(svg, source_font_profile=profile)
     admitted = Admitted('<html><head><meta content="font-src &#x27;none&#x27;"></head><body></body></html>')

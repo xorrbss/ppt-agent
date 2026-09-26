@@ -67,10 +67,7 @@ def _picture(relationship_id: str, extent: tuple[int, int] | None = None) -> str
     properties = (
         "<p:spPr/>"
         if extent is None
-        else (
-            f'<p:spPr><a:xfrm><a:off x="0" y="0"/>'
-            f'<a:ext cx="{extent[0]}" cy="{extent[1]}"/></a:xfrm></p:spPr>'
-        )
+        else (f'<p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="{extent[0]}" cy="{extent[1]}"/></a:xfrm></p:spPr>')
     )
     return (
         "<p:pic>"
@@ -98,15 +95,13 @@ def _rels_xml(relations: dict[str, tuple[str, str]]) -> bytes:
         for identifier, (kind, target) in relations.items()
     )
     return (
-        '<?xml version="1.0" encoding="UTF-8"?>'
-        f'<Relationships xmlns="{RELATIONSHIP_NS}">{entries}</Relationships>'
+        f'<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="{RELATIONSHIP_NS}">{entries}</Relationships>'
     ).encode("utf-8")
 
 
 def _presentation_xml(slide_relationship_ids: list[str]) -> bytes:
     slides = "".join(
-        f'<p:sldId id="{256 + index}" r:id="{identifier}"/>'
-        for index, identifier in enumerate(slide_relationship_ids)
+        f'<p:sldId id="{256 + index}" r:id="{identifier}"/>' for index, identifier in enumerate(slide_relationship_ids)
     )
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'
@@ -134,10 +129,7 @@ def _deck(
     parts: dict[str, bytes] = {
         "ppt/presentation.xml": _presentation_xml([f"rIdSlide{index}" for index in range(1, len(slides) + 1)]),
         "ppt/_rels/presentation.xml.rels": _rels_xml(
-            {
-                f"rIdSlide{index}": ("slide", f"slides/slide{index}.xml")
-                for index in range(1, len(slides) + 1)
-            }
+            {f"rIdSlide{index}": ("slide", f"slides/slide{index}.xml") for index in range(1, len(slides) + 1)}
         ),
     }
     for index, (slide_xml, relations) in enumerate(slides, start=1):
@@ -545,10 +537,19 @@ def test_a_picture_without_a_stated_extent_reports_no_coverage(tmp_path: Path) -
 
 def test_docx_collection_preserves_repeated_media_occurrences(tmp_path):
     from services.source_images.extract_documents import extract_document_images
+
     path = tmp_path / "pictures.docx"
     paragraph = '<w:p><w:r><w:drawing><a:blip r:embed="rId1"/></w:drawing></w:r></w:p>'
-    main = f'<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:a="{DRAWING_NS}" xmlns:r="{OFFICE_RELATIONSHIP_NS}"><w:body>{paragraph}{paragraph}</w:body></w:document>'
-    rels = f'<Relationships xmlns="{RELATIONSHIP_NS}"><Relationship Id="rId1" Type="{OFFICE_RELATIONSHIP_NS}/image" Target="media/picture.png"/></Relationships>'
+    main = (
+        f'<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+        f'xmlns:a="{DRAWING_NS}" xmlns:r="{OFFICE_RELATIONSHIP_NS}">'
+        f'<w:body>{paragraph}{paragraph}</w:body></w:document>'
+    )
+    rels = (
+        f'<Relationships xmlns="{RELATIONSHIP_NS}">'
+        f'<Relationship Id="rId1" Type="{OFFICE_RELATIONSHIP_NS}/image" '
+        f'Target="media/picture.png"/></Relationships>'
+    )
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr("word/document.xml", main)
         archive.writestr("word/_rels/document.xml.rels", rels)
@@ -563,14 +564,13 @@ def test_docx_collection_preserves_repeated_media_occurrences(tmp_path):
 
 def test_document_collection_reports_corrupt_input(tmp_path):
     from services.source_images.extract_documents import extract_document_images
+
     path = tmp_path / "broken.docx"
     path.write_bytes(b"not a document")
     result = extract_document_images(path)
     assert result.status == "failed"
     assert result.coverage == "partial"
     assert result.diagnostics
-
-
 def test_pdf_scan_collection_preserves_page(tmp_path):
     from services.source_images.extract_documents import extract_document_images
     path = tmp_path / "scan.pdf"

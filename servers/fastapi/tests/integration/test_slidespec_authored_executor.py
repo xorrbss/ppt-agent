@@ -91,17 +91,13 @@ def _request(slide_id: uuid.UUID) -> RenderRequest:
     empty = "sha256:" + "0" * 64
     return RenderRequest(
         spec=spec,
-        renderer=RendererManifest(
-            name="slidespec-html", version="1", runtime="browser"
-        ),
+        renderer=RendererManifest(name="slidespec-html", version="1", runtime="browser"),
         fonts=FontManifest(digest=empty),
         assets=AssetManifest(digest=empty),
     )
 
 
-async def _run_executor_canary(
-    tmp_path, monkeypatch, *, fail_postcommit_verification: bool = False
-) -> None:
+async def _run_executor_canary(tmp_path, monkeypatch, *, fail_postcommit_verification: bool = False) -> None:
     database = tmp_path / "executor.db"
     engine = create_async_engine(f"sqlite+aiosqlite:///{database}")
     async with engine.begin() as connection:
@@ -159,9 +155,7 @@ async def _run_executor_canary(
                 "source": "tracked-integration-test",
             },
         )
-        await publish_slidespec_bundle_cas(
-            session, slide=slides[10], bundle=imported
-        )
+        await publish_slidespec_bundle_cas(session, slide=slides[10], bundle=imported)
         await session.commit()
 
     ocr_calls = 0
@@ -235,22 +229,16 @@ async def _run_executor_canary(
             nonlocal load_calls
             load_calls += 1
             if load_calls == 2:
-                raise executor.SlideSpecArtifactError(
-                    "artifact.publish.readback_mismatch"
-                )
+                raise executor.SlideSpecArtifactError("artifact.publish.readback_mismatch")
             return await real_load_active(session, slide)
 
-        monkeypatch.setattr(
-            executor, "load_active_slidespec_bundle", fail_new_session_readback
-        )
+        monkeypatch.setattr(executor, "load_active_slidespec_bundle", fail_new_session_readback)
 
     async with sessions() as session:
         slides = list(
             (
                 await session.execute(
-                    select(SlideModel)
-                    .where(SlideModel.presentation == presentation_id)
-                    .order_by(SlideModel.index)
+                    select(SlideModel).where(SlideModel.presentation == presentation_id).order_by(SlideModel.index)
                 )
             ).scalars()
         )
@@ -266,21 +254,11 @@ async def _run_executor_canary(
     assert result.claimed_positions == (10,)
     expected_fixed = 0 if fail_postcommit_verification else 1
     assert result.data["fixed_count"] == expected_fixed
-    assert result.data["fixed_slide_indices"] == (
-        [] if fail_postcommit_verification else [10]
-    )
-    assert result.data["metrics"]["publish_active"] == (
-        0 if fail_postcommit_verification else 1
-    )
-    assert result.data["metrics"]["postverify_passed"] == (
-        0 if fail_postcommit_verification else 1
-    )
-    assert result.data["metrics"]["rolled_back"] == (
-        1 if fail_postcommit_verification else 0
-    )
-    assert result.data["metrics"]["deterministic_resolved"] == (
-        0 if fail_postcommit_verification else 1
-    )
+    assert result.data["fixed_slide_indices"] == ([] if fail_postcommit_verification else [10])
+    assert result.data["metrics"]["publish_active"] == (0 if fail_postcommit_verification else 1)
+    assert result.data["metrics"]["postverify_passed"] == (0 if fail_postcommit_verification else 1)
+    assert result.data["metrics"]["rolled_back"] == (1 if fail_postcommit_verification else 0)
+    assert result.data["metrics"]["deterministic_resolved"] == (0 if fail_postcommit_verification else 1)
     assert result.data["metrics"]["llm_calls"] == 0
     assert result.data["metrics"]["render_calls"] >= 1
     assert result.data["metrics"]["dom_calls"] >= 1
@@ -295,9 +273,7 @@ async def _run_executor_canary(
     assert result.data["resolved_issue_count"] == (
         0 if fail_postcommit_verification else result.data["detailed_issue_count"]
     )
-    assert result.data["remaining_slide_count"] == int(
-        fail_postcommit_verification
-    )
+    assert result.data["remaining_slide_count"] == int(fail_postcommit_verification)
     assert pass_controls
     assert len({id(lock) for lock, _guard in pass_controls}) == 1
     assert len({id(guard) for _lock, guard in pass_controls}) == 1
@@ -307,9 +283,7 @@ async def _run_executor_canary(
     )
     assert result.data["slide_results"][0]["route"] == "slidespec_active"
     assert result.data["slide_results"][0]["path"] == "deterministic"
-    assert result.data["slide_results"][0]["applied"] is (
-        not fail_postcommit_verification
-    )
+    assert result.data["slide_results"][0]["applied"] is (not fail_postcommit_verification)
     if fail_postcommit_verification:
         assert result.data["slide_results"][0]["publish_status"] == "active"
         assert result.data["slide_results"][0]["post_verify_status"] == "failed"
@@ -320,15 +294,9 @@ async def _run_executor_canary(
         assert slide_result["publish_status"] == "active"
         assert slide_result["post_verify_status"] == "passed"
         assert slide_result["target_evidence"]
-        assert all(
-            item["qid"] and item["constraint_id"]
-            for item in slide_result["target_evidence"]
-        )
+        assert all(item["qid"] and item["constraint_id"] for item in slide_result["target_evidence"])
         assert slide_result["element_changes"]
-        assert all(
-            item["target"] and item["operation"]
-            for item in slide_result["element_changes"]
-        )
+        assert all(item["target"] and item["operation"] for item in slide_result["element_changes"])
     assert result.data["slide_results"][0]["telemetry"]["llm_calls"] == 0
     assert result.data["slide_results"][0]["telemetry"]["repair_costs"]
     assert ocr_calls >= 2
@@ -366,9 +334,7 @@ async def _run_executor_canary(
         versions = list(
             (
                 await session.execute(
-                    select(PresentationVersionModel).where(
-                        PresentationVersionModel.presentation_id == presentation_id
-                    )
+                    select(PresentationVersionModel).where(PresentationVersionModel.presentation_id == presentation_id)
                 )
             ).scalars()
         )
@@ -379,18 +345,20 @@ async def _run_executor_canary(
 
 
 @pytest.mark.skipif(find_chrome() is None, reason="headless Chrome is required")
-@pytest.mark.xfail(strict=True, reason="authored frozen: page-11 executor yields zero deterministic fixes for publication; see handoff x2-tests")
-def test_page_11_executor_publishes_with_cas_snapshot_and_readback(
-    tmp_path, monkeypatch
-) -> None:
+@pytest.mark.xfail(
+    strict=True,
+    reason="authored frozen: page-11 executor yields zero deterministic fixes for publication; see handoff x2-tests",
+)
+def test_page_11_executor_publishes_with_cas_snapshot_and_readback(tmp_path, monkeypatch) -> None:
     asyncio.run(_run_executor_canary(tmp_path, monkeypatch))
 
 
 @pytest.mark.skipif(find_chrome() is None, reason="headless Chrome is required")
-@pytest.mark.xfail(strict=True, reason="authored frozen: page-11 executor yields no candidate for rollback verification; see handoff x2-tests")
-def test_page_11_executor_rolls_back_postcommit_verification_failure(
-    tmp_path, monkeypatch
-) -> None:
+@pytest.mark.xfail(
+    strict=True,
+    reason="authored frozen: page-11 executor yields no candidate for rollback verification; see handoff x2-tests",
+)
+def test_page_11_executor_rolls_back_postcommit_verification_failure(tmp_path, monkeypatch) -> None:
     asyncio.run(
         _run_executor_canary(
             tmp_path,
@@ -403,12 +371,8 @@ def test_page_11_executor_rolls_back_postcommit_verification_failure(
 def test_plan_qualified_candidate_state_keys_do_not_alias_identical_renders() -> None:
     render_hash = "sha256:" + "a" * 64
     states = {}
-    first = SimpleNamespace(
-        plan=SimpleNamespace(plan_id="rp_rule_one"), decision="accepted"
-    )
-    second = SimpleNamespace(
-        plan=SimpleNamespace(plan_id="rp_rule_two"), decision="rejected"
-    )
+    first = SimpleNamespace(plan=SimpleNamespace(plan_id="rp_rule_one"), decision="accepted")
+    second = SimpleNamespace(plan=SimpleNamespace(plan_id="rp_rule_two"), decision="rejected")
 
     first_key = executor._store_candidate_state(states, render_hash, first)
     second_key = executor._store_candidate_state(states, render_hash, second)
@@ -420,9 +384,7 @@ def test_plan_qualified_candidate_state_keys_do_not_alias_identical_renders() ->
 
 
 def test_slide_execution_controls_are_isolated_per_slide_and_reused_by_pass() -> None:
-    locks, guards = executor._slide_execution_controls(
-        (3, 7), max_incremental_repairs=12
-    )
+    locks, guards = executor._slide_execution_controls((3, 7), max_incremental_repairs=12)
 
     assert locks[3] is locks[3]
     assert guards[3] is guards[3]
@@ -490,9 +452,7 @@ def test_canonical_terminal_prefers_selected_outcome() -> None:
         "publish_status": "active",
         "post_verify_status": "passed",
         "diagnostics": {
-            "target_evidence": [
-                {"qid": "q-target", "constraint_id": "con:target"}
-            ],
+            "target_evidence": [{"qid": "q-target", "constraint_id": "con:target"}],
             "repair_operations": [
                 {
                     "operation": "translateWithinParent",
@@ -516,12 +476,8 @@ def test_canonical_terminal_prefers_selected_outcome() -> None:
     assert projection["apply_status"] == "committed"
     assert projection["publish_status"] == "active"
     assert projection["post_verify_status"] == "passed"
-    assert projection["target_evidence"] == selected["diagnostics"][
-        "target_evidence"
-    ]
-    assert projection["element_changes"] == selected["diagnostics"][
-        "repair_operations"
-    ]
+    assert projection["target_evidence"] == selected["diagnostics"]["target_evidence"]
+    assert projection["element_changes"] == selected["diagnostics"]["repair_operations"]
 
 
 def test_canonical_projection_unions_incremental_selected_evidence() -> None:
@@ -624,6 +580,4 @@ def test_executor_conflict_footprint_resolves_layout_ancestry_and_space_pool() -
 
     assert footprint.nodes == frozenset({target.layoutId})
     assert request.spec.layout.layoutId in footprint.ancestor_cones
-    assert footprint.parent_space_pools == frozenset(
-        {request.spec.layout.layoutId}
-    )
+    assert footprint.parent_space_pools == frozenset({request.spec.layout.layoutId})
