@@ -1,3 +1,4 @@
+import { attributes, digest, requirePart, stableJson } from "./master-readback-primitives.ts";
 import { createHash } from "node:crypto";
 import path from "node:path";
 
@@ -31,49 +32,6 @@ const THEME_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.theme+
 const PNG_CONTENT_TYPE = "image/png";
 const PNG_SIGNATURE = Buffer.from("89504e470d0a1a0a", "hex");
 
-function xmlUnescape(value: string): string {
-  return value
-    .replaceAll("&quot;", '"')
-    .replaceAll("&apos;", "'")
-    .replaceAll("&gt;", ">")
-    .replaceAll("&lt;", "<")
-    .replaceAll("&amp;", "&");
-}
-
-function attributes(source: string): Record<string, string> {
-  const result: Record<string, string> = {};
-  for (const match of source.matchAll(/([\w:.-]+)="([^"]*)"/g)) {
-    result[match[1]] = xmlUnescape(match[2]);
-  }
-  return result;
-}
-
-function stableValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(stableValue);
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .sort(([left], [right]) => left.localeCompare(right, "en"))
-        .map(([key, child]) => [key, stableValue(child)])
-    );
-  }
-  return value;
-}
-
-function stableJson(value: unknown): string {
-  return JSON.stringify(stableValue(value));
-}
-
-function digest(value: unknown): string {
-  const payload = typeof value === "string" ? value : stableJson(value);
-  return `sha256:${createHash("sha256").update(payload).digest("hex")}`;
-}
-
-function requirePart(parts: ReadonlyMap<string, Uint8Array>, partName: string): string {
-  const value = parts.get(partName);
-  if (!value) throw new Error(`Deck master read-back is missing ${partName}`);
-  return Buffer.from(value).toString("utf8");
-}
 
 function parseTokenValue(kind: string, value: string): DeckMasterTokenValue {
   if (kind === "string") return value;

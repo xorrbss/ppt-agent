@@ -1,3 +1,4 @@
+import { activeWorkspaceMutationState, reviewRequiredIndicesFor, useWorkspaceGenerationInfoResult, type WorkspaceChatPanelProps, type GenerationInfoResult } from "./workspaceChatPanelHelpers";
 "use client";
 
 import { LocateFixed } from "lucide-react";
@@ -58,30 +59,6 @@ const SLIDESPEC_WORKSPACE_REPAIR_ENABLED =
   process.env.NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI !== "false" &&
   process.env.NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES !== "false";
 
-interface WorkspaceChatPanelProps {
-  presentationId: string;
-  presentation?: Parameters<typeof deriveFlaggedSlideMap>[0];
-  currentSlide?: number; currentSlideId?: string; generationPending?: boolean;
-  commandsEnabled?: boolean;
-  onPresentationChanged?: WorkspacePresentationChangedHandler;
-  onSlideFocus?: (slideIndex: number) => void;
-  /** True while the runner still owns the deck, for canvas activity affordances. */
-  onAgentActivityChange?: (active: boolean) => void;
-  /** Emitted only while "AI 따라가기" is on, so the canvas may move itself. */
-  onAgentSlideFocus?: (focus: WorkspaceAgentSlideFocus) => void;
-  onCommandDispatcherReady?: (
-    dispatcher: WorkspaceCommandDispatcher | null,
-  ) => void;
-  onQualityReviewRequesterReady?: (
-    requester: WorkspaceQualityReviewRequester | null,
-  ) => void;
-  onPageRemakeRequesterReady?: (
-    requester: WorkspacePageRemakeRequester | null,
-  ) => void;
-  onExportOperationStateChange?: (operationType: ExportOperationType | null) => void;
-  onGenerationStateChange?: (state: { loading: boolean; operationId: string | null; status: string | null; resultRevision?: number }) => void;
-  onEditCurrentSlideReady?: (handler: (() => void) | null) => void;
-}
 
 export default function WorkspaceChatPanel({
   presentationId,
@@ -99,13 +76,7 @@ export default function WorkspaceChatPanel({
   onGenerationStateChange, onEditCurrentSlideReady,
 }: WorkspaceChatPanelProps) {
   const t = useTranslations("presentationChatPanel");
-  const reviewRequiredIndices = useMemo(() => {
-    const flags = deriveFlaggedSlideMap(presentation);
-    const slides = Array.isArray(presentation?.slides) ? presentation.slides : [];
-    return slides.flatMap((slide, position) =>
-      flags[flaggedSlideKey(slide, position)] ? [position] : [],
-    );
-  }, [presentation]);
+  const reviewRequiredIndices = useMemo(() => reviewRequiredIndicesFor(presentation), [presentation]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { restore: restoreScroll, remember: rememberScroll } = useWorkspaceScrollContinuity(presentationId);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -131,10 +102,7 @@ export default function WorkspaceChatPanel({
   const [qualityReviewRangeError, setQualityReviewRangeError] = useState<
     string | null
   >(null);
-  const [generationInfoResult, setGenerationInfoResult] = useState<{
-    presentationId: string;
-    info: PresentationGenerationInfo | null;
-  } | null>(null);
+  const [generationInfoResult, setGenerationInfoResult] = useState<GenerationInfoResult | null>(null);
   const hasInitialScrollRef = useRef(false);
   const shouldFollowLatestRef = useRef(true);
   const [followingLatest, setFollowingLatest] = useState(true);
@@ -179,28 +147,7 @@ export default function WorkspaceChatPanel({
     onPresentationChanged: handlePresentationChanged,
   });
 
-  useEffect(() => {
-    let active = true;
-
-    void DashboardApi.getPresentationGenerationInfo(presentationId)
-      .then((info) => {
-        if (active) setGenerationInfoResult({ presentationId, info });
-      })
-      .catch(() => {
-        if (active) setGenerationInfoResult({ presentationId, info: null });
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [presentationId]);
-
-  const generationInfo =
-    generationInfoResult?.presentationId === presentationId
-      ? generationInfoResult.info
-      : null;
-  const generationInfoLoading =
-    generationInfoResult?.presentationId !== presentationId;
+  const { generationInfo, generationInfoLoading } = useWorkspaceGenerationInfoResult(presentationId, generationInfoResult, setGenerationInfoResult);
 
   const timelineItems = useMemo(
     () =>
@@ -216,21 +163,8 @@ export default function WorkspaceChatPanel({
     onChange: onGenerationStateChange,
   });
 
-  const activeMutations = projection.items.filter((item): item is WorkspaceOperationAnchor =>
-    item.anchorType === "operation" && !TERMINAL.has(item.status) &&
-    !item.operationType.startsWith("export."));
-  const activeMutation = activeMutations.sort((left, right) => right.position - left.position)[0];
-  const cancelOperation = activeMutation && writesEnabled &&
-    (activeMutation.status === "cancelling" || activeMutation.allowedActions.some((action) => action.id === "cancel" && action.enabled))
-    ? { operationId: activeMutation.operationId, pending: submitting || activeMutation.status === "cancelling",
-        onCancel: (operationId: string) => performAction(operationId, "cancel") }
-    : undefined;
-  const showFollowControl = Boolean(activeMutation?.status === "running" && activeMutation.operationType !== "presentation.generate" && !generationPending);
-  const restartBlockedReason = loading || submitting || mutationActive
-    ? "현재 작업 상태가 확정된 뒤 다시 만들 수 있습니다."
-    : retryIntent?.reason === "ambiguous"
-      ? "이전 요청의 접수 상태를 먼저 확인해 주세요."
-      : !writesEnabled ? "이 프레젠테이션을 변경할 권한이 없습니다." : null;
+  const { activeMutation, cancelOperation, showFollowControl, restartBlockedReason } =
+    activeWorkspaceMutationState(projection.items, writesEnabled, submitting, performAction, generationPending, loading, mutationActive, retryIntent?.reason);
 
   useActiveExportOperationNotifier(timelineItems, onExportOperationStateChange);
   const agentFocus = useWorkspaceAgentFocus({

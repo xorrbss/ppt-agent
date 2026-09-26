@@ -1,12 +1,20 @@
 from __future__ import annotations
 
-import hashlib
+import sys
+from services import authored_pipeline_small_helpers as _small_helpers
+from services.authored_pipeline_small_helpers import (
+    _call_pipeline_helper as _call_pipeline_helper,
+    _evaluate_slide_quality as _evaluate_slide_quality,
+    _local_fit_quality_flag as _local_fit_quality_flag,
+    _local_fit_unresolved_flag as _local_fit_unresolved_flag,
+)
+
 from dataclasses import replace
 from services.authored_local_fit_evidence_types import AcceptedLocalFit
 
 from services.authored_presentation_pipeline_deps import *
 from services import authored_presentation_author_batch as author_batch_impl
-from services import authored_presentation_pipeline_helpers as _pipeline_helpers
+from services import authored_presentation_pipeline_helpers as _pipeline_helpers  # noqa: F401
 from services.authored_local_fit_policy import local_fit_applies, requested_font_policy_revision, policy_floor_pt
 from services.authored_admission_producers import author_html as admit_author_html, source_image_html
 from services.authored_admission_capture import capture_once, captured_metrics_or_existing
@@ -31,15 +39,9 @@ except Exception:
 _AUTHORED_AUTHOR_WORKERS = authored_provider_concurrency(_selected_provider)
 
 
-def _resolve_authored_render_workers(
-    author_workers: int,
-    environment: Mapping[str, str] = os.environ,
-) -> int:
-    """Resolve the authored render queue against the managed Chromium ceiling."""
-    raw = environment.get("AUTHORED_SLIDE_RENDER_CONCURRENCY")
-    if raw is None:
-        raw = environment.get("PUBLIC_RENDER_MAX_CONCURRENCY", str(author_workers))
-    return max(1, int(raw))
+def _resolve_authored_render_workers(author_workers: int, environment: Mapping[str, str] = os.environ) -> int:
+    _small_helpers.bind_runtime(sys.modules[__name__])
+    return _small_helpers._resolve_authored_render_workers(author_workers, environment)
 
 
 _AUTHORED_RENDER_WORKERS = _resolve_authored_render_workers(_AUTHORED_AUTHOR_WORKERS)
@@ -47,67 +49,19 @@ _AUTHORED_SLIDE_WORKERS = _AUTHORED_AUTHOR_WORKERS + _AUTHORED_RENDER_WORKERS
 _DEFAULT_AUTHOR_PLANNED_SLIDE = author_planned_slide
 
 
-def _call_pipeline_helper(name: str, *args, **kwargs):
-    _pipeline_helpers.bind_runtime(sys.modules[__name__])
-    return getattr(_pipeline_helpers, name)(*args, **kwargs)
 
 
-def _evaluate_slide_quality(*args, **kwargs):
-    return _call_pipeline_helper("_evaluate_slide_quality", *args, **kwargs)
-
-
-def _local_fit_quality_flag(*args, **kwargs):
-    return _call_pipeline_helper("_local_fit_quality_flag", *args, **kwargs)
-
-
-def _local_fit_unresolved_flag(*args, **kwargs):
-    return _call_pipeline_helper("_local_fit_unresolved_flag", *args, **kwargs)
-
-
-def _reusable_source_repair_scene(
-    *,
-    source_reflow: bool,
-    durable_evidence: Any,
-    original_html: str,
-    scene_html: str,
-    slide_index: int,
-) -> bool:
-    """Reuse an admitted source repair only through its validated durable tuple.
-
-    The caller has already obtained the checkpoint under attempt fencing and
-    verified its immutable artifact revision. Admission additionally binds the
-    reconstructed original, exact repaired scene, PNG, metrics, and slide index.
-    """
-    if not source_reflow or durable_evidence is None or durable_evidence.html != scene_html:
-        return False
-    return validate_structural_checkpoint(
-        html=scene_html,
-        png=durable_evidence.png,
-        metrics=durable_evidence.metrics,
-        expected_slide_index=slide_index,
-        baseline_html_digest=html_digest(original_html),
+def _reusable_source_repair_scene(*, source_reflow: bool, durable_evidence: Any, original_html: str, scene_html: str, slide_index: int) -> bool:  # noqa: E501
+    _small_helpers.bind_runtime(sys.modules[__name__])
+    return _small_helpers._reusable_source_repair_scene(
+        source_reflow=source_reflow, durable_evidence=durable_evidence,
+        original_html=original_html, scene_html=scene_html, slide_index=slide_index,
     )
 
 
-def _rehydrate_accepted_local_fit(
-    receipt: Mapping[str, Any],
-    *,
-    html: str,
-    png: bytes | None,
-    metrics: Mapping[str, Any],
-) -> AcceptedLocalFit | None:
-    """Restore only an already validated, immutable normal-fit acceptance."""
-
-    if receipt_is_preserved_original(receipt) or png is None:
-        return None
-    if receipt.get("png_digest") != "sha256:" + hashlib.sha256(png).hexdigest():
-        return None
-    return AcceptedLocalFit(
-        html=html,
-        png=png,
-        metrics=dict(metrics),
-        receipt=dict(receipt),
-    )
+def _rehydrate_accepted_local_fit(receipt: Mapping[str, Any], *, html: str, png: bytes | None, metrics: Mapping[str, Any]) -> AcceptedLocalFit | None:  # noqa: E501
+    _small_helpers.bind_runtime(sys.modules[__name__])
+    return _small_helpers._rehydrate_accepted_local_fit(receipt, html=html, png=png, metrics=metrics)
 
 
 async def _author_illustrate_render_pipeline(

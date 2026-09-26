@@ -30,6 +30,8 @@ import HeaderMoreMenu from "./header/HeaderMoreMenu";
 import DashboardNavigationButton from "./header/DashboardNavigationButton";
 import PresentationTitleEditor from "./header/PresentationTitleEditor";
 import RegenerateConfirmDialog from "./header/RegenerateConfirmDialog";
+import type { PresentationHeaderFeatureSlots } from "./presentationHeaderTypes";
+export type { PresentationHeaderFeatureSlots } from "./presentationHeaderTypes";
 import type { PptxExportMode } from "./header/types";
 import {
   authoredHybridUnavailableReason,
@@ -55,11 +57,6 @@ import {
   getAuthoredEmissionReadinessStatus,
 } from "../../services/api/authored-emission-capability";
 
-export interface PresentationHeaderFeatureSlots {
-  /** Computed by PresentationShell's server-issued capability projection. */
-  readonly showAuthoredActions: boolean;
-  readonly exportActions: boolean;
-}
 
 const PresentationHeader = ({
   presentation_id,

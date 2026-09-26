@@ -1,3 +1,4 @@
+import { isAmbiguousGenerationTransportError, isRetryableGenerationStartError, hasRecoverableChatFirstWorkspace, isCompanyStandardAdmissionError } from "./generationStartErrors";
 import { useTranslations as useA2bTranslations } from "next-intl";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -37,41 +38,6 @@ const DEFAULT_LOADING_STATE: LoadingState = {
 // New presentations have one engine.  It routes through the durable authored
 // endpoint instead of choosing among layout, custom, or Template V2 paths.
 const AUTHORED_TIMEOUT_MS = 30 * 60 * 1000;
-
-const isAmbiguousGenerationTransportError = (error: unknown): boolean => {
-  if (error instanceof TypeError) return true;
-  if (
-    typeof DOMException !== "undefined" &&
-    error instanceof DOMException &&
-    (error.name === "AbortError" || error.name === "NetworkError")
-  ) {
-    return true;
-  }
-  if (error instanceof ApiError) return error.status === 0;
-  return Boolean(
-    error &&
-      typeof error === "object" &&
-      (error as { status?: unknown }).status === 0
-  );
-};
-
-const isRetryableGenerationStartError = (error: unknown): boolean =>
-  isAmbiguousGenerationTransportError(error) ||
-  isRetryablePresentationGenerationError(error);
-
-const hasRecoverableChatFirstWorkspace = (error: unknown): boolean =>
-  error instanceof ApiError && error.workspaceProjected;
-
-const isCompanyStandardAdmissionError = (error: unknown): boolean => {
-  if (!(error instanceof ApiError)) return false;
-  const value = `${error.code ?? ""} ${error.message}`.toLowerCase();
-  return [
-    "authored_vnext_stale_master",
-    "authored_vnext_published_master_required",
-    "authored_vnext_generation_not_found",
-    "authored_vnext_master_disabled",
-  ].some((code) => value.includes(code));
-};
 
 export const usePresentationGeneration = (
   presentationId: string | null,
