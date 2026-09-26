@@ -6,6 +6,7 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   {
+    files: ["**/*.{js,jsx,mjs,ts,tsx,mts,cts}"],
     // Preserve the existing lint baseline while moving off the removed `next lint` command.
     rules: {
       "@typescript-eslint/no-empty-object-type": "off",
@@ -25,6 +26,18 @@ const eslintConfig = defineConfig([
       "react/jsx-key": "off",
       "react/no-unescaped-entities": "off",
     },
+  },
+  {
+    files: ["**/*.cjs"],
+    rules: { "@typescript-eslint/no-require-imports": "off" },
+  },
+  {
+    // Authored is frozen; preserve its existing render contract until that flow can be revised.
+    files: [
+      "app/(presentation-generator)/authored-vnext/AuthoredVnextFlowClient.tsx",
+      "app/(presentation-generator)/authored-vnext/master-setup/MasterCatalogDialog.tsx",
+    ],
+    rules: { "react-hooks/refs": "off" },
   },
   globalIgnores([
     ".next/**",

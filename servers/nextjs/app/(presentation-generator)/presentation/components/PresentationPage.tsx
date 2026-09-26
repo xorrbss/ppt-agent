@@ -235,7 +235,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
         ? `${presentation_id}:${presentationData?.revision ?? "published"}:published`
         : null
     : null;
-  const workspaceLayout = useConversationWorkspaceLayout({
+  const { containerRef, ...workspaceLayout } = useConversationWorkspaceLayout({
     presentationId: presentation_id,
     resultReady,
     completionKey: resultCompletionKey,
@@ -701,7 +701,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
         onUpload={() => router.push("/upload")} onDashboard={() => router.push("/dashboard")}
         onRefreshStaging={refreshWorkspaceStaging} onOpenChat={openWorkspaceOperation}
       />}
-      <div ref={workspaceLayout.containerRef} className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden">
+      <div ref={containerRef} className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden">
         {showResult && <PresentationFeatureSlot name="editorSurface">
           <div
             id="presentation-slides-pane"

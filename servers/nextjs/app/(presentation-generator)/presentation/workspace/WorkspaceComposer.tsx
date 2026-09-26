@@ -82,7 +82,9 @@ export function WorkspaceComposer({
   const localTextareaRef = useRef<HTMLTextAreaElement>(null);
   const inputRef = textareaRef ?? localTextareaRef;
   const latestValue = useRef(value);
-  latestValue.current = value;
+  useLayoutEffect(() => {
+    latestValue.current = value;
+  }, [value]);
   useLayoutEffect(() => {
     const input = inputRef.current;
     if (!input) return;
