@@ -1,8 +1,8 @@
-import { errorMessage, FALLBACK_THEME } from "./themePanelDefaults";
+import { createFallbackTheme, errorMessage } from "./themePanelDefaults";
 import { useTranslations as useA2bTranslations } from "next-intl";
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import {
@@ -39,15 +39,15 @@ import { MixpanelEvent, trackEvent } from '@/utils/mixpanel'
 
 const ThemePanel: React.FC = () => {
   const tA2b = useA2bTranslations("dashboardExtras");
+  const fallbackTheme = useMemo(() => createFallbackTheme(tA2b("standardThemeDescription")), [tA2b]);
   const searchParams = useSearchParams()
   const pathname = usePathname()
 
-
-  const [selectedTheme, setSelectedTheme] = useState<Theme>(FALLBACK_THEME)
+  const [selectedTheme, setSelectedTheme] = useState<Theme>(fallbackTheme)
   const [tab, setTab] = useState<'custom' | 'default'>('default')
 
-  const [customColors, setCustomColors] = useState<ThemeColors>(FALLBACK_THEME.data.colors)
-  const [customFonts, setCustomFonts] = useState<{ textFont: { name: string, url: string } }>(FALLBACK_THEME.data.fonts)
+  const [customColors, setCustomColors] = useState<ThemeColors>(fallbackTheme.data.colors)
+  const [customFonts, setCustomFonts] = useState<{ textFont: { name: string, url: string } }>(fallbackTheme.data.fonts)
   const [customBrandLogo, setCustomBrandLogo] = useState<string | null>(null)
   const [customBrandLogoId, setCustomBrandLogoId] = useState<string | null>(null)
   const [isLogoUploading, setIsLogoUploading] = useState<boolean>(false)
@@ -151,7 +151,7 @@ const ThemePanel: React.FC = () => {
       setDefaultThemes(localDefaults)
 
       // If selected theme is still fallback, set first default
-      if (localDefaults.length > 0 && selectedTheme.id === FALLBACK_THEME.id) {
+      if (localDefaults.length > 0 && selectedTheme.id === fallbackTheme.id) {
         const first = localDefaults[0]
         setSelectedTheme(first)
         setCustomColors(first.data.colors)
@@ -163,7 +163,7 @@ const ThemePanel: React.FC = () => {
     }
     loadCustomThemes()
     loadDefaultThemes()
-  }, [selectedTheme.id])
+  }, [selectedTheme.id, fallbackTheme.id])
 
 
   useEffect(() => {

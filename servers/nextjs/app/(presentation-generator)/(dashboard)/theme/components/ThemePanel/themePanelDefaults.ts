@@ -5,10 +5,10 @@ export const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : ''
 
 // Fallback theme used before defaults are loaded from API (unified Theme type)
-export const FALLBACK_THEME: Theme = {
+export const createFallbackTheme = (description: string): Theme => ({
   id: 'standard',
   name: 'Standard',
-  description: 'Standard theme',
+  description,
   user: 'system',
   logo: '',
   logo_url: '',
@@ -35,4 +35,4 @@ export const FALLBACK_THEME: Theme = {
       textFont: { name: 'Inter', url: 'https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap' },
     },
   },
-}
+})

@@ -5048,6 +5048,7 @@
     "other": "Other",
     "quality": "Quality",
     "settings": "Settings",
+    "standardThemeDescription": "Standard theme",
     "themePreview": "Theme preview",
     "usesYourExistingCodexLoginAndIts": "Uses your existing Codex login and its usage limits. GPT Image 2.5 Sunburst is requested, but the server does not disclose the model actually used. Manage login in ChatGPT provider settings."
   },

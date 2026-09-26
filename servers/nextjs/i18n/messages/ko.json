@@ -5048,6 +5048,7 @@
     "other": "기타",
     "quality": "품질",
     "settings": "설정",
+    "standardThemeDescription": "Standard theme",
     "themePreview": "테마 미리보기",
     "usesYourExistingCodexLoginAndIts": "기존 Codex 로그인을 사용하며 Codex 사용 한도가 적용됩니다. GPT Image 2.5 Sunburst를 요청하지만 실제 적용 모델은 서버가 공개하지 않습니다. 로그인은 ChatGPT 제공자 설정에서 관리합니다."
   },
