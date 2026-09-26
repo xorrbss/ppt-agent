@@ -722,7 +722,7 @@
     {
       "key": "PUBLIC_PROVIDER_PRICING_REVISION",
       "type": "string",
-      "default": null,
+      "default": "subscription-local-20260926",
       "secret": false,
       "targets": ["fastapi.runtime"],
       "group": "public.provider_pricing",
@@ -731,7 +731,18 @@
     {
       "key": "PUBLIC_PROVIDER_PRICING_CATALOG",
       "type": "json",
-      "default": null,
+      "default": {
+        "schemaVersion": "public-provider-pricing-catalog/v1",
+        "revision": "subscription-local-20260926",
+        "entries": [
+          {"providerId": "codex", "modelId": "gpt-5.6-sol", "inputMicrounitsPerMillionTokens": 0, "outputMicrounitsPerMillionTokens": 0, "currency": "USD"},
+          {"providerId": "codex", "modelId": "gpt-5.6-luna", "inputMicrounitsPerMillionTokens": 0, "outputMicrounitsPerMillionTokens": 0, "currency": "USD"},
+          {"providerId": "codex", "modelId": "gpt-5.6-terra", "inputMicrounitsPerMillionTokens": 0, "outputMicrounitsPerMillionTokens": 0, "currency": "USD"},
+          {"providerId": "codex", "modelId": "gpt-6-sol", "inputMicrounitsPerMillionTokens": 0, "outputMicrounitsPerMillionTokens": 0, "currency": "USD"},
+          {"providerId": "codex", "modelId": "gpt-6-luna", "inputMicrounitsPerMillionTokens": 0, "outputMicrounitsPerMillionTokens": 0, "currency": "USD"},
+          {"providerId": "codex", "modelId": "gpt-6-astra", "inputMicrounitsPerMillionTokens": 0, "outputMicrounitsPerMillionTokens": 0, "currency": "USD"}
+        ]
+      },
       "secret": false,
       "targets": ["fastapi.runtime"],
       "group": "public.provider_pricing",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from services.provider_pricing import ProviderModelPricing, ProviderPricingCatalog
@@ -12,6 +13,14 @@ from utils.runtime_settings import RuntimeSettings, resolve_runtime_settings
 class PublicProviderPricingUnavailable(RuntimeError):
     code = "public_provider_pricing_unavailable"
     retryable = False
+
+    def __init__(
+        self, message: str, *, provider_id: str | None = None, model_id: str | None = None
+    ) -> None:
+        super().__init__(message)
+        if provider_id is not None and model_id is not None:
+            pair = re.sub(r"[^a-z0-9]+", "_", f"{provider_id}_{model_id}".lower())
+            self.code = f"public_provider_pricing_missing_{pair.strip('_')}"
 
 
 def _entry(value: object, *, revision: str) -> ProviderModelPricing:
@@ -80,7 +89,9 @@ def resolve_public_provider_pricing(
         )
     except LookupError as error:
         raise PublicProviderPricingUnavailable(
-            "public_provider_pricing_exact_match_required"
+            "public_provider_pricing_exact_match_required",
+            provider_id=provider_id,
+            model_id=model_id,
         ) from error
 
 

@@ -8,7 +8,9 @@ minutes into a run, instead of at the moment the model was chosen.
 """
 
 import pytest
+import json
 
+from constants.settings_registry import get_setting_default
 from services.provider_pricing_admission import (
     ProviderPricingSelectionError,
     find_pricing_gaps,
@@ -16,6 +18,7 @@ from services.provider_pricing_admission import (
     reject_write_that_introduces_a_pricing_gap,
 )
 from utils.runtime_settings import RuntimeSettings
+from utils.generation_model import CODEX_GENERATION_PRESETS
 
 
 REVISION = "pricing-fixture-r1"
@@ -48,6 +51,39 @@ def _settings(**overrides: object) -> RuntimeSettings:
 def test_no_gap_when_the_catalog_prices_the_selected_model() -> None:
     assert find_pricing_gaps(_settings()) == ()
     assert pricing_gap_message(_settings()) is None
+
+
+def test_default_catalog_prices_every_codex_preset_and_default() -> None:
+    catalog = get_setting_default("PUBLIC_PROVIDER_PRICING_CATALOG")
+    revision = get_setting_default("PUBLIC_PROVIDER_PRICING_REVISION")
+    assert catalog["revision"] == revision
+    priced = {
+        (entry["providerId"], entry["modelId"]) for entry in catalog["entries"]
+    }
+    selected = {("codex", get_setting_default("CODEX_MODEL"))}
+    selected.update(("codex", model) for model, _ in CODEX_GENERATION_PRESETS.values())
+    assert selected <= priced
+    assert {("codex", model) for model in ("gpt-5.6-sol", "gpt-5.6-luna", "gpt-5.6-terra")} <= priced
+    settings = RuntimeSettings.from_sources(environ={"LLM": "codex"})
+    assert json.loads(settings.get_env("PUBLIC_PROVIDER_PRICING_CATALOG"))["revision"] == revision
+    assert find_pricing_gaps(settings) == ()
+
+
+def test_boot_gap_names_each_unpriced_codex_preset_model() -> None:
+    settings = RuntimeSettings.from_sources(
+        environ={
+            "LLM": "codex",
+            "PUBLIC_PROVIDER_PRICING_REVISION": REVISION,
+            "PUBLIC_PROVIDER_PRICING_CATALOG": (
+                '{"schemaVersion":"public-provider-pricing-catalog/v1",'
+                f'"revision":"{REVISION}","entries":[]}}'
+            ),
+        }
+    )
+    message = pricing_gap_message(settings)
+    assert message is not None
+    for model in {get_setting_default("CODEX_MODEL"), *(model for model, _ in CODEX_GENERATION_PRESETS.values())}:
+        assert f"codex/{model}" in message
 
 
 def test_an_unconfigured_catalog_is_not_a_gap() -> None:
@@ -128,7 +164,7 @@ def test_an_already_unpriced_configuration_stays_writable() -> None:
 def test_the_2026_09_07_codex_incident_is_caught_before_generation() -> None:
     """The exact shape that failed: the catalog kept the previous Codex model.
 
-    ``CODEX_MODEL`` moved to ``gpt-6-astra`` (also the registry default) while
+    ``CODEX_MODEL`` moved to ``gpt-6-astra`` while
     the catalog still priced only ``gpt-5.6-sol``. Every authored call then
     failed ``public_provider_pricing_exact_match_required`` on a slide.
     """
@@ -149,9 +185,11 @@ def test_the_2026_09_07_codex_incident_is_caught_before_generation() -> None:
     )
 
     gaps = find_pricing_gaps(incident)
-    assert [(gap.provider_id, gap.model_id) for gap in gaps] == [
-        ("codex", "gpt-6-astra")
-    ]
+    assert {(gap.provider_id, gap.model_id) for gap in gaps} == {
+        ("codex", "gpt-6-astra"),
+        ("codex", "gpt-6-luna"),
+        ("codex", "gpt-6-sol"),
+    }
     assert "gpt-5.6-sol" in gaps[0].message()
 
 
