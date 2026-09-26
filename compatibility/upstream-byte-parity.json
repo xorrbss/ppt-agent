@@ -6644,10 +6644,6 @@
       ".spec-memory/decisions/workspace.staging-bounded-queue-observation.1.json",
       ".spec-memory/state.json",
       "AGENTS.md",
-      "C1-HANDOFF.md",
-      "C2-HANDOFF.md",
-      "C3-HANDOFF.md",
-      "C4-HANDOFF.md",
       "CLAUDE.md",
       "RUNNING-LOCAL.md",
       "artifacts/authored-full-product-validation-20260910/audit-full-run.ps1",
@@ -13973,14 +13969,14 @@
     "source": {
       "mode": "tree",
       "ref": "HEAD",
-      "commit": "38e29d4a97b1b7db04c5ebc74f1664d7b3e8ccc3"
+      "commit": "534428e998c007150015493f72148580930f4558"
     },
     "counts": {
       "upstreamOwned": 10163,
       "identical": 9250,
       "exceptions": 913,
-      "localOnly": 7556
+      "localOnly": 7552
     },
-    "policySha256": "eaa98ffc5b3c74bd20614190a37aa7522ac7840a55be3feeb23b067fbfaf6a8a"
+    "policySha256": "73cde56e9f5066ab109dacacfb90d3f398fd316e82ec5807e3cf4c3f1c0120e0"
   }
 }
