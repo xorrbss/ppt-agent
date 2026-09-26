@@ -14,7 +14,7 @@ from PIL import Image
 from pydantic import ValidationError
 
 from services.raster_source_assets import raster_slot_id
-from services.source_content import raster_redesign
+from services.source_content import raster_page_pool, raster_redesign
 from services.source_content.raster_analysis import EmbeddedRasterPage
 from services.source_content.raster_captures import PageContext
 from services.source_content.raster_contracts import (
@@ -127,6 +127,12 @@ def _analysis(monkeypatch, tmp_path, plan: PagePlan, words) -> tuple[RasterAnaly
                                                                                      (embedded,)))
     monkeypatch.setattr(raster_redesign, "redesign_ocr", lambda *_a, **_k: (words, lines))
     monkeypatch.setattr(raster_redesign, "robust_plan", lambda *_a: (plan, []))
+    def in_process(pages, size, executable, tessdata, _vision, _workers):
+        return [raster_redesign._page_result(
+            page, size, tesseract_path=executable, tessdata_path=tessdata,
+        ) for page in pages]
+
+    monkeypatch.setattr(raster_page_pool, "analyze_pages", in_process)
     tesseract = tmp_path / "tesseract.exe"
     tesseract.write_bytes(b"")
     draft = raster_redesign.analyze_redesign(tmp_path / "deck.pptx", orientation="landscape",

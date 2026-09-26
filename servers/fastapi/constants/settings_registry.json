@@ -1649,6 +1649,15 @@
       "description": "Authoring prompt text for authored slides: current keeps today's prompt byte for byte; august-0819 restores the 2026-08-19 design-system brief, default style brief and block order (design system stated last, no archetype clause, no deck-token or exemplar tail, pre-bundle type scale), keeping every contract the current gates require - the semantic-role vocabulary, the hidden-overflow prohibition, the data-qid sentence, the header contract and the requirement-identifier rules. Measured on one fixture the deck-invariant brief is 8235 characters under august-0819 and 11569 under current for the default style. It does not change the style anchor, the illustration plan, the composition envelope or the DOM gate; those keep their own knobs."
     },
     {
+      "key": "RASTER_ANALYSIS_PROCESS_WORKERS",
+      "type": "integer",
+      "default": 0,
+      "secret": false,
+      "targets": ["fastapi.runtime"],
+      "group": "raster",
+      "description": "Spawned workers for CPU-bound raster page analysis. Zero selects min(4, cpu count minus one); positive values set a fixed cap. Each worker holds one page image."
+    },
+    {
       "key": "AUTHORED_AUTHOR_PROMPT_MODEL",
       "type": "string",
       "default": null,
