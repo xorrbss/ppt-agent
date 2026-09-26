@@ -122,6 +122,7 @@ def selected_models(
     """
 
     from utils.get_env_programme import get_llm_light_model_env
+    from utils.generation_model import CODEX_GENERATION_PRESETS
     from utils.llm_provider import get_llm_provider, get_model
 
     snapshot = resolve_runtime_settings(settings)
@@ -130,11 +131,14 @@ def selected_models(
     light_model = str(get_llm_light_model_env(snapshot) or "").strip()
     if light_model:
         selections.append(("light model (LLM_LIGHT_MODEL)", provider_id, light_model))
-    return tuple(
-        (selection, provider, model)
-        for selection, provider, model in selections
-        if model
-    )
+    if provider_id == "codex":
+        for preset, (model_id, _) in CODEX_GENERATION_PRESETS.items():
+            selections.append((f"generation preset {preset}", provider_id, model_id))
+    unique: dict[tuple[str, str], tuple[str, str, str]] = {}
+    for selection, provider, model in selections:
+        if model:
+            unique.setdefault((provider, model), (selection, provider, model))
+    return tuple(unique.values())
 
 
 def find_pricing_gaps(

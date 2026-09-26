@@ -82,9 +82,10 @@ def test_public_runtime_pricing_resolves_exact_revision_and_fails_closed() -> No
     with pytest.raises(
         PublicProviderPricingUnavailable,
         match="public_provider_pricing_exact_match_required",
-    ):
+    ) as raised:
         resolve_public_provider_pricing(
             provider_id="openai",
             model_id="gpt-missing",
             settings=settings,
         )
+    assert raised.value.code == "public_provider_pricing_missing_openai_gpt_missing"
