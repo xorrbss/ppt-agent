@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from services.workspace_quality_receipt_digest import (
+    _is_sha256_digest as _is_sha256_digest,
+    _release_review_receipt_digest as _release_review_receipt_digest,
+)
+
 import asyncio
-import hashlib
-import json
 import logging
 import sys
 import uuid
@@ -136,25 +139,6 @@ def _compatibility_progress_interval() -> float:
 def _context(claim_payload: Mapping[str, Any]) -> Mapping[str, Any]:
     value = claim_payload.get("context")
     return value if isinstance(value, Mapping) else {}
-
-
-def _release_review_receipt_digest(payload: Mapping[str, Any]) -> str:
-    return "sha256:" + hashlib.sha256(
-        json.dumps(
-            dict(payload),
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-        ).encode("utf-8")
-    ).hexdigest()
-
-
-def _is_sha256_digest(value: object) -> bool:
-    return (
-        isinstance(value, str)
-        and value.startswith("sha256:")
-        and len(value) == 71
-    )
 
 
 def release_review_checker_policy() -> dict[str, Any]:
