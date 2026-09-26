@@ -1,5 +1,6 @@
 "use client";
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import { ArrowRight, Loader2, RefreshCw, Trash2 } from "lucide-react";
 import CodexModelSelect from "./CodexModelSelect";
 import { useCodexAuth } from "./useCodexAuth";
@@ -24,6 +25,7 @@ export default function CodexConfig({
   onInputChange,
   variant = "onboarding",
 }: CodexConfigProps) {
+  const t = useTranslations("a2cCodexConfig");
   const dense = variant === "settings";
   const {
     authStatus,
@@ -57,7 +59,7 @@ export default function CodexConfig({
     <div className={`${badgeClass} bg-[#333333]`}>
       <Image
         src="/providers/OpenAI-white.png"
-        alt="OpenAI logo"
+        alt={t("openAiLogo")}
         width={27}
         height={27}
         className={dense ? "h-[18px] w-[18px]" : "h-[27px] w-[27px]"}
@@ -81,10 +83,10 @@ export default function CodexConfig({
       >
         {spinnerBadge}
         <div className="min-w-0 text-start">
-          <h4 className={titleClass}>상태 확인 중</h4>
+          <h4 className={titleClass}>{t("checking")}</h4>
           {!dense && (
             <p className="text-sm font-normal text-[#B3B3B3]">
-              ChatGPT 연결을 확인하는 중…
+              {t("checkingConnection")}
             </p>
           )}
         </div>
@@ -99,10 +101,10 @@ export default function CodexConfig({
           <div className="flex min-w-0 flex-1 items-center gap-3">
             {spinnerBadge}
             <div className="min-w-0 text-start">
-              <h4 className={titleClass}>로그인 대기 중</h4>
+              <h4 className={titleClass}>{t("waitingForSignIn")}</h4>
               {!dense && (
                 <p className="text-sm font-normal text-[#B3B3B3]">
-                  새로 열린 브라우저 탭에서 로그인을 완료해 주세요.
+                  {t("finishInBrowser")}
                 </p>
               )}
             </div>
@@ -112,18 +114,18 @@ export default function CodexConfig({
             onClick={handleCancelPolling}
             className="shrink-0 text-xs text-[#B3B3B3] underline underline-offset-2 transition-colors hover:text-[#191919]"
           >
-            취소
+            {t("cancel")}
           </button>
         </div>
 
         <div className="space-y-2 rounded-[8px] border border-[#EDEEEF] p-3">
           <p className="text-xs font-normal text-[#666666]">
-            자동으로 이동되지 않았다면 리디렉션 URL 또는 코드를 붙여넣으세요
+            {t("pasteRedirectHint")}
           </p>
           <div className="flex gap-2">
             <input
               type="text"
-              placeholder="URL 또는 코드 붙여넣기…"
+              placeholder={t("pasteRedirectPlaceholder")}
               className="min-w-0 flex-1 rounded-[8px] border border-[#EDEEEF] px-3 py-2.5 text-sm text-[#191919] outline-none transition-colors placeholder:text-[#666666] focus:border-[#555555]"
               value={manualCode}
               onChange={(event) => setManualCode(event.target.value)}
@@ -137,7 +139,7 @@ export default function CodexConfig({
               {isExchanging ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                "제출"
+                t("submit")
               )}
             </button>
           </div>
@@ -159,15 +161,15 @@ export default function CodexConfig({
               <p className="truncate text-sm font-medium text-[#191919]">
                 {username ||
                   email ||
-                  (accountId ? `계정 ${accountId}` : "ChatGPT 계정")}
+                  (accountId ? t("account", { id: accountId }) : t("chatGptAccount"))}
               </p>
               {email && username && (
                 <p className="truncate text-xs text-[#B3B3B3]">{email}</p>
               )}
               {!email && accountId && (
-                <p className="truncate text-xs text-[#B3B3B3]">ID: {accountId}</p>
+                <p className="truncate text-xs text-[#B3B3B3]">{t("idLabel")} {accountId}</p>
               )}
-              <p className="text-xs text-[#B3B3B3]">ChatGPT에 로그인됨</p>
+              <p className="text-xs text-[#B3B3B3]">{t("signedIn")}</p>
             </div>
           </div>
           <div className="flex shrink-0 gap-1.5">
@@ -175,7 +177,7 @@ export default function CodexConfig({
               type="button"
               onClick={handleRefreshToken}
               disabled={isRefreshing}
-              title="토큰 갱신"
+              title={t("refreshToken")}
               className={iconButtonClass}
             >
               {isRefreshing ? (
@@ -188,7 +190,7 @@ export default function CodexConfig({
               type="button"
               onClick={handleSignOut}
               disabled={isLoggingOut}
-              title="로그아웃"
+              title={t("signOut")}
               className={iconButtonClass}
             >
               {isLoggingOut ? (
@@ -221,7 +223,7 @@ export default function CodexConfig({
         onClick={handleSignIn}
         className="w-fit rounded-[48px] bg-[#EDEEEF] px-3.5 py-2.5 text-xs font-semibold text-[#101323] transition-colors hover:bg-[#E4E5E6]"
       >
-        ChatGPT로 로그인
+        {t("signIn")}
       </button>
     );
   }
@@ -235,9 +237,9 @@ export default function CodexConfig({
       <div className="flex flex-1 items-center gap-2">
         {openAiBadge}
         <div className="flex-1 text-start">
-          <h4 className="text-sm font-medium text-[#191919]">ChatGPT로 로그인</h4>
+          <h4 className="text-sm font-medium text-[#191919]">{t("signIn")}</h4>
           <p className="text-xs font-normal text-[#B3B3B3]">
-            ChatGPT 계정을 사용하세요 — API 키가 필요 없습니다
+            {t("noApiKey")}
           </p>
         </div>
       </div>

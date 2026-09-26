@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Check, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +27,7 @@ interface CodexModelSelectProps {
 
 /** ChatGPT models are a fixed client-side list; the provider exposes no discovery API. */
 const CodexModelSelect = ({ codexModel, codexReasoningEffort, onSelect }: CodexModelSelectProps) => {
+  const t = useTranslations("a2cCodexConfig");
   const [open, setOpen] = useState(false);
   const selectedPreset = CODEX_GENERATION_PRESETS.find(
     (preset) => preset.modelId === codexModel && preset.effort === codexReasoningEffort,
@@ -40,7 +42,7 @@ const CodexModelSelect = ({ codexModel, codexReasoningEffort, onSelect }: CodexM
   return (
     <div>
       <label className="mb-2 block text-sm font-medium text-gray-700">
-        PPT 생성 모델 · 추론 강도
+        {t("modelAndReasoning")}
       </label>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
@@ -51,7 +53,7 @@ const CodexModelSelect = ({ codexModel, codexReasoningEffort, onSelect }: CodexM
             className="h-10 w-full justify-between rounded-lg border border-gray-300 px-3 outline-none hover:border-gray-400"
           >
             <span className="text-sm text-gray-900">
-              {codexModel ? (selectedName ?? codexModel) : "모델 선택"}
+              {codexModel ? (selectedName ?? codexModel) : t("selectModel")}
             </span>
             <ChevronUp className="h-4 w-4 text-gray-400" />
           </Button>
@@ -62,9 +64,9 @@ const CodexModelSelect = ({ codexModel, codexReasoningEffort, onSelect }: CodexM
           style={{ width: "var(--radix-popover-trigger-width)" }}
         >
           <Command>
-            <CommandInput placeholder="모델 검색…" />
+            <CommandInput placeholder={t("searchModel")} />
             <CommandList>
-              <CommandEmpty>모델을 찾을 수 없습니다.</CommandEmpty>
+              <CommandEmpty>{t("modelNotFound")}</CommandEmpty>
               <CommandGroup>
                 {CODEX_GENERATION_PRESETS.map((preset) => (
                   <CommandItem

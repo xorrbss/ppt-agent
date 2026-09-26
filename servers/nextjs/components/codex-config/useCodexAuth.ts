@@ -1,4 +1,6 @@
 "use client";
+
+import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { notify } from "@/components/ui/sonner";
 import { getApiUrl } from "@/utils/api";
@@ -38,6 +40,7 @@ export const useCodexAuth = ({
   onInputChange,
   adoptProviderOnSignedIn,
 }: CodexAuthOptions) => {
+  const t = useTranslations("a2cCodexConfig");
   const [authStatus, setAuthStatus] = useState<CodexAuthStatus>("checking");
   const [accountId, setAccountId] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
@@ -120,11 +123,11 @@ export const useCodexAuth = ({
       setManualCode("");
       seedDefaultModel();
       notify.success(
-        "ChatGPT 로그인 완료",
-        "ChatGPT 계정이 연결되어 사용할 준비가 되었습니다."
+        t("signInComplete"),
+        t("signInReady")
       );
     },
-    [applyProfile, seedDefaultModel, stopPolling]
+    [applyProfile, seedDefaultModel, stopPolling, t]
   );
 
   const handleSignIn = useCallback(async () => {
@@ -156,8 +159,8 @@ export const useCodexAuth = ({
             stopPolling();
             markSignedOut();
             notify.error(
-              "로그인 실패",
-              "인증이 완료되지 않았습니다. 다시 로그인해 주세요."
+              t("signInFailed"),
+              t("authIncomplete")
             );
           }
         } catch {
@@ -166,12 +169,12 @@ export const useCodexAuth = ({
       }, POLL_INTERVAL_MS);
     } catch {
       notify.error(
-        "로그인 실패",
-        "로그인 과정을 시작할 수 없습니다. 다시 시도해 주세요."
+        t("signInFailed"),
+        t("cannotStartSignIn")
       );
       markSignedOut();
     }
-  }, [completeSignIn, markSignedOut, stopPolling]);
+  }, [completeSignIn, markSignedOut, stopPolling, t]);
 
   const handleManualExchange = useCallback(async () => {
     if (!sessionId || !manualCode.trim()) return;
@@ -190,13 +193,13 @@ export const useCodexAuth = ({
     } catch (err) {
       const message = err instanceof Error ? err.message : "";
       notify.error(
-        "로그인 실패",
+        t("signInFailed"),
         message || "인증 코드를 처리할 수 없습니다. 다시 시도해 주세요."
       );
     } finally {
       setIsExchanging(false);
     }
-  }, [completeSignIn, manualCode, sessionId]);
+  }, [completeSignIn, manualCode, sessionId, t]);
 
   const handleCancelPolling = useCallback(() => {
     stopPolling();
@@ -216,16 +219,16 @@ export const useCodexAuth = ({
       // documented default provider instead of keeping an unauthenticated one.
       onInputChangeRef.current("openai", "LLM");
       onInputChangeRef.current("", "codex_model");
-      notify.success("로그아웃 완료", "ChatGPT 연결이 해제되었습니다.");
+      notify.success(t("signOutComplete"), t("disconnected"));
     } catch {
       notify.error(
-        "로그아웃 실패",
-        "ChatGPT 연결을 해제할 수 없습니다. 다시 시도해 주세요."
+        t("signOutFailed"),
+        t("cannotDisconnect")
       );
     } finally {
       setIsLoggingOut(false);
     }
-  }, [markSignedOut]);
+  }, [markSignedOut, t]);
 
   const handleRefreshToken = useCallback(async () => {
     setIsRefreshing(true);
@@ -236,19 +239,19 @@ export const useCodexAuth = ({
       if (!res.ok) throw new Error("Refresh failed");
       applyProfile(await res.json());
       notify.success(
-        "세션 갱신 완료",
-        "ChatGPT 연결이 성공적으로 갱신되었습니다."
+        t("refreshComplete"),
+        t("refreshed")
       );
     } catch {
       notify.error(
-        "세션 갱신 실패",
-        "ChatGPT 세션을 갱신할 수 없습니다. 다시 로그인해 주세요."
+        t("refreshFailed"),
+        t("cannotRefresh")
       );
       markSignedOut();
     } finally {
       setIsRefreshing(false);
     }
-  }, [applyProfile, markSignedOut]);
+  }, [applyProfile, markSignedOut, t]);
 
   return {
     authStatus,
