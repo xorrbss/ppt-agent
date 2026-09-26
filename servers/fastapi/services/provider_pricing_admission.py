@@ -30,6 +30,7 @@ time, exactly what the gate would later refuse.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from typing import Any, Mapping
 
 from fastapi import HTTPException
@@ -218,6 +219,15 @@ def reject_write_that_introduces_a_pricing_gap(
     would lock the operator out of the same screen that repairs it -- including
     the act of selecting a priced model again.
     """
+
+    pricing_keys = (
+        "PUBLIC_PROVIDER_PRICING_REVISION",
+        "PUBLIC_PROVIDER_PRICING_CATALOG",
+    )
+    if not any(key in merged or os.environ.get(key) for key in pricing_keys):
+        # Registry defaults are runtime fallbacks, not provider settings. Their
+        # presence must not turn an ordinary settings patch into a pricing edit.
+        return
 
     introduced = _gap_identities(merged) - _gap_identities(existing)
     if not introduced:
