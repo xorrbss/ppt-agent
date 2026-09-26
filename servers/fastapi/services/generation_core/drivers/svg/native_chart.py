@@ -3,8 +3,9 @@
 Converted natively, the group's drawn children are replaced by a chart built
 from the payload, so the payload may only say what the group already shows:
 
-* The model JSON is ``{"chartType", "categories": [str], "series": [{"name",
-  "values": [num]}], "title"?: str}``; any other key rejects the declaration.
+* The model JSON declares its category order, point colours, value labels and
+  markers alongside the authored V1 values; SVG-only options live on the
+  sidecar entry, leaving the V1 chart payload unchanged.
 * Every category and series name (and the title, when declared) is drawn as a
   text in the group: the converter drops, and the pre-export validator
   rejects, a title or legend entry that is not drawn inside the group. Axis
@@ -27,23 +28,27 @@ from __future__ import annotations
 from services.generation_core.drivers.svg.native_geometry import (
     GroupPrimitives, NativeRejection, normalize_text, parse_label_number,
 )
+from services.generation_core.drivers.svg.native_chart_visual import chart_appearance
 
 CHART_ELEMENTS = frozenset({"g", "rect", "line", "polyline", "polygon", "path", "circle", "ellipse",
                             "text", "tspan"})
 
 
 def _model_chart(raw: dict) -> dict:
-    if not set(raw) <= {"chartType", "categories", "series", "title"}:
+    if not set(raw) <= {"chartType", "categories", "series", "title", "categoryOrder", "valueLabels", "markers"}:
         raise NativeRejection("native_chart_json_invalid")
     categories, series = raw.get("categories"), raw.get("series")
     if (not isinstance(categories, list) or not all(isinstance(c, str) for c in categories)
             or not isinstance(series, list) or not series
-            or not all(isinstance(s, dict) and set(s) <= {"name", "values"} and isinstance(s.get("name"), str)
+            or not all(isinstance(s, dict) and set(s) <= {"name", "values", "pointColors"}
+                       and isinstance(s.get("name"), str)
                        for s in series)
             or (raw.get("title") is not None and not isinstance(raw["title"], str))):
         raise NativeRejection("native_chart_json_invalid")
     payload = {"chartType": raw.get("chartType"), "categories": list(categories),
-               "series": [{"name": s["name"], "values": s.get("values")} for s in series]}
+               "series": [{"name": s["name"], "values": s.get("values"),
+                           **({"pointColors": s["pointColors"]} if "pointColors" in s else {})}
+                          for s in series]}
     if raw.get("title"):
         payload["title"] = raw["title"]
     return payload
@@ -68,8 +73,8 @@ def _series_colors(payload: dict, prims: GroupPrimitives) -> list[str] | None:
     return None
 
 
-def chart_object(raw: dict, prims: GroupPrimitives) -> tuple[dict, dict]:
-    """``(anchor, payload)`` for one declared chart; raises :class:`NativeRejection`."""
+def chart_object(raw: dict, prims: GroupPrimitives) -> tuple[dict, dict, dict | None]:
+    """``(anchor, payload, SVG appearance)`` for one declared chart."""
     if not prims.tags <= CHART_ELEMENTS:
         raise NativeRejection("native_group_element_unsupported")
     payload = _model_chart(raw)
@@ -104,4 +109,5 @@ def chart_object(raw: dict, prims: GroupPrimitives) -> tuple[dict, dict]:
     families = {text.family.split(",")[0].strip().strip("'\"") for text in prims.texts}
     if len(families) == 1 and "" not in families:
         payload["fontFamily"] = families.pop()
-    return frame.anchor(), payload
+    appearance = chart_appearance(raw, payload, prims)
+    return frame.anchor(), payload, appearance

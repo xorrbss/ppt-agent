@@ -63,6 +63,9 @@ class Shape:
     fill_alpha: float = 1.0
     stroke_alpha: float = 1.0
     stroke_width: float = 1.0
+    area: float = 0.0
+    centroid: tuple[float, float] | None = None
+    vertices: tuple[tuple[float, float], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -204,14 +207,26 @@ def shape_of(node: ET.Element, tag: str, dx: float, dy: float, attrs: dict) -> S
         points = list(zip(values[0::2], values[1::2], strict=False))
     if not points:
         raise NativeRejection("native_group_shape_empty")
-    xs, ys = [p[0] + dx for p in points], [p[1] + dy for p in points]
+    vertices = [(x + dx, y + dy) for x, y in points]
+    xs, ys = [p[0] for p in vertices], [p[1] for p in vertices]
+    area, centroid = 0.0, None
+    if tag in ("polygon", "path") and len(vertices) >= 3:
+        edges = [(vertices[i], vertices[(i + 1) % len(vertices)]) for i in range(len(vertices))]
+        signed = sum(x0 * y1 - x1 * y0 for (x0, y0), (x1, y1) in edges)
+        if abs(signed) > 1e-6:
+            area = abs(signed) / 2
+            centroid = (sum((x0 + x1) * (x0 * y1 - x1 * y0) for (x0, y0), (x1, y1) in edges)
+                        / (3 * signed),
+                        sum((y0 + y1) * (x0 * y1 - x1 * y0) for (x0, y0), (x1, y1) in edges)
+                        / (3 * signed))
     opacity = attrs.get("_opacity", 1.0)
     return Shape(tag, Box(min(xs), min(ys), max(xs), max(ys)),
                  None if tag in ("line", "image") else paint(attrs.get("fill", "black")),
                  paint(attrs.get("stroke")), 0 if tag in ("rect", "image") else len(points),
                  fill_alpha=float(attrs.get("fill-opacity", 1.0)) * opacity,
                  stroke_alpha=float(attrs.get("stroke-opacity", 1.0)) * opacity,
-                 stroke_width=float(attrs.get("stroke-width", 1.0)))
+                 stroke_width=float(attrs.get("stroke-width", 1.0)), area=area, centroid=centroid,
+                 vertices=tuple(vertices))
 
 
 def _text(node: ET.Element, dx: float, dy: float, attrs: dict) -> DrawnText:

@@ -46,7 +46,7 @@ def font_pt_to_px(value: float) -> float:
 
 def converter_payload(item: NativeObject) -> dict:
     project = _table if item.kind == "table" else _chart
-    payload = project(item.payload)
+    payload = project(item.payload) if item.kind == "table" else project(item.payload, item.svg_appearance)
     anchor = item.anchor
     return {"x": anchor.x, "y": anchor.y, "width": anchor.width, "height": anchor.height, **payload}
 
@@ -121,7 +121,7 @@ def _borders(borders: dict) -> dict:
     }
 
 
-def _chart(chart: dict) -> dict:
+def _chart(chart: dict, appearance: dict | None = None) -> dict:
     """Small, separate chart projection (category charts only; V1 has no other)."""
     chart_type = _CHART_TYPES[chart["chartType"]]
     palette = chart.get("palette") or _AUTHORED_PALETTE
@@ -130,6 +130,11 @@ def _chart(chart: dict) -> dict:
         entry: dict[str, Any] = {"name": item["name"], "values": list(item["values"])}
         if item.get("pointColors"):
             entry["point_colors"] = list(item["pointColors"])
+        if appearance is not None and chart_type == "line" and len(chart["series"]) == 1:
+            if appearance.get("lineWidthPx"):
+                entry["line_width"] = appearance["lineWidthPx"]
+            if appearance.get("markerDiameterPx"):
+                entry["marker_size"] = max(2, min(72, round(appearance["markerDiameterPx"] * 0.75)))
         series.append(entry)
     # Authored's series colour rule: its own colour, else the palette cycled.
     style: dict[str, Any] = {"colors": [item.get("color") or palette[index % len(palette)]
@@ -138,6 +143,20 @@ def _chart(chart: dict) -> dict:
                                  "style": style}
     if chart.get("title") is not None:
         projected["title"] = chart["title"]
+    if appearance is not None:
+        if chart.get("title"):
+            projected["title_reserve_space"] = True
+        if chart_type == "bar" and appearance["categoryOrder"] == "topToBottom":
+            projected["axes"] = {"category": {"position": "left", "reverse": True}}
+        if chart_type in {"pie", "doughnut"}:
+            projected["data_labels"] = {
+                "position": appearance["valueLabels"]["position"] or "bestFit",
+                "show_value": appearance["valueLabels"]["shown"], "show_category": True,
+            }
+        elif appearance["valueLabels"]["shown"]:
+            projected["data_labels"] = {"position": appearance["valueLabels"]["position"]}
+        if chart_type == "line" and appearance["markers"]:
+            projected["line_style"] = "lineMarker"
     if chart.get("fontFamily") is not None:
         style["font_family"] = chart["fontFamily"]
     if chart.get("fontSizePt") is not None:
