@@ -259,6 +259,7 @@ async def build_authored_retemplate_generation_request(
         "instructions": source.instructions,
         "language": source.language,
         "template": "authored",
+        "strategy": "authored",
         "include_table_of_contents": False,
         "include_title_slide": False,
         "export_as": "pptx",
