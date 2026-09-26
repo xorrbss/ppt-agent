@@ -39,6 +39,7 @@ from services.authored_vnext.generation.scene_checkpoint import (
     SceneRepairBudgetExhausted,
 )
 from services.authored_evidence_ledger import DeckEvidenceLedger
+from services.authored_admission_context import digest_html
 from services.authored_composition_policy import CompositionProfile
 from services.authored_generation_preflight import over_budget_violations
 from services.authored_generation_timing_receipt_e4 import (
@@ -56,15 +57,16 @@ from utils.llm_calls import author_vision_qa as author_vision_qa_mod
 from utils.llm_calls.author_deck import AuthoredDeckResult
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
 from utils.authored_semantic_role_repair import canonicalize_authored_roles
+from utils.slide_capture_result import RenderCapture
 
 TERMINAL_MARKER = "TERMINAL-SLIDE"
 
 _TERMINAL_HTML = (
-    "<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'></head>"
+    "<!DOCTYPE html><html lang='en'><head><meta charset=\"utf-8\"></head>"
     f"<body><h1>{TERMINAL_MARKER}</h1></body></html>"
 )
 _REMADE_HTML = (
-    "<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'></head>"
+    "<!DOCTYPE html><html lang='en'><head><meta charset=\"utf-8\"></head>"
     "<body><h1>REMADE</h1></body></html>"
 )
 
@@ -273,7 +275,7 @@ def _install_deck_stubs(monkeypatch, tmp_path, htmls):
         )
     monkeypatch.setattr(authored_generation_mod, "ensure_browser_metrics", fake_metrics)
 
-    async def fake_fit_content_revision(html, *, slide_index, policy_revision=None):
+    async def fake_fit_content_revision(html, *, slide_index, policy_revision=None, **_kwargs):
         canonical = canonicalize_authored_roles(html)
         return SimpleNamespace(
             html=canonical,
@@ -299,9 +301,9 @@ def _install_deck_stubs(monkeypatch, tmp_path, htmls):
         ``fit=`` because the knob defaults on, and reports nothing fitted, which
         is what a slide with no escaping card produces."""
 
-        return SimpleNamespace(
-            png=b"remade-png", browser_metrics={"telemetry": "ok"},
-            fitted_html=None, fit_report=None,
+        return RenderCapture.from_payload(
+            html_digest=digest_html(html), png=b"remade-png",
+            browser_metrics={"telemetry": "ok"}, runtime_counters={},
         )
 
     monkeypatch.setattr(terminal_mod, "render_html_to_png_with_metrics", fake_capture)
@@ -2246,7 +2248,7 @@ def _install_receipt_evidence(monkeypatch):
     attempt_id = public_attempt_id(str(uuid.uuid4()))
     ledger = DeckEvidenceLedger(attempt_id=attempt_id)
 
-    def tagged_metrics(html):
+    def tagged_metrics(html, **_kwargs):
         blocked = TERMINAL_MARKER in str(html) or _CAPACITY_MARKER in str(html)
         return {
             "telemetry": "ok",
@@ -2375,7 +2377,7 @@ def _install_metrics_gap(monkeypatch, gap_marker):
             + hashlib.sha256(str(html).encode("utf-8")).hexdigest(),
         }
 
-    def cached(html):
+    def cached(html, **_kwargs):
         return None if gap_marker in str(html) else measured(html)
 
     async def recollect(html, *_args, **_kwargs):
@@ -2672,14 +2674,6 @@ async def _paid_call(*, slot, model, retry_class, input_tokens, output_tokens):
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "merge debt: main-added test runs on the branch's shared deck stubs, whose "
-        "HTML and fake captures predate authored_metrics_require_prepared_html / "
-        "prepared_html capture binding; the same root fails ~15 branch tests in this file"
-    ),
-)
 def test_repair_rounds_receipt_their_provider_calls_by_stage(monkeypatch, tmp_path):
     """Remake-first, patch round and terminal remake each file their call and
     their span; the slide remade in both rounds gets two distinct receipts."""
