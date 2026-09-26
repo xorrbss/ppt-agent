@@ -1,4 +1,5 @@
 "use client";
+import { useTranslations as useA2bTranslations } from "next-intl";
 import React from "react";
 import SettingSideBar from "./SettingSideBar";
 import TextProvider from "./TextProvider";
@@ -13,6 +14,7 @@ import { useSettingsPageState } from "./setting-page/useSettingsPageState";
 import { useUnsavedModelGuard } from "./setting-page/useUnsavedModelGuard";
 
 const SettingsPage = () => {
+  const tA2b = useA2bTranslations("dashboardExtras");
   const {
     pathname,
     mode,
@@ -56,7 +58,7 @@ const SettingsPage = () => {
           <div className="mb-6 hidden min-h-12 items-center py-2 lg:flex">
             <div className="flex flex-wrap items-center gap-3">
               <h3 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl">
-                설정
+                {tA2b("settings")}
               </h3>
               <p className="rounded-full border border-violet-100 bg-violet-50 px-3 py-1 text-xs font-medium text-violet-700">
                 {textSummary} · {imageSummary}

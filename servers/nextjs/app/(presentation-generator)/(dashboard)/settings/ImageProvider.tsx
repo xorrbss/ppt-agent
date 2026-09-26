@@ -1,3 +1,4 @@
+import { useTranslations as useA2bTranslations } from "next-intl";
 import ToolTip from '@/components/ToolTip'
 import { Button } from '@/components/ui/button'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
@@ -13,6 +14,7 @@ import React, { useEffect, useState } from 'react'
 import Image from 'next/image'
 
 const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setLlmConfig: React.Dispatch<React.SetStateAction<LLMConfig>> }) => {
+  const tA2b = useA2bTranslations("dashboardExtras");
     const [openImageProviderSelect, setOpenImageProviderSelect] = useState(false);
     const [showApiKey, setShowApiKey] = useState(false);
     const [openaiCompatListMeta, setOpenaiCompatListMeta] = useState<{
@@ -112,7 +114,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
             return (
                 <div className="w-full sm:w-[262px]">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                        {IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER].label} 품질
+                        {IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER].label} {tA2b("quality")}
                     </label>
                     <div className="">
                         <Select
@@ -260,7 +262,7 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                         (() => {
                                             const provider = IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER];
                                             if (provider.value === "codex_image") {
-                                                return <p className="text-sm text-gray-600">기존 Codex 로그인을 사용하며 Codex 사용 한도가 적용됩니다. GPT Image 2.5 Sunburst를 요청하지만 실제 적용 모델은 서버가 공개하지 않습니다. 로그인은 ChatGPT 제공자 설정에서 관리합니다.</p>;
+                                                return <p className="text-sm text-gray-600">{tA2b("usesYourExistingCodexLoginAndIts")}</p>;
                                             }
 
                                             const layout = PUBLIC_PROVIDERS_BY_ID[provider.value]?.ui?.credentialLayout;

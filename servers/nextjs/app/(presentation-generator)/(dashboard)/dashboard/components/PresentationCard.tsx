@@ -1,3 +1,4 @@
+import { useTranslations as useA2bTranslations } from "next-intl";
 'use client'
 import React, { useEffect, useRef } from "react";
 
@@ -39,6 +40,7 @@ export const PresentationCard = ({
   presentation: any;
   onDeleted?: (presentationId: string) => void;
 }) => {
+  const tA2b = useA2bTranslations("dashboardExtras");
   const t = useTranslations("community");
   const tWorkspace = useTranslations("slideWorkspace");
   const title = getPresentationDisplayTitle({ ...presentation, title: storedTitle }, tWorkspace("untitledPresentation"));
@@ -159,7 +161,7 @@ export const PresentationCard = ({
       }}
       role="link"
       tabIndex={0}
-      aria-label={`${title || "발표자료"} 열기`}
+      aria-label={tA2b("openValue", { value0: title || "발표자료" })}
       className="bg-zinc-50 font-syne shadow-none presentation-card rounded-2xl border border-zinc-200 p-0 group hover:border-zinc-300 hover:shadow-[0_8px_24px_-12px_rgba(24,24,27,0.2)] transition-all duration-200 slide-theme cursor-pointer overflow-hidden flex flex-col focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2"
     >
       <div
@@ -190,7 +192,7 @@ export const PresentationCard = ({
             <Popover>
               <PopoverTrigger
                 ref={menuTriggerRef}
-                aria-label={`${title || "발표자료"} 메뉴`}
+                aria-label={tA2b("menuForValue", { value0: title || "발표자료" })}
                 className="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5146E5]"
                 onClick={(event) => event.stopPropagation()}
                 onKeyDown={(event) => {
