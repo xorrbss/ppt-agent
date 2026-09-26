@@ -170,3 +170,35 @@ def test_style_reference_durable_payload_adds_only_the_authored_pins():
         published_theme["authored_vnext"]["schemaVersion"]
         == "authored-editable-hybrid-scene-projection/v1"
     )
+
+
+def test_a_pre_resolver_legacy_payload_rehydrates_its_omitted_strategy_as_authored():
+    """A durable payload saved before the strategy resolver existed never
+    pinned ``strategy``: rehydrating it today must not silently reinterpret
+    that omission through the current (svg) default. Only an omitted value
+    is backfilled -- an explicit legacy choice is never overridden, and a
+    payload that already carries the resolver's reason key is left alone.
+    """
+
+    # A pre-D1 durable payload was just ``request.model_dump(mode="json")``:
+    # no pinned "strategy" and no reason key at all.
+    legacy_omitted = GeneratePresentationRequest(
+        content="Legacy deck", template="authored"
+    ).model_dump(mode="json")
+    assert legacy_omitted["strategy"] is None
+    assert "_internal_generation_strategy_reason" not in legacy_omitted
+    restored = _request_from_durable_payload(legacy_omitted)
+    assert restored.strategy == "authored"
+
+    legacy_explicit_svg = GeneratePresentationRequest(
+        content="Legacy deck", strategy="svg"
+    ).model_dump(mode="json")
+    assert "_internal_generation_strategy_reason" not in legacy_explicit_svg
+    restored_explicit = _request_from_durable_payload(legacy_explicit_svg)
+    assert restored_explicit.strategy == "svg"
+
+    svg_request = GeneratePresentationRequest(content="Svg deck", strategy="svg")
+    svg_durable = _durable_request_payload(svg_request)
+    assert svg_durable["_internal_generation_strategy_reason"] == "explicit"
+    restored_svg = _request_from_durable_payload(svg_durable)
+    assert restored_svg.strategy == "svg"

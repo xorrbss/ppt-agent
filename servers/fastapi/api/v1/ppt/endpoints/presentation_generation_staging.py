@@ -336,7 +336,14 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
     # schema. It remains on the durable job across operation rebinds, but must
     # never be passed to Pydantic as caller input.
     values.pop(INTERNAL_ADMISSION_RETRY_KEY, None)
-    values.pop("_internal_generation_strategy_reason", None)
+    strategy_reason = values.pop("_internal_generation_strategy_reason", None)
+    if strategy_reason is None and values.get("strategy") is None:
+        # A payload durably saved before the strategy resolver existed never
+        # pinned this key: its omitted ``strategy`` meant the then-default
+        # (authored), not today's default (svg). Re-resolving it now would
+        # silently switch a queued or retried pre-deployment authored job to
+        # svg the first time it is rehydrated after the upgrade.
+        values["strategy"] = "authored"
     from services.public_generation_route import LEGACY_RESTYLE_FIT_POLICY_KEY
 
     values.pop(LEGACY_RESTYLE_FIT_POLICY_KEY, None)
