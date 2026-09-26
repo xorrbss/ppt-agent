@@ -162,7 +162,10 @@ def test_public_v2_contract_delegates_async_surfaces_and_fails_closed_quality() 
                 "schemaVersion": "presentation-generation-request/v2",
                 "content": "A bounded public deck",
                 "slideCount": 5,
-                "generationEngine": "deck-ir",
+                # "deck-ir" is retired as an explicit client selection; any
+                # still-accepted value proves the same field-passthrough
+                # fidelity this test actually exercises.
+                "generationEngine": "authored",
             },
         )
         assert generated.status_code == 202
@@ -260,7 +263,7 @@ def test_public_v2_contract_delegates_async_surfaces_and_fails_closed_quality() 
     assert isinstance(generation_call, dict)
     assert generation_call["actor"] == actor
     assert generation_call["idempotency_key"] == "generate-key"
-    assert generation_call["request"].generation_engine == "deck-ir"
+    assert generation_call["request"].generation_engine == "authored"
 
     evidence = {
         "checkerVersion": "geometry/1",

@@ -96,9 +96,13 @@ def test_generation_mode_contract_and_server_owned_route_receipt(
         "_installed_generation_route_resolver",
         lambda: None,
     )
+    # An explicit authored request reaches the legacy deck-ir/narrative-IR
+    # resolver path exactly as before; the resolver-unavailable fallback
+    # still applies there.
     fallback_request = PresentationGenerationRequestV2(
         content="Brand style deck",
         generationMode="brand-style",
+        strategy="authored",
     )
     fallback = asyncio.run(
         public_v2_orchestrator._resolve_generation_route_receipt(
@@ -111,6 +115,25 @@ def test_generation_mode_contract_and_server_owned_route_receipt(
     assert fallback.fallback_reason == "route_resolver_unavailable"
     assert public_v2_orchestrator._effective_generation_engine(fallback_request) == (
         "deck-ir"
+    )
+
+    # The same generationMode with strategy omitted is svg by default now --
+    # it never reaches the deck-ir/narrative-IR resolver at all.
+    svg_default_request = PresentationGenerationRequestV2(
+        content="Brand style deck",
+        generationMode="brand-style",
+    )
+    svg_default = asyncio.run(
+        public_v2_orchestrator._resolve_generation_route_receipt(
+            svg_default_request,
+            slide_count=10,
+            resolver=None,
+        )
+    )
+    assert svg_default.selected_route == "svg-native"
+    assert svg_default.fallback_reason is None
+    assert public_v2_orchestrator._effective_generation_engine(svg_default_request) == (
+        "authored"
     )
 
     legacy = PresentationGenerationRequestV2(

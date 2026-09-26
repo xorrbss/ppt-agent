@@ -419,6 +419,11 @@ async def _create(
     idempotency_key: str,
     content: str = "Build a durable strategy deck",
     theme: dict | None = None,
+    # This suite exercises the authored creation/theme path specifically;
+    # the endpoint's own default is svg since D1 (services.compatibility_
+    # migration.admission.stamp_new_svg_presentation), which stamps a
+    # different theme shape (no authored_vnext.canvas).
+    strategy: str = "authored",
 ):
     return await presentation_crud.create_presentation(
         content=content,
@@ -433,6 +438,7 @@ async def _create(
         include_title_slide=True,
         web_search=False,
         theme=theme,
+        strategy=strategy,
         idempotency_key=idempotency_key,
         sql_session=session,
     )

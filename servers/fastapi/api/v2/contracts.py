@@ -117,7 +117,10 @@ class PresentationGenerationRequestV2(PublicWireModel):
         "presentation-generation-request/v2"
     )
     engine: Literal["authored"] = "authored"
-    strategy: Literal["authored", "svg"] = "authored"
+    # Omit for the server default (svg) -- see
+    # services.generation_core.admission.resolve_generation_strategy. Never
+    # read this field directly; every decision goes through the resolver.
+    strategy: Literal["authored", "svg"] | None = None
     generation_mode: GenerationMode = "auto"
     design_pack_pin: DesignPackPinV1 | None = None
     generation_engine: Literal["authored", "deck-ir"] | None = "authored"
@@ -196,7 +199,15 @@ class PresentationGenerationRequestV2(PublicWireModel):
                 raise ValueError("raster_approval_pin_required")
             if self.source_content_manifest_pin is not None or len(self.reference_snapshot_ids) != 1:
                 raise ValueError("raster_single_source_snapshot_required")
-            if self.strategy != "svg" or self.page_size != "A4" or self.orientation is None:
+            from services.generation_core.admission.strategy import (
+                resolve_generation_strategy,
+            )
+
+            if (
+                resolve_generation_strategy(self) != "svg"
+                or self.page_size != "A4"
+                or self.orientation is None
+            ):
                 raise ValueError("raster_a4_svg_required")
             if not self.authored_style or self.slides_markdown is not None or self.quality_policy == "release-v1":
                 raise ValueError("source_content_generation_option_conflict")
