@@ -30,6 +30,8 @@ clock those two calls cost is documented in the ordering module named above.
 
 from __future__ import annotations
 
+from services.authored_terminal_replay_plan import replayed_plan_kwargs as replayed_plan_kwargs
+
 import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -42,8 +44,8 @@ from services.authored_composition_policy import (
 )
 from utils.authored_semantic_role_repair import canonicalize_authored_roles
 from services.authored_infographic_assets import (
-    build_infographic_asset_context,
-    deck_has_picture_source,
+    build_infographic_asset_context as build_infographic_asset_context,
+    deck_has_picture_source as deck_has_picture_source,
 )
 from services.authored_presentation_artifacts import (
     _complete_stage_after_external_success,
@@ -58,8 +60,8 @@ from services.authored_remake_schedule import (
 from services.authored_terminal_slide_flag_only import verbatim_flagged_slides
 from services.authored_terminal_slide_policy import terminal_fallback_active
 from services.authored_vnext.generation.scene_envelope import replace_deck_scene_slide
-from services.image_generation_service import ImageGenerationService
-from utils.asset_directory_utils import get_images_directory
+from services.image_generation_service import ImageGenerationService as ImageGenerationService
+from utils.asset_directory_utils import get_images_directory as get_images_directory
 from utils.authored_dom_quality import inspect_authored_dom
 from utils.llm_calls.author_vision_qa import revise_authored_deck
 from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
@@ -132,49 +134,6 @@ def _blocking_defects(
     return tuple(blocking_safety_issues(report))
 
 
-def replayed_plan_kwargs(
-    indices: Sequence[int],
-    *,
-    chapter_plan: Any = None, illustration_plan: Any = None,
-    infographic_plan: Any = None, style: Any = None, brand: Any = None,
-    instructions: object = None, exact_reconstruction: bool = False,
-    with_assets: bool = False,
-) -> dict[str, Any]:
-    """The deck's own per-slide plan decisions, replayed into a revise call.
-
-    A repaired or re-authored slide must be produced under the same deck-wide
-    decisions its first draft was: without the chapter prefix, the one slide a
-    revise pass touched is the one whose eyebrow disagrees with the deck.
-    ``None`` stays distinct from an empty plan -- with no plan at all the
-    legacy behaviour still lets a slide request an illustration.
-
-    An exact-reconstruction deck replays only the chapter prefixes; its
-    illustration and infographic slots are dictated by the reference page.
-    ``with_assets`` adds the deck-level infographic asset context and the image
-    service a reviser needs for an allowed replacement slot; the bounded patch
-    round passes neither, because a local patch may not replace an image.
-    """
-
-    kwargs: dict[str, Any] = {}
-    if chapter_plan is not None:
-        kwargs["chapter_prefixes"] = [
-            chapter_plan.eyebrow_prefix_at(index) for index in indices
-        ]
-    if exact_reconstruction:
-        return kwargs
-    if illustration_plan is not None:
-        kwargs["illustration_slots"] = [
-            illustration_plan.allows(index) for index in indices
-        ]
-    if infographic_plan is not None:
-        kwargs["infographic_briefs"] = [infographic_plan.at(i) for i in indices]
-        if with_assets:
-            kwargs["infographic_assets"] = build_infographic_asset_context(
-                style=style, brand=brand, instructions=instructions
-            )
-    if with_assets and deck_has_picture_source(style):
-        kwargs["image_service"] = ImageGenerationService(get_images_directory())
-    return kwargs
 
 
 async def _remake_candidate(
