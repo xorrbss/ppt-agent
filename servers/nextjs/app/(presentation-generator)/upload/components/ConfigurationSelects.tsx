@@ -1,3 +1,4 @@
+import { useTranslations as useA2bTranslations } from "next-intl";
 import { PresentationConfig } from "../type";
 import { useEffect, useState } from "react";
 import { Check, ChevronUp } from "lucide-react";
@@ -174,6 +175,7 @@ export function ConfigurationSelects({
     generationStrategy = "svg",
     sourceDocumentCanvas = null,
 }: ConfigurationSelectsProps) {
+  const tA2b = useA2bTranslations("uploadExtras");
     const [openSlides, setOpenSlides] = useState(false);
     const [supportedAspectRatios, setSupportedAspectRatios] = useState<AspectRatio[]>(["16:9"]);
     const [a4Enabled, setA4Enabled] = useState<boolean | null>(null);
@@ -244,11 +246,11 @@ export function ConfigurationSelects({
             /> : null}
             {sourceSvgLandscape ? (
                 <div className="flex h-9 items-center gap-2 rounded-xl bg-slate-50 px-3 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-200/80" data-testid="source-svg-landscape-canvas">
-                    <span>캔버스</span>
+                    <span>{tA2b("canvas")}</span>
                     <span className="text-slate-900">{sourceCanvasLabel}</span>
                 </div>
             ) : showA4Controls ? <label className="flex h-9 items-center gap-2 rounded-xl bg-slate-50 px-3 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-200/80">
-                <span>방향</span>
+                <span>{tA2b("orientation")}</span>
                 <select
                     value={config.orientation ?? "landscape"}
                     disabled={a4Enabled === null && !rasterSourceCandidate}
@@ -261,34 +263,34 @@ export function ConfigurationSelects({
                         );
                     }}
                     className="bg-transparent outline-none"
-                    aria-label="방향"
+                    aria-label={tA2b("orientation")}
                     data-testid="document-orientation-select"
                 >
-                    <option value="landscape">가로</option>
-                    <option value="portrait">세로</option>
+                    <option value="landscape">{tA2b("landscape")}</option>
+                    <option value="portrait">{tA2b("portrait")}</option>
                 </select>
             </label> : <label className="flex h-9 items-center gap-2 rounded-xl bg-slate-50 px-3 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-200/80">
-                <span>화면 비율</span>
+                <span>{tA2b("aspectRatio")}</span>
                 <select
                     value={config.aspectRatio}
                     onChange={(event) => onConfigChange("aspectRatio", event.target.value as AspectRatio)}
                     className="bg-transparent outline-none"
-                    aria-label="화면 비율"
+                    aria-label={tA2b("aspectRatio")}
                     data-testid="aspect-ratio-select"
                 >
-                    <option value="16:9">가로 16:9</option>
-                    <option value="9:16" disabled={!portraitSupported}>세로 9:16{portraitSupported ? "" : ` (${portraitUnavailableReason})`}</option>
-                    <option value="9:13" disabled={!proposalSupported}>세로 9:13{proposalSupported ? "" : ` (${portraitUnavailableReason})`}</option>
+                    <option value="16:9">{tA2b("landscape169")}</option>
+                    <option value="9:16" disabled={!portraitSupported}>{tA2b("portrait916")}{portraitSupported ? "" : ` (${portraitUnavailableReason})`}</option>
+                    <option value="9:13" disabled={!proposalSupported}>{tA2b("portrait913")}{proposalSupported ? "" : ` (${portraitUnavailableReason})`}</option>
                 </select>
             </label>}
             {!sourceSvgLandscape && !rasterSourceCandidate && a4Enabled !== null && showA4Controls && !a4SelectionAllowed ? (
                 <p className="w-full text-xs text-amber-700" role="status">
-                    선택한 생성 방식과 회사 표준 조합의 A4 지원이 아직 확인되지 않았습니다. 방향은 유지되며, 지원 확인 전에는 생성할 수 없습니다.
+                    {tA2b("a4SupportForTheSelectedGenerationMode")}
                 </p>
             ) : null}
             {!a4Enabled && hasCompanyStandard && config.aspectRatio !== "16:9" ? (
                 <p className="w-full text-xs text-amber-700" role="note" data-testid="portrait-master-unavailable">
-                    세로형 Authored 생성은 회사 표준 마스터와 함께 사용할 수 없습니다. 마스터를 해제하거나 가로 16:9를 선택해 주세요.
+                    {tA2b("portraitAuthoredGenerationCannotBeUsedWith")}
                 </p>
             ) : null}
             <AdvanceSettings

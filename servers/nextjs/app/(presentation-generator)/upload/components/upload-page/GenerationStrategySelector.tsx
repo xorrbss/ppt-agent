@@ -4,6 +4,7 @@
  * UploadPage.tsx (file-size ratchet split); behaviour unchanged, only the
  * module boundary moved.
  */
+import { useTranslations } from "next-intl";
 import type { PresentationGenerationStrategy } from "@/store/slices/presentationGenUpload";
 import type { PresentationConfig } from "../../type";
 
@@ -21,13 +22,15 @@ export const GenerationStrategySelector = ({
   onChangeStrategy,
   sourceSvgCapability,
   pageSize,
-}: GenerationStrategySelectorProps) => (
+}: GenerationStrategySelectorProps) => {
+  const t = useTranslations("uploadExtras");
+  return (
   <fieldset className="mt-4" data-testid="generation-strategy-selector">
-    <legend className="mb-2 text-sm font-semibold text-[#242629]">생성 방식</legend>
+    <legend className="mb-2 text-sm font-semibold text-[#242629]">{t("generationMode")}</legend>
     <div className="flex flex-wrap gap-2">
       {([
-        ["authored", "AI 저작", "기본 방식"],
-        ["svg", "SVG", sourceContentMode ? "이미지형 원본 화면을 A4로 보존" : "벡터 원본으로 생성"],
+        ["authored", t("aiAuthored"), t("defaultMode")],
+        ["svg", "SVG", sourceContentMode ? t("preserveImageSourceOnA4") : t("generateFromVectorSource")],
       ] as const).map(([strategy, label, description]) => (
         <label key={strategy} className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm">
           <input
@@ -44,11 +47,12 @@ export const GenerationStrategySelector = ({
       ))}
     </div>
     {sourceContentMode && sourceSvgCapability === null && pageSize !== "A4" ? (
-      <p className="mt-2 text-xs text-slate-500" role="status">SVG 원본 보존 지원을 확인하고 있습니다.</p>
+      <p className="mt-2 text-xs text-slate-500" role="status">{t("checkingSvgSourcePreservation")}</p>
     ) : sourceContentMode && sourceSvgCapability === false && pageSize !== "A4" ? (
-      <p className="mt-2 text-xs text-amber-700" role="status">이 서버에서는 원본 콘텐츠 유지 SVG 생성을 아직 사용할 수 없습니다.</p>
+      <p className="mt-2 text-xs text-amber-700" role="status">{t("svgSourcePreservationUnavailable")}</p>
     ) : null}
   </fieldset>
-);
+  );
+};
 
 export default GenerationStrategySelector;

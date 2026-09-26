@@ -1,4 +1,5 @@
 "use client";
+import { useTranslations as useA2bTranslations } from "next-intl";
 
 /**
  * Source-content admission: analyse the uploaded deck, then decide whether the
@@ -57,6 +58,7 @@ export const useSourceContentAdmission = ({
   setLoadingState,
   trackUploadValidationFailure,
 }: UseSourceContentAdmissionArgs) => {
+  const tA2b = useA2bTranslations("uploadExtras");
   const [summary, setSummary] = useState<SourceContentAnalysisSummary | null>(
     null,
   );
@@ -82,7 +84,7 @@ export const useSourceContentAdmission = ({
     if (validation) {
       trackUploadValidationFailure(validation);
       notify.warning(
-        "원본 콘텐츠 유지 파일 제한",
+        tA2b("fileLimitForSourceContentPreservation"),
         sourceContentSelectionErrorMessage(validation),
       );
       return null;

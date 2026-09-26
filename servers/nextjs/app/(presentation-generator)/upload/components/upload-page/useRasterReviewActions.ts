@@ -1,4 +1,5 @@
 "use client";
+import { useTranslations as useA2bTranslations } from "next-intl";
 /**
  * Owns the raster review's operation/page state and its per-request actions
  * (page navigation, region/page-mode edits, inventory confirmation,
@@ -57,6 +58,7 @@ export const useRasterReviewActions = ({
   handoffRasterGeneration,
   handleGenerationError,
 }: RasterReviewActionsDeps) => {
+  const tA2b = useA2bTranslations("uploadExtras");
   const [rasterOperation, setRasterOperation] = useState<RasterOperationWire | null>(null);
   const [rasterPage, setRasterPage] = useState<RasterReviewPageDetail | null>(null);
   const [isRasterPageLoading, setIsRasterPageLoading] = useState(false);
@@ -69,7 +71,7 @@ export const useRasterReviewActions = ({
       const detail = await RasterSourceApi.page(rasterOperation.operation_id, pageIndex + 1);
       setRasterPage(rasterPageDetail(rasterOperation, detail));
     } catch {
-      notify.error("원본 페이지를 불러오지 못했습니다", "다시 시도해 주세요.");
+      notify.error(tA2b("couldNotLoadTheSourcePage"), tA2b("pleaseTryAgain"));
     } finally {
       setIsRasterPageLoading(false);
     }
@@ -206,7 +208,7 @@ export const useRasterReviewActions = ({
         setRasterRecovery(recovery);
         setRasterOperation(operation);
         setLoadingState({ isLoading: false, message: "원본 보존으로 전환하지 못했습니다. 기존 검토 상태를 유지합니다.", showProgress: false });
-        notify.error("원본 화면 보존을 시작하지 못했습니다", "기존 검토 내용은 그대로 유지됩니다.");
+        notify.error(tA2b("couldNotStartSourceScreenPreservation"), tA2b("existingReviewContentRemainsSaved"));
       }
     } finally {
       startInFlightRef.current = false;

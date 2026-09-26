@@ -1,4 +1,5 @@
 "use client";
+import { useTranslations as useA2bTranslations } from "next-intl";
 import React, { useRef, useState } from "react";
 import { notify } from "@/components/ui/sonner";
 import { useUploadLimits } from "@/lib/use-upload-limits";
@@ -22,6 +23,7 @@ export const useSupportingFiles = ({
   sourceLocked?: boolean;
   onFilesChange?: (files: File[]) => void;
 } = {}) => {
+  const tA2b = useA2bTranslations("uploadExtras");
   const uploadLimits = useUploadLimits();
 
   const [files, setFiles] = useState<File[]>([]);
@@ -37,7 +39,7 @@ export const useSupportingFiles = ({
       : null;
     if (sourceLockedError) {
       notify.error(
-        "원본 문서 그대로 생성 파일 제한",
+        tA2b("fileLimitForSourceDocumentGeneration"),
         sourceLockedSelectionErrorMessage(sourceLockedError),
       );
       return false;

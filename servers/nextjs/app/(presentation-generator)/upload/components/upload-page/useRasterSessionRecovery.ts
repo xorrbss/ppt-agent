@@ -1,4 +1,5 @@
 "use client";
+import { useTranslations as useA2bTranslations } from "next-intl";
 /**
  * On mount, restores an in-progress raster review from sessionStorage (a
  * browser refresh or back-navigation should not lose it) and either hands it
@@ -56,6 +57,7 @@ export const useRasterSessionRecovery = ({
   setRasterPage,
   handoffRasterGeneration,
 }: RasterSessionRecoveryDeps) => {
+  const tA2b = useA2bTranslations("uploadExtras");
   useEffect(() => {
     let saved: RasterReviewRecovery | null = null;
     try {
@@ -106,7 +108,7 @@ export const useRasterSessionRecovery = ({
         setRasterRecovery(null);
         setGenerationAttemptActive(false);
         setLoadingState({ isLoading: false, message: "", showProgress: false });
-        notify.error("이전 원본 분석을 불러오지 못했습니다", "소유 권한이나 분석 상태를 확인해 주세요.");
+        notify.error(tA2b("couldNotLoadThePreviousSourceAnalysis"), tA2b("checkOwnershipPermissionsOrAnalysisStatus"));
       }
     })();
     return () => controller.abort();

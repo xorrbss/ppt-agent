@@ -1,3 +1,4 @@
+import { useTranslations as useA2bTranslations } from "next-intl";
 /**
  * Upload entry experience: a centered creation composer followed by a
  * container-responsive template catalog. Generation behavior remains owned by
@@ -54,6 +55,7 @@ export interface UploadPageProps {
 const UploadPage = ({
   masterFeatureEnabled = isAuthoredVnextMasterEnabled(),
 }: UploadPageProps = {}) => {
+  const tA2b = useA2bTranslations("uploadExtras");
   const t = useTranslations("upload");
   const uploadLimits = useUploadLimits();
   const dispatch = useDispatch();
@@ -237,12 +239,12 @@ const UploadPage = ({
       progressLabel={loadingState.progressLabel}
       detail={loadingState.extra_info}
       actions={<>
-        {canCancelDocumentProcessing && <Button variant="outline" onClick={() => abortDocumentProcessing(decomposeAbortControllerRef.current)}>자료 처리 취소</Button>}
+        {canCancelDocumentProcessing && <Button variant="outline" onClick={() => abortDocumentProcessing(decomposeAbortControllerRef.current)}>{tA2b("cancelDocumentProcessing")}</Button>}
         {!generationBusy && !sourceContentLossPrompt && (rasterRetryAvailable
-          ? <Button onClick={() => void retryRasterAnalysis()}>분석 상태 다시 확인</Button>
+          ? <Button onClick={() => void retryRasterAnalysis()}>{tA2b("checkAnalysisStatusAgain")}</Button>
           : loadingState.awaitingReceipt
-            ? <Button onClick={() => void recoverCreate()}>접수 확인·계속</Button>
-            : <Button variant="outline" onClick={editGenerationRequest}>요청 수정</Button>)}
+            ? <Button onClick={() => void recoverCreate()}>{tA2b("checkAdmissionAndContinue")}</Button>
+            : <Button variant="outline" onClick={editGenerationRequest}>{tA2b("editRequest")}</Button>)}
       </>}
     >
       <SourceContentLossDialog inline prompt={sourceContentLossPrompt} onDecide={resolveSourceContentLossPrompt} />
@@ -349,11 +351,11 @@ const UploadPage = ({
 
             {sourceContentMode && generationStrategy === "svg" && config.pageSize === "A4" && authoredStyle === "screenshot-blue" &&
               <details className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
-                <summary className="cursor-pointer font-medium">고급 옵션 · 모든 영역을 직접 검토</summary>
+                <summary className="cursor-pointer font-medium">{tA2b("advancedOptionReviewEveryRegionManually")}</summary>
                 <label className="mt-3 flex items-start gap-2">
                   <input type="checkbox" className="mt-1" checked={rasterAdvancedReview}
                     onChange={(event) => setRasterAdvancedReview(event.target.checked)} />
-                  <span>기본값은 서버가 자동으로 재구성하고 확신이 낮은 소수 항목만 확인을 요청합니다. 이 옵션을 켜면 모든 영역과 인식 문자를 페이지별로 직접 검토합니다.</span>
+                  <span>{tA2b("byDefaultTheServerReconstructsContentAutomatically")}</span>
                 </label>
               </details>}
 

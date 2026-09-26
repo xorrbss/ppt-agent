@@ -1,4 +1,5 @@
 "use client";
+import { useTranslations as useA2bTranslations } from "next-intl";
 /**
  * Owns all local review state, derived values and save/approve/page-mode
  * actions for RasterSourceReview.tsx: the current page/region selection,
@@ -53,6 +54,7 @@ export function useRasterSourceReviewState({
   onConfirmInventory,
   onApprove,
 }: UseRasterSourceReviewStateArgs) {
+  const tA2b = useA2bTranslations("uploadExtras");
   const [pageIndex, setPageIndex] = useState(analysis.pages[0]?.pageIndex ?? 0);
   const [regionId, setRegionId] = useState<string | null>(null);
   const [textDraft, setTextDraft] = useState("");
@@ -303,7 +305,7 @@ export function useRasterSourceReviewState({
   const a4Preview = a4PreviewUrl ? <div className="mx-auto w-full max-w-52 rounded border border-slate-300 bg-white p-1 shadow-sm"
     style={{ aspectRatio: analysis.targetCanvas === "a4-portrait" ? "840 / 1188" : "1188 / 840" }}>
     {/* eslint-disable-next-line @next/next/no-img-element */}
-    <img src={a4PreviewUrl} alt={`${pageIndex + 1}장 A4 배치 비율 미리보기`} className="h-full w-full object-contain" />
+    <img src={a4PreviewUrl} alt={tA2b("a4LayoutProportionPreviewForSlideValue", { value0: pageIndex + 1 })} className="h-full w-full object-contain" />
   </div> : null;
 
   return {

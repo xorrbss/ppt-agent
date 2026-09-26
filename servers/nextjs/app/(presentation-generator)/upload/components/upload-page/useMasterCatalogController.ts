@@ -1,4 +1,5 @@
 "use client";
+import { useTranslations as useA2bTranslations } from "next-intl";
 /**
  * Owns the company-standard "master catalog" dialog state and the AI-import
  * flow that lets a user analyse an uploaded PPTX into a new master: which
@@ -40,6 +41,7 @@ export const useMasterCatalogController = ({
   analysisSourceFile,
   uploadLimits,
 }: UseMasterCatalogControllerArgs) => {
+  const tA2b = useA2bTranslations("uploadExtras");
   const [masterCatalogOpen, setMasterCatalogOpen] = useState(false);
   const [masterCatalogEntryMode, setMasterCatalogEntryMode] =
     useState<MasterCatalogEntryMode>("catalog");
@@ -83,15 +85,15 @@ export const useMasterCatalogController = ({
     if (!/\.(?:ppt|pptx)$/i.test(file.name)) return;
     if (file.size > uploadLimits.document.bytes) {
       notify.error(
-        "파일이 너무 큽니다",
-        `파일당 최대 크기는 ${uploadLimits.document.mb}MB입니다.`,
+        tA2b("fileIsTooLarge"),
+        tA2b("theMaximumSizePerFileIsValue", { value0: uploadLimits.document.mb }),
       );
       return;
     }
     if (!analysisSourceFile && files.length >= MAX_SUPPORTED_FILES) {
       notify.warning(
-        "최대 파일 수 초과",
-        `문서는 최대 ${MAX_SUPPORTED_FILES}개까지만 업로드할 수 있습니다.`,
+        tA2b("maximumFileCountExceeded"),
+        tA2b("youCanUploadUpToValueDocuments", { value0: MAX_SUPPORTED_FILES }),
       );
       return;
     }

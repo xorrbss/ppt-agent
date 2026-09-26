@@ -8,6 +8,7 @@ import { setPptGenUploadState, type CompanyStandardSelection } from "@/store/sli
 import type { RootState } from "@/store/store";
 import { documentCanvasRequestForConfig, LanguageType, type PresentationConfig } from "../../type";
 import { notify } from "@/components/ui/sonner";
+import { uploadExtraTranslator } from "./uploadExtraTranslator";
 import { isAbortError, PresentationGenerationApi, type DocumentUploadAdmission } from "../../../services/api/presentation-generation";
 import { SOURCE_CONTENT_POLICY, type SourceContentAnalysisResponseV1 } from "../../../services/api/source-content/contract";
 import { getApiErrorDisplayMessage } from "../../../services/api/api-error-handler";
@@ -151,10 +152,11 @@ export function createUploadGenerationHandlers({
       });
       return true;
     } catch (error: any) {
+      const t = uploadExtraTranslator();
       notify.error(
-        "이미지 제공자에 연결할 수 없습니다",
+        t("cannotConnectImageProvider"),
         error?.message ||
-        `현재 ${selectedProvider}에 연결할 수 없습니다. API 키와 설정을 확인한 후 다시 시도해 주세요.`
+        t("cannotConnectSelectedProvider", { provider: selectedProvider })
       );
       return false;
     }

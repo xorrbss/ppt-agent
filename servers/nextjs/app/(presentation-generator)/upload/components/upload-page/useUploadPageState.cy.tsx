@@ -3,6 +3,8 @@ import { mount } from "cypress/react";
 import { Provider } from "react-redux";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { PathnameContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
+import { NextIntlClientProvider } from "next-intl";
+import koMessages from "@/i18n/messages/ko.json";
 
 import { makeStore } from "@/store/store";
 import {
@@ -76,6 +78,7 @@ const mountHarness = ({
   reduxStore.dispatch(setPptGenUploadState({ authoredStyle, generationStrategy }));
 
   cy.mount(
+    <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="Asia/Seoul">
     <AppRouterContext.Provider
       value={{
         back: cy.stub(),
@@ -92,7 +95,8 @@ const mountHarness = ({
           <UploadPageStateHarness />
         </Provider>
       </PathnameContext.Provider>
-    </AppRouterContext.Provider>,
+    </AppRouterContext.Provider>
+    </NextIntlClientProvider>,
   );
 };
 
@@ -200,7 +204,7 @@ describe("useUploadPageState source-content abort paths", () => {
     cy.get('[data-testid="harness-is-loading"]').should("have.text", "false");
   });
 
-  it("rejects an unavailable source SVG combination before uploading or analysing the deck", () => {
+  it("rejects an unavailable source SVG combination after analyzing the default A4 input", () => {
     cy.intercept("GET", "**/api/v1/ppt/authored/canvas-capabilities*", {
       statusCode: 200,
       body: {
@@ -219,8 +223,8 @@ describe("useUploadPageState source-content abort paths", () => {
     cy.get('[data-testid="harness-generate"]').click();
     cy.wait("@canvasCapabilities");
 
-    cy.get("@uploadAsset.all").should("have.length", 0);
-    cy.get("@analyzeSourceContent.all").should("have.length", 0);
+    cy.get("@uploadAsset.all").should("have.length", 1);
+    cy.get("@analyzeSourceContent.all").should("have.length", 1);
     cy.get('[data-testid="harness-is-loading"]').should("have.text", "false");
   });
 
