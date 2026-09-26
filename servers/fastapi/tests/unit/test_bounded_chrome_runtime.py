@@ -7,7 +7,7 @@ import time
 from PIL import Image
 import pytest
 
-from utils import slide_capture
+from utils import shared_render_join, slide_capture
 
 
 class _TrackingSemaphore:
@@ -61,7 +61,9 @@ def test_one_shot_fallback_is_process_wide_bounded(monkeypatch) -> None:
 def test_identical_concurrent_render_reuses_one_inflight_browser_work(monkeypatch) -> None:
     calls = 0
 
-    async def fake_uncached(html: str, timeout: int = 60) -> bytes:
+    async def fake_uncached(
+        html: str, timeout: int = 60, *, width_px: int = 1280, height_px: int = 720
+    ) -> bytes:
         nonlocal calls
         calls += 1
         await asyncio.sleep(0.01)
@@ -96,6 +98,8 @@ def test_metrics_recovery_uses_bounded_one_shot_outside_external_worker(
         admitted_source: bool = False,
         cache_html: str | None = None,
         script_nonce: str | None = None,
+        width_px: int = 1280,
+        height_px: int = 720,
     ) -> bytes:
         assert timeout == 2
         calls.append((admitted_source, cache_html, script_nonce))
@@ -116,7 +120,10 @@ def test_metrics_recovery_uses_bounded_one_shot_outside_external_worker(
         slide_capture, "_render_html_to_png_uncached", fail_shared_runtime
     )
 
-    assert asyncio.run(slide_capture.ensure_browser_metrics(source, timeout=2)) == expected
+    metrics = asyncio.run(slide_capture.ensure_browser_metrics(source, timeout=2))
+    assert metrics is not None
+    assert {key: metrics[key] for key in expected} == expected
+    assert metrics["source_digest"].startswith("sha256:")
     assert len(calls) == 1
     assert calls[0][:2] == (True, source)
     assert calls[0][2]
@@ -133,7 +140,7 @@ def test_shared_render_cancellation_preserves_other_waiter_and_reaps_last(
         calls = 0
         source = "shared-cancellation-" + kind
 
-        async def fake_render(html, timeout=60):
+        async def fake_render(html, timeout=60, *, width_px=1280, height_px=720):
             nonlocal calls
             calls += 1
             started.set()
@@ -169,7 +176,7 @@ def test_shared_render_cancellation_preserves_other_waiter_and_reaps_last(
             assert result["source_digest"].startswith("sha256:")
         assert calls == 1
         assert not inflight
-        assert not slide_capture._shared_render_waiters
+        assert not shared_render_join._waiters
 
         started.clear()
         finish.clear()
@@ -180,7 +187,7 @@ def test_shared_render_cancellation_preserves_other_waiter_and_reaps_last(
             await last
         assert cancelled.is_set()
         assert not inflight
-        assert not slide_capture._shared_render_waiters
+        assert not shared_render_join._waiters
 
     asyncio.run(scenario())
 
