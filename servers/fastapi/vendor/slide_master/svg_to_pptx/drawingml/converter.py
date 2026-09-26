@@ -31,8 +31,7 @@ from ..conversion_context import current_conversion_context
 from .theme_colors import ThemeColorSpec
 from .theme_fonts import ThemeFontSpec
 from .utils import (
-    SVG_NS, EMU_PER_PX,
-    _extract_inheritable_styles, _f, _get_attr, parse_transform_matrix, resolve_url_id,
+    SVG_NS, _extract_inheritable_styles, _f, _get_attr, parse_transform_matrix, resolve_url_id,
     parse_svg_length,
 )
 from .styles import (

@@ -559,7 +559,7 @@ def flatten_text_with_tspans(
         if lead_text:
             current_line_lead_text = lead_text
 
-        for idx, child in enumerate(list(text_el)):
+        for child in list(text_el):
             if not is_svg_tag(child, "tspan"):
                 continue
 

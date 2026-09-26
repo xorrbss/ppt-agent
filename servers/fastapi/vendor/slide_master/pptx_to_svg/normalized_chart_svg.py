@@ -62,8 +62,14 @@ def render_normalized_chart_svg(
     """Render a readable normalized fallback for supported classic charts."""
     chart_type = str(payload.get("type") or "")
     if chart_type not in {
-        "area", "bar", "column", "doughnut", "line", "pie",
-        "scatter", "bubble",
+        "area",
+        "bar",
+        "column",
+        "doughnut",
+        "line",
+        "pie",
+        "scatter",
+        "bubble",
     }:
         return None
 
@@ -76,11 +82,7 @@ def render_normalized_chart_svg(
         )
     except (KeyError, TypeError, ValueError, OverflowError):
         return None
-    if (
-        bounds.w <= 0
-        or bounds.h <= 0
-        or not all(math.isfinite(value) for value in vars(bounds).values())
-    ):
+    if bounds.w <= 0 or bounds.h <= 0 or not all(math.isfinite(value) for value in vars(bounds).values()):
         return None
 
     legend_entries = _legend_entries(payload, styles)
@@ -236,32 +238,38 @@ def _render_category(
     show_value_labels = payload.get("show_value_axis_labels") is not False
 
     if is_bar:
-        parts.extend(_horizontal_grid_and_ticks(
-            plot,
-            ticks,
-            lo,
-            hi,
-            label_size,
-            percent,
-            show_labels=show_value_labels,
-        ))
+        parts.extend(
+            _horizontal_grid_and_ticks(
+                plot,
+                ticks,
+                lo,
+                hi,
+                label_size,
+                percent,
+                show_labels=show_value_labels,
+            )
+        )
         parts.extend(_bar_category_labels(plot, categories, label_size))
     else:
-        parts.extend(_vertical_grid_and_ticks(
-            plot,
-            ticks,
-            lo,
-            hi,
-            label_size,
-            percent,
-            show_labels=show_value_labels,
-        ))
-        parts.extend(_column_category_labels(
-            plot,
-            categories,
-            label_size,
-            point_aligned=chart_type in {"line", "area"},
-        ))
+        parts.extend(
+            _vertical_grid_and_ticks(
+                plot,
+                ticks,
+                lo,
+                hi,
+                label_size,
+                percent,
+                show_labels=show_value_labels,
+            )
+        )
+        parts.extend(
+            _column_category_labels(
+                plot,
+                categories,
+                label_size,
+                point_aligned=chart_type in {"line", "area"},
+            )
+        )
     parts.extend(_axis_titles(plot, content, axis_titles, label_size, is_bar=is_bar))
 
     if chart_type in {"bar", "column"}:
@@ -351,10 +359,7 @@ def _category_segments(
     count: int,
     grouping: str,
 ) -> tuple[list[list[tuple[float, float]]], bool]:
-    raw = [
-        [float(value) for value in item.get("values", [])[:count]]
-        for item in series
-    ]
+    raw = [[float(value) for value in item.get("values", [])[:count]] for item in series]
     percent = grouping == "percentStacked"
     if percent:
         positive = [sum(max(row[idx], 0.0) for row in raw) for idx in range(count)]
@@ -406,15 +411,12 @@ def _render_bars(
     cluster = category_span * 0.72
     bar_span = cluster if stacked else cluster / max(len(series), 1)
     labels = payload.get("data_labels") if isinstance(payload.get("data_labels"), dict) else None
-    for series_index, (item, style, row) in enumerate(zip(series, styles, segments)):
+    for series_index, (item, style, row) in enumerate(zip(series, styles, segments, strict=False)):
         fill = style.fill or "none"
         stroke = style.stroke or "none"
         for category_index, (start, end) in enumerate(row):
             offset = 0.0 if stacked else series_index * bar_span
-            display_index = (
-                len(categories) - 1 - category_index
-                if horizontal else category_index
-            )
+            display_index = len(categories) - 1 - category_index if horizontal else category_index
             cluster_start = display_index * category_span + (category_span - cluster) / 2
             if horizontal:
                 x1 = _map(end, lo, hi, plot.x, plot.x + plot.w)
@@ -474,19 +476,13 @@ def _render_lines_or_areas(
 ) -> list[str]:
     parts: list[str] = []
     count = len(categories)
-    x_positions = [
-        _category_point_x(plot, idx, count)
-        for idx in range(count)
-    ]
+    x_positions = [_category_point_x(plot, idx, count) for idx in range(count)]
     labels = payload.get("data_labels") if isinstance(payload.get("data_labels"), dict) else None
     show_markers = chart_type == "line" and payload.get("line_style") == "lineMarker"
-    for series_index, (item, style, row) in enumerate(zip(series, styles, segments)):
+    for _series_index, (item, style, row) in enumerate(zip(series, styles, segments, strict=False)):
         fill_color = style.fill or "none"
         line_color = style.stroke
-        top = [
-            (x_positions[idx], _map(end, lo, hi, plot.y + plot.h, plot.y))
-            for idx, (_start, end) in enumerate(row)
-        ]
+        top = [(x_positions[idx], _map(end, lo, hi, plot.y + plot.h, plot.y)) for idx, (_start, end) in enumerate(row)]
         if chart_type == "area":
             bottom = [
                 (x_positions[idx], _map(start, lo, hi, plot.y + plot.h, plot.y))
@@ -562,13 +558,11 @@ def _render_pie(
                 f'<circle cx="{_fmt(cx)}" cy="{_fmt(cy)}" r="{_fmt(radius * 0.75)}" '
                 'fill="none" stroke="#D5DAE1" stroke-width="1"/>'
             )
-        parts.append(
-            _text(cx, cy + label_size * 0.32, "0", size=label_size, anchor="middle")
-        )
+        parts.append(_text(cx, cy + label_size * 0.32, "0", size=label_size, anchor="middle"))
         return parts
     parts: list[str] = []
     angle = -math.pi / 2
-    for idx, (category, value, style) in enumerate(zip(categories, values, styles)):
+    for _idx, (category, value, style) in enumerate(zip(categories, values, styles, strict=False)):
         sweep = math.tau * value / total
         end = angle + sweep
         # Pie styles are completed before rendering, so ``None`` here means
@@ -644,16 +638,8 @@ def _render_xy(
     axes = payload.get("axes")
     x_axis = axes.get("x") if isinstance(axes, dict) else None
     y_axis = axes.get("y") if isinstance(axes, dict) else None
-    x_major_gridlines = (
-        bool(x_axis.get("major_gridlines", False))
-        if isinstance(x_axis, dict)
-        else False
-    )
-    y_major_gridlines = (
-        bool(y_axis.get("major_gridlines", True))
-        if isinstance(y_axis, dict)
-        else True
-    )
+    x_major_gridlines = bool(x_axis.get("major_gridlines", False)) if isinstance(x_axis, dict) else False
+    y_major_gridlines = bool(y_axis.get("major_gridlines", True)) if isinstance(y_axis, dict) else True
     parts = _xy_grid_and_ticks(
         plot,
         x_ticks,
@@ -668,23 +654,20 @@ def _render_xy(
     )
     parts.extend(_xy_axis_titles(plot, content, axis_titles, label_size))
     nonnegative_bubble_sizes = [
-        float(value)
-        for item in series
-        for value in item.get("sizes") or []
-        if float(value) >= 0
+        float(value) for item in series for value in item.get("sizes") or [] if float(value) >= 0
     ]
     bubble_max = max(max(nonnegative_bubble_sizes or [0.0]), 1e-12)
     scatter_style = str(payload.get("scatter_style") or "marker")
     has_line = chart_type == "scatter" and scatter_style in {"line", "lineMarker", "smooth", "smoothMarker"}
     has_marker = chart_type == "bubble" or scatter_style in {"marker", "lineMarker", "smoothMarker"}
-    for idx, (item, style) in enumerate(zip(series, styles)):
+    for idx, (item, style) in enumerate(zip(series, styles, strict=False)):
         color = style.stroke or style.fill or style.marker_fill or _DEFAULT_COLORS[idx % len(_DEFAULT_COLORS)]
         points = [
             (
                 _map(float(x), x_lo, x_hi, plot.x, plot.x + plot.w),
                 _map(float(y), y_lo, y_hi, plot.y + plot.h, plot.y),
             )
-            for x, y in zip(item.get("x") or [], item.get("y") or [])
+            for x, y in zip(item.get("x") or [], item.get("y") or [], strict=False)
         ]
         if has_line and style.stroke is not None and len(points) >= 2:
             parts.append(
@@ -703,19 +686,13 @@ def _render_xy(
                     radius = 3.0 + 13.0 * math.sqrt(bubble_size / bubble_max)
                 else:
                     radius = max(2.0, style.marker_size / 2)
-                fill = (
-                    style.fill or "none"
-                    if chart_type == "bubble"
-                    else style.marker_fill or "none"
-                )
-                stroke = (
-                    style.stroke or "none"
-                    if chart_type == "bubble"
-                    else style.marker_stroke or "none"
-                )
+                fill = style.fill or "none" if chart_type == "bubble" else style.marker_fill or "none"
+                stroke = style.stroke or "none" if chart_type == "bubble" else style.marker_stroke or "none"
+                fill_opacity = style.marker_fill_opacity if chart_type == "scatter" else style.fill_opacity
                 parts.append(
                     f'<circle cx="{_fmt(x)}" cy="{_fmt(y)}" r="{_fmt(radius)}" '
-                    f'fill="{fill}" fill-opacity="{_fmt(style.marker_fill_opacity if chart_type == "scatter" else style.fill_opacity)}" '
+                    f'fill="{fill}" '
+                    f'fill-opacity="{_fmt(fill_opacity)}" '
                     f'stroke="{stroke}" stroke-opacity="{_fmt(style.marker_stroke_opacity)}" '
                     f'stroke-width="{_fmt(max(0.6, style.marker_stroke_width))}"/>'
                 )
@@ -800,7 +777,7 @@ def _column_category_labels(
         parts.append(
             f'<text x="{_fmt(x)}" y="{_fmt(y)}" text-anchor="{anchor}" '
             f'font-family="Arial" font-size="{_fmt(size)}" fill="#555555"{transform}>'
-            f'{html.escape(category)}</text>'
+            f"{html.escape(category)}</text>"
         )
     return parts
 
@@ -857,7 +834,9 @@ def _xy_grid_and_ticks(
                 f'<line x1="{_fmt(x)}" y1="{_fmt(plot.y)}" x2="{_fmt(x)}" '
                 f'y2="{_fmt(plot.y + plot.h)}" stroke="#D9D9D9" stroke-width="0.7"/>'
             )
-        parts.append(_text(x, plot.y + plot.h + size + 4.0, _format_number(tick), size=size, anchor="middle", fill="#666666"))
+        parts.append(
+            _text(x, plot.y + plot.h + size + 4.0, _format_number(tick), size=size, anchor="middle", fill="#666666")
+        )
     parts.append(
         f'<line x1="{_fmt(plot.x)}" y1="{_fmt(plot.y + plot.h)}" '
         f'x2="{_fmt(plot.x + plot.w)}" y2="{_fmt(plot.y + plot.h)}" '
@@ -905,7 +884,9 @@ def _draw_axis_titles(
 ) -> list[str]:
     parts: list[str] = []
     if x_title:
-        parts.append(_text(plot.x + plot.w / 2, content.y + content.h - 2.0, x_title, size=size, anchor="middle", weight="600"))
+        parts.append(
+            _text(plot.x + plot.w / 2, content.y + content.h - 2.0, x_title, size=size, anchor="middle", weight="600")
+        )
     if y_title:
         x = content.x + size
         y = plot.y + plot.h / 2
@@ -913,7 +894,7 @@ def _draw_axis_titles(
             f'<text x="{_fmt(x)}" y="{_fmt(y)}" text-anchor="middle" '
             f'font-family="Arial" font-size="{_fmt(size)}" font-weight="600" '
             f'fill="#444444" transform="rotate(-90 {_fmt(x)} {_fmt(y)})">'
-            f'{html.escape(y_title)}</text>'
+            f"{html.escape(y_title)}</text>"
         )
     return parts
 
@@ -933,7 +914,7 @@ def _legend_entries(
             label,
             style.fill or style.stroke or style.marker_fill or _DEFAULT_COLORS[idx % len(_DEFAULT_COLORS)],
         )
-        for idx, (label, style) in enumerate(zip(labels, completed))
+        for idx, (label, style) in enumerate(zip(labels, completed, strict=False))
     ]
 
 
@@ -950,9 +931,7 @@ def _render_legend(
         row_h = min(18.0, rect.h / max(len(entries), 1))
         for idx, (label, color) in enumerate(entries):
             y = rect.y + row_h * (idx + 0.5)
-            parts.append(
-                f'<rect x="{_fmt(rect.x + 5)}" y="{_fmt(y - 4)}" width="8" height="8" fill="{color}"/>'
-            )
+            parts.append(f'<rect x="{_fmt(rect.x + 5)}" y="{_fmt(y - 4)}" width="8" height="8" fill="{color}"/>')
             parts.append(_text(rect.x + 18.0, y + size * 0.32, label, size=size, anchor="start", fill="#444444"))
         return parts
 
@@ -965,9 +944,7 @@ def _render_legend(
         col = idx % columns
         x = rect.x + col * col_w + 5.0
         y = rect.y + row_h * (row + 0.5)
-        parts.append(
-            f'<rect x="{_fmt(x)}" y="{_fmt(y - 4)}" width="8" height="8" fill="{color}"/>'
-        )
+        parts.append(f'<rect x="{_fmt(x)}" y="{_fmt(y - 4)}" width="8" height="8" fill="{color}"/>')
         parts.append(_text(x + 13.0, y + size * 0.32, label, size=size, anchor="start", fill="#444444"))
     return parts
 
@@ -986,26 +963,24 @@ def _data_label(
     if config.get("show_category"):
         fields.append(category)
     if config.get("show_value"):
-        fields.append(_format_data_label_value(
-            value,
-            config.get("number_format"),
-        ))
+        fields.append(
+            _format_data_label_value(
+                value,
+                config.get("number_format"),
+            )
+        )
     if config.get("show_percent"):
         if percent_value is None:
-            raise ValueError(
-                "normalized percent labels require percent-stacked segments"
-            )
+            raise ValueError("normalized percent labels require percent-stacked segments")
         number_format = config.get("number_format")
         normalized_format = str(number_format or "").strip()
-        percent_format = (
-            "0%"
-            if not normalized_format or normalized_format.lower() == "general"
-            else normalized_format
+        percent_format = "0%" if not normalized_format or normalized_format.lower() == "general" else normalized_format
+        fields.append(
+            _format_data_label_value(
+                percent_value,
+                percent_format,
+            )
         )
-        fields.append(_format_data_label_value(
-            percent_value,
-            percent_format,
-        ))
     return " · ".join(field for field in fields if field)
 
 
@@ -1035,9 +1010,7 @@ def _format_data_label_value(value: float, number_format: Any) -> str:
     )
     absolute = format(rounded, f"{grouping}.{decimals}f")
     sign = "-" if scaled < 0 else ""
-    return (
-        f"{sign}{match.group('prefix')}{absolute}{match.group('percent')}"
-    )
+    return f"{sign}{match.group('prefix')}{absolute}{match.group('percent')}"
 
 
 def _nice_scale(
@@ -1064,7 +1037,17 @@ def _nice_scale(
     raw_step = (hi - lo) / 5.0
     magnitude = 10 ** math.floor(math.log10(raw_step))
     normalized = raw_step / magnitude
-    nice = 1.0 if normalized <= 1 else 2.0 if normalized <= 2 else 2.5 if normalized <= 2.5 else 5.0 if normalized <= 5 else 10.0
+    nice = (
+        1.0
+        if normalized <= 1
+        else 2.0
+        if normalized <= 2
+        else 2.5
+        if normalized <= 2.5
+        else 5.0
+        if normalized <= 5
+        else 10.0
+    )
     step = nice * magnitude
     nice_lo = math.floor(lo / step) * step
     nice_hi = math.ceil(hi / step) * step
@@ -1167,7 +1150,7 @@ def _text(
     return (
         f'<text x="{_fmt(x)}" y="{_fmt(y)}" text-anchor="{anchor}" '
         f'font-family="Arial" font-size="{_fmt(size)}" fill="{fill}"{weight_attr}>'
-        f'{html.escape(str(value))}</text>'
+        f"{html.escape(str(value))}</text>"
     )
 
 
@@ -1199,7 +1182,7 @@ def _format_percent(value: float) -> str:
 def _contrast_color(color: str) -> str:
     token = color.lstrip("#")
     try:
-        r, g, b = (int(token[idx:idx + 2], 16) for idx in (0, 2, 4))
+        r, g, b = (int(token[idx : idx + 2], 16) for idx in (0, 2, 4))
     except (ValueError, TypeError):
         return "#FFFFFF"
     luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255.0

@@ -148,7 +148,7 @@ def convert_txbody(
     # Pre-compute heights to support anchor=ctr / b
     para_heights = [
         _paragraph_height_from_lines(p, lines)
-        for p, lines in zip(paragraphs, para_lines)
+        for p, lines in zip(paragraphs, para_lines, strict=False)
     ]
     total_h = sum(para_heights)
     if anchor == "ctr":
@@ -160,7 +160,7 @@ def convert_txbody(
 
     bottom_y = inner_y + inner_h
     text_blocks: list[str] = []
-    for para, lines, height in zip(paragraphs, para_lines, para_heights):
+    for para, lines, height in zip(paragraphs, para_lines, para_heights, strict=False):
         cursor_y += para.space_before_px
         visible_lines = _clip_lines_to_bottom(para, lines, cursor_y, bottom_y)
         if visible_lines:
@@ -250,7 +250,7 @@ def convert_vertical_txbody(
     first_run: TextRun | None = None
     first_baseline: float | None = None
     previous_baseline: float | None = None
-    for (char, run), advance in zip(glyphs, advances):
+    for (char, run), advance in zip(glyphs, advances, strict=False):
         if cursor_y + advance > bottom_y:
             break
         baseline_y = cursor_y + run.font_size_px * 0.85

@@ -162,7 +162,7 @@ def load_theme_color_spec(project_path: Path) -> ThemeColorSpec | None:
         for key, color in roles.items()
         if key not in _ROLE_SLOTS and color not in {"000000", "FFFFFF"}
     )[:2]
-    extra_slots = dict(zip(extra_roles, ("accent5", "accent6")))
+    extra_slots = dict(zip(extra_roles, ("accent5", "accent6"), strict=False))
     role_slots = {**_ROLE_SLOTS, **extra_slots}
 
     slots = dict(_OFFICE_DEFAULTS)

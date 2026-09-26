@@ -1303,7 +1303,7 @@ def validate_generated_animation_xml(
         else:
             expected_offsets.append(0)
 
-    for index, (actual, target) in enumerate(zip(summary.rows, expected), 1):
+    for index, (actual, target) in enumerate(zip(summary.rows, expected, strict=False), 1):
         spec = ANIMATIONS[target.effect]
         if actual.shape_id != target.shape_id:
             errors.append(
