@@ -213,7 +213,14 @@ Merge 3: N1, D1, L1, L2 -> `main`; CI (GitHub + Bitbucket) green.
 
 ## 6. Known debts recorded, not in scope
 
-- Native charts for svg depend on slide-master support (N1 verifies; else debt).
+- Native charts for svg: **supported** (N1, 2026-09-26). The vendored slide-master
+  converter emits classic `c:chart` parts with an embedded workbook for every
+  authored V1 chart type (column, bar, line, area, pie, donut); pinned by
+  `tests/unit/test_svg_native_chart_probe.py`. The converter's key names differ
+  from the V1 payload for legend, palette/series colour, axis titles and font
+  size, so `drivers/svg/export_projection.py` maps them; a title/axis title/legend
+  not drawn inside the marked group is dropped by the converter, so publish
+  accepts only drawn labels. No debt remains here.
 - Background operations fall back to the default tenant without a tenant in
   the command context; multi-tenant deployments verify before rollout.
 - `PATCH /presentation/{id}/slides/order` exists API-only; the editor is
