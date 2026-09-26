@@ -189,7 +189,7 @@ describe("<TextProvider />", () => {
     mountProvider({ LLM: "codex" });
 
     cy.wait("@codexStatus");
-    cy.contains("button", "ChatGPT로 로그인").should("be.visible");
+    cy.contains("button", "Sign in with ChatGPT").should("be.visible");
     // The OAuth flow lives in this app, so the read-only notice must not win.
     cy.contains("This provider is authenticated through the server-managed sign-in flow.").should("not.exist");
   });
@@ -211,14 +211,14 @@ describe("<TextProvider />", () => {
     cy.wait("@codexStatus");
     cy.contains("presenton-admin").should("be.visible");
     cy.contains("admin@example.com").should("be.visible");
-    cy.contains("ChatGPT에 로그인됨").should("be.visible");
-    cy.get('button[title="토큰 갱신"]').should("be.visible");
-    cy.get('button[title="로그아웃"]').should("be.visible");
+    cy.contains("Signed in to ChatGPT").should("be.visible");
+    cy.get('button[title="Refresh token"]').should("be.visible");
+    cy.get('button[title="Sign out"]').should("be.visible");
 
-    cy.contains("label", "PPT 생성 모델 · 추론 강도").should("be.visible");
-    cy.contains('button[role="combobox"]', "GPT-5.6 Sol").should("be.visible");
+    cy.contains("label", "PPT generation model · reasoning effort").should("be.visible");
+    cy.contains('button[role="combobox"]', "GPT-6 Sol").should("be.visible");
 
-    cy.contains('button[role="combobox"]', "GPT-5.6 Sol").click();
+    cy.contains('button[role="combobox"]', "GPT-6 Sol").click();
     cy.get("[cmdk-item]").contains("Sol · Medium").click();
     cy.contains('button[role="combobox"]', "Sol · Medium").should("be.visible");
   });
