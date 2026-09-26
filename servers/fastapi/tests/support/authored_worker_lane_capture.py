@@ -99,6 +99,8 @@ async def capture_for_lane(html: str, png: bytes, **kwargs):
         slide_index=0,
     )
     metrics = _observe_dom(html)
+    metrics["width"] = int(kwargs.get("width_px", 1280))
+    metrics["height"] = int(kwargs.get("height_px", 720))
     metrics["local_fit_mode"] = fit
     metrics["local_fit_render_identity"] = local_fit_render_identity(
         html, policy, fit=fit
@@ -157,4 +159,3 @@ async def capture_for_lane(html: str, png: bytes, **kwargs):
         prepared_html=html,
         prepared_fit_policy=policy,
     )
-
