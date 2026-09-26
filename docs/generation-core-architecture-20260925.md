@@ -1,7 +1,6 @@
 # Generation core: one shared core, SVG driver forward, authored driver frozen (2026-09-25)
 
-Status: APPROVED DESIGN, revision 2. Becomes `docs/generation-core-architecture-20260925.md`
-as the first commit of the integration branch.
+Status: APPROVED DESIGN, revision 2; programme completed on 2026-09-26 (main `6a29f0d40`).
 
 Revision 2 changes (from the review): authored is frozen; SVG PDF must be vector
 before the default switch; a preparatory split of `svg_presentation_generate.py`
@@ -213,6 +212,9 @@ Merge 3: N1, D1, L1, L2 -> `main`; CI (GitHub + Bitbucket) green.
 
 ## 6. Known debts recorded, not in scope
 
+- Deck IR decision (2026-09-26): keep Deck IR as part of the frozen authored-family
+  engine. It is reachable only when `strategy="authored"` is explicit and
+  `generationMode` is sent; explicit `generationEngine:"deck-ir"` remains rejected.
 - Native charts for svg: **supported** (N1, 2026-09-26). The vendored slide-master
   converter emits classic `c:chart` parts with an embedded workbook for every
   authored V1 chart type (column, bar, line, area, pie, donut); pinned by
