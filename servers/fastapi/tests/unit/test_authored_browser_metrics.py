@@ -59,7 +59,7 @@ def test_render_cache_hit_reuses_atomic_capture_after_metrics_eviction(monkeypat
     slide_capture._browser_metrics_inflight.clear()
     calls = 0
 
-    async def fake_uncached(html, timeout=60):
+    async def fake_uncached(html, timeout=60, **_kwargs):
         nonlocal calls
         calls += 1
         slide_capture._cache_browser_metrics(
@@ -76,9 +76,7 @@ def test_render_cache_hit_reuses_atomic_capture_after_metrics_eviction(monkeypat
     second, metrics = asyncio.run(slide_capture.render_html_to_png_with_metrics(HTML))
 
     assert first == second == b"fresh-png"
-    # The capture-result adapter must not launch a second browser pass when
-    # the PNG is already retained; metrics are recovered from the same atomic
-    # capture path (or reported unavailable) instead.
+    # A retained PNG must not trigger a second browser pass.
     assert calls == 1
     assert metrics is not None
     assert metrics["width"] == 1280
@@ -90,10 +88,14 @@ def test_metrics_recollection_failure_is_explicitly_unavailable(monkeypatch):
     slide_capture._capture_cache.clear()
     slide_capture._browser_metrics_inflight.clear()
 
-    async def fake_uncached(html, timeout=60):
+    async def fake_uncached(html, timeout=60, **_kwargs):
         return b"png-without-probe"
 
+    async def failed_recollection(*_args, **_kwargs):
+        raise RuntimeError("metrics probe unavailable")
+
     monkeypatch.setattr(slide_capture, "_render_html_to_png_uncached", fake_uncached)
+    monkeypatch.setattr(slide_capture, "_render_html_to_png_subprocess", failed_recollection)
     monkeypatch.setattr(slide_capture, "RENDER_CACHE_SIZE", 8)
 
     png, metrics = asyncio.run(slide_capture.render_html_to_png_with_metrics(HTML))
@@ -145,7 +147,7 @@ def test_render_collects_dom_metrics_in_the_same_browser_invocation(monkeypatch)
     numeric_digest = hashlib.sha256(numeric.encode()).hexdigest()
     png, metrics = asyncio.run(slide_capture.render_html_to_png_with_metrics(numeric))
     assert hashlib.sha256(numeric.encode()).hexdigest() == numeric_digest
-    assert metrics["dom_metrics_version"] == "authored-dom-metrics-v26-font-stack-fallback"
+    assert metrics["dom_metrics_version"] == slide_capture.DOM_METRICS_VERSION
     owners = {item["qid"]: item for item in metrics["elements"]}
     visible, clipped = owners["false.metric"], owners["true.metric"]
     assert visible["range_clip_suspect"] is True
@@ -193,7 +195,7 @@ def test_render_collects_dom_metrics_in_the_same_browser_invocation(monkeypatch)
         item = rounded_owners[qid]
         assert item["measurement"]["occlusion"] is True, item["occlusion_measurement_evidence"]
         assert item["occlusion_measurement_evidence"]["rounded_domain_excluded_samples"] > 0
-        assert item["occlusion_sensor_version"] == "owned-paint-v12-polygon-normal-hit"
+        assert item["occlusion_sensor_version"] == slide_capture.OCCLUSION_SENSOR_VERSION
     assert rounded_owners["rounded.visible"]["occluded_fraction"] == 0
     assert rounded_owners["rounded.covered"]["occluded_fraction"] > 0.95
     assert "rounded.intruder" in rounded_owners["rounded.covered"]["occlusion_occluder_qids"]
@@ -201,10 +203,8 @@ def test_render_collects_dom_metrics_in_the_same_browser_invocation(monkeypatch)
     assert unknown["measurement"]["occlusion"] is False
     assert unknown["occlusion_measurement_evidence"]["rounded_domain_excluded_samples"] == 0
     assert unknown["occlusion_measurement_evidence"]["rounded_domain_unsupported_rects"] == 1
-    # Nine surface seeds plus all nine owned-text seeds: the text contribution
-    # must survive even when its fragment reaches a rounded surface's corner.
     assert rounded_owners["rounded.corner-text"]["occlusion_owned_rect_sample_count"] == 18
-    assert runtime["cacheIdentity"]["occlusionSensor"] == "owned-paint-v12-polygon-normal-hit"
+    assert runtime["cacheIdentity"]["occlusionSensor"] == slide_capture.OCCLUSION_SENSOR_VERSION
 
     independent = """<!doctype html><html><head><style>
     html,body{margin:0;width:1280px;height:720px;overflow:hidden}
