@@ -48,6 +48,7 @@ _ARTIFACT_DIR_ENV = "PUBLIC_V2_WINDOWS_PRODUCT_E2E_ARTIFACT_DIR"
 _GENERATION_QUALITY_POLICY_ENV = (
     "PUBLIC_V2_WINDOWS_PRODUCT_E2E_GENERATION_QUALITY_POLICY"
 )
+_DEVAX_KOREAN_ENV = "PUBLIC_V2_WINDOWS_PRODUCT_E2E_DEVAX_KOREAN"
 
 
 def _required(name: str) -> str:
@@ -520,6 +521,8 @@ def test_live_http_generation_then_fidelity_export_reaches_artifact_publication(
     if os.getenv(_ENABLE_ENV, "").strip() != "1":
         pytest.skip(f"set {_ENABLE_ENV}=1 for the owned live RC stack")
 
+    devax_korean = os.getenv(_DEVAX_KOREAN_ENV, "").strip() == "1"
+
     source_before = _source_manifest_observation()
 
     # The launcher supplies random credentials through its child environment and
@@ -538,13 +541,21 @@ def test_live_http_generation_then_fidelity_export_reaches_artifact_publication(
         json={
             "schemaVersion": "presentation-generation-request/v2",
             "content": (
+                "DevAX SI 구축 제안서를 한국어로 정확히 5장 작성한다. 대상은 기업 CIO와 사업 책임자다. "
+                "화이트 바탕, 블루·네이비 포인트, 얇은 시안 구분선, 넓은 여백, 큰 한 줄 제목의 "
+                "기업 제안서 스타일을 사용한다. 1장 DevAX SI 구축 제안, 2장 기업 AI 전환 과제, "
+                "3장 요구사항부터 테스트까지의 추적 체계, 4장 착수·구축·확산 계획, 5장 기대효과와 "
+                "파일럿 승인 제안으로 구성한다. 각 장에는 짧은 제목 하나, 7단어 이내의 짧은 근거 "
+                "정확히 3개, 짧은 가정 수치 하나만 넣는다. 표, 차트, 다이어그램, 각주, 긴 문장, "
+                "추가 설명은 사용하지 않는다. 수치는 반드시 '가정'이라고 표시한다."
+            ) if devax_korean else (
                 "Create exactly 5 slides about trusted PPT exports. "
                 "Each slide has exactly one title of at most 30 characters, exactly three bullets of at most five words, "
                 "and one short numeric fact. Use no tables, charts, diagrams, footnotes, "
                 "subtitles, hero copy, or extra prose."
             ),
             "slideCount": 5,
-            "language": "English",
+            "language": "Korean" if devax_korean else "English",
             "qualityPolicy": os.getenv(
                 _GENERATION_QUALITY_POLICY_ENV, "release-v1"
             ).strip()
