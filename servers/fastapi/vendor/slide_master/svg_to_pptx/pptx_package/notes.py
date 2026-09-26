@@ -16,35 +16,34 @@ def markdown_to_plain_text(md_content: str) -> str:
     Returns:
         Plain text content.
     """
-
     def strip_inline_bold(text: str) -> str:
-        text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
-        text = re.sub(r"__(.+?)__", r"\1", text)
+        text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+        text = re.sub(r'__(.+?)__', r'\1', text)
         return text
 
     lines: list[str] = []
-    for line in md_content.split("\n"):
-        if line.startswith("#"):
-            text = re.sub(r"^#+\s*", "", line).strip()
+    for line in md_content.split('\n'):
+        if line.startswith('#'):
+            text = re.sub(r'^#+\s*', '', line).strip()
             text = strip_inline_bold(text)
             if text:
                 lines.append(text)
-                lines.append("")
-        elif line.strip().startswith("- "):
+                lines.append('')
+        elif line.strip().startswith('- '):
             item_text = line.strip()[2:]
             item_text = strip_inline_bold(item_text)
-            lines.append("• " + item_text)
+            lines.append('• ' + item_text)
         elif line.strip():
             text = strip_inline_bold(line.strip())
             lines.append(text)
         else:
-            lines.append("")
+            lines.append('')
 
     # Merge consecutive empty lines
     result: list[str] = []
     is_prev_empty = False
     for line in lines:
-        if line == "":
+        if line == '':
             if not is_prev_empty:
                 result.append(line)
             is_prev_empty = True
@@ -52,7 +51,7 @@ def markdown_to_plain_text(md_content: str) -> str:
             result.append(line)
             is_prev_empty = False
 
-    return "\n".join(result).strip()
+    return '\n'.join(result).strip()
 
 
 def create_notes_slide_xml(slide_num: int, notes_text: str) -> str:
@@ -65,10 +64,13 @@ def create_notes_slide_xml(slide_num: int, notes_text: str) -> str:
     Returns:
         Notes slide XML string.
     """
-    notes_text = notes_text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    notes_text = (notes_text
+                  .replace('&', '&amp;')
+                  .replace('<', '&lt;')
+                  .replace('>', '&gt;'))
 
     paragraphs: list[str] = []
-    for para in notes_text.split("\n"):
+    for para in notes_text.split('\n'):
         if para.strip():
             lang = detect_text_lang(para)
             paragraphs.append(f'''<a:p>
@@ -81,10 +83,12 @@ def create_notes_slide_xml(slide_num: int, notes_text: str) -> str:
             paragraphs.append('<a:p><a:endParaRPr lang="en-US" dirty="0"/></a:p>')
 
     paragraphs_xml = (
-        "\n            ".join(paragraphs) if paragraphs else '<a:p><a:endParaRPr lang="en-US" dirty="0"/></a:p>'
+        '\n            '.join(paragraphs)
+        if paragraphs
+        else '<a:p><a:endParaRPr lang="en-US" dirty="0"/></a:p>'
     )
 
-    return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    return f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:notes xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
          xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
          xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
@@ -137,7 +141,7 @@ def create_notes_slide_xml(slide_num: int, notes_text: str) -> str:
   <p:clrMapOvr>
     <a:masterClrMapping/>
   </p:clrMapOvr>
-</p:notes>"""
+</p:notes>'''
 
 
 def create_notes_slide_rels_xml(slide_num: int) -> str:
@@ -149,18 +153,16 @@ def create_notes_slide_rels_xml(slide_num: int) -> str:
     Returns:
         Relationship file XML string.
     """
-    return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    return f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaste\
-r" Target="../notesMasters/notesMaster1.xml"/>
-  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Tar\
-get="../slides/slide{slide_num}.xml"/>
-</Relationships>"""
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster" Target="../notesMasters/notesMaster1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="../slides/slide{slide_num}.xml"/>
+</Relationships>'''
 
 
 def create_notes_master_xml() -> str:
     """Create a minimal PowerPoint-compatible notes master XML."""
-    return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:notesMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
                xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
                xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
@@ -280,13 +282,12 @@ def create_notes_master_xml() -> str:
       <a:defRPr sz="1200" lang="en-US"/>
     </a:lvl1pPr>
   </p:notesStyle>
-</p:notesMaster>"""
+</p:notesMaster>'''
 
 
 def create_notes_master_rels_xml() -> str:
     """Create notes master relationships XML."""
-    return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Tar\
-get="../theme/theme2.xml"/>
-</Relationships>"""
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme2.xml"/>
+</Relationships>'''

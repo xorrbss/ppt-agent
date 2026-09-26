@@ -234,16 +234,16 @@ def _parse_src_rect(elem: ET.Element | None) -> tuple[float, float, float, float
         return None
     if not (elem.attrib.keys() & {"l", "t", "r", "b"}):
         return None
-    left = _pct_attr(elem, "l")
+    l = _pct_attr(elem, "l")
     t = _pct_attr(elem, "t")
     r = _pct_attr(elem, "r")
     b = _pct_attr(elem, "b")
     # All zero -> equivalent to no crop
-    if left == 0 and t == 0 and r == 0 and b == 0:
+    if l == 0 and t == 0 and r == 0 and b == 0:
         return None
-    vb_x = left
+    vb_x = l
     vb_y = t
-    vb_w = max(0.0, 1.0 - left - r)
+    vb_w = max(0.0, 1.0 - l - r)
     vb_h = max(0.0, 1.0 - t - b)
     if vb_w <= 0 or vb_h <= 0:
         return None

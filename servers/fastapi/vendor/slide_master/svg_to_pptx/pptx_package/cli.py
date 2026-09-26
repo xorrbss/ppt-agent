@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import sys
-from importlib import import_module
 import json
 import math
 import re
@@ -36,41 +35,32 @@ if __package__ in {None, ''}:
     sys.modules.setdefault('svg_to_pptx', package)
     __package__ = 'svg_to_pptx'
 
-_lint_import_38 = import_module('.dimensions', __package__)
-CANVAS_FORMATS = _lint_import_38.CANVAS_FORMATS
-get_project_info = _lint_import_38.get_project_info
-get_viewbox_dimensions = _lint_import_38.get_viewbox_dimensions
-_lint_import_39 = import_module('.discovery', __package__)
-find_svg_files = _lint_import_39.find_svg_files
-find_notes_files = _lint_import_39.find_notes_files
-_lint_import_40 = import_module('.builder', __package__)
-create_pptx_with_native_svg = _lint_import_40.create_pptx_with_native_svg
-_lint_import_41 = import_module('..native_objects.marker_status', __package__)
-native_marker_release_block_reason = _lint_import_41.native_marker_release_block_reason
-_lint_import_42 = import_module('..drawingml.theme_colors', __package__)
-ThemeColorError = _lint_import_42.ThemeColorError
-load_theme_color_spec = _lint_import_42.load_theme_color_spec
-_lint_import_43 = import_module('..drawingml.theme_fonts', __package__)
-ThemeFontError = _lint_import_43.ThemeFontError
-load_master_text_style_spec = _lint_import_43.load_master_text_style_spec
-load_theme_font_spec = _lint_import_43.load_theme_font_spec
-_lint_import_48 = import_module('.narration', __package__)
-NARRATION_EXTENSIONS = _lint_import_48.NARRATION_EXTENSIONS
-find_narration_files = _lint_import_48.find_narration_files
-probe_audio_duration = _lint_import_48.probe_audio_duration
-_lint_import_49 = import_module('.slide_xml', __package__)
-TRANSITIONS = _lint_import_49.TRANSITIONS
-_lint_import_50 = import_module('.template_structure', __package__)
-TemplateStructureError = _lint_import_50.TemplateStructureError
-load_pptx_structure_lock = _lint_import_50.load_pptx_structure_lock
-parse_template_slides = _lint_import_50.parse_template_slides
-template_lock_errors = _lint_import_50.template_lock_errors
-template_prototype_errors = _lint_import_50.template_prototype_errors
-_lint_import_57 = import_module('..animation_config', __package__)
-load_animation_config = _lint_import_57.load_animation_config
-validate_animation_config = _lint_import_57.validate_animation_config
-validate_animation_config_errors = _lint_import_57.validate_animation_config_errors
-validate_transition_config = _lint_import_57.validate_transition_config
+from .dimensions import CANVAS_FORMATS, get_project_info, get_viewbox_dimensions
+from .discovery import find_svg_files, find_notes_files
+from .builder import create_pptx_with_native_svg
+from ..native_objects.marker_status import native_marker_release_block_reason
+from ..drawingml.theme_colors import ThemeColorError, load_theme_color_spec
+from ..drawingml.theme_fonts import (
+    ThemeFontError,
+    load_master_text_style_spec,
+    load_theme_font_spec,
+)
+from .narration import NARRATION_EXTENSIONS, find_narration_files, probe_audio_duration
+from .slide_xml import TRANSITIONS
+from .template_structure import (
+    TemplateStructureError,
+    load_pptx_structure_lock,
+    parse_template_slides,
+    template_lock_errors,
+    template_prototype_errors,
+)
+from ..animation_config import (
+    load_animation_config,
+    validate_animation_config,
+    validate_animation_config_errors,
+    validate_transition_config,
+)
+
 
 def _next_export_version(exports_dir: Path, title: str) -> int:
     """Next `_verN` number for this title's exports (suffix variants included).
@@ -90,8 +80,10 @@ def _next_export_version(exports_dir: Path, title: str) -> int:
                 latest = max(latest, int(match.group(1)))
     return latest + 1
 
+
 def _as_dict(value: object) -> dict:
     return value if isinstance(value, dict) else {}
+
 
 _PPTX_STRUCTURE_SECTION_RE = re.compile(
     r"(?ms)^##[ \t]+pptx_structure[ \t]*\r?\n(.*?)(?=^##[ \t]+|\Z)"
@@ -107,6 +99,7 @@ _LEGACY_PPTX_STRUCTURE_MODES = frozenset({
 })
 _RELEASE_PPTX_STRUCTURE_MODES = frozenset({'flat', 'structured'})
 
+
 def _declared_pptx_structure_mode(project_path: Path) -> str | None:
     """Return the explicitly locked SVG export mode, without legacy fallback."""
     lock_path = project_path / 'spec_lock.md'
@@ -119,6 +112,7 @@ def _declared_pptx_structure_mode(project_path: Path) -> str | None:
         return None
     mode_match = _PPTX_STRUCTURE_MODE_RE.search(section_match.group(1))
     return mode_match.group(1).strip().lower() if mode_match else None
+
 
 def _print_structure_migration_error(mode: str | None) -> None:
     """Explain how a legacy or absent SVG structure contract is restored."""
@@ -136,6 +130,7 @@ def _print_structure_migration_error(mode: str | None) -> None:
         file=sys.stderr,
     )
 
+
 def _native_object_fallbacks(svg_files: list[Path]) -> list[tuple[str, str, str]]:
     """Return fallback-only native object statuses from SVG inputs."""
     fallbacks: list[tuple[str, str, str]] = []
@@ -151,6 +146,7 @@ def _native_object_fallbacks(svg_files: list[Path]) -> list[tuple[str, str, str]
             marker_id = elem.get('id') or elem.get('data-name') or '<unnamed>'
             fallbacks.append((svg_path.name, marker_id, status))
     return fallbacks
+
 
 def _release_blocked_graphics(
     svg_files: list[Path],
@@ -171,6 +167,7 @@ def _release_blocked_graphics(
             marker_id = elem.get('id') or elem.get('data-name') or '<unnamed>'
             blocked.append((svg_path.name, marker_id, reason))
     return blocked
+
 
 def _reconstruction_only_graphics(
     svg_files: list[Path],
@@ -193,6 +190,7 @@ def _reconstruction_only_graphics(
             active_native = bool((elem.get('data-pptx-native') or '').strip())
             diagnostics.append((svg_path.name, marker_id, active_native))
     return diagnostics
+
 
 def _recorded_narration_on_click_slides(
     ref_files: list[Path],
@@ -229,6 +227,7 @@ def _recorded_narration_on_click_slides(
         if slide_trigger == 'on-click':
             blocked.append(svg_path.stem)
     return blocked
+
 
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point for the SVG to PPTX conversion tool."""
@@ -948,9 +947,10 @@ Recorded narration:
                 if verbose:
                     print(f"  [warn] svg_output backup skipped: {exc}")
         elif verbose:
-            print("  [info] svg_output/ not found, backup skipped")
+            print(f"  [info] svg_output/ not found, backup skipped")
 
     return 0 if success else 1
+
 
 if __name__ == '__main__':
     raise SystemExit(main())

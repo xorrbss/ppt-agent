@@ -81,8 +81,7 @@ _BUILTIN_MEDIUM_STYLE_2_ACCENT_1_XML = ET.fromstring(
         </a:tcStyle>
       </a:wholeTbl>
       <a:band1H>
-        <a:tcStyle><a:fill><a:solidFill><a:schemeClr val="accent1"><a:tint val="40000"/></a:schemeClr></a:soli\
-dFill></a:fill></a:tcStyle>
+        <a:tcStyle><a:fill><a:solidFill><a:schemeClr val="accent1"><a:tint val="40000"/></a:schemeClr></a:solidFill></a:fill></a:tcStyle>
       </a:band1H>
       <a:band2H><a:tcStyle/></a:band2H>
       <a:firstRow>
@@ -91,8 +90,7 @@ dFill></a:fill></a:tcStyle>
           <a:schemeClr val="lt1"/>
         </a:tcTxStyle>
         <a:tcStyle>
-          <a:tcBdr><a:bottom><a:ln w="38100"><a:solidFill><a:schemeClr val="lt1"/></a:solidFill></a:ln></a:bot\
-tom></a:tcBdr>
+          <a:tcBdr><a:bottom><a:ln w="38100"><a:solidFill><a:schemeClr val="lt1"/></a:solidFill></a:ln></a:bottom></a:tcBdr>
           <a:fill><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></a:fill>
         </a:tcStyle>
       </a:firstRow>
@@ -126,10 +124,16 @@ class _TableStyleContext:
             return ()
 
         names: list[str] = []
-        first_row = bool(self.table_properties is not None and ooxml_bool(self.table_properties.get("firstRow")))
+        first_row = bool(
+            self.table_properties is not None
+            and ooxml_bool(self.table_properties.get("firstRow"))
+        )
         if first_row and row_index == 0:
             names.append("firstRow")
-        elif self.table_properties is not None and ooxml_bool(self.table_properties.get("bandRow")):
+        elif (
+            self.table_properties is not None
+            and ooxml_bool(self.table_properties.get("bandRow"))
+        ):
             band_index = row_index - (1 if first_row else 0)
             names.append("band1H" if band_index % 2 == 0 else "band2H")
         names.append("wholeTbl")
@@ -151,7 +155,10 @@ def _resolve_table_style(
     table_styles: ET.Element | None,
 ) -> _TableStyleContext:
     tbl_pr = tbl.find("a:tblPr", NS)
-    style_id = tbl_pr.findtext("a:tableStyleId", default="", namespaces=NS).strip() if tbl_pr is not None else ""
+    style_id = (
+        tbl_pr.findtext("a:tableStyleId", default="", namespaces=NS).strip()
+        if tbl_pr is not None else ""
+    )
     if not style_id and table_styles is not None:
         style_id = table_styles.get("def", "").strip()
     normalized_id = _normalize_table_style_id(style_id)
@@ -182,10 +189,7 @@ def _effective_cell_fill(
 ) -> FillResult:
     """Resolve direct cell fill before row-region and whole-table defaults."""
     direct = resolve_fill(
-        tc_pr,
-        palette,
-        id_prefix=id_prefix,
-        id_seq=id_seq,
+        tc_pr, palette, id_prefix=id_prefix, id_seq=id_seq,
     )
     if direct.attrs or direct.defs:
         return direct
@@ -195,10 +199,7 @@ def _effective_cell_fill(
         if fill_parent is None:
             continue
         inherited = resolve_fill(
-            fill_parent,
-            palette,
-            id_prefix=id_prefix,
-            id_seq=id_seq,
+            fill_parent, palette, id_prefix=id_prefix, id_seq=id_seq,
         )
         if inherited.attrs or inherited.defs:
             return inherited
@@ -246,8 +247,7 @@ def _table_tx_style_run_props(
         ):
             if typeface:
                 ET.SubElement(
-                    run_props,
-                    f"{{{NS['a']}}}{tag}",
+                    run_props, f"{{{NS['a']}}}{tag}",
                     {"typeface": typeface},
                 )
 
@@ -264,7 +264,6 @@ def _table_tx_style_run_props(
 # ---------------------------------------------------------------------------
 # Public entry
 # ---------------------------------------------------------------------------
-
 
 def convert_tbl(
     tbl: ET.Element,
@@ -290,7 +289,10 @@ def convert_tbl(
         return TableResult()
     table_style = _resolve_table_style(tbl, table_styles)
     row_heights_px = [_row_height_px(r) for r in rows]
-    grid_topology_invalid = any(len(row.findall("a:tc", NS)) != len(col_widths_px) for row in rows)
+    grid_topology_invalid = any(
+        len(row.findall("a:tc", NS)) != len(col_widths_px)
+        for row in rows
+    )
     source_geometry_invalid = (
         grid_topology_invalid
         or any(width <= 0 for width in col_widths_px)
@@ -338,9 +340,7 @@ def convert_tbl(
     else:
         native_status = None
     native_payload = (
-        None
-        if native_status
-        else _native_table_payload(
+        None if native_status else _native_table_payload(
             tbl,
             xfrm,
             col_widths,
@@ -361,14 +361,11 @@ def convert_tbl(
                 continue
             rect_x = col_lefts[c]
             rect_y = row_tops[r]
-            rect_w = sum(col_widths[c : c + cell.col_span])
-            rect_h = sum(row_heights[r : r + cell.row_span])
+            rect_w = sum(col_widths[c:c + cell.col_span])
+            rect_h = sum(row_heights[r:r + cell.row_span])
             tcPr = cell.element.find("a:tcPr", NS)
             fill = _effective_cell_fill(
-                tcPr,
-                table_style,
-                r,
-                palette,
+                tcPr, table_style, r, palette,
                 id_prefix=f"{id_prefix}fill",
                 id_seq=grad_seq,
             )
@@ -378,7 +375,7 @@ def convert_tbl(
             body_parts.append(
                 f'<rect x="{fmt_num(rect_x)}" y="{fmt_num(rect_y)}" '
                 f'width="{fmt_num(rect_w)}" height="{fmt_num(rect_h)}"'
-                f"{attr_str}/>"
+                f'{attr_str}/>'
             )
 
     # Pass B: cell text. Cell xfrm uses default tcPr insets if none specified.
@@ -392,19 +389,13 @@ def convert_tbl(
             tcPr = cell.element.find("a:tcPr", NS)
             cell_x = col_lefts[c]
             cell_y = row_tops[r]
-            cell_w = sum(col_widths[c : c + cell.col_span])
-            cell_h = sum(row_heights[r : r + cell.row_span])
+            cell_w = sum(col_widths[c:c + cell.col_span])
+            cell_h = sum(row_heights[r:r + cell.row_span])
             cell_xfrm = Xfrm(x=cell_x, y=cell_y, w=cell_w, h=cell_h)
             text_result = _convert_cell_text(
-                tx_body,
-                tcPr,
-                cell_xfrm,
-                palette,
-                theme_fonts,
+                tx_body, tcPr, cell_xfrm, palette, theme_fonts,
                 fallback_run_props=_table_text_run_props(
-                    table_style,
-                    r,
-                    theme_fonts or {},
+                    table_style, r, theme_fonts or {},
                 ),
                 slide_number=slide_number,
                 id_prefix=f"{id_prefix}txt",
@@ -421,8 +412,8 @@ def convert_tbl(
                 continue
             cell_x = col_lefts[c]
             cell_y = row_tops[r]
-            cell_w = sum(col_widths[c : c + cell.col_span])
-            cell_h = sum(row_heights[r : r + cell.row_span])
+            cell_w = sum(col_widths[c:c + cell.col_span])
+            cell_h = sum(row_heights[r:r + cell.row_span])
             tcPr = cell.element.find("a:tcPr", NS)
             for tag, x1, y1, x2, y2 in (
                 ("a:lnT", cell_x, cell_y, cell_x + cell_w, cell_y),
@@ -431,21 +422,9 @@ def convert_tbl(
                 ("a:lnL", cell_x, cell_y, cell_x, cell_y + cell_h),
             ):
                 line_xml = _border_line(
-                    tcPr,
-                    table_style,
-                    r,
-                    c,
-                    len(rows),
-                    len(col_widths),
-                    tag,
-                    x1,
-                    y1,
-                    x2,
-                    y2,
-                    palette,
-                    id_prefix=f"{id_prefix}stk",
-                    id_seq=marker_seq,
-                    defs=defs,
+                    tcPr, table_style, r, c, len(rows), len(col_widths), tag,
+                    x1, y1, x2, y2, palette,
+                    id_prefix=f"{id_prefix}stk", id_seq=marker_seq, defs=defs,
                 )
                 if line_xml:
                     body_parts.append(line_xml)
@@ -461,7 +440,6 @@ def convert_tbl(
 # ---------------------------------------------------------------------------
 # Geometry helpers
 # ---------------------------------------------------------------------------
-
 
 def _column_widths_px(tbl: ET.Element) -> list[float]:
     grid = tbl.find("a:tblGrid", NS)
@@ -490,7 +468,12 @@ def _safe_emu_integer(raw_value: str) -> int | None:
     """Return a bounded ASCII DrawingML coordinate without float overflow."""
     token = raw_value.strip(" \t\r\n")
     digits = token[1:] if token.startswith("-") else token
-    if not digits or not digits.isascii() or not digits.isdigit() or len(digits) > 10:
+    if (
+        not digits
+        or not digits.isascii()
+        or not digits.isdigit()
+        or len(digits) > 10
+    ):
         return None
     value = int(token)
     if not _POWERPOINT_COORD_MIN <= value <= _POWERPOINT_COORD_MAX:
@@ -510,7 +493,6 @@ def _cumulative_starts(origin: float, sizes: list[float]) -> list[float]:
 # ---------------------------------------------------------------------------
 # Cell grid
 # ---------------------------------------------------------------------------
-
 
 @dataclass
 class _CellSlot:
@@ -584,8 +566,7 @@ def _build_cell_grid(rows: list[ET.Element], col_count: int) -> list[list[_CellS
                         grid[rr][cc] = slot
                     else:
                         grid[rr][cc] = _CellSlot(
-                            element=tc,
-                            is_dropped=True,
+                            element=tc, is_dropped=True,
                         )
             c += 1 if explicit_grid else slot.col_span
 
@@ -652,9 +633,15 @@ def _canonical_native_merge_status(
     """Accept only explicit rectangular merge topology safe for regeneration."""
     physical_rows = [row.findall("a:tc", NS) for row in rows]
     merge_attrs = {"gridSpan", "rowSpan", "hMerge", "vMerge"}
-    if not any(any(name in tc.attrib for name in merge_attrs) for row_cells in physical_rows for tc in row_cells):
+    if not any(
+        any(name in tc.attrib for name in merge_attrs)
+        for row_cells in physical_rows
+        for tc in row_cells
+    ):
         return None
-    if col_count <= 0 or any(len(row_cells) != col_count for row_cells in physical_rows):
+    if col_count <= 0 or any(
+        len(row_cells) != col_count for row_cells in physical_rows
+    ):
         return "unsupported-merge-topology"
 
     states: dict[tuple[int, int], tuple[ET.Element, int, int, bool, bool]] = {}
@@ -677,11 +664,16 @@ def _canonical_native_merge_status(
         (_tc, row_span, col_span, h_merge, v_merge),
     ) in states.items():
         if not h_merge and not v_merge and (row_span > 1 or col_span > 1):
-            anchors.append(_CanonicalMergeRegion(row_idx, col_idx, row_span, col_span))
+            anchors.append(
+                _CanonicalMergeRegion(row_idx, col_idx, row_span, col_span)
+            )
 
     owners: dict[tuple[int, int], _CanonicalMergeRegion] = {}
     for region in anchors:
-        if region.row + region.row_span > len(rows) or region.col + region.col_span > col_count:
+        if (
+            region.row + region.row_span > len(rows)
+            or region.col + region.col_span > col_count
+        ):
             return "unsupported-merge-topology"
         for covered_row in range(region.row, region.row + region.row_span):
             for covered_col in range(region.col, region.col + region.col_span):
@@ -721,19 +713,20 @@ def _table_has_unsupported_style(tbl: ET.Element) -> bool:
     if tbl_pr is None:
         return False
     allowed_attrs = {
-        "firstRow",
-        "bandRow",
-        "firstCol",
-        "lastCol",
-        "lastRow",
-        "bandCol",
-        "rtl",
+        "firstRow", "bandRow", "firstCol", "lastCol", "lastRow",
+        "bandCol", "rtl",
     }
     if any(name not in allowed_attrs for name in tbl_pr.attrib):
         return True
-    if any(ooxml_bool(tbl_pr.attrib.get(name)) for name in ("firstCol", "lastCol", "lastRow", "bandCol", "rtl")):
+    if any(
+        ooxml_bool(tbl_pr.attrib.get(name))
+        for name in ("firstCol", "lastCol", "lastRow", "bandCol", "rtl")
+    ):
         return True
-    return any(child.tag.rsplit("}", 1)[-1] != "tableStyleId" for child in tbl_pr)
+    return any(
+        child.tag.rsplit("}", 1)[-1] != "tableStyleId"
+        for child in tbl_pr
+    )
 
 
 _DIRECT_BORDER_TAGS = {
@@ -761,7 +754,11 @@ def _validate_opaque_border_color(color_elem: ET.Element | None) -> None:
         raise ValueError("unsupported border color")
     for modifier in color_elem:
         modifier_name = modifier.tag.rsplit("}", 1)[-1]
-        if modifier_name not in _OPAQUE_COLOR_MODIFIERS or set(modifier.attrib) != {"val"} or list(modifier):
+        if (
+            modifier_name not in _OPAQUE_COLOR_MODIFIERS
+            or set(modifier.attrib) != {"val"}
+            or list(modifier)
+        ):
             raise ValueError("unsupported border color modifier")
         value = modifier.get("val", "")
         if not value.isdigit() or not 0 <= int(value) <= 100000:
@@ -799,7 +796,8 @@ def _direct_border_payload(
 
     decoration_names = {"round", "headEnd", "tailEnd"}
     if child_names.count("solidFill") != 1 or any(
-        name not in {"solidFill", "prstDash", *decoration_names} for name in child_names
+        name not in {"solidFill", "prstDash", *decoration_names}
+        for name in child_names
     ):
         raise ValueError("unsupported border paint")
     if (
@@ -812,7 +810,9 @@ def _direct_border_payload(
         (child for child in children if child.tag.rsplit("}", 1)[-1] == "prstDash"),
         None,
     )
-    if dash is not None and (dash.attrib != {"val": "solid"} or list(dash)):
+    if dash is not None and (
+        dash.attrib != {"val": "solid"} or list(dash)
+    ):
         raise ValueError("unsupported border dash")
     line_join = next(
         (child for child in children if child.tag.rsplit("}", 1)[-1] == "round"),
@@ -822,7 +822,10 @@ def _direct_border_payload(
         raise ValueError("unsupported border line join")
     for endpoint_name in ("headEnd", "tailEnd"):
         endpoint = next(
-            (child for child in children if child.tag.rsplit("}", 1)[-1] == endpoint_name),
+            (
+                child for child in children
+                if child.tag.rsplit("}", 1)[-1] == endpoint_name
+            ),
             None,
         )
         if endpoint is None:
@@ -836,7 +839,10 @@ def _direct_border_payload(
         ):
             raise ValueError("unsupported border endpoint")
 
-    solid_fill = next(child for child in children if child.tag.rsplit("}", 1)[-1] == "solidFill")
+    solid_fill = next(
+        child for child in children
+        if child.tag.rsplit("}", 1)[-1] == "solidFill"
+    )
     if solid_fill.attrib or len(list(solid_fill)) != 1:
         raise ValueError("invalid solid border fill")
     color_elem = find_color_elem(solid_fill)
@@ -874,10 +880,15 @@ def _table_has_unsupported_direct_formatting(
             if tc_pr.get("anchor") not in {None, "t", "ctr", "b"}:
                 return True
             if any(
-                child.tag.rsplit("}", 1)[-1] not in {"solidFill", "noFill", *_DIRECT_BORDER_TAGS} for child in tc_pr
+                child.tag.rsplit("}", 1)[-1]
+                not in {"solidFill", "noFill", *_DIRECT_BORDER_TAGS}
+                for child in tc_pr
             ):
                 return True
-            fills = [child for child in tc_pr if child.tag.rsplit("}", 1)[-1] in {"solidFill", "noFill"}]
+            fills = [
+                child for child in tc_pr
+                if child.tag.rsplit("}", 1)[-1] in {"solidFill", "noFill"}
+            ]
             if len(fills) > 1:
                 return True
             no_fill = tc_pr.find("a:noFill", NS)
@@ -906,7 +917,10 @@ def _table_has_unsupported_direct_formatting(
 
 def _table_cell_has_unsupported_topology(tc: ET.Element) -> bool:
     """Accept only the closed optional txBody -> optional tcPr cell sequence."""
-    if any(name not in {"gridSpan", "rowSpan", "hMerge", "vMerge"} for name in tc.attrib):
+    if any(
+        name not in {"gridSpan", "rowSpan", "hMerge", "vMerge"}
+        for name in tc.attrib
+    ):
         return True
     tx_body_tag = f"{{{NS['a']}}}txBody"
     tc_pr_tag = f"{{{NS['a']}}}tcPr"
@@ -914,7 +928,7 @@ def _table_cell_has_unsupported_topology(tc: ET.Element) -> bool:
     child_index = 0
     if child_tags[:1] == [tx_body_tag]:
         child_index += 1
-    if child_tags[child_index : child_index + 1] == [tc_pr_tag]:
+    if child_tags[child_index:child_index + 1] == [tc_pr_tag]:
         child_index += 1
     return child_index != len(child_tags)
 
@@ -935,7 +949,9 @@ def _text_body_has_unsupported_formatting(tx_body: ET.Element | None) -> bool:
     body_index += 1
     if body_index < len(body_tags) and body_tags[body_index] == list_style_tag:
         body_index += 1
-    if body_index == len(body_tags) or any(tag != paragraph_tag for tag in body_tags[body_index:]):
+    if body_index == len(body_tags) or any(
+        tag != paragraph_tag for tag in body_tags[body_index:]
+    ):
         return True
 
     relationship_prefix = f"{{{NS['r']}}}"
@@ -945,7 +961,8 @@ def _text_body_has_unsupported_formatting(tx_body: ET.Element | None) -> bool:
         f"{{{NS['a']}}}hlinkMouseOver",
     }
     if any(
-        node.tag in forbidden_run_children or any(name.startswith(relationship_prefix) for name in node.attrib)
+        node.tag in forbidden_run_children
+        or any(name.startswith(relationship_prefix) for name in node.attrib)
         for node in tx_body.iter()
     ):
         return True
@@ -966,9 +983,15 @@ def _text_body_has_unsupported_formatting(tx_body: ET.Element | None) -> bool:
         paragraph_index = 0
         if direct_tags[:1] == [p_pr_tag]:
             paragraph_index += 1
-        while paragraph_index < len(direct_tags) and direct_tags[paragraph_index] == run_tag:
+        while (
+            paragraph_index < len(direct_tags)
+            and direct_tags[paragraph_index] == run_tag
+        ):
             paragraph_index += 1
-        if paragraph_index < len(direct_tags) and direct_tags[paragraph_index] == end_r_pr_tag:
+        if (
+            paragraph_index < len(direct_tags)
+            and direct_tags[paragraph_index] == end_r_pr_tag
+        ):
             paragraph_index += 1
         if paragraph_index != len(direct_tags):
             return True
@@ -1026,7 +1049,10 @@ def _legacy_text_body_has_unsupported_formatting(
         if p_pr is not None:
             if any(name != "algn" for name in p_pr.attrib):
                 return True
-            if any(child.tag.rsplit("}", 1)[-1] not in {"defRPr", "buNone"} for child in p_pr):
+            if any(
+                child.tag.rsplit("}", 1)[-1] not in {"defRPr", "buNone"}
+                for child in p_pr
+            ):
                 return True
 
         default_r_pr = p_pr.find("a:defRPr", NS) if p_pr is not None else None
@@ -1036,12 +1062,16 @@ def _legacy_text_body_has_unsupported_formatting(
             r_pr = run.find("a:rPr", NS)
             if _legacy_run_props_have_unsupported_formatting(r_pr):
                 return True
-            run_signatures.add(_legacy_effective_run_signature(r_pr, default_r_pr))
+            run_signatures.add(
+                _legacy_effective_run_signature(r_pr, default_r_pr)
+            )
         end_r_pr = paragraph.find("a:endParaRPr", NS)
         if _legacy_run_props_have_unsupported_formatting(end_r_pr):
             return True
         if not paragraph.findall("a:r", NS) and end_r_pr is not None:
-            run_signatures.add(_legacy_effective_run_signature(end_r_pr, default_r_pr))
+            run_signatures.add(
+                _legacy_effective_run_signature(end_r_pr, default_r_pr)
+            )
 
     return len(run_signatures) > 1
 
@@ -1064,24 +1094,18 @@ def _legacy_run_props_have_unsupported_formatting(
     if r_pr.get("spc") not in {None, "0"}:
         return True
     allowed_attrs = {
-        "lang",
-        "altLang",
-        "sz",
-        "b",
-        "i",
-        "u",
-        "strike",
-        "dirty",
-        "baseline",
-        "cap",
-        "spc",
+        "lang", "altLang", "sz", "b", "i", "u", "strike", "dirty",
+        "baseline", "cap", "spc",
     }
     if any(name not in allowed_attrs for name in r_pr.attrib):
         return True
     solid_fill = r_pr.find("a:solidFill", NS)
     if solid_fill is not None and solid_fill.find(".//a:alpha", NS) is not None:
         return True
-    return any(child.tag.rsplit("}", 1)[-1] != "solidFill" for child in r_pr)
+    return any(
+        child.tag.rsplit("}", 1)[-1] != "solidFill"
+        for child in r_pr
+    )
 
 
 def _legacy_effective_run_signature(
@@ -1096,7 +1120,10 @@ def _legacy_effective_run_signature(
     solid_fill = r_pr.find("a:solidFill", NS) if r_pr is not None else None
     if solid_fill is None and default_r_pr is not None:
         solid_fill = default_r_pr.find("a:solidFill", NS)
-    fill_xml = ET.tostring(solid_fill, encoding="utf-8") if solid_fill is not None else None
+    fill_xml = (
+        ET.tostring(solid_fill, encoding="utf-8")
+        if solid_fill is not None else None
+    )
     return attr("b"), attr("sz"), fill_xml
 
 
@@ -1122,7 +1149,9 @@ def _native_table_payload(
         "width": _round_payload_number(xfrm.w),
         "height": _round_payload_number(xfrm.h),
         "strict_grid": True,
-        "header_rows": (1 if tbl_pr is not None and ooxml_bool(tbl_pr.get("firstRow")) else 0),
+        "header_rows": (
+            1 if tbl_pr is not None and ooxml_bool(tbl_pr.get("firstRow")) else 0
+        ),
         "column_widths": [_round_payload_number(width) for width in column_widths],
         "row_heights": [_round_payload_number(height) for height in row_heights],
         "rows": [],
@@ -1295,7 +1324,9 @@ def _native_run_payload(
     if strike is not None:
         payload["strike"] = strike != "noStrike"
 
-    font_size = _canonical_source_font_size_px(_effective_run_attr(r_pr, default_r_pr, "sz"))
+    font_size = _canonical_source_font_size_px(
+        _effective_run_attr(r_pr, default_r_pr, "sz")
+    )
     if font_size is not None:
         payload["font_size"] = font_size
 
@@ -1336,12 +1367,7 @@ def _cell_rich_paragraph_payloads(
     style_signatures: set[tuple[tuple[str, Any], ...]] = set()
     needs_runs = False
     run_only_fields = {
-        "italic",
-        "underline",
-        "strike",
-        "font_family",
-        "lang",
-        "alt_lang",
+        "italic", "underline", "strike", "font_family", "lang", "alt_lang",
     }
     for paragraph in tx_body.findall("a:p", NS):
         p_pr = paragraph.find("a:pPr", NS)
@@ -1349,7 +1375,10 @@ def _cell_rich_paragraph_payloads(
         if align not in {"l", "ctr", "r"}:
             align = None
         default_r_pr = p_pr.find("a:defRPr", NS) if p_pr is not None else None
-        runs = [_native_run_payload(run, default_r_pr, palette, theme_fonts) for run in paragraph.findall("a:r", NS)]
+        runs = [
+            _native_run_payload(run, default_r_pr, palette, theme_fonts)
+            for run in paragraph.findall("a:r", NS)
+        ]
         paragraphs.append((align, runs))
         for run in runs:
             style = tuple(sorted((key, value) for key, value in run.items() if key != "text"))
@@ -1406,7 +1435,12 @@ def _cell_font_size_px(tx_body: ET.Element | None) -> int | float | None:
 
 def _canonical_source_font_size_px(raw_size: str | None) -> int | float | None:
     """Return a writer-stable font size for one bounded DrawingML token."""
-    if raw_size is None or not raw_size.isascii() or not raw_size.isdigit() or len(raw_size) > 6:
+    if (
+        raw_size is None
+        or not raw_size.isascii()
+        or not raw_size.isdigit()
+        or len(raw_size) > 6
+    ):
         return None
     size_hpt = int(raw_size)
     if not 100 <= size_hpt <= 400000:
@@ -1489,7 +1523,6 @@ def _copy_cell_margins(tc_pr: ET.Element | None, cell: dict[str, Any]) -> None:
 # Cell text & borders
 # ---------------------------------------------------------------------------
 
-
 def _convert_cell_text(
     tx_body: ET.Element,
     tcPr: ET.Element | None,
@@ -1512,14 +1545,16 @@ def _convert_cell_text(
     run_props = [
         node
         for node in tx_body.iter()
-        if node.tag
-        in {
+        if node.tag in {
             f"{{{NS['a']}}}defRPr",
             f"{{{NS['a']}}}endParaRPr",
             f"{{{NS['a']}}}rPr",
         }
     ]
-    if any(_run_props_need_render_normalization(node, palette) for node in run_props):
+    if any(
+        _run_props_need_render_normalization(node, palette)
+        for node in run_props
+    ):
         render_tx_body = copy.deepcopy(tx_body)
         for node in render_tx_body.iter():
             if node.tag not in {
@@ -1528,7 +1563,10 @@ def _convert_cell_text(
                 f"{{{NS['a']}}}rPr",
             }:
                 continue
-            if node.get("sz") is not None and _canonical_source_font_size_px(node.get("sz")) is None:
+            if (
+                node.get("sz") is not None
+                and _canonical_source_font_size_px(node.get("sz")) is None
+            ):
                 node.attrib.pop("sz", None)
             solid_fill = node.find("a:solidFill", NS)
             if solid_fill is not None and _solid_fill_is_unsafe(solid_fill, palette):
@@ -1544,10 +1582,7 @@ def _convert_cell_text(
     try:
         try:
             return convert_txbody(
-                render_tx_body,
-                cell_xfrm,
-                palette,
-                theme_fonts=theme_fonts,
+                render_tx_body, cell_xfrm, palette, theme_fonts=theme_fonts,
                 fallback_run_props=fallback_run_props,
                 slide_number=slide_number,
                 id_prefix=id_prefix,
@@ -1556,10 +1591,7 @@ def _convert_cell_text(
         except (AttributeError, OverflowError, TypeError, ValueError):
             plain_tx_body = _plain_table_text_body(render_tx_body, overrides)
             return convert_txbody(
-                plain_tx_body,
-                cell_xfrm,
-                palette,
-                theme_fonts=theme_fonts,
+                plain_tx_body, cell_xfrm, palette, theme_fonts=theme_fonts,
                 fallback_run_props=(),
                 slide_number=slide_number,
                 id_prefix=id_prefix,
@@ -1606,17 +1638,8 @@ def _color_numeric_tokens_are_finite(color: ET.Element) -> bool:
         "scrgbClr": ("r", "g", "b"),
     }
     modifier_tags = {
-        "alpha",
-        "alphaMod",
-        "alphaOff",
-        "hueMod",
-        "hueOff",
-        "lumMod",
-        "lumOff",
-        "satMod",
-        "satOff",
-        "shade",
-        "tint",
+        "alpha", "alphaMod", "alphaOff", "hueMod", "hueOff",
+        "lumMod", "lumOff", "satMod", "satOff", "shade", "tint",
     }
     for node in color.iter():
         name = node.tag.rsplit("}", 1)[-1]
@@ -1669,7 +1692,8 @@ def _tcPr_inset_overrides(tcPr: ET.Element | None) -> dict[str, str]:
     if tcPr is None:
         return {}
     out: dict[str, str] = {}
-    for src, dst in (("marL", "lIns"), ("marR", "rIns"), ("marT", "tIns"), ("marB", "bIns")):
+    for src, dst in (("marL", "lIns"), ("marR", "rIns"),
+                     ("marT", "tIns"), ("marB", "bIns")):
         if src not in tcPr.attrib:
             continue
         value = _safe_emu_integer(tcPr.attrib[src])
@@ -1686,10 +1710,7 @@ def _border_line(
     row_count: int,
     col_count: int,
     tag: str,
-    x1: float,
-    y1: float,
-    x2: float,
-    y2: float,
+    x1: float, y1: float, x2: float, y2: float,
     palette: ColorPalette | None,
     *,
     id_prefix: str,
@@ -1701,48 +1722,30 @@ def _border_line(
     ln = tcPr.find(tag, NS) if tcPr is not None else None
     if ln is not None:
         return _line_element_to_svg(
-            ln,
-            x1,
-            y1,
-            x2,
-            y2,
-            palette,
-            id_prefix=id_prefix,
-            id_seq=id_seq,
-            defs=defs,
+            ln, x1, y1, x2, y2, palette,
+            id_prefix=id_prefix, id_seq=id_seq, defs=defs,
         )
 
     # Draw inherited shared edges once, from the upper/left cell.  This keeps
     # a specific firstRow bottom border from being painted over by the next
     # row's whole-table top border.  A direct border above still wins because
     # it is handled before this de-duplication gate.
-    if (tag == "a:lnT" and row_index > 0) or (tag == "a:lnL" and col_index > 0):
+    if (tag == "a:lnT" and row_index > 0) or (
+        tag == "a:lnL" and col_index > 0
+    ):
         return ""
 
     for region_name, region in table_style.regions_for_row(row_index):
         for border_name in _table_style_border_names(
-            region_name,
-            row_index,
-            col_index,
-            row_count,
-            col_count,
-            tag,
+            region_name, row_index, col_index, row_count, col_count, tag,
         ):
             ln = region.find(
-                f"a:tcStyle/a:tcBdr/a:{border_name}/a:ln",
-                NS,
+                f"a:tcStyle/a:tcBdr/a:{border_name}/a:ln", NS,
             )
             if ln is not None:
                 return _line_element_to_svg(
-                    ln,
-                    x1,
-                    y1,
-                    x2,
-                    y2,
-                    palette,
-                    id_prefix=id_prefix,
-                    id_seq=id_seq,
-                    defs=defs,
+                    ln, x1, y1, x2, y2, palette,
+                    id_prefix=id_prefix, id_seq=id_seq, defs=defs,
                 )
     return ""
 
@@ -1796,7 +1799,12 @@ def _line_element_to_svg(
     if not attrs.get("stroke"):
         return ""
     attr_str = "".join(f' {k}="{v}"' for k, v in attrs.items())
-    return f'<line x1="{fmt_num(x1)}" y1="{fmt_num(y1)}" x2="{fmt_num(x2)}" y2="{fmt_num(y2)}"{attr_str}/>'
+    return (
+        f'<line x1="{fmt_num(x1)}" y1="{fmt_num(y1)}" '
+        f'x2="{fmt_num(x2)}" y2="{fmt_num(y2)}"{attr_str}/>'
+    )
+
+
 def _make_ln_wrapper(ln: ET.Element) -> ET.Element:
     """resolve_stroke walks for ``parent.find('a:ln')``; tcPr borders ARE the
     <a:ln> already, so wrap them in a synthetic parent that points back at

@@ -29,10 +29,8 @@ Icon libraries (subdirectories of templates/icons/):
     tabler-filled/     - 1000+ fill icons, 24x24 viewBox (use prefix: tabler-filled/name)
     tabler-outline/    - 5000+ stroke icons, 24x24 viewBox (use prefix: tabler-outline/name)
     phosphor-duotone/  - 1200+ duotone icons, 256x256 viewBox (single color + 0.2-opacity backplate)
-    simple-icons/      - 3400+ brand logos, 24x24 viewBox (brand-inset library — used alongside the chosen pri\
-mary library, NOT as a standalone library for generic icons)
-    <asset_id>.svg     - project-local extracted vector illustrations with data-icon-style="preserve-color"; p\
-reserve source colors and natural viewBox aspect ratio
+    simple-icons/      - 3400+ brand logos, 24x24 viewBox (brand-inset library — used alongside the chosen primary library, NOT as a standalone library for generic icons)
+    <asset_id>.svg     - project-local extracted vector illustrations with data-icon-style="preserve-color"; preserve source colors and natural viewBox aspect ratio
 
 Usage:
     python3 scripts/svg_finalize/embed_icons.py <svg_file> [svg_file2] ...
@@ -46,10 +44,12 @@ Options:
 
 from __future__ import annotations
 
+import os
 import re
 import sys
 import argparse
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 _SCRIPTS_DIR = Path(__file__).resolve().parents[1]
 if str(_SCRIPTS_DIR) not in sys.path:
@@ -377,8 +377,7 @@ def generate_icon_group(attrs: dict[str, str | float], elements: list[str], styl
   </g>'''
 
 
-def process_svg_file(svg_path: Path, icons_dir: Path, dry_run: bool = False,
-                     verbose: bool = False, fallback_dir: Path | None = None) -> int:
+def process_svg_file(svg_path: Path, icons_dir: Path, dry_run: bool = False, verbose: bool = False, fallback_dir: Path | None = None) -> int:
     """
     Process a single SVG file, replacing all icon placeholders.
 

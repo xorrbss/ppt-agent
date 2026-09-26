@@ -577,7 +577,7 @@ def _parse_filter_params(
         tag = child.tag.replace(f'{{{SVG_NS}}}', '')
         style_values = parse_inline_style(child.get('style'))
 
-        def effect_attr(name: str, default: str | None = None, style_values=style_values, child=child) -> str | None:
+        def effect_attr(name: str, default: str | None = None) -> str | None:
             return style_values.get(name) or child.get(name, default)
 
         if tag == 'feDropShadow':

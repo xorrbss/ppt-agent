@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from .utils import font_px_to_hpt, parse_font_family
+from .utils import FONT_PX_TO_HUNDREDTHS_PT, font_px_to_hpt, parse_font_family
 from ..conversion_context import current_conversion_context
 
 

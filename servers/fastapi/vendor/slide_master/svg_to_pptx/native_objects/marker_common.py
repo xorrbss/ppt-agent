@@ -12,6 +12,8 @@ from xml.etree import ElementTree as ET
 from ..drawingml.context import ConvertContext, IDENTITY_MATRIX
 from ..conversion_context import current_conversion_context
 from ..drawingml.utils import (
+    EMU_PER_PX,
+    FONT_PX_TO_HUNDREDTHS_PT,
     ctx_h,
     ctx_w,
     ctx_x,

@@ -8,8 +8,14 @@ from xml.etree import ElementTree as ET
 
 from ..drawingml.context import ConvertContext
 from ..drawingml.utils import detect_text_lang, parse_font_family, px_to_emu, _xml_escape
+from .chart_data import _DEFAULT_CHART_COLORS
 from .marker_common import (
+    _bool_attr,
+    _bounds,
+    _chart_bool,
+    _clean_hex,
     _compact_key,
+    _fallback_fill_candidates,
     _fallback_stroke_colors,
     _fallback_text_colors,
     _first_present,
@@ -19,6 +25,7 @@ from .marker_common import (
     _local_tag,
     _maybe_number,
     _most_common_color,
+    _number,
     _normalized_fallback_text,
     _powerpoint_emu,
     _powerpoint_emu_value,
@@ -88,7 +95,11 @@ def _most_common_font_size(values: list[str]) -> str | None:
         counts[value] = counts.get(value, 0) + 1
     max_count = max(counts.values())
     candidates = [value for value, count in counts.items() if count == max_count]
-    numeric_candidates = [(float(value), value) for value in candidates if _maybe_number(value) is not None]
+    numeric_candidates = [
+        (float(value), value)
+        for value in candidates
+        if _maybe_number(value) is not None
+    ]
     if numeric_candidates:
         return min(numeric_candidates, key=lambda item: item[0])[1]
     return candidates[0]
@@ -101,7 +112,9 @@ def _classic_chart_style(
 ) -> dict[str, str | None]:
     inherited_styles = inherited_styles or {}
     fallback_background = _inferred_chart_background(elem)
-    text_color = _most_common_color(_fallback_text_colors(elem, inherited_styles.get("fill"))) or "404040"
+    text_color = _most_common_color(
+        _fallback_text_colors(elem, inherited_styles.get("fill"))
+    ) or "404040"
     stroke_colors = _fallback_stroke_colors(elem, inherited_styles.get("stroke"))
     darkest_stroke = min(stroke_colors, key=_relative_luminance) if stroke_colors else None
     lightest_stroke = max(stroke_colors, key=_relative_luminance) if stroke_colors else None
@@ -175,8 +188,7 @@ def _chart_text_sizes(
                 inherited_styles.get("font-size"),
             )
         )
-        if elem is not None
-        else None
+        if elem is not None else None
     )
     base_raw = _first_present(
         payload.get("font_size"),
@@ -268,7 +280,7 @@ def _chart_line_sp_pr_xml(color: str | None, *, width: int = 9525) -> str:
 
 
 def _major_gridlines_xml(color: str | None) -> str:
-    return f"<c:majorGridlines>{_chart_line_sp_pr_xml(color, width=6350)}</c:majorGridlines>"
+    return f'<c:majorGridlines>{_chart_line_sp_pr_xml(color, width=6350)}</c:majorGridlines>'
 
 
 def _font_face_xml(font_face: str | None) -> str:
@@ -287,7 +299,10 @@ def _chart_tx_pr_xml(
     bold: bool = False,
     font_face: str | None = None,
 ) -> str:
-    fill_xml = f'<a:solidFill><a:srgbClr val="{color}"/></a:solidFill>' if color else ""
+    fill_xml = (
+        f'<a:solidFill><a:srgbClr val="{color}"/></a:solidFill>'
+        if color else ""
+    )
     bold_attr = ' b="1"' if bold else ""
     return (
         "<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr>"
@@ -315,16 +330,11 @@ def _chart_text_entry_font_size(item: dict[str, Any], fallback: int) -> int:
 
 
 def _chart_text_entry_color(item: dict[str, Any], fallback: str | None) -> str | None:
-    return (
-        _hex_or_none(
-            _first_present(
-                item.get("color"),
-                item.get("font_color"),
-                item.get("fontColor"),
-            )
-        )
-        or fallback
-    )
+    return _hex_or_none(_first_present(
+        item.get("color"),
+        item.get("font_color"),
+        item.get("fontColor"),
+    )) or fallback
 
 
 def _chart_text_entry_font_face(item: dict[str, Any], fallback: str | None) -> str | None:
@@ -368,14 +378,17 @@ def _axis_title_xml(
         return ""
     text, item = entry
     text_color = _chart_text_entry_color(item, color)
-    fill_xml = f'<a:solidFill><a:srgbClr val="{text_color}"/></a:solidFill>' if text_color else ""
+    fill_xml = (
+        f'<a:solidFill><a:srgbClr val="{text_color}"/></a:solidFill>'
+        if text_color else ""
+    )
     lang = detect_text_lang(text)
     return (
         "<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/>"
         f'<a:p><a:r><a:rPr lang="{lang}" sz="{_chart_text_entry_font_size(item, font_size)}">'
         f"{fill_xml}{_font_face_xml(_chart_text_entry_font_face(item, font_face))}</a:rPr>"
         f"<a:t>{_xml_escape(text)}</a:t></a:r></a:p>"
-        '</c:rich></c:tx><c:layout/><c:overlay val="0"/></c:title>'
+        "</c:rich></c:tx><c:layout/><c:overlay val=\"0\"/></c:title>"
     )
 
 
@@ -413,23 +426,20 @@ def _axis_titles(payload: dict[str, Any]) -> dict[str, Any]:
     def pick(axis_keys: tuple[str, ...], root_keys: tuple[str, ...]) -> Any:
         values: list[Any] = []
         for key in root_keys:
-            values.extend(
-                (
-                    payload.get(key),
-                    style.get(key),
-                )
-            )
+            values.extend((
+                payload.get(key),
+                style.get(key),
+            ))
         for key in axis_keys + root_keys:
-            values.extend(
-                (
-                    axis_map.get(key),
-                    style_axis_map.get(key),
-                )
-            )
+            values.extend((
+                axis_map.get(key),
+                style_axis_map.get(key),
+            ))
         return _first_present(*values)
 
     return {
-        field_name: pick(axis_keys, root_keys) for field_name, (axis_keys, root_keys) in _AXIS_TITLE_KEY_GROUPS.items()
+        field_name: pick(axis_keys, root_keys)
+        for field_name, (axis_keys, root_keys) in _AXIS_TITLE_KEY_GROUPS.items()
     }
 
 
@@ -508,7 +518,9 @@ def _native_chart_export_payload(
         text = _metadata_text(payload.get(key))
         if text and text not in fallback_texts:
             mutable_payload().pop(key, None)
-            messages.append(f"omitted native chart {key} {text!r} because it is not visible in the fallback")
+            messages.append(
+                f"omitted native chart {key} {text!r} because it is not visible in the fallback"
+            )
 
     for field_name, value in _axis_titles(payload).items():
         text = _metadata_text(value)
@@ -527,7 +539,8 @@ def _native_chart_export_payload(
             for map_key in ("axis_titles", "axisTitles"):
                 drop_map_keys(style, map_key, axis_keys + root_keys)
         messages.append(
-            f"omitted native chart axis_titles.{field_name} {text!r} because it is not visible in the fallback"
+            f"omitted native chart axis_titles.{field_name} {text!r} "
+            "because it is not visible in the fallback"
         )
 
     style = payload.get("style") if isinstance(payload.get("style"), dict) else {}
@@ -536,7 +549,10 @@ def _native_chart_export_payload(
         legend_texts = _legend_candidate_texts(payload)
         if legend_texts and not any(text in fallback_texts for text in legend_texts):
             mutable_payload()["show_legend"] = False
-            messages.append("omitted native chart legend because show_legend=true has no visible fallback legend text")
+            messages.append(
+                "omitted native chart legend because show_legend=true has no "
+                "visible fallback legend text"
+            )
 
     return output, messages
 
@@ -636,7 +652,10 @@ def _text_box_xml(
         "left": "l",
         "l": "l",
     }.get(align_key, "l")
-    fill_xml = f'<a:solidFill><a:srgbClr val="{color}"/></a:solidFill>' if color else ""
+    fill_xml = (
+        f'<a:solidFill><a:srgbClr val="{color}"/></a:solidFill>'
+        if color else ""
+    )
     bold_attr = ' b="1"' if bold else ""
     lang = detect_text_lang(text)
     name = _xml_escape(f"Chart {role.title()} {shape_id}")
@@ -655,8 +674,7 @@ def _text_box_xml(
 <a:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0" anchor="t" anchorCtr="0"/>
 <a:lstStyle/>
 <a:p><a:pPr algn="{algn}"/>
-<a:r><a:rPr lang="{lang}" sz="{font_size}"{bold_attr}>{fill_xml}{_font_face_xml(font_face)}</a:rPr><a:t>\
-{_xml_escape(text)}</a:t></a:r>
+<a:r><a:rPr lang="{lang}" sz="{font_size}"{bold_attr}>{fill_xml}{_font_face_xml(font_face)}</a:rPr><a:t>{_xml_escape(text)}</a:t></a:r>
 </a:p>
 </p:txBody>
 </p:sp>'''
@@ -699,7 +717,9 @@ def _chart_companion_box(item: dict[str, Any]) -> tuple[int, int, int, int] | No
     box_keys = ("x", "y", "width", "height")
     provided_box_keys = [key for key in box_keys if key in item]
     if provided_box_keys and len(provided_box_keys) != len(box_keys):
-        raise RuntimeError("Native PPTX chart companion text boxes require x/y/width/height together")
+        raise RuntimeError(
+            "Native PPTX chart companion text boxes require x/y/width/height together"
+        )
     if not provided_box_keys:
         return None
     return (
@@ -770,6 +790,7 @@ def _chart_companion_text_xml(
             font_size = title_font_size
         elif item.get("font_size") is None and item.get("fontSize") is None:
             font_size = note_font_size
+
         color = _hex_or_none(item.get("color")) or chart_style.get("text_color")
         font_face = _chart_text_entry_font_face(item, chart_style.get("font_face"))
         align = str(item.get("align") or ("ctr" if role == "title" else "l"))
@@ -791,20 +812,18 @@ def _chart_companion_text_xml(
             ext_cx = chart_ext_cx
             ext_cy = px_to_emu(16)
             below_index += 1
-        parts.append(
-            _text_box_xml(
-                ctx,
-                text=text,
-                role=role,
-                off_x=off_x,
-                off_y=off_y,
-                ext_cx=ext_cx,
-                ext_cy=ext_cy,
-                font_size=font_size,
-                color=color,
-                align=align,
-                bold=bold,
-                font_face=font_face,
-            )
-        )
+        parts.append(_text_box_xml(
+            ctx,
+            text=text,
+            role=role,
+            off_x=off_x,
+            off_y=off_y,
+            ext_cx=ext_cx,
+            ext_cy=ext_cy,
+            font_size=font_size,
+            color=color,
+            align=align,
+            bold=bold,
+            font_face=font_face,
+        ))
     return "".join(parts)

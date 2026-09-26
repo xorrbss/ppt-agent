@@ -78,6 +78,9 @@ dev = [
 [tool.ruff]
 target-version = "py311"
 line-length = 120
+# Vendored third-party code is kept byte-identical to its pinned upstream plus
+# the replay patches in compatibility/slide-master/patches; it is not linted.
+extend-exclude = ["vendor"]
 
 [tool.ruff.lint]
 # All requested rule families are active. The legacy baseline below records only

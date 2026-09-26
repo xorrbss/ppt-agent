@@ -35,6 +35,7 @@ if __name__ == "__main__":
     )
     raise SystemExit(1)
 
+from ..drawingml.utils import EMU_PER_PX
 from ..conversion_context import current_conversion_context
 from .template_structure import (
     OOXML_UINT32_MAX,

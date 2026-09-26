@@ -44,13 +44,11 @@ crops can no longer accumulate across re-runs.
 
 from __future__ import annotations
 
-import argparse
 import base64
 import io
 import os
 import re
 import sys
-from importlib import import_module
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import unquote
@@ -73,18 +71,13 @@ if __package__ in {None, ''}:
     __package__ = 'svg_finalize'
 
 # Reuse helpers from the previous standalone modules.
-_lint_import_75 = import_module('.crop_images', __package__)
-crop_image_to_size = _lint_import_75.crop_image_to_size
-get_crop_anchor = _lint_import_75.get_crop_anchor
-parse_preserve_aspect_ratio = _lint_import_75.parse_preserve_aspect_ratio
-_lint_import_76 = import_module('.embed_images', __package__)
-_optimize_image_bytes = _lint_import_76._optimize_image_bytes
-get_mime_type = _lint_import_76.get_mime_type
-_lint_import_77 = import_module('.fix_image_aspect', __package__)
-calculate_fitted_dimensions = _lint_import_77.calculate_fitted_dimensions
+from .crop_images import crop_image_to_size, get_crop_anchor, parse_preserve_aspect_ratio
+from .embed_images import _optimize_image_bytes, get_mime_type
+from .fix_image_aspect import calculate_fitted_dimensions
 
 if TYPE_CHECKING:  # pragma: no cover
     from PIL import Image as PILImage  # noqa: F401
+
 
 SVG_NS = 'http://www.w3.org/2000/svg'
 XLINK_NS = 'http://www.w3.org/1999/xlink'
@@ -99,6 +92,7 @@ _PIL_FORMAT_BY_MIME = {
 }
 _OFFICE_VECTOR_EXTENSIONS = {'.emf', '.wmf'}
 
+
 def _parse_float(val: str | None, default: float = 0.0) -> float:
     """Best-effort float parse, tolerating trailing ``px`` etc."""
     if val is None or val == '':
@@ -108,12 +102,14 @@ def _parse_float(val: str | None, default: float = 0.0) -> float:
     except (ValueError, AttributeError):
         return default
 
+
 def _format_number(n: float) -> str:
     """Format a float for compact SVG attribute output."""
     if abs(n - round(n)) < 1e-6:
         return str(int(round(n)))
     s = f"{n:.2f}".rstrip('0').rstrip('.')
     return s or '0'
+
 
 def _resolve_image_path(href: str, svg_dir: Path) -> Path | None:
     """Resolve an <image> href to a local filesystem path.
@@ -132,6 +128,7 @@ def _resolve_image_path(href: str, svg_dir: Path) -> Path | None:
         candidate = (svg_dir / decoded).resolve()
     return candidate if candidate.exists() else None
 
+
 def _is_svg_image(img_path: Path, raw_bytes: bytes) -> bool:
     """Return True when an image reference is an SVG document."""
     if img_path.suffix.lower() == '.svg':
@@ -139,11 +136,13 @@ def _is_svg_image(img_path: Path, raw_bytes: bytes) -> bool:
     head = raw_bytes.lstrip()[:512].lower()
     return head.startswith(b'<svg') or (head.startswith(b'<?xml') and b'<svg' in head)
 
+
 def _embed_raw_image(image: ET.Element, img_path: Path, raw_bytes: bytes) -> None:
     """Embed raw image bytes without PIL transforms."""
     mime_type = get_mime_type(img_path.name, raw_bytes)
     b64 = base64.b64encode(raw_bytes).decode('ascii')
     _set_href(image, f'data:{mime_type};base64,{b64}')
+
 
 def _load_pil_image(img_path: Path) -> 'PILImage' | None:
     """Open an image with PIL, returning None on any failure."""
@@ -527,6 +526,7 @@ def align_and_embed_images_in_svg(
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the standalone diagnostic parser."""
+    import argparse
     parser = argparse.ArgumentParser(
         description='Align (slice/meet) and Base64-embed all <image> refs in an SVG.',
     )
