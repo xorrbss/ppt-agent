@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   LEGACY_AUTHORED_CANVAS,
   type AuthoredCanvasContract,
@@ -63,6 +64,7 @@ export function SvgSlidePreview({
   resolveAssets = false,
   canvas = LEGACY_AUTHORED_CANVAS,
 }: SvgSlidePreviewProps) {
+  const t = useTranslations("a2cPreview");
   // The app is web-only now: there is no Electron runtime branch left to
   // special-case (mirrors AuthoredSlidePreview). `runtime` stays only as a
   // post-mount gate so the SVG resolution effect below, and the srcDoc it
@@ -104,10 +106,10 @@ export function SvgSlidePreview({
       className="h-full w-full overflow-hidden bg-white"
       style={{ aspectRatio: `${canvas.widthPx} / ${canvas.heightPx}` }}
     >
-      {srcDoc ? <iframe title={`Slide ${slideIndex + 1}`} srcDoc={srcDoc} sandbox="" loading="eager" referrerPolicy="no-referrer" tabIndex={-1} className="pointer-events-none block h-full w-full border-0" /> : imageSrc ? (
+      {srcDoc ? <iframe title={t("slide", { number: slideIndex + 1 })} srcDoc={srcDoc} sandbox="" loading="eager" referrerPolicy="no-referrer" tabIndex={-1} className="pointer-events-none block h-full w-full border-0" /> : imageSrc ? (
         // eslint-disable-next-line @next/next/no-img-element -- backend artifacts may use non-Next URLs.
-        <img src={imageSrc} alt={`Slide ${slideIndex + 1}`} className="h-full w-full object-cover" draggable={false} />
-      ) : loading ? <div role="status" className="flex h-full w-full items-center justify-center bg-gray-100 text-sm text-gray-600">SVG preview loading.</div> : <div role="alert" className="flex h-full w-full items-center justify-center bg-gray-100 text-sm text-gray-600">SVG slide preview is unavailable.</div>}
+        <img src={imageSrc} alt={t("slide", { number: slideIndex + 1 })} className="h-full w-full object-cover" draggable={false} />
+      ) : loading ? <div role="status" className="flex h-full w-full items-center justify-center bg-gray-100 text-sm text-gray-600">{t("loading")}</div> : <div role="alert" className="flex h-full w-full items-center justify-center bg-gray-100 text-sm text-gray-600">{t("unavailable")}</div>}
     </div>
   );
 }
