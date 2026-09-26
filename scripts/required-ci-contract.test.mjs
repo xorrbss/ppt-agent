@@ -207,8 +207,6 @@ test("chat-first deployment configuration is required by both CI providers", () 
     "the explicit Next.js Node-test directory must not be excluded from CI discovery",
   );
   for (const testFile of [
-    "element-insert-shapes.test.mjs",
-    "math-insert-elements.test.mjs",
     "settings-access.test.mjs",
     "workspace-contract.test.mjs",
   ]) {
@@ -1158,16 +1156,16 @@ test("the route gate proves an authoritative kill switch wins across real browsi
   const spec = read("servers/nextjs/cypress/e2e/workspaceChatFirstRoute.cy.ts");
   const scenario = spec.slice(
     spec.indexOf(
-      "revalidates a server rollback across two real browsing contexts",
+      "revalidates command capability across two real browsing contexts without replacing the workspace",
     ),
     spec.indexOf(
       "keeps the bootstrap request as the first durable chat message",
     ),
   );
 
-  assert.ok(scenario.length > 0, "server rollback scenario is missing");
-  assert.match(scenario, /capabilityResponse\s*=\s*\{[\s\S]*enabled:\s*false/u);
-  assert.match(scenario, /reason:\s*"chat_first_kill_switch_enabled"/u);
+  assert.ok(scenario.length > 0, "capability rollback scenario is missing");
+  assert.match(scenario, /capabilityResponse\s*=\s*disabledCapability/u);
+  assert.match(spec, /const disabledCapability\s*=\s*\{[\s\S]*reason:\s*"chat_first_kill_switch_enabled"/u);
   assert.match(
     scenario,
     /createElement\("iframe"\)[\s\S]*workspace-secondary-context/u,
@@ -1187,15 +1185,12 @@ test("the route gate proves an authoritative kill switch wins across real browsi
     /requestsBeforeEnable\s*=\s*capabilityRequestCount[\s\S]*greaterThan\(requestsBeforeEnable\)/u,
   );
   assert.match(scenario, /workspace-command-form[\s\S]{0,80}not\.exist/u);
-  assert.match(scenario, /share-popover-trigger[\s\S]{0,80}be\.visible/u);
-  assert.match(
-    scenario,
-    /presentation-title-edit[\s\S]{0,80}not\.be\.disabled/u,
-  );
+  assert.match(scenario, /workspace-timeline-scroll[\s\S]{0,80}be\.visible/u);
+  assert.match(scenario, /secondary command revoke/u);
   assert.match(scenario, /capabilityResponse\s*=\s*enabledCapability/u);
   assert.match(
     scenario,
-    /waitForWindowText\(secondaryWorkspaceWindow as Window, firstUserMessage\.content\)/u,
+    /waitForWindowText\(secondaryWorkspaceWindow as Window, firstUserMessage\.content,/u,
   );
 });
 
@@ -1203,31 +1198,34 @@ test("presentation creation and outline generation retain one stable deck identi
   const uploadState = read(
     "servers/nextjs/app/(presentation-generator)/upload/components/upload-page/useUploadPageState.ts",
   );
+  const uploadHandlers = read(
+    "servers/nextjs/app/(presentation-generator)/upload/components/upload-page/uploadGenerationHandlers.ts",
+  );
   const outline = read(
     "servers/nextjs/app/(presentation-generator)/outline/hooks/usePresentationGeneration.ts",
   );
 
   assert.match(
     uploadState,
-    /const \[pendingPresentationId,\s*setPendingPresentationId\]\s*=\s*useState\(\s*\(\) => crypto\.randomUUID\(\),?\s*\)/u,
+    /const \[pendingPresentationId,\s*setPendingPresentationId\]\s*=\s*useState<string>\(\s*\(\) => crypto\.randomUUID\(\),?\s*\)/u,
   );
   assert.match(
-    uploadState,
+    uploadHandlers,
     /setPendingPresentationId\(crypto\.randomUUID\(\)\)/u,
     "a failed create attempt must rotate the deck id before an explicit retry",
   );
   assert.equal(
-    uploadState.match(/const presentationId = pendingPresentationId;/gu)?.length,
+    uploadHandlers.match(/const presentationId = pendingPresentationId;/gu)?.length,
     2,
     "document and prompt-only creates must reuse the stable deck id",
   );
   assert.equal(
-    uploadState.match(/presentation_id: presentationId,/gu)?.length,
+    uploadHandlers.match(/presentation_id: presentationId,/gu)?.length,
     2,
     "both create admissions must send that same id",
   );
   assert.equal(
-    uploadState.match(
+    uploadHandlers.match(
       /idempotency_key: `presentation-create:\$\{presentationId\}`/gu,
     )?.length,
     2,
