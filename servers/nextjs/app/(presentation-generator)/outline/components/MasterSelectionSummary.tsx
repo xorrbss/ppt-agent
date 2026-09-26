@@ -1,4 +1,5 @@
 "use client";
+import { useTranslations as useA2bTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import type { CompanyStandardSelection } from "@/store/slices/presentationGenUpload";
@@ -16,6 +17,7 @@ export default function MasterSelectionSummary({
   selection,
   onOpen,
 }: MasterSelectionSummaryProps) {
+  const tA2b = useA2bTranslations("outlineExtras");
   const t = useTranslations("authoredVnext.master.entry");
   return (
     <section
@@ -31,7 +33,7 @@ export default function MasterSelectionSummary({
         {selection ? (
           <>
             <p className="truncate text-sm font-semibold text-[#2D2D2D]">
-              {selection.name} · v{selection.revision} / PPT 마스터 기반
+              {selection.name} {tA2b("v")}{selection.revision} / PPT 마스터 기반
             </p>
             <p className="truncate text-xs text-[#667085]">
               {selection.hasLogo ? t("logoOn") : t("logoOff")}

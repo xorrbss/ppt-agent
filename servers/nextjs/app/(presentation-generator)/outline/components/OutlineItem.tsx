@@ -1,3 +1,4 @@
+import { useTranslations as useA2bTranslations } from "next-intl";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Trash } from "lucide-react";
@@ -38,6 +39,7 @@ export function OutlineItem({
   isActiveStreaming = false,
   isStableStreaming = false,
 }: OutlineItemProps) {
+  const tA2b = useA2bTranslations("outlineExtras");
   const { outlines } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
@@ -182,7 +184,7 @@ export function OutlineItem({
           {...attributes}
           {...listeners}
           className="relative flex items-center justify-center rounded cursor-grab focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8]"
-          aria-label={`슬라이드 ${index} 순서 변경`}
+          aria-label={tA2b("reorderSlideValue", { value0: index })}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -313,7 +315,7 @@ export function OutlineItem({
               type="button"
               onClick={handleSlideDelete}
               disabled={isStreaming}
-              aria-label={`슬라이드 ${index} 삭제`}
+              aria-label={tA2b("deleteSlideValue", { value0: index })}
               className="rounded-full bg-white p-1.5 shadow-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8] disabled:cursor-not-allowed disabled:opacity-50 sm:p-2"
             >
               <Trash className="w-4 h-4  text-black/70" />
