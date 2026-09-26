@@ -2,8 +2,9 @@
 
 Every coordinate returned here is in canvas px: each ancestor's and the
 element's own ``translate()`` is applied (the SVG contract admits no other
-transform). ``fill``/``stroke``/``font-weight``/``text-anchor`` inherit through
-``<g>`` ancestors as in SVG.
+transform). Paint properties (``fill``, ``stroke``, their opacities,
+``stroke-width``) and ``font-weight``/``text-anchor`` inherit through ``<g>``
+ancestors as in SVG; ``opacity`` multiplies down the ancestor chain.
 """
 from __future__ import annotations
 
@@ -15,7 +16,8 @@ from xml.etree import ElementTree as ET
 from services.generation_core.drivers.svg.fallback import _text_em
 
 SVG_NS = "{http://www.w3.org/2000/svg}"
-_INHERITED = ("fill", "stroke", "font-weight", "text-anchor")
+_INHERITED = ("fill", "stroke", "fill-opacity", "stroke-opacity", "stroke-width", "font-weight",
+              "text-anchor")
 _NUMBER = re.compile(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?")
 _NAMED = {"black": "#000000", "white": "#FFFFFF"}
 
@@ -58,6 +60,9 @@ class Shape:
     fill: str | None
     stroke: str | None
     point_count: int = 0
+    fill_alpha: float = 1.0
+    stroke_alpha: float = 1.0
+    stroke_width: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -122,7 +127,14 @@ def _num(node: ET.Element, key: str, default: float = 0.0) -> float:
     return float(value) if value is not None else default
 
 
-def _translate(node: ET.Element) -> tuple[float, float]:
+def inherit(attrs: dict, node: ET.Element) -> dict:
+    """``attrs`` as seen by ``node``'s children (``_opacity`` is the opacity product)."""
+    merged = {**attrs, **{k: node.get(k) for k in _INHERITED if node.get(k) is not None}}
+    merged["_opacity"] = attrs.get("_opacity", 1.0) * float(node.get("opacity", 1.0))
+    return merged
+
+
+def translate_of(node: ET.Element) -> tuple[float, float]:
     value = node.get("transform")
     if value is None:
         return 0.0, 0.0
@@ -133,7 +145,7 @@ def _translate(node: ET.Element) -> tuple[float, float]:
     return numbers[0], numbers[1] if len(numbers) == 2 else 0.0
 
 
-def _tag(node: ET.Element) -> str:
+def tag_of(node: ET.Element) -> str:
     return node.tag.removeprefix(SVG_NS)
 
 
@@ -142,11 +154,11 @@ def find_group(root: ET.Element, group_id: str):
     stack = [(root, (0.0, 0.0), {})]
     while stack:
         node, (dx, dy), inherited = stack.pop()
-        tx, ty = _translate(node)
+        tx, ty = translate_of(node)
         offset = (dx + tx, dy + ty)
-        attrs = {**inherited, **{k: node.get(k) for k in _INHERITED if node.get(k) is not None}}
+        attrs = inherit(inherited, node)
         if node.get("id") == group_id:
-            return (node, offset, attrs) if _tag(node) == "g" else None
+            return (node, offset, attrs) if tag_of(node) == "g" else None
         stack.extend((child, offset, attrs) for child in node)
     return None
 
@@ -173,12 +185,13 @@ def _path_points(d: str) -> list[tuple[float, float]]:
     return points
 
 
-def _shape(node: ET.Element, tag: str, dx: float, dy: float, attrs: dict) -> Shape:
-    if tag == "rect":
+def shape_of(node: ET.Element, tag: str, dx: float, dy: float, attrs: dict) -> Shape:
+    """One non-text element in canvas px; ``attrs`` already include the node's own."""
+    if tag in ("rect", "image"):
         x, y = _num(node, "x") + dx, _num(node, "y") + dy
-        box = Box(x, y, x + _num(node, "width"), y + _num(node, "height"))
-        return Shape(tag, box, paint(attrs.get("fill", "black")), paint(attrs.get("stroke")))
-    if tag == "line":
+        points = [(x, y), (x + _num(node, "width"), y + _num(node, "height"))]
+        dx = dy = 0.0
+    elif tag == "line":
         points = [(_num(node, "x1"), _num(node, "y1")), (_num(node, "x2"), _num(node, "y2"))]
     elif tag in ("circle", "ellipse"):
         cx, cy = _num(node, "cx"), _num(node, "cy")
@@ -192,8 +205,13 @@ def _shape(node: ET.Element, tag: str, dx: float, dy: float, attrs: dict) -> Sha
     if not points:
         raise NativeRejection("native_group_shape_empty")
     xs, ys = [p[0] + dx for p in points], [p[1] + dy for p in points]
-    return Shape(tag, Box(min(xs), min(ys), max(xs), max(ys)), paint(attrs.get("fill", "black")),
-                 paint(attrs.get("stroke")), len(points))
+    opacity = attrs.get("_opacity", 1.0)
+    return Shape(tag, Box(min(xs), min(ys), max(xs), max(ys)),
+                 None if tag in ("line", "image") else paint(attrs.get("fill", "black")),
+                 paint(attrs.get("stroke")), 0 if tag in ("rect", "image") else len(points),
+                 fill_alpha=float(attrs.get("fill-opacity", 1.0)) * opacity,
+                 stroke_alpha=float(attrs.get("stroke-opacity", 1.0)) * opacity,
+                 stroke_width=float(attrs.get("stroke-width", 1.0)))
 
 
 def _text(node: ET.Element, dx: float, dy: float, attrs: dict) -> DrawnText:
@@ -231,13 +249,13 @@ def collect_primitives(group: ET.Element, offset: tuple[float, float], inherited
     stack = [(child, offset, inherited) for child in reversed(list(group))]
     while stack:
         node, (dx, dy), attrs = stack.pop()
-        tag = _tag(node)
+        tag = tag_of(node)
         if tag not in allowed:
             raise NativeRejection("native_group_element_unsupported")
         tags.add(tag)
-        tx, ty = _translate(node)
+        tx, ty = translate_of(node)
         position = (dx + tx, dy + ty)
-        attrs = {**attrs, **{k: node.get(k) for k in _INHERITED if node.get(k) is not None}}
+        attrs = inherit(attrs, node)
         if tag == "g":
             stack.extend((child, position, attrs) for child in reversed(list(node)))
         elif tag == "text":
@@ -245,7 +263,7 @@ def collect_primitives(group: ET.Element, offset: tuple[float, float], inherited
             if drawn.lines:
                 texts.append(drawn)
         else:
-            shapes.append(_shape(node, tag, *position, attrs))
+            shapes.append(shape_of(node, tag, *position, attrs))
     return GroupPrimitives(tuple(shapes), tuple(texts), frozenset(tags))
 
 

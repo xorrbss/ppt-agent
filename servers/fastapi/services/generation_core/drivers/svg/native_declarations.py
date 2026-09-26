@@ -41,9 +41,10 @@ _GROUP = "{http://www.w3.org/2000/svg}g"
 
 NATIVE_TABLE_RULE = (
     "For tabular data draw each table as <g id=\"native-table-SLUG\" data-native-table='JSON'> "
-    "(SLUG unique on the slide) holding only rect, line and text: an outer frame rect, grid lines "
-    "or cell rects, and exactly one text per non-empty cell (a multi-line cell uses tspan lines, "
-    "one explicit y per line). "
+    "(SLUG unique on the slide) holding only rect, line and text: draw every row and column "
+    "boundary, outer edges included, as a line or a cell-rect edge (for a borderless look use "
+    "cell rects or lines in the background colour), and exactly one text per non-empty cell "
+    "(a multi-line cell uses tspan lines, one explicit y per line). "
     "JSON is {\"rows\":[[\"Header\",\"Header\"],[\"cell\",\"1,200\"]],\"headerRows\":1}: every row "
     "has the same number of cells, each cell string is exactly the text drawn in that cell "
     "(\\n between lines), \"\" for an empty cell. No other text inside the group; put captions "

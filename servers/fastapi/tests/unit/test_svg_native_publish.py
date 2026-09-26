@@ -32,11 +32,17 @@ def _cell(x, y, text, *, anchor="start", header=False):
             f"{text}</text>")
 
 
-def _table_group(rows=ROWS, *, cells=None, extra="", declared_id="native-table-sales"):
-    grid = ('<rect x="0" y="0" width="600" height="240" fill="#FFFFFF" stroke="#333333"/>'
-            '<rect x="0" y="0" width="600" height="60" fill="#1F4E79"/>'
-            + "".join(f'<line x1="{x}" y1="0" x2="{x}" y2="240" stroke="#333333"/>' for x in (200, 400))
-            + "".join(f'<line x1="0" y1="{y}" x2="600" y2="{y}" stroke="#333333"/>' for y in (60, 120, 180)))
+CARD = '<rect x="100" y="140" width="660" height="300" rx="12" fill="#1F4E79" fill-opacity="0.1"/>'
+CARD_TINT = "#E9EDF2"  # 10% #1F4E79 over the white canvas
+
+
+def _table_group(rows=ROWS, *, cells=None, extra="", before=CARD, grid=None):
+    grid = grid if grid is not None else (
+        '<rect x="0" y="0" width="600" height="60" fill="#1F4E79"/>'
+        + "".join(f'<line x1="{x}" y1="0" x2="{x}" y2="240" stroke="#CCCCCC"/>' for x in (200, 400))
+        + "".join(f'<line x1="0" y1="{y}" x2="600" y2="{y}" stroke="#CCCCCC"/>' for y in (120, 180))
+        + '<line x1="0" y1="60" x2="600" y2="60" stroke="#1F4E79" stroke-width="2" stroke-opacity="0.5"/>'
+        + '<rect x="0" y="0" width="600" height="240" fill="none" stroke="#333333" stroke-width="2"/>')
     default = (_cell(100, 38, "지역", anchor="middle", header=True)
                + _cell(300, 38, "매출(억원)", anchor="middle", header=True)
                + _cell(500, 38, "비고", anchor="middle", header=True)
@@ -46,8 +52,9 @@ def _table_group(rows=ROWS, *, cells=None, extra="", declared_id="native-table-s
                  '<tspan x="412" y="140">지점</tspan><tspan x="412" y="165">신규</tspan></text>'
                + _cell(12, 218, "대구") + _cell(388, 218, "430", anchor="end"))
     declaration = _attr({"rows": rows, "headerRows": 1})
-    return (f'<g transform="translate(100,150)"><g id="{declared_id}" data-native-table=\'{declaration}\' '
-            f'transform="translate(20,10)">{grid}{default if cells is None else cells}{extra}</g></g>')
+    return (f'{before}<g transform="translate(100,150)"><g id="native-table-sales" '
+            f'data-native-table=\'{declaration}\' transform="translate(20,10)">'
+            f'{grid}{default if cells is None else cells}{extra}</g></g>')
 
 
 def _page(body: str, *, stale_body: str | None = None) -> tuple[dict, str]:
@@ -62,8 +69,8 @@ def _page(body: str, *, stale_body: str | None = None) -> tuple[dict, str]:
     return payload, payload["svg_content"]
 
 
-def test_korean_table_is_accepted_with_exact_anchor_and_payload():
-    payload, final = _page(_table_group())
+def _accepted_table(body: str) -> dict:
+    payload, final = _page(body)
     assert "data-native" not in final
     validate_svg(final)
     wire, summary = page_native_objects(payload, pt_per_px=0.75)
@@ -71,7 +78,11 @@ def test_korean_table_is_accepted_with_exact_anchor_and_payload():
     [entry] = NativeObjects.from_wire(wire).objects
     assert entry.id == "native-table-sales" and entry.kind == "table"
     assert entry.anchor.to_wire() == {"x": 120.0, "y": 160.0, "width": 600.0, "height": 240.0}
-    table = entry.payload
+    return entry.payload
+
+
+def test_korean_table_is_accepted_with_exact_anchor_and_payload():
+    table = _accepted_table(_table_group())
     assert [[cell["text"] for cell in row] for row in table["rows"]] == ROWS
     assert table["headerRows"] == 1
     assert table["columnWidths"] == [200.0, 200.0, 200.0]
@@ -79,11 +90,50 @@ def test_korean_table_is_accepted_with_exact_anchor_and_payload():
     header, body = table["rows"][0][0], table["rows"][1][1]
     assert header == {"text": "지역", "fill": "#1F4E79", "textColor": "#FFFFFF", "bold": True,
                       "fontFamily": "Noto Sans KR", "fontSizePt": 15.0}
-    assert body == {"text": "1,200", "fill": "#FFFFFF", "textColor": "#222222", "bold": False,
+    assert body == {"text": "1,200", "fill": CARD_TINT, "textColor": "#222222", "bold": False,
                     "fontFamily": "Noto Sans KR", "fontSizePt": 13.5}
-    assert table["rows"][3][2] == {"text": "", "fill": "#FFFFFF"}
+    assert table["rows"][3][2] == {"text": "", "fill": CARD_TINT}
     assert [style.get("horizontalAlign") for style in table["cellStyles"][1]] == ["left", "right", "left"]
-    assert table["cellStyles"][0][0] == {"horizontalAlign": "center"} and table["cellStyles"][3][2] == {}
+    assert "horizontalAlign" not in table["cellStyles"][3][2]
+
+
+def test_cell_borders_carry_the_drawn_stroke_colours_and_widths():
+    styles = _accepted_table(_table_group())["cellStyles"]
+    frame, grid = {"color": "#333333", "widthPt": 1.5}, {"color": "#CCCCCC", "widthPt": 0.75}
+    rule_on_header = {"color": "#1F4E79", "widthPt": 1.5}  # 50% #1F4E79 over the header fill
+    rule_on_body = {"color": "#849EB6", "widthPt": 1.5}  # 50% #1F4E79 over the card tint
+    assert styles[0][0]["borders"] == {"top": frame, "right": grid, "bottom": rule_on_header, "left": frame}
+    assert styles[1][1]["borders"] == {"top": rule_on_body, "right": grid, "bottom": grid, "left": grid}
+    assert styles[3][2]["borders"] == {"top": grid, "right": frame, "bottom": frame, "left": grid}
+
+
+def test_borderless_cell_rects_give_fills_and_no_borders():
+    cells = "".join(f'<rect x="{c * 200}" y="{r * 60}" width="200" height="60" '
+                    f'fill="{"#1F4E79" if r == 0 else "#FFFFFF"}"/>' for r in range(4) for c in range(3))
+    table = _accepted_table(_table_group(grid=cells))
+    assert all("borders" not in style for row in table["cellStyles"] for style in row)
+    assert table["rows"][0][2]["fill"] == "#1F4E79" and table["rows"][2][0]["fill"] == "#FFFFFF"
+
+
+def test_horizontal_rules_alone_do_not_determine_the_grid():
+    rules = "".join(f'<line x1="0" y1="{y}" x2="600" y2="{y}" stroke="#333333"/>' for y in (0, 60, 120, 180, 240))
+    wire, summary, _ = _dropped(_table_group(grid=rules))
+    assert wire is None and summary["dropped"][0]["reason"] == "native_table_grid_undetermined"
+
+
+def test_a_shape_painted_behind_a_cell_makes_the_background_not_solid():
+    blob = '<path d="M 400 230 L 460 230 L 460 270 Z" fill="#FF8800"/>'  # covers row 1, column 1
+    wire, summary, _ = _dropped(_table_group(before=CARD + blob))
+    assert wire is None and summary["dropped"][0]["reason"] == "native_table_background_not_solid"
+    covered = CARD.replace(' fill-opacity="0.1"', "").replace("#1F4E79", "#F4F6F8")
+    table = _accepted_table(_table_group(before=blob + covered))  # an opaque card covers it again
+    assert table["rows"][1][1]["fill"] == "#F4F6F8"
+
+
+def test_a_stroke_covering_part_of_an_edge_is_rejected():
+    stub = '<line x1="0" y1="120" x2="100" y2="120" stroke="#FF0000"/>'
+    wire, summary, _ = _dropped(_table_group(extra=stub))
+    assert wire is None and summary["dropped"][0]["reason"] == "native_table_border_partial"
 
 
 def _dropped(body: str) -> tuple[dict | None, dict, str]:

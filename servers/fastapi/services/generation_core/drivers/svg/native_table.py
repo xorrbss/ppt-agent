@@ -4,35 +4,36 @@ The drawing is authoritative: converted natively, the group's drawn children
 are replaced by a table built from the payload, so the payload may only say
 what the group already shows.
 
-* The model JSON is ``{"rows": [[str]], "headerRows"?: int, "columnWidths"?: [num]}``.
+* The model JSON is ``{"rows": [[str]], "headerRows"?: int}``; the drawn grid is
+  authoritative for sizes.
 * Text: the multiset of the group's drawn texts (one per ``<text>``, lines
   joined with ``"\\n"``, whitespace-normalized NFC) equals the multiset of the
   JSON's non-empty cells. Nothing drawn is lost, nothing declared is invented.
 * Anchor: the bounding box of the group's rect/line primitives (the outer
   frame), canvas px; every text lies inside it.
-* Grid: when the distinct rect edges and straight grid lines inside the frame
-  give exactly ``columns + 1`` x- and ``rows + 1`` y-boundaries, every drawn
-  text must sit in the cell the JSON puts it in, and the grid supplies
-  ``columnWidths`` (px weights), ``rowHeightsPt``, per-cell fill (the smallest
-  filled rect containing the cell centre), alignment and text style. Without
-  such a grid only the text checks apply and styles are taken from a drawn
-  text only when every drawn text with that value agrees.
+* Grid (required): the distinct rect edges and straight lines of the group
+  must give exactly ``columns + 1`` x- and ``rows + 1`` y-boundaries
+  (``native_table_grid_undetermined`` otherwise). Every drawn text must sit in
+  the cell the JSON puts it in; the grid supplies ``columnWidths`` (px
+  weights) and ``rowHeightsPt``; each cell gets its effective fill and its
+  drawn borders (``native_paint.py``), alignment and text style.
 """
 from __future__ import annotations
 
 from collections import Counter
 
 from services.generation_core.drivers.svg.native_geometry import (
-    Box, DrawnText, GroupPrimitives, NativeRejection, is_bold, normalize_cell,
+    Box, DrawnText, GroupPrimitives, NativeRejection, Shape, is_bold, normalize_cell,
 )
+from services.generation_core.drivers.svg.native_paint import cell_borders, effective_fill, group_strokes
 
 TABLE_ELEMENTS = frozenset({"g", "rect", "line", "text", "tspan"})
 _ALIGN = {"start": "left", "middle": "center", "end": "right"}
 _EDGE_TOLERANCE = 1.5
 
 
-def _model_rows(raw: dict) -> tuple[list[list[str]], int | None, list | None]:
-    if not set(raw) <= {"rows", "headerRows", "columnWidths"}:
+def _model_rows(raw: dict) -> tuple[list[list[str]], int | None]:
+    if not set(raw) <= {"rows", "headerRows"}:
         raise NativeRejection("native_table_json_invalid")
     rows = raw.get("rows")
     if (not isinstance(rows, list) or not rows or not all(isinstance(r, list) and r for r in rows)
@@ -43,7 +44,7 @@ def _model_rows(raw: dict) -> tuple[list[list[str]], int | None, list | None]:
     header = raw.get("headerRows")
     if header is not None and (type(header) is not int or not 0 <= header <= len(rows)):
         raise NativeRejection("native_table_json_invalid")
-    return rows, header, raw.get("columnWidths")
+    return rows, header
 
 
 def _check_text_multiset(cells: list[list[str]], texts: tuple[DrawnText, ...]) -> None:
@@ -77,10 +78,10 @@ def _grid(prims: GroupPrimitives, frame: Box, rows: int, columns: int):
         elif box.height <= 0.5:
             ys.append(box.y0)
         else:
-            return None  # a diagonal line is not a grid line
+            raise NativeRejection("native_table_grid_undetermined")  # a diagonal line
     xs, ys = _boundaries(xs), _boundaries(ys)
     if len(xs) != columns + 1 or len(ys) != rows + 1:
-        return None
+        raise NativeRejection("native_table_grid_undetermined")
     return xs, ys
 
 
@@ -120,27 +121,16 @@ def _text_style(text: DrawnText | None, pt_per_px: float) -> dict:
     return style
 
 
-def _by_value(texts: tuple[DrawnText, ...], pt_per_px: float) -> dict[str, dict]:
-    styles: dict[str, dict] = {}
-    conflicting: set[str] = set()
-    for text in texts:
-        style = _text_style(text, pt_per_px)
-        if text.text in styles and styles[text.text] != style:
-            conflicting.add(text.text)
-        styles.setdefault(text.text, style)
-    return {key: value for key, value in styles.items() if key not in conflicting}
+def table_object(raw: dict, prims: GroupPrimitives, *, pt_per_px: float,
+                 layers: list[Shape]) -> tuple[dict, dict]:
+    """``(anchor, payload)`` for one declared table; raises :class:`NativeRejection`.
 
-
-def _cell_fill(prims: GroupPrimitives, cx: float, cy: float) -> str | None:
-    filled = [s for s in prims.shapes if s.tag == "rect" and s.fill and s.box.contains(cx, cy, 0.0)]
-    return min(filled, key=lambda s: s.box.width * s.box.height).fill if filled else None
-
-
-def table_object(raw: dict, prims: GroupPrimitives, *, pt_per_px: float) -> tuple[dict, dict]:
-    """``(anchor, payload)`` for one declared table; raises :class:`NativeRejection`."""
+    ``layers`` are the slide's filled shapes under the table's texts
+    (``native_paint.background_layers``).
+    """
     if not prims.tags <= TABLE_ELEMENTS:
         raise NativeRejection("native_group_element_unsupported")
-    cells, header, model_widths = _model_rows(raw)
+    cells, header = _model_rows(raw)
     cells = [[normalize_cell(cell) for cell in row] for row in cells]
     _check_text_multiset(cells, prims.texts)
     frames = [s.box for s in prims.shapes]
@@ -153,30 +143,23 @@ def table_object(raw: dict, prims: GroupPrimitives, *, pt_per_px: float) -> tupl
         raise NativeRejection("native_table_frame_missing")
     if not all(frame.contains(x, y) for text in prims.texts for x, y in text.points):
         raise NativeRejection("native_table_text_outside_frame")
-    grid = _grid(prims, frame, len(cells), len(cells[0]))
-    payload: dict = {"rows": []}
-    if grid is None:
-        by_value = _by_value(prims.texts, pt_per_px)
-        payload["rows"] = [[{"text": cell, **by_value.get(cell, {})} for cell in row] for row in cells]
-        if model_widths is not None:
-            payload["columnWidths"] = model_widths
-    else:
-        xs, ys = grid
-        placed = _place(prims.texts, xs, ys, cells)
-        styles = []
-        for r, row in enumerate(cells):
-            payload_row, style_row = [], []
-            for c, cell in enumerate(row):
-                text = placed.get((r, c))
-                fill = _cell_fill(prims, (xs[c] + xs[c + 1]) / 2, (ys[r] + ys[r + 1]) / 2)
-                payload_row.append({"text": cell, **({"fill": fill} if fill else {}),
-                                    **_text_style(text, pt_per_px)})
-                style_row.append({"horizontalAlign": _ALIGN[text.anchor]} if text else {})
-            payload["rows"].append(payload_row)
-            styles.append(style_row)
-        payload["columnWidths"] = [round(xs[i + 1] - xs[i], 3) for i in range(len(xs) - 1)]
-        payload["rowHeightsPt"] = [round((ys[i + 1] - ys[i]) * pt_per_px, 3) for i in range(len(ys) - 1)]
-        payload["cellStyles"] = styles
+    xs, ys = _grid(prims, frame, len(cells), len(cells[0]))
+    placed = _place(prims.texts, xs, ys, cells)
+    strokes = group_strokes(prims.shapes)
+    payload: dict = {"rows": [], "cellStyles": []}
+    for r, row in enumerate(cells):
+        payload_row, style_row = [], []
+        for c, cell in enumerate(row):
+            text, box = placed.get((r, c)), Box(xs[c], ys[r], xs[c + 1], ys[r + 1])
+            fill = effective_fill(layers, (box.x0 + box.x1) / 2, (box.y0 + box.y1) / 2)
+            payload_row.append({"text": cell, "fill": fill, **_text_style(text, pt_per_px)})
+            borders = cell_borders(strokes, box, under=fill, pt_per_px=pt_per_px)
+            style_row.append({**({"horizontalAlign": _ALIGN[text.anchor]} if text else {}),
+                              **({"borders": borders} if borders else {})})
+        payload["rows"].append(payload_row)
+        payload["cellStyles"].append(style_row)
+    payload["columnWidths"] = [round(xs[i + 1] - xs[i], 3) for i in range(len(xs) - 1)]
+    payload["rowHeightsPt"] = [round((ys[i + 1] - ys[i]) * pt_per_px, 3) for i in range(len(ys) - 1)]
     if header:
         payload["headerRows"] = header
     return frame.anchor(), payload

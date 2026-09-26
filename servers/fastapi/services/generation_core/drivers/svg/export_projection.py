@@ -99,7 +99,8 @@ def _cell(cell: dict, style: dict, *, header: bool, family: str) -> dict:
     entry.update({
         "fill": style.get("fill") or cell.get("fill") or _NO_FILL_PROJECTION,
         "color": cell.get("textColor", _AUTHORED_TEXT_COLOR),
-        "bold": bool(cell.get("bold")) or header,
+        # An explicit V1 weight wins; only an unstated one takes the header default.
+        "bold": cell["bold"] if "bold" in cell else header,
         "align": _ALIGN[style.get("horizontalAlign", "left")],
         "valign": style.get("verticalAlign", "middle"),
         "borders": _borders(style.get("borders", {})),

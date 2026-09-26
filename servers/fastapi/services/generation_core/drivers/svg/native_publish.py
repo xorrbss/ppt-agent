@@ -30,6 +30,7 @@ from services.generation_core.drivers.svg.native_declarations import bound_decla
 from services.generation_core.drivers.svg.native_geometry import (
     NativeRejection, collect_primitives, find_group,
 )
+from services.generation_core.drivers.svg.native_paint import background_layers
 from services.generation_core.drivers.svg.native_table import TABLE_ELEMENTS, table_object
 from services.generation_core.native_objects import NativeObject, NativeObjects, NativeObjectsError
 
@@ -58,8 +59,11 @@ def _entry(root: ET.Element, declaration: dict, *, width: float, height: float,
     raw = declaration.get("raw")
     if not isinstance(raw, dict):
         raise NativeRejection("native_declaration_json_invalid")
-    anchor, payload = (table_object(raw, prims, pt_per_px=pt_per_px) if kind == "table"
-                       else chart_object(raw, prims))
+    if kind == "table":
+        anchor, payload = table_object(raw, prims, pt_per_px=pt_per_px,
+                                       layers=background_layers(root, group))
+    else:
+        anchor, payload = chart_object(raw, prims)
     entry = NativeObject.build(id=group_id, kind=kind, anchor=anchor, payload=payload)
     if not entry.anchor.within(width, height):
         raise NativeRejection("native_anchor_outside_canvas")
