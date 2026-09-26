@@ -70,14 +70,17 @@ GENERATION_TABLES = [
 
 
 async def _database(path: Path):
-    engine = create_async_engine(f"sqlite+aiosqlite:///{path}")
+    engine = create_async_engine(
+        f"sqlite+aiosqlite:///{path}", connect_args={"timeout": 30.0}
+    )
 
     @event.listens_for(engine.sync_engine, "connect")
     def _sqlite_safety(connection, _record):
         connection.execute("PRAGMA foreign_keys=ON")
-        connection.execute("PRAGMA busy_timeout=5000")
+        connection.execute("PRAGMA busy_timeout=30000")
 
     async with engine.begin() as connection:
+        await connection.exec_driver_sql("PRAGMA journal_mode=WAL")
         await connection.run_sync(
             lambda sync_connection: SQLModel.metadata.create_all(
                 sync_connection, tables=GENERATION_TABLES
