@@ -6538,6 +6538,7 @@
       ".spec-memory/decisions/generation.svg-image-asset-derivatives.1.json",
       ".spec-memory/decisions/generation.svg-mode-shared-authored-styles.1.json",
       ".spec-memory/decisions/generation.svg-mode-shared-authored-styles.2.json",
+      ".spec-memory/decisions/generation.svg-smoke-contract.1.json",
       ".spec-memory/decisions/image-generation.codex-oauth-requested-model.1.json",
       ".spec-memory/decisions/image-generation.gpt-image-2-5-support.1.json",
       ".spec-memory/decisions/ppt.hyundai-reference-visual-benchmark.1.json",
@@ -12259,6 +12260,11 @@
       "servers/fastapi/tests/fixtures/slidespec_active_bundle_a6470d97_slide_0004.html",
       "servers/fastapi/tests/fixtures/slidespec_golden_corpus.json",
       "servers/fastapi/tests/fixtures/slidespec_human_labeled_replay.json",
+      "servers/fastapi/tests/fixtures/svg_smoke/chart-declarations.json",
+      "servers/fastapi/tests/fixtures/svg_smoke/slide-2.svg",
+      "servers/fastapi/tests/fixtures/svg_smoke/slide-3.svg",
+      "servers/fastapi/tests/fixtures/svg_smoke/slide-4.svg",
+      "servers/fastapi/tests/fixtures/svg_smoke/slide-5.svg",
       "servers/fastapi/tests/integration/rich_authored_product_prompt.py",
       "servers/fastapi/tests/integration/test_authored_canonical_api.py",
       "servers/fastapi/tests/integration/test_authored_checkpoint_90_slide_regression.py",
@@ -12865,6 +12871,7 @@
       "servers/fastapi/tests/unit/test_svg_renderer_raster_preview.py",
       "servers/fastapi/tests/unit/test_svg_renderer_trusted_font_weights.py",
       "servers/fastapi/tests/unit/test_svg_review_pages.py",
+      "servers/fastapi/tests/unit/test_svg_smoke_regressions.py",
       "servers/fastapi/tests/unit/test_svg_source_generation_flow.py",
       "servers/fastapi/tests/unit/test_svg_source_layout.py",
       "servers/fastapi/tests/unit/test_svg_source_preserving_export.py",
@@ -13966,14 +13973,14 @@
     "source": {
       "mode": "tree",
       "ref": "HEAD",
-      "commit": "c664b0679d3f4f643fdc2f514ad00f9025c09bf8"
+      "commit": "38e29d4a97b1b7db04c5ebc74f1664d7b3e8ccc3"
     },
     "counts": {
       "upstreamOwned": 10163,
       "identical": 9250,
       "exceptions": 913,
-      "localOnly": 7549
+      "localOnly": 7556
     },
-    "policySha256": "5ad0cf87a1e16406139fd2757fe68ef941d3795fe28a76f333819f96a1c20920"
+    "policySha256": "eaa98ffc5b3c74bd20614190a37aa7522ac7840a55be3feeb23b067fbfaf6a8a"
   }
 }
