@@ -108,6 +108,7 @@ async def _builder(source_id, request, _session):
         slides_markdown=["one", "two"],
         language="Korean",
         template="authored",
+        strategy="authored",
         authored_style=request.authored_style,
         master_pin=request.master_pin,
         vision_qa=request.vision_qa,

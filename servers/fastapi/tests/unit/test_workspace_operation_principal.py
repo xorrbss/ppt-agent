@@ -65,16 +65,20 @@ def test_handler_runs_as_captured_principal_without_leaking_between_claims(tmp_p
             _, (captured, legacy) = await runner_test._seed_operations(maker, count=2, owner_id=OWNER)
             await _set_payload(maker, captured, {PRINCIPAL_TENANT_PAYLOAD_KEY: "tenant-a"})
             await _set_payload(maker, legacy, {"ordinal": 1})  # submitted before the capture
-            seen: list[tuple[uuid.UUID | None, str | None]] = []
+            # Keyed by operation, not claim order: both share one owner and are
+            # seeded in the same instant, so the fair-order query's final
+            # ``created_at, id`` tiebreak may claim either one first.
+            seen: dict[uuid.UUID, tuple[uuid.UUID | None, str | None]] = {}
 
-            async def handler(_context):
-                seen.append((get_current_owner_id(), get_current_tenant_id()))
+            async def handler(context):
+                seen[context.claim.operation_id] = (get_current_owner_id(), get_current_tenant_id())
                 return WorkspaceOperationResult(payload={"status": "completed"})
 
             runner = _runner(maker, handler)
             assert await runner_test._drain_once(runner) == 1
             assert await runner_test._drain_once(runner) == 1
-            assert seen == [(OWNER, "tenant-a"), (OWNER, None)]  # legacy: owner only, no invented tenant
+            # legacy: owner only, no invented tenant
+            assert seen == {captured: (OWNER, "tenant-a"), legacy: (OWNER, None)}
             # The runner's own task never carried the handler's principal.
             assert get_current_tenant_id() is None and get_current_owner_id() is None
             for operation_id in (captured, legacy):
