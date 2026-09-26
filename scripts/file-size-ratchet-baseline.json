@@ -36,7 +36,7 @@
     "servers/fastapi/migrations.py": 1818,
     "servers/fastapi/models/authored_vnext/deck/scene.py": 967,
     "servers/fastapi/models/authored_vnext/master/contract.py": 598,
-    "servers/fastapi/models/authored_vnext/semantic/contracts.py": 824,
+    "servers/fastapi/models/authored_vnext/semantic/contracts.py": 784,
     "servers/fastapi/models/slidespec_v1.py": 805,
     "servers/fastapi/models/sql/presentation_export_attempt.py": 1606,
     "servers/fastapi/models/sql/public_admission.py": 522,
