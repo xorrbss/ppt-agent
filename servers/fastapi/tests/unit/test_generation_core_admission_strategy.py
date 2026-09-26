@@ -15,8 +15,12 @@ from api.v1.ppt.endpoints import presentation_generate as endpoint
 from api.v2.contracts import PresentationGenerationRequestV2
 from models.generate_presentation_request import GeneratePresentationRequest
 from services.generation_core.admission.strategy import (
+    recorded_generation_strategy,
     resolve_generation_strategy,
     resolve_generation_strategy_with_reason,
+)
+from api.v1.ppt.endpoints.presentation_generation_staging import (
+    _durable_request_payload, _request_from_durable_payload,
 )
 
 
@@ -50,6 +54,17 @@ def test_explicit_authored_is_honoured_verbatim():
 def test_omitted_strategy_defaults_to_svg():
     request = _request()
     assert resolve_generation_strategy_with_reason(request) == ("svg", "default")
+
+
+def test_omitted_strategy_keeps_default_reason_after_durable_rehydration():
+    request = GeneratePresentationRequest(content="Smoke deck", slides_markdown=["one"])
+    payload = _durable_request_payload(request)
+    restored = _request_from_durable_payload(payload)
+    assert payload["strategy"] == "svg"
+    assert payload["_internal_generation_strategy_reason"] == "default"
+    assert restored.strategy == "svg"
+    assert recorded_generation_strategy(restored) == ("svg", "default")
+    assert _durable_request_payload(restored)["_internal_generation_strategy_reason"] == "default"
 
 
 def test_omitted_strategy_stays_authored_for_registered_template():

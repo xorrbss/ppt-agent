@@ -141,6 +141,8 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
                 retryable=False) from error
         return RETRY
     payload["attempts"][-1]["quality"] = rendered.quality
+    if payload.get("fontAdvisories"):
+        rendered.quality.setdefault("advisories", []).extend(payload["fontAdvisories"])
     if ordinal == 0:
         payload["initial_quality"] = {
             **rendered.quality, "stage": "first_response",

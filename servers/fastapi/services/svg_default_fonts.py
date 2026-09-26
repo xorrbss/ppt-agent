@@ -10,6 +10,7 @@ import xml.etree.ElementTree as ET
 
 from services.svg_trusted_fonts import (
     DEFAULT_FONT_FAMILY as FONT_FAMILY,
+    bundled_svg_font_family,
     read_trusted_pretendard_faces,
     trusted_font_weights_used,
 )
@@ -17,6 +18,23 @@ from utils.svg_template_fonts import font_material
 
 
 FONT_PROFILE = "svg-default-bundled-fonts/v1"
+
+
+def normalize_model_font_families(svg: str) -> tuple[str, list[dict]]:
+    """Use the bundled SVG font registry for model-authored text families."""
+    root = ET.fromstring(svg)
+    advisories = []
+    for node in root.iter():
+        requested = node.get("font-family")
+        if requested is None:
+            continue
+        resolved = bundled_svg_font_family(requested)
+        if requested.strip().strip("'\"") == resolved:
+            continue
+        node.set("font-family", resolved)
+        advisories.append({"kind": "font_family_substituted", "requested_family": requested,
+                           "resolved_family": resolved})
+    return (ET.tostring(root, encoding="unicode"), advisories) if advisories else (svg, [])
 
 
 @lru_cache(maxsize=1)

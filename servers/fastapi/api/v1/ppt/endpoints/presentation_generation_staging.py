@@ -22,7 +22,7 @@ from services.database import sql_engine
 from services.authored_local_fit_policy import POLICY_REVISION, font_policy
 from services.generation_core.admission.strategy import (
     resolve_generation_strategy,
-    resolve_generation_strategy_with_reason,
+    recorded_generation_strategy,
 )
 from services.authored_canvas import (
     request_canvas_metadata,
@@ -90,7 +90,7 @@ def _durable_request_payload(
     """Persist canonical identities only, never admission-time raw paths."""
 
     payload = request.model_dump(mode="json")
-    resolved_strategy, strategy_reason = resolve_generation_strategy_with_reason(request)
+    resolved_strategy, strategy_reason = recorded_generation_strategy(request)
     # Persist the resolved value, never the raw (possibly omitted) field: every
     # downstream consumer that reads this durable payload's "strategy" key as a
     # plain dict (checkpoint recovery, job listing, workspace projections) does
@@ -332,9 +332,7 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
     rollout_profile_payload = values.pop(INTERNAL_ROLLOUT_PROFILE_KEY, None)
     canvas_payload = values.pop(INTERNAL_CANVAS_KEY, _MISSING_CANVAS_PAYLOAD)
     frozen_canvas_digest = values.pop("_internal_canvas_digest", None)
-    # Internal runner metadata is deliberately outside the public request
-    # schema. It remains on the durable job across operation rebinds, but must
-    # never be passed to Pydantic as caller input.
+    # Runner metadata stays on the durable job, outside Pydantic caller input.
     values.pop(INTERNAL_ADMISSION_RETRY_KEY, None)
     strategy_reason = values.pop("_internal_generation_strategy_reason", None)
     if strategy_reason is None and values.get("strategy") is None:
@@ -348,6 +346,7 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
 
     values.pop(LEGACY_RESTYLE_FIT_POLICY_KEY, None)
     request = GeneratePresentationRequest.model_validate(values)
+    request._generation_strategy_reason = strategy_reason
     request._svg_style_snapshot = svg_style_snapshot
     request._svg_source_binding = svg_source_binding
     if resolve_generation_strategy(request) == "svg" and request.source_mode == "source_content_restyle":

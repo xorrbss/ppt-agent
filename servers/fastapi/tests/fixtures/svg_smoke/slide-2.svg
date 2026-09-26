@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect x="0" y="0" width="1280" height="720" fill="#F8FAFC" />
+  <rect x="56" y="42" width="46" height="4" fill="#2563EB" />
+  <text font-family="Noto Sans KR" font-size="15" font-weight="700" fill="#2563EB" x="56" y="72">실적 분석 · 분기별 손익</text>
+  <text font-family="Noto Sans KR" font-size="38" font-weight="700" fill="#0F172A" x="56" y="122">분기마다 매출과 이익이 함께 성장했습니다</text>
+  <text font-family="Noto Sans KR" font-size="19" font-weight="400" fill="#64748B" x="56" y="158">매출과 영업이익이 4개 분기 연속 증가하고, 영업이익률은 10.0%에서 11.9%로 상승했습니다.</text>
+
+  <text font-family="Noto Sans KR" font-size="18" font-weight="700" fill="#0F172A" x="56" y="207">분기별 손익 데이터</text>
+  <text font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#64748B" x="756" y="207" text-anchor="end">금액 단위: 억원</text>
+
+  <g id="native-table-quarterly-performance">
+    <rect x="56" y="226" width="700" height="250" fill="#FFFFFF" />
+    <rect x="56" y="226" width="700" height="54" fill="#EAF1FF" />
+    <rect x="56" y="280" width="180" height="196" fill="#F1F5F9" />
+
+    <line x1="56" y1="226" x2="756" y2="226" stroke="#CBD5E1" stroke-width="1" />
+    <line x1="56" y1="280" x2="756" y2="280" stroke="#CBD5E1" stroke-width="1" />
+    <line x1="56" y1="345" x2="756" y2="345" stroke="#CBD5E1" stroke-width="1" />
+    <line x1="56" y1="410" x2="756" y2="410" stroke="#CBD5E1" stroke-width="1" />
+    <line x1="56" y1="476" x2="756" y2="476" stroke="#CBD5E1" stroke-width="1" />
+
+    <line x1="56" y1="226" x2="56" y2="476" stroke="#CBD5E1" stroke-width="1" />
+    <line x1="236" y1="226" x2="236" y2="476" stroke="#CBD5E1" stroke-width="1" />
+    <line x1="332" y1="226" x2="332" y2="476" stroke="#CBD5E1" stroke-width="1" />
+    <line x1="428" y1="226" x2="428" y2="476" stroke="#CBD5E1" stroke-width="1" />
+    <line x1="524" y1="226" x2="524" y2="476" stroke="#CBD5E1" stroke-width="1" />
+    <line x1="620" y1="226" x2="620" y2="476" stroke="#CBD5E1" stroke-width="1" />
+    <line x1="756" y1="226" x2="756" y2="476" stroke="#CBD5E1" stroke-width="1" />
+
+    <text font-family="Noto Sans KR" font-size="15" font-weight="700" fill="#0F172A" x="146" y="259" text-anchor="middle">구분</text>
+    <text font-family="Noto Sans KR" font-size="15" font-weight="700" fill="#0F172A" x="284" y="259" text-anchor="middle">1분기</text>
+    <text font-family="Noto Sans KR" font-size="15" font-weight="700" fill="#0F172A" x="380" y="259" text-anchor="middle">2분기</text>
+    <text font-family="Noto Sans KR" font-size="15" font-weight="700" fill="#0F172A" x="476" y="259" text-anchor="middle">3분기</text>
+    <text font-family="Noto Sans KR" font-size="15" font-weight="700" fill="#0F172A" x="572" y="259" text-anchor="middle">4분기</text>
+    <text font-family="Noto Sans KR" font-size="15" font-weight="700" fill="#0F172A" x="688" y="259" text-anchor="middle">연간 합계</text>
+
+    <text font-family="Noto Sans KR" font-size="16" font-weight="700" fill="#0F172A" x="72" y="319">매출(억원)</text>
+    <text font-family="Noto Sans KR" font-size="17" font-weight="400" fill="#0F172A" x="284" y="319" text-anchor="middle">120</text>
+    <text font-family="Noto Sans KR" font-size="17" font-weight="400" fill="#0F172A" x="380" y="319" text-anchor="middle">145</text>
+    <text font-family="Noto Sans KR" font-size="17" font-weight="400" fill="#0F172A" x="476" y="319" text-anchor="middle">160</text>
+    <text font-family="Noto Sans KR" font-size="17" font-weight="400" fill="#0F172A" x="572" y="319" text-anchor="middle">185</text>
+    <text font-family="Noto Sans KR" font-size="17" font-weight="700" fill="#2563EB" x="688" y="319" text-anchor="middle">610</text>
+
+    <text font-family="Noto Sans KR" font-size="16" font-weight="700" fill="#0F172A" x="72" y="384">영업이익(억원)</text>
+    <text font-family="Noto Sans KR" font-size="17" font-weight="400" fill="#0F172A" x="284" y="384" text-anchor="middle">12</text>
+    <text font-family="Noto Sans KR" font-size="17" font-weight="400" fill="#0F172A" x="380" y="384" text-anchor="middle">15</text>
+    <text font-family="Noto Sans KR" font-size="17" font-weight="400" fill="#0F172A" x="476" y="384" text-anchor="middle">18</text>
+    <text font-family="Noto Sans KR" font-size="17" font-weight="400" fill="#0F172A" x="572" y="384" text-anchor="middle">22</text>
+    <text font-family="Noto Sans KR" font-size="17" font-weight="700" fill="#2563EB" x="688" y="384" text-anchor="middle">67</text>
+
+    <text font-family="Noto Sans KR" font-size="16" font-weight="700" fill="#0F172A" x="72" y="450">영업이익률</text>
+    <text font-family="Noto Sans KR" font-size="17" font-weight="400" fill="#0F172A" x="284" y="450" text-anchor="middle">10.0%</text>
+    <text font-family="Noto Sans KR" font-size="17" font-weight="400" fill="#0F172A" x="380" y="450" text-anchor="middle">10.3%</text>
+    <text font-family="Noto Sans KR" font-size="17" font-weight="400" fill="#0F172A" x="476" y="450" text-anchor="middle">11.3%</text>
+    <text font-family="Noto Sans KR" font-size="17" font-weight="400" fill="#0F172A" x="572" y="450" text-anchor="middle">11.9%</text>
+    <text font-family="Noto Sans KR" font-size="17" font-weight="700" fill="#2563EB" x="688" y="450" text-anchor="middle">11.0%</text>
+  </g>
+
+  <g id="native-chart-quarterly-sales">
+    <rect x="792" y="190" width="432" height="286" fill="#FFFFFF" />
+    <text font-family="Noto Sans KR" font-size="18" font-weight="700" fill="#0F172A" x="816" y="219">분기별 매출</text>
+    <rect x="816" y="235" width="12" height="12" fill="#2563EB" />
+    <text font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#64748B" x="836" y="246">매출(억원)</text>
+
+    <line x1="816" y1="438" x2="1200" y2="438" stroke="#CBD5E1" stroke-width="1" />
+    <line x1="816" y1="270" x2="1200" y2="270" stroke="#E2E8F0" stroke-width="1" />
+    <line x1="816" y1="354" x2="1200" y2="354" stroke="#E2E8F0" stroke-width="1" />
+
+    <rect x="842" y="337" width="62" height="101" fill="#2563EB" />
+    <rect x="936" y="316" width="62" height="122" fill="#2563EB" />
+    <rect x="1030" y="304" width="62" height="134" fill="#2563EB" />
+    <rect x="1124" y="283" width="62" height="155" fill="#2563EB" />
+
+    <text font-family="Noto Sans KR" font-size="16" font-weight="700" fill="#FFFFFF" x="873" y="360" text-anchor="middle">120</text>
+    <text font-family="Noto Sans KR" font-size="16" font-weight="700" fill="#FFFFFF" x="967" y="339" text-anchor="middle">145</text>
+    <text font-family="Noto Sans KR" font-size="16" font-weight="700" fill="#FFFFFF" x="1061" y="327" text-anchor="middle">160</text>
+    <text font-family="Noto Sans KR" font-size="16" font-weight="700" fill="#FFFFFF" x="1155" y="306" text-anchor="middle">185</text>
+
+    <text font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#0F172A" x="873" y="462" text-anchor="middle">1분기</text>
+    <text font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#0F172A" x="967" y="462" text-anchor="middle">2분기</text>
+    <text font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#0F172A" x="1061" y="462" text-anchor="middle">3분기</text>
+    <text font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#0F172A" x="1155" y="462" text-anchor="middle">4분기</text>
+  </g>
+
+  <rect x="56" y="510" width="1168" height="122" fill="#FFFFFF" />
+  <rect x="56" y="510" width="6" height="122" fill="#2563EB" />
+  <line x1="746" y1="530" x2="746" y2="612" stroke="#E2E8F0" stroke-width="1" />
+
+  <text font-family="Noto Sans KR" font-size="15" font-weight="700" fill="#2563EB" x="84" y="540">4개 분기 연속 증가</text>
+  <text font-family="Noto Sans KR" font-size="18" font-weight="700" fill="#0F172A" x="84" y="571">매출 120 → 145 → 160 → 185억원</text>
+  <text font-family="Noto Sans KR" font-size="15" font-weight="400" fill="#64748B" x="84" y="600">영업이익 12 → 15 → 18 → 22억원 · 연간 합계 매출 610억원, 영업이익 67억원</text>
+
+  <text font-family="Noto Sans KR" font-size="15" font-weight="700" fill="#2563EB" x="778" y="540">연간 영업이익률</text>
+  <text font-family="Noto Sans KR" font-size="34" font-weight="700" fill="#0F172A" x="778" y="580">11.0%</text>
+  <text font-family="Noto Sans KR" font-size="15" font-weight="400" fill="#64748B" x="898" y="578">67억원 ÷ 610억원</text>
+  <text font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#64748B" x="778" y="607">분기 이익률 10.0% → 10.3% → 11.3% → 11.9%</text>
+
+  <line x1="56" y1="660" x2="1224" y2="660" stroke="#CBD5E1" stroke-width="1" />
+  <text font-family="Noto Sans KR" font-size="13" font-weight="400" fill="#64748B" x="56" y="687">검증용 가상 데이터 · 모든 금액은 억원 단위 · 영업이익률은 영업이익을 매출로 나누어 계산</text>
+<text id="svg-system-page-number" x="1248" y="700" font-family="Noto Sans KR" font-size="12" fill="#2563EB" text-anchor="end">02</text></svg>

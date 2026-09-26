@@ -126,10 +126,8 @@ class GeneratePresentationRequest(BaseModel):
     _raster_tenant_id: Optional[str] = PrivateAttr(default=None)
     _authored_source_readback_receipt: Any = PrivateAttr(default=None)
     _authored_local_fit_policy_revision: Optional[str] = PrivateAttr(default=None)
-    # The five authored rollout switches, frozen when the job was staged and
-    # restored on every later attempt, so a resumed deck runs the switches its
-    # published slides were produced under.  ``services.authored_rollout_profile``
-    # owns the value; nothing reads the environment for it again.
+    # Authored rollout switches are pinned at staging and restored on retries;
+    # services.authored_rollout_profile owns their values.
     _authored_rollout_profile: Any = PrivateAttr(default=None)
     # Resolved once at generation admission and reused by authoring, repair and
     # publication.  It is intentionally private: callers select source policy
@@ -138,7 +136,7 @@ class GeneratePresentationRequest(BaseModel):
     _authored_canvas: Any = PrivateAttr(default=None)
     _document_canvas: Any = PrivateAttr(default=None)
     _svg_style_snapshot: Any = PrivateAttr(default=None)
-
+    _generation_strategy_reason: Optional[str] = PrivateAttr(default=None)
     # Chat-first async generation reuses the durable presentation shell and
     # awaiting-approval operation created by /presentation/create.  Legacy
     # generation ignores this field while the feature flag is disabled.
@@ -359,7 +357,8 @@ class GeneratePresentationRequest(BaseModel):
     @model_validator(mode="after")
     def validate_source_content_mode(self) -> "GeneratePresentationRequest":
         if self.source_mode is None:
-            if self.source_content_manifest_pin is not None or self.content_policy is not None or self.raster_approval_pin is not None:
+            if (self.source_content_manifest_pin is not None or self.content_policy is not None
+                    or self.raster_approval_pin is not None):
                 raise ValueError("source_content_mode_required")
             return self
         if self.source_mode == "raster_reconstruction":

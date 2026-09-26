@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+from collections import Counter
 
 from services.generation_core.drivers.svg.native_geometry import (
     Box, GroupPrimitives, NativeRejection, normalize_text, parse_label_number,
@@ -31,27 +32,51 @@ def _category_texts(payload: dict, prims: GroupPrimitives) -> list:
     return found
 
 
-def _bar_points(payload: dict, prims: GroupPrimitives, labels: list) -> list:
+def _bar_matrix(payload: dict, prims: GroupPrimitives, labels: list) -> list[list]:
     axis = "y" if payload["chartType"] == "bar" else "x"
     coordinates = [_mid(text.box(), axis) for text in labels]
     if coordinates != sorted(coordinates) or len(set(coordinates)) != len(coordinates):
         raise NativeRejection("native_chart_category_order_mismatch")
-    if len(payload["series"]) != 1:
-        return []
+    spacing = min((b - a for a, b in zip(coordinates, coordinates[1:], strict=False)),
+                  default=float("inf"))
     candidates = [shape for shape in prims.shapes if shape.tag == "rect" and shape.fill
-                  and shape.box.width > 1 and shape.box.height > 1]
-    matched = []
-    for index, coordinate in enumerate(coordinates):
-        near = [shape for shape in candidates
-                if abs(_mid(shape.box, axis) - coordinate) <
-                (min(abs(coordinate - other) for j, other in enumerate(coordinates) if j != index) / 2
-                 if len(coordinates) > 1 else float("inf"))]
-        if len(near) != 1:
-            raise NativeRejection("native_chart_point_color_mismatch")
-        matched.append(near[0])
-    if len(set(map(id, matched))) != len(matched):
-        raise NativeRejection("native_chart_point_color_mismatch")
-    return matched
+                  and shape.box.width > 1 and shape.box.height > 1
+                  and (shape.box.height if axis == "y" else shape.box.width) < spacing * .9]
+    def baseline(shape):
+        return shape.box.x0 if axis == "y" else shape.box.y1
+    if not candidates:
+        raise NativeRejection("native_chart_bar_geometry_invalid")
+    common = Counter(round(baseline(shape)) for shape in candidates).most_common(1)[0][0]
+    bars = [shape for shape in candidates if abs(baseline(shape) - common) <= 1]
+    per_category = []
+    for coordinate in coordinates:
+        near = [shape for shape in bars if abs(_mid(shape.box, axis) - coordinate) < spacing / 2]
+        if len(near) != len(payload["series"]):
+            raise NativeRejection("native_chart_bar_geometry_invalid")
+        per_category.append(sorted(near, key=lambda shape: _mid(shape.box, "y" if axis == "y" else "x")))
+    if len({id(shape) for row in per_category for shape in row}) != len(bars):
+        raise NativeRejection("native_chart_bar_geometry_invalid")
+    matrix = [[row[series] for row in per_category] for series in range(len(payload["series"]))]
+    for series, shapes in zip(payload["series"], matrix, strict=True):
+        values = series["values"]
+        if len(values) != len(shapes) or any(type(value) not in (int, float) or value <= 0 for value in values):
+            raise NativeRejection("native_chart_bar_geometry_invalid")
+        lengths = [shape.box.width if axis == "y" else shape.box.height for shape in shapes]
+        scales = [length / value for length, value in zip(lengths, values, strict=True)]
+        if max(scales) / min(scales) > 1.08:
+            raise NativeRejection("native_chart_value_geometry_mismatch")
+    return matrix
+
+
+def _color_near(declared: str, drawn: str) -> bool:
+    if not (isinstance(declared, str) and len(declared) == len(drawn) == 7
+            and declared.startswith("#") and drawn.startswith("#")):
+        return False
+    try:
+        return max(abs(int(declared[i:i + 2], 16) - int(drawn[i:i + 2], 16))
+                   for i in (1, 3, 5)) <= 16
+    except ValueError:
+        return False
 
 
 def _value_texts(payload: dict, prims: GroupPrimitives) -> list:
@@ -59,7 +84,9 @@ def _value_texts(payload: dict, prims: GroupPrimitives) -> list:
     reserved.update(normalize_text(item["name"]) for item in payload["series"])
     if payload.get("title"):
         reserved.add(normalize_text(payload["title"]))
-    return [text for text in prims.texts if normalize_text(" ".join(text.lines)) not in reserved]
+    declared_values = [value for series in payload["series"] for value in series["values"]]
+    return [text for text in prims.texts if normalize_text(" ".join(text.lines)) not in reserved
+            and parse_label_number(" ".join(text.lines)) in declared_values]
 
 
 def _label_position(chart_type: str, label: Box, shape: Box) -> str:
@@ -104,21 +131,22 @@ def chart_appearance(raw: dict, payload: dict, prims: GroupPrimitives) -> dict |
             or (markers and chart_type != "line")):
         raise NativeRejection("native_chart_appearance_invalid")
     categories = _category_texts(payload, prims)
-    points = _bar_points(payload, prims, categories) if chart_type in {"bar", "column"} else []
-    if chart_type in {"bar", "column"} and not points and any(
-            item.get("pointColors") for item in payload["series"]):
-        raise NativeRejection("native_chart_point_color_mismatch")
+    matrix = _bar_matrix(payload, prims, categories) if chart_type in {"bar", "column"} else []
     if chart_type in {"line", "area"}:
         xs = [_mid(text.box(), "x") for text in categories]
         if xs != sorted(xs) or len(set(xs)) != len(xs):
             raise NativeRejection("native_chart_category_order_mismatch")
-    if points and payload["series"][0].get("pointColors") != [point.fill for point in points]:
-        raise NativeRejection("native_chart_point_color_mismatch")
+    for series, shapes in zip(payload["series"], matrix, strict=False):
+        drawn_colors = [shape.fill for shape in shapes]
+        declared_colors = series.get("pointColors")
+        if (not isinstance(declared_colors, list) or len(declared_colors) != len(drawn_colors)
+                or not all(_color_near(a, b) for a, b in zip(declared_colors, drawn_colors, strict=True))):
+            series["pointColors"] = drawn_colors
     if chart_type in {"pie", "donut"}:
         slices = [shape for shape in prims.shapes if shape.tag in {"path", "polygon"} and shape.fill]
-        if (len(slices) != len(payload["categories"]) or
-                payload["series"][0].get("pointColors") != [shape.fill for shape in slices]):
+        if len(slices) != len(payload["categories"]):
             raise NativeRejection("native_chart_point_color_mismatch")
+        payload["series"][0]["pointColors"] = [shape.fill for shape in slices]
         amounts = payload["series"][0]["values"]
         total_area, total_amount = sum(shape.area for shape in slices), sum(amounts)
         if (total_area <= 0 or total_amount <= 0 or any(value <= 0 for value in amounts)
@@ -140,45 +168,44 @@ def chart_appearance(raw: dict, payload: dict, prims: GroupPrimitives) -> dict |
             if abs((shape_angle - label_angle + math.pi) % (2 * math.pi) - math.pi) > math.pi / 4:
                 raise NativeRejection("native_chart_category_order_mismatch")
     values = _value_texts(payload, prims)
-    if labels_decl["shown"] != bool(values):
-        raise NativeRejection("native_chart_value_labels_mismatch")
+    labels_decl = {"shown": bool(values), "position": labels_decl["position"] if values else None}
     if values:
-        if chart_type == "area":
-            raise NativeRejection("native_chart_value_label_position_mismatch")
-        if len(payload["series"]) != 1 or len(values) != len(payload["categories"]):
+        labels_decl["position"] = labels_decl["position"] or (
+            "bestFit" if chart_type in {"pie", "donut"} else "above" if chart_type == "line" else "outsideEnd")
+        if len(values) != len(payload["categories"]) * len(payload["series"]):
             raise NativeRejection("native_chart_value_labels_mismatch")
-        expected = payload["series"][0]["values"]
         remaining = list(values)
-        for index, number in enumerate(expected):
-            matches = [text for text in remaining if parse_label_number(" ".join(text.lines)) == number]
-            if not matches:
-                raise NativeRejection("native_chart_value_labels_mismatch")
-            text = matches[0]
-            remaining.remove(text)
-            if points:
-                cross_axis = "y" if chart_type == "bar" else "x"
-                if (abs(_mid(text.box(), cross_axis) - _mid(points[index].box, cross_axis)) >
-                        (points[index].box.height if chart_type == "bar" else points[index].box.width)
-                        or _label_position(chart_type, text.box(), points[index].box) != labels_decl["position"]):
-                    raise NativeRejection("native_chart_value_label_position_mismatch")
-            if chart_type in {"pie", "donut"} and labels_decl["position"] != "bestFit":
-                slices = [shape for shape in prims.shapes if shape.tag in {"path", "polygon"}]
-                inside = _inside_polygon(_mid(text.box(), "x"), _mid(text.box(), "y"),
-                                         slices[index].vertices)
-                if inside != (labels_decl["position"] == "center"):
-                    raise NativeRejection("native_chart_value_label_position_mismatch")
-            if chart_type == "line":
-                curves = [shape for shape in prims.shapes if shape.tag in {"polyline", "path"} and shape.stroke]
-                if len(curves) != 1 or len(curves[0].vertices) != len(expected):
-                    raise NativeRejection("native_chart_line_geometry_invalid")
-                px, py = curves[0].vertices[index]
-                above = text.box().y1 < py
-                centered = text.box().contains(px, py, tolerance=4)
-                if abs(_mid(categories[index].box(), "x") - px) > 30 or not (
-                        above if labels_decl["position"] == "above" else centered):
-                    raise NativeRejection("native_chart_value_label_position_mismatch")
+        drawn_positions = []
+        for series_index, series in enumerate(payload["series"]):
+            for index, number in enumerate(series["values"]):
+                matches = [text for text in remaining if parse_label_number(" ".join(text.lines)) == number]
+                if not matches:
+                    raise NativeRejection("native_chart_value_labels_mismatch")
+                shape = matrix[series_index][index] if matrix else None
+                text = (min(matches, key=lambda item: abs(_mid(item.box(), "x") - _mid(shape.box, "x")))
+                        if shape else matches[0])
+                remaining.remove(text)
+                if shape:
+                    drawn_positions.append(_label_position(chart_type, text.box(), shape.box))
+                if chart_type in {"pie", "donut"}:
+                    slices = [item for item in prims.shapes if item.tag in {"path", "polygon"} and item.fill]
+                    inside = _inside_polygon(_mid(text.box(), "x"), _mid(text.box(), "y"),
+                                             slices[index].vertices)
+                    drawn_positions.append("center" if inside else "outsideEnd")
+                if chart_type == "line":
+                    curves = [shape for shape in prims.shapes if shape.tag in {"polyline", "path"} and shape.stroke]
+                    if len(curves) != 1 or len(curves[0].vertices) != len(series["values"]):
+                        raise NativeRejection("native_chart_line_geometry_invalid")
+                    px, py = curves[0].vertices[index]
+                    if abs(_mid(categories[index].box(), "x") - px) > 30:
+                        raise NativeRejection("native_chart_value_label_position_mismatch")
+                    drawn_positions.append("above" if text.box().y1 < py else "center")
         if remaining:
             raise NativeRejection("native_chart_value_labels_mismatch")
+        if drawn_positions:
+            if len(set(drawn_positions)) != 1:
+                raise NativeRejection("native_chart_value_label_position_mismatch")
+            labels_decl["position"] = drawn_positions[0]
     if markers:
         circles = [shape for shape in prims.shapes if shape.tag in {"circle", "ellipse"}]
         if len(circles) < len(payload["categories"]):
@@ -188,7 +215,8 @@ def chart_appearance(raw: dict, payload: dict, prims: GroupPrimitives) -> dict |
     if payload.get("title"):
         title = next(text for text in prims.texts
                      if normalize_text(" ".join(text.lines)) == normalize_text(payload["title"]))
-        plot_shapes = [shape for shape in prims.shapes if shape.tag != "line"]
+        plot_shapes = ([shape for series in matrix for shape in series] if matrix else
+                       [shape for shape in prims.shapes if shape.tag in {"path", "polygon", "polyline"}])
         if plot_shapes and title.box().y1 >= min(shape.box.y0 for shape in plot_shapes):
             raise NativeRejection("native_chart_title_position_mismatch")
     appearance = {"categoryOrder": category_order, "valueLabels": labels_decl, "markers": markers}
