@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "key": "generation-core.svg-native-chart-fidelity",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "code",
+  "summary": "Publish SVG native charts only when declared appearance matches drawn primitives; preserve category order, point colours, labels and title in editable PPTX.",
+  "scope": [
+    "generation-core",
+    "svg-native-export"
+  ],
+  "invariants": [
+    "A mismatched declaration drops only its native annotation and retains the SVG drawing.",
+    "Horizontal bar categories render top to bottom in declared order.",
+    "Validated point colours, value labels, title spacing and line markers flow through the chart projection."
+  ],
+  "forbidden": [
+    "Do not change raster deck slide XML for SVG chart appearance fixes."
+  ],
+  "evidence": [
+    "servers/fastapi/services/generation_core/drivers/svg/native_chart_visual.py",
+    "servers/fastapi/tests/unit/test_svg_chart_fidelity.py",
+    "C:/project/PPT-agent/handoff/codex-reports/y2-evidence/verify_deck4_parity.py"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-26T06:44:12.6979474+00:00"
+}

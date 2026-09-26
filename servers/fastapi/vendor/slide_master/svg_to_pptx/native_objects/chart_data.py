@@ -104,7 +104,7 @@ def _chart_data_labels(
     config = _data_labels_config(payload)
     if config is None:
         return None
-    if chart_type not in {"area", "bar", "column", "line"}:
+    if chart_type not in {"area", "bar", "column", "line", "pie", "doughnut"}:
         raise RuntimeError(
             f"Native PPTX {chart_type} chart data labels are outside current support"
         )
@@ -292,8 +292,8 @@ def _chart_axes(
                 f"Native PPTX chart axes.{role}.position must be bottom, left, right, or top"
             )
         allowed_positions = (
-            {"bottom", "top"}
-            if role in {"category", "secondary_category", "x"}
+            {"bottom", "top", "left", "right"} if role == "category" else
+            {"bottom", "top"} if role in {"secondary_category", "x"}
             else {"left", "right"}
         )
         if position not in allowed_positions:
@@ -624,10 +624,7 @@ def _category_series(payload: dict[str, Any], categories: list[Any]) -> list[dic
         series_item = {"name": str(item.get("name") or f"Series {idx}"), "values": values}
         if point_colors:
             series_item["point_colors"] = point_colors
-        fill_opacity = _first_present(
-            item.get("fill_opacity"),
-            item.get("fillOpacity"),
-        )
+        fill_opacity = _first_present(item.get("fill_opacity"), item.get("fillOpacity"))
         if fill_opacity is not None:
             fill_opacity = _number(fill_opacity, "series fill_opacity")
             if not 0 <= fill_opacity <= 1:
@@ -635,16 +632,17 @@ def _category_series(payload: dict[str, Any], categories: list[Any]) -> list[dic
                     "Native PPTX chart series fill_opacity must be between 0 and 1"
                 )
             series_item["fill_opacity"] = fill_opacity
-        line_width = _first_present(
-            item.get("line_width"),
-            item.get("lineWidth"),
-        )
+        line_width = _first_present(item.get("line_width"), item.get("lineWidth"))
         if line_width is not None:
             line_width = _number(line_width, "series line_width")
             if line_width <= 0:
                 raise RuntimeError("Native PPTX chart series line_width must be positive")
             _powerpoint_line_width_emu(line_width, "series line_width")
             series_item["line_width"] = line_width
+        if (marker_size := item.get("marker_size")) is not None:
+            if type(marker_size) is not int or not 2 <= marker_size <= 72:
+                raise RuntimeError("Native PPTX marker_size must be an integer from 2 to 72")
+            series_item["marker_size"] = marker_size
         series.append(series_item)
     return series
 
@@ -656,7 +654,7 @@ def _category_chart_data(
     alias_style: str | None,
 ) -> dict[str, Any]:
     axes = _chart_axes(payload, {"category", "value"})
-    if axes and chart_type in {"bar", "doughnut", "of_pie", "pie"}:
+    if axes and chart_type in {"doughnut", "of_pie", "pie"}:
         raise RuntimeError(
             f"Native PPTX {chart_type} chart axes are outside current support"
         )
@@ -906,7 +904,7 @@ def _combo_chart_data(payload: dict[str, Any]) -> dict[str, Any]:
         raw_series = _chart_list(payload.get("series", []), "series")
         if not raw_series:
             raise RuntimeError("Native PPTX combo chart requires plots or typed series")
-        for idx, item in enumerate(raw_series, start=1):
+        for item in raw_series:
             if not isinstance(item, dict):
                 raise RuntimeError("Native PPTX chart series entries must be objects")
             if not (item.get("type") or item.get("chart_type")):

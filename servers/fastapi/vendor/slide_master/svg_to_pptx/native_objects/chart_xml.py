@@ -290,12 +290,13 @@ def _data_point_colors_xml(
     )
 
 
-def _marker_xml(symbol: str | None) -> str:
+def _marker_xml(symbol: str | None, size: int | None = None) -> str:
     if not symbol:
         return ""
     if symbol == "none":
         return '<c:marker><c:symbol val="none"/></c:marker>'
-    return f'<c:marker><c:symbol val="{_xml_escape(symbol)}"/></c:marker>'
+    size_xml = f'<c:size val="{size}"/>' if size is not None else ""
+    return f'<c:marker><c:symbol val="{_xml_escape(symbol)}"/>{size_xml}</c:marker>'
 
 
 def _series_xml(
@@ -367,7 +368,7 @@ def _series_xml(
                 disable_negative_invert=True,
             )
         if chart_type == "line":
-            marker_xml = _marker_xml("circle" if line_style == "lineMarker" else "none")
+            marker_xml = _marker_xml("circle" if line_style == "lineMarker" else "none", item.get("marker_size"))
             smooth_xml = '<c:smooth val="0"/>'
         if chart_type == "radar":
             if radar_style == "filled":
@@ -387,8 +388,8 @@ def _series_xml(
                 default_color=data_label_color,
                 default_font_face=data_label_font_face,
             )
-            if _series_scoped_data_labels(data_labels)
-            and chart_type in {"area", "bar", "column", "line"}
+            if (_series_scoped_data_labels(data_labels) or data_labels is not None and chart_type in {"pie","doughnut"})
+            and chart_type in {"area", "bar", "column", "line", "pie", "doughnut"}
             else ""
         )
         parts.append(
@@ -398,15 +399,12 @@ def _series_xml(
             f"<c:f>Sheet1!${_excel_col(column_index)}$1</c:f>"
             f"{_string_cache([str(item['name'])])}"
             "</c:strRef></c:tx>"
-            f"{color_xml}{invert_xml}{marker_xml}{point_colors_xml}"
-            f"{data_labels_xml}"
-            f"{category_xml}"
+            f"{color_xml}{invert_xml}{marker_xml}{point_colors_xml}{data_labels_xml}{category_xml}"
             "<c:val><c:numRef>"
             f"<c:f>Sheet1!${_excel_col(column_index)}$2:${_excel_col(column_index)}${len(categories) + 1}</c:f>"
             f"{_number_cache(item['values'])}"
             "</c:numRef></c:val>"
-            f"{smooth_xml}"
-            "</c:ser>"
+            f"{smooth_xml}</c:ser>"
         )
     return "".join(parts)
 
@@ -436,7 +434,7 @@ def _chart_title_xml(
     color: str | None = None,
     subtitle: Any = None,
     subtitle_font_size: int | None = None,
-    font_face: str | None = None,
+    font_face: str | None = None, reserve_space: bool = False,
 ) -> str:
     title_entry = _chart_text_entry(title)
     subtitle_entry = _chart_text_entry(subtitle)
@@ -459,10 +457,10 @@ def _chart_title_xml(
             color=_chart_text_entry_color(item, color),
             font_face=_chart_text_entry_font_face(item, font_face),
         ))
+    overlay_xml = '<c:overlay val="0"/>' if reserve_space else ""
     return (
-        "<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/>"
-        f"{''.join(paragraphs)}"
-        "</c:rich></c:tx><c:layout/></c:title>"
+        f"<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/>{''.join(paragraphs)}"
+        f"</c:rich></c:tx><c:layout/>{overlay_xml}</c:title>"
         '<c:autoTitleDeleted val="0"/>'
     )
 
@@ -754,7 +752,7 @@ def _axis_pair_xml(
         f'<c:majorUnit val="{value["major_unit"]}"/>'
         if value.get("major_unit") is not None else ""
     )
-    value_crosses = "max" if secondary else "autoZero"
+    value_crosses = "max" if secondary or (chart_type == "bar" and category.get("reverse")) else "autoZero"
     return (
         f"<c:{category_tag}>"
         f'<c:axId val="{cat_ax_id}"/>{_axis_scaling_xml(category)}'
@@ -1378,7 +1376,7 @@ def _chart_xml(
         color=chart_style.get("text_color"),
         subtitle=payload.get("subtitle"),
         subtitle_font_size=text_sizes["subtitle"],
-        font_face=chart_style.get("font_face"),
+        font_face=chart_style.get("font_face"), reserve_space=bool(payload.get("title_reserve_space")),
     )
     legend_xml = _chart_legend_xml(
         payload,

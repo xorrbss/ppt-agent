@@ -53,10 +53,14 @@ NATIVE_TABLE_RULE = (
 NATIVE_CHART_RULE = (
     "For a bar, column, line, area, pie or donut chart draw it as <g id=\"native-chart-SLUG\" "
     "data-native-chart='JSON'> (SLUG unique on the slide) with JSON {\"chartType\":\"column\","
-    "\"categories\":[\"A\",\"B\"],\"series\":[{\"name\":\"Sales\",\"values\":[120,95]}],"
-    "\"title\":\"optional\"} (a pie has exactly one series). Inside the group draw every "
-    "category label, series name and the title as text; any other text there is only a value "
-    "label equal to a series value (no axis tick labels, no images).\n"
+    "\"categories\":[\"A\",\"B\"],\"series\":[{\"name\":\"Sales\",\"values\":[120,95],"
+    "\"pointColors\":[\"#2457D6\",\"#68A4FF\"]}],\"categoryOrder\":\"leftToRight\","
+    "\"valueLabels\":{\"shown\":true,\"position\":\"insideEnd\"},\"markers\":false,"
+    "\"title\":\"optional\"}. Use topToBottom for bar categories, leftToRight for column/line/area, "
+    "clockwise for pie/donut. Point colours must match each drawn bar or slice in category order. "
+    "Draw the title above the plot and every category and series name as text. Draw one value label "
+    "per value only when shown=true; its position must agree with the JSON. Line markers are "
+    "circles when markers=true. No axis tick labels or images inside the group.\n"
 )
 
 

@@ -74,9 +74,11 @@ class NativeObject:
     kind: NativeKind
     anchor: NativeAnchor
     payload: dict
+    svg_appearance: dict | None = None
 
     @classmethod
-    def build(cls, *, id: str, kind: str, anchor: NativeAnchor | dict, payload: Any) -> "NativeObject":
+    def build(cls, *, id: str, kind: str, anchor: NativeAnchor | dict, payload: Any,
+              svgAppearance: Any = None) -> "NativeObject":
         """Validate and canonicalize one entry; raises ``NativeObjectsError``."""
         if not isinstance(id, str) or not _ID.match(id):
             raise NativeObjectsError("native_object_id_invalid")
@@ -89,10 +91,33 @@ class NativeObject:
             canonical = parser(payload)
         except NativePayloadError as error:
             raise NativeObjectsError(f"native_object_payload_invalid:{error}") from error
-        return cls(id=id, kind=kind, anchor=anchor, payload=canonical)
+        if svgAppearance is not None:
+            if (kind != "chart" or not isinstance(svgAppearance, dict)
+                    or not {"categoryOrder", "valueLabels", "markers"} <= set(svgAppearance)
+                    or set(svgAppearance) - {"categoryOrder", "valueLabels", "markers",
+                                             "lineWidthPx", "markerDiameterPx"}
+                    or svgAppearance["categoryOrder"] not in ("topToBottom", "leftToRight", "clockwise")
+                    or svgAppearance["categoryOrder"] != {
+                        "bar": "topToBottom", "column": "leftToRight", "line": "leftToRight",
+                        "area": "leftToRight", "pie": "clockwise", "donut": "clockwise",
+                    }[canonical["chartType"]]
+                    or not isinstance(svgAppearance["valueLabels"], dict)
+                    or set(svgAppearance["valueLabels"]) != {"shown", "position"}
+                    or type(svgAppearance["valueLabels"]["shown"]) is not bool
+                    or svgAppearance["valueLabels"]["position"] not in
+                    (None, "center", "insideEnd", "insideBase", "outsideEnd", "above", "bestFit")
+                    or type(svgAppearance["markers"]) is not bool
+                    or any(type(svgAppearance[key]) not in (int, float) or
+                           not math.isfinite(svgAppearance[key]) or svgAppearance[key] <= 0
+                           for key in ("lineWidthPx", "markerDiameterPx") if key in svgAppearance)):
+                raise NativeObjectsError("native_chart_appearance_invalid")
+        return cls(id=id, kind=kind, anchor=anchor, payload=canonical, svg_appearance=svgAppearance)
 
     def to_wire(self) -> dict:
-        return {"id": self.id, "kind": self.kind, "anchor": self.anchor.to_wire(), "payload": self.payload}
+        entry = {"id": self.id, "kind": self.kind, "anchor": self.anchor.to_wire(), "payload": self.payload}
+        if self.svg_appearance is not None:
+            entry["svgAppearance"] = self.svg_appearance
+        return entry
 
 
 @dataclass(frozen=True)
@@ -116,7 +141,9 @@ class NativeObjects:
             raise NativeObjectsError("native_objects_invalid")
         entries = []
         for item in value["objects"]:
-            if not isinstance(item, dict) or set(item) != {"id", "kind", "anchor", "payload"}:
+            if (not isinstance(item, dict) or
+                    set(item) not in ({"id", "kind", "anchor", "payload"},
+                                      {"id", "kind", "anchor", "payload", "svgAppearance"})):
                 raise NativeObjectsError("native_object_invalid")
             entries.append(NativeObject.build(**item))
         return cls(tuple(entries))

@@ -63,8 +63,9 @@ def _entry(root: ET.Element, declaration: dict, *, width: float, height: float,
         anchor, payload = table_object(raw, prims, pt_per_px=pt_per_px,
                                        layers=background_layers(root, group))
     else:
-        anchor, payload = chart_object(raw, prims)
-    entry = NativeObject.build(id=group_id, kind=kind, anchor=anchor, payload=payload)
+        anchor, payload, appearance = chart_object(raw, prims)
+    entry = NativeObject.build(id=group_id, kind=kind, anchor=anchor, payload=payload,
+                               svgAppearance=appearance if kind == "chart" else None)
     if not entry.anchor.within(width, height):
         raise NativeRejection("native_anchor_outside_canvas")
     return entry
