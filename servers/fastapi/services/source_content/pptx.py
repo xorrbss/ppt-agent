@@ -6,11 +6,8 @@ import base64
 from collections import Counter
 from dataclasses import dataclass
 from hashlib import sha256
-import math
 import mimetypes
-import posixpath
-from pathlib import Path, PurePosixPath
-import re
+from pathlib import Path
 from typing import Any
 from zipfile import ZipFile
 
@@ -36,12 +33,46 @@ from services.source_content.pptx_document_identity import (
     title_from_file_name,
 )
 from services.source_content.pptx_text_body import (
-    BulletImageResolver,
     extract_text_body,
     placeholder_payload,
 )
 from services.source_content.pptx_typography import MANIFEST_ID_EXTRACTOR_REVISION, PptxTypographyResolver
 from services.source_content.pptx_custom_geometry import extract_custom_geometry
+from services.source_content.pptx_extraction_constants import (
+    P_NS as P_NS,
+    A_NS as A_NS,
+    R_NS as R_NS,
+    C_NS as C_NS,
+    NS as NS,
+    _SLIDE_RE as _SLIDE_RE,
+    _NOTES_RE as _NOTES_RE,
+    _SUPPORTED_REL_SUFFIXES as _SUPPORTED_REL_SUFFIXES,
+    _UNSUPPORTED_CONTENT_REL_SUFFIXES as _UNSUPPORTED_CONTENT_REL_SUFFIXES,
+    AffineTransform as AffineTransform,
+    IDENTITY_TRANSFORM as IDENTITY_TRANSFORM,
+)
+from services.source_content.pptx_package_parts import (
+    _relationship_source_part as _relationship_source_part,
+    _resolve_target as _resolve_target,
+    _relationship_map as _relationship_map,
+    _ordered_slide_parts as _ordered_slide_parts,
+    _part_classification as _part_classification,
+    _rel_classification as _rel_classification,
+)
+from services.source_content.pptx_geometry import (
+    _compose_affine as _compose_affine,
+    _apply_affine as _apply_affine,
+    _group_child_transform as _group_child_transform,
+    _geometry as _geometry,
+    _image_crop as _image_crop,
+    _image_color_transforms as _image_color_transforms,
+)
+from services.source_content.pptx_semantics import (
+    _extract_table as _extract_table,
+    _chart_values as _chart_values,
+    _numeric_chart_values as _numeric_chart_values,
+    _extract_chart as _extract_chart,
+)
 from services.source_content.security import (
     REL_NS,
     PackageSecurityReport,
@@ -50,57 +81,6 @@ from services.source_content.security import (
 )
 
 
-P_NS = "http://schemas.openxmlformats.org/presentationml/2006/main"
-A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
-R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
-C_NS = "http://schemas.openxmlformats.org/drawingml/2006/chart"
-NS = {"p": P_NS, "a": A_NS, "r": R_NS, "c": C_NS}
-
-_SLIDE_RE = re.compile(r"^ppt/slides/slide(\d+)\.xml$")
-_NOTES_RE = re.compile(r"^ppt/notesSlides/notesSlide(\d+)\.xml$")
-_SUPPORTED_REL_SUFFIXES = {
-    "/officeDocument",
-    "/presentation",
-    "/slide",
-    "/slideMaster",
-    "/slideLayout",
-    "/handoutMaster",
-    "/theme",
-    "/themeOverride",
-    "/image",
-    "/chart",
-    "/notesSlide",
-    "/notesMaster",
-    "/comments",
-    "/commentAuthors",
-    "/hyperlink",
-    "/tableStyles",
-    "/viewProps",
-    "/presProps",
-    "/extended-properties",
-    "/core-properties",
-    "/custom-properties",
-    "/thumbnail",
-    "/customXml",
-    "/customXmlProps",
-    "/printerSettings",
-    "/revisionInfo",
-    "/changesInfo",
-    "/font",
-    "/tags",
-    "/audio",
-    "/video",
-    "/media",
-    "/package",
-}
-_UNSUPPORTED_CONTENT_REL_SUFFIXES = {
-    "/diagramData",
-    "/diagramLayout",
-    "/diagramQuickStyle",
-    "/diagramColors",
-    "/diagramDrawing",
-    "/vmlDrawing",
-}
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,132 +97,16 @@ class ExtractedSourceContent:
     assets: tuple[SealedManifestAsset, ...]
 
 
-def _relationship_source_part(rel_part: str) -> str:
-    if rel_part == "_rels/.rels":
-        return ""
-    prefix, filename = rel_part.rsplit("/_rels/", 1)
-    if not filename.endswith(".rels"):
-        return ""
-    return f"{prefix}/{filename[:-5]}"
 
 
-def _resolve_target(source_part: str, target: str) -> str:
-    target = target.replace("\\", "/")
-    if target.startswith("/"):
-        resolved = target.lstrip("/")
-    else:
-        resolved = posixpath.normpath(posixpath.join(posixpath.dirname(source_part), target))
-    if resolved.startswith("../") or resolved in {"", ".", ".."}:
-        raise SourceContentError(
-            MANIFEST_INVALID,
-            detail={"reason": "relationship_target_invalid"},
-        )
-    return str(PurePosixPath(resolved))
 
 
-def _relationship_map(package: ZipFile, source_part: str) -> dict[str, tuple[str, str]]:
-    if "/" in source_part:
-        directory, filename = source_part.rsplit("/", 1)
-        rel_part = f"{directory}/_rels/{filename}.rels"
-    else:
-        rel_part = f"_rels/{source_part}.rels"
-    if rel_part not in package.namelist():
-        return {}
-    root = secure_xml(package.read(rel_part), part_name=rel_part)
-    result: dict[str, tuple[str, str]] = {}
-    for rel in root.findall(f"{{{REL_NS}}}Relationship"):
-        rel_id = rel.get("Id")
-        target = rel.get("Target")
-        if not rel_id or not target:
-            raise SourceContentError(
-                MANIFEST_INVALID,
-                detail={"reason": "relationship_missing_identity", "part": rel_part},
-            )
-        result[rel_id] = (_resolve_target(source_part, target), rel.get("Type", ""))
-    return result
 
 
-def _ordered_slide_parts(
-    package: ZipFile, report: PackageSecurityReport
-) -> list[str]:
-    presentation_part = "ppt/presentation.xml"
-    if presentation_part not in report.entries:
-        raise SourceContentError(
-            MANIFEST_INVALID,
-            detail={"reason": "presentation_part_missing"},
-        )
-    root = secure_xml(package.read(presentation_part), part_name=presentation_part)
-    relationships = _relationship_map(package, presentation_part)
-    slide_entries = {
-        name for name in report.entries if _SLIDE_RE.match(name)
-    }
-    ordered: list[str] = []
-    for slide_id in root.findall(".//p:sldId", namespaces=NS):
-        rel_id = slide_id.get(f"{{{R_NS}}}id")
-        relation = relationships.get(rel_id or "")
-        if (
-            relation is None
-            or not relation[1].endswith("/slide")
-            or relation[0] not in slide_entries
-        ):
-            raise SourceContentError(
-                MANIFEST_INVALID,
-                detail={"reason": "slide_relationship_invalid"},
-            )
-        ordered.append(relation[0])
-    if len(ordered) != len(slide_entries) or set(ordered) != slide_entries:
-        raise SourceContentError(
-            MANIFEST_INVALID,
-            detail={"reason": "slide_order_invalid"},
-        )
-    return ordered
 
 
-def _part_classification(name: str) -> tuple[str, bool]:
-    lowered = name.lower()
-    if _SLIDE_RE.match(name) or _NOTES_RE.match(name):
-        return "source_unit", True
-    if lowered.startswith("ppt/media/"):
-        return "content_asset", True
-    if lowered.startswith("ppt/charts/") or lowered.startswith("ppt/embeddings/"):
-        return "content_data", True
-    if lowered.startswith(("ppt/slidemasters/", "ppt/slidelayouts/", "ppt/theme/")):
-        return "source_decorative", False
-    if lowered.endswith(".rels"):
-        return "relationship_container", False
-    if lowered in {"[content_types].xml", "ppt/presentation.xml"}:
-        return "package_structure", False
-    if lowered.startswith(
-        (
-            "docprops/",
-            "ppt/notesmasters/",
-            "ppt/handoutmasters/",
-            "ppt/presprops.xml",
-            "ppt/revisioninfo.xml",
-            "ppt/changesinfos/",
-            "ppt/viewprops.xml",
-            "ppt/tablestyles.xml",
-            "ppt/commentauthors.xml",
-            "ppt/comments/",
-            "ppt/printersettings/",
-            "ppt/tags/",
-            "customxml/",
-        )
-    ):
-        return "package_metadata", False
-    return "unclassified", False
 
 
-def _rel_classification(rel_type: str) -> tuple[str, bool, bool]:
-    if any(rel_type.endswith(suffix) for suffix in _SUPPORTED_REL_SUFFIXES):
-        content = any(
-            rel_type.endswith(suffix)
-            for suffix in ("/image", "/chart", "/audio", "/video", "/media", "/notesSlide")
-        )
-        return "supported_relationship", content, True
-    if any(rel_type.endswith(suffix) for suffix in _UNSUPPORTED_CONTENT_REL_SUFFIXES):
-        return "unsupported_content_relationship", True, False
-    return "unclassified", False, False
 
 
 def _shape_identity(element: etree._Element, fallback: int) -> tuple[str, str]:
@@ -252,282 +116,18 @@ def _shape_identity(element: etree._Element, fallback: int) -> tuple[str, str]:
     return c_nv_pr.get("id", str(fallback)), c_nv_pr.get("name", "")
 
 
-AffineTransform = tuple[float, float, float, float, float, float]
-IDENTITY_TRANSFORM: AffineTransform = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
 
 
-def _compose_affine(
-    outer: AffineTransform, inner: AffineTransform
-) -> AffineTransform:
-    oa, ob, oc, od, oe, of = outer
-    ia, ib, ic, id_, ie, if_ = inner
-    return (
-        oa * ia + oc * ib,
-        ob * ia + od * ib,
-        oa * ic + oc * id_,
-        ob * ic + od * id_,
-        oa * ie + oc * if_ + oe,
-        ob * ie + od * if_ + of,
-    )
 
 
-def _apply_affine(transform: AffineTransform, x: float, y: float) -> tuple[float, float]:
-    a, b, c, d, e, f = transform
-    return a * x + c * y + e, b * x + d * y + f
 
 
-def _group_child_transform(element: etree._Element) -> AffineTransform:
-    xfrm = element.find("./p:grpSpPr/a:xfrm", namespaces=NS)
-    if xfrm is None:
-        raise SourceContentError(
-            UNSUPPORTED_OBJECT,
-            detail={"reason": "invalid_group_coordinate_space"},
-        )
-    off = xfrm.find("a:off", namespaces=NS)
-    ext = xfrm.find("a:ext", namespaces=NS)
-    child_off = xfrm.find("a:chOff", namespaces=NS)
-    child_ext = xfrm.find("a:chExt", namespaces=NS)
-    if ext is None or child_ext is None:
-        raise SourceContentError(
-            UNSUPPORTED_OBJECT,
-            detail={"reason": "invalid_group_coordinate_space"},
-        )
-    width = float(ext.get("cx", "0"))
-    height = float(ext.get("cy", "0"))
-    child_width = float(child_ext.get("cx", "0"))
-    child_height = float(child_ext.get("cy", "0"))
-    if width <= 0 or height <= 0 or child_width <= 0 or child_height <= 0:
-        raise SourceContentError(
-            UNSUPPORTED_OBJECT,
-            detail={"reason": "invalid_group_coordinate_space"},
-        )
-    x = float(off.get("x", "0")) if off is not None else 0.0
-    y = float(off.get("y", "0")) if off is not None else 0.0
-    child_x = float(child_off.get("x", "0")) if child_off is not None else 0.0
-    child_y = float(child_off.get("y", "0")) if child_off is not None else 0.0
-    scale_x = width / child_width
-    scale_y = height / child_height
-    base: AffineTransform = (
-        scale_x,
-        0.0,
-        0.0,
-        scale_y,
-        x - child_x * scale_x,
-        y - child_y * scale_y,
-    )
-    center_x = x + width / 2.0
-    center_y = y + height / 2.0
-    angle = math.radians(float(xfrm.get("rot", "0")) / 60_000.0)
-    flip_x = -1.0 if xfrm.get("flipH", "0").lower() in {"1", "true", "on"} else 1.0
-    flip_y = -1.0 if xfrm.get("flipV", "0").lower() in {"1", "true", "on"} else 1.0
-    cos_angle = math.cos(angle)
-    sin_angle = math.sin(angle)
-    around_center: AffineTransform = (
-        cos_angle * flip_x,
-        sin_angle * flip_x,
-        -sin_angle * flip_y,
-        cos_angle * flip_y,
-        center_x - cos_angle * flip_x * center_x + sin_angle * flip_y * center_y,
-        center_y - sin_angle * flip_x * center_x - cos_angle * flip_y * center_y,
-    )
-    return _compose_affine(around_center, base)
 
 
-def _geometry(
-    element: etree._Element,
-    *,
-    parent_transform: AffineTransform = IDENTITY_TRANSFORM,
-    inherited_shapes: tuple[tuple[str, etree._Element], ...] = (),
-    local_source: str = "slide",
-    source_block_id: str | None = None,
-) -> dict[str, Any]:
-    def transform_of(shape: etree._Element) -> etree._Element | None:
-        transform = shape.find("./p:spPr/a:xfrm", namespaces=NS)
-        return transform if transform is not None else shape.find("./p:xfrm", namespaces=NS)
-
-    candidates = [(local_source, element), *inherited_shapes]
-    transforms = [
-        (source, transform)
-        for source, shape in candidates
-        if (transform := transform_of(shape)) is not None
-    ]
-    if not transforms:
-        return {}
-
-    def component(node_name: str, attribute: str) -> tuple[float, str] | None:
-        for source, transform in transforms:
-            node = transform.find(f"a:{node_name}", namespaces=NS)
-            if node is None or node.get(attribute) is None:
-                continue
-            try:
-                return float(node.get(attribute, "0")), source
-            except ValueError:
-                return None
-        return None
-
-    resolved = {
-        "x": component("off", "x"),
-        "y": component("off", "y"),
-        "cx": component("ext", "cx"),
-        "cy": component("ext", "cy"),
-    }
-    if any(value is None for value in resolved.values()):
-        return {}
-    x, source_x = resolved["x"]  # type: ignore[misc]
-    y, source_y = resolved["y"]  # type: ignore[misc]
-    width, source_width = resolved["cx"]  # type: ignore[misc]
-    height, source_height = resolved["cy"]  # type: ignore[misc]
-    corners = (
-        _apply_affine(parent_transform, x, y),
-        _apply_affine(parent_transform, x + width, y),
-        _apply_affine(parent_transform, x, y + height),
-        _apply_affine(parent_transform, x + width, y + height),
-    )
-    left = min(point[0] for point in corners)
-    top = min(point[1] for point in corners)
-    right = max(point[0] for point in corners)
-    bottom = max(point[1] for point in corners)
-    sources = {
-        "x": source_x,
-        "y": source_y,
-        "cx": source_width,
-        "cy": source_height,
-    }
-    geometry: dict[str, Any] = {
-        "x": round(left),
-        "y": round(top),
-        "cx": round(right - left),
-        "cy": round(bottom - top),
-        "source": next(iter(set(sources.values()))) if len(set(sources.values())) == 1 else "mixed",
-        "sources": sources,
-    }
-    if source_block_id is not None:
-        geometry["sourceBlockId"] = source_block_id
-    for attribute, key, divisor in (
-        ("rot", "rotationDegrees", 60_000.0),
-        ("flipH", "flipH", None),
-        ("flipV", "flipV", None),
-    ):
-        for source, transform in transforms:
-            value = transform.get(attribute)
-            if value is None:
-                continue
-            if divisor is not None:
-                try:
-                    geometry[key] = float(value) / divisor
-                except ValueError:
-                    pass
-            else:
-                geometry[key] = value.lower() in {"1", "true", "on"}
-            geometry["sources"][key] = source
-            break
-    return geometry
 
 
-def _image_crop(element: etree._Element) -> dict[str, float]:
-    source_rect = element.find(".//p:blipFill/a:srcRect", namespaces=NS)
-
-    def fraction(attribute: str) -> float:
-        if source_rect is None:
-            return 0.0
-        try:
-            return int(source_rect.get(attribute, "0")) / 100_000.0
-        except ValueError:
-            return 0.0
-
-    return {
-        "left": fraction("l"),
-        "top": fraction("t"),
-        "right": fraction("r"),
-        "bottom": fraction("b"),
-    }
 
 
-def _image_color_transforms(element: etree._Element) -> list[dict[str, Any]]:
-    """Supported occurrence-local ``a:blip`` effects in source order."""
-
-    def unsupported(reason: str) -> SourceContentError:
-        return SourceContentError(
-            UNSUPPORTED_OBJECT,
-            detail={"reason": "unsupported_image_color_transform", "detail": reason},
-        )
-
-    def literal_color(container: etree._Element | None) -> tuple[str, float]:
-        if container is None or len(container) != 1:
-            raise unsupported("color_container_invalid")
-        color = container[0]
-        if etree.QName(color).localname != "srgbClr":
-            raise unsupported("color_model_not_srgb")
-        value = (color.get("val") or "").strip()
-        if not re.fullmatch(r"[0-9A-Fa-f]{6}", value):
-            raise unsupported("srgb_value_invalid")
-        alpha = 1.0
-        for transform in color:
-            if etree.QName(transform).localname != "alpha":
-                raise unsupported("nested_color_transform_unsupported")
-            try:
-                raw_alpha = int(transform.get("val", ""))
-            except ValueError as exc:
-                raise unsupported("alpha_value_invalid") from exc
-            if not 0 <= raw_alpha <= 100_000:
-                raise unsupported("alpha_value_out_of_range")
-            alpha = raw_alpha / 100_000.0
-        return f"#{value.upper()}", alpha
-
-    def fixed_percentage(effect: etree._Element, attribute: str) -> float:
-        raw = effect.get(attribute, "0").strip()
-        try:
-            value = float(raw[:-1]) / 100.0 if raw.endswith("%") else int(raw) / 100_000.0
-        except ValueError as exc:
-            raise unsupported(f"{attribute}_value_invalid") from exc
-        if not -1.0 <= value <= 1.0:
-            raise unsupported(f"{attribute}_value_out_of_range")
-        return value
-
-    blip = element.find(".//a:blip", namespaces=NS)
-    if blip is None:
-        return []
-    result: list[dict[str, Any]] = []
-    for effect in blip:
-        effect_name = etree.QName(effect).localname
-        if effect_name == "extLst":
-            continue
-        if effect_name == "clrChange":
-            raw_use_alpha = effect.get("useA")
-            if raw_use_alpha is None or raw_use_alpha in {"1", "true"}:
-                use_alpha = True
-            elif raw_use_alpha in {"0", "false"}:
-                use_alpha = False
-            else:
-                raise unsupported("use_alpha_invalid")
-            from_color, from_alpha = literal_color(
-                effect.find("a:clrFrom", namespaces=NS)
-            )
-            to_color, to_alpha = literal_color(effect.find("a:clrTo", namespaces=NS))
-            result.append(
-                {
-                    "kind": "colorChange",
-                    "fromColor": from_color,
-                    "fromAlpha": from_alpha,
-                    "toColor": to_color,
-                    "toAlpha": to_alpha,
-                    "useAlpha": use_alpha,
-                }
-            )
-            continue
-        if effect_name == "lum":
-            if len(effect):
-                raise unsupported("luminance_children_unsupported")
-            result.append(
-                {
-                    "kind": "luminance",
-                    "brightness": fixed_percentage(effect, "bright"),
-                    "contrast": fixed_percentage(effect, "contrast"),
-                }
-            )
-            continue
-        raise unsupported(f"effect_{effect_name}_unsupported")
-    return result
 
 
 def _block(
@@ -554,205 +154,12 @@ def _block(
     )
 
 
-def _extract_table(
-    element: etree._Element,
-    *,
-    source_block_id: str,
-    bullet_image_resolver: BulletImageResolver,
-) -> tuple[dict[str, Any], int, int]:
-    rows: list[list[dict[str, Any]]] = []
-    merged_cells: list[dict[str, int]] = []
-    count = 0
-    picture_bullet_count = 0
-    column_widths = [
-        int(column.get("w", "0"))
-        for column in element.findall(".//a:tbl/a:tblGrid/a:gridCol", namespaces=NS)
-    ]
-    row_heights: list[int] = []
-    for row_index, row in enumerate(element.findall(".//a:tbl/a:tr", namespaces=NS)):
-        row_heights.append(int(row.get("h", "0")))
-        values: list[dict[str, Any]] = []
-        for column_index, cell in enumerate(row.findall("a:tc", namespaces=NS)):
-            body = extract_text_body(
-                cell, bullet_image_resolver=bullet_image_resolver
-            )
-            picture_bullet_count += body.picture_bullet_count
-            grid_span = int(cell.get("gridSpan", "1"))
-            row_span = int(cell.get("rowSpan", "1"))
-            h_merge = cell.get("hMerge") in {"1", "true"}
-            v_merge = cell.get("vMerge") in {"1", "true"}
-            values.append(
-                {
-                    "row": row_index,
-                    "column": column_index,
-                    "sourceCellId": f"{source_block_id}:row:{row_index}:column:{column_index}",
-                    "text": body.text,
-                    "paragraphs": body.paragraphs,
-                    "runs": body.runs,
-                    "runStyles": body.run_styles,
-                    "textBody": body.text_body,
-                    "gridSpan": grid_span,
-                    "rowSpan": row_span,
-                    "hMerge": h_merge,
-                    "vMerge": v_merge,
-                }
-            )
-            if (grid_span > 1 or row_span > 1) and not h_merge and not v_merge:
-                merged_cells.append(
-                    {
-                        "row": row_index,
-                        "column": column_index,
-                        "rowSpan": row_span,
-                        "columnSpan": grid_span,
-                    }
-                )
-            count += 1
-        rows.append(values)
-    for merged in merged_cells:
-        origin_row = merged["row"]
-        origin_column = merged["column"]
-        for row_index in range(origin_row, origin_row + merged["rowSpan"]):
-            for column_index in range(origin_column, origin_column + merged["columnSpan"]):
-                if row_index >= len(rows) or column_index >= len(rows[row_index]):
-                    continue
-                rows[row_index][column_index]["mergeOrigin"] = {
-                    "row": origin_row,
-                    "column": origin_column,
-                }
-                rows[row_index][column_index]["mergeCovered"] = (
-                    row_index != origin_row or column_index != origin_column
-                )
-    return {
-        "rows": rows,
-        "cells": [[cell["text"] for cell in row] for row in rows],
-        "mergedCells": merged_cells,
-        "columnWidthsEmu": column_widths,
-        "rowHeightsEmu": row_heights,
-    }, count, picture_bullet_count
 
 
-def _chart_values(element: etree._Element | None) -> list[str]:
-    if element is None:
-        return []
-    points = element.findall(".//c:pt", namespaces=NS)
-    if points:
-        return [
-            (point.find("c:v", namespaces=NS).text or "")
-            for point in sorted(points, key=lambda value: int(value.get("idx", "0")))
-            if point.find("c:v", namespaces=NS) is not None
-        ]
-    return [value.text or "" for value in element.findall(".//c:v", namespaces=NS)]
 
 
-def _numeric_chart_values(values: list[str], *, chart_part: str) -> list[int | float]:
-    result: list[int | float] = []
-    for value in values:
-        try:
-            number = float(value)
-        except ValueError as error:
-            raise SourceContentError(
-                UNSUPPORTED_OBJECT,
-                detail={"reason": "chart_value_not_numeric", "part": chart_part},
-            ) from error
-        result.append(int(number) if number.is_integer() else number)
-    return result
 
 
-def _extract_chart(package: ZipFile, chart_part: str) -> tuple[dict[str, Any], int]:
-    if chart_part not in package.namelist():
-        raise SourceContentError(
-            MANIFEST_INVALID,
-            detail={"reason": "chart_part_missing", "part": chart_part},
-        )
-    root = secure_xml(package.read(chart_part), part_name=chart_part)
-    values = [value.text or "" for value in root.findall(".//c:v", namespaces=NS)]
-    formulas = [value.text or "" for value in root.findall(".//c:f", namespaces=NS)]
-    plot_area = root.find(".//c:plotArea", namespaces=NS)
-    chart_element = None
-    if plot_area is not None:
-        chart_element = next(
-            (
-                child
-                for child in plot_area
-                if etree.QName(child).localname.endswith("Chart")
-            ),
-            None,
-        )
-    if chart_element is None:
-        raise SourceContentError(
-            UNSUPPORTED_OBJECT,
-            detail={"reason": "chart_type_unsupported", "part": chart_part},
-        )
-    ooxml_chart_type = etree.QName(chart_element).localname
-    if ooxml_chart_type == "barChart":
-        bar_direction = chart_element.find("c:barDir", namespaces=NS)
-        chart_type = (
-            "bar"
-            if bar_direction is not None and bar_direction.get("val") == "bar"
-            else "column"
-        )
-    else:
-        chart_type = {
-            "lineChart": "line",
-            "areaChart": "area",
-            "pieChart": "pie",
-            "doughnutChart": "donut",
-        }.get(ooxml_chart_type)
-    if chart_type is None:
-        raise SourceContentError(
-            UNSUPPORTED_OBJECT,
-            detail={
-                "reason": "chart_type_unsupported",
-                "part": chart_part,
-                "chartType": ooxml_chart_type,
-            },
-        )
-    categories: list[str] = []
-    series: list[dict[str, Any]] = []
-    chart_value_count = 0
-    for series_index, series_element in enumerate(
-        chart_element.findall("c:ser", namespaces=NS)
-    ):
-        name_values = _chart_values(series_element.find("c:tx", namespaces=NS))
-        category_values = _chart_values(series_element.find("c:cat", namespaces=NS))
-        if not category_values:
-            category_values = _chart_values(series_element.find("c:xVal", namespaces=NS))
-        raw_values = _chart_values(series_element.find("c:val", namespaces=NS))
-        if not raw_values:
-            raw_values = _chart_values(series_element.find("c:yVal", namespaces=NS))
-        numeric_values = _numeric_chart_values(raw_values, chart_part=chart_part)
-        if not numeric_values:
-            raise SourceContentError(
-                UNSUPPORTED_OBJECT,
-                detail={"reason": "chart_series_values_missing", "part": chart_part},
-            )
-        if not categories:
-            categories = category_values
-        elif category_values and category_values != categories:
-            raise SourceContentError(
-                UNSUPPORTED_OBJECT,
-                detail={"reason": "chart_category_mismatch", "part": chart_part},
-            )
-        series.append(
-            {
-                "name": name_values[0] if name_values else f"Series {series_index + 1}",
-                "values": numeric_values,
-            }
-        )
-        chart_value_count += len(numeric_values)
-    if not series:
-        raise SourceContentError(
-            UNSUPPORTED_OBJECT,
-            detail={"reason": "chart_series_missing", "part": chart_part},
-        )
-    return {
-        "values": values,
-        "formulas": formulas,
-        "sourcePart": chart_part,
-        "categories": categories,
-        "series": series,
-        "chartType": chart_type,
-    }, chart_value_count
 
 
 def _semantic_role(element: etree._Element, *, default: str) -> str:
