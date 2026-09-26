@@ -15,7 +15,7 @@ import {
   testViewports,
 } from "@/cypress/support/testHelpers";
 import PresentationPage from "./PresentationPage";
-import enMessages from "@/i18n/messages/en.json";
+import koMessages from "@/i18n/messages/ko.json";
 
 type AxeRuntime = typeof import("axe-core");
 
@@ -109,7 +109,7 @@ describe("<PresentationPage />", () => {
   const mountPage = (workspaceStaging = false) => {
     router = createMockRouter();
     cy.mount(
-      <NextIntlClientProvider locale="en" messages={enMessages} timeZone="UTC">
+      <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="UTC">
         <AppRouterContext.Provider value={router as never}>
           <PathnameContext.Provider value="/presentation">
             <SearchParamsContext.Provider

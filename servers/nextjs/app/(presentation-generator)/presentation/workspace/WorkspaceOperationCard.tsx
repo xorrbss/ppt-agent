@@ -117,6 +117,7 @@ export function WorkspaceOperationCard({
   composerCancelOperationId,
 }: WorkspaceOperationCardProps) {
   const t = useTranslations("qualityReview.workspace");
+  const tOperation = useTranslations("presentationOperationCard");
   const locale = useLocale();
   const operationKnown = isKnownWorkspaceOperationType(operation.operationType);
   const statusKnown = (KNOWN_OPERATION_STATUSES as readonly string[]).includes(
@@ -610,7 +611,7 @@ export function WorkspaceOperationCard({
       setActionError(
         safeRequestError(
           error,
-          "작업을 완료할 수 없습니다. 다시 시도해 주세요.",
+          tOperation("actionFailed"),
         ),
       );
     } finally {
@@ -628,7 +629,7 @@ export function WorkspaceOperationCard({
       await onReExport(operationType);
     } catch (error) {
       setActionError(
-        safeRequestError(error, "다시 내보내기를 시작할 수 없습니다."),
+        safeRequestError(error, tOperation("reexportFailed")),
       );
     } finally {
       setPendingAction(undefined);
@@ -638,7 +639,7 @@ export function WorkspaceOperationCard({
   return (
     <article
       className="w-full text-[15px] leading-[1.6]"
-      aria-label={`${operation.title} 작업`}
+      aria-label={tOperation("operationAria", { title: operation.title })}
       data-workspace-anchor-id={operation.id}
       data-operation-id={operation.operationId}
       data-operation-status={operation.status}
@@ -655,15 +656,15 @@ export function WorkspaceOperationCard({
             aria-live="polite"
           >
             {historicalResolution === "resolved"
-              ? "후속 성공으로 해결됨"
+              ? tOperation("resolved")
               : historicalResolution === "superseded"
-                ? "후속 성공으로 대체됨"
+                ? tOperation("superseded")
               : capacityWaiting
-              ? "생성 용량 대기 중"
+              ? tOperation("capacityWaiting")
               : operation.status === "succeeded" && isTemplateApply && !templateEvidenceComplete
-              ? "시각 검증 증거 대기"
+              ? tOperation("visualEvidenceWaiting")
               : STATUS_LABELS[operation.status] ??
-              `지원되지 않는 상태 · ${operation.status}`}
+              tOperation("unsupportedStatus", { status: operation.status })}
           </p>
         </div>
         {!isPresentationGeneration && !TERMINAL.has(operation.status) &&
@@ -679,7 +680,7 @@ export function WorkspaceOperationCard({
           className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-xs text-amber-900"
           role="alert"
         >
-          지원되지 않는 작업 상태입니다. 기록은 보존되어 있습니다.
+          {tOperation("unsupportedStatusNotice")}
         </p>
       )}
       {approvable && (
@@ -690,13 +691,13 @@ export function WorkspaceOperationCard({
           data-testid="operation-approval-alert"
         >
           {approvalExpired
-            ? `${operation.title} 작업의 승인 기한이 만료되었습니다.`
-            : `${operation.title} 작업에 승인이 필요합니다.`}
+            ? tOperation("approvalExpired", { title: operation.title })
+            : tOperation("approvalRequired", { title: operation.title })}
         </p>
       )}
       {operationMetadata.length > 0 && (
         <details className="mt-2 text-xs text-slate-600">
-          <summary className="cursor-pointer select-none font-medium">작업 내역 보기</summary>
+          <summary className="cursor-pointer select-none font-medium">{tOperation("viewDetails")}</summary>
           <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 rounded-lg bg-slate-50 px-2.5 py-2" data-testid="operation-metadata">
             {operationMetadata.map(([label, value]) => (
               <div key={label} className="contents">
@@ -708,7 +709,7 @@ export function WorkspaceOperationCard({
           {progressEvidence.messages.length > 0 && <ol className="mt-2 space-y-1 text-slate-600">
             {progressEvidence.messages.map((message, index) => <li key={`${index}-${message}`}>{message}</li>)}
           </ol>}
-          {TERMINAL.has(operation.status) && progress !== undefined && <p className="mt-2">마지막 보고 진행률 · {Math.round(progress)}%</p>}
+          {TERMINAL.has(operation.status) && progress !== undefined && <p className="mt-2">{tOperation("lastProgress", { percent: Math.round(progress) })}</p>}
         </details>
       )}
       {isPresentationGeneration && !TERMINAL.has(operation.status) && <WorkspaceGenerationProgress operation={operation} observation={observation} locale={locale} />}
@@ -717,13 +718,13 @@ export function WorkspaceOperationCard({
           <div
             className="h-1.5 overflow-hidden rounded-full bg-slate-100"
             role="progressbar"
-            aria-label="작업 진행률"
+            aria-label={tOperation("progressAria")}
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={Math.round(displayedProgress)}
             aria-valuetext={
               qualityResultSaving
-                ? "결과와 수정본 리비전을 저장 중"
+                ? tOperation("savingResultRevision")
                 : `${Math.round(displayedProgress)}%`
             }
           >
@@ -734,7 +735,7 @@ export function WorkspaceOperationCard({
           </div>
           <p className="mt-1 text-right text-[11px] text-slate-500">
             {qualityResultSaving
-              ? "결과 저장 중"
+              ? tOperation("savingResult")
               : `${Math.round(displayedProgress)}%`}
           </p>
         </div>
@@ -745,7 +746,7 @@ export function WorkspaceOperationCard({
           role="status"
           aria-live="polite"
         >
-          검수 결과와 수정본 리비전을 저장하고 있습니다.
+          {tOperation("savingReviewResult")}
         </p>
       )}
       {capacityWaiting && !isTemplateApply && (
@@ -782,20 +783,17 @@ export function WorkspaceOperationCard({
               ? "border-amber-200 bg-amber-50 text-amber-950"
               : "border-emerald-100 bg-emerald-50 text-emerald-950"
           }`}
-          aria-label="문서 생성 결과"
+          aria-label={tOperation("generationResultAria")}
           data-testid="generation-completion-summary"
         >
           <p className="font-semibold">
-            문서 생성 완료 — {generationCompletion.total}페이지 / 정상{" "}
-            {generationCompletion.normal} · 자동 수정{" "}
-            {generationCompletion.autoRepaired} · 검토 필요{" "}
-            {generationCompletion.reviewRequired}
+            {tOperation("generationSummary", { total: generationCompletion.total, normal: generationCompletion.normal, repaired: generationCompletion.autoRepaired, review: generationCompletion.reviewRequired })}
           </p>
           {generationCompletion.reviewPages.length > 0 && (
             <ul className="mt-2 space-y-1" data-testid="generation-review-pages">
               {generationCompletion.reviewPages.map((page) => (
                 <li key={page.index}>
-                  {page.index + 1}페이지: {page.reasons.join(" · ")}
+                  {tOperation("reviewPage", { page: page.index + 1, reasons: page.reasons.join(" · ") })}
                 </li>
               ))}
             </ul>
@@ -805,13 +803,11 @@ export function WorkspaceOperationCard({
       {operation.status === "succeeded" && remakeOfferSlideIndex !== undefined && (
         <section
           className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-950"
-          aria-label="페이지 다시 만들기 제안"
+          aria-label={tOperation("remakeOfferAria")}
           data-testid="page-remake-offer"
         >
           <p>
-            {remakeOfferSlideIndex + 1}페이지는 AI가 직접 작성한 자료라 대화로는
-            고칠 수 없습니다. 페이지를 다시 만들면 지금 요청한 내용을 반영할 수
-            있습니다.
+            {tOperation("remakeOfferDescription", { page: remakeOfferSlideIndex + 1 })}
           </p>
           <button
             type="button"
@@ -820,25 +816,25 @@ export function WorkspaceOperationCard({
             className="mt-2 rounded-md border border-amber-300 bg-white px-2.5 py-1.5 font-semibold text-amber-900 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-1"
             data-testid="page-remake-offer-start"
           >
-            {remakeOfferSlideIndex + 1}페이지 다시 만들기
+            {tOperation("remakePage", { page: remakeOfferSlideIndex + 1 })}
           </button>
         </section>
       )}
       {operation.status === "succeeded" && isVersionRestore && (
         <section
           className="mt-2 rounded-lg border border-emerald-100 bg-emerald-50 px-2.5 py-2 text-xs text-emerald-950"
-          aria-label="버전 복원 결과"
+          aria-label={tOperation("restoreResultAria")}
           data-testid="version-restore-result"
         >
-          <p className="font-semibold">버전 복원이 완료되었습니다.</p>
+          <p className="font-semibold">{tOperation("restoreComplete")}</p>
           <p className="mt-1 text-emerald-800">
             {sourceRevision !== undefined && publishedRevision !== undefined
-              ? `리비전 ${sourceRevision} → ${publishedRevision}`
+              ? tOperation("revisionTransition", { source: sourceRevision, published: publishedRevision })
               : publishedRevision !== undefined
-                ? `리비전 ${publishedRevision}`
-                : "새 리비전으로 게시됨"}
+                ? tOperation("revision", { revision: publishedRevision })
+                : tOperation("publishedNewRevision")}
             {restoredSlideCount !== undefined
-              ? ` · ${restoredSlideCount}장`
+              ? tOperation("slideCountSuffix", { count: restoredSlideCount })
               : ""}
           </p>
           {restoredVersionId && (
@@ -846,7 +842,7 @@ export function WorkspaceOperationCard({
               className="mt-1 truncate text-emerald-700"
               title={restoredVersionId}
             >
-              대상 버전 {restoredVersionId}
+              {tOperation("targetVersion", { id: restoredVersionId })}
             </p>
           )}
         </section>
@@ -858,72 +854,72 @@ export function WorkspaceOperationCard({
               ? "border-violet-100 bg-violet-50 text-violet-950"
               : "border-amber-200 bg-amber-50 text-amber-950"
           }`}
-          aria-label="AI 저작 템플릿 변경 결과"
+          aria-label={tOperation("templateResultAria")}
           data-testid="template-apply-result"
         >
           <p className="font-semibold">
             {templateEvidenceComplete
-              ? stringValue(result.message) ?? "AI 저작 자료의 시각 검증이 완료되었습니다."
-              : "자료는 생성되었지만 시각 검증 증거가 부족하여 완료로 표시하지 않습니다."}
+              ? stringValue(result.message) ?? tOperation("visualVerified")
+              : tOperation("visualEvidenceMissing")}
           </p>
           <p className="mt-1 text-violet-800">
-            원본 자료는 변경되지 않았습니다.
+            {tOperation("sourceUnchanged")}
           </p>
           <dl
             className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 break-words"
             data-testid="template-apply-evidence"
           >
-            <dt>템플릿</dt>
-            <dd>{templateEvidence.templateId ?? "미확인"}</dd>
-            <dt>템플릿 digest</dt>
-            <dd>{templateEvidence.templateDigest ?? "미확인"}</dd>
-            <dt>Reference-layout digest</dt>
-            <dd>{templateEvidence.referenceLayoutDigest ?? "미확인"}</dd>
-            <dt>Composition / rule digest</dt>
+            <dt>{tOperation("template")}</dt>
+            <dd>{templateEvidence.templateId ?? tOperation("unknown")}</dd>
+            <dt>{tOperation("templateDigest")}</dt>
+            <dd>{templateEvidence.templateDigest ?? tOperation("unknown")}</dd>
+            <dt>{tOperation("referenceLayoutDigest")}</dt>
+            <dd>{templateEvidence.referenceLayoutDigest ?? tOperation("unknown")}</dd>
+            <dt>{tOperation("compositionRuleDigest")}</dt>
             <dd>
-              {templateEvidence.compositionDigest ?? "미확인"} / {templateEvidence.ruleDigest ?? "미확인"}
+              {templateEvidence.compositionDigest ?? tOperation("unknown")} / {templateEvidence.ruleDigest ?? tOperation("unknown")}
             </dd>
-            <dt>시각 충실도</dt>
-            <dd>{templateEvidence.visualFidelityPassed ? "통과" : "미통과 또는 미확인"}</dd>
-            <dt>Preview / native snapshot</dt>
+            <dt>{tOperation("visualFidelity")}</dt>
+            <dd>{templateEvidence.visualFidelityPassed ? tOperation("passed") : tOperation("notPassedOrUnknown")}</dd>
+            <dt>{tOperation("previewNativeSnapshot")}</dt>
             <dd>
               {templateEvidence.previewMatches && templateEvidence.nativeMatches
-                ? "동일한 resolved snapshot 확인"
-                : "동일 snapshot 미확인"}
+                ? tOperation("sameSnapshotVerified")
+                : tOperation("sameSnapshotUnknown")}
             </dd>
-            <dt>사용 semantic roles</dt>
-            <dd>{templateEvidence.semanticRoles.join(", ") || "미확인"}</dd>
-            <dt>사용 layout roles</dt>
-            <dd>{templateEvidence.layoutRoles.join(", ") || "미확인"}</dd>
-            <dt>페이지 번호</dt>
+            <dt>{tOperation("semanticRoles")}</dt>
+            <dd>{templateEvidence.semanticRoles.join(", ") || tOperation("unknown")}</dd>
+            <dt>{tOperation("layoutRoles")}</dt>
+            <dd>{templateEvidence.layoutRoles.join(", ") || tOperation("unknown")}</dd>
+            <dt>{tOperation("pageNumbers")}</dt>
             <dd>
               {templateEvidence.pageNumbers.length > 0
-                ? `${templateEvidence.pageNumbers.join(", ")} / ${templateEvidence.slideCount ?? "?"}장`
-                : "미확인"}
+                ? tOperation("pageNumbersValue", { pages: templateEvidence.pageNumbers.join(", "), count: templateEvidence.slideCount ?? "?" })
+                : tOperation("unknown")}
             </dd>
-            <dt>Native PPTX readback</dt>
-            <dd>{templateEvidence.readbackVerified ? "검증됨" : "미확인"}</dd>
+            <dt>{tOperation("nativePptxReadback")}</dt>
+            <dd>{templateEvidence.readbackVerified ? tOperation("verified") : tOperation("unknown")}</dd>
           </dl>
         </section>
       )}
       {operation.status === "succeeded" && isQualityReview && (
         <section
           className="mt-2 rounded-lg border border-blue-100 bg-blue-50 px-2.5 py-2 text-xs text-blue-950"
-          aria-label="품질 검토 결과"
+          aria-label={tOperation("qualityReviewResultAria")}
           data-testid="quality-review-result"
         >
           <p className="font-semibold">
             {stringValue(result.message) ??
-              "고품질 검수와 자동 수정이 완료되었습니다."}
+              tOperation("qualityReviewComplete")}
           </p>
           <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-blue-800">
-            <dt>검토 페이지</dt>
+            <dt>{tOperation("reviewedPages")}</dt>
             <dd>
-              {reviewedCount !== undefined ? `${reviewedCount}장` : "검토 완료"}
+              {reviewedCount !== undefined ? tOperation("slidesCount", { count: reviewedCount }) : tOperation("reviewComplete")}
             </dd>
             <dt>{t("issueSlides")}</dt>
             <dd>
-              {issueSlideCount !== undefined ? `${issueSlideCount}장` : "-"}
+              {issueSlideCount !== undefined ? tOperation("slidesCount", { count: issueSlideCount }) : "-"}
             </dd>
             <dt>{t("detailedIssues")}</dt>
             <dd>{t("issuesCount", { count: detailedIssueCount })}</dd>
@@ -948,11 +944,11 @@ export function WorkspaceOperationCard({
                 </dd>
               </>
             )}
-            <dt>검토 리비전</dt>
+            <dt>{tOperation("inspectedRevision")}</dt>
             <dd>{inspectedRevision !== undefined ? inspectedRevision : "-"}</dd>
-            <dt>저장 리비전</dt>
+            <dt>{tOperation("savedRevision")}</dt>
             <dd>{qualityRevision !== undefined ? qualityRevision : "-"}</dd>
-            <dt>PowerPoint 갱신</dt>
+            <dt>{tOperation("powerPointRefresh")}</dt>
             <dd>{qualityRefreshMessage}</dd>
           </dl>
           {(qualityWallTime !== undefined || qualityStageAggregateTime !== undefined || qualityPipelineMetrics.length > 0 || Object.keys(qualityStageTimings).length > 0) && (
@@ -1003,7 +999,7 @@ export function WorkspaceOperationCard({
           {fixedSlideIndexes.length > 0 && (
             <div
               className="mt-2 flex flex-wrap gap-1.5"
-              aria-label="수정된 페이지로 이동"
+              aria-label={tOperation("goToEditedPages")}
             >
               {fixedSlideIndexes.map((slideIndex) => (
                 <button
@@ -1012,10 +1008,10 @@ export function WorkspaceOperationCard({
                   onClick={() => onFocusSlide?.(slideIndex)}
                   disabled={!onFocusSlide}
                   className="rounded-md border border-blue-200 bg-white px-2 py-1 font-semibold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1"
-                  aria-label={`${slideIndex + 1}번 슬라이드로 이동`}
+                  aria-label={tOperation("goToSlide", { number: slideIndex + 1 })}
                   data-testid={`quality-review-focus-slide-${slideIndex + 1}`}
                 >
-                  {slideIndex + 1}번으로 이동
+                  {tOperation("goToNumber", { number: slideIndex + 1 })}
                 </button>
               ))}
             </div>
@@ -1037,7 +1033,7 @@ export function WorkspaceOperationCard({
       {operation.status === "succeeded" && isExport && (
         <section
           className="mt-2 rounded-lg border border-emerald-100 bg-emerald-50 px-2.5 py-2 text-xs text-emerald-950"
-          aria-label="내보내기 결과"
+          aria-label={tOperation("exportResultAria")}
           data-testid="export-artifact-result"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1046,9 +1042,9 @@ export function WorkspaceOperationCard({
                 {artifactFileName(result, artifactFormat)}
               </p>
               <p className="mt-0.5 text-emerald-800">
-                {artifactFormat?.toUpperCase() ?? "파일"}
+                {artifactFormat?.toUpperCase() ?? tOperation("file")}
                 {sourceRevision !== undefined
-                  ? ` · 소스 리비전 ${sourceRevision}`
+                  ? tOperation("sourceRevisionSuffix", { revision: sourceRevision })
                   : ""}
               </p>
               {exportEditabilityCompletion && (
@@ -1077,9 +1073,9 @@ export function WorkspaceOperationCard({
                 }
                 onClick={() => void handleArtifactDownload()}
                 className="shrink-0 rounded-lg bg-emerald-700 px-3 py-1.5 font-semibold text-white hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2"
-                aria-label={`${artifactFormat?.toUpperCase() ?? "내보낸"} 파일 다운로드`}
+                aria-label={tOperation("downloadFileAria", { format: artifactFormat?.toUpperCase() ?? tOperation("exported") })}
               >
-                다운로드
+                {tOperation("download")}
               </button>
             )}
           </div>
@@ -1090,23 +1086,23 @@ export function WorkspaceOperationCard({
               className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-amber-950"
               data-testid="export-editability-evidence"
             >
-              <p className="font-medium">편집성 확인</p>
+              <p className="font-medium">{tOperation("editabilityCheck")}</p>
               {exportEditabilityReasons.length > 0 && (
                 <p className="mt-1">
-                  사유: {exportEditabilityReasons.map(editabilityReasonLabel).join(" · ")}
+                  {tOperation("reasons", { reasons: exportEditabilityReasons.map(editabilityReasonLabel).join(" · ") })}
                 </p>
               )}
               {exportEditabilitySlides.length > 0 && (
                 <ul className="mt-1 space-y-0.5">
                   {exportEditabilitySlides.map((slide) => (
                     <li key={slide.slideNumber}>
-                      {slide.slideNumber}페이지: {slide.photoOnlyExempt
-                        ? "원본 사진 페이지"
+                      {tOperation("pageLabel", { page: slide.slideNumber })} {slide.photoOnlyExempt
+                        ? tOperation("sourcePhotoPage")
                         : slide.imageOnly
-                          ? "이미지 전용"
+                          ? tOperation("imageOnly")
                           : slide.verdict === "partially-editable"
-                            ? "부분 편집 가능"
-                            : "확인 필요"}
+                            ? tOperation("partiallyEditable")
+                            : tOperation("needsConfirmation")}
                       {slide.reasons.length > 0
                         ? ` · ${slide.reasons.map(editabilityReasonLabel).join(" · ")}`
                         : ""}
@@ -1116,16 +1112,14 @@ export function WorkspaceOperationCard({
               )}
               {exportImageFallbackPages.length > 0 && (
                 <p className="mt-1 font-medium" data-testid="export-image-fallback-pages">
-                  이미지로 대체된 페이지: {exportImageFallbackPages
-                    .map((page) => `${page}페이지`)
-                    .join(", ")}
+                  {tOperation("imageFallbackPages", { pages: exportImageFallbackPages.map((page) => tOperation("pageName", { page })).join(", ") })}
                 </p>
               )}
               {exportQualitySlideFallbacks.length > 0 && (
                 <ul className="mt-1 space-y-0.5" data-testid="export-image-fallback-reasons">
                   {exportQualitySlideFallbacks.map((fallback) => (
                     <li key={`${fallback.slideNumber}:${fallback.code}`}>
-                      {fallback.slideNumber}페이지: {editabilityReasonLabel(fallback.code)}
+                      {tOperation("pageLabel", { page: fallback.slideNumber })} {editabilityReasonLabel(fallback.code)}
                     </li>
                   ))}
                 </ul>
@@ -1137,9 +1131,7 @@ export function WorkspaceOperationCard({
               className="mt-2 rounded-md bg-slate-100 px-2 py-1.5 text-slate-700"
               data-testid="export-cleanup-status"
             >
-              내보내기 종료 정리: {exportCleanupFailurePages
-                .map((page) => `${page}페이지`)
-                .join(", ")} 작업의 임시 실행 환경 정리를 완료하지 못했습니다. 결과 파일과 페이지 측정 판정은 유지됩니다.
+              {tOperation("cleanupFailure", { pages: exportCleanupFailurePages.map((page) => tOperation("pageName", { page })).join(", ") })}
             </p>
           )}
           {!artifactId && (
@@ -1147,7 +1139,7 @@ export function WorkspaceOperationCard({
               className="mt-2 rounded-md bg-red-100 px-2 py-1.5 text-red-800"
               role="alert"
             >
-              다운로드 정보를 확인할 수 없습니다. 다시 내보내 주세요.
+              {tOperation("downloadInfoMissing")}
             </p>
           )}
           {downloadError && (
@@ -1163,7 +1155,7 @@ export function WorkspaceOperationCard({
               className="mt-2 rounded-md bg-amber-100 px-2 py-2 text-amber-950"
               data-testid="artifact-expired"
             >
-              <p role="status">내보내기 파일이 만료되었습니다.</p>
+              <p role="status">{tOperation("exportExpired")}</p>
               {exportOperationType &&
                 onReExport &&
                 retryAction?.enabled === true && (
@@ -1173,9 +1165,9 @@ export function WorkspaceOperationCard({
                     disabled={disabled || pendingAction !== undefined}
                     onClick={() => void handleReExport(exportOperationType)}
                     className="mt-2 rounded-lg border border-amber-700 bg-white px-3 py-1.5 font-semibold text-amber-950 hover:bg-amber-50 disabled:opacity-50"
-                    aria-label={`최신 리비전을 ${artifactFormat?.toUpperCase() ?? "파일"}로 다시 내보내기`}
+                    aria-label={tOperation("reexportLatestAria", { format: artifactFormat?.toUpperCase() ?? tOperation("file") })}
                   >
-                    최신 리비전으로 다시 내보내기
+                    {tOperation("reexportLatest")}
                   </button>
                 )}
             </div>
@@ -1186,8 +1178,7 @@ export function WorkspaceOperationCard({
               role="status"
               data-testid="artifact-stale"
             >
-              이 파일은 이전 리비전에서 생성되었습니다. 최신 내용이 필요하면
-              다시 내보내세요.
+              {tOperation("staleArtifact")}
             </p>
           )}
         </section>
@@ -1198,7 +1189,7 @@ export function WorkspaceOperationCard({
           role="status"
           data-testid="operation-superseded-resolution"
         >
-          감사 이력은 유지됩니다. 후속 성공 작업 {operation.supersededByOperationId}이(가) 같은 revision과 형식의 현재 결과입니다.
+          {tOperation("supersededHistory", { id: operation.supersededByOperationId })}
         </p>
       )}
       {(failed || operation.error) && operation.status !== "succeeded" && !resolvedByLaterSuccess && (
@@ -1224,7 +1215,7 @@ export function WorkspaceOperationCard({
           className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-xs text-amber-800"
           role="status"
         >
-          승인 기한이 만료되었습니다. 작업을 다시 시도해 주세요.
+          {tOperation("approvalDeadlineExpired")}
         </p>
       )}
       {retryUnavailable && !isPresentationGeneration && !failed && !operation.error && !resolvedByLaterSuccess && (
@@ -1233,8 +1224,7 @@ export function WorkspaceOperationCard({
           role="status"
           data-testid="operation-retry-unavailable"
         >
-          이 오류는 재시도할 수 없습니다. 내용을 확인한 뒤 새 명령을 보내
-          주세요.
+          {tOperation("retryUnavailable")}
         </p>
       )}
       <div className="mt-3 flex flex-wrap gap-2">

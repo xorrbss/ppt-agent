@@ -13,7 +13,7 @@ import {
   setStreaming,
 } from "@/store/slices/presentationGeneration";
 import { isAuthoredPresentation } from "../utils/isAuthoredPresentation";
-import enMessages from "@/i18n/messages/en.json";
+import koMessages from "@/i18n/messages/ko.json";
 import type {
   WorkspaceCommandDispatcher,
   WorkspacePageRemakeRequester,
@@ -60,7 +60,7 @@ const mountHeader = (
   store.dispatch(setStreaming(false));
 
   cy.mount(
-    <NextIntlClientProvider locale="en" messages={enMessages} timeZone="UTC">
+    <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="UTC">
       <AppRouterContext.Provider
         value={{
           back: cy.stub(),
@@ -295,7 +295,7 @@ describe("PresentationHeader workspace controls", () => {
     openMoreOptions();
     cy.get('[data-testid="editable-hybrid-workbench-bridge"]').should(
       "contain.text",
-      enMessages.presentationHeader.editableHybridTitle,
+      koMessages.presentationHeader.editableHybridTitle,
     );
     cy.get('[data-testid="editable-hybrid-workbench-link"]').should("have.attr", "href", "/authored-vnext/workbench?authoredDeckId=deck%3Anormal-ai-publication");
   });
@@ -568,8 +568,8 @@ describe("PresentationHeader workspace controls", () => {
 
     cy.get('[data-testid="export-trigger"]')
       .should("be.disabled")
-      .and("have.attr", "aria-label", enMessages.exportMenu.triggerDisabledExportInFlightAria)
-      .and("have.attr", "title", enMessages.exportMenu.triggerDisabledExportInFlightAria);
+      .and("have.attr", "aria-label", koMessages.exportMenu.triggerDisabledExportInFlightAria)
+      .and("have.attr", "title", koMessages.exportMenu.triggerDisabledExportInFlightAria);
     cy.get("@workspaceCommand").should("not.have.been.called");
   });
 
@@ -586,7 +586,7 @@ describe("PresentationHeader workspace controls", () => {
 
     cy.get('[data-testid="export-trigger"]')
       .should("not.be.disabled")
-      .and("have.attr", "aria-label", enMessages.exportMenu.triggerAria)
+      .and("have.attr", "aria-label", koMessages.exportMenu.triggerAria)
       .and("not.have.attr", "title");
   });
 

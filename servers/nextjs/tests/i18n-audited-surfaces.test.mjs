@@ -43,6 +43,8 @@ const auditedFiles = [
   "app/(presentation-generator)/presentation/components/PresentationPage.tsx",
   "app/(presentation-generator)/presentation/components/AuthoredElementEditor.tsx",
   "app/(presentation-generator)/presentation/components/AuthoredTemplateChanger.tsx",
+  "app/(presentation-generator)/presentation/workspace/WorkspaceOperationCard.tsx",
+  "app/(presentation-generator)/presentation/components/header/AuthoredEmissionCapabilityStatus.tsx",
   "components/slide-editor/shortcuts/ShortcutKeys.tsx",
   "components/slide-editor/shortcuts/editorShortcuts.ts",
 ];

@@ -1,9 +1,19 @@
 import React from "react";
+import { NextIntlClientProvider } from "next-intl";
+import koMessages from "@/i18n/messages/ko.json";
 
 import { WorkspaceComposer } from "./WorkspaceComposer";
 
-function mountComposer(onFilesSelected: (files: File[]) => Promise<void>) {
+function mountWithLocale(component: React.ReactNode) {
   cy.mount(
+    <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="UTC">
+      {component}
+    </NextIntlClientProvider>,
+  );
+}
+
+function mountComposer(onFilesSelected: (files: File[]) => Promise<void>) {
+  mountWithLocale(
     <WorkspaceComposer
       value=""
       onValueChange={cy.stub()}
@@ -62,7 +72,7 @@ describe("WorkspaceComposer", () => {
         onScopeChange={setScope} pinnedSlideNumber={3} onSend={onSend}
         assets={[{ assetId: "asset-1", fileName: "자료.pdf", status: "준비됨", ready: true }]} />;
     }
-    cy.mount(<Harness />);
+    mountWithLocale(<Harness />);
     cy.get('[aria-label="수정 요청 전송"]').should("be.disabled");
     cy.get('[aria-label="수정 범위 선택"]').select("slide");
     cy.get('[aria-label="수정 요청 전송"]').should("be.enabled");
@@ -87,7 +97,7 @@ describe("WorkspaceComposer", () => {
           assets={[{ assetId: "ready", fileName: "자료.pdf", status: "준비됨", ready: true },
             ...(failed ? [{ assetId: "failed", fileName: "실패.pdf", status: "실패", ready: false }] : [])]} /></>;
     }
-    cy.mount(<Harness />);
+    mountWithLocale(<Harness />);
     cy.get('[aria-label="수정 요청 전송"]').should("be.disabled");
     cy.contains("실패 파일 제거").click();
     cy.get('[aria-label="수정 요청 전송"]').should("be.disabled");
@@ -103,7 +113,7 @@ describe("WorkspaceComposer", () => {
       const [value, setValue] = React.useState("제목 수정");
       return <WorkspaceComposer value={value} onValueChange={setValue} scope="presentation" onSend={onSend} />;
     }
-    cy.mount(<Harness />);
+    mountWithLocale(<Harness />);
     cy.get("#workspace-command").trigger("keydown", { key: "Enter", isComposing: true });
     cy.get("#workspace-command").trigger("keydown", { key: "Enter", keyCode: 229 });
     cy.wrap(onSend).should("not.have.been.called");
@@ -123,7 +133,7 @@ describe("WorkspaceComposer", () => {
         pinnedSlideNumber={3} canSend={false} canAttach={false} onSend={onSend}
         cancelOperation={{ operationId: "operation-current", pending: false, onCancel }} />;
     }
-    cy.mount(<Harness />);
+    mountWithLocale(<Harness />);
     cy.get("#workspace-command").type("{enter}");
     cy.wrap(onCancel).should("not.have.been.called");
     cy.wrap(onSend).should("not.have.been.called");
