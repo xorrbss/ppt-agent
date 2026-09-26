@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import type {
   WorkspaceOperationAnchor,
   WorkspacePageRemakeRequester,
@@ -31,6 +32,7 @@ interface Props {
 }
 
 export function WorkspaceTimelineOperation(props: Props) {
+  const t = useTranslations("presentationTimelineOperation");
   const { operation } = props;
   const [exportPending, setExportPending] = useState(false);
   const [exportError, setExportError] = useState<string>();
@@ -56,7 +58,7 @@ export function WorkspaceTimelineOperation(props: Props) {
     try {
       await props.onReExport("export.pptx");
     } catch {
-      setExportError("PPTX 만들기를 시작하지 못했어요. 다시 시도해 주세요.");
+      setExportError(t("createFailed"));
     } finally {
       setExportPending(false);
     }
@@ -70,7 +72,7 @@ export function WorkspaceTimelineOperation(props: Props) {
         disabled={props.disabled || exportPending}
         onClick={() => void createPptx()}
         className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-      >{exportPending ? "PPTX 만들기 요청 중" : "PPTX 만들기"}</button>}
+      >{exportPending ? t("createPending") : t("createPptx")}</button>}
       {exportError && <p role="alert" className="text-sm text-slate-700">{exportError}</p>}
     <details
       className="py-2 text-sm"
@@ -78,14 +80,14 @@ export function WorkspaceTimelineOperation(props: Props) {
     >
       <summary className="cursor-pointer select-none list-none rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
         <span className="flex flex-wrap items-center justify-between gap-2">
-          <span className="font-semibold text-slate-900">제작 과정 보기</span>
+          <span className="font-semibold text-slate-900">{t("viewHistory")}</span>
           <span className="text-xs text-slate-600">{summary}</span>
         </span>
       </summary>
       <div className="mt-2 border-t border-slate-100 pt-2 text-xs text-slate-600">
         {history.length > 0
           ? <ol className="space-y-2">{history.map((message, index) => <li key={`${index}-${message}`}>{message}</li>)}</ol>
-          : <p>확인된 제작 단계 내역이 없습니다.</p>}
+          : <p>{t("noHistory")}</p>}
       </div>
     </details>
     </div>

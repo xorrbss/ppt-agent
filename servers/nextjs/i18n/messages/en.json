@@ -1761,6 +1761,111 @@
     "reorderConflictReload": "The presentation changed elsewhere. Reloading to get the latest version.",
     "reorderNetworkRetry": "Check your network connection and try again."
   },
+  "presentationQualityHistory": {
+    "title": "Review history by page",
+    "unknownPage": "Page information unavailable",
+    "slide": "Slide {index}",
+    "issueType": "Issue type",
+    "severity": "Severity",
+    "description": "Description",
+    "action": "Corrective action",
+    "appliedLabel": "Applied",
+    "applied": "Applied",
+    "notApplied": "Not applied",
+    "rejectionReason": "Reason not corrected"
+  },
+  "presentationGenerationProgress": {
+    "completed": "Completed",
+    "checkingConnection": "Checking the connection",
+    "processingRequest": "Processing the presentation generation request.",
+    "noRecentProgress": "The server confirmed the task is running. There is no new progress yet.",
+    "lastServerCheck": "Last server check · {time}",
+    "lastProgress": "Last progress change · {time}",
+    "noInformation": "No information available"
+  },
+  "presentationLoading": {
+    "title": "Creating your presentation",
+    "descriptionFirst": "Slides will appear automatically when they are ready.",
+    "descriptionSecond": "Please wait a moment."
+  },
+  "presentationResultNotice": {
+    "loadFailed": "Could not load the PPT. We will check the result without rerunning generation.",
+    "reload": "Reload",
+    "upload": "Go to upload",
+    "autoCheckPaused": "Automatic checking paused",
+    "refreshStatus": "Refresh status",
+    "viewTask": "View task",
+    "noSlides": "No slides",
+    "noSlidesDescription": "There are no slides to display yet. Check the task conversation or reload the result.",
+    "dashboard": "Go to dashboard"
+  },
+  "presentationWorkspaceToolbar": {
+    "workspace": "Workspace",
+    "slides": "PPT",
+    "chat": "Chat",
+    "closeSlideList": "Close slide list",
+    "openSlideList": "Open slide list",
+    "slideList": "Slide list",
+    "selectSlide": "Select a slide to navigate to.",
+    "openChat": "Open chat",
+    "collapseChat": "Collapse chat"
+  },
+  "presentationAttemptNavigation": {
+    "previousTaskStillRunning": "You can edit the request after confirming the previous task has ended.",
+    "loadPreviousFailed": "Could not load the previous request. Check your access and connection.",
+    "saveEditFailed": "Could not save the edits in your browser. Please try again.",
+    "navigation": "Generation attempts",
+    "previousAttempt": "Previous attempt",
+    "nextAttempt": "Next attempt",
+    "nextAttempts": "Next attempts ({count})",
+    "nextAttemptNumber": "Next attempt {index}",
+    "loadingRequest": "Loading request",
+    "editRequest": "Edit request",
+    "previousAttachments": "Previous attachments: {names}",
+    "reattachFiles": "File access and readiness must be checked again. Reattach the files you want to use on the next screen.",
+    "confirmSettings": "Review the existing generation settings on the next screen, then explicitly start a new attempt.",
+    "cancelChanges": "Cancel changes",
+    "openingSettings": "Opening settings",
+    "reviewEditedSettings": "Review settings with edits"
+  },
+  "presentationMode": {
+    "presentation": "Presentation",
+    "slidePosition": "Slide {current} of {total}",
+    "fullscreen": "Full screen (F)",
+    "exit": "Exit presentation (Esc)",
+    "previousSlide": "Previous slide",
+    "nextSlide": "Next slide",
+    "keyboardShortcuts": "Keyboard shortcuts",
+    "keyboardHint": "← → Space · Home/End · F full screen · Esc exit"
+  },
+  "presentationDashboardNavigation": {
+    "goToDashboard": "Go to dashboard"
+  },
+  "presentationMasterLayoutBadge": {
+    "title": "{label} — The master and page layout applied to this document. Changes must be applied explicitly in master settings.",
+    "openSettings": "{label}. Open applied master settings"
+  },
+  "presentationWorkspaceMessage": {
+    "initialRequest": "Initial generation request",
+    "attachmentRequest": "This request started with an attachment",
+    "generationSettings": "Generation settings · {settings}",
+    "userMessage": "User message",
+    "assistantMessage": "Assistant message",
+    "attachments": "Attachments",
+    "stateAtTime": "At the time: {state}",
+    "currentState": "Current: {state}",
+    "reattachNamedFile": "Reattach {name}",
+    "reattachFile": "Reattach file",
+    "preview": "Preview",
+    "download": "Download"
+  },
+  "presentationTimelineOperation": {
+    "createFailed": "Could not start creating the PPTX. Please try again.",
+    "createPending": "Requesting PPTX creation",
+    "createPptx": "Create PPTX",
+    "viewHistory": "View creation process",
+    "noHistory": "No confirmed creation steps are available."
+  },
   "flaggedSlides": {
     "badge": "Needs review",
     "ariaLabel": "Slide {index} needs review: {reason}",

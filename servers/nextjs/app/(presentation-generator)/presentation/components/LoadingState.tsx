@@ -1,7 +1,9 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 import { Loader2 } from "lucide-react";
+import styles from "./LoadingState.module.css";
 
 interface LoadingStateProps {
     title?: string;
@@ -12,12 +14,13 @@ interface LoadingStateProps {
 }
 
 const LoadingState = ({
-    title = "발표자료를 만들고 있어요",
-    description = <>완성되면 슬라이드가 자동으로 표시됩니다.<br />잠시만 기다려 주세요.</>,
+    title,
+    description,
     notice,
     actions,
     animate = true,
 }: LoadingStateProps) => {
+    const t = useTranslations("presentationLoading");
     return (
         <div className="absolute inset-0 flex items-center justify-center p-5 sm:p-8">
             <section
@@ -34,10 +37,10 @@ const LoadingState = ({
                     />
                 </div>
                 <h2 className="break-keep text-xl font-semibold tracking-tight text-gray-900">
-                    {title}
+                    {title ?? t("title")}
                 </h2>
                 <p className="mt-2 break-keep text-sm leading-6 text-gray-500">
-                    {description}
+                    {description ?? <>{t("descriptionFirst")}<br />{t("descriptionSecond")}</>}
                 </p>
                 {notice ? (
                     <p className="mt-3 break-keep text-xs leading-5 text-amber-700">
@@ -53,28 +56,9 @@ const LoadingState = ({
                     className="mt-7 h-1 overflow-hidden rounded-full bg-gray-100"
                     aria-hidden="true"
                 >
-                    <div className={`presentation-loading-indicator h-full w-1/3 rounded-full bg-[#5141e5]/80 ${animate ? "" : "presentation-loading-indicator-static"}`} />
+                    <div className={`${styles.indicator} h-full w-1/3 rounded-full bg-[#5141e5]/80 ${animate ? "" : styles.static}`} />
                 </div>
             </section>
-            <style jsx>{`
-                .presentation-loading-indicator {
-                    animation: presentation-loading-slide 1.8s ease-in-out infinite alternate;
-                }
-                .presentation-loading-indicator-static {
-                    animation: none;
-                    margin-inline: auto;
-                }
-                @keyframes presentation-loading-slide {
-                    from { transform: translateX(0); }
-                    to { transform: translateX(200%); }
-                }
-                @media (prefers-reduced-motion: reduce) {
-                    .presentation-loading-indicator {
-                        animation: none;
-                        margin-inline: auto;
-                    }
-                }
-            `}</style>
         </div>
     );
 };

@@ -1,0 +1,20 @@
+.indicator {
+  animation: presentation-loading-slide 1.8s ease-in-out infinite alternate;
+}
+
+.static {
+  animation: none;
+  margin-inline: auto;
+}
+
+@keyframes presentation-loading-slide {
+  from { transform: translateX(0); }
+  to { transform: translateX(200%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .indicator {
+    animation: none;
+    margin-inline: auto;
+  }
+}
