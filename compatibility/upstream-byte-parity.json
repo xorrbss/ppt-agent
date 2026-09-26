@@ -6524,6 +6524,7 @@
       ".spec-memory/decisions/authored.verbatim-flagged-publish.2.json",
       ".spec-memory/decisions/authored.verbatim-placeholder-authoring.1.json",
       ".spec-memory/decisions/authored.visual-acceptance-artifact-bound.1.json",
+      ".spec-memory/decisions/codex.default-generation-model.1.json",
       ".spec-memory/decisions/composer.dense-source-font-floor-px.1.json",
       ".spec-memory/decisions/composer.design-bar.1.json",
       ".spec-memory/decisions/composer.portrait-template-priority.1.json",
@@ -13970,14 +13971,14 @@
     "source": {
       "mode": "tree",
       "ref": "HEAD",
-      "commit": "534428e998c007150015493f72148580930f4558"
+      "commit": "2bc5e5a3c7a07981c98e5a2adb469c7abdb3d0f5"
     },
     "counts": {
       "upstreamOwned": 10163,
       "identical": 9250,
       "exceptions": 913,
-      "localOnly": 7553
+      "localOnly": 7554
     },
-    "policySha256": "9b089829f2d1996d77d5b6e28dc935cb8a388065056365ca4d9f6442a610d30e"
+    "policySha256": "6b2956756d754c3ee8165326ad046fcb0581b00220d258ca494008f39ce6117f"
   }
 }
