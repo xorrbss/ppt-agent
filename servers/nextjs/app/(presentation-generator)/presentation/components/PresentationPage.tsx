@@ -125,6 +125,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   workspaceStaging = false,
 }) => {
   const t = useTranslations("community");
+  const tPage = useTranslations("presentationPage");
   const pathname = usePathname();
   const dispatch = useDispatch();
   const [loading, setLoading] = useState(true);
@@ -669,15 +670,12 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
       </PresentationFeatureSlot>
       {isAuthoredDeck && showResult && (
         <div className="shrink-0 bg-[#EFF4FF] border-y border-[#C7D7FE] px-6 py-2 text-center text-xs text-[#2D4E9A] font-medium">
-          이 발표자료는 <span className="font-bold">AI 저작(고품질)</span>{" "}
-          모드입니다 — 상단 <span className="font-bold">요소 편집</span>에서
-          지원되는 data-qid 요소만 안전하게 수정할 수 있으며, 복합 CSS와 지원
-          불가 요소는 읽기 전용입니다.
+          {tPage.rich("authoredNotice", { mode: (chunks) => <span className="font-bold">{chunks}</span>, edit: (chunks) => <span className="font-bold">{chunks}</span> })}
         </div>
       )}
       {showResult && rasterOriginalPreserveNoteId === presentation_id && (
         <div className="shrink-0 border-y border-blue-200 bg-blue-50 px-6 py-2 text-center text-xs font-medium text-blue-950" role="status" data-testid="raster-original-preserve-result-note">
-          원본 화면을 각 페이지의 이미지로 A4에 보존했습니다. 화면 안의 텍스트는 편집할 수 없으며 작은 글자는 읽기 어려울 수 있습니다.
+          {tPage("rasterPreserveNotice")}
         </div>
       )}
       {showResult && <ConversationWorkspaceToolbar
@@ -690,7 +688,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
         presentationId={presentation_id} loading={loading}
       />}
       {!showResult && <div className="shrink-0 border-b border-neutral-100 bg-white px-6 py-4 text-sm font-medium text-neutral-800">
-        {presentationData?.id === presentation_id ? presentationData.title || "발표자료 만들기" : "발표자료 만들기"}
+        {presentationData?.id === presentation_id ? presentationData.title || tPage("createPresentation") : tPage("createPresentation")}
       </div>}
       {!showResult && <ConversationResultNotice
         failed={error || Boolean(previewArtifactState.error)}
@@ -706,7 +704,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
           <div
             id="presentation-slides-pane"
             role={workspaceLayout.isSplit ? "region" : "tabpanel"}
-            aria-label="PPT"
+            aria-label={tPage("pptPane")}
             aria-labelledby={!workspaceLayout.isSplit && showResult ? "compact-slides-tab" : undefined}
             className={`min-w-0 flex-1 gap-3 ${showResult && (workspaceLayout.isSplit || compactWorkspacePane === "slides") ? "flex" : "hidden"}`}
           >
@@ -721,11 +719,11 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
             </div>
             <div className="flex w-full min-w-0 h-full flex-1 flex-col pt-[18px]">
               {editCurrentSlide && <div className="flex shrink-0 justify-end px-4 pb-2">
-                <Button variant="outline" size="sm" onClick={() => { openWorkspaceOperation(); editCurrentSlide(); }}>이 슬라이드 수정</Button>
+                <Button variant="outline" size="sm" onClick={() => { openWorkspaceOperation(); editCurrentSlide(); }}>{tPage("editThisSlide")}</Button>
               </div>}
               {showResult && (error || previewArtifactState.error) && <div role="alert" className="flex shrink-0 items-center justify-between gap-3 px-4 py-2 text-sm text-red-700">
-                <span>최신 PPT를 불러오지 못했습니다. 이전 결과를 표시합니다.</span>
-                <Button size="sm" variant="outline" onClick={() => { setError(false); void fetchUserSlides({ clearHistory: false }); }}>다시 불러오기</Button>
+                <span>{tPage("latestLoadFailed")}</span>
+                <Button size="sm" variant="outline" onClick={() => { setError(false); void fetchUserSlides({ clearHistory: false }); }}>{tPage("reload")}</Button>
               </div>}
               <div
                 ref={slidesScrollContainerRef}
@@ -745,10 +743,10 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                       className="h-4 w-4 text-violet-700"
                       aria-hidden="true"
                     />
-                    <span>화살표 키로 슬라이드를 이동할 수 있습니다</span>
+                    <span>{tPage("arrowNavigation")}</span>
                     <span
                       className="flex items-center gap-1"
-                      aria-label="방향키"
+                      aria-label={tPage("arrowKeys")}
                     >
                       {NAVIGATION_HINT_KEYS.map((key) => (
                         <kbd
@@ -760,11 +758,11 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                       ))}
                     </span>
                     <span className="hidden lg:inline">
-                      또는 왼쪽 목록에서 선택하세요
+                      {tPage("orSelectFromList")}
                     </span>
                     <button
                       type="button"
-                      aria-label="슬라이드 이동 안내 닫기"
+                      aria-label={tPage("closeNavigationHint")}
                       onClick={dismissNavigationHint}
                       className="pointer-events-auto ml-1 flex h-11 w-11 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-700"
                     >
@@ -798,8 +796,8 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                                   notice={workspaceStagingContent.notice}
                                   animate={!workspaceStagingPollingPaused && !workspaceStagingTerminal}
                                   actions={<>
-                                    <Button type="button" variant="outline" size="sm" onClick={refreshWorkspaceStaging}>상태 새로 고침</Button>
-                                    <Button type="button" size="sm" onClick={openWorkspaceOperation}>작업 확인</Button>
+                                    <Button type="button" variant="outline" size="sm" onClick={refreshWorkspaceStaging}>{tPage("refreshStatus")}</Button>
+                                    <Button type="button" size="sm" onClick={openWorkspaceOperation}>{tPage("viewTask")}</Button>
                                   </>}
                                 />
                               ) : <LoadingState />}
@@ -812,12 +810,10 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                       <div className="flex max-w-md flex-col items-center rounded-lg border border-gray-200 bg-white px-6 py-8 shadow-sm">
                         <Layers className="mb-4 h-14 w-14 text-gray-400" />
                         <h2 className="mb-2 text-lg font-semibold text-gray-800">
-                          슬라이드가 없습니다
+                          {tPage("noSlides")}
                         </h2>
                         <p className="mb-5 text-sm text-gray-500">
-                          이 발표자료에는 아직 생성된 슬라이드가 없습니다. 다시
-                          불러오거나 상단의 재생성 버튼으로 슬라이드를 만들 수
-                          있습니다.
+                          {tPage("noSlidesDescription")}
                         </p>
                         <div className="flex items-center justify-center gap-2">
                           <Button
@@ -825,7 +821,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                               fetchUserSlides({ clearHistory: false })
                             }
                           >
-                            다시 불러오기
+                            {tPage("reload")}
                           </Button>
                           <Button
                             variant="outline"
@@ -837,7 +833,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                               router.push("/dashboard");
                             }}
                           >
-                            대시보드로 이동
+                            {tPage("dashboard")}
                           </Button>
                         </div>
                       </div>
@@ -895,7 +891,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
           <div
             id="workspace-chat-pane"
             role={workspaceLayout.isSplit || !showResult ? "region" : "tabpanel"}
-            aria-label="채팅"
+            aria-label={tPage("chat")}
             aria-labelledby={!workspaceLayout.isSplit && showResult ? "compact-chat-tab" : undefined}
             data-testid="workspace-chat-pane"
             style={showResult && workspaceLayout.isSplit ? { width: workspaceLayout.chatWidth, flex: "0 0 auto" } : { flex: "1 1 0%" }}
@@ -934,11 +930,10 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                 />
                 <div>
                   <p className="text-sm font-medium text-slate-800">
-                    작업 대화를 연결할 수 없습니다.
+                    {tPage("chatUnavailable")}
                   </p>
                   <p className="mt-1 text-xs leading-5 text-slate-500">
-                    이 런타임에서는 작업 기록을 사용할 수 없습니다. 연결을 다시
-                    시도해 주세요.
+                    {tPage("historyUnavailable")}
                   </p>
                 </div>
                 <Button
@@ -947,7 +942,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                   size="sm"
                   onClick={refreshWorkspaceCapability}
                 >
-                  다시 연결
+                  {tPage("reconnect")}
                 </Button>
               </div>
             ) : (
@@ -956,7 +951,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                 role="status"
                 aria-live="polite"
               >
-                작업 대화를 연결하는 중입니다.
+                {tPage("connectingChat")}
               </div>
             )}
           </div>
