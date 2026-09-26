@@ -68,7 +68,7 @@ def _keyword(call: ast.Call, name: str) -> ast.expr | None:
     return None
 
 
-def test_a_source_binding_rejection_is_recorded_as_a_retryable_slide_failure() -> None:
+def test_a_source_binding_rejection_retries_within_the_author_budget() -> None:
     raises = _source_binding_raises()
     assert raises, "expected the pipeline to translate source-binding rejections"
     for call in raises:
@@ -78,9 +78,9 @@ def test_a_source_binding_rejection_is_recorded_as_a_retryable_slide_failure() -
             "the retry re-authors it"
         )
         retryable = _keyword(call, "retryable")
-        assert isinstance(retryable, ast.Constant) and retryable.value is True, (
-            "marking this non-retryable throws away every other authored slide"
-        )
+        assert (
+            isinstance(retryable, ast.Constant) and retryable.value is True
+        ) or ast.unparse(retryable) == "author_provider_attempt_count < 3"
         assert _keyword(call, "slide_index") is not None
         assert _keyword(call, "cause") is not None, (
             "the cause carries the reason the next attempt corrects"

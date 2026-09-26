@@ -1,11 +1,9 @@
 """D7 at the author stage: a third simplified attempt, then a flagged placeholder.
 
 The pipeline-level cases drive the real ``_author_illustrate_render_pipeline``
-with a stubbed provider and stubbed Chromium the way
-``tests/unit/test_authored_pipeline.py`` does, because the decision under test
+with a stubbed provider and Chromium, because the decision under test
 is a slide outcome inside that pipeline: published (unflagged or flagged)
-versus ``authored_slide_author_failed``. The deck-level case reuses the D7
-harness in ``tests/unit/test_authored_terminal_slide_fallback.py`` to prove the
+versus ``authored_slide_author_failed``. The deck-level case reuses the D7 harness to prove the
 author-stage flag reaches the same published ``flaggedSlides`` receipt the
 gate-stage flags do.
 """
@@ -29,6 +27,7 @@ from services import authored_author_stage_rescue as rescue_mod
 from services import authored_presentation_pipeline as pipeline_mod
 from services import authored_presentation_service as authored_service
 from services import authored_terminal_slide_fallback as terminal_mod
+from services.authored_admission_capture import canonical_capture_html
 from services.authored_composition_policy import CompositionProfile
 from services.authored_generation_observability import (
     log_authored_slide_failure_observation,
@@ -707,15 +706,16 @@ def test_the_author_flag_reaches_the_published_quality_gate(monkeypatch, tmp_pat
         illustration_plan=None,
         instructions=None,
     ):
+        prepared_html = canonical_capture_html(_RESCUED_HTML, index=0)
         return AuthoredGenerationPipelineResult(
-            deck=AuthoredDeckResult([_RESCUED_HTML], "DESIGN SYSTEM"),
+            deck=AuthoredDeckResult([prepared_html], "DESIGN SYSTEM"),
             pngs=[b"png"],
             elapsed=0.1,
             author_work=0.1,
             illustration_work=0.0,
             render_work=0.1,
             author_flagged_slides=(flag,),
-            local_fit_receipts=_fit_receipts([_RESCUED_HTML]),
+            local_fit_receipts=_fit_receipts([prepared_html]),
         )
 
     async def fake_header_contract(
