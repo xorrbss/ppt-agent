@@ -76,9 +76,7 @@ def test_invalid_workspace_worker_mode_fails_closed(monkeypatch) -> None:
         worker.get_workspace_operation_worker_mode()
 
 
-def test_external_worker_owns_migrations_runner_and_shutdown(
-    monkeypatch, tmp_path
-) -> None:
+def test_external_worker_owns_migrations_runner_and_shutdown(monkeypatch, tmp_path) -> None:
     stop = asyncio.Event()
     stop.set()
     monkeypatch.setenv("WORKSPACE_OPERATION_WORKER_MODE", "external")
@@ -86,27 +84,17 @@ def test_external_worker_owns_migrations_runner_and_shutdown(
     monkeypatch.setenv("PPT_PROCESS_PROFILE", "generation")
     registry = WorkspaceOperationHandlerRegistry()
     monkeypatch.setattr(worker, "workspace_operation_handler_registry", registry)
-    monkeypatch.setattr(
-        worker, "require_workspace_asset_malware_scan_safety", Mock()
-    )
-    monkeypatch.setattr(
-        worker, "get_app_data_directory_env", lambda: str(tmp_path / "data")
-    )
+    monkeypatch.setattr(worker, "require_workspace_asset_malware_scan_safety", Mock())
+    monkeypatch.setattr(worker, "get_app_data_directory_env", lambda: str(tmp_path / "data"))
     monkeypatch.setattr(worker, "migrate_database_on_startup", AsyncMock())
     monkeypatch.setattr(worker, "create_db_and_tables", AsyncMock())
-    monkeypatch.setattr(
-        worker, "require_public_controller_database_authority", AsyncMock()
-    )
-    monkeypatch.setattr(
-        worker, "start_runtime_settings_coordinator", AsyncMock()
-    )
-    monkeypatch.setattr(
-        worker, "stop_runtime_settings_coordinator", AsyncMock()
-    )
+    monkeypatch.setattr(worker, "require_public_controller_database_authority", AsyncMock())
+    monkeypatch.setattr(worker, "start_runtime_settings_coordinator", AsyncMock())
+    monkeypatch.setattr(worker, "stop_runtime_settings_coordinator", AsyncMock())
     monkeypatch.setattr(
         worker,
-        "register_presentation_generation_operation_handler",
-        Mock(),
+        "register_operation_handlers",
+        Mock(wraps=worker.register_operation_handlers),
     )
     metrics_exporter = SimpleNamespace(close=AsyncMock())
     monkeypatch.setattr(
@@ -133,9 +121,7 @@ def test_external_worker_owns_migrations_runner_and_shutdown(
     worker.create_db_and_tables.assert_awaited_once_with()
     worker.require_public_controller_database_authority.assert_awaited_once_with()
     worker.start_runtime_settings_coordinator.assert_awaited_once_with()
-    worker.register_presentation_generation_operation_handler.assert_called_once_with(
-        replace=True
-    )
+    worker.register_operation_handlers.assert_called_once_with(controller="generation", registry=registry)
     profile = get_public_worker_profile("generation")
     assert profile.operation_kinds == (
         "presentation.generate",
@@ -154,19 +140,14 @@ def test_external_worker_owns_migrations_runner_and_shutdown(
     assert profile.browser_allowed is False
     assert profile.converter_allowed is False
     assert worker.external_workspace_operation_kinds(profile.role) == profile.operation_kinds
-    assert isinstance(
-        registry.resolve("quality.review"), worker.WorkspaceQualityReviewOperationHandler
-    )
+    assert type(registry.resolve("quality.review")).__name__ == "WorkspaceQualityReviewOperationHandler"
     assert registry.recovery_policy("quality.review") == "automatic"
     assert isinstance(
         registry.resolve("slide.regenerate.preview"),
         WorkspacePageRemakePreviewOperationHandler,
     )
     assert registry.recovery_policy("slide.regenerate.preview") == "automatic"
-    assert isinstance(
-        registry.resolve("slide.regenerate"),
-        worker.WorkspacePageRemakeOperationHandler,
-    )
+    assert type(registry.resolve("slide.regenerate")).__name__ == "WorkspacePageRemakeOperationHandler"
     assert registry.recovery_policy("slide.regenerate") == "automatic"
     for kind in ("template.apply", "design.apply"):
         assert registry.resolve(kind) is not None
@@ -176,10 +157,7 @@ def test_external_worker_owns_migrations_runner_and_shutdown(
     assert registry.recovery_policy("slide.regenerate.batch.preview") == "automatic"
     assert registry.resolve("slide.regenerate.batch") is not None
     assert registry.recovery_policy("slide.regenerate.batch") == "automatic"
-    # raster.analysis's own registration call in this same branch
-    # (register_raster_analysis_operation_handler(replace=True), no explicit
-    # registry= override) is a separate, pre-existing gap against this
-    # test's swapped-in local registry -- out of scope here.
+    assert registry.resolve("raster.analysis") is not None
     assert registry.resolve("presentation.edit") is None
     assert registry.resolve("export.pptx") is None
     assert registry.resolve("export.pdf") is None
@@ -215,14 +193,8 @@ def test_worker_registration_includes_all_durable_remake_handlers() -> None:
     # registration list is asserted against the process registry it publishes to.
     worker.register_workspace_operation_handlers()
 
-    assert (
-        workspace_operation_handler_registry.resolve("slide.regenerate.batch")
-        is not None
-    )
-    assert (
-        workspace_operation_handler_registry.recovery_policy("slide.regenerate.batch")
-        == "automatic"
-    )
+    assert workspace_operation_handler_registry.resolve("slide.regenerate.batch") is not None
+    assert workspace_operation_handler_registry.recovery_policy("slide.regenerate.batch") == "automatic"
     for kind in (
         "slide.regenerate.preview",
         "slide.regenerate.batch.preview",
@@ -246,9 +218,7 @@ def test_external_worker_requires_a_supported_sql_runtime(monkeypatch) -> None:
         asyncio.run(worker.run_external_worker(asyncio.Event()))
 
 
-def test_generation_controller_can_claim_a_slide_order_operation(
-    monkeypatch, tmp_path
-) -> None:
+def test_generation_controller_can_claim_a_slide_order_operation(monkeypatch, tmp_path) -> None:
     """D found this in a real run: a presentation.slides.reorder operation
     sat "queued" (retryCount 0) for 3+ minutes because no external
     controller's allowed_kinds included the kind -- neither the "generation"
@@ -271,12 +241,8 @@ def test_generation_controller_can_claim_a_slide_order_operation(
     async def _claim():
         engine, maker = await runner_test._database(tmp_path / "reorder-claim.db")
         try:
-            _, operation_ids = await runner_test._seed_operations(
-                maker, kind="presentation.slides.reorder"
-            )
-            claim = await claim_next_workspace_operation(
-                session_factory=maker, allowed_kinds=allowed_kinds
-            )
+            _, operation_ids = await runner_test._seed_operations(maker, kind="presentation.slides.reorder")
+            claim = await claim_next_workspace_operation(session_factory=maker, allowed_kinds=allowed_kinds)
             return claim, operation_ids
         finally:
             await engine.dispose()

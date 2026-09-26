@@ -7,6 +7,8 @@ import os
 from types import MappingProxyType
 from typing import Literal, Mapping
 
+from services.workspace_operation_catalog import operation_kinds_for_controller
+
 
 WorkerRole = Literal["ppt-core", "generation", "render", "export"]
 
@@ -41,21 +43,7 @@ PUBLIC_WORKER_PROFILES = MappingProxyType(
         ),
         "generation": PublicWorkerProfile(
             role="generation",
-            operation_kinds=(
-                "presentation.generate",
-                "raster.analysis",
-                "quality.review",
-                "slide.regenerate.preview",
-                "slide.regenerate",
-                "slide.regenerate.batch.preview",
-                "slide.regenerate.batch",
-                "template.apply",
-                "design.apply",
-                # Local, DB-only mutation (no provider calls, no browser/
-                # converter), but still a fenced workspace command like every
-                # other mutation, so it needs an external-controller home.
-                "presentation.slides.reorder",
-            ),
+            operation_kinds=operation_kinds_for_controller("generation"),
             canonical_database_access=True,
             provider_network_access=True,
             artifact_access="metadata-authority",
@@ -84,7 +72,7 @@ PUBLIC_WORKER_PROFILES = MappingProxyType(
         ),
         "export": PublicWorkerProfile(
             role="export",
-            operation_kinds=("export.pptx", "export.pdf"),
+            operation_kinds=operation_kinds_for_controller("export"),
             canonical_database_access=False,
             provider_network_access=False,
             artifact_access="scoped-read-write",
