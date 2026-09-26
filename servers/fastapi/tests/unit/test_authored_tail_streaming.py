@@ -1,11 +1,4 @@
-"""Phase 3: the slide tail runs while later slides are still being authored.
-
-Two levels. The coordinator/runner cases drive
-``services.authored_tail_streaming`` directly; the pipeline cases drive the
-real ``_author_illustrate_render_pipeline`` against a scratch checkpoint
-database, with the provider batch call and Chromium replaced, so the ordering
-claim is made about the shipped code path and not about a model of it.
-"""
+"""Slide-tail ordering through direct coordinator and job pipeline fixtures."""
 
 import asyncio
 import uuid
@@ -27,6 +20,7 @@ from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.public_admission import PublicOperationAdmission
 from models.sql.workspace import WorkspaceOperation
 from services import authored_checkpoint_service as checkpoints
+from services.authored_admission_context import digest_html
 from services.authored_checkpoint_html import checkpoint_stage_html
 from services import authored_presentation_pipeline as pipeline
 from services.authored_composition_policy import ensure_authored_semantic_roles
@@ -39,6 +33,7 @@ from services.authored_tail_streaming import (
     run_streamed_slide_tail,
 )
 from utils.authored_dom_quality import ensure_authored_qids
+from utils.slide_capture_result import RenderCapture
 from utils.authored_semantic_role_repair import canonicalize_authored_roles
 from utils.llm_calls.author_deck import (
     AuthoredBatchFailure,
@@ -271,13 +266,15 @@ def _install_pipeline_fakes(monkeypatch, *, slide_count, batch, render):
     monkeypatch.setattr(pipeline, "author_planned_slide", unexpected_single)
     monkeypatch.setattr(pipeline, "_DEFAULT_AUTHOR_PLANNED_SLIDE", unexpected_single)
     monkeypatch.setattr(pipeline, "author_planned_batch", batch)
+    monkeypatch.setattr(pipeline, "local_fit_applies", lambda **_kwargs: False)
     async def render_with_metrics(html, *, fit=False, **_kwargs):
         """The knob defaults on, so the pipeline reaches this one; it defers to
         the plain fake above so the test observes the same calls either way."""
 
         png = await render(html)
-        return SimpleNamespace(
-            png=png, browser_metrics=None, fitted_html=None, fit_report=None
+        return RenderCapture.from_payload(
+            html_digest=digest_html(html), png=png, browser_metrics=None,
+            runtime_counters={}, prepared_html=html,
         )
 
     monkeypatch.setattr(pipeline, "render_html_to_png", render)
