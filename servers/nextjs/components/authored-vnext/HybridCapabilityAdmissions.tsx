@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import type { ActiveSlideScene, HybridRenderOwnership, NativeCapabilityProjectionV1 } from "./types";
 
 const DECISION_LABEL: Record<HybridRenderOwnership["decision"], string> = {
@@ -26,6 +28,7 @@ export function HybridCapabilityAdmissions({
   scene: ActiveSlideScene | null;
   projection?: NativeCapabilityProjectionV1 | null;
 }) {
+  const t = useTranslations("a2cHybridChrome");
   if (!scene) return null;
   const entries = scene.bodyElements.map((element) => ({
     id: element.id,
@@ -39,16 +42,16 @@ export function HybridCapabilityAdmissions({
   const evaluatedCapabilities = projection?.capabilities.filter((entry) => entry.status !== "notEvaluated") ?? [];
 
   return (
-    <section aria-label="Hybrid capability admissions" className="border-b border-slate-200 bg-slate-50 px-4 py-2" data-testid="authored-hybrid-capability-admissions">
+    <section aria-label={t("admissionsAria")} className="border-b border-slate-200 bg-slate-50 px-4 py-2" data-testid="authored-hybrid-capability-admissions">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-700">
-        <span className="font-semibold text-slate-900">Hybrid ownership receipt</span>
+        <span className="font-semibold text-slate-900">{t("ownershipReceipt")}</span>
         {sealed.length === 0 ? (
-          <span data-testid="authored-hybrid-admission-unsealed">서버 admission receipt 미수신 · 이 화면은 native readiness를 추정하지 않습니다.</span>
+          <span data-testid="authored-hybrid-admission-unsealed">{t("receiptMissingLong")}</span>
         ) : (
           <>
-            <span data-testid="authored-hybrid-native-count">Native {nativeCount}</span>
-            <span data-testid="authored-hybrid-raster-count">Raster island {rasterCount}</span>
-            <span data-testid="authored-hybrid-blocked-count">Blocked {blockedCount}</span>
+            <span data-testid="authored-hybrid-native-count">{t("nativeCount", { count: nativeCount })}</span>
+            <span data-testid="authored-hybrid-raster-count">{t("rasterCount", { count: rasterCount })}</span>
+            <span data-testid="authored-hybrid-blocked-count">{t("blockedCount", { count: blockedCount })}</span>
           </>
         )}
       </div>
@@ -57,7 +60,7 @@ export function HybridCapabilityAdmissions({
           {entries.map((entry) => {
             const ownership = entry.ownership;
             if (!ownership) {
-              return <li className="rounded px-1.5 py-0.5 text-[10px] text-slate-500" data-qid={entry.id} key={entry.id}>{entry.id} · receipt missing</li>;
+              return <li className="rounded px-1.5 py-0.5 text-[10px] text-slate-500" data-qid={entry.id} key={entry.id}>{entry.id} · {t("receiptMissingShort")}</li>;
             }
             return (
               <li className={`rounded px-1.5 py-0.5 text-[10px] ring-1 ${DECISION_TONE[ownership.decision]}`} data-owner={ownership.decision} data-qid={entry.id} key={entry.id} title={`${entry.label} · ${ownership.capabilityId}${ownership.reasonCode ? ` · ${ownership.reasonCode}` : ""}`}>
@@ -77,7 +80,7 @@ export function HybridCapabilityAdmissions({
               data-capability-id={capability.capabilityId}
               data-capability-status={capability.status}
               key={capability.capabilityId}
-              title={`${capability.reasonCode} · native ${capability.nativeOwnerCount} · raster ${capability.rasterOwnerCount} · blocked ${capability.blockedOwnerCount}`}
+              title={t("capabilityTitle", { reason: capability.reasonCode, native: capability.nativeOwnerCount, raster: capability.rasterOwnerCount, blocked: capability.blockedOwnerCount })}
             >
               {capability.capabilityId} · {capability.status}
             </li>

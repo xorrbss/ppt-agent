@@ -282,8 +282,8 @@ describe("AuthoredWorkbench", () => {
   it("emits a separate strict native text-style command without replacing text", () => {
     const onCommand = cy.stub().as("text-style-command");
     mountWorkbench(<AuthoredWorkbench {...createProps({ onCommand })} />);
-    cy.get('input[aria-label="Text color"]').clear().type("#2563eb");
-    cy.contains("button", "Apply native text style").click();
+    cy.get(`input[aria-label="${koMessages.authoredVnext.workbench.inspector.extra.textColor}"]`).clear().type("#2563eb");
+    cy.contains("button", koMessages.authoredVnext.workbench.inspector.extra.applyTextStyle).click();
     cy.get("@text-style-command").should("have.been.calledWithMatch", {
       kind: "text.style.patch",
       elementId: "body-title",

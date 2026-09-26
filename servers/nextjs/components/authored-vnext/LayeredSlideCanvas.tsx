@@ -70,14 +70,14 @@ export function ScreenReaderSlideOutline({ scene }: { scene: ActiveSlideScene })
   );
 }
 
-function bodyFallback(element: BodyLayerElement) {
+function bodyFallback(element: BodyLayerElement, unavailableMessage: string) {
   if (element.kind === "asset") {
     return element.previewUrl ? (
       // eslint-disable-next-line @next/next/no-img-element
       <img alt={element.alt} className={`h-full w-full ${element.crop === "contain" ? "object-contain" : "object-cover"}`} data-asset-digest={element.assetDigest} src={element.previewUrl} />
     ) : (
       <span className="grid h-full place-items-center bg-amber-50 px-2 text-center text-[10px] text-amber-900" data-asset-digest={element.assetDigest}>
-        {element.previewUnavailableReason ?? "authored_vnext_asset_preview_unavailable"}: {element.alt}
+        {element.previewUnavailableReason ?? unavailableMessage}: {element.alt}
       </span>
     );
   }
@@ -186,7 +186,7 @@ export function LayeredSlideCanvas({
         <span className="font-medium text-slate-800">{scene.title}</span>
         <span>{t("revision", { master: scene.masterRevisionLabel, revision: scene.revision })}</span>
       </div>
-      <nav aria-label={`${scene.title} objects`} className="flex gap-1 overflow-x-auto border-y border-slate-200 bg-white px-4 py-1.5">
+      <nav aria-label={t("objectsAria", { title: scene.title })} className="flex gap-1 overflow-x-auto border-y border-slate-200 bg-white px-4 py-1.5">
         {scene.bodyElements.map((element) => (
           <button
             aria-pressed={element.id === selectedElementId}
@@ -269,7 +269,7 @@ export function LayeredSlideCanvas({
                       onClick={() => onSelectElement(element.id)}
                       type="button"
                     >
-                      {bodyFallback(element)}
+                      {bodyFallback(element, t("previewUnavailable"))}
                     </button>
                   )}
                 </div>

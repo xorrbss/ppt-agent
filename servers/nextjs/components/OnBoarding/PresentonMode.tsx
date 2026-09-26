@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslations } from 'next-intl';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Button } from '../ui/button';
 import { ArrowUpRight, Check, CheckCircle, ChevronLeft, ChevronUp, Download, Eye, EyeOff, Info, Loader2 } from 'lucide-react';
@@ -25,6 +26,7 @@ import Image from 'next/image';
 import { getSelectedImageQuality, getSelectedTextModel } from './llmConfigSelectors';
 
 const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep: (step: number) => void }) => {
+    const t = useTranslations("a2cOnboarding");
     const pathname = usePathname();
     const [openProviderSelect, setOpenProviderSelect] = useState(false);
     const [openImageProviderSelect, setOpenImageProviderSelect] = useState(false);
@@ -203,11 +205,11 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 console.error('Failed to fetch models');
                 setAvailableModels([]);
                 setModelsChecked(true);
-                notify.error("모델을 불러올 수 없습니다", `${LLM_PROVIDER_OPTIONS[llmConfig.LLM!]?.label} 모델 목록을 가져오지 못했습니다. API 키 또는 엔드포인트를 확인한 후 다시 시도하세요.`);
+                notify.error(t("modelLoadFailed"), t("providerModelListFailed", { provider: LLM_PROVIDER_OPTIONS[llmConfig.LLM!]?.label ?? "" }));
             }
         } catch (error) {
             console.error('Error fetching models:', error);
-            notify.error("모델을 불러올 수 없습니다", "모델 목록을 가져오지 못했습니다. API 키 또는 엔드포인트를 확인한 후 다시 시도하세요.");
+            notify.error(t("modelLoadFailed"), t("modelListFailed"));
             setAvailableModels([]);
             setModelsChecked(true);
         } finally {
@@ -229,7 +231,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
             return (
                 <div className="w-full ">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                        DALL·E 3 이미지 품질
+                        {t("dalleQuality")}
                     </label>
                     <div className="">
                         <Select value={llmConfig.DALL_E_3_QUALITY || 'standard'} onValueChange={(value) => setLlmConfig((prev) => ({
@@ -237,7 +239,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                             DALL_E_3_QUALITY: value
                         }))}>
                             <SelectTrigger className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between">
-                                <SelectValue placeholder="품질 선택" />
+                                <SelectValue placeholder={t("selectQuality")} />
                             </SelectTrigger>
                             <SelectContent>
                                 {IMAGE_QUALITY_OPTIONS["dall-e-3"].map((option) => (
@@ -255,7 +257,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
             return (
                 <div className="w-full">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                        GPT Image 1.5 품질
+                        {t("gptImageQuality")}
                     </label>
                     <div className="">
                         <Select
@@ -268,7 +270,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                             <SelectTrigger
 
                                 className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between">
-                                <SelectValue placeholder="품질 선택" />
+                                <SelectValue placeholder={t("selectQuality")} />
                             </SelectTrigger>
                             <SelectContent>
                                 {IMAGE_QUALITY_OPTIONS["gpt-image-1.5"].map((option) => (
@@ -287,7 +289,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
             return (
                 <div className="w-full">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                        {IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER].label} 품질
+                        {IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER].label} {t("quality")}
                     </label>
                     <div className="">
                         <Select
@@ -298,7 +300,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                             }))}
                         >
                             <SelectTrigger className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between">
-                                <SelectValue placeholder="품질 선택" />
+                                <SelectValue placeholder={t("selectQuality")} />
                             </SelectTrigger>
                             <SelectContent>
                                 {IMAGE_QUALITY_OPTIONS[llmConfig.IMAGE_PROVIDER === "codex_image" ? "gpt-image-2.5-sunburst" : llmConfig.IMAGE_PROVIDER].map((option) => (
@@ -343,13 +345,13 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
             if (llmConfig.LLM === 'codex') {
                 const isAuthenticated = await checkCurrentAuthStatus();
                 if (!isAuthenticated) {
-                    notify.error("로그인 필요", "계속하려면 ChatGPT에 로그인하세요.");
+                    notify.error(t("signInRequired"), t("signInToContinue"));
                     return;
                 }
             }
             const validationError = getLLMConfigValidationError(llmConfig);
             if (validationError) {
-                notify.warning("아직 저장할 수 없습니다", validationError);
+                notify.warning(t("cannotSaveYet"), validationError);
                 return;
             }
             setSavingConfig(true);
@@ -383,11 +385,11 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 image_quality: imageGenerationEnabled ? getSelectedImageQuality(llmConfig) : ''
             });
 
-            notify.success("설정 저장됨", "설정이 성공적으로 저장되었습니다.");
+            notify.success(t("settingsSaved"), t("settingsSavedDescription"));
             setStep(3)
             // router.push("/upload");
         } catch (error) {
-            notify.error("설정을 저장할 수 없습니다", error instanceof Error ? error.message : "설정 저장에 실패했습니다");
+            notify.error(t("settingsSaveFailed"), error instanceof Error ? error.message : "설정 저장에 실패했습니다");
 
         }
         finally {
@@ -413,12 +415,12 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
             <p className='px-2.5 py-0.5 w-fit text-[#7A5AF8] rounded-[50px]  border border-[#EDEEEF] text-[10px] font-medium mb-5 font-syne'>PRESENTON</p>
             <div className=''>
 
-                <h2 className='mb-4 text-black text-[26px] font-normal font-unbounded '>콘텐츠 제공자를 선택하세요</h2>
-                <p className='text-[#000000CC] text-xl font-normal font-syne'>슬라이드 텍스트와 시각 자료를 생성할 AI 엔진을 선택하세요.</p>
+                <h2 className='mb-4 text-black text-[26px] font-normal font-unbounded '>{t("chooseContentProvider")}</h2>
+                <p className='text-[#000000CC] text-xl font-normal font-syne'>{t("chooseAiEngine")}</p>
             </div>
             <div className='flex items-center gap-2 bg-[#F0F3F9B2] rounded-[8px]  px-6 py-2.5 my-[54px]'>
                 <Info className='w-4 h-4 fill-[#003399] stroke-white' />
-                <p className='text-sm text-[#5F6062] font-medium'>기기에서 로컬로 실행됩니다. API 키와 생성 설정은 사용자의 기기에만 저장됩니다.</p>
+                <p className='text-sm text-[#5F6062] font-medium'>{t("localStorageInfo")}</p>
             </div>
 
             {/* Text Provider */}
@@ -435,9 +437,9 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                     </div>
                     <div className='w-full'>
 
-                        <h3 className="text-xl font-normal text-[#191919] pb-1.5">텍스트 생성 설정</h3>
+                        <h3 className="text-xl font-normal text-[#191919] pb-1.5">{t("textGenerationSettings")}</h3>
                         <p className=" text-sm  text-gray-500">
-                            텍스트 콘텐츠를 생성할 위치를 선택합니다
+                            {t("chooseTextLocation")}
                         </p>
                     </div>
                 </div>
@@ -458,14 +460,14 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 />
                 <div className='flex items-center gap-2.5 my-[30px]'>
                     <div className='w-full h-[1px] bg-[#E1E1E5]' />
-                    <p className='text-xs font-normal text-[#999999]'>또는</p>
+                    <p className='text-xs font-normal text-[#999999]'>{t("or")}</p>
                     <div className='w-full h-[1px] bg-[#E1E1E5]' />
                 </div>
                 <div className="flex w-full max-w-[222px] flex-col items-start gap-4">
                     <div className="flex w-full flex-col justify-start">
 
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                            텍스트 제공자 선택
+                            {t("chooseTextProvider")}
                         </label>
                         <Popover
                             open={openProviderSelect}
@@ -483,7 +485,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                             {llmConfig.LLM
                                                 ? LLM_PROVIDER_OPTIONS[llmConfig.LLM]
                                                     ?.label || llmConfig.LLM
-                                                : "텍스트 제공자 선택"}
+                                                : t("chooseTextProvider")}
                                         </span>
                                     </div>
                                     <ChevronUp className="w-4 h-4 text-gray-500" />
@@ -495,9 +497,9 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
 
                             >
                                 <Command>
-                                    <CommandInput placeholder="제공자 검색..." />
+                                    <CommandInput placeholder={t("searchProvider")} />
                                     <CommandList className='hide-scrollbar'>
-                                        <CommandEmpty>제공자를 찾을 수 없습니다.</CommandEmpty>
+                                        <CommandEmpty>{t("providerNotFound")}</CommandEmpty>
                                         <CommandGroup >
                                             {Object.values(LLM_PROVIDER_OPTIONS).map(
                                                 (provider, index) => (
@@ -549,12 +551,12 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                             }))}
                                             className="py-2.5 bg-[#EDEEEF] px-3.5 w-fit rounded-[48px] text-xs font-semibold text-[#101323] transition-all duration-200 border border-[#EDEEEF] hover:bg-[#E8F0FF]/90 focus:ring-2 focus:ring-blue-500/20"
                                         >
-                                            Ollama URL 사용
+                                            {t("useOllamaUrl")}
                                         </button>
                                     ) : (
                                         <>
                                             <label className="block text-sm font-medium capitalize text-gray-700 mb-2">
-                                                Ollama URL
+                                                {t("ollamaUrl")}
                                             </label>
                                             <div className="relative">
                                                 <input
@@ -577,7 +579,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                                 }))}
                                                 className="mt-2 text-xs font-medium text-[#4B5563] underline underline-offset-2"
                                             >
-                                                기본 Ollama URL 사용
+                                                {t("useDefaultOllamaUrl")}
                                             </button>
                                         </>
                                     )}
@@ -585,7 +587,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                             ) : llmConfig.LLM === 'chatgpt' || llmConfig.LLM === 'codex' ? (
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        PPT 생성 모델 · 추론 강도
+                                        {t("modelAndReasoning")}
                                     </label>
                                     <Popover open={openModelSelect} onOpenChange={setOpenModelSelect}>
                                         <PopoverTrigger asChild>
@@ -601,7 +603,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                                             preset.modelId === llmConfig.CODEX_MODEL
                                                             && preset.effort === llmConfig.CODEX_REASONING_EFFORT
                                                         )?.name ?? `${llmConfig.CODEX_MODEL}${llmConfig.CODEX_REASONING_EFFORT ? ` · ${llmConfig.CODEX_REASONING_EFFORT}` : ''}`)
-                                                        : "모델 선택"}
+                                                        : t("selectModel")}
                                                 </span>
                                                 <ChevronUp className="w-4 h-4 text-gray-400" />
                                             </Button>
@@ -612,9 +614,9 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                             style={{ width: "var(--radix-popover-trigger-width)" }}
                                         >
                                             <Command>
-                                                <CommandInput placeholder="모델 검색…" />
+                                                <CommandInput placeholder={t("searchModel")} />
                                                 <CommandList>
-                                                    <CommandEmpty>모델을 찾을 수 없습니다.</CommandEmpty>
+                                                    <CommandEmpty>{t("modelNotFound")}</CommandEmpty>
                                                     <CommandGroup>
                                                         {CODEX_GENERATION_PRESETS.map((preset) => (
                                                             <CommandItem
@@ -674,7 +676,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                                 [currentApiKeyField]: e.target.value
                                             }))}
                                             className="w-full px-2 py-3 outline-none border  border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                                            placeholder={`${providerApiKeyLabel}을(를) 입력하세요`}
+                                            placeholder={t("enterField", { field: providerApiKeyLabel })}
                                         />
                                         <button
                                             type="button"
@@ -695,13 +697,13 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                         CUSTOM_LLM_URL: e.target.value
                                     }))}
                                     className="w-full mt-2 px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                                    placeholder="OpenAI 호환 URL"
+                                    placeholder={t("openAiCompatibleUrl")}
                                 />
                             )}
                             {llmConfig.LLM === 'litellm' && (
                                 <>
                                     <label className="mt-3 block text-sm font-medium text-gray-700 mb-2">
-                                        LiteLLM 기본 URL
+                                        {t("litellmDefaultUrl")}
                                     </label>
                                     <input
                                         type="text"
@@ -711,17 +713,17 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                             LITELLM_BASE_URL: e.target.value
                                         }))}
                                         className="w-full px-2 py-3 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                                        placeholder="예: http://host.docker.internal:4000/v1"
+                                        placeholder={t("urlExample")}
                                     />
                                     <p className="mt-1.5 text-xs text-gray-500">
-                                        OpenAI 호환 루트 URL입니다(보통 /v1로 끝남). 생략하면 /v1이 자동으로 추가됩니다. 인증이 없는 로컬 프록시의 경우 위의 API 키는 선택 사항입니다.
+                                        {t("openAiCompatibleHint")}
                                     </p>
                                 </>
                             )}
                             {llmConfig.LLM === 'lmstudio' && (
                                 <>
                                     <label className="mt-3 block text-sm font-medium text-gray-700 mb-2">
-                                        LM Studio 기본 URL
+                                        {t("lmStudioDefaultUrl")}
                                     </label>
                                     <input
                                         type="text"
@@ -734,14 +736,14 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                         placeholder="http://localhost:1234/v1"
                                     />
                                     <p className="mt-1.5 text-xs text-gray-500">
-                                        기본값은 localhost:1234/v1이며, 생략하면 /v1이 자동으로 추가됩니다.
+                                        {t("lmStudioHint")}
                                     </p>
                                 </>
                             )}
                             {llmConfig.LLM === 'fireworks' && (
                                 <>
                                     <label className="mt-3 block text-sm font-medium text-gray-700 mb-2">
-                                        Fireworks 기본 URL (선택 사항)
+                                        {t("fireworksOptionalUrl")}
                                     </label>
                                     <input
                                         type="text"
@@ -758,7 +760,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                             {llmConfig.LLM === 'together' && (
                                 <>
                                     <label className="mt-3 block text-sm font-medium text-gray-700 mb-2">
-                                        Together 기본 URL (선택 사항)
+                                        {t("togetherOptionalUrl")}
                                     </label>
                                     <input
                                         type="text"
@@ -809,10 +811,10 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                 {modelsLoading ? (
                                     <span className="flex items-center justify-center gap-2">
                                         <Loader2 className="w-4 h-4 animate-spin" />
-                                        모델 확인 중...
+                                        {t("checkingModels")}
                                     </span>
                                 ) : (
-                                    "검증 후 모델 불러오기"
+                                    t("loadModelsAfterValidation")
                                 )}
                             </button>
                         )}
@@ -827,7 +829,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                         <div className="w-full">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    {llmConfig.LLM === 'ollama' ? '지원되는 모델 선택' : `${LLM_PROVIDER_OPTIONS[llmConfig.LLM!]?.label} 모델 선택`}
+                                    {llmConfig.LLM === 'ollama' ? t("selectSupportedModel") : t("selectProviderModel", { provider: LLM_PROVIDER_OPTIONS[llmConfig.LLM!]?.label ?? "" })}
                                 </label>
                                 <div className="w-full">
                                     <Popover
@@ -846,7 +848,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                                         currentModel
                                                             ? availableModels.find(model => model === currentModel) || currentModel
                                                             :
-                                                            "모델 선택"
+                                                            t("selectModel")
                                                     }
                                                 </span>
 
@@ -859,9 +861,9 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                             style={{ width: "var(--radix-popover-trigger-width)" }}
                                         >
                                             <Command>
-                                                <CommandInput placeholder="모델 검색..." />
+                                                <CommandInput placeholder={t("searchModel")} />
                                                 <CommandList>
-                                                    <CommandEmpty>모델을 찾을 수 없습니다.</CommandEmpty>
+                                                    <CommandEmpty>{t("modelNotFound")}</CommandEmpty>
                                                     <CommandGroup>
                                                         {availableModels.map((model, index) => (
                                                             <CommandItem
@@ -929,16 +931,16 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                         <Image
                             src="/image-markup.svg"
                             className='h-full w-full object-cover'
-                            alt='image-markup'
+                            alt={t("imageMarkupAlt")}
                             width={46}
                             height={46}
                         />
                     </div>
                     <div>
 
-                        <h3 className="text-xl font-normal text-[#191919] ">이미지 생성 설정</h3>
+                        <h3 className="text-xl font-normal text-[#191919] ">{t("imageGenerationSettings")}</h3>
                         <p className=" text-sm  text-gray-500">
-                            이미지를 생성할 위치를 선택합니다
+                            {t("chooseImageLocation")}
                         </p>
                     </div>
                 </div>
@@ -947,7 +949,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                         {/* Image Provider Selection */}
                         <div className="w-full">
                             <label className="block text-sm font-medium text-gray-700 mb-2">
-                                이미지 제공자 선택
+                                {t("chooseImageProvider")}
                             </label>
                             <div className="w-full">
                                 <Popover
@@ -967,7 +969,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                                     {llmConfig.IMAGE_PROVIDER
                                                         ? IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER]
                                                             ?.label || llmConfig.IMAGE_PROVIDER
-                                                        : '이미지 제공자 선택'}
+                                                        : t("chooseImageProvider")}
                                                 </span>
                                             </div>
                                             <ChevronUp className="w-4 h-4 text-gray-500" />
@@ -979,9 +981,9 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
 
                                     >
                                         <Command>
-                                            <CommandInput placeholder="제공자 검색..." />
+                                            <CommandInput placeholder={t("searchProvider")} />
                                             <CommandList>
-                                                <CommandEmpty>제공자를 찾을 수 없습니다.</CommandEmpty>
+                                                <CommandEmpty>{t("providerNotFound")}</CommandEmpty>
                                                 <CommandGroup>
                                                     {Object.values(IMAGE_PROVIDER_OPTIONS).map(
                                                         (provider, index) => (
@@ -1035,7 +1037,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                             (() => {
                                 const provider = IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER];
                                             if (provider.value === "codex_image") {
-                                                return <p className="text-sm text-gray-600">기존 Codex 로그인을 사용하며 Codex 사용 한도가 적용됩니다. GPT Image 2.5 Sunburst를 요청하지만 실제 적용 모델은 서버가 공개하지 않습니다. 로그인은 ChatGPT 제공자 설정에서 관리합니다.</p>;
+                                                return <p className="text-sm text-gray-600">{t("codexImageInfo")}</p>;
                                             }
 
 
@@ -1074,7 +1076,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                         <div className=" space-y-4 w-full">
                                             <div className=''>
                                                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                    ComfyUI 서버 URL
+                                                    {t("comfyServerUrl")}
                                                 </label>
                                                 <div className="relative">
                                                     <input
@@ -1105,12 +1107,12 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                             <label className="block text-sm font-medium text-gray-700">
                                                 {provider.apiKeyFieldLabel}
                                             </label>
-                                            {provider.getApiKeyUrl && <a href={provider.getApiKeyUrl || ""} target='_blank' className='text-[#666666] text-xs font-normal flex items-center gap-1'>API 키 발급 <ArrowUpRight className='w-3.5 h-3.5' /></a>}
+                                            {provider.getApiKeyUrl && <a href={provider.getApiKeyUrl || ""} target='_blank' className='text-[#666666] text-xs font-normal flex items-center gap-1'>{t("getApiKey")} <ArrowUpRight className='w-3.5 h-3.5' /></a>}
                                         </div>
                                         <div className="relative">
                                             <input
                                                 type={showApiKey ? 'text' : 'password'}
-                                                placeholder={`${provider.apiKeyFieldLabel}을(를) 입력하세요`}
+                                                placeholder={t("enterField", { field: provider.apiKeyFieldLabel ?? "" })}
                                                 className="w-full px-4 py-2.5 h-12 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
                                                 value={getFieldValue(provider.apiKeyField)}
                                                 onChange={(e) => {
@@ -1144,11 +1146,11 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                     </div>
                     {llmConfig.IMAGE_PROVIDER === "comfyui" && <div className='w-full'>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                            워크플로우 JSON
+                            {t("workflowJson")}
                         </label>
                         <div className="relative">
                             <textarea
-                                placeholder='ComfyUI 워크플로우 JSON을 여기에 붙여넣으세요 (ComfyUI에서 "Export (API)"로 내보내기)'
+                                placeholder={t("workflowPlaceholder")}
                                 className="w-full px-4 py-2.5 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors font-mono text-xs"
                                 rows={3}
                                 value={llmConfig.COMFYUI_WORKFLOW || ""}
@@ -1179,7 +1181,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                     disabled={savingConfig}
                     onClick={handleSaveConfig}
                     className='border font-syne border-[#EDEEEF] bg-[#7C51F8]  rounded-[58px] px-5 py-2.5 text-white text-xs  font-semibold'>
-                    완료 단계로 계속
+                    {t("continueToFinish")}
                 </button>
             </div>
             {/* Download Progress Modal */}
@@ -1199,7 +1201,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
 
                             {/* Title */}
                             <h3 className="break-keep text-xl font-semibold leading-7 tracking-tight text-gray-900 mb-2">
-                                {downloadingModel.done ? "다운로드 완료!" : "모델 다운로드 중"}
+                                {downloadingModel.done ? t("downloadComplete") : t("downloadingModel")}
                             </h3>
 
                             {/* Model Name */}
@@ -1217,7 +1219,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                         />
                                     </div>
                                     <p className="text-xs tabular-nums text-gray-500 mt-2">
-                                        {downloadProgress}% 완료
+                                        {t("downloadPercent", { percent: downloadProgress })}
                                     </p>
                                 </div>
                             )}
@@ -1235,9 +1237,9 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                             {/* Status Message */}
                             {downloadingModel.status && downloadingModel.status !== "pulled" && (
                                 <div className="text-xs text-gray-500">
-                                    {downloadingModel.status === "downloading" && "모델 파일을 다운로드하는 중..."}
-                                    {downloadingModel.status === "verifying" && "모델 무결성을 확인하는 중..."}
-                                    {downloadingModel.status === "pulling" && "레지스트리에서 모델을 가져오는 중..."}
+                                    {downloadingModel.status === "downloading" && t("downloadingFile")}
+                                    {downloadingModel.status === "verifying" && t("verifyingModel")}
+                                    {downloadingModel.status === "pulling" && t("pullingModel")}
                                 </div>
                             )}
 
@@ -1245,8 +1247,8 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                             {downloadingModel.downloaded && downloadingModel.size && (
                                 <div className="mt-4 p-3 bg-gray-50 rounded-lg">
                                     <div className="flex justify-between text-xs text-gray-600">
-                                        <span>다운로드됨: {(downloadingModel.downloaded / 1024 / 1024).toFixed(1)} MB</span>
-                                        <span>전체: {(downloadingModel.size / 1024 / 1024).toFixed(1)} MB</span>
+                                        <span>{t("downloaded")} {(downloadingModel.downloaded / 1024 / 1024).toFixed(1)} MB</span>
+                                        <span>{t("total")} {(downloadingModel.size / 1024 / 1024).toFixed(1)} MB</span>
                                     </div>
                                 </div>
                             )}

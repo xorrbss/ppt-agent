@@ -1,4 +1,5 @@
 import { Loader2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { ProgressBar } from "./progress-bar";
 import { useEffect, useRef, useState } from "react";
@@ -30,6 +31,7 @@ export const OverlayLoader = ({
   onCancel,
   cancelText = "취소",
 }: OverlayLoaderProps) => {
+  const t = useTranslations("a2cOverlay");
   const [isVisible, setIsVisible] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
@@ -99,7 +101,7 @@ export const OverlayLoader = ({
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label={text || "작업을 진행하고 있습니다"}
+        aria-label={text || t("working")}
         aria-busy="true"
         tabIndex={-1}
         className={cn(

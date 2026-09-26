@@ -202,7 +202,7 @@ describe("MasterStudioCanvas Konva adapter", () => {
   it("renders the shared guide halo at fit, zoomed-out, and zoomed-in scales", () => {
     let insertedId = "";
     cy.mount(<Harness />);
-    cy.contains("button", "AI 편집존").click();
+    cy.contains("button", enMessages.authoredVnext.master.studio.extra.aiEditZone).click();
     cy.get('[data-testid="master-contract-snapshot"]').should(($output) => {
       const contract = JSON.parse($output.text()) as DeckMasterContractV1;
       insertedId = contract.aiEditZones?.at(-1)?.id ?? "";
@@ -257,7 +257,7 @@ describe("MasterStudioCanvas Konva adapter", () => {
       .filter(":visible")
       .should("exist");
 
-    cy.contains("button", "AI 편집존").click();
+    cy.contains("button", enMessages.authoredVnext.master.studio.extra.aiEditZone).click();
     cy.get('[data-testid="master-studio-inline-editor"]').should("not.exist");
     cy.get('[data-testid="master-contract-snapshot"]').should(($output) => {
       const contract = JSON.parse($output.text()) as DeckMasterContractV1;
@@ -268,7 +268,7 @@ describe("MasterStudioCanvas Konva adapter", () => {
     });
 
     cy.then(() => selectKonvaElement(insertedId));
-    cy.get('select[aria-label="AI 편집존 텍스트 정렬"]')
+    cy.get(`select[aria-label="${enMessages.authoredVnext.master.studio.extra.textAlignmentAria}"]`)
       .select("right");
     cy.get('[data-testid="master-contract-snapshot"]').should(($output) => {
       const contract = JSON.parse($output.text()) as DeckMasterContractV1;

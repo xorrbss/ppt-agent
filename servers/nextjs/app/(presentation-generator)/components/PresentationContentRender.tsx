@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 import { useSelector } from "react-redux";
 
 import type { PresentationDriverId } from "@/lib/presentation-profile";
@@ -31,11 +32,12 @@ function AuthoredContent({
   preferAuthoredHtml = false,
   canvas,
 }: DriverRendererProps) {
+  const t = useTranslations("a2cPreview");
   const imageRef = slide?.content?.image || slide?.properties?.image;
   const imageSrc = resolveAuthoredImageUrl(imageRef);
 
   return (
-    <SlideErrorBoundary label={`Slide ${slide.index + 1}`}>
+    <SlideErrorBoundary label={t("slide", { number: slide.index + 1 })}>
       <AuthoredSlidePreview
         slideIndex={slide.index}
         html={slide.html_content}
@@ -48,10 +50,11 @@ function AuthoredContent({
 }
 
 function SvgContent({ slide, canvas, resolveSvgAssets }: DriverRendererProps) {
+  const t = useTranslations("a2cPreview");
   const imageRef = slide?.content?.image || slide?.properties?.image;
   const manifest = slide?.content?.svgAssetManifest;
   const revision = manifest?.slideRevision ?? slide?.content?.svgReceipt?.source_digest ?? slide?.svg_content;
-  return <SlideErrorBoundary label={`Slide ${slide.index + 1}`}><SvgSlidePreview slideIndex={slide.index} slideId={slide.id} svg={slide.svg_content} resolveAssets={resolveSvgAssets} revision={revision} imageSrc={resolveAuthoredImageUrl(imageRef)} canvas={canvas} /></SlideErrorBoundary>;
+  return <SlideErrorBoundary label={t("slide", { number: slide.index + 1 })}><SvgSlidePreview slideIndex={slide.index} slideId={slide.id} svg={slide.svg_content} resolveAssets={resolveSvgAssets} revision={revision} imageSrc={resolveAuthoredImageUrl(imageRef)} canvas={canvas} /></SlideErrorBoundary>;
 }
 
 const PRESENTATION_CONTENT_RENDERER_REGISTRY = Object.freeze({
@@ -76,6 +79,7 @@ export function PresentationContentRender({
   driverId,
   canvas,
 }: PresentationContentRenderProps) {
+  const t = useTranslations("a2cPreview");
   const presentationData = useSelector(
     (state: RootState) => state.presentationGeneration.presentationData,
   );
@@ -89,7 +93,7 @@ export function PresentationContentRender({
   if (!resolvedDriver) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-gray-100 text-sm text-gray-600">
-        Unsupported presentation content.
+        {t("unsupported")}
       </div>
     );
   }
