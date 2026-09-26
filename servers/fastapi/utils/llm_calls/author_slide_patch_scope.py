@@ -8,10 +8,15 @@ from typing import Any
 
 from utils.authored_patch_engine import _DocumentSpanParser
 from utils.llm_calls.author_slide_patch_contracts import (
-    StructuralRepairScope, _LAYOUT_DISPLAYS, _MAX_SCOPE_EDITABLE_QIDS,
-    _PROTECTED_ROLE_TOKENS, _QID_PATTERN, _bounded_string,
+    StructuralRepairScope,
+    _LAYOUT_DISPLAYS,
+    _MAX_SCOPE_EDITABLE_QIDS,
+    _PROTECTED_ROLE_TOKENS,
+    _QID_PATTERN,
+    _bounded_string,
 )
 from utils.llm_calls.author_slide_patch_dom import build_full_dom_graph
+
 
 def _critique_issue_mappings(critique: Any) -> list[Mapping[str, Any]]:
     if hasattr(critique, "model_dump"):
@@ -22,6 +27,7 @@ def _critique_issue_mappings(critique: Any) -> list[Mapping[str, Any]]:
     if not isinstance(raw_issues, Sequence) or isinstance(raw_issues, (str, bytes)):
         return []
     return [issue for issue in raw_issues if isinstance(issue, Mapping)]
+
 
 def build_structural_repair_scope(
     compact_dom_map: Sequence[Mapping[str, Any]],
@@ -40,23 +46,13 @@ def build_structural_repair_scope(
     graph = build_full_dom_graph(compact_dom_map, html=html)
     normalized, available_qids = graph.nodes, graph.qids
     by_qid = {item["qid"]: item for item in normalized}
-    targets = {
-        str(qid).strip()
-        for qid in issue_qids
-        if _QID_PATTERN.fullmatch(str(qid).strip())
-    }
+    targets = {str(qid).strip() for qid in issue_qids if _QID_PATTERN.fullmatch(str(qid).strip())}
     reasons: list[str] = []
     for issue in _critique_issue_mappings(critique):
         raw_qids = issue.get("qids")
         if isinstance(raw_qids, Sequence) and not isinstance(raw_qids, (str, bytes)):
-            targets.update(
-                str(qid).strip()
-                for qid in raw_qids
-                if _QID_PATTERN.fullmatch(str(qid).strip())
-            )
-        reason = _bounded_string(
-            issue.get("detail") or issue.get("message") or issue.get("type"), 240
-        ).strip()
+            targets.update(str(qid).strip() for qid in raw_qids if _QID_PATTERN.fullmatch(str(qid).strip()))
+        reason = _bounded_string(issue.get("detail") or issue.get("message") or issue.get("type"), 240).strip()
         if reason and reason not in reasons:
             reasons.append(reason)
 
@@ -90,18 +86,21 @@ def build_structural_repair_scope(
                 or item.get("semanticRole") != "decoration"
                 or item.get("sourceBlockId")
                 or children_by_parent.get(qid)
-                or not parent or parent not in by_qid
+                or not parent
+                or parent not in by_qid
                 or style.get("position") != "absolute"
                 or str(item.get("text") or "").strip()
-                or span is None or span.content_end is None
-                or html[span.content_start:span.content_end].strip()
+                or span is None
+                or span.content_end is None
+                or html[span.content_start : span.content_end].strip()
             ):
                 isolated_ornaments = False
                 break
         if isolated_ornaments:
             ordered = tuple(sorted(targets))
             return StructuralRepairScope(
-                layout_owner_qid=ordered[0], editable_qids=ordered,
+                layout_owner_qid=ordered[0],
+                editable_qids=ordered,
                 affected_qids=ordered,
                 protected_qids=tuple(sorted(available_qids - targets)),
                 reasons=("isolated_absolute_decoration_geometry",),
@@ -136,7 +135,7 @@ def build_structural_repair_scope(
             and min(first[3], second[3]) > max(first[1], second[1])
             and min(first[4], second[4]) > max(first[2], second[2])
             for index, first in enumerate(target_boxes)
-            for second in target_boxes[index + 1:]
+            for second in target_boxes[index + 1 :]
         )
 
     def is_layout_owner(qid: str) -> bool:
@@ -151,16 +150,8 @@ def build_structural_repair_scope(
         ):
             return False
         style = item.get("computedStyle")
-        display = (
-            str(style.get("display") or "").lower()
-            if isinstance(style, Mapping)
-            else ""
-        )
-        position = (
-            str(style.get("position") or "").lower()
-            if isinstance(style, Mapping)
-            else ""
-        )
+        display = str(style.get("display") or "").lower() if isinstance(style, Mapping) else ""
+        position = str(style.get("position") or "").lower() if isinstance(style, Mapping) else ""
         children = children_by_parent.get(qid, ())
         escaping_target = False
         owner_box = item.get("bbox", {})
@@ -174,21 +165,32 @@ def build_structural_repair_scope(
                     if target_box["y"] + target_box["height"] > owner_box["y"] + owner_box["height"] + 2:
                         escaping_target = True
                         break
-        constrained_block = display == "block" and isinstance(style, Mapping) and (
-            str(style.get("overflow") or "") in {"hidden", "clip", "auto", "scroll"}
-            or any(str(style.get(key) or "") in {"hidden", "clip", "auto", "scroll"} for key in ("overflowX", "overflowY"))
-            or (qid in targets and not item.get("sourceBlockId") and any(str(style.get(key) or "") not in {"", "auto", "none", "0px"} for key in ("height", "maxHeight", "width", "maxWidth")))
-            or (len(children) > 1 and has_cross_branch_target_overlap(qid))
-            or escaping_target
-            or item.get("verifiedHeaderBand") is True
+        constrained_block = (
+            display == "block"
+            and isinstance(style, Mapping)
+            and (
+                str(style.get("overflow") or "") in {"hidden", "clip", "auto", "scroll"}
+                or any(
+                    str(style.get(key) or "") in {"hidden", "clip", "auto", "scroll"}
+                    for key in ("overflowX", "overflowY")
+                )
+                or (
+                    qid in targets
+                    and not item.get("sourceBlockId")
+                    and any(
+                        str(style.get(key) or "") not in {"", "auto", "none", "0px"}
+                        for key in ("height", "maxHeight", "width", "maxWidth")
+                    )
+                )
+                or (len(children) > 1 and has_cross_branch_target_overlap(qid))
+                or escaping_target
+                or item.get("verifiedHeaderBand") is True
+            )
         )
         return bool(children) and (
             display in _LAYOUT_DISPLAYS
             or constrained_block
-            or (
-                position in {"relative", "absolute", "fixed"}
-                and len(children) > 1
-            )
+            or (position in {"relative", "absolute", "fixed"} and len(children) > 1)
         )
 
     def layout_owner_chain(qid: str) -> tuple[str, ...]:
@@ -243,17 +245,12 @@ def build_structural_repair_scope(
         affected.add(ancestor_qid)
         ancestor_qid = str(by_qid[ancestor_qid].get("parentQid") or "")
     target_branches = {
-        child_qid
-        for child_qid in direct_children
-        if child_qid in targets or bool(descendants(child_qid) & targets)
+        child_qid for child_qid in direct_children if child_qid in targets or bool(descendants(child_qid) & targets)
     }
     for child_qid in direct_children:
         role = str(by_qid[child_qid].get("semanticRole") or "").lower()
         role_tokens = {token for token in re.split(r"[^a-z0-9_-]+", role) if token}
-        if (
-            child_qid not in target_branches
-            and role_tokens & _PROTECTED_ROLE_TOKENS
-        ):
+        if child_qid not in target_branches and role_tokens & _PROTECTED_ROLE_TOKENS:
             return None
 
     # A parent-only edit can reflow arbitrarily many descendants. Preserve their
@@ -264,22 +261,11 @@ def build_structural_repair_scope(
         # Defect leaves need not be editable to repair their parent cards. Keep
         # the complete direct-child layout action group when it fits the budget;
         # do not let many text findings remove all card geometry permissions.
-        direct_editable = {
-            qid for qid in {owner, *direct_children}
-            if by_qid[qid].get("editable") is not False
-        }
-        editable = (
-            direct_editable
-            if len(direct_editable) <= _MAX_SCOPE_EDITABLE_QIDS
-            else {owner}
-        )
+        direct_editable = {qid for qid in {owner, *direct_children} if by_qid[qid].get("editable") is not False}
+        editable = direct_editable if len(direct_editable) <= _MAX_SCOPE_EDITABLE_QIDS else {owner}
 
     affected_blocks = sorted(
-        {
-            str(by_qid[qid].get("sourceBlockId") or "")
-            for qid in affected
-            if str(by_qid[qid].get("sourceBlockId") or "")
-        }
+        {str(by_qid[qid].get("sourceBlockId") or "") for qid in affected if str(by_qid[qid].get("sourceBlockId") or "")}
     )
     protected = tuple(sorted(available_qids - affected))
     return StructuralRepairScope(
@@ -290,6 +276,7 @@ def build_structural_repair_scope(
         protected_qids=protected,
         reasons=tuple(reasons[:8]),
     )
+
 
 def build_structural_repair_scopes(
     compact_dom_map: Sequence[Mapping[str, Any]],
@@ -345,9 +332,13 @@ def build_structural_repair_scopes(
         first = target_rectangle(target)
         if first is None:
             continue
-        for other in ordered_targets[index + 1:]:
+        for other in ordered_targets[index + 1 :]:
             second = target_rectangle(other)
-            if second and min(first[2], second[2]) > max(first[0], second[0]) and min(first[3], second[3]) > max(first[1], second[1]):
+            if (
+                second
+                and min(first[2], second[2]) > max(first[0], second[0])
+                and min(first[3], second[3]) > max(first[1], second[1])
+            ):
                 join_targets({target, other})
     groups: list[tuple[set[str], StructuralRepairScope]] = []
     for group_targets in sorted(target_groups, key=lambda group: tuple(sorted(group))):
@@ -362,8 +353,12 @@ def build_structural_repair_scopes(
             return True
         for qid in a | b:
             opposite = b if qid in a else a
-            if any(by_qid[qid].get(key) in opposite for key in ("layoutOwnerQid", "clippingAncestorQid", "containingBlockQid", "occludingQid")):
+            if any(
+                by_qid[qid].get(key) in opposite
+                for key in ("layoutOwnerQid", "clippingAncestorQid", "containingBlockQid", "occludingQid")
+            ):
                 return True
+
         def rectangle(qid):
             box = by_qid[qid].get("bbox", {})
             x, y = box.get("x", box.get("left")), box.get("y", box.get("top"))
@@ -373,7 +368,12 @@ def build_structural_repair_scopes(
             return x, y, x + width, y + height
 
         left_box, right_box = rectangle(left.layout_owner_qid), rectangle(right.layout_owner_qid)
-        if left_box and right_box and min(left_box[2], right_box[2]) > max(left_box[0], right_box[0]) and min(left_box[3], right_box[3]) > max(left_box[1], right_box[1]):
+        if (
+            left_box
+            and right_box
+            and min(left_box[2], right_box[2]) > max(left_box[0], right_box[0])
+            and min(left_box[3], right_box[3]) > max(left_box[1], right_box[1])
+        ):
             return True
         parents = {by_qid[left.layout_owner_qid].get("parentQid"), by_qid[right.layout_owner_qid].get("parentQid")}
         if len(parents) == 1:
@@ -403,6 +403,7 @@ def build_structural_repair_scopes(
             if changed:
                 break
     return tuple(scope for _, scope in sorted(groups, key=lambda item: item[1].layout_owner_qid))
+
 
 def protected_qids_for_repair_scopes(
     compact_dom_map: Sequence[Mapping[str, Any]],

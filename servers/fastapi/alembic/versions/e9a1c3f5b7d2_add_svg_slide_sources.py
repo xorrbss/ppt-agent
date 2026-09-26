@@ -3,6 +3,7 @@
 Revision ID: e9a1c3f5b7d2
 Revises: d4a7c9e1b3f6
 """
+
 from alembic import op
 import sqlalchemy as sa
 
@@ -12,8 +13,16 @@ branch_labels = None
 depends_on = None
 
 CHECKS = {
-    "ck_slides_svg_source_exclusive": "svg_content IS NULL OR svg_content = '' OR ((html_content IS NULL OR html_content = '') AND ui IS NULL)",
-    "ck_slides_source_format": "source_format IS NULL OR (source_format = 'svg' AND (html_content IS NULL OR html_content = '') AND ui IS NULL) OR (source_format = 'html' AND (svg_content IS NULL OR svg_content = '') AND ui IS NULL) OR (source_format = 'native' AND (svg_content IS NULL OR svg_content = '') AND (html_content IS NULL OR html_content = ''))",
+    "ck_slides_svg_source_exclusive": (
+        "svg_content IS NULL OR svg_content = '' OR ((html_content IS NULL OR html_content = '') AN"
+        'D ui IS NULL)'
+                                      ),
+    "ck_slides_source_format": (
+        "source_format IS NULL OR (source_format = 'svg' AND (html_content IS NULL OR html_content "
+        "= '') AND ui IS NULL) OR (source_format = 'html' AND (svg_content IS NULL OR svg_content ="
+        " '') AND ui IS NULL) OR (source_format = 'native' AND (svg_content IS NULL OR svg_content "
+        "= '') AND (html_content IS NULL OR html_content = ''))"
+                               ),
 }
 
 

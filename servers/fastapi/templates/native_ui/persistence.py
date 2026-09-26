@@ -32,15 +32,9 @@ def _to_raw_tree(value: Any, active: set[int] | None = None) -> Any:
             extra = getattr(value, "__pydantic_extra__", None)
             if extra:
                 raw_model.update(extra)
-            return {
-                key: _to_raw_tree(item, active)
-                for key, item in raw_model.items()
-            }
+            return {key: _to_raw_tree(item, active) for key, item in raw_model.items()}
         if isinstance(value, Mapping):
-            return {
-                key: _to_raw_tree(item, active)
-                for key, item in value.items()
-            }
+            return {key: _to_raw_tree(item, active) for key, item in value.items()}
         return [_to_raw_tree(item, active) for item in value]
     finally:
         active.remove(identity)
@@ -68,5 +62,7 @@ def canonicalize_slide_dump(value: Any) -> dict[str, Any]:
     canonical["ui"] = canonicalize_slide_ui(canonical.get("ui"))
     if canonical["ui"] is not None and canonical.get("html_content"):
         raise ValueError("slide_ui_and_authored_html_cannot_coexist")
-    validate_slide_source(canonical.get("source_format"), canonical.get("html_content"), canonical.get("svg_content"), canonical["ui"])
+    validate_slide_source(
+        canonical.get("source_format"), canonical.get("html_content"), canonical.get("svg_content"), canonical["ui"]
+    )
     return canonical

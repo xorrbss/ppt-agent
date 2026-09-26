@@ -10,28 +10,20 @@ from __future__ import annotations
 
 import json
 import logging
-import re
-from collections.abc import Collection, Mapping, Sequence
-from dataclasses import dataclass
-from html.parser import HTMLParser
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from llmai import get_client
 from llmai.shared import (
-    ImageContentPart,
     JSONSchemaResponse,
-    SystemMessage,
     TextContentPart,
     UserMessage,
 )
-from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from utils.authored_patch_engine import (
-    EXACT_RECONSTRUCTION,
     STYLE_REFERENCE,
     AuthoredPatchPlan,
-    _DocumentSpanParser,
-    _replace_start_tag_style,
     ReferenceMode,
     allowed_patch_style_properties,
     validate_patch_plan,
@@ -52,10 +44,9 @@ from utils.llm_calls.author_slide_patch_contracts import (
     _MAX_DOM_JSON_CHARS,
     _MAX_REJECTED_PROPOSAL_CHARS,
     _MAX_VALIDATION_ERROR_CHARS,
-    _STYLE_KEYS,
-    _bounded_string,
 )
 from utils.llm_calls.author_slide_patch_dom import (
+    FullDomGraph,
     build_full_dom_graph,
     compact_dom_map_for_prompt,
 )
@@ -80,6 +71,8 @@ def build_patch_messages(*args, **kwargs):
     _patch_dom._MAX_DOM_JSON_CHARS = _MAX_DOM_JSON_CHARS
     _patch_prompt._MAX_DOM_JSON_CHARS = _MAX_DOM_JSON_CHARS
     return _build_patch_messages(*args, **kwargs)
+
+
 class PatchProposalResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -113,9 +106,7 @@ def _validation_retry_message(content: Any, error: Exception) -> UserMessage:
     retry_payload = {
         "rejectedProposal": rejected[:_MAX_REJECTED_PROPOSAL_CHARS],
         "validationError": str(error)[:_MAX_VALIDATION_ERROR_CHARS],
-        "allowedSetStyleProperties": list(
-            allowed_patch_style_properties(source_reflow=True)
-        ),
+        "allowedSetStyleProperties": list(allowed_patch_style_properties(source_reflow=True)),
         "validColorFormats": [
             "#RGB",
             "#RRGGBB",
@@ -178,22 +169,20 @@ async def propose_authored_slide_patch(
             html=html,
         )
     except (TypeError, ValueError) as error:
-        reason = "repair_prompt_budget_exceeded" if str(error).startswith("repair_prompt_budget_exceeded") else "invalid_patch_input"
+        reason = (
+            "repair_prompt_budget_exceeded"
+            if str(error).startswith("repair_prompt_budget_exceeded")
+            else "invalid_patch_input"
+        )
         return _fallback(str(error), reason)
 
     model: str | None = None
-    scoped_slide_index = (
-        None if active_usage_scope_slide_index() is not None else slide_index
-    )
+    scoped_slide_index = None if active_usage_scope_slide_index() is not None else slide_index
     try:
         client = get_client(config=get_llm_config())
         model = get_model()
-        schema = prepare_schema_for_validation(
-            AuthoredPatchPlan.model_json_schema(), strict=False
-        )
-        response_format = JSONSchemaResponse(
-            name="authored_patch", json_schema=schema, strict=False
-        )
+        schema = prepare_schema_for_validation(AuthoredPatchPlan.model_json_schema(), strict=False)
+        response_format = JSONSchemaResponse(name="authored_patch", json_schema=schema, strict=False)
         bounded_structural_proposal = scope is not None
         content = await generate_structured_with_schema_retries(
             client,
@@ -204,15 +193,9 @@ async def propose_authored_slide_patch(
             strict=False,
             validate_schema=True,
             validate_schema_max_loop_count=(1 if bounded_structural_proposal else 2),
-            call_budget=(
-                StructuredProviderCallBudget(limit=1)
-                if bounded_structural_proposal
-                else None
-            ),
+            call_budget=(StructuredProviderCallBudget(limit=1) if bounded_structural_proposal else None),
             semantic_slot_prefix=VQA_PATCH_PREFIX,
-            semantic_slot_suffix=deck_stage_slot_suffix(
-                scoped_slide_index, run=slot_run
-            ),
+            semantic_slot_suffix=deck_stage_slot_suffix(scoped_slide_index, run=slot_run),
         )
         try:
             plan = validate_patch_plan(
@@ -269,22 +252,16 @@ async def propose_authored_slide_patch(
             out_of_scope_qids = sorted(action_qids - set(scope.editable_qids))
             if out_of_scope_qids:
                 return _fallback(
-                    "model targeted qid(s) outside structural repair scope: "
-                    f"{out_of_scope_qids}",
+                    f"model targeted qid(s) outside structural repair scope: {out_of_scope_qids}",
                     "target_outside_repair_scope",
                     model=model,
                 )
             forbidden_actions = sorted(
-                {
-                    action.action
-                    for action in plan.actions
-                    if action.action not in {"setStyle", "move", "resize"}
-                }
+                {action.action for action in plan.actions if action.action not in {"setStyle", "move", "resize"}}
             )
             if forbidden_actions:
                 return _fallback(
-                    "structural repair proposed forbidden action(s): "
-                    f"{forbidden_actions}",
+                    f"structural repair proposed forbidden action(s): {forbidden_actions}",
                     "action_outside_repair_scope",
                     model=model,
                 )

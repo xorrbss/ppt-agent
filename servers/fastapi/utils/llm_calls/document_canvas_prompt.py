@@ -5,8 +5,8 @@ from __future__ import annotations
 def canvas_clause(width: int, height: int, safe_area: object | None = None) -> str:
     if safe_area is None:
         return ""
-    x, y = float(getattr(safe_area, "x")), float(getattr(safe_area, "y"))
-    w, h = float(getattr(safe_area, "width")), float(getattr(safe_area, "height"))
+    x, y = float(safe_area.x), float(safe_area.y)
+    w, h = float(safe_area.width), float(safe_area.height)
     orientation = "portrait" if height > width else "landscape"
     return (
         "\nDOCUMENT CANVAS (authoritative over example slide dimensions):\n"

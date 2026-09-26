@@ -1,6 +1,7 @@
 """Font availability, contrast and owned text paint in the Chromium probe."""
 
-FONT_AND_PAINT_JS = r"""
+FONT_AND_PAINT_JS = (
+r"""
     const fontFamilies = (value) => {
       const families = []; let current = '', quote = null, escaped = false;
       for (const character of String(value || '')) {
@@ -11,7 +12,8 @@ FONT_AND_PAINT_JS = r"""
           if (character === quote) quote = null;
           continue;
         }
-        if (character === '"' || character === "'") { current += character; quote = character; continue; }
+        if (character === '"' || character === "'") { current += character; quote = character; conti"""
+r"""nue; }
         if (character === ',') {
           if (current.trim()) families.push(current.trim().replace(/^['"]|['"]$/g, ''));
           current = ''; continue;
@@ -37,7 +39,8 @@ FONT_AND_PAINT_JS = r"""
     const fontEvidence = (style, text) => {
       if (!document.fonts) return {loaded: true, family: null, source: 'font-api-unavailable'};
       try {
-        if (document.fonts.status !== 'loaded') return {loaded: false, family: null, source: 'fonts-pending'};
+        if (document.fonts.status !== 'loaded') return {loaded: false, family: null, source: 'fonts-"""
+r"""pending'};
         const generic = new Set(['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui']);
         for (const family of fontFamilies(style.fontFamily)) {
           const normalized = family.toLowerCase();
@@ -58,13 +61,16 @@ FONT_AND_PAINT_JS = r"""
       } catch (_) { return {loaded: false, family: null, source: 'font-probe-error'}; }
     };
     const rgba = (value) => {
-      const match = String(value || '').match(/rgba?\(\s*([\d.]+)[, ]+\s*([\d.]+)[, ]+\s*([\d.]+)(?:\s*[,/]\s*([\d.]+))?\s*\)/i);
-      return match ? [Number(match[1]), Number(match[2]), Number(match[3]), match[4] === undefined ? 1 : Number(match[4])] : null;
+      const match = String(value || '').match(/rgba?\(\s*([\d.]+)[, ]+\s*([\d.]+)[, ]+\s*([\d.]+)(?:"""
+r"""\s*[,/]\s*([\d.]+))?\s*\)/i);
+      return match ? [Number(match[1]), Number(match[2]), Number(match[3]), match[4] === undefined ?"""
+r""" 1 : Number(match[4])] : null;
     };
     const composite = (front, back) => {
       const alpha = front[3] + back[3] * (1 - front[3]);
       if (alpha <= 0) return [255, 255, 255, 1];
-      return [0, 1, 2].map((index) => (front[index] * front[3] + back[index] * back[3] * (1 - front[3])) / alpha).concat(alpha);
+      return [0, 1, 2].map((index) => (front[index] * front[3] + back[index] * back[3] * (1 - front["""
+r"""3])) / alpha).concat(alpha);
     };
     const effectiveBackground = (node) => {
       const layers = [];
@@ -83,7 +89,8 @@ FONT_AND_PAINT_JS = r"""
       return layers.reverse().reduce((back, front) => composite(front, back), [255, 255, 255, 1]);
     };
     const luminance = (color) => {
-      const channel = (value) => { value /= 255; return value <= .04045 ? value / 12.92 : Math.pow((value + .055) / 1.055, 2.4); };
+      const channel = (value) => { value /= 255; return value <= .04045 ? value / 12.92 : Math.pow(("""
+r"""value + .055) / 1.055, 2.4); };
       return .2126 * channel(color[0]) + .7152 * channel(color[1]) + .0722 * channel(color[2]);
     };
     const contrastRatio = (node, style) => {
@@ -111,7 +118,8 @@ FONT_AND_PAINT_JS = r"""
       for (const text of ownedTextNodes(node)) {
         const range = document.createRange(); range.selectNodeContents(text);
         for (const rect of range.getClientRects()) {
-          if (rect.width > 0 && rect.height > 0) rects.push({x: rect.x, y: rect.y, width: rect.width, height: rect.height});
+          if (rect.width > 0 && rect.height > 0) rects.push({x: rect.x, y: rect.y, width: rect.width"""
+r""", height: rect.height});
         }
       }
       ownedTextRectCache.set(node, rects);
@@ -134,3 +142,4 @@ FONT_AND_PAINT_JS = r"""
       );
     };
 """
+)

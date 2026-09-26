@@ -3,6 +3,7 @@
 The returned DOM retains text, assets, QIDs and hierarchy. No screenshot is
 embedded and no browser is started outside the existing renderer boundary.
 """
+
 from __future__ import annotations
 
 import json
@@ -19,7 +20,8 @@ _MARKER = "document-canvas-source-normalization"
 
 def normalization_probe_js() -> str:
     properties = json.dumps(sorted(ALLOWED_CSS_PROPERTIES))
-    return r"""
+    return (
+r"""
     const effectiveFontSize = (node) => {
       let matrix = new DOMMatrix();
       for (let current = node; current; current = current.parentElement) {
@@ -33,7 +35,8 @@ def normalization_probe_js() -> str:
         if (cs.rotate && cs.rotate !== 'none') {
           const parts = cs.rotate.trim().split(/\s+/), token = parts.pop();
           if (parts.length && parts.join(' ') !== 'z' && parts.join(' ') !== '0 0 1') return null;
-          const factor = token.endsWith('turn') ? 360 : token.endsWith('rad') && !token.endsWith('grad') ? 180/Math.PI : token.endsWith('grad') ? 0.9 : 1;
+          const factor = token.endsWith('turn') ? 360 : token.endsWith('rad') && !token.endsWith('gr"""
+r"""ad') ? 180/Math.PI : token.endsWith('grad') ? 0.9 : 1;
           const angle = parseFloat(token) * factor;
           if (!Number.isFinite(angle)) return null;
           local = new DOMMatrix().rotate(angle).multiply(local);
@@ -71,7 +74,8 @@ def normalization_probe_js() -> str:
             throw new Error('source_native_canvas_generated_content_unsupported');
         }
       }
-      copy.querySelectorAll('script,style,link,meta[http-equiv],meta[name="document-canvas-source-normalization"],meta[id="__codex_authored_dom_metrics"]').forEach(node => node.remove());
+      copy.querySelectorAll('script,style,link,meta[http-equiv],meta[name="document-canvas-source-no"""
+r"""rmalization"],meta[id="__codex_authored_dom_metrics"]').forEach(node => node.remove());
       // Keep the original body (including transforms, background and QIDs) as
       // an ordinary source-local element; the new body owns only placement.
       const oldBody = copy.querySelector('body');
@@ -82,7 +86,8 @@ def normalization_probe_js() -> str:
       outer.style.backgroundColor = getComputedStyle(document.documentElement).backgroundColor;
       outer.style.backgroundImage = getComputedStyle(document.documentElement).backgroundImage;
       const viewport = document.createElement('div');
-      viewport.style.cssText = `position:relative;width:${innerWidth}px;height:${innerHeight}px;margin:0;padding:0;transform:matrix(1,0,0,1,0,0);transform-origin:0 0`;
+      viewport.style.cssText = `position:relative;width:${innerWidth}px;height:${innerHeight}px;marg"""
+r"""in:0;padding:0;transform:matrix(1,0,0,1,0,0);transform-origin:0 0`;
       // Fixed right/bottom anchors now resolve against the original viewport,
       // even after the outer body is placed on a differently shaped target.
       // Any nearer original transformed ancestor remains inside this wrapper.
@@ -92,7 +97,8 @@ def normalization_probe_js() -> str:
       return {version:'source-viewport-computed/v1', width:innerWidth, height:innerHeight,
         html:'<!DOCTYPE html>' + copy.outerHTML};
     };
-    """.replace("PROPERTIES", properties)
+    """
+).replace("PROPERTIES", properties)
 
 
 async def normalize_source_viewport(html: str, *, width: float, height: float) -> tuple[str, dict]:
@@ -117,9 +123,12 @@ async def normalize_source_viewport(html: str, *, width: float, height: float) -
     frozen = metrics.get("source_viewport_normalization")
     if not metrics.get("fonts_ready") or not isinstance(frozen, Mapping):
         raise ValueError("source_native_canvas_source_measurement_missing")
-    if (frozen.get("version") != NORMALIZATION_VERSION
-            or (frozen.get("width"), frozen.get("height")) != viewport
-            or not isinstance(frozen.get("html"), str) or not frozen["html"]):
+    if (
+        frozen.get("version") != NORMALIZATION_VERSION
+        or (frozen.get("width"), frozen.get("height")) != viewport
+        or not isinstance(frozen.get("html"), str)
+        or not frozen["html"]
+    ):
         raise ValueError("source_native_canvas_source_measurement_invalid")
     return frozen["html"], {
         "version": NORMALIZATION_VERSION,
