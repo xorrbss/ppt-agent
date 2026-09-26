@@ -121,7 +121,10 @@ from services.source_content.pipeline import (
 )
 from services.database import async_session_maker, get_async_session, sql_engine
 from services.documents_loader import DocumentsLoader
-from services.generation_core.admission.strategy import resolve_generation_strategy
+from services.generation_core.admission.strategy import (
+    resolve_generation_strategy,
+    resolve_generation_strategy_with_reason,
+)
 from services.generation_provider_admission import generation_provider_admitted
 from services.compatibility_migration.authored_vnext_contract import (
     require_authored_vnext_creation_admission,
@@ -1131,7 +1134,7 @@ async def generate_presentation_handler(
                 async_status.updated_at = datetime.now(timezone.utc)
                 sql_session.add(async_status)
                 await sql_session.commit()
-            resolved_strategy = resolve_generation_strategy(request)
+            resolved_strategy, strategy_reason = resolve_generation_strategy_with_reason(request)
             generate_document = generate_authored_presentation
             if resolved_strategy == "svg":
                 from services.svg_presentation_service import generate_svg_presentation
@@ -1159,6 +1162,7 @@ async def generate_presentation_handler(
                     **response.model_dump(mode="json"),
                     "quality_gate_status": gate_status,
                     "quality_pages": pages,
+                    "generation_strategy_reason": strategy_reason,
                 }
                 async_status.error, async_status.updated_at = None, datetime.now(timezone.utc)
                 sql_session.add(async_status)
@@ -1167,6 +1171,17 @@ async def generate_presentation_handler(
                 # (it used to -- chain_generation_export rolls back the
                 # session on a submission error, discarding whatever else was
                 # pending on it). Commit "completed" on its own first.
+                await sql_session.commit()
+            elif async_status is not None and strategy_reason != "explicit":
+                # An omitted strategy that fell back to authored (a svg
+                # admission violation, registered-template, or a design pack)
+                # is otherwise silent -- additive merge, never overwrites the
+                # status/message the authored pipeline itself manages.
+                data = dict(async_status.data or {})
+                data["generation_strategy_reason"] = strategy_reason
+                async_status.data = data
+                async_status.updated_at = datetime.now(timezone.utc)
+                sql_session.add(async_status)
                 await sql_session.commit()
             response = await finalize_generation_export_chain(
                 sql_session,

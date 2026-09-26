@@ -20,7 +20,10 @@ from models.sql.workspace import WorkspaceOperation, get_workspace_owner_scope
 from utils.authored_styles import AuthoredStyle
 from services.database import sql_engine
 from services.authored_local_fit_policy import POLICY_REVISION, font_policy
-from services.generation_core.admission.strategy import resolve_generation_strategy
+from services.generation_core.admission.strategy import (
+    resolve_generation_strategy,
+    resolve_generation_strategy_with_reason,
+)
 from services.authored_canvas import (
     request_canvas_metadata,
     restore_request_canvas_metadata,
@@ -87,12 +90,16 @@ def _durable_request_payload(
     """Persist canonical identities only, never admission-time raw paths."""
 
     payload = request.model_dump(mode="json")
-    resolved_strategy = resolve_generation_strategy(request)
+    resolved_strategy, strategy_reason = resolve_generation_strategy_with_reason(request)
     # Persist the resolved value, never the raw (possibly omitted) field: every
     # downstream consumer that reads this durable payload's "strategy" key as a
     # plain dict (checkpoint recovery, job listing, workspace projections) does
     # a literal "== svg"/"== authored" comparison and has no resolver access.
     payload["strategy"] = resolved_strategy
+    # Observability for the silent default-svg-rejected-to-authored case: an
+    # operator reading this job's payload can tell "explicit"/"default" apart
+    # from a real svg admission violation the caller never saw as a 422.
+    payload["_internal_generation_strategy_reason"] = strategy_reason
     incomplete_source_retry = (
         admission_retry
         and resolved_strategy == "svg"
@@ -329,6 +336,7 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
     # schema. It remains on the durable job across operation rebinds, but must
     # never be passed to Pydantic as caller input.
     values.pop(INTERNAL_ADMISSION_RETRY_KEY, None)
+    values.pop("_internal_generation_strategy_reason", None)
     from services.public_generation_route import LEGACY_RESTYLE_FIT_POLICY_KEY
 
     values.pop(LEGACY_RESTYLE_FIT_POLICY_KEY, None)
