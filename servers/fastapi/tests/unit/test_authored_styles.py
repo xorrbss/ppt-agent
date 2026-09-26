@@ -20,7 +20,6 @@ from utils.authored_styles import (
 )
 from utils.authored_style_catalogue import AUTHORED_STYLE_ALIASES
 
-
 EXPECTED_AUTHORED_STYLE_IDS = {
     "academic-edge",
     "architectural-portfolio",
@@ -41,6 +40,7 @@ EXPECTED_AUTHORED_STYLE_IDS = {
     "groovy-70s",
     "hyundai-culture-center",
     "iso-blueprint",
+    "kbs-company-proposal",
     "liquid-executive",
     "luxury-editorial",
     "minimal-vellum",
@@ -335,7 +335,6 @@ def test_resolve_authored_style_warns_only_for_an_unknown_named_id(tmp_path, cap
     assert "Unknown authored style 'stategic-navy'" in caplog.text
 
     caplog.clear()
-    # Empty / default requests are not typos and must stay quiet.
     with caplog.at_level(logging.WARNING):
         resolve_authored_style(None, tmp_path)
         resolve_authored_style("default", tmp_path)
@@ -529,7 +528,7 @@ def test_authored_catalogue_has_complete_contracts(tmp_path, caplog):
     with caplog.at_level(logging.WARNING, logger="utils.authored_styles"):
         styles = load_authored_styles(tracked_catalogue)
 
-    assert len(sources) == len(styles) == len(EXPECTED_AUTHORED_STYLE_IDS) == 43
+    assert len(sources) == len(styles) == len(EXPECTED_AUTHORED_STYLE_IDS) == 44
     assert {source.stem for source in sources} == EXPECTED_AUTHORED_STYLE_IDS
     assert {style.id for style in styles} == EXPECTED_AUTHORED_STYLE_IDS
     assert not [
@@ -549,12 +548,9 @@ def test_authored_catalogue_has_complete_contracts(tmp_path, caplog):
             assert data["category"] == "research"
         if style_id in TECHNOLOGY_STYLE_IDS:
             assert data["category"] == "technology"
-        assert data["tags"] and all(
-            isinstance(tag, str) and tag.strip() for tag in data["tags"]
-        )
+        assert data["tags"] and all(isinstance(tag, str) and tag.strip() for tag in data["tags"])
         assert data["use_cases"] and all(
-            isinstance(use_case, str) and use_case.strip()
-            for use_case in data["use_cases"]
+            isinstance(use_case, str) and use_case.strip() for use_case in data["use_cases"]
         )
         assert re.search(r"[가-힣]", data["name"])
         assert re.search(r"[가-힣]", data["description"])
@@ -568,6 +564,10 @@ def test_authored_catalogue_has_complete_contracts(tmp_path, caplog):
         assert preview["variant"]
 
         brief = data["brief"]
+        assert not PLACEHOLDER_PATTERN.search(source.read_text(encoding="utf-8"))
+        if style_id == "kbs-company-proposal":
+            assert set(REQUIRED_SLIDE_ARCHETYPES) <= data["reference_images"].keys()
+            continue
         assert tuple(BRIEF_SECTION_PATTERN.findall(brief)) == REQUIRED_BRIEF_SECTIONS
         for section in REQUIRED_BRIEF_SECTIONS:
             headings = re.findall(
@@ -599,7 +599,6 @@ def test_authored_catalogue_has_complete_contracts(tmp_path, caplog):
             f"{style_id}: unknown slide archetypes: "
             f"{archetype_names - set(REQUIRED_SLIDE_ARCHETYPES) - OPTIONAL_SLIDE_ARCHETYPES}"
         )
-        assert not PLACEHOLDER_PATTERN.search(source.read_text(encoding="utf-8"))
 
 
 def test_authored_styles_api_hides_briefs_and_returns_exact_catalogue():
@@ -617,7 +616,7 @@ def test_authored_styles_api_hides_briefs_and_returns_exact_catalogue():
 
     assert response.status_code == 200
     body = response.json()
-    assert len(body) == 38
+    assert len(body) == 39
     assert [style["id"] for style in body] == sorted(style["id"] for style in body)
     assert {style["id"] for style in body} == (
         EXPECTED_AUTHORED_STYLE_IDS - set(AUTHORED_STYLE_ALIASES)
@@ -632,6 +631,7 @@ def test_authored_styles_api_hides_briefs_and_returns_exact_catalogue():
             "tags",
             "use_cases",
             "preview",
+            "supportedAspectRatios",
         } | ({"aliases"} if style["id"] in AUTHORED_STYLE_ALIASES.values() else set())
         for style in body
     )
