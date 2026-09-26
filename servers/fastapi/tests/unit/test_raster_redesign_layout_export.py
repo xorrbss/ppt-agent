@@ -14,7 +14,7 @@ from pptx.enum.shapes import MSO_SHAPE_TYPE
 
 import test_raster_redesign_layout_fixtures as fx
 from services.document_canvas import document_canvas_for_orientation
-from services.source_content import raster_redesign_pptx
+from services.generation_core.drivers.svg import export_scene
 from services.source_content.raster_redesign_layout import render_redesign_page_svg
 from services.svg_contract import validate_svg
 from workers.public_svg_export_worker import convert_pptx
@@ -99,19 +99,20 @@ def test_structured_table_cells_are_verbatim_in_the_native_table(tmp_path):
 
 
 def test_native_table_failure_falls_back_to_grid_with_evidence(tmp_path, monkeypatch):
-    original = raster_redesign_pptx.table_payload
+    original = export_scene.converter_payload
 
-    def broken(group):
-        payload = original(group)
+    def broken(item):
+        payload = original(item)
         payload["header_rows"] = 99  # rejected by the converter's table schema
         return payload
 
-    monkeypatch.setattr(raster_redesign_pptx, "table_payload", broken)
+    monkeypatch.setattr(export_scene, "converter_payload", broken)
     svg = render_redesign_page_svg(DECK, 4)
     readback, deck = _export([svg], tmp_path)
     evidence = readback["rasterRedesign"]
     assert evidence["nativeTablesDelivered"] == 0 and evidence["tablesKeptAsGrid"] == 1
-    assert evidence["nativeTableFallbackReason"]
+    assert evidence["nativeTableFallbackReason"].startswith("converter_rejected:")
+    assert readback["nativeObjects"]["fellBack"] == 1 and readback["nativeObjects"]["native"] == 0
     texts = "".join(sorted(_dense(s.text_frame.text) for s in _shapes(deck.slides[0])
                            if s.has_text_frame and s.text_frame.text.strip()))
     expected = "".join(sorted(_dense("".join(n.itertext())) for n in ET.fromstring(svg).iter(f"{NS}text")))

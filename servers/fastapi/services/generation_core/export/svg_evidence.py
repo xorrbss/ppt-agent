@@ -10,9 +10,12 @@ svg exports start using it; this builder exists so today's receipt already
 records the same digest shape N1 will bind to
 (agreed with ppt-agent-fe 2026-09-26).
 
-``semantic_digest`` currently equals ``scene_digest``: svg has no separate
-semantic-extraction pass distinct from its rendered scene (unlike authored's
-``editable_scene.py``). Revisit if/when one is introduced.
+``semantic_digest`` equals ``scene_digest`` for a deck without NativeObjects
+sidecars: svg has no separate semantic-extraction pass distinct from its
+rendered scene (unlike authored's ``editable_scene.py``). The sidecars are
+exactly that semantic layer (tables/charts as data next to the markup), so
+when an export carries them (the bundle's ``nativeObjects`` entries) they are
+bound into ``semantic_digest`` on top of the scene.
 
 ``font_manifest_digest`` identifies the *trusted font registry* the render
 pipeline trusts (``services.svg_trusted_fonts``), not whether this particular
@@ -38,6 +41,7 @@ def build_svg_export_evidence_digests(
     notes,
     source_assets=None,
     source_preservation=None,
+    native_objects=None,
     quality_receipt: dict,
     converter_version: str,
     converter_digest: str,
@@ -47,7 +51,8 @@ def build_svg_export_evidence_digests(
     ``quality_receipt`` is the already-built receipt dict (from
     ``services.svg_export_quality.source_svg_public_quality_receipt`` or the
     legacy-fidelity fallback) -- its content, not its identity, is what binds
-    ``quality_digest``.
+    ``quality_digest``. ``native_objects`` is the bundle's per-slide
+    ``nativeObjects`` entry list, or ``None`` when no slide has a sidecar.
     """
     from services.public_export_identity import ExportEvidenceDigests
     from services.svg_trusted_fonts import read_trusted_pretendard_faces
@@ -62,7 +67,9 @@ def build_svg_export_evidence_digests(
     })
     return ExportEvidenceDigests(
         scene_digest=scene_digest,
-        semantic_digest=scene_digest,
+        semantic_digest=scene_digest if native_objects is None else _digest({
+            "scene": scene_digest, "nativeObjects": list(native_objects),
+        }),
         quality_digest=_digest(quality_receipt),
         exporter_digest=_digest({"converterVersion": converter_version, "converterDigest": converter_digest}),
         font_manifest_digest=font_manifest_digest,
