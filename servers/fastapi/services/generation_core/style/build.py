@@ -131,23 +131,40 @@ def build_style_context(
     never markup.
     """
     explicit_primary, explicit_fonts, wordmark = _request_brand_overrides(request)
+    # Precedence, high to low: an explicit request override; a published
+    # company-standard master's own tokens (it is the org's actual brand, so
+    # it outranks the generic style preset); the style preset's own tokens;
+    # a hard default. Without this, master_rules/design_pack_rules would sit
+    # in the snapshot unread -- the svg author prompt only ever looks at
+    # tokens.primary/heading_font/body_font (see project_style.py).
+    master_tokens = (master_rules or {}).get("tokens") if master_rules else None
+    master_fonts = (master_rules or {}).get("fonts") if master_rules else None
+    master_accent = (master_tokens or {}).get("accent")
+    master_background = (master_tokens or {}).get("background")
+    master_heading_font = ((master_fonts or {}).get("heading") or {}).get("family")
+    master_body_font = ((master_fonts or {}).get("body") or {}).get("family")
     # A style preset usually carries its own primary/fonts; only an explicit
-    # request override should displace them (the "Facts" bug this session
-    # fixes: svg previously read only the preset's tokens).
+    # request override or a master should displace them (the "Facts" bug this
+    # session fixes: svg previously read only the preset's tokens).
     primary = (
         explicit_primary
+        or master_accent
         or getattr(style, "primary_color", None)
         or getattr(style, "preview_accent", _DEFAULT_PRIMARY)
     )
     palette = Palette(
         primary=primary,
-        background=getattr(style, "background_color", None) or getattr(style, "preview_bg", "#FFFFFF"),
+        background=(
+            master_background
+            or getattr(style, "background_color", None)
+            or getattr(style, "preview_bg", "#FFFFFF")
+        ),
         swatches=tuple(getattr(style, "preview_palette", None) or ()),
     )
     default_font = "Noto Sans KR"
     fonts = FontChoice(
-        heading=explicit_fonts or getattr(style, "heading_font", None) or default_font,
-        body=explicit_fonts or getattr(style, "body_font", None) or default_font,
+        heading=explicit_fonts or master_heading_font or getattr(style, "heading_font", None) or default_font,
+        body=explicit_fonts or master_body_font or getattr(style, "body_font", None) or default_font,
         mono=getattr(style, "mono_font", None) or "monospace",
     )
     return StyleContext(

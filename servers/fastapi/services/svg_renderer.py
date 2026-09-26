@@ -9,9 +9,9 @@ import re
 import xml.etree.ElementTree as ET
 
 from services.svg_contract import PAGE_NUMBER_ID, SVG_CONTRACT_VERSION, source_digest, validate_svg
+from services.svg_trusted_fonts import trusted_font_weights_used as _trusted_font_weights_used
 
 SVG_RENDERER_VERSION = "svg-chromium/v1"
-
 
 # Persisted identity: stored SVG sources carry this marker and re-render only
 # when it matches, so the historical value stays although its original owner
@@ -34,18 +34,6 @@ def _trusted_font_marker() -> str:
     )
 
 
-def _pretendard_weights(root: ET.Element) -> set[int]:
-    result = set()
-    for node in root.iter():
-        if node.get("font-family", "").strip("'\"").casefold() != "pretendard":
-            continue
-        value = node.get("font-weight", "400").casefold()
-        if value not in {"normal", "400", "bold", "700"}:
-            raise ValueError("svg_trusted_font_weight_unsupported")
-        result.add(700 if value in {"bold", "700"} else 400)
-    return result
-
-
 def materialize_trusted_svg_fonts(source: str, admitted):
     """Inject fixed bundled faces after normal HTML admission inside the worker."""
     from utils.svg_template_fonts import FONT_PROFILE
@@ -62,7 +50,7 @@ def materialize_trusted_svg_fonts(source: str, admitted):
     if match is None:
         raise ValueError("svg_trusted_font_wrapper_invalid")
     root = ET.fromstring(match.group(1))
-    if not _pretendard_weights(root):
+    if not _trusted_font_weights_used(root)[0]:
         raise ValueError("svg_trusted_font_profile_unused")
     csp_font_none = "font-src &#x27;none&#x27;"
     if admitted.html.count(csp_font_none) != 1 or "</head>" not in admitted.html:
@@ -212,7 +200,7 @@ def svg_preview_html(svg: str, *, width: int = 1280, height: int = 720,
         if ET.tostring(canonical_root) != ET.tostring(resolved_root):
             raise ValueError("svg_materialized_source_mismatch")
     root = ET.fromstring(rendered_source)
-    weights = _pretendard_weights(root)
+    weights, _advisories = _trusted_font_weights_used(root)
     template_font = False
     if source_font_profile is not None:
         from utils.svg_template_fonts import trusted_font_marker
@@ -339,10 +327,12 @@ async def render_svg_with_metrics(svg: str, *, width: int = 1280, height: int = 
     if missing:
         failures.append({"kind": "required_text_missing", "count": len(missing)})
     font_profile = None
-    if _pretendard_weights(root):
+    trusted_weights, weight_advisories = _trusted_font_weights_used(root)
+    if trusted_weights:
         font_profile = {"profile": TRUSTED_FONT_PROFILE,
             "font_digests": [digest for _weight, digest, _payload in _trusted_font_materials()],
-            "worker_materialized": bool(text) and all(item.get("font_loaded") is True for item in text)}
+            "worker_materialized": bool(text) and all(item.get("font_loaded") is True for item in text),
+            **({"weight_normalizations": weight_advisories} if weight_advisories else {})}
     from utils.svg_template_fonts import FONT_PROFILE
     if f'<html title="{FONT_PROFILE}|' in wrapper:
         from utils.svg_template_fonts import FONT_DIGEST, FONT_FAMILY, FONT_PROFILE

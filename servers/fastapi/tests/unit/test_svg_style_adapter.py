@@ -49,6 +49,34 @@ def test_master_rules_and_pin_are_carried_into_the_snapshot():
     assert result["master_pin"] == pin
 
 
+def test_master_rules_govern_tokens_primary_and_fonts_when_not_overridden():
+    style = resolve_authored_style("default")
+    rules = {
+        "style_id": "master:acme-1",
+        "tokens": {"accent": "#7A1FA2", "background": "#111111"},
+        "fonts": {"heading": {"family": "Malgun Gothic"}, "body": {"family": "Malgun Gothic"}},
+    }
+    result = adapt_svg_style(
+        style, width=1280, height=720, request=_request(), master_rules=rules,
+    )
+    assert result["tokens"]["primary"] == "#7A1FA2"
+    assert result["tokens"]["background"] == "#111111"
+    assert result["tokens"]["heading_font"] == "Malgun Gothic"
+    assert result["tokens"]["body_font"] == "Malgun Gothic"
+
+
+def test_explicit_request_override_still_wins_over_a_master():
+    style = resolve_authored_style("default")
+    rules = {"style_id": "master:acme-1", "tokens": {"accent": "#7A1FA2"},
+             "fonts": {"heading": {"family": "Malgun Gothic"}, "body": {"family": "Malgun Gothic"}}}
+    result = adapt_svg_style(
+        style, width=1280, height=720,
+        request=_request(primary_color="#00FF00", fonts="Pretendard"), master_rules=rules,
+    )
+    assert result["tokens"]["primary"] == "#00FF00"
+    assert result["tokens"]["heading_font"] == "Pretendard"
+
+
 def test_no_master_rules_means_no_master_keys_in_the_snapshot():
     style = resolve_authored_style("default")
     result = adapt_svg_style(style, width=1280, height=720)

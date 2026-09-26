@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 from typing import Final
+import xml.etree.ElementTree as ET
 
 from services.authored_vnext.semantic.typography import NativeFontByteRegistry
 
@@ -26,6 +27,69 @@ BUNDLED_FACES: Final[tuple[tuple[int, str, str], ...]] = (
     (400, "Regular", "Pretendard-Regular.ttf"),
     (700, "Bold", "Pretendard-Bold.ttf"),
 )
+
+#: Weights each trusted (embeddable) font family actually bundles. The
+#: renderer normalizes any other requested weight to one of these (see
+#: ``services.svg_renderer``); it never invents a weight this registry does
+#: not declare. Keyed casefolded; a family absent here is not trusted at all
+#: -- the renderer neither validates nor embeds it.
+TRUSTED_FONT_WEIGHTS: Final[dict[str, frozenset[int]]] = {
+    FONT_FAMILY.casefold(): frozenset(weight for weight, _face, _file in BUNDLED_FACES),
+}
+
+
+def declared_weights(family: str) -> frozenset[int] | None:
+    """The weights ``family`` bundles, or ``None`` if it is not a trusted font."""
+
+    return TRUSTED_FONT_WEIGHTS.get(family.strip("'\"").casefold())
+
+
+def _nearest_declared_weight(declared: frozenset[int], requested: int) -> int:
+    """Round up to the nearest heavier declared weight, clamped at the
+    bundled range's ends. This is also what a browser's own CSS font
+    matching already approximates to when only these exact faces are
+    embedded, so the rendered glyphs match what gets embedded."""
+    ordered = sorted(declared)
+    if requested <= ordered[0]:
+        return ordered[0]
+    if requested >= ordered[-1]:
+        return ordered[-1]
+    return next(weight for weight in ordered if weight >= requested)
+
+
+def trusted_font_weights_used(root: ET.Element) -> tuple[set[int], list[dict]]:
+    """Weights the renderer needs to embed for every trusted-font node in
+    ``root``, plus one advisory per node whose requested weight this
+    registry does not bundle exactly (normalized instead of failing).
+
+    A font-family this registry does not declare at all is skipped entirely:
+    it is neither validated nor embedded here.
+    """
+
+    weights: set[int] = set()
+    advisories: list[dict] = []
+    for node in root.iter():
+        family = node.get("font-family", "")
+        declared = declared_weights(family)
+        if declared is None:
+            continue
+        raw = node.get("font-weight", "400").casefold()
+        if raw == "bold":
+            requested = 700
+        elif raw == "normal":
+            requested = 400
+        else:
+            try:
+                requested = int(raw)
+            except ValueError as error:
+                raise ValueError("svg_trusted_font_weight_invalid") from error
+        normalized = requested if requested in declared else _nearest_declared_weight(declared, requested)
+        if normalized != requested:
+            advisories.append({
+                "family": family, "requested_weight": requested, "normalized_weight": normalized,
+            })
+        weights.add(normalized)
+    return weights, advisories
 
 
 def read_trusted_pretendard_faces() -> tuple[tuple[int, str, bytes], ...]:
@@ -58,5 +122,8 @@ __all__ = [
     "BUNDLED_FACES",
     "FONT_DIRECTORY",
     "FONT_FAMILY",
+    "TRUSTED_FONT_WEIGHTS",
+    "declared_weights",
     "read_trusted_pretendard_faces",
+    "trusted_font_weights_used",
 ]
