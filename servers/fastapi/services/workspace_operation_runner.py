@@ -864,6 +864,7 @@ async def _project_linked_generation_recovered(
     operation: WorkspaceOperation,
     *,
     expected_attempt_token: str | None,
+    capacity_deferred: bool = False,
 ) -> bool:
     """Keep a retryable recovery and its legacy projection atomic."""
 
@@ -879,6 +880,7 @@ async def _project_linked_generation_recovered(
         operation.id,
         expected_job_id=job_id,
         expected_attempt_token=expected_attempt_token,
+        capacity_deferred=capacity_deferred,
     )
 
 
@@ -3205,13 +3207,7 @@ async def defer_workspace_operation_claim(
     *,
     session_factory: async_sessionmaker[AsyncSession] = async_session_maker,
 ) -> bool:
-    """Return a capacity-bound claim to the durable queue for free.
-
-    ``attempt_number`` is restored because the handler never acquired scarce
-    generation capacity.  The fencing token remains monotonic, while the
-    attempt token and lease are cleared atomically so a later poll or another
-    worker can safely reclaim the operation.
-    """
+    """Return a capacity claim to the queue without spending an attempt."""
 
     now = _utc_now()
     next_attempt_at = now + timedelta(seconds=deferred.retry_after_seconds)
@@ -3236,12 +3232,8 @@ async def defer_workspace_operation_claim(
             )
 
         admission = await _public_admission_for_operation(session, claim.operation_id)
-        public_requeue = bool(
-            admission is not None and _is_public_v2_admission(admission)
-        )
-        public_budget_error = (
-            _public_retry_budget_error(admission) if public_requeue else None
-        )
+        public_requeue = admission is not None and _is_public_v2_admission(admission)
+        public_budget_error = _public_retry_budget_error(admission) if public_requeue else None
         if public_budget_error is not None:
             await session.rollback()
             return await _transition_claim_failure(
@@ -3283,9 +3275,7 @@ async def defer_workspace_operation_claim(
             "progress": progress,
             "error_code": None,
             "error_detail": None,
-            "started_at": (
-                None if claim.attempt_number == 1 else operation.started_at
-            ),
+            "started_at": None if claim.attempt_number == 1 else operation.started_at,
         }
         event_fencing_token = claim.fencing_token
         if public_requeue:
@@ -3334,6 +3324,13 @@ async def defer_workspace_operation_claim(
                     claim,
                     session_factory=session_factory,
                 )
+            return False
+        if not await _project_linked_generation_recovered(
+            session, operation,
+            expected_attempt_token=claim.attempt_token,
+            capacity_deferred=True,
+        ):
+            await session.rollback()
             return False
         await session.commit()
         _observe_claim(

@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 import uuid
 
 from sqlalchemy import event, select
@@ -22,6 +23,7 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_generation_job import PresentationGenerationJob
+from models.sql.public_admission import PublicOperationAdmission
 from models.sql.user import User
 from models.sql.workspace import (
     WorkspaceActionReceipt,
@@ -34,12 +36,12 @@ from api.v1.ppt.endpoints.presentation_generate import (
     PRESENTATION_GENERATE_ROUTER,
 )
 from services import presentation_generation_operation_handler as generation_handler
-from services import presentation_generation_job_service as generation_jobs
 from services.presentation_generation_operation_handler import (
     PresentationGenerationOperationHandler,
 )
 from services.workspace_operation_handler_registry import (
     WorkspaceOperationHandlerRegistry,
+    WorkspaceOperationDeferred,
     WorkspaceOperationResult,
 )
 from services.workspace_operation_runner import (
@@ -63,6 +65,7 @@ GENERATION_TABLES = [
     WorkspaceActionReceipt.__table__,
     AsyncPresentationGenerationTaskModel.__table__,
     PresentationGenerationJob.__table__,
+    PublicOperationAdmission.__table__,
 ]
 
 
@@ -130,6 +133,9 @@ async def _seed_operations(maker):
                     },
                     expected_revision=0,
                     created_at=base_created_at + timedelta(milliseconds=index),
+                    next_attempt_at=(
+                        base_created_at + timedelta(minutes=1) if index == 3 else None
+                    ),
                 )
                 task = AsyncPresentationGenerationTaskModel(
                     status="pending", message="Queued for generation"
@@ -183,53 +189,26 @@ async def _capacity_acceptance(tmp_path: Path, monkeypatch):
             if active_job is not None or (
                 not claim_order and operation_id != first_operation
             ):
-                raise generation_jobs.GenerationCapacityUnavailable(
-                    retry_after_seconds=0.5,
-                    queue_position=2,
+                raise WorkspaceOperationDeferred(
+                    "authored_cluster_capacity_unavailable",
+                    retry_after_seconds=2.0,
+                    detail={"queue_position": 2},
                 )
             job_id = job_by_operation[operation_id]
             async with maker() as session:
                 job = await session.get(PresentationGenerationJob, job_id)
-                assert job is not None
-                job.state = "running"
-                job.attempt_number += 1
-                job.attempt_token = str(_attempt_token)
-                session.add(job)
-                await session.commit()
-            active_job = job_id
+                assert job is not None and job.state == "running"
+                assert job.attempt_token == str(_attempt_token)
+                active_job = job_id
         claim_order.append(operation_id)
         return str(job_id), str(job.task_id)
 
-    async def complete_linked(job_id, _operation_id, _attempt_token):
-        nonlocal active_job
-        async with maker() as session:
-            job = await session.get(PresentationGenerationJob, uuid.UUID(str(job_id)))
-            assert job is not None
-            job.state = "published"
-            job.attempt_token = None
-            job.lease_expires_at = None
-            session.add(job)
-            await session.commit()
-        active_job = None
-        return True
-
-    async def release_linked(job_id, _operation_id, _attempt_token):
-        nonlocal active_job
-        async with maker() as session:
-            job = await session.get(PresentationGenerationJob, uuid.UUID(str(job_id)))
-            assert job is not None
-            job.state = "queued"
-            job.attempt_token = None
-            job.lease_expires_at = None
-            session.add(job)
-            await session.commit()
-        active_job = None
-        return True
-
     async def pipeline(job_id, _task_id, _cookie, _context):
+        nonlocal active_job
         if uuid.UUID(str(job_id)) == job_by_operation[first_operation]:
             first_started.set()
             await allow_first.wait()
+        active_job = None
         return WorkspaceOperationResult(
             payload={"status": "completed", "job_id": str(job_id)}
         )
@@ -238,16 +217,6 @@ async def _capacity_acceptance(tmp_path: Path, monkeypatch):
         generation_handler,
         "claim_workspace_linked_generation_job",
         claim_linked,
-    )
-    monkeypatch.setattr(
-        generation_handler,
-        "complete_workspace_linked_generation_job",
-        complete_linked,
-    )
-    monkeypatch.setattr(
-        generation_handler,
-        "release_workspace_linked_generation_job",
-        release_linked,
     )
     handler = PresentationGenerationOperationHandler(
         session_factory=maker,
@@ -260,7 +229,7 @@ async def _capacity_acceptance(tmp_path: Path, monkeypatch):
         # Admission seeded every operation/job pair atomically above. Avoid a
         # redundant SQLite read in four concurrent handler tasks so this test
         # measures scheduler capacity behavior instead of connection queuing.
-        return object()
+        return SimpleNamespace(request_payload={})
 
     monkeypatch.setattr(handler, "_linked_job", linked_job_exists)
     registry = WorkspaceOperationHandlerRegistry()
@@ -314,15 +283,23 @@ async def _capacity_acceptance(tmp_path: Path, monkeypatch):
             and waiting_rows[seeded[index][2]].progress.get("stage")
             == "waiting_for_capacity"
             for index in (1, 2)
-        )
+        ), {
+            str(key): (row.state, row.progress, row.attempt_number, row.error_code,
+                       row.next_attempt_at)
+            for key, row in waiting_rows.items()
+        }
 
-        # Cancel one capacity-waiting owner while the first owner still holds
-        # the sole authored slot.
+        # Cancel the queued fourth owner while the first holds the sole slot.
         cancel_token = set_current_owner_id(OWNER_IDS[3])
         try:
-            assert await request_workspace_operation_cancellation(
+            requested = await request_workspace_operation_cancellation(
                 cancelled_operation, session_factory=maker
             )
+            if not requested:
+                async with maker() as session:
+                    row = await session.get(WorkspaceOperation, cancelled_operation)
+                    job = await session.get(PresentationGenerationJob, job_by_operation[cancelled_operation])
+                assert requested, (row.state, row.owner_scope, job.state)
         finally:
             reset_current_owner_id(cancel_token)
 
@@ -378,7 +355,7 @@ async def _capacity_acceptance(tmp_path: Path, monkeypatch):
 
         allow_first.set()
         states: dict[uuid.UUID, str] = {}
-        for _ in range(100):
+        for _ in range(200):
             async with maker() as session:
                 states = {
                     row.owner_id: row.state
