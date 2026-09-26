@@ -99,7 +99,7 @@ describe("PresentationGenerationApi.createPresentation", () => {
         file_paths: [],
         language: "Korean",
         theme,
-        strategy: "authored",
+        strategy: "svg",
       });
     });
   });
@@ -141,6 +141,7 @@ describe("PresentationGenerationApi.generateAuthoredAsync", () => {
         content: "Outline title",
         slides_markdown: ["# Outline title"],
         language: "Korean",
+        strategy: "authored",
         vision_qa: true,
         authored_style: "strategic-navy",
         idempotency_key: "authored-generation-key",

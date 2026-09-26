@@ -40,7 +40,7 @@ interface PresentationGenUploadState {
   /** Authored mode only: selected server-authored visual style id. */
   authoredStyle: string;
 
-  /** Rendering source selected for a new document. Authored remains default. */
+  /** Rendering source selected for a new document. SVG is the default. */
   generationStrategy: PresentationGenerationStrategy;
 
   /**
@@ -65,7 +65,7 @@ const initialState: PresentationGenUploadState = {
   selectedTheme: null, // null = no preset; deck keeps the default (theme picked later in the editor)
   authoredVisionQa: false,
   authoredStyle: "default",
-  generationStrategy: "authored",
+  generationStrategy: "svg",
   companyStandard: null,
   sourceContentMode: false,
   sourceContentAdmission: null,
