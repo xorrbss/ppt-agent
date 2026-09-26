@@ -69,7 +69,12 @@ def _register_probe_handler() -> None:
 
 
 if __name__ == "__main__":
-    workspace_operation_worker.register_workspace_operation_handlers = (
-        _register_probe_handler
+    # This probe uses the production generation controller, whose allowlist
+    # deliberately excludes test operation kinds. Add only the probe kind in
+    # this child process so it reaches the real claim, lease, and fence paths.
+    production_kinds = workspace_operation_worker.external_workspace_operation_kinds
+    workspace_operation_worker.external_workspace_operation_kinds = (
+        lambda role: (*production_kinds(role), CRASH_PROBE_OPERATION_KIND)
     )
+    _register_probe_handler()
     workspace_operation_worker.main()
