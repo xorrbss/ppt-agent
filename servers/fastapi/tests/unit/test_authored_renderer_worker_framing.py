@@ -42,7 +42,7 @@ class _FakeSession:
         self.closed = False
         _FakeSession.instances.append(self)
 
-    def render(self, admitted, timeout):
+    def render(self, admitted, timeout, **_kwargs):
         self.renders.append((admitted.source_digest, timeout))
         return PNG, {"contentBoxes": len(self.renders)}
 
@@ -135,7 +135,7 @@ def test_max_requests_from_the_first_request_stops_the_process(monkeypatch):
 
 def test_a_failed_render_reports_once_and_retires_the_process(monkeypatch):
     class _PoisonedSession(_FakeSession):
-        def render(self, admitted, timeout):
+        def render(self, admitted, timeout, **_kwargs):
             raise RuntimeError("chromium target crashed")
 
     monkeypatch.setattr(authored_renderer_session, "RendererChromiumSession", _PoisonedSession)
@@ -166,7 +166,7 @@ def test_a_malformed_frame_length_is_rejected_without_rendering(monkeypatch):
 def test_a_legacy_bare_payload_still_gets_one_response_and_no_session(monkeypatch):
     calls: list[int] = []
 
-    async def fake_worker_render(admitted, *, timeout):
+    async def fake_worker_render(admitted, *, timeout, **_kwargs):
         calls.append(timeout)
         return PNG, {"contentBoxes": 1}
 
