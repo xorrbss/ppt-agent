@@ -9,10 +9,8 @@ only for regions whose measured confidence is low.
 from __future__ import annotations
 
 import io
-import os
 import subprocess
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from PIL import Image
@@ -31,7 +29,7 @@ from services.source_content.raster_llm_structure import VisionJson
 from services.source_content.raster_page_plan import PagePlan
 from services.source_content.raster_page_fallback import robust_plan
 from services.source_content.raster_redesign_ocr import redesign_ocr
-from services.source_content.raster_stage_timing import page_task, stage
+from services.source_content.raster_stage_timing import stage
 from services.source_content.raster_table_overlay import expand_overlays
 
 PIXEL_ROLES = frozenset({"screenshot", "logo", "decoration"})
@@ -172,23 +170,12 @@ def analyze_redesign(
     if orientation not in {"portrait", "landscape"}:
         raise ValueError("raster_target_orientation_invalid")
     source_sha, width_emu, height_emu, embedded = extract_embedded_raster_pages(source_path)
-    workers = max(1, min(len(embedded), max_workers or min(12, os.cpu_count() or 2)))
-    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="raster-redesign") as pool:
-        results = list(
-            pool.map(
-                # A copy of this context per page task: pool threads do not inherit it.
-                page_task(
-                    lambda page: _page_result(
-                        page,
-                        (width_emu, height_emu),
-                        tesseract_path=tesseract_path,
-                        tessdata_path=tessdata_path,
-                        structurer=structurer,
-                    )
-                ),
-                embedded,
-            )
-        )
+    from services.source_content.raster_page_pool import analyze_pages
+
+    results = analyze_pages(
+        embedded, (width_emu, height_emu), tesseract_path, tessdata_path,
+        structurer, max_workers,
+    )
     pages, crops, issues = [], {}, []
     if structurer is None:
         # Every page is planned without the vision reader: said once for the deck.

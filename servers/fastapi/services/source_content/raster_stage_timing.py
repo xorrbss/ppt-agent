@@ -84,6 +84,16 @@ class TimingRun:
         with self._lock:
             (self._page(page).calls if page is not None else self._unpaged_calls).append(call)
 
+    def import_page(self, payload: dict[str, Any]) -> None:
+        """Install a complete page timing record returned by a spawned worker."""
+
+        with self._lock:
+            self._pages[payload["page_number"]] = _Page(
+                stages={k: v for k, v in payload["stages"].items() if k != RESIDUAL},
+                calls=list(payload["vision_calls"]),
+                wall=payload["wall_seconds"],
+            )
+
     def payload(self) -> dict[str, Any]:
         """The ``RasterStageTimings`` payload (plain JSON types)."""
 
@@ -123,6 +133,17 @@ _PAGE: contextvars.ContextVar[int | None] = contextvars.ContextVar("raster_timin
 
 def current_run() -> TimingRun | None:
     return _RUN.get()
+
+
+@contextmanager
+def suspend() -> Iterator[None]:
+    """Keep parent-side vision calls out of a worker-owned page receipt."""
+
+    token = _RUN.set(None)
+    try:
+        yield
+    finally:
+        _RUN.reset(token)
 
 
 @contextmanager
