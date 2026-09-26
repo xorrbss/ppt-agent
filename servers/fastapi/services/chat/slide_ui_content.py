@@ -7,7 +7,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from services.chat.slide_ui_geometry import apply_geometry
-from templates.v2.models.elements import Table
+from templates.native_ui.models.elements import Table
 
 _TYPE_STYLE_FIELDS: dict[str, set[str]] = {
     "text": {

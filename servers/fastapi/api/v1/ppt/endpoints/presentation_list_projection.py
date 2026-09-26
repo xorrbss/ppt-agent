@@ -1,5 +1,7 @@
 """Dashboard projections that withhold source and diagnostic payloads in SQL."""
-from typing import List
+import uuid
+from datetime import datetime
+from typing import List, Literal, Optional, Union
 from pydantic import BaseModel
 from sqlalchemy import JSON, String, case, cast, column, func, literal, select, type_coerce
 from models.presentation_with_slides import PresentationWithSlides
@@ -103,8 +105,30 @@ def _list_slide_without_html(slide: SlideModel, *, content: dict) -> SlideModel:
     return SlideModel(**carried, content=content, html_content=None)
 
 
+class UnsupportedPresentationListItem(BaseModel):
+    """Degraded dashboard row for a persisted deck whose driver cannot resolve.
+
+    ``resolve_presentation_driver`` is fail-closed: a pre-removal row (e.g. an
+    old Template V2 deck) has no supported driver. The list endpoint must keep
+    serving every other row, so a row like this is projected instead of
+    raising ``PresentationWithSlides`` for the whole page. The client already
+    treats a presentation payload with no resolvable ``profile`` as
+    unsupported (``tryResolveServerIssuedPresentationProfile`` returns null).
+    """
+
+    id: uuid.UUID
+    title: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    lifecycle_status: str = "published"
+    unsupported_template_format: Literal[True] = True
+
+
+PresentationListItem = Union[PresentationWithSlides, UnsupportedPresentationListItem]
+
+
 class PresentationListPage(BaseModel):
-    items: List[PresentationWithSlides]
+    items: List[PresentationListItem]
     total: int
     page: int
     page_size: int

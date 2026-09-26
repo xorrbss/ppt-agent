@@ -12,10 +12,6 @@ const ROOTS = ["app", "components", "i18n", "lib", "scripts", "store", "tests", 
 const TEST_RE = /\.test\.(ts|tsx|mjs)$/;
 const EXCLUDED = [
   {
-    re: /^lib\/export-fidelity\//,
-    reason: "covered by test:template-v2-export-fidelity (dedicated Chromium/LibreOffice workflow)",
-  },
-  {
     re: /\.e2e\.test\.mjs$/,
     reason: "end-to-end: spawns the export runtime / Chrome; run via its dedicated flow",
   },
@@ -44,15 +40,11 @@ const included = all.filter((file) => {
   return true;
 });
 
-// template-v2 suites share on-disk studio state (journal, drafts); keep them
-// serial exactly as the hand-written script did with --test-concurrency=1.
-const serial = included.filter((file) => file.includes("template-v2"));
-const parallel = included.filter((file) => !file.includes("template-v2"));
 // Chrome integration tests exercise the opt-in renderer. They must not turn
 // on the product feature for the default-off and fail-closed test group.
 const RENDERER_REQUIRED = /^lib\/authored-hybrid\/(?:authored-hybrid-e2e|chrome|cleanup|font-layout-chrome|google-fonts-trust-boundary|security)\.test\.mjs$/;
-const rendererRequired = parallel.filter((file) => RENDERER_REQUIRED.test(file));
-const defaultOffParallel = parallel.filter(
+const rendererRequired = included.filter((file) => RENDERER_REQUIRED.test(file));
+const defaultOffParallel = included.filter(
   (file) => !RENDERER_REQUIRED.test(file),
 );
 
@@ -74,7 +66,7 @@ function run(files, extraArgs, env = process.env) {
 }
 
 console.log(
-  `ci-node: running ${parallel.length} parallel + ${serial.length} serial test files; ${skipped.length} excluded:`,
+  `ci-node: running ${included.length} test files; ${skipped.length} excluded:`,
 );
 for (const line of skipped) console.log(`  excluded: ${line}`);
 run(defaultOffParallel, []);
@@ -82,4 +74,3 @@ run(rendererRequired, [], {
   ...process.env,
   AUTHORED_VNEXT_RENDERER_ENABLED: "true",
 });
-run(serial, ["--test-concurrency=1"]);

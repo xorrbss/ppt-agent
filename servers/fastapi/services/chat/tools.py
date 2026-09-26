@@ -470,7 +470,6 @@ class ChatTools:
             "moveOutline",
             "addNewSlide",
             "addNewSlideLayout",
-            "getAvailableBlocks",
             "getTemplateSummary",
             "readSourceDocuments",
             "searchSlide",
@@ -542,17 +541,6 @@ class ChatTools:
             "addNewSlideLayout": (
                 "add_new_slide_layout",
                 ("content", "slide_content", "layout_id", "index"),
-            ),
-            "getAvailableBlocks": (
-                "get_available_blocks",
-                (
-                    "query",
-                    "layout_id",
-                    "element_type",
-                    "block_id",
-                    "include_full_content",
-                    "max_results",
-                ),
             ),
             "getTemplateSummary": ("get_template_summary", ()),
             "readSourceDocuments": ("read_source_documents", ("query", "max_chars")),

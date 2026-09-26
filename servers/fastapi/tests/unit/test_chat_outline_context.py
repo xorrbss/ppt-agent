@@ -10,7 +10,6 @@ from utils.owner_context import (
 from constants.presentation import MAX_NUMBER_OF_SLIDES
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
-from models.sql.template_v2 import TemplateV2
 from services.chat.outline_context import OutlineTemplateContext
 
 
@@ -251,82 +250,6 @@ async def test_blank_slide_preserves_native_ui_html_exclusivity():
 
 
 @pytest.mark.anyio
-async def test_available_blocks_only_uses_associated_template_and_filters_type():
-    presentation = _presentation()
-    template = TemplateV2(
-        id="owned-template",
-        name="Owned",
-        components={
-            "components": [
-                {
-                    "id": "title-block",
-                    "name": "Title block",
-                    "elements": [{"type": "text", "children": [{"type": "image"}]}],
-                }
-            ]
-        },
-    )
-    context, _, _ = _context(presentation, scalar_results=[[template]])
-
-    result = await context.get_available_blocks(element_type="image", include_full_content=True)
-    assert result["truncated"] is False
-    assert result["blocks"] == [
-        {
-            "id": "title-block",
-            "name": "Title block",
-            "description": None,
-            "template_id": "owned-template",
-            "layout_id": None,
-            "element_types": ["image", "text"],
-            "component": template.components["components"][0],
-        }
-    ]
-
-
-def test_catalog_default_outline_scope_requires_release_ready(monkeypatch):
-    owner_id = uuid.uuid4()
-    catalog_default = TemplateV2(
-        id="catalog-default",
-        owner_id=None,
-        name="Catalog default",
-        assets={"release": "ready"},
-        is_default=False,
-    )
-    stale_database_default = TemplateV2(
-        id="stale-default",
-        owner_id=None,
-        name="Stale database default",
-        is_default=True,
-    )
-    owned_custom = TemplateV2(
-        id="owned-custom",
-        owner_id=owner_id,
-        name="Owned custom",
-    )
-    monkeypatch.setattr(
-        "services.chat.outline_context.get_template_v2_catalog_entry",
-        lambda template_id: object() if template_id == "catalog-default" else None,
-    )
-    monkeypatch.setattr(
-        "services.chat.outline_context.is_template_v2_default_release",
-        lambda template_id, assets: (
-            template_id == "catalog-default" and assets == {"release": "ready"}
-        ),
-    )
-
-    token = set_current_owner_id(owner_id)
-    try:
-        assert OutlineTemplateContext._is_template_scoped(catalog_default)
-        catalog_default.assets = {"release": "blocked"}
-        assert not OutlineTemplateContext._is_template_scoped(catalog_default)
-        assert not OutlineTemplateContext._is_template_scoped(
-            stale_database_default
-        )
-        assert OutlineTemplateContext._is_template_scoped(owned_custom)
-    finally:
-        reset_current_owner_id(token)
-
-
 @pytest.mark.anyio
 async def test_source_document_rejects_unowned_path_before_loader(monkeypatch):
     presentation = _presentation(file_paths=["/not-owner/secret.txt"])

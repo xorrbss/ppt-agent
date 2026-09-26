@@ -11,9 +11,7 @@ import type {
   RenderSourceIdentity,
 } from "./render-service/contracts.ts";
 
-export type PersistedExportStrategy =
-  | "template-v2-general"
-  | "authored-hybrid";
+export type PersistedExportStrategy = "authored-hybrid";
 
 export const PRESENTATION_SOURCE_SHA256 = Symbol(
   "presenton.presentationSourceSha256"
@@ -105,14 +103,10 @@ export function resolvePersistedExportStrategy(
 ): PersistedExportStrategy {
   const version = presentation.version ?? "v1-standard";
   const mode = presentation.mode ?? null;
-  if (version !== "v1-standard" && version !== "v2-standard") {
+  if (version !== "v1-standard") {
     throw new Error("unsupported_presentation_identity");
   }
-  if (
-    mode !== null &&
-    mode !== "template" &&
-    mode !== "authored"
-  ) {
+  if (mode !== null && mode !== "authored") {
     throw new Error("unsupported_presentation_identity");
   }
 
@@ -122,11 +116,7 @@ export function resolvePersistedExportStrategy(
   }
 
   const themeMode = readThemeMode(presentation.theme);
-  if (
-    themeMode !== undefined &&
-    themeMode !== "template" &&
-    themeMode !== "authored"
-  ) {
+  if (themeMode !== undefined && themeMode !== "authored") {
     throw new Error("unsupported_presentation_identity");
   }
   if (
@@ -152,25 +142,6 @@ export function resolvePersistedExportStrategy(
     throw new Error("mixed_slide_payload_forbidden");
   }
 
-  if (version === "v2-standard") {
-    if (
-      (mode !== null && mode !== "template") ||
-      (themeMode !== undefined && themeMode !== "template")
-    ) {
-      throw new Error("template_v2_identity_mismatch");
-    }
-    if (payloads.some(({ html }) => Boolean(html))) {
-      throw new Error("template_v2_authored_payload_forbidden");
-    }
-    if (payloads.some(({ ui }) => ui === null || ui === undefined)) {
-      throw new Error("template_v2_ui_payload_required");
-    }
-    return validateCanonicalExportStrategy(
-      presentation,
-      "template-v2-general",
-    );
-  }
-
   const authored = isAuthoredPresentation(presentation);
   if (authored) {
     if (themeMode !== undefined && themeMode !== "authored") {
@@ -193,10 +164,10 @@ function validateCanonicalExportStrategy(
   identityStrategy: PersistedExportStrategy,
 ): PersistedExportStrategy {
   const runtime = resolveServerIssuedPresentationProfile(presentation);
-  const expected: PersistedExportStrategy =
-    runtime.driver.driver_id === "template-v2"
-      ? "template-v2-general"
-      : "authored-hybrid";
+  if (runtime.driver.driver_id !== "authored") {
+    throw new Error("presentation_profile_export_identity_conflict");
+  }
+  const expected: PersistedExportStrategy = "authored-hybrid";
   if (expected !== identityStrategy) {
     throw new Error("presentation_profile_export_identity_conflict");
   }

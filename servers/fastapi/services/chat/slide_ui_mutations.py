@@ -24,7 +24,7 @@ from services.chat.slide_ui_query import (
     slide_ui_revision,
 )
 from services.presentation_version_service import snapshot_slides
-from templates.v2.persistence import canonicalize_slide_ui
+from templates.native_ui.persistence import canonicalize_slide_ui
 
 
 class SlideUIAccessError(PermissionError):

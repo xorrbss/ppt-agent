@@ -41,19 +41,6 @@ from services.source_locked.maintenance import (
 from services.presentation_deletion_operation_handler import (
     register_presentation_deletion_operation_handler,
 )
-from services.template_v2_pptx_ingestion_service import (
-    start_template_v2_pptx_dispatcher,
-    stop_template_v2_pptx_dispatcher,
-)
-from services.template_v2_pptx_operations import (
-    log_template_v2_operational_health,
-    require_template_v2_database_safety,
-)
-from services.template_v2_pptx_retention_service import (
-    start_template_v2_private_source_cleanup,
-    stop_template_v2_private_source_cleanup,
-)
-from services.template_v2_pptx_worker import should_start_embedded_worker
 from services.workspace_operation_outbox_dispatcher import (
     start_workspace_operation_outbox_dispatcher,
     stop_workspace_operation_outbox_dispatcher,
@@ -110,9 +97,6 @@ from services.workspace_event_retention import (
     stop_workspace_event_retention,
 )
 from services.workspace_runtime_profile import require_supported_workspace_runtime
-from templates.packages.defaults import import_template_packages_on_startup
-from templates.packages.registry import get_template_package_registry
-from templates.v2.policy import get_structured_template_policy
 from services.provider_pricing_admission import pricing_gap_message
 from utils.get_env import get_app_data_directory_env, get_can_change_keys_env
 from utils.model_availability import (
@@ -157,13 +141,6 @@ async def app_lifespan(_: FastAPI):
     availability.
     """
     _configure_application_logging()
-    # Validate the immutable package catalog before migrations or workers make
-    # an API with an untrusted bundled-template source appear healthy.
-    template_package_registry = get_template_package_registry()
-    template_v2_policy = get_structured_template_policy()
-    require_template_v2_database_safety(
-        feature_enabled=template_v2_policy.creation_enabled,
-    )
     # The operation runner owns every presentation write, so an unusable SQL
     # runtime must stop startup rather than surface as a half-working API.
     require_supported_workspace_runtime(sql_engine.url)
@@ -182,11 +159,8 @@ async def app_lifespan(_: FastAPI):
         and should_start_embedded_workspace_operation_worker()
     ):
         raise RuntimeError("public_controller_process_separation_required")
-    await import_template_packages_on_startup(template_package_registry)
     await start_runtime_settings_coordinator()
     runtime_settings_coordinator_started = True
-    template_v2_dispatcher_started = False
-    template_v2_cleanup_started = False
     export_retention_started = False
     source_locked_maintenance_started = False
     presentation_generation_dispatcher_started = False
@@ -199,12 +173,6 @@ async def app_lifespan(_: FastAPI):
     trusted_worker_runtime = None
     artifact_lifecycle_started = False
     try:
-        try:
-            await log_template_v2_operational_health()
-        except Exception:
-            logger.exception("Template V2 operational health check failed")
-        await start_template_v2_private_source_cleanup()
-        template_v2_cleanup_started = True
         await start_export_retention_sweeper()
         export_retention_started = True
         await start_source_locked_maintenance()
@@ -263,13 +231,6 @@ async def app_lifespan(_: FastAPI):
             workspace_asset_maintenance_started = True
             await start_workspace_event_retention()
             workspace_event_retention_started = True
-        if (
-            template_v2_policy.creation_enabled
-            and template_v2_policy.allowed_template_ids
-            and should_start_embedded_worker()
-        ):
-            await start_template_v2_pptx_dispatcher()
-            template_v2_dispatcher_started = True
         if should_start_embedded_workspace_operation_worker():
             # Pay the renderer's cold start (Chromium bring-up, or the
             # external worker binary/isolation check) at boot instead of on
@@ -305,14 +266,12 @@ async def app_lifespan(_: FastAPI):
             (workspace_asset_maintenance_started, stop_workspace_asset_maintenance),
             (workspace_operation_runner_started, stop_workspace_operation_runner),
             (workspace_outbox_dispatcher_started, stop_workspace_operation_outbox_dispatcher),
-            (template_v2_dispatcher_started, stop_template_v2_pptx_dispatcher),
             (
                 presentation_generation_dispatcher_started,
                 stop_presentation_generation_dispatcher,
             ),
             (export_retention_started, stop_export_retention_sweeper),
             (source_locked_maintenance_started, stop_source_locked_maintenance),
-            (template_v2_cleanup_started, stop_template_v2_private_source_cleanup),
             (artifact_lifecycle_started, stop_public_artifact_lifecycle_runtime),
         )
         for started, stop in cleanup_steps:

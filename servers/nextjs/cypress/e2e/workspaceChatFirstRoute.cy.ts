@@ -136,34 +136,6 @@ const firstUserMessage = {
   },
 };
 
-const templateV2Runtime = {
-  profile: {
-    schema_version: 1,
-    driver_id: "template-v2",
-    content_model: "template-v2",
-    generation_strategy: "template",
-    style_source: "imported",
-    generation_mode: "standard",
-  },
-  capabilities: {
-    schema_version: 1,
-    driver_id: "template-v2",
-    renderer_adapter_id: "template-v2",
-    editor_adapter_id: "template-v2",
-    editor: {
-      element_text_edit: true,
-      element_geometry_edit: true,
-      chart_edit: true,
-      theme_apply: true,
-      template_apply: true,
-      slide_image_regenerate: false,
-    },
-    agent_tool_capability: "template-v2",
-    export_adapter_id: "template-v2-general",
-    export_editable_pptx: true,
-  },
-};
-
 const authoredRuntime = {
   profile: {
     schema_version: 1,
@@ -217,7 +189,7 @@ const renderableSlide = {
       },
     ],
   },
-  layout_group: "template-v2",
+  layout_group: "authored",
   layout: "__blank_slide__",
   presentation: PRESENTATION_ID,
 };
@@ -304,11 +276,11 @@ const readyPresentation = {
   n_slides: 1,
   revision: 7,
   lifecycle_status: "published",
-  mode: "template",
-  version: "v2-standard",
+  mode: "authored",
+  version: "v1-standard",
   layout: { name: "blank", ordered: true, slides: [] },
-  theme: null,
-  ...templateV2Runtime,
+  theme: { mode: "authored" },
+  ...authoredRuntime,
   slides: [renderableSlide],
 };
 

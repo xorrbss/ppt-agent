@@ -12,19 +12,21 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Final, Literal, TypeAlias, cast
 
-PresentationDriverId: TypeAlias = Literal["template-v2", "authored", "svg-v1"]
-ContentModel: TypeAlias = Literal["template-v2", "authored", "svg"]
+PresentationDriverId: TypeAlias = Literal["authored", "svg-v1"]
+ContentModel: TypeAlias = Literal["authored", "svg"]
 GenerationStrategy: TypeAlias = Literal["template", "authored", "svg"]
 StyleSource: TypeAlias = Literal["imported", "authored"]
 LegacyGenerationMode: TypeAlias = Literal["standard"]
 
 PROFILE_SCHEMA_VERSION: Final = 1
 CAPABILITY_SCHEMA_VERSION: Final = 1
+# "v2-standard" and mode "template" remain accepted identity values so a
+# pre-existing row is refused with a clear error instead of an unhandled
+# exception; no driver claims them since Template V2 was removed 2026-09-25.
 _KNOWN_VERSIONS: Final = frozenset({"v1-standard", "v2-standard"})
 _KNOWN_MODES: Final = frozenset({None, "template", "authored", "svg"})
 _KNOWN_THEME_MODES: Final = frozenset({None, "template", "authored", "svg"})
 _DRIVER_IDS: Final[tuple[PresentationDriverId, ...]] = (
-    "template-v2",
     "authored",
     "svg-v1",
 )
@@ -171,29 +173,8 @@ def _validate_common_identity(identity: PersistedIdentity) -> tuple[
         raise PresentationProfileError("unsupported_presentation_theme_mode")
     if mode is not None and theme_mode is not None and mode != theme_mode:
         raise PresentationProfileError("presentation_mode_theme_conflict")
-    if version == "v2-standard":
-        if generation_mode != "standard":
-            raise PresentationProfileError("template_v2_generation_mode_conflict")
-        if mode == "authored" or theme_mode == "authored":
-            raise PresentationProfileError("authored_version_conflict")
-        # Rows created before the additive ``mode`` facade existed legitimately
-        # have NULL here.  The persisted v2 version remains authoritative.
-        if mode not in {None, "template"}:
-            raise PresentationProfileError("template_v2_identity_conflict")
 
     return generation_mode, cast(str | None, mode), cast(str, version), theme
-
-
-def _validate_template_v2(
-    profile: PresentationProfile, identity: PersistedIdentity
-) -> None:
-    generation_mode, mode, version, _ = _validate_common_identity(identity)
-    if generation_mode != "standard":
-        raise PresentationProfileError("template_v2_generation_mode_conflict")
-    if version != "v2-standard" or mode not in {None, "template"}:
-        raise PresentationProfileError("template_v2_identity_conflict")
-    if profile.content_model != "template-v2":
-        raise PresentationProfileError("template_v2_content_model_conflict")
 
 
 def _validate_authored(profile: PresentationProfile, identity: PersistedIdentity) -> None:
@@ -235,25 +216,10 @@ def _capabilities(
     )
 
 
-_TEMPLATE_V2_EDITOR = EditorCapabilities(True, True, True, True, True, False)
 _AUTHORED_EDITOR = EditorCapabilities(False, False, False, False, True, True)
 
 
 _DRIVERS: dict[PresentationDriverId, PresentationDriver] = {
-    "template-v2": PresentationDriver(
-        driver_id="template-v2",
-        content_model="template-v2",
-        generation_strategy="template",
-        validate=_validate_template_v2,
-        capabilities=_capabilities(
-            "template-v2",
-            renderer="template-v2",
-            editor_adapter="template-v2",
-            editor=_TEMPLATE_V2_EDITOR,
-            export_adapter="template-v2-general",
-            export_editable_pptx=True,
-        ),
-    ),
     "authored": PresentationDriver(
         driver_id="authored",
         content_model="authored",
@@ -313,8 +279,6 @@ def resolve_presentation_profile(identity: PersistedIdentity) -> PresentationPro
         driver_id = "svg-v1"
     elif mode == "authored" or theme.get("mode") == "authored":
         driver_id = "authored"
-    elif version == "v2-standard" and mode in {None, "template"}:
-        driver_id = "template-v2"
     else:
         raise PresentationProfileError("unsupported_presentation_driver")
 

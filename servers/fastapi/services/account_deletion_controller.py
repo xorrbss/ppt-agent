@@ -19,7 +19,6 @@ from services.account_deletion_service import (
     AccountDeletionMarker,
     AccountDeletionFenceConflict,
     cancel_authored_vnext_exports_for_account,
-    delete_account_restricted_dependents,
     lock_account_deletion_marker,
     retire_public_artifacts_for_account,
 )
@@ -239,7 +238,6 @@ async def finalize_account_deletion_claim(
         owner_id=user.id,
         generation=claim.generation,
     )
-    await delete_account_restricted_dependents(session, owner_id=user.id)
     await session.execute(
         delete(KeyValueSqlModel).where(
             KeyValueSqlModel.key == f"presentation_custom_themes:{user.id}"

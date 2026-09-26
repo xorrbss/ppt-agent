@@ -15,12 +15,6 @@ import {
 } from "./presentation-profile.ts";
 
 const expected = {
-  "template-v2": {
-    content_model: "template-v2",
-    generation_strategy: "template",
-    style_source: "imported",
-    generation_mode: "standard",
-  },
   authored: {
     content_model: "authored",
     generation_strategy: "authored",
@@ -57,7 +51,6 @@ function serverResponse(driverId: PresentationDriverId) {
 
 test("compile-time registry resolves the supported server-issued profiles", () => {
   assert.deepEqual(Object.keys(PRESENTATION_DRIVER_REGISTRY), [
-    "template-v2",
     "authored",
     "svg-v1",
   ]);
@@ -111,7 +104,7 @@ test("UI-safe resolution grants no capability to malformed profiles", () => {
   assert.equal(
     tryResolveServerIssuedPresentationProfile({
       ...serverResponse("authored"),
-      capabilities: serverResponse("template-v2").capabilities,
+      capabilities: serverResponse("svg-v1").capabilities,
     }),
     null,
   );
@@ -123,7 +116,7 @@ test("profile/capability conflicts fail before an adapter is selected", () => {
     () =>
       resolveServerIssuedPresentationProfile({
         profile: authored.profile,
-        capabilities: serverResponse("template-v2").capabilities,
+        capabilities: serverResponse("svg-v1").capabilities,
       }),
     (error: unknown) =>
       error instanceof PresentationProfileResolutionError &&
@@ -134,7 +127,7 @@ test("profile/capability conflicts fail before an adapter is selected", () => {
       resolveServerIssuedPresentationProfile({
         profile: {
           ...authored.profile,
-          content_model: "template-v2",
+          content_model: "svg",
         },
         capabilities: authored.capabilities,
       }),
@@ -146,7 +139,7 @@ test("profile/capability conflicts fail before an adapter is selected", () => {
 
 test("root client hints cannot spoof a server-issued profile", () => {
   const response = {
-    ...serverResponse("template-v2"),
+    ...serverResponse("svg-v1"),
     driver_id: "authored",
     generation_mode: "standard",
     content_model: "authored",
@@ -154,20 +147,24 @@ test("root client hints cannot spoof a server-issued profile", () => {
 
   const resolved = resolveServerIssuedPresentationProfile(response);
 
-  assert.equal(resolved.profile.driver_id, "template-v2");
-  assert.equal(resolved.driver.export_adapter_id, "template-v2-general");
+  assert.equal(resolved.profile.driver_id, "svg-v1");
+  assert.equal(resolved.driver.export_adapter_id, "svg-v1");
 });
 
 test("selectors consume immutable capabilities and authored alternatives", () => {
-  const templateV2 = resolveServerIssuedPresentationProfile(
-    serverResponse("template-v2"),
-  );
   const authored = resolveServerIssuedPresentationProfile(
     serverResponse("authored"),
   );
+  // No live driver currently grants element_text_edit/element_geometry_edit;
+  // exercise the selector's true branch directly rather than coupling this
+  // unit test to a driver capability set that may change independently.
+  const editableCapabilities: PresentationCapabilities = {
+    ...authored.capabilities,
+    editor: { ...authored.capabilities.editor, element_text_edit: true },
+  };
 
   assert.equal(
-    presentationCapabilitySelectors.canEditElements(templateV2.capabilities),
+    presentationCapabilitySelectors.canEditElements(editableCapabilities),
     true,
   );
   assert.equal(

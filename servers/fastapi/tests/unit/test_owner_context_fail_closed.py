@@ -10,7 +10,7 @@ import pytest
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from models.sql.presentation import PresentationModel, PresentationVersion
+from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from models.sql.user import User
 from services import database as _database_events  # noqa: F401
@@ -162,7 +162,7 @@ def test_owned_select_with_a_tenant_but_no_owner_reads_nobody() -> None:
                         PresentationModel(
                             id=uuid.uuid4(),
                             owner_id=owner,
-                            version=PresentationVersion.V2_STANDARD,
+                            mode="authored",
                             content=content,
                             n_slides=1,
                             language="en",
@@ -195,7 +195,7 @@ def test_owned_update_and_delete_inside_request_without_identity_raise() -> None
                     PresentationModel(
                         id=uuid.uuid4(),
                         owner_id=owner_id,
-                        version=PresentationVersion.V2_STANDARD,
+                        mode="authored",
                         content="owned",
                         n_slides=1,
                         language="en",

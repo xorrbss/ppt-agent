@@ -32,11 +32,19 @@ __all__ = [
 
 
 class PptxImportConversionsService(ExportTaskRuntimeMixin):
-    """PPTX -> JSON/HTML/schema conversions used by the template-v2 import pipeline.
+    """PPTX -> JSON/HTML/schema conversion transport.
 
-    This service owns the live import-facing operations and reuses the generic
-    Node-runtime bridge. The bridge is not export-specific; it is the transport
-    every bundled conversion task spawns through.
+    ``convert_pptx_to_html``, ``convert_pptx_to_json`` and ``extract_schema``
+    were used by the template-v2 import pipeline (``structured_template_imports``),
+    which was removed with Template V2; those three methods currently have no
+    production caller. This module is not deleted because its module-level
+    ``EXPORT_TASK_SERVICE`` singleton is the sole concrete instance of
+    ``ExportTaskRuntimeMixin``, the generic Node-runtime bridge every bundled
+    conversion task spawns through (``services.export_task_runtime`` calls
+    ``EXPORT_TASK_SERVICE._ensure_output_readable`` directly), and several unit
+    tests use this class to exercise that shared, non-import-specific transport
+    (bounded child output, Node env resolution, timeout configuration, and
+    owner-scoped artifact relocation).
     """
 
     def __init__(self, timeout_seconds: int | None = None):

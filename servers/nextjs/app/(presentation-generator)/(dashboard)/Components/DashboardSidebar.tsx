@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { LayoutDashboard, Star, Brain, Settings, Palette } from "lucide-react";
+import { LayoutDashboard, Brain, Settings, Palette } from "lucide-react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -10,11 +10,7 @@ import Image from "next/image";
 
 export const defaultNavItems = [
     { key: "dashboard" as const, label: "대시보드", icon: LayoutDashboard },
-    { key: "templates" as const, label: "기본", icon: Star },
     { key: "designs" as const, label: "스마트", icon: Brain },
-
-
-
 ];
 export const BelongingNavItems = [
     { key: "settings" as const, label: "설정", icon: Settings },
@@ -56,21 +52,6 @@ const DashboardSidebar = () => {
                         >
                             <LayoutDashboard className={["h-4 w-4", pathname === "/dashboard" ? "text-[#5146E5]" : "text-slate-600"].join(" ")} />
                             <span className="text-[11px] text-slate-800">대시보드</span>
-                        </Link>
-                        <Link
-                            prefetch={false}
-                            href={`/templates`}
-                            className={[
-                                "flex min-w-0 flex-1 flex-col items-center gap-1 text-center transition-colors sm:gap-2",
-                                pathname === "/templates" ? "" : "ring-transparent",
-                            ].join(" ")}
-                            aria-label="템플릿"
-                            title="템플릿"
-                        >
-                            <div className="flex cursor-pointer flex-col items-center gap-1 text-center transition-colors sm:gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={`${pathname === "/templates" ? "#5146E5" : "#475569"}`} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="M4 14h6" /><path d="M4 2h10" /><rect x="4" y="18" width="16" height="4" rx="1" /><rect x="4" y="6" width="16" height="4" rx="1" /></svg>
-                                <span className="text-[11px] text-slate-800">템플릿</span>
-                            </div>
                         </Link>
                         <Link
                             prefetch={false}

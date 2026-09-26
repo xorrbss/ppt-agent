@@ -96,34 +96,27 @@ async def get_frozen_runtime_descriptor(
     sql_session: AsyncSession,
     presentation_id: uuid.UUID,
 ) -> FrozenRuntimeDescriptor:
+    """Return the frozen-legacy runtime descriptor for a presentation.
+
+    No presentation can resolve to a frozen/legacy driver any more: the
+    driver registry (``services.presentation_profiles``) only ever lists
+    live drivers, so a profile that resolves at all -- ``authored`` or any
+    other currently-registered driver such as ``svg-v1`` -- is, by
+    construction, not frozen. This always raises:
+    ``compatibility_runtime_not_applicable`` for a resolvable (live) profile,
+    ``compatibility_presentation_quarantined`` for a row whose identity no
+    longer resolves at all (the only remaining shape a legacy Template V2 row
+    can have, now that the underlying tables are gone).
+    """
+
     presentation = await _require_owned_presentation(sql_session, presentation_id)
-    slides = list(
-        (
-            await sql_session.scalars(
-                select(SlideModel)
-                .where(SlideModel.presentation == presentation_id)
-                .order_by(SlideModel.index, SlideModel.id)
-            )
-        ).all()
-    )
-    census_entry = classify_presentation(presentation, slides)
-    if census_entry.quarantine:
-        raise FrozenCompatibilityError(
-            "compatibility_presentation_quarantined", status_code=409
-        )
     try:
-        profile = resolve_presentation_profile(presentation)
+        resolve_presentation_profile(presentation)
     except PresentationProfileError as error:
         raise FrozenCompatibilityError(
             "compatibility_presentation_quarantined", status_code=409
         ) from error
-    if profile.driver_id == "authored":
-        raise FrozenCompatibilityError("compatibility_runtime_not_applicable")
-    return FrozenRuntimeDescriptor(
-        presentation_id=presentation.id,
-        source_driver_id=profile.driver_id,
-        allowed_operations=FROZEN_ALLOWED_OPERATIONS,
-    )
+    raise FrozenCompatibilityError("compatibility_runtime_not_applicable")
 
 
 async def authorize_frozen_operation(

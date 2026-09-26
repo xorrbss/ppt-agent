@@ -17,8 +17,9 @@ def _presentation(**overrides):
         "updated_at": datetime.now(UTC),
         "slides": [],
         "generation_mode": "standard",
-        "mode": "template",
-        "version": "v2-standard",
+        "mode": "authored",
+        "theme": {"mode": "authored"},
+        "version": "v1-standard",
         "deck_plan": None,
         "revision": 7,
         "lifecycle_status": "published",
@@ -30,25 +31,15 @@ def _presentation(**overrides):
 @pytest.mark.parametrize(
     ("overrides", "driver_id"),
     [
-        ({}, "template-v2"),
+        ({}, "authored"),
         (
             {
-                "mode": "template",
-                "version": "v2-standard",
-                "deck_plan": None,
-            },
-            "template-v2",
-        ),
-        (
-            {
-                "mode": "authored",
-                "theme": {"mode": "authored"},
-                # An authored deck is v1. Inheriting the base payload's v2 here
-                # described a deck that cannot exist, and the projection said so.
+                "mode": "svg",
+                "theme": {"mode": "svg"},
                 "version": "v1-standard",
                 "deck_plan": None,
             },
-            "authored",
+            "svg-v1",
         ),
     ],
 )
@@ -60,16 +51,29 @@ def test_response_projects_all_server_drivers(overrides, driver_id):
     assert response.revision == 7
 
 
+def test_response_rejects_a_removed_template_v2_identity():
+    """Template V2 was removed from the driver registry (2026-09-25).
+
+    A row that used to describe it -- explicit mode/version or the bare
+    default -- no longer resolves a profile at all, so the projection fails
+    closed instead of naming a ``template-v2`` driver.
+    """
+    with pytest.raises(ValidationError, match="unsupported_presentation_driver"):
+        PresentationWithSlides.model_validate(
+            _presentation(mode="template", version="v2-standard", theme=None)
+        )
+
+
 def test_response_ignores_spoofed_profile_and_capabilities():
     response = PresentationWithSlides.model_validate(
         _presentation(
-            profile={"driver_id": "authored"},
-            capabilities={"driver_id": "authored"},
+            profile={"driver_id": "svg-v1"},
+            capabilities={"driver_id": "svg-v1"},
         )
     )
 
-    assert response.profile.driver_id == "template-v2"
-    assert response.capabilities.driver_id == "template-v2"
+    assert response.profile.driver_id == "authored"
+    assert response.capabilities.driver_id == "authored"
 
 
 def test_response_fails_closed_for_future_persisted_identity():

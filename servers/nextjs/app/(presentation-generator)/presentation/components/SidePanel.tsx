@@ -123,7 +123,6 @@ const SidePanel = ({
         index: newIndex,
         presentationId,
         templateId: BLANK_SLIDE_LAYOUT_GROUP,
-        isTemplateV2: true,
       });
 
       dispatch(
@@ -139,7 +138,6 @@ const SidePanel = ({
         template_id: BLANK_SLIDE_LAYOUT_GROUP,
         layout_id: BLANK_SLIDE_LAYOUT_ID,
         source: "blank_side_panel",
-        is_template_v2: true,
       });
       onSlideClick(newIndex);
       return;

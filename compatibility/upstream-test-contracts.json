@@ -167,61 +167,6 @@
   ],
   "portedContracts": [
     {
-      "id": "template-v2-default-off",
-      "sourceConcept": "Default templates must not become active implicitly.",
-      "localTests": [
-        "servers/fastapi/tests/unit/test_upstream_template_v2_contracts.py::test_template_v2_is_default_off_without_rollout_configuration"
-      ],
-      "evidenceFiles": [
-        "servers/fastapi/templates/v2/policy.py"
-      ]
-    },
-    {
-      "id": "versioned-api-with-legacy-async-status",
-      "sourceConcept": "Async task status remains reachable through a stable versioned API.",
-      "localTests": [
-        "servers/fastapi/tests/unit/test_upstream_template_v2_contracts.py::test_template_v2_routes_stay_in_api_v1_and_preserve_legacy_async_status"
-      ],
-      "evidenceFiles": [
-        "servers/fastapi/api/v1/ppt/endpoints/presentation_generate.py"
-      ]
-    },
-    {
-      "id": "non-conflicting-template-v2-compat-mutations",
-      "sourceConcept": "Expose only Template V2 method/path pairs that do not replace the legacy template read contract.",
-      "localTests": [
-        "servers/fastapi/tests/unit/test_upstream_template_v2_contracts.py::test_compat_router_adds_advanced_routes_without_legacy_collisions",
-        "servers/fastapi/tests/unit/test_upstream_template_v2_contracts.py::test_template_item_openapi_exposes_one_resource_path_with_unique_operations"
-      ],
-      "evidenceFiles": [
-        "servers/fastapi/api/v1/ppt/endpoints/template_v2_compat.py",
-        "servers/fastapi/templates/router.py"
-      ]
-    },
-    {
-      "id": "template-v2-generated-content-image-cover",
-      "sourceConcept": "Generated raster content images use cover fitting while icons and decorative assets retain their existing semantics.",
-      "localTests": [
-        "servers/fastapi/tests/unit/test_template_v2_prompted_layout.py::test_prompted_layout_retries_and_normalizes_replaceable_assets",
-        "servers/fastapi/tests/unit/test_template_v2_prompted_layout.py::test_prompted_layout_normalizes_contained_content_images_to_cover"
-      ],
-      "evidenceFiles": [
-        "servers/fastapi/templates/v2/generation.py"
-      ]
-    },
-    {
-      "id": "template-v2-chat-layout-hydration-image-semantics",
-      "sourceConcept": "Chat hydration clones a Template V2 layout, preserves image prompt metadata, uses cover for generated raster content, and preserves SVG, icon, and clipped-asset semantics.",
-      "localTests": [
-        "servers/fastapi/tests/unit/services/chat/test_template_v2_hydration.py::test_hydration_clones_layout_and_preserves_image_prompt_metadata",
-        "servers/fastapi/tests/unit/services/chat/test_template_v2_hydration.py::test_hydration_is_fail_closed_for_malformed_native_ui",
-        "servers/fastapi/tests/unit/services/chat/test_template_v2_hydration.py::test_apply_state_restores_all_fields_when_assignment_fails"
-      ],
-      "evidenceFiles": [
-        "servers/fastapi/services/chat/template_v2_hydration.py"
-      ]
-    },
-    {
       "id": "durable-owner-scoped-async-read-facade",
       "sourceConcept": "Expose generic async task reads without creating a second execution path or weakening owner isolation.",
       "localTests": [

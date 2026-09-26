@@ -33,43 +33,11 @@ def _stub_runtime_settings_coordinator(monkeypatch):
     )
 
 
-def test_managed_database_guard_precedes_schema_mutation(monkeypatch):
-    migrate = AsyncMock()
-    create_tables = AsyncMock()
-    monkeypatch.setenv("TEMPLATE_V2_DEPLOYMENT_TIER", "production")
-    monkeypatch.setenv("DATABASE_URL", "sqlite+aiosqlite:///production.db")
-    monkeypatch.setattr(
-        lifespan,
-        "get_structured_template_policy",
-        lambda: SimpleNamespace(creation_enabled=True),
-    )
-    monkeypatch.setattr(lifespan, "migrate_database_on_startup", migrate)
-    monkeypatch.setattr(lifespan, "create_db_and_tables", create_tables)
-
-    async def enter_lifespan() -> None:
-        async with lifespan.app_lifespan(FastAPI()):
-            raise AssertionError("unsafe managed database must fail before startup")
-
-    with pytest.raises(
-        RuntimeError,
-        match="template_v2_managed_canary_requires_postgresql",
-    ):
-        asyncio.run(enter_lifespan())
-
-    migrate.assert_not_awaited()
-    create_tables.assert_not_awaited()
-
-
 def test_managed_chat_first_scanner_guard_precedes_schema_mutation(monkeypatch):
     migrate = AsyncMock()
     create_tables = AsyncMock()
     monkeypatch.setenv("TEMPLATE_V2_DEPLOYMENT_TIER", "production")
     monkeypatch.setenv("WORKSPACE_ASSET_MALWARE_SCAN_MODE", "disabled")
-    monkeypatch.setattr(
-        lifespan,
-        "get_structured_template_policy",
-        lambda: SimpleNamespace(creation_enabled=False),
-    )
     monkeypatch.setattr(lifespan, "migrate_database_on_startup", migrate)
     monkeypatch.setattr(lifespan, "create_db_and_tables", create_tables)
 
@@ -94,11 +62,6 @@ def test_unsupported_sql_runtime_precedes_schema_mutation(monkeypatch):
         lifespan,
         "sql_engine",
         SimpleNamespace(url="mysql+aiomysql://db/app"),
-    )
-    monkeypatch.setattr(
-        lifespan,
-        "get_structured_template_policy",
-        lambda: SimpleNamespace(creation_enabled=False),
     )
     monkeypatch.setattr(
         lifespan,
@@ -137,9 +100,6 @@ def test_database_admin_bootstrap_runs_during_startup(monkeypatch, tmp_path):
     async_steps = (
             "migrate_database_on_startup",
             "create_db_and_tables",
-            "import_template_packages_on_startup",
-            "log_template_v2_operational_health",
-        "start_template_v2_private_source_cleanup",
         "start_export_retention_sweeper",
         "start_source_locked_maintenance",
         "start_presentation_generation_dispatcher",
@@ -158,16 +118,7 @@ def test_database_admin_bootstrap_runs_during_startup(monkeypatch, tmp_path):
         "stop_presentation_generation_dispatcher",
         "stop_export_retention_sweeper",
         "stop_source_locked_maintenance",
-        "stop_template_v2_private_source_cleanup",
         "dispose_engines",
-    )
-    monkeypatch.setattr(
-        lifespan,
-        "get_structured_template_policy",
-        lambda: SimpleNamespace(
-            creation_enabled=False,
-            allowed_template_ids=(),
-        ),
     )
     monkeypatch.setattr(lifespan, "get_app_data_directory_env", lambda: str(tmp_path))
     monkeypatch.setattr(lifespan, "bootstrap_database_admin", bootstrap_admin)
@@ -207,11 +158,6 @@ def test_database_admin_bootstrap_runs_during_startup(monkeypatch, tmp_path):
 def test_export_only_validation_skips_provider_availability(monkeypatch, tmp_path):
     provider_check = AsyncMock()
     monkeypatch.setenv("PRESENTON_SKIP_PROVIDER_AVAILABILITY_CHECK", "true")
-    monkeypatch.setattr(
-        lifespan,
-        "get_structured_template_policy",
-        lambda: SimpleNamespace(creation_enabled=False, allowed_template_ids=()),
-    )
     monkeypatch.setattr(lifespan, "get_app_data_directory_env", lambda: str(tmp_path))
     monkeypatch.setattr(lifespan, "bootstrap_database_admin", AsyncMock())
     monkeypatch.setattr(
@@ -222,9 +168,6 @@ def test_export_only_validation_skips_provider_availability(monkeypatch, tmp_pat
     for name in (
         "migrate_database_on_startup",
         "create_db_and_tables",
-        "import_template_packages_on_startup",
-        "log_template_v2_operational_health",
-        "start_template_v2_private_source_cleanup",
         "start_export_retention_sweeper",
         "start_source_locked_maintenance",
         "start_presentation_generation_dispatcher",
@@ -241,7 +184,6 @@ def test_export_only_validation_skips_provider_availability(monkeypatch, tmp_pat
         "stop_presentation_generation_dispatcher",
         "stop_export_retention_sweeper",
         "stop_source_locked_maintenance",
-        "stop_template_v2_private_source_cleanup",
         "dispose_engines",
     ):
         monkeypatch.setattr(lifespan, name, AsyncMock())
@@ -257,11 +199,6 @@ def test_export_only_validation_skips_provider_availability(monkeypatch, tmp_pat
 
 def test_chat_first_workers_start_and_stop_in_dependency_order(monkeypatch, tmp_path):
     calls: list[str] = []
-    monkeypatch.setattr(
-        lifespan,
-        "get_structured_template_policy",
-        lambda: SimpleNamespace(creation_enabled=False, allowed_template_ids=()),
-    )
     monkeypatch.setattr(
         lifespan,
         "require_workspace_asset_malware_scan_safety",
@@ -282,9 +219,6 @@ def test_chat_first_workers_start_and_stop_in_dependency_order(monkeypatch, tmp_
     for name in (
             "migrate_database_on_startup",
             "create_db_and_tables",
-            "import_template_packages_on_startup",
-            "log_template_v2_operational_health",
-        "start_template_v2_private_source_cleanup",
         "start_export_retention_sweeper",
         "start_source_locked_maintenance",
         "start_presentation_generation_dispatcher",
@@ -293,7 +227,6 @@ def test_chat_first_workers_start_and_stop_in_dependency_order(monkeypatch, tmp_
         "stop_presentation_generation_dispatcher",
         "stop_export_retention_sweeper",
         "stop_source_locked_maintenance",
-        "stop_template_v2_private_source_cleanup",
         "dispose_engines",
     ):
         monkeypatch.setattr(lifespan, name, AsyncMock())

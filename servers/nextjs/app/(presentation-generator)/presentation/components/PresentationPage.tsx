@@ -878,6 +878,15 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
             </div>
           </div>
         </PresentationFeatureSlot>}
+        {showResult && !presentationFeatureView.driverId && (
+          <div
+            role="alert"
+            className="flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-6 py-10 text-center text-sm text-neutral-600"
+            data-testid="presentation-unsupported-driver-notice"
+          >
+            {t("unsupportedTemplateFormat")}
+          </div>
+        )}
         {showResult && workspaceLayout.isSplit && !workspaceLayout.chatCollapsed && (
           <div {...workspaceLayout.separatorProps} className="group flex w-2 shrink-0 touch-none cursor-col-resize items-center justify-center bg-white outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-600" data-testid="workspace-pane-separator">
             <span className="h-10 w-1 rounded-full bg-neutral-200 group-hover:bg-neutral-400" />

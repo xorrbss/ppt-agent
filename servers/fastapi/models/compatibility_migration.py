@@ -20,16 +20,30 @@ class FrozenCompatibilityOperation(str, Enum):
 
 
 class FrozenRuntimeDescriptor(BaseModel):
+    """Shape of a frozen-legacy runtime descriptor. No longer constructible.
+
+    ``template-v2`` was the last driver id a frozen deck could carry; the
+    retired ``standard``/``smart`` React-template drivers named below were
+    already gone before it. Template V2 was removed from the driver registry
+    in ``services.presentation_profiles`` on 2026-09-25, so a presentation
+    profile can now only resolve to a live driver (``authored``, ``svg-v1``)
+    or fail to resolve at all -- there is no longer a driver id that is both
+    resolvable and frozen. ``services.compatibility_migration.runtime.
+    get_frozen_runtime_descriptor`` therefore never builds one of these any
+    more; it always raises instead. The type is kept only for the HTTP
+    endpoint's declared response shape.
+    """
+
     model_config = ConfigDict(frozen=True)
 
     schema_version: Literal[1] = 1
     presentation_id: uuid.UUID
-    # The only driver a frozen deck can have. ``authored`` is absent because an
-    # authored deck is not frozen and raises before the descriptor is built,
-    # and the retired ``standard``/``smart`` ids named React-template drivers
-    # this fork no longer ships: ``app/presentation-templates/`` holds no
-    # component at all, so such a deck could not be rendered even if a row for
-    # one survived.
+    # The only driver a frozen deck could have. ``authored`` is absent because
+    # an authored deck is not frozen and raises before the descriptor is
+    # built, and the retired ``standard``/``smart`` ids named React-template
+    # drivers this fork no longer ships: ``app/presentation-templates/``
+    # holds no component at all, so such a deck could not be rendered even if
+    # a row for one survived.
     source_driver_id: Literal["template-v2"]
     state: Literal["frozen-compatibility"] = "frozen-compatibility"
     allowed_operations: tuple[FrozenCompatibilityOperation, ...]
