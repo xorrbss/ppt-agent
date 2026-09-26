@@ -1,4 +1,5 @@
 "use client";
+import { useTranslations as useA2bTranslations } from "next-intl";
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
@@ -41,6 +42,7 @@ const OutlinePage: React.FC<{
   initialPresentationId?: string;
   initialMasterSettingsOpen?: boolean;
 }> = ({ auto = false, initialPresentationId, initialMasterSettingsOpen = false }) => {
+  const tA2b = useA2bTranslations("outlineExtras");
   const { presentation_id, outlines } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
@@ -408,18 +410,18 @@ const OutlinePage: React.FC<{
         busy={preparing || awaitingAuto}
         progressLabel={slideProgress?.label ?? (streamState.isStreaming && outlines.length > 0 ? `구성 ${outlines.length}장 작성됨` : undefined)}
         actions={!preparing && <>
-          {streamFailed ? <Button variant="outline" onClick={streamState.retry}>구성 다시 불러오기</Button> : null}
+          {streamFailed ? <Button variant="outline" onClick={streamState.retry}>{tA2b("reloadOutline")}</Button> : null}
           {!auto && outlines.length > 0 && !editingOutline && !startRecovery && <>
-            <Button variant="outline" onClick={startOutlineEdit}>구성 수정</Button>
-            <Button onClick={() => void handleSubmit()}>이대로 만들기</Button>
+            <Button variant="outline" onClick={startOutlineEdit}>{tA2b("editOutline")}</Button>
+            <Button onClick={() => void handleSubmit()}>{tA2b("createAsShown")}</Button>
           </>}
-          {loadingState.message && startRecovery && !auto && <Button onClick={() => void handleSubmit()}>{startRecovery === "receipt" ? "같은 요청으로 접수 확인" : "같은 요청 재시도"}</Button>}
+          {loadingState.message && startRecovery && !auto && <Button onClick={() => void handleSubmit()}>{startRecovery === "receipt" ? tA2b("checkAdmissionForTheSameRequest") : tA2b("retryTheSameRequest")}</Button>}
           {auto && loadingState.message && (startRecovery
-            ? <Button onClick={() => void handleSubmit()}>{startRecovery === "receipt" ? "같은 요청으로 접수 확인" : "같은 요청 재시도"}</Button>
-            : <Button variant="outline" onClick={() => router.replace(`/outline?id=${encodeURIComponent(resolvedPresentationId)}`)}>요청 검토</Button>)}
+            ? <Button onClick={() => void handleSubmit()}>{startRecovery === "receipt" ? tA2b("checkAdmissionForTheSameRequest") : tA2b("retryTheSameRequest")}</Button>
+            : <Button variant="outline" onClick={() => router.replace(`/outline?id=${encodeURIComponent(resolvedPresentationId)}`)}>{tA2b("reviewRequest")}</Button>)}
           {editingOutline && <>
-            <Button variant="outline" onClick={cancelOutlineEdit}>변경 취소</Button>
-            <Button onClick={() => setEditingOutline(false)}>수정 적용</Button>
+            <Button variant="outline" onClick={cancelOutlineEdit}>{tA2b("discardChanges")}</Button>
+            <Button onClick={() => setEditingOutline(false)}>{tA2b("applyChanges")}</Button>
           </>}
         </>}
       >
@@ -445,7 +447,7 @@ const OutlinePage: React.FC<{
             onRetry={streamState.retry}
           />
         </div> : outlines.length > 0 && <details open={!auto} className="rounded-2xl border border-slate-200 px-4 py-3">
-          <summary className="cursor-pointer text-sm font-medium">{streamState.isStreaming ? "작성 중인 구성" : "구성 보기"} · {outlines.length}장</summary>
+          <summary className="cursor-pointer text-sm font-medium">{streamState.isStreaming ? tA2b("outlineInProgress") : tA2b("viewOutline")} · {outlines.length}{tA2b("slides")}</summary>
           <ol className="mt-3 max-h-[40dvh] list-decimal space-y-3 overflow-y-auto pl-5">
             {outlines.map((item, index) => <li key={index} className="whitespace-pre-wrap break-words text-sm leading-6 text-slate-600">{item.content}</li>)}
           </ol>

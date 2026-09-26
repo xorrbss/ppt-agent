@@ -11,6 +11,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import type { Dispatch as ReduxDispatch, UnknownAction } from "redux";
 import { clearOutlines, setPresentationId } from "@/store/slices/presentationGeneration";
 import { notify } from "@/components/ui/sonner";
+import { uploadExtraTranslator } from "./uploadExtraTranslator";
 import type { PresentationConfig } from "../../type";
 import { PresentationGenerationApi } from "../../../services/api/presentation-generation";
 import {
@@ -61,8 +62,9 @@ export function createRasterRedesignStarter({
 }: RasterRedesignStarterDeps) {
   return async function startRasterRedesignFlow(admitted: SourceContentAdmission) {
     if (authoredStyle !== "screenshot-blue") {
-      notify.warning("템플릿을 확인해 주세요", "이미지형 A4 SVG 재구성은 현재 screenshot-blue 템플릿에서 지원합니다. 템플릿을 선택한 뒤 다시 시작해 주세요.");
-      abandonRun("이미지형 A4 SVG 재구성에 필요한 screenshot-blue 템플릿을 선택해 주세요.");
+      const t = uploadExtraTranslator();
+      notify.warning(t("checkTemplate"), t("a4SvgReconstructionSupportedTemplate"));
+      abandonRun(t("selectScreenshotBlueTemplate"));
       return;
     }
     try {

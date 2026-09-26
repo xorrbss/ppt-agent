@@ -8,6 +8,7 @@ import { createTranslator } from "next-intl";
 import { notify } from "@/components/ui/sonner";
 import { resolveUiLocale } from "@/i18n/locale";
 import { getUiMessages } from "@/i18n/messages";
+import { uploadExtraTranslator } from "./uploadExtraTranslator";
 import type {
   RasterAnalysisMode,
   RasterOperationWire,
@@ -76,8 +77,9 @@ export const notifyRasterAdvisories = (operation: RasterOperationWire) => {
   }
   const count = otherAdvisoryCount(operation.advisory_count ?? 0, unresolved);
   if (count <= 0 || count > RASTER_ADVISORY_NOTICE_MAX) return;
+  const t = uploadExtraTranslator();
   notify.info(
-    "검토를 권장하는 항목이 있습니다",
-    `서버가 확신하지 못한 항목 ${count}개가 있습니다. 생성은 그대로 진행되며, 결과에서 해당 부분을 확인해 주세요.`,
+    t("reviewItemsRecommended"),
+    t("uncertainItemsNotice", { count }),
   );
 };

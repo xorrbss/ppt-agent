@@ -1,3 +1,4 @@
+import { useTranslations as useA2bTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { notify } from "@/components/ui/sonner";
@@ -49,6 +50,7 @@ export const useOutlineStreaming = (
   presentationId: string | null,
   createEventSource: OutlineEventSourceFactory = createBrowserEventSource
 ) => {
+  const tA2b = useA2bTranslations("outlineExtras");
   const t = useTranslations("generation");
   const dispatch = useDispatch();
   const { outlines } = useSelector((state: RootState) => state.presentationGeneration);
@@ -299,7 +301,7 @@ export const useOutlineStreaming = (
             if (isModelAvailabilityError(data.detail || "")) {
               stopStreaming();
               notify.error(
-                "프레젠테이션 모델 일시 장애",
+                tA2b("presentationModelTemporarilyUnavailable"),
                 data.detail || "잠시 후 개요 생성을 다시 시도해 주세요.",
               );
               break;

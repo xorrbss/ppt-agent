@@ -1,3 +1,4 @@
+import { useTranslations as useA2bTranslations } from "next-intl";
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
@@ -72,6 +73,7 @@ const FALLBACK_THEME: Theme = {
   },
 }
 const ThemePanel: React.FC = () => {
+  const tA2b = useA2bTranslations("dashboardExtras");
   const searchParams = useSearchParams()
   const pathname = usePathname()
 
@@ -1170,9 +1172,9 @@ const ThemePanel: React.FC = () => {
                     >
                       <div>
                         <div className="mb-8 h-3 w-32 rounded-full bg-[var(--primary-color)]" />
-                        <h2 className="text-6xl font-bold">테마 미리보기</h2>
+                        <h2 className="text-6xl font-bold">{tA2b("themePreview")}</h2>
                         <p className="mt-6 text-2xl text-[var(--background-text)]">
-                          색상과 글꼴이 Authored 및 Template V2 콘텐츠에 적용됩니다.
+                          {tA2b("colorsAndFontsApplyToAuthoredAnd")}
                         </p>
                       </div>
                       <div className="grid grid-cols-3 gap-6">

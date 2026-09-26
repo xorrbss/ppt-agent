@@ -1,3 +1,4 @@
+import { useTranslations as useA2bTranslations } from "next-intl";
 import React from 'react'
 import { LogOut, Shield, ShieldCheck } from 'lucide-react'
 import { IMAGE_PROVIDER_OPTIONS, LLM_PROVIDER_OPTIONS } from '@/utils/provider-registry.generated'
@@ -8,6 +9,7 @@ import Image from 'next/image'
 type SettingsSection = 'text-provider' | 'image-provider' | 'privacy' | 'admin' | 'session'
 
 const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }: { mode: 'nanobanana' | 'presenton', setMode: (mode: 'nanobanana' | 'presenton') => void, selectedProvider: SettingsSection, setSelectedProvider: (provider: SettingsSection) => void }) => {
+  const tA2b = useA2bTranslations("dashboardExtras");
     const { llm_config } = useSelector((state: RootState) => state.userConfig)
     const textProviderIcon = LLM_PROVIDER_OPTIONS[llm_config.LLM || ""]?.icon
     const imageProviderIcon = IMAGE_PROVIDER_OPTIONS[llm_config.IMAGE_PROVIDER || ""]?.icon || '/providers/pexel.png'
@@ -89,7 +91,7 @@ const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }
                 </div>
       </section>
       <section id="settings-other-options" className={`order-4 mt-4 border-t border-zinc-100 pt-4 lg:mt-5 lg:block lg:pt-5 ${mobileOptionsOpen ? "block" : "hidden"}`}>
-        <p className="hidden pb-2.5 text-xs font-semibold text-zinc-500 lg:block">기타</p>
+        <p className="hidden pb-2.5 text-xs font-semibold text-zinc-500 lg:block">{tA2b("other")}</p>
                 <div className='grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-1'>
                     <button
                         className={`w-full rounded-xl px-3 py-3 flex items-center gap-2.5 border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 ${selectedProvider === 'privacy' ? 'bg-zinc-100 border-zinc-200' : 'bg-white border-transparent hover:bg-zinc-50 hover:border-zinc-200'}`}

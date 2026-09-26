@@ -1,4 +1,5 @@
 "use client";
+import { useTranslations as useA2bTranslations } from "next-intl";
 
 import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { Search, Sparkles, X } from "lucide-react";
@@ -57,6 +58,7 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
   isActive,
   onActivate,
 }: AuthoredStylePickerProps) {
+  const tA2b = useA2bTranslations("outlineExtras");
   const dispatch = useDispatch();
   const authoredVisionQa = useSelector(
     (state: RootState) => state.pptGenUpload.authoredVisionQa
@@ -337,9 +339,7 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
                   (a cover or closing slide alone raises the deck to tier T1).
                   Fidelity PPTX and PDF still export without it. */}
               <p className="mt-0.5 text-xs leading-5 text-[#666078]">
-                편집 가능한 PPTX(Hybrid)로 내보내려면 시각 검수가 필요합니다. 켜면 생성
-                시간이 약 두 배가 되고, 끄면 화면을 그대로 담는 Fidelity PPTX와 PDF만
-                내보낼 수 있습니다.
+                {tA2b("visualReviewIsRequiredToExportAn")}
               </p>
             </div>
           </div>

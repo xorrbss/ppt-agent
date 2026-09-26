@@ -1,3 +1,4 @@
+import { useTranslations as useA2bTranslations } from "next-intl";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store/store";
@@ -77,6 +78,7 @@ export const usePresentationGeneration = (
   outlines: { content: string }[] | null,
   onMasterRequired?: () => void,
 ) => {
+  const tA2b = useA2bTranslations("outlineExtras");
   const t = useTranslations("generation");
   const dispatch = useDispatch();
   const router = useRouter();
@@ -427,8 +429,8 @@ export const usePresentationGeneration = (
         clearDurableGenerationTask(durableTask.idempotencyKey);
         startingDurableTaskRef.current = null;
         notify.warning(
-          "PPT 마스터를 다시 확인해 주세요",
-          "마스터가 변경되었거나 게시 상태가 아닙니다. 최신 마스터를 적용한 뒤 다시 생성하세요."
+          tA2b("pleaseCheckThePptMasterAgain"),
+          tA2b("theMasterChangedOrIsNotPublished")
         );
         onMasterRequired?.();
         return;

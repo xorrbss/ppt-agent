@@ -1,4 +1,5 @@
 "use client";
+import { useTranslations as useA2bTranslations } from "next-intl";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
@@ -77,6 +78,7 @@ export const useUploadPageState = ({
   masterFeatureEnabled = isAuthoredVnextMasterEnabled(),
   onMasterRequired,
 }: UseUploadPageStateArgs) => {
+  const tA2b = useA2bTranslations("uploadExtras");
   // Allocate the server-visible deck id before the create command so the
   // workspace operation and its retries hash the exact same stable id.
   const [pendingPresentationId, setPendingPresentationId] = useState<string>(
@@ -397,8 +399,8 @@ export const useUploadPageState = ({
         ) {
       trackUploadValidationFailure("portrait_company_standard_unsupported");
       notify.warning(
-        "세로형 생성 제한",
-        "세로형 Authored 생성은 회사 표준 마스터와 함께 사용할 수 없습니다. 마스터를 해제하거나 가로 16:9를 선택해 주세요.",
+        tA2b("portraitGenerationLimitation"),
+        tA2b("portraitAuthoredGenerationCannotBeUsedWith"),
       );
       return false;
     }
@@ -407,7 +409,7 @@ export const useUploadPageState = ({
       if (sourceContentError) {
         trackUploadValidationFailure(sourceContentError);
         notify.warning(
-          "원본 콘텐츠 유지 파일 제한",
+          tA2b("fileLimitForSourceContentPreservation"),
           sourceContentSelectionErrorMessage(sourceContentError),
         );
         return false;
@@ -445,8 +447,8 @@ export const useUploadPageState = ({
       // A source-content run cannot silently substitute another template.
     }
     notify.warning(
-      "AI 저작 스타일을 다시 선택해 주세요",
-      "선택한 스타일을 현재 카탈로그에서 확인할 수 없습니다.",
+      tA2b("pleaseSelectTheAiAuthoredStyleAgain"),
+      tA2b("theSelectedStyleIsNotInThe"),
     );
     return false;
   };
@@ -459,7 +461,7 @@ export const useUploadPageState = ({
     if (!aliveRef.current || startInFlightRef.current || previousGenerationAttempt.blocked) return;
     const selectedFiles = filesRef?.current ?? files;
     if (previousGenerationAttempt.info?.attachment_file_names.length && selectedFiles.length === 0) {
-      notify.error("첨부파일을 확인해 주세요", "수정한 요청에 사용할 파일을 다시 첨부해 주세요.");
+      notify.error(tA2b("pleaseCheckTheAttachments"), tA2b("attachTheFilesForTheRevisedRequest"));
       return;
     }
     const selectedFileIdentity = fileIdentityOf(selectedFiles);
@@ -482,8 +484,8 @@ export const useUploadPageState = ({
           capability.sourceContentSvg.reason || "svg_source_content_unsupported",
         );
         notify.warning(
-          "SVG 원본 보존 생성 제한",
-          "이 서버에서는 원본 콘텐츠 유지 SVG 생성을 아직 사용할 수 없습니다.",
+          tA2b("svgSourcePreservationGenerationLimitation"),
+          tA2b("sourceContentPreservingSvgGenerationIsNot"),
         );
         setLoadingState({ isLoading: false, message: "", showProgress: false });
         startInFlightRef.current = false;
@@ -583,7 +585,7 @@ export const useUploadPageState = ({
         hasCompanyStandard: false,
       });
       if (!capability.sourceContentSvg.enabled) {
-        notify.warning("SVG 원본 보존 생성 제한", "이 서버에서는 원본 콘텐츠 유지 SVG 생성을 아직 사용할 수 없습니다.");
+        notify.warning(tA2b("svgSourcePreservationGenerationLimitation"), tA2b("sourceContentPreservingSvgGenerationIsNot"));
         abandonRun("원본 SVG 생성을 시작하지 않았습니다. 자료와 생성 방식을 확인해 주세요.");
         return;
       }
@@ -592,7 +594,7 @@ export const useUploadPageState = ({
     if (admitted && generationStrategy === "svg" && admitted.analysis.summary.charts > 0) {
       const reason = "원본에 차트가 있어 SVG 재구성을 시작하지 않았습니다. 차트를 이미지로 바꾼 PPTX를 사용해 주세요.";
       notify.warning(
-        "차트가 포함된 페이지를 재배치할 수 없습니다",
+        tA2b("pagesContainingChartsCannotBeRearranged"),
         reason,
       );
       abandonRun(reason);
@@ -601,7 +603,7 @@ export const useUploadPageState = ({
     if (admitted && generationStrategy === "svg" && !admitted.analysis.documentCanvas) {
       const reason = "첨부 PPTX의 원본 크기가 지원 범위와 맞지 않아 SVG 재구성을 시작하지 않았습니다. 현재 원본 콘텐츠 유지 SVG는 A4 가로 원본만 지원합니다. A4 가로 PPTX를 사용하거나 생성 방식을 변경해 주세요.";
       notify.warning(
-        "원본 캔버스를 지원하지 않습니다",
+        tA2b("sourceCanvasIsUnsupported"),
         reason,
       );
       abandonRun(reason);
@@ -632,7 +634,7 @@ export const useUploadPageState = ({
         hasCompanyStandard: Boolean(resolvedMaster) && !sourceContentMode,
       });
       if (capability.a4.reason === "document_canvas_capability_unavailable") {
-        notify.warning("용지 설정 확인 실패", "서버의 용지 지원 정보를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+        notify.warning(tA2b("couldNotCheckPageSettings"), tA2b("couldNotCheckTheServerSPaper"));
         abandonRun("서버의 용지 지원 정보를 확인하지 못해 생성을 시작하지 않았습니다. 잠시 후 다시 시도해 주세요.");
         return;
       }
@@ -641,7 +643,7 @@ export const useUploadPageState = ({
         setConfig(runConfig);
       }
       if (runConfig.pageSize === "A4" && (!capability.a4.enabled || capability.a4.selection?.enabled !== true)) {
-        notify.warning("A4 생성 제한", "선택한 생성 방식과 회사 표준 조합은 아직 A4 생성이 준비되지 않았습니다. 선택한 방향은 유지됩니다.");
+        notify.warning(tA2b("a4GenerationLimitation"), tA2b("a4GenerationIsNotReadyForThe"));
         abandonRun("선택한 생성 방식과 회사 표준 조합은 A4 생성을 지원하지 않아 시작하지 않았습니다. 생성 방식과 회사 표준 설정을 확인해 주세요.");
         return;
       }

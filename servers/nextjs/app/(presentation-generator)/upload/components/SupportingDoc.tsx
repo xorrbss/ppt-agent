@@ -1,4 +1,5 @@
 "use client";
+import { useTranslations as useA2bTranslations } from "next-intl";
 
 import React, { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { File, Paperclip, Plus, X } from 'lucide-react'
@@ -78,6 +79,7 @@ const SupportingDoc = ({
     compact = false,
     sourceLocked = false,
 }: SupportingDocProps) => {
+  const tA2b = useA2bTranslations("uploadExtras");
     const uploadLimits = useUploadLimits()
     const [isDragging, setIsDragging] = useState(false)
     const [previewUrls, setPreviewUrls] = useState<(string | null)[]>([])
@@ -131,7 +133,7 @@ const SupportingDoc = ({
         const nextFiles = multiple ? [...files, ...selectedFiles] : [selectedFiles[0]]
         const sourceLockedError = sourceLocked ? validateSourceLockedFiles(nextFiles) : null
         if (sourceLockedError) {
-            notify.error('원본 문서 그대로 생성 파일 제한', sourceLockedSelectionErrorMessage(sourceLockedError))
+            notify.error(tA2b("fileLimitForSourceDocumentGeneration"), sourceLockedSelectionErrorMessage(sourceLockedError))
             e.currentTarget.value = ''
             return
         }
@@ -157,7 +159,7 @@ const SupportingDoc = ({
         const nextFiles = multiple ? [...files, ...droppedFiles] : [droppedFiles[0]]
         const sourceLockedError = sourceLocked ? validateSourceLockedFiles(nextFiles) : null
         if (sourceLockedError) {
-            notify.error('원본 문서 그대로 생성 파일 제한', sourceLockedSelectionErrorMessage(sourceLockedError))
+            notify.error(tA2b("fileLimitForSourceDocumentGeneration"), sourceLockedSelectionErrorMessage(sourceLockedError))
             return
         }
         const allowedFiles = applyFileLimit(
@@ -215,7 +217,7 @@ const SupportingDoc = ({
                             accept={accept}
                             multiple={multiple}
                             data-testid="file-upload-input"
-                            aria-label="첨부 파일 선택"
+                            aria-label={tA2b("selectAttachment")}
                         />
                         <Paperclip aria-hidden="true" className="w-3.5 h-3.5" />
                         <span aria-hidden="true">{hasFiles ? `첨부 ${filteredFiles.length}개` : '파일 첨부'}</span>
@@ -252,7 +254,7 @@ const SupportingDoc = ({
                     <div
                         role="button"
                         tabIndex={0}
-                        aria-label="첨부 파일 선택 또는 끌어 놓기"
+                        aria-label={tA2b("selectOrDropAttachments")}
                         className={`mt-1 block cursor-pointer rounded-lg border-2 border-dashed px-4 py-6 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5146E5] focus-visible:ring-offset-2 ${isDragging ? 'border-[#5146E5] bg-[#5146E5]/5' : 'border-gray-200 hover:border-[#5146E5]'}`}
                         onDragOver={handleDragOver}
                         onDragLeave={handleDragLeave}

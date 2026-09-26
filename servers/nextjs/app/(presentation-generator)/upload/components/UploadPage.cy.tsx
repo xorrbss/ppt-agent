@@ -89,14 +89,14 @@ describe("<UploadPage /> authored-only creation", () => {
   });
 
   it("keeps a newly accepted attachment available to an immediate submit", () => {
-    mount(<ImmediateFileSelectionHarness />);
+    mount(<NextIntlClientProvider locale="ko" messages={koMessages} timeZone="Asia/Seoul"><ImmediateFileSelectionHarness /></NextIntlClientProvider>);
 
     cy.get('[data-testid="select-and-submit"]').click();
     cy.get('[data-testid="submitted-file-count"]').should("have.text", "1");
     cy.get('[data-testid="rendered-file-count"]').should("have.text", "1");
   });
 
-  it("enables the supported source-preserving landscape SVG flow", () => {
+  it("enables the supported source-preserving A4 SVG flow", () => {
     mount(
       <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="Asia/Seoul">
         <AppRouterContext.Provider value={router as any}>
@@ -116,10 +116,8 @@ describe("<UploadPage /> authored-only creation", () => {
     cy.get('[data-testid="generation-strategy-svg"]').should("be.enabled").click();
 
     cy.get('[data-testid="source-content-selection-summary"]')
-      .should("contain", "SVG 원본 크기 재배치")
-      .and("contain", "원문·표·이미지 유지")
-      .and("contain", "요약 및 페이지 추가 안 함");
-    cy.get('[data-testid="source-svg-landscape-canvas"]').should("contain", "원본 크기 · 분석 후 유지");
+      .should("contain", "원본 화면을 편집 가능한 텍스트와 표로 A4에 재구성")
+      .and("contain", "화면 캡처만 이미지로 남습니다");
     cy.get('[data-testid="upload-master-selection"]').should("not.exist");
   });
 

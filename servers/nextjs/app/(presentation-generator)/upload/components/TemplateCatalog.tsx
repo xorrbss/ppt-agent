@@ -1,4 +1,5 @@
 "use client";
+import { useTranslations as useA2bTranslations } from "next-intl";
 
 import React, { useCallback } from "react";
 
@@ -22,6 +23,7 @@ const TemplateCatalog: React.FC<TemplateCatalogProps> = ({
   onSelectAuthored,
   onActivateAuthored,
 }) => {
+  const tA2b = useA2bTranslations("uploadExtras");
   const activate = useCallback(() => {
     onSelectAuthored(authoredStyleId);
     onActivateAuthored(authoredStyleId);
@@ -29,7 +31,7 @@ const TemplateCatalog: React.FC<TemplateCatalogProps> = ({
 
   return (
     <section
-      aria-label="AI 저작 스타일"
+      aria-label={tA2b("aiAuthoredStyle")}
       className="mx-auto mt-10 max-w-[1180px]"
       data-testid="authored-style-catalog"
     >

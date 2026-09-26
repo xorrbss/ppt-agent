@@ -36,6 +36,7 @@ describe("usePresentationGeneration authored-only generation", () => {
     store.dispatch(
       setPptGenUploadState({
         authoredStyle: "strategic-navy",
+        generationStrategy: "authored",
         authoredVisionQa: true,
         companyStandard: {
           masterId: "master:company-standard",

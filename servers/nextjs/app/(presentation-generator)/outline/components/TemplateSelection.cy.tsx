@@ -1,8 +1,10 @@
 import React from "react";
 import { Provider } from "react-redux";
 import { mount } from "cypress/react";
+import { NextIntlClientProvider } from "next-intl";
 
 import { makeStore } from "@/store/store";
+import koMessages from "@/i18n/messages/ko.json";
 import TemplateSelection from "./TemplateSelection";
 
 describe("TemplateSelection authored-only surface", () => {
@@ -12,9 +14,11 @@ describe("TemplateSelection authored-only surface", () => {
       body: [],
     });
     mount(
-      <Provider store={makeStore()}>
-        <TemplateSelection />
-      </Provider>,
+      <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="UTC">
+        <Provider store={makeStore()}>
+          <TemplateSelection />
+        </Provider>
+      </NextIntlClientProvider>,
     );
 
     cy.get('[data-testid="authored-style-section"]').should("be.visible");
