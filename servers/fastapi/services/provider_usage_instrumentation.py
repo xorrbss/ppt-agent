@@ -33,6 +33,10 @@ from services.provider_pricing import (
     calculate_actual_usage_cost,
 )
 from services.provider_usage_cached_tokens import cached_tokens_from_usage
+from services.provider_usage_idempotency import (
+    _normalize_semantic_slot as _normalize_semantic_slot,
+    _provider_idempotency_key as _provider_idempotency_key,
+)
 from services.provider_runtime_job_registration import (
     ensure_runtime_job,
     optional_env_int,
@@ -237,28 +241,6 @@ def current_provider_idempotency_key() -> str | None:
     """Return the content-free stable key for the active provider SDK call."""
 
     return _ACTIVE_PROVIDER_IDEMPOTENCY_KEY.get()
-
-
-def _normalize_semantic_slot(value: str) -> str:
-    normalized = str(value).strip().lower()
-    if not normalized or len(normalized) > 128:
-        raise ValueError("provider_semantic_slot_invalid")
-    if any(character not in "abcdefghijklmnopqrstuvwxyz0123456789._-" for character in normalized):
-        raise ValueError("provider_semantic_slot_invalid")
-    return normalized
-
-
-def _provider_idempotency_key(
-    fence: PublicOperationFence,
-    scope: ProviderUsageScope,
-    semantic_slot: str,
-) -> str:
-    slide = "deck" if scope.slide_index is None else str(scope.slide_index)
-    preimage = (
-        f"public-provider-call/v2:{fence.operation_id}:{scope.stage}:"
-        f"{slide}:{_normalize_semantic_slot(semantic_slot)}"
-    )
-    return f"ppt-{sha256(preimage.encode('utf-8')).hexdigest()}"
 
 
 async def _assert_current_public_operation_fence(
