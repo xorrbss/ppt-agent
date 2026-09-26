@@ -10,6 +10,7 @@ from services.source_content.raster_captures import Box, PageContext, _pad, _uni
 from services.source_content.raster_paragraphs import paragraphs, pixel_paragraph
 from services.source_content.raster_page_plan import PlannedRegion
 from services.source_content.raster_redesign_ocr import RedesignWord, line_text
+from services.source_content.raster_table_overlay import blank_cells, overlay_cells
 
 
 @dataclass
@@ -189,16 +190,17 @@ def _table(build: Build, rows: list[list[list[int]]], group: str | None) -> None
     width = max(len(row) for row in rows)
     box = _pad(_union([page.lines[i].bbox for i in members]), 4, page.size)
     tokens = tuple(t for i in members for t in build.tokens.get(i, ()))
-    # Native only when every cell line passed the text and number gates. An
-    # unverified cell never carries its OCR reading as editable text (an icon
-    # read as "A" or "[" would be published as content): the table stays source
-    # pixels.
-    native = all(build.texts.get(i) is not None for i in members)
-    cells = tuple(
+    # An unverified cell never carries its OCR reading as editable text (an icon
+    # read as "A" or "[" would be published as content): it keeps its source
+    # pixels as a pixel cell of the table, or, when the grid is not confirmed or
+    # most cells are unverified, the whole table stays pixels (raster_table_overlay).
+    pixel_cells = overlay_cells(page, rows, build.texts, build.tokens, box)
+    native = pixel_cells is not None
+    cells = blank_cells(tuple(
         tuple("\n".join(build.texts.get(i) or "" for i in cell) for cell in row)
         + ("",) * (width - len(row))
         for row in rows
-    )
+    ), pixel_cells or ())
     build.regions.append(
         PlannedRegion(
             "table",
@@ -211,6 +213,7 @@ def _table(build: Build, rows: list[list[list[int]]], group: str | None) -> None
             reason=f"llm_structure:{build.model}",
             editable_fallback=not native,
             group_id=group,
+            pixel_cells=pixel_cells or (),
         )
     )
 

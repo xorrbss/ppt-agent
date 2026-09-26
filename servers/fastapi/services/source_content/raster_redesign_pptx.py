@@ -1,22 +1,20 @@
-"""PPTX conversion inputs for raster-redesign SVG pages.
+"""NativeObjects entries for the validated tables of raster-redesign SVG pages.
 
 Canonical redesign SVG carries only contract-admitted markup: a root id marker
 and, per structured table, a ``<g id="rd-<tag>-table-<rows>x<cols>">`` grid of
-rect/line/text primitives. Right before the vendored converter runs, this
-module derives the converter's native-table marker (``data-pptx-native`` and
-``data-pptx-json``) from that validated grid, so PowerPoint receives a real
-editable table. Nothing outside marked redesign pages is touched; the grid
-stays the fallback if native conversion fails.
+rect/line/text primitives. This raster-owned module reads such a grid back into
+a format-neutral ``NativeObject`` (authored V1 table payload + canvas anchor),
+so raster tables reach PowerPoint through the same svg export scene as every
+other deck's native objects (``drivers/svg/export_scene.py``). The grid itself
+is untouched and stays the fallback if native conversion fails.
 """
 
 from __future__ import annotations
 
-import json
 import re
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass, field
-from pathlib import Path
 
+from services.generation_core.native_objects import NativeAnchor, NativeObject, NativeObjectsError
 from services.source_content.raster_redesign_table import (
     BAND_FILL,
     BODY_TEXT,
@@ -28,29 +26,13 @@ from services.svg_contract import RASTER_REDESIGN_ROOT_ID, SVG_NS
 
 _TABLE_ID = re.compile(r"^(rd-[0-9a-f]{10})-table-(\d{1,3})x(\d{1,3})$")
 _CELL_ID = re.compile(r"^rd-[0-9a-f]{10}-r(\d{1,3})c(\d{1,3})$")
+# A pixel cell's crop, a sibling after its table group (raster_redesign_table.render_table).
+_OVERLAY_ID = re.compile(r"^(rd-[0-9a-f]{10})-cell-r\d{1,3}c\d{1,3}$")
 _FAMILY = "Noto Sans KR"
-
-
-@dataclass
-class RedesignPptxInputs:
-    active: bool = False
-    native_tables: int = 0
-    skipped_tables: int = 0
-    grid_sources: dict[Path, str] = field(default_factory=dict)
-
-    def restore_grid(self) -> None:
-        """Rewrite every prepared page back to its validated grid-only source."""
-        for path, source in self.grid_sources.items():
-            path.write_text(source, encoding="utf-8")
-
-    def evidence(self, *, delivered_native: bool, fallback_reason: str | None = None) -> dict:
-        return {
-            "rasterRedesign": self.active,
-            "nativeTablesRequested": self.native_tables,
-            "nativeTablesDelivered": self.native_tables if delivered_native else 0,
-            "tablesKeptAsGrid": self.skipped_tables + (0 if delivered_native else self.native_tables),
-            "nativeTableFallbackReason": fallback_reason,
-        }
+_DEFAULT_FONT_PX = 16.9
+_PT_PER_PX = 0.75
+# One 1 px rule on every edge of every cell, as drawn by the grid.
+_RULE_BORDERS = {edge: {"color": RULE, "widthPt": _PT_PER_PX} for edge in ("top", "right", "bottom", "left")}
 
 
 def is_redesign_svg(root: ET.Element) -> bool:
@@ -66,8 +48,21 @@ def _boundaries(values: list[float], start: float, size: float) -> list[float]:
     return [start, *inner, start + size]
 
 
-def table_payload(group: ET.Element) -> dict | None:
-    """Build the converter's native-table JSON from one validated grid group."""
+def is_table_group(group: ET.Element) -> bool:
+    return _TABLE_ID.match(group.get("id") or "") is not None
+
+
+def _row_fill(row: int) -> str:
+    # Header, then the grid's band rule: even body rows are banded.
+    return HEADER_FILL if row == 0 else BAND_FILL if row % 2 == 0 else "#FFFFFF"
+
+
+def table_native_object(group: ET.Element) -> NativeObject | None:
+    """Read one validated grid group back into a V1 table ``NativeObject``.
+
+    Grids carry no transform, so the outer rect is the canvas anchor. ``None``
+    when the group is not a well-formed grid (it then stays a grid).
+    """
 
     match = _TABLE_ID.match(group.get("id") or "")
     if match is None:
@@ -83,7 +78,8 @@ def table_payload(group: ET.Element) -> dict | None:
     ys = _boundaries([float(n.get("y1")) for n in lines if n.get("y1") == n.get("y2")], y, height)
     if len(xs) != columns + 1 or len(ys) != rows + 1:
         return None
-    cells: list[list[dict]] = [[{"text": ""} for _ in range(columns)] for _ in range(rows)]
+    texts: list[list[str]] = [["" for _ in range(columns)] for _ in range(rows)]
+    right = [[False] * columns for _ in range(rows)]
     font_size = None
     for node in group:
         cell = _CELL_ID.match(node.get("id") or "") if _local(node) == "text" else None
@@ -93,51 +89,51 @@ def table_payload(group: ET.Element) -> dict | None:
         if row >= rows or column >= columns:
             return None
         spans = [span.text or "" for span in node if _local(span) == "tspan"] or [node.text or ""]
-        entry: dict = {"paragraphs": spans} if len(spans) > 1 else {"text": spans[0]}
-        if node.get("text-anchor") == "end":
-            entry["align"] = "r"
-        cells[row][column] = entry
+        texts[row][column] = "\n".join(spans)
+        right[row][column] = node.get("text-anchor") == "end"
         font_size = float(node.get("font-size")) if font_size is None else font_size
-    return {
-        # Explicit bounds: inferring them from fallback text extents overshoots.
-        "x": x, "y": y, "width": width, "height": height,
-        "rows": cells,
-        "header_rows": 1,
-        "strict_grid": True,
-        "column_widths": [round(b - a, 3) for a, b in zip(xs, xs[1:], strict=False)],
-        "row_heights": [round(b - a, 3) for a, b in zip(ys, ys[1:], strict=False)],
-        "style": {
-            "header_fill": HEADER_FILL, "header_text": HEADER_TEXT, "body_fill": "#FFFFFF",
-            "body_text": BODY_TEXT, "band_fill": BAND_FILL, "band_row": True,
-            "font_family": _FAMILY, "font_size": font_size or 16.9,
-            "header_font_size": font_size or 16.9, "border_color": RULE, "border_width": 1,
-        },
+    payload = {
+        "rows": [[{"text": texts[r][c], "fill": _row_fill(r), "textColor": HEADER_TEXT if r == 0 else BODY_TEXT,
+                   "bold": r == 0} for c in range(columns)] for r in range(rows)],
+        "cellStyles": [[{"horizontalAlign": "right" if right[r][c] else "center" if r == 0 else "left",
+                         "verticalAlign": "middle", "borders": _RULE_BORDERS} for c in range(columns)]
+                       for r in range(rows)],
+        "headerRows": 1,
+        "fontFamily": _FAMILY,
+        "fontSizePt": (font_size or _DEFAULT_FONT_PX) * _PT_PER_PX,
+        "columnWidths": [round(b - a, 3) for a, b in zip(xs, xs[1:], strict=False)],
+        "rowHeightsPt": [round(b - a, 3) * _PT_PER_PX for a, b in zip(ys, ys[1:], strict=False)],
     }
+    return NativeObject.build(id=group.get("id"), kind="table", anchor=NativeAnchor(x, y, width, height),
+                              payload=payload)
 
 
-def prepare_redesign_pptx_inputs(paths: list[Path]) -> RedesignPptxInputs:
-    """Mark native tables on redesign pages in place; other pages are untouched."""
+def table_cell_overlays(root: ET.Element) -> dict[str, int]:
+    """Table group id -> number of pixel-cell images drawn over that table."""
 
-    result = RedesignPptxInputs()
-    for path in paths:
-        source = path.read_text(encoding="utf-8")
-        root = ET.fromstring(source)
-        if not is_redesign_svg(root):
+    tables = {match[1]: group.get("id") for group in root.iter(f"{{{SVG_NS}}}g")
+              if (match := _TABLE_ID.match(group.get("id") or ""))}
+    counts: dict[str, int] = {}
+    for image in root.iter(f"{{{SVG_NS}}}image"):
+        match = _OVERLAY_ID.match(image.get("id") or "")
+        if match and match[1] in tables:
+            counts[tables[match[1]]] = counts.get(tables[match[1]], 0) + 1
+    return counts
+
+
+def redesign_native_objects(root: ET.Element) -> tuple[list[NativeObject], int]:
+    """Every well-formed grid of a redesign page, plus how many stay grids."""
+
+    objects, skipped = [], 0
+    for group in root.iter(f"{{{SVG_NS}}}g"):
+        if not is_table_group(group):
             continue
-        result.active = True
-        marked = 0
-        for group in root.iter(f"{{{SVG_NS}}}g"):
-            if not _TABLE_ID.match(group.get("id") or ""):
-                continue
-            payload = table_payload(group)
-            if payload is None:
-                result.skipped_tables += 1
-                continue
-            group.set("data-pptx-native", "table")
-            group.set("data-pptx-json", json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
-            marked += 1
-        if marked:
-            result.grid_sources[path] = source
-            result.native_tables += marked
-            path.write_text(ET.tostring(root, encoding="unicode"), encoding="utf-8")
-    return result
+        try:
+            item = table_native_object(group)
+        except NativeObjectsError:
+            item = None  # outside the V1 table shape (e.g. font size): stays a grid, counted
+        if item is None:
+            skipped += 1
+        else:
+            objects.append(item)
+    return objects, skipped

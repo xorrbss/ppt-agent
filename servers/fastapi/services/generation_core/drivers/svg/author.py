@@ -18,6 +18,7 @@ import json
 import re
 
 from services.authored_checkpoint_errors import AuthoredStageError
+from services.generation_core.drivers.svg.native_declarations import bind_native_declarations
 from services.provider_usage_instrumentation import provider_usage_scope
 from services.svg_presentation_checkpoint import _provider_attempt_count
 
@@ -175,6 +176,9 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
     payload["model_attempt_count"] = _provider_attempt_count(payload)
     payload["inflight"] = None
     payload["svg_content"] = svg
+    # Declarations are bound to the digest of this exact drawing; any other SVG
+    # this page ends with (correction, restore, fallback) does not match it.
+    bind_native_declarations(payload, svg, authored.native_declarations)
     if offer is not None and offer.slots[index]:
         # Per-page AssetOffer receipt; raster slots are also accounted for by
         # the render step's sourceImages check, vector icons only here.

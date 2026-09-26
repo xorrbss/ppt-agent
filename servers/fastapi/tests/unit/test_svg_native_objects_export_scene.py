@@ -1,0 +1,246 @@
+"""NativeObjects sidecars reach PPTX as native tables/charts through the svg export scene."""
+
+from __future__ import annotations
+
+from html import escape
+from types import SimpleNamespace
+
+import pytest
+from pptx import Presentation
+from pptx.enum.shapes import MSO_SHAPE_TYPE
+
+from services.document_canvas import document_canvas_for_orientation
+from services.generation_core.drivers.svg.export_native_wire import (
+    PageNativeObjects,
+    bundle_entry,
+    parse_bundle_native_objects,
+)
+from services.generation_core.export.svg_evidence import build_svg_export_evidence_digests
+from services.generation_core.native_objects import NativeObjects
+from services.svg_contract import validate_svg
+from services.svg_export_bundle import build_svg_export_bundle
+from workers.public_svg_export_worker import convert_pptx
+
+CANVAS = document_canvas_for_orientation("landscape")
+EMU_PER_PX = 9000
+FONT = 'font-family="Noto Sans KR" font-size="16"'
+ROWS = [["지역", "매출(억원)", "성장률"], ["서울", "1,234", "12.5%"], ["부산", "567", "-3.2%"], ["대구", "89", "0.0%"]]
+TABLE_BOX = (100.0, 150.0, 600.0, 200.0)
+CHART_BOX = (120.0, 120.0, 640.0, 400.0)
+
+
+def _svg(body: str) -> str:
+    return ('<svg xmlns="http://www.w3.org/2000/svg" width="1188" height="840" viewBox="0 0 1188 840">'
+            f"{body}</svg>")
+
+
+def _table_group(group_id: str, *, wrapper: str = "") -> str:
+    x, y, width, height = TABLE_BOX
+    parts = [f'<g id="{group_id}"><rect x="{x}" y="{y}" width="{width}" height="{height}" fill="#FFFFFF" '
+             'stroke="#CCCCCC" stroke-width="1"/>']
+    for r, row in enumerate(ROWS):
+        for c, text in enumerate(row):
+            parts.append(f'<text x="{x + c * 200 + 10}" y="{y + r * 50 + 32}" {FONT} fill="#111111">'
+                         f"{escape(text)}</text>")
+    parts.append("</g>")
+    body = "".join(parts)
+    return f"<g {wrapper}>{body}</g>" if wrapper else body
+
+
+def _chart_group(group_id: str, title: str | None) -> str:
+    x, y, _, _ = CHART_BOX
+    bars = "".join(f'<rect x="{x + 40 + i * 140}" y="{y + 340 - v * 10}" width="80" height="{v * 10}" '
+                   'fill="#2457D6"/>' for i, v in enumerate((10, 20, 15, 30)))
+    labels = "".join(f'<text x="{x + 60 + i * 140}" y="{y + 380}" {FONT} fill="#333333">Q{i + 1}</text>'
+                     for i in range(4))
+    heading = f'<text x="{x + 20}" y="{y + 30}" {FONT} fill="#111111">{escape(title)}</text>' if title else ""
+    return f'<g id="{group_id}">{heading}{bars}{labels}</g>'
+
+
+def _table_object(object_id: str, box=TABLE_BOX) -> dict:
+    x, y, width, height = box
+    return {"id": object_id, "kind": "table", "anchor": {"x": x, "y": y, "width": width, "height": height},
+            "payload": {"rows": [[{"text": text, "fill": "#1F3A5F" if r == 0 else "#FFFFFF",
+                                   "textColor": "#FFFFFF" if r == 0 else "#111111"} for text in row]
+                                 for r, row in enumerate(ROWS)],
+                        "headerRows": 1, "fontFamily": "Noto Sans KR", "fontSizePt": 12}}
+
+
+def _chart_object(object_id: str, title: str) -> dict:
+    x, y, width, height = CHART_BOX
+    return {"id": object_id, "kind": "chart", "anchor": {"x": x, "y": y, "width": width, "height": height},
+            "payload": {"chartType": "column", "categories": ["Q1", "Q2", "Q3", "Q4"], "title": title,
+                        "series": [{"name": "매출", "values": [10, 20, 15, 30], "color": "#2457D6"}]}}
+
+
+def _sidecar(*objects: dict) -> PageNativeObjects:
+    return PageNativeObjects(sidecar=NativeObjects.from_wire({"schemaVersion": "native-objects/v1",
+                                                              "objects": list(objects)}))
+
+
+def _convert(tmp_path, svgs, pages):
+    paths = []
+    for index, svg in enumerate(svgs, 1):
+        validate_svg(svg, width=1188, height=840)
+        path = tmp_path / f"slide-{index:03d}.svg"
+        path.write_text(svg, encoding="utf-8")
+        paths.append(path)
+    target = tmp_path / "deck.pptx"
+    readback = convert_pptx(paths, target, [""] * len(paths), CANVAS, native_objects=pages)
+    return readback, Presentation(str(target))
+
+
+def _shapes(shapes):
+    for shape in shapes:
+        yield shape
+        if shape.shape_type == MSO_SHAPE_TYPE.GROUP:
+            yield from _shapes(shape.shapes)
+
+
+def _texts(slide) -> list[str]:
+    return [shape.text_frame.text for shape in _shapes(slide.shapes) if shape.has_text_frame and shape.text_frame.text]
+
+
+def test_sidecar_tables_and_charts_become_native_with_per_object_fallback(tmp_path):
+    svgs = [
+        _svg(_table_group("native-table-sales")
+             + '<g id="native-table-wide"><rect x="900" y="150" width="200" height="200" fill="#EEEEEE"/></g>'),
+        _svg(_chart_group("native-chart-revenue", "분기별 매출") + _chart_group("native-chart-hidden", None)),
+    ]
+    pages = [
+        _sidecar(_table_object("native-table-sales"), _table_object("native-table-gone"),
+                 _table_object("native-table-wide", box=(900.0, 150.0, 600.0, 200.0))),
+        _sidecar(_chart_object("native-chart-revenue", "분기별 매출"),
+                 _chart_object("native-chart-hidden", "그려지지 않은 제목")),
+    ]
+    readback, deck = _convert(tmp_path, svgs, pages)
+
+    receipt = readback["nativeObjects"]
+    assert (receipt["offered"], receipt["native"], receipt["fellBack"]) == (5, 2, 3)
+    reasons = {entry["id"]: (entry["page"], entry["kind"], entry["reason"]) for entry in receipt["reasons"]}
+    assert reasons["native-table-gone"] == (0, "table", "group_missing")
+    assert reasons["native-table-wide"] == (0, "table", "anchor_outside_canvas")
+    assert reasons["native-chart-hidden"][:2] == (1, "chart")
+    assert reasons["native-chart-hidden"][2].startswith("converter_rejected:")
+    assert "rasterRedesign" not in readback
+
+    tables = [shape for shape in _shapes(deck.slides[0].shapes) if shape.has_table]
+    assert len(tables) == 1
+    table = tables[0]
+    assert [[cell.text for cell in row.cells] for row in table.table.rows] == ROWS
+    assert (table.left, table.top, table.width, table.height) == tuple(int(v * EMU_PER_PX) for v in TABLE_BOX)
+    assert not any(text in ROWS[1] for text in _texts(deck.slides[0]))
+
+    charts = [shape for shape in _shapes(deck.slides[1].shapes) if shape.has_chart]
+    assert len(charts) == 1
+    chart = charts[0]
+    assert (chart.left, chart.top, chart.width, chart.height) == tuple(int(v * EMU_PER_PX) for v in CHART_BOX)
+    plot = chart.chart.plots[0]
+    assert list(plot.categories) == ["Q1", "Q2", "Q3", "Q4"]
+    assert list(plot.series[0].values) == [10, 20, 15, 30]
+    # The rejected chart keeps its drawn fallback: its category labels stay text.
+    assert _texts(deck.slides[1]).count("Q1") == 1
+
+
+def test_invalid_sidecar_falls_back_every_named_object_on_record(tmp_path):
+    page = PageNativeObjects(invalid_reason="native_object_anchor_invalid",
+                             invalid_objects=(("native-table-sales", "table"),))
+    readback, deck = _convert(tmp_path, [_svg(_table_group("native-table-sales"))], [page])
+    assert readback["nativeObjects"] == {"offered": 1, "native": 0, "fellBack": 1, "reasons": [{
+        "page": 0, "id": "native-table-sales", "kind": "table",
+        "reason": "sidecar_invalid:native_object_anchor_invalid"}]}
+    assert not any(shape.has_table for shape in _shapes(deck.slides[0].shapes))
+    assert "서울" in _texts(deck.slides[0])
+
+
+def test_converter_failure_restores_every_group_and_records_the_reason(tmp_path):
+    # Group opacity passes marker pre-validation but fails the native converter run.
+    svg = _svg(_table_group("native-table-sales", wrapper='opacity="0.5"'))
+    readback, deck = _convert(tmp_path, [svg], [_sidecar(_table_object("native-table-sales"))])
+    receipt = readback["nativeObjects"]
+    assert (receipt["native"], receipt["fellBack"]) == (0, 1)
+    assert "opacity" in receipt["reasons"][0]["reason"].lower()
+    assert not any(shape.has_table for shape in _shapes(deck.slides[0].shapes))
+
+
+def test_decks_without_native_objects_record_an_empty_receipt(tmp_path):
+    readback, deck = _convert(tmp_path, [_svg(_table_group("plain"))], None)
+    assert readback["nativeObjects"] == {"offered": 0, "native": 0, "fellBack": 0, "reasons": []}
+    assert not any(shape.has_table for shape in _shapes(deck.slides[0].shapes))
+
+
+def test_bundle_entries_round_trip_and_reject_malformed_wire():
+    valid = {"nativeObjects": {"schemaVersion": "native-objects/v1", "objects": [_table_object("t1")]}}
+    invalid = {"nativeObjects": {"schemaVersion": "native-objects/v1", "objects": [
+        {"id": "t1", "kind": "table", "anchor": {"x": 0, "y": 0, "width": 0, "height": 1}, "payload": {}}]}}
+    entries = [bundle_entry(valid), bundle_entry(invalid), bundle_entry({"other": 1})]
+    assert entries[0]["status"] == "valid" and entries[2] is None
+    assert entries[1] == {"status": "invalid", "reason": "native_object_anchor_invalid",
+                          "objects": [{"id": "t1", "kind": "table"}]}
+    pages = parse_bundle_native_objects(entries, 3)
+    assert pages[0].sidecar.by_id()["t1"].kind == "table"
+    assert pages[1].invalid_objects == (("t1", "table"),) and pages[2] == PageNativeObjects()
+    for bad in ([entries[0]], [{"status": "valid"}, None, None], [{**entries[1], "extra": 1}, None, None]):
+        with pytest.raises(ValueError, match="svg_export_native_objects_invalid"):
+            parse_bundle_native_objects(bad, 3)
+
+
+def test_native_objects_bind_pptx_bundle_identity_and_semantic_digest_only():
+    claim = SimpleNamespace(expected_revision=3, presentation_id="p")
+    entries = [bundle_entry({"nativeObjects": {"schemaVersion": "native-objects/v1",
+                                               "objects": [_table_object("t1")]}})]
+
+    def bundle(fmt, native):
+        return build_svg_export_bundle(claim=claim, slide_refs=[{"ref": 1}], source_digests=["a" * 64],
+                                       notes=[""], canvas={"w": 1}, export_format=fmt, font_embedding=False,
+                                       assets=[None], native_objects=native)
+
+    plain, native = bundle("pptx", None), bundle("pptx", entries)
+    assert "nativeObjects" not in plain and native["nativeObjects"] == entries
+    assert native["canonicalExportIdentity"] != plain["canonicalExportIdentity"]
+    assert bundle("pdf", entries) == bundle("pdf", None)  # vector PDF: no native objects
+
+    def digests(native):
+        return build_svg_export_evidence_digests(svgs=["<svg/>"], notes=[""], canvas={"w": 1}, native_objects=native,
+                                                 quality_inputs={}, converter_version="v", converter_digest="d",
+                                                 contract_version="c")
+
+    without, with_native = digests(None), digests(entries)
+    assert without.semantic_digest == without.scene_digest
+    assert with_native.scene_digest == without.scene_digest
+    assert with_native.semantic_digest != without.semantic_digest
+
+
+def test_raster_grid_projects_to_the_converter_payload_the_grid_draws():
+    import xml.etree.ElementTree as ET
+
+    from services.generation_core.drivers.svg.export_projection import converter_payload
+    from services.source_content import raster_redesign_table as grid
+    from services.source_content.raster_redesign_pptx import redesign_native_objects
+
+    rows = [["구분", "2024", "비고"], ["국내", "1,234억", "신규 채널 확대 및 파트너십 강화"], ["해외", "845억", ""]]
+    layout = grid.layout_table(rows, 700, 14.25)
+    body = "".join(grid.render_table(layout, 60, 80, id_prefix="rd-0123456789", family="Noto Sans KR",
+                                     escape=escape))
+    root = ET.fromstring('<svg xmlns="http://www.w3.org/2000/svg" id="svg-raster-redesign" width="1188" '
+                         f'height="840" viewBox="0 0 1188 840">{body}</svg>')
+    (item,), skipped = redesign_native_objects(root)
+    payload = converter_payload(item)
+    assert skipped == 0 and payload["header_rows"] == 1 and payload["strict_grid"] is True
+    assert payload["style"] == {"font_family": "Noto Sans KR", "font_size": 14.25, "header_font_size": 14.25}
+    assert payload["column_widths"] == [round(width, 3) for width in payload["column_widths"]]
+    assert sum(payload["row_heights"]) == pytest.approx(layout.height, abs=0.01)
+    rule = {"style": "solid", "color": grid.RULE, "width": 1.0}
+    for r, row in enumerate(payload["rows"]):
+        for cell in row:
+            assert cell["fill"] == (grid.HEADER_FILL if r == 0 else grid.BAND_FILL if r % 2 == 0 else "#FFFFFF")
+            assert cell["color"] == (grid.HEADER_TEXT if r == 0 else grid.BODY_TEXT)
+            assert cell["bold"] is (r == 0) and cell["valign"] == "middle"
+            assert cell["borders"] == {edge: rule for edge in ("top", "right", "bottom", "left")}
+    assert [cell["align"] for cell in payload["rows"][0]] == ["ctr", "ctr", "ctr"]
+    assert [cell["align"] for cell in payload["rows"][1]] == ["l", "r", "l"]
+    for node in root.iter("{http://www.w3.org/2000/svg}text"):
+        r, c = (int(v) for v in node.get("id").rsplit("-r", 1)[1].split("c"))
+        spans = [span.text for span in node]
+        cell = payload["rows"][r][c]
+        assert cell.get("paragraphs", [cell.get("text")]) == spans

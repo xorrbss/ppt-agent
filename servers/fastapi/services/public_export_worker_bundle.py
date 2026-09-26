@@ -150,14 +150,23 @@ def compute_public_export_worker_bundle(
     try:
         files = _bundle_files(nextjs_root)
         svg_root = root / "servers" / "fastapi"
-        svg_sources = [svg_root / "workers" / "public_svg_export_worker.py", svg_root / "services" / "svg_contract.py"]
+        svg_sources = [svg_root / "workers" / "public_svg_export_worker.py", svg_root / "services" / "svg_contract.py",
+                       svg_root / "workers" / "public_svg_pptx_convert.py",
+                       svg_root / "workers" / "public_svg_pptx_readback.py",
+                       svg_root / "services" / "source_content" / "raster_redesign_pptx.py"]
+        # The PPTX native-object scene the worker runs (sidecar model + projection).
+        svg_sources.extend(sorted((svg_root / "services" / "generation_core" / "native_objects").glob("*.py")))
+        svg_sources.extend(svg_root / "services" / "generation_core" / "drivers" / "svg" / name for name in (
+            "export_scene.py", "export_projection.py", "export_native_wire.py"))
         vendor = svg_root / "vendor" / "slide_master"
-        svg_sources.extend(path for path in vendor.rglob("*") if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc")
+        svg_sources.extend(path for path in vendor.rglob("*")
+                           if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc")
         inventory = sorted(
             (path.relative_to(nextjs_root).as_posix(), _file_digest(path))
             for path in files
         )
-        inventory.extend(("../fastapi/" + path.relative_to(svg_root).as_posix(), _file_digest(path)) for path in svg_sources if path.is_file())
+        inventory.extend(("../fastapi/" + path.relative_to(svg_root).as_posix(), _file_digest(path))
+                         for path in svg_sources if path.is_file())
         inventory.sort()
     except (PublicExportWorkerBundleError, OSError) as error:
         reason = (

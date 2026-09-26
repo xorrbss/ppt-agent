@@ -142,12 +142,19 @@ def redesign_content_ledger(
         )
         for region in page.regions
     ]
-    for pixel, text in boundary_conflicts(items):
+    from services.source_content.raster_table_overlay import overlay_pairs
+
+    # A table's own pixel cell lies inside it by design; the word rules below still
+    # hold for the cell crop. A table replaced by pixels takes its cells along.
+    linked = overlay_pairs(page.regions)
+    for pixel, text in boundary_conflicts(items, linked):
         violations.append(f"{page.regions[pixel].region_id}:{page.regions[text].region_id}:crop_text_boundary")
     from services.source_content.raster_crop_edges import page_edge_conflicts
     from services.source_content.raster_exactly_once import page_exactly_once
 
     for pixel, other, _kind in page_exactly_once(page, analysis.source.canvas_width_emu):
+        if (other, pixel) in linked and page.regions[other].region_id in replaced:
+            continue
         violations.append(f"{page.regions[pixel].region_id}:{page.regions[other].region_id}:shown_twice")
 
     # Editable text inside a crop, or a crop cutting its own words, loses or duplicates
@@ -186,11 +193,14 @@ def _touching_row(a: Box, b: Box) -> bool:
     return overlap >= 0.5 * low and gap < low
 
 
-def boundary_conflicts(items: Sequence[tuple[bool, Box, bool]]) -> list[tuple[int, int]]:
+def boundary_conflicts(
+    items: Sequence[tuple[bool, Box, bool]], exempt: frozenset[tuple[int, int]] | set = frozenset()
+) -> list[tuple[int, int]]:
     """``items`` are ``(is_pixels, box, single_line_with_digits)``; returns (pixel, text) pairs.
 
     The digit rule compares single text lines only (a numeral OCR split into a
     crop and a text line); multi-line blocks and tables are checked by overlap.
+    ``exempt`` (pixel, text) pairs are a native table and its own pixel cell.
     """
 
     conflicts = []
@@ -198,7 +208,7 @@ def boundary_conflicts(items: Sequence[tuple[bool, Box, bool]]) -> list[tuple[in
         if not pixels:
             continue
         for t, (is_pixels, text_box, text_digits) in enumerate(items):
-            if is_pixels:
+            if is_pixels or (p, t) in exempt:
                 continue
             overlap = _intersection(pixel_box, text_box)
             if overlap > OVERLAP_SHARE * min(_area(pixel_box), _area(text_box)) or (

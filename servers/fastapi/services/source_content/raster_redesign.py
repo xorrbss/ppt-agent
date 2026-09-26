@@ -32,6 +32,7 @@ from services.source_content.raster_page_plan import PagePlan
 from services.source_content.raster_page_fallback import robust_plan
 from services.source_content.raster_redesign_ocr import redesign_ocr
 from services.source_content.raster_stage_timing import page_task, stage
+from services.source_content.raster_table_overlay import expand_overlays
 
 PIXEL_ROLES = frozenset({"screenshot", "logo", "decoration"})
 CROP_ROLES = frozenset({"screenshot", "logo", "table", "decoration"})
@@ -79,22 +80,27 @@ def _page_result(
         "crop_source_sha256": media_digest,
     }
     crops: dict[str, bytes] = {}
-    ids = [f"p{page.page_number}-r{index}" for index in range(1, len(plan.regions) + 1)]
-    stacking = sorted(range(len(plan.regions)), key=lambda i: (plan.regions[i].role not in PIXEL_ROLES, i))
+    # A native table's pixel cells become crop regions right after it (raster_table_overlay).
+    entries = expand_overlays(plan.regions, page.page_number, words)
+    ids = [entry[0] for entry in entries]
+    planned_regions = [entry[1] for entry in entries]
+    # Pixel roles below text; a table's pixel cell above its table.
+    stacking = sorted(range(len(entries)), key=lambda i: (
+        2 if entries[i][3] else int(planned_regions[i].role not in PIXEL_ROLES), i))
     z_order = {index: position for position, index in enumerate(stacking)}
     regions: list[dict] = []
-    for index, planned in enumerate(plan.regions):
+    for index, (region_id, planned, pixel_cells, _) in enumerate(entries):
         x, y, width, height = planned.bbox
         crop = image.crop((x, y, x + width, y + height))
         if planned.role in CROP_ROLES:
-            crops[ids[index]] = _png(crop)
+            crops[region_id] = _png(crop)
         if planned.review_reason is not None:
             # Advisory only: the region already renders losslessly as pixels.
-            issues.append(f"{ADVISORY_PREFIX}page_{page.page_number}:{ids[index]}:{planned.review_reason}")
+            issues.append(f"{ADVISORY_PREFIX}page_{page.page_number}:{region_id}:{planned.review_reason}")
         regions.append(
             {
                 **lineage,
-                "region_id": ids[index],
+                "region_id": region_id,
                 "role": planned.role,
                 "bbox": _emu_box(planned.bbox, image, slide_size),
                 "z_order": z_order[index],
@@ -102,7 +108,8 @@ def _page_result(
                 "source_pixel_bbox": planned.bbox,
                 "pixel_sha256": _pixel_sha256(crop),
                 "overlaps": tuple(
-                    ids[j] for j, other in enumerate(plan.regions) if j != index and _overlap(planned.bbox, other.bbox)
+                    ids[j] for j, other in enumerate(planned_regions)
+                    if j != index and _overlap(planned.bbox, other.bbox)
                 ),
                 "review_required": False,
                 "editable_fallback": planned.editable_fallback,
@@ -113,6 +120,7 @@ def _page_result(
                 "ocr_token_indices": planned.word_indices,
                 "group_id": planned.group_id,
                 "heading_line_count": planned.heading_line_count,
+                "table_pixel_cells": pixel_cells,
             }
         )
     reference_id = f"p{page.page_number}-source-reference"
