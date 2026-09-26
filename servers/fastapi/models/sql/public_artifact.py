@@ -8,7 +8,6 @@ or exposed by these contracts.
 from __future__ import annotations
 
 from datetime import datetime
-import re
 from typing import Literal
 import uuid
 
@@ -32,6 +31,11 @@ from sqlalchemy import (
 from sqlmodel import Field, SQLModel
 
 from utils.datetime_utils import get_current_utc_datetime
+from models.sql.artifact_keys import (
+    _SHA256_RE as _SHA256_RE,
+    artifact_storage_key as artifact_storage_key,
+    normalize_sha256 as normalize_sha256,
+)
 
 
 ARTIFACT_REF_SCHEMA_VERSION = "artifact-ref/v1"
@@ -57,7 +61,6 @@ PUBLIC_ARTIFACT_LIFECYCLE_STATES = (
 EXPORT_IDENTITY_STATES = ("running", "succeeded", "failed")
 EXPORT_MODES = ("pptx", "pdf")
 
-_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _MEDIA_TYPE_BY_KIND = {
     "checkpoint": "application/json",
     "slide-html": "text/html",
@@ -70,29 +73,6 @@ _MEDIA_TYPE_BY_KIND = {
     "presentation-pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     "presentation-pdf": "application/pdf",
 }
-
-
-def normalize_sha256(value: str) -> str:
-    normalized = value.strip().lower()
-    if not _SHA256_RE.fullmatch(normalized):
-        raise ValueError("artifact digest must be a lowercase SHA-256 value")
-    return normalized
-
-
-def artifact_storage_key(*, owner_id: uuid.UUID, tenant_id: str, digest: str) -> str:
-    """Build an opaque, owner-bound object key without exposing a local path."""
-
-    from hashlib import sha256
-
-    normalized_digest = normalize_sha256(digest)
-    normalized_tenant = tenant_id.strip()
-    if not normalized_tenant:
-        raise ValueError("artifact tenant binding is required")
-    tenant_digest = sha256(normalized_tenant.encode("utf-8")).hexdigest()
-    return (
-        f"v1/tenant/{tenant_digest}/owner/{owner_id}/"
-        f"sha256/{normalized_digest[:2]}/{normalized_digest}"
-    )
 
 
 class ArtifactRef(BaseModel):
