@@ -9,12 +9,16 @@ from typing import Annotated, List, Literal, Optional
 
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request, Response
 from sqlalchemy import func, or_
-from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 from sqlmodel import select
 
 from api.v1.ppt.endpoints.presentation_helpers import resolve_presentation_fonts
+from api.v1.ppt.endpoints.presentation_crud_helpers import (
+    _get_presentation_with_slides as _get_presentation_with_slides,
+    apply_presentation_delete as apply_presentation_delete,
+)
 from api.v1.ppt.endpoints.presentation_generation_context import (
     generation_context_fields,
     validate_previous_attempt,
@@ -50,12 +54,6 @@ from services.database import get_async_session, sql_engine
 from services.authored_canvas import merge_presentation_canvas
 from services.compatibility_migration.admission import (
     stamp_new_authored_presentation,
-)
-from services.presentation_deletion_service import (
-    PresentationDeleteConflictError,
-    PresentationDeleteRetryableError,
-    PresentationDeletionService,
-    is_retryable_sqlite_lock,
 )
 from services.presentation_access_service import require_live_presentation
 from services.presentation_profiles import PresentationProfileError, resolve_presentation_driver
@@ -234,26 +232,6 @@ async def get_all_presentations(
     )
 
 
-async def _get_presentation_with_slides(
-    id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session)
-) -> PresentationWithSlides:
-    presentation = await require_live_presentation(sql_session, id)
-    slides_result = await sql_session.scalars(
-        select(SlideModel)
-        .where(SlideModel.presentation == id)
-        .order_by(SlideModel.index)
-    )
-    slides = list(slides_result)
-    identity = presentation.model_dump(exclude={"fonts"})
-    try:
-        resolve_presentation_driver(identity)
-    except PresentationProfileError as error:
-        # Fail closed with a clean 4xx instead of letting the profile
-        # resolution ValueError surface from PresentationWithSlides's model
-        # validator as an uncaught 500.
-        raise HTTPException(status_code=422, detail=error.code) from error
-    fonts = await resolve_presentation_fonts(presentation, slides, sql_session)
-    return PresentationWithSlides(**identity, slides=slides, fonts=fonts)
 
 
 @PRESENTATION_CRUD_ROUTER.get("/{id}", response_model=PresentationWithSlides)
@@ -370,52 +348,6 @@ async def get_presentation_generation_info(
     )
 
 
-async def apply_presentation_delete(
-    id: uuid.UUID,
-    sql_session: AsyncSession,
-) -> None:
-    """Delete a deck and its dependants, mapping service errors to HTTP status.
-
-    This boundary intentionally performs no route/write-gate check: the HTTP
-    route applies the runner-only gate, while the durable
-    `presentation.delete` operation reaches the same rollback semantics from
-    its already-authorized handler.
-    """
-    try:
-        presentation = await require_live_presentation(sql_session, id)
-    except OperationalError as error:
-        await sql_session.rollback()
-        if not is_retryable_sqlite_lock(error, sql_session):
-            raise
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "code": "presentation_delete_temporarily_unavailable",
-                "presentation_id": str(id),
-                "retryable": True,
-            },
-            headers={"Retry-After": "1"},
-        ) from error
-    try:
-        await PresentationDeletionService(sql_session).delete(presentation)
-    except PresentationDeleteConflictError as error:
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "code": "presentation_delete_dependency_conflict",
-                "presentation_id": str(error.presentation_id),
-            },
-        ) from error
-    except PresentationDeleteRetryableError as error:
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "code": "presentation_delete_temporarily_unavailable",
-                "presentation_id": str(error.presentation_id),
-                "retryable": True,
-            },
-            headers={"Retry-After": "1"},
-        ) from error
 
 
 @PRESENTATION_CRUD_ROUTER.delete("/{id}", status_code=204)
