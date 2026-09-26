@@ -9,42 +9,29 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
-import io
 import json
 import os
 from pathlib import Path
 from types import SimpleNamespace
 
 from fastapi import FastAPI
-from PIL import Image
-from sqlmodel import SQLModel
 
 from api.v1.ppt.endpoints import presentation_generate as endpoint
-from models.sql.async_presentation_generation_status import (
-    AsyncPresentationGenerationTaskModel,
-)
-from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
-from models.sql.presentation import PresentationModel
-from models.sql.presentation_generation_job import PresentationGenerationJob
-from models.sql.presentation_export_attempt import PresentationExportAttempt
-from models.sql.slide import SlideModel
-from models.sql.user import User
-from models.sql.workspace import (
-    WorkspaceAsset,
-    WorkspaceArtifact,
-    WorkspaceConversation,
-    WorkspaceMessage,
-    WorkspaceMessageAttachment,
-    WorkspaceOperation,
-    WorkspaceOperationEvent,
-    WorkspaceOutbox,
-)
 from services import authored_presentation_service as authored
 from services import database
 from services import presentation_generation_job_service as jobs
 from services import workspace_operation_runner as workspace_runner
 from services.presentation_generation_operation_handler import (
     register_presentation_generation_operation_handler,
+)
+from tests.support.authored_checkpoint_public_fixture import (
+    create_checkpoint_schema,
+    fixed_header_contract,
+    install_checkpoint_principal,
+    seed_checkpoint_owner,
+    semantic_capture,
+    semantic_slide,
+    slide_png,
 )
 from utils import llm_provider
 
@@ -66,17 +53,11 @@ def _record(event: str, slide_index: int | None = None) -> None:
         stream.flush()
 
 
-def _png() -> bytes:
-    output = io.BytesIO()
-    Image.new("RGB", (160, 90), (35, 100, 180)).save(output, format="PNG")
-    return output.getvalue()
-
-
 PLAN = SimpleNamespace(
     contents=tuple(f"Slide {index + 1}" for index in range(SLIDE_COUNT)),
     design_system="SUBPROCESS CHECKPOINT RECOVERY",
 )
-RENDERED_PNG = _png()
+RENDERED_PNGS = [slide_png(index) for index in range(SLIDE_COUNT)]
 
 
 async def _fake_brief(*_args, **_kwargs):
@@ -99,22 +80,22 @@ async def _fake_outline(*_args, **_kwargs):
 async def _fake_author(_selected_plan, index, **_options):
     await asyncio.sleep(0.02)
     _record("author_success", index)
-    return (
-        "<!DOCTYPE html><html><body>"
-        f"<h1 data-index='{index}'>Slide {index + 1}</h1>"
-        "</body></html>"
-    )
+    return semantic_slide(index)
 
 
 async def _fake_render(html):
-    index = int(html.split("data-index='", 1)[1].split("'", 1)[0])
+    index = int(html.split("Slide ", 1)[1].split("<", 1)[0]) - 1
     _record("render_start", index)
     if index == BLOCK_RENDER_SLIDE:
         _record("render_blocked", index)
         await asyncio.Event().wait()
     await asyncio.sleep(0.02)
     _record("render_success", index)
-    return RENDERED_PNG
+    return RENDERED_PNGS[index]
+
+
+async def _fake_capture(html, **kwargs):
+    return await semantic_capture(html, await _fake_render(html), **kwargs)
 
 
 async def _no_op(*_args, **_kwargs):
@@ -126,9 +107,11 @@ endpoint.generate_ppt_outline = _fake_outline
 endpoint.MEM0_PRESENTATION_MEMORY_SERVICE.store_generation_context = _no_op
 endpoint.MEM0_PRESENTATION_MEMORY_SERVICE.store_generated_outlines = _no_op
 authored.prepare_authored_deck = lambda *_args, **_kwargs: PLAN
+authored.resolve_header_contract = fixed_header_contract
 authored.author_planned_slide = _fake_author
 authored.is_fallback_slide_html = lambda _html: False
 authored.render_html_to_png = _fake_render
+authored.render_html_to_png_with_metrics = _fake_capture
 authored._AUTHORED_SLIDE_WORKERS = 1
 authored._AUTHORED_JOB_SEMAPHORE = asyncio.Semaphore(1)
 llm_provider.get_llm_provider = lambda: SimpleNamespace(
@@ -156,30 +139,8 @@ jobs.GENERATION_JOB_DISPATCH_SECONDS = 0.5
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI):
-    async with database.sql_engine.begin() as connection:
-        await connection.exec_driver_sql("PRAGMA journal_mode=WAL")
-        await connection.run_sync(
-            SQLModel.metadata.create_all,
-            tables=[
-                AsyncPresentationGenerationTaskModel.__table__,
-                PresentationGenerationJob.__table__,
-                AuthoredSlideCheckpoint.__table__,
-                PresentationModel.__table__,
-                SlideModel.__table__,
-                User.__table__,
-                # A bare generate bootstraps and activates its chat-first
-                # workspace before the runner can claim the linked job.
-                WorkspaceConversation.__table__,
-                WorkspaceMessage.__table__,
-                WorkspaceAsset.__table__,
-                PresentationExportAttempt.__table__,
-                WorkspaceArtifact.__table__,
-                WorkspaceMessageAttachment.__table__,
-                WorkspaceOperation.__table__,
-                WorkspaceOperationEvent.__table__,
-                WorkspaceOutbox.__table__,
-            ],
-        )
+    await create_checkpoint_schema(database.sql_engine)
+    await seed_checkpoint_owner(database.async_session_maker)
     await jobs.start_presentation_generation_dispatcher()
     register_presentation_generation_operation_handler(replace=True)
     await workspace_runner.start_workspace_operation_runner()
@@ -196,3 +157,4 @@ async def _lifespan(_app: FastAPI):
 
 app = FastAPI(lifespan=_lifespan)
 app.include_router(endpoint.PRESENTATION_GENERATE_ROUTER, prefix="/api/v1/ppt")
+install_checkpoint_principal(app)
