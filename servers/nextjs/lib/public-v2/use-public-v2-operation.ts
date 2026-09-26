@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import {
   createPublicV2OperationClient,
@@ -40,11 +40,7 @@ export function usePublicV2Operation(options: UsePublicV2OperationOptions = {}):
   cancel: () => ReturnType<PublicV2OperationClient["cancel"]>;
   clear: () => void;
 } {
-  const clientRef = useRef<PublicV2OperationClient | null>(null);
-  if (!clientRef.current) {
-    clientRef.current = createPublicV2OperationClient(options);
-  }
-  const client = clientRef.current;
+  const [client] = useState(() => createPublicV2OperationClient(options));
   const snapshot = useSyncExternalStore(
     (listener) => client.subscribe(listener),
     () => client.snapshot,

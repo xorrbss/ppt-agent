@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type {
   WorkspaceCommandOptions,
@@ -117,7 +117,9 @@ export function useWorkspaceAgentFocus({
   );
   const active = submitting || operationInFlight;
   const activeRef = useRef(active);
-  activeRef.current = active;
+  useLayoutEffect(() => {
+    activeRef.current = active;
+  }, [active]);
 
   useEffect(() => {
     onActivityChange?.(active);

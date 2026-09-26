@@ -126,10 +126,12 @@ export function useConversationWorkspaceLayout({
     null,
   );
 
-  if (currentPresentationIdRef.current !== presentationId) {
-    currentPresentationIdRef.current = presentationId;
-    handledCompletionKeyRef.current = null;
-  }
+  useLayoutEffect(() => {
+    if (currentPresentationIdRef.current !== presentationId) {
+      currentPresentationIdRef.current = presentationId;
+      handledCompletionKeyRef.current = null;
+    }
+  }, [presentationId]);
 
   const setActivePane = useCallback((pane: ConversationWorkspacePane) => {
     setActivePaneState(pane);
