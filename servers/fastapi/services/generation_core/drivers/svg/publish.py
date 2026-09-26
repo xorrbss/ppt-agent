@@ -19,8 +19,28 @@ from models.sql.slide import SlideModel
 from services.authored_canvas import merge_presentation_canvas, request_canvas_metadata
 from services.authored_checkpoint_service import begin_publish, complete_publish
 from services.authored_presentation_artifacts import _save_slide_pngs, authored_title
+from services.generation_core.drivers.svg.native_declarations import PAYLOAD_KEY as NATIVE_DECLARATIONS_KEY
+from services.generation_core.drivers.svg.native_publish import canvas_point_per_px, page_native_objects
+from services.generation_core.native_objects import SLIDE_CONTENT_KEY as NATIVE_OBJECTS_KEY
 from services.generation_core.quality.page_outcome import review_page_indices
 from services.svg_presentation_checkpoint import _save_source_page_pngs
+
+
+def svg_slide_content(payload: dict, *, role, source, pt_per_px: float) -> dict:
+    """``slide.content`` of one published page: receipt, asset manifest, native objects.
+
+    The page's raw native declarations never reach the receipt; only the
+    publication summary (``native_publish.page_native_objects``) does.
+    """
+    native_objects, native_summary = page_native_objects(payload, pt_per_px=pt_per_px)
+    receipt = {key: value for key, value in payload.items()
+               if key not in {"svg_content", "attempts", "svgAssetManifest", NATIVE_DECLARATIONS_KEY}}
+    if native_summary:
+        receipt["nativeObjects"] = native_summary
+    return {"__svg__": True, "role": role, "source": source,
+            **({"svgAssetManifest": payload["svgAssetManifest"]} if payload.get("svgAssetManifest") else {}),
+            **({NATIVE_OBJECTS_KEY: native_objects} if native_objects else {}),
+            "svgReceipt": receipt}
 
 
 async def _publish(request, presentation_id, outline, language, session, job, snapshot, roles, pages,
@@ -104,13 +124,11 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
                 "codexGenerationPreset": request.codex_generation_preset},
     }, request_canvas_metadata(request))
     presentation.lifecycle_status = PRESENTATION_LIFECYCLE_PUBLISHED
+    pt_per_px = canvas_point_per_px(request_canvas_metadata(request))
     await session.execute(delete(SlideModel).where(SlideModel.presentation == presentation_id))
     for index, (payload, _) in enumerate(pages):
-        slide_content = {"__svg__": True, "role": roles[index], "source": outline.slides[index].content,
-                         **({"svgAssetManifest": payload["svgAssetManifest"]}
-                            if payload.get("svgAssetManifest") else {}),
-                         "svgReceipt": {key: value for key, value in payload.items()
-                                       if key not in {"svg_content", "attempts", "svgAssetManifest"}}}
+        slide_content = svg_slide_content(payload, role=roles[index], source=outline.slides[index].content,
+                                          pt_per_px=pt_per_px)
         session.add(SlideModel(presentation=presentation_id, owner_id=owner,
                               layout_group="svg", layout="svg:content", index=index,
                               content=slide_content,

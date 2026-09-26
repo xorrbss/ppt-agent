@@ -11,6 +11,9 @@ from typing import Awaitable, Callable, Sequence
 
 from llmai import get_client
 from llmai.shared import ImageContentPart
+from services.generation_core.drivers.svg.native_declarations import (
+    declaration_receipt, extract_native_declarations, native_author_rules,
+)
 from services.provider_usage_instrumentation import (
     ProviderCallTimer, current_provider_idempotency_key, provider_call_admission, record_provider_call,
 )
@@ -61,6 +64,9 @@ class SvgAuthorResult:
     svg_content: str
     raw_response: str
     receipt: dict
+    # Model-declared native tables/charts extracted from this attempt's SVG
+    # (``native_declarations.extract_native_declarations``); ``None`` if none.
+    native_declarations: dict | None = None
 
 
 def preflight_svg_source_images(source_images) -> dict:
@@ -116,7 +122,7 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
         images.append(ImageContentPart(data=base64.b64decode(data), mime_type=header[5:].split(";")[0]))
     image_count = len(images)
     image_bytes = sum(len(part.data) for part in images)
-    rules = (SVG_AUTHOR_RULES + f"\nBody text minimum: {body_floor:g} CSS px. "
+    rules = (SVG_AUTHOR_RULES + native_author_rules() + f"\nBody text minimum: {body_floor:g} CSS px. "
              "Honor explicit user typography constraints.\n")
     messages = author_messages(rules, prompt, design, image_parts=images)
     client = get_client(config=get_llm_config())
@@ -154,9 +160,13 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
     from xml.etree import ElementTree as ET
     validation_error = None
     vector_used: set = set()
+    declarations = None
     if not re.search(r"<!|<\?", svg):
         try:
             root = ET.fromstring(svg)
+            # Declaration attributes are outside the SVG contract: strip them
+            # before anything validates or stores the tree.
+            declarations = extract_native_declarations(root)
             vectors = {k: v["vector"] for k, v in manifest.items() if v.get("vector") is not None}
             used = set()
             if vectors:
@@ -185,6 +195,7 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
             "raw_digest": source_digest(raw), "source_digest": source_digest(svg), "latency_ms": timer.elapsed_ms,
             "effective_model_verified": False, "validation_error": validation_error,
             "input_image_count": image_count, "input_image_bytes": image_bytes,
-            "body_font_floor_px": body_floor,
+            "body_font_floor_px": body_floor, **declaration_receipt(declarations),
             **({"vector_icons_used": sorted(vector_used)} if any(v.get("vector") is not None
-                                                                 for v in manifest.values()) else {})})
+                                                                 for v in manifest.values()) else {})},
+            native_declarations=declarations)

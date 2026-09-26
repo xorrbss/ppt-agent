@@ -1,0 +1,107 @@
+"""Validate one declared native chart against its drawing and derive the V1 payload.
+
+Converted natively, the group's drawn children are replaced by a chart built
+from the payload, so the payload may only say what the group already shows:
+
+* The model JSON is ``{"chartType", "categories": [str], "series": [{"name",
+  "values": [num]}], "title"?: str}``; any other key rejects the declaration.
+* Every category and series name (and the title, when declared) is drawn as a
+  text in the group: the converter drops, and the pre-export validator
+  rejects, a title or legend entry that is not drawn inside the group. Axis
+  titles are not part of the model JSON. A pie has exactly one series. Chart
+  texts are compared with their lines joined by a space, whitespace-normalized
+  NFC.
+* Every drawn text is a category, a series name, the title, or a value label:
+  a number (``,`` separators, sign, currency prefix and short unit suffix
+  allowed; the suffix is not interpreted) equal to one of the series values.
+  Axis tick labels are therefore not accepted: the native chart draws its own.
+* Anchor: the bounding box of every primitive (text boxes estimated from their
+  font size), canvas px.
+* Style: series colours only where unambiguous -- bar/column: exactly one rect
+  fill per series drawn once per category (plus an optional legend swatch),
+  assigned in drawing order; line: one stroked polyline/path per series. A
+  font family shared by every drawn text becomes the chart font.
+"""
+from __future__ import annotations
+
+from services.generation_core.drivers.svg.native_geometry import (
+    GroupPrimitives, NativeRejection, normalize_text, parse_label_number,
+)
+
+CHART_ELEMENTS = frozenset({"g", "rect", "line", "polyline", "polygon", "path", "circle", "ellipse",
+                            "text", "tspan"})
+
+
+def _model_chart(raw: dict) -> dict:
+    if not set(raw) <= {"chartType", "categories", "series", "title"}:
+        raise NativeRejection("native_chart_json_invalid")
+    categories, series = raw.get("categories"), raw.get("series")
+    if (not isinstance(categories, list) or not all(isinstance(c, str) for c in categories)
+            or not isinstance(series, list) or not series
+            or not all(isinstance(s, dict) and set(s) <= {"name", "values"} and isinstance(s.get("name"), str)
+                       for s in series)
+            or (raw.get("title") is not None and not isinstance(raw["title"], str))):
+        raise NativeRejection("native_chart_json_invalid")
+    payload = {"chartType": raw.get("chartType"), "categories": list(categories),
+               "series": [{"name": s["name"], "values": s.get("values")} for s in series]}
+    if raw.get("title"):
+        payload["title"] = raw["title"]
+    return payload
+
+
+def _series_colors(payload: dict, prims: GroupPrimitives) -> list[str] | None:
+    count, series = len(payload["categories"]), len(payload["series"])
+    if payload["chartType"] in ("bar", "column"):
+        order: list[str] = []
+        tally: dict[str, int] = {}
+        for shape in prims.shapes:
+            if shape.tag == "rect" and shape.fill:
+                tally[shape.fill] = tally.get(shape.fill, 0) + 1
+                if shape.fill not in order:
+                    order.append(shape.fill)
+        colors = [fill for fill in order if tally[fill] in (count, count + 1)]
+        return colors if len(colors) == series else None
+    if payload["chartType"] == "line":
+        strokes = [s.stroke for s in prims.shapes
+                   if s.tag in ("polyline", "path") and s.stroke and s.point_count >= count]
+        return strokes if len(strokes) == series else None
+    return None
+
+
+def chart_object(raw: dict, prims: GroupPrimitives) -> tuple[dict, dict]:
+    """``(anchor, payload)`` for one declared chart; raises :class:`NativeRejection`."""
+    if not prims.tags <= CHART_ELEMENTS:
+        raise NativeRejection("native_group_element_unsupported")
+    payload = _model_chart(raw)
+    if payload["chartType"] == "pie" and len(payload["series"]) != 1:
+        raise NativeRejection("native_chart_pie_series_invalid")
+    labels = {normalize_text(item) for item in payload["categories"]}
+    names = {normalize_text(item["name"]) for item in payload["series"]}
+    title = {normalize_text(payload["title"])} if payload.get("title") else set()
+    values = [value for item in payload["series"] if isinstance(item["values"], list)
+              for value in item["values"] if type(value) in (int, float)]
+    drawn = [normalize_text(" ".join(text.lines)) for text in prims.texts]
+    if not (labels | names | title) <= set(drawn):
+        raise NativeRejection("native_chart_label_not_drawn")
+    for text in drawn:
+        if text in labels or text in names or text in title:
+            continue
+        number = parse_label_number(text)
+        if number is None or not any(abs(number - v) <= 1e-9 * max(1.0, abs(v)) for v in values):
+            raise NativeRejection("native_chart_text_unaccounted")
+    boxes = [shape.box for shape in prims.shapes] + [text.box() for text in prims.texts]
+    if not boxes:
+        raise NativeRejection("native_chart_empty")
+    frame = boxes[0]
+    for box in boxes[1:]:
+        frame = frame.union(box)
+    if frame.width <= 0 or frame.height <= 0:
+        raise NativeRejection("native_chart_empty")
+    colors = _series_colors(payload, prims) if isinstance(payload["chartType"], str) else None
+    if colors:
+        for item, color in zip(payload["series"], colors, strict=True):
+            item["color"] = color
+    families = {text.family.split(",")[0].strip().strip("'\"") for text in prims.texts}
+    if len(families) == 1 and "" not in families:
+        payload["fontFamily"] = families.pop()
+    return frame.anchor(), payload
