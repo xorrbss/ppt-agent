@@ -1,6 +1,6 @@
-import { actionMessageKey, runMessageKey, statusMessageKey, statusClass, formatBytes, safeAssetUrl } from "./chatSurfaceHelpers";
 "use client";
 
+import { actionMessageKey, runMessageKey, statusMessageKey, statusClass, formatBytes, safeAssetUrl } from "./chatSurfaceHelpers";
 import { ClipboardEvent, DragEvent, FormEvent, useState } from "react";
 import { ArrowUp, Download, FileText, Loader2, Paperclip, X } from "lucide-react";
 import { useTranslations } from "next-intl";

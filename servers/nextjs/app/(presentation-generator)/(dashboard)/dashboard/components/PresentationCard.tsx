@@ -1,5 +1,5 @@
-import { useTranslations as useA2bTranslations } from "next-intl";
 'use client'
+import { useTranslations as useA2bTranslations } from "next-intl";
 import React, { useEffect, useRef } from "react";
 
 import { Card } from "@/components/ui/card";

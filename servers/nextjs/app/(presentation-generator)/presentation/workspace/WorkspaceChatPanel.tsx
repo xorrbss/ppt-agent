@@ -1,6 +1,6 @@
-import { activeWorkspaceMutationState, reviewRequiredIndicesFor, useWorkspaceGenerationInfoResult, type WorkspaceChatPanelProps, type GenerationInfoResult } from "./workspaceChatPanelHelpers";
 "use client";
 
+import { activeWorkspaceMutationState, reviewRequiredIndicesFor, useWorkspaceGenerationInfoResult, type WorkspaceChatPanelProps, type GenerationInfoResult } from "./workspaceChatPanelHelpers";
 import { LocateFixed } from "lucide-react";
 import { useTranslations } from "next-intl";
 import {

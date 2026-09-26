@@ -1,7 +1,7 @@
-import { createFallbackTheme, errorMessage } from "./themePanelDefaults";
-import { useTranslations as useA2bTranslations } from "next-intl";
 'use client'
 
+import { createFallbackTheme, errorMessage } from "./themePanelDefaults";
+import { useTranslations as useA2bTranslations } from "next-intl";
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'

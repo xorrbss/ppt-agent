@@ -1,11 +1,11 @@
+"use client";
+
 import { useTranslations as useA2bTranslations } from "next-intl";
 /**
  * Upload entry experience: a centered creation composer followed by a
  * container-responsive template catalog. Generation behavior remains owned by
  * useUploadPageState; this component only reorganizes the interaction surface.
  */
-
-"use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { LayoutTemplate } from "lucide-react";

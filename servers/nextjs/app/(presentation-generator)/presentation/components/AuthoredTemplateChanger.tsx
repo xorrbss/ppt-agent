@@ -1,6 +1,6 @@
-import { CATEGORY_LABELS, normalizeSearchText, createIdempotencyKey, targetPresentationUrl } from "./authoredTemplateChangerHelpers";
 "use client";
 
+import { CATEGORY_LABELS, normalizeSearchText, createIdempotencyKey, targetPresentationUrl } from "./authoredTemplateChangerHelpers";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
