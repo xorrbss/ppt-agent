@@ -842,14 +842,14 @@ def _extract_unit(
             new_block: SourceContentBlock | None = None
             group_transform: AffineTransform | None = None
 
-            def source_payload() -> dict[str, Any]:
+            def source_payload(shape_id=shape_id, current_shape_index=current_shape_index) -> dict[str, Any]:
                 return {
                     "shapeId": shape_id,
                     "sourceSlideIndex": source_index,
                     "sourceShapeIndex": current_shape_index,
                 }
 
-            def geometry_for(block_id: str) -> dict[str, Any]:
+            def geometry_for(block_id: str, element=element) -> dict[str, Any]:
                 return _geometry(
                     element,
                     parent_transform=parent_transform,

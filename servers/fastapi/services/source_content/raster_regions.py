@@ -246,7 +246,8 @@ def _colored_icon_candidates(image: Image.Image) -> tuple[RegionCandidate, ...]:
 
     def colored(x: int, y: int) -> bool:
         red, green, blue = pixels[x, y]
-        return max(red, green, blue) - min(red, green, blue) >= 65 and max(red, green, blue) >= 135 and min(red, green, blue) <= 135
+        return max(red, green, blue) - min(red, green, blue) >= 65 \
+            and max(red, green, blue) >= 135 and min(red, green, blue) <= 135
 
     for y in range(height):
         for x in range(width):
@@ -530,7 +531,7 @@ def _border_card_bottom(image: Image.Image, scale: float, left: int, top: int, w
     def edge(x: int, y: int) -> int:
         left_pixel = source.getpixel((x - 3, y))
         right_pixel = source.getpixel((x + 3, y))
-        return sum(abs(a - b) for a, b in zip(left_pixel, right_pixel))
+        return sum(abs(a - b) for a, b in zip(left_pixel, right_pixel, strict=False))
 
     borders: list[tuple[float, int]] = []
     for expected in (x_left, x_right):
@@ -555,7 +556,6 @@ def _border_card_bottom(image: Image.Image, scale: float, left: int, top: int, w
     if last_supported <= sample_start + source_width * 0.25:
         return None
     return min(round((last_supported + 12) * scale), round(source.height * scale))
-
 
 def text_and_table_candidates(
     words: tuple[OCRWord, ...],

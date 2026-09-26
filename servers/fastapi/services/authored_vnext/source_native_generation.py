@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from . import source_native_flow_styles as _flow_styles
+from .source_native_flow_styles import (_unit_render_text, _flow_mapping, _flow_number,
+                                       _flow_role, _flow_font_px, _semantic_weight_override)
+
 import asyncio
 import base64
 from collections.abc import Mapping, Sequence
@@ -609,11 +613,6 @@ def _protected_dom_digest(document: object, editable_qids: set[str]) -> str:
                 }
             )
     return canonical_digest(protected)
-
-
-from . import source_native_flow_styles as _flow_styles
-from .source_native_flow_styles import (_unit_render_text, _flow_mapping, _flow_number,
-                                       _flow_role, _flow_font_px, _semantic_weight_override)
 
 
 def _flow_text_css(slot, *, role, adaptive_scale):

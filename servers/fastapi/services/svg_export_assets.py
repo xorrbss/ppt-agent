@@ -38,7 +38,7 @@ def validate_export_placement(svg, source, placement, *, page_index, slide_revis
     if len(images) != len(placement.placements):
         raise ValueError("svg_export_placement_count_mismatch")
     used = set()
-    for (node, tx, ty), item in zip(images, placement.placements):
+    for (node, tx, ty), item in zip(images, placement.placements, strict=False):
         if item.slot_id in used or node.get("href") != item.slot_id:
             raise ValueError("svg_export_placement_slot_mismatch")
         used.add(item.slot_id)
@@ -322,9 +322,18 @@ async def build_slide_export_assets(slide, *, service, session, claim, tenant_id
             x=float(node.get("x", "0")) + tx, y=float(node.get("y", "0")) + ty,
             width=float(node.get("width", "0")), height=float(node.get("height", "0")),
             fit=slot.export_policy, derivative=derivative))
-    manifest = PlacementManifest.seal(dict(canonicalSvgDigest=source_digest(slide.svg_content),
-        sourceManifestDigest=source.digest, slideRevision=revision, purpose=f"export-{export_format}",
-        placements=[p.model_dump(mode="json", by_alias=True) for p in placements], rendererVersion=SVG_RENDERER_VERSION))
+    manifest = PlacementManifest.seal(
+    dict(
+        canonicalSvgDigest=source_digest(
+            slide.svg_content),
+            sourceManifestDigest=source.digest,
+            slideRevision=revision,
+            purpose=f"export-{export_format}",
+            placements=[
+                p.model_dump(
+                    mode="json",
+                    by_alias=True) for p in placements],
+                     rendererVersion=SVG_RENDERER_VERSION))
     manifest.validate_source(source, page_index=page_index)
     validate_export_placement(slide.svg_content, source, manifest, page_index=page_index,
         slide_revision=revision, presentation_id=claim.presentation_id, export_format=export_format,
@@ -361,9 +370,17 @@ async def prepare_export_assets(binding, *, svg, service, session, claim, tenant
             owner_id=claim.owner_id, tenant_id=tenant_id))
         refs.append(await service.register_consumer_ref(session, ref, created_by_operation_id=claim.operation_id))
     source, placement = manifests
-    derivatives = validate_export_placement(svg, source, placement,
-        page_index=binding["pageIndex"], slide_revision=binding["slideRevision"],
-        presentation_id=claim.presentation_id, export_format=export_format, width=width, height=height, allow_image_only=binding.get("fullPagePreserve") is True)
+    derivatives = validate_export_placement(
+    svg,
+    source,
+    placement,
+    page_index=binding["pageIndex"],
+    slide_revision=binding["slideRevision"],
+    presentation_id=claim.presentation_id,
+    export_format=export_format,
+    width=width,
+    height=height,
+     allow_image_only=binding.get("fullPagePreserve") is True)
     from services.svg_asset_resolver import bind_export_derivatives
     from services.public_export_operation import _worker_ref
     derivative_refs = await bind_export_derivatives(derivatives=derivatives, session=session,
@@ -402,9 +419,17 @@ def materialize_export_assets(binding, *, svg, job, store, presentation_id,
     placement = PlacementManifest.model_validate_json(placement_bytes)
     if source.digest != binding["sourceManifestDigest"] or placement.digest != binding["placementManifestDigest"]:
         raise ValueError("svg_export_manifest_digest_mismatch")
-    derivatives = validate_export_placement(svg, source, placement,
-        page_index=binding["pageIndex"], slide_revision=binding["slideRevision"], presentation_id=presentation_id,
-        export_format=export_format, width=width, height=height, allow_image_only=binding.get("fullPagePreserve") is True)
+    derivatives = validate_export_placement(
+    svg,
+    source,
+    placement,
+    page_index=binding["pageIndex"],
+    slide_revision=binding["slideRevision"],
+    presentation_id=presentation_id,
+    export_format=export_format,
+    width=width,
+    height=height,
+     allow_image_only=binding.get("fullPagePreserve") is True)
     if set(binding["derivatives"]) != set(derivatives):
         raise ValueError("svg_export_derivative_slot_mismatch")
     if (sum(d.byte_size for d in derivatives.values()) > 64 * 1024 * 1024
@@ -421,8 +446,19 @@ def materialize_export_assets(binding, *, svg, job, store, presentation_id,
     slots = {s.slot_id: s for s in source.slots}
     contract = {s: {"required": slots[s].policy.required, "allowOmit": slots[s].policy.allow_omit}
                 for s in page.slot_ids}
-    resolved = materialize_svg(svg, manifest=source, placement_manifest=placement,
-        page_index=binding["pageIndex"], derivatives=derivatives, payloads=payloads, width=width, height=height, allow_image_only=verified_full_page_preserve_export(binding, canonical_svg=svg, source_contract=contract))
+    resolved = materialize_svg(
+    svg,
+    manifest=source,
+    placement_manifest=placement,
+    page_index=binding["pageIndex"],
+    derivatives=derivatives,
+    payloads=payloads,
+    width=width,
+    height=height,
+    allow_image_only=verified_full_page_preserve_export(
+        binding,
+        canonical_svg=svg,
+         source_contract=contract))
     return resolved, contract
 
 def verified_full_page_preserve_export(binding, *, canonical_svg: str, source_contract: dict) -> bool:

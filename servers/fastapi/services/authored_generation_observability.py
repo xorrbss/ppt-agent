@@ -42,12 +42,7 @@ _MAX_DURATION_MS = 86_400_000.0
 
 
 def _bounded_int(name: str, value: int, *, maximum: int = _MAX_COUNT) -> int:
-    if (
-        isinstance(value, bool)
-        or not isinstance(value, int)
-        or value < 0
-        or value > maximum
-    ):
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0 or value > maximum:
         raise ValueError(f"{name} must be a bounded nonnegative integer")
     return value
 
@@ -119,21 +114,15 @@ def build_authored_generation_observation(
         )
         if provider_attempt_count is not None:
             event.update(
-                provider_attempt_count=_bounded_int(
-                    "provider_attempt_count", provider_attempt_count, maximum=3
-                ),
-                retry_reason=(
-                    "retryable_failure" if retryable else "terminal_failure"
-                ),
+                provider_attempt_count=_bounded_int("provider_attempt_count", provider_attempt_count, maximum=3),
+                retry_reason=("retryable_failure" if retryable else "terminal_failure"),
                 stage_reason=code,
             )
     elif name == "resume":
         if attempt_number is None or completed_slides is None or total_slides is None:
             raise ValueError("resume counts are required")
         attempt = _bounded_int("attempt_number", attempt_number)
-        completed = _bounded_int(
-            "completed_slides", completed_slides, maximum=_MAX_SLIDES
-        )
+        completed = _bounded_int("completed_slides", completed_slides, maximum=_MAX_SLIDES)
         total = _bounded_int("total_slides", total_slides, maximum=_MAX_SLIDES)
         if attempt < 2 or completed > total:
             raise ValueError("resume counts are inconsistent")
@@ -224,7 +213,11 @@ def log_authored_slide_failure_observation(
     Stable identifiers propagate unchanged; arbitrary exception text is refused.
     """
 
-    safe_code = code if isinstance(code, str) and re.fullmatch(r"[a-z][a-z0-9_]{0,127}", code) else "authored_unexpected_failure"
+    safe_code = (
+        code
+        if isinstance(code, str) and re.fullmatch(r"[a-z][a-z0-9_]{0,127}", code)
+        else "authored_unexpected_failure"
+    )
     return log_authored_generation_observation(
         logger=logger,
         name="slide_failure",

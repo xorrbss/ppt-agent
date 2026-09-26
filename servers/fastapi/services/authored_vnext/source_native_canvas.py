@@ -184,8 +184,8 @@ def build_source_native_canvas_placement(
         source_rect = CanvasRect(
             0,
             0,
-            float(getattr(design_canvas, "width")) * unit_scale,
-            float(getattr(design_canvas, "height")) * unit_scale,
+            float(design_canvas.width) * unit_scale,
+            float(design_canvas.height) * unit_scale,
         )
     except (AttributeError, TypeError, ValueError) as error:
         raise ValueError("source_native_canvas_geometry_invalid") from error

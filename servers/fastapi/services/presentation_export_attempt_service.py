@@ -41,9 +41,7 @@ def _canonical_json(value: Any) -> bytes:
             sort_keys=True,
         )
     except (TypeError, ValueError) as error:
-        raise PresentationExportContractError(
-            "presentation_export_snapshot_invalid"
-        ) from error
+        raise PresentationExportContractError("presentation_export_snapshot_invalid") from error
     return serialized.encode("utf-8")
 
 
@@ -67,15 +65,17 @@ def build_export_source_snapshot_sha256(
             "content": slide.content,
             "ui": slide.ui,
             "html_content": slide.html_content,
-            **({"svg_content": slide.svg_content, "source_format": "svg"} if getattr(slide, "source_format", None) == "svg" else {}),
+            **(
+                {"svg_content": slide.svg_content, "source_format": "svg"}
+                if getattr(slide, "source_format", None) == "svg"
+                else {}
+            ),
             "speaker_note": slide.speaker_note,
             "properties": slide.properties,
         }
         for slide in slides
     ]
-    slide_payloads.sort(
-        key=lambda item: (item["index"], sha256_canonical_json(item))
-    )
+    slide_payloads.sort(key=lambda item: (item["index"], sha256_canonical_json(item)))
 
     return sha256_canonical_json(
         {
@@ -112,7 +112,15 @@ def build_export_source_snapshot_sha256(
 def build_export_html_source_sha256(slides: Sequence[SlideModel]) -> str:
     return sha256_canonical_json(
         [
-            {"index": slide.index, "html_content": slide.html_content, **({"svg_content": slide.svg_content, "source_format": "svg"} if getattr(slide, "source_format", None) == "svg" else {})}
+            {
+                "index": slide.index,
+                "html_content": slide.html_content,
+                **(
+                    {"svg_content": slide.svg_content, "source_format": "svg"}
+                    if getattr(slide, "source_format", None) == "svg"
+                    else {}
+                ),
+            }
             for slide in sorted(slides, key=lambda item: (item.index, str(item.id)))
         ]
     )
@@ -142,13 +150,15 @@ def build_export_composition_sha256(
                     "layout_group": slide.layout_group,
                     "layout": slide.layout,
                     "html_content": slide.html_content,
-            **({"svg_content": slide.svg_content, "source_format": "svg"} if getattr(slide, "source_format", None) == "svg" else {}),
+                    **(
+                        {"svg_content": slide.svg_content, "source_format": "svg"}
+                        if getattr(slide, "source_format", None) == "svg"
+                        else {}
+                    ),
                     "ui": slide.ui,
                     "properties": slide.properties,
                 }
-                for slide in sorted(
-                    slides, key=lambda item: (item.index, str(item.id))
-                )
+                for slide in sorted(slides, key=lambda item: (item.index, str(item.id)))
             ],
         }
     )
@@ -239,9 +249,7 @@ def build_sync_export_hashes(
             "source_snapshot_sha256": source_snapshot_sha256,
         }
     )
-    idempotency_key_hash = sha256(
-        f"presentation-export:{identity}".encode("utf-8")
-    ).hexdigest()
+    idempotency_key_hash = sha256(f"presentation-export:{identity}".encode("utf-8")).hexdigest()
     return request_hash, idempotency_key_hash
 
 
@@ -312,9 +320,7 @@ async def begin_export_attempt(
         PresentationExportAttempt.idempotency_key_hash == idempotency_key_hash,
     )
     existing = (
-        await session.execute(
-            select(PresentationExportAttempt).where(*identity_predicates)
-        )
+        await session.execute(select(PresentationExportAttempt).where(*identity_predicates))
     ).scalar_one_or_none()
     now = datetime.now(timezone.utc)
     if existing is None:
@@ -345,9 +351,7 @@ async def begin_export_attempt(
             # identity it committed; a conflicting payload remains fail-closed.
             await session.rollback()
             existing = (
-                await session.execute(
-                    select(PresentationExportAttempt).where(*identity_predicates)
-                )
+                await session.execute(select(PresentationExportAttempt).where(*identity_predicates))
             ).scalar_one_or_none()
             if existing is None:
                 raise
@@ -365,13 +369,9 @@ async def begin_export_attempt(
         and existing.requested_adapter == requested_adapter
     )
     if not immutable_matches:
-        raise PresentationExportContractError(
-            "presentation_export_idempotency_conflict"
-        )
+        raise PresentationExportContractError("presentation_export_idempotency_conflict")
     if existing.state == "succeeded":
-        raise PresentationExportContractError(
-            "presentation_export_attempt_already_succeeded"
-        )
+        raise PresentationExportContractError("presentation_export_attempt_already_succeeded")
     existing.state = "running"
     existing.selected_adapter = None
     existing.artifact_sha256 = None
@@ -423,12 +423,10 @@ async def terminalize_export_attempt_succeeded(
             PresentationExportAttempt.presentation_id == presentation_id,
             PresentationExportAttempt.owner_id == expected_owner_id,
             PresentationExportAttempt.owner_scope == expected_owner_scope,
-            PresentationExportAttempt.workspace_operation_id
-            == expected_workspace_operation_id,
+            PresentationExportAttempt.workspace_operation_id == expected_workspace_operation_id,
             PresentationExportAttempt.state == "running",
             PresentationExportAttempt.source_revision == source_revision,
-            PresentationExportAttempt.source_snapshot_sha256
-            == source_snapshot_sha256,
+            PresentationExportAttempt.source_snapshot_sha256 == source_snapshot_sha256,
         )
         .values(
             state="succeeded",
@@ -444,9 +442,7 @@ async def terminalize_export_attempt_succeeded(
         )
     )
     if result.rowcount != 1:
-        raise PresentationExportContractError(
-            "presentation_export_attempt_terminal_conflict"
-        )
+        raise PresentationExportContractError("presentation_export_attempt_terminal_conflict")
 
 
 async def terminalize_export_attempt_failed(
@@ -484,17 +480,14 @@ async def terminalize_export_attempt_failed(
             PresentationExportAttempt.id == attempt_id,
             PresentationExportAttempt.owner_id == expected_owner_id,
             PresentationExportAttempt.owner_scope == expected_owner_scope,
-            PresentationExportAttempt.workspace_operation_id
-            == expected_workspace_operation_id,
+            PresentationExportAttempt.workspace_operation_id == expected_workspace_operation_id,
             PresentationExportAttempt.state.in_(("pending", "running", "failed")),
         )
         .values(**values)
     )
     if result.rowcount != 1:
         await session.rollback()
-        raise PresentationExportContractError(
-            "presentation_export_attempt_terminal_conflict"
-        )
+        raise PresentationExportContractError("presentation_export_attempt_terminal_conflict")
     await session.commit()
 
 
@@ -541,8 +534,7 @@ async def terminalize_export_attempt_failed_if_current_workspace_claim(
             PresentationExportAttempt.id == attempt_id,
             PresentationExportAttempt.owner_id == expected_owner_id,
             PresentationExportAttempt.owner_scope == expected_owner_scope,
-            PresentationExportAttempt.workspace_operation_id
-            == expected_workspace_operation_id,
+            PresentationExportAttempt.workspace_operation_id == expected_workspace_operation_id,
             PresentationExportAttempt.state == "running",
         )
         .values(
@@ -569,11 +561,7 @@ async def require_export_source_revision(
     presentation_id: uuid.UUID,
     expected_revision: int,
 ) -> None:
-    current = await session.scalar(
-        select(PresentationModel.revision).where(
-            PresentationModel.id == presentation_id
-        )
-    )
+    current = await session.scalar(select(PresentationModel.revision).where(PresentationModel.id == presentation_id))
     if current != expected_revision:
         raise PresentationExportContractError("stale_presentation_revision")
 

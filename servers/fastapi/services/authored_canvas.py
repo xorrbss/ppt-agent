@@ -39,10 +39,7 @@ class AuthoredCanvasMetadata(StrictCamelModel):
 
     @model_validator(mode="after")
     def validate_canvas_geometry(self) -> "AuthoredCanvasMetadata":
-        if (
-            self.safe_area.right > self.width_px
-            or self.safe_area.bottom > self.height_px
-        ):
+        if self.safe_area.right > self.width_px or self.safe_area.bottom > self.height_px:
             raise ValueError("authored_canvas_safe_area_out_of_bounds")
         return self
 
@@ -82,9 +79,7 @@ def _metadata_wire(metadata: AuthoredCanvasMetadata) -> dict[str, object]:
     return metadata.model_dump(mode="json", by_alias=True)
 
 
-def _canvas_metadata_from_contract(
-    aspect_ratio: AuthoredAspectRatio, canvas: object
-) -> AuthoredCanvasMetadata:
+def _canvas_metadata_from_contract(aspect_ratio: AuthoredAspectRatio, canvas: object) -> AuthoredCanvasMetadata:
     try:
         contract = CanvasContract.model_validate(canvas)
     except (TypeError, ValueError) as error:
@@ -157,14 +152,10 @@ def request_canvas_metadata(request: Any) -> dict[str, object]:
     contract = request_canvas_contract(request)
     if getattr(request, "_document_canvas", None) is not None:
         return request._document_canvas.model_dump(mode="json", by_alias=True)
-    return _metadata_wire(
-        _canvas_metadata_from_contract(request.aspect_ratio, contract)
-    )
+    return _metadata_wire(_canvas_metadata_from_contract(request.aspect_ratio, contract))
 
 
-def restore_request_canvas_metadata(
-    request: Any, payload: object, *, present: bool = True
-) -> None:
+def restore_request_canvas_metadata(request: Any, payload: object, *, present: bool = True) -> None:
     if not present:
         if getattr(request, "page_size", None) is not None:
             raise ValueError("document_canvas_contract_missing")
@@ -172,7 +163,11 @@ def restore_request_canvas_metadata(
             raise ValueError("authored_canvas_contract_missing")
         return
     try:
-        from services.document_canvas import DocumentCanvasMetadata, parse_canvas_metadata, document_canvas_for_orientation
+        from services.document_canvas import (
+            DocumentCanvasMetadata,
+            parse_canvas_metadata,
+            document_canvas_for_orientation,
+        )
 
         metadata = parse_canvas_metadata(payload)
         if isinstance(metadata, DocumentCanvasMetadata):
@@ -184,9 +179,8 @@ def restore_request_canvas_metadata(
             if source_manifest_canvas:
                 if getattr(request, "orientation", None) is not None:
                     raise ValueError("document_canvas_request_mismatch")
-            elif (
-                getattr(request, "page_size", None) != "A4"
-                or metadata != document_canvas_for_orientation(request.orientation)
+            elif getattr(request, "page_size", None) != "A4" or metadata != document_canvas_for_orientation(
+                request.orientation
             ):
                 raise ValueError("document_canvas_request_mismatch")
             request._document_canvas = metadata
@@ -225,15 +219,11 @@ def presentation_canvas_metadata(theme: object) -> dict[str, object]:
 def presentation_canvas_contract(theme: object) -> CanvasContract:
     from services.document_canvas import parse_canvas_metadata
 
-    metadata = parse_canvas_metadata(
-        presentation_canvas_metadata(theme)
-    )
+    metadata = parse_canvas_metadata(presentation_canvas_metadata(theme))
     return metadata.canvas_contract()
 
 
-def merge_presentation_canvas(
-    theme: object, canvas_metadata: Mapping[str, object]
-) -> dict[str, object]:
+def merge_presentation_canvas(theme: object, canvas_metadata: Mapping[str, object]) -> dict[str, object]:
     merged_theme = dict(theme) if isinstance(theme, Mapping) else {}
     from services.document_canvas import DocumentCanvasMetadata, parse_canvas_metadata
 
@@ -256,21 +246,19 @@ def merge_presentation_canvas(
     return merged_theme
 
 
-def merge_authored_vnext_projection(
-    theme: object, projection_updates: Mapping[str, object]
-) -> dict[str, object]:
+def merge_authored_vnext_projection(theme: object, projection_updates: Mapping[str, object]) -> dict[str, object]:
     """Overlay a scene projection without discarding frozen canvas metadata."""
 
     merged_theme = dict(theme) if isinstance(theme, Mapping) else {}
     current_projection = merged_theme.get("authored_vnext")
-    merged_projection = (
-        dict(current_projection) if isinstance(current_projection, Mapping) else {}
-    )
+    merged_projection = dict(current_projection) if isinstance(current_projection, Mapping) else {}
     merged_projection.update(dict(projection_updates))
     if "documentCanvas" in merged_theme and "canvas" in merged_projection:
         from services.document_canvas import DocumentCanvasMetadata
 
-        if DocumentCanvasMetadata.model_validate(merged_projection["canvas"]) != DocumentCanvasMetadata.model_validate(merged_theme["documentCanvas"]):
+        if DocumentCanvasMetadata.model_validate(merged_projection["canvas"]) != DocumentCanvasMetadata.model_validate(
+            merged_theme["documentCanvas"]
+        ):
             raise ValueError("document_canvas_request_mismatch")
         merged_projection.pop("canvas")
     merged_theme["authored_vnext"] = merged_projection
@@ -291,9 +279,7 @@ def validate_authored_canvas_admission(request: Any, *, style_id: str) -> None:
         from utils.authored_styles import resolve_authored_style
 
         style = getattr(request, "_authored_style_snapshot", None) or resolve_authored_style(style_id)
-        _policy, enabled, reason = evaluate_a4_request(
-            request, reference_mode=getattr(style, "reference_mode", None)
-        )
+        _policy, enabled, reason = evaluate_a4_request(request, reference_mode=getattr(style, "reference_mode", None))
         if not enabled:
             raise ValueError(reason or "document_canvas_a4_not_available")
         request_canvas_contract(request)

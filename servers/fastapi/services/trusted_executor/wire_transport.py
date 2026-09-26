@@ -54,13 +54,9 @@ _CHUNK_BYTES = 1024 * 1024
 class TrustedWorkerArtifactAuthority(Protocol):
     """Streaming byte authority used by the trusted transport."""
 
-    async def stage(
-        self, *, reference: ArtifactRef, destination: Path
-    ) -> None: ...
+    async def stage(self, *, reference: ArtifactRef, destination: Path) -> None: ...
 
-    async def publish(
-        self, *, reference: ArtifactRef, source: Path
-    ) -> None: ...
+    async def publish(self, *, reference: ArtifactRef, source: Path) -> None: ...
 
 
 class ArtifactObjectStoreWireAdapter:
@@ -86,9 +82,7 @@ class ArtifactObjectStoreWireAdapter:
         cancelled = threading.Event()
 
         def copy() -> None:
-            temporary = destination.with_name(
-                f".{destination.name}.stage-{uuid.uuid4().hex}.tmp"
-            )
+            temporary = destination.with_name(f".{destination.name}.stage-{uuid.uuid4().hex}.tmp")
             digest = hashlib.sha256()
             size = 0
             try:
@@ -101,21 +95,15 @@ class ArtifactObjectStoreWireAdapter:
                             break
                         size += len(chunk)
                         if size > reference.size_bytes:
-                            raise TrustedWorkerWireError(
-                                "trusted_worker_artifact_size_mismatch"
-                            )
+                            raise TrustedWorkerWireError("trusted_worker_artifact_size_mismatch")
                         digest.update(chunk)
                         target.write(chunk)
                     target.flush()
                     os.fsync(target.fileno())
                 if size != reference.size_bytes:
-                    raise TrustedWorkerWireError(
-                        "trusted_worker_artifact_size_mismatch"
-                    )
+                    raise TrustedWorkerWireError("trusted_worker_artifact_size_mismatch")
                 if digest.hexdigest() != reference.sha256:
-                    raise TrustedWorkerWireError(
-                        "trusted_worker_artifact_digest_mismatch"
-                    )
+                    raise TrustedWorkerWireError("trusted_worker_artifact_digest_mismatch")
                 if not cancelled.is_set():
                     os.replace(temporary, destination)
             finally:
@@ -150,8 +138,7 @@ class ArtifactObjectStoreWireAdapter:
             await self._object_store.put_stream(product_ref, stream)
         metadata = await self._object_store.head(product_ref)
         if metadata is None or (
-            metadata.size_bytes != reference.size_bytes
-            or metadata.media_type != reference.media_type
+            metadata.size_bytes != reference.size_bytes or metadata.media_type != reference.media_type
         ):
             raise TrustedWorkerWireError("trusted_worker_output_readback_failed")
         opened = await self._object_store.open_read_stream(product_ref)
@@ -212,9 +199,7 @@ class _StagingCapacitySupervisor:
 
 
 class _StagingReservation:
-    def __init__(
-        self, supervisor: _StagingCapacitySupervisor, reserved_bytes: int
-    ) -> None:
+    def __init__(self, supervisor: _StagingCapacitySupervisor, reserved_bytes: int) -> None:
         self._supervisor = supervisor
         self._reserved_bytes = reserved_bytes
 
@@ -267,18 +252,16 @@ class SupervisedStdioWireTransport:
         if len(payload) > MAX_WIRE_STDIN_BYTES:
             raise TrustedWorkerWireError("trusted_worker_job_too_large")
         try:
-            configured_output_limit = int(environment.get(
-                "PPT_WORKER_OUTPUT_LIMIT_BYTES", str(MAX_OUTPUT_ARTIFACT_BYTES)
-            ))
+            configured_output_limit = int(
+                environment.get("PPT_WORKER_OUTPUT_LIMIT_BYTES", str(MAX_OUTPUT_ARTIFACT_BYTES))
+            )
         except ValueError as error:
             raise TrustedWorkerWireError("trusted_worker_output_limit_invalid") from error
         if configured_output_limit <= 0:
             raise TrustedWorkerWireError("trusted_worker_output_limit_invalid")
         output_limit = min(MAX_OUTPUT_ARTIFACT_BYTES, configured_output_limit)
         try:
-            output_reservation = int(environment.get(
-                "PUBLIC_WORKER_ARTIFACT_CACHE_MAX_BYTES", str(output_limit)
-            ))
+            output_reservation = int(environment.get("PUBLIC_WORKER_ARTIFACT_CACHE_MAX_BYTES", str(output_limit)))
         except ValueError as error:
             raise TrustedWorkerWireError("trusted_worker_cache_limits_invalid") from error
         if output_reservation <= 0:
@@ -286,11 +269,7 @@ class SupervisedStdioWireTransport:
         spec = work_item.launch_spec
         if spec.filesystem is None:
             raise TrustedWorkerWireError("trusted_worker_filesystem_missing")
-        reserved_bytes = (
-            job.input_artifact.size_bytes
-            + output_reservation
-            + spec.limits.temporary_bytes
-        )
+        reserved_bytes = job.input_artifact.size_bytes + output_reservation + spec.limits.temporary_bytes
         await self._staging_capacity.reserve(reserved_bytes)
         reservation = _StagingReservation(self._staging_capacity, reserved_bytes)
         try:
@@ -339,9 +318,7 @@ class SupervisedStdioWireTransport:
         )
         if staging_plan[0].destination != primary_path:
             raise TrustedWorkerWireError("trusted_worker_stage_binding_mismatch")
-        additional_input_bytes = sum(
-            item.reference.size_bytes for item in staging_plan[1:]
-        )
+        additional_input_bytes = sum(item.reference.size_bytes for item in staging_plan[1:])
         await reservation.grow(additional_input_bytes)
         for item in staging_plan[1:]:
             await self._artifact_authority.stage(
@@ -363,9 +340,7 @@ class SupervisedStdioWireTransport:
                 or self._isolation_report.backend != "windows-job-object-only"
                 or not self._isolation_report.resource_limits_supported
             ):
-                raise TrustedWorkerWireError(
-                    "trusted_worker_local_development_policy_unavailable"
-                )
+                raise TrustedWorkerWireError("trusted_worker_local_development_policy_unavailable")
         else:
             spec.require_os_enforcement(self._isolation_report)
 
@@ -378,9 +353,7 @@ class SupervisedStdioWireTransport:
         child_environment["TMP"] = str(spec.filesystem.temporary_root)
         if self._allow_local_development_isolation_gap:
             child_environment["PUBLIC_WORKER_LOCAL_DEVELOPMENT"] = "1"
-        capability_key = child_environment.get(
-            "PUBLIC_WORKER_CAPABILITY_KEY_FILE", ""
-        ).strip()
+        capability_key = child_environment.get("PUBLIC_WORKER_CAPABILITY_KEY_FILE", "").strip()
         if not capability_key or not Path(capability_key).is_absolute():
             raise TrustedWorkerWireError("trusted_worker_capability_key_unavailable")
 
@@ -388,10 +361,13 @@ class SupervisedStdioWireTransport:
         remaining_seconds = job.deadline_epoch_seconds - time.time()
         if remaining_seconds <= 0:
             raise TrustedWorkerWireError("deadline_exceeded")
-        spec = replace(spec, limits=replace(
-            spec.limits,
-            deadline_seconds=min(spec.limits.deadline_seconds, remaining_seconds),
-        ))
+        spec = replace(
+            spec,
+            limits=replace(
+                spec.limits,
+                deadline_seconds=min(spec.limits.deadline_seconds, remaining_seconds),
+            ),
+        )
         supervisor = self._supervisor_factory(spec.identity, spec.limits)
         resource_metrics: Mapping[str, object] = {}
         async with self._active_lock:
@@ -403,33 +379,27 @@ class SupervisedStdioWireTransport:
         def launch_observed():
             observation = begin_supervised_invocation((str(spec.executable), *spec.arguments))
             process = supervisor.launch(
-                spec, cwd=spec.filesystem.sandbox_root,
-                environment=child_environment, pipe_stdio=True,
+                spec,
+                cwd=spec.filesystem.sandbox_root,
+                environment=child_environment,
+                pipe_stdio=True,
             )
             return process, observation
 
         try:
             process, invocation_observation = await asyncio.to_thread(launch_observed)
-            communication = asyncio.create_task(
-                asyncio.to_thread(_communicate, process, payload)
-            )
+            communication = asyncio.create_task(asyncio.to_thread(_communicate, process, payload))
             try:
                 captured = await asyncio.shield(communication)
             except asyncio.CancelledError:
-                await asyncio.to_thread(
-                    supervisor.cancel, zero_timeout=self._zero_timeout_seconds
-                )
+                await asyncio.to_thread(supervisor.cancel, zero_timeout=self._zero_timeout_seconds)
                 try:
                     await communication
                 except BaseException:
                     pass
                 raise
-            if not await asyncio.to_thread(
-                supervisor.wait_for_zero, timeout=self._zero_timeout_seconds
-            ):
-                await asyncio.to_thread(
-                    supervisor.cancel, zero_timeout=self._zero_timeout_seconds
-                )
+            if not await asyncio.to_thread(supervisor.wait_for_zero, timeout=self._zero_timeout_seconds):
+                await asyncio.to_thread(supervisor.cancel, zero_timeout=self._zero_timeout_seconds)
                 raise TrustedWorkerWireError("trusted_worker_descendants_remained")
             tree_zero_at = datetime.now(timezone.utc)
             tree_zero_monotonic_ns = time.perf_counter_ns()
@@ -444,31 +414,17 @@ class SupervisedStdioWireTransport:
                 "isolationAttestation": self._isolation_report.to_attestation(),
             }
         except asyncio.CancelledError:
-            await asyncio.to_thread(
-                supervisor.cancel, zero_timeout=self._zero_timeout_seconds
-            )
+            await asyncio.to_thread(supervisor.cancel, zero_timeout=self._zero_timeout_seconds)
             raise
         except ProcessDeadlineExceeded as error:
-            metrics = await asyncio.to_thread(
-                _supervisor_metrics_or_empty, supervisor
-            )
-            raise TrustedWorkerWireError(
-                "deadline_exceeded", resource_metrics=metrics
-            ) from error
+            metrics = await asyncio.to_thread(_supervisor_metrics_or_empty, supervisor)
+            raise TrustedWorkerWireError("deadline_exceeded", resource_metrics=metrics) from error
         except ProcessMemoryLimitExceeded as error:
-            metrics = await asyncio.to_thread(
-                _supervisor_metrics_or_empty, supervisor
-            )
-            raise TrustedWorkerWireError(
-                "memory_limit_exceeded", resource_metrics=metrics
-            ) from error
+            metrics = await asyncio.to_thread(_supervisor_metrics_or_empty, supervisor)
+            raise TrustedWorkerWireError("memory_limit_exceeded", resource_metrics=metrics) from error
         except ProcessSupervisorError as error:
-            metrics = await asyncio.to_thread(
-                _supervisor_metrics_or_empty, supervisor
-            )
-            raise TrustedWorkerWireError(
-                "trusted_worker_supervision_failed", resource_metrics=metrics
-            ) from error
+            metrics = await asyncio.to_thread(_supervisor_metrics_or_empty, supervisor)
+            raise TrustedWorkerWireError("trusted_worker_supervision_failed", resource_metrics=metrics) from error
         finally:
             async with self._active_lock:
                 self._active.discard(supervisor)
@@ -490,14 +446,10 @@ class SupervisedStdioWireTransport:
             # Validate every child before publishing any part of a render bundle.
             # The child is untrusted and may bypass its own store/runtime checks.
             for render_output in render_outputs:
-                render_output_path = output_root.joinpath(
-                    *render_output.storage_key.split("/")
-                )
+                render_output_path = output_root.joinpath(*render_output.storage_key.split("/"))
                 _verify_artifact_file(render_output, render_output_path, max_bytes=output_limit)
             for render_output in render_outputs:
-                render_output_path = output_root.joinpath(
-                    *render_output.storage_key.split("/")
-                )
+                render_output_path = output_root.joinpath(*render_output.storage_key.split("/"))
                 await self._artifact_authority.publish(
                     reference=render_output,
                     source=render_output_path,
@@ -514,7 +466,9 @@ class SupervisedStdioWireTransport:
                     observation=invocation_observation,
                     tree_zero_at=tree_zero_at,
                     tree_zero_monotonic_ns=tree_zero_monotonic_ns,
-                    job=job, output=output_reference, resource_metrics=resource_metrics,
+                    job=job,
+                    output=output_reference,
+                    resource_metrics=resource_metrics,
                 ),
             }
         return TrustedWorkerWireResult(
@@ -528,9 +482,7 @@ class SupervisedStdioWireTransport:
             self._closed = True
             active = tuple(self._active)
         for supervisor in active:
-            await asyncio.to_thread(
-                supervisor.cancel, zero_timeout=self._zero_timeout_seconds
-            )
+            await asyncio.to_thread(supervisor.cancel, zero_timeout=self._zero_timeout_seconds)
 
 
 def _communicate(process: object, payload: bytes) -> _CapturedProcess:
@@ -565,12 +517,8 @@ def _communicate(process: object, payload: bytes) -> _CapturedProcess:
         except BaseException as error:
             read_error = error
 
-    stdout_thread = threading.Thread(
-        target=drain, args=(process.stdout,), kwargs={"stdout": True}, daemon=True
-    )
-    stderr_thread = threading.Thread(
-        target=drain, args=(process.stderr,), kwargs={"stdout": False}, daemon=True
-    )
+    stdout_thread = threading.Thread(target=drain, args=(process.stdout,), kwargs={"stdout": True}, daemon=True)
+    stderr_thread = threading.Thread(target=drain, args=(process.stderr,), kwargs={"stdout": False}, daemon=True)
     stdout_thread.start()
     stderr_thread.start()
     try:
@@ -620,9 +568,7 @@ def _remove_operation_staging(filesystem: SandboxFilesystemSpec) -> None:
     shutil.rmtree(root, ignore_errors=True)
 
 
-def _verify_artifact_file(
-    reference: ArtifactRef, path: Path, *, max_bytes: int | None = None
-) -> None:
+def _verify_artifact_file(reference: ArtifactRef, path: Path, *, max_bytes: int | None = None) -> None:
     if max_bytes is not None and reference.size_bytes > max_bytes:
         raise TrustedWorkerWireError("trusted_worker_output_limit_exceeded")
     try:
@@ -641,9 +587,7 @@ def _verify_artifact_file(
         raise TrustedWorkerWireError("trusted_worker_artifact_digest_mismatch")
 
 
-def _physical_staging_plan(
-    *, object_root: Path, references: Sequence[ArtifactRef]
-) -> tuple[_StagedArtifact, ...]:
+def _physical_staging_plan(*, object_root: Path, references: Sequence[ArtifactRef]) -> tuple[_StagedArtifact, ...]:
     plan: list[_StagedArtifact] = []
     by_destination: dict[Path, _StagedArtifact] = {}
     for reference in references:
@@ -654,19 +598,12 @@ def _physical_staging_plan(
             by_destination[destination] = item
             plan.append(item)
             continue
-        if (
-            existing.reference.sha256 != reference.sha256
-            or existing.reference.size_bytes != reference.size_bytes
-        ):
-            raise TrustedWorkerWireError(
-                "trusted_worker_stage_destination_collision"
-            )
+        if existing.reference.sha256 != reference.sha256 or existing.reference.size_bytes != reference.size_bytes:
+            raise TrustedWorkerWireError("trusted_worker_stage_destination_collision")
     return tuple(plan)
 
 
-def _input_bundle_references(
-    job: IsolatedWorkerJob, path: Path
-) -> tuple[ArtifactRef, ...]:
+def _input_bundle_references(job: IsolatedWorkerJob, path: Path) -> tuple[ArtifactRef, ...]:
     if job.role == "render" and job.input_artifact.kind != "export-bundle":
         return ()
     if job.role not in {"render", "export"}:
@@ -681,43 +618,57 @@ def _input_bundle_references(
     if not isinstance(value, Mapping) or not isinstance(value.get("slides"), list):
         raise TrustedWorkerWireError("trusted_worker_bundle_invalid")
     if job.role == "render" and value.get("schemaVersion") not in {
-        "public-render-bundle/v1", "public-render-bundle/v2",
+        "public-render-bundle/v1",
+        "public-render-bundle/v2",
     }:
         raise TrustedWorkerWireError("trusted_worker_render_bundle_invalid")
     svg_export = job.role == "export" and value.get("schemaVersion") in {
-        "public-svg-export-bundle/v1", "public-svg-export-bundle/v2",
+        "public-svg-export-bundle/v1",
+        "public-svg-export-bundle/v2",
         "public-svg-export-bundle/v3",
     }
     expected_kind = "slide-svg" if svg_export else ("slide-html" if job.role == "render" else "slide-png")
     expected_media_type = "image/svg+xml" if svg_export else ("text/html" if job.role == "render" else "image/png")
-    result = _staged_bundle_slides(
-        job, value["slides"], kind=expected_kind, media_type=expected_media_type
-    )
+    result = _staged_bundle_slides(job, value["slides"], kind=expected_kind, media_type=expected_media_type)
     if not 1 <= len(result) <= 100:
         raise TrustedWorkerWireError("trusted_worker_bundle_slide_count_invalid")
     if svg_export and value.get("schemaVersion") in {
-        "public-svg-export-bundle/v2", "public-svg-export-bundle/v3",
+        "public-svg-export-bundle/v2",
+        "public-svg-export-bundle/v3",
     }:
         asset_refs = []
         for entry in value["slides"]:
             assets = entry.get("assets")
             if assets is None:
                 continue
-            required_asset_keys = {"sourceManifestRef", "placementManifestRef", "sourceManifestDigest",
-                                   "placementManifestDigest", "pageIndex", "slideRevision", "derivatives"}
-            if (not isinstance(assets, Mapping)
-                    or set(assets) not in (required_asset_keys, required_asset_keys | {"fullPagePreserve"})
-                    or ("fullPagePreserve" in assets and type(assets["fullPagePreserve"]) is not bool)
-                    or not isinstance(assets["derivatives"], Mapping)
-                    or len(assets["derivatives"]) > 4096):
+            required_asset_keys = {
+                "sourceManifestRef",
+                "placementManifestRef",
+                "sourceManifestDigest",
+                "placementManifestDigest",
+                "pageIndex",
+                "slideRevision",
+                "derivatives",
+            }
+            if (
+                not isinstance(assets, Mapping)
+                or set(assets) not in (required_asset_keys, required_asset_keys | {"fullPagePreserve"})
+                or ("fullPagePreserve" in assets and type(assets["fullPagePreserve"]) is not bool)
+                or not isinstance(assets["derivatives"], Mapping)
+                or len(assets["derivatives"]) > 4096
+            ):
                 raise TrustedWorkerWireError("trusted_worker_svg_asset_bundle_invalid")
-            for name, kind in (("sourceManifestRef", "source-manifest"),
-                               ("placementManifestRef", "placement-manifest")):
+            for name, kind in (
+                ("sourceManifestRef", "source-manifest"),
+                ("placementManifestRef", "placement-manifest"),
+            ):
                 asset_refs.extend(_staged_bundle_slides(job, [assets[name]], kind=kind, media_type="application/json"))
             for wire in assets["derivatives"].values():
                 if not isinstance(wire, Mapping) or wire.get("mediaType") not in {"image/png", "image/jpeg"}:
                     raise TrustedWorkerWireError("trusted_worker_svg_derivative_type_invalid")
-                asset_refs.extend(_staged_bundle_slides(job, [wire], kind="image-derivative", media_type=wire["mediaType"]))
+                asset_refs.extend(
+                    _staged_bundle_slides(job, [wire], kind="image-derivative", media_type=wire["mediaType"])
+                )
         if any(ref.created_by_operation_id != job.operation_id for ref in (*result, *asset_refs)):
             raise TrustedWorkerWireError("trusted_worker_svg_asset_operation_mismatch")
         result = (*result, *asset_refs)
@@ -729,9 +680,7 @@ def _input_bundle_references(
             raise TrustedWorkerWireError("trusted_worker_bundle_source_count_invalid")
         result = (
             *result,
-            *_staged_bundle_slides(
-                job, sources, kind="slide-html", media_type="text/html"
-            ),
+            *_staged_bundle_slides(job, sources, kind="slide-html", media_type="text/html"),
         )
     return tuple(result)
 
@@ -759,10 +708,7 @@ def _staged_bundle_slides(
             or reference.tenant_id != job.input_artifact.tenant_id
             or reference.kind != kind
             or reference.media_type != media_type
-            or (
-                job.role == "render"
-                and reference.created_by_operation_id != job.operation_id
-            )
+            or (job.role == "render" and reference.created_by_operation_id != job.operation_id)
         ):
             raise TrustedWorkerWireError("trusted_worker_bundle_slide_binding_mismatch")
         result.append(reference)
@@ -783,9 +729,7 @@ def _render_output_bundle_references(
         with path.open("rb") as stream:
             value = json.load(stream)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise TrustedWorkerWireError(
-            "trusted_worker_render_output_bundle_invalid"
-        ) from error
+        raise TrustedWorkerWireError("trusted_worker_render_output_bundle_invalid") from error
     if (
         not isinstance(value, Mapping)
         or set(value) != {"schemaVersion", "slides", "runtime"}
@@ -807,9 +751,7 @@ def _render_output_bundle_references(
         try:
             reference = ArtifactRef.from_wire(item["artifactRef"])
         except ValueError as error:
-            raise TrustedWorkerWireError(
-                "trusted_worker_render_output_slide_invalid"
-            ) from error
+            raise TrustedWorkerWireError("trusted_worker_render_output_slide_invalid") from error
         if (
             reference.owner_id != job.input_artifact.owner_id
             or reference.tenant_id != job.input_artifact.tenant_id
@@ -817,9 +759,7 @@ def _render_output_bundle_references(
             or reference.kind != "slide-png"
             or reference.media_type != "image/png"
         ):
-            raise TrustedWorkerWireError(
-                "trusted_worker_render_output_slide_binding_mismatch"
-            )
+            raise TrustedWorkerWireError("trusted_worker_render_output_slide_binding_mismatch")
         outputs.append(reference)
     runtime = value["runtime"]
     expected_runtime = {
@@ -849,8 +789,7 @@ def _validated_success_output(payload: bytes, job: IsolatedWorkerJob) -> Artifac
         value.get("operationId") == str(job.operation_id),
         value.get("fencingToken") == job.fencing_token,
         value.get("inputDigest") == job.input_digest,
-        value.get("attemptTokenSha256")
-        == hashlib.sha256(job.attempt_token.encode("utf-8")).hexdigest(),
+        value.get("attemptTokenSha256") == hashlib.sha256(job.attempt_token.encode("utf-8")).hexdigest(),
     )
     if not all(bindings) or not isinstance(value.get("outputArtifact"), Mapping):
         raise TrustedWorkerWireError("trusted_worker_result_binding_mismatch")

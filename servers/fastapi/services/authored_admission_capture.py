@@ -164,25 +164,18 @@ def _bind_prepared_html(
     return replace(
         result,
         prepared_html=prepared_html,
-        prepared_fit_policy=(
-            dict(prepared_fit_policy) if prepared_fit_policy is not None else None
-        ),
+        prepared_fit_policy=(dict(prepared_fit_policy) if prepared_fit_policy is not None else None),
     )
 
 
-def _prepare_capture_kwargs(
-    html: str, prepared_html: str, kwargs: Mapping[str, Any]
-) -> dict[str, Any]:
+def _prepare_capture_kwargs(html: str, prepared_html: str, kwargs: Mapping[str, Any]) -> dict[str, Any]:
     """Rebuild HTML-bound local-fit policy for the owner's prepared bytes."""
     prepared_kwargs = dict(kwargs)
     policy_value = prepared_kwargs.get("fit_policy")
     if prepared_html == html or not isinstance(policy_value, Mapping):
         return prepared_kwargs
     original_digest = digest_html(html)
-    if not any(
-        policy_value.get(name) == original_digest
-        for name in ("author_revision", "original_html_digest")
-    ):
+    if not any(policy_value.get(name) == original_digest for name in ("author_revision", "original_html_digest")):
         return prepared_kwargs
 
     from services.authored_local_fit_policy import POLICY_REVISION, local_fit_policy
@@ -205,11 +198,7 @@ def _prepare_capture_kwargs(
         export_height_pt=float(scale.get("height_pt", 540)),
         viewport_width=int(scale.get("viewport_width", 1280)),
         viewport_height=int(scale.get("viewport_height", 720)),
-        baseline=(
-            policy_value.get("baseline")
-            if isinstance(policy_value.get("baseline"), Mapping)
-            else None
-        ),
+        baseline=(policy_value.get("baseline") if isinstance(policy_value.get("baseline"), Mapping) else None),
         slide_index=int(policy_value.get("slide_index", 0)),
         fit_budget_ms=float(policy_value.get("fit_budget_ms", 6000)),
         policy_revision=str(policy_value.get("policy_revision") or POLICY_REVISION),
@@ -222,7 +211,9 @@ def _prepare_capture_kwargs(
     return prepared_kwargs
 
 
-async def capture_once(html: str, *, index: int | None = None, capture, defer_fit_proposal_admission: bool = False, **kwargs: Any):
+async def capture_once(
+    html: str, *, index: int | None = None, capture, defer_fit_proposal_admission: bool = False, **kwargs: Any
+):
     """Prepare then render one immutable document per attempt capture key."""
 
     session = current_session()
@@ -241,9 +232,7 @@ async def capture_once(html: str, *, index: int | None = None, capture, defer_fi
         prepared_fit_policy = None
     if session is None:
         result = await capture(prepared_html, **kwargs)
-        return _bind_prepared_html(
-            result, prepared_html, prepared_digest, prepared_fit_policy
-        )
+        return _bind_prepared_html(result, prepared_html, prepared_digest, prepared_fit_policy)
     profile = capture_profile(kwargs)
     key = (prepared_digest, profile)
     ledger = capture_ledger(session)
@@ -275,9 +264,7 @@ async def capture_once(html: str, *, index: int | None = None, capture, defer_fi
     _retain(session, key)
     # A capture adapter may return any payload; only a ``RenderCapture`` carries
     # a fitted document and telemetry, and only those two fields are read here.
-    result = _bind_prepared_html(
-        result, prepared_html, prepared_digest, prepared_fit_policy
-    )
+    result = _bind_prepared_html(result, prepared_html, prepared_digest, prepared_fit_policy)
     fitted_html = getattr(result, "fitted_html", None)
     expanded = fitted_html or prepared_html
     metrics = getattr(result, "browser_metrics", None)
@@ -298,14 +285,7 @@ async def capture_once(html: str, *, index: int | None = None, capture, defer_fi
         raise RuntimeError("authored_final_capture_html_changed")
     if fitted_changed and not reported_proposal:
         raise RuntimeError("authored_fit_candidate_change_unreported")
-    is_fit_proposal = (
-        fit_enabled
-        and (
-            fitted_changed
-            or reported_proposal
-            or defer_fit_proposal_admission
-        )
-    )
+    is_fit_proposal = fit_enabled and (fitted_changed or reported_proposal or defer_fit_proposal_admission)
     # Changed fit proposals are not admitted publication evidence. The caller
     # canonicalizes and independently recaptures them through the ordinary gate.
     if index is not None and session.contexts and session.mode == "enforce" and not is_fit_proposal:

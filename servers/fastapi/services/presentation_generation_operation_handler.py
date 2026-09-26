@@ -92,6 +92,7 @@ def _begin_upstream_outline_timing(request: object) -> None:
     if str(getattr(request, "template", "")).strip().lower() == "authored":
         object.__setattr__(request, "_authored_outline_started_at", time.monotonic())
 
+
 GenerationPipeline = Callable[
     [uuid.UUID, str, str | None, WorkspaceOperationExecutionContext],
     Awaitable[WorkspaceOperationResult],
@@ -115,9 +116,7 @@ class PresentationGenerationOperationHandler:
         *,
         session_factory: async_sessionmaker[AsyncSession] = async_session_maker,
         pipeline: GenerationPipeline | None = None,
-        internal_header_provider: InternalHeaderProvider = (
-            authenticated_internal_request_headers
-        ),
+        internal_header_provider: InternalHeaderProvider = (authenticated_internal_request_headers),
         heartbeat_seconds: float = GENERATION_JOB_HEARTBEAT_SECONDS,
     ) -> None:
         self._session_factory = session_factory
@@ -130,17 +129,14 @@ class PresentationGenerationOperationHandler:
             job = (
                 await session.execute(
                     select(PresentationGenerationJob).where(
-                        PresentationGenerationJob.workspace_operation_id
-                        == operation_id
+                        PresentationGenerationJob.workspace_operation_id == operation_id
                     )
                 )
             ).scalar_one_or_none()
         if job is None:
             # Bootstrap commits the operation and linked job atomically.  A
             # short retry is still safer for rows created by rolling upgrades.
-            raise RetryableWorkspaceOperationError(
-                "presentation_generation_job_not_linked"
-            )
+            raise RetryableWorkspaceOperationError("presentation_generation_job_not_linked")
         return job
 
     async def _run_existing_pipeline(
@@ -162,21 +158,13 @@ class PresentationGenerationOperationHandler:
         await context.raise_if_cancelled()
         async with self._session_factory() as session:
             job = await session.get(PresentationGenerationJob, job_id)
-            status = await session.get(
-                AsyncPresentationGenerationTaskModel, task_id
-            )
-            operation_timing = await session.get(
-                WorkspaceOperation, context.claim.operation_id
-            )
+            status = await session.get(AsyncPresentationGenerationTaskModel, task_id)
+            operation_timing = await session.get(WorkspaceOperation, context.claim.operation_id)
             operation_queue_wait_ms = _queue_wait_ms(operation_timing)
             if job is None:
-                raise RetryableWorkspaceOperationError(
-                    "presentation_generation_job_missing"
-                )
+                raise RetryableWorkspaceOperationError("presentation_generation_job_missing")
             if status is None:
-                raise NonRetryableWorkspaceOperationError(
-                    "presentation_generation_task_missing"
-                )
+                raise NonRetryableWorkspaceOperationError("presentation_generation_task_missing")
 
             # The generic operation claim is authoritative.  Keep its
             # provenance available to checkpoint/publication callers without
@@ -223,13 +211,10 @@ class PresentationGenerationOperationHandler:
                 and isinstance(operation_timing.request_payload, Mapping)
                 else {}
             )
-            generation_route_receipt = operation_payload.get(
-                "generation_route_receipt"
-            )
+            generation_route_receipt = operation_payload.get("generation_route_receipt")
             if (
                 isinstance(generation_route_receipt, Mapping)
-                and generation_route_receipt.get("selectedRoute")
-                == "source-native"
+                and generation_route_receipt.get("selectedRoute") == "source-native"
             ):
                 from services.authored_vnext.source_native_generation import (
                     SourceNativeGenerationError,
@@ -257,22 +242,20 @@ class PresentationGenerationOperationHandler:
                         request,
                         sql_session=session,
                         owner_id=str(context.claim.owner_id),
-                        tenant_id=(request._raster_tenant_id if request.source_mode == RASTER_SOURCE_MODE else get_current_tenant_id()),
+                        tenant_id=(
+                            request._raster_tenant_id
+                            if request.source_mode == RASTER_SOURCE_MODE
+                            else get_current_tenant_id()
+                        ),
                     )
 
                 status_error = _snapshot_status_error(status)
                 with provider_operation_usage_scope() as provider_usage:
                     try:
-                        persisted = await session.get(
-                            PresentationModel, context.claim.presentation_id
-                        )
-                        identity = server_generation_profile_identity(
-                            request, persisted
-                        )
+                        persisted = await session.get(PresentationModel, context.claim.presentation_id)
+                        identity = server_generation_profile_identity(request, persisted)
                         profile = resolve_presentation_profile(identity)
-                        required_capabilities = generation_provider_capabilities(
-                            request, profile.driver_id
-                        )
+                        required_capabilities = generation_provider_capabilities(request, profile.driver_id)
                         with public_operation_scope(
                             context.claim.operation_id,
                             attempt_token=context.claim.attempt_token,
@@ -282,13 +265,11 @@ class PresentationGenerationOperationHandler:
                                 identity,
                                 required_capabilities=required_capabilities,
                             ):
-                                source_native_result = (
-                                    await run_source_native_generation(
-                                        request=request,
-                                        generation_job=job,
-                                        context=context,
-                                        route_receipt=generation_route_receipt,
-                                    )
+                                source_native_result = await run_source_native_generation(
+                                    request=request,
+                                    generation_job=job,
+                                    context=context,
+                                    route_receipt=generation_route_receipt,
                                 )
                     except BaseException as error:
                         logger.exception(
@@ -322,27 +303,19 @@ class PresentationGenerationOperationHandler:
                                 exc_info=True,
                             )
                         if isinstance(error, SourceNativeGenerationError):
-                            raise NonRetryableWorkspaceOperationError(
-                                error.code
-                            ) from error
+                            raise NonRetryableWorkspaceOperationError(error.code) from error
                         raise
                 publication = source_native_result.get("publication")
                 if not isinstance(publication, Mapping):
-                    raise NonRetryableWorkspaceOperationError(
-                        "authored_manifest_publication_failed"
-                    )
+                    raise NonRetryableWorkspaceOperationError("authored_manifest_publication_failed")
                 try:
                     from services.authored_vnext.narrative_ir.content_graph import (
                         validate_content_integrity_receipt,
                     )
 
-                    validate_content_integrity_receipt(
-                        source_native_result.get("contentIntegrityReceipt")
-                    )
+                    validate_content_integrity_receipt(source_native_result.get("contentIntegrityReceipt"))
                 except Exception as error:
-                    raise NonRetryableWorkspaceOperationError(
-                        "content_integrity_receipt_invalid"
-                    ) from error
+                    raise NonRetryableWorkspaceOperationError("content_integrity_receipt_invalid") from error
                 success_receipt_payload = await _persist_terminal_attempt_timing(
                     job_id=job_id,
                     context=context,
@@ -350,25 +323,15 @@ class PresentationGenerationOperationHandler:
                     provider_usage=provider_usage,
                     queue_wait_ms=operation_queue_wait_ms,
                     outcome="succeeded",
-                    retry_reason=(
-                        "workspace_retry"
-                        if context.claim.attempt_number > 1
-                        else None
-                    ),
+                    retry_reason=("workspace_retry" if context.claim.attempt_number > 1 else None),
                     terminal_error=None,
                     request=request,
                 )
                 if success_receipt_payload is None:
-                    raise NonRetryableWorkspaceOperationError(
-                        "generation_timing_receipt_persistence_failed"
-                    )
-                success_timing_projection = generation_timing_result_projection(
-                    success_receipt_payload
-                )
+                    raise NonRetryableWorkspaceOperationError("generation_timing_receipt_persistence_failed")
+                success_timing_projection = generation_timing_result_projection(success_receipt_payload)
                 if not success_timing_projection:
-                    raise NonRetryableWorkspaceOperationError(
-                        "generation_timing_receipt_projection_invalid"
-                    )
+                    raise NonRetryableWorkspaceOperationError("generation_timing_receipt_projection_invalid")
                 status.status = "completed"
                 status.message = "Source-native Design Pack generation completed"
                 status.data = {
@@ -387,10 +350,7 @@ class PresentationGenerationOperationHandler:
                         **success_timing_projection,
                     },
                     result_revision=(
-                        raw_revision
-                        if isinstance(raw_revision, int)
-                        and not isinstance(raw_revision, bool)
-                        else None
+                        raw_revision if isinstance(raw_revision, int) and not isinstance(raw_revision, bool) else None
                     ),
                 )
             strategy_receipt = operation_payload.get("generation_strategy")
@@ -414,9 +374,7 @@ class PresentationGenerationOperationHandler:
                 except GenerationStrategyCapabilityError as error:
                     raise NonRetryableWorkspaceOperationError(error.code) from error
                 if selected_strategy == "reject":
-                    raise NonRetryableWorkspaceOperationError(
-                        "generation_strategy_capability_missing"
-                    )
+                    raise NonRetryableWorkspaceOperationError("generation_strategy_capability_missing")
                 if selected_strategy == "deck-ir":
                     status_error = _snapshot_status_error(status)
                     with provider_operation_usage_scope() as provider_usage:
@@ -437,16 +395,10 @@ class PresentationGenerationOperationHandler:
                             # admission; install the same no-I/O composition root
                             # before resolving the sealed operation strategy.
                             ensure_product_deck_ir_execution_adapter(explicit=True)
-                            persisted = await session.get(
-                                PresentationModel, context.claim.presentation_id
-                            )
-                            identity = server_generation_profile_identity(
-                                request, persisted
-                            )
+                            persisted = await session.get(PresentationModel, context.claim.presentation_id)
+                            identity = server_generation_profile_identity(request, persisted)
                             profile = resolve_presentation_profile(identity)
-                            required_capabilities = generation_provider_capabilities(
-                                request, profile.driver_id
-                            )
+                            required_capabilities = generation_provider_capabilities(request, profile.driver_id)
                             with public_operation_scope(
                                 context.claim.operation_id,
                                 attempt_token=context.claim.attempt_token,
@@ -497,15 +449,11 @@ class PresentationGenerationOperationHandler:
                                     DeckIrGrammarError,
                                 ),
                             ):
-                                raise NonRetryableWorkspaceOperationError(
-                                    error.code
-                                ) from error
+                                raise NonRetryableWorkspaceOperationError(error.code) from error
                             raise
                     publication = deck_result.get("publication")
                     if not isinstance(publication, Mapping):
-                        raise NonRetryableWorkspaceOperationError(
-                            "authored_manifest_publication_failed"
-                        )
+                        raise NonRetryableWorkspaceOperationError("authored_manifest_publication_failed")
                     await require_public_generation_publication(
                         session=session,
                         context=context,
@@ -517,25 +465,15 @@ class PresentationGenerationOperationHandler:
                         provider_usage=provider_usage,
                         queue_wait_ms=operation_queue_wait_ms,
                         outcome="succeeded",
-                        retry_reason=(
-                            "workspace_retry"
-                            if context.claim.attempt_number > 1
-                            else None
-                        ),
+                        retry_reason=("workspace_retry" if context.claim.attempt_number > 1 else None),
                         terminal_error=None,
                         request=request,
                     )
                     if success_receipt_payload is None:
-                        raise NonRetryableWorkspaceOperationError(
-                            "generation_timing_receipt_persistence_failed"
-                        )
-                    success_timing_projection = generation_timing_result_projection(
-                        success_receipt_payload
-                    )
+                        raise NonRetryableWorkspaceOperationError("generation_timing_receipt_persistence_failed")
+                    success_timing_projection = generation_timing_result_projection(success_receipt_payload)
                     if not success_timing_projection:
-                        raise NonRetryableWorkspaceOperationError(
-                            "generation_timing_receipt_projection_invalid"
-                        )
+                        raise NonRetryableWorkspaceOperationError("generation_timing_receipt_projection_invalid")
                     # The injected publisher has already performed the fenced
                     # immutable manifest CAS.  This compatibility task row is
                     # updated only after that success and never becomes the
@@ -559,21 +497,18 @@ class PresentationGenerationOperationHandler:
                         },
                         result_revision=(
                             raw_revision
-                            if isinstance(raw_revision, int)
-                            and not isinstance(raw_revision, bool)
+                            if isinstance(raw_revision, int) and not isinstance(raw_revision, bool)
                             else None
                         ),
                     )
             status_error = _snapshot_status_error(status)
             with provider_operation_usage_scope() as provider_usage:
                 try:
-                    request._quality_receipt_v3_persistence_port = (
-                        PostgresOperationQualityReceiptV3Port(
-                            session,
-                            operation_id=context.claim.operation_id,
-                            attempt_token=context.claim.attempt_token,
-                            fencing_token=context.claim.fencing_token,
-                        )
+                    request._quality_receipt_v3_persistence_port = PostgresOperationQualityReceiptV3Port(
+                        session,
+                        operation_id=context.claim.operation_id,
+                        attempt_token=context.claim.attempt_token,
+                        fencing_token=context.claim.fencing_token,
                     )
                     request._quality_receipt_v3_durability_profile = "public"
                     _validate_authored_exact_admission(request)
@@ -653,11 +588,7 @@ class PresentationGenerationOperationHandler:
                         job_id,
                         exc_info=True,
                     )
-                error_type = (
-                    RetryableWorkspaceOperationError
-                    if retryable
-                    else NonRetryableWorkspaceOperationError
-                )
+                error_type = RetryableWorkspaceOperationError if retryable else NonRetryableWorkspaceOperationError
                 raise error_type(code)
 
             operation_projection_row = await require_public_generation_publication(
@@ -671,35 +602,23 @@ class PresentationGenerationOperationHandler:
                 provider_usage=provider_usage,
                 queue_wait_ms=operation_queue_wait_ms,
                 outcome="succeeded",
-                retry_reason=(
-                    "workspace_retry" if context.claim.attempt_number > 1 else None
-                ),
+                retry_reason=("workspace_retry" if context.claim.attempt_number > 1 else None),
                 terminal_error=None,
                 request=request,
             )
             if success_receipt_payload is None:
-                raise NonRetryableWorkspaceOperationError(
-                    "generation_timing_receipt_persistence_failed"
-                )
-            success_timing_projection = generation_timing_result_projection(
-                success_receipt_payload
-            )
+                raise NonRetryableWorkspaceOperationError("generation_timing_receipt_persistence_failed")
+            success_timing_projection = generation_timing_result_projection(success_receipt_payload)
             if not success_timing_projection:
-                raise NonRetryableWorkspaceOperationError(
-                    "generation_timing_receipt_projection_invalid"
-                )
+                raise NonRetryableWorkspaceOperationError("generation_timing_receipt_projection_invalid")
 
             result_revision = operation_projection_row.result_revision
             if result_revision is None:
                 result_revision = await session.scalar(
-                    select(PresentationModel.revision).where(
-                        PresentationModel.id == context.claim.presentation_id
-                    )
+                    select(PresentationModel.revision).where(PresentationModel.id == context.claim.presentation_id)
                 )
             publication_result = (
-                operation_projection_row.result
-                if isinstance(operation_projection_row.result, Mapping)
-                else {}
+                operation_projection_row.result if isinstance(operation_projection_row.result, Mapping) else {}
             )
             return WorkspaceOperationResult(
                 payload={
@@ -709,14 +628,10 @@ class PresentationGenerationOperationHandler:
                     **publication_result,
                     **success_timing_projection,
                 },
-                result_revision=(
-                    int(result_revision) if result_revision is not None else None
-                ),
+                result_revision=(int(result_revision) if result_revision is not None else None),
             )
 
-    async def execute(
-        self, context: WorkspaceOperationExecutionContext
-    ) -> WorkspaceOperationResult:
+    async def execute(self, context: WorkspaceOperationExecutionContext) -> WorkspaceOperationResult:
         """Run public work under its immutable operation deadline."""
 
         deadline = await public_generation_deadline(self._session_factory, context)
@@ -729,16 +644,12 @@ class PresentationGenerationOperationHandler:
             # Publish the pinned instant so stages below can size their own
             # sub-budget against what is left; asyncio.timeout does not expose
             # its deadline to the code it wraps.
-            with public_operation_deadline_scope(
-                deadline
-            ), authored_local_fit_deadline_scope(remaining_seconds):
+            with public_operation_deadline_scope(deadline), authored_local_fit_deadline_scope(remaining_seconds):
                 async with asyncio.timeout(remaining_seconds):
                     return await self._execute_without_deadline(context)
         except TimeoutError:
             if datetime.now(timezone.utc) >= deadline:
-                raise NonRetryableWorkspaceOperationError(
-                    "public_deadline_exceeded"
-                ) from None
+                raise NonRetryableWorkspaceOperationError("public_deadline_exceeded") from None
             raise
 
     async def _execute_without_deadline(
@@ -784,9 +695,7 @@ class PresentationGenerationOperationHandler:
                     },
                 )
                 if not recorded:
-                    raise WorkspaceOperationLeaseLost(
-                        "presentation_generation_checkpoint_reuse_event_fenced"
-                    )
+                    raise WorkspaceOperationLeaseLost("presentation_generation_checkpoint_reuse_event_fenced")
         # Authored generation has no reporter seam of its own; this turns the
         # per-slide checkpoints it already writes into timeline progress.
         stop_authored_progress = start_authored_generation_progress_polling(
@@ -796,9 +705,7 @@ class PresentationGenerationOperationHandler:
         )
         try:
             if not await context.progress(stage="generation_started"):
-                raise WorkspaceOperationLeaseLost(
-                    "presentation_generation_lifecycle_fenced"
-                )
+                raise WorkspaceOperationLeaseLost("presentation_generation_lifecycle_fenced")
             await mark_authored_generation_stage(
                 job_id=job_id,
                 attempt_token=claim.attempt_token,
@@ -810,9 +717,7 @@ class PresentationGenerationOperationHandler:
                 percent=8,
                 message="발표 구조와 작성 기준을 준비하고 있습니다.",
             ):
-                raise WorkspaceOperationLeaseLost(
-                    "presentation_generation_lifecycle_fenced"
-                )
+                raise WorkspaceOperationLeaseLost("presentation_generation_lifecycle_fenced")
             from utils.generation_model import generation_model_context
 
             preset = (
@@ -821,9 +726,7 @@ class PresentationGenerationOperationHandler:
                 else None
             )
             with generation_model_context(preset):
-                result = await self._pipeline(
-                    job_id, task_id, export_cookie_header, context
-                )
+                result = await self._pipeline(job_id, task_id, export_cookie_header, context)
             return result
         except asyncio.CancelledError:
             raise
@@ -835,11 +738,7 @@ class PresentationGenerationOperationHandler:
             raise
         except Exception as error:
             code, retryable = durable_generation_failure(error)
-            error_type = (
-                RetryableWorkspaceOperationError
-                if retryable
-                else NonRetryableWorkspaceOperationError
-            )
+            error_type = RetryableWorkspaceOperationError if retryable else NonRetryableWorkspaceOperationError
             raise error_type(code) from error
         finally:
             await stop_authored_progress()

@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from .scene_lifecycle import SceneLifecycle
+
 from datetime import datetime, timezone
 from dataclasses import replace
 from models.authored_vnext.deck import (
     AuthoredCompositionPin,
     BodyShapeElement,
     BodyTextElement,
-    CandidateBundle,
     CompletedSlideCheckpoint,
     DeckSceneIR,
     DeckGenerationSnapshot,
@@ -18,11 +19,7 @@ from models.authored_vnext.deck import (
     MasterDigestPin,
     OutlineAssignment,
     OutlineAssignmentSet,
-    RegenerateBodyCommand,
-    RegenerationResult,
     ResumeGenerationRequest,
-    RollbackDeckRequest,
-    RollbackResult,
     SlideValidationCheckpoint,
     SlideVisualPlan,
     ValidatedSlideSpecV2,
@@ -36,8 +33,6 @@ from .effective_style import materialize_authored_composition
 from .errors import (
     CandidateRejectedError,
     GenerationConflictError,
-    GenerationNotFoundError,
-    RollbackConflictError,
     StaleMasterError,
 )
 from .montage import build_generation_montage_manifest
@@ -45,7 +40,7 @@ from .master_pin import validate_master_pin as _validate_master_pin
 from .outline import OutlineItem as PlanningOutlineItem
 from .outline import plan_outline
 from .title_fit import fit_and_promote_title
-from .quality_wire import build_deck_quality_report, validate_pipeline_slide_candidate
+from .quality_wire import build_deck_quality_report
 from .repository import GenerationRepository
 from .scene_compiler import (
     compatibility_composition_digest,
@@ -294,9 +289,6 @@ def _published_checkpoint(
     if request.composition is not None:
         payload["composition"] = request.composition.model_dump(mode="json", by_alias=True)
     return GenerationCheckpoint(**payload, checkpointDigest=canonical_digest(payload))
-
-
-from .scene_lifecycle import SceneLifecycle
 
 
 class AuthoredVNextGenerationPipeline(SceneLifecycle):

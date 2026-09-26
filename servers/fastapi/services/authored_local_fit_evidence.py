@@ -11,6 +11,7 @@ receipt-building, and status-predicate logic live in sibling
 Every public name below stays importable from here so existing callers and
 tests do not need to change.
 """
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -63,10 +64,9 @@ def _baseline(report: Mapping[str, Any], *, policy: Mapping[str, Any]) -> dict[s
     if not isinstance(value, Mapping) or value.get("complete") is not True:
         raise AuthoredLocalFitRejected("baseline_unavailable")
     result = dict(value)
-    if (
-        result.get("author_revision") != policy.get("author_revision")
-        or result.get("original_html_digest") != policy.get("original_html_digest")
-    ):
+    if result.get("author_revision") != policy.get("author_revision") or result.get(
+        "original_html_digest"
+    ) != policy.get("original_html_digest"):
         raise AuthoredLocalFitRejected("baseline_unavailable")
     return result
 
@@ -84,20 +84,19 @@ def _unresolved_reason(report: Mapping[str, Any]) -> str | None:
 
 
 def _verify_runs(
-    accepted: list[Mapping[str, Any]], verify_report: Mapping[str, Any],
+    accepted: list[Mapping[str, Any]],
+    verify_report: Mapping[str, Any],
     baseline: Mapping[str, Any],
 ) -> None:
     _validate_immutable_identity(
-        baseline, verify_report, reason="reconstruction_mismatch",
+        baseline,
+        verify_report,
+        reason="reconstruction_mismatch",
     )
     values = verify_report.get("runs")
     if not isinstance(values, list):
         raise AuthoredLocalFitRejected("unverifiable_font_size")
-    verify = {
-        _run_id(run): run
-        for run in values
-        if isinstance(run, Mapping) and _run_id(run)
-    }
+    verify = {_run_id(run): run for run in values if isinstance(run, Mapping) and _run_id(run)}
     if {str(run["run_id"]) for run in accepted} != set(verify):
         raise AuthoredLocalFitRejected("reconstruction_mismatch")
     for run in accepted:
@@ -115,9 +114,7 @@ def _run_id(run: Mapping[str, Any]) -> str:
     return str(value or "")
 
 
-def accept_unchanged_capture(
-    capture: object, *, original_html: str, policy: Mapping[str, Any]
-) -> AcceptedLocalFit:
+def accept_unchanged_capture(capture: object, *, original_html: str, policy: Mapping[str, Any]) -> AcceptedLocalFit:
     report, metrics = _report(capture), _metrics(capture)
     policy_revision = _policy_revision(policy)
     unresolved = report.get("unresolved_reasons")
@@ -149,14 +146,14 @@ def accept_unchanged_capture(
         raise AuthoredLocalFitRejected("reconstruction_mismatch")
     _validate_image_text_scope(metrics)
     fitted_html = getattr(capture, "fitted_html", None)
-    changed = bool(report.get("changed")) or (
-        isinstance(fitted_html, str) and fitted_html != original_html
-    )
+    changed = bool(report.get("changed")) or (isinstance(fitted_html, str) and fitted_html != original_html)
     if changed:
         raise AuthoredLocalFitRejected("reconstruction_mismatch")
     baseline = _baseline(report, policy=policy)
     _accepted_runs(
-        report, baseline, policy_revision=policy_revision,
+        report,
+        baseline,
+        policy_revision=policy_revision,
     )
     receipt = _receipt(
         policy=policy,
@@ -190,10 +187,7 @@ def retain_publishable_unresolved_capture(
     reasons = tuple(
         dict.fromkeys(
             str(reason).strip()
-            for reason in (
-                unresolved_reasons
-                or (raw_reasons if isinstance(raw_reasons, (list, tuple)) else ())
-            )
+            for reason in (unresolved_reasons or (raw_reasons if isinstance(raw_reasons, (list, tuple)) else ()))
             if str(reason).strip()
         )
     )
@@ -228,14 +222,14 @@ def retain_publishable_unresolved_capture(
     return AcceptedLocalFit(original_html, png, metrics, receipt)
 
 
-def accept_original_capture(
-    capture: object, *, original_html: str, policy: Mapping[str, Any]
-) -> AcceptedLocalFit:
+def accept_original_capture(capture: object, *, original_html: str, policy: Mapping[str, Any]) -> AcceptedLocalFit:
     """Accept a fit-disabled original after the caller's measured quality pass."""
 
     # Reuse the independent original's HTML, PNG and renderer identity checks.
     retained = retain_publishable_unresolved_capture(
-        capture, original_html=original_html, policy=policy,
+        capture,
+        original_html=original_html,
+        policy=policy,
         unresolved_reasons=("original_quality_pending",),
     )
     report = _report(capture)
@@ -248,22 +242,29 @@ def accept_original_capture(
     _validate_image_text_scope(retained.metrics)
     baseline = _baseline(report, policy=policy)
     receipt = _receipt(
-        policy=policy, baseline=baseline, final_html=original_html,
-        report=report, final_metrics=retained.metrics, final_png=retained.png,
-        changed=False, verified=True, max_bbox_delta_px=0.0,
-        verify_wait_ms=0.0, verify_ms=0.0,
+        policy=policy,
+        baseline=baseline,
+        final_html=original_html,
+        report=report,
+        final_metrics=retained.metrics,
+        final_png=retained.png,
+        changed=False,
+        verified=True,
+        max_bbox_delta_px=0.0,
+        verify_wait_ms=0.0,
+        verify_ms=0.0,
     )
     receipt.update(
-        status="unchanged", renderedFitDisabled=True,
-        verifiedFitDisabled=False, verificationCount=0,
+        status="unchanged",
+        renderedFitDisabled=True,
+        verifiedFitDisabled=False,
+        verificationCount=0,
     )
     metrics = {**retained.metrics, RECEIPT_KEY: receipt}
     return AcceptedLocalFit(original_html, retained.png, metrics, receipt)
 
 
-def validate_changed_capture(
-    capture: object, *, original_html: str, policy: Mapping[str, Any]
-) -> dict[str, Any]:
+def validate_changed_capture(capture: object, *, original_html: str, policy: Mapping[str, Any]) -> dict[str, Any]:
     """Validate fit-enabled candidate evidence before any recovery decision."""
 
     report, metrics = _report(capture), _metrics(capture)
@@ -277,7 +278,14 @@ def validate_changed_capture(
         or metrics.get("local_fit_mode") is not True
         or not isinstance(final_html, str)
         or final_html == original_html
-        or ((getattr(capture, "html_digest", None) != html_digest(original_html) or report.get("candidate_html_digest") != html_digest(final_html)) if report.get("fit_proposal") is True else (getattr(capture, "html_digest", None) != html_digest(final_html)))
+        or (
+            (
+                getattr(capture, "html_digest", None) != html_digest(original_html)
+                or report.get("candidate_html_digest") != html_digest(final_html)
+            )
+            if report.get("fit_proposal") is True
+            else (getattr(capture, "html_digest", None) != html_digest(final_html))
+        )
         or policy.get("original_html_digest") != html_digest(original_html)
     ):
         raise AuthoredLocalFitRejected("reconstruction_mismatch")
@@ -308,13 +316,15 @@ def accept_verified_capture(
 ) -> AcceptedLocalFit:
     report = _report(fitted_capture)
     baseline = validate_changed_capture(
-        fitted_capture, original_html=original_html, policy=policy,
+        fitted_capture,
+        original_html=original_html,
+        policy=policy,
     )
 
     # The proposal retains its original digest; only fresh verification can
     # establish evidence for the policy-normalized output bytes.
     final_html = prepared_html if prepared_html is not None else getattr(fitted_capture, "fitted_html", None)
-    if (html_digest(final_html) != getattr(verify_capture, "html_digest", None)):
+    if html_digest(final_html) != getattr(verify_capture, "html_digest", None):
         raise AuthoredLocalFitRejected("reconstruction_mismatch")
     verify_report = _report(verify_capture)
     verify_metrics = _metrics(verify_capture)
@@ -334,10 +344,14 @@ def accept_verified_capture(
         raise AuthoredLocalFitRejected("reconstruction_mismatch")
     verify_baseline = _baseline(verify_report, policy=policy)
     _validate_immutable_identity(
-        baseline, verify_baseline, reason="reconstruction_mismatch",
+        baseline,
+        verify_baseline,
+        reason="reconstruction_mismatch",
     )
     accepted_runs = _accepted_runs(
-        report, baseline, policy_revision=_policy_revision(policy),
+        report,
+        baseline,
+        policy_revision=_policy_revision(policy),
     )
     _verify_runs(accepted_runs, verify_report, baseline)
     fitted_metrics = _metrics(fitted_capture)
@@ -359,22 +373,25 @@ def accept_verified_capture(
         verify_ms=(verify_finished_at - verify_started_at) * 1000,
     )
     verify_metrics[RECEIPT_KEY] = receipt
-    return AcceptedLocalFit(
-        final_html, bytes(verify_capture.png), verify_metrics, receipt
-    )
+    return AcceptedLocalFit(final_html, bytes(verify_capture.png), verify_metrics, receipt)
 
 
 def cache_accepted_capture(
-    accepted: AcceptedLocalFit, *, timeout: int,
-    width_px: int = 1280, height_px: int = 720,
+    accepted: AcceptedLocalFit,
+    *,
+    timeout: int,
+    width_px: int = 1280,
+    height_px: int = 720,
 ) -> None:
     """Publish only an accepted final tuple to the existing bounded caches."""
 
     from utils.slide_capture import RenderCapture, _cache_browser_metrics, _cache_capture
 
     _cache_browser_metrics(
-        accepted.html, accepted.metrics,
-        width_px=width_px, height_px=height_px,
+        accepted.html,
+        accepted.metrics,
+        width_px=width_px,
+        height_px=height_px,
     )
     capture = RenderCapture.from_payload(
         html_digest=html_digest(accepted.html),
@@ -384,8 +401,11 @@ def cache_accepted_capture(
         fit_report=None,
     )
     _cache_capture(
-        accepted.html, timeout, capture,
-        width_px=width_px, height_px=height_px,
+        accepted.html,
+        timeout,
+        capture,
+        width_px=width_px,
+        height_px=height_px,
     )
 
 

@@ -120,10 +120,13 @@ def resolve_source_plan(plan, manifest, page_index, minimum_px, template=None):
         boxes = _text_boxes(block, placement, template)
         header_cells = {cell.get("sourceCellId", f"{block.source_block_id}:row:{r}:column:{c}")
             for r, c, rs, cs, cell in _cells(block)[1] if r == 0} if block.kind == "table" and template else set()
-        header_font = _font(placement.model_copy(update={"font_weight": str(template["table"]["header_weight"])})) if header_cells else font
-        def fit(size):
-            ranges = {sid: wrap_source_text(text, width, size, header_font if sid in header_cells else font) for sid, text, width, height in boxes}
-            return ranges, all(measured_text_height(len(ranges[sid]),size,header_font if sid in header_cells else font) <= height + .000001
+        header_font = _font(placement.model_copy(update=
+            {"font_weight": str(template["table"]["header_weight"])})) if header_cells else font
+        def fit(size, header_font=header_font, header_cells=header_cells, font=font, boxes=boxes):
+            ranges = {sid: wrap_source_text(text, width, size,
+                header_font if sid in header_cells else font) for sid, text, width, height in boxes}
+            return ranges, all(measured_text_height(len(ranges[sid]),size,
+                header_font if sid in header_cells else font) <= height + .000001
                 for sid, text, width, height in boxes)
         size = max(placement.font_size, minimum_px)
         try:
@@ -165,7 +168,8 @@ def repair_template_coordinates(plan, manifest, page_index, template):
     blocks = {b.source_block_id: b for b in manifest.units[page_index].blocks}
     roles = page_roles(manifest, page_index)
     layout = next(x for x in template["layouts"] if x["id"] == plan.layout_id)
-    membership = source_group_membership(manifest,page_index,parallel_only=layout.get("allowed_variations",{}).get("requires_same_source_parallel_group",False))
+    membership = source_group_membership(manifest,page_index,parallel_only=
+        layout.get("allowed_variations",{}).get("requires_same_source_parallel_group",False))
     placements = list(plan.placements)
     count = 0
     for _ in range(2):
@@ -238,15 +242,11 @@ def _inside(p, box):
     return (p.x >= box["x"] - .001 and p.y >= box["y"] - .001
         and p.x + p.width <= box["x"] + box["width"] + .001
         and p.y + p.height <= box["y"] + box["height"] + .001)
-
-
 def _role(block, roles=None):
     if roles is not None and block.source_block_id in roles:
         return roles[block.source_block_id]
     return "heading" if block.kind == "text" and block.semantic_role in {"title", "heading", "subtitle"} else (
         "table" if block.kind == "table" else "body")
-
-
 def page_roles(manifest, page_index):
     """Use explicit roles, or one clearly prominent source title candidate.
 
@@ -270,11 +270,10 @@ def page_roles(manifest, page_index):
                         continue
                     if all(k in anchor and k in geom for k in ("x","y","cx","cy")):
                         separation = max(anchor["y"],geom["y"])-min(anchor["y"]+anchor["cy"],geom["y"]+geom["cy"])
-                        if abs(anchor["x"]-geom["x"]) <= max(anchor["cx"],geom["cx"])*.1 and separation <= max(anchor["cy"],geom["cy"])*.2:
+                        if abs(anchor["x"]-geom["x"]) <= max(anchor["cx"],geom["cx"])* \
+                            .1 and separation <= max(anchor["cy"],geom["cy"])*.2:
                             roles[neighbor.source_block_id] = "heading"
     return roles
-
-
 def parallel_source_groups(manifest, page_index):
     blocks = manifest.units[page_index].blocks
     candidates = []
@@ -287,28 +286,26 @@ def parallel_source_groups(manifest, page_index):
             other = child.payload.get("geometry", {})
             if child.kind != "text" or not all(k in other for k in ("x","y","cx","cy")):
                 continue
-            if geom["x"] <= other["x"]+other["cx"]/2 <= geom["x"]+geom["cx"] and geom["y"] <= other["y"]+other["cy"]/2 <= geom["y"]+geom["cy"]:
+            if geom["x"] <= other["x"]+other["cx"]/2 <= geom["x"]+geom["cx"] \
+                and geom["y"] <= other["y"]+other["cy"]/2 <= geom["y"]+geom["cy"]:
                 members.append(child.source_block_id)
         if len(members) >= 3:
             candidates.append((block,geom,members))
-    for anchor, geom, _ in candidates:
+    for _anchor, geom, _ in candidates:
         peers = [(b,g,m) for b,g,m in candidates if abs(g["y"]-geom["y"]) <= geom["cy"]*.04
             and abs(g["cx"]-geom["cx"]) <= geom["cx"]*.05 and abs(g["cy"]-geom["cy"]) <= geom["cy"]*.05]
         peers.sort(key=lambda item:item[1]["x"])
-        if len(peers) >= 3 and all(a[1]["x"]+a[1]["cx"] <= b[1]["x"] for a,b in zip(peers,peers[1:])):
+        if len(peers) >= 3 and all(a[1]["x"]+a[1]["cx"] <= b[1]["x"] for a,b in zip(peers,peers[1:], strict=False)):
             return [dict(container_id=b.source_block_id,member_ids=m) for b,g,m in peers]
     return []
-
-
 def applicable_layouts(template, manifest, page_index):
     groups = parallel_source_groups(manifest,page_index)
-    layouts = [layout for layout in template["layouts"] if not layout.get("applicability",{}).get("requires_source_parallel_groups")
+    layouts = [layout for layout in template["layouts"] if not layout.get("applicability",
+        {}).get("requires_source_parallel_groups")
         or len(groups) >= layout["applicability"].get("minimum_group_count",3)]
     if groups:
         layouts.sort(key=lambda layout:(-layout["columns"],layout["id"]))
     return layouts
-
-
 def source_group_membership(manifest,page_index,*,parallel_only=False):
     blocks = manifest.units[page_index].blocks
     content = [b for b in blocks if b.kind in {"text","image","table"}]
@@ -323,21 +320,18 @@ def source_group_membership(manifest,page_index,*,parallel_only=False):
         members = []
         for block in content:
             item = block.payload.get("geometry",{})
-            if all(k in item for k in ("x","y","cx","cy")) and geom["x"] <= item["x"]+item["cx"]/2 <= geom["x"]+geom["cx"] and geom["y"] <= item["y"]+item["cy"]/2 <= geom["y"]+geom["cy"]:
+            if all(k in item for k in ("x","y","cx","cy")) and geom["x"] <= item["x"]+item["cx"]/ \
+                2 <= geom["x"]+geom["cx"] and geom["y"] <= item["y"]+item["cy"]/2 <= geom["y"]+geom["cy"]:
                 members.append(block.source_block_id)
         # Whole-page backdrops do not create a semantic content group.
         if 2 <= len(members) < len(content)*.7:
             for sid in members:
                 membership[sid].add(container.source_block_id)
     return membership
-
-
 def required_content_gap(first_id,second_id,layout,membership):
     if membership.get(first_id,set()).intersection(membership.get(second_id,set())):
         return layout.get("intra_group_gap",layout["min_gap"])
     return layout["min_gap"]
-
-
 def validate_template_plan(plan, manifest, page_index, template):
     if plan.schema_version != "svg-source-layout/v2" or plan.template_digest != template["digest"]:
         raise ValueError("svg_source_template_identity_mismatch")
@@ -367,28 +361,31 @@ def validate_template_plan(plan, manifest, page_index, template):
             if (p.font_family != spec["family"] or str(p.font_weight) != str(spec["weight"])
                     or p.fill != expected_fill or p.font_size > spec["size"] + .001):
                 raise ValueError(f"svg_source_template_typography_violation:{p.block_id}")
-            if block.kind == "table" and (p.background != template["table"]["body_fill"] or p.stroke != template["table"]["border"]):
+            if block.kind == "table" and (p.background != template["table"]["body_fill"]
+                or p.stroke != template["table"]["border"]):
                 raise ValueError("svg_source_template_table_violation")
             evidence.append(dict(block_id=p.block_id, role=role, font_digest=spec["digest"],
                 family=p.font_family, size=p.font_size, fill=p.fill))
-        elif block.kind == "shape" and (p.background != template["shape"]["fill"] or p.stroke != template["shape"]["border"]):
+        elif block.kind == "shape" and (p.background != template["shape"]["fill"]
+            or p.stroke != template["shape"]["border"]):
             raise ValueError("svg_source_template_shape_violation")
     headings = [p.font_size for p in plan.placements if _role(blocks[p.block_id], roles) == "heading"]
-    bodies = [p.font_size for p in plan.placements if blocks[p.block_id].kind in {"text", "table"} and _role(blocks[p.block_id], roles) != "heading"]
+    bodies = [p.font_size for p in plan.placements if blocks[p.block_id].kind in {"text",
+        "table"} and _role(blocks[p.block_id], roles) != "heading"]
     if headings and bodies and min(headings) < max(bodies):
         raise ValueError("svg_source_template_title_hierarchy_violation")
     return dict(template_digest=template["digest"], layout_id=plan.layout_id,
         rule_version=template["rule_version"], solver_version=SOLVER_VERSION,
         typography=evidence, decoration_count=len(template.get("decorations", [])),
-        source_parallel_groups=parallel_source_groups(manifest,page_index) if layout.get("applicability",{}).get("requires_source_parallel_groups") else [],
+        source_parallel_groups=parallel_source_groups(manifest,page_index) if layout.get("applicability",
+            {}).get("requires_source_parallel_groups") else [],
         role_classification=[dict(block_id=b.source_block_id, source_role=b.semantic_role,
-            layout_role=roles[b.source_block_id], basis="source_typography_prominence" if roles[b.source_block_id] != _role(b) else "source_role")
+            layout_role=roles[b.source_block_id], basis=
+                "source_typography_prominence" if roles[b.source_block_id] != _role(b) else "source_role")
             for b in blocks.values() if b.kind in {"text", "table"}],
         constraints_verified=True, passed=True,
         checks=dict(identity=True, slots=True, typography=True, background=True,
             table_style=True, shape_style=True, decorations=True, title_hierarchy=True), visual_review_verified=False)
-
-
 def _placement(block, template, *, role=None, **geometry):
     role = role or _role(block)
     font = template["fonts"][role]
@@ -396,14 +393,15 @@ def _placement(block, template, *, role=None, **geometry):
     return SvgSourcePlacement(block_id=block.source_block_id, **geometry,
         font_family=font["family"], font_weight=str(font["weight"]), font_size=font["size"],
         fill=tokens.get("heading", tokens["text"]) if role == "heading" else tokens["text"],
-        background=template["table"]["body_fill"] if block.kind == "table" else template.get("shape", {}).get("fill", tokens["background"]),
-        stroke=template["table"]["border"] if block.kind == "table" else template.get("shape", {}).get("border", tokens.get("accent", tokens["text"])))
-
-
+        background=template["table"]["body_fill"] if block.kind == "table" else template.get("shape",
+            {}).get("fill", tokens["background"]),
+        stroke=template["table"]["border"] if block.kind == "table" else template.get("shape",
+            {}).get("border", tokens.get("accent", tokens["text"])))
 def _needed_height(block, p, size, template):
     if block.kind == "image":
         geometry = block.payload.get("geometry") or {}
-        ratio = float(geometry.get("cy", geometry.get("height", 1))) / max(1, float(geometry.get("cx", geometry.get("width", 1))))
+        ratio = float(geometry.get("cy", geometry.get("height", 1))) / \
+            max(1, float(geometry.get("cx", geometry.get("width", 1))))
         image_fraction = template.get("image", {}).get("max_height_fraction")
         image_cap = (p.height * image_fraction if image_fraction is not None
                      else 42 if ratio < .3 else p.height * .35)
@@ -413,15 +411,15 @@ def _needed_height(block, p, size, template):
         rows, cells = _cells(block)
         inset = template["table"]["cell_padding"]
         header_font = _font(p.model_copy(update={"font_weight": str(template["table"]["header_weight"])}))
-        row_height = max((measured_text_height(len(wrap_source_text(cell["text"], p.width * cs / len(rows[0]) - 2 * inset, size, header_font if r == 0 else font)),size,header_font if r == 0 else font) + 2 * inset) / rs
+        row_height = max((measured_text_height(len(wrap_source_text(cell["text"], p.width * cs / len(rows[0]) -
+            2 * inset, size, header_font if r == 0 else font)),size,header_font if r == 0 else font) + 2 * inset) / rs
             for r, c, rs, cs, cell in cells)
         return row_height * len(rows)
     return measured_text_height(len(wrap_source_text(block.payload["text"], p.width, size, font)),size,font)
-
-
 def _candidate(manifest, page_index, template, layout, width, height, minimum_px, pass_index):
     blocks = [b for b in manifest.units[page_index].blocks if b.kind != "source_note"]
-    membership = source_group_membership(manifest,page_index,parallel_only=layout.get("allowed_variations",{}).get("requires_same_source_parallel_group",False))
+    membership = source_group_membership(manifest,page_index,parallel_only=
+        layout.get("allowed_variations",{}).get("requires_same_source_parallel_group",False))
     roles = page_roles(manifest, page_index)
     headings = [b for b in blocks if _role(b, roles) == "heading"]
     content = [b for b in blocks if b.kind != "shape" and b not in headings]
@@ -435,14 +433,16 @@ def _candidate(manifest, page_index, template, layout, width, height, minimum_px
         raise ValueError("svg_source_text_box_unfit:title")
     for i, block in enumerate(headings):
         h = (title["height"] - gap * (len(headings) - 1)) / len(headings)
-        placed.append(_placement(block, template, role=roles[block.source_block_id], x=title["x"], y=title["y"] + i * (h + gap), width=title["width"], height=h))
+        placed.append(_placement(block, template, role=roles[block.source_block_id], x=
+            title["x"], y=title["y"] + i * (h + gap), width=title["width"], height=h))
     groups = []
     for block in sorted(content, key=lambda b: b.order):
         previous = groups[-1][-1] if groups else None
         a = previous.payload.get("geometry", {}) if previous is not None else {}
         b = block.payload.get("geometry", {})
         same_row = False
-        if pass_index == 1 and previous is not None and previous.kind == block.kind == "text" and len(groups[-1]) < 4 and all(k in a and k in b for k in ("x", "y", "cx", "cy")):
+        if pass_index == 1 and previous is not None and previous.kind == block.kind == "text" \
+            and len(groups[-1]) < 4 and all(k in a and k in b for k in ("x", "y", "cx", "cy")):
             overlap = min(a["y"]+a["cy"],b["y"]+b["cy"])-max(a["y"],b["y"])
             same_row = overlap >= .6 * min(a["cy"],b["cy"]) and b["x"] >= a["x"] + a["cx"] * .8
         if same_row:
@@ -457,10 +457,11 @@ def _candidate(manifest, page_index, template, layout, width, height, minimum_px
         weights = []
         for block in group:
             probe = _placement(block, template, x=0,y=0,width=col_width,height=body["height"])
-            weights.append(max(1,max((_font(probe).getlength(line) for line in block.payload.get("text", "").splitlines()), default=1)))
+            weights.append(max(1,max((_font(probe).getlength(line) for line in block.payload.get("text",
+                "").splitlines()), default=1)))
         available_width = col_width - gap*(len(group)-1)
         items, offset = [], 0
-        for block, weight in zip(group, weights):
+        for block, weight in zip(group, weights, strict=False):
             w = available_width * weight / sum(weights)
             p = _placement(block, template, x=body["x"]+column*(col_width+gap)+offset,y=y,
                 width=math.floor(w) if block.kind == "image" else w,height=body["height"])
@@ -503,7 +504,7 @@ def _candidate(manifest, page_index, template, layout, width, height, minimum_px
             choices = [p for p in placed if originals[p.block_id].kind != "shape"]
             if not choices:
                 raise ValueError(f"svg_source_layout_candidate_unavailable:{block.source_block_id}")
-            def distance(p):
+            def distance(p, geom=geom, block=block):
                 other = originals[p.block_id].payload.get("geometry") or {}
                 if all(k in geom and k in other for k in ("x", "y", "cx", "cy")):
                     return ((geom["x"]+geom["cx"]/2-other["x"]-other["cx"]/2)**2
@@ -533,8 +534,6 @@ def _candidate(manifest, page_index, template, layout, width, height, minimum_px
         page_digest=page_digest(manifest, page_index), width=width, height=height,
         background=template["tokens"]["background"], template_digest=template["digest"], layout_id=layout["id"],
         placements=tuple(p.model_dump(exclude={"line_ends", "cell_line_ends"}) for p in placed))
-
-
 def _try_template_source_layout(manifest, page_index, style_snapshot, *, source_images,
         image_slots, min_font_size_px, width, height, max_layout_candidates=3,
         local_layout_budget_ms=1500, deadline=None, check_cancelled=None, _validated_pages=None):
@@ -574,7 +573,8 @@ def _try_template_source_layout(manifest, page_index, style_snapshot, *, source_
             try:
                 plan = _candidate(manifest, page_index, template, layout, width, height, fit_minimum_px, pass_index)
                 if pass_index == 2:
-                    low, high = fit_minimum_px, min(template["fonts"]["body"]["size"],template["fonts"]["table"]["size"])
+                    low, high = fit_minimum_px, min(template["fonts"]["body"]["size"],
+                        template["fonts"]["table"]["size"])
                     for _ in range(4):
                         middle = (low+high)/2
                         try:
@@ -596,7 +596,8 @@ def _try_template_source_layout(manifest, page_index, style_snapshot, *, source_
                     source_layout_version="svg-source-layout/v2", source_preservation=assembled.receipt,
                     authoring_path="server_template_layout", model_calls=0,
                     attempted_layout_ids=attempts, repair_count=repairs,
-                    deterministic_repaired_placements=adjusted, analysis_ms=analysis_ms, elapsed_ms=(time.monotonic()-started)*1000)
+                    deterministic_repaired_placements=adjusted, analysis_ms=
+                        analysis_ms, elapsed_ms=(time.monotonic()-started)*1000)
                 return SvgAuthorResult(assembled.svg_content, "", receipt)
             except ValueError as error:
                 code = str(error)
@@ -610,9 +611,8 @@ def _try_template_source_layout(manifest, page_index, style_snapshot, *, source_
                     "layout_candidate_unavailable" if "candidate_unavailable" in code else "layout_overflow_unresolved")
     return dict(escalation_reason=reason, attempted_layout_ids=attempts, repair_count=repairs,
         violations=violations[-6:], analysis_ms=analysis_ms, elapsed_ms=(time.monotonic()-started)*1000, model_calls=0,
-        model_layout_allowed=any(x.get("allowed_variations", {}).get("model_layout", False) for x in template["layouts"]))
-
-
+        model_layout_allowed=any(x.get("allowed_variations",
+            {}).get("model_layout", False) for x in template["layouts"]))
 def try_template_source_layout(manifest, page_index, style_snapshot, **kwargs):
     """Isolate cancellation/deadline context, including when a candidate fails."""
     limit_token = _LOCAL_LIMIT.set(None)

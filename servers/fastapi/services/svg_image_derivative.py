@@ -4,6 +4,7 @@ No filesystem writes or persistence occur here. The caller retains original
 bytes and publishes the returned derivative through the existing asset gateway.
 Worker wall-time/memory reservations remain required around this CPU operation.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -33,17 +34,26 @@ class ModelPreview:
         return {
             "sourceSha256": self.source_sha256,
             "sourceAppearanceSha256": self.source_appearance_sha256,
-            "sha256": self.sha256, "width": self.width, "height": self.height,
-            "mediaType": self.media_type, "byteSize": len(self.payload),
+            "sha256": self.sha256,
+            "width": self.width,
+            "height": self.height,
+            "mediaType": self.media_type,
+            "byteSize": len(self.payload),
             "recipeDigest": self.recipe_digest,
         }
 
 
-def _build_raster_derivative(source: bytes, *, semantic_kind: Literal["photo", "text", "unknown"] = "unknown",
-                        max_bytes: int, max_edge: int | None = None,
-                        min_edge: int = 1024, max_source_bytes: int = 32 * 1024 * 1024,
-                        max_source_pixels: int = 64_000_000,
-                        max_source_edge: int = 16384) -> ModelPreview:
+def _build_raster_derivative(
+    source: bytes,
+    *,
+    semantic_kind: Literal["photo", "text", "unknown"] = "unknown",
+    max_bytes: int,
+    max_edge: int | None = None,
+    min_edge: int = 1024,
+    max_source_bytes: int = 32 * 1024 * 1024,
+    max_source_pixels: int = 64_000_000,
+    max_source_edge: int = 16384,
+) -> ModelPreview:
     """PNG/JPEG/WebP -> verified sRGB PNG/JPEG without modifying originals.
 
     The 1536/2048 and 1024 sizes are v3 candidate profiles, not a provider
@@ -76,8 +86,9 @@ def _build_raster_derivative(source: bytes, *, semantic_kind: Literal["photo", "
         if icc:
             try:
                 color = oriented if oriented.mode in {"RGB", "CMYK", "LAB", "L"} else oriented.convert("RGB")
-                rgb = ImageCms.profileToProfile(color, ImageCms.ImageCmsProfile(io.BytesIO(icc)),
-                                               ImageCms.createProfile("sRGB"), outputMode="RGB")
+                rgb = ImageCms.profileToProfile(
+                    color, ImageCms.ImageCmsProfile(io.BytesIO(icc)), ImageCms.createProfile("sRGB"), outputMode="RGB"
+                )
             except (OSError, ValueError, ImageCms.PyCMSError) as error:
                 raise ValueError("svg_asset_source_color_profile_invalid") from error
         else:
@@ -105,7 +116,7 @@ def _build_raster_derivative(source: bytes, *, semantic_kind: Literal["photo", "
         scale = edge / original_edge
         dimensions = (max(1, round(image.width * scale)), max(1, round(image.height * scale)))
         resized = image.resize(dimensions, Image.Resampling.LANCZOS) if dimensions != image.size else image
-        for quality in ((100,) if use_png else (90, 85)):
+        for quality in (100,) if use_png else (90, 85):
             output = io.BytesIO()
             if use_png:
                 resized.save(output, format="PNG", optimize=False, compress_level=9)
@@ -122,51 +133,82 @@ def _build_raster_derivative(source: bytes, *, semantic_kind: Literal["photo", "
             recipe = DerivativeRecipe(
                 decoder_version=f"pillow-{pillow_version}",
                 encoder_version=f"pillow-{pillow_version}-png9-jpeg444-v1",
-                width=dimensions[0], height=dimensions[1], alpha=alpha,
-                media_type=media_type, quality=quality,
+                width=dimensions[0],
+                height=dimensions[1],
+                alpha=alpha,
+                media_type=media_type,
+                quality=quality,
             )
-            return ModelPreview(payload, source_digest, appearance_digest,
-                                hashlib.sha256(payload).hexdigest(), *dimensions,
-                                media_type, recipe, canonical_digest(recipe))
+            return ModelPreview(
+                payload,
+                source_digest,
+                appearance_digest,
+                hashlib.sha256(payload).hexdigest(),
+                *dimensions,
+                media_type,
+                recipe,
+                canonical_digest(recipe),
+            )
     raise ValueError("svg_asset_preview_budget_unresolved")
 
 
-def build_model_preview(source: bytes, *, expected_media_type: str | None = None,
-                        semantic_kind: Literal["photo", "text", "unknown"] = "unknown",
-                        max_bytes: int, max_edge: int | None = None, min_edge: int = 1024,
-                        max_source_bytes: int = 32 * 1024 * 1024,
-                        max_source_pixels: int = 64_000_000,
-                        max_source_edge: int = 16384) -> ModelPreview:
+def build_model_preview(
+    source: bytes,
+    *,
+    expected_media_type: str | None = None,
+    semantic_kind: Literal["photo", "text", "unknown"] = "unknown",
+    max_bytes: int,
+    max_edge: int | None = None,
+    min_edge: int = 1024,
+    max_source_bytes: int = 32 * 1024 * 1024,
+    max_source_pixels: int = 64_000_000,
+    max_source_edge: int = 16384,
+) -> ModelPreview:
     """Public preflight boundary: invalid raster input always raises ValueError."""
     try:
         if expected_media_type is not None:
             with Image.open(io.BytesIO(source)) as probe:
-                if {"PNG": "image/png", "JPEG": "image/jpeg", "WEBP": "image/webp"}.get(probe.format) != expected_media_type:
+                if {"PNG": "image/png", "JPEG": "image/jpeg", "WEBP": "image/webp"}.get(
+                    probe.format
+                ) != expected_media_type:
                     raise ValueError("svg_asset_source_media_type_mismatch")
         return _build_raster_derivative(
-            source, semantic_kind=semantic_kind, max_bytes=max_bytes,
-            max_edge=max_edge, min_edge=min_edge, max_source_bytes=max_source_bytes,
-            max_source_pixels=max_source_pixels, max_source_edge=max_source_edge,
+            source,
+            semantic_kind=semantic_kind,
+            max_bytes=max_bytes,
+            max_edge=max_edge,
+            min_edge=min_edge,
+            max_source_bytes=max_source_bytes,
+            max_source_pixels=max_source_pixels,
+            max_source_edge=max_source_edge,
         )
     except (OSError, SyntaxError, Image.DecompressionBombError, Image.DecompressionBombWarning) as error:
         raise ValueError("svg_asset_source_decoder_invalid") from error
 
 
-def build_purpose_derivative(source: bytes, *, purpose: Literal["screen", "export"],
-                             width_css_px: float, height_css_px: float,
-                             fit: Literal["contain", "cover"] = "contain",
-                             semantic_kind: Literal["photo", "text", "unknown"] = "unknown",
-                             max_bytes: int = 32 * 1024 * 1024,
-                             css_pixels_per_inch: float = 96.0) -> ModelPreview:
+def build_purpose_derivative(
+    source: bytes,
+    *,
+    purpose: Literal["screen", "export"],
+    width_css_px: float,
+    height_css_px: float,
+    fit: Literal["contain", "cover"] = "contain",
+    semantic_kind: Literal["photo", "text", "unknown"] = "unknown",
+    max_bytes: int = 32 * 1024 * 1024,
+    css_pixels_per_inch: float = 96.0,
+) -> ModelPreview:
     """Build from original appearance at placement density, never model bytes.
 
     The native exporter uses 9525 EMU/CSS px, hence 96 CSS px/inch. Density
     targets are recipe inputs; raster dimensions remain capped by the source.
     """
     import math
-    if (purpose not in {"screen", "export"} or fit not in {"contain", "cover"}
-            or not all(math.isfinite(v) and v > 0 for v in
-                       (width_css_px, height_css_px, css_pixels_per_inch))):
+
+    if (
+        purpose not in {"screen", "export"}
+        or fit not in {"contain", "cover"}
+        or not all(math.isfinite(v) and v > 0 for v in (width_css_px, height_css_px, css_pixels_per_inch))
+    ):
         raise ValueError("svg_asset_placement_resolution_invalid")
     if not source or len(source) > 32 * 1024 * 1024:
         raise ValueError("svg_asset_source_byte_budget_exceeded")
@@ -178,14 +220,13 @@ def build_purpose_derivative(source: bytes, *, purpose: Literal["screen", "expor
             if probe.getexif().get(274) in {5, 6, 7, 8}:
                 source_width, source_height = source_height, source_width
         dpi = 144 if purpose == "screen" else (200 if semantic_kind == "photo" else 300)
-        desired = (width_css_px * dpi / css_pixels_per_inch,
-                   height_css_px * dpi / css_pixels_per_inch)
-        scale = (max if fit == "cover" else min)(desired[0] / source_width,
-                                                    desired[1] / source_height)
+        desired = (width_css_px * dpi / css_pixels_per_inch, height_css_px * dpi / css_pixels_per_inch)
+        scale = (max if fit == "cover" else min)(desired[0] / source_width, desired[1] / source_height)
         edge = max(1, math.ceil(max(source_width, source_height) * min(1.0, scale)))
         # A fixed target forbids silently dropping export resolution to fit a
         # byte budget. The caller records a conversion failure and can resume.
-        return _build_raster_derivative(source, semantic_kind=semantic_kind,
-                                        max_bytes=max_bytes, max_edge=edge, min_edge=edge)
+        return _build_raster_derivative(
+            source, semantic_kind=semantic_kind, max_bytes=max_bytes, max_edge=edge, min_edge=edge
+        )
     except (OSError, SyntaxError, Image.DecompressionBombError, Image.DecompressionBombWarning) as error:
         raise ValueError("svg_asset_source_decoder_invalid") from error
