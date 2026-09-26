@@ -8,6 +8,7 @@ import {
   type CompositionEvent,
   type KeyboardEvent,
 } from "react";
+import { useTranslations } from "next-intl";
 
 export interface CompositionSafeTextEditorProps {
   value: string;
@@ -28,6 +29,7 @@ export function CompositionSafeTextEditor({
   style,
   onCommit,
 }: CompositionSafeTextEditorProps) {
+  const t = useTranslations("a2cHybridChrome");
   const [draft, setDraft] = useState(value);
   const composingRef = useRef(false);
   const lastCommittedRef = useRef(value);
@@ -81,7 +83,7 @@ export function CompositionSafeTextEditor({
       onCompositionStart={handleCompositionStart}
       onKeyDown={handleKeyDown}
       rows={multiline ? 3 : 1}
-      title={multiline ? "Ctrl+Enter to apply" : undefined}
+      title={multiline ? t("applyShortcut") : undefined}
       spellCheck
       style={style}
       value={draft}
