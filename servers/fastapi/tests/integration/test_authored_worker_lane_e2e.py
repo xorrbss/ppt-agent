@@ -36,6 +36,8 @@ from utils.renderer_isolation import admit_authored_html
 
 
 def test_happy_path_authors_in_token_profile_waves_and_publishes(tmp_path, monkeypatch):
+    monkeypatch.setenv("AUTHORED_WAVE_BARRIER_DISABLED", "false")
+    monkeypatch.setenv("AUTHORED_STYLE_ANCHOR_ENABLED", "false")
     monkeypatch.setenv("AUTHORED_PROVIDER_RATE_PROFILE", TOKEN_PROFILE_NAME)
     profile = _token_profile(monkeypatch)
     contract = _default_contract()
@@ -67,7 +69,7 @@ def test_happy_path_authors_in_token_profile_waves_and_publishes(tmp_path, monke
 
     # Wave shapes: 1 call in the initial wave, then 2 per wave, 1 slide/call.
     expected_waves = _expected_wave_shapes(slide_count, profile)
-    assert recorder.waves == expected_waves
+    assert recorder.waves == expected_waves, (recorder.waves, provider.calls_by_index)
     assert len(recorder.waves) == 1 + math.ceil((slide_count - 1) / 2)
     assert len(recorder.waves) == deadline_policy.public_generation_wave_count(
         slide_count, profile=profile

@@ -30,7 +30,6 @@ import uuid
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from html.parser import HTMLParser
 from types import SimpleNamespace
 from typing import Any, Callable
 
@@ -78,6 +77,7 @@ from services.presentation_generation_operation_handler import (
 from utils.llm_calls import author_batch as author_batch_mod
 from utils.llm_calls import author_deck as author_deck_mod
 from utils.llm_calls import author_slide as author_slide_mod
+from tests.support.authored_worker_lane_capture import capture_for_lane, _observe_dom
 from utils.owner_context import (
     reset_current_owner_id,
     reset_current_tenant_id,
@@ -120,9 +120,9 @@ def _pricing_catalog() -> str:
 #: Stripped by ``utils/authored_html_normalize.py`` before admission (A2), so a
 #: persisted slide must never carry it even though the provider emitted it.
 _NORMALIZED_DECLARATION = "break-inside: avoid;"
-#: Outside the renderer CSS allowlist and NOT on the normaliser's whitelist, so
-#: admission rejects it on every attempt.
-_FORBIDDEN_DECLARATION = "content: 'x';"
+#: An active external resource survives normalisation and is always rejected
+#: by the renderer admission boundary.
+_FORBIDDEN_DECLARATION = "background-image:url(https://example.invalid/x.png);"
 
 
 # --- authored HTML fixtures ---------------------------------------------------
@@ -570,85 +570,6 @@ class _CleanReport:
         return {"issues": [], "telemetryStatus": self.telemetry_status}
 
 
-class _DomObserver(HTMLParser):
-    """Derive the browser telemetry Chromium's probe would report for a page.
-
-    One entry per ``data-qid`` element with its stamped semantic role, its
-    directly owned text and its descendant text, every font loaded at a size
-    above the floor.  The QualityReceipt v2 capacity gate refuses anything
-    that is not a real per-element observation, so a token dict cannot stand
-    in for the browser here.
-    """
-
-    _VOID = {"meta", "br", "hr", "img", "col", "link", "input"}
-
-    def __init__(self) -> None:
-        super().__init__(convert_charrefs=True)
-        self._stack: list[dict[str, Any] | None] = []
-        self.records: list[dict[str, Any]] = []
-
-    def _open(self, tag: str, attrs) -> dict[str, Any] | None:
-        mapped = {key: (value or "") for key, value in attrs}
-        qid = mapped.get("data-qid", "").strip()
-        if not qid:
-            return None
-        record = {
-            "qid": qid,
-            "tag": tag,
-            "semantic_role": mapped.get("data-semantic-role", "").strip(),
-            "owned": [],
-            "rendered": [],
-        }
-        self.records.append(record)
-        return record
-
-    def handle_starttag(self, tag, attrs):
-        record = self._open(tag, attrs)
-        if tag not in self._VOID:
-            self._stack.append(record)
-
-    def handle_startendtag(self, tag, attrs):
-        self._open(tag, attrs)
-
-    def handle_endtag(self, tag):
-        if self._stack:
-            self._stack.pop()
-
-    def handle_data(self, data):
-        if not self._stack:
-            return
-        owner = self._stack[-1]
-        if owner is not None:
-            owner["owned"].append(data)
-        for record in self._stack:
-            if record is not None:
-                record["rendered"].append(data)
-
-
-def _observe_dom(html: str) -> dict[str, Any]:
-    observer = _DomObserver()
-    observer.feed(html)
-    observer.close()
-    elements = []
-    for record in observer.records:
-        owned = re.sub(r"\s+", " ", "".join(record["owned"])).strip()
-        rendered = re.sub(r"\s+", " ", "".join(record["rendered"])).strip()
-        elements.append(
-            {
-                "qid": record["qid"],
-                "tag": record["tag"],
-                "semantic_role": record["semantic_role"],
-                "rendered_text": rendered,
-                "owned_text": owned,
-                "has_owned_text": bool(owned),
-                "font_size": 18,
-                "font_loaded": True,
-                "css_visible": True,
-            }
-        )
-    return {"elements": elements}
-
-
 def _install_chromium_and_gate_stubs(monkeypatch: pytest.MonkeyPatch) -> None:
     """No browser in CI: PNG bytes, DOM-derived telemetry and a clean report."""
 
@@ -659,7 +580,7 @@ def _install_chromium_and_gate_stubs(monkeypatch: pytest.MonkeyPatch) -> None:
         return _observe_dom(html)
 
     async def fake_capture(html: str, *args, **kwargs):
-        return SimpleNamespace(png=_png(html), browser_metrics=_observe_dom(html))
+        return await capture_for_lane(html, _png(html), **kwargs)
 
     # ``_sync_runtime_dependencies`` copies these from the service facade into
     # the pipeline/generation modules on every call, so patch the facade.
