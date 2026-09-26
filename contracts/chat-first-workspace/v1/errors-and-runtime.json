@@ -865,13 +865,13 @@
       "retryable": false
     },
     {
-      "code": "svg_font_embedding_not_supported",
+      "code": "svg_font_embedding_pptx_only",
       "status_code": 422,
       "safe_message": "The operation request is invalid.",
       "retryable": false
     },
     {
-      "code": "svg_release_quality_review_not_supported",
+      "code": "svg_quality_policy_invalid",
       "status_code": 422,
       "safe_message": "The operation request is invalid.",
       "retryable": false
@@ -1052,6 +1052,30 @@
     },
     {
       "code": "svg_export_incomplete_presentation",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "svg_release_quality_receipt_invalid",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "svg_release_quality_visual_review_not_passed",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "svg_release_quality_advisory_evidence_missing",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "svg_release_quality_not_release_ready",
       "status_code": 409,
       "safe_message": "The presentation is not ready for this operation.",
       "retryable": false
