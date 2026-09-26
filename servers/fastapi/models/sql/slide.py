@@ -6,7 +6,7 @@ from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text, Uuid, e
 from sqlalchemy.types import JSON, TypeDecorator
 from sqlmodel import Field, Column, SQLModel
 
-from templates.v2.persistence import canonicalize_slide_ui
+from templates.native_ui.persistence import canonicalize_slide_ui
 from utils.owner_context import get_current_owner_id
 from utils.slide_source import validate_slide_source
 

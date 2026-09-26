@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -7,10 +6,6 @@ import {
   type PresentationDriverId,
   type PresentationProfile,
 } from "../presentation-profile.ts";
-import {
-  compileTemplateRenderPlan,
-  type CanonicalTemplateAst,
-} from "../template-v2-ast/index.ts";
 import {
   assertRenderArtifactFresh,
   createRenderPresentationSnapshot,
@@ -137,53 +132,6 @@ test("authored decks export without chart snapshots the server never issues", ()
     assert.equal(artifact.chart_snapshot.status, "not-required");
     assert.deepEqual(artifact.chart_snapshot.chart_ids, ["slide-1-html-chart"]);
   }
-});
-
-test("Template V2 adapter consumes canonical plans and persisted hydrated UI", () => {
-  const ast = JSON.parse(
-    readFileSync(
-      new URL(
-        "../../../../contracts/template_v2/fixtures/repeatable-grouped-content.a3352f3c.ast.json",
-        import.meta.url,
-      ),
-      "utf8",
-    ),
-  ) as CanonicalTemplateAst;
-  const plan = compileTemplateRenderPlan(ast, "canonical_repeat_fixture", {
-    regular_cards: { cards: [{ card_title: "A" }, { card_title: "B" }] },
-    positioned_callouts: {
-      items: [{ item_title: "One" }, { item_title: "Two" }],
-    },
-  });
-  const snapshot = createRenderPresentationSnapshot(
-    presentation("template-v2", [{ id: "slide-1", ui: { persisted: true } }]),
-  );
-  const service = new RenderService();
-
-  const artifact = service.render({
-    target: "preview",
-    snapshot,
-    template_render_plans: [plan],
-  });
-  assert.equal(artifact.renderer_version, "template-v2-canonical@1");
-  const payload = artifact.payload as {
-    slides: Array<Record<string, unknown>>;
-    materialization: string;
-  };
-  assert.equal(payload.slides.length, 1);
-  assert.equal(payload.materialization, "canonical-render-plan");
-  assert.equal(payload.slides[0].id, "slide-1");
-  assert.ok((payload.slides[0].ui as Record<string, unknown>).components);
-
-  const persistedSnapshot = createRenderPresentationSnapshot(
-    presentation("template-v2", payload.slides),
-  );
-  const persistedArtifact = service.render({
-    target: "preview",
-    snapshot: persistedSnapshot,
-  });
-  const persistedPayload = persistedArtifact.payload as { materialization: string };
-  assert.equal(persistedPayload.materialization, "persisted-hydrated-ui-facade");
 });
 
 test("unknown profiles, stale revisions, stale artifacts, overflow, and unsafe HTML fail closed", () => {

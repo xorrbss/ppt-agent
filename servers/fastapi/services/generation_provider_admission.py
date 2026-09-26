@@ -35,9 +35,10 @@ def requested_generation_driver(
 
     # A request can no longer name the template-v2 driver: the strategy
     # literal that produced it was retired with the Template V2 generation
-    # entry. The driver itself survives in identity_by_driver below, because
-    # a deck generated before that retirement still carries it in its
-    # persisted profile.
+    # entry, and the driver id itself was later removed from the registry in
+    # ``services.presentation_profiles`` (2026-09-25), so a persisted deck
+    # can no longer resolve to it either -- there is no remaining identity
+    # this function needs to describe for it.
     if resolve_generation_strategy(request) == "svg":
         return "svg-v1"
     if request.template == "authored" or request.strategy == "authored":
@@ -69,12 +70,6 @@ def server_generation_profile_identity(
         "svg-v1": {
             "generation_mode": "standard", "mode": "svg", "version": "v1-standard",
             "theme": {"mode": "svg"}, "profile_driver_id": "svg-v1", "profile_schema_version": 1,
-        },
-        "template-v2": {
-            "generation_mode": "standard",
-            "mode": "template",
-            "version": "v2-standard",
-            "theme": {"mode": "template"},
         },
         "authored": {
             "generation_mode": "standard",

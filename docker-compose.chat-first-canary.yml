@@ -53,7 +53,6 @@ services:
       - "${CHAT_FIRST_CANARY_PORT:-5050}:80"
     volumes:
       - ./app_data:/app_data
-      - presenton_template_v2_private_sources:/app_data-private
       - ./servers/fastapi/templates:/app/servers/fastapi/templates:ro
     environment:
       <<: *chat-first-canary-env
@@ -86,7 +85,6 @@ services:
       - "${CHAT_FIRST_POSTGRES_CANARY_PORT:-5051}:80"
     volumes:
       - ./app_data:/app_data
-      - presenton_template_v2_private_sources:/app_data-private
       - ./servers/fastapi/templates:/app/servers/fastapi/templates:ro
     environment:
       <<: *chat-first-canary-env
@@ -120,7 +118,6 @@ services:
       - "${CHAT_FIRST_MYSQL_DISABLED_PORT:-5052}:80"
     volumes:
       - ./app_data:/app_data
-      - presenton_template_v2_private_sources:/app_data-private
       - ./servers/fastapi/templates:/app/servers/fastapi/templates:ro
     environment:
       <<: *chat-first-canary-env

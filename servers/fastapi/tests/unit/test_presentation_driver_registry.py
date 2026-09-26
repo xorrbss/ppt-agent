@@ -17,18 +17,6 @@ from services.presentation_profiles import (
         (
             {
                 "generation_mode": "standard",
-                "mode": "template",
-                "version": "v2-standard",
-                "theme": {"mode": "template"},
-            },
-            "template-v2",
-            "template-v2",
-            "template",
-            "imported",
-        ),
-        (
-            {
-                "generation_mode": "standard",
                 "mode": "authored",
                 "version": "v1-standard",
                 "theme": {"mode": "authored"},
@@ -55,11 +43,11 @@ def test_supported_profiles_and_drivers(
 
 
 def test_registry_is_complete_immutable_and_exposes_supported_adapters():
-    assert tuple(PRESENTATION_DRIVER_REGISTRY) == ("template-v2", "authored", "svg-v1")
+    assert tuple(PRESENTATION_DRIVER_REGISTRY) == ("authored", "svg-v1")
     assert {
         driver.capabilities.renderer_adapter_id
         for driver in PRESENTATION_DRIVER_REGISTRY.values()
-    } == {"template-v2", "authored", "svg"}
+    } == {"authored", "svg-v1"}
     with pytest.raises(TypeError):
         PRESENTATION_DRIVER_REGISTRY["future"] = PRESENTATION_DRIVER_REGISTRY[  # type: ignore[index]
             "authored"
@@ -87,23 +75,40 @@ def test_registry_is_complete_immutable_and_exposes_supported_adapters():
             },
             "unsupported_presentation_driver",
         ),
+        # Template V2 was removed from the driver registry (2026-09-25); a row
+        # carrying its old identity -- explicit or already-stamped -- can no
+        # longer resolve to anything and fails closed like any other retired
+        # driver, rather than resolving to "template-v2".
+        (
+            {
+                "generation_mode": "standard",
+                "mode": "template",
+                "version": "v2-standard",
+                "theme": {"mode": "template"},
+            },
+            "unsupported_presentation_driver",
+        ),
+        (
+            {
+                "generation_mode": "standard",
+                "mode": None,
+                "version": "v2-standard",
+            },
+            "unsupported_presentation_driver",
+        ),
+        (
+            {
+                "profile_driver_id": "template-v2",
+                "profile_schema_version": 1,
+            },
+            "unsupported_presentation_driver",
+        ),
     ],
 )
 def test_removed_and_conflicting_identity_fails_closed(identity, code):
     with pytest.raises(PresentationProfileError) as error:
         resolve_presentation_profile(identity)
     assert error.value.code == code
-
-
-def test_null_mode_template_v2_row_remains_supported():
-    profile = resolve_presentation_profile(
-        {
-            "generation_mode": "standard",
-            "mode": None,
-            "version": "v2-standard",
-        }
-    )
-    assert profile.driver_id == "template-v2"
 
 
 def test_client_profile_and_capability_spoofs_are_never_read():

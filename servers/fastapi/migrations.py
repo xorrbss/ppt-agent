@@ -388,7 +388,8 @@ DURABLE_PRESENTATION_GENERATION_JOB_COLUMNS = {
     "request_id",
     "request_sha256",
     "request_payload",
-    "template_v2_target",
+    # template_v2_target was dropped by f432fc854225; a post-removal database
+    # never has it again, so it is not part of the permanent required set.
     "export_cookie_required",
     "state",
     "attempt_number",
@@ -637,9 +638,7 @@ def _workspace_schema_applied(
         for constraint in inspector.get_check_constraints("presentations")
     }
     if "ck_presentations_revision_nonnegative" not in presentation_checks:
-        raise RuntimeError(
-            "Chat-first presentations revision constraint is only partially applied"
-        )
+        raise RuntimeError("Chat-first presentations revision constraint is only partially applied")
     job_indexes = {
         index.get("name"): bool(index.get("unique"))
         for index in inspector.get_indexes("presentation_generation_jobs")
@@ -647,9 +646,7 @@ def _workspace_schema_applied(
     if not job_indexes.get(
         "ix_presentation_generation_jobs_workspace_operation_id"
     ):
-        raise RuntimeError(
-            "Chat-first generation job operation index is only partially applied"
-        )
+        raise RuntimeError("Chat-first generation job operation index is only partially applied")
     job_foreign_keys = _foreign_key_signatures(
         inspector, "presentation_generation_jobs"
     )
@@ -658,9 +655,7 @@ def _workspace_schema_applied(
         "workspace_operations",
         "SET NULL",
     ) not in job_foreign_keys:
-        raise RuntimeError(
-            "Chat-first generation job operation foreign key is only partially applied"
-        )
+        raise RuntimeError("Chat-first generation job operation foreign key is only partially applied")
     return True
 
 
@@ -689,9 +684,7 @@ def _account_deletion_schema_revision(
     if not present_columns and not present_checks and not present_indexes:
         return previous_revision
     if previous_revision != REVISION_DURABLE_DELETION:
-        raise RuntimeError(
-            "Account deletion fence exists without durable cleanup prerequisites"
-        )
+        raise RuntimeError("Account deletion fence exists without durable cleanup prerequisites")
     if present_columns != ACCOUNT_DELETION_USER_COLUMNS:
         raise RuntimeError("Account deletion fence columns are only partially applied")
 
@@ -741,21 +734,15 @@ def _slidespec_schema_revision(
     if not has_artifacts and not has_publications:
         return previous_revision
     if has_publications and not has_artifacts:
-        raise RuntimeError(
-            "SlideSpec publication attempts exist without artifact bundles"
-        )
+        raise RuntimeError("SlideSpec publication attempts exist without artifact bundles")
     if previous_revision != REVISION_ACCOUNT_DELETION_FENCE:
-        raise RuntimeError(
-            "SlideSpec artifact schema exists without persistence prerequisites"
-        )
+        raise RuntimeError("SlideSpec artifact schema exists without persistence prerequisites")
 
     artifact_columns = {
         column["name"] for column in inspector.get_columns(artifact_table)
     }
     if artifact_columns != SLIDESPEC_ARTIFACT_BUNDLE_COLUMNS:
-        raise RuntimeError(
-            "SlideSpec artifact bundle schema is only partially applied"
-        )
+        raise RuntimeError("SlideSpec artifact bundle schema is only partially applied")
     artifact_indexes = {
         index.get("name"): index for index in inspector.get_indexes(artifact_table)
     }
@@ -775,9 +762,7 @@ def _slidespec_schema_revision(
         column["name"] for column in inspector.get_columns(publication_table)
     }
     if publication_columns != SLIDESPEC_PUBLICATION_ATTEMPT_COLUMNS:
-        raise RuntimeError(
-            "SlideSpec publication attempt schema is only partially applied"
-        )
+        raise RuntimeError("SlideSpec publication attempt schema is only partially applied")
     publication_indexes = {
         index.get("name"): index
         for index in inspector.get_indexes(publication_table)
@@ -947,19 +932,21 @@ def _post_reference_schema_revision(
     receipt_table = "asset_gateway_idempotency_receipts"
     if receipt_table not in tables:
         if attempt_exists:
-            raise RuntimeError(
-                "Presentation export attempt schema exists without its receipt predecessor"
-            )
+            raise RuntimeError("Presentation export attempt schema exists without its receipt predecessor")
         return REVISION_PRESENTATION_REFERENCE_SNAPSHOTS
 
-    template_columns = {
-        column["name"]: column for column in inspector.get_columns("template_v2")
-    }
-    presentation_column = template_columns.get("presentation_id")
-    if presentation_column is None:
-        raise RuntimeError("Template V2 presentation ownership column is missing")
-    if not presentation_column.get("nullable", False):
-        raise RuntimeError("Template V2 package ownership schema is incompatible")
+    if "template_v2" in tables:
+        template_columns = {
+            column["name"]: column
+            for column in inspector.get_columns("template_v2")
+        }
+        presentation_column = template_columns.get("presentation_id")
+        if presentation_column is None:
+            raise RuntimeError("Template V2 presentation ownership column is missing")
+        if not presentation_column.get("nullable", False):
+            raise RuntimeError("Template V2 package ownership schema is incompatible")
+    # template_v2 was removed by f432fc854225; its absence here means the
+    # package ownership relaxation it used to gate is moot, not incomplete.
     # A receipt marker is deliberately stamped only at c0. D1 validates or
     # safely repairs the complete receipt contract, and D2 independently
     # validates an already-present export schema before Alembic can stamp head.
@@ -1003,13 +990,9 @@ def _durable_deletion_schema_revision(
         )
 
     if present_presentation_markers != DURABLE_DELETION_PRESENTATION_COLUMNS:
-        raise RuntimeError(
-            "Durable presentation deletion schema is only partially applied"
-        )
+        raise RuntimeError("Durable presentation deletion schema is only partially applied")
     if present_attachment_markers != DURABLE_ATTACHMENT_SNAPSHOT_COLUMNS:
-        raise RuntimeError(
-            "Immutable attachment snapshot schema is only partially applied"
-        )
+        raise RuntimeError("Immutable attachment snapshot schema is only partially applied")
     if not has_cleanup_table:
         raise RuntimeError("Workspace cleanup journal schema is missing")
 
@@ -1028,9 +1011,7 @@ def _durable_deletion_schema_revision(
         (("asset_id",), "workspace_assets", "SET NULL")
         not in attachment_foreign_keys
     ):
-        raise RuntimeError(
-            "Workspace attachment live asset pointer must use ON DELETE SET NULL"
-        )
+        raise RuntimeError("Workspace attachment live asset pointer must use ON DELETE SET NULL")
     attachment_uniques = {
         constraint.get("name"): tuple(
             constraint.get("column_names")
@@ -1043,9 +1024,7 @@ def _durable_deletion_schema_revision(
         "message_id",
         "asset_id_snapshot",
     ):
-        raise RuntimeError(
-            "Workspace attachment snapshot uniqueness is only partially applied"
-        )
+        raise RuntimeError("Workspace attachment snapshot uniqueness is only partially applied")
 
     cleanup_columns = {
         column["name"] if isinstance(column, dict) else column
@@ -1071,9 +1050,7 @@ def _durable_deletion_schema_revision(
     if not WORKSPACE_CLEANUP_JOURNAL_INDEXES.issubset(cleanup_indexes):
         raise RuntimeError("Workspace cleanup journal indexes are incomplete")
     if inspector.get_foreign_keys(cleanup_table):
-        raise RuntimeError(
-            "Workspace cleanup journal snapshot identifiers must not have foreign keys"
-        )
+        raise RuntimeError("Workspace cleanup journal snapshot identifiers must not have foreign keys")
     return _account_deletion_schema_revision(
         inspector,
         tables,
@@ -1114,9 +1091,7 @@ def _async_task_timestamp_revision(
         if column["name"] in ASYNC_PRESENTATION_TASK_TIMESTAMP_COLUMNS
     }
     if set(columns) != set(ASYNC_PRESENTATION_TASK_TIMESTAMP_COLUMNS):
-        raise RuntimeError(
-            "Async presentation task timestamp schema is incomplete"
-        )
+        raise RuntimeError("Async presentation task timestamp schema is incomplete")
 
     awareness: list[bool] = []
     for name in ASYNC_PRESENTATION_TASK_TIMESTAMP_COLUMNS:
@@ -1161,18 +1136,14 @@ def _validate_authored_checkpoint_schema(
         present_job_columns != AUTHORED_PRESENTATION_GENERATION_JOB_COLUMNS
         or not has_checkpoint_table
     ):
-        raise RuntimeError(
-            "Authored slide checkpoint schema is only partially applied"
-        )
+        raise RuntimeError("Authored slide checkpoint schema is only partially applied")
 
     checkpoint_columns = {
         column["name"]
         for column in inspector.get_columns("authored_slide_checkpoints")
     }
     if not AUTHORED_SLIDE_CHECKPOINT_REVISION_COLUMNS.issubset(checkpoint_columns):
-        raise RuntimeError(
-            "Authored slide checkpoint table is only partially applied"
-        )
+        raise RuntimeError("Authored slide checkpoint table is only partially applied")
     if not validate_constraints:
         return True
 
@@ -1181,9 +1152,7 @@ def _validate_authored_checkpoint_schema(
         for index in inspector.get_indexes("authored_slide_checkpoints")
     }
     if AUTHORED_SLIDE_CHECKPOINT_INDEX not in indexes:
-        raise RuntimeError(
-            "Authored slide checkpoint progress index is missing"
-        )
+        raise RuntimeError("Authored slide checkpoint progress index is missing")
     unique_constraints = {
         constraint.get("name")
         for constraint in inspector.get_unique_constraints(
@@ -1191,9 +1160,7 @@ def _validate_authored_checkpoint_schema(
         )
     }
     if AUTHORED_SLIDE_CHECKPOINT_UNIQUE not in unique_constraints:
-        raise RuntimeError(
-            "Authored slide checkpoint job/slide uniqueness is missing"
-        )
+        raise RuntimeError("Authored slide checkpoint job/slide uniqueness is missing")
     check_constraints = {
         constraint.get("name")
         for constraint in inspector.get_check_constraints(
@@ -1203,9 +1170,7 @@ def _validate_authored_checkpoint_schema(
     if not AUTHORED_SLIDE_CHECKPOINT_CONSTRAINTS.issubset(
         check_constraints
     ):
-        raise RuntimeError(
-            "Authored slide checkpoint state constraints are incomplete"
-        )
+        raise RuntimeError("Authored slide checkpoint state constraints are incomplete")
     job_foreign_keys = [
         foreign_key
         for foreign_key in inspector.get_foreign_keys(
@@ -1216,16 +1181,12 @@ def _validate_authored_checkpoint_schema(
         and foreign_key.get("referred_columns") == ["id"]
     ]
     if len(job_foreign_keys) != 1:
-        raise RuntimeError(
-            "Authored slide checkpoint job foreign key is missing"
-        )
+        raise RuntimeError("Authored slide checkpoint job foreign key is missing")
     ondelete = str(
         (job_foreign_keys[0].get("options") or {}).get("ondelete") or ""
     ).upper()
     if ondelete != "CASCADE":
-        raise RuntimeError(
-            "Authored slide checkpoint job foreign key must cascade deletes"
-        )
+        raise RuntimeError("Authored slide checkpoint job foreign key must cascade deletes")
     return True
 
 
@@ -1240,10 +1201,89 @@ def _authored_resume_count_applied(
 
     has_resume_count = bool(AUTHORED_RESUME_COUNT_COLUMNS & job_columns)
     if has_resume_count and not has_authored_checkpoints:
-        raise RuntimeError(
-            "Authored resume count column exists without checkpoint schema"
-        )
+        raise RuntimeError("Authored resume count column exists without checkpoint schema")
     return has_resume_count
+
+
+def _durable_generation_and_authored_schema_revision(
+    inspector,
+    tables: set[str],
+    presentation_columns: set[str],
+    *,
+    chat_scope_repaired: bool,
+) -> str:
+    """Infer 3d through the authored/workspace/deletion chain.
+
+    Independent of template_v2, so it is reused both while template_v2's own
+    history is still walkable and once it has been removed entirely
+    (``chat_scope_repaired=True`` in that case: the column that used to prove
+    the chat-scope repair happened is gone, but the repair itself predates
+    the removal and so is never in question again).
+    """
+
+    has_job_table = "presentation_generation_jobs" in tables
+    has_lifecycle = "lifecycle_status" in presentation_columns
+    if not has_job_table and not has_lifecycle:
+        if "authored_slide_checkpoints" in tables:
+            raise RuntimeError("Authored slide checkpoint schema exists without durable generation jobs")
+        return REVISION_TEMPLATE_V2_REVISION_JOURNAL
+    if has_job_table != has_lifecycle:
+        raise RuntimeError("Durable generation schema is only partially applied")
+    job_columns = {
+        column["name"]
+        for column in inspector.get_columns("presentation_generation_jobs")
+    }
+    if not DURABLE_PRESENTATION_GENERATION_JOB_COLUMNS.issubset(job_columns):
+        raise RuntimeError("Durable generation job schema is only partially applied")
+    has_authored_checkpoints = _validate_authored_checkpoint_schema(
+        inspector,
+        tables,
+        job_columns,
+        validate_constraints=True,
+    )
+    has_authored_resume_count = _authored_resume_count_applied(
+        job_columns, has_authored_checkpoints
+    )
+    if "user" not in tables:
+        if has_authored_checkpoints:
+            raise RuntimeError("Authored slide checkpoint schema exists without multi-user prerequisites")
+        return REVISION_DURABLE_GENERATION_JOBS
+    if "provider_settings" not in tables:
+        if has_authored_checkpoints:
+            raise RuntimeError("Authored slide checkpoint schema exists without provider settings prerequisites")
+        return REVISION_MULTI_USER_AUTH
+    user_columns = {column["name"] for column in inspector.get_columns("user")}
+    if "admin_slot" not in user_columns:
+        if has_authored_checkpoints:
+            raise RuntimeError("Authored slide checkpoint schema exists without primary-admin prerequisites")
+        return REVISION_PROVIDER_SETTINGS
+    if not chat_scope_repaired:
+        if has_authored_checkpoints:
+            raise RuntimeError("Authored slide checkpoint schema exists without chat-scope prerequisites")
+        return REVISION_PRIMARY_ADMIN
+    if has_authored_resume_count:
+        authored_revision = (
+            REVISION_AUTHORED_EXACT_PROVENANCE
+            if "authored_exact_provenance" in tables
+            else REVISION_AUTHORED_RESUME_COUNT
+        )
+        if authored_revision == REVISION_AUTHORED_EXACT_PROVENANCE:
+            if _workspace_schema_applied(
+                inspector, tables, presentation_columns, job_columns
+            ):
+                return _durable_deletion_schema_revision(
+                    inspector,
+                    tables,
+                    presentation_columns,
+                    _async_task_timestamp_revision(inspector, tables),
+                )
+            return authored_revision
+        return authored_revision
+    return (
+        REVISION_AUTHORED_SLIDE_CHECKPOINTS
+        if has_authored_checkpoints
+        else REVISION_CHAT_TEMPLATE_SCOPE_REPAIR
+    )
 
 
 async def migrate_database_on_startup() -> None:
@@ -1418,12 +1458,23 @@ def _infer_revision_from_schema(
         )
         report.require_compatible()
         if not report.complete:
-            return REVISION_SHARE_TOKEN
+            # template_v2 is missing alone (version/ui survive it as generic
+            # native-UI schema) plus a post-Phase-1 marker (c0) means it once
+            # existed and was later removed (f432fc854225), not that this is
+            # a genuinely pre-Phase-1 legacy database. Keep walking the same
+            # later chain (independent of template_v2) instead of stamping a
+            # fixed floor, so corruption further along still fails loud.
+            removed_post_phase_one = report.repairable == (
+                "template_v2 is missing",
+            ) and "asset_gateway_idempotency_receipts" in tables
+            if not removed_post_phase_one:
+                return REVISION_SHARE_TOKEN
+            return _durable_generation_and_authored_schema_revision(
+                inspector, tables, presentation_columns, chat_scope_repaired=True
+            )
         if "template_v2_pptx_imports" not in tables:
             if "revision" in template_v2_columns:
-                raise RuntimeError(
-                    "Template V2 revision column exists without PPTX import schema"
-                )
+                raise RuntimeError("Template V2 revision column exists without PPTX import schema")
             return REVISION_TEMPLATE_V2_PHASE_ONE
         if "revision" not in template_v2_columns:
             return REVISION_TEMPLATE_V2_PPTX_IMPORTS
@@ -1443,9 +1494,7 @@ def _infer_revision_from_schema(
             or revision_column.get("nullable", True)
             or revision_default != "1"
         ):
-            raise RuntimeError(
-                "Template V2 revision column has incompatible schema"
-            )
+            raise RuntimeError("Template V2 revision column has incompatible schema")
         import_columns = {
             column["name"]
             for column in inspector.get_columns("template_v2_pptx_imports")
@@ -1456,41 +1505,31 @@ def _infer_revision_from_schema(
         if not present_lease_columns:
             return REVISION_TEMPLATE_V2_STUDIO
         if not TEMPLATE_V2_IMPORT_LEASE_COLUMNS.issubset(import_columns):
-            raise RuntimeError(
-                "Template V2 PPTX import lease schema is only partially applied"
-            )
+            raise RuntimeError("Template V2 PPTX import lease schema is only partially applied")
         dispatch_indexes = {
             index.get("name")
             for index in inspector.get_indexes("template_v2_pptx_imports")
         }
         if "ix_template_v2_pptx_imports_dispatch" not in dispatch_indexes:
-            raise RuntimeError(
-                "Template V2 PPTX import lease dispatch index is missing"
-            )
+            raise RuntimeError("Template V2 PPTX import lease dispatch index is missing")
         present_retention_columns = (
             TEMPLATE_V2_SOURCE_RETENTION_COLUMNS & import_columns
         )
         if not present_retention_columns:
             return REVISION_TEMPLATE_V2_IMPORT_LEASES
         if not TEMPLATE_V2_SOURCE_RETENTION_COLUMNS.issubset(import_columns):
-            raise RuntimeError(
-                "Template V2 PPTX source retention schema is only partially applied"
-            )
+            raise RuntimeError("Template V2 PPTX source retention schema is only partially applied")
         if (
             "ix_template_v2_pptx_imports_source_cleanup"
             not in dispatch_indexes
         ):
-            raise RuntimeError(
-                "Template V2 PPTX source cleanup index is missing"
-            )
+            raise RuntimeError("Template V2 PPTX source cleanup index is missing")
         if "template_v2_local_state" not in tables:
             return REVISION_TEMPLATE_V2_SOURCE_RETENTION
         local_state_report = validate_template_v2_local_sidecars(connection)
         local_state_report.require_compatible()
         if not local_state_report.complete:
-            raise RuntimeError(
-                "Template V2 local-state sidecar schema is incomplete"
-            )
+            raise RuntimeError("Template V2 local-state sidecar schema is incomplete")
         delete_action = template_v2_presentation_fk_delete_action(inspector)
         sidecar_delete_action = (
             template_v2_local_state_presentation_fk_delete_action(inspector)
@@ -1504,116 +1543,23 @@ def _infer_revision_from_schema(
             if not present_review_columns:
                 return REVISION_TEMPLATE_V2_DELETE_SAFETY
             if not TEMPLATE_V2_IMPORT_REVIEW_COLUMNS.issubset(import_columns):
-                raise RuntimeError(
-                    "Template V2 PPTX review schema is only partially applied"
-                )
+                raise RuntimeError("Template V2 PPTX review schema is only partially applied")
             if (
                 "uq_template_v2_pptx_imports_owner_request_key"
                 not in dispatch_indexes
             ):
-                raise RuntimeError(
-                    "Template V2 PPTX owner request-key index is missing"
-                )
+                raise RuntimeError("Template V2 PPTX owner request-key index is missing")
             if "template_v2_revisions" not in tables:
                 return REVISION_TEMPLATE_V2_IMPORT_REVIEW
-            has_job_table = "presentation_generation_jobs" in tables
-            has_lifecycle = "lifecycle_status" in presentation_columns
-            if not has_job_table and not has_lifecycle:
-                if "authored_slide_checkpoints" in tables:
-                    raise RuntimeError(
-                        "Authored slide checkpoint schema exists without "
-                        "durable generation jobs"
-                    )
-                return REVISION_TEMPLATE_V2_REVISION_JOURNAL
-            if has_job_table != has_lifecycle:
-                raise RuntimeError(
-                    "Durable generation schema is only partially applied"
-                )
-            job_columns = {
-                column["name"]
-                for column in inspector.get_columns(
-                    "presentation_generation_jobs"
-                )
-            }
-            if not DURABLE_PRESENTATION_GENERATION_JOB_COLUMNS.issubset(
-                job_columns
-            ):
-                raise RuntimeError(
-                    "Durable generation job schema is only partially applied"
-                )
-            has_authored_checkpoints = _validate_authored_checkpoint_schema(
-                inspector,
-                tables,
-                job_columns,
-                validate_constraints=True,
-            )
-            has_authored_resume_count = _authored_resume_count_applied(
-                job_columns, has_authored_checkpoints
-            )
-            if "user" not in tables:
-                if has_authored_checkpoints:
-                    raise RuntimeError(
-                        "Authored slide checkpoint schema exists without "
-                        "multi-user prerequisites"
-                    )
-                return REVISION_DURABLE_GENERATION_JOBS
-            if "provider_settings" not in tables:
-                if has_authored_checkpoints:
-                    raise RuntimeError(
-                        "Authored slide checkpoint schema exists without "
-                        "provider settings prerequisites"
-                    )
-                return REVISION_MULTI_USER_AUTH
-            user_columns = {
-                column["name"]
-                for column in inspector.get_columns("user")
-            }
-            if "admin_slot" not in user_columns:
-                if has_authored_checkpoints:
-                    raise RuntimeError(
-                        "Authored slide checkpoint schema exists without "
-                        "primary-admin prerequisites"
-                    )
-                return REVISION_PROVIDER_SETTINGS
             chat_columns = {
                 column["name"]
                 for column in inspector.get_columns("chat_history_messages")
             }
-            if "template_v2_id" not in chat_columns:
-                if has_authored_checkpoints:
-                    raise RuntimeError(
-                        "Authored slide checkpoint schema exists without "
-                        "chat-scope prerequisites"
-                    )
-                return REVISION_PRIMARY_ADMIN
-            if has_authored_resume_count:
-                authored_revision = (
-                    REVISION_AUTHORED_EXACT_PROVENANCE
-                    if "authored_exact_provenance" in tables
-                    else REVISION_AUTHORED_RESUME_COUNT
-                )
-                if authored_revision == REVISION_AUTHORED_EXACT_PROVENANCE:
-                    if _workspace_schema_applied(
-                        inspector,
-                        tables,
-                        presentation_columns,
-                        job_columns,
-                    ):
-                        return _durable_deletion_schema_revision(
-                            inspector,
-                            tables,
-                            presentation_columns,
-                            _async_task_timestamp_revision(
-                                inspector,
-                                tables,
-                            ),
-                        )
-                    return authored_revision
-                return authored_revision
-            return (
-                REVISION_AUTHORED_SLIDE_CHECKPOINTS
-                if has_authored_checkpoints
-                else REVISION_CHAT_TEMPLATE_SCOPE_REPAIR
+            return _durable_generation_and_authored_schema_revision(
+                inspector,
+                tables,
+                presentation_columns,
+                chat_scope_repaired="template_v2_id" in chat_columns,
             )
         raise RuntimeError(
             "Template V2 presentation ownership FKs have unsupported or "
@@ -1648,9 +1594,7 @@ def _infer_revision_from_schema(
     if not present_retention_columns:
         return REVISION_TEMPLATE_V2_IMPORT_LEASES
     if not TEMPLATE_V2_SOURCE_RETENTION_COLUMNS.issubset(import_columns):
-        raise RuntimeError(
-            "Template V2 PPTX source retention schema is only partially applied"
-        )
+        raise RuntimeError("Template V2 PPTX source retention schema is only partially applied")
     if "template_v2_local_state" not in tables:
         return REVISION_TEMPLATE_V2_SOURCE_RETENTION
     local_state_columns = {
@@ -1664,9 +1608,7 @@ def _infer_revision_from_schema(
         "created_at",
         "updated_at",
     }:
-        raise RuntimeError(
-            "Template V2 local-state sidecar schema is only partially applied"
-        )
+        raise RuntimeError("Template V2 local-state sidecar schema is only partially applied")
     delete_action = template_v2_presentation_fk_delete_action(inspector)
     sidecar_delete_action = (
         template_v2_local_state_presentation_fk_delete_action(inspector)
@@ -1676,9 +1618,7 @@ def _infer_revision_from_schema(
         if not present_review_columns:
             return REVISION_TEMPLATE_V2_DELETE_SAFETY
         if not TEMPLATE_V2_IMPORT_REVIEW_COLUMNS.issubset(import_columns):
-            raise RuntimeError(
-                "Template V2 PPTX review schema is only partially applied"
-            )
+            raise RuntimeError("Template V2 PPTX review schema is only partially applied")
         if "template_v2_revisions" not in tables:
             return REVISION_TEMPLATE_V2_IMPORT_REVIEW
         has_job_table = "presentation_generation_jobs" in tables
@@ -1691,9 +1631,7 @@ def _infer_revision_from_schema(
                 )
             return REVISION_TEMPLATE_V2_REVISION_JOURNAL
         if has_job_table != has_lifecycle:
-            raise RuntimeError(
-                "Durable generation schema is only partially applied"
-            )
+            raise RuntimeError("Durable generation schema is only partially applied")
         job_columns = {
             column["name"] if isinstance(column, dict) else column
             for column in inspector.get_columns(
@@ -1703,9 +1641,7 @@ def _infer_revision_from_schema(
         if not DURABLE_PRESENTATION_GENERATION_JOB_COLUMNS.issubset(
             job_columns
         ):
-            raise RuntimeError(
-                "Durable generation job schema is only partially applied"
-            )
+            raise RuntimeError("Durable generation job schema is only partially applied")
         has_authored_checkpoints = _validate_authored_checkpoint_schema(
             inspector,
             tables,
@@ -1744,9 +1680,7 @@ def _infer_revision_from_schema(
             else REVISION_DURABLE_GENERATION_JOBS
         )
     if delete_action != sidecar_delete_action:
-        raise RuntimeError(
-            "Template V2 presentation ownership FKs have mixed delete actions"
-        )
+        raise RuntimeError("Template V2 presentation ownership FKs have mixed delete actions")
     return REVISION_TEMPLATE_V2_LOCAL_STATE
 
 

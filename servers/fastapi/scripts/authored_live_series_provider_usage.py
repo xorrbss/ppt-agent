@@ -1,4 +1,4 @@
-﻿"""Read-only export of ``provider_usage_receipts`` for one generation job.
+"""Read-only export of ``provider_usage_receipts`` for one generation job.
 
 Built for the authored verbatim placeholder-authoring live validation series
 (``docs/authored-verbatim-placeholder-authoring-design-20260911.md`` section 4;

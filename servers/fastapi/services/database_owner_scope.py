@@ -6,7 +6,7 @@ connection setup.  ``services.database`` imports this module and calls
 already imports the engine keeps the same hooks with the same behaviour.
 """
 
-from sqlalchemy import event, inspect, or_, text
+from sqlalchemy import event, inspect, text
 from sqlalchemy.orm import Session, with_loader_criteria
 from sqlalchemy.sql.schema import Table
 from sqlalchemy.sql.util import find_tables
@@ -25,7 +25,6 @@ from models.sql.presentation import (
     PresentationModel,
 )
 from models.sql.template import TemplateModel
-from models.sql.template_v2 import TemplateV2
 from models.sql.template_create_info import TemplateCreateInfoModel
 from models.sql.slide import SlideModel
 from models.sql.webhook_subscription import WebhookSubscription
@@ -47,7 +46,6 @@ from models.sql.asset_gateway_idempotency_receipt import (
 from models.sql.presentation_export_attempt import PresentationExportAttempt
 from models.sql.public_admission import PublicOperationAdmission
 from models.sql.public_artifact import PublicArtifact, PublicExportIdentity
-from templates.v2.catalog import get_template_v2_default_template_id
 from services.presentation_profile_persistence import stamp_presentation_profile
 from utils.owner_context import (
     get_current_owner_id,
@@ -96,21 +94,13 @@ _STRICT_TENANT_MODELS = (
     PublicExportIdentity,
 )
 
-# TemplateV2 is owner-scoped through its own catalog-aware criteria below, so
-# a request that lost its identity must not read it unscoped either.
 _OWNER_SCOPED_TABLE_NAMES = frozenset(
-    model.__tablename__ for model in (*_STRICT_OWNER_MODELS, TemplateV2)
+    model.__tablename__ for model in _STRICT_OWNER_MODELS
 )
 
 
 def owner_scoped_table_names() -> tuple[str, ...]:
-    """Tables whose rows are owner-scoped by the ORM hooks (RLS parity source).
-
-    This is the full guarded set, ``TemplateV2`` included.  Deriving it from
-    ``_STRICT_OWNER_MODELS`` alone hid ``template_v2`` from the row-level
-    security parity test, which is exactly the omission that test exists to
-    catch.
-    """
+    """Tables whose rows are owner-scoped by the ORM hooks (RLS parity source)."""
     return tuple(sorted(_OWNER_SCOPED_TABLE_NAMES))
 
 
@@ -118,9 +108,10 @@ def catalog_shared_table_names() -> tuple[str, ...]:
     """Owner-scoped tables that also hold shared, ownerless catalog rows.
 
     Their row-level security predicate has to admit ``owner_id IS NULL`` rows,
-    because the ORM criteria admit the shared catalog entries too.
+    because the ORM criteria admit the shared catalog entries too. No current
+    model needs this; the last one (``template_v2``) was removed 2026-09-25.
     """
-    return (TemplateV2.__tablename__,)
+    return ()
 
 
 def tenant_scoped_table_names() -> tuple[str, ...]:
@@ -196,7 +187,6 @@ def _scope_owned_statements(execute_state) -> None:
 
     statement = execute_state.statement
     if owner_id is not None and not skip_owner_scope:
-        catalog_default_id = get_template_v2_default_template_id()
         for model in _STRICT_OWNER_MODELS:
             statement = statement.options(
                 with_loader_criteria(
@@ -205,20 +195,6 @@ def _scope_owned_statements(execute_state) -> None:
                     include_aliases=True,
                 )
             )
-        statement = statement.options(
-            with_loader_criteria(
-                TemplateV2,
-                lambda row: or_(
-                    row.owner_id == owner_id,
-                    (row.owner_id.is_(None) & row.is_default.is_(True)),
-                    (
-                        row.owner_id.is_(None)
-                        & (row.id == catalog_default_id)
-                    ),
-                ),
-                include_aliases=True,
-            )
-        )
     if tenant_id is not None and not execute_state.execution_options.get(
         "skip_tenant_scope"
     ):
@@ -247,7 +223,7 @@ def _pending_owned_instances(session, owner_models) -> bool:
 def _stamp_new_owned_rows(session, _flush_context, _instances) -> None:
     owner_id = get_current_owner_id()
     tenant_id = get_current_tenant_id()
-    owner_models = _STRICT_OWNER_MODELS + (TemplateV2,)
+    owner_models = _STRICT_OWNER_MODELS
     if owner_id is None and _pending_owned_instances(session, owner_models):
         # An enforced request must not persist, mutate or delete ownerless
         # rows; check before any profile derivation so the failure names the

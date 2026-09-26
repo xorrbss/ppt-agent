@@ -134,28 +134,6 @@ test("Ruff is a required locked Python lint gate on both CI providers", () => {
   );
 });
 
-test("generated Template V2 contracts are checked by both CI providers", () => {
-  const rootPackage = readJson("package.json");
-  const workflow = read(".github/workflows/test-all.yml");
-  const githubFastApiJob = workflowJob(workflow, "test-fastapi");
-  const pipeline = read("bitbucket-pipelines.yml");
-  const generator = "contracts/template_v2/generate.py --check";
-
-  assert.equal(
-    rootPackage.scripts["check:template-v2-contracts"],
-    "uv run --directory servers/fastapi python ../../contracts/template_v2/generate.py --check",
-  );
-  assert.match(
-    githubFastApiJob,
-    /name: Check generated Template V2 contracts\s*\n\s*run: uv run python \.\.\/\.\.\/contracts\/template_v2\/generate\.py --check/u,
-  );
-  assert.ok(pipeline.includes(generator));
-  assert.match(
-    pipeline,
-    /uv sync --frozen --directory servers\/fastapi[\s\S]*uv run --directory servers\/fastapi python \.\.\/\.\.\/contracts\/template_v2\/generate\.py --check/u,
-  );
-});
-
 test("workspace E2E is an always-captured PR gate on Bitbucket", () => {
   const pipeline = read("bitbucket-pipelines.yml");
 
@@ -232,7 +210,6 @@ test("chat-first deployment configuration is required by both CI providers", () 
     "element-insert-shapes.test.mjs",
     "math-insert-elements.test.mjs",
     "settings-access.test.mjs",
-    "template-v2-json-to-html.test.mjs",
     "workspace-contract.test.mjs",
   ]) {
     assert.ok(
@@ -275,7 +252,6 @@ test("the packaging security gate audits the locked FastAPI dependency tree", ()
   assert.ok(nextAudit > npmAudit, "the Next.js production tree must be audited too");
   assert.ok(pipAudit > npmAudit, "the Python audit must sit beside the npm audit");
   assert.match(job, /uv sync --frozen --directory servers\/fastapi/u);
-  assert.match(job, /node --test scripts\/operational-release-preflight\.test\.mjs/u);
   // No desktop packaging, signing, or installer scanning may creep back in.
   assert.doesNotMatch(workflowSteps(workflow), /electron/iu);
   assert.doesNotMatch(workflowSteps(workflow), /clamav/iu);
@@ -1080,10 +1056,10 @@ test("developer documentation matches the executable lint and test workflow", ()
   assert.match(rootPackage.scripts["test:next-ci"], /test:ci-node/u);
   assert.match(pyproject, /select = \["E", "F", "B", "ASYNC"\]/u);
   assert.match(nodeRunner, /const ROOTS = \["app", "components", "i18n", "lib", "scripts", "store", "tests", "utils"\]/u);
-  assert.equal(specList?.length, 22);
+  assert.equal(specList?.length, 12);
   assert.match(claude, /Ruff is locked/u);
   assert.match(claude, /tests\/?`, and `utils\//u);
-  assert.match(claude, /22 named Cypress specs/u);
+  assert.match(claude, /12 named Cypress specs/u);
   assert.doesNotMatch(claude, /There is \*\*no ruff/u);
   assert.doesNotMatch(claude, /does \*\*not\*\* include `servers\/nextjs\/tests\/`/u);
 });

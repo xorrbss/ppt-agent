@@ -81,11 +81,12 @@ def _native_ui():
 
 
 def test_canonical_census_assigns_every_required_classification_once():
-    """Two formats can be described; everything else is reported, not guessed.
+    """Live formats can be described; everything else is reported, not guessed.
 
-    A deck in one of the retired React-template formats resolves no profile —
-    this fork ships no component for them — so the census reports it invalid
-    and quarantines it rather than inventing a cohort for a deck nothing can
+    A deck in one of the retired React-template formats -- including
+    template-v2, whose driver id was removed from the registry alongside its
+    studio -- resolves no profile, so the census reports it invalid and
+    quarantines it rather than inventing a cohort for a deck nothing can
     render.
     """
     presentations = [
@@ -112,18 +113,20 @@ def test_canonical_census_assigns_every_required_classification_once():
     result = build_census(presentations, slides)
 
     assert [entry.classification for entry in result] == [
-        "template_v2",
+        "invalid",
         "authored",
         "mixed",
         "invalid",
         "invalid",
     ]
     assert len(result) == len(presentations)
-    assert all(entry.quarantine for entry in result[-3:])
+    assert result[1].quarantine is False
+    assert all(entry.quarantine for entry in (result[0], *result[2:]))
     assert [entry.quarantine_reason for entry in result[-2:]] == [
         "unsupported_presentation_driver",
         "unsupported_generation_mode",
     ]
+    assert result[0].quarantine_reason == "unsupported_presentation_driver"
 
 
 def test_malformed_slide_is_invalid_and_profile_evidence_conflict_is_mixed():
@@ -227,12 +230,12 @@ def test_fixture_database_report_has_full_coverage_quarantine_and_drain(tmp_path
                     "id": deck_id,
                     "owner_id": "owner-a",
                     "generation_mode": "standard",
-                    # A template-v2 deck: the non-authored format this fork can
-                    # still describe, so the report is exercised by the
-                    # malformed slide below rather than by a deck whose profile
-                    # cannot resolve at all.
-                    "mode": "template",
-                    "version": "v2-standard",
+                    # An authored deck: the only currently-registered driver a
+                    # plain dict fixture like this can resolve to, so the
+                    # report is exercised by the malformed slide below rather
+                    # than by a deck whose profile cannot resolve at all.
+                    "mode": "authored",
+                    "version": "v1-standard",
                 }
             ],
         )

@@ -113,27 +113,23 @@ def test_client_cannot_select_a_presentation_driver() -> None:
     assert resolve_presentation_profile(identity).driver_id == "authored"
 
 
-@pytest.mark.parametrize("driver_id", ["template-v2", "authored"])
-def test_generation_driver_mismatch_fails_before_invocation(driver_id: str) -> None:
-    identity_by_driver = {
-        "template-v2": {
-            "generation_mode": "standard",
-            "mode": "template",
-            "version": "v2-standard",
-            "theme": {"mode": "template"},
-        },
-        "authored": {
-            "generation_mode": "standard",
-            "mode": "authored",
-            "version": "v1-standard",
-            "theme": {"mode": "authored"},
-        },
+def test_generation_driver_mismatch_fails_before_invocation() -> None:
+    # Cerebras supports no presentation driver, so requesting the only
+    # currently-registered non-svg driver (authored) against it is a driver
+    # mismatch. Template-v2 identity is not exercised here any more: it no
+    # longer resolves to a driver at all, so it cannot reach this mismatch
+    # check -- it fails earlier, at profile resolution.
+    identity = {
+        "generation_mode": "standard",
+        "mode": "authored",
+        "version": "v1-standard",
+        "theme": {"mode": "authored"},
     }
     invoked = False
 
     with pytest.raises(ProviderResolutionError) as error:
         with generation_provider_admission(
-            identity_by_driver[driver_id],
+            identity,
             required_capabilities=("structuredOutput",),
             settings=_settings("cerebras"),
         ):

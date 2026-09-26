@@ -25,7 +25,7 @@ from services.chat.slide_ui_query import (
     parse_element_path,
     slide_ui_revision,
 )
-from templates.v2.persistence import canonicalize_slide_ui
+from templates.native_ui.persistence import canonicalize_slide_ui
 
 
 TEXT_PATH = "components[0].elements[0]"

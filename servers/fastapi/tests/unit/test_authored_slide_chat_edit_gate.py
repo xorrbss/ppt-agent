@@ -68,12 +68,16 @@ async def _seed(maker, *, authored: bool) -> uuid.UUID:
                 # An authored deck carries no layout catalogue at all, which is
                 # exactly why save_slide cannot rebuild one of its pages.
                 layout=None if authored else {"name": "deck", "slides": []},
-                # The non-authored deck is template-v2: the retired
-                # React-template formats this fixture used to describe are gone
-                # from the fork along with their components.
-                mode="authored" if authored else "template",
-                theme={"mode": "authored"} if authored else None,
-                version="v1-standard" if authored else "v2-standard",
+                # The non-authored deck here only needs a resolvable identity
+                # that is not authored; the chat memory layer's per-slide
+                # markers below (layout_group/layout/content), not the deck's
+                # driver, are what this test actually exercises. svg-v1 is the
+                # only other currently-registered driver -- the retired
+                # template-v2 identity this fixture used to describe no longer
+                # resolves at all, so it can no longer even be persisted.
+                mode="authored" if authored else "svg",
+                theme={"mode": "authored"} if authored else {"mode": "svg"},
+                version="v1-standard",
             )
         )
         for index in range(3):

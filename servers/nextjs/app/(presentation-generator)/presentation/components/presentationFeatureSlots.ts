@@ -43,14 +43,6 @@ export interface PresentationPageDriverAdapter {
 const RENDER_ACTIONS = Object.freeze(["preview", "pdf", "pptx"] as const);
 
 export const PRESENTATION_PAGE_DRIVER_ADAPTER_REGISTRY = Object.freeze({
-  "template-v2": Object.freeze({
-    driverId: "template-v2",
-    editorAdapterId: "template-v2",
-    assistantAdapterId: "canonical-workspace",
-    exportAdapterId: "template-v2-general",
-    background: "#EDEEEF",
-    renderActions: RENDER_ACTIONS,
-  }),
   authored: Object.freeze({
     driverId: "authored",
     editorAdapterId: "authored-readonly",

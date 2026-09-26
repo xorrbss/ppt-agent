@@ -1,14 +1,14 @@
 import pytest
 from pydantic import ValidationError
 
-from templates.v2.models.elements import (
+from templates.native_ui.models.elements import (
     Chart,
     Infographic,
     MathExpression,
     Text,
     Vector,
 )
-from templates.v2.models.layouts import RawSlideLayout
+from templates.native_ui.models.layouts import RawSlideLayout
 
 
 def _text_element(name: str = "text") -> dict:

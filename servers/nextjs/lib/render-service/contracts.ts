@@ -3,7 +3,6 @@ import type {
   PresentationDriverId,
   PresentationProfile,
 } from "../presentation-profile.ts";
-import type { TemplateRenderPlan } from "../template-v2-ast/index.ts";
 
 export const RENDER_ARTIFACT_CONTRACT =
   "presenton.render-artifact/v1" as const;
@@ -126,7 +125,6 @@ export interface RenderRequest {
   readonly fonts?: readonly RenderFontDependency[];
   readonly assets?: readonly RenderAssetDependency[];
   readonly chart_snapshots?: readonly RenderChartSnapshot[];
-  readonly template_render_plans?: readonly TemplateRenderPlan[];
 }
 
 export interface RenderAdapterPlan<Payload = unknown> {

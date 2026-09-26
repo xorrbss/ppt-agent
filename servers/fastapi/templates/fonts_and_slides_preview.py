@@ -30,7 +30,7 @@ from templates.pptx_font_utils import (
     normalize_font_variants,
     replace_fonts_in_pptx,
 )
-from templates.v2.pptx.package_reader import PptxPackageReader, UnsafePptxPackage
+from templates.pptx_safety.package_reader import PptxPackageReader, UnsafePptxPackage
 from utils.asset_directory_utils import absolute_fastapi_asset_url
 from utils.get_env import get_app_data_directory_env
 from utils.upload_limits import get_single_upload_limit_bytes, stream_upload_to_file

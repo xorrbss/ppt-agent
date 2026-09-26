@@ -14,7 +14,7 @@ from copy import deepcopy
 from hashlib import sha256
 from typing import Any
 
-from templates.v2.persistence import canonicalize_slide_ui
+from templates.native_ui.persistence import canonicalize_slide_ui
 
 _PATH_SEGMENT = re.compile(
     r"^(?P<key>components|elements|children)(?:\[(?P<index>[0-9]+)\])$"

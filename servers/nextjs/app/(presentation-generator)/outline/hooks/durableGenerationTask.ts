@@ -7,7 +7,7 @@ import type { CodexGenerationPresetId } from "@/components/codex-config";
 import type { DocumentCanvas } from "@/lib/document-canvas";
 import type { RasterApprovalPinWire } from "../../services/api/source-content/raster-contract";
 
-export type DurableGenerationMode = "authored" | "svg" | "template-v2";
+export type DurableGenerationMode = "authored" | "svg";
 
 export type DurableGenerationStatus =
   | "starting"
