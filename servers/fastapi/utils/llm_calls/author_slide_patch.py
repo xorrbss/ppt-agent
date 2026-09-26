@@ -10,20 +10,29 @@ from __future__ import annotations
 
 import json
 import logging
+import re as re
+from collections.abc import Collection as Collection
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass as dataclass
+from html.parser import HTMLParser as HTMLParser
 from typing import Any
 
 from llmai import get_client
 from llmai.shared import (
+    ImageContentPart as ImageContentPart,
     JSONSchemaResponse,
+    SystemMessage as SystemMessage,
     TextContentPart,
     UserMessage,
 )
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError, model_validator as model_validator
 
 from utils.authored_patch_engine import (
+    EXACT_RECONSTRUCTION as EXACT_RECONSTRUCTION,
     STYLE_REFERENCE,
     AuthoredPatchPlan,
+    _DocumentSpanParser as _DocumentSpanParser,
+    _replace_start_tag_style as _replace_start_tag_style,
     ReferenceMode,
     allowed_patch_style_properties,
     validate_patch_plan,
@@ -44,6 +53,8 @@ from utils.llm_calls.author_slide_patch_contracts import (
     _MAX_DOM_JSON_CHARS,
     _MAX_REJECTED_PROPOSAL_CHARS,
     _MAX_VALIDATION_ERROR_CHARS,
+    _STYLE_KEYS as _STYLE_KEYS,
+    _bounded_string as _bounded_string,
 )
 from utils.llm_calls.author_slide_patch_dom import (
     FullDomGraph,

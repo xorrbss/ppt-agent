@@ -10,9 +10,11 @@ from html.parser import HTMLParser
 from typing import Any
 
 from utils.llm_calls.author_slide_patch_contracts import (
+    StructuralRepairScope as StructuralRepairScope,
     _BBOX_KEYS,
     _MAX_DOM_ELEMENTS,
     _MAX_DOM_JSON_CHARS,
+    _MAX_SCOPE_EDITABLE_QIDS as _MAX_SCOPE_EDITABLE_QIDS,
     _QID_PATTERN,
     _ROOT_QIDS,
     _STYLE_KEYS,
