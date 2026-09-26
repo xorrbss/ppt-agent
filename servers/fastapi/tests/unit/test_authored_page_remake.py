@@ -43,6 +43,14 @@ SOURCE_HTML = "<html><body><main data-qid='source'>Source</main></body></html>"
 CANDIDATE_HTML = "<html><body><main data-qid='candidate'>Candidate</main></body></html>"
 
 
+def _preview_context(presentation):
+    plan = SimpleNamespace(
+        roles=("content",), brand=SimpleNamespace(), design_system="design",
+        reference_images=((),),
+    )
+    return plan, None, STYLE_REFERENCE, None, remake.presentation_canvas_contract(presentation.theme)
+
+
 def async_test(function):
     @wraps(function)
     def run(*args, **kwargs):
@@ -143,21 +151,11 @@ def _patch_preview(
     """Stub rendering, DOM inspection, generation and asset publication."""
 
     async def fake_context(_session, _presentation, _slides):
-        return (
-            SimpleNamespace(
-                roles=("content",),
-                brand=SimpleNamespace(),
-                design_system="design",
-                reference_images=((),),
-            ),
-            None,
-            STYLE_REFERENCE,
-            None,
-        )
+        return _preview_context(_presentation)
 
     renders = {"count": 0}
 
-    async def fake_render(_html):
+    async def fake_render(_html, **_kwargs):
         renders["count"] += 1
         if candidate_render_error is not None and renders["count"] > 1:
             raise candidate_render_error
@@ -193,7 +191,11 @@ def _preview_task_data(presentation, slide, *, candidate_dom: str) -> dict:
         "slide_id": str(slide.id),
         "slide_index": 0,
         "source_digest": remake.authored_page_source_digest(slide),
-        "candidate_digest": "sha256:candidate",
+        "candidate_digest": remake._canonical_digest({
+            "html": CANDIDATE_HTML,
+            "image": "/app_data/images/remake.png",
+            "semanticSource": None,
+        }),
         "candidate_html": CANDIDATE_HTML,
         "candidate_image": "/app_data/images/remake.png",
         "validation": {
@@ -343,21 +345,11 @@ async def test_preview_is_detached_and_pins_exact_source(tmp_path, monkeypatch):
         original_digest = remake.authored_page_source_digest(slide)
 
         async def fake_context(_session, _presentation, _slides):
-            return (
-                SimpleNamespace(
-                    roles=("content",),
-                    brand=SimpleNamespace(),
-                    design_system="design",
-                    reference_images=((),),
-                ),
-                None,
-                STYLE_REFERENCE,
-                None,
-            )
+            return _preview_context(_presentation)
 
         render_count = 0
 
-        async def fake_render(_html):
+        async def fake_render(_html, **_kwargs):
             nonlocal render_count
             render_count += 1
             return b"png", {"telemetry_status": "available"}
@@ -473,7 +465,8 @@ async def test_publish_snapshots_cas_updates_and_invalidates_stale_pointer(
             snapshots.append((slides, kwargs))
 
         async def fake_context(_session, _presentation, _slides):
-            return SimpleNamespace(), None, STYLE_REFERENCE, None, None
+            return (SimpleNamespace(), None, STYLE_REFERENCE, None,
+                    remake.presentation_canvas_contract(_presentation.theme))
 
         monkeypatch.setattr(remake.version_service, "snapshot_slides", fake_snapshot)
         async def fake_fit(_html, *, slide_index, policy_revision, canvas):
@@ -763,7 +756,8 @@ async def test_warned_preview_publishes_after_explicit_approval(tmp_path, monkey
             return None
 
         async def fake_context(_session, _presentation, _slides):
-            return SimpleNamespace(), None, STYLE_REFERENCE, None, None
+            return (SimpleNamespace(), None, STYLE_REFERENCE, None,
+                    remake.presentation_canvas_contract(_presentation.theme))
 
         async def fake_render(_html, *, canvas):
             assert (canvas.width_px, canvas.height_px) == (1280, 720)
