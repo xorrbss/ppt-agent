@@ -1756,7 +1756,10 @@
     "thumbnails": "슬라이드 미리보기",
     "addSlide": "슬라이드 추가",
     "slide": "{index}번 슬라이드",
-    "reorder": "{index}번 슬라이드 순서 변경"
+    "reorder": "{index}번 슬라이드 순서 변경",
+    "reorderSaveFailed": "슬라이드 순서를 저장하지 못했습니다",
+    "reorderConflictReload": "다른 곳에서 프레젠테이션이 변경되어 새로고침합니다.",
+    "reorderNetworkRetry": "네트워크 연결을 확인하고 다시 시도해 주세요."
   },
   "flaggedSlides": {
     "badge": "검수 필요",

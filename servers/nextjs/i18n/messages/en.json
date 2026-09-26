@@ -1756,7 +1756,10 @@
     "thumbnails": "Slide thumbnails",
     "addSlide": "Add slide",
     "slide": "Slide {index}",
-    "reorder": "Reorder slide {index}"
+    "reorder": "Reorder slide {index}",
+    "reorderSaveFailed": "Could not save the slide order",
+    "reorderConflictReload": "The presentation changed elsewhere. Reloading to get the latest version.",
+    "reorderNetworkRetry": "Check your network connection and try again."
   },
   "flaggedSlides": {
     "badge": "Needs review",
