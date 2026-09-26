@@ -191,16 +191,16 @@ const SidePanel = ({
       .catch((error) => {
         if (error instanceof ApiError && error.status === 409) {
           notify.error(
-            "슬라이드 순서를 저장하지 못했습니다",
-            "다른 곳에서 프레젠테이션이 변경되어 새로고침합니다.",
+            t("reorderSaveFailed"),
+            t("reorderConflictReload"),
           );
           window.location.reload();
           return;
         }
         console.error("Failed to save slide order", error);
         notify.error(
-          "슬라이드 순서를 저장하지 못했습니다",
-          "네트워크 연결을 확인하고 다시 시도해 주세요.",
+          t("reorderSaveFailed"),
+          t("reorderNetworkRetry"),
         );
       });
   };

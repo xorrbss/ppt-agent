@@ -10,6 +10,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useDispatch } from "react-redux";
 
 import { Button } from "@/components/ui/button";
@@ -104,6 +105,12 @@ export default function AuthoredTemplateChanger({
   onWorkspaceCommand?: WorkspaceCommandDispatcher;
   navigateToPresentation?: (targetUrl: string) => void;
 }) {
+  const t = useTranslations("presentationTemplateChanger");
+  const categoryLabels: Record<AuthoredStyleCategory, string> = {
+    general: t("categoryGeneral"), business: t("categoryBusiness"),
+    technology: t("categoryTechnology"), research: t("categoryResearch"),
+    editorial: t("categoryEditorial"), creative: t("categoryCreative"),
+  };
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"template" | "master">("template");
   const [styles, setStyles] = useState<AuthoredStyleSummary[]>([]);
@@ -147,8 +154,8 @@ export default function AuthoredTemplateChanger({
         if (cancelled) return;
         console.error("Failed to load AI-authored templates", error);
         notify.error(
-          "AI 저작 템플릿을 불러오지 못했습니다",
-          "잠시 후 다시 시도해 주세요."
+          t("stylesLoadFailed"),
+          t("tryAgainLater")
         );
       })
       .finally(() => {
@@ -172,7 +179,7 @@ export default function AuthoredTemplateChanger({
       .catch((error) => {
         if (controller.signal.aborted) return;
         console.error("Failed to load PPT masters", error);
-        setMasterLoadError("PPT 마스터를 불러오지 못했습니다.");
+        setMasterLoadError(t("mastersLoadFailed"));
       })
       .finally(() => {
         if (!controller.signal.aborted) setIsLoadingMasters(false);
@@ -224,13 +231,13 @@ export default function AuthoredTemplateChanger({
           currentMasterPin?.masterId,
         )
       : undefined) ||
-    (currentMasterPin ? "현재 회사 표준" : "회사 표준 없음");
+    (currentMasterPin ? t("currentCompanyStandard") : t("noCompanyStandard"));
   const nextMasterName =
     masterIntent.intent === "keep"
       ? currentMasterName
       : masterIntent.intent === "clear"
-        ? "회사 표준 없음"
-        : selectedMasterName || "선택한 회사 표준";
+        ? t("noCompanyStandard")
+        : selectedMasterName || t("selectedCompanyStandard");
   const styleChanged = authoredStyleIntent.intent === "set";
   const masterChanged =
     masterIntent.intent === "set" ||
@@ -238,10 +245,10 @@ export default function AuthoredTemplateChanger({
   const hasDesignChange = styleChanged || masterChanged;
   const ctaLabel =
     styleChanged && masterChanged
-      ? "선택한 디자인으로 새로 만들기"
+      ? t("recreateWithDesign")
       : masterChanged
-        ? "이 회사 표준으로 새로 만들기"
-        : "이 템플릿으로 새로 만들기";
+        ? t("recreateWithStandard")
+        : t("recreateWithTemplate");
 
   const selectMaster = (entry: MasterCatalogSummary) => {
     if (entry.publishedRevision === null || entry.publishedDigest === null) return;
@@ -311,7 +318,7 @@ export default function AuthoredTemplateChanger({
           limit: 1,
         });
         if (sourceTimeline.revision === undefined) {
-          throw new Error("원본 자료의 최신 리비전을 확인할 수 없습니다.");
+          throw new Error(t("latestRevisionUnknown"));
         }
         const receipt = await postWorkspaceTemplateApplication(presentationId, {
           sourceRevision: sourceTimeline.revision,
@@ -328,10 +335,10 @@ export default function AuthoredTemplateChanger({
         .catch((error) => {
           console.error("Error confirming AI-authored template", error);
           notify.error(
-            "AI 저작 템플릿 변경 실패",
+            t("changeFailed"),
             error instanceof Error
               ? error.message
-              : "템플릿 변경 요청 중 오류가 발생했습니다.",
+              : t("requestFailed"),
           );
           setOpen(true);
         })
@@ -350,8 +357,8 @@ export default function AuthoredTemplateChanger({
 
     if (masterIntent.intent !== "keep" || authoredStyleIntent.intent !== "set") {
       notify.error(
-        "디자인 변경을 사용할 수 없습니다",
-        "현재 작업공간에서는 템플릿과 마스터를 함께 적용할 수 없습니다.",
+        t("designChangeUnavailable"),
+        t("combinedChangeUnavailable"),
       );
       return;
     }
@@ -367,11 +374,11 @@ export default function AuthoredTemplateChanger({
           }
         );
       const taskId = started?.id;
-      if (!taskId) throw new Error("생성 작업을 시작하지 못했습니다.");
+      if (!taskId) throw new Error(t("startFailed"));
 
       notify.success(
-        "AI 저작 템플릿 변경을 시작했습니다",
-        "저장된 슬라이드 원고로 새 자료를 생성합니다. 원본은 유지됩니다."
+        t("changeStarted"),
+        t("sourcePreserved")
       );
 
       const deadline = Date.now() + GENERATION_TIMEOUT_MS;
@@ -388,7 +395,7 @@ export default function AuthoredTemplateChanger({
           if (task?.status === "completed") {
             const newPresentationId = task?.data?.presentation_id;
             if (!newPresentationId) {
-              throw new Error("생성된 프레젠테이션을 찾지 못했습니다.");
+              throw new Error(t("generatedNotFound"));
             }
 
             dispatch(clearPresentationData());
@@ -399,7 +406,7 @@ export default function AuthoredTemplateChanger({
           }
           if (task?.status === "error") {
             throw new Error(
-              task?.message || "AI 저작 프레젠테이션 생성에 실패했습니다."
+              task?.message || t("generationFailed")
             );
           }
         } catch (error) {
@@ -408,14 +415,14 @@ export default function AuthoredTemplateChanger({
         }
       }
 
-      throw new Error("생성 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.");
+      throw new Error(t("generationTimedOut"));
     } catch (error) {
       console.error("Error changing AI-authored template", error);
       notify.error(
-        "AI 저작 템플릿 변경 실패",
+        t("changeFailed"),
         error instanceof Error
           ? error.message
-          : "템플릿 변경 중 오류가 발생했습니다."
+          : t("changeError")
       );
     } finally {
       setIsGenerating(false);
@@ -441,7 +448,7 @@ export default function AuthoredTemplateChanger({
           data-testid="template-change-trigger"
         >
           <LayoutTemplate className="h-4 w-4" />
-          디자인 변경
+          {t("designChange")}
         </Button>
       </DialogTrigger>
 
@@ -449,12 +456,10 @@ export default function AuthoredTemplateChanger({
         <DialogHeader className="px-7 pb-2 pt-7">
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-[#5141E5]" />
-            디자인 변경
+            {t("designChange")}
           </DialogTitle>
           <DialogDescription className="leading-6">
-            AI 저작 템플릿과 회사 표준을 각각 선택해 새 자료를 만듭니다.
-            원고, 슬라이드 순서와 장수, 표·차트 의미 데이터와 이미지 참조는
-            유지되며 원본 자료는 변경되지 않습니다.
+            {t("description")}
           </DialogDescription>
         </DialogHeader>
 
@@ -470,16 +475,16 @@ export default function AuthoredTemplateChanger({
                 data-testid="design-tab-template"
                 className="h-10 rounded-lg font-semibold data-[state=active]:bg-white data-[state=active]:text-[#5141E5] data-[state=active]:shadow-sm"
               >
-                1. AI 저작 템플릿
-                {styleChanged ? <span className="ml-2 text-xs">변경됨</span> : null}
+                {t("templateStep")}
+                {styleChanged ? <span className="ml-2 text-xs">{t("changed")}</span> : null}
               </TabsTrigger>
               <TabsTrigger
                 value="master"
                 data-testid="design-tab-master"
                 className="h-10 rounded-lg font-semibold data-[state=active]:bg-white data-[state=active]:text-[#5141E5] data-[state=active]:shadow-sm"
               >
-                2. 회사 표준
-                {masterChanged ? <span className="ml-2 text-xs">변경됨</span> : null}
+                {t("standardStep")}
+                {masterChanged ? <span className="ml-2 text-xs">{t("changed")}</span> : null}
               </TabsTrigger>
             </TabsList>
 
@@ -488,10 +493,10 @@ export default function AuthoredTemplateChanger({
             <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 id="authored-template-heading" className="font-semibold text-gray-950">
-                  1. AI 저작 템플릿
+                  {t("templateStep")}
                 </h3>
                 <p className="mt-1 text-xs text-gray-500">
-                  본문 색상, 타이포그래피와 콘텐츠 표현을 선택합니다.
+                  {t("templateDescription")}
                 </p>
               </div>
               <label className="relative block sm:w-80">
@@ -500,7 +505,7 @@ export default function AuthoredTemplateChanger({
                   type="search"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="이름, 용도, 태그로 검색"
+                  placeholder={t("searchPlaceholder")}
                   className="h-10 w-full rounded-xl border border-[#E3E4E8] bg-white pl-10 pr-4 text-sm outline-none focus:border-[#5141E5] focus:ring-2 focus:ring-[#5141E5]/15"
                 />
               </label>
@@ -509,12 +514,12 @@ export default function AuthoredTemplateChanger({
               {isLoadingStyles ? (
                 <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-gray-600">
                   <Loader2 className="h-5 w-5 animate-spin" />
-                  AI 저작 템플릿을 불러오는 중입니다.
+                  {t("loadingTemplates")}
                 </div>
               ) : (
                 <div
                   role="radiogroup"
-                  aria-label="AI 저작 템플릿"
+                  aria-label={t("templateGroup")}
                   data-testid="authored-template-grid"
                   className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
                 >
@@ -522,7 +527,7 @@ export default function AuthoredTemplateChanger({
                     <AuthoredStyleCard
                       key={style.id}
                       style={style}
-                      categoryLabel={CATEGORY_LABELS[style.category]}
+                      categoryLabel={categoryLabels[style.category]}
                       isSelected={style.id === selectedStyleId}
                       isTabStop={style.id === selectedStyleId}
                       onSelect={setSelectedStyleId}
@@ -532,7 +537,7 @@ export default function AuthoredTemplateChanger({
               )}
               {!isLoadingStyles && filteredStyles.length === 0 && (
                 <p className="py-10 text-center text-sm text-gray-500">
-                  검색 조건에 맞는 AI 저작 템플릿이 없습니다.
+                  {t("noMatchingTemplates")}
                 </p>
               )}
             </div>
@@ -546,16 +551,16 @@ export default function AuthoredTemplateChanger({
           >
             <div className="mb-3">
               <h3 id="ppt-master-heading" className="font-semibold text-gray-950">
-                2. 회사 표준
+                {t("standardStep")}
               </h3>
               <p className="mt-1 text-xs text-gray-500">
-                PPT 마스터 기반의 헤더·푸터·페이지 번호·브랜드 장식을 선택합니다.
+                {t("standardDescription")}
               </p>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto pr-1" data-testid="ppt-master-scroll">
               <div
                 role="radiogroup"
-                aria-label="회사 표준"
+                aria-label={t("companyStandard")}
                 className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
                 data-testid="ppt-master-grid"
               >
@@ -576,7 +581,7 @@ export default function AuthoredTemplateChanger({
               >
                 <span className="flex items-center gap-2 font-semibold text-gray-950">
                   <Layers3 className="h-4 w-4 text-[#5141E5]" />
-                  현재 회사 표준 유지
+                  {t("keepCurrentStandard")}
                 </span>
                 <span className="mt-2 block text-sm text-gray-600">{currentMasterName}</span>
                 {masterIntent.intent === "keep" && (
@@ -599,9 +604,9 @@ export default function AuthoredTemplateChanger({
                     : "border-gray-200 bg-white hover:border-gray-300"
                 }`}
               >
-                <span className="font-semibold text-gray-950">회사 표준 사용 안 함</span>
+                <span className="font-semibold text-gray-950">{t("clearStandard")}</span>
                 <span className="mt-2 block text-sm text-gray-600">
-                  명시적으로 회사 표준을 제거하고 AI 템플릿만 사용합니다.
+                  {t("clearStandardDescription")}
                 </span>
                 {masterIntent.intent === "clear" && (
                   <Check className="absolute right-3 top-3 h-4 w-4 text-[#5141E5]" />
@@ -642,11 +647,11 @@ export default function AuthoredTemplateChanger({
                         {companyStandardDisplayName(entry.name, entry.masterId)}
                       </span>
                       <span className="mt-2 block text-sm text-gray-600">
-                        PPT 마스터 기반 · {entry.layoutCount}개 레이아웃 · {entry.primaryFont}
+                        {t("masterLayoutCount", { count: entry.layoutCount, font: entry.primaryFont })}
                       </span>
                       {isCurrent ? (
                         <span className="mt-2 inline-flex rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">
-                          현재 적용됨 · 다시 선택하면 유지
+                          {t("currentlyApplied")}
                         </span>
                       ) : null}
                       {selected && (
@@ -659,11 +664,11 @@ export default function AuthoredTemplateChanger({
               {isLoadingMasters && (
                 <p className="mt-3 flex items-center gap-2 text-sm text-gray-500">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  회사 표준을 불러오는 중입니다.
+                  {t("loadingStandards")}
                 </p>
               )}
               {masterLoadError && (
-                <p className="mt-3 text-sm text-amber-700">{masterLoadError} 현재 회사 표준 유지는 계속 사용할 수 있습니다.</p>
+                <p className="mt-3 text-sm text-amber-700">{t("masterLoadErrorWithFallback", { error: masterLoadError })}</p>
               )}
             </div>
           </section>
@@ -671,12 +676,12 @@ export default function AuthoredTemplateChanger({
           </Tabs>
 
           <div className="mt-4 shrink-0 rounded-xl border border-[#DDD9FF] bg-[#F8F7FF] px-4 py-3 text-sm" data-testid="design-combination-summary">
-            <span className="font-semibold text-gray-950">현재 조합</span>
+            <span className="font-semibold text-gray-950">{t("currentCombination")}</span>
             <span className="ml-2 text-gray-700" data-testid="current-design-combination">
               {currentStyleName} + {currentMasterName}
             </span>
             <span className="mx-3 text-[#5141E5]" aria-hidden="true">→</span>
-            <span className="font-semibold text-gray-950">변경 후</span>
+            <span className="font-semibold text-gray-950">{t("afterChange")}</span>
             <span className="ml-2 text-gray-700" data-testid="next-design-combination">
               {selectedStyleName} + {nextMasterName}
             </span>
@@ -692,8 +697,8 @@ export default function AuthoredTemplateChanger({
               onChange={(event) => setVisionQa(event.target.checked)}
               className="h-4 w-4 rounded border-gray-300 accent-[#5141E5]"
             />
-            고품질 검수 추가
-            <span className="text-xs text-gray-500">(더 느리지만 시각 오류 재검사)</span>
+            {t("addQualityReview")}
+            <span className="text-xs text-gray-500">{t("qualityReviewSlow")}</span>
           </label>
           <div className="flex gap-2">
             <Button
@@ -702,7 +707,7 @@ export default function AuthoredTemplateChanger({
               disabled={isGenerating}
               onClick={() => setOpen(false)}
             >
-              취소
+              {t("cancel")}
             </Button>
             <Button
               type="button"
@@ -717,7 +722,7 @@ export default function AuthoredTemplateChanger({
             >
               {!onWorkspaceCommand && isGenerating && <Loader2 className="h-4 w-4 animate-spin" />}
               {!onWorkspaceCommand && isGenerating
-                ? "AI 저작 자료 생성 중"
+                ? t("generating")
                 : ctaLabel}
             </Button>
           </div>

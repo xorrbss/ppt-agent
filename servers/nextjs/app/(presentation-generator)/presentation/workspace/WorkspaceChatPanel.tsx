@@ -1,6 +1,7 @@
 "use client";
 
 import { LocateFixed } from "lucide-react";
+import { useTranslations } from "next-intl";
 import {
   useCallback,
   useEffect,
@@ -97,6 +98,7 @@ export default function WorkspaceChatPanel({
   onExportOperationStateChange,
   onGenerationStateChange, onEditCurrentSlideReady,
 }: WorkspaceChatPanelProps) {
+  const t = useTranslations("presentationChatPanel");
   const reviewRequiredIndices = useMemo(() => {
     const flags = deriveFlaggedSlideMap(presentation);
     const slides = Array.isArray(presentation?.slides) ? presentation.slides : [];
@@ -499,7 +501,7 @@ export default function WorkspaceChatPanel({
   return (
     <section
       className="relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden bg-white"
-      aria-label="프레젠테이션 작업 대화"
+      aria-label={t("conversation")}
     >
       {(connection !== "live" || showFollowControl) && <header className="mx-auto flex w-full max-w-[800px] items-center justify-end gap-2 px-4 py-2">
         <div className="flex shrink-0 items-center gap-2">
@@ -517,8 +519,8 @@ export default function WorkspaceChatPanel({
           data-testid="workspace-follow-agent-toggle"
           title={
             agentFocus.followEnabled
-              ? "AI 따라가기 켜짐: 요청한 페이지로 캔버스가 이동합니다"
-              : "AI 따라가기 꺼짐"
+              ? t("followOnTitle")
+              : t("followOffTitle")
           }
           className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
             agentFocus.followEnabled
@@ -527,7 +529,7 @@ export default function WorkspaceChatPanel({
           }`}
         >
           <LocateFixed className="h-3 w-3" aria-hidden="true" />
-          {agentFocus.followEnabled ? "따라가는 중" : "AI 따라가기"}
+          {agentFocus.followEnabled ? t("following") : t("follow")}
         </button>}
         </div>
       </header>}
@@ -540,11 +542,11 @@ export default function WorkspaceChatPanel({
         showRestart={false}
         restartBlockedReason={
           loading || submitting || mutationActive
-            ? "현재 작업 상태가 확정된 뒤 다시 만들 수 있습니다."
+            ? t("retryAfterSettled")
             : retryIntent?.reason === "ambiguous"
-              ? "이전 요청의 접수 상태를 먼저 확인해 주세요."
+              ? t("checkPriorAdmission")
               : !writesEnabled
-                ? "이 프레젠테이션을 변경할 권한이 없습니다."
+                ? t("noWritePermission")
                 : null
         }
       />
@@ -568,13 +570,13 @@ export default function WorkspaceChatPanel({
               disabled={loadingOlder}
               className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50"
             >
-              {loadingOlder ? "이전 기록 불러오는 중" : "이전 기록 불러오기"}
+              {loadingOlder ? t("loadingOlder") : t("loadOlder")}
             </button>
           </div>
         )}
         {(loading || (generationInfoLoading && timelineItems.length === 0)) && (
           <p className="py-8 text-center text-sm text-slate-500">
-            대화 기록을 불러오는 중입니다.
+            {t("loadingHistory")}
           </p>
         )}
         {!loading &&
@@ -585,7 +587,7 @@ export default function WorkspaceChatPanel({
           !historyError && (
             <div className="py-8">
               <p className="text-center text-sm text-slate-500">
-                아직 기록된 대화가 없습니다.
+                {t("noHistory")}
               </p>
             </div>
           )}
@@ -673,8 +675,7 @@ export default function WorkspaceChatPanel({
                 className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm"
                 role="alert"
               >
-                지원되지 않는 타임라인 항목({item.rawType})입니다. 기록은
-                보존되어 있습니다.
+                {t("unsupportedTimelineItem", { type: item.rawType })}
               </article>
             );
           })}
@@ -682,7 +683,7 @@ export default function WorkspaceChatPanel({
             <article
               className="rounded-2xl border border-indigo-200 bg-white p-4 shadow-sm"
               data-testid="quality-review-options"
-              aria-label="고품질 검수 범위"
+              aria-label={t("qualityReviewScope")}
               aria-live="polite"
             >
               <div className="flex items-start gap-3">
@@ -694,23 +695,22 @@ export default function WorkspaceChatPanel({
                 </span>
                 <div className="min-w-0 flex-1">
                   <h3 className="text-sm font-semibold text-slate-900">
-                    고품질 검수 범위
+                    {t("qualityReviewScope")}
                   </h3>
                   <p className="mt-1 text-xs leading-5 text-slate-500">
-                    검토 후 문제를 자동으로 수정합니다. 검수할 페이지 범위를
-                    선택해 주세요.
+                    {t("qualityReviewDescription")}
                   </p>
                 </div>
               </div>
 
               <fieldset className="mt-4">
                 <legend className="text-xs font-semibold text-slate-700">
-                  검수 범위
+                  {t("reviewScope")}
                 </legend>
                 <div
                   className="mt-2 grid grid-cols-2 gap-2"
                   role="radiogroup"
-                  aria-label="검수 범위"
+                  aria-label={t("reviewScope")}
                 >
                   <button
                     type="button"
@@ -725,7 +725,7 @@ export default function WorkspaceChatPanel({
                         : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                     }`}
                   >
-                    검수 필요 페이지만 ({reviewRequiredIndices.length}장)
+                    {t("reviewRequiredOnly", { count: reviewRequiredIndices.length })}
                   </button>
                   <button
                     type="button"
@@ -739,7 +739,7 @@ export default function WorkspaceChatPanel({
                         : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                     }`}
                   >
-                    전체 슬라이드
+                    {t("allSlides")}
                   </button>
                   <button
                     type="button"
@@ -754,10 +754,10 @@ export default function WorkspaceChatPanel({
                         : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                     }`}
                   >
-                    현재 슬라이드
+                    {t("currentSlide")}
                     {qualityReviewPrompt.currentSlide === undefined
                       ? ""
-                      : ` (${qualityReviewPrompt.currentSlide + 1}번)`}
+                      : t("slideNumberSuffix", { number: qualityReviewPrompt.currentSlide + 1 })}
                   </button>
                   <button
                     type="button"
@@ -771,7 +771,7 @@ export default function WorkspaceChatPanel({
                         : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                     }`}
                   >
-                    페이지 지정
+                    {t("specificPages")}
                   </button>
                 </div>
               </fieldset>
@@ -783,8 +783,8 @@ export default function WorkspaceChatPanel({
                   data-testid="quality-review-required-confirmation"
                 >
                   {reviewRequiredIndices.length > 0
-                    ? `검수 대상: ${reviewRequiredIndices.map((index) => index + 1).join(", ")}번 페이지`
-                    : "검수 필요로 표시된 페이지가 없습니다."}
+                    ? t("reviewTargets", { pages: reviewRequiredIndices.map((index) => index + 1).join(", ") })
+                    : t("noReviewRequired")}
                 </p>
               )}
 
@@ -794,13 +794,13 @@ export default function WorkspaceChatPanel({
                     htmlFor="quality-review-page-range"
                     className="text-xs font-semibold text-slate-700"
                   >
-                    페이지 번호
+                    {t("pageNumbers")}
                   </label>
                   <p
                     id="quality-review-range-help"
                     className="mt-1 text-[11px] text-slate-500"
                   >
-                    쉼표와 범위를 사용해 입력하세요. 예: 3, 5-8, 12
+                    {t("rangeHelp")}
                   </p>
                   <input
                     id="quality-review-page-range"
@@ -815,7 +815,7 @@ export default function WorkspaceChatPanel({
                         : "quality-review-range-help"
                     }
                     inputMode="text"
-                    placeholder="예: 3, 5-8, 12"
+                    placeholder={t("rangePlaceholder")}
                     className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                   />
                   {qualityReviewRangeError && (
@@ -834,7 +834,7 @@ export default function WorkspaceChatPanel({
                       data-testid="quality-review-range-confirmation"
                       className="mt-2 text-xs font-medium text-emerald-700"
                     >
-                      검수 대상 확인: {qualityReviewRange.normalized}번 페이지
+                      {t("confirmedTargets", { pages: qualityReviewRange.normalized })}
                     </p>
                   )}
                 </div>
@@ -847,7 +847,7 @@ export default function WorkspaceChatPanel({
                   data-testid="quality-review-options-cancel"
                   className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
                 >
-                  취소
+                  {t("cancel")}
                 </button>
                 <button
                   type="button"
@@ -863,7 +863,7 @@ export default function WorkspaceChatPanel({
                   data-testid="quality-review-options-submit"
                   className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  검수 및 자동 수정 시작
+                  {t("startReview")}
                 </button>
               </div>
             </article>
@@ -893,7 +893,7 @@ export default function WorkspaceChatPanel({
               onClick={() => void retryLoad()}
               className="mt-2 font-semibold underline"
             >
-              기록 다시 불러오기
+              {t("reloadHistory")}
             </button>
           </div>
         )}
@@ -903,8 +903,7 @@ export default function WorkspaceChatPanel({
             role="status"
             data-testid="workspace-schema-read-only"
           >
-            이 기록의 계약 버전을 확인할 수 없어 새 요청과 작업 변경을 잠시
-            사용할 수 없습니다. 기존 기록과 다운로드는 계속 확인할 수 있습니다.
+            {t("unknownContractVersion")}
           </p>
         )}
         {requestError && (
@@ -929,8 +928,8 @@ export default function WorkspaceChatPanel({
                 className="mt-2 font-semibold underline disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {retryIntent.reason === "revision_conflict"
-                  ? "최신 버전 기준으로 다시 시도"
-                  : "같은 요청으로 다시 확인"}
+                  ? t("retryLatest")
+                  : t("retrySame")}
               </button>
             )}
           </div>
@@ -945,7 +944,7 @@ export default function WorkspaceChatPanel({
           if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }}
         className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm shadow-sm"
-        data-testid="workspace-new-messages">새 메시지 ↓</button></div>}
+        data-testid="workspace-new-messages">{t("newMessages")}</button></div>}
       {commandsEnabled ? (
       <div className="mx-auto w-full max-w-[824px] shrink-0">
         <WorkspaceConversationComposer

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   ChevronLeft,
   ChevronRight,
@@ -36,6 +37,7 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
   onExit,
   onSlideChange,
 }) => {
+  const t = useTranslations("presentationMode");
   const rootRef = useRef<HTMLDivElement>(null);
   const hideChromeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [chromeVisible, setChromeVisible] = useState(true);
@@ -177,7 +179,7 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
       id="presentation-mode-wrapper"
       ref={rootRef}
       role="application"
-      aria-label="발표"
+      aria-label={t("presentation")}
       className="fixed inset-0 z-[100] flex flex-col outline-none select-none"
       style={{ backgroundColor: "var(--page-background-color, #c8c7c9)" }}
       tabIndex={0}
@@ -185,7 +187,7 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
       onClick={handleSlideAreaClick}
     >
       <span className="sr-only">
-        슬라이드 {slides.length}개 중 {currentSlide + 1}번째
+        {t("slidePosition", { current: currentSlide + 1, total: slides.length })}
       </span>
 
       {/* Top bar — fullscreen: auto-hide */}
@@ -198,7 +200,7 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
             type="button"
             variant="ghost"
             size="icon"
-            title="전체 화면 (F)"
+            title={t("fullscreen")}
             onClick={(e) => {
               e.stopPropagation();
               onFullscreenToggle();
@@ -211,7 +213,7 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
             type="button"
             variant="ghost"
             size="icon"
-            title="발표 종료 (Esc)"
+            title={t("exit")}
             onClick={(e) => {
               e.stopPropagation();
               onExit();
@@ -268,7 +270,7 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
           type="button"
           variant="ghost"
           size="icon"
-          title="이전 슬라이드"
+          title={t("previousSlide")}
           onClick={(e) => {
             e.stopPropagation();
             goPrev();
@@ -290,7 +292,7 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
           type="button"
           variant="ghost"
           size="icon"
-          title="다음 슬라이드"
+          title={t("nextSlide")}
           onClick={(e) => {
             e.stopPropagation();
             goNext();
@@ -303,11 +305,11 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
         <div className="mx-1 hidden h-6 w-px bg-gray-200 sm:block" />
         <div
           className="hidden max-w-[200px] items-center gap-1.5 text-[11px] leading-tight text-gray-500 sm:flex"
-          title="키보드 단축키"
+          title={t("keyboardShortcuts")}
         >
           <Keyboard className="h-3.5 w-3.5 shrink-0" />
           <span>
-            ← → Space · Home/End · F 전체 화면 · Esc 종료
+            {t("keyboardHint")}
           </span>
         </div>
       </div>

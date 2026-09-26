@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { getWorkspaceTimeline } from "../../services/api/workspace";
 import type {
   WorkspaceOperationAnchor,
@@ -50,6 +51,7 @@ export function useWorkspaceStaging({
   router: RouterLike;
   fetchUserSlides: FetchSlides;
 }) {
+  const t = useTranslations("presentationStaging");
   const [operation, setOperation] = useState<WorkspaceOperationAnchor | null>(null);
   const [networkError, setNetworkError] = useState(false);
   const [pollingPaused, setPollingPaused] = useState(false);
@@ -210,16 +212,16 @@ export function useWorkspaceStaging({
 
   const terminal = operation !== null && TERMINAL_STATES.has(operation.status);
   const content = useMemo<WorkspaceStagingContent>(() => {
-    if (networkError && !pollingPaused) return { title: "작업 상태를 확인하는 중이에요", description: "연결이 잠시 불안정합니다. 작업은 서버에서 계속 진행될 수 있습니다.", notice: "자동으로 다시 확인합니다." };
-    if (!operation) return { title: "작업 상태를 확인하는 중이에요", description: "디자인 변경 작업을 찾고 있습니다." };
-    if (pollingPaused && operation.status === "queued") return { title: "작업 시작 대기를 계속 확인할 수 있어요", description: operation.capacityWaiting ? "자동 상태 확인을 잠시 멈췄습니다. 마지막 확인 시 생성 용량 대기 중이었습니다." : "자동 상태 확인을 잠시 멈췄습니다. 마지막 확인 시 작업 시작 대기 중이었습니다.", notice: "상태 새로 고침으로 다시 확인하거나 작업 대화에서 가능한 조치를 선택해 주세요." };
-    if (terminal) return { title: operation.status === "cancelled" ? "디자인 변경이 취소되었습니다" : operation.status === "deadline_exceeded" || operation.status === "expired" ? "디자인 변경 시간이 만료되었습니다" : "디자인 변경을 완료하지 못했습니다", description: operation.error || "작업 대화에서 원인을 확인하고 가능한 작업을 선택해 주세요.", notice: "작업 대화에서 다시 시도 또는 취소 상태를 확인할 수 있습니다." };
-    if (operation.status === "queued") return operation.capacityWaiting ? { title: "생성 용량을 기다리고 있어요", description: "사용 가능한 생성 슬롯이 생기면 자동으로 시작합니다.", notice: operation.queuePosition === undefined ? undefined : `대기 순번 ${operation.queuePosition}번째` } : { title: "디자인 변경을 대기 중이에요", description: "작업이 아직 시작되지 않았습니다. 시작되면 자동으로 진행 상황을 표시합니다.", notice: "60초 이상 대기해도 작업은 자동으로 실패하지 않습니다." };
-    if (["waiting_for_assets", "blocked", "approval_required", "awaiting_approval"].includes(operation.status)) return { title: "작업에 확인이 필요해요", description: "필요한 파일 또는 승인 상태를 작업 대화에서 확인해 주세요.", notice: "작업 대화에서 가능한 조치를 선택할 수 있습니다." };
-    if (operation.status === "cancelling") return { title: "디자인 변경을 취소하는 중이에요", description: "취소가 확인될 때까지 잠시 기다려 주세요." };
-    if (operation.status === "succeeded") return { title: "디자인 변경을 마무리하고 있어요", description: "완료된 슬라이드를 불러오는 중입니다." };
-    return { title: "디자인을 적용하고 있어요", description: "원본 자료를 유지하며 새 발표자료를 만들고 있습니다." };
-  }, [networkError, operation, pollingPaused, terminal]);
+    if (networkError && !pollingPaused) return { title: t("checkingStatus"), description: t("connectionUnstable"), notice: t("retryAutomatically") };
+    if (!operation) return { title: t("checkingStatus"), description: t("findingOperation") };
+    if (pollingPaused && operation.status === "queued") return { title: t("canContinueChecking"), description: operation.capacityWaiting ? t("capacityCheckPaused") : t("queueCheckPaused"), notice: t("refreshOrChooseAction") };
+    if (terminal) return { title: operation.status === "cancelled" ? t("cancelled") : operation.status === "deadline_exceeded" || operation.status === "expired" ? t("expired") : t("failed"), description: operation.error || t("inspectCause"), notice: t("retryOrCancel") };
+    if (operation.status === "queued") return operation.capacityWaiting ? { title: t("waitingForCapacity"), description: t("startsWhenAvailable"), notice: operation.queuePosition === undefined ? undefined : t("queuePosition", { position: operation.queuePosition }) } : { title: t("waitingForDesign"), description: t("notStartedYet"), notice: t("waitDoesNotFail") };
+    if (["waiting_for_assets", "blocked", "approval_required", "awaiting_approval"].includes(operation.status)) return { title: t("needsAttention"), description: t("checkFilesOrApproval"), notice: t("chooseAction") };
+    if (operation.status === "cancelling") return { title: t("cancelling"), description: t("waitForCancellation") };
+    if (operation.status === "succeeded") return { title: t("finishing"), description: t("loadingSlides") };
+    return { title: t("applyingDesign"), description: t("creatingFromSource") };
+  }, [networkError, operation, pollingPaused, terminal, t]);
 
   return { content, pollingPaused, refresh, terminal };
 }

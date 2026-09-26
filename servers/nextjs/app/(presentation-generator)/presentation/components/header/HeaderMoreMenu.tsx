@@ -66,6 +66,7 @@ const HeaderMoreMenu = ({
   expectedRevision,
 }: HeaderMoreMenuProps) => {
   const t = useTranslations("presentationHeader");
+  const tCapability = useTranslations("presentationCapability");
   const [open, setOpen] = useState(false);
   const closeThen = (action: () => void) => {
     setOpen(false);
@@ -197,6 +198,7 @@ const HeaderMoreMenu = ({
               <AuthoredEmissionCapabilityStatusView
                 status={authoredCapabilityStatus}
                 expectedRevision={expectedRevision}
+                t={(key, values) => tCapability(key, values)}
               />
             </section>
           </div>

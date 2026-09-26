@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import type { WorkspaceOperationAnchor } from "./types";
 import { APPROVABLE, TERMINAL } from "./WorkspaceOperationLabels";
 import { formatTimestamp } from "./WorkspaceOperationResult";
@@ -13,6 +14,7 @@ export function WorkspaceGenerationProgress({ operation, observation, locale }: 
   observation?: WorkspaceOperationObservation;
   locale: string;
 }) {
+  const t = useTranslations("presentationGenerationProgress");
   const evidence = operationProgressEvidence(operation);
   const active = !TERMINAL.has(operation.status);
   const running = active && !APPROVABLE.has(operation.status) &&
@@ -34,16 +36,16 @@ export function WorkspaceGenerationProgress({ operation, observation, locale }: 
   return (
     <div className="mt-3 space-y-2 text-[15px] leading-relaxed" data-testid="generation-progress-response">
       {evidence.completedStages.filter((message) => message !== current).map((message) => (
-        <p key={message} className="flex items-start gap-2 text-sm text-slate-600"><span aria-label="완료">✓</span>{message}</p>
+        <p key={message} className="flex items-start gap-2 text-sm text-slate-600"><span aria-label={t("completed")}>✓</span>{message}</p>
       ))}
       {running && <p className="flex items-start gap-2" role="status">
         <span aria-hidden="true" className={`mt-2 h-2 w-2 shrink-0 rounded-full bg-slate-500 ${checking ? "" : "animate-pulse motion-reduce:animate-none"}`} />
-        <span>{checking ? "연결을 확인하고 있어요" : current ?? "프레젠테이션 생성 요청을 처리하고 있습니다."}</span>
+        <span>{checking ? t("checkingConnection") : current ?? t("processingRequest")}</span>
       </p>}
       {(stale || checking) && <div className="space-y-1 text-xs text-slate-600" data-testid="generation-observation">
-        {stale && !checking && <p role="status">서버에서 실행 상태를 확인했어요. 진행 변화는 아직 없습니다.</p>}
-        <p>마지막 서버 확인 · {formatTimestamp(observation?.lastConfirmedAt, locale) ?? "확인 정보 없음"}</p>
-        <p data-testid="generation-last-progress-at">마지막 진행 변화 · {formatTimestamp(progressAt, locale) ?? "확인 정보 없음"}</p>
+        {stale && !checking && <p role="status">{t("noRecentProgress")}</p>}
+        <p>{t("lastServerCheck", { time: formatTimestamp(observation?.lastConfirmedAt, locale) ?? t("noInformation") })}</p>
+        <p data-testid="generation-last-progress-at">{t("lastProgress", { time: formatTimestamp(progressAt, locale) ?? t("noInformation") })}</p>
       </div>}
     </div>
   );

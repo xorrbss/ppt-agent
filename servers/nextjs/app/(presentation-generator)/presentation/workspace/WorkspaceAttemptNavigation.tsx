@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { DashboardApi } from "../../services/api/dashboard";
 import { stagePreviousAttemptPromptEdit } from "../../upload/components/upload-page/usePreviousGenerationAttempt";
 
@@ -30,6 +31,7 @@ export function WorkspaceAttemptNavigation({
   showHistory?: boolean;
   showRestart?: boolean;
 }) {
+  const t = useTranslations("presentationAttemptNavigation");
   const router = useRouter();
   const [editor, setEditor] = useState<{
     prompt: string;
@@ -74,7 +76,7 @@ export function WorkspaceAttemptNavigation({
       if (requestId !== editorRequestRef.current) return;
       if (!info.can_start_new_attempt) {
         setEditorError(
-          "이전 작업이 종료되었는지 확인한 뒤 요청을 수정할 수 있습니다.",
+          t("previousTaskStillRunning"),
         );
         return;
       }
@@ -85,7 +87,7 @@ export function WorkspaceAttemptNavigation({
     } catch {
       if (requestId !== editorRequestRef.current) return;
       setEditorError(
-        "이전 요청을 불러오지 못했습니다. 접근 권한과 연결 상태를 확인해 주세요.",
+        t("loadPreviousFailed"),
       );
     } finally {
       if (requestId === editorRequestRef.current) setLoadingEditor(false);
@@ -104,7 +106,7 @@ export function WorkspaceAttemptNavigation({
     setEditorError(null);
     if (!stagePreviousAttemptPromptEdit(presentationId, editor.prompt)) {
       setEditorError(
-        "수정 내용을 브라우저에 보관하지 못했습니다. 다시 시도해 주세요.",
+        t("saveEditFailed"),
       );
       return;
     }
@@ -118,14 +120,14 @@ export function WorkspaceAttemptNavigation({
   return (
     <nav
       className="flex flex-wrap items-center gap-2 bg-white py-2 text-xs"
-      aria-label="생성 시도 이동"
+      aria-label={t("navigation")}
     >
       {showHistory && previousPresentationId && (
         <Link
           href={`/presentation?id=${encodeURIComponent(previousPresentationId)}`}
           className="rounded-full border border-slate-200 px-2.5 py-1 font-medium text-slate-600 hover:bg-slate-50"
         >
-          이전 시도
+          {t("previousAttempt")}
         </Link>
       )}
       {nextIds.length === 1 && (
@@ -133,13 +135,13 @@ export function WorkspaceAttemptNavigation({
           href={`/presentation?id=${encodeURIComponent(nextIds[0]!)}`}
           className="rounded-full border border-slate-200 px-2.5 py-1 font-medium text-slate-600 hover:bg-slate-50"
         >
-          다음 시도
+          {t("nextAttempt")}
         </Link>
       )}
       {nextIds.length > 1 && (
         <details className="relative">
           <summary className="cursor-pointer list-none rounded-full border border-slate-200 px-2.5 py-1 font-medium text-slate-600 hover:bg-slate-50">
-            다음 시도 ({nextIds.length})
+            {t("nextAttempts", { count: nextIds.length })}
           </summary>
           <div className="absolute left-0 z-20 mt-1 grid min-w-28 gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
             {nextIds.map((id, index) => (
@@ -148,7 +150,7 @@ export function WorkspaceAttemptNavigation({
                 href={`/presentation?id=${encodeURIComponent(id)}`}
                 className="rounded-md px-2 py-1.5 text-slate-600 hover:bg-slate-50"
               >
-                다음 시도 {index + 1}
+                {t("nextAttemptNumber", { index: index + 1 })}
               </Link>
             ))}
           </div>
@@ -162,7 +164,7 @@ export function WorkspaceAttemptNavigation({
           onClick={() => void openEditor()}
           className="min-h-10 rounded-full border border-slate-200 px-4 py-2 font-medium text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
         >
-          {loadingEditor ? "요청 불러오는 중" : "요청 수정"}
+          {loadingEditor ? t("loadingRequest") : t("editRequest")}
         </button>
       )}
       {restartAvailable && editor && (
@@ -175,7 +177,7 @@ export function WorkspaceAttemptNavigation({
             className="block text-xs font-semibold text-slate-700"
             htmlFor={`attempt-prompt-${presentationId}`}
           >
-            요청 수정
+            {t("editRequest")}
           </label>
           <textarea
             id={`attempt-prompt-${presentationId}`}
@@ -198,15 +200,13 @@ export function WorkspaceAttemptNavigation({
               id={`attempt-attachments-${presentationId}`}
               className="mt-2 text-xs leading-5 text-slate-600"
             >
-              이전 첨부: {editor.attachmentNames.join(", ")}
+              {t("previousAttachments", { names: editor.attachmentNames.join(", ") })}
               <br />
-              파일 접근 권한과 준비 상태를 다시 확인해야 하므로 다음 화면에서
-              사용할 파일을 다시 첨부해 주세요.
+              {t("reattachFiles")}
             </p>
           )}
           <p className="mt-2 text-xs leading-5 text-slate-500">
-            다음 화면에서 기존 생성 설정을 확인한 뒤 명시적으로 새 시도를
-            시작합니다.
+            {t("confirmSettings")}
           </p>
           <div className="mt-3 flex justify-end gap-2">
             <button
@@ -218,7 +218,7 @@ export function WorkspaceAttemptNavigation({
               disabled={continuing}
               className="min-h-10 rounded-full px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 disabled:text-slate-400"
             >
-              변경 취소
+              {t("cancelChanges")}
             </button>
             <button
               type="submit"
@@ -228,7 +228,7 @@ export function WorkspaceAttemptNavigation({
               title={restartBlockedReason ?? undefined}
               className="min-h-10 rounded-full bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
-              {continuing ? "설정 여는 중" : "수정 내용으로 설정 확인"}
+              {continuing ? t("openingSettings") : t("reviewEditedSettings")}
             </button>
           </div>
         </form>

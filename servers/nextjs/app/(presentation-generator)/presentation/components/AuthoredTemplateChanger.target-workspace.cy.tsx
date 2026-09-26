@@ -1,7 +1,9 @@
 import React from "react";
+import { NextIntlClientProvider } from "next-intl";
 import { Provider } from "react-redux";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 
+import koMessages from "@/i18n/messages/ko.json";
 import { store } from "@/store/store";
 import AuthoredTemplateChanger from "./AuthoredTemplateChanger";
 
@@ -82,7 +84,8 @@ function mountChanger({ nativeNavigation = false } = {}) {
   };
   const navigateToPresentation = cy.stub().as("navigateToTarget");
   cy.mount(
-    <AppRouterContext.Provider value={router as any}>
+    <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="UTC">
+      <AppRouterContext.Provider value={router as any}>
       <Provider store={store}>
         <AuthoredTemplateChanger
           presentationId={SOURCE_ID}
@@ -91,7 +94,8 @@ function mountChanger({ nativeNavigation = false } = {}) {
           navigateToPresentation={nativeNavigation ? undefined : navigateToPresentation}
         />
       </Provider>
-    </AppRouterContext.Provider>,
+        </AppRouterContext.Provider>
+      </NextIntlClientProvider>,
   );
 }
 
@@ -187,6 +191,7 @@ describe("AuthoredTemplateChanger target-owned confirmation", () => {
       replace: cy.stub(), prefetch: cy.stub(), hmrRefresh: cy.stub(),
     };
     cy.mount(
+      <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="UTC">
       <AppRouterContext.Provider value={router as any}>
         <Provider store={store}>
           <AuthoredTemplateChanger
@@ -202,7 +207,8 @@ describe("AuthoredTemplateChanger target-owned confirmation", () => {
             navigateToPresentation={cy.stub().as("navigateToTarget")}
           />
         </Provider>
-      </AppRouterContext.Provider>,
+          </AppRouterContext.Provider>
+      </NextIntlClientProvider>,
     );
 
     cy.get('[data-testid="template-change-trigger"]').click();
@@ -276,6 +282,7 @@ describe("AuthoredTemplateChanger target-owned confirmation", () => {
       replace: cy.stub(), prefetch: cy.stub(), hmrRefresh: cy.stub(),
     };
     cy.mount(
+      <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="UTC">
       <AppRouterContext.Provider value={router as any}>
         <Provider store={store}>
           <AuthoredTemplateChanger
@@ -291,7 +298,8 @@ describe("AuthoredTemplateChanger target-owned confirmation", () => {
             navigateToPresentation={cy.stub().as("navigateToTarget")}
           />
         </Provider>
-      </AppRouterContext.Provider>,
+          </AppRouterContext.Provider>
+      </NextIntlClientProvider>,
     );
 
     cy.get('[data-testid="template-change-trigger"]').click();

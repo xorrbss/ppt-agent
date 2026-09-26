@@ -1,15 +1,17 @@
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 
 export default function DashboardNavigationButton({
   onNavigate,
 }: {
   onNavigate: () => void;
 }) {
+  const t = useTranslations("presentationDashboardNavigation");
   return (
     <button
       type="button"
       onClick={onNavigate}
-      aria-label="대시보드로 이동"
+      aria-label={t("goToDashboard")}
       className="shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141e5] focus-visible:ring-offset-2"
     >
       <Image

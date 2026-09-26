@@ -3,6 +3,7 @@ import { Loader2, AlertTriangle } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
+import { useTranslations } from "next-intl";
 
 import { RootState } from "@/store/store";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
@@ -89,6 +90,7 @@ const PresentationHeader = ({
   onCanonicalSaved?: () => void | Promise<void>;
   headerFeatures?: PresentationHeaderFeatureSlots;
 }) => {
+  const tCapability = useTranslations("presentationCapability");
   const [shortcutsDialogOpen, setShortcutsDialogOpen] = useState(false);
   const router = useRouter();
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -148,7 +150,7 @@ const PresentationHeader = ({
   }, [expectedRevision, isAuthoredDeck, presentation_id]);
 
   const hybridDisabledReason = isAuthoredDeck
-    ? authoredHybridUnavailableReason(authoredCapabilityStatus, expectedRevision, presentationData)
+    ? authoredHybridUnavailableReason(authoredCapabilityStatus, expectedRevision, presentationData, (key, values) => tCapability(key, values))
     : undefined;
   // Compatibility facade for isolated header consumers. The presentation page
   // always supplies the server-derived projection; this fallback is removable

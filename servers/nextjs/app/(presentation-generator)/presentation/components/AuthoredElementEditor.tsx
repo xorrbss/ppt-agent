@@ -9,6 +9,7 @@ import {
   Undo2,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -50,10 +51,10 @@ function supportedOperation(
   );
 }
 
-function parseObject(value: string, label: string): Record<string, unknown> {
+function parseObject(value: string, errorMessage: string): Record<string, unknown> {
   const parsed = JSON.parse(value) as unknown;
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error(`${label} 값은 객체여야 합니다.`);
+    throw new Error(errorMessage);
   }
   return parsed as Record<string, unknown>;
 }
@@ -67,6 +68,7 @@ const AuthoredElementEditor = ({
   disabled?: boolean;
   onSaved?: () => void | Promise<void>;
 }) => {
+  const t = useTranslations("presentationElementEditor");
   const [open, setOpen] = useState(false);
   const [document, setDocument] = useState<AuthoredCanonicalDocument | null>(
     null,
@@ -124,7 +126,7 @@ const AuthoredElementEditor = ({
       setError(
         cause instanceof Error
           ? cause.message
-          : "편집 문서를 불러오지 못했습니다.",
+          : t("loadFailed"),
       );
     } finally {
       setLoading(false);
@@ -166,12 +168,12 @@ const AuthoredElementEditor = ({
         setError(
           cause instanceof Error
             ? cause.message
-            : "변경 사항을 저장하지 못했습니다.",
+            : t("saveFailed"),
         );
       }
       if (retry)
         setError(
-          "최신 revision에도 적용하지 못했습니다. 내용을 확인해 다시 시도해 주세요.",
+          t("retryLatestFailed"),
         );
     } finally {
       setSaving(false);
@@ -201,7 +203,7 @@ const AuthoredElementEditor = ({
       setError(
         cause instanceof Error
           ? cause.message
-          : "최신 revision에도 적용하지 못했습니다.",
+          : t("applyLatestFailed"),
       );
     } finally {
       setSaving(false);
@@ -227,7 +229,7 @@ const AuthoredElementEditor = ({
         setError(
           cause instanceof Error
             ? cause.message
-            : "기록을 적용하지 못했습니다.",
+            : t("historyFailed"),
         );
       }
     } finally {
@@ -249,7 +251,7 @@ const AuthoredElementEditor = ({
       void apply([operation]);
     } catch (cause) {
       setError(
-        cause instanceof Error ? cause.message : "입력 값을 확인해 주세요.",
+        cause instanceof Error ? cause.message : t("checkInput"),
       );
     }
   };
@@ -269,14 +271,14 @@ const AuthoredElementEditor = ({
         error?: string;
       } | null;
       if (!response.ok || !payload?.assetUrl) {
-        throw new Error(payload?.error ?? "이미지 업로드에 실패했습니다.");
+        throw new Error(payload?.error ?? t("imageUploadFailed"));
       }
       setAssetId(payload.assetUrl);
     } catch (cause) {
       setError(
         cause instanceof Error
           ? cause.message
-          : "이미지 업로드에 실패했습니다.",
+          : t("imageUploadFailed"),
       );
     } finally {
       setUploadingImage(false);
@@ -292,10 +294,10 @@ const AuthoredElementEditor = ({
         disabled={disabled}
         onClick={() => setOpen(true)}
         data-testid="authored-element-editor-trigger"
-        aria-label="Authored 요소 편집 열기"
+        aria-label={t("open")}
       >
         <PencilLine className="h-4 w-4" aria-hidden="true" />
-        요소 편집
+        {t("toolbarLabel")}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
@@ -303,10 +305,9 @@ const AuthoredElementEditor = ({
           data-testid="authored-element-editor"
         >
           <DialogHeader>
-            <DialogTitle>Authored 요소 편집</DialogTitle>
+            <DialogTitle>{t("title")}</DialogTitle>
             <DialogDescription>
-              stable data-qid로 확인된 요소만 변경합니다. 임의 HTML/CSS
-              덮어쓰기는 지원하지 않습니다.
+              {t("description")}
             </DialogDescription>
           </DialogHeader>
           {loading ? (
@@ -320,11 +321,10 @@ const AuthoredElementEditor = ({
                 className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600"
                 data-testid="authored-canonical-identity"
               >
-                revision {document.revision} · source digest{" "}
-                {document.sourceDigest}
+                {t("canonicalIdentity", { revision: document.revision, digest: document.sourceDigest })}
               </div>
               <label className="block text-sm font-medium text-slate-800">
-                편집 대상
+                {t("editTarget")}
                 <select
                   value={selectedKey}
                   onChange={(event) => setSelectedKey(event.target.value)}
@@ -348,14 +348,13 @@ const AuthoredElementEditor = ({
                   role="status"
                   data-testid="authored-unsupported-reason"
                 >
-                  읽기 전용:{" "}
-                  {selected.reason ?? "복합 CSS 또는 지원하지 않는 요소입니다."}
+                  {t("readOnly", { reason: selected.reason ?? t("unsupportedElement") })}
                 </div>
               ) : null}
               {selected && selected.editable ? (
                 <div className="space-y-3 rounded-lg border border-slate-200 p-3">
                   {supportedOperation(selected, "set_text") ? (
-                    <EditorRow label="텍스트">
+                    <EditorRow label={t("text")}>
                       <textarea
                         value={text}
                         onChange={(event) => setText(event.target.value)}
@@ -365,12 +364,12 @@ const AuthoredElementEditor = ({
                         disabled={saving}
                         onClick={() => submit("set_text", text)}
                       >
-                        텍스트 저장
+                        {t("saveText")}
                       </Action>
                     </EditorRow>
                   ) : null}
                   {supportedOperation(selected, "set_style") ? (
-                    <EditorRow label="안전한 스타일">
+                    <EditorRow label={t("safeStyle")}>
                       <div className="flex gap-2">
                         <select
                           value={styleProperty}
@@ -395,7 +394,7 @@ const AuthoredElementEditor = ({
                             setStyleValue(event.target.value)
                           }
                           className="min-w-0 flex-1 rounded-md border p-2 text-sm"
-                          placeholder="#1e293b 또는 24px"
+                          placeholder={t("stylePlaceholder")}
                         />
                       </div>
                       <Action
@@ -409,12 +408,12 @@ const AuthoredElementEditor = ({
                           })
                         }
                       >
-                        스타일 저장
+                        {t("saveStyle")}
                       </Action>
                     </EditorRow>
                   ) : null}
                   {supportedOperation(selected, "set_geometry") ? (
-                    <EditorRow label="위치 및 크기">
+                    <EditorRow label={t("geometry")}>
                       <textarea
                         value={geometry}
                         onChange={(event) => setGeometry(event.target.value)}
@@ -426,23 +425,23 @@ const AuthoredElementEditor = ({
                           try {
                             submit(
                               "set_geometry",
-                              parseObject(geometry, "위치 및 크기"),
+                              parseObject(geometry, t("geometryObjectRequired")),
                             );
                           } catch (cause) {
                             setError(
                               cause instanceof Error
                                 ? cause.message
-                                : "입력 값을 확인해 주세요.",
+                                : t("checkInput"),
                             );
                           }
                         }}
                       >
-                        위치/크기 저장
+                        {t("saveGeometry")}
                       </Action>
                     </EditorRow>
                   ) : null}
                   {supportedOperation(selected, "replace_image") ? (
-                    <EditorRow label="이미지 교체">
+                    <EditorRow label={t("replaceImage")}>
                       <input
                         type="file"
                         accept="image/png,image/jpeg,image/gif,image/webp"
@@ -458,7 +457,7 @@ const AuthoredElementEditor = ({
                         value={assetId}
                         readOnly
                         className="w-full rounded-md border bg-slate-50 p-2 text-xs"
-                        placeholder="업로드 후 승인된 로컬 asset URL이 표시됩니다."
+                        placeholder={t("imageAssetPlaceholder")}
                       />
                       <Action
                         disabled={saving || uploadingImage || !assetId.trim()}
@@ -466,17 +465,17 @@ const AuthoredElementEditor = ({
                           submit("replace_image", { src: assetId.trim() })
                         }
                       >
-                        {uploadingImage ? "업로드 중" : "이미지 교체"}
+                        {uploadingImage ? t("uploading") : t("replaceImage")}
                       </Action>
                     </EditorRow>
                   ) : null}
                   {supportedOperation(selected, "crop_image") ? (
-                    <EditorRow label="이미지 crop">
+                    <EditorRow label={t("imageCrop")}>
                       <input
                         value={crop}
                         onChange={(event) => setCrop(event.target.value)}
                         className="w-full rounded-md border p-2 text-sm"
-                        placeholder="50% 50%"
+                        placeholder={t("cropPlaceholder")}
                       />
                       <Action
                         disabled={saving || !crop.trim()}
@@ -487,17 +486,17 @@ const AuthoredElementEditor = ({
                           })
                         }
                       >
-                        crop 저장
+                        {t("saveCrop")}
                       </Action>
                     </EditorRow>
                   ) : null}
                   {supportedOperation(selected, "set_shape") ? (
-                    <EditorRow label="단순 도형">
+                    <EditorRow label={t("simpleShape")}>
                       <input
                         value={styleValue}
                         onChange={(event) => setStyleValue(event.target.value)}
                         className="w-full rounded-md border p-2 text-sm"
-                        placeholder="fill color"
+                        placeholder={t("fillColorPlaceholder")}
                       />
                       <Action
                         disabled={saving || !styleValue.trim()}
@@ -507,7 +506,7 @@ const AuthoredElementEditor = ({
                           })
                         }
                       >
-                        도형 저장
+                        {t("saveShape")}
                       </Action>
                     </EditorRow>
                   ) : null}
@@ -519,15 +518,13 @@ const AuthoredElementEditor = ({
                   role="alert"
                   data-testid="authored-editor-conflict"
                 >
-                  다른 사용자가 revision {conflict.revision}을 먼저
-                  저장했습니다. 최신 canonical 문서로 rebase한 뒤 같은 allowlist
-                  patch를 다시 적용할 수 있습니다.
+                  {t("conflict", { revision: conflict.revision })}
                   <div className="mt-2 flex gap-2">
                     <Action
                       disabled={saving || !pending}
                       onClick={() => void rebaseRetry()}
                     >
-                      rebase 후 다시 시도
+                      {t("retryAfterRebase")}
                     </Action>
                     <Button
                       type="button"
@@ -538,7 +535,7 @@ const AuthoredElementEditor = ({
                         setConflict(null);
                       }}
                     >
-                      최신본만 보기
+                      {t("viewLatestOnly")}
                     </Button>
                   </div>
                 </div>
@@ -558,7 +555,7 @@ const AuthoredElementEditor = ({
                   data-testid="authored-patch-undo"
                 >
                   <Undo2 className="mr-1 h-3.5 w-3.5" />
-                  실행 취소
+                  {t("undo")}
                 </Button>
                 <Button
                   type="button"
@@ -569,7 +566,7 @@ const AuthoredElementEditor = ({
                   data-testid="authored-patch-redo"
                 >
                   <Redo2 className="mr-1 h-3.5 w-3.5" />
-                  다시 실행
+                  {t("redo")}
                 </Button>
                 <Button
                   type="button"
@@ -579,14 +576,14 @@ const AuthoredElementEditor = ({
                   onClick={() => void load()}
                 >
                   <ChevronLeft className="mr-1 h-3.5 w-3.5" />
-                  다시 불러오기
+                  {t("reload")}
                 </Button>
               </div>
             </div>
           ) : null}
           {!loading && !document && !error ? (
             <p className="py-6 text-center text-sm text-slate-500">
-              편집 가능한 Authored canonical 문서가 없습니다.
+              {t("noEditableDocument")}
             </p>
           ) : null}
         </DialogContent>

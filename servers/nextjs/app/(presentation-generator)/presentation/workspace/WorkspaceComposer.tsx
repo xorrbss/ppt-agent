@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { ArrowUp, Paperclip, Square, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { ConversationComposerFrame } from "../conversation/ConversationPrimitives";
 
 interface ComposerAsset {
@@ -74,6 +75,7 @@ export function WorkspaceComposer({
   cancelOperation,
   onSend,
 }: WorkspaceComposerProps) {
+  const t = useTranslations("presentationComposer");
   const [draggingFiles, setDraggingFiles] = useState(false);
   const [sending, setSending] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
@@ -185,7 +187,7 @@ export function WorkspaceComposer({
         type="file"
         multiple
         className="sr-only"
-        aria-label="첨부할 파일 선택"
+        aria-label={t("selectFiles")}
         disabled={attachingDisabled || uploading}
         onChange={(event) => {
           const files = Array.from(event.currentTarget.files ?? []);
@@ -196,7 +198,7 @@ export function WorkspaceComposer({
 
       <div className="mb-2 flex items-center justify-between gap-2">
         <label className="flex min-w-0 items-center gap-2 text-xs font-medium text-slate-600">
-          <span className="shrink-0">수정 범위</span>
+          <span className="shrink-0">{t("editScope")}</span>
           <select
             value={scope}
             onChange={(event) =>
@@ -204,14 +206,14 @@ export function WorkspaceComposer({
             }
             disabled={editingDisabled || !onScopeChange}
             className="min-w-0 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-            aria-label="수정 범위 선택"
+            aria-label={t("selectEditScope")}
           >
-            <option value="unselected">대상 선택</option>
-            <option value="presentation">전체 발표자료</option>
+            <option value="unselected">{t("selectTarget")}</option>
+            <option value="presentation">{t("wholePresentation")}</option>
             <option value="slide">
               {pinnedSlideNumber
-                ? `${pinnedSlideNumber}페이지 수정`
-                : "현재 슬라이드"}
+                ? t("editPage", { number: pinnedSlideNumber })
+                : t("currentSlide")}
             </option>
           </select>
         </label>
@@ -221,16 +223,16 @@ export function WorkspaceComposer({
             onClick={() => onScopeChange?.("unselected")}
             disabled={editingDisabled}
             className="inline-flex shrink-0 items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-200"
-            aria-label={`${pinnedSlideNumber}번 슬라이드 대상 해제`}
+            aria-label={t("removeSlideTarget", { number: pinnedSlideNumber })}
           >
-            {pinnedSlideNumber}페이지 수정
+            {t("editPage", { number: pinnedSlideNumber })}
             <X className="h-3 w-3" aria-hidden="true" />
           </button>
         )}
       </div>
 
       {assets.length > 0 && (
-        <ul className="mb-2 flex flex-wrap gap-2" aria-label="전송할 첨부 파일">
+        <ul className="mb-2 flex flex-wrap gap-2" aria-label={t("attachmentsToSend")}>
           {assets.map((asset) => (
             <li
               key={asset.assetId}
@@ -242,7 +244,7 @@ export function WorkspaceComposer({
                 <button
                   type="button"
                   onClick={() => onRemoveAsset(asset.assetId)}
-                  aria-label={`${asset.fileName} 첨부 제거`}
+                  aria-label={t("removeAttachment", { name: asset.fileName })}
                   className="ml-1 font-semibold"
                 >
                   ×
@@ -266,7 +268,7 @@ export function WorkspaceComposer({
         }`}
       >
         <label htmlFor="workspace-command" className="sr-only">
-          프레젠테이션 수정 요청
+          {t("editRequest")}
         </label>
         <textarea
           id="workspace-command"
@@ -288,7 +290,7 @@ export function WorkspaceComposer({
           }}
           rows={2}
           disabled={editingDisabled}
-          placeholder="슬라이드 수정을 요청하세요"
+          placeholder={t("editPlaceholder")}
           className="block max-h-[180px] min-h-12 w-full resize-none overflow-y-auto bg-transparent px-1 py-1 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400 disabled:bg-slate-50"
         />
         <div className="mt-1 flex items-end justify-between gap-3">
@@ -297,13 +299,13 @@ export function WorkspaceComposer({
             onClick={() => fileInputRef?.current?.click()}
             disabled={attachingDisabled || uploading || !onFilesSelected}
             className="inline-flex h-11 w-11 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
-            aria-label={uploading ? "파일 업로드 중" : "파일 첨부"}
-            title={uploading ? "업로드 중" : "파일 첨부"}
+            aria-label={uploading ? t("uploadingFiles") : t("attachFile")}
+            title={uploading ? t("uploading") : t("attachFile")}
           >
             <Paperclip className="h-4 w-4" aria-hidden="true" />
           </button>
           <span className="ml-auto text-[11px] text-slate-500" aria-live="polite">
-            {scope === "unselected" ? "대상 선택" : scope === "presentation" ? "전체 발표자료" : pinnedSlideNumber ? `${pinnedSlideNumber}페이지 수정` : "대상 확인 필요"}
+            {scope === "unselected" ? t("selectTarget") : scope === "presentation" ? t("wholePresentation") : pinnedSlideNumber ? t("editPage", { number: pinnedSlideNumber }) : t("targetRequired")}
           </span>
           {cancelOperation ? (
             <button
@@ -311,24 +313,24 @@ export function WorkspaceComposer({
               onClick={() => void stop()}
               disabled={stopping}
               className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-slate-900 px-3 text-xs font-medium text-white disabled:opacity-50"
-              aria-label={stopping ? "중지 요청 중" : "생성 중지"}
+              aria-label={stopping ? t("stopping") : t("stopGeneration")}
             >
               <Square className="h-3 w-3" aria-hidden="true" />
-              {stopping ? "중지 요청 중" : "생성 중지"}
+              {stopping ? t("stopping") : t("stopGeneration")}
             </button>
           ) : <button
             type="submit"
             disabled={submissionBlocked}
             className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
-            aria-label="수정 요청 전송"
-            title="전송"
+            aria-label={t("sendEditRequest")}
+            title={t("send")}
           >
             <ArrowUp className="h-4 w-4" aria-hidden="true" />
           </button>}
         </div>
       </ConversationComposerFrame>
       <p className="mt-1.5 px-1 text-[11px] text-slate-500" role="status">
-        {blockedReason ?? "Enter 전송 · Shift+Enter 줄바꿈"}
+        {blockedReason ?? t("keyboardHint")}
       </p>
     </form>
   );

@@ -116,6 +116,7 @@ export const WorkspaceMessage = memo(function WorkspaceMessage({
   onReattach,
 }: WorkspaceMessageProps) {
   const t = useTranslations("upload.advancedSettings");
+  const tMessage = useTranslations("presentationWorkspaceMessage");
   const settings = visibleSettings(message.generationSettings, {
     tone: t("toneLabel"),
     verbosity: t("verbosityLabel"),
@@ -145,15 +146,15 @@ export const WorkspaceMessage = memo(function WorkspaceMessage({
       className="w-full"
       aria-label={
         isInitialGenerationRequest
-          ? "초기 생성 요청"
+          ? tMessage("initialRequest")
           : isUser
-            ? "사용자 메시지"
-            : "도우미 메시지"
+            ? tMessage("userMessage")
+            : tMessage("assistantMessage")
       }
     >
       <ConversationMessageFrame appearance={isUser ? "user" : "assistant"}>
       {isUser ? (
-        <p className="whitespace-pre-wrap break-words">{message.content || (message.attachments.length > 0 ? "첨부 파일로 시작한 요청입니다" : "")}</p>
+        <p className="whitespace-pre-wrap break-words">{message.content || (message.attachments.length > 0 ? tMessage("attachmentRequest") : "")}</p>
       ) : (
         <div
           className={conversationAssistantMarkdownClassName}
@@ -161,7 +162,7 @@ export const WorkspaceMessage = memo(function WorkspaceMessage({
         />
       )}
       {message.attachments.length > 0 && (
-        <ul className="mt-3 space-y-2" aria-label="첨부 파일">
+        <ul className="mt-3 space-y-2" aria-label={tMessage("attachments")}>
           {message.attachments.map((attachment) => {
             const size = formatBytes(attachment.size);
             const previewUrl =
@@ -192,10 +193,10 @@ export const WorkspaceMessage = memo(function WorkspaceMessage({
                     )}
                   </div>
                   <div className="shrink-0 text-right text-xs text-slate-500">
-                    <p>당시 {assetStateLabel(attachment.stateAtTime)}</p>
+                    <p>{tMessage("stateAtTime", { state: assetStateLabel(attachment.stateAtTime) })}</p>
                     {attachment.currentState !== attachment.stateAtTime && (
                       <p className="mt-0.5 font-medium text-slate-700">
-                        현재 {assetStateLabel(attachment.currentState)}
+                        {tMessage("currentState", { state: assetStateLabel(attachment.currentState) })}
                       </p>
                     )}
                   </div>
@@ -212,10 +213,10 @@ export const WorkspaceMessage = memo(function WorkspaceMessage({
                   <button
                     type="button"
                     onClick={() => onReattach(attachment.id)}
-                    aria-label={`${attachment.name} 파일 다시 첨부`}
+                    aria-label={tMessage("reattachNamedFile", { name: attachment.name })}
                     className="mt-2 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700"
                   >
-                    파일 다시 첨부
+                    {tMessage("reattachFile")}
                   </button>
                 )}
                 {(previewUrl || downloadUrl) && (
@@ -227,7 +228,7 @@ export const WorkspaceMessage = memo(function WorkspaceMessage({
                         rel="noreferrer"
                         className="rounded-md border border-slate-200 bg-white px-2 py-1 text-slate-700"
                       >
-                        미리보기
+                        {tMessage("preview")}
                       </a>
                     )}
                     {downloadUrl && (
@@ -236,7 +237,7 @@ export const WorkspaceMessage = memo(function WorkspaceMessage({
                         download
                         className="rounded-md bg-blue-600 px-2 py-1 text-white"
                       >
-                        다운로드
+                        {tMessage("download")}
                       </a>
                     )}
                   </div>
@@ -249,7 +250,7 @@ export const WorkspaceMessage = memo(function WorkspaceMessage({
       {settings.length > 0 && (
         <details className="mt-3 rounded-lg bg-slate-50 px-2.5 py-2 text-xs text-slate-600">
           <summary className="cursor-pointer font-medium text-slate-700">
-            생성 설정 · {settings.slice(0, 3).map(([key, value]) => `${key} ${value}`).join(" · ")}
+            {tMessage("generationSettings", { settings: settings.slice(0, 3).map(([key, value]) => `${key} ${value}`).join(" · ") })}
           </summary>
           <dl className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1">
             {settings.map(([key, value]) => (
