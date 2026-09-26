@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "key": "codex.default-generation-model",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Use GPT-6 Codex defaults, with gpt-6-sol as the saved default model for generation.",
+  "scope": [
+    "generation",
+    "provider-settings"
+  ],
+  "invariants": [
+    "Change saved provider settings through the admin settings API while preserving other fields and credentials."
+  ],
+  "forbidden": [
+    "Do not replace provider settings through a direct database write."
+  ],
+  "evidence": [
+    "C:\\project\\PPT-agent\\handoff\\codex-reports\\o1-shared-stack.md"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-09-26T12:28:20.7455284+00:00"
+}
