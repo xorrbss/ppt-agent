@@ -62,7 +62,9 @@ def test_style_reference_durable_payload_adds_only_the_authored_pins():
         "_internal_authored_local_fit_policy_revision",
         "_internal_authored_rollout_profile",
         "_internal_authored_canvas",
+        "_internal_generation_strategy_reason",
     }
+    assert pins["_internal_generation_strategy_reason"] == "explicit"
     assert {key: durable[key] for key in public} == public
     assert pins["_internal_authored_rollout_profile"] == RolloutProfile().as_dict()
     assert pins["_internal_authored_canvas"] == {

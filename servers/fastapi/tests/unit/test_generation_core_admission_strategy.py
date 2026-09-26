@@ -14,7 +14,10 @@ from pydantic import ValidationError
 from api.v1.ppt.endpoints import presentation_generate as endpoint
 from api.v2.contracts import PresentationGenerationRequestV2
 from models.generate_presentation_request import GeneratePresentationRequest
-from services.generation_core.admission.strategy import resolve_generation_strategy
+from services.generation_core.admission.strategy import (
+    resolve_generation_strategy,
+    resolve_generation_strategy_with_reason,
+)
 
 
 def _request(**overrides):
@@ -36,32 +39,32 @@ def _request(**overrides):
 
 def test_explicit_svg_is_honoured_verbatim():
     request = _request(strategy="svg", generation_mode="registered-template", design_pack_pin={"id": "x"})
-    assert resolve_generation_strategy(request) == "svg"
+    assert resolve_generation_strategy_with_reason(request) == ("svg", "explicit")
 
 
 def test_explicit_authored_is_honoured_verbatim():
     request = _request(strategy="authored")
-    assert resolve_generation_strategy(request) == "authored"
+    assert resolve_generation_strategy_with_reason(request) == ("authored", "explicit")
 
 
 def test_omitted_strategy_defaults_to_svg():
     request = _request()
-    assert resolve_generation_strategy(request) == "svg"
+    assert resolve_generation_strategy_with_reason(request) == ("svg", "default")
 
 
 def test_omitted_strategy_stays_authored_for_registered_template():
     request = _request(generation_mode="registered-template")
-    assert resolve_generation_strategy(request) == "authored"
+    assert resolve_generation_strategy_with_reason(request) == ("authored", "registered_template")
 
 
 def test_omitted_strategy_stays_authored_with_a_design_pack_pin():
     request = _request(design_pack_pin={"designPackId": "acme", "version": 1})
-    assert resolve_generation_strategy(request) == "authored"
+    assert resolve_generation_strategy_with_reason(request) == ("authored", "design_pack_pin")
 
 
 def test_omitted_strategy_stays_authored_for_deck_ir_engine_conflict():
     request = _request(generation_engine="deck-ir")
-    assert resolve_generation_strategy(request) == "authored"
+    assert resolve_generation_strategy_with_reason(request) == ("authored", "svg_engine_conflict")
 
 
 def test_omitted_strategy_resolves_svg_for_an_admissible_source_restyle():
@@ -70,7 +73,7 @@ def test_omitted_strategy_resolves_svg_for_an_admissible_source_restyle():
         authored_style="screenshot-blue",
         content_policy=SimpleNamespace(text="verbatim", allow_summarization=False),
     )
-    assert resolve_generation_strategy(request) == "svg"
+    assert resolve_generation_strategy_with_reason(request) == ("svg", "default")
 
 
 def test_omitted_strategy_stays_authored_for_a_non_verbatim_source_restyle():
@@ -82,7 +85,7 @@ def test_omitted_strategy_stays_authored_for_a_non_verbatim_source_restyle():
         authored_style="screenshot-blue",
         content_policy=SimpleNamespace(text="summary", allow_summarization=True),
     )
-    assert resolve_generation_strategy(request) == "authored"
+    assert resolve_generation_strategy_with_reason(request) == ("authored", "svg_source_verbatim_required")
 
 
 def test_omitted_strategy_stays_authored_for_a_canvas_override_source_restyle():
@@ -93,7 +96,9 @@ def test_omitted_strategy_stays_authored_for_a_canvas_override_source_restyle():
         page_size="A4",
         orientation="portrait",
     )
-    assert resolve_generation_strategy(request) == "authored"
+    assert resolve_generation_strategy_with_reason(request) == (
+        "authored", "svg_source_canvas_override_not_supported",
+    )
 
 
 def test_omitted_strategy_stays_authored_for_an_svg_unsupported_style_id():
@@ -104,7 +109,9 @@ def test_omitted_strategy_stays_authored_for_an_svg_unsupported_style_id():
         authored_style="devax-first-ten",
         content_policy=SimpleNamespace(text="verbatim", allow_summarization=False),
     )
-    assert resolve_generation_strategy(request) == "authored"
+    assert resolve_generation_strategy_with_reason(request) == (
+        "authored", "svg_source_template_unsupported",
+    )
 
 
 def test_omitted_strategy_stays_authored_for_raster_export_source_restyle():
@@ -114,19 +121,28 @@ def test_omitted_strategy_stays_authored_for_raster_export_source_restyle():
         content_policy=SimpleNamespace(text="verbatim", allow_summarization=False),
         export_as="pdf",
     )
-    assert resolve_generation_strategy(request) == "authored"
+    assert resolve_generation_strategy_with_reason(request) == (
+        "authored", "source_content_format_not_supported",
+    )
 
 
 def test_omitted_strategy_resolves_svg_for_an_admissible_raster_reconstruction():
     request = _request(source_mode="raster_reconstruction", authored_style="screenshot-blue")
-    assert resolve_generation_strategy(request) == "svg"
+    assert resolve_generation_strategy_with_reason(request) == ("svg", "default")
 
 
 def test_omitted_strategy_stays_authored_for_an_exact_reconstruction_style():
     request = _request(authored_style="exact-private")
     style = SimpleNamespace(reference_mode="exact_reconstruction")
     with patch("utils.authored_styles.resolve_authored_style", return_value=style):
-        assert resolve_generation_strategy(request) == "authored"
+        assert resolve_generation_strategy_with_reason(request) == (
+            "authored", "svg_exact_reconstruction_not_supported",
+        )
+
+
+def test_resolve_generation_strategy_is_the_reason_wrapper_dropping_it():
+    request = _request(generation_mode="registered-template")
+    assert resolve_generation_strategy(request) == "authored"
 
 
 def test_v1_request_model_itself_still_accepts_deck_ir_for_internal_construction():

@@ -1118,9 +1118,14 @@ def test_api_submit_source_restyle_charges_source_pages_and_pins_master(
 
         submission = dict(_SOURCE_RESTYLE_SUBMISSION)
         if verbatim:
+            # "deck-ir" (formerly asserted here) is retired as an explicit
+            # engine selection; the override this test actually proves --
+            # source-content restyle always resolves to authored regardless
+            # of the requested engine -- holds just as well starting from
+            # the field's own default (see the unconditional
+            # generation_engine == "authored" assertion below).
             submission.update(
                 generationMode="registered-template",
-                generationEngine="deck-ir",
                 contentPolicy={"text": "verbatim", "allowSummarization": False},
             )
         response, maker, generation_settings, request_plans, route_counts = (
