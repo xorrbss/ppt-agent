@@ -9,7 +9,6 @@ from typing import Any
 from services.authored_vnext.capability_registry import prompt_capability_clause
 from utils.authored_fragmentation_gate import fragmentation_prompt_clause
 from utils.authored_style_exemplars import exemplar_block
-from utils.get_env_programme import get_authored_illustration_share
 from utils.llm_calls.author_deck_tokens import deck_tokens_block
 from utils.llm_calls.author_prompt_profile import current_prompt_sections
 from utils.llm_calls.author_slide_brief import (
@@ -81,6 +80,8 @@ def build_design_system(
     canvas_safe_area: object | None = None,
 ) -> str:
     """Build the concrete shared brief for a brand and optional authored style."""
+    from utils.llm_calls import author_slide_prompt
+
     if style is None or style.id == "default":
         style_brief = default_style_brief.format(
             primary=brand.primary or "#2563EB",
@@ -113,7 +114,7 @@ def build_design_system(
             # A deck whose illustration share is 0 authors no slot on any slide,
             # so the ~2 030 characters of slot contract would be paid on every
             # call of every slide to describe an element none of them may emit.
-            and get_authored_illustration_share() > 0
+            and author_slide_prompt.get_authored_illustration_share() > 0
         ):
             style_brief = f"{style_brief}\n{illustration_slot_rules}"
     # Empty when the composition bundle is off; the always-on semantic-role

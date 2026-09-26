@@ -8,6 +8,9 @@ from utils.llm_calls.author_slide_design_system import (
     build_design_system as build_design_system,
     css_font_stack as css_font_stack,
 )
+from utils.get_env_programme import (
+    get_authored_illustration_share as get_authored_illustration_share,
+)
 
 from collections.abc import Mapping, Sequence
 import json
