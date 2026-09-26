@@ -23,7 +23,6 @@ from typing import Mapping
 from PIL import Image, UnidentifiedImageError
 
 from utils.renderer_internal_capability import consume_internal_render_capability
-from utils.renderer_css_policy import ALLOWED_CSS_PROPERTIES
 from utils.renderer_markup_policy import (
     ALLOWED_TAGS,
     DROP_TAGS,
@@ -45,9 +44,19 @@ from utils.renderer_worker_policy import (
     worker_command as worker_command,
 )
 from utils.renderer_static_policy import neutralize_static_output_html
+from utils.renderer_css_admission import (
+    MAX_HTML_BYTES as MAX_HTML_BYTES,
+    _ALLOWED_CSS_PROPERTIES as _ALLOWED_CSS_PROPERTIES,
+    _CSS_BLOCK as _CSS_BLOCK,
+    _CSS_COMMENT as _CSS_COMMENT,
+    _FONT_FAMILY as _FONT_FAMILY,
+    _REJECTED_VALUE_LOG_CHARS as _REJECTED_VALUE_LOG_CHARS,
+    _UNSAFE_CSS as _UNSAFE_CSS,
+    _validate_css as _validate_css,
+    duplicate_attribute_counts as duplicate_attribute_counts,
+)
 
 
-MAX_HTML_BYTES = 2 * 1024 * 1024
 MAX_REQUEST_BYTES = 12 * 1024 * 1024 + 4096
 MAX_RESPONSE_BYTES = 32 * 1024 * 1024
 MAX_DOM_NODES = 4096
@@ -66,21 +75,6 @@ _VOID_TAGS = VOID_TAGS
 _DROP_TAGS = DROP_TAGS
 _GLOBAL_ATTRIBUTES = GLOBAL_ATTRIBUTES
 _TAG_ATTRIBUTES = TAG_ATTRIBUTES
-_ALLOWED_CSS_PROPERTIES = ALLOWED_CSS_PROPERTIES
-#: How much of a rejected declaration's value is echoed into the policy
-#: error. Enough to identify the declaration, short enough that untrusted
-#: model output cannot flood a log line.
-_REJECTED_VALUE_LOG_CHARS = 120
-
-_CSS_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
-_CSS_BLOCK = re.compile(r"([^{}]+)\{([^{}]*)\}", re.DOTALL)
-_UNSAFE_CSS = re.compile(
-    r"@(?:import|font-face|namespace|supports|document|page|keyframes)|"
-    r"(?:url|image-set|cross-fade|element|expression)\s*\(|"
-    r"-moz-binding|behavior\s*:|javascript\s*:|file\s*:|https?\s*:",
-    re.IGNORECASE,
-)
-_FONT_FAMILY = re.compile(r"(?:^|[;{])\s*font-family\s*:\s*([^;}]+)", re.IGNORECASE)
 _DATA_URL = re.compile(r"^data:([^;,]+);base64,([A-Za-z0-9+/=\s]+)$", re.IGNORECASE)
 _ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp", "image/gif"}
 _SVG_PAINT_ATTRIBUTES = {"fill", "stroke", "clip-path", "mask"}
@@ -172,71 +166,6 @@ def admit_authorized_svg_materialized(canonical_svg: str, materialized_svg: str,
     return AdmittedHtml(html=_inject_csp(wrapper, nonce), nonce=nonce,
         source_digest="sha256:" + hashlib.sha256(wrapper.encode("utf-8")).hexdigest(),
         asset_digests=tuple(asset_digests), node_count=sum(1 for _ in canonical.iter()) + 5)
-
-
-def duplicate_attribute_counts(
-    attrs: list[tuple[str, str | None]],
-) -> list[tuple[str, int]]:
-    """Return duplicate attribute names in first-seen order with occurrence counts."""
-
-    counts: dict[str, int] = {}
-    duplicate_order: list[str] = []
-    for raw_name, _raw_value in attrs:
-        name = raw_name.lower()
-        counts[name] = counts.get(name, 0) + 1
-        if counts[name] == 2:
-            duplicate_order.append(name)
-    return [(name, counts[name]) for name in duplicate_order]
-
-
-def _validate_css(css: str) -> set[str]:
-    normalized = html_lib.unescape(_CSS_COMMENT.sub("", css))
-    if len(normalized.encode("utf-8")) > MAX_HTML_BYTES:
-        raise RendererPolicyError("CSS exceeds authored source limit")
-    if _UNSAFE_CSS.search(normalized):
-        raise RendererPolicyError("CSS contains an external, active, or font resource")
-    declarations: list[str] = []
-    blocks = list(_CSS_BLOCK.finditer(normalized))
-    if "{" in normalized or "}" in normalized:
-        residue = _CSS_BLOCK.sub("", normalized)
-        if "{" in residue or "}" in residue:
-            raise RendererPolicyError("CSS contains unbalanced or nested rules")
-        declarations.extend(match.group(2) for match in blocks)
-    else:
-        declarations.append(normalized)
-    families: set[str] = set()
-    for declaration_block in declarations:
-        for declaration in declaration_block.split(";"):
-            if not declaration.strip():
-                continue
-            if ":" not in declaration:
-                raise RendererPolicyError("CSS declaration is malformed")
-            property_name, value = declaration.split(":", 1)
-            property_name = property_name.strip().lower()
-            if property_name not in _ALLOWED_CSS_PROPERTIES:
-                # The value is reported alongside the name because the allowlist
-                # is value-blind: `visibility: visible` and `visibility: hidden`
-                # are rejected identically, and only the value says whether the
-                # property should be admitted or whether it would hide content
-                # from the hybrid-export measurer. Without it every rejection
-                # investigation stops at a guess. Truncated because a rejected
-                # declaration is untrusted model output on a log line.
-                raise RendererPolicyError(
-                    "CSS property is not allowed: "
-                    f"{property_name}: {value.strip()[:_REJECTED_VALUE_LOG_CHARS]}"
-                )
-            if len(value) > 8192 or "\\" in property_name or "\\" in value:
-                raise RendererPolicyError("CSS value exceeds policy")
-    for match in _FONT_FAMILY.finditer(";" + normalized):
-        family_value = match.group(1).strip()
-        if len(family_value) > 512:
-            raise RendererPolicyError("font-family declaration exceeds policy")
-        families.update(
-            item.strip().strip("\"'").lower()
-            for item in family_value.split(",")
-            if item.strip()
-        )
-    return families
 
 
 class _PolicyParser(HTMLParser):
