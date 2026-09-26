@@ -137,7 +137,7 @@ async def _request_advisory(sheet: bytes, *, slide_count: int) -> tuple[str, obj
     )
     from utils.llm_config import enforce_llm_egress_policy, get_llm_config
     from utils.llm_provider import get_llm_provider, get_model
-    from utils.llm_utils import extract_text, get_generate_kwargs
+    from utils.llm_utils import extract_structured_content, extract_text, get_generate_kwargs
     from utils.provider_idempotency import (
         AUTHORED_DECK_OUTCOME_SCOPE,
         provider_generate_call,
@@ -198,7 +198,8 @@ async def _request_advisory(sheet: bytes, *, slide_count: int) -> tuple[str, obj
             latency_ms=timer.elapsed_ms,
             retry_class="initial",
         )
-    return model, _decode_advisory_text(extract_text(response.content) or "")
+    payload = extract_structured_content(response.content)
+    return model, payload if payload is not None else _decode_advisory_text(extract_text(response.content) or "")
 
 
 async def run_vision_advisory(

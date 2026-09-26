@@ -161,10 +161,10 @@ def build_style_context(
         ),
         swatches=tuple(getattr(style, "preview_palette", None) or ()),
     )
-    default_font = "Noto Sans KR"
+    from services.svg_trusted_fonts import bundled_svg_font_family
     fonts = FontChoice(
-        heading=explicit_fonts or master_heading_font or getattr(style, "heading_font", None) or default_font,
-        body=explicit_fonts or master_body_font or getattr(style, "body_font", None) or default_font,
+        heading=explicit_fonts or master_heading_font or bundled_svg_font_family(getattr(style, "heading_font", None)),
+        body=explicit_fonts or master_body_font or bundled_svg_font_family(getattr(style, "body_font", None)),
         mono=getattr(style, "mono_font", None) or "monospace",
     )
     return StyleContext(

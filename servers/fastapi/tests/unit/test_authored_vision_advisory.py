@@ -263,6 +263,18 @@ def test_the_advisory_call_sends_the_sheet_and_the_budget(monkeypatch):
     assert client.kwargs["messages"][1].content[1].data == b"sheet"
 
 
+def test_the_advisory_accepts_a_provider_parsed_json_object(monkeypatch):
+    from services.generation_core.quality import vision_advisory as shared_advisory
+
+    client = _FakeClient({"slides": []})
+    _install_fake_client(monkeypatch, client)
+
+    model, payload = _run(shared_advisory._request_advisory(b"sheet", slide_count=1))
+
+    assert model == "gpt-6-astra"
+    assert payload == {"slides": []}
+
+
 def test_an_empty_model_answer_is_a_named_skip_not_a_raise(monkeypatch):
     """``public_provider_empty_output`` is our own admission wrapper refusing a
     text-free response; the advisory records which outcome it was."""

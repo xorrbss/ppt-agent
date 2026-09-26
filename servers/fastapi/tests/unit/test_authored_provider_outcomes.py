@@ -143,6 +143,22 @@ def test_empty_output_and_classified_overload_are_not_terminal_event_aliases():
     assert "private detail" not in str(raised_bridge.value)
 
 
+def test_structured_deck_response_with_no_findings_is_output():
+    from llmai.shared import JSONSchemaResponse
+
+    client = _ChatGPTClient([], result_content={"slides": []})
+    call = provider_generate_call(
+        client,
+        provider_id="codex",
+        kwargs={"response_format": JSONSchemaResponse(
+            name="vision_advisory", json_schema={"type": "object"}, strict=False,
+        )},
+        idempotency_key=None,
+        outcome_scope="authored_deck",
+    )
+    assert call().content == {"slides": []}
+
+
 class _PlainClient:
     """A transport with no idempotency support but a cloneable raw client."""
 
