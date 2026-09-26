@@ -26,6 +26,21 @@ const auditedFiles = [
   "app/(presentation-generator)/presentation/components/SortableSlide.tsx",
   "components/slide-editor/shortcuts/ShortcutKeys.tsx",
   "components/slide-editor/shortcuts/editorShortcuts.ts",
+  "app/(presentation-generator)/authored-vnext/master-setup/MasterCatalogCard.tsx",
+  "app/(presentation-generator)/authored-vnext/master-setup/MasterSetupPublishPanel.tsx",
+  "app/(presentation-generator)/components/PresentationContentRender.tsx",
+  "app/(presentation-generator)/components/SvgSlidePreview.tsx",
+  "app/(presentation-generator)/generation-workspace/GenerationPreparation.tsx",
+  "components/authored-vnext/CompositionSafeTextEditor.tsx",
+  "components/authored-vnext/EditableHybridReadiness.tsx",
+  "components/authored-vnext/HybridCapabilityAdmissions.tsx",
+  "components/authored-vnext/LayeredSlideCanvas.tsx",
+  "components/authored-vnext/TypedInspector.tsx",
+  "components/codex-config/CodexConfig.tsx",
+  "components/codex-config/CodexModelSelect.tsx",
+  "components/codex-config/useCodexAuth.ts",
+  "components/OnBoarding/PresentonMode.tsx",
+  "components/ui/overlay-loader.tsx",
 ];
 
 test("the audited surfaces contain no hardcoded user-facing copy", () => {
