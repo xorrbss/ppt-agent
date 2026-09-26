@@ -11,8 +11,6 @@ import {
   type WorkbenchTypedCommand,
 } from "@/components/authored-vnext";
 import {
-  authoredVnextFlowReducer,
-  createAuthoredVnextFlowState,
   digestText,
   publicationPin,
   sceneMutationRequestForOperation,
@@ -46,6 +44,7 @@ import {
   type SlideId,
   type WorkbenchOperation,
 } from "@/lib/authored-vnext/workbench";
+import { useAuthoredVnextFlowState } from "./useAuthoredVnextFlowState";
 import AuthoredVnextFlowStage from "./AuthoredVnextFlowStage";
 import AuthoredPackageLifecycle from "./AuthoredPackageLifecycle";
 import {
@@ -67,14 +66,7 @@ import { flowClientCallbacks } from "./flow-client-callbacks";
 export default function AuthoredVnextFlowClient() {
   const t = useTranslations("authoredVnext");
   const slideCount = authoredVnextSlideCount();
-  const [flow, reduceFlow] = useReducer(
-    (
-      state: ReturnType<typeof createAuthoredVnextFlowState>,
-      event: FlowEvent,
-    ) => authoredVnextFlowReducer(state, event).state,
-    undefined,
-    () => createAuthoredVnextFlowState(slideCount),
-  );
+  const [flow, reduceFlow] = useAuthoredVnextFlowState(slideCount);
   const [workbench, dispatchWorkbench] = useReducer(
     workbenchReducer,
     undefined,
