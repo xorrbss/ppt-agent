@@ -1,3 +1,4 @@
+import { CATEGORY_LABELS, normalizeSearchText, createIdempotencyKey, targetPresentationUrl } from "./authoredTemplateChangerHelpers";
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -56,32 +57,6 @@ const GENERATION_TIMEOUT_MS = 30 * 60 * 1_000;
 const MAX_POLL_ERRORS = 4;
 const masterClient = new AuthoredVnextMasterClient();
 
-const CATEGORY_LABELS: Record<AuthoredStyleCategory, string> = {
-  general: "범용",
-  business: "비즈니스",
-  technology: "기술",
-  research: "리서치",
-  editorial: "에디토리얼",
-  creative: "크리에이티브",
-};
-
-function normalizeSearchText(value: string) {
-  return value.normalize("NFKC").trim().toLocaleLowerCase("ko-KR");
-}
-
-function createIdempotencyKey(): string {
-  if (
-    typeof crypto !== "undefined" &&
-    typeof crypto.randomUUID === "function"
-  ) {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
-function targetPresentationUrl(presentationId: string): string {
-  return `/presentation?id=${encodeURIComponent(presentationId)}&workspace_staging=template`;
-}
 
 interface WorkspaceTemplateAttempt {
   signature: string;
