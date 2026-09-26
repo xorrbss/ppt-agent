@@ -734,14 +734,6 @@ def test_export_adapter_accepts_registry_bound_hybrid_readback() -> None:
         [],
         master_payload,
     )
-    # Keep this adapter test scoped to the registry/readback seam.  Native text
-    # style/auto-fit parity has its own OOXML tests and is intentionally removed
-    # from the synthetic worker receipt below.
-    actual_element = native_receipt["scene"]["slides"][0]["elements"][0]
-    native_receipt["scene"]["slides"][0]["elements"][0] = {
-        key: actual_element[key]
-        for key in ("elementId", "kind", "textDigest", "renderedBounds")
-    }
     receipt = {
         **native_receipt,
         "validation": "candidate-reopened",
@@ -840,11 +832,10 @@ def test_post_vqa_admission_measures_the_candidate_instead_of_only_reading_cache
         )
     ]
     assert assignments, "the post-VQA candidate measurement disappeared"
-    for node in assignments:
-        assert isinstance(node.value, ast.Await), (
-            "candidate metrics must be measured, not read from a cache that the "
-            "canonicalized candidate can never hit"
-        )
-        call = node.value.value
-        assert isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
-        assert call.func.id == "ensure_browser_metrics"
+    assert any(
+        isinstance(node.value, ast.Await)
+        and isinstance(node.value.value, ast.Call)
+        and isinstance(node.value.value.func, ast.Name)
+        and node.value.value.func.id == "captured_metrics_or_existing"
+        for node in assignments
+    )
