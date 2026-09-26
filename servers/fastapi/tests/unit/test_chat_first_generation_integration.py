@@ -2022,7 +2022,7 @@ def test_source_content_admission_charges_source_pages_not_slide_hint(monkeypatc
         request = _source_content_request(uuid.uuid4(), n_slides=28)
         manifest_admissions: list[object] = []
 
-        async def admit_manifest(candidate, *, sql_session, owner_id):
+        async def admit_manifest(candidate, *, sql_session, owner_id, tenant_id):
             manifest_admissions.append(candidate)
             candidate._source_document_outline = SimpleNamespace(
                 source_slide_count=35
@@ -2053,7 +2053,7 @@ def test_source_content_admission_defers_manifest_rejection_to_validation(
     async def scenario():
         request = _source_content_request(uuid.uuid4(), n_slides=28)
 
-        async def reject_manifest(candidate, *, sql_session, owner_id):
+        async def reject_manifest(candidate, *, sql_session, owner_id, tenant_id):
             raise SourceContentError(
                 "source_content_manifest_invalid", status_code=409
             )
