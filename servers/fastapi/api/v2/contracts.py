@@ -159,6 +159,16 @@ class PresentationGenerationRequestV2(PublicWireModel):
     quality_policy: QualityPolicy = "interactive-v1"
 
     @model_validator(mode="after")
+    def reject_retired_deck_ir_engine_selection(self) -> "PresentationGenerationRequestV2":
+        # "deck-ir" is retired as an explicit client choice on the public wire
+        # contract. The server's internal auto-routing to that engine
+        # (services.public_generation_route.effective_generation_engine) is a
+        # separate, server-owned decision that never reads this field back.
+        if self.generation_engine == "deck-ir":
+            raise ValueError("generation_engine_deck_ir_retired")
+        return self
+
+    @model_validator(mode="after")
     def validate_generation_mode(self) -> "PresentationGenerationRequestV2":
         if self.generation_mode == "editable-first":
             raise ValueError("capability_not_supported: editable-first")

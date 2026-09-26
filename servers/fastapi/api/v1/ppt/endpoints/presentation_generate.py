@@ -121,6 +121,7 @@ from services.source_content.pipeline import (
 )
 from services.database import async_session_maker, get_async_session, sql_engine
 from services.documents_loader import DocumentsLoader
+from services.generation_core.admission.strategy import resolve_generation_strategy
 from services.generation_provider_admission import generation_provider_admitted
 from services.compatibility_migration.authored_vnext_contract import (
     require_authored_vnext_creation_admission,
@@ -502,6 +503,12 @@ async def check_if_api_request_is_valid(
 
     if request.strategy not in {None, "authored", "svg"}:
         raise HTTPException(status_code=400, detail="generation_strategy_conflict")
+    if request.generation_engine == "deck-ir":
+        # Retired as an explicit client choice. The server's own internal
+        # auto-routing to that engine (services.public_generation_route.
+        # effective_generation_engine) is unaffected -- it constructs its own
+        # bridge request object outside this admission function.
+        raise HTTPException(status_code=400, detail="generation_engine_deck_ir_retired")
     if request.strategy == "svg":
         from services.svg_generation_admission import require_svg_creation_admission
 
@@ -852,7 +859,7 @@ async def generate_presentation_handler(
         await _admit_source_content_generation(request, sql_session)
         if request.source_mode == SOURCE_CONTENT_RESTYLE_MODE:
             await _admit_source_content_reference_snapshot(request, sql_session)
-        if request.strategy == "svg":
+        if resolve_generation_strategy(request) == "svg":
             prepare_source_content_svg_reflow(request)
         else:
             prepare_source_content_authored_reflow(request)
@@ -1124,8 +1131,9 @@ async def generate_presentation_handler(
                 async_status.updated_at = datetime.now(timezone.utc)
                 sql_session.add(async_status)
                 await sql_session.commit()
+            resolved_strategy = resolve_generation_strategy(request)
             generate_document = generate_authored_presentation
-            if request.strategy == "svg":
+            if resolved_strategy == "svg":
                 from services.svg_presentation_service import generate_svg_presentation
 
                 generate_document = generate_svg_presentation
@@ -1140,7 +1148,7 @@ async def generate_presentation_handler(
             # The single point where "generation finished and an export was
             # requested" is decided, for the synchronous and the durable path
             # alike: this is the one successful completion of the handler.
-            if request.strategy == "svg" and async_status is not None:
+            if resolved_strategy == "svg" and async_status is not None:
                 # The per-page verdict publication recorded, not the deck mode.
                 from services.generation_core.drivers.svg.publish import svg_completion_status
 
@@ -1574,7 +1582,7 @@ async def _bootstrap_generation_workspace(
     # same canonical Authored identity before workspace capability derivation.
     # Leaving the profile unset makes the documented one-call API fail with
     # ``unsupported_presentation_driver`` before it can enqueue its operation.
-    if request.strategy == "svg":
+    if resolve_generation_strategy(request) == "svg":
         from services.compatibility_migration.admission import stamp_new_svg_presentation
 
         stamp_new_svg_presentation(presentation)

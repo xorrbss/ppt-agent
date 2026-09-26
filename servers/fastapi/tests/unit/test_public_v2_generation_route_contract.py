@@ -142,7 +142,10 @@ def test_source_restyle_uses_authored_without_private_design_pack(
     request = PresentationGenerationRequestV2(
         content="Preserve the source document",
         generationMode=mode,
-        generationEngine="deck-ir",
+        # "deck-ir" is retired as an explicit client selection; the override
+        # this test exercises (source restyle always resolves to authored,
+        # regardless of the requested engine) holds for the field's own
+        # default just as well.
         sourceMode="source_content_restyle",
         sourceContentManifestPin={
             "manifestId": str(uuid.uuid4()),

@@ -20,6 +20,7 @@ from models.sql.workspace import WorkspaceOperation, get_workspace_owner_scope
 from utils.authored_styles import AuthoredStyle
 from services.database import sql_engine
 from services.authored_local_fit_policy import POLICY_REVISION, font_policy
+from services.generation_core.admission.strategy import resolve_generation_strategy
 from services.authored_canvas import (
     request_canvas_metadata,
     restore_request_canvas_metadata,
@@ -86,9 +87,15 @@ def _durable_request_payload(
     """Persist canonical identities only, never admission-time raw paths."""
 
     payload = request.model_dump(mode="json")
+    resolved_strategy = resolve_generation_strategy(request)
+    # Persist the resolved value, never the raw (possibly omitted) field: every
+    # downstream consumer that reads this durable payload's "strategy" key as a
+    # plain dict (checkpoint recovery, job listing, workspace projections) does
+    # a literal "== svg"/"== authored" comparison and has no resolver access.
+    payload["strategy"] = resolved_strategy
     incomplete_source_retry = (
         admission_retry
-        and request.strategy == "svg"
+        and resolved_strategy == "svg"
         and request.source_mode == "source_content_restyle"
         and (
             getattr(request, "_document_canvas", None) is None
@@ -97,7 +104,7 @@ def _durable_request_payload(
     )
     if admission_retry:
         payload[INTERNAL_ADMISSION_RETRY_KEY] = True
-    if request.strategy == "svg":
+    if resolved_strategy == "svg":
         if not incomplete_source_retry:
             from services.svg_generation_admission import pin_svg_style
 
@@ -328,7 +335,7 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
     request = GeneratePresentationRequest.model_validate(values)
     request._svg_style_snapshot = svg_style_snapshot
     request._svg_source_binding = svg_source_binding
-    if request.strategy == "svg" and request.source_mode == "source_content_restyle":
+    if resolve_generation_strategy(request) == "svg" and request.source_mode == "source_content_restyle":
         if not isinstance(svg_source_binding, dict) and not payload.get(INTERNAL_ADMISSION_RETRY_KEY):
             raise ValueError("svg_source_input_binding_required")
     restore_request_canvas_metadata(

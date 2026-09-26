@@ -22,6 +22,7 @@ def test_exact_snapshot_identity_round_trips_only_in_durable_payload():
     request = GeneratePresentationRequest(
         content="Private exact deck",
         template="authored",
+        strategy="authored",
         authored_style="exact-private",
     )
     request._authored_exact_snapshot_id = "a" * 32
@@ -51,7 +52,7 @@ def test_style_reference_durable_payload_adds_only_the_authored_pins():
     """
 
     request = GeneratePresentationRequest(
-        content="Style deck", template="authored", aspect_ratio="9:16"
+        content="Style deck", template="authored", strategy="authored", aspect_ratio="9:16"
     )
 
     durable = _durable_request_payload(request)

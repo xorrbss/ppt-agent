@@ -362,7 +362,7 @@ export class PresentationGenerationApi {
     page_size,
     orientation,
     theme,
-    strategy = "authored",
+    strategy = "svg",
   }: {
     presentation_id: string;
     previous_presentation_id?: string | null;
@@ -672,6 +672,8 @@ export class PresentationGenerationApi {
       idempotency_key?: string;
     },
   ): Promise<StartGenerationResponse> {
+    // An omitted strategy now means svg (the current default), not authored.
+    const resolvedStrategy = body.strategy ?? "svg";
     try {
       const response = await fetch(
         getApiUrl(`/api/v1/ppt/presentation/generate/async`),
@@ -689,7 +691,7 @@ export class PresentationGenerationApi {
             ...(body.sourceMode ? {} : { slides_markdown: body.slides_markdown ?? [] }),
             ...generationPreferencesPayload(body),
             template: "authored",
-            strategy: body.strategy ?? "authored",
+            strategy: resolvedStrategy,
             export_as: "pptx",
             // Export refuses a "development" receipt in every format.
             qualityProfile: "release",
@@ -697,9 +699,9 @@ export class PresentationGenerationApi {
             // OFF by default — it adds a second authoring round (~doubles time); the
             // design-system hardening already prevents most overflow/overlap. Opt in for
             // a max-quality, slower pass.
-            vision_qa: body.strategy === "svg" ? false : (body.vision_qa ?? false),
+            vision_qa: resolvedStrategy === "svg" ? false : (body.vision_qa ?? false),
             authored_style: body.authored_style ?? "default",
-            ...(body.sourceMode === "source_content_restyle" && body.strategy === "svg"
+            ...(body.sourceMode === "source_content_restyle" && resolvedStrategy === "svg"
               ? {}
               : body.page_size && body.orientation
                 ? { page_size: body.page_size, orientation: body.orientation }

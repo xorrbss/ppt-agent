@@ -389,7 +389,7 @@ export const usePresentationGeneration = (
           : {}),
         language: authoredRequest.language,
         vision_qa: authoredRequest.visionQa,
-        strategy: authoredRequest.strategy ?? "authored",
+        strategy: authoredRequest.strategy ?? "svg",
         authored_style: authoredRequest.authoredStyle,
         ...(authoredRequest.sourceMode === "source_content_restyle" && authoredRequest.strategy === "svg"
           ? {}

@@ -29,11 +29,11 @@ def _settings(provider: str) -> RuntimeSettings:
 @pytest.mark.parametrize(
     ("preset", "model", "effort"),
     [
-        ("luna-medium", "gpt-5.6-luna", "medium"),
-        ("luna-high", "gpt-5.6-luna", "high"),
-        ("sol-low", "gpt-5.6-sol", "low"),
-        ("sol-medium", "gpt-5.6-sol", "medium"),
-        ("sol-high", "gpt-5.6-sol", "high"),
+        ("luna-medium", "gpt-6-luna", "medium"),
+        ("luna-high", "gpt-6-luna", "high"),
+        ("sol-low", "gpt-6-sol", "low"),
+        ("sol-medium", "gpt-6-sol", "medium"),
+        ("sol-high", "gpt-6-sol", "high"),
         ("sol6-low", "gpt-6-sol", "low"),
         ("sol6-medium", "gpt-6-sol", "medium"),
         ("sol6-high", "gpt-6-sol", "high"),

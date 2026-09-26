@@ -55,7 +55,7 @@ Secret values are never read or rendered by the generator.
 | `LMSTUDIO_BASE_URL` | string | — | no | LM Studio OpenAI-compatible base URL. |
 | `LMSTUDIO_API_KEY` | string | — | yes | Optional LM Studio API key. |
 | `LMSTUDIO_MODEL` | string | `openai/gpt-oss-20b` | no | LM Studio model id. |
-| `CODEX_MODEL` | string | `gpt-5.6-sol` | no | Codex OAuth model id. |
+| `CODEX_MODEL` | string | `gpt-6-sol` | no | Codex OAuth model id. |
 | `CODEX_REASONING_EFFORT` | enum | — | no | Optional Codex reasoning effort. |
 | `DISABLE_THINKING` | boolean | `false` | no | Disable custom-provider thinking mode. |
 | `WEB_GROUNDING` | boolean | `false` | no | Enable provider web grounding where supported. |

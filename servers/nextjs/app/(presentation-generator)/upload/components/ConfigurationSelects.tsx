@@ -171,7 +171,7 @@ export function ConfigurationSelects({
     sourceContentMode = false,
     authoredStyle,
     hasCompanyStandard = false,
-    generationStrategy = "authored",
+    generationStrategy = "svg",
     sourceDocumentCanvas = null,
 }: ConfigurationSelectsProps) {
     const [openSlides, setOpenSlides] = useState(false);

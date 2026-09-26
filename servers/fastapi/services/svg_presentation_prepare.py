@@ -92,8 +92,10 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
         source_units = source_pages(source_document)
         if len(source_units) != len(outline.slides):
             raise ValueError("svg_source_page_count_mismatch")
+    from services.generation_core.admission.strategy import resolve_generation_strategy
+
     canonical_assets = not raster_reconstruction and slot_writer_enabled(
-        strategy=getattr(request, "strategy", None),
+        strategy=resolve_generation_strategy(request),
         durable=job is not None and job.workspace_operation_id is not None)
     canvas = request_canvas_contract(request)
     physical_kwargs = ({"physical_canvas": request._document_canvas}

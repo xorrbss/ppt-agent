@@ -23,6 +23,7 @@
 //   --slides <n>             n_slides (default 8, max 50). Use --slides auto to let the model decide
 //   --language <str>         language (default "Korean (한국어)")
 //   --template <name>        retained template id (default "authored")
+//   --strategy <svg|authored> generation strategy (default svg, matches the server default)
 //   --style <id>             authored-mode style preset id (sent as authored_style)
 //   --export <pptx|pdf>      export_as (default pptx)
 //   --instructions <str>     extra generation instructions
@@ -60,6 +61,7 @@ import { followExportToArtifact } from "./lib/ppt-agent-export-follow.mjs";
 const TONES = ["default", "casual", "professional", "funny", "educational", "sales_pitch"];
 const VERBOSITIES = ["concise", "standard", "text-heavy"];
 const EXPORTS = ["pptx", "pdf"];
+const STRATEGIES = ["svg", "authored"];
 // Mirror of the server constant MAX_NUMBER_OF_SLIDES (constants/presentation.py).
 const MAX_SLIDES = 50;
 
@@ -130,6 +132,7 @@ function printHelpAndExit() {
       "  --slides <n|auto>       n_slides (default 8, max 50)",
       '  --language <str>        default "Korean (한국어)"',
       "  --template <name>       default authored",
+      "  --strategy <svg|authored>  generation strategy, default svg (server default)",
       "  --mode authored         model-authored bespoke-HTML deck (image PPTX/PDF)",
       "  --style <id>            authored mode: style preset id",
       "  --vision-qa             authored mode: self-correct flagged slides (slower)",
@@ -164,6 +167,10 @@ function buildBody(content, opts) {
   if (opts.slidesProvided && opts.nSlides !== null) body.n_slides = opts.nSlides;
   if (opts.language) body.language = opts.language;
   if (opts.template) body.template = opts.template;
+  // Omitted entirely (not just falsy) when not given: the server default is
+  // svg, and sending an explicit value here would only matter if it differs
+  // from that default.
+  if (opts.strategy) body.strategy = opts.strategy;
   body.export_as = opts.exportAs;
   if (opts.instructions) body.instructions = opts.instructions;
   if (opts.tone) body.tone = opts.tone;
@@ -483,6 +490,9 @@ async function main() {
   if (args.style !== undefined && !args.style) {
     die(`--style requires a style preset id`);
   }
+  if (args.strategy !== undefined && !STRATEGIES.includes(args.strategy)) {
+    die(`--strategy must be one of ${STRATEGIES.join(", ")} (got "${args.strategy}")`);
+  }
 
   // slides: default 8; "auto" (or empty) => omit n_slides so the model decides.
   let nSlides = 8;
@@ -528,6 +538,7 @@ async function main() {
     // --mode authored and the default both select the model-authored bespoke-HTML
     // pipeline. A supplied template is retained for explicit supported templates.
     template: args.mode === "authored" ? "authored" : args.template || "authored",
+    strategy: args.strategy || null,
     instructions: args.instructions || null,
     tone: args.tone || null,
     verbosity: args.verbosity || null,

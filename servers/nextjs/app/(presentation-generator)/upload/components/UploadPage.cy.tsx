@@ -7,6 +7,7 @@ import { NextIntlClientProvider } from "next-intl";
 import koMessages from "@/i18n/messages/ko.json";
 import { Toaster } from "@/components/ui/sonner";
 import { makeStore } from "@/store/store";
+import { setPptGenUploadState } from "@/store/slices/presentationGenUpload";
 import UploadPage from "./UploadPage";
 import { useSupportingFiles } from "./upload-page/useSupportingFiles";
 
@@ -130,10 +131,16 @@ describe("<UploadPage /> authored-only creation", () => {
       );
     });
 
+    // The company-standard master picker is an authored-only feature; svg is
+    // now the landing default, so this test selects authored explicitly to
+    // exercise it.
+    const store = makeStore();
+    store.dispatch(setPptGenUploadState({ generationStrategy: "authored" }));
+
     mount(
       <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="Asia/Seoul">
         <AppRouterContext.Provider value={router as any}>
-          <Provider store={makeStore()}>
+          <Provider store={store}>
             <UploadPage masterFeatureEnabled />
             <Toaster />
           </Provider>

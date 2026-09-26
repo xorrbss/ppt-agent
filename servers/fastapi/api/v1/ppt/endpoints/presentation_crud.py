@@ -441,7 +441,7 @@ async def create_presentation(
     include_table_of_contents: Annotated[bool, Body()] = False,
     include_title_slide: Annotated[bool, Body()] = True,
     web_search: Annotated[bool, Body()] = False,
-    strategy: Annotated[Literal["authored", "svg"], Body()] = "authored",
+    strategy: Annotated[Literal["authored", "svg"], Body()] = "svg",
     theme: Annotated[Optional[dict], Body()] = None,
     aspect_ratio: Annotated[Literal["16:9", "9:16", "9:13"], Body()] = "16:9",
     page_size: Annotated[Optional[Literal["A4"]], Body()] = None,

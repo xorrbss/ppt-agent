@@ -41,11 +41,13 @@ export const CHATGPT_MODELS: CodexModel[] = [
 
 /** PPT generation presets exposed by the ChatGPT-backed provider. */
 export const CODEX_GENERATION_PRESETS: CodexGenerationPreset[] = [
-  { id: "luna-medium", modelId: "gpt-5.6-luna", effort: "medium", name: "Luna · Medium" },
-  { id: "luna-high", modelId: "gpt-5.6-luna", effort: "high", name: "Luna · High" },
-  { id: "sol-low", modelId: "gpt-5.6-sol", effort: "low", name: "Sol · Low" },
-  { id: "sol-medium", modelId: "gpt-5.6-sol", effort: "medium", name: "Sol · Medium" },
-  { id: "sol-high", modelId: "gpt-5.6-sol", effort: "high", name: "Sol · High" },
+  { id: "luna-medium", modelId: "gpt-6-luna", effort: "medium", name: "Luna · Medium" },
+  { id: "luna-high", modelId: "gpt-6-luna", effort: "high", name: "Luna · High" },
+  { id: "sol-low", modelId: "gpt-6-sol", effort: "low", name: "Sol · Low" },
+  { id: "sol-medium", modelId: "gpt-6-sol", effort: "medium", name: "Sol · Medium" },
+  { id: "sol-high", modelId: "gpt-6-sol", effort: "high", name: "Sol · High" },
+  // sol6-* are a legacy alias of sol-* (same gpt-6-sol target): kept so stored
+  // configs/requests carrying the old sol6-* id still resolve identically.
   { id: "sol6-low", modelId: "gpt-6-sol", effort: "low", name: "Sol 6 · Low" },
   { id: "sol6-medium", modelId: "gpt-6-sol", effort: "medium", name: "Sol 6 · Medium" },
   { id: "sol6-high", modelId: "gpt-6-sol", effort: "high", name: "Sol 6 · High" },
@@ -53,4 +55,4 @@ export const CODEX_GENERATION_PRESETS: CodexGenerationPreset[] = [
   { id: "astra-medium", modelId: "gpt-6-astra", effort: "medium", name: "Astra · Medium" },
 ];
 
-export const DEFAULT_CODEX_MODEL = "gpt-5.6-sol";
+export const DEFAULT_CODEX_MODEL = "gpt-6-sol";

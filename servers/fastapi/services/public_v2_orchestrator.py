@@ -7,6 +7,7 @@ render, and export execution remains owned by the workspace worker boundary.
 from __future__ import annotations
 
 from services.source_images.budget import source_image_admission_budget
+from services.generation_core.admission.strategy import resolve_generation_strategy
 
 from services.public_generation_route import (
     effective_generation_engine as _effective_generation_engine,
@@ -256,9 +257,12 @@ async def _resolve_generation_route_receipt(
     slide_count: int,
     resolver: GenerationRouteResolver | None,
 ) -> GenerationRouteReceiptV1:
-    if request.strategy == "svg":
+    if resolve_generation_strategy(request) == "svg":
         from services.svg_generation_admission import require_svg_creation_admission
 
+        # A no-op unless ``strategy`` was explicit -- an omitted strategy that
+        # resolved to svg here already passed the same admission check inside
+        # the resolver itself (silent authored fallback otherwise).
         require_svg_creation_admission(request)
         payload = {
             "schemaVersion": "generation-route-receipt/v1",
@@ -1125,7 +1129,7 @@ class SqlPublicV2Orchestrator:
                 ),
             )
             pin_source_restyle_authoring(internal_request)
-            if internal_request.strategy == "svg" and internal_request.source_mode in {
+            if resolve_generation_strategy(internal_request) == "svg" and internal_request.source_mode in {
                     "source_content_restyle", "raster_reconstruction"}:
                 from services.source_content.pipeline import admit_source_content_request
                 from services.source_content.errors import SourceContentError
@@ -1153,7 +1157,7 @@ class SqlPublicV2Orchestrator:
                 instructions=request.instructions,
                 lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
             )
-            if request.strategy == "svg":
+            if resolve_generation_strategy(request) == "svg":
                 from services.compatibility_migration.admission import stamp_new_svg_presentation
 
                 stamp_new_svg_presentation(presentation)
