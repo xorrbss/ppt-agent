@@ -195,8 +195,10 @@ def evaluate_a4_selection(
 def evaluate_a4_request(
     request: Any, *, reference_mode: str | None
 ) -> tuple[DocumentCanvasRoutePolicy, bool, str | None]:
+    from services.generation_core.admission.strategy import resolve_generation_strategy
+
     selection = select_a4_route(
-        strategy=getattr(request, "strategy", None),
+        strategy=resolve_generation_strategy(request),
         source_content=getattr(request, "source_mode", None) == "source_content_restyle",
         has_fixed_master=(
             getattr(request, "master_pin", None) is not None

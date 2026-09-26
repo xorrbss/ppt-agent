@@ -9,6 +9,7 @@ from typing import Any
 from api.v2.contracts import GenerationRouteReceiptV1, PresentationGenerationRequestV2
 from models.generate_presentation_request import GeneratePresentationRequest
 from services.authored_rollout_profile import RolloutProfile
+from services.generation_core.admission.strategy import resolve_generation_strategy
 
 #: Durable key the withdrawn server-owned restyle composer wrote into staged
 #: job payloads. Nothing writes it any more; staging only strips it so a
@@ -19,7 +20,11 @@ LEGACY_RESTYLE_FIT_POLICY_KEY = "_internal_composer_fit_policy"
 def effective_generation_engine(
     request: PresentationGenerationRequestV2,
 ) -> str:
-    if request.strategy == "svg":
+    # The strategy resolver decides svg-vs-authored first (svg is the
+    # default). Only when it resolves to authored does the pre-svg-default
+    # engine table apply -- an omitted strategy no longer falls through to
+    # the deck-ir auto-route just because generationMode was also set.
+    if resolve_generation_strategy(request) == "svg":
         return "authored"
     if request.source_mode == "source_content_restyle":
         return "authored"
@@ -39,7 +44,7 @@ def pin_source_restyle_authoring(
 ) -> dict[str, object] | None:
     """Pin new source restyles to the authored reflow before staging."""
     route_receipt: dict[str, object] | None = None
-    if request.strategy == "svg":
+    if resolve_generation_strategy(request) == "svg":
         return None
     if request.source_mode == "source_content_restyle":
         from utils.authored_styles import resolve_authored_style
@@ -90,7 +95,7 @@ def restore_source_restyle_route(
     by the withdrawn server-owned composer (``source-content-composer-reflow``)
     replay through that same reflow, which was also its disabled-flag path.
     """
-    if request.strategy == "svg":
+    if resolve_generation_strategy(request) == "svg":
         return
     raw_receipt = payload.get("generation_route_receipt")
     if request.source_mode == "source_content_restyle" and raw_receipt is not None:

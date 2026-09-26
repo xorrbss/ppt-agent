@@ -43,9 +43,14 @@ def source_svg_capability(*, strategy: str | None, source_content: bool | None,
             "inputFormats": ["pptx"], "productVerified": False}
 
 
-def require_svg_creation_admission(request: object) -> None:
-    if getattr(request, "strategy", None) != "svg":
-        return
+def svg_creation_admission_violation(request: object) -> str | None:
+    """First reason ``request`` would fail svg admission, or ``None`` if it passes.
+
+    Field-only checks (no ``strategy`` read): callers decide *when* to ask this
+    -- an explicit ``strategy == "svg"`` request that violates it is a 422; an
+    omitted-strategy request that violates it silently prefers authored
+    instead (``generation_core.admission.resolve_generation_strategy``).
+    """
     allowed_source_modes = {None, "source_content_restyle", "raster_reconstruction"}
     blocked = (
         (getattr(request, "source_mode", None) not in allowed_source_modes, "svg_source_restyle_not_supported"),
@@ -55,33 +60,42 @@ def require_svg_creation_admission(request: object) -> None:
     )
     for condition, code in blocked:
         if condition:
-            raise HTTPException(status_code=422, detail=code() if callable(code) else code)
+            return code() if callable(code) else code
     if getattr(request, "source_mode", None) == "source_content_restyle":
         if (getattr(request, "page_size", None) is not None
                 or getattr(request, "orientation", None) is not None):
-            raise HTTPException(status_code=422, detail="svg_source_canvas_override_not_supported")
+            return "svg_source_canvas_override_not_supported"
         policy = getattr(request, "content_policy", None)
         if policy is None or policy.text != "verbatim" or policy.allow_summarization:
-            raise HTTPException(status_code=422, detail="svg_source_verbatim_required")
+            return "svg_source_verbatim_required"
         if getattr(request, "export_as", "pptx") != "pptx":
-            raise HTTPException(status_code=422, detail="source_content_format_not_supported")
+            return "source_content_format_not_supported"
     source_restyle = getattr(request, "source_mode", None) in {"source_content_restyle", "raster_reconstruction"}
     if source_restyle:
         from utils.svg_template_rules import resolve_source_template_style
 
         style_id = getattr(request, "authored_style", None)
         if not style_id:
-            raise HTTPException(status_code=422, detail="svg_source_template_selection_required")
+            return "svg_source_template_selection_required"
         try:
             style = resolve_source_template_style(style_id)
         except ValueError as error:
-            raise HTTPException(status_code=422, detail=str(error).split(":", 1)[0]) from error
+            return str(error).split(":", 1)[0]
     else:
         from utils.authored_styles import resolve_authored_style
 
         style = resolve_authored_style(getattr(request, "authored_style", None))
     if getattr(style, "reference_mode", "") == "exact_reconstruction":
-        raise HTTPException(status_code=422, detail="svg_exact_reconstruction_not_supported")
+        return "svg_exact_reconstruction_not_supported"
+    return None
+
+
+def require_svg_creation_admission(request: object) -> None:
+    if getattr(request, "strategy", None) != "svg":
+        return
+    violation = svg_creation_admission_violation(request)
+    if violation is not None:
+        raise HTTPException(status_code=422, detail=violation)
 
 
 def _resolve_master_rules(request: object, canvas: object) -> tuple[dict | None, dict | None]:

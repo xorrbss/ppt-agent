@@ -216,7 +216,10 @@ class GeneratePresentationRequest(BaseModel):
     strategy: Optional[Literal["authored", "svg"]] = Field(
         default=None,
         description=(
-            "Explicit generation strategy. Omit to use the authored source."
+            "Explicit generation strategy. Omit to use the server default (svg), "
+            "except for registered-template/design-pack requests and combinations "
+            "svg admission does not support, which stay on authored -- see "
+            "services.generation_core.admission.resolve_generation_strategy."
         ),
     )
     generation_mode: GenerationMode = Field(
@@ -233,7 +236,10 @@ class GeneratePresentationRequest(BaseModel):
         alias="generationEngine",
         description=(
             "Compatibility-only internal engine input. Product routing is owned "
-            "by generationMode and its durable route receipt."
+            "by generationMode and its durable route receipt. 'deck-ir' is "
+            "retired as an explicit client selection -- see "
+            "reject_retired_deck_ir_engine_selection -- the server's internal "
+            "auto-routing to that engine is unaffected."
         ),
     )
     source_mode: Optional[Literal["source_content_restyle", "raster_reconstruction"]] = Field(
@@ -363,7 +369,15 @@ class GeneratePresentationRequest(BaseModel):
                 raise ValueError("raster_native_manifest_not_expected")
             if len(self.reference_snapshot_ids) != 1:
                 raise ValueError("raster_single_source_snapshot_required")
-            if self.strategy != "svg" or self.page_size != "A4" or self.orientation is None:
+            from services.generation_core.admission.strategy import (
+                resolve_generation_strategy,
+            )
+
+            if (
+                resolve_generation_strategy(self) != "svg"
+                or self.page_size != "A4"
+                or self.orientation is None
+            ):
                 raise ValueError("raster_a4_svg_required")
             if self.template.strip().lower() != "authored" or self.authored_style != "screenshot-blue":
                 raise ValueError("source_content_template_required")

@@ -14,6 +14,7 @@ from sqlmodel import select
 from models.generate_presentation_request import GeneratePresentationRequest
 from models.sql.presentation import PresentationModel
 from models.sql.workspace import WorkspaceOperation
+from services.generation_core.admission.strategy import resolve_generation_strategy
 from services.presentation_profiles import (
     PresentationDriverId,
     PresentationProfileError,
@@ -37,9 +38,9 @@ def requested_generation_driver(
     # entry. The driver itself survives in identity_by_driver below, because
     # a deck generated before that retirement still carries it in its
     # persisted profile.
-    if request.strategy == "svg":
+    if resolve_generation_strategy(request) == "svg":
         return "svg-v1"
-    if request.strategy == "authored" or request.template == "authored":
+    if request.template == "authored" or request.strategy == "authored":
         return "authored"
     raise PresentationProfileError("generation_strategy_not_supported")
 
