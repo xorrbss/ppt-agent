@@ -1,6 +1,6 @@
 {
   "name": "slide-master-svg-converter",
-  "version": "vendored-20260916+document-canvas.2",
+  "version": "vendored-20260916+document-canvas.2+text-advance.1",
   "license": "MIT",
   "source": "https://github.com/byungjunjang/slide-master",
   "files": {
@@ -56,11 +56,11 @@
     "svg_finalize/svg_rect_to_path.py": "56fbe63d9e67c5835ac3ebdf25ce6f70e2356e71e1f1c6afd9411a0bb38780c5",
     "svg_to_pptx/__init__.py": "6ca92e75bb02274044f61700e141481f48c4e970b156b21c31aef9fd362c9df7",
     "svg_to_pptx/animation_config.py": "a738e1b8e95fa7fcda0156369fd5278d0dbb5d13a6c817f4cd7d39a4614b0afa",
-    "svg_to_pptx/conversion_context.py": "c794d8a665ef07c395a4c2310dc7e236e8927d592d9fdbec21d32adba35b2234",
+    "svg_to_pptx/conversion_context.py": "f29f25f5c800f97c0c35e38f3db3e47bbdf6b389a4a9a2771adbb47e71302992",
     "svg_to_pptx/drawingml/__init__.py": "9313e6cb2ce93064d10a3f96f65252241a95300efcbfa3de3455fc5e2d1775dd",
     "svg_to_pptx/drawingml/context.py": "96a4286fcb5100c145576d9cebece10977efbb4e48325baaebf23c8b2bf61d1a",
     "svg_to_pptx/drawingml/converter.py": "337ef9bb9b972113bedf2b14fb598379fd566935d9d626adfb3aa926681fe423",
-    "svg_to_pptx/drawingml/elements.py": "2f54308549332beee3da9625d7d8621d8bbebf0b96276fcbb5b6f3ecd5d7fae2",
+    "svg_to_pptx/drawingml/elements.py": "8467fe98f01691d6e8aa6e3dfe77f261bc0a56d788a59e2420f3cf3554356e15",
     "svg_to_pptx/drawingml/paths.py": "155496190ddb9322f577e21e5d665916635935b5a8c417a8bf73888c9ac51262",
     "svg_to_pptx/drawingml/styles.py": "bc09854175b2973621bc8669ff68ebe4bda0f285dad7b45dcc82537b05bae036",
     "svg_to_pptx/drawingml/theme_colors.py": "c632de1a8453fa60398b2f6dc3075c0d8c7ec20caf94a0089f624b08e412a573",
@@ -95,9 +95,11 @@
   "commit": "166472bd2a22de9aa9fb6c8cdf8b0cdfc6b698ef",
   "presentonPatches": [
     "config.py: disable host profile and dotenv discovery in isolated conversion",
-    "document-canvas.2: invocation-local physical units and bounded source-canvas rounding"
+    "document-canvas.2: invocation-local physical units and bounded source-canvas rounding",
+    "text-advance.1: single-line text frames never narrower than the caller's exact font advance"
   ],
   "patches": {
-    "document-canvas-1.patch": "70aa54650ee16995534d5ff7eaff6de7c24782e23970bf5c48b6a7ffcf60ab61"
+    "document-canvas-1.patch": "70aa54650ee16995534d5ff7eaff6de7c24782e23970bf5c48b6a7ffcf60ab61",
+    "text-advance-1.patch": "c8e7fe0fd5de7693876e4f9c9da40b16f533db88d69d93eba7e18ab5ea18ff3a"
   }
 }

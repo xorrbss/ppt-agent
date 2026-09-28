@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import utils.user_config_acl as user_config_acl
 import utils.user_config_store as user_config_store
 from utils.user_config_store import read_user_config_file, update_user_config_file
 
@@ -21,6 +22,75 @@ def assert_private_config_file(config_path):
     if os.name == "nt":
         return
     assert stat.S_IMODE(config_path.stat().st_mode) == 0o600
+
+
+def test_harden_is_a_noop_when_backup_sibling_is_missing(monkeypatch, tmp_path):
+    """A fresh install has no ``.bak`` yet; hardening it must not be attempted."""
+    config_path = tmp_path / "userConfig.json"
+    config_path.write_text('{"LLM": "openai"}', encoding="utf-8")
+    backup_path = config_path.with_suffix(config_path.suffix + ".bak")
+    assert not backup_path.exists()
+
+    secured = []
+    monkeypatch.setattr(
+        user_config_store,
+        "_secure_config_file",
+        lambda path: secured.append(path) or True,
+    )
+
+    user_config_store._harden_existing_config_permissions(str(config_path))
+
+    assert secured == [str(config_path)]
+
+
+def test_harden_swallows_a_non_oserror_hardening_failure(monkeypatch, tmp_path, capsys):
+    """pywin32 raises ``pywintypes.error`` for a missing file, which is not an
+    ``OSError`` subclass. A narrower catch here previously let it escape all
+    the way to ``read_user_config_file``'s blanket ``except Exception``,
+    turning a readable config into ``{}``. Any hardening failure -- of any
+    exception type -- must stay local to this function.
+    """
+    config_path = tmp_path / "userConfig.json"
+    config_path.write_text('{"LLM": "openai"}', encoding="utf-8")
+
+    class FakePywinError(Exception):
+        """Stands in for pywintypes.error (not an OSError subclass)."""
+
+    def fake_secure(_path):
+        raise FakePywinError("file not found (winerror 2)")
+
+    monkeypatch.setattr(user_config_store, "_secure_config_file", fake_secure)
+
+    user_config_store._harden_existing_config_permissions(str(config_path))
+
+    assert "Failed to secure" in capsys.readouterr().out
+
+
+def test_read_returns_real_content_despite_non_oserror_hardening_failure(
+    monkeypatch, tmp_path
+):
+    """Reproduces the reported defect end to end at the public read entry
+    point: a hardening failure of a type the old code did not catch must not
+    turn a readable, non-empty config file into ``{}``.
+    """
+    config_path = tmp_path / "userConfig.json"
+    config_path.write_text(
+        json.dumps({"LLM": "openai", "OPENAI_API_KEY": "sk-real"}),
+        encoding="utf-8",
+    )
+
+    class FakePywinError(Exception):
+        pass
+
+    def fake_secure(_path):
+        raise FakePywinError("file not found (winerror 2)")
+
+    monkeypatch.setattr(user_config_store, "_secure_config_file", fake_secure)
+
+    assert read_user_config_file(str(config_path)) == {
+        "LLM": "openai",
+        "OPENAI_API_KEY": "sk-real",
+    }
 
 
 def test_reads_backup_when_primary_json_is_malformed(tmp_path):
@@ -60,9 +130,9 @@ def test_windows_hardening_uses_current_user_sid_acl(monkeypatch, tmp_path):
     config_path = tmp_path / "userConfig.json"
     calls = []
 
-    monkeypatch.setattr(user_config_store.os, "name", "nt")
+    monkeypatch.setattr(user_config_acl.os, "name", "nt")
     monkeypatch.setattr(
-        user_config_store,
+        user_config_acl,
         "_windows_current_user_sid",
         lambda: "S-1-5-21-1000",
     )
@@ -71,9 +141,9 @@ def test_windows_hardening_uses_current_user_sid_acl(monkeypatch, tmp_path):
         calls.append((command, kwargs))
         return SimpleNamespace(returncode=0)
 
-    monkeypatch.setattr(user_config_store.subprocess, "run", run)
+    monkeypatch.setattr(user_config_acl.subprocess, "run", run)
 
-    assert user_config_store._secure_config_file(str(config_path)) is True
+    assert user_config_acl._secure_config_file(str(config_path)) is True
     assert len(calls) == 1
     command, kwargs = calls[0]
     assert command == [
@@ -89,7 +159,7 @@ def test_windows_hardening_uses_current_user_sid_acl(monkeypatch, tmp_path):
         "check": False,
         "capture_output": True,
         "timeout": 10,
-        **user_config_store._subprocess_text_kwargs(),
+        **user_config_acl._subprocess_text_kwargs(),
     }
 
 
@@ -103,18 +173,18 @@ def test_windows_sid_command_replaces_undecodable_localized_output(monkeypatch):
             returncode=0,
         )
 
-    monkeypatch.setattr(user_config_store.subprocess, "run", run)
+    monkeypatch.setattr(user_config_acl.subprocess, "run", run)
 
-    assert user_config_store._windows_current_user_sid() == "S-1-5-21-1000"
+    assert user_config_acl._windows_current_user_sid() == "S-1-5-21-1000"
     assert calls[0][1]["errors"] == "replace"
     assert calls[0][1]["encoding"]
 
 
 def test_windows_acl_timeout_fails_closed(monkeypatch, tmp_path):
     config_path = tmp_path / "userConfig.json"
-    monkeypatch.setattr(user_config_store.os, "name", "nt")
+    monkeypatch.setattr(user_config_acl.os, "name", "nt")
     monkeypatch.setattr(
-        user_config_store,
+        user_config_acl,
         "_windows_current_user_sid",
         lambda: "S-1-5-21-1000",
     )
@@ -122,9 +192,9 @@ def test_windows_acl_timeout_fails_closed(monkeypatch, tmp_path):
     def timeout(*_args, **_kwargs):
         raise subprocess.TimeoutExpired("icacls", 10)
 
-    monkeypatch.setattr(user_config_store.subprocess, "run", timeout)
+    monkeypatch.setattr(user_config_acl.subprocess, "run", timeout)
 
-    assert user_config_store._secure_config_file(str(config_path)) is False
+    assert user_config_acl._secure_config_file(str(config_path)) is False
 
 
 def test_windows_hardening_accepts_verified_private_legacy_acl(
@@ -133,14 +203,14 @@ def test_windows_hardening_accepts_verified_private_legacy_acl(
     """An admin-owned file need not be mutated when its DACL is already safe."""
     config_path = tmp_path / "userConfig.json"
     config_path.write_text("{}", encoding="utf-8")
-    monkeypatch.setattr(user_config_store.os, "name", "nt")
+    monkeypatch.setattr(user_config_acl.os, "name", "nt")
     monkeypatch.setattr(
-        user_config_store,
+        user_config_acl,
         "_windows_current_user_sid",
         lambda: "S-1-5-21-1000",
     )
     monkeypatch.setattr(
-        user_config_store,
+        user_config_acl,
         "_windows_acl_snapshot",
         lambda _path: {
             "owner": "BUILTIN\\Administrators",
@@ -156,12 +226,12 @@ def test_windows_hardening_accepts_verified_private_legacy_acl(
         },
     )
     monkeypatch.setattr(
-        user_config_store.subprocess,
+        user_config_acl.subprocess,
         "run",
         lambda *_args, **_kwargs: SimpleNamespace(returncode=5),
     )
 
-    assert user_config_store._secure_config_file(str(config_path)) is True
+    assert user_config_acl._secure_config_file(str(config_path)) is True
 
 
 def test_windows_hardening_rejects_unexpected_allowed_principal(
@@ -169,14 +239,14 @@ def test_windows_hardening_rejects_unexpected_allowed_principal(
 ):
     config_path = tmp_path / "userConfig.json"
     config_path.write_text("{}", encoding="utf-8")
-    monkeypatch.setattr(user_config_store.os, "name", "nt")
+    monkeypatch.setattr(user_config_acl.os, "name", "nt")
     monkeypatch.setattr(
-        user_config_store,
+        user_config_acl,
         "_windows_current_user_sid",
         lambda: "S-1-5-21-1000",
     )
     monkeypatch.setattr(
-        user_config_store,
+        user_config_acl,
         "_windows_acl_snapshot",
         lambda _path: {
             "protected": True,
@@ -192,12 +262,12 @@ def test_windows_hardening_rejects_unexpected_allowed_principal(
         },
     )
     monkeypatch.setattr(
-        user_config_store.subprocess,
+        user_config_acl.subprocess,
         "run",
         lambda *_args, **_kwargs: SimpleNamespace(returncode=5),
     )
 
-    assert user_config_store._secure_config_file(str(config_path)) is False
+    assert user_config_acl._secure_config_file(str(config_path)) is False
 
 
 def test_atomic_write_never_serializes_credentials_when_acl_hardening_fails(

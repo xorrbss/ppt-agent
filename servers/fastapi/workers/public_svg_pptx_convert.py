@@ -12,7 +12,7 @@ from services.authored_canvas import AuthoredCanvasMetadata
 from services.document_canvas import canvas_physical_size
 from workers.public_svg_pptx_readback import iter_shapes, source_preservation_readback
 
-CONVERTER_VERSION = "slide-master/166472bd2a22de9aa9fb6c8cdf8b0cdfc6b698ef+document-canvas.2"
+CONVERTER_VERSION = "slide-master/166472bd2a22de9aa9fb6c8cdf8b0cdfc6b698ef+document-canvas.2+text-advance.1"
 VENDOR_ROOT = Path(__file__).resolve().parents[1] / "vendor" / "slide_master"
 
 
@@ -34,15 +34,17 @@ def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
     """
     converter_digest()
     from services.generation_core.drivers.svg.export_scene import prepare_svg_pptx_inputs
+    from services.svg_text_advance import text_advance
     sys.path.insert(0, str(VENDOR_ROOT))
     try:
         from svg_to_pptx import create_pptx_with_native_svg
         from svg_to_pptx.conversion_context import ConversionContext
         scene = prepare_svg_pptx_inputs(paths, native_objects, width=canvas.width_px, height=canvas.height_px)
         width_emu, height_emu = canvas_physical_size(canvas)
+        # Bundled-font metrics keep single-line frames at least as wide as their text.
         context = ConversionContext(
             canvas.width_px, canvas.height_px, width_emu, height_emu,
-            legacy=isinstance(canvas, AuthoredCanvasMetadata),
+            legacy=isinstance(canvas, AuthoredCanvasMetadata), text_advance=text_advance,
         )
 
         def run(native):
