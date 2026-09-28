@@ -19,6 +19,10 @@ class SourceContentError(RuntimeError):
         self.detail = detail or {}
 
 
+def source_error(code: str, *, status_code: int = 422) -> SourceContentError:
+    return SourceContentError(code, status_code=status_code)
+
+
 SECURITY_REJECTED = "source_content_security_rejected"
 MANIFEST_INVALID = "source_content_manifest_invalid"
 UNSUPPORTED_OBJECT = "source_content_unsupported_object"

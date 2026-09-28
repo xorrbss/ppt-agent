@@ -14,11 +14,6 @@ from pydantic import (
 from services.document_canvas import DocumentCanvasMetadata
 
 
-# Source geometry is part of the authored substance for template restyling.
-# Native shapes carry image frames, grouping panels, dividers, and process
-# structure; dropping them leaves the source technically counted but visually
-# incomplete. Speaker notes remain metadata and are not rendered on slides.
-RESTYLE_CONTENT_KINDS = frozenset({"text", "table", "chart", "image", "shape"})
 DESIGN_ONLY_KINDS = frozenset({"source_note"})
 SOURCE_LAYOUT_VERSION_V2 = "source-layout/v2"
 
