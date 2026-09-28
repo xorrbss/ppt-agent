@@ -6,10 +6,15 @@ Nonlegacy calls are deliberately serial until child propagation is supported.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import wraps
 from inspect import signature
+
+#: ``(text, font_size, font_weight, font_family) -> advance`` in canvas units,
+#: or ``None`` when that family, weight or any glyph cannot be measured exactly.
+TextAdvance = Callable[[str, float, str, str], "float | None"]
 
 
 @dataclass(frozen=True)
@@ -19,10 +24,15 @@ class ConversionContext:
     width_emu: int = 12192000
     height_emu: int = 6858000
     legacy: bool = True
+    # Exact font metrics supplied by the caller. Without it, single-line text
+    # frames are sized from the per-character estimate alone.
+    text_advance: TextAdvance | None = field(default=None, compare=False)
 
     def __post_init__(self):
         values = (self.width_units, self.height_units, self.width_emu, self.height_emu)
         if any(type(value) is not int or value <= 0 for value in values):
+            raise ValueError("svg_conversion_context_invalid")
+        if self.text_advance is not None and not callable(self.text_advance):
             raise ValueError("svg_conversion_context_invalid")
         aspect_error = abs(
             self.width_emu * self.height_units - self.height_emu * self.width_units

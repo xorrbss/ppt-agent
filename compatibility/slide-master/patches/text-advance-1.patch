@@ -1,0 +1,83 @@
+diff --git a/servers/fastapi/vendor/slide_master/svg_to_pptx/conversion_context.py b/servers/fastapi/vendor/slide_master/svg_to_pptx/conversion_context.py
+index c447ac950aa5e1d646895464e576400f0ce4f551..0e5ee1e04ff44d253e1b83710a318064f6ba424c 100644
+--- a/servers/fastapi/vendor/slide_master/svg_to_pptx/conversion_context.py
++++ b/servers/fastapi/vendor/slide_master/svg_to_pptx/conversion_context.py
+@@ -6,11 +6,16 @@ Nonlegacy calls are deliberately serial until child propagation is supported.
+ """
+ from __future__ import annotations
+ 
++from collections.abc import Callable
+ from contextvars import ContextVar
+-from dataclasses import dataclass
++from dataclasses import dataclass, field
+ from functools import wraps
+ from inspect import signature
+ 
++#: ``(text, font_size, font_weight, font_family) -> advance`` in canvas units,
++#: or ``None`` when that family, weight or any glyph cannot be measured exactly.
++TextAdvance = Callable[[str, float, str, str], "float | None"]
++
+ 
+ @dataclass(frozen=True)
+ class ConversionContext:
+@@ -19,11 +24,16 @@ class ConversionContext:
+     width_emu: int = 12192000
+     height_emu: int = 6858000
+     legacy: bool = True
++    # Exact font metrics supplied by the caller. Without it, single-line text
++    # frames are sized from the per-character estimate alone.
++    text_advance: TextAdvance | None = field(default=None, compare=False)
+ 
+     def __post_init__(self):
+         values = (self.width_units, self.height_units, self.width_emu, self.height_emu)
+         if any(type(value) is not int or value <= 0 for value in values):
+             raise ValueError("svg_conversion_context_invalid")
++        if self.text_advance is not None and not callable(self.text_advance):
++            raise ValueError("svg_conversion_context_invalid")
+         aspect_error = abs(
+             self.width_emu * self.height_units - self.height_emu * self.width_units
+         )
+diff --git a/servers/fastapi/vendor/slide_master/svg_to_pptx/drawingml/elements.py b/servers/fastapi/vendor/slide_master/svg_to_pptx/drawingml/elements.py
+index 7a4255352de95960e8cf0b7c8e32aaf743639af9..ea24963001fa7bc543b8250d3169134ddc82e815 100644
+--- a/servers/fastapi/vendor/slide_master/svg_to_pptx/drawingml/elements.py
++++ b/servers/fastapi/vendor/slide_master/svg_to_pptx/drawingml/elements.py
+@@ -1774,7 +1774,38 @@ def _estimate_text_runs_width(
+         base, ceiling = _SERIF_TEXT_WIDTH_HEADROOM_BASE, _SERIF_TEXT_WIDTH_HEADROOM_CAPS
+     else:
+         base, ceiling = _TEXT_WIDTH_HEADROOM_BASE, _TEXT_WIDTH_HEADROOM_CAPS
+-    return width * (base + (ceiling - base) * caps)
++    estimated = width * (base + (ceiling - base) * caps)
++    # A single-line frame narrower than its text's true advance is folded by
++    # renderers that ignore wrap="none" (LibreOffice breaks "68%" before "%").
++    # The per-character table cannot know every glyph, so exact metrics, when
++    # the caller supplies them, are a floor under the estimate.
++    measured = _measured_text_runs_width(runs)
++    return estimated if measured is None else max(estimated, measured)
++
++
++def _measured_text_runs_width(runs: list[dict[str, Any]]) -> float | None:
++    """Exact advance of a line from the context's measurer, or ``None``.
++
++    Every run must be measurable; one unknown family, weight or glyph makes
++    the whole line fall back to the estimate. DrawingML ``spc`` tracks every
++    character, so the measured line carries one spacing step per character.
++    """
++    measure = current_conversion_context().text_advance
++    if measure is None:
++        return None
++    total = 0.0
++    for run in runs:
++        text = str(run.get('text', ''))
++        advance = measure(
++            text,
++            float(run.get('font_size', 16)),
++            str(run.get('font_weight', '400')),
++            str(run.get('font_family', '')),
++        )
++        if advance is None:
++            return None
++        total += advance + float(run.get('letter_spacing', 0.0) or 0.0) * len(text)
++    return total
+ 
+ 
+ def _first_nonspace_run(runs: list[dict[str, Any]]) -> dict[str, Any] | None:

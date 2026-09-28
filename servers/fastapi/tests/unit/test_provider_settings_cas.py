@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -28,6 +29,7 @@ from services.provider_settings_retry import (
     provider_settings_retry_delay_seconds,
     provider_settings_retry_pause,
 )
+from services.provider_settings_sync import ProviderSettingsImportError
 from utils.datetime_utils import get_current_utc_datetime
 from utils.user_config_store import read_user_config_file, update_user_config_file
 
@@ -457,6 +459,72 @@ def test_sync_import_path_is_read_only_and_mirrors_to_runtime_config(
     assert import_path.read_bytes() == original_bytes
     assert runtime_path.is_file()
     assert read_user_config_file(str(runtime_path))["CODEX_ACCESS_TOKEN"] == "import-only"
+
+
+def test_sync_refuses_to_report_success_importing_nothing_from_nonempty_file(
+    monkeypatch, tmp_path
+):
+    """Regression test for the reported defect: a read failure silently
+    swallowed into ``{}`` must not let the sync report success while the
+    source file plainly has content on disk.
+    """
+    database_path = tmp_path / "sync-divergence.db"
+    config_path = tmp_path / "userConfig.json"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path}")
+    monkeypatch.setenv("USER_CONFIG_PATH", str(config_path))
+    config_path.write_text(
+        json.dumps({"LLM": "openai", "OPENAI_API_KEY": "sk-real"}),
+        encoding="utf-8",
+    )
+    # Simulate the read path silently swallowing a failure (e.g. the ACL
+    # hardening bug) while the file on disk plainly has content.
+    monkeypatch.setattr(
+        "services.provider_settings_sync.read_user_config_file",
+        lambda _path: {},
+    )
+
+    with pytest.raises(ProviderSettingsImportError):
+        sync_legacy_file_to_provider_settings(managed_updates=None)
+
+
+def test_sync_accepts_a_genuinely_empty_file_without_raising(monkeypatch, tmp_path):
+    """A file that is legitimately absent/empty is a normal bootstrap state,
+    not a failure; the divergence guard must not fire for it."""
+    database_path = tmp_path / "sync-empty.db"
+    config_path = tmp_path / "userConfig.json"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database_path}")
+    monkeypatch.setenv("USER_CONFIG_PATH", str(config_path))
+    engine = create_engine(f"sqlite:///{database_path}")
+    ProviderSettings.__table__.create(engine)
+    engine.dispose()
+    update_user_config_file(str(config_path), lambda _existing: {})
+
+    committed = sync_legacy_file_to_provider_settings(managed_updates=None)
+
+    assert committed is not None
+    assert committed.config == {}
+
+
+def test_mirror_refuses_to_force_an_empty_projection_over_real_settings(
+    monkeypatch, tmp_path
+):
+    """The startup/recovery mirror uses ``force=True`` to bypass revision
+    ordering, never to bypass correctness. An empty incoming projection must
+    not erase a file that already holds real provider settings.
+    """
+    config_path = tmp_path / "userConfig.json"
+    monkeypatch.setenv("USER_CONFIG_PATH", str(config_path))
+    update_user_config_file(
+        str(config_path),
+        lambda _existing: {"LLM": "openai", "OPENAI_API_KEY": "sk-real"},
+    )
+
+    _mirror_to_legacy_file({}, 0, force=True)
+
+    stored = read_user_config_file(str(config_path))
+    assert stored["LLM"] == "openai"
+    assert stored["OPENAI_API_KEY"] == "sk-real"
+    assert LEGACY_PROVIDER_SETTINGS_REVISION_KEY not in stored
 
 
 def test_sync_semantic_noop_is_revision_guarded(monkeypatch, tmp_path):
