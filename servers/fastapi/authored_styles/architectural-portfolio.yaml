@@ -26,6 +26,13 @@ preview:
   image: catalogue-previews/architectural-portfolio.png
 reference_images:
   content: [catalogue-previews/architectural-portfolio.png]
+svg_overrides:
+  resolved_sections: [GENERAL]
+  common_guidance:
+    - "Compose a dominant drawing or photo image-slot with a measured caption rail (separate small text elements) and a calm title margin, using rect/line/text/image primitives. Alternate plan-led studies, material comparisons and a short project narrative across slides."
+    - "Keep at most three numbered callouts (small circles plus text) per drawing; when dimensions are dense, plan a second content slide instead of shrinking type below the floor."
+  layout_hints:
+    - "Compose freely using the permitted SVG primitives (rect, line, text, image slots) -- not a fixed layout, slot grid or Deck IR."
 brief: |-
   MOOD:
   Create a contemporary architecture-studio portfolio that feels bright, sculptural, orderly, and environmentally aware. The system is image-first and modular. Distinguish it from minimal-vellum: use no warm paper texture, muted-brown text-first minimalism, or single-image austerity; repeat sage, teal, terracotta, curved photo masks, and blueprint logic.

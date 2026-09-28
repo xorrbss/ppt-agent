@@ -23,6 +23,13 @@ preview:
   image: catalogue-previews/cobalt-editorial.png
 reference_images:
   content: [catalogue-previews/cobalt-editorial.png]
+svg_overrides:
+  resolved_sections: [GENERAL]
+  common_guidance:
+    - "Use a deep-cobalt image/diagram field (solid rect) opposed by a white reading field; vary that proportion freely with the content. Alternate full-blue argument pages, light comparison spreads and architectural image studies across the deck."
+    - "Keep one principal chart and no more than three annotation text elements on a blue-field slide; move dense tables onto a white-field slide instead."
+  layout_hints:
+    - "Compose freely with the permitted SVG primitives -- not a fixed layout, slot grid or Deck IR."
 brief: |-
   MOOD: Build a lucid, cultured editorial deck with deep cobalt fields, luminous
   paper-colored type, and decisive composition. It should feel closer to a designed
