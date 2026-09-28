@@ -66,6 +66,10 @@ def read_pdf_pages(pdf_path: Path) -> list[PdfPageInfo]:
     return pages
 
 
+def _squash(text: str) -> str:
+    return "".join(text.split())
+
+
 def check_deck_acceptance(
     pages: Sequence[PdfPageInfo],
     expected_page_count: int,
@@ -91,7 +95,9 @@ def check_deck_acceptance(
             problems.append(f"slide {slide_no}: order-guard slide is missing from the deck")
             continue
         for keyword in keywords:
-            if keyword not in page.text:
+            # Display type is often letter-spaced ("루 미 나") and charts split units
+            # from values, so compare with all whitespace removed.
+            if _squash(keyword) not in _squash(page.text):
                 problems.append(f"slide {slide_no}: order-guard keyword '{keyword}' not found in extracted text")
     return problems
 
