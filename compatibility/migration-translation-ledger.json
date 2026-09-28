@@ -17,8 +17,7 @@
       },
       {
         "dialect": "postgresql",
-        "scope": "live Template V2 upgrade, downgrade, re-upgrade, preservation, constraints, and deletion integrity",
-        "evidenceFile": "servers/fastapi/tests/integration/test_postgresql_template_v2_migrations.py"
+        "scope": "live Template V2 upgrade, downgrade, re-upgrade, preservation, constraints, and deletion integrity"
       }
     ],
     "unsupported": [

@@ -264,61 +264,12 @@ for (const [assetName, sha256] of exportAssets) {
   );
 }
 
-const rendererSource = await readText(manifest.templateV2Renderer?.source);
-const rendererDispatchStart = rendererSource.indexOf("function renderElement(");
-const rendererDispatchEnd = rendererSource.indexOf(
-  "\nfunction projectElementForRenderPlan(",
-  rendererDispatchStart
-);
-check(
-  rendererDispatchStart >= 0 && rendererDispatchEnd > rendererDispatchStart,
-  "renderer contract cannot locate the renderElement dispatch boundary"
-);
-const rendererDispatchSource =
-  rendererDispatchStart >= 0 && rendererDispatchEnd > rendererDispatchStart
-    ? rendererSource.slice(rendererDispatchStart, rendererDispatchEnd)
-    : "";
-const actualDiscriminators = [
-  ...rendererDispatchSource.matchAll(/element\.type === "([^"]+)"/g),
-].map((match) => match[1]);
-const expectedDiscriminators = manifest.templateV2Renderer?.discriminators ?? [];
-check(expectedDiscriminators.length > 0, "renderer contract must contain at least one discriminator");
-checkUnique(expectedDiscriminators, (value) => value, "renderer discriminators");
-check(
-  JSON.stringify(actualDiscriminators) === JSON.stringify(expectedDiscriminators),
-  `renderer discriminator drift: expected [${expectedDiscriminators}], got [${actualDiscriminators}]`
-);
-
-const payloadBoundarySource = await readText(
-  manifest.templateV2PayloadBoundary?.source
-);
-const payloadBoundaryTest = await readText(
-  manifest.templateV2PayloadBoundary?.test
-);
-const expectedWireShapes = [
-  "array",
-  "envelope",
-  "nested-envelope",
-];
-check(
-  JSON.stringify(manifest.templateV2PayloadBoundary?.wireShapes) ===
-    JSON.stringify(expectedWireShapes),
-  `Template V2 payload boundary must retain wire shapes [${expectedWireShapes}]`
-);
-for (const required of
-  manifest.templateV2PayloadBoundary?.sourceRequiredContains ?? []) {
-  check(
-    payloadBoundarySource.includes(required),
-    `Template V2 payload boundary source lost ${JSON.stringify(required)}`
-  );
-}
-for (const required of
-  manifest.templateV2PayloadBoundary?.testRequiredContains ?? []) {
-  check(
-    payloadBoundaryTest.includes(required),
-    `Template V2 payload boundary test lost ${JSON.stringify(required)}`
-  );
-}
+// The Template V2 renderer and its payload-boundary contract were removed
+// with the rest of Template V2 on 2026-09-25 (see
+// docs/refactoring-audit-20260929.md); the corresponding manifest keys
+// (templateV2Renderer, templateV2PayloadBoundary) were retired with them.
+// There is nothing left in this fork to check a discriminator or wire-shape
+// contract against.
 
 const routerSource = await readText(manifest.api?.routerSource);
 check(
@@ -662,9 +613,6 @@ const gatedContractSources = new Set(
     ...(manifest.versions ?? []).flatMap((version) =>
       [version.source, version.mirror].filter(Boolean)
     ),
-    manifest.templateV2Renderer?.source,
-    manifest.templateV2PayloadBoundary?.source,
-    manifest.templateV2PayloadBoundary?.test,
     manifest.api?.routerSource,
     ...(manifest.api?.keyEndpoints ?? []).map((endpoint) => endpoint.source),
     ...(registry.patches ?? []).flatMap((patch) =>
@@ -686,6 +634,6 @@ if (errors.length > 0) {
 } else {
   console.log(
     `Upstream compatibility verified: ${checks} checks; compatibility baseline ${manifest.baseline.upstreamSha}; ` +
-      `${expectedDiscriminators.length} discriminators; ${manifest.api.keyEndpoints.length} key endpoints.`
+      `${manifest.api.keyEndpoints.length} key endpoints.`
   );
 }

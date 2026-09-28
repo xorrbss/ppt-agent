@@ -3,65 +3,6 @@
   "baselineUpstreamSha": "1a1b7ae6134b31d7465d8f7fd065c1c9fa8eff97",
   "sources": [
     {
-      "path": "servers/fastapi/tests/unit/test_default_templates.py",
-      "tests": [
-        {
-          "name": "test_default_template_import_normalizes_shapes_and_copies_static",
-          "disposition": "excluded",
-          "reasonCode": "startup-default-import-not-enabled",
-          "reason": "The local Template V2 rollout is default-off and does not mutate database rows or static assets during startup."
-        },
-        {
-          "name": "test_default_template_import_force_replaces_static_assets",
-          "disposition": "excluded",
-          "reasonCode": "startup-default-import-not-enabled",
-          "reason": "Force-replacing bundled static assets would bypass the local default-off rollout boundary."
-        },
-        {
-          "name": "test_default_template_import_removes_static_directory_removed_from_bundle",
-          "disposition": "excluded",
-          "reasonCode": "startup-default-import-not-enabled",
-          "reason": "Startup deletion of static directories is outside the local Template V2 compatibility surface."
-        },
-        {
-          "name": "test_default_template_import_updates_existing_database_row",
-          "disposition": "excluded",
-          "reasonCode": "startup-default-import-not-enabled",
-          "reason": "Automatic mutation of existing Template V2 rows conflicts with the feature-gated local write policy."
-        },
-        {
-          "name": "test_default_template_import_removes_stale_default_database_rows",
-          "disposition": "excluded",
-          "reasonCode": "startup-default-import-not-enabled",
-          "reason": "Automatic removal of persisted defaults would change local data outside an explicit API write."
-        },
-        {
-          "name": "test_default_template_import_removes_all_defaults_when_bundle_is_empty",
-          "disposition": "excluded",
-          "reasonCode": "startup-default-import-not-enabled",
-          "reason": "An empty upstream bundle must not delete local Template V2 rows."
-        },
-        {
-          "name": "test_bundled_general_template_json_matches_template_v2_shapes",
-          "disposition": "excluded",
-          "reasonCode": "no-bundled-default-template-contract",
-          "reason": "The local rollout does not ship or initialize an upstream general default-template bundle."
-        },
-        {
-          "name": "test_resolve_default_template_id_maps_public_name_to_json_id",
-          "disposition": "excluded",
-          "reasonCode": "no-public-name-default-resolver",
-          "reason": "Local Template V2 APIs use explicit allowlisted string identifiers and do not alias a public default-template name."
-        },
-        {
-          "name": "test_resolve_default_template_id_rejects_paths",
-          "disposition": "excluded",
-          "reasonCode": "no-filesystem-default-resolver",
-          "reason": "No local API resolves a user-supplied template identifier to a bundled filesystem path."
-        }
-      ]
-    },
-    {
       "path": "servers/fastapi/tests/unit/test_async_tasks_api.py",
       "tests": [
         {
@@ -115,40 +56,6 @@
           ],
           "evidenceFiles": [
             "servers/fastapi/services/async_task_read_service.py"
-          ]
-        }
-      ]
-    },
-    {
-      "path": "servers/fastapi/tests/unit/test_templates_v2_generation.py",
-      "tests": [
-        {
-          "name": "test_generate_slide_layout_replaces_content_image_urls",
-          "disposition": "ported"
-        }
-      ]
-    },
-    {
-      "path": "servers/fastapi/tests/unit/test_presentation_template_v2_ui.py",
-      "tests": [
-        {
-          "name": "test_chat_template_image_content_stores_prompt",
-          "disposition": "ported",
-          "localTests": [
-            "servers/fastapi/tests/unit/services/chat/test_template_v2_hydration.py::test_hydration_clones_layout_and_preserves_image_prompt_metadata"
-          ],
-          "evidenceFiles": [
-            "servers/fastapi/services/chat/template_v2_hydration.py"
-          ]
-        },
-        {
-          "name": "test_apply_template_image_content_avoids_stretching_generated_photos",
-          "disposition": "ported",
-          "localTests": [
-            "servers/fastapi/tests/unit/services/chat/test_template_v2_hydration.py::test_hydration_clones_layout_and_preserves_image_prompt_metadata"
-          ],
-          "evidenceFiles": [
-            "servers/fastapi/services/chat/template_v2_hydration.py"
           ]
         }
       ]
