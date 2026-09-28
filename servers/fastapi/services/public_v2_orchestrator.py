@@ -13,6 +13,9 @@ from services.public_generation_route import (
     effective_generation_engine as _effective_generation_engine,
     pin_source_restyle_authoring,
 )
+from services.public_v2_admission_errors import generation_route_error_types
+from services.public_v2_request_bridge import (
+    resolve_canvas_style_id, resolve_internal_generation_request)
 
 from collections.abc import Awaitable, Callable, Mapping
 from contextlib import contextmanager
@@ -48,7 +51,6 @@ from api.v2.orchestration import (
     PublicRequestActor,
     PublicV2OrchestrationError,
 )
-from models.generate_presentation_request import GeneratePresentationRequest
 from services.authored_canvas import (
     merge_presentation_canvas,
     request_canvas_metadata,
@@ -304,6 +306,8 @@ async def _resolve_generation_route_receipt(
             )
             if inspect.isawaitable(raw_resolution):
                 raw_resolution = await raw_resolution
+        except generation_route_error_types() as error:
+            raise _public_error(422, getattr(error, "code", str(error))) from error
         except Exception as error:
             raise _public_error(503, "generation_route_resolver_unavailable") from error
         if isinstance(raw_resolution, GenerationRouteReceiptV1):
@@ -750,49 +754,13 @@ class SqlPublicV2Orchestrator:
                 if generation_route_receipt.design_pack_pin is not None
                 else None
             )
-            internal_request = GeneratePresentationRequest(
-                content=request.content,
-                slides_markdown=request.slides_markdown,
-                instructions=request.instructions,
-                n_slides=slide_count,
-                language=request.language,
-                template="authored",
-                strategy=request.strategy,
-                qualityProfile=(
-                    "release" if request.quality_policy == "release-v1" else "development"
-                ),
-                visionQa=request.quality_policy == "release-v1",
-                reference_snapshot_ids=reference_ids,
-                authored_style=request.authored_style,
-                **({"page_size": request.page_size, "orientation": request.orientation}
-                   if request.page_size is not None else {"aspect_ratio": request.aspect_ratio}),
-                masterPin=(
-                    request.master_pin.model_dump(mode="json", by_alias=True)
-                    if request.master_pin is not None
-                    else None
-                ),
-                sourceMode=request.source_mode,
-                sourceContentManifestPin=(
-                    request.source_content_manifest_pin.model_dump(
-                        mode="json",
-                        by_alias=True,
-                    )
-                    if request.source_content_manifest_pin is not None
-                    else None
-                ),
-                rasterApprovalPin=(
-                    request.raster_approval_pin.model_dump(mode="json")
-                    if request.raster_approval_pin is not None
-                    else None
-                ),
-                contentPolicy=(
-                    request.content_policy.model_dump(mode="json", by_alias=True)
-                    if request.content_policy is not None
-                    else None
-                ),
-                generationMode=internal_generation_mode,
-                designPackPin=internal_design_pack_pin,
-                generationEngine=effective_generation_engine,
+            internal_request = resolve_internal_generation_request(
+                request,
+                slide_count=slide_count,
+                reference_ids=reference_ids,
+                internal_generation_mode=internal_generation_mode,
+                internal_design_pack_pin=internal_design_pack_pin,
+                effective_generation_engine=effective_generation_engine,
             )
             try:
                 if internal_request.master_pin is not None:
@@ -803,7 +771,7 @@ class SqlPublicV2Orchestrator:
                     await _validate_authored_master_pin_admission(internal_request)
                 validate_authored_canvas_admission(
                     internal_request,
-                    style_id=request.authored_style or "default",
+                    style_id=resolve_canvas_style_id(internal_request),
                 )
             except ValueError as error:
                 if str(error).startswith(("document_canvas", "authored_canvas", "authored_portrait")):
