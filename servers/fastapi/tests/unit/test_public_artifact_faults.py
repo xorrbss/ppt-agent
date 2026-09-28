@@ -245,14 +245,12 @@ def test_artifact_fault_boundaries_stream_digest_orphan_gc_and_stale_cas(
             authority=authority, object_store=store, enabled=True
         )
         committed = await lifecycle.transition(authority.record, "committed")
-        referenced = await lifecycle.change_ref_count(committed, delta=1)
         assert await lifecycle.collect_once(
             older_than=datetime.now(timezone.utc) + timedelta(seconds=1), limit=1
         ) == 0
-        released = await lifecycle.change_ref_count(referenced, delta=-1)
         authority.force_stale = True
         with pytest.raises(ArtifactStoreError, match="lifecycle_fence_stale"):
-            await lifecycle.transition(released, "tombstoned")
+            await lifecycle.transition(committed, "tombstoned")
 
     asyncio.run(scenario())
 

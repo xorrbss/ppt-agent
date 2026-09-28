@@ -11,7 +11,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from enum import StrEnum
 import re
-from collections.abc import Iterable
 from typing import Any, Mapping
 import uuid
 
@@ -236,36 +235,3 @@ def build_conversation_event(
         occurred_at=occurred_at or datetime.now(timezone.utc),
         data=dict(data),
     )
-
-
-def recover_assistant_checkpoints(
-    events: Iterable[UnifiedConversationEvent],
-    *,
-    after_cursor: str | int | None = None,
-) -> tuple[str | None, dict[uuid.UUID, str]]:
-    """Apply a durable replay page and return its cursor plus assistant content.
-
-    Event consumers use this before accepting live deltas after an SSE reconnect.
-    Only checkpoint events update rendered assistant text, so missing transient
-    packets cannot produce a corrupt or duplicate response.
-    """
-
-    high_watermark = canonical_event_cursor(after_cursor)
-    replay_floor = int(high_watermark) if high_watermark is not None else None
-    checkpoints: dict[uuid.UUID, str] = {}
-    checkpoint_cursors: dict[uuid.UUID, int] = {}
-    for event in events:
-        if event.durability != EventDurability.DURABLE:
-            continue
-        assert event.cursor is not None
-        event_cursor = int(event.cursor)
-        if replay_floor is not None and event_cursor <= replay_floor:
-            continue
-        if high_watermark is None or event_cursor > int(high_watermark):
-            high_watermark = event.cursor
-        if event.type == ConversationEventType.ASSISTANT_CHECKPOINT:
-            assert event.message_id is not None
-            if event_cursor > checkpoint_cursors.get(event.message_id, -1):
-                checkpoint_cursors[event.message_id] = event_cursor
-                checkpoints[event.message_id] = str(event.data["content"])
-    return high_watermark, checkpoints

@@ -22,8 +22,8 @@ from services.source_content.raster_reconstruction_store import (
 )
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError, WorkspaceOperationExecutionContext,
-    WorkspaceOperationHandlerRegistry, WorkspaceOperationLeaseLost,
-    WorkspaceOperationResult, workspace_operation_handler_registry,
+    WorkspaceOperationLeaseLost,
+    WorkspaceOperationResult,
 )
 
 
@@ -305,14 +305,3 @@ class RasterAnalysisOperationHandler:
             "page_count": analysis.source.page_count,
             "auto_approved": auto_approved,
         })
-
-
-def register_raster_analysis_operation_handler(
-    *,
-    registry: WorkspaceOperationHandlerRegistry = workspace_operation_handler_registry,
-    replace: bool = False,
-) -> None:
-    registry.register(
-        RASTER_ANALYSIS_OPERATION_KIND, RasterAnalysisOperationHandler(),
-        replace=replace, recovery_policy="automatic",
-    )

@@ -39,10 +39,8 @@ from services.workspace_operation_handler_registry import (
     RetryableWorkspaceOperationError,
     WorkspaceOperationCancelled,
     WorkspaceOperationExecutionContext,
-    WorkspaceOperationHandlerRegistry,
     WorkspaceOperationLeaseLost,
     WorkspaceOperationResult,
-    workspace_operation_handler_registry,
 )
 from services.workspace_operation_runner import sanitize_workspace_event_payload
 
@@ -319,20 +317,3 @@ class WorkspaceBatchRemakeOperationHandler:
                 operation_kind=OPERATION_KIND,
             )
         return safe_result, published_revision
-
-
-def register_workspace_batch_remake_operation_handler(
-    *,
-    registry: WorkspaceOperationHandlerRegistry = workspace_operation_handler_registry,
-    replace: bool = False,
-) -> WorkspaceBatchRemakeOperationHandler:
-    handler = WorkspaceBatchRemakeOperationHandler()
-    registry.register(
-        OPERATION_KIND,
-        handler,
-        # The whole publish stays uncommitted until the final revision bump, so
-        # a crashed attempt published nothing and can safely be retried.
-        replace=replace,
-        recovery_policy="automatic",
-    )
-    return handler

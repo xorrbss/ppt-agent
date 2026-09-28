@@ -63,9 +63,7 @@ from services.workspace_operation_handler_registry import (
     RetryableWorkspaceOperationError,
     WorkspaceOperationCancelled,
     WorkspaceOperationExecutionContext,
-    WorkspaceOperationHandlerRegistry,
     WorkspaceOperationResult,
-    workspace_operation_handler_registry,
 )
 from services.workspace_buffered_session import (
     BufferedAsyncSession as BufferedAsyncSession,
@@ -716,22 +714,3 @@ class VersionRestoreOperationHandler:
             payload=result_payload,
             result_revision=revision,
         )
-
-
-def register_presentation_chat_operation_handlers(
-    *,
-    registry: WorkspaceOperationHandlerRegistry = workspace_operation_handler_registry,
-    replace: bool = False,
-    handler: PresentationChatOperationHandler | None = None,
-    version_restore_handler: VersionRestoreOperationHandler | None = None,
-) -> PresentationChatOperationHandler:
-    resolved = handler or PresentationChatOperationHandler()
-    for kind in CHAT_MUTATION_OPERATION_KINDS:
-        registry.register(kind, resolved, replace=replace)
-    registry.register(
-        "version.restore",
-        version_restore_handler or VersionRestoreOperationHandler(),
-        replace=replace,
-        recovery_policy="automatic",
-    )
-    return resolved

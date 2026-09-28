@@ -41,7 +41,6 @@ from services.public_export_operation import PublicExportOperationError
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
     WorkspaceOperationClaim,
-    WorkspaceOperationHandlerRegistry,
     WorkspaceOperationLeaseLost,
     WorkspaceOperationResult,
 )
@@ -54,9 +53,8 @@ from services.workspace_quality_export_operation_handlers import (
     _legacy_fidelity_public_quality_receipt,
     _resolved_authored_quality_digest,
     WorkspaceExportOperationHandler,
-    WorkspaceQualityReviewOperationHandler,
-    register_workspace_quality_export_operation_handlers,
 )
+from services.workspace_quality_operation_handler import WorkspaceQualityReviewOperationHandler
 from services.workspace_quality_operation_handler import (
     _requires_release_recheck_after_completed_task,
     build_export_release_review_receipt,
@@ -479,14 +477,6 @@ def test_command_contract_accepts_quality_and_export_and_rejects_credentials():
             idempotency_key="secret-test",
             context={"cookie": "must-not-persist"},
         )
-
-
-def test_quality_review_registration_enables_automatic_crash_recovery():
-    registry = WorkspaceOperationHandlerRegistry()
-
-    register_workspace_quality_export_operation_handlers(registry=registry)
-
-    assert registry.recovery_policy("quality.review") == "automatic"
 
 
 def test_completed_fixed_release_review_requires_same_runtime_recheck():

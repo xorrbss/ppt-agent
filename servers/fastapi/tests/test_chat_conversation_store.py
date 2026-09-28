@@ -56,10 +56,7 @@ class TestChatConversationStore:
         ) as load_sql, patch(
             "services.chat.conversation_store.CHAT_MEMORY_STORE.load_history",
             new=AsyncMock(return_value=legacy),
-        ) as load_mem0, patch(
-            "services.chat.conversation_store.sql_chat_history.replace_messages",
-            new=AsyncMock(),
-        ) as replace_messages:
+        ) as load_mem0:
             store = ChatConversationStore(sql_session)
             history = asyncio.run(
                 store.load_history(
@@ -70,7 +67,6 @@ class TestChatConversationStore:
 
         load_sql.assert_awaited_once()
         load_mem0.assert_awaited_once()
-        replace_messages.assert_not_awaited()
         assert history == legacy
 
     def test_append_turn_persists_canonical_messages_and_mem0(self):
@@ -83,9 +79,6 @@ class TestChatConversationStore:
         store = ChatConversationStore(sql_session)
 
         with patch(
-            "services.chat.conversation_store.sql_chat_history.append_turn",
-            new=AsyncMock(),
-        ) as append_sql, patch(
             "services.chat.conversation_store.CHAT_MEMORY_STORE.store_chat_turn",
             new=AsyncMock(),
         ) as store_mem0, patch(
@@ -101,7 +94,6 @@ class TestChatConversationStore:
                 )
             )
 
-        append_sql.assert_not_awaited()
         added = sql_session.add_all.call_args.args[0]
         assert [message.role for message in added] == ["user", "assistant"]
         store_mem0.assert_awaited_once_with(
@@ -122,9 +114,6 @@ class TestChatConversationStore:
         store = ChatConversationStore(sql_session)
 
         with patch(
-            "services.chat.conversation_store.sql_chat_history.append_turn",
-            new=AsyncMock(),
-        ) as append_sql, patch(
             "services.chat.conversation_store.CHAT_MEMORY_STORE.store_chat_turn",
             new=AsyncMock(),
         ) as store_mem0, patch(
@@ -140,7 +129,6 @@ class TestChatConversationStore:
                 )
             )
 
-        append_sql.assert_not_awaited()
         sql_session.add_all.assert_called_once()
         store_mem0.assert_not_awaited()
 
