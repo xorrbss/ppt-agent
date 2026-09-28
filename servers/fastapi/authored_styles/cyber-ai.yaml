@@ -41,6 +41,14 @@ reference_images:
     - cyber-ai/architecture.png
   closing:
     - cyber-ai/closing.png
+svg_overrides:
+  resolved_sections: [LAYOUT SYSTEM, IMAGE DIRECTION]
+  layout_hints:
+    - "Pair one simple trust-boundary diagram with a clear narrative text column. Alternate a boundary map, a workflow study and a flat verification ledger across pages. Each map uses three to five nodes and one highlighted path; move exception detail to a separate reading page. Treat these as compositional directions scaled to the pinned canvas, not fixed coordinates."
+  common_guidance:
+    - "Build diagrams from permitted SVG primitives only: nodes as rect, circle or polygon; connections as line or straight-segment polyline; the one highlighted path in the accent colour at a heavier stroke, all others muted."
+    - "Suggest the luminous protective field and refracted glass forms with two or three stacked solid shapes of decreasing opacity around the protected node, never with gradients, filters or blur. Draw isometric systems and cutaways with polygon faces in three flat tones of one hue for top, left and right planes."
+    - "Keep every illustration tied to the slide's claim. Do not reproduce wording, logos, watermarks or the exact object arrangement of a reference image."
 brief: |-
   MOOD
   Create an optimistic near-future security platform aesthetic: precise, luminous, calm, and highly engineered. The deck should feel like a premium technology keynote with consulting-grade information design, not a generic corporate template.
