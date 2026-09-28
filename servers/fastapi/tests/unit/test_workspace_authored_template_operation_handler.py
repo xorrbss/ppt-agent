@@ -7,12 +7,10 @@ import pytest
 from services.workspace_authored_template_operation_handler import (
     DESIGN_APPLY_OPERATION_KIND,
     WorkspaceAuthoredTemplateOperationHandler,
-    register_workspace_authored_template_operation_handler,
 )
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
     WorkspaceOperationClaim,
-    WorkspaceOperationHandlerRegistry,
     WorkspaceOperationResult,
 )
 
@@ -79,19 +77,6 @@ def _design_settings(source_id: uuid.UUID | None = None) -> dict:
         "resolved_style_digest": "sha256:" + "b" * 64,
         "design_signature": "sha256:" + "a" * 64,
     }
-
-
-def test_template_apply_registration_is_automatic_and_resolvable():
-    registry = WorkspaceOperationHandlerRegistry()
-
-    handler = register_workspace_authored_template_operation_handler(
-        registry=registry
-    )
-
-    assert registry.resolve("template.apply") is handler
-    assert registry.resolve(DESIGN_APPLY_OPERATION_KIND) is handler
-    assert registry.recovery_policy("template.apply") == "automatic"
-    assert registry.recovery_policy(DESIGN_APPLY_OPERATION_KIND) == "automatic"
 
 
 @pytest.mark.parametrize(

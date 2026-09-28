@@ -414,27 +414,6 @@ class ArtifactLifecycleService:
             raise ArtifactStoreError("artifact.lifecycle_fence_stale")
         return updated
 
-    async def change_ref_count(
-        self,
-        record: ArtifactLifecycleRecord,
-        *,
-        delta: Literal[-1, 1],
-    ) -> ArtifactLifecycleRecord:
-        self._require_enabled()
-        if delta == 1 and record.state != "committed":
-            raise ArtifactStoreError("artifact.reference_add_not_committed")
-        if delta == -1 and (record.state not in {"committed", "tombstoned"} or record.ref_count == 0):
-            raise ArtifactStoreError("artifact.reference_count_underflow")
-        updated = await self._authority.compare_and_set(
-            artifact_id=record.artifact.artifact_id,
-            expected_state=record.state,
-            expected_revision=record.state_revision,
-            next_state=record.state,
-            ref_count_delta=delta,
-        )
-        if updated is None:
-            raise ArtifactStoreError("artifact.lifecycle_fence_stale")
-        return updated
 
     async def collect_once(self, *, older_than: datetime, limit: int) -> int:
         self._require_enabled()

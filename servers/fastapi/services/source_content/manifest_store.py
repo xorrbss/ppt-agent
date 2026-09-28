@@ -444,31 +444,3 @@ def mark_coverage_receipts_stale_sync(
         presentation.updated_at = now
         session.add(presentation)
     return int(result.rowcount or 0)
-
-
-async def mark_coverage_receipts_stale(
-    session: AsyncSession,
-    *,
-    owner_id: uuid.UUID | None,
-    presentation_id: uuid.UUID,
-    prior_revision: int,
-    new_revision: int,
-) -> int:
-    now = get_current_utc_datetime()
-    result = await session.execute(
-        update(SourceContentCoverageReceipt)
-        .where(
-            SourceContentCoverageReceipt.owner_scope == _scope(owner_id),
-            SourceContentCoverageReceipt.presentation_id == presentation_id,
-            SourceContentCoverageReceipt.presentation_revision <= prior_revision,
-            SourceContentCoverageReceipt.edit_state == "pristine",
-        )
-        .values(edit_state="stale", superseded_at=now, updated_at=now)
-    )
-    presentation = await session.get(PresentationModel, presentation_id)
-    if presentation is not None and presentation.owner_id == owner_id:
-        presentation.theme = _modified_theme(presentation.theme, new_revision=new_revision)
-        presentation.updated_at = now
-        session.add(presentation)
-    await session.flush()
-    return int(result.rowcount or 0)

@@ -312,39 +312,6 @@ def _ai_edit_zone_envelopes(contract: DeckMasterContract) -> dict[str, Rect]:
     return result
 
 
-def _role_policy(
-    *,
-    role: str,
-    envelope: Rect,
-) -> SlideRolePolicySnapshot:
-    title_height = max(
-        1.0,
-        envelope.height * (0.28 if role in {"cover", "section", "closing"} else 0.20),
-    )
-    title = Rect(
-        x=envelope.x,
-        y=envelope.y,
-        width=envelope.width,
-        height=min(title_height, envelope.height),
-    )
-    body_top = min(envelope.bottom - 1.0, title.bottom)
-    body = Rect(
-        x=envelope.x,
-        y=body_top,
-        width=envelope.width,
-        height=max(1.0, envelope.bottom - body_top),
-    )
-    return SlideRolePolicySnapshot(
-        role=role,
-        title_anchor=title,
-        content_rect=body,
-        max_title_lines=3 if role in {"cover", "closing"} else 2,
-        title_alignment="center" if role in {"cover", "closing"} else "left",
-        bullet_policy="none" if role in {"cover", "closing"} else "preserve",
-        show_document_id=role in {"cover", "closing"},
-    )
-
-
 def _canonical_role_policy(contract: DeckMasterContract, role: str) -> SlideRolePolicySnapshot:
     """Return company-neutral Authored template geometry.
 

@@ -26,7 +26,6 @@ from services.authored_vnext.narrative_ir.content_graph import (
     seal_content_integrity_receipt,
 )
 from services.authored_vnext.source_native_generation import (
-    _append_flow_text_units,
     _append_fixed_text_columns,
     _apply_composition_plan,
     _build_slide_quality_observation,
@@ -271,16 +270,6 @@ def test_source_native_unstructured_table_cells_share_renderer_estimator_columns
         column_width=column_width,
     )
 
-    parent = lxml_html.Element("div")
-    _append_flow_text_units(
-        parent,
-        cells,
-        slot=slot,
-        adaptive_scale=1.0,
-        role="body",
-        column_width=column_width,
-    )
-
     # Without source matrix metadata, the canonical renderer uses at most four
     # columns. The estimator must describe that grid, not invent a denser one.
     assert selected_columns == 4
@@ -291,15 +280,6 @@ def test_source_native_unstructured_table_cells_share_renderer_estimator_columns
         role="body",
         column_width=column_width,
     ) == selected_height
-    grids = parent.xpath("./div[div[@data-source-boundary-kind='table-cell']]")
-    assert len(grids) == 1
-    assert (
-        f"grid-template-columns:repeat({selected_columns},minmax(0,1fr))"
-        in str(grids[0].get("style") or "")
-    )
-    assert [cell.get("data-source-flow-unit-id") for cell in grids[0].xpath("./div")] == [
-        cell.content_unit_id for cell in cells
-    ]
 
 
 def test_source_native_flow_text_inherits_container_color_without_pack_override() -> None:

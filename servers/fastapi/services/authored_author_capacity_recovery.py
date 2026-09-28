@@ -238,38 +238,6 @@ class _TitleTextBoundaryParser(_AuthoredStartTagCollector):
         }
 
 
-def preauthor_title_recovery_contract_prompt(content: str, capacity: SlideCapacity) -> str:
-    """Freeze a conservative planned-title contract before provider ordinal one."""
-
-    lines = [
-        re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", line)).strip()
-        for line in str(content or "").splitlines()
-    ]
-    lines = [re.sub(r"^(?:#{1,6}|[-*+] |\d+[.)]\s+)", "", line).strip() for line in lines if line]
-    title = lines[0] if len(lines) >= 2 else ""
-    non_title = len(" ".join(lines[1:])) if title else len(" ".join(lines))
-    eligible = (("planned.title", title),) if title else ()
-    measured = {
-        "owner_title": len(title),
-        "owner_visible_text": len(title) + non_title,
-    }
-    contract = build_title_recovery_contract(
-        measured,
-        {
-            "owner_title": capacity.title_max_chars,
-            "owner_visible_text": capacity.max_visible_text_chars,
-        },
-        eligible,
-        layout_id=f"role:{capacity.role.lower()}",
-    )
-    prompt = title_budget_prompt(contract, eligible)
-    return (
-        "PRE-PROVIDER TITLE CONTRACT (server-owned; applies to ordinal one): "
-        + prompt
-        + " Treat planned.title as the single primary title owner identity; if emitted, use that exact QID. "
-    )
-
-
 def title_capacity_recovery_titles(html: str, qids: Sequence[str]) -> dict[str, str]:
     parser = _TitleTextBoundaryParser(qids)
     parser.feed(html)

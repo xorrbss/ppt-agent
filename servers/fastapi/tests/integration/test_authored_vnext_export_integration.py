@@ -38,7 +38,7 @@ from services.authored_vnext.integration.export_service import (
     CreateJobCommand,
     ExportServiceError,
 )
-from services.authored_vnext.master.repository import (
+from tests.support.authored_vnext_master_memory_repository import (
     InMemoryAuthoredVNextMasterRepository,
 )
 from services.authored_vnext.master.service import AuthoredVNextMasterService

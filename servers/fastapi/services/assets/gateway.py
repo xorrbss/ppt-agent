@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Iterable
 from datetime import datetime, timedelta
 from hashlib import sha256
 import hmac
@@ -187,31 +186,6 @@ class AssetGateway:
             conversation_id=asset.conversation_id,
         )
 
-    async def bind_many(
-        self,
-        session: AsyncSession,
-        *,
-        asset_ids: Iterable[uuid.UUID],
-        kind: AssetKind | str,
-        conversation_id: uuid.UUID | None = None,
-        storage_root: Path | None = None,
-    ) -> tuple[AssetBinding, ...]:
-        seen: set[uuid.UUID] = set()
-        bindings: list[AssetBinding] = []
-        for asset_id in asset_ids:
-            if asset_id in seen:
-                raise AssetGatewayError("duplicate_asset_binding", status_code=422)
-            seen.add(asset_id)
-            bindings.append(
-                await self.bind(
-                    session,
-                    asset_id=asset_id,
-                    kind=kind,
-                    conversation_id=conversation_id,
-                    storage_root=storage_root,
-                )
-            )
-        return tuple(bindings)
 
     async def resolve_for_processing(
         self,

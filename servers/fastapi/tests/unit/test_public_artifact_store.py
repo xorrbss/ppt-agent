@@ -593,11 +593,7 @@ def test_feature_lifecycle_refcount_expiry_and_gc_fail_closed(
             enabled=True,
         )
         committed = await lifecycle.transition(authority.record, "committed")
-        referenced = await lifecycle.change_ref_count(committed, delta=1)
-        with pytest.raises(ArtifactStoreError, match="references_remain"):
-            await lifecycle.transition(referenced, "tombstoned")
-        released = await lifecycle.change_ref_count(referenced, delta=-1)
-        tombstoned = await lifecycle.transition(released, "tombstoned")
+        tombstoned = await lifecycle.transition(committed, "tombstoned")
         authority.record = replace(
             authority.record,
             delete_after=datetime.now(timezone.utc) + timedelta(hours=1),

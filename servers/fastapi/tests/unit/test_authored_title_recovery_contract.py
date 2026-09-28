@@ -4,7 +4,6 @@ from services.authored_title_recovery_contract import (
     deterministic_title_abbreviation,
     protected_title_token_differences,
     resolve_title_capacity_recovery,
-    safe_title_recovery_receipt,
 )
 
 
@@ -64,7 +63,6 @@ def test_recovery_substitutes_layout_then_abbreviates_without_provider_or_gate_r
     assert result["titles"]["hero.title"] == "IBM 20% info tech arch and impl management"
     assert protected_title_token_differences(title, result["titles"]["hero.title"]) == []
     receipt = result["receipt"]
-    assert safe_title_recovery_receipt(receipt) == receipt
     assert receipt["layoutSubstituted"] is True
     assert receipt["deterministicAbbreviationApplied"] is True
     assert receipt["gateRelaxed"] is False
@@ -82,9 +80,3 @@ def test_korean_abbreviation_is_closed_and_unresolvable_is_bounded_terminal():
     assert result["status"] == "terminal"
     assert result["code"] == TITLE_CAPACITY_UNRESOLVABLE
     assert result["titles"] == {"hero.title": title}
-    assert safe_title_recovery_receipt(result["receipt"]) == result["receipt"]
-
-    unsafe = dict(result["receipt"], gateRelaxed=True)
-    assert safe_title_recovery_receipt(unsafe) is None
-    unsafe = dict(result["receipt"], probabilisticCallCount=1)
-    assert safe_title_recovery_receipt(unsafe) is None

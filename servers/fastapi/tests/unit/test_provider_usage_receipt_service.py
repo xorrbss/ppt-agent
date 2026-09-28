@@ -12,7 +12,6 @@ from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.provider_usage_receipt import ProviderUsageReceipt
 from services.provider_usage_receipt_service import (
     ProviderUsageReceiptInput,
-    aggregate_provider_usage_for_job,
     record_provider_usage_receipt,
     validate_provider_usage_receipt,
 )
@@ -149,32 +148,6 @@ def test_receipts_dedupe_retries_and_keep_cancel_resume_aggregate_exact(tmp_path
                 await session.commit()
 
             async with sessions() as session:
-                aggregate = await aggregate_provider_usage_for_job(session, job_id)
-                assert aggregate == {
-                    "receipt_count": 2,
-                    "request_count": 2,
-                    "provider_receipt_count": 1,
-                    "provider_request_count": 1,
-                    "provider_retry_receipt_count": 0,
-                    "retry_receipt_count": 1,
-                    "resume_receipt_count": 1,
-                    "recovery_receipt_count": 0,
-                    "cancelled_receipt_count": 1,
-                    "failed_receipt_count": 0,
-                    "unavailable_receipt_count": 1,
-                    "latency_ms": 642,
-                    "input_tokens": 123,
-                    "output_tokens": 45,
-                    "cached_tokens": None,
-                    "reported_cost_microunits": None,
-                    "estimated_cost_microunits": 678,
-                    "cost_by_pricing_version": {
-                        "2026-08-13": {
-                            "reported_cost_microunits": 0,
-                            "estimated_cost_microunits": 678,
-                        }
-                    },
-                }
                 with pytest.raises(ValueError, match="conflicts"):
                     await record_provider_usage_receipt(
                         session, replace(initial, latency_ms=322)

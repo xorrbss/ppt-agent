@@ -45,22 +45,6 @@ def _offline_resolver(_hostname: str, _port: int) -> tuple[str, ...]:
     return (PUBLIC_IP,)
 
 
-def test_self_hosted_manifest_declares_all_categories_and_defaults_off() -> None:
-    manifest = EgressManifest.self_hosted_default()
-    safe = manifest.to_safe_dict()
-
-    assert {rule["category"] for rule in safe["rules"]} == {
-        "provider",
-        "image",
-        "search",
-        "font",
-        "telemetry",
-    }
-    assert all(not rule["enabled"] for rule in safe["rules"])
-    assert safe["self_hosted"] is True
-    assert safe["telemetry_opt_in"] is False
-
-
 def test_default_off_rejects_before_dns_resolution() -> None:
     called = False
 

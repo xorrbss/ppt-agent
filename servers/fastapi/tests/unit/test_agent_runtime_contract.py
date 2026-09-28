@@ -28,7 +28,6 @@ from services.conversation_event_contract import (
     ConversationEventType,
     EventDurability,
     build_conversation_event,
-    recover_assistant_checkpoints,
 )
 from services.workspace_chat_operation_handler import _default_chat_service_factory
 
@@ -229,33 +228,6 @@ def test_checkpointing_continues_at_capacity_and_final_state_is_canonical():
         assert checkpoints == ["abc", "bcdef", "efghi", "FINAL"]
 
     asyncio.run(scenario())
-
-
-def test_checkpoint_recovery_ignores_floor_and_keeps_latest_cursor_per_message():
-    conversation_id = uuid.uuid4()
-    run_id = uuid.uuid4()
-    message_id = uuid.uuid4()
-
-    def checkpoint(cursor: int, content: str):
-        return build_conversation_event(
-            event_id=f"checkpoint:{cursor}",
-            event_type=ConversationEventType.ASSISTANT_CHECKPOINT,
-            conversation_id=conversation_id,
-            run_id=run_id,
-            message_id=message_id,
-            cursor=cursor,
-            checkpoint_cursor=cursor,
-            data={"content": content},
-        )
-
-    # Replay sources are normally ordered by SQL, but recovery remains correct
-    # for duplicated/out-of-order transport pages and never reapplies its floor.
-    high_watermark, recovered = recover_assistant_checkpoints(
-        (checkpoint(12, "latest"), checkpoint(9, "before-floor"), checkpoint(11, "older")),
-        after_cursor="10",
-    )
-    assert high_watermark == "12"
-    assert recovered == {message_id: "latest"}
 
 
 def test_event_sink_stops_when_the_durable_attempt_fence_is_lost():

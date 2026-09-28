@@ -224,23 +224,6 @@ class ProviderRuntimeControl:
                 "in_flight": self._in_flight_by_job.get(job_id, 0),
             }
 
-    async def runtime_status(self) -> dict[str, int | float | str]:
-        """Return provider-wide bounded scalars for dashboards and alerts."""
-
-        async with self._condition:
-            now = self._clock()
-            self._prune_rpm(now)
-            return {
-                "queue_depth": len(self._queue),
-                "queue_capacity": self.limits.max_queue_size,
-                "in_flight": self._in_flight,
-                "concurrency_limit": self.limits.max_concurrency,
-                "rpm_window_count": len(self._rpm_timestamps),
-                "rpm_limit": self.limits.requests_per_minute,
-                "circuit_state": self._circuit_snapshot_state(now),
-                "circuit_consecutive_failures": self._circuit_failures,
-                "circuit_open_remaining_seconds": max(0.0, self._circuit_open_until - now),
-            }
 
     async def snapshot(self) -> dict[str, object]:
         """Return a JSON-safe, payload-free restart snapshot."""

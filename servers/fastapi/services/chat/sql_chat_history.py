@@ -3,16 +3,13 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from models.sql.chat_history_message import ChatHistoryMessageModel
-from utils.datetime_utils import get_current_utc_datetime
-from utils.owner_context import get_current_owner_id
 
 
 def _compact_preview(content: str) -> str:
@@ -95,122 +92,3 @@ async def load_messages_with_meta(
             entry["created_at"] = created
         out.append(entry)
     return out
-
-
-async def replace_messages(
-    session: AsyncSession,
-    *,
-    presentation_id: uuid.UUID,
-    conversation_id: uuid.UUID,
-    messages: list[dict[str, str]],
-) -> None:
-    # Delete through the unit of work.  A bulk DELETE executes immediately and
-    # would hold the writer lock for the rest of a buffered chat turn, which on
-    # SQLite blocks the runner's independent lease heartbeat.
-    superseded = await session.scalars(
-        select(ChatHistoryMessageModel).where(
-            ChatHistoryMessageModel.presentation_id == presentation_id,
-            ChatHistoryMessageModel.conversation_id == conversation_id,
-            ChatHistoryMessageModel.owner_id == get_current_owner_id(),
-        )
-    )
-    for message in list(superseded):
-        await session.delete(message)
-
-    next_position = 1
-    base_time = get_current_utc_datetime()
-    for index, message in enumerate(messages):
-        role = message.get("role")
-        content = message.get("content")
-        if role not in ("user", "assistant"):
-            continue
-        if not isinstance(content, str) or not content.strip():
-            continue
-
-        created_at = _parse_created_at(message.get("created_at")) or (
-            base_time + timedelta(microseconds=index)
-        )
-        session.add(
-            ChatHistoryMessageModel(
-                presentation_id=presentation_id,
-                conversation_id=conversation_id,
-                position=next_position,
-                role=role,
-                content=content,
-                created_at=created_at,
-            )
-        )
-        next_position += 1
-
-
-async def append_turn(
-    session: AsyncSession,
-    *,
-    presentation_id: uuid.UUID,
-    conversation_id: uuid.UUID,
-    user_message: str,
-    assistant_message: str,
-    tool_calls: list[str] | None = None,
-) -> None:
-    max_position = await session.scalar(
-        select(func.max(ChatHistoryMessageModel.position)).where(
-            ChatHistoryMessageModel.presentation_id == presentation_id,
-            ChatHistoryMessageModel.conversation_id == conversation_id,
-        )
-    )
-    next_position = int(max_position or 0) + 1
-    now = get_current_utc_datetime()
-
-    session.add(
-        ChatHistoryMessageModel(
-            presentation_id=presentation_id,
-            conversation_id=conversation_id,
-            position=next_position,
-            role="user",
-            content=user_message,
-            created_at=now,
-        )
-    )
-    session.add(
-        ChatHistoryMessageModel(
-            presentation_id=presentation_id,
-            conversation_id=conversation_id,
-            position=next_position + 1,
-            role="assistant",
-            content=assistant_message,
-            created_at=now + timedelta(microseconds=1),
-            tool_calls=tool_calls or None,
-        )
-    )
-
-
-async def list_conversations(
-    session: AsyncSession, *, presentation_id: uuid.UUID
-) -> list[dict[str, Any]]:
-    rows = list(
-        (
-            await session.scalars(
-                select(ChatHistoryMessageModel)
-                .where(ChatHistoryMessageModel.presentation_id == presentation_id)
-                .order_by(
-                    ChatHistoryMessageModel.created_at.desc(),
-                    ChatHistoryMessageModel.position.desc(),
-                )
-            )
-        ).all()
-    )
-
-    summary_by_conversation: dict[str, dict[str, Any]] = {}
-    for row in rows:
-        conversation_key = str(row.conversation_id)
-        if conversation_key in summary_by_conversation:
-            continue
-        summary_by_conversation[conversation_key] = {
-            "conversation_id": conversation_key,
-            "updated_at": _serialize_created_at(row.created_at),
-            "last_message_preview": _compact_preview(row.content),
-        }
-
-    summaries = list(summary_by_conversation.values())
-    summaries.sort(key=lambda item: item.get("updated_at") or "", reverse=True)
-    return summaries

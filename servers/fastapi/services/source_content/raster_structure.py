@@ -273,27 +273,3 @@ def xy_cut_order(boxes: list[Box]) -> list[int]:
         return [index for index, _ in sorted(items, key=lambda item: (item[1][1], item[1][0]))]
 
     return solve(list(enumerate(boxes)))
-
-
-def redesign_ink_coverage(
-    analysis: RasterAnalysis, page_number: int, page_image
-) -> tuple[tuple[int, int, int, int], ...]:
-    """Source-pixel boxes of visible ink no rendered region carries (empty = covered).
-
-    ``page_image`` is the page's embedded source image. Decoration regions count
-    as coverage only for icon-like ink (see ``raster_ink_coverage``).
-    """
-
-    from services.source_content.raster_ink_coverage import uncovered_ink
-
-    page = analysis.pages[page_number - 1]
-    sx = page_image.width / analysis.source.canvas_width_emu
-    sy = page_image.height / analysis.source.canvas_height_emu
-
-    def pixels(box) -> tuple[int, int, int, int]:
-        return (int(box.x * sx), int(box.y * sy), max(1, int(box.width * sx)), max(1, int(box.height * sy)))
-
-    rendered = [pixels(r.bbox) for r in page.regions if r.role != "decoration"]
-    decorations = [pixels(r.bbox) for r in page.regions if r.role == "decoration"]
-    words = [pixels(token.bbox) for token in page.ocr_inventory]
-    return tuple(uncovered_ink(page_image, rendered, decorations, words))

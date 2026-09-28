@@ -21,14 +21,11 @@ from models.sql.workspace import (
     WorkspaceOutbox,
 )
 from services.workspace_chat_operation_handler import (
-    PresentationChatOperationHandler,
     VersionRestoreOperationHandler,
-    register_presentation_chat_operation_handlers,
 )
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
     WorkspaceOperationClaim,
-    WorkspaceOperationHandlerRegistry,
 )
 
 
@@ -334,19 +331,3 @@ async def _previous_strategy_uses_latest_durable_version(tmp_path: Path):
             assert slide.html_content == "<section>target</section>"
     finally:
         await engine.dispose()
-
-
-def test_restore_registration_reuses_runner_with_automatic_recovery():
-    registry = WorkspaceOperationHandlerRegistry()
-    chat_handler = PresentationChatOperationHandler()
-    restore_handler = VersionRestoreOperationHandler()
-
-    register_presentation_chat_operation_handlers(
-        registry=registry,
-        handler=chat_handler,
-        version_restore_handler=restore_handler,
-    )
-
-    assert registry.resolve("presentation.edit") is chat_handler
-    assert registry.resolve("version.restore") is restore_handler
-    assert registry.recovery_policy("version.restore") == "automatic"

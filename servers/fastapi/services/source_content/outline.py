@@ -11,7 +11,7 @@ from typing import Any, Mapping
 
 from pydantic import Field, model_validator
 
-from services.source_content.allocator import canonical_digest
+from services.source_content.digests import digest_json as canonical_digest
 from services.source_content.contracts import (
     ContractModel,
     SourceContentManifestPin,

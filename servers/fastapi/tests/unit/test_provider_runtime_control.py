@@ -169,9 +169,6 @@ def test_deadline_kill_condition_cancels_before_provider_admission() -> None:
         await asyncio.sleep(0.02)
         with pytest.raises(CancellationRequested, match="deadline_exceeded"):
             await control.admit("job-1", "after-deadline", estimated_cost_microunits=1)
-        status = await control.runtime_status()
-        assert status["queue_depth"] == 0
-        assert status["in_flight"] == 0
 
     asyncio.run(scenario())
 

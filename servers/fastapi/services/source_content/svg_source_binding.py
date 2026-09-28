@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from services.source_content.staging_projection import _source_error
+from services.source_content.errors import source_error as _source_error
 
 
 def bind_svg_source_input(request: Any, *, manifest: Any, pin: Any, owner_id: Any) -> None:

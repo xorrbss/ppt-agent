@@ -12,9 +12,7 @@ from services.presentation_generation_operation_handler import (
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
     WorkspaceOperationExecutionContext,
-    WorkspaceOperationHandlerRegistry,
     WorkspaceOperationResult,
-    workspace_operation_handler_registry,
 )
 
 
@@ -127,24 +125,3 @@ class WorkspaceAuthoredTemplateOperationHandler:
             },
             result_revision=generated.result_revision,
         )
-
-
-def register_workspace_authored_template_operation_handler(
-    *,
-    registry: WorkspaceOperationHandlerRegistry = workspace_operation_handler_registry,
-    replace: bool = False,
-) -> WorkspaceAuthoredTemplateOperationHandler:
-    handler = WorkspaceAuthoredTemplateOperationHandler()
-    registry.register(
-        DESIGN_APPLY_OPERATION_KIND,
-        handler,
-        replace=replace,
-        recovery_policy="automatic",
-    )
-    registry.register(
-        TEMPLATE_APPLY_OPERATION_KIND,
-        handler,
-        replace=replace,
-        recovery_policy="automatic",
-    )
-    return handler

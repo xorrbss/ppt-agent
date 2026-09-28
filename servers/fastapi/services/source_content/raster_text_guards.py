@@ -302,36 +302,6 @@ def _with_splits(gray: Image.Image, array: np.ndarray, words, reads, folder: Pat
     return tuple(replace(read, splits=tuple(splits.get(k, ()))) for k, read in enumerate(reads))
 
 
-def verify_number_units(
-    image: Image.Image,
-    words,
-    seeds,
-    *,
-    executable: Path | None,
-    tessdata: Path | None,
-    min_confidence: float = HEURISTIC_MIN_CONFIDENCE,
-):
-    """Digit word index -> confirmed, judged on the whole visual number it belongs to.
-
-    Every fragment of a unit shares the unit's verdict: confirmed only when the unit
-    is not wrapped over rows, its single read equals the unit's OCR numbers, and no
-    digit word of it has an engine confidence below ``min_confidence`` (without a
-    second reader, a doubtful primary reading and a read of the same pixels agreeing
-    is not proof). None when the local OCR engine is unavailable."""
-
-    reads = read_number_units(image, words, seeds, executable=executable, tessdata=tessdata)
-    if reads is None:
-        return None
-    verdict: dict[int, bool] = {}
-    for read in reads:
-        digits = [i for i in read.unit.words if any(ch.isdigit() for ch in words[i].text)]
-        sure = all(words[i].confidence is None or words[i].confidence >= min_confidence for i in digits)
-        ok = sure and sequence_confirmed(text_numbers(read.unit.text), (read,), allow_skip=False)
-        for i in digits:
-            verdict[i] = verdict.get(i, True) and ok
-    return verdict
-
-
 def targeted_number_reads(image: Image.Image, words, lines, *, executable: Path | None, tessdata: Path | None) -> dict:
     """Line index -> ``NumberReads`` of the whole-number units of its digit words.
 

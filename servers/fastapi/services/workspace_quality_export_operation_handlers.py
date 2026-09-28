@@ -69,10 +69,8 @@ from services.workspace_operation_handler_registry import (
     WorkspaceOperationDeferred,
     WorkspaceOperationExecutionError,
     WorkspaceOperationExecutionContext,
-    WorkspaceOperationHandlerRegistry,
     WorkspaceOperationLeaseLost,
     WorkspaceOperationResult,
-    workspace_operation_handler_registry,
 )
 from services.workspace_export_quality_evidence import (
     _legacy_fidelity_public_quality_receipt,
@@ -83,7 +81,6 @@ from services.workspace_export_quality_evidence import (
     _validated_authored_quality_receipt_digest as _validated_authored_quality_receipt_digest,
 )
 from services.workspace_quality_operation_handler import (
-    WorkspaceQualityReviewOperationHandler,
     release_review_checker_policy_digest,
     validate_release_review_base_evidence_for_export,
     validate_export_release_review_receipt,
@@ -97,8 +94,6 @@ QUALITY_REVIEW_PROGRESS_INTERVAL_SECONDS = 30.0
 
 _public_export_error_code = public_export_error_code
 _public_export_failure_is_non_retryable = public_export_failure_is_non_retryable
-
-
 
 
 def _context(claim_payload: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -1269,21 +1264,3 @@ class WorkspaceExportOperationHandler:
             },
             result_revision=revision,
         )
-
-
-def register_workspace_quality_export_operation_handlers(
-    *,
-    registry: WorkspaceOperationHandlerRegistry = workspace_operation_handler_registry,
-    replace: bool = False,
-) -> tuple[WorkspaceQualityReviewOperationHandler, WorkspaceExportOperationHandler]:
-    quality = WorkspaceQualityReviewOperationHandler()
-    export = WorkspaceExportOperationHandler()
-    registry.register(
-        QUALITY_REVIEW_OPERATION_KIND,
-        quality,
-        replace=replace,
-        recovery_policy="automatic",
-    )
-    for kind in EXPORT_OPERATION_KINDS:
-        registry.register(kind, export, replace=replace)
-    return quality, export

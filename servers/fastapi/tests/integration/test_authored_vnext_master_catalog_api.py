@@ -22,7 +22,7 @@ from services.authored_vnext.master.catalog_seed import (
     SAMPLE_MASTER_IDS,
     seed_catalog,
 )
-from services.authored_vnext.master.repository import InMemoryAuthoredVNextMasterRepository
+from tests.support.authored_vnext_master_memory_repository import InMemoryAuthoredVNextMasterRepository
 from services.authored_vnext.master.service import AuthoredVNextMasterService
 from tests.support.authored_vnext_master_fixture import master_contract_payload
 

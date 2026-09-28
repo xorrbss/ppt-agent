@@ -782,8 +782,6 @@ def _semantic_text_metrics(
     )
 
 
-
-
 def _semantic_text_css(
     unit: SealedContentUnit,
     *,
@@ -1155,26 +1153,6 @@ def _image_lane_container(
     _tag_image_lane_group(container, block)
     panel.append(container)
     return container
-
-
-def _append_flow_text_units(
-    parent: object,
-    units: list[SealedContentUnit],
-    *,
-    slot: Mapping[str, object],
-    adaptive_scale: float,
-    role: str,
-    column_width: float | None = None,
-) -> None:
-    del column_width  # Geometry was already selected for whole atomic blocks.
-    for block in _flow_blocks(units):
-        _append_semantic_block(
-            parent,
-            block,
-            slot=slot,
-            adaptive_scale=adaptive_scale,
-            role=role,
-        )
 
 
 def _select_flow_table_layout(
@@ -3265,53 +3243,6 @@ def _complete_semantic_elements(
     if set(assigned_by_qid) - observed or not complete:
         raise SourceNativeGenerationError("authored_semantic_qid_mismatch")
     return complete
-
-
-def _replace_frame_text(
-    raw_html: str,
-    slide: object,
-    *,
-    frame: object | None = None,
-    narrative: object | None = None,
-) -> tuple[str, list[dict[str, object]]]:
-    """Compatibility wrapper using semantic qid handles, never DOM ordering."""
-
-    if frame is None:
-        document = lxml_html.document_fromstring(raw_html)
-        qids = [str(node.get("data-qid")) for node in document.xpath("//*[@data-qid]")]
-        slots = []
-        for qid in qids:
-            role = "title" if any(token in qid.lower() for token in ("title", "headline", "heading")) else "body"
-            slots.append(
-                {
-                    "slotId": f"compat:{qid}",
-                    "semanticRole": role,
-                    "acceptedKinds": ["text"],
-                    "required": False,
-                    "capacityEnvelope": {"maxCharacters": 10000, "maxLines": 1000, "contentArea": 10_000_000},
-                    "patchHandle": {"kind": "authored-qid", "elementId": qid},
-                    "extractionConfidence": 1.0,
-                    "bounds": {"width": 1000, "height": 500},
-                }
-            )
-        class _CompatFrame:
-            frame_id = "compat-frame"
-            source_digest = canonical_digest(raw_html)
-            pass
-        _CompatFrame.slots = slots
-        frame = _CompatFrame()
-    if narrative is None:
-        class _CompatNarrative:
-            sealed_content_units: tuple[object, ...] = ()
-            content_graph_digest = canonical_digest(str(getattr(slide, "slide_key", "slide")))
-        narrative = _CompatNarrative()
-    plan, units, slots = build_composition_plan(narrative=narrative, slide=slide, frame=frame)
-    try:
-        assert_composition_plan(plan)
-    except CompositionError as error:
-        raise SourceNativeGenerationError(error.code) from error
-    html, semantic, _, _ = _apply_composition_plan(raw_html, plan=plan, units=units, slots=slots)
-    return html, semantic
 
 
 class _SourceNativeExecutor:

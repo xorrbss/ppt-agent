@@ -271,30 +271,6 @@ async def _workspace_linked_generation_queue_position(
     )
 
 
-async def get_workspace_linked_generation_queue_position(
-    workspace_operation_id: uuid.UUID,
-) -> int | None:
-    """Return a metadata-only, best-effort capacity queue position."""
-
-    async with async_session_maker() as session:
-        target = (
-            await session.execute(
-                select(PresentationGenerationJob)
-                .where(
-                    PresentationGenerationJob.workspace_operation_id
-                    == workspace_operation_id
-                )
-                .execution_options(skip_owner_scope=True)
-            )
-        ).scalar_one_or_none()
-        if target is None:
-            return None
-        return await _workspace_linked_generation_queue_position(
-            session,
-            target=target,
-        )
-
-
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -1085,34 +1061,6 @@ async def launch_generation_job(
             _active_jobs.pop(job_id, None)
 
     task.add_done_callback(_discard)
-
-
-async def resolve_generation_job_presentation_id(
-    task_id: str,
-) -> uuid.UUID | None:
-    """Return an owner-scoped deck id without mutating generation state."""
-
-    owner_id = get_current_owner_id()
-    owner_filter = (
-        AsyncPresentationGenerationTaskModel.owner_id.is_(None)
-        if owner_id is None
-        else AsyncPresentationGenerationTaskModel.owner_id == owner_id
-    )
-    async with async_session_maker() as session:
-        return (
-            await session.execute(
-                select(PresentationGenerationJob.presentation_id)
-                .join(
-                    AsyncPresentationGenerationTaskModel,
-                    AsyncPresentationGenerationTaskModel.id
-                    == PresentationGenerationJob.task_id,
-                )
-                .where(
-                    AsyncPresentationGenerationTaskModel.id == task_id,
-                    owner_filter,
-                )
-            )
-        ).scalar_one_or_none()
 
 
 async def cancel_generation_job(

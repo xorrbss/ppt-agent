@@ -15,7 +15,6 @@ from services.source_content.outline import (
     SourceDocumentOutlineSlide,
     build_source_document_outline,
 )
-from services.source_content.allocator import PageLockedTemplateCompositionPlanner
 
 __all__ = [
     "SourceContentAnalysisReceipt",
@@ -27,5 +26,4 @@ __all__ = [
     "SourceDocumentOutlineBuilder",
     "SourceDocumentOutlineSlide",
     "build_source_document_outline",
-    "PageLockedTemplateCompositionPlanner",
 ]

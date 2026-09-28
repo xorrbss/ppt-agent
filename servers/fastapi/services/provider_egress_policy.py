@@ -183,22 +183,6 @@ class EgressManifest:
                 return rule
         raise EgressPolicyError("egress_destination_not_declared")
 
-    def to_safe_dict(self) -> dict[str, object]:
-        return {
-            "self_hosted": self.self_hosted,
-            "telemetry_opt_in": self.telemetry_opt_in,
-            "rules": [
-                {
-                    "category": rule.category.value,
-                    "service_id": rule.service_id,
-                    "enabled": rule.enabled,
-                    "allowed_hostnames": list(rule.allowed_hostnames),
-                    "allowed_ports": sorted(rule.allowed_ports),
-                }
-                for rule in self.rules
-            ],
-        }
-
 
 @dataclass(frozen=True, slots=True)
 class ValidatedEndpoint:

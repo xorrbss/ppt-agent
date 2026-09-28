@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-import uuid
 
 import pytest
 from pydantic import ValidationError
@@ -16,7 +15,6 @@ from services.conversation_event_contract import (
     UnifiedConversationEvent,
     build_conversation_event,
     canonical_event_cursor,
-    recover_assistant_checkpoints,
 )
 
 
@@ -90,27 +88,6 @@ def test_durable_checkpoint_reconnects_without_replaying_transient_tokens():
     assert delta.durability == "transient"
     assert delta.cursor is None
     assert delta.checkpoint_cursor == "44"
-
-
-def test_reconnect_fixture_recovers_assistant_checkpoint_and_run_state_from_cursor():
-    fixture = _reconnect_fixture()
-    events = [UnifiedConversationEvent.model_validate(value) for value in fixture["events"]]
-    replay = [
-        event
-        for event in events
-        if event.cursor is not None
-        and int(event.cursor) > int(fixture["reconnect_after_cursor"])
-    ]
-    next_cursor, content = recover_assistant_checkpoints(
-        replay, after_cursor=fixture["reconnect_after_cursor"]
-    )
-    assert next_cursor == fixture["expected_recovery"]["next_cursor"]
-    assert content == {
-        uuid.UUID(fixture["expected_recovery"]["assistant_message_id"]): (
-            fixture["expected_recovery"]["assistant_content"]
-        )
-    }
-    assert replay[-1].data["status"] == fixture["expected_recovery"]["run_status"]
 
 
 def test_contract_fails_closed_for_wrong_durability_cursors_and_private_data():

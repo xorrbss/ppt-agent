@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 from models.sql.authored_vnext_repository import (
     AuthoredVNextExportArtifactReceipt,
     AuthoredVNextExportJob,
-    AuthoredVNextMasterRevision,
     AuthoredVNextPublicationPointer,
 )
 
@@ -257,56 +256,5 @@ class AuthoredVNextPublicationRepositoryMixin:
             session.flush()
             return session.get(AuthoredVNextPublicationPointer, pointer.id)
 
-    def rollback_master_publication(
-        self,
-        *,
-        master_id: str,
-        target_revision: int,
-        target_digest: str,
-        expected_generation: int,
-        expected_revision: int,
-        expected_digest: str,
-        operation_id: uuid.UUID | None = None,
-    ) -> AuthoredVNextPublicationPointer:
-        """Move the published-master pointer to an immutable prior revision."""
-        with self._sessions.begin() as session:
-            target = session.scalar(
-                select(AuthoredVNextMasterRevision).where(
-                    *self._scope(AuthoredVNextMasterRevision),
-                    AuthoredVNextMasterRevision.master_id == master_id,
-                    AuthoredVNextMasterRevision.revision == target_revision,
-                    AuthoredVNextMasterRevision.digest == target_digest,
-                    AuthoredVNextMasterRevision.status == "published",
-                )
-            )
-            pointer = session.scalar(
-                select(AuthoredVNextPublicationPointer).where(
-                    *self._scope(AuthoredVNextPublicationPointer),
-                    AuthoredVNextPublicationPointer.publication_kind == "master",
-                    AuthoredVNextPublicationPointer.entity_id == master_id,
-                )
-            )
-            if target is None or pointer is None:
-                raise PublicationConflictError()
-            changed = session.execute(
-                update(AuthoredVNextPublicationPointer)
-                .where(
-                    AuthoredVNextPublicationPointer.id == pointer.id,
-                    AuthoredVNextPublicationPointer.generation == expected_generation,
-                    AuthoredVNextPublicationPointer.revision == expected_revision,
-                    AuthoredVNextPublicationPointer.digest == expected_digest,
-                )
-                .values(
-                    revision=target_revision,
-                    digest=target_digest,
-                    generation=pointer.generation + 1,
-                    operation_id=operation_id or uuid.uuid4(),
-                )
-            ).rowcount
-            if changed != 1:
-                raise PublicationConflictError()
-            session.flush()
-            return session.get(AuthoredVNextPublicationPointer, pointer.id)
 
 __all__ = ["AuthoredVNextPublicationRepositoryMixin"]
-

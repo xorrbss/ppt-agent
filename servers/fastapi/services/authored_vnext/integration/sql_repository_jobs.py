@@ -275,24 +275,6 @@ class AuthoredVNextExportJobRepositoryMixin:
             session.flush()
             return session.get(AuthoredVNextExportJob, row.id)
 
-    def heartbeat_export_job(
-        self, job_id: uuid.UUID, *, fence_token: int, worker_id: str, lease_seconds: int = 60
-    ) -> None:
-        with self._sessions.begin() as session:
-            changed = session.execute(
-                update(AuthoredVNextExportJob)
-                .where(
-                    *self._scope(AuthoredVNextExportJob),
-                    AuthoredVNextExportJob.id == job_id,
-                    AuthoredVNextExportJob.state == "running",
-                    AuthoredVNextExportJob.fence_token == fence_token,
-                    AuthoredVNextExportJob.worker_id == worker_id,
-                    AuthoredVNextExportJob.cancel_requested.is_(False),
-                )
-                .values(lease_expires_at=_now() + timedelta(seconds=lease_seconds))
-            ).rowcount
-            if changed != 1:
-                raise OperationFenceError()
 
     def request_cancel(
         self,
@@ -410,4 +392,3 @@ class AuthoredVNextExportJobRepositoryMixin:
                 raise OperationFenceError()
 
 __all__ = ["AuthoredVNextExportJobRepositoryMixin"]
-

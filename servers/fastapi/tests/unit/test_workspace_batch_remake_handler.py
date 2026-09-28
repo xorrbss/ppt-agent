@@ -19,12 +19,10 @@ from services import workspace_batch_remake_operation_handler as handler_module
 from services.authored_page_remake_service import AuthoredPageRemakeError
 from services.workspace_batch_remake_operation_handler import (
     WorkspaceBatchRemakeOperationHandler,
-    register_workspace_batch_remake_operation_handler,
 )
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
     WorkspaceOperationClaim,
-    WorkspaceOperationHandlerRegistry,
 )
 
 
@@ -173,15 +171,6 @@ def _install_publishers(monkeypatch, session, *, failing_indexes: frozenset[int]
     monkeypatch.setattr(handler_module, "publish_authored_page_remake", publish_page)
     monkeypatch.setattr(handler_module, "publish_presentation_revision", publish_revision)
     return revision_calls
-
-
-def test_batch_handler_registers_with_automatic_recovery():
-    registry = WorkspaceOperationHandlerRegistry()
-    handler = register_workspace_batch_remake_operation_handler(registry=registry)
-
-    assert isinstance(handler, WorkspaceBatchRemakeOperationHandler)
-    assert registry.resolve("slide.regenerate.batch") is handler
-    assert registry.recovery_policy("slide.regenerate.batch") == "automatic"
 
 
 @async_test

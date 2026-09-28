@@ -176,7 +176,6 @@ _OCR_DETAIL_SIGNAL = re.compile(
 )
 
 
-
 from services.authored_quality_review_support import (
     _RequestOcrRuntime,
     _execute_sqlalchemy,
@@ -265,54 +264,6 @@ async def run_authored_quality_review(
         await _run_authored_quality_review_unlocked(
             presentation_id, request, task, session
         )
-
-
-def _public_review_error_detail(exc: Exception) -> str:
-    """Return a stable task error without exposing private review metadata."""
-    if isinstance(exc, AuthoredExactReconstructionUnavailableError):
-        return "authored_exact_reconstruction_unavailable"
-    if isinstance(exc, ExactProvenanceError):
-        return "authored_exact_reconstruction_provenance_mismatch"
-    return "authored_quality_review_failed"
-
-
-async def _run_quality_review(
-    presentation_id: uuid.UUID,
-    request: AuthoredQualityReviewRequest,
-    task_id: str,
-) -> None:
-    async with async_session_maker() as session:
-        task = await session.get(AsyncPresentationGenerationTaskModel, task_id)
-        if task is None:
-            return
-        try:
-            await run_authored_quality_review(presentation_id, request, task, session)
-        except Exception as exc:  # noqa: BLE001 - background task boundary
-            exact_failure = isinstance(
-                exc,
-                (
-                    AuthoredExactReconstructionUnavailableError,
-                    ExactProvenanceError,
-                ),
-            )
-            if exact_failure:
-                LOGGER.warning(
-                    "Exact reconstruction quality review failed closed (%s)",
-                    type(exc).__name__,
-                )
-            else:
-                LOGGER.warning(
-                    "Authored quality review failed (%s)",
-                    type(exc).__name__,
-                )
-            await session.rollback()
-            await _set_status(
-                session,
-                task,
-                status="error",
-                message="품질 검토 중 오류가 발생했습니다.",
-                error={"detail": _public_review_error_detail(exc)},
-            )
 
 
 async def queue_authored_quality_review(
