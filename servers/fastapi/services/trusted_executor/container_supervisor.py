@@ -1,7 +1,7 @@
 """Operation-scoped container ownership for the trusted executor (Linux path).
 
 This supervisor exposes the same surface ``OperationProcessSupervisor`` offers
-to ``SupervisedStdioWireTransport`` and ``TrustedExecutorProductLauncher``
+to ``SupervisedStdioWireTransport``
 (``launch``/``cancel``/``wait_for_zero``/``wait_for_termination``/``telemetry``/
 ``close`` plus the deadline and memory flags), but the boundary is a container
 created through an injected ``ContainerRuntimeClient``: ``network_mode=none``,
