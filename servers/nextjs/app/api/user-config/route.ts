@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { getFastApiBaseUrl } from "@/lib/fastapi-internal";
-import { fetchTimeoutSignal } from "@/lib/fetch-timeout-signal";
+import { proxyToFastApi } from "@/lib/fastapi-proxy";
 import { requireAdminApi } from "@/lib/server-auth-role";
 
 const canChangeKeys = process.env.CAN_CHANGE_KEYS !== "false";
@@ -15,32 +14,29 @@ function immutableResponse() {
   );
 }
 
-async function forwardProviderSettings(
+function forwardProviderSettings(
   request: Request,
   method: "GET" | "PUT",
+  failureMessage: string,
   body?: string
 ) {
-  const cookie = request.headers.get("cookie") || "";
-  const response = await fetch(
-    `${getFastApiBaseUrl()}/api/v1/admin/provider-settings`,
-    {
-      method,
-      headers: {
-        ...(cookie ? { cookie } : {}),
-        ...(body ? { "content-type": "application/json" } : {}),
-      },
-      body,
-      cache: "no-store",
-      signal: fetchTimeoutSignal(PROVIDER_SETTINGS_TIMEOUT_MS, request.signal),
-    }
-  );
-  const payload = await response.text();
-  return new NextResponse(payload || null, {
-    status: response.status,
-    headers: {
-      "content-type":
-        response.headers.get("content-type") || "application/json",
-    },
+  return proxyToFastApi(request, "/api/v1/admin/provider-settings", {
+    timeoutMs: PROVIDER_SETTINGS_TIMEOUT_MS,
+    method,
+    // The admin browser session terminates here; only its cookie is forwarded.
+    includeServerAuth: false,
+    forwardRequestHeaders: ["cookie"],
+    headers: body ? { "content-type": "application/json" } : {},
+    body: body ?? null,
+    forwardSearch: false,
+    forwardResponseHeaders: ["content-type"],
+    defaultContentType: "application/json",
+    cacheControl: null,
+    logLabel: "[user-config]",
+    // Upstream (FastAPI) failure or timeout, not a fault in this route:
+    // 502, consistent with every other bounded-fetch route in app/api/*.
+    onFailure: () =>
+      NextResponse.json({ error: failureMessage, status: 502 }, { status: 502 }),
   });
 }
 
@@ -49,16 +45,11 @@ export async function GET(request: Request) {
   if (denied) return denied;
   if (!canChangeKeys) return immutableResponse();
 
-  try {
-    return await forwardProviderSettings(request, "GET");
-  } catch {
-    // Upstream (FastAPI) failure or timeout, not a fault in this route:
-    // 502, consistent with every other bounded-fetch route in app/api/*.
-    return NextResponse.json(
-      { error: "Unable to read provider settings", status: 502 },
-      { status: 502 }
-    );
-  }
+  return forwardProviderSettings(
+    request,
+    "GET",
+    "Unable to read provider settings"
+  );
 }
 
 export async function POST(request: Request) {
@@ -81,7 +72,12 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-    return await forwardProviderSettings(request, "PUT", body);
+    return await forwardProviderSettings(
+      request,
+      "PUT",
+      "Unable to save provider settings",
+      body
+    );
   } catch (error) {
     if (error instanceof SyntaxError) {
       return NextResponse.json(
@@ -89,8 +85,8 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-    // Upstream (FastAPI) failure or timeout, not a fault in this route:
-    // 502, consistent with every other bounded-fetch route in app/api/*.
+    // Failure reading the request body itself; upstream failures are handled
+    // by the forwarder's onFailure.
     return NextResponse.json(
       { error: "Unable to save provider settings", status: 502 },
       { status: 502 }

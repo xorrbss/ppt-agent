@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import {
-  getFastApiAuthHeaders,
-  getFastApiBaseUrl,
-} from "@/lib/fastapi-internal";
-import { fetchTimeoutSignal } from "@/lib/fetch-timeout-signal";
+import { fetchFastApi } from "@/lib/fastapi-proxy";
 import {
   parsePublicExportAdmission,
   parsePublicExportReceipt,
@@ -39,19 +35,20 @@ export async function POST(request: NextRequest) {
       raw,
       request.headers.get("idempotency-key"),
     );
-    const cookie = request.headers.get("cookie")?.trim();
-    const response = await fetch(
-      `${getFastApiBaseUrl()}/api/v1/ppt/workspace/presentations/${encodeURIComponent(admission.presentationId)}/commands`,
+    // The browser session terminates at PPT Core. It is never copied into
+    // the durable operation payload or forwarded to a worker.
+    const response = await fetchFastApi(
+      request,
+      `/api/v1/ppt/workspace/presentations/${encodeURIComponent(admission.presentationId)}/commands`,
       {
+        timeoutMs: EXPORT_ADMISSION_TIMEOUT_MS,
         method: "POST",
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
-          ...getFastApiAuthHeaders(),
-          // The browser session terminates at PPT Core. It is never copied into
-          // the durable operation payload or forwarded to a worker.
-          ...(cookie ? { Cookie: cookie } : {}),
         },
+        forwardRequestHeaders: ["cookie"],
+        forwardSearch: false,
         body: JSON.stringify({
           command:
             admission.commandType === "export.pptx"
@@ -63,8 +60,6 @@ export async function POST(request: NextRequest) {
           context: admission.context,
           asset_ids: [],
         }),
-        cache: "no-store",
-        signal: fetchTimeoutSignal(EXPORT_ADMISSION_TIMEOUT_MS, request.signal),
       },
     );
     if (!response.ok) {

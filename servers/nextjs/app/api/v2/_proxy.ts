@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import {
-  getFastApiAuthHeaders,
-  getFastApiBaseUrl,
-} from "@/lib/fastapi-internal";
-import { fetchTimeoutSignal } from "@/lib/fetch-timeout-signal";
+import { proxyToFastApi } from "@/lib/fastapi-proxy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,53 +8,6 @@ export const dynamic = "force-dynamic";
 // The public v2 surface includes export artifact downloads (range requests),
 // so the bound covers a full response body on a slow link, not just admission.
 const V2_UPSTREAM_TIMEOUT_MS = 10 * 60_000;
-
-const FORWARDED_REQUEST_HEADERS = [
-  "accept",
-  "authorization",
-  "cookie",
-  "content-type",
-  "idempotency-key",
-  "if-none-match",
-  "if-modified-since",
-  "if-range",
-  "range",
-  "x-request-id",
-] as const;
-
-const FORWARDED_RESPONSE_HEADERS = [
-  "accept-ranges",
-  "cache-control",
-  "content-length",
-  "content-range",
-  "content-disposition",
-  "content-type",
-  "etag",
-  "expires",
-  "last-modified",
-  "location",
-  "retry-after",
-  "x-request-id",
-] as const;
-
-function requestHeaders(request: NextRequest): Headers {
-  const headers = new Headers(getFastApiAuthHeaders());
-  for (const name of FORWARDED_REQUEST_HEADERS) {
-    const value = request.headers.get(name);
-    if (value) headers.set(name, value);
-  }
-  return headers;
-}
-
-function responseHeaders(response: Response): Headers {
-  const headers = new Headers();
-  for (const name of FORWARDED_RESPONSE_HEADERS) {
-    const value = response.headers.get(name);
-    if (value) headers.set(name, value);
-  }
-  headers.set("cache-control", "no-store");
-  return headers;
-}
 
 function upstreamUnavailableResponse(): NextResponse {
   return NextResponse.json(
@@ -75,29 +24,12 @@ function upstreamUnavailableResponse(): NextResponse {
 export async function proxyV2Request(
   request: NextRequest,
   backendPath: string,
-): Promise<NextResponse> {
-  const method = request.method.toUpperCase();
-  const requestBody = method !== "GET" && method !== "HEAD" ? request.body : null;
-  try {
-    const response = await fetch(
-      `${getFastApiBaseUrl()}${backendPath}${request.nextUrl.search}`,
-      {
-        method,
-        headers: requestHeaders(request),
-        cache: "no-store",
-        redirect: "manual",
-        signal: fetchTimeoutSignal(V2_UPSTREAM_TIMEOUT_MS, request.signal),
-        ...(requestBody === null
-          ? {}
-          : { body: requestBody, duplex: "half" as const }),
-      },
-    );
-    return new NextResponse(response.body, {
-      status: response.status,
-      headers: responseHeaders(response),
-    });
-  } catch (error) {
-    console.error("[api/v2] FastAPI request failed", error);
-    return upstreamUnavailableResponse();
-  }
+): Promise<Response> {
+  return proxyToFastApi(request, backendPath, {
+    timeoutMs: V2_UPSTREAM_TIMEOUT_MS,
+    redirect: "manual",
+    logLabel: "[api/v2]",
+    // Timeouts and transport failures share one public envelope.
+    onFailure: upstreamUnavailableResponse,
+  });
 }
