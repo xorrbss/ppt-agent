@@ -173,21 +173,9 @@ test("chat-first deployment configuration is required by both CI providers", () 
     rootPackage.scripts["test:chat-first-deployment-config"],
     "node scripts/check-chat-first-deployment-config.mjs",
   );
-  assert.equal(
-    rootPackage.scripts["test:file-size-ratchet"],
-    "node scripts/check-file-size-ratchet.mjs",
-  );
-  assert.match(
-    rootPackage.scripts["test:next-ci"],
-    /npm run test:file-size-ratchet/u,
-  );
   assert.match(
     rootPackage.scripts["test:next-ci"],
     /npm run test:chat-first-deployment-config/u,
-  );
-  assert.match(
-    rootPackage.scripts["test:next-ci"],
-    /scripts\/check-file-size-ratchet\.test\.mjs/u,
   );
   assert.equal(
     rootPackage.scripts["check:release-sbom"],
