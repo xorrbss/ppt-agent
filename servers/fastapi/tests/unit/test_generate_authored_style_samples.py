@@ -222,22 +222,40 @@ def test_write_json_lf_uses_lf_line_endings(tmp_path: Path):
 # ---------------------------------------------------------------------------
 
 
-def test_ensure_clean_code_tree_raises_on_dirty_output(tmp_path: Path, monkeypatch):
+def _fake_git_status(tracked: str, untracked: str):
     def fake_run(cmd, **kwargs):
-        assert cmd[:3] == ["git", "-C", str(tmp_path)]
-        return subprocess.CompletedProcess(cmd, 0, stdout=" M servers/fastapi/foo.py\n", stderr="")
+        assert cmd[:4] == ["git", "-C", cmd[2], "status"]
+        mode = next(arg for arg in cmd if arg.startswith("--untracked-files="))
+        stdout = tracked if mode == "--untracked-files=no" else tracked + untracked
+        return subprocess.CompletedProcess(cmd, 0, stdout=stdout, stderr="")
 
-    monkeypatch.setattr(gen.subprocess, "run", fake_run)
-    with pytest.raises(gen.GeneratorRefused, match="uncommitted changes"):
+    return fake_run
+
+
+def test_ensure_clean_code_tree_raises_on_modified_tracked_file(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(gen.subprocess, "run", _fake_git_status(" M servers/fastapi/foo.py\n", ""))
+    with pytest.raises(gen.GeneratorRefused, match="modified tracked files"):
         gen.ensure_clean_code_tree(tmp_path)
 
 
-def test_ensure_clean_code_tree_passes_on_clean_output(tmp_path: Path, monkeypatch):
-    def fake_run(cmd, **kwargs):
-        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+def test_ensure_clean_code_tree_raises_on_deleted_tracked_file(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(gen.subprocess, "run", _fake_git_status(" D servers/fastapi/bar.py\n", ""))
+    with pytest.raises(gen.GeneratorRefused, match="modified tracked files"):
+        gen.ensure_clean_code_tree(tmp_path)
 
-    monkeypatch.setattr(gen.subprocess, "run", fake_run)
-    gen.ensure_clean_code_tree(tmp_path)  # does not raise
+
+def test_ensure_clean_code_tree_allows_and_returns_untracked_files(tmp_path: Path, monkeypatch):
+    untracked = "?? servers/fastapi/utils/new_module.py\n?? servers/fastapi/tests/unit/test_new.py\n"
+    monkeypatch.setattr(gen.subprocess, "run", _fake_git_status("", untracked))
+    assert gen.ensure_clean_code_tree(tmp_path) == [
+        "servers/fastapi/tests/unit/test_new.py",
+        "servers/fastapi/utils/new_module.py",
+    ]
+
+
+def test_ensure_clean_code_tree_passes_on_clean_output(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(gen.subprocess, "run", _fake_git_status("", ""))
+    assert gen.ensure_clean_code_tree(tmp_path) == []
 
 
 def test_ensure_clean_code_tree_raises_on_git_failure(tmp_path: Path, monkeypatch):

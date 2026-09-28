@@ -100,21 +100,35 @@ class DeckResult:
 # ---------------------------------------------------------------------------
 
 
-def ensure_clean_code_tree(code_tree: Path) -> None:
-    """Refuse unless ``git -C <code_tree> status --porcelain -- servers`` is empty."""
+def _git_status(code_tree: Path, untracked: str) -> str:
     result = subprocess.run(
-        ["git", "-C", str(code_tree), "status", "--porcelain", "--", "servers"],
+        ["git", "-C", str(code_tree), "status", "--porcelain", f"--untracked-files={untracked}", "--", "servers"],
         capture_output=True,
         text=True,
         check=False,
     )
     if result.returncode != 0:
         raise GeneratorRefused(f"git status failed for {code_tree}: {result.stderr.strip()}")
-    if result.stdout.strip():
+    return result.stdout
+
+
+def ensure_clean_code_tree(code_tree: Path) -> list[str]:
+    """Refuse if a tracked file under ``servers/`` differs from HEAD.
+
+    A modified or deleted tracked file changes what the running backend
+    executes, so ``generatorCommit`` would be false. An untracked new file
+    cannot: code at HEAD does not reference a module HEAD lacks. Such files
+    are returned so each deck records what else was present in the tree.
+    """
+    tracked = _git_status(code_tree, "no")
+    if tracked.strip():
         raise GeneratorRefused(
-            f"{code_tree} has uncommitted changes under servers/; refusing to generate "
-            f"(generatorCommit would not be trustworthy):\n{result.stdout}"
+            f"{code_tree} has modified tracked files under servers/; refusing to generate "
+            f"(generatorCommit would not be trustworthy):\n{tracked}"
         )
+    return sorted(
+        line[3:] for line in _git_status(code_tree, "all").splitlines() if line.startswith("?? ")
+    )
 
 
 def get_generator_commit(code_tree: Path) -> str:
@@ -244,14 +258,20 @@ def generate_one_style(
 
     for attempt in range(1, MAX_ATTEMPTS + 1):
         attempts = attempt
-        # "Before EVERY deck" (plan §1.1): re-checked on every attempt, not just once.
-        ensure_clean_code_tree(args.code_tree)
+        # Checked before AND after each attempt: a deck takes minutes, and a
+        # tracked edit landing mid-generation would taint it just the same.
+        untracked = set(ensure_clean_code_tree(args.code_tree))
         generator_commit = get_generator_commit(args.code_tree)
 
         attempt_scratch = style_scratch / f"attempt-{attempt}"
         rasters, presentation_id, problems = _attempt_once(
             style_id, prompt, fixed, args, repo_root, attempt_scratch
         )
+        untracked |= set(ensure_clean_code_tree(args.code_tree))
+        if get_generator_commit(args.code_tree) != generator_commit:
+            raise GeneratorRefused(
+                f"{args.code_tree} HEAD moved during generation of {style_id}; the deck's code version is unknown"
+            )
         if rasters is not None:
             titles = list(fixed.titles)
             if len(titles) != len(rasters):
@@ -274,6 +294,7 @@ def generate_one_style(
                 "thumbQualities": [r.thumb_quality for r in rasters],
                 "stageBytes": [len(r.stage_bytes) for r in rasters],
                 "thumbBytes": [len(r.thumb_bytes) for r in rasters],
+                "untrackedCodeTreeFiles": sorted(untracked),
             }
             style_scratch.mkdir(parents=True, exist_ok=True)
             write_json_lf(style_scratch / "result.json", result_json)
