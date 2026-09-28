@@ -26,7 +26,6 @@ const auditedFiles = [
   "app/(presentation-generator)/outline/components/style-sample/StyleSampleSlides.tsx",
   "app/(presentation-generator)/outline/components/style-sample/useStyleSampleNavigation.ts",
   "app/(presentation-generator)/public-v2/PublicV2OperationsClient.tsx",
-  "app/(presentation-generator)/upload/components/TemplateCatalog.tsx",
   "app/(presentation-generator)/upload/components/UploadPage.tsx",
   "app/(presentation-generator)/upload/components/CanvasSelect.tsx",
   "app/(presentation-generator)/upload/components/upload-page/GenerationStrategySelector.tsx",

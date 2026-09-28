@@ -239,38 +239,6 @@ export async function trackEventImmediately(
   mixpanel.track(event, props, { transport: 'sendBeacon' });
 }
 
-export function getDistinctId(): string | undefined {
-  if (!canUseMixpanel()) return undefined;
-  if (typeof window !== 'undefined' && window.__mixpanel_telemetry_enabled === false) {
-    return undefined;
-  }
-  if (!window.__mixpanel_initialized) {
-    initMixpanel();
-    return undefined;
-  }
-  if (!window.__mixpanel_initialized) return undefined;
-  return mixpanel.get_distinct_id();
-}
-
-export function identifyAnonymous(): void {
-  if (!canUseMixpanel()) return;
-  if (typeof window !== 'undefined' && window.__mixpanel_telemetry_enabled === false) {
-    return;
-  }
-  if (!window.__mixpanel_initialized) {
-    initMixpanel();
-    return;
-  }
-  mixpanel.identify(mixpanel.get_distinct_id());
-}
-
-export function resetTelemetryCache(): void {
-  trackingCheckPromise = null;
-  if (typeof window !== 'undefined') {
-    delete window.__mixpanel_telemetry_enabled;
-  }
-}
-
 export function setTelemetryEnabled(enabled: boolean): void {
   if (typeof window !== 'undefined') {
     window.__mixpanel_telemetry_enabled = enabled;
@@ -285,9 +253,6 @@ const mixpanelUtils = {
   initMixpanel,
   track,
   trackEvent,
-  getDistinctId,
-  identifyAnonymous,
-  resetTelemetryCache,
   setTelemetryEnabled,
 };
 

@@ -1,13 +1,11 @@
 import { Theme } from "@/app/(presentation-generator)/services/api/types";
 import { Slide } from "@/app/(presentation-generator)/types/slide";
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import type { ImageEditorProperties } from "@/components/slide-editor/images/imageCrop";
 import type {
   PresentationCapabilities,
   PresentationProfile,
 } from "@/lib/presentation-profile";
-import { setNestedMediaValue } from "./presentationGenerationMedia";
-import type { PathContainer, SlideChart, SlideRecord } from "./presentationGenerationTypes";
+import type { SlideRecord } from "./presentationGenerationTypes";
 import type { FlaggedSlideMap } from "@/app/(presentation-generator)/presentation/utils/flaggedSlides";
 
 export interface PresentationData {
@@ -41,7 +39,6 @@ interface PresentationGenerationState {
   outlines: { content: string }[];
   error: string | null;
   presentationData: PresentationData | null;
-  isSlidesRendered: boolean;
   isLayoutLoading: boolean;
   /**
    * Slides the authored pipeline published flagged (D7 terminal fallback /
@@ -54,7 +51,6 @@ interface PresentationGenerationState {
 const initialState: PresentationGenerationState = {
   presentation_id: null,
   outlines: [],
-  isSlidesRendered: false,
   isLayoutLoading: false,
   isLoading: false,
   isStreaming: null,
@@ -81,10 +77,6 @@ const presentationGenerationSlice = createSlice({
     setPresentationId: (state, action: PayloadAction<string>) => {
       state.presentation_id = action.payload;
       state.error = null;
-    },
-    // Slides rendered
-    setSlidesRendered: (state, action: PayloadAction<boolean>) => {
-      state.isSlidesRendered = action.payload;
     },
     // Error
     setError: (state, action: PayloadAction<string>) => {
@@ -168,26 +160,6 @@ const presentationGenerationSlice = createSlice({
           action.payload.slide;
       }
     },
-    updateSlideHtmlContent: (
-      state,
-      action: PayloadAction<{
-        slideIndex: number;
-        html: string;
-        slideId?: string | null;
-      }>
-    ) => {
-      const slides = state.presentationData?.slides;
-      if (!Array.isArray(slides)) return;
-
-      const slide =
-        (action.payload.slideId
-          ? slides.find((item: Slide) => item.id === action.payload.slideId)
-          : undefined) ??
-        slides.find((item: Slide) => item.index === action.payload.slideIndex) ??
-        slides[action.payload.slideIndex];
-      if (slide) slide.html_content = action.payload.html;
-    },
-
     // Update a slide's speaker note (presenter-only text; persisted by autosave).
     updateSlideSpeakerNote: (
       state,
@@ -200,85 +172,6 @@ const presentationGenerationSlice = createSlice({
       ) {
         state.presentationData.slides[action.payload.slideIndex].speaker_note =
           action.payload.speakerNote;
-      }
-    },
-
-    // Replace a slide's chart object (type + data points) wholesale. Used by the
-    // in-tree chart editor: type switches and adding/removing points change the
-    // array shape, which the path-based updateSlideContent can't express, and the
-    // values must stay numbers (not the strings updateSlideContent stores).
-    updateSlideChart: (
-      state,
-      action: PayloadAction<{ slideIndex: number; chart: SlideChart }>
-    ) => {
-      if (
-        state.presentationData &&
-        state.presentationData.slides &&
-        state.presentationData.slides[action.payload.slideIndex]
-      ) {
-        const slide = state.presentationData.slides[action.payload.slideIndex];
-        slide.content = { ...slide.content, chart: action.payload.chart };
-      }
-    },
-
-    // Update slide content at specific data path (for Tiptap text editing)
-    updateSlideContent: (
-      state,
-      action: PayloadAction<{
-        slideIndex: number;
-        dataPath: string;
-        content: string;
-      }>
-    ) => {
-      if (
-        state.presentationData &&
-        state.presentationData.slides &&
-        state.presentationData.slides[action.payload.slideIndex]
-      ) {
-        const slide = state.presentationData.slides[action.payload.slideIndex];
-        const { dataPath, content } = action.payload;
-
-        // Helper function to set nested property value
-        const setNestedValue = (
-          obj: PathContainer,
-          path: string,
-          value: string
-        ) => {
-          const keys = path.split(/[.\[\]]+/).filter(Boolean);
-          let current = obj;
-
-          // Navigate to the parent object
-          for (let i = 0; i < keys.length - 1; i++) {
-            const key = keys[i];
-            if (isNaN(Number(key))) {
-              // String key
-              if (!current[key]) {
-                current[key] = {};
-              }
-              current = current[key] as PathContainer;
-            } else {
-              // Array index
-              const index = Number(key);
-              if (!current[index]) {
-                current[index] = {};
-              }
-              current = current[index] as PathContainer;
-            }
-          }
-
-          // Set the final value
-          const finalKey = keys[keys.length - 1];
-          if (isNaN(Number(finalKey))) {
-            current[finalKey] = value;
-          } else {
-            current[Number(finalKey)] = value;
-          }
-        };
-
-        // Update the slide content
-        if (dataPath && slide.content) {
-          setNestedValue(slide.content, dataPath, content);
-        }
       }
     },
 
@@ -297,92 +190,6 @@ const presentationGenerationSlice = createSlice({
       }
     },
 
-    // Update slide image at specific data path
-    updateSlideImage: (
-      state,
-      action: PayloadAction<{
-        slideIndex: number;
-        dataPath: string;
-        imageUrl: string;
-        prompt?: string;
-      }>
-    ) => {
-      if (
-        state.presentationData &&
-        state.presentationData.slides &&
-        state.presentationData.slides[action.payload.slideIndex]
-      ) {
-        const slide = state.presentationData.slides[action.payload.slideIndex];
-        const { dataPath, imageUrl, prompt } = action.payload;
-
-        if (dataPath && slide.content) {
-          setNestedMediaValue(slide.content, dataPath, imageUrl, prompt, "__image_url__", "__image_prompt__");
-        }
-
-        // Also update the images array if it exists
-        if (slide.images && Array.isArray(slide.images)) {
-          const imageIndex = parseInt(dataPath.split('[')[1]?.split(']')[0]) || 0;
-          if (slide.images[imageIndex] !== undefined) {
-            slide.images[imageIndex] = imageUrl;
-          }
-        }
-      }
-    },
-
-    updateImageProperties: (
-      state,
-      action: PayloadAction<{
-        slideIndex: number;
-        itemIndex: number;
-        properties: ImageEditorProperties;
-      }>
-    ) => {
-      if (
-        state.presentationData &&
-        state.presentationData.slides &&
-        state.presentationData.slides[action.payload.slideIndex]
-      ) {
-        const slide = state.presentationData.slides[action.payload.slideIndex];
-        const { itemIndex, properties } = action.payload;
-        slide['properties'] = {
-          ...slide.properties,
-          [itemIndex]: properties
-        };
-
-      }
-    },
-
-    // Update slide icon at specific data path
-    updateSlideIcon: (
-      state,
-      action: PayloadAction<{
-        slideIndex: number;
-        dataPath: string;
-        iconUrl: string;
-        query?: string;
-      }>
-    ) => {
-      if (
-        state.presentationData &&
-        state.presentationData.slides &&
-        state.presentationData.slides[action.payload.slideIndex]
-      ) {
-        const slide = state.presentationData.slides[action.payload.slideIndex];
-        const { dataPath, iconUrl, query } = action.payload;
-
-        if (dataPath && slide.content) {
-          setNestedMediaValue(slide.content, dataPath, iconUrl, query, "__icon_url__", "__icon_query__");
-        }
-
-        // Also update the icons array if it exists
-        if (slide.icons && Array.isArray(slide.icons)) {
-          const iconIndex = parseInt(dataPath.split('[')[1]?.split(']')[0]) || 0;
-          if (slide.icons[iconIndex] !== undefined) {
-            slide.icons[iconIndex] = iconUrl;
-          }
-        }
-      }
-    },
     updateTheme: (state, action: PayloadAction<Theme | null>) => {
       if (state.presentationData) {
         state.presentationData['theme'] = action.payload;
@@ -397,7 +204,6 @@ export const {
   setLoading,
   setLayoutLoading,
   setPresentationId,
-  setSlidesRendered,
   setError,
   clearPresentationData,
   clearOutlines,
@@ -409,14 +215,8 @@ export const {
   // slides operations
   addSlide,
   updateSlide,
-  updateSlideHtmlContent,
   deletePresentationSlide,
-  updateSlideContent,
   updateSlideSpeakerNote,
-  updateSlideChart,
-  updateSlideImage,
-  updateImageProperties,
-  updateSlideIcon,
   addNewSlide,
   updateTheme,
 } = presentationGenerationSlice.actions;

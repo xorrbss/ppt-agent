@@ -1,15 +1,9 @@
 import { createHash } from "node:crypto";
 
-import { resolveRequestedPptxMode } from "./authored-hybrid/mode.ts";
 import { readBoundedResponseText } from "./authored-hybrid/security.ts";
-import {
-  executeExportAtProductionBoundary,
-  type ExportBoundaryDependencies,
-} from "./presentation-export-boundary.ts";
 import {
   PRESENTATION_SOURCE_SHA256,
   type PersistedPresentation,
-  type PresentationExportResult,
 } from "./presentation-export-strategy.ts";
 
 export interface ExportPresentationRouteBody {
@@ -22,12 +16,6 @@ export interface ExportPresentationRouteBody {
   canonicalSourceDigest?: unknown;
   expectedPresentationRevision?: unknown;
   operationId?: unknown;
-}
-
-export interface ExportPresentationRouteDependencies<
-  Result extends PresentationExportResult = PresentationExportResult,
-> extends ExportBoundaryDependencies<Result> {
-  packageAvailable(): Promise<boolean>;
 }
 
 export class ExportPresentationRequestError extends Error {
@@ -298,124 +286,4 @@ export async function fetchPersistedPresentationForExport(
       options
     )
   ).presentation;
-}
-
-/**
- * Production route orchestration kept framework-free so the exact request to
- * the persisted-identity export boundary can be exercised with runner spies.
- */
-export async function executeExportPresentationRouteRequest<
-  Result extends PresentationExportResult,
->(
-  body: ExportPresentationRouteBody,
-  cookieHeader: string,
-  dependencies: ExportPresentationRouteDependencies<Result>
-): Promise<Result> {
-  if (typeof body.id !== "string" || !body.id) {
-    throw new ExportPresentationRequestError("Missing Presentation ID", 400);
-  }
-  if (body.format !== "pdf" && body.format !== "pptx") {
-    throw new ExportPresentationRequestError("Invalid export format", 400);
-  }
-
-  const resolvedPptxMode = resolveRequestedPptxMode(
-    body.format,
-    body.pptxMode
-  );
-  if (!resolvedPptxMode.ok) {
-    throw new ExportPresentationRequestError(
-      "Invalid PPTX export mode",
-      400
-    );
-  }
-  if (
-    body.fontEmbedding !== undefined &&
-    typeof body.fontEmbedding !== "boolean"
-  ) {
-    throw new ExportPresentationRequestError(
-      "Invalid font embedding option",
-      400
-    );
-  }
-  // Keep non-Hybrid requests unchanged. For an authored Hybrid request the
-  // strategy normalizes an omitted option to true; false is the sole
-  // compatibility escape hatch.
-  const fontEmbedding = body.fontEmbedding as boolean | undefined;
-  if (
-    fontEmbedding === true &&
-    (body.format !== "pptx" || resolvedPptxMode.value !== "hybrid")
-  ) {
-    throw new ExportPresentationRequestError(
-      "Font embedding requires hybrid PPTX export",
-      400
-    );
-  }
-  if (
-    body.exportAttemptId !== undefined &&
-    (typeof body.exportAttemptId !== "string" || !body.exportAttemptId.trim())
-  ) {
-    throw new ExportPresentationRequestError("Invalid export attempt ID", 400);
-  }
-  if (
-    body.canonicalSourceDigest !== undefined &&
-    (typeof body.canonicalSourceDigest !== "string" ||
-      !/^[a-f0-9]{64}$/i.test(body.canonicalSourceDigest))
-  ) {
-    throw new ExportPresentationRequestError(
-      "Invalid canonical source digest",
-      400
-    );
-  }
-  if (
-    (body.exportAttemptId !== undefined) !==
-    (body.canonicalSourceDigest !== undefined)
-  ) {
-    throw new ExportPresentationRequestError(
-      "Export attempt binding is incomplete",
-      400
-    );
-  }
-  if (
-    body.expectedPresentationRevision !== undefined &&
-    (!Number.isSafeInteger(body.expectedPresentationRevision) ||
-      (body.expectedPresentationRevision as number) < 0)
-  ) {
-    throw new ExportPresentationRequestError(
-      "Invalid expected presentation revision",
-      400
-    );
-  }
-  // Progress correlation is optional narration, so a malformed value is
-  // dropped rather than failing an otherwise valid export request.
-  const operationId =
-    typeof body.operationId === "string" && body.operationId.trim()
-      ? body.operationId.trim()
-      : undefined;
-  if (!(await dependencies.packageAvailable())) {
-    throw new Error(
-      "presentation-export runtime is not available. Run scripts/sync-presentation-export.cjs to install it."
-    );
-  }
-
-  return executeExportAtProductionBoundary(
-    {
-      format: body.format,
-      presentationId: body.id,
-      title: typeof body.title === "string" ? body.title : undefined,
-      cookieHeader,
-      pptxMode: resolvedPptxMode.value,
-      explicitPptxMode: body.pptxMode !== undefined,
-      fontEmbedding,
-      ...(typeof body.exportAttemptId === "string"
-        ? { exportAttemptId: body.exportAttemptId.trim() }
-        : {}),
-      ...(typeof body.canonicalSourceDigest === "string"
-        ? { canonicalSourceDigest: body.canonicalSourceDigest.toLowerCase() }
-        : {}),
-      expectedPresentationRevision:
-        body.expectedPresentationRevision as number | undefined,
-      ...(operationId ? { operationId } : {}),
-    },
-    dependencies
-  );
 }

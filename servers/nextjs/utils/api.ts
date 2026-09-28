@@ -237,33 +237,6 @@ export function resolveAuthoredImageUrl(
   );
 }
 
-export type BackendAssetLike = {
-  /** Stable backend identifier for mutation/reference flows; not a render URL. */
-  asset_id?: string | null;
-  /** Canonical client-renderable asset URL emitted by the backend. */
-  file_url?: string | null;
-};
-
-export function getBackendAssetSource(
-  asset: BackendAssetLike | string | null | undefined
-): string {
-  if (typeof asset === "string") {
-    return asset;
-  }
-
-  if (!asset) {
-    return "";
-  }
-
-  return asset.file_url?.trim() || "";
-}
-
-export function resolveBackendAssetSource(
-  asset: BackendAssetLike | string | null | undefined
-): string {
-  return resolveBackendAssetUrl(getBackendAssetSource(asset));
-}
-
 export const normalizeBackendAssetUrls = <T,>(input: T): T => {
   if (Array.isArray(input)) {
     return input.map((item) => normalizeBackendAssetUrls(item)) as T;
