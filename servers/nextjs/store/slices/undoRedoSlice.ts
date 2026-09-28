@@ -123,11 +123,6 @@ const undoRedoSlice = createSlice({
       state.present = deepCopy(next);
     },
 
-    finishUndoRedo: (state) => {
-      state.isUndoRedoInProgress = false;
-      state.pendingHistorySkips = 0;
-    },
-
     clearHistory: (state) => {
       state.past = [];
       state.future = [];
@@ -138,5 +133,5 @@ const undoRedoSlice = createSlice({
   }
 });
 
-export const { addToHistory, undo, redo, finishUndoRedo, clearHistory } = undoRedoSlice.actions;
+export const { addToHistory, undo, redo, clearHistory } = undoRedoSlice.actions;
 export default undoRedoSlice.reducer; 
