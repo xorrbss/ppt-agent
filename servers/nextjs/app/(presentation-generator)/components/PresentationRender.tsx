@@ -7,6 +7,7 @@ import {
     type AuthoredCanvasContract,
 } from "@/lib/authored-canvas";
 import { PresentationContentRender } from "./PresentationContentRender";
+import { isAuthoredSlide } from "../presentation/utils/isAuthoredPresentation";
 
 
 const BASE_WIDTH = 1280;
@@ -123,10 +124,9 @@ const SlideScale = ({
     driverId?: PresentationDriverId;
 }) => {
 
-    const isAuthoredSlide = driverId === "authored" || driverId === "svg-v1" ||
-        slide?.content?.__authored__ === true ||
-        slide?.layout_group === "authored" || slide?.layout_group === "svg";
-    const canvas = isAuthoredSlide
+    const authoredSlide =
+        driverId === "authored" || driverId === "svg-v1" || isAuthoredSlide(slide);
+    const canvas = authoredSlide
         ? resolveAuthoredCanvas(theme)
         : LEGACY_AUTHORED_CANVAS;
 
@@ -208,7 +208,7 @@ const SlideScale = ({
                         preferAuthoredHtml={preferAuthoredHtml}
                         resolveSvgAssets={resolveSvgAssets}
                         driverId={driverId}
-                        canvas={isAuthoredSlide ? canvas : undefined}
+                        canvas={authoredSlide ? canvas : undefined}
                     />
                     {showEditScan && (
                         <div

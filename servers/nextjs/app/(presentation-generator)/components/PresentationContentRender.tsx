@@ -12,6 +12,7 @@ import { resolveAuthoredImageUrl } from "@/utils/api";
 import { AuthoredSlidePreview } from "./AuthoredSlidePreview";
 import { SvgSlidePreview } from "./SvgSlidePreview";
 import SlideErrorBoundary from "./SlideErrorBoundary";
+import { inferSlideDriver } from "../presentation/utils/isAuthoredPresentation";
 
 type SlideRecord = Record<string, any>;
 
@@ -62,16 +63,6 @@ const PRESENTATION_CONTENT_RENDERER_REGISTRY = Object.freeze({
   "svg-v1": SvgContent,
 } satisfies Record<PresentationDriverId, React.ComponentType<DriverRendererProps>>);
 
-function inferSupportedDriver(slide: SlideRecord): PresentationDriverId | null {
-  if (
-    slide?.content?.__authored__ === true ||
-    slide?.layout_group === "authored"
-  ) {
-    return "authored";
-  }
-  return null;
-}
-
 export function PresentationContentRender({
   slide,
   resolveSvgAssets = false,
@@ -88,7 +79,7 @@ export function PresentationContentRender({
     driverId ??
     (issuedDriver === "authored" || issuedDriver === "svg-v1"
       ? issuedDriver
-      : inferSupportedDriver(slide));
+      : inferSlideDriver(slide));
 
   if (!resolvedDriver) {
     return (

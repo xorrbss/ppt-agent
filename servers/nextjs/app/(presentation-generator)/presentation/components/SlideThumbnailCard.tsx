@@ -8,6 +8,7 @@ import { LEGACY_AUTHORED_CANVAS, resolveAuthoredCanvas } from "@/lib/authored-ca
 import type { RootState } from "@/store/store";
 import { FlaggedSlideBadge } from "./FlaggedSlideBadge";
 import type { FlaggedSlideBadge as FlaggedSlideBadgeModel } from "../utils/flaggedSlides";
+import { isAuthoredSlide } from "../utils/isAuthoredPresentation";
 
 interface SlideThumbnailCardProps extends React.HTMLAttributes<HTMLDivElement> {
   slide: Slide;
@@ -39,7 +40,7 @@ export const SlideThumbnailCard = forwardRef<
 }, ref) => {
   const t = useTranslations("slideNavigation");
   const theme = useSelector((state: RootState) => state.presentationGeneration.presentationData?.theme);
-  const canvas = slide?.content?.__authored__ === true || slide?.layout_group === "authored" || slide?.layout_group === "svg"
+  const canvas = isAuthoredSlide(slide)
     ? resolveAuthoredCanvas(theme)
     : LEGACY_AUTHORED_CANVAS;
   const handleDragButtonClick = (event: React.MouseEvent<HTMLButtonElement>) => {

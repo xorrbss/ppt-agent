@@ -25,6 +25,7 @@ import SlideScale, { ViewportCulledSlide } from "../../components/PresentationRe
 import { LEGACY_AUTHORED_CANVAS, resolveAuthoredCanvas } from "@/lib/authored-canvas";
 import { FlaggedSlideBadge } from "./FlaggedSlideBadge";
 import { flaggedSlideKey } from "../utils/flaggedSlides";
+import { isAuthoredSlide } from "../utils/isAuthoredPresentation";
 
 interface SlideContentProps {
   slide: any;
@@ -58,7 +59,7 @@ const SlideContent = ({
     (state: RootState) => state.presentationGeneration
   );
   const flag = flaggedSlides[flaggedSlideKey(slide, index)] ?? null;
-  const canvas = slide?.content?.__authored__ === true || slide?.layout_group === "authored" || slide?.layout_group === "svg"
+  const canvas = isAuthoredSlide(slide)
     ? resolveAuthoredCanvas(presentationData?.theme)
     : LEGACY_AUTHORED_CANVAS;
 

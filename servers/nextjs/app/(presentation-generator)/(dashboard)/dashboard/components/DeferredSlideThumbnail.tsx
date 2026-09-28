@@ -9,6 +9,7 @@ import {
   LEGACY_AUTHORED_CANVAS,
   resolveAuthoredCanvas,
 } from "@/lib/authored-canvas";
+import { isAuthoredSlide } from "../../../presentation/utils/isAuthoredPresentation";
 
 /**
  * How far outside the viewport a card starts rendering its slide stage —
@@ -70,8 +71,7 @@ export const DeferredSlideThumbnail = ({ slide, theme }: { slide: any; theme?: u
     : isNearViewport
       ? "rendered"
       : "deferred";
-  const canvas = slide?.content?.__authored__ === true ||
-    slide?.layout_group === "authored" || slide?.layout_group === "svg"
+  const canvas = isAuthoredSlide(slide)
     ? resolveAuthoredCanvas(theme)
     : LEGACY_AUTHORED_CANVAS;
 
