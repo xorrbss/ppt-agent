@@ -18,6 +18,7 @@ from services.provider_usage_instrumentation import (
     ProviderCallTimer, current_provider_idempotency_key, provider_call_admission, record_provider_call,
 )
 from services.svg_contract import SVG_CONTRACT_VERSION, source_digest, validate_raster_data_url
+from utils.llm_calls.author_canvas_shape import composition_clause
 from utils.llm_calls.author_prompt_profile import authoring_model
 from utils.llm_calls.author_prompt_split import author_messages
 from utils.llm_calls.author_slide import (
@@ -69,6 +70,13 @@ class SvgAuthorResult:
     # Model-declared native tables/charts extracted from this attempt's SVG
     # (``native_declarations.extract_native_declarations``); ``None`` if none.
     native_declarations: dict | None = None
+
+
+def svg_author_rules(style_snapshot: dict, body_floor: float) -> str:
+    canvas = style_snapshot.get("canvas") or {}
+    width, height = int(canvas.get("width", 1280)), int(canvas.get("height", 720))
+    return (SVG_AUTHOR_RULES + native_author_rules() + f"\nBody text minimum: {body_floor:g} CSS px. "
+            "Honor explicit user typography constraints.\n" + composition_clause(width, height))
 
 
 def preflight_svg_source_images(source_images) -> dict:
@@ -124,8 +132,7 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
         images.append(ImageContentPart(data=base64.b64decode(data), mime_type=header[5:].split(";")[0]))
     image_count = len(images)
     image_bytes = sum(len(part.data) for part in images)
-    rules = (SVG_AUTHOR_RULES + native_author_rules() + f"\nBody text minimum: {body_floor:g} CSS px. "
-             "Honor explicit user typography constraints.\n")
+    rules = svg_author_rules(style_snapshot, body_floor)
     messages = author_messages(rules, prompt, design, image_parts=images)
     client = get_client(config=get_llm_config())
     model = authoring_model(get_model())

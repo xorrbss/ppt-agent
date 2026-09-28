@@ -2024,7 +2024,11 @@ def repair_authored_layout_alignment(html: str, *, role: str) -> str:
 
 
 def repair_authored_owned_text_paint_order(
-    html: str, browser_metrics: Any, *, profile_id: str = "ordinary"
+    html: str,
+    browser_metrics: Any,
+    *,
+    profile_id: str = "ordinary",
+    canvas_size: tuple[int, int] | None = None,
 ) -> str:
     """Lift one measured text-only flex/grid item above empty sibling paint.
 
@@ -2042,7 +2046,7 @@ def repair_authored_owned_text_paint_order(
         or browser_metrics.get("dom_metrics_version") != "authored-dom-metrics-v16-owned-text"
         or (
             browser_metrics.get("width"), browser_metrics.get("height")
-        ) not in {(1280, 720), (720, 1280)}
+        ) not in ({(1280, 720), (720, 1280)} if canvas_size is None else {canvas_size})
         or browser_metrics.get("fonts_ready") is not True
         or browser_metrics.get("source_digest") != "sha256:" + sha256(html.encode("utf-8")).hexdigest()
         or re.fullmatch(r"sha256:[0-9a-f]{64}", str(browser_metrics.get("render_digest", ""))) is None

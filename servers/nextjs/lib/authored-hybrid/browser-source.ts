@@ -30,6 +30,28 @@ export const AUTHORED_HYBRID_COMPLETION_MARKER_NAME =
 export const AUTHORED_HYBRID_ELEMENT_ATTRIBUTE =
   "data-presenton-authored-hybrid-id";
 
+/**
+ * Mirrors the inline viewport check spliced into the template below. Chrome
+ * executes the template directly as injected source (no bundler, no TS
+ * import), so the check is duplicated in plain JS there; keep both in sync.
+ */
+export function authoredHybridViewportMatchesExpected(
+  actualWidth: number,
+  actualHeight: number,
+  expectedViewport: unknown
+): boolean {
+  if (
+    !expectedViewport ||
+    typeof expectedViewport !== "object" ||
+    typeof (expectedViewport as { width?: unknown }).width !== "number" ||
+    typeof (expectedViewport as { height?: unknown }).height !== "number"
+  ) {
+    return false;
+  }
+  const expected = expectedViewport as { width: number; height: number };
+  return actualWidth === expected.width && actualHeight === expected.height;
+}
+
 // The box-shadow mapping helpers are spliced in below; they are hoisted
 // function declarations that share this IIFE scope.
 export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
@@ -42,12 +64,19 @@ export const AUTHORED_HYBRID_BROWSER_SOURCE = String.raw`
   var ELEMENT_ATTRIBUTE = "data-presenton-authored-hybrid-id";
   var ISOLATED_INLINE_ATTRIBUTE = "data-presenton-authored-layout-isolated-inline";
   var sourceFitV2 = Boolean(document.querySelector('[data-source-fit-policy="composer-source-fit/v2"]'));
-  var WIDTH = window.innerWidth;
-  var HEIGHT = window.innerHeight;
-  if (!((WIDTH === 1280 && HEIGHT === 720) || (WIDTH === 720 && HEIGHT === 1280))) {
-    throw new Error("Unsupported authored canvas viewport " + WIDTH + "x" + HEIGHT + ".");
+  function authoredHybridViewportMatchesExpected(actualWidth, actualHeight, expectedViewport) {
+    return Boolean(expectedViewport) &&
+      typeof expectedViewport.width === "number" &&
+      typeof expectedViewport.height === "number" &&
+      actualWidth === expectedViewport.width &&
+      actualHeight === expectedViewport.height;
   }
   var config = window.__PRESENTON_AUTHORED_HYBRID_CONFIG__ || {};
+  var WIDTH = window.innerWidth;
+  var HEIGHT = window.innerHeight;
+  if (!authoredHybridViewportMatchesExpected(WIDTH, HEIGHT, config.expectedViewport)) {
+    throw new Error("Unsupported authored canvas viewport " + WIDTH + "x" + HEIGHT + ".");
+  }
   var captureMode = ["observation", "hybrid-backplate", "hybrid-paint-band", "fidelity"].includes(
     config.captureMode
   ) ? config.captureMode : "observation";

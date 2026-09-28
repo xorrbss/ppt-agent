@@ -9,6 +9,7 @@ from typing import Any
 from services.authored_vnext.capability_registry import prompt_capability_clause
 from utils.authored_fragmentation_gate import fragmentation_prompt_clause
 from utils.authored_style_exemplars import exemplar_block
+from utils.llm_calls.author_canvas_shape import apply_canvas_tokens, composition_clause
 from utils.llm_calls.author_deck_tokens import deck_tokens_block
 from utils.llm_calls.author_prompt_profile import current_prompt_sections
 from utils.llm_calls.author_slide_brief import (
@@ -136,30 +137,8 @@ def build_design_system(
         page_number_system=page_number_system,
         type_scale=type_scale,
     )
-    if (canvas_width_px, canvas_height_px) in {(720, 1280), (720, 1040)}:
-        portrait_ratio = "9:13" if canvas_height_px == 1040 else "9:16"
-        portrait_size = f"720x{canvas_height_px}"
-        replacements = (
-            ("single 16:9 slide", f"single {portrait_ratio} portrait slide"),
-            ("1280x720px", f"{portrait_size}px"),
-            ("1280x720", portrait_size),
-            ("y=648px", f"y={canvas_height_px - 72}px"),
-            ("y=688px", f"y={canvas_height_px - 32}px"),
-            ("y=749", f"y={canvas_height_px + 29}"),
-            ("an element is never 1280px wide", "an element is never 720px wide"),
-            ("a 72px inset on each side leaves 1136px", "a 72px inset on each side leaves 576px"),
-            ("width:1280px", "width:720px"),
-        )
-        for old, new in replacements:
-            rules = rules.replace(old, new)
-        rules += (
-            "\n- PORTRAIT COMPOSITION (authoritative for this deck): use the full "
-            f"{portrait_size} canvas without rotation or landscape scaling. Place cover titles "
-            "and subtitles toward the top; use one readable vertical body column; stack "
-            "comparisons and three-card groups vertically; keep images and charts within "
-            "the 592px safe content width with captions below; and compose closing "
-            "messages and next actions as a vertical sequence.\n"
-        )
+    rules = apply_canvas_tokens(rules, canvas_width_px, canvas_height_px)
+    rules += composition_clause(canvas_width_px, canvas_height_px)
     # Deck-invariant tail, in the order design section G8 fixes: the rules, then
     # this deck's literal tokens, then the style's exemplar slide. The exemplar
     # is last because it is the longest and the most concrete: everything above

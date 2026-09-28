@@ -1,0 +1,127 @@
+DESIGN SYSTEM (obey on EVERY slide so the deck is cohesive):
+- Brand primary colour: #2563EB. Brand fonts: Noto Sans KR. Deck language: Korean.
+- Canvas: a single 16:9 slide that renders at EXACTLY 1280x720px. Inline <style> only, no
+  external JS. Body 1280x720, margin 0, overflow hidden.
+- Document head: emit at most `<meta charset="utf-8">`. Never emit viewport, refresh,
+  CSP, or any other meta `name`/`http-equiv` attributes; render security headers are
+  injected by the application after validation.
+- SELF-CONTAINED FONT POLICY: Never emit a Google Fonts <link>, CSS @import, remote font URL,
+  @font-face, or data-font. Use a logical family plus its deterministic local fallback:
+  "Noto Sans KR"/"Pretendard" -> "Malgun Gothic"; "Noto Serif KR" -> "Batang";
+  "Inter"/"Roboto"/"DM Sans" -> "Aptos"; "Source Serif 4" -> "Cambria";
+  "IBM Plex Mono" -> "Consolas". Example:
+  `font-family:"Noto Sans KR","Malgun Gothic",sans-serif`.
+  These rules make HTML render offline and editable PPTX typefaces deterministic. They do NOT
+  mean that fonts are embedded in the PPTX; font embedding is outside this authoring workflow.
+- Fonts: use the offline-safe logical stack "Noto Sans KR","Malgun Gothic",sans-serif; headings 800-900 weight, body
+  400-500. Do not add any external font resource.
+- Palette: build everything from the brand primary (#2563EB) + neutrals (ink #0F172A, muted
+  #64748B, hairline #E2E8F0, surface #F8FAFC, white). The primary is the ONE accent; no other hues.
+- SEMANTIC ROLES (the repair pass and the capacity gate read these marks):
+  - Mark every text element with `data-semantic-role`, one of: title, body, supporting,
+    decoration, image. Mark exactly ONE element per slide `data-semantic-role="title"` —
+    the slide's title, on a cover the main title — on the element that directly contains
+    that text, never `decoration`. `body` is the slide's readable content — sentences,
+    bullets, descriptions, table text, card copy (most text owners on a content slide are
+    `body`); `supporting` is short structural text only — sub-headings, eyebrows, labels,
+    numbers with units, captions. A content slide must have body owners. Empty shapes and
+    rules are `decoration`.
+- SHARED UNIVERSALS (they hold whatever the style brief above says):
+  - Margins ~64px on every edge, except an intentional full-bleed colour zone.
+  - ONE accent hue per slide: the style's accent carries emphasis and everything else is
+    ink, a neutral, or a tint of that accent. A second saturated hue is an error.
+  - Eyebrow: UPPERCASE where the language has case, letter-spaced 0.15em, ~13px, in the
+    accent, with a short tick or rule beside it.
+  - Vary per slide (any of these, never all at once): full-bleed or partial colour-blocked
+    zones, asymmetric grids, a left sidebar, oversized numerals, thin rules, and subtle
+    tints of the accent.
+- PPTX-NATIVE SAFETY (keeps exported objects editable):
+  - Draw decorative ticks, underlines, badges, and divider lines as real <span>/<div> DOM
+    elements, never ::before/::after pseudo-elements; painted pseudo-elements rasterize that subtree.
+  - EXPLAIN THE SLIDE WITH STRUCTURE, NOT DECORATION: when the CONTENT states a process,
+    a comparison, an architecture, a hierarchy, a schedule, or a set of figures, BUILD that
+    relationship on the slide out of real DOM elements -- boxes, connector rules, lanes,
+    columns, bars, rings -- carrying the CONTENT's own Korean labels and numbers. A page that
+    restates its bullets as prose beside an ornamental picture has explained nothing. Prefer
+    HTML+CSS (flex/grid, borders, gradients, box-shadow) for these: the converter maps DOM
+    elements to native editable PowerPoint shapes, while an SVG is flattened to a bitmap.
+    Tables, KPI figures, org charts, gantt bars and schedule rails, and simple 3-to-5 box
+    process flows ALWAYS stay HTML+CSS DOM: a figure baked into a picture cannot be
+    corrected, searched or re-used, so accuracy and editability outrank rendering ambition.
+  - Do not use inline SVG for simple decoration; use HTML+CSS. Reserve SVG for geometry HTML
+    genuinely cannot express -- curved or radial paths, polylines, arcs, wedges.
+  - INLINE SVG CONTRACT (only when an essential chart or diagram truly needs SVG):
+    - Root attributes: `xmlns="http://www.w3.org/2000/svg"` (exact value, root only) plus
+      `viewBox`, `width`, `height`, `preserveAspectRatio`; never `xmlns:xlink`.
+    - Elements: only inert presentation shapes, text and paint definitions (g, path, rect,
+      circle, ellipse, line, polyline, polygon, text, tspan, defs, linearGradient,
+      radialGradient, stop, clipPath, mask).
+    - Attributes: only each element's ordinary coordinates plus transform, fill/stroke
+      paint, opacity, dash, and text-metric attributes; paint may reference only a local
+      fragment id such as `clip-path="url(#clip1)"`.
+    - Never emit script, use, foreignObject, SVG image, animation, event attributes, href,
+      xlink:href, or any network/file/data/javascript URL. Anything else is refused, and
+      the rejection message names it.
+  - Do not use text-shadow, filter, backdrop-filter, or mix-blend-mode.
+  - Use ONE radius family for the whole deck (one pixel value, applied uniformly). Per-corner
+    radii are allowed only where the style itself names a tab or folder shape; export demotes
+    that shape to raster, which is an acceptable price for it alone. No percentage radii.
+  - Freely allowed: linear-gradient backgrounds, layered box-shadow, and raster images.
+    Export keeps text, simple shapes and semantic tables as native editable PowerPoint
+    objects and flattens whatever it cannot express — including a gradient field or a
+    shadowed surface — into a picture BEHIND them. So use gradients and shadows for
+    surfaces, and never to carry a value, a label, or the only cue that distinguishes
+    two things.
+- FORBIDDEN: default round bullet dots; identical heavy-shadow boxed cards on every item;
+  clutter; lorem/placeholder; text overflowing/clipping the frame; low contrast; off-palette hues.
+- FIT IS CRITICAL — the frame is EXACTLY 1280x720 and CLIPS (overflow:hidden): EVERY element
+  must fit fully inside it with NO overflow, NO clipping, and NO overlap between blocks. This is
+  the single most common failure — prioritise it over visual ambition. Use less/shorter text and
+  generous spacing rather than cramming.
+- NEVER hide overflowing content to make it "fit": `-webkit-line-clamp`, `line-clamp`,
+  `text-overflow: ellipsis`, and `overflow`/`overflow-x`/`overflow-y: auto` or
+  `scroll` are all forbidden and are rejected before rendering. If content does not fit, reduce
+  density (shorter copy, fewer items) or re-lay out the slide instead — never truncate or make
+  it scrollable.
+- Width belongs to the CONTENT BOX, not the canvas: inside a container that is inset from the
+  edge, an element is never 1280px wide. Subtract both insets (a 72px inset on each side leaves
+  1136px) or set no width at all and let the container size it. Measured failures: three slides
+  of one deck placed elements at x=72 with width:1280px, so each ran 72px past the right edge and
+  clipped the source text inside it.
+- The same arithmetic applies down the page: an element's top plus its height must stay above
+  the footer safe zone. A block starting at y=749 on a 720px canvas is invisible, however
+  correct its own box looks.
+- TYPE SCALE: in ordinary authored generation and style-reference mode, set body copy, bullets,
+  labels, and table cells at 18px or larger, and keep no visible content text (headings, body,
+  bullets, tables, chart labels, metrics, callouts, captions, footnotes) below 13px (10pt
+  equivalent). Express text sizes with `font-size` in px; do not use CSS `font` shorthand or
+  relative units to evade this floor. Spare room on a slide goes into a larger type scale and
+  more generous leading, not into one large empty band. If content does not fit, shorten it or
+  allocate more space instead of shrinking it until it becomes unnecessarily hard to read.
+- Heading sizing: size headings to the ACTUAL text length so they stay within their area, and
+  budget vertical space for the real number of wrapped lines.
+- No fragile positioning: never pin a TEXT block to a fixed top/absolute offset underneath a
+  heading that could wrap to another line. Prefer normal document flow (flex/grid column with
+  gaps) for content, and keep clear gaps between text blocks. Absolute positioning is for
+  decorative layers, the page-number box, and the header contract's own band and body wrapper
+  — those are fixed furniture and are meant to be pinned.
+- Connector clearance: keep every line and its complete arrowhead bounding box inside a dedicated
+  gutter, at least 12px away from text glyphs. Budget rotated arrowheads by their painted bounds,
+  not only the unrotated CSS box; shorten the connector before reducing text clearance.
+- Korean/CJK: set `word-break: keep-all` AND `overflow-wrap: break-word` on text containers so
+  a Korean word is never split across lines and a single long token still cannot overflow its
+  box. Set Hangul body copy to a line-height between 1.5 and 1.7 — Hangul needs more leading
+  than Latin at the same size. Keep a numeral and its unit together on one line (one inline
+  element around both, or a non-breaking space between them).
+- Boxes/cards/labels: each one's text must fit ENTIRELY inside it with padding — never let text
+  touch or clip an edge. Size the box to its content (or shrink the content to the box).
+- PAGE-NUMBER OWNERSHIP: company-standard furniture owns all page numbering.
+  - Never render a page number, page marker, pagination label, or page-number footer in the
+    authored template scene, including non-cover slides.
+  - Do not reserve or style a template-owned page-number box. The product composes the configured
+    company-standard pageNumber furniture after template rendering.
+- All visible text in Korean.
+Return ONLY the complete HTML document.
+Capability contract: author the visual source only; do not claim editable Hybrid output. Native promotion is explicitly admitted later, and unsupported features are rasterized or rejected rather than silently downgraded.
+DECK TOKENS (this deck's own values): ink #0F172A; accent #2563EB; accent-2 #2563EB; surface #F8FAFC; hairline #E2E8F0; radius 12px; gutter 24px; pad 28px; t-display 44px; t-h2 26px; t-body 18px; t-label 15px.
+Use these exact values for colour, radius and spacing; any other hue is an error. Tints and shades of the ink and of the two accents are allowed, a new hue is not, and radius/gutter/pad are one family for the whole deck. Write the values literally in the CSS: do not declare CSS custom properties.

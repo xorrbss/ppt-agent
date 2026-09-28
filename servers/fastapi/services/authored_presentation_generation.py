@@ -1989,7 +1989,7 @@ async def _generate_authored_presentation(
                 role=roles[absolute_index],
                 profile_id=composition_profile.profile_id,
                 allow_immutable_checkpoint_geometry=(capture_policy == "hydrated"),
-                repair_intrinsic_grid_overlap=source_reflow,
+                repair_intrinsic_grid_overlap=source_reflow, canvas_size=(canvas_width_px, canvas_height_px),
             )
             deterministic_changed = digest_html(deterministic) != digest_html(original_html)
             preflight = preflight_authored_provider_repair(

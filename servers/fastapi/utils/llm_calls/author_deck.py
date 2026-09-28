@@ -1322,7 +1322,7 @@ def prepare_authored_deck(
             **(
                 {"canvas_safe_area": canvas.safe_area}
                 if canvas is not None
-                and (canvas_width_px, canvas_height_px) not in {(1280, 720), (720, 1280), (720, 1040)}
+                and (canvas_width_px, canvas_height_px) != (1280, 720)
                 else {}
             ),
         )

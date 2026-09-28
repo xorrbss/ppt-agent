@@ -202,7 +202,7 @@ def _prepare_slide(
         source_guidance = (
             "\n\nSLIDE-SPECIFIC SOURCE AUTHORITY: Every listed source slot is "
             "required on this slide and must be materially visible inside the "
-            "1280x720 viewport. URL and invented-image bans remain in force."
+            "slide viewport. URL and invented-image bans remain in force."
             + source_guidance
         )
     return _PreparedSlide(

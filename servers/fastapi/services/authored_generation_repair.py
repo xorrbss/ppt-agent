@@ -17,6 +17,7 @@ def _deterministic_repair_candidate(
     profile_id: str,
     allow_immutable_checkpoint_geometry: bool,
     repair_intrinsic_grid_overlap: bool = False,
+    canvas_size: tuple[int, int] | None = None,
 ) -> str:
     """Compose every applicable local repair before a single recapture."""
 
@@ -30,6 +31,7 @@ def _deterministic_repair_candidate(
         source_visibility_candidate,
         browser_metrics,
         profile_id=profile_id,
+        canvas_size=canvas_size,
     )
     stale_geometry_metrics = (
         source_visibility_candidate != html or candidate != source_visibility_candidate

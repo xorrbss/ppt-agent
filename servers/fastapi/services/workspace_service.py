@@ -1086,7 +1086,6 @@ async def _verified_authored_local_fit_checkpoint_recovery(
         job is None
         or not isinstance(job.last_error, Mapping)
         or not isinstance(job.request_payload, Mapping)
-        or job.request_payload.get("aspect_ratio") not in {None, "16:9"}
     ):
         return None
     failure = job.last_error
@@ -1119,10 +1118,12 @@ async def _verified_authored_local_fit_checkpoint_recovery(
         from services.authored_checkpoint_artifacts import read_valid_evidence_artifact
         from services.authored_checkpoint_html import checkpoint_stage_html
         from services.authored_local_fit_evidence_status import reusable_checkpoint_receipt
+        from services.authored_local_fit_geometry import presentation_local_fit_geometry as local_fit_geometry
         from services.authored_local_fit_policy import local_fit_policy
 
+        geometry = await local_fit_geometry(session, operation.presentation_id)
         bundle = await read_valid_evidence_artifact(
-            checkpoint, expected_width_px=1280, expected_height_px=720
+            checkpoint, expected_width_px=geometry.viewport_width, expected_height_px=geometry.viewport_height
         )
     except Exception:
         return None
@@ -1130,17 +1131,16 @@ async def _verified_authored_local_fit_checkpoint_recovery(
         return None
     fit = bundle.metrics.get("authored_local_fit") if isinstance(bundle.metrics, Mapping) else None
     manifest = fit.get("exportScaleManifest") if isinstance(fit, Mapping) else None
-    if not isinstance(fit, Mapping) or not isinstance(manifest, Mapping) or (
-        manifest.get("width_pt"), manifest.get("height_pt"),
-        manifest.get("viewport_width"), manifest.get("viewport_height"),
-    ) != (960, 540, 1280, 720):
+    if not isinstance(fit, Mapping) or not isinstance(manifest, Mapping) or tuple(
+        manifest.get(key) for key in geometry._fields
+    ) != tuple(geometry):
         return None
     try:
         policy = local_fit_policy(
             author_revision=str(fit.get("authorRevision") or ""),
             original_html_digest=str(fit.get("originalHtmlDigest") or ""),
-            export_width_pt=960, export_height_pt=540,
-            viewport_width=1280, viewport_height=720,
+            export_width_pt=geometry.width_pt, export_height_pt=geometry.height_pt,
+            viewport_width=geometry.viewport_width, viewport_height=geometry.viewport_height,
             slide_index=checkpoint.slide_index,
             policy_revision=str(fit.get("policyRevision") or ""),
         )

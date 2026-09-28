@@ -7,6 +7,7 @@ import {
   POWERPOINT_GENERIC_FONT_FALLBACK_POLICY,
 } from "./font-policy.ts";
 import { BACKPLATE_SCALE } from "./capture-scale.ts";
+import { LEGACY_AUTHORED_CANVAS } from "../authored-canvas.ts";
 import type {
   AuthoredHybridExpectedPromotedElement,
   BrowserAuthoredHybridObservation,
@@ -41,6 +42,8 @@ interface InstrumentAuthoredHtmlOptions {
   captureMode?: "observation" | "hybrid-backplate" | "hybrid-paint-band" | "fidelity";
   /** Exact authored data-qid registry for declared semantic observations. */
   declaredElementIds?: readonly string[];
+  /** Canvas the injected analyser must observe; defaults to the legacy 16:9 slide. */
+  canvas?: { widthPx: number; heightPx: number };
 }
 
 const POWERPOINT_FONT_LAYOUT_SCRIPT_ID =
@@ -109,12 +112,17 @@ export function instrumentAuthoredHtml(
 
   const baseUrl = normalizeAuthoredHybridBaseUrl(options.baseUrl);
   const promotedElements = [...(options.promotedElements ?? [])];
+  const canvas = options.canvas ?? LEGACY_AUTHORED_CANVAS;
   const config = JSON.stringify({
     promotedElements,
     paintBandElementIds: [...(options.paintBandElementIds ?? [])],
     fontFallbackPolicy: AUTHORED_FONT_FALLBACK_POLICY,
     captureMode: options.captureMode ??
       (promotedElements.length ? "hybrid-backplate" : "observation"),
+    // Must match the actual CDP viewport the runner configures from the same
+    // canvas contract (see chrome-runner.ts/extractor.ts); the injected
+    // analyser throws unless window.innerWidth/Height equal this exactly.
+    expectedViewport: { width: canvas.widthPx, height: canvas.heightPx },
     // The Chromium session's deviceScaleFactor (see capture-scale.ts) is
     // always applied before this script runs, so window.devicePixelRatio
     // already reports it. Passing it through explicitly lets the injected

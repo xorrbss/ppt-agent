@@ -119,18 +119,20 @@ async function extractAuthoredSlideDomObservation(
       "Authored renderer baseUrl values are disabled; assets must be embedded data URLs."
     );
   }
+  const canvas = options.canvas ?? LEGACY_AUTHORED_CANVAS;
   const domCompletionToken = randomUUID();
   const instrumented = instrumentAuthoredHtml(html, {
     baseUrl,
     fontLayoutMode: options.fontLayoutMode,
     declaredElementIds: options.declaredElementIds,
     completionToken: domCompletionToken,
+    canvas,
   });
   const { capture, observation } = await captureWithFixedViewport(
     instrumented,
     screenshot,
     domCompletionToken,
-    options
+    { ...options, canvas }
   );
   const slide = buildAuthoredHybridSlide(html, observation, baseUrl);
   rememberLocalFitSource(slide, observation.localFitObservation);
@@ -242,24 +244,26 @@ export async function renderAuthoredFidelityBackplate(
       "Authored renderer baseUrl values are disabled; assets must be embedded data URLs."
     );
   }
+  const canvas = options.canvas ?? LEGACY_AUTHORED_CANVAS;
   const domCompletionToken = randomUUID();
   const instrumented = instrumentAuthoredHtml(html, {
     baseUrl,
     captureMode: "fidelity",
     completionToken: domCompletionToken,
+    canvas,
   });
   const { capture, observation } = await captureWithFixedViewport(
     instrumented,
     true,
     domCompletionToken,
-    options
+    { ...options, canvas }
   );
   if (!capture.screenshotPng) {
     throw new Error("Chrome did not return the complete authored Fidelity capture.");
   }
   const screenshotPng = await normalizeBackplatePng(
     capture.screenshotPng,
-    options.canvas ?? LEGACY_AUTHORED_CANVAS,
+    canvas,
   );
   return {
     backplatePng: screenshotPng,
@@ -319,6 +323,7 @@ export async function renderAuthoredBackplate(
       ? slide.elements.map((element) => element.id)
       : undefined,
     completionToken: domCompletionToken,
+    canvas,
   });
   const { capture, observation } = await captureWithFixedViewport(
     instrumented,
@@ -408,6 +413,7 @@ export async function renderAuthoredRasterPaintBand(
     paintBandElementIds: requested,
     declaredElementIds: slide.elements.map((element) => element.id),
     completionToken: domCompletionToken,
+    canvas,
   });
   const { capture, observation } = await captureWithFixedViewport(
     instrumented,
