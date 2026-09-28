@@ -29,6 +29,10 @@ design_tokens:
   mono_font: IBM Plex Mono
 reference_images:
   content: [catalogue-previews/signal.png]
+svg_overrides:
+  resolved_sections: [GENERAL]
+  common_guidance:
+    - "Retain the established spacious margins and flat hairline treatment, built from thin line and rect primitives, not shadows or rounded corners. Distribute attention through one large thesis, a deliberately small evidence cluster and a long calm edge. Alternate dark thesis pages, paper evidence pages and sparse two-column comparisons; keep dense discussion to three rows or move supporting detail to the next slide. These are flexible compositional directions for freely authored SVG, not fixed layouts, slots, Deck IR or a layout engine."
 brief: |-
   This is the SIGNAL system — a literary editorial briefing: The Economist's
   restraint crossed with a private intelligence memo. Follow its rules exactly;

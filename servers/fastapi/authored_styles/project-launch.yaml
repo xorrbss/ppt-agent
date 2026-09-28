@@ -23,6 +23,10 @@ preview:
   image: catalogue-previews/project-launch.png
 reference_images:
   content: [catalogue-previews/project-launch.png]
+svg_overrides:
+  resolved_sections: [LAYOUT SYSTEM]
+  common_guidance:
+    - "Use a broad milestone or dependency field built from rect, line and text primitives, with one prominent next decision and a concise side note. Alternate an overview, a readiness comparison and a focused handoff page. Keep up to four milestones or three workstreams per slide; longer plans continue with a visible shared time basis. These are flexible compositional directions for freely authored SVG, not fixed layouts, slots, Deck IR or a layout engine."
 brief: |-
   MOOD
   차분하지만 추진력 있는 실행 회의. 참석자가 다음 행동과 책임자를 한눈에 이해하도록 만든다.
