@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
 
 import { fetchTimeoutSignal } from "@/lib/fetch-timeout-signal";
+import { getFastApiBaseUrl } from "@/lib/fastapi-internal";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,8 +35,7 @@ export async function GET(req: NextRequest) {
     return errorResponse(400);
   }
 
-  const base =
-    process.env.FAST_API_INTERNAL_URL?.trim() || "http://127.0.0.1:8000";
+  const base = getFastApiBaseUrl();
 
   try {
     const headers = new Headers({ Accept: "image/svg+xml" });
