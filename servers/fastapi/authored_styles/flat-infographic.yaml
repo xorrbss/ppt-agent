@@ -29,6 +29,12 @@ illustration:
     editorial style, balanced negative space, no gradients
 reference_images:
   content: [catalogue-previews/flat-infographic.png]
+svg_overrides:
+  resolved_sections: [GENERAL]
+  common_guidance:
+    - "Keep all meaningful text as explicit SVG text/tspan elements -- never rendered inside a raster image."
+    - "For illustration-led slides, build around one flat illustration image slot that anchors the story -- sized to roughly half the slide -- with structured SVG elements around it: numbered step chips, role groups, or short bullet text aligned to a clear grid."
+    - "architecture archetype: draw source-supported roles or components as SVG text labels and polygon/line connectors with a clear reading direction; keep decorative characters outside the relationship diagram."
 brief: |-
   MOOD: Create a friendly, modern business explainer — the visual language of
   a well-designed annual report infographic. Approachable but disciplined:

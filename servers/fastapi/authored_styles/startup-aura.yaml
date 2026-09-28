@@ -23,6 +23,10 @@ preview:
   image: catalogue-previews/startup-aura.png
 reference_images:
   content: [catalogue-previews/startup-aura.png]
+svg_overrides:
+  resolved_sections: [LAYOUT SYSTEM]
+  common_guidance:
+    - "Use generous cream space with one soft geometric illustration built from rounded-looking polygon and circle primitives and a grounded evidence area. Alternate a customer observation, a mechanism page and a light experiment comparison. Keep a maximum of three short evidence statements; separate product promises from source-backed outcomes. These are flexible compositional directions for freely authored SVG, not fixed layouts, slots, Deck IR or a layout engine."
 brief: |-
   MOOD
   낙관적이고 인간적이며 빠르게 움직이는 초기 팀의 에너지. 과장된 미래주의 대신 믿을 수 있는 자신감을 만든다.

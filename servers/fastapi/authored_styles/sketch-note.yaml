@@ -29,6 +29,13 @@ illustration:
     charming but precise, generous empty margin, no shading gradients
 reference_images:
   content: [catalogue-previews/sketch-note.png]
+svg_overrides:
+  resolved_sections: [GENERAL]
+  common_guidance:
+    - "Underlines, circled numbers and highlighter washes are drawn with native SVG rect, circle, line and path primitives (no CSS, filters or stylesheets) so Korean text stays crisp as real SVG text -- never rasterized inside images."
+    - "For illustration-led slides, anchor the composition with one sketch illustration slot -- a hand-drawn scene or diagram occupying a third to half of the slide -- and arrange note-style SVG content around it: highlighted key sentences shown as a pale rect wash behind the text, numbered margin notes, small definition cards. Vary slot placement per slide. Reserve the slot area with explicit sizing so the layout holds without the image."
+    - "Let the sketch slot become small or disappear when a long Korean explanation, chart or relationship diagram needs the canvas. Keep all essential labels in upright SVG text elements, reserve note rotation for decoration, and use a broad open reading area instead of repeating small definition cards."
+    - "architecture: Keep supported entities, labels and connectors as native SVG text, rect and line/path elements, using the sketch only as a separate illustrative aid."
 brief: |-
   MOOD: Create the feeling of a brilliant teacher's notebook — hand-drawn
   warmth with rigorous structure. Slides should read like beautifully kept

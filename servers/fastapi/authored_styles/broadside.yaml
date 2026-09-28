@@ -26,6 +26,13 @@ preview:
   image: catalogue-previews/broadside.png
 reference_images:
   content: [catalogue-previews/broadside.png]
+svg_overrides:
+  resolved_sections: [GENERAL]
+  common_guidance:
+    - "Use an oversized headline text element as one edge of the composition, then open a disciplined newspaper-style reading field of smaller text elements. Alternate a loud poster page with a quieter tabular or quote page across the deck."
+    - "Keep the claim to two lines and evidence to three rows; when the brief is dense, plan a second slide rather than shrinking type below the floor."
+  layout_hints:
+    - "Compose freely with the permitted SVG primitives -- not a fixed layout, slot grid or Deck IR."
 brief: |-
   MOOD:
   Create a protest-poster editorial system with considered newspaper precision: ink on fire, loud but controlled. Use two registers only—dark for documentation and orange for declaration. Treat one very short headline as a graphic object, then let negative space restore order.

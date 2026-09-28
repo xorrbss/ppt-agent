@@ -23,6 +23,10 @@ preview:
   image: catalogue-previews/visual-discovery.png
 reference_images:
   content: [catalogue-previews/visual-discovery.png]
+svg_overrides:
+  resolved_sections: [LAYOUT SYSTEM]
+  common_guidance:
+    - "Build a loose but aligned specimen field with an adjacent synthesis margin, using image slots and rect/text primitives for structure. Vary the rhythm between an image-led discovery spread, a two-specimen comparison and a quiet findings index. Keep three specimens or three observations per page; do not turn the notebook into a dense mood-board wall. These are flexible compositional directions for freely authored SVG, not fixed layouts, slots, Deck IR or a layout engine."
 brief: |-
   MOOD
   관찰하고 연결하며 예상 밖의 패턴을 발견하는 호기심. 단정한 보고서보다 연구 벽면의 흥미로운 증거 묶음처럼 느껴져야 한다.

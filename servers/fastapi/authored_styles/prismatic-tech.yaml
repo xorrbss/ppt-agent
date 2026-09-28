@@ -23,6 +23,10 @@ preview:
   image: catalogue-previews/prismatic-tech.png
 reference_images:
   content: [catalogue-previews/prismatic-tech.png]
+svg_overrides:
+  resolved_sections: [LAYOUT SYSTEM]
+  common_guidance:
+    - "Compose one faceted prism or folded light plane built from straight-edged polygon and path primitives (M/L/H/V/Z only, no curves) in an open dark field, with input and output annotations on different edges. Alternate a refraction overview, a plain comparison page and a focused component study. Keep three analytical strands per scene and place dense evidence in a flat adjacent ledger. These are flexible compositional directions for freely authored SVG, not fixed layouts, slots, Deck IR or a layout engine."
 brief: |-
   MOOD
   정밀하고 낙관적인 첨단성. 빛이 분해되고 다시 결합하는 느낌으로 복잡한 기술을 명료한 구조로 보이게 한다.

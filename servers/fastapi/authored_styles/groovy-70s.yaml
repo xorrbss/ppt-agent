@@ -26,6 +26,13 @@ preview:
   image: catalogue-previews/groovy-70s.png
 reference_images:
   content: [catalogue-previews/groovy-70s.png]
+svg_overrides:
+  # GENERAL: the LAYOUT SYSTEM composition line is html-only only for the
+  # shared "freely authored HTML/CSS" boilerplate; the composition intent
+  # (curved field, alternation, data-group limit) is restated for SVG below.
+  resolved_sections: [GENERAL]
+  layout_hints:
+    - "Approximate one curved color field or arch with a closed SVG polygon or polyline made of short straight segments (no curve commands) to organize an open reading area, with data placed on a calm cream plane. Alternate a flowing poster slide, a straightforward evidence sheet and a warm process story across the deck. Keep up to three data groups per slide; move long copy out of the curved shape onto open canvas rather than narrowing the font. Compose freely from SVG primitives rather than a fixed slot grid."
 brief: |-
   MOOD:
   Create warm, soulful 1970s print and record-sleeve nostalgia. The feeling is optimistic, playful, analog, and composed rather than chaotic acid psychedelia. Let a few bold curves and rounded forms carry the period voice.

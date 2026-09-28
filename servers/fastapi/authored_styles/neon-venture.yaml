@@ -23,6 +23,15 @@ preview:
   image: catalogue-previews/neon-venture.png
 reference_images:
   content: [catalogue-previews/neon-venture.png]
+svg_overrides:
+  # LAYOUT SYSTEM: the composition line is html-only only for the shared
+  # "freely authored HTML/CSS" boilerplate; the intent (single focal arena,
+  # alternation, observation limit) is restated below for SVG. Glow itself
+  # has no SVG filter equivalent here, so it is expressed as layered
+  # lower-opacity solid shapes instead (per SVG_AUTHOR_RULES: no filters).
+  resolved_sections: [LAYOUT SYSTEM]
+  layout_hints:
+    - "Build a focused arena with one large comparison or experiment path and a supporting SVG text zone, not an array of glowing cards. Approximate any glow with two or three layered, slightly offset, lower-opacity solid-color shapes behind the focal object rather than a filter or gradient. Alternate a vivid launch proposition slide, a quiet dark data slide and an open milestone scene across the deck. Limit neon emphasis to one focal object per slide; keep supporting content to three short SVG text observations. Compose freely from SVG primitives rather than a fixed slot grid."
 brief: |-
   MOOD
   야간 무대의 대담한 낙관과 벤처 규모의 야심. 한 장면마다 하나의 강한 투자 논지를 남긴다.

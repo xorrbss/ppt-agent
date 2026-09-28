@@ -26,6 +26,13 @@ preview:
   image: catalogue-previews/luxury-editorial.png
 reference_images:
   content: [catalogue-previews/luxury-editorial.png]
+svg_overrides:
+  # GENERAL: the LAYOUT SYSTEM composition line is html-only only for the
+  # shared "freely authored HTML/CSS" boilerplate; the composition intent
+  # (material plane vs. observation column, alternation) is restated below.
+  resolved_sections: [GENERAL]
+  layout_hints:
+    - "Build tension between a large cropped material-image plane and a narrow column of precise observation text. Alternate a dark image-led study slide, a clean side-by-side specification spread and a near-empty statement slide across the deck. Allow one headline and at most three craft observations as SVG text around an image slot; place a longer specification table on its own pale inset rect surface. Compose freely from SVG primitives rather than a fixed slot grid."
 brief: |-
   MOOD:
   Create a dark fashion-atelier editorial: quiet, sensual, tactile, and highly art-directed. Favor the intimacy of silk, linen, jewelry, and portraiture over generic corporate luxury. Unlike editorial-tritone, this system is espresso, taupe, and old gold; it is image-and-material led rather than cream-paper, coral punctuation, and pull-quote led.

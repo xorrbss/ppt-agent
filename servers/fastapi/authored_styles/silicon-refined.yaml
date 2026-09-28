@@ -23,6 +23,10 @@ preview:
   image: catalogue-previews/silicon-refined.png
 reference_images:
   content: [catalogue-previews/silicon-refined.png]
+svg_overrides:
+  resolved_sections: [GENERAL]
+  common_guidance:
+    - "Let one engineered object or simple mechanism, drawn with straight-edged polygon/path and rect/circle primitives, occupy a generous white field, with a compact evidence ledger placed in its optical counterweight. Alternate centered object studies, asymmetric comparison spreads and near-empty decision pages. Keep specifications to three or four meaningful rows; move test conditions onto a separate clean evidence page when they need explanation. These are flexible compositional directions for freely authored SVG, not fixed layouts, slots, Deck IR or a layout engine."
 brief: >-
   MOOD: Create an ultra-refined technology presentation that feels quiet, exact, and
   premium. Let a small number of carefully staged ideas carry the narrative with

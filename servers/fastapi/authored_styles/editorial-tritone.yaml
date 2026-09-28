@@ -21,6 +21,12 @@ preview:
   image: catalogue-previews/editorial-tritone.png
 reference_images:
   content: [catalogue-previews/editorial-tritone.png]
+svg_overrides:
+  resolved_sections: [LAYOUT SYSTEM]
+  common_guidance:
+    - "Compose across an open column rhythm with unequal text-block measures and generous gutters. Let a coral annotation shape interrupt an otherwise cream-and-ink spread. Alternate a headline-led essay, an evidence chart, an image-and-caption spread and a short rebuttal across slides. Limit prose to three compact text blocks; continue long arguments on a new slide rather than shrinking type."
+  layout_hints:
+    - "Compose freely with the permitted SVG primitives -- not a fixed layout, slot grid or Deck IR."
 brief: |-
   MOOD
   Create an art-directed magazine atmosphere that feels warm, observant, and deliberate. Each slide should carry one memorable editorial beat rather than resemble a corporate template.

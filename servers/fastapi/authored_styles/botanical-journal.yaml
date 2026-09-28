@@ -26,6 +26,13 @@ preview:
   image: catalogue-previews/botanical-journal.png
 reference_images:
   content: [catalogue-previews/botanical-journal.png]
+svg_overrides:
+  resolved_sections: [GENERAL]
+  common_guidance:
+    - "Pair one generous specimen illustration (drawn with permitted SVG polygon/path primitives, or an offered image slot) with an open observation list set as separate text elements, using an irregular but clearly aligned rhythm. Alternate specimen pages, field comparisons and simple seasonal traces across slides."
+    - "Limit a specimen page to four labels and a ledger page to three observations; move detailed notes to a companion slide instead of shrinking text below the floor."
+  layout_hints:
+    - "Compose freely using the permitted SVG primitives -- not a fixed layout, slot grid or Deck IR."
 brief: |-
   MOOD:
   Create a friendly eco field journal: handmade, observant, cheerful, and educational. Combine the clarity of a nature notebook with restrained scrapbook warmth. Keep the tone curious rather than childish and make every handmade mark support the story.
