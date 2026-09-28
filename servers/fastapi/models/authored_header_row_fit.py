@@ -12,10 +12,10 @@ from __future__ import annotations
 import math
 
 from models.authored_header_contract import (
-    SLIDE_WIDTH_PX,
     AuthoredHeaderContract,
     HeaderRequirementSpec,
 )
+from models.authored_header_metrics import SLOT_MAX_WIDTH_PX, SLOT_MIN_WIDTH_PX
 
 #: Requirement identifiers are ``PREFIX-000`` shaped; the overflow chip is ``+N``.
 _REQUIREMENT_ID_CHARS = 7
@@ -55,13 +55,15 @@ def fit_requirement_row(contract: "AuthoredHeaderContract") -> "AuthoredHeaderCo
 
     payload = contract.model_dump()
     widest = min(
-        560,
-        SLIDE_WIDTH_PX - 2 * contract.margin_x_px - contract.title.max_width_px,
+        SLOT_MAX_WIDTH_PX,
+        contract.canvas_width_px
+        - 2 * contract.margin_x_px
+        - contract.title.max_width_px,
     )
     working = contract
     needed = requirement_row_width_px(working)
     if needed > working.right_slot.width_px and widest >= needed:
-        payload["right_slot"]["width_px"] = max(160, needed)
+        payload["right_slot"]["width_px"] = max(SLOT_MIN_WIDTH_PX, needed)
         return AuthoredHeaderContract.model_validate(payload)
 
     while needed > working.right_slot.width_px and payload["requirements"][

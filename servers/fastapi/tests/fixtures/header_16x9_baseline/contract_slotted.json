@@ -1,0 +1,79 @@
+{
+  "schema_version": "authored-header-contract/v2",
+  "band_min_px": 96,
+  "band_max_px": 280,
+  "header_top_px": 32,
+  "eyebrow_gap_px": 12,
+  "subline_gap_px": 8,
+  "title_gap_px": 28,
+  "content_gap_px": 20,
+  "margin_x_px": 64,
+  "eyebrow": {
+    "enabled": true,
+    "font_size_px": 13,
+    "weight": 700,
+    "letter_spacing_em": 0.06,
+    "color": "#2563EB",
+    "max_chars": 24,
+    "text_style": "deckLanguage",
+    "form": "sectionOnly",
+    "tick": {
+      "enabled": true,
+      "width_px": 24,
+      "height_px": 3,
+      "color": "#2563EB",
+      "gap_px": 12
+    }
+  },
+  "title": {
+    "font_size_px": 34,
+    "weight": 800,
+    "line_height": 1.32,
+    "color": "#0F172A",
+    "max_lines": 2,
+    "max_width_px": 640
+  },
+  "subline": {
+    "enabled": true,
+    "font_size_px": 15,
+    "weight": 500,
+    "color": "#64748B",
+    "max_lines": 1
+  },
+  "right_slot": {
+    "mode": "requirementsAndSummary",
+    "width_px": 400,
+    "summary_font_size_px": 13,
+    "summary_color": "#64748B",
+    "summary_max_lines": 2
+  },
+  "requirements": {
+    "enabled": true,
+    "label": "요구사항",
+    "style": "chip",
+    "max_visible": 6,
+    "overflow": "plusN",
+    "font_size_px": 12,
+    "weight": 700,
+    "text_color": "#1D4ED8",
+    "background_color": "#EEF3FA",
+    "border_color": "#D6E2F0",
+    "radius_px": 4,
+    "height_px": 22,
+    "padding_x_px": 10,
+    "gap_px": 6
+  },
+  "divider": {
+    "enabled": true,
+    "thickness_px": 1,
+    "color": "#E2E8F0",
+    "width": "content"
+  },
+  "page_number": {
+    "enabled": false
+  },
+  "excluded_roles": [
+    "COVER",
+    "SECTION"
+  ]
+}

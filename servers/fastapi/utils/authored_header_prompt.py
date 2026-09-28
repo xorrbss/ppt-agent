@@ -16,7 +16,6 @@ from __future__ import annotations
 
 from models.authored_header_contract import (
     HEADER_BAND_ATTRIBUTE,
-    SLIDE_WIDTH_PX,
     AuthoredHeaderContract,
     label_row_px as _label_row_px,
 )
@@ -219,7 +218,8 @@ def _right_slot_lines(contract: AuthoredHeaderContract) -> list[str]:
     slot = contract.right_slot
     geometry = (
         f"a {_px(slot.width_px)} column starting at x={_px(contract.right_slot_left_px)} "
-        f"and ending at x={_px(SLIDE_WIDTH_PX - contract.margin_x_px)}, right-aligned, "
+        f"and ending at x={_px(contract.canvas_width_px - contract.margin_x_px)}, "
+        "right-aligned, "
         "top-aligned with the eyebrow"
     )
     if slot.mode == "none":
@@ -264,7 +264,7 @@ def _divider_line(contract: AuthoredHeaderContract) -> str:
         if divider.width == "full"
         else (
             f"x={_px(contract.margin_x_px)} to "
-            f"x={_px(SLIDE_WIDTH_PX - contract.margin_x_px)}"
+            f"x={_px(contract.canvas_width_px - contract.margin_x_px)}"
         )
     )
     return (
@@ -337,7 +337,8 @@ def _band_lines(contract: AuthoredHeaderContract) -> list[str]:
     named here is one the validator reads back out of the slide's own markup.
     """
     return [
-        f"  - Header band: the top of the {SLIDE_WIDTH_PX}x720 canvas, with "
+        f"  - Header band: the top of the {contract.canvas_width_px}x"
+        f"{contract.canvas_height_px} canvas, with "
         f"{_px(contract.margin_x_px)} left and right margins. Its HEIGHT is not "
         "fixed for the deck: each slide DERIVES it from what that slide actually "
         "rendered, so a one-line title does not carry the space a two-line title "

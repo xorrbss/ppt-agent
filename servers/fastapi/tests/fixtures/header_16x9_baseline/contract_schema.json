@@ -1,0 +1,496 @@
+{
+  "$defs": {
+    "DeckPageNumberSpec": {
+      "additionalProperties": false,
+      "description": "Whether this deck prints a page number at the bottom of every slide.\n\nIt lives in the header contract because it is the same kind of thing: one\ndecision taken once and reproduced identically on every slide. It defaults\nOFF — an unrequested footer number is chrome nobody asked for, so it appears\nonly when the deck's own request calls for it.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        }
+      },
+      "title": "DeckPageNumberSpec",
+      "type": "object"
+    },
+    "HeaderDividerSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "thickness_px": {
+          "default": 1,
+          "maximum": 6,
+          "minimum": 1,
+          "title": "Thickness Px",
+          "type": "integer"
+        },
+        "color": {
+          "default": "#E2E8F0",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Color",
+          "type": "string"
+        },
+        "width": {
+          "default": "content",
+          "enum": [
+            "full",
+            "content"
+          ],
+          "title": "Width",
+          "type": "string"
+        }
+      },
+      "title": "HeaderDividerSpec",
+      "type": "object"
+    },
+    "HeaderEyebrowSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "font_size_px": {
+          "default": 13,
+          "maximum": 20,
+          "minimum": 12,
+          "title": "Font Size Px",
+          "type": "integer"
+        },
+        "weight": {
+          "default": 700,
+          "maximum": 900,
+          "minimum": 400,
+          "title": "Weight",
+          "type": "integer"
+        },
+        "letter_spacing_em": {
+          "default": 0.06,
+          "maximum": 0.3,
+          "minimum": 0.0,
+          "title": "Letter Spacing Em",
+          "type": "number"
+        },
+        "color": {
+          "default": "#2563EB",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Color",
+          "type": "string"
+        },
+        "max_chars": {
+          "default": 24,
+          "maximum": 60,
+          "minimum": 6,
+          "title": "Max Chars",
+          "type": "integer"
+        },
+        "text_style": {
+          "default": "deckLanguage",
+          "enum": [
+            "deckLanguage",
+            "latinUpper"
+          ],
+          "title": "Text Style",
+          "type": "string"
+        },
+        "form": {
+          "default": "sectionOnly",
+          "enum": [
+            "sectionOnly",
+            "chapterBreadcrumb"
+          ],
+          "title": "Form",
+          "type": "string"
+        },
+        "tick": {
+          "$ref": "#/$defs/HeaderTickSpec"
+        }
+      },
+      "title": "HeaderEyebrowSpec",
+      "type": "object"
+    },
+    "HeaderRequirementSpec": {
+      "additionalProperties": false,
+      "description": "How RFP requirement identifiers appear, when the deck has any at all.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "label": {
+          "default": "",
+          "maxLength": 24,
+          "title": "Label",
+          "type": "string"
+        },
+        "style": {
+          "default": "chip",
+          "enum": [
+            "chip",
+            "text"
+          ],
+          "title": "Style",
+          "type": "string"
+        },
+        "max_visible": {
+          "default": 6,
+          "maximum": 12,
+          "minimum": 1,
+          "title": "Max Visible",
+          "type": "integer"
+        },
+        "overflow": {
+          "default": "wrap",
+          "enum": [
+            "plusN",
+            "wrap"
+          ],
+          "title": "Overflow",
+          "type": "string"
+        },
+        "font_size_px": {
+          "default": 12,
+          "maximum": 18,
+          "minimum": 12,
+          "title": "Font Size Px",
+          "type": "integer"
+        },
+        "weight": {
+          "default": 700,
+          "maximum": 900,
+          "minimum": 400,
+          "title": "Weight",
+          "type": "integer"
+        },
+        "text_color": {
+          "default": "#1D4ED8",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Text Color",
+          "type": "string"
+        },
+        "background_color": {
+          "default": "#EEF3FA",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Background Color",
+          "type": "string"
+        },
+        "border_color": {
+          "default": "#D6E2F0",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Border Color",
+          "type": "string"
+        },
+        "radius_px": {
+          "default": 4,
+          "maximum": 16,
+          "minimum": 0,
+          "title": "Radius Px",
+          "type": "integer"
+        },
+        "height_px": {
+          "default": 22,
+          "maximum": 40,
+          "minimum": 16,
+          "title": "Height Px",
+          "type": "integer"
+        },
+        "padding_x_px": {
+          "default": 10,
+          "maximum": 24,
+          "minimum": 4,
+          "title": "Padding X Px",
+          "type": "integer"
+        },
+        "gap_px": {
+          "default": 6,
+          "maximum": 16,
+          "minimum": 2,
+          "title": "Gap Px",
+          "type": "integer"
+        }
+      },
+      "title": "HeaderRequirementSpec",
+      "type": "object"
+    },
+    "HeaderRightSlotSpec": {
+      "additionalProperties": false,
+      "description": "The single right-hand slot of the header band.\n\n``mode`` is what keeps decks uniform: the slot always plays the same role on\nevery slide instead of being a summary here, a label there, and a badge\nsomewhere else.",
+      "properties": {
+        "mode": {
+          "default": "none",
+          "enum": [
+            "none",
+            "summary",
+            "requirements",
+            "requirementsAndSummary"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "width_px": {
+          "default": 336,
+          "maximum": 560,
+          "minimum": 160,
+          "title": "Width Px",
+          "type": "integer"
+        },
+        "summary_font_size_px": {
+          "default": 13,
+          "maximum": 20,
+          "minimum": 12,
+          "title": "Summary Font Size Px",
+          "type": "integer"
+        },
+        "summary_color": {
+          "default": "#64748B",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Summary Color",
+          "type": "string"
+        },
+        "summary_max_lines": {
+          "default": 2,
+          "maximum": 3,
+          "minimum": 1,
+          "title": "Summary Max Lines",
+          "type": "integer"
+        }
+      },
+      "title": "HeaderRightSlotSpec",
+      "type": "object"
+    },
+    "HeaderSublineSpec": {
+      "additionalProperties": false,
+      "description": "One optional supporting line directly under the title.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "font_size_px": {
+          "default": 15,
+          "maximum": 22,
+          "minimum": 12,
+          "title": "Font Size Px",
+          "type": "integer"
+        },
+        "weight": {
+          "default": 500,
+          "maximum": 800,
+          "minimum": 300,
+          "title": "Weight",
+          "type": "integer"
+        },
+        "color": {
+          "default": "#64748B",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Color",
+          "type": "string"
+        },
+        "max_lines": {
+          "default": 1,
+          "maximum": 2,
+          "minimum": 1,
+          "title": "Max Lines",
+          "type": "integer"
+        }
+      },
+      "title": "HeaderSublineSpec",
+      "type": "object"
+    },
+    "HeaderTickSpec": {
+      "additionalProperties": false,
+      "description": "The short accent rule before the eyebrow. OFF by default like page\nnumbering: an accent bar nobody asked for is chrome, and readers mistake\nthe rendered span for a dash in the eyebrow text.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "width_px": {
+          "default": 24,
+          "maximum": 120,
+          "minimum": 8,
+          "title": "Width Px",
+          "type": "integer"
+        },
+        "height_px": {
+          "default": 3,
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Height Px",
+          "type": "integer"
+        },
+        "color": {
+          "default": "#2563EB",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Color",
+          "type": "string"
+        },
+        "gap_px": {
+          "default": 12,
+          "maximum": 32,
+          "minimum": 4,
+          "title": "Gap Px",
+          "type": "integer"
+        }
+      },
+      "title": "HeaderTickSpec",
+      "type": "object"
+    },
+    "HeaderTitleSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "font_size_px": {
+          "default": 34,
+          "maximum": 56,
+          "minimum": 20,
+          "title": "Font Size Px",
+          "type": "integer"
+        },
+        "weight": {
+          "default": 800,
+          "maximum": 900,
+          "minimum": 400,
+          "title": "Weight",
+          "type": "integer"
+        },
+        "line_height": {
+          "default": 1.32,
+          "maximum": 2.0,
+          "minimum": 1.0,
+          "title": "Line Height",
+          "type": "number"
+        },
+        "color": {
+          "default": "#0F172A",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "title": "Color",
+          "type": "string"
+        },
+        "max_lines": {
+          "default": 2,
+          "maximum": 3,
+          "minimum": 1,
+          "title": "Max Lines",
+          "type": "integer"
+        },
+        "max_width_px": {
+          "default": 780,
+          "maximum": 1152,
+          "minimum": 320,
+          "title": "Max Width Px",
+          "type": "integer"
+        }
+      },
+      "title": "HeaderTitleSpec",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The frozen, deck-wide description of every slide's fixed chrome.\n\nThat is the top area on every slide, plus the one bottom-area decision\n(page numbering) that has to stay identical deck-wide for the same reason.\n\nThe band each slide renders is derived, never dictated::\n\n    left   = eyebrow row + eyebrowGapPx + rendered title lines\n             (+ sublineGapPx + subline block, only when one is rendered)\n    right  = the requirement chip row, or the summary at its own line count\n    band   = headerTopPx + max(left, right) + titleGapPx   clamped to\n             bandMinPx..bandMaxPx\n    body   = band + contentGapPx\n\nEvery term but ``max(left, right)`` is fixed here, which is the line between\na header that adapts and a header that drifts.",
+  "properties": {
+    "schema_version": {
+      "const": "authored-header-contract/v2",
+      "default": "authored-header-contract/v2",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "band_min_px": {
+      "default": 96,
+      "maximum": 280,
+      "minimum": 96,
+      "title": "Band Min Px",
+      "type": "integer"
+    },
+    "band_max_px": {
+      "default": 280,
+      "maximum": 360,
+      "minimum": 96,
+      "title": "Band Max Px",
+      "type": "integer"
+    },
+    "header_top_px": {
+      "default": 32,
+      "maximum": 96,
+      "minimum": 16,
+      "title": "Header Top Px",
+      "type": "integer"
+    },
+    "eyebrow_gap_px": {
+      "default": 12,
+      "maximum": 48,
+      "minimum": 4,
+      "title": "Eyebrow Gap Px",
+      "type": "integer"
+    },
+    "subline_gap_px": {
+      "default": 8,
+      "maximum": 32,
+      "minimum": 4,
+      "title": "Subline Gap Px",
+      "type": "integer"
+    },
+    "title_gap_px": {
+      "default": 28,
+      "maximum": 64,
+      "minimum": 8,
+      "title": "Title Gap Px",
+      "type": "integer"
+    },
+    "content_gap_px": {
+      "default": 20,
+      "maximum": 64,
+      "minimum": 8,
+      "title": "Content Gap Px",
+      "type": "integer"
+    },
+    "margin_x_px": {
+      "default": 64,
+      "maximum": 120,
+      "minimum": 32,
+      "title": "Margin X Px",
+      "type": "integer"
+    },
+    "eyebrow": {
+      "$ref": "#/$defs/HeaderEyebrowSpec"
+    },
+    "title": {
+      "$ref": "#/$defs/HeaderTitleSpec"
+    },
+    "subline": {
+      "$ref": "#/$defs/HeaderSublineSpec"
+    },
+    "right_slot": {
+      "$ref": "#/$defs/HeaderRightSlotSpec"
+    },
+    "requirements": {
+      "$ref": "#/$defs/HeaderRequirementSpec"
+    },
+    "divider": {
+      "$ref": "#/$defs/HeaderDividerSpec"
+    },
+    "page_number": {
+      "$ref": "#/$defs/DeckPageNumberSpec"
+    },
+    "excluded_roles": {
+      "default": [
+        "COVER",
+        "SECTION"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Excluded Roles",
+      "type": "array"
+    }
+  },
+  "title": "AuthoredHeaderContract",
+  "type": "object"
+}

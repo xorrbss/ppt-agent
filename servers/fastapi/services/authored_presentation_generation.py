@@ -1150,7 +1150,7 @@ async def _generate_authored_presentation(
         async def resolve_current_header_contract() -> AuthoredHeaderContract:
             return default_header_contract(
                 primary=getattr(brand, "primary", None) or "#2563EB",
-                chapter_breadcrumb=False,
+                canvas_width_px=canvas_width_px, canvas_height_px=canvas_height_px,
             )
 
         header_contract, header_reused = (
@@ -1178,11 +1178,10 @@ async def _generate_authored_presentation(
     else:
         async def resolve_current_header_contract() -> AuthoredHeaderContract:
             return await resolve_header_contract(
-                outline,
-                brand,
-                style,
+                outline, brand, style,
                 instructions=request.instructions,
                 chapter_breadcrumb=chapter_plan is not None,
+                canvas_width_px=canvas_width_px, canvas_height_px=canvas_height_px,
             )
 
         with provider_usage_scope(

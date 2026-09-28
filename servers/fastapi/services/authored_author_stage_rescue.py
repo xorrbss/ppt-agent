@@ -262,6 +262,8 @@ def _placeholder(plan: Any, index: int) -> str:
         role=(plan.roles[index] if getattr(plan, "roles", None) else ""),
         contract=contract,
         font_stack=_css_font_stack(str(getattr(brand, "fonts", "") or "Noto Sans KR")),
+        canvas_width_px=getattr(plan, "canvas_width_px", None),
+        canvas_height_px=getattr(plan, "canvas_height_px", None),
     )
 
 

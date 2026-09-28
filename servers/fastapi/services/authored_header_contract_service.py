@@ -12,6 +12,8 @@ import logging
 from typing import Optional
 
 from models.authored_header_contract import (
+    SLIDE_HEIGHT_PX,
+    SLIDE_WIDTH_PX,
     AuthoredHeaderContract,
     default_header_contract,
 )
@@ -50,6 +52,8 @@ async def resolve_header_contract(
     *,
     instructions: Optional[str] = None,
     chapter_breadcrumb: bool = False,
+    canvas_width_px: int = SLIDE_WIDTH_PX,
+    canvas_height_px: int = SLIDE_HEIGHT_PX,
 ) -> AuthoredHeaderContract:
     """Decide this deck's header once, from its content, style, and instructions.
 
@@ -70,6 +74,8 @@ async def resolve_header_contract(
         instructions=instructions,
         content_sample=_content_sample(contents),
         chapter_breadcrumb=chapter_breadcrumb,
+        canvas_width_px=canvas_width_px,
+        canvas_height_px=canvas_height_px,
     )
     LOGGER.info(
         # The band is per-slide now, so what identifies a deck's header is the

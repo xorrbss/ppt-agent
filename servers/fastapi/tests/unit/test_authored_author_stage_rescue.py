@@ -719,9 +719,10 @@ def test_the_author_flag_reaches_the_published_quality_gate(monkeypatch, tmp_pat
         )
 
     async def fake_header_contract(
-        outline, brand, style=None, instructions=None, chapter_breadcrumb=False
+        outline, brand, style=None, instructions=None, chapter_breadcrumb=False,
+        **canvas,
     ):
-        return default_header_contract(primary=brand.primary)
+        return default_header_contract(primary=brand.primary, **canvas)
 
     async def fake_metrics(_html):
         return {"telemetry": "available"}

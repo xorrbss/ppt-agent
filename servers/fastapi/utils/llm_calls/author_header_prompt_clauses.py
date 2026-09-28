@@ -17,13 +17,13 @@ _SYSTEM = (
     "Return only the structured contract."
 )
 
-_GUIDANCE = """\
+_GUIDANCE_TEMPLATE = """\
 Design rules for this contract:
 - Explicit user design instructions take precedence over the defaults below.
   Honor requested typography, compact headers, spacing and colors within the
   schema and runtime canvas. Use defaults only for unspecified properties;
   a request for compact proposal content is a reason to reduce header gaps.
-- The canvas is exactly 1280x720px. You are NOT choosing a band height: each
+- The canvas is exactly {width}x{height}px. You are NOT choosing a band height: each
   slide derives its own from what it rendered, as
   header_top_px + max(left column, right column) + title_gap_px, and starts its
   content content_gap_px below that. What you choose is the rhythm those gaps
@@ -52,7 +52,7 @@ Design rules for this contract:
   Korean headlines wrap wider than English ones.
 - title.max_width_px and right_slot.width_px divide ONE row between them, so the
   title column ends where the right slot begins:
-  title.max_width_px <= 1280 - 2 x margin_x_px - right_slot.width_px.
+  title.max_width_px <= {width} - 2 x margin_x_px - right_slot.width_px.
   Widen one only by narrowing the other; a pair that overlaps is not a near miss
   the header can absorb.
 - The right slot plays ONE role for the whole deck. Pick the role the deck's
@@ -63,6 +63,11 @@ Design rules for this contract:
 - Prefer restraint: a deck reads as designed when its header is quiet and
   identical everywhere.
 """
+
+
+def _guidance(canvas_width_px: int, canvas_height_px: int) -> str:
+    """The design rules, stated for the canvas the deck is authored on."""
+    return _GUIDANCE_TEMPLATE.format(width=canvas_width_px, height=canvas_height_px)
 
 
 _REQUIREMENT_DIRECTIVE = """\

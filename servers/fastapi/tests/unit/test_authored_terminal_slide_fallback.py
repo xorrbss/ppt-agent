@@ -230,9 +230,10 @@ def _install_deck_stubs(monkeypatch, tmp_path, htmls):
         )
 
     async def fake_header_contract(
-        outline, brand, style=None, instructions=None, chapter_breadcrumb=False
+        outline, brand, style=None, instructions=None, chapter_breadcrumb=False,
+        **canvas,
     ):
-        return default_header_contract(primary=brand.primary)
+        return default_header_contract(primary=brand.primary, **canvas)
 
     async def fake_metrics(_html):
         return {"telemetry": "available"}

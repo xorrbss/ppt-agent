@@ -4,9 +4,10 @@ The contract is decided ONCE per deck (optionally by an LLM that reads the user'
 own instructions) and then frozen.  Every slide of that deck receives the exact
 same rendered contract text, which is what makes the top of the deck uniform.
 
-Geometry is expressed in the authored canvas' absolute pixels (1280x720) so the
-contract can be validated after rendering and later patched field-by-field
-without re-authoring a slide from scratch.
+Geometry is expressed in the deck canvas' absolute pixels, which the contract
+carries itself (1280x720 unless the deck says otherwise), so the contract can be
+validated after rendering and later patched field-by-field without re-authoring
+a slide from scratch.
 
 The contract owns the header's *rhythm*, not its height. The band is derived by
 each slide from what that slide actually rendered, and only the derived number
@@ -18,10 +19,29 @@ two-line title needs.
 
 from __future__ import annotations
 
-import math
-from typing import Literal
+from typing import Literal, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
+from pydantic.json_schema import SkipJsonSchema
+
+from models.authored_header_metrics import (
+    BAND_CEILING_PX,
+    BAND_FLOOR_PX,
+    BAND_MAX_CEILING_PX,
+    DEFAULT_MARGIN_X_PX,
+    DEFAULT_SLOT_WIDTH_PX,
+    DEFAULT_TITLE_WIDTH_PX,
+    LABEL_LINE_RATIO,
+    SLIDE_HEIGHT_PX,
+    SLIDE_WIDTH_PX,
+    SLOT_MAX_WIDTH_PX,
+    SLOT_MIN_WIDTH_PX,
+    TITLE_MIN_WIDTH_PX,
+    default_row_split,
+    label_row_px,
+    omit_default_canvas,
+    round_px,
+)
 
 
 HEADER_CONTRACT_SCHEMA_VERSION = "authored-header-contract/v2"
@@ -30,16 +50,6 @@ HEADER_CONTRACT_SCHEMA_VERSION = "authored-header-contract/v2"
 #: written under it describes a different header even where the field names match
 #: — which is why it carries its own version instead of being read as a v2.
 LEGACY_FIXED_BAND_SCHEMA_VERSION = "authored-header-contract/v1"
-
-SLIDE_WIDTH_PX = 1280
-SLIDE_HEIGHT_PX = 720
-
-#: Line box of a one-line label (eyebrow, subline, right-hand note) as a multiple
-#: of its font size. The contract fixes no line-height for those rows, yet the
-#: band derivation needs one number per row or two slides could stack the same
-#: parts differently. It lives here because the brief, the bounds check and the
-#: tests must all read the same number.
-LABEL_LINE_RATIO = 1.4
 
 _HEX_PATTERN = r"^#[0-9A-Fa-f]{6}$"
 
@@ -65,19 +75,7 @@ HeaderPart = Literal[
 #: ``body`` is the one value that marks something *outside* the band: it is the
 #: root the band pushes down, and without it the contract's reach below the
 #: divider is prose that nothing can check.
-HEADER_PART_VALUES: frozenset[str] = frozenset(
-    (
-        "band",
-        "tick",
-        "eyebrow",
-        "title",
-        "subline",
-        "right",
-        "requirements",
-        "divider",
-        "body",
-    )
-)
+HEADER_PART_VALUES: frozenset[str] = frozenset(get_args(HeaderPart))
 
 #: Attribute on the band root carrying the height that slide derived, as a bare
 #: integer count of pixels. The band is per-slide, so the deck-wide contract can
@@ -87,33 +85,12 @@ HEADER_BAND_ATTRIBUTE = "data-header-band"
 #: Fields of the superseded fixed-band contract, kept only so persisted decks
 #: written against it still load. See ``_map_fixed_band``.
 _LEGACY_FIXED_BAND_KEYS = frozenset(("band_height_px", "content_top_px"))
-
-#: Bounds of the derived band's floor. A mapped legacy band must fall inside them
-#: to be usable, and so must a floor lowered onto the rhythm's own smallest band.
-BAND_FLOOR_PX = 96
-BAND_CEILING_PX = 280
-
-#: How tall the derived band's ceiling itself may be. It sits above
-#: ``BAND_CEILING_PX`` because the ceiling has to be able to hold everything the
-#: rest of the contract permits (see ``required_band_px``); past this the header
-#: is no longer a header, and the contract is refused rather than stretched.
-BAND_MAX_CEILING_PX = 360
 _CONTENT_GAP_FLOOR_PX = 8
 _CONTENT_GAP_CEILING_PX = 64
 
 #: Shortest eyebrow budget a breadcrumb fits in: the chapter half alone spends
 #: most of the sectionOnly default.
 BREADCRUMB_MIN_EYEBROW_CHARS = 36
-
-
-def round_px(value: float) -> int:
-    """Round half up, so the brief's arithmetic is reproducible off a calculator."""
-    return int(math.floor(value + 0.5))
-
-
-def label_row_px(font_size_px: int) -> int:
-    """Height of one single-line label row at the given font size."""
-    return round_px(font_size_px * LABEL_LINE_RATIO)
 
 
 class _Spec(BaseModel):
@@ -155,7 +132,9 @@ class HeaderTitleSpec(_Spec):
     line_height: float = Field(default=1.32, ge=1.0, le=2.0)
     color: str = Field(default="#0F172A", pattern=_HEX_PATTERN)
     max_lines: int = Field(default=2, ge=1, le=3)
-    max_width_px: int = Field(default=780, ge=320, le=1152)
+    max_width_px: int = Field(
+        default=DEFAULT_TITLE_WIDTH_PX, ge=TITLE_MIN_WIDTH_PX, le=1152
+    )
 
     @property
     def line_px(self) -> int:
@@ -201,7 +180,9 @@ class HeaderRightSlotSpec(_Spec):
     """
 
     mode: Literal["none", "summary", "requirements", "requirementsAndSummary"] = "none"
-    width_px: int = Field(default=336, ge=160, le=560)
+    width_px: int = Field(
+        default=DEFAULT_SLOT_WIDTH_PX, ge=SLOT_MIN_WIDTH_PX, le=SLOT_MAX_WIDTH_PX
+    )
     summary_font_size_px: int = Field(default=13, ge=12, le=20)
     summary_color: str = Field(default="#64748B", pattern=_HEX_PATTERN)
     summary_max_lines: int = Field(default=2, ge=1, le=3)
@@ -269,7 +250,7 @@ class AuthoredHeaderContract(_Spec):
     title_gap_px: int = Field(default=28, ge=8, le=64)
     #: Band bottom to the top of ordinary slide content.
     content_gap_px: int = Field(default=20, ge=8, le=64)
-    margin_x_px: int = Field(default=64, ge=32, le=120)
+    margin_x_px: int = Field(default=DEFAULT_MARGIN_X_PX, ge=32, le=120)
     eyebrow: HeaderEyebrowSpec = Field(default_factory=HeaderEyebrowSpec)
     title: HeaderTitleSpec = Field(default_factory=HeaderTitleSpec)
     subline: HeaderSublineSpec = Field(default_factory=HeaderSublineSpec)
@@ -278,10 +259,14 @@ class AuthoredHeaderContract(_Spec):
     divider: HeaderDividerSpec = Field(default_factory=HeaderDividerSpec)
     page_number: DeckPageNumberSpec = Field(default_factory=DeckPageNumberSpec)
     excluded_roles: tuple[str, ...] = DEFAULT_EXCLUDED_ROLES
+    #: The deck's canvas. Deck policy, never the model's choice, so it is kept
+    #: out of the schema the contract call answers.
+    canvas_width_px: SkipJsonSchema[int] = Field(default=SLIDE_WIDTH_PX, ge=320, le=7680)
+    canvas_height_px: SkipJsonSchema[int] = Field(default=SLIDE_HEIGHT_PX, ge=180, le=4320)
 
     @property
     def right_slot_left_px(self) -> int:
-        return SLIDE_WIDTH_PX - self.margin_x_px - self.right_slot.width_px
+        return self.canvas_width_px - self.margin_x_px - self.right_slot.width_px
 
     @property
     def minimum_band_px(self) -> int:
@@ -437,13 +422,21 @@ class AuthoredHeaderContract(_Spec):
                     "be; reduce the title size, the line budget, or the gaps"
                 )
             self.band_max_px = max(self.band_max_px, self.required_band_px)
-        if self.band_max_px + self.content_gap_px >= SLIDE_HEIGHT_PX:
+        if self.band_max_px + self.content_gap_px >= self.canvas_height_px:
             raise ValueError("header band leaves no room for slide content")
         return self
 
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler):
+        return omit_default_canvas(handler(self))
+
 
 def default_header_contract(
-    *, primary: str = "#2563EB", chapter_breadcrumb: bool = False
+    *,
+    primary: str = "#2563EB",
+    chapter_breadcrumb: bool = False,
+    canvas_width_px: int = SLIDE_WIDTH_PX,
+    canvas_height_px: int = SLIDE_HEIGHT_PX,
 ) -> AuthoredHeaderContract:
     """The deterministic fallback used when contract generation is unavailable.
 
@@ -453,12 +446,17 @@ def default_header_contract(
     so the fallback omits it rather than guessing; the eyebrow's form it keeps.
     """
     accent = primary if _is_hex(primary) else "#2563EB"
+    slot_px, title_px = default_row_split(canvas_width_px)
     return AuthoredHeaderContract(
+        canvas_width_px=canvas_width_px,
+        canvas_height_px=canvas_height_px,
         eyebrow=HeaderEyebrowSpec(
             color=accent,
             form="chapterBreadcrumb" if chapter_breadcrumb else "sectionOnly",
             tick=HeaderTickSpec(color=accent),
         ),
+        title=HeaderTitleSpec(max_width_px=title_px),
+        right_slot=HeaderRightSlotSpec(width_px=slot_px),
     )
 
 

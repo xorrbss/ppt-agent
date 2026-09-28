@@ -34,7 +34,7 @@ from models.authored_header_contract import (
 MAX_BODY_BULLETS = 10
 
 #: Characters one bullet keeps. The tail is dropped with an ellipsis rather
-#: than wrapped indefinitely, because a body that overflows 720px is the exact
+#: than wrapped indefinitely, because a body that overflows the canvas is the exact
 #: defect the whole rescue ladder exists to avoid.
 MAX_BULLET_CHARS = 150
 
@@ -167,24 +167,31 @@ def author_placeholder_html(
     role: str,
     contract: AuthoredHeaderContract | None,
     font_stack: str,
+    canvas_width_px: int | None = None,
+    canvas_height_px: int | None = None,
 ) -> str:
     """Render one slide's outline as the deck's plainest contract-conforming page.
 
     ``contract`` is ``None`` for a deck that has no header contract, and for a
     role the contract excludes; that page keeps the same body and simply owns
-    its whole frame, which is what those roles do anyway.
+    its whole frame, which is what those roles do anyway. The page takes the
+    contract's canvas unless one is given; with neither it is 1280x720.
     """
 
+    canvas = (
+        canvas_width_px or (contract.canvas_width_px if contract else SLIDE_WIDTH_PX),
+        canvas_height_px or (contract.canvas_height_px if contract else SLIDE_HEIGHT_PX),
+    )
     title, bullets = _split_content(content, title_budget=_title_budget(contract))
     accent = str(getattr(brand, "primary", "") or "#2563EB")
     eyebrow = str(role or "").strip().upper()[: (contract.eyebrow.max_chars if contract else 24)]
     if contract is None:
         return _unbanded_html(
-            title=title, bullets=bullets, accent=accent, font_stack=font_stack
+            title=title, bullets=bullets, accent=accent, font_stack=font_stack, canvas=canvas
         )
     band_px = _band_px(contract)
     margin = contract.margin_x_px
-    body_height = SLIDE_HEIGHT_PX - band_px - contract.content_gap_px - _BODY_BOTTOM_PX
+    body_height = canvas[1] - band_px - contract.content_gap_px - _BODY_BOTTOM_PX
     band = (
         f'<header data-header-part="band" data-header-band="{band_px}" '
         f'style="box-sizing:border-box;height:{band_px}px;padding:'
@@ -198,11 +205,16 @@ def author_placeholder_html(
         f"{contract.content_gap_px}px;padding:0 {margin}px;height:{max(0, body_height)}px;"
         f'overflow:hidden;">{_bullet_markup(bullets)}</main>'
     )
-    return _document(band + body, font_stack=font_stack)
+    return _document(band + body, font_stack=font_stack, canvas=canvas)
 
 
 def _unbanded_html(
-    *, title: str, bullets: Sequence[str], accent: str, font_stack: str
+    *,
+    title: str,
+    bullets: Sequence[str],
+    accent: str,
+    font_stack: str,
+    canvas: tuple[int, int],
 ) -> str:
     body = (
         f'<div style="width:56px;height:6px;background:{accent};margin-bottom:24px;"></div>'
@@ -211,16 +223,17 @@ def _unbanded_html(
         + _bullet_markup(bullets)
     )
     return _document(
-        f'<main style="padding:64px;height:{SLIDE_HEIGHT_PX}px;box-sizing:border-box;'
+        f'<main style="padding:64px;height:{canvas[1]}px;box-sizing:border-box;'
         f'overflow:hidden;">{body}</main>',
         font_stack=font_stack,
+        canvas=canvas,
     )
 
 
-def _document(inner: str, *, font_stack: str) -> str:
+def _document(inner: str, *, font_stack: str, canvas: tuple[int, int]) -> str:
     return (
         '<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><style>'
-        f"body{{margin:0;width:{SLIDE_WIDTH_PX}px;height:{SLIDE_HEIGHT_PX}px;"
+        f"body{{margin:0;width:{canvas[0]}px;height:{canvas[1]}px;"
         f"overflow:hidden;background:#FFFFFF;font-family:{font_stack};}}"
         f"</style></head><body>{inner}</body></html>"
     )

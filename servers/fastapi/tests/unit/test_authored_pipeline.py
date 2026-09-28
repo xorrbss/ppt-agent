@@ -2815,10 +2815,11 @@ def test_authored_service_resolves_passes_and_persists_canonical_style(
     )
 
     async def fake_header_contract(
-        outline, brand, style=None, instructions=None, chapter_breadcrumb=False
+        outline, brand, style=None, instructions=None, chapter_breadcrumb=False,
+        **canvas,
     ):
         captured["header_instructions"] = instructions
-        return default_header_contract(primary=brand.primary)
+        return default_header_contract(primary=brand.primary, **canvas)
 
     monkeypatch.setattr(
         authored_service, "resolve_header_contract", fake_header_contract
@@ -2915,9 +2916,10 @@ def test_a_design_replay_is_authored_rather_than_dumped_verbatim(
     )
 
     async def fake_header_contract(
-        outline, brand, style=None, instructions=None, chapter_breadcrumb=False
+        outline, brand, style=None, instructions=None, chapter_breadcrumb=False,
+        **canvas,
     ):
-        return default_header_contract(primary=brand.primary)
+        return default_header_contract(primary=brand.primary, **canvas)
 
     monkeypatch.setattr(
         authored_service, "resolve_header_contract", fake_header_contract
