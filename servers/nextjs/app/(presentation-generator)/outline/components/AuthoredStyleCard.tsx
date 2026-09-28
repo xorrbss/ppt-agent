@@ -320,6 +320,12 @@ interface AuthoredStyleCardProps {
   isSelected: boolean;
   isTabStop: boolean;
   onSelect: (styleId: string) => void;
+  /**
+   * `radio` selects on click and keeps roving radio keyboard semantics.
+   * `preview` opens the sample dialog, so it must not be a radio: the radio
+   * key handler clicks on every arrow press and would open one dialog each.
+   */
+  mode?: "radio" | "preview";
 }
 
 const AuthoredStyleCard = memo(function AuthoredStyleCard({
@@ -328,12 +334,26 @@ const AuthoredStyleCard = memo(function AuthoredStyleCard({
   isSelected,
   isTabStop,
   onSelect,
+  mode = "radio",
 }: AuthoredStyleCardProps) {
   const titleId = `authored-style-title-${style.id}`;
   const descriptionId = `authored-style-description-${style.id}`;
+  const buttonSemantics =
+    mode === "preview"
+      ? {
+          "aria-haspopup": "dialog" as const,
+          "aria-current": isSelected ? ("true" as const) : undefined,
+        }
+      : {
+          role: "radio",
+          "aria-checked": isSelected,
+          tabIndex: isTabStop ? 0 : -1,
+          onKeyDown: handleAuthoredRadioKeyDown,
+        };
 
   return (
     <Card
+      role={mode === "preview" ? "listitem" : undefined}
       data-testid={`authored-style-card-${style.id}`}
       className={cn(
         "relative min-w-0 overflow-hidden rounded-xl border bg-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm",
@@ -344,15 +364,12 @@ const AuthoredStyleCard = memo(function AuthoredStyleCard({
     >
       <button
         type="button"
-        role="radio"
-        aria-checked={isSelected}
+        {...buttonSemantics}
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
-        tabIndex={isTabStop ? 0 : -1}
         data-testid={`authored-style-select-${style.id}`}
         className="block h-full w-full min-w-0 cursor-pointer text-left outline-none focus-visible:ring-2 focus-visible:ring-[#5141E5] focus-visible:ring-inset"
         onClick={() => onSelect(style.id)}
-        onKeyDown={handleAuthoredRadioKeyDown}
       >
         <AuthoredStylePreview style={style} />
         <div className="min-w-0 border-t border-[#EBEBEC] bg-white px-4 py-3">
