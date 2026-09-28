@@ -126,6 +126,10 @@ test("Ruff is a required locked Python lint gate on both CI providers", () => {
   );
   assert.match(
     pipeline,
+    /uv run --directory servers\/fastapi ruff check \.\s*\n\s*-\s*\.bitbucket-uv\/bin\/uv run --directory servers\/fastapi python scripts\/check_authored_style_samples\.py/u,
+  );
+  assert.match(
+    pipeline,
     /pull-requests:\s*\n\s*"\*\*":\s*[\s\S]*\*workspace-chat-first-e2e/u,
   );
   assert.match(

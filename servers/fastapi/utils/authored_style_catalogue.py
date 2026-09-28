@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Collection, Iterable
 
 from services.authored_canvas import supported_aspect_ratios_for_style
+from utils.authored_style_samples import load_style_samples
 
 if TYPE_CHECKING:
     from utils.authored_styles import AuthoredStyle
@@ -42,5 +43,19 @@ def authored_style_catalogue(styles: Iterable[AuthoredStyle]) -> list[dict]:
             public["tags"] = list(dict.fromkeys(
                 [*public["tags"], *(by_id[old_id].name for old_id in aliases if old_id in by_id)]
             ))
+        samples = load_style_samples(style_id)
+        if samples is not None:
+            public["samples"] = {
+                "canvas": {"width": samples.canvas.width, "height": samples.canvas.height},
+                "slides": [
+                    {
+                        "index": slide.index,
+                        "title": slide.title,
+                        "thumb": f"/api/v1/ppt/authored/styles/{style_id}/samples/{slide.index}?size=thumb",
+                        "full": f"/api/v1/ppt/authored/styles/{style_id}/samples/{slide.index}?size=full",
+                    }
+                    for slide in samples.slides
+                ],
+            }
         result.append(public)
     return result

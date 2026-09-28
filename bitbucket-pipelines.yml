@@ -47,6 +47,7 @@ definitions:
           - npm ci --prefix servers/nextjs
           - .bitbucket-uv/bin/uv sync --frozen --directory servers/fastapi
           - .bitbucket-uv/bin/uv run --directory servers/fastapi ruff check .
+          - .bitbucket-uv/bin/uv run --directory servers/fastapi python scripts/check_authored_style_samples.py
           - export CI=true
           - export PATH="$BITBUCKET_CLONE_DIR/.bitbucket-uv/bin:$PATH"
           - export WORKSPACE_E2E_ARTIFACT_DIR="$BITBUCKET_CLONE_DIR/test-artifacts/workspace-e2e"

@@ -1,7 +1,7 @@
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Path as PathParam
 from fastapi.responses import FileResponse
 
 from utils.authored_styles import load_authored_styles, resolve_authored_style
@@ -9,6 +9,7 @@ from utils.authored_style_catalogue import (
     authored_style_catalogue,
     canonical_authored_style_id,
 )
+from utils.authored_style_samples import load_style_samples, sample_file_path
 
 
 class AuthoredStylePreview(BaseModel):
@@ -17,6 +18,23 @@ class AuthoredStylePreview(BaseModel):
     palette: Optional[list[str]] = None
     variant: Optional[str] = None
     image: Optional[str] = None
+
+
+class AuthoredStyleSampleCanvas(BaseModel):
+    width: int
+    height: int
+
+
+class AuthoredStyleSampleSlide(BaseModel):
+    index: int
+    title: str
+    thumb: str
+    full: str
+
+
+class AuthoredStyleSamples(BaseModel):
+    canvas: AuthoredStyleSampleCanvas
+    slides: list[AuthoredStyleSampleSlide]
 
 
 class AuthoredStyleSummary(BaseModel):
@@ -34,6 +52,7 @@ class AuthoredStyleSummary(BaseModel):
     supported_aspect_ratios: list[Literal["16:9", "9:16", "9:13"]] = Field(
         alias="supportedAspectRatios"
     )
+    samples: Optional[AuthoredStyleSamples] = None
 
 
 AUTHORED_ROUTER = APIRouter(prefix="/authored", tags=["Authored"])
@@ -111,3 +130,28 @@ def get_authored_style_preview(style_id: str) -> FileResponse:
     if style is None or style.preview_image is None:
         raise HTTPException(status_code=404, detail="Authored style preview not found")
     return FileResponse(style.preview_image)
+
+
+@AUTHORED_ROUTER.get("/styles/{style_id}/samples/{index}", response_class=FileResponse)
+def get_authored_style_sample(
+    style_id: str,
+    index: int = PathParam(ge=1, le=24),
+    size: Literal["thumb", "full"] = "thumb",
+) -> FileResponse:
+    """Serve a style sample image.
+
+    Trusts the samples root directly (D10): it does not load the style
+    catalogue, only validates the id shape via ``load_style_samples`` and
+    serves the fixed-name file via ``sample_file_path``.
+    """
+    samples = load_style_samples(style_id)
+    if samples is None or index > len(samples.slides):
+        raise HTTPException(status_code=404, detail="Authored style sample not found")
+    file_path = sample_file_path(style_id, index, size)
+    if file_path is None:
+        raise HTTPException(status_code=404, detail="Authored style sample not found")
+    return FileResponse(
+        file_path,
+        media_type="image/webp",
+        headers={"Cache-Control": "private, max-age=86400"},
+    )
