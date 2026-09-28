@@ -28,7 +28,7 @@ current slide number, so styles can be compared page for page.
 | D5 | Staleness is enforced before merge, not at runtime. The check script fails when a sample's recorded `styleDigest` no longer matches its style or its `topicDigest` no longer matches the demo prompt. The request path never computes digests; it only derives a 12-hex `cache_version` from the two recorded digests and appends it as `&v=` to image URLs, so a regenerated deck defeats the day-long `Cache-Control` without any route change. | Hiding stale samples at runtime would make a style's samples vanish after any YAML edit. Computing digests per request would hash reference images per request. |
 | D6 | The style digest covers the parsed YAML **minus display-only keys**, plus the bytes of referenced image assets; never the YAML file bytes. It is computed by the samples module's own `yaml.safe_load`, not by the loader's private `_read_style_mapping`. | `core.autocrlf=true` rewrites line endings on Windows checkouts, so byte hashes differ across machines. Editing a description does not change rendering and must not stale a sample. Excluding a fixed display-only list treats any future key as render-affecting by default. Reading the YAML directly avoids coupling to a private loader function. |
 | D7 | The digest does not cover the generation pipeline. `manifest.json` records `generatorCommit` as provenance, and the check script prints each deck's generator commit and age without failing on it. | Prompt or renderer changes drift samples away from real output; no hash of style inputs can detect that. Regeneration after pipeline changes is an operating rule (§10), stated as a known limit. |
-| D8 | Images are WebP only, fixed names `NN.webp` (stage, long edge 1280 px) and `NN.thumb.webp` (grid, long edge 320 px), with byte caps of 96 KB and 14 KB enforced by the check script. The manifest records the canvas as pixel `width`/`height`, not an aspect-ratio label. | SVG in `<img>` cannot load web fonts. Fixed names remove file names — and path validation — from the manifest. The caps bound one generation of 39 × 10 slides to about 40 MB in git; without them a generation would be 40–60 MB and every regeneration accumulates in history. Recording pixel dimensions keeps the contract neutral between the 16:9 prompt-generation canvas (1280×720) and the A4 document canvas (landscape 1280×905, portrait 905×1280) that the source-content path uses; the sample canvas is chosen by the generation session, not by this code. |
+| D8 | Images are WebP only, fixed names `NN.webp` (stage, long edge 1280 px) and `NN.thumb.webp` (grid, long edge 320 px), with byte caps of 96 KB and 14 KB enforced by the check script. The manifest records the canvas as pixel `width`/`height`, not an aspect-ratio label. | SVG in `<img>` cannot load web fonts. Fixed names remove file names — and path validation — from the manifest. The caps bound one generation of 39 × 12 slides to at most about 50 MB in git (the 16:9 pilot measured about 0.5 MB per deck, about 21 MB in total); without them a generation would be 40–60 MB and every regeneration accumulates in history. Recording pixel dimensions keeps the contract neutral between the 16:9 prompt-generation canvas (1280×720) and the A4 document canvas (landscape 1280×905, portrait 905×1280) that the source-content path uses; the sample canvas is chosen by the generation session, not by this code. Decision 2026-09-28: samples are 16:9 (1280×720), 12 slides — a 4 × 3 grid with no ragged row. |
 | D9 | Samples are committed directly to git for the first generation (about 40 MB). If a second generation is needed, moving the samples root to a versioned download (the `scripts/sync-presentation-export.cjs` pattern) is the fallback; the storage contract (§4) does not change. | About 40 MB once is acceptable; repeated generations are not. Deciding the download mechanism before it is needed would be speculative. |
 | D10 | The image route trusts the samples root: it validates the id shape, reads the manifest, and serves the file. It does not load the style catalogue. | The check script already guarantees a sample directory exists only for a public canonical style, so the runtime check would be redundant, and the dialog issues up to 24 image requests at once — loading 46 YAML files per request would mean ~1,100 parses per open. |
 | D11 | In preview mode the card grid is a list of buttons, not a radio group. | `handleAuthoredRadioKeyDown` moves focus **and calls `.click()`** on arrow keys (`AuthoredStyleCard.tsx:287-315`), so a radio card that opens a dialog would open one per arrow press. Radio semantics stay unchanged when preview mode is off. |
@@ -249,14 +249,19 @@ New strings in an `authoredStyleSamples` namespace in
 ### 8.1 Inputs
 
 - **Demo topic** `business-plan-v1`: a fictitious Korean company's business
-  plan, Korean language, 10 slides, fixed prompt text stored in
+  plan, Korean language, 12 slides, fixed prompt text stored in
   `servers/fastapi/scripts/authored_style_samples_topic.md`. No real
-  organisation names. The prompt asks for the standard chapter shape (cover,
-  agenda, market, product, business model, roadmap, team, financials, risks,
-  closing) so every style is measured on the same page types.
+  organisation names. Each slide exercises a different layout type (cover,
+  agenda, big numbers, card row, feature list, process, pricing table,
+  comparison matrix, quote, timeline, chart, closing) so every style is
+  measured on the same page types, and on the types where styles differ most.
+- **Canvas**: 16:9, 1280×720. Requests omit `page_size`/`orientation`, which is
+  the CLI's default request shape. The upload page currently forces A4 for
+  users, so samples are a design preview rather than the exact output shape.
 - **Pipeline**: the product's default `svg` strategy through the public API,
-  `--slides 10 --language ko --export pdf`, using `scripts/ppt-agent.mjs`
-  against the running local stack (`http://localhost:5000`).
+  `--async --slides 12 --export pdf`, using `scripts/ppt-agent.mjs` against the
+  running local stack (`http://127.0.0.1:8000`; the sync endpoint is 410 on the
+  PostgreSQL runtime).
 
 ### 8.2 Generator `servers/fastapi/scripts/generate_authored_style_samples.py` (new)
 
@@ -267,10 +272,12 @@ New strings in an `authoredStyleSamples` namespace in
    the manifest canvas and its 320 px thumbnail, writes WebP with Pillow at a quality that meets the
    byte caps (steps down quality until it fits; fails the deck if it cannot at
    quality 60).
-4. Slide titles come from the generated deck's outline
-   (`GET /presentation/{id}`), truncated to 80 characters.
+4. Slide titles are the fixed role names listed in the topic file, in order.
+   Before accepting a deck, the generator checks that the PDF has exactly 12
+   pages and that the order-guard keywords in the topic file appear on their
+   pages, so a reordered deck cannot be labelled wrongly.
 5. Writes `manifest.json` with both digests (§5) and `git rev-parse HEAD`.
-6. Emits `<scratch>/contact-sheet.html`: one row per style, 10 thumbnails each,
+6. Emits `<scratch>/contact-sheet.html`: one row per style, 12 thumbnails each,
    for review.
 7. Runs the check script at the end; a failing deck is reported, not committed.
 
