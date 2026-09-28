@@ -1,12 +1,10 @@
+import { recordOrNull } from "@/lib/guards";
 /**
  * Compare-and-set pre-conditions for applying a company standard to a
  * presentation that already exists. Extracted from OutlinePage so the page
  * stays inside the file-size gate while it carries view concerns only.
  */
-export const record = (value: unknown): Record<string, unknown> | null =>
-  value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
+export const record = recordOrNull;
 
 export const existingMasterApplyCas = (presentation: unknown) => {
   const data = record(presentation);

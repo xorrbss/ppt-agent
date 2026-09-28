@@ -1,9 +1,9 @@
+import { isRecord } from "@/lib/guards";
+
 type UnknownRecord = Record<string, unknown>;
 
 export function asRecord(value: unknown): UnknownRecord {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as UnknownRecord)
-    : {};
+  return isRecord(value) ? value : {};
 }
 
 export function stringValue(...values: unknown[]): string | undefined {
@@ -70,10 +70,7 @@ export function booleanValue(...values: unknown[]): boolean | undefined {
 }
 
 export function objectValue(...values: unknown[]): UnknownRecord | undefined {
-  return values.find(
-    (value) =>
-      value !== null && typeof value === "object" && !Array.isArray(value),
-  ) as UnknownRecord | undefined;
+  return values.find(isRecord);
 }
 
 export function operationStatus(...values: unknown[]): string | undefined {

@@ -6,6 +6,7 @@ import {
   RESULT_LABELS,
   STATUS_LABELS,
 } from "./WorkspaceOperationLabels";
+import { isRecord } from "@/lib/guards";
 
 export function resultLabel(key: string): string | undefined {
   return RESULT_LABELS[key];
@@ -17,9 +18,7 @@ export function displayResultValue(value: string | number | boolean): string {
 }
 
 export function recordValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+  return isRecord(value) ? value : {};
 }
 
 export function numberValue(...values: unknown[]): number | undefined {

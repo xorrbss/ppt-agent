@@ -11,6 +11,7 @@ import type {
   RenderSlideDiscovery,
   RenderTarget,
 } from "./contracts.ts";
+import { isRecord } from "../guards.ts";
 
 export class RenderPolicyError extends Error {
   readonly code: string;
@@ -23,10 +24,6 @@ export class RenderPolicyError extends Error {
 }
 
 type JsonRecord = Record<string, unknown>;
-
-function isRecord(value: unknown): value is JsonRecord {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function visit(value: unknown, visitor: (record: JsonRecord) => void): void {
   if (Array.isArray(value)) {

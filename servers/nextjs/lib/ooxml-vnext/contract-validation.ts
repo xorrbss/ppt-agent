@@ -7,6 +7,7 @@ import {
   type DeckMasterTokenValue,
   type NormalizedDeckMasterContract,
 } from "./contracts.ts";
+import { isRecord } from "../guards.ts";
 
 export class DeckMasterContractValidationError extends Error {
   readonly issues: readonly string[];
@@ -36,10 +37,6 @@ const REQUIRED_THEME_COLORS = [
   "hlink",
   "folHlink",
 ] as const;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function allowedKeys(
   value: Record<string, unknown>,

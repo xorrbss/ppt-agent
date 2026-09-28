@@ -1,5 +1,6 @@
 import { getApiUrl } from "@/utils/api";
 import { getHeader } from "./header";
+import { isRecord } from "@/lib/guards";
 
 const ROOT = "/api/v1/ppt/presentation";
 
@@ -73,9 +74,7 @@ export class HybridExportHistoryError extends Error {
 type RecordValue = Record<string, unknown>;
 
 function record(value: unknown): RecordValue {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as RecordValue)
-    : {};
+  return isRecord(value) ? value : {};
 }
 
 function text(value: unknown): string | undefined {

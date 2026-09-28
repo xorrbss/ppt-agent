@@ -20,6 +20,7 @@ import {
   type SlideMaterializationRequest,
 } from "../../../../lib/ooxml-vnext/index.ts";
 import { OoxmlWorkerError } from "./worker-error.ts";
+import { isRecord } from "@/lib/guards";
 
 export { OoxmlWorkerError } from "./worker-error.ts";
 
@@ -44,10 +45,6 @@ export interface OoxmlWorkerRequestV1 extends Omit<WorkerRequestEnvelope, "maste
 }
 
 export type OoxmlWorkerSuccessV1 = WorkerResponseEnvelope;
-
-function isRecord(value: unknown): value is JsonRecord {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function assertKeys(value: JsonRecord, allowed: readonly string[], name: string): void {
   const allowedSet = new Set(allowed);

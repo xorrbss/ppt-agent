@@ -1,3 +1,4 @@
+import { isRecord } from "@/lib/guards";
 /**
  * Flagged-slide badges for the editor.
  *
@@ -100,10 +101,6 @@ const CATEGORY_LABEL_KEYS: Record<string, FlaggedSlideCategoryKey> = {
 };
 
 type SlideLike = { id?: string | null; index?: number | null };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 /** Map key for a slide: its id, or its list position when it has none. */
 export function flaggedSlideKey(slide: SlideLike | null | undefined, position: number): string {

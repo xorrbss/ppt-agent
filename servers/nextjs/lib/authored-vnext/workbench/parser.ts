@@ -22,6 +22,7 @@ import type {
   TextBodyNode,
   WorkbenchOperation,
 } from "./model.ts";
+import { isRecord } from "../../guards.ts";
 
 export class WorkbenchParseError extends Error {
   readonly path: string;
@@ -34,10 +35,10 @@ export class WorkbenchParseError extends Error {
 }
 
 function record(value: unknown, path: string): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (!isRecord(value)) {
     throw new WorkbenchParseError(path, "object required");
   }
-  return value as Record<string, unknown>;
+  return value;
 }
 
 function string(value: unknown, path: string): string {

@@ -1,3 +1,4 @@
+import { recordOrNull } from "@/lib/guards";
 export const BATCH_REMAKE_PREVIEW_KIND = "authored_batch_remake_preview";
 
 export type BatchRemakeSlideStatus = "pending" | "previewed" | "failed";
@@ -26,12 +27,6 @@ export interface BatchRemakeReadyPreview {
 
 type UnknownRecord = Record<string, unknown>;
 
-function record(value: unknown): UnknownRecord | null {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as UnknownRecord)
-    : null;
-}
-
 function slideIndex(value: unknown): number | null {
   return typeof value === "number" && Number.isInteger(value) && value >= 0
     ? value
@@ -49,7 +44,7 @@ function text(value: unknown): string | undefined {
 }
 
 function decodeSlide(value: unknown): BatchRemakeSlide | null {
-  const source = record(value);
+  const source = recordOrNull(value);
   if (!source) return null;
   const index = slideIndex(source.slide_index);
   const previewTaskId = text(source.preview_task_id);
@@ -79,7 +74,7 @@ function decodeSlide(value: unknown): BatchRemakeSlide | null {
 export function decodeBatchRemakePayload(
   data: unknown,
 ): BatchRemakePayload | null {
-  const source = record(data);
+  const source = recordOrNull(data);
   if (!source || source.kind !== BATCH_REMAKE_PREVIEW_KIND) return null;
 
   const slides = (Array.isArray(source.slides) ? source.slides : [])

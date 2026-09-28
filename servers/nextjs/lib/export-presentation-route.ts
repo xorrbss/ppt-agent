@@ -5,6 +5,7 @@ import {
   PRESENTATION_SOURCE_SHA256,
   type PersistedPresentation,
 } from "./presentation-export-strategy.ts";
+import { isRecord } from "./guards.ts";
 
 export interface ExportPresentationRouteBody {
   format?: unknown;
@@ -56,10 +57,6 @@ const COMPOSITION_PIN_REFERENCE_PATH =
   "theme.authored_vnext.compositionPin";
 const COMPOSITION_PIN_REFERENCE_SCHEMA =
   "presenton.export-composition-ref/v1";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function isCompositionPinReference(value: unknown): boolean {
   return (

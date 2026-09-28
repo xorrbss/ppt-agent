@@ -1,3 +1,5 @@
+import { recordOrNull } from "./guards.ts";
+
 type PresentationDisplaySource = {
   title?: unknown;
   titles?: unknown;
@@ -8,9 +10,7 @@ type PresentationDisplaySource = {
 const instructionTitle = /^(?:generate|create|make)\s+(?:a|an)\s+(?:presentation|slide\s*deck)\b/i;
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : undefined;
+  return recordOrNull(value) ?? undefined;
 }
 
 function readableTitle(value: unknown): string | undefined {

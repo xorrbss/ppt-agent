@@ -1,3 +1,4 @@
+import { isRecord } from "./guards.ts";
 export const PRESENTATION_DRIVER_IDS = ["authored", "svg-v1"] as const;
 
 export type PresentationDriverId = (typeof PRESENTATION_DRIVER_IDS)[number];
@@ -75,10 +76,6 @@ export const GENERATION_MODE_COMPATIBILITY = Object.freeze({
   removal_condition:
     "Remove only after every supported persisted row and public API consumer uses server-issued PresentationProfile.driver_id, no supported rolling deployment reads generation_mode, and a compatibility migration has been released and rollback-tested.",
 });
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function isDriverId(value: unknown): value is PresentationDriverId {
   return PRESENTATION_DRIVER_IDS.some((driverId) => driverId === value);

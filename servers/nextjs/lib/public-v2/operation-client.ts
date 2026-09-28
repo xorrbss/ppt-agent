@@ -1,4 +1,5 @@
 import type { PublicV2OperationKind, PublicV2OperationStatus, PublicV2OperationPhase, PublicV2Lifecycle, PublicV2GenerationMode, PublicV2DesignPackPin, PublicV2GenerationRequest, PublicV2GenerationRouteReceipt, PublicV2ExportRequest, PublicV2Artifact, PublicV2OperationEvent, PublicV2OperationFailure, PublicV2Quality, PublicV2Readiness, PublicV2GenerationStageTiming, PublicV2GenerationTiming, PublicV2OperationSnapshot } from "./operation-client-contracts"; export type { PublicV2OperationKind, PublicV2OperationStatus, PublicV2OperationPhase, PublicV2Lifecycle, PublicV2GenerationMode, PublicV2DesignPackPin, PublicV2GenerationRequest, PublicV2GenerationRouteReceipt, PublicV2ExportRequest, PublicV2Artifact, PublicV2OperationEvent, PublicV2OperationFailure, PublicV2Quality, PublicV2Readiness, PublicV2GenerationStageTiming, PublicV2GenerationTiming, PublicV2OperationSnapshot } from "./operation-client-contracts"; 
+import { isRecord } from "../guards.ts";
 export function shouldPollPublicV2Operation(snapshot: PublicV2OperationSnapshot): boolean {
   return Boolean(snapshot.operationId && (
     snapshot.status === "queued"
@@ -140,10 +141,10 @@ const EMPTY_SNAPSHOT: PublicV2OperationSnapshot = {
 };
 
 function record(value: unknown): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (!isRecord(value)) {
     throw new PublicV2ApiError(502, "public_v2_invalid_response");
   }
-  return value as Record<string, unknown>;
+  return value;
 }
 
 function publicId(value: unknown, field: string): string {

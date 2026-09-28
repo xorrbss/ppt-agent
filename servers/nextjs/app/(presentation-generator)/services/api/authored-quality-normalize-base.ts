@@ -14,10 +14,9 @@ import type {
   AuthoredQualityReviewStageUsage,
   AuthoredReviewRepairPath,
 } from "./authored";
+import { isRecord } from "@/lib/guards";
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
+export { isRecord };
 
 export function normalizeStringList(value: unknown): string[] {
   if (!Array.isArray(value)) return [];

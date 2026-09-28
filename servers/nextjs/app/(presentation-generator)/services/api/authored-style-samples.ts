@@ -1,4 +1,5 @@
 import { getApiUrl } from "@/utils/api";
+import { isRecord } from "@/lib/guards";
 
 /** Pixel canvas shared by every slide image of one sample deck. */
 export interface AuthoredStyleSampleCanvas {
@@ -17,10 +18,6 @@ export interface AuthoredStyleSampleSlide {
 export interface AuthoredStyleSamples {
   canvas: AuthoredStyleSampleCanvas;
   slides: AuthoredStyleSampleSlide[];
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isPositiveInteger(value: unknown): value is number {

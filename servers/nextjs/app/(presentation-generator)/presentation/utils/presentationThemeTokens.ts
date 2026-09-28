@@ -1,4 +1,5 @@
 import type { Theme } from "../../services/api/types";
+import { isRecord } from "@/lib/guards";
 
 // Phase 2 — tone & manner design tokens.
 // Derived ADDITIVELY from the existing 16-colour theme so legacy templates
@@ -12,7 +13,7 @@ import type { Theme } from "../../services/api/types";
  * token falls back to its v1 default.
  */
 function asRecord(value: unknown): Record<string, unknown> {
-  return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  return isRecord(value) ? value : {};
 }
 
 export function deriveThemeTokens(theme: Theme | null | undefined): Record<string, string> {

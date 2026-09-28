@@ -1,3 +1,4 @@
+import { isRecord } from "@/lib/guards";
 export type SlideNavigationIntent = -1 | 1;
 
 export interface SlideNavigationKeyboardEvent {
@@ -14,10 +15,6 @@ export interface SlideNavigationKeyboardEvent {
 }
 
 type RecordLike = Record<string, unknown>;
-
-function isRecord(value: unknown): value is RecordLike {
-  return typeof value === "object" && value !== null;
-}
 
 function editableTagName(value: RecordLike): string | null {
   const tagName =
