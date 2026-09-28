@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import threading
 from typing import Any, Mapping
@@ -31,6 +32,7 @@ _CODEX_MANAGED_KEYS = frozenset(
     if "user_config.managed" in entry["targets"]
 )
 _RUNTIME_SETTINGS_REFRESH_LOCK = threading.Lock()
+_logger = logging.getLogger(__name__)
 
 
 def _read_persisted_user_config(
@@ -42,8 +44,17 @@ def _read_persisted_user_config(
         return {}
     try:
         return read_user_config_file(str(path))
-    except Exception:
-        # Do not include paths, values, or secrets in startup/request logs.
+    except Exception as error:
+        # This is a per-request/startup hot path, so a read failure degrades
+        # to an empty snapshot rather than raising -- but it must be loud.
+        # Do not include paths, values, or secrets in the log line, only the
+        # exception type; silently returning {} here previously masked a
+        # readable, non-empty config file being misread as absent.
+        _logger.error(
+            "Failed to read persisted user config; treating as empty for "
+            "this snapshot (error_type=%s)",
+            type(error).__name__,
+        )
         return {}
 
 
