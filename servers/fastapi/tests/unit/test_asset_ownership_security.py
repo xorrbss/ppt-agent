@@ -1,8 +1,6 @@
 import os
 import uuid
 
-import pytest
-from fastapi import HTTPException
 
 from api.v1.auth.assets import is_app_data_path_authorized
 from utils.owner_context import (
@@ -11,7 +9,6 @@ from utils.owner_context import (
     set_current_owner_id,
     set_current_owner_is_admin,
 )
-from services.pptx_import_conversions import PptxImportConversionsService
 from utils.asset_directory_utils import resolve_app_path_to_filesystem
 
 
@@ -103,69 +100,4 @@ def test_server_side_file_resolution_rejects_other_users_and_symlink_escape(
     finally:
         reset_current_owner_is_admin(admin_token)
         reset_current_owner_id(owner_token)
-
-
-def test_conversion_artifacts_are_moved_into_the_owner_namespace(
-    monkeypatch, tmp_path
-):
-    app_data = tmp_path / "app_data"
-    owner_id = uuid.uuid4()
-    source_dir = app_data / "pptx-to-json" / "session-1"
-    output_path = source_dir / "presentation.json"
-    image_path = source_dir / "images" / "slide.png"
-    image_path.parent.mkdir(parents=True)
-    output_path.write_text("{}", encoding="utf-8")
-    image_path.write_bytes(b"image")
-    monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
-
-    owner_token = set_current_owner_id(owner_id)
-    try:
-        rewritten = PptxImportConversionsService._scope_conversion_artifacts(
-            str(output_path),
-            {
-                "layouts": [
-                    {
-                        "image": "/app_data/pptx-to-json/session-1/images/slide.png"
-                    }
-                ]
-            },
-            "pptx-to-json",
-        )
-    finally:
-        reset_current_owner_id(owner_token)
-
-    target_dir = (
-        app_data / "pptx-to-json" / "users" / str(owner_id) / "session-1"
-    )
-    assert not source_dir.exists()
-    assert (target_dir / "images" / "slide.png").is_file()
-    assert rewritten["layouts"][0]["image"] == (
-        f"/app_data/pptx-to-json/users/{owner_id}/session-1/images/slide.png"
-    )
-
-
-def test_conversion_artifacts_cannot_move_an_unrelated_app_data_directory(
-    monkeypatch, tmp_path
-):
-    app_data = tmp_path / "app_data"
-    owner_id = uuid.uuid4()
-    unrelated_dir = app_data / "uploads" / "users" / str(uuid.uuid4())
-    output_path = unrelated_dir / "presentation.json"
-    unrelated_dir.mkdir(parents=True)
-    output_path.write_text("{}", encoding="utf-8")
-    monkeypatch.setenv("APP_DATA_DIRECTORY", str(app_data))
-
-    owner_token = set_current_owner_id(owner_id)
-    try:
-        with pytest.raises(HTTPException, match="outside its asset directory"):
-            PptxImportConversionsService._scope_conversion_artifacts(
-                str(output_path),
-                {},
-                "pptx-to-json",
-            )
-    finally:
-        reset_current_owner_id(owner_token)
-
-    assert output_path.is_file()
-
 

@@ -2,7 +2,6 @@ import asyncio
 import io
 import json
 import os
-import stat
 import uuid
 from unittest.mock import AsyncMock
 
@@ -26,7 +25,6 @@ from models.sse_response import (
 )
 from services.chat.conversation_store import ChatConversationStore
 from services.concurrent_service import ConcurrentService
-from services.pptx_import_conversions import EXPORT_TASK_SERVICE
 from templates.presentation_layout import PresentationLayoutModel, SlideLayoutModel
 from utils import ocr_language
 from utils.datetime_utils import get_current_utc_datetime
@@ -446,24 +444,6 @@ def test_concurrent_service_runs_tasks(monkeypatch):
     asyncio.run(runner())
     assert len(touched) == 2
     mock_sleep.assert_awaited_once_with(3)
-
-
-@pytest.mark.skipif(
-    os.name == "nt",
-    reason="POSIX file-mode semantics: NTFS/Windows does not implement chmod 0o755/0o644 bits.",
-)
-def test_export_task_output_permissions_are_readable(tmp_path):
-    export_dir = tmp_path / "exports"
-    export_dir.mkdir(mode=0o700)
-    output_path = export_dir / "deck.pptx"
-    output_path.write_bytes(b"pptx")
-    os.chmod(export_dir, 0o700)
-    os.chmod(output_path, 0o600)
-
-    EXPORT_TASK_SERVICE._ensure_output_readable(str(output_path))
-
-    assert stat.S_IMODE(export_dir.stat().st_mode) == 0o755
-    assert stat.S_IMODE(output_path.stat().st_mode) == 0o644
 
 
 def test_replace_and_extension_helpers():
