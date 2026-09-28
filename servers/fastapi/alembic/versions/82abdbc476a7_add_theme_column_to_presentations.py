@@ -4,6 +4,14 @@ Revision ID: 82abdbc476a7
 Revises: f42ad4074449
 Create Date: 2026-03-24 12:42:46.220359
 
+NOTE (2026-09-29, docs/refactoring-audit-20260929.md): this revision is an
+accidental duplicate of f42ad4074449, which already adds the same
+`presentations.theme` column 14 seconds earlier in the same chain. Both
+`upgrade()` and `downgrade()` here are auto-generated no-ops (`pass`) and do
+nothing. It is kept, not deleted, because Alembic revision history cannot be
+rewritten once a revision may have been applied against a real database;
+removing it would break `down_revision` linkage for anyone already on this
+head. Do not add logic here — the column is owned by f42ad4074449.
 """
 from typing import Sequence, Union
 
