@@ -28,6 +28,7 @@ from services.documents_loader import DocumentsLoader
 from services.mem0_presentation_memory_service import (
     MEM0_PRESENTATION_MEMORY_SERVICE,
 )
+from services.authored_canvas import presentation_canvas_contract
 from services.presentation_access_service import require_live_presentation
 from services.references import ReferenceProviderError, admit_reference_snapshots
 from services.workspace_legacy_write_gate import (
@@ -47,6 +48,7 @@ from utils.llm_calls.generate_presentation_outlines import (
     generate_ppt_outline,
     get_messages as get_outline_messages,
 )
+from utils.llm_calls.outline_canvas_budget import budget_for_canvas_contract
 from utils.outline_citations import strip_outline_citations
 from utils.sse_heartbeat import (
     get_sse_heartbeat_interval_seconds,
@@ -217,6 +219,9 @@ async def stream_outlines(
         else:
             n_slides_to_generate = None
 
+        canvas_budget = budget_for_canvas_contract(
+            presentation_canvas_contract(presentation.theme)
+        )
         outline_messages = get_outline_messages(
             presentation.content,
             n_slides_to_generate,
@@ -227,6 +232,7 @@ async def stream_outlines(
             presentation.instructions,
             presentation.include_title_slide,
             presentation.include_table_of_contents,
+            canvas_budget,
         )
         await MEM0_PRESENTATION_MEMORY_SERVICE.store_generation_context(
             presentation_id=presentation.id,
@@ -257,6 +263,7 @@ async def stream_outlines(
             presentation.web_search,
             presentation.include_table_of_contents,
             disconnect_checker=request.is_disconnected,
+            canvas_budget=canvas_budget,
         ):
             # Give control to the event loop
             await asyncio.sleep(0)

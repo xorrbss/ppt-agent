@@ -109,7 +109,7 @@ from services.authored_canvas import (
     canvas_metadata_for_aspect_ratio,
     merge_presentation_canvas,
     presentation_canvas_metadata,
-    request_canvas_metadata,
+    request_canvas_contract, request_canvas_metadata,
     validate_authored_canvas_admission,
 )
 from services.concurrent_service import CONCURRENT_SERVICE
@@ -214,10 +214,9 @@ from services.authored_content_brief_checkpoint import run_content_brief_with_ch
 from utils.llm_calls.generate_content_brief import generate_content_brief
 from utils.llm_calls.generate_presentation_outlines import (
     generate_ppt_outline,
-)
-from utils.llm_calls.generate_presentation_outlines import (
     get_messages as get_outline_messages,
 )
+from utils.llm_calls.outline_canvas_budget import budget_for_canvas_contract
 from utils.llm_utils import message_content_to_text
 from utils.outline_citations import strip_outline_citations
 from utils.outline_utils import (
@@ -998,6 +997,7 @@ async def generate_presentation_handler(
                     )
                 )
 
+            canvas_budget = budget_for_canvas_contract(request_canvas_contract(request))
             outline_messages = get_outline_messages(
                 request.content,
                 n_slides_to_generate,
@@ -1007,7 +1007,7 @@ async def generate_presentation_handler(
                 request.verbosity.value,
                 request.instructions,
                 request.include_title_slide,
-                request.include_table_of_contents,
+                request.include_table_of_contents, canvas_budget,
             )
             await MEM0_PRESENTATION_MEMORY_SERVICE.store_generation_context(
                 presentation_id=presentation_id,
@@ -1044,6 +1044,7 @@ async def generate_presentation_handler(
                     request.include_title_slide,
                     request.web_search,
                     request.include_table_of_contents,
+                    canvas_budget=canvas_budget,
                 ):
 
                     if isinstance(chunk, HTTPException):

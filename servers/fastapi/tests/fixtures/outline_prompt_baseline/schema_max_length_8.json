@@ -1,0 +1,150 @@
+{
+  "None|8": {
+    "$defs": {
+      "SlideOutlineModelWithNSlides": {
+        "properties": {
+          "content": {
+            "description": "Markdown content for each slide",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Content",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "title": "SlideOutlineModelWithNSlides",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "slides": {
+        "description": "List of slide outlines",
+        "items": {
+          "$ref": "#/$defs/SlideOutlineModelWithNSlides"
+        },
+        "maxItems": 8,
+        "minItems": 8,
+        "title": "Slides",
+        "type": "array"
+      }
+    },
+    "required": [
+      "slides"
+    ],
+    "title": "PresentationOutlineModelWithNSlides",
+    "type": "object"
+  },
+  "concise|8": {
+    "$defs": {
+      "SlideOutlineModelWithNSlides": {
+        "properties": {
+          "content": {
+            "description": "Markdown content for each slide",
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Content",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "title": "SlideOutlineModelWithNSlides",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "slides": {
+        "description": "List of slide outlines",
+        "items": {
+          "$ref": "#/$defs/SlideOutlineModelWithNSlides"
+        },
+        "maxItems": 8,
+        "minItems": 8,
+        "title": "Slides",
+        "type": "array"
+      }
+    },
+    "required": [
+      "slides"
+    ],
+    "title": "PresentationOutlineModelWithNSlides",
+    "type": "object"
+  },
+  "standard|8": {
+    "$defs": {
+      "SlideOutlineModelWithNSlides": {
+        "properties": {
+          "content": {
+            "description": "Markdown content for each slide",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Content",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "title": "SlideOutlineModelWithNSlides",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "slides": {
+        "description": "List of slide outlines",
+        "items": {
+          "$ref": "#/$defs/SlideOutlineModelWithNSlides"
+        },
+        "maxItems": 8,
+        "minItems": 8,
+        "title": "Slides",
+        "type": "array"
+      }
+    },
+    "required": [
+      "slides"
+    ],
+    "title": "PresentationOutlineModelWithNSlides",
+    "type": "object"
+  },
+  "text-heavy|8": {
+    "$defs": {
+      "SlideOutlineModelWithNSlides": {
+        "properties": {
+          "content": {
+            "description": "Markdown content for each slide",
+            "maxLength": 2500,
+            "minLength": 1,
+            "title": "Content",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "title": "SlideOutlineModelWithNSlides",
+        "type": "object"
+      }
+    },
+    "properties": {
+      "slides": {
+        "description": "List of slide outlines",
+        "items": {
+          "$ref": "#/$defs/SlideOutlineModelWithNSlides"
+        },
+        "maxItems": 8,
+        "minItems": 8,
+        "title": "Slides",
+        "type": "array"
+      }
+    },
+    "required": [
+      "slides"
+    ],
+    "title": "PresentationOutlineModelWithNSlides",
+    "type": "object"
+  }
+}

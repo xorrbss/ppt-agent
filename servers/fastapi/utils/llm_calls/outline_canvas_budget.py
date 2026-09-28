@@ -5,16 +5,20 @@ Scales the outline stage's prompt targets, floor, ceiling, and schema
 baseline. See ``docs/canvas-expansion-content-budget-spec-20260929.md``
 (rev 2) for the derivation; the numbers here are that spec's contract.
 
-Not wired into the outline generator yet; this module is standalone and
-imported by nothing outside its own tests.
+Wired into ``utils/llm_calls/generate_presentation_outlines.py`` via
+``generate_ppt_outline(..., canvas_budget=...)``.
 """
 
+import logging
 from dataclasses import dataclass
 from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
 from types import MappingProxyType
+from typing import Any
 
 from utils.get_dynamic_models import _OUTLINE_CONTENT_BOUNDS
 from utils.llm_calls.outline_density import DENSITY_CEILINGS_BY_VERBOSITY
+
+LOGGER = logging.getLogger(__name__)
 
 BASELINE_SAFE_AREA = 1152 * 592
 
@@ -91,4 +95,51 @@ def budget_for_canvas(
         bullets=MappingProxyType(bullets),
         ceiling=MappingProxyType(ceiling),
         schema_max_length=MappingProxyType(schema_max_length),
+    )
+
+
+def safe_budget_for_canvas(
+    canvas_id: str,
+    width_px: int,
+    height_px: int,
+    margin_px: int,
+    *,
+    floor_chars: int,
+) -> CanvasBudget | None:
+    """``budget_for_canvas``, falling back to ``None`` (today's behaviour) below f=0.5.
+
+    No registry canvas exercises this path today; an out-of-catalog canvas
+    should degrade the outline budget, not fail generation over it.
+    """
+    try:
+        return budget_for_canvas(
+            canvas_id, width_px, height_px, margin_px, floor_chars=floor_chars
+        )
+    except ValueError:
+        LOGGER.warning(
+            "canvas_budget_factor_too_small canvas=%s width=%s height=%s margin=%s",
+            canvas_id,
+            width_px,
+            height_px,
+            margin_px,
+        )
+        return None
+
+
+def budget_for_canvas_contract(contract: Any) -> CanvasBudget | None:
+    """The outline content budget for an admitted canvas contract.
+
+    ``contract`` is a ``services.authored_canvas`` ``CanvasContract`` (or the
+    document-canvas equivalent) with ``width_px``/``height_px``/``safe_area``.
+    Reads ``OUTLINE_DENSITY_FLOOR_CHARS`` itself so callers (the two outline
+    endpoints) need only resolve and pass the contract.
+    """
+    from utils.get_env_programme import get_outline_density_floor_chars
+
+    return safe_budget_for_canvas(
+        f"{contract.width_px}x{contract.height_px}",
+        contract.width_px,
+        contract.height_px,
+        int(contract.safe_area.x),
+        floor_chars=get_outline_density_floor_chars(),
     )

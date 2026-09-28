@@ -13,11 +13,12 @@ from llmai.shared import (
 )
 
 from models.presentation_outline_model import PresentationOutlineModel
-from utils.get_dynamic_models import get_presentation_outline_model_with_n_slides
+from utils.get_dynamic_models import outline_model
 from utils.get_env_programme import (
     get_outline_density_floor_chars,
     is_outline_density_ceiling_enabled,
 )
+from utils.llm_calls.outline_canvas_budget import VERBOSITIES, CanvasBudget
 from utils.llm_calls.outline_density import (
     apply_density_floor_to_text,
     ceiling_for_verbosity,
@@ -37,10 +38,15 @@ from utils.prompt_safety import format_untrusted_source_documents
 from utils.schema_utils import prepare_schema_for_validation
 
 
+def _canvas_verbosity_key(verbosity: Optional[str]) -> str:
+    return verbosity if verbosity in VERBOSITIES else "standard"
+
+
 def get_system_prompt(
     verbosity: Optional[str] = None,
     include_title_slide: bool = True,
     include_table_of_contents: bool = False,
+    canvas_budget: Optional[CanvasBudget] = None,
 ):
     # Slide text has a FLOOR again (2026-09-05). The 08-19 rewrite turned the
     # "at least ~N words" floor into a per-bullet ceiling because dense outlines
@@ -55,15 +61,31 @@ def get_system_prompt(
     # Characters are quoted beside words because one CJK "word" is an eojeol of
     # three to four characters, so a word-only figure reads as several times
     # more text in Korean than the same number does in English.
-    verbosity_budget = (
-        "at least about 80 words (Korean: about 250 characters) in 3 to 4 bullets"
-        if verbosity == "concise"
-        else (
-            "at least about 250 words (Korean: about 800 characters) in 5 to 7 bullets"
-            if verbosity == "text-heavy"
-            else "at least about 150 words (Korean: about 500 characters) in 4 to 6 bullets"
+    # A canvas content budget (docs/canvas-expansion-content-budget-spec-
+    # 20260929.md, rev 2) scales these targets for a canvas smaller than the
+    # 16:9 baseline. ``canvas_budget is None`` or ``factor == 1`` must produce
+    # exactly today's literal text below -- tests pin byte identity.
+    if canvas_budget is not None:
+        verbosity_key = _canvas_verbosity_key(verbosity)
+        chars = canvas_budget.target_chars[verbosity_key]
+        words = canvas_budget.target_words[verbosity_key]
+        bullets_lo, bullets_hi = canvas_budget.bullets[verbosity_key]
+        verbosity_budget = (
+            f"at least about {words} words (Korean: about {chars} characters) "
+            f"in {bullets_lo} to {bullets_hi} bullets"
         )
-    )
+        ceiling_value = canvas_budget.ceiling[verbosity_key]
+    else:
+        verbosity_budget = (
+            "at least about 80 words (Korean: about 250 characters) in 3 to 4 bullets"
+            if verbosity == "concise"
+            else (
+                "at least about 250 words (Korean: about 800 characters) in 5 to 7 bullets"
+                if verbosity == "text-heavy"
+                else "at least about 150 words (Korean: about 500 characters) in 4 to 6 bullets"
+            )
+        )
+        ceiling_value = ceiling_for_verbosity(verbosity)
     # OUTLINE_DENSITY_CEILING_ENABLED (2026-09-08, off by default): the floor
     # above has no upper bound, and the slide-authoring model reproduces its
     # outline input almost verbatim -- so a slide with nothing capping it can
@@ -72,12 +94,14 @@ def get_system_prompt(
     # the floor and ask for the same trade the mechanical condense step makes:
     # cut the least load-bearing material, don't compress every bullet into a
     # heading. Off, this text must stay byte-identical to before the knob
-    # existed -- tests pin it.
+    # existed -- tests pin it. A canvas budget below f=1 states the ceiling
+    # regardless of the flag: the schema cap is the real enforcement there,
+    # and the model should know the number it is being held to.
     ceiling_enabled = is_outline_density_ceiling_enabled()
-    if ceiling_enabled:
+    canvas_scales = canvas_budget is not None and canvas_budget.factor < 1
+    if ceiling_enabled or canvas_scales:
         verbosity_budget = (
-            f"{verbosity_budget} and at most about "
-            f"{ceiling_for_verbosity(verbosity)} characters"
+            f"{verbosity_budget} and at most about {ceiling_value} characters"
         )
     verbosity_instruction = (
         f"Each slide's body is a bullet list of {verbosity_budget}. Every bullet is a "
@@ -181,14 +205,30 @@ def get_user_prompt(
     instructions: Optional[str] = None,
     include_title_slide: bool = True,
     include_table_of_contents: bool = False,
+    canvas_budget: Optional[CanvasBudget] = None,
 ):
     display_language = _resolve_prompt_language(language)
     display_slides = _resolve_prompt_n_slides(n_slides)
     toc_text = f"Include Table Of Contents: {str(include_table_of_contents).lower()}\n"
     source_documents = format_untrusted_source_documents(additional_context)
+    # Rev 2 §4: an unconstrained slide count on a scaled-down canvas should
+    # trade slide count for density, not carry 16:9 density onto a smaller
+    # page. ``canvas_budget is None`` or ``factor == 1`` leaves this empty, so
+    # the prompt stays byte-identical to before this knob existed.
+    slide_count_instruction = (
+        "Choose the slide count so that each slide fits its budget; prefer "
+        "more slides over denser slides.\n"
+        if (
+            n_slides is None
+            and canvas_budget is not None
+            and canvas_budget.factor < 1
+        )
+        else ""
+    )
     return (
         f"Content: {content or ''}\n"
         f"Number of Slides: {display_slides}\n"
+        f"{slide_count_instruction}"
         f"Language: {display_language}\n"
         f"Tone: {tone or ''}\n"
         f"Today's Date: {datetime.now().strftime('%Y-%m-%d')}\n"
@@ -209,6 +249,7 @@ def get_messages(
     instructions: Optional[str] = None,
     include_title_slide: bool = True,
     include_table_of_contents: bool = False,
+    canvas_budget: Optional[CanvasBudget] = None,
 ) -> list[Message]:
     return [
         SystemMessage(
@@ -216,6 +257,7 @@ def get_messages(
                 verbosity,
                 include_title_slide,
                 include_table_of_contents,
+                canvas_budget,
             ),
         ),
         UserMessage(
@@ -228,6 +270,7 @@ def get_messages(
                 instructions,
                 include_title_slide,
                 include_table_of_contents,
+                canvas_budget,
             ),
         ),
     ]
@@ -245,13 +288,29 @@ async def generate_ppt_outline(
     web_search: bool = False,
     include_table_of_contents: bool = False,
     disconnect_checker: Optional[DisconnectChecker] = None,
+    canvas_budget: Optional[CanvasBudget] = None,
 ):
     model = get_model()
-    response_model = (
-        get_presentation_outline_model_with_n_slides(n_slides, verbosity)
-        if n_slides is not None
-        else PresentationOutlineModel
-    )
+    canvas_scales = canvas_budget is not None and canvas_budget.factor < 1
+    verbosity_key = _canvas_verbosity_key(verbosity)
+    if n_slides is not None:
+        # f=1 (or no budget) scales to the same default cap outline_model
+        # already applied, so the schema stays byte-identical.
+        schema_max_length = (
+            canvas_budget.schema_max_length[verbosity_key]
+            if canvas_budget is not None
+            else None
+        )
+        response_model = outline_model(n_slides, verbosity, schema_max_length)
+    elif canvas_scales:
+        # Rev 2 §4: the schema cap is the deterministic enforcement for a
+        # scaled-down canvas, applied here too so an unconstrained slide count
+        # cannot carry 16:9 density onto a smaller page.
+        response_model = outline_model(
+            None, verbosity, canvas_budget.schema_max_length[verbosity_key]
+        )
+    else:
+        response_model = PresentationOutlineModel
 
     client = get_client(config=get_llm_config())
     # Per-request web_search, OR the instance-wide WEB_GROUNDING knob (previously
@@ -268,9 +327,23 @@ async def generate_ppt_outline(
     # only those cases, buffers the stream and emits the final outline in one
     # chunk. A prompt-only deck with the ceiling off and
     # OUTLINE_DENSITY_FLOOR_CHARS=0 streams exactly as before.
-    density_floor = get_outline_density_floor_chars()
+    # A canvas budget scales the floor/ceiling numbers themselves (rev 2 §4),
+    # but not the mechanisms that use them: expansion still needs a source and
+    # the floor knob, condensation still needs OUTLINE_DENSITY_CEILING_ENABLED.
+    # Streaming/buffering therefore stays a function of the flags alone, never
+    # of the canvas (invariant 5).
+    density_floor = (
+        canvas_budget.floor if canvas_budget is not None else get_outline_density_floor_chars()
+    )
     density_ceiling_enabled = is_outline_density_ceiling_enabled()
-    density_ceiling = ceiling_for_verbosity(verbosity) if density_ceiling_enabled else 0
+    if density_ceiling_enabled:
+        density_ceiling = (
+            canvas_budget.ceiling[verbosity_key]
+            if canvas_budget is not None
+            else ceiling_for_verbosity(verbosity)
+        )
+    else:
+        density_ceiling = 0
     density_source = str(additional_context or "").strip()
     density_expands = density_floor > 0 and bool(density_source)
     density_condenses = density_ceiling_enabled
@@ -300,6 +373,7 @@ async def generate_ppt_outline(
                 instructions,
                 include_title_slide,
                 include_table_of_contents,
+                canvas_budget,
             ),
             response_format=response_format,
             tools=([WebSearchTool()] if use_search_tool else None),
@@ -346,7 +420,15 @@ async def generate_ppt_outline(
                 )
             yield text
         elif collected:
-            log_outline_density(collected, floor=density_floor, ceiling=density_ceiling)
+            log_outline_density(
+                collected,
+                floor=density_floor,
+                ceiling=density_ceiling,
+                canvas=canvas_budget.canvas_id if canvas_budget is not None else None,
+                factor=(
+                    float(canvas_budget.factor) if canvas_budget is not None else None
+                ),
+            )
     except Exception as e:
         handled = handle_llm_client_exceptions(e)
         if isinstance(handled, HTTPException):

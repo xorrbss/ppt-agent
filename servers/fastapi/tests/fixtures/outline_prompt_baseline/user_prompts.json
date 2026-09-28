@@ -1,0 +1,8 @@
+{
+  "None|None": "Content: Build quarterly strategy deck\nNumber of Slides: auto-detect\nLanguage: auto-detect\nTone: professional\nToday's Date: 2026-01-01\nInclude Title Slide: True\nInstructions: \nContext: None\n",
+  "None|English": "Content: Build quarterly strategy deck\nNumber of Slides: auto-detect\nLanguage: English\nTone: professional\nToday's Date: 2026-01-01\nInclude Title Slide: True\nInstructions: \nContext: None\n",
+  "None|  ": "Content: Build quarterly strategy deck\nNumber of Slides: auto-detect\nLanguage: auto-detect\nTone: professional\nToday's Date: 2026-01-01\nInclude Title Slide: True\nInstructions: \nContext: None\n",
+  "8|None": "Content: Build quarterly strategy deck\nNumber of Slides: 8\nLanguage: auto-detect\nTone: professional\nToday's Date: 2026-01-01\nInclude Title Slide: True\nInstructions: \nContext: None\n",
+  "8|English": "Content: Build quarterly strategy deck\nNumber of Slides: 8\nLanguage: English\nTone: professional\nToday's Date: 2026-01-01\nInclude Title Slide: True\nInstructions: \nContext: None\n",
+  "8|  ": "Content: Build quarterly strategy deck\nNumber of Slides: 8\nLanguage: auto-detect\nTone: professional\nToday's Date: 2026-01-01\nInclude Title Slide: True\nInstructions: \nContext: None\n"
+}

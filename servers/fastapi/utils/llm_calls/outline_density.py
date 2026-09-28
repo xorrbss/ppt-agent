@@ -32,7 +32,7 @@ from models.presentation_outline_model import (
 
 LOGGER = logging.getLogger(__name__)
 
-RECEIPT_SCHEMA_VERSION = "outline-density/v1"
+RECEIPT_SCHEMA_VERSION = "outline-density/v2"
 #: How much of the source document one expansion call may carry. A 10-20 page
 #: Korean proposal fits well inside this; a book does not, and truncating is
 #: better than a request the provider refuses outright.
@@ -97,9 +97,20 @@ def ceiling_for_verbosity(verbosity: str | None) -> int:
 
 
 def outline_density_receipt(
-    outline: Any, *, floor: int = 0, ceiling: int = 0
+    outline: Any,
+    *,
+    floor: int = 0,
+    ceiling: int = 0,
+    canvas: str | None = None,
+    factor: float | None = None,
 ) -> dict[str, Any]:
-    """Per-slide usable characters, the deck median, and the floor/ceiling in force."""
+    """Per-slide usable characters, the deck median, and the floor/ceiling in force.
+
+    ``canvas`` and ``factor`` record the canvas content budget (if any) this
+    outline was generated against; ``None`` for a deck with no canvas budget
+    (today's only case, and every case before rev 2 of the canvas expansion
+    content budget spec).
+    """
 
     slides = list(getattr(outline, "slides", None) or ())
     counts = [usable_chars(getattr(slide, "content", "")) for slide in slides]
@@ -119,6 +130,8 @@ def outline_density_receipt(
             index for index, count in enumerate(counts) if ceiling > 0 and count > ceiling
         ],
         "condensed": False,
+        "canvas": canvas,
+        "factor": float(factor) if factor is not None else None,
     }
 
 
@@ -320,7 +333,7 @@ def _log_receipt(receipt: Mapping[str, Any]) -> None:
 
     LOGGER.info(
         "outline_density median=%s floor=%s slides=%s below_floor=%s expanded=%s "
-        "ceiling=%s above_ceiling=%s condensed=%s",
+        "ceiling=%s above_ceiling=%s condensed=%s canvas=%s factor=%s",
         receipt["median"],
         receipt["floor"],
         receipt["slideCount"],
@@ -329,11 +342,18 @@ def _log_receipt(receipt: Mapping[str, Any]) -> None:
         receipt["ceiling"],
         len(receipt["aboveCeiling"]),
         receipt["condensed"],
+        receipt.get("canvas"),
+        receipt.get("factor"),
     )
 
 
 def log_outline_density(
-    outline_text: str, *, floor: int, ceiling: int = 0
+    outline_text: str,
+    *,
+    floor: int,
+    ceiling: int = 0,
+    canvas: str | None = None,
+    factor: float | None = None,
 ) -> dict[str, Any] | None:
     """Measure one streamed outline and record its receipt. Never raises."""
 
@@ -341,7 +361,9 @@ def log_outline_density(
         parsed = _parse_outline_text(outline_text)
         if parsed is None:
             return None
-        receipt = outline_density_receipt(parsed[1], floor=floor, ceiling=ceiling)
+        receipt = outline_density_receipt(
+            parsed[1], floor=floor, ceiling=ceiling, canvas=canvas, factor=factor
+        )
         _log_receipt(receipt)
         return receipt
     except Exception:
