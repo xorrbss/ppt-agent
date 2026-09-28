@@ -236,13 +236,6 @@ const nextConfig = {
         destination: '/upload',
         permanent: false,
       },
-      // The community gallery is backed by an upstream service this fork does
-      // not operate, so the route is hidden rather than served.
-      {
-        source: '/community',
-        destination: '/dashboard',
-        permanent: false,
-      },
     ];
   },
 
