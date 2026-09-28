@@ -25,20 +25,6 @@ export interface AuthoredRendererIsolationPolicy {
   executionBoundary: "external-worker" | "development-local" | "local-native";
 }
 
-export interface AuthoredRendererAttestationProjection {
-  schemaVersion: "authored-renderer-attestation/v1";
-  state: "unattested" | "attested" | "expired" | "blocked";
-  reasonCode: string;
-  /** Opaque receipt reference only; never a credential or renderer command. */
-  attestationDigest: string | null;
-  environment: {
-    nodeEnvironment: "production" | "development";
-    osIsolation: string;
-    executionBoundary: string;
-  };
-  expiresAt: string | null;
-}
-
 const REQUIRED_PRODUCTION_OS_ISOLATION =
   "nonroot-readonly-tmpfs-network-none" as const;
 
@@ -107,54 +93,6 @@ export function authoredRendererIsolationPolicy(environment: NodeJS.ProcessEnv =
         ? "external-worker"
         : "development-local",
   };
-}
-
-function optionalAttestationDigest(value: string | undefined): string | null {
-  const normalized = value?.trim().toLowerCase();
-  return normalized && /^sha256:[a-f0-9]{64}$/.test(normalized) ? normalized : null;
-}
-
-/**
- * Operational, server-side projection for the v2 release-readiness endpoint.
- * It reports an environment claim but never makes a Next.js browser process an
- * attestation issuer or changes renderer authorization.
- */
-export function authoredRendererAttestationProjection(
-  environment: NodeJS.ProcessEnv = process.env,
-  now = Date.now(),
-): AuthoredRendererAttestationProjection {
-  const nodeEnvironment: AuthoredRendererAttestationProjection["environment"]["nodeEnvironment"] =
-    environment.NODE_ENV === "production" ? "production" : "development";
-  const osIsolation = environment.AUTHORED_RENDERER_OS_ISOLATION?.trim() || "undeclared";
-  const executionBoundary = environment.AUTHORED_RENDERER_EXECUTION_BOUNDARY?.trim() || "undeclared";
-  const base: Omit<AuthoredRendererAttestationProjection, "state" | "reasonCode"> = {
-    schemaVersion: "authored-renderer-attestation/v1" as const,
-    attestationDigest: optionalAttestationDigest(environment.AUTHORED_RENDERER_ATTESTATION_DIGEST),
-    environment: { nodeEnvironment, osIsolation, executionBoundary },
-    expiresAt: environment.AUTHORED_RENDERER_ATTESTATION_EXPIRES_AT?.trim() || null,
-  };
-  if (booleanEnvironment("AUTHORED_RENDERER_KILL_SWITCH", false, environment)) {
-    return { ...base, state: "blocked", reasonCode: "authored_renderer_kill_switch_active" };
-  }
-  try {
-    authoredRendererIsolationPolicy(environment);
-  } catch {
-    return { ...base, state: "blocked", reasonCode: "renderer_isolation_policy_invalid" };
-  }
-  const expiresAt = base.expiresAt ? Date.parse(base.expiresAt) : Number.NaN;
-  if (base.expiresAt && (!Number.isFinite(expiresAt) || expiresAt <= now)) {
-    return { ...base, state: "expired", reasonCode: "renderer_attestation_expired" };
-  }
-  if (
-    nodeEnvironment === "production" &&
-    osIsolation === REQUIRED_PRODUCTION_OS_ISOLATION &&
-    executionBoundary === "external-worker" &&
-    base.attestationDigest &&
-    base.expiresAt
-  ) {
-    return { ...base, state: "attested", reasonCode: "renderer_attestation_reported" };
-  }
-  return { ...base, state: "unattested", reasonCode: "renderer_attestation_missing" };
 }
 
 function sha256CspSource(script: string): string {

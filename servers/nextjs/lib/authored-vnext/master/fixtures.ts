@@ -1,9 +1,7 @@
 import type {
   DeckMasterContractV1,
-  LayoutKind,
   MasterFurniture,
   SemanticStyle,
-  SlideDraft,
   StressCategory,
   TitleStressCase,
   VisualDirection,
@@ -297,26 +295,6 @@ export const DEFAULT_MASTER_CONTRACT: DeckMasterContractV1 = {
   titleStressCorpus: TITLE_STRESS_CORPUS,
   digest: null,
 };
-
-export function makeSlideSpec(
-  layoutKind: LayoutKind,
-  stress: TitleStressCase = TITLE_STRESS_CORPUS[0],
-): SlideDraft {
-  const layout = DEFAULT_MASTER_CONTRACT.layouts[layoutKind];
-  return {
-    slideId: "slide:master-setup-preview",
-    layoutId: layout.id,
-    title: {
-      text: stress.text,
-      lines: stress.expectedLines,
-      lineBreakPolicy: "canonical-explicit-uax14-v1",
-      uax14Version: "17.0.0",
-      tailoring: "ko-space-first-with-id-fallback-v1",
-      kinsokuPolicy: "cjk-no-leading-closing-no-trailing-opening",
-    },
-    body: "모델이 쓸 수 있는 본문 영역입니다. Master furniture와 namespace가 분리됩니다.",
-  };
-}
 
 export function stressCategoryLabel(category: StressCategory): string {
   return {
