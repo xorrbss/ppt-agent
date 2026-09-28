@@ -422,46 +422,6 @@ def require_title_capacity_resolution(result: Mapping[str, Any]) -> Mapping[str,
     return result
 
 
-def safe_title_recovery_receipt(value: object) -> dict[str, Any] | None:
-    """Validate the exact content-free receipt schema before persistence."""
-
-    keys = {
-        "schemaVersion", "outcome", "terminalCode", "originalLayoutId", "selectedLayoutId",
-        "jointTitleBudgetBefore", "jointTitleBudgetAfter", "fixedTitleChars", "nonTitleVisibleChars",
-        "eligibleCharsBefore", "eligibleCharsAfter", "remainingTitleBudgetAfter", "qidCount",
-        "qidLedgerDigest", "protectedLedgerDigest", "layoutSubstituted",
-        "deterministicAbbreviationApplied", "gateRelaxed", "probabilisticCallCount",
-    }
-    if not isinstance(value, dict) or set(value) != keys or value.get("schemaVersion") != TITLE_RECOVERY_RECEIPT_SCHEMA:
-        return None
-    outcome = value.get("outcome")
-    if outcome not in {"unchanged", "layout_substitution", "deterministic_abbreviation", "terminal"}:
-        return None
-    if value.get("terminalCode") != (TITLE_CAPACITY_UNRESOLVABLE if outcome == "terminal" else None):
-        return None
-    if any(not isinstance(value.get(key), str) or not value[key] for key in ("originalLayoutId", "selectedLayoutId")):
-        return None
-    non_negative = (
-        "jointTitleBudgetBefore", "jointTitleBudgetAfter", "fixedTitleChars", "nonTitleVisibleChars",
-        "eligibleCharsBefore", "eligibleCharsAfter", "qidCount", "probabilisticCallCount",
-    )
-    if any(type(value.get(key)) is not int or value[key] < 0 for key in non_negative):
-        return None
-    if type(value.get("remainingTitleBudgetAfter")) is not int:
-        return None
-    if any(not isinstance(value.get(key), str) or re.fullmatch(r"[0-9a-f]{64}", value[key]) is None for key in ("qidLedgerDigest", "protectedLedgerDigest")):
-        return None
-    if any(type(value.get(key)) is not bool for key in ("layoutSubstituted", "deterministicAbbreviationApplied", "gateRelaxed")):
-        return None
-    if value["gateRelaxed"] or value["probabilisticCallCount"] != 0:
-        return None
-    if value["layoutSubstituted"] != (value["originalLayoutId"] != value["selectedLayoutId"]):
-        return None
-    if value["remainingTitleBudgetAfter"] != value["jointTitleBudgetAfter"] - value["fixedTitleChars"] - value["eligibleCharsAfter"]:
-        return None
-    return dict(value)
-
-
 def title_token_diagnostic(
     before_html: str, after_html: str,
     before: Mapping[str, str], after: Mapping[str, str],

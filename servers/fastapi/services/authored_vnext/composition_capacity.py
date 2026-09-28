@@ -331,53 +331,6 @@ def _role_family(slot: Mapping[str, Any]) -> str:
     return "body"
 
 
-def _rects_are_near(left: Mapping[str, float], right: Mapping[str, float]) -> bool:
-    if _intersection_area(left, right) > 0:
-        return True
-    horizontal_overlap = max(
-        0.0, min(_right(left), _right(right)) - max(left["x"], right["x"])
-    )
-    vertical_overlap = max(
-        0.0, min(_bottom(left), _bottom(right)) - max(left["y"], right["y"])
-    )
-    horizontal_gap = max(0.0, max(left["x"], right["x"]) - min(_right(left), _right(right)))
-    vertical_gap = max(0.0, max(left["y"], right["y"]) - min(_bottom(left), _bottom(right)))
-    horizontal_band = vertical_overlap >= min(left["height"], right["height"]) * 0.2
-    vertical_band = horizontal_overlap >= min(left["width"], right["width"]) * 0.2
-    return (
-        horizontal_band
-        and horizontal_gap <= min(left["width"], right["width"]) * 0.35
-    ) or (
-        vertical_band
-        and vertical_gap <= min(left["height"], right["height"]) * 0.35
-    )
-
-
-def _spatial_components(
-    slots: Sequence[Mapping[str, Any]],
-) -> list[list[Mapping[str, Any]]]:
-    remaining = list(slots)
-    components: list[list[Mapping[str, Any]]] = []
-    while remaining:
-        seed = remaining.pop(0)
-        component = [seed]
-        changed = True
-        while changed:
-            changed = False
-            for candidate in list(remaining):
-                candidate_rect = _rect(candidate.get("bounds"))
-                if candidate_rect is not None and any(
-                    member_rect is not None
-                    and _rects_are_near(candidate_rect, member_rect)
-                    for member_rect in (_rect(item.get("bounds")) for item in component)
-                ):
-                    remaining.remove(candidate)
-                    component.append(candidate)
-                    changed = True
-        components.append(component)
-    return components
-
-
 def _free_rect(
     envelope: Mapping[str, float],
     member_rects: Sequence[Mapping[str, float]],

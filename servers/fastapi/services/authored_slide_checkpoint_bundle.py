@@ -10,7 +10,6 @@ import os
 from pathlib import Path
 import re
 import tempfile
-import time
 from typing import Any, Iterator, Mapping
 
 _SAFE_COMPONENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -188,23 +187,6 @@ class AtomicSlideCheckpointStore:
             self._fsync_directory(slide_dir)
         return bundle
 
-    def commit_repair(
-        self,
-        *,
-        attempt_id: str,
-        slide_index: int,
-        base_revision: int,
-        html: str,
-        png: bytes,
-        metrics: Mapping[str, Any],
-    ) -> SlideCheckpointBundle:
-        """Advance exactly one slide by one revision; no deck-wide operation."""
-        self._validate_identity(attempt_id, slide_index, base_revision)
-        return self.commit(
-            attempt_id=attempt_id, slide_index=slide_index,
-            revision=base_revision + 1, expected_revision=base_revision,
-            html=html, png=png, metrics=metrics,
-        )
 
     def recover(
         self, *, attempt_id: str, slide_index: int, revision: int | None = None,
@@ -235,74 +217,6 @@ class AtomicSlideCheckpointStore:
         )
         return bundle.revision if bundle else None
 
-    def sweep_orphans(
-        self, *, max_age_seconds: float = 24 * 60 * 60, max_files: int = 256
-    ) -> int:
-        """Remove stale transactional markers and temp files.
-
-        Only files created by this store are considered. Immutable
-        ``revision-*.json`` and ``current.json`` payloads are never removed;
-        callers can apply attempt retention separately after receipt sealing.
-        """
-        if max_age_seconds < 0 or max_files <= 0:
-            raise ValueError("invalid_orphan_sweep_limits")
-        now = time.time()
-        removed = 0
-        for path in self.root.rglob(".prepared-r*.json"):
-            if removed >= max_files:
-                break
-            try:
-                if now - path.stat().st_mtime >= max_age_seconds:
-                    path.unlink()
-                    removed += 1
-            except OSError:
-                continue
-        for path in self.root.rglob(".committed-r*.json"):
-            if removed >= max_files:
-                break
-            try:
-                # A committed marker is retained while its revision/current
-                # payload exists. Remove only malformed or detached markers.
-                payload = json.loads(path.read_text("utf-8"))
-                revision = payload["revision"]
-                digest = payload["digest"]
-                revision_path = path.parent / f"revision-{revision}.json"
-                if revision_path.exists():
-                    continue
-                if now - path.stat().st_mtime >= max_age_seconds and isinstance(digest, str):
-                    path.unlink()
-                    removed += 1
-            except (OSError, ValueError, KeyError, TypeError):
-                try:
-                    if now - path.stat().st_mtime >= max_age_seconds:
-                        path.unlink()
-                        removed += 1
-                except OSError:
-                    continue
-        # ``_atomic_file`` can leave a uniquely named temporary file if the
-        # process dies after fsync and before ``os.replace``.  These files are
-        # deliberately distinguishable by the double-dot prefix; sweep only
-        # stale files created for known checkpoint payloads and never touch
-        # immutable revisions or writer locks.
-        temp_pattern = re.compile(
-            r"^\.\.(?:current\.json|revision-[0-9]+\.json|prepared-r|committed-r)"
-        )
-        for path in self.root.rglob("*"):
-            if removed >= max_files:
-                break
-            try:
-                if (
-                    not path.is_file()
-                    or path.is_symlink()
-                    or not temp_pattern.match(path.name)
-                    or now - path.stat().st_mtime < max_age_seconds
-                ):
-                    continue
-                path.unlink()
-                removed += 1
-            except OSError:
-                continue
-        return removed
 
     def _slide_dir(self, attempt_id: str, slide_index: int, *, create: bool = False) -> Path:
         path = self.root / attempt_id / f"slide-{slide_index}"

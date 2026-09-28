@@ -767,16 +767,6 @@ def test_filesystem_evidence_recovers_db_pointer_and_clears_render_failure(
             with pytest.raises(checkpoints.SlideCheckpointCorrupt):
                 checkpoints.read_valid_evidence(recovered)
 
-            store = checkpoints.AtomicSlideCheckpointStore(tmp_path / "bundle-store")
-            orphan_dir = tmp_path / "bundle-store" / "attempt-a" / "slide-0"
-            orphan_dir.mkdir(parents=True)
-            orphan = orphan_dir / ".prepared-r1-deadbeef.json"
-            orphan.write_text(
-                '{"revision":1,"digest":"deadbeef"}',
-                encoding="utf-8",
-            )
-            assert store.sweep_orphans(max_age_seconds=0, max_files=1) == 1
-            assert not orphan.exists()
         finally:
             await engine.dispose()
 

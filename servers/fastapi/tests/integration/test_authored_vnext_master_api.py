@@ -9,7 +9,7 @@ from api.v1.ppt.endpoints.authored_vnext.master.router import (
     AUTHORED_VNEXT_MASTER_ROUTER,
     get_authored_vnext_master_service,
 )
-from services.authored_vnext.master.repository import (
+from tests.support.authored_vnext_master_memory_repository import (
     InMemoryAuthoredVNextMasterRepository,
 )
 from services.authored_vnext.master.service import AuthoredVNextMasterService

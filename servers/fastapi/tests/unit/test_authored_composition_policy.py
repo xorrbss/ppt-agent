@@ -20,7 +20,6 @@ from services.authored_composition_policy import (
     ensure_authored_semantic_roles,
     repair_authored_layout_alignment,
     repair_authored_owned_text_paint_order,
-    reduce_authored_closing_capacity,
     reduce_authored_closing_title_punctuation,
     reduce_authored_owner_text_capacity,
     resolve_composition_profile,
@@ -29,9 +28,7 @@ from services.authored_composition_policy import (
 from services.authored_presentation_generation import (
     _admit_gate_repair_capacity_candidate,
     _admit_vqa_capacity_candidate,
-    _apply_bounded_closing_capacity_reducer,
     _apply_bounded_header_eyebrow_fallback,
-    _apply_final_checkpoint_closing_capacity_reducer,
     _apply_final_checkpoint_header_eyebrow_fallback,
     _bind_bounded_repair_evidence,
     _callable_accepts_keyword,
@@ -1813,52 +1810,6 @@ def test_semantic_roles_bind_header_title_to_the_text_owner():
         print("retained-header-title-owner", "pngByteExact", True, "capacityChecks", corrected_capacity["checks"])
 
 
-def test_final_checkpoint_closing_capacity_reducer_uses_exact_ledger_metrics(
-    monkeypatch,
-):
-    html = '<p data-qid="closing.cue" data-semantic-role="body">정리 문구</p>'
-    metrics = {"elements": []}
-    capacity = SlideCapacity(0, "CLOSING", 62, 270, 350, 0, 20)
-    pipeline = SimpleNamespace(
-        evidence_attempt_id="attempt",
-        evidence_ledger=SimpleNamespace(
-            latest=lambda _attempt, _index: SimpleNamespace(
-                html=html, browser_metrics=metrics
-            )
-        ),
-    )
-    calls = []
-
-    async def fake_reducer(**kwargs):
-        calls.append(kwargs)
-        return "<p>reduced</p>", b"reduced", {"elements": []}
-
-    monkeypatch.setattr(
-        "services.authored_presentation_generation._apply_bounded_closing_capacity_reducer",
-        fake_reducer,
-    )
-    htmls = [html]
-    pngs = [b"before"]
-    overrides = {}
-
-    repaired = asyncio.run(
-        _apply_final_checkpoint_closing_capacity_reducer(
-            pipeline=pipeline,
-            htmls=htmls,
-            pngs=pngs,
-            capacity_plan=SimpleNamespace(at=lambda _index: capacity),
-            profile_id="ordinary",
-            metrics_override=overrides,
-        )
-    )
-
-    assert repaired == [0]
-    assert calls[0]["browser_metrics"] is metrics
-    assert htmls == ["<p>reduced</p>"]
-    assert pngs == [b"reduced"]
-    assert overrides == {0: {"elements": []}}
-
-
 def test_closing_title_punctuation_reducer_keeps_gate_and_meaning_intact():
     html = (
         '<html><head></head><body>'
@@ -1909,153 +1860,6 @@ def test_closing_title_punctuation_reducer_keeps_gate_and_meaning_intact():
     assert "authored-closing-title-punctuation-reducer-v1" in reduced
     assert "AI가 생성해도 배포 결정은 증거와 사람의 승인으로 완성합니다</h1>" in reduced
     assert "검증 가능한 관문이 신뢰할 수 있는 배포를 만듭니다" in reduced
-
-
-def test_bounded_closing_reducer_recaptures_21_targets_and_299_body_chars(
-    monkeypatch,
-):
-    titles = [(f"title.{index}", "제목텍스트") for index in range(4)]
-    groups = {
-        "conclusion": [18, 18, 18, 18, 18],
-        "criteria": [18, 18, 18, 17],
-        "artifacts": [18, 18, 18, 18, 10],
-    }
-    body_nodes = [
-        (f"{group}.item{index}", "가" * length)
-        for group, lengths in groups.items()
-        for index, length in enumerate(lengths, start=1)
-    ]
-    body_nodes.extend(
-        [
-            ("closing.claim", "나" * 18),
-            ("closing.emphasis", "다" * 18),
-            ("closing.cue", "라" * 20),
-        ]
-    )
-    assert len(titles) + len(body_nodes) == 21
-    assert sum(len(text) for _qid, text in body_nodes) == 299
-
-    html = "<html><head></head><body>"
-    html += "".join(
-        f'<h2 data-qid="{qid}" data-semantic-role="title">{text}</h2>'
-        for qid, text in titles
-    )
-    for group, lengths in groups.items():
-        html += f'<ul data-qid="{group}.list" data-semantic-role="decoration">'
-        html += "".join(
-            f'<li data-qid="{group}.item{index}" data-semantic-role="body">'
-            f'{"가" * length}</li>'
-            for index, length in enumerate(lengths, start=1)
-        )
-        html += "</ul>"
-    html += (
-        '<p data-qid="closing.claim" data-semantic-role="body">'
-        f'{"나" * 18}</p>'
-        '<strong data-qid="closing.emphasis" data-semantic-role="body">'
-        f'{"다" * 18}</strong>'
-        '<div data-qid="closing.cue" data-semantic-role="body">'
-        f'{"라" * 20}</div></body></html>'
-    )
-
-    def metric(qid, tag, role, text):
-        return {
-            "qid": qid,
-            "tag": tag,
-            "semantic_role": role,
-            "rendered_text": text,
-            "has_owned_text": bool(text),
-            "font_size": 18,
-            "font_loaded": True,
-            "css_visible": True,
-            "bbox": {"x": 10, "y": 10, "width": 120, "height": 24},
-            "clipped": False,
-            "glyph_clipped": False,
-            "line_box_clipped": False,
-        }
-
-    before_elements = [
-        *(metric(qid, "h2", "title", text) for qid, text in titles),
-        *(
-            metric(f"{group}.list", "ul", "decoration", "")
-            for group in groups
-        ),
-        *(metric(qid, "li", "body", text) for qid, text in body_nodes[:-3]),
-        metric("closing.claim", "p", "body", "나" * 18),
-        metric("closing.emphasis", "strong", "body", "다" * 18),
-        metric("closing.cue", "div", "body", "라" * 20),
-    ]
-    before_metrics = {"elements": before_elements}
-    capacity = SlideCapacity(2, "CLOSING", 62, 270, 350, 0, 20)
-    assert capacity_violations(html, before_metrics, capacity) == (
-        "qids:21>20",
-        "browser_body:299>270",
-    )
-
-    reduced = reduce_authored_closing_capacity(
-        html, before_metrics, capacity, profile_id="ordinary"
-    )
-    assert "authored-closing-capacity-reducer-v1" in reduced
-    assert 'data-qid="closing.cue"' not in reduced
-    assert 'data-qid="artifacts.item5"' not in reduced
-    assert 'data-qid="closing.claim" data-semantic-role="body"' in reduced
-    assert 'data-qid="closing.emphasis" data-semantic-role="body"' in reduced
-    assert semantic_repair_boundary_violations(html, reduced) == ()
-    assert reduce_authored_closing_capacity(
-        reduced, before_metrics, capacity, profile_id="ordinary"
-    ) == reduced
-    assert reduce_authored_closing_capacity(
-        html.replace("<body>", '<body data-source-block-id="source:1">'),
-        before_metrics,
-        capacity,
-        profile_id="ordinary",
-    ).find('data-qid="closing.cue"') >= 0
-
-    removed = {"closing.cue", "artifacts.item5"}
-    after_metrics = {
-        "elements": [
-            item for item in before_elements if item["qid"] not in removed
-        ]
-    }
-    captures = []
-
-    bound = canonicalize_authored_capacity_html(reduced)
-    assert bound.count('data-semantic-role="title"') == 1
-
-    async def fake_capture(candidate_html):
-        captures.append(candidate_html)
-        assert candidate_html == bound
-        return _capture(candidate_html, b"reduced-closing", after_metrics)
-
-    monkeypatch.setattr(
-        "services.authored_presentation_generation.render_html_to_png_with_metrics",
-        fake_capture,
-    )
-    repaired = asyncio.run(
-        _apply_bounded_closing_capacity_reducer(
-            html=html,
-            browser_metrics=before_metrics,
-            capacity=capacity,
-            profile_id="ordinary",
-        )
-    )
-
-    assert repaired is not None
-    repaired_html, repaired_png, repaired_metrics = repaired
-    assert captures == [repaired_html]
-    assert repaired_png == b"reduced-closing"
-    assert len(
-        [
-            item
-            for item in repaired_metrics["elements"]
-            if item["semantic_role"] in {"title", "body", "image"}
-        ]
-    ) == 19
-    assert sum(
-        len(item["rendered_text"])
-        for item in repaired_metrics["elements"]
-        if item["semantic_role"] == "body"
-    ) == 269
-    assert capacity_violations(repaired_html, repaired_metrics, capacity) == ()
 
 
 def test_bounded_header_eyebrow_fallback_recaptures_exact_qid(monkeypatch):

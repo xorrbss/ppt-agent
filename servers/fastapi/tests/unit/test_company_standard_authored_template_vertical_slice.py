@@ -42,7 +42,7 @@ from services.authored_vnext.generation.pipeline import AuthoredVNextGenerationP
 from services.authored_vnext.generation.repository import InMemoryGenerationRepository
 from services.authored_vnext.integration.export_payload import worker_slides
 from services.authored_vnext.master.digests import canonical_digest, seal_master_contract
-from services.authored_vnext.master.repository import (
+from tests.support.authored_vnext_master_memory_repository import (
     InMemoryAuthoredVNextMasterRepository,
 )
 from services.authored_vnext.master.preview import build_preview

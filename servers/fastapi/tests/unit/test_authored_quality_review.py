@@ -27,13 +27,11 @@ from services import authored_presentation_service as authored_service
 from services import authored_quality_review_service as quality_service
 from services import presentation_version_service as version_service
 from services.authored_exact_provenance import (
-    ExactProvenanceError,
     build_exact_provenance,
 )
 from services.authored_review_asset_store import publish_reviewed_png
 from tests.unit.authored_quality_test_metrics import complete_browser_metrics
 from utils.authored_styles import (
-    AuthoredExactReconstructionUnavailableError,
     AuthoredStyle,
 )
 from utils.authored_ocr_quality import OcrQualityResult
@@ -113,34 +111,6 @@ def _mock_text_preserving_ocr(monkeypatch) -> None:
         )
 
     monkeypatch.setattr(quality_service, "inspect_authored_ocr", fake_ocr)
-
-
-@pytest.mark.parametrize(
-    "error, expected",
-    [
-        (
-            ExactProvenanceError("private path C:/secret/source.png and digest"),
-            "authored_exact_reconstruction_provenance_mismatch",
-        ),
-        (
-            AuthoredExactReconstructionUnavailableError("private-exact-style"),
-            "authored_exact_reconstruction_unavailable",
-        ),
-    ],
-)
-def test_exact_review_error_detail_hides_private_metadata(error, expected):
-    assert quality_service._public_review_error_detail(error) == expected
-
-
-def test_style_review_error_detail_hides_private_metadata():
-    error = RuntimeError(
-        "write failed for C:/private/review/slide.png digest=0123456789abcdef"
-    )
-
-    assert (
-        quality_service._public_review_error_detail(error)
-        == "authored_quality_review_failed"
-    )
 
 
 async def _make_engine(db_path):

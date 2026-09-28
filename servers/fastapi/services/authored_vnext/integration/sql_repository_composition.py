@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import timezone
 import uuid
-from typing import Any
 
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
@@ -21,7 +20,6 @@ from models.sql.authored_vnext_repository import (
     AuthoredVNextEntityHead,
     AuthoredVNextMasterRevision,
     AuthoredVNextPublicationPointer,
-    AuthoredVNextQualityDecision,
     AuthoredVNextRenderReceipt,
     AuthoredVNextSlideRevision,
 )
@@ -431,68 +429,6 @@ class AuthoredVNextCompositionRepositoryMixin:
                     return
             raise ExportJobConflictError("candidate write raced") from exc
 
-    def record_quality_decision(
-        self,
-        *,
-        deck_id: str,
-        deck_revision: int,
-        deck_digest: str,
-        idempotency_key: str,
-        decision: str,
-        policy_version: str,
-        evidence_digest: str,
-        evidence: dict[str, Any],
-    ) -> AuthoredVNextQualityDecision:
-        key_hash = _hash(idempotency_key)
-        try:
-            with self._sessions.begin() as session:
-                self._active_account_generation(session)
-                existing = session.scalar(
-                    select(AuthoredVNextQualityDecision).where(
-                        *self._scope(AuthoredVNextQualityDecision),
-                        AuthoredVNextQualityDecision.decision_key_hash == key_hash,
-                    )
-                )
-                if existing:
-                    if (
-                        existing.deck_digest,
-                        existing.decision,
-                        existing.evidence_digest,
-                    ) != (deck_digest, decision, evidence_digest):
-                        raise ExportJobConflictError("quality idempotency payload changed")
-                    return existing
-                row = AuthoredVNextQualityDecision(
-                    owner_id=self.owner_id,
-                    owner_scope=self.owner_scope,
-                    tenant_id=self.tenant_id,
-                    deck_id=deck_id,
-                    deck_revision=deck_revision,
-                    deck_digest=deck_digest,
-                    decision_key_hash=key_hash,
-                    decision=decision,
-                    policy_version=policy_version,
-                    evidence_digest=evidence_digest,
-                    evidence=evidence,
-                )
-                session.add(row)
-                session.flush()
-                session.expunge(row)
-                return row
-        except IntegrityError as exc:
-            with self._sessions() as session:
-                existing = session.scalar(
-                    select(AuthoredVNextQualityDecision).where(
-                        *self._scope(AuthoredVNextQualityDecision),
-                        AuthoredVNextQualityDecision.decision_key_hash == key_hash,
-                    )
-                )
-                if existing is not None and (
-                    existing.deck_digest,
-                    existing.decision,
-                    existing.evidence_digest,
-                ) == (deck_digest, decision, evidence_digest):
-                    return existing
-            raise ExportJobConflictError("quality decision write raced") from exc
 
     def record_render_receipt(
         self,
@@ -566,4 +502,3 @@ class AuthoredVNextCompositionRepositoryMixin:
             raise ExportJobConflictError("render receipt write raced") from exc
 
 __all__ = ["AuthoredVNextCompositionRepositoryMixin"]
-

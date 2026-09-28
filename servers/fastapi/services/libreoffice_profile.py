@@ -11,9 +11,7 @@ therefore give each invocation its own throwaway profile directory via
 independent LibreOffice instances instead of contenders for one profile.
 
 This mirrors the pattern already used by
-``services/source_locked/conversion.py`` and
-``services/authored_vnext/semantic/editable_hybrid_libreoffice_readback.py``;
-this module exists so ``DocumentConversionService`` (the primary upload/
+``services/source_locked/conversion.py``; this module exists so ``DocumentConversionService`` (the primary upload/
 decompose conversion path) shares the same isolation instead of reinventing
 it a third time.
 """
