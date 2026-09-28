@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import html
 import json
 import posixpath
 import re
@@ -35,6 +34,7 @@ from .models import (
     UnsupportedElement,
     seal_structure,
 )
+from .structural_render import structural_svg
 
 
 _P = "http://schemas.openxmlformats.org/presentationml/2006/main"
@@ -881,40 +881,6 @@ def _layout_hint(root: ET.Element | None, part: str | None) -> str:
     return " ".join(str(value) for value in values if value)
 
 
-def _structural_svg(frame: DesignFrame, canvas: Canvas) -> bytes:
-    target_width, target_height = 1280.0, 720.0
-    sx, sy = target_width / canvas.width, target_height / canvas.height
-    boxes: list[str] = []
-    for slot in frame.slots:
-        bounds = slot.bounds
-        boxes.append(
-            '<rect x="{:.2f}" y="{:.2f}" width="{:.2f}" height="{:.2f}" '
-            'fill="none" stroke="#2563EB" stroke-width="2"/>'.format(
-                bounds.x * sx,
-                bounds.y * sy,
-                bounds.width * sx,
-                bounds.height * sy,
-            )
-        )
-        boxes.append(
-            '<text x="{:.2f}" y="{:.2f}" font-family="Arial" font-size="12" '
-            'fill="#0F172A">{}</text>'.format(
-                bounds.x * sx + 4,
-                bounds.y * sy + 16,
-                html.escape(slot.semantic_role),
-            )
-        )
-    document = (
-        '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" '
-        'viewBox="0 0 1280 720"><rect width="1280" height="720" fill="#FFFFFF"/>'
-        f'<text x="24" y="32" font-family="Arial" font-size="18" fill="#111827">'
-        f'{html.escape(frame.frame_id)} · {html.escape(frame.role)}</text>'
-        + "".join(boxes)
-        + "</svg>\n"
-    )
-    return document.encode("utf-8")
-
-
 def _part_for_relationship(
     relationships: Mapping[str, tuple[str, str]], relation_id: str | None, suffix: str
 ) -> str | None:
@@ -1063,7 +1029,7 @@ def compile_pptx_design_source(path: Path | str) -> CompiledDesignSource:
         for frame in frames:
             relative = frame.representative_render_ref
             assert relative is not None
-            content = _structural_svg(frame, canvas)
+            content = structural_svg(frame, canvas)
             assets[relative] = content
             render_refs.append(
                 RepresentativeRenderRef(
@@ -1392,7 +1358,7 @@ def compile_authored_design_source(source: Mapping[str, Any]) -> CompiledDesignS
     for frame in frames:
         relative = frame.representative_render_ref
         assert relative is not None
-        content = _structural_svg(frame, canvas)
+        content = structural_svg(frame, canvas)
         assets[relative] = content
         render_refs.append(
             RepresentativeRenderRef(

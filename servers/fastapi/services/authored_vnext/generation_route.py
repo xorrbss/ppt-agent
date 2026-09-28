@@ -88,7 +88,8 @@ def load_pinned_design_pack(
 ) -> RegisteredDesignPack:
     pin = normalize_design_pack_pin(design_pack_pin)
     try:
-        packages = DesignPackRegistry(design_pack_storage_root(owner_id)).list()
+        # Admission may have re-pinned the request to an approved canvas variant.
+        packages = DesignPackRegistry(design_pack_storage_root(owner_id)).pinnable()
     except DesignPackRegistryError as error:
         raise GenerationRouteError(str(error)) from error
     matches = [
