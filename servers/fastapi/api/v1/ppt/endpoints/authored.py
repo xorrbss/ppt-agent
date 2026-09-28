@@ -1,6 +1,6 @@
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_serializer
 from fastapi import APIRouter, HTTPException, Path as PathParam
 from fastapi.responses import FileResponse
 
@@ -37,6 +37,19 @@ class AuthoredStyleSamples(BaseModel):
     slides: list[AuthoredStyleSampleSlide]
 
 
+class AuthoredStyleCanvas(BaseModel):
+    id: Literal["wide-16x9", "tall-9x16", "tall-9x13", "square-1x1", "ultrawide-21x9"]
+    enabled: bool
+    reason: Optional[Literal["canvas_stage_disabled", "style_not_supported"]]
+
+    # The route excludes None fields; the picker contract keeps `reason: null`.
+    @model_serializer(mode="wrap")
+    def serialize(self, handler):
+        data = handler(self)
+        data["reason"] = self.reason
+        return data
+
+
 class AuthoredStyleSummary(BaseModel):
     id: str
     name: str
@@ -49,8 +62,11 @@ class AuthoredStyleSummary(BaseModel):
     use_cases: list[str]
     preview: AuthoredStylePreview
     aliases: Optional[list[str]] = None
-    supported_aspect_ratios: list[Literal["16:9", "9:16", "9:13"]] = Field(
+    supported_aspect_ratios: list[Literal["16:9", "9:16", "9:13", "1:1", "21:9"]] = Field(
         alias="supportedAspectRatios"
+    )
+    supported_canvases: Optional[list[AuthoredStyleCanvas]] = Field(
+        default=None, alias="supportedCanvases"
     )
     samples: Optional[AuthoredStyleSamples] = None
 

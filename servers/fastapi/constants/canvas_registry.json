@@ -1,0 +1,217 @@
+{
+  "canvases": [
+    {
+      "aliases": {
+        "aspect_ratio": "16:9"
+      },
+      "badge": null,
+      "budget": {
+        "charsFactor": "1.00"
+      },
+      "canvas": {
+        "contractVersion": "document-canvas/v1",
+        "logicalSize": {
+          "height": 720,
+          "width": 1280
+        },
+        "physicalSize": {
+          "heightEmu": 6858000,
+          "widthEmu": 12192000
+        },
+        "safeArea": {
+          "height": 592.0,
+          "width": 1152.0,
+          "x": 64.0,
+          "y": 64.0
+        }
+      },
+      "hidden": false,
+      "id": "wide-16x9",
+      "shape": "baseline",
+      "sortOrder": 1
+    },
+    {
+      "aliases": {
+        "aspect_ratio": "9:16"
+      },
+      "badge": null,
+      "budget": {
+        "charsFactor": "1.00"
+      },
+      "canvas": {
+        "contractVersion": "document-canvas/v1",
+        "logicalSize": {
+          "height": 1280,
+          "width": 720
+        },
+        "physicalSize": {
+          "heightEmu": 12192000,
+          "widthEmu": 6858000
+        },
+        "safeArea": {
+          "height": 1152.0,
+          "width": 592.0,
+          "x": 64.0,
+          "y": 64.0
+        }
+      },
+      "hidden": false,
+      "id": "tall-9x16",
+      "shape": "portrait",
+      "sortOrder": 2
+    },
+    {
+      "aliases": {
+        "orientation": "landscape",
+        "page_size": "A4"
+      },
+      "badge": "A4",
+      "budget": {
+        "charsFactor": "1.00"
+      },
+      "canvas": {
+        "contractVersion": "document-canvas/v1",
+        "logicalSize": {
+          "height": 840,
+          "width": 1188
+        },
+        "physicalSize": {
+          "heightEmu": 7560000,
+          "widthEmu": 10692000
+        },
+        "safeArea": {
+          "height": 720.0,
+          "width": 1068.0,
+          "x": 60.0,
+          "y": 60.0
+        }
+      },
+      "hidden": false,
+      "id": "a4-landscape",
+      "shape": "wide-landscape",
+      "sortOrder": 3
+    },
+    {
+      "aliases": {
+        "orientation": "portrait",
+        "page_size": "A4"
+      },
+      "badge": "A4",
+      "budget": {
+        "charsFactor": "1.00"
+      },
+      "canvas": {
+        "contractVersion": "document-canvas/v1",
+        "logicalSize": {
+          "height": 1188,
+          "width": 840
+        },
+        "physicalSize": {
+          "heightEmu": 10692000,
+          "widthEmu": 7560000
+        },
+        "safeArea": {
+          "height": 1068.0,
+          "width": 720.0,
+          "x": 60.0,
+          "y": 60.0
+        }
+      },
+      "hidden": false,
+      "id": "a4-portrait",
+      "shape": "portrait",
+      "sortOrder": 4
+    },
+    {
+      "aliases": {
+        "aspect_ratio": "1:1"
+      },
+      "badge": null,
+      "budget": {
+        "charsFactor": "0.51"
+      },
+      "canvas": {
+        "contractVersion": "document-canvas/v1",
+        "logicalSize": {
+          "height": 720,
+          "width": 720
+        },
+        "physicalSize": {
+          "heightEmu": 6858000,
+          "widthEmu": 6858000
+        },
+        "safeArea": {
+          "height": 592.0,
+          "width": 592.0,
+          "x": 64.0,
+          "y": 64.0
+        }
+      },
+      "hidden": false,
+      "id": "square-1x1",
+      "shape": "square",
+      "sortOrder": 5
+    },
+    {
+      "aliases": {
+        "aspect_ratio": "21:9"
+      },
+      "badge": null,
+      "budget": {
+        "charsFactor": "1.00"
+      },
+      "canvas": {
+        "contractVersion": "document-canvas/v1",
+        "logicalSize": {
+          "height": 720,
+          "width": 1680
+        },
+        "physicalSize": {
+          "heightEmu": 6858000,
+          "widthEmu": 16002000
+        },
+        "safeArea": {
+          "height": 592.0,
+          "width": 1552.0,
+          "x": 64.0,
+          "y": 64.0
+        }
+      },
+      "hidden": false,
+      "id": "ultrawide-21x9",
+      "shape": "ultrawide",
+      "sortOrder": 6
+    },
+    {
+      "aliases": {
+        "aspect_ratio": "9:13"
+      },
+      "badge": null,
+      "budget": {
+        "charsFactor": "0.79"
+      },
+      "canvas": {
+        "contractVersion": "document-canvas/v1",
+        "logicalSize": {
+          "height": 1040,
+          "width": 720
+        },
+        "physicalSize": {
+          "heightEmu": 9906000,
+          "widthEmu": 6858000
+        },
+        "safeArea": {
+          "height": 912.0,
+          "width": 592.0,
+          "x": 64.0,
+          "y": 64.0
+        }
+      },
+      "hidden": true,
+      "id": "tall-9x13",
+      "shape": "portrait",
+      "sortOrder": 7
+    }
+  ],
+  "schemaVersion": "canvas-registry/v1"
+}

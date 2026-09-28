@@ -159,7 +159,7 @@ class GeneratePresentationRequest(BaseModel):
         description="Language for the presentation. If omitted, model auto-detects language.",
     )
     template: str = Field(default="authored", description="Presentation source to use for generation")
-    aspect_ratio: Literal["16:9", "9:16", "9:13"] = Field(
+    aspect_ratio: Literal["16:9", "9:16", "9:13", "1:1", "21:9"] = Field(
         default="16:9",
         description="Authored presentation canvas aspect ratio.",
     )

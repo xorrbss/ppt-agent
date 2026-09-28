@@ -65,6 +65,7 @@ EXACT_ENV_PREFIX = "AUTHORED_EXACT_"
 CANVASES: dict[str, dict[str, str]] = {
     "16:9": {"aspect_ratio": "16:9"}, "9:16": {"aspect_ratio": "9:16"}, "9:13": {"aspect_ratio": "9:13"},
     "A4-L": {"page_size": "A4", "orientation": "landscape"}, "A4-P": {"page_size": "A4", "orientation": "portrait"},
+    "1:1": {"aspect_ratio": "1:1"}, "21:9": {"aspect_ratio": "21:9"},
 }
 STYLES = ("default", "kbs-company-proposal", "osb-smart-banking", "hyundai-culture-center", "no-such-style")
 # raster_reconstruction is model-valid only for this style; without it every
@@ -189,39 +190,29 @@ def run_async(request: Any) -> None:
 
 
 async def run_v2(request: PresentationGenerationRequestV2) -> None:
-    """public_v2_orchestrator.py:724-728, :733-796 (verbatim), :804-811."""
-    reference_ids = [uuid.UUID(value) for value in request.reference_snapshot_ids]
+    """public_v2_orchestrator.py:~728-779, calling the orchestrator's own request bridge."""
+    from services.public_v2_request_bridge import resolve_canvas_style_id, resolve_internal_generation_request
+
     slide_count = request.slide_count
     receipt = await _resolve_generation_route_receipt(request, slide_count=slide_count, resolver=None)
     source_native_route = receipt.selected_route == "source-native"
-    effective_generation_engine = "authored" if source_native_route else _effective_generation_engine(request)
-    internal_generation_mode = (
-        "registered-template" if source_native_route
-        else "free-design" if request.source_mode in {"source_content_restyle", "raster_reconstruction"}
-        else request.generation_mode
-    )
-
-    def dumped(value: Any, **kwargs: Any) -> Any:
-        return value.model_dump(mode="json", **kwargs) if value is not None else None
-
-    internal_request = GeneratePresentationRequest(
-        content=request.content, slides_markdown=request.slides_markdown, instructions=request.instructions,
-        n_slides=slide_count, language=request.language, template="authored", strategy=request.strategy,
-        qualityProfile=("release" if request.quality_policy == "release-v1" else "development"),
-        visionQa=request.quality_policy == "release-v1",
-        reference_snapshot_ids=reference_ids, authored_style=request.authored_style,
-        **({"page_size": request.page_size, "orientation": request.orientation}
-           if request.page_size is not None else {"aspect_ratio": request.aspect_ratio}),
-        masterPin=dumped(request.master_pin, by_alias=True),
-        sourceMode=request.source_mode,
-        sourceContentManifestPin=dumped(request.source_content_manifest_pin, by_alias=True),
-        rasterApprovalPin=dumped(request.raster_approval_pin),
-        contentPolicy=dumped(request.content_policy, by_alias=True),
-        generationMode=internal_generation_mode, designPackPin=dumped(receipt.design_pack_pin, by_alias=True),
-        generationEngine=effective_generation_engine,
+    internal_request = resolve_internal_generation_request(
+        request,
+        slide_count=slide_count,
+        reference_ids=[uuid.UUID(value) for value in request.reference_snapshot_ids],
+        internal_generation_mode=(
+            "registered-template" if source_native_route
+            else "free-design" if request.source_mode in {"source_content_restyle", "raster_reconstruction"}
+            else request.generation_mode
+        ),
+        internal_design_pack_pin=(
+            receipt.design_pack_pin.model_dump(mode="json", by_alias=True)
+            if receipt.design_pack_pin is not None else None
+        ),
+        effective_generation_engine="authored" if source_native_route else _effective_generation_engine(request),
     )
     try:
-        validate_authored_canvas_admission(internal_request, style_id=request.authored_style or "default")
+        validate_authored_canvas_admission(internal_request, style_id=resolve_canvas_style_id(internal_request))
     except ValueError as error:
         if str(error).startswith(_MAPPED_PREFIXES):
             raise _public_error(422, str(error)) from error

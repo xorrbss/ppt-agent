@@ -632,6 +632,7 @@ def test_authored_styles_api_hides_briefs_and_returns_exact_catalogue():
             "use_cases",
             "preview",
             "supportedAspectRatios",
+            "supportedCanvases",
         } | ({"aliases"} if style["id"] in AUTHORED_STYLE_ALIASES.values() else set())
         for style in body
     )

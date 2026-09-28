@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
+from functools import lru_cache
+from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import Field, model_validator
@@ -15,7 +18,10 @@ AUTHORED_CANVAS_CONTRACT_VERSION = "authored-canvas/v1"
 LANDSCAPE_ASPECT_RATIO = "16:9"
 PORTRAIT_ASPECT_RATIO = "9:16"
 PROPOSAL_ASPECT_RATIO = "9:13"
-AuthoredAspectRatio = Literal["16:9", "9:16", "9:13"]
+SQUARE_ASPECT_RATIO = "1:1"
+ULTRAWIDE_ASPECT_RATIO = "21:9"
+AuthoredAspectRatio = Literal["16:9", "9:16", "9:13", "1:1", "21:9"]
+CanvasStage = Literal["disabled", "candidate", "verified"]
 
 # Product exposure is enabled only after the lead completes provider and file
 # readback acceptance. Backend admission remains available for that acceptance run.
@@ -24,8 +30,22 @@ _CANVAS_SIZE_BY_ASPECT_RATIO: dict[AuthoredAspectRatio, tuple[int, int]] = {
     LANDSCAPE_ASPECT_RATIO: (1280, 720),
     PORTRAIT_ASPECT_RATIO: (720, 1280),
     PROPOSAL_ASPECT_RATIO: (720, 1040),
+    SQUARE_ASPECT_RATIO: (720, 720),
+    ULTRAWIDE_ASPECT_RATIO: (1680, 720),
 }
 _SAFE_MARGIN_PX = 64.0
+PRESET_CANVAS_IDS: dict[AuthoredAspectRatio, str] = {
+    LANDSCAPE_ASPECT_RATIO: "wide-16x9",
+    PORTRAIT_ASPECT_RATIO: "tall-9x16",
+    PROPOSAL_ASPECT_RATIO: "tall-9x13",
+    SQUARE_ASPECT_RATIO: "square-1x1",
+    ULTRAWIDE_ASPECT_RATIO: "ultrawide-21x9",
+}
+# Exposure of these presets is per style and written by the bench promotion
+# (docs/canvas-expansion-admission-spec-20260929.md §5); a missing style is disabled.
+GATED_ASPECT_RATIOS: tuple[AuthoredAspectRatio, ...] = (SQUARE_ASPECT_RATIO, ULTRAWIDE_ASPECT_RATIO)
+CANVAS_STAGES_PATH = Path(__file__).resolve().parents[1] / "constants" / "canvas_stages.json"
+_CANVAS_STAGES: tuple[CanvasStage, ...] = ("disabled", "candidate", "verified")
 
 
 class AuthoredCanvasMetadata(StrictCamelModel):
@@ -266,12 +286,35 @@ def merge_authored_vnext_projection(theme: object, projection_updates: Mapping[s
     return merged_theme
 
 
-def supported_aspect_ratios_for_style(style_id: str) -> list[AuthoredAspectRatio]:
+@lru_cache(maxsize=1)
+def _canvas_stages() -> dict[str, dict[str, CanvasStage]]:
+    document = json.loads(CANVAS_STAGES_PATH.read_text(encoding="utf-8"))
+    if not isinstance(document, dict) or set(document) != set(GATED_ASPECT_RATIOS):
+        raise ValueError("canvas_stages_ratios_invalid")
+    for stages in document.values():
+        if not isinstance(stages, dict) or any(stage not in _CANVAS_STAGES for stage in stages.values()):
+            raise ValueError("canvas_stages_value_invalid")
+    return document
+
+
+def canvas_stage(aspect_ratio: str, style_id: str) -> CanvasStage:
+    if aspect_ratio not in GATED_ASPECT_RATIOS:
+        raise ValueError("canvas_stage_ratio_not_gated")
+    return _canvas_stages()[aspect_ratio].get(style_id, "disabled")
+
+
+def _base_aspect_ratios_for_style(style_id: str) -> list[AuthoredAspectRatio]:
     if style_id == "default" and PORTRAIT_RELEASE_VERIFIED:
         return [LANDSCAPE_ASPECT_RATIO, PORTRAIT_ASPECT_RATIO, PROPOSAL_ASPECT_RATIO]
     if style_id == "kbs-company-proposal":
         return [LANDSCAPE_ASPECT_RATIO, PROPOSAL_ASPECT_RATIO]
     return [LANDSCAPE_ASPECT_RATIO]
+
+
+def supported_aspect_ratios_for_style(style_id: str) -> list[AuthoredAspectRatio]:
+    return _base_aspect_ratios_for_style(style_id) + [
+        ratio for ratio in GATED_ASPECT_RATIOS if canvas_stage(ratio, style_id) != "disabled"
+    ]
 
 
 def validate_authored_canvas_admission(request: Any, *, style_id: str) -> None:
@@ -287,6 +330,8 @@ def validate_authored_canvas_admission(request: Any, *, style_id: str) -> None:
         return
     if request.aspect_ratio == LANDSCAPE_ASPECT_RATIO:
         return
+    if request.aspect_ratio in GATED_ASPECT_RATIOS and canvas_stage(request.aspect_ratio, style_id) == "disabled":
+        raise ValueError("authored_canvas_stage_disabled")
     # The authored source reflow restyles on the requested canvas. Retained
     # masters/design packs still have their own fixed geometry contracts.
     if (
@@ -318,11 +363,18 @@ __all__ = [
     "AUTHORED_CANVAS_CONTRACT_VERSION",
     "AuthoredAspectRatio",
     "AuthoredCanvasMetadata",
+    "CANVAS_STAGES_PATH",
+    "CanvasStage",
+    "GATED_ASPECT_RATIOS",
     "LANDSCAPE_ASPECT_RATIO",
     "PORTRAIT_ASPECT_RATIO",
     "PROPOSAL_ASPECT_RATIO",
     "PORTRAIT_RELEASE_VERIFIED",
+    "PRESET_CANVAS_IDS",
+    "SQUARE_ASPECT_RATIO",
+    "ULTRAWIDE_ASPECT_RATIO",
     "canvas_metadata_for_aspect_ratio",
+    "canvas_stage",
     "merge_authored_vnext_projection",
     "presentation_canvas_contract",
     "presentation_canvas_metadata",

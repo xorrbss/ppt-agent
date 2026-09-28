@@ -375,7 +375,7 @@ async def create_presentation(
     web_search: Annotated[bool, Body()] = False,
     strategy: Annotated[Literal["authored", "svg"], Body()] = "svg",
     theme: Annotated[Optional[dict], Body()] = None,
-    aspect_ratio: Annotated[Literal["16:9", "9:16", "9:13"], Body()] = "16:9",
+    aspect_ratio: Annotated[Literal["16:9", "9:16", "9:13", "1:1", "21:9"], Body()] = "16:9",
     page_size: Annotated[Optional[Literal["A4"]], Body()] = None,
     orientation: Annotated[Optional[Literal["landscape", "portrait"]], Body()] = None,
     http_request: Request = None,

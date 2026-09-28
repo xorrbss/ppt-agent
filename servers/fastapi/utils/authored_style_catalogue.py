@@ -3,7 +3,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Collection, Iterable
 
-from services.authored_canvas import supported_aspect_ratios_for_style
+from services.authored_canvas import (
+    GATED_ASPECT_RATIOS,
+    PRESET_CANVAS_IDS,
+    canvas_stage,
+    supported_aspect_ratios_for_style,
+)
 from utils.authored_style_samples import load_style_samples
 
 if TYPE_CHECKING:
@@ -25,6 +30,20 @@ def canonical_authored_style_id(style_id: str, available_ids: Collection[str]) -
     return canonical if canonical in available_ids else style_id
 
 
+def supported_canvases_for_style(style_id: str) -> list[dict]:
+    """Preset canvases only; A4 availability comes from /authored/canvas-capabilities."""
+    supported = supported_aspect_ratios_for_style(style_id)
+    canvases = []
+    for ratio, canvas_id in PRESET_CANVAS_IDS.items():
+        enabled = ratio in supported
+        reason = None
+        if not enabled:
+            stage_disabled = ratio in GATED_ASPECT_RATIOS and canvas_stage(ratio, style_id) == "disabled"
+            reason = "canvas_stage_disabled" if stage_disabled else "style_not_supported"
+        canvases.append({"id": canvas_id, "enabled": enabled, "reason": reason})
+    return canvases
+
+
 def authored_style_catalogue(styles: Iterable[AuthoredStyle]) -> list[dict]:
     by_id = {style.id: style for style in styles}
     result = []
@@ -33,6 +52,7 @@ def authored_style_catalogue(styles: Iterable[AuthoredStyle]) -> list[dict]:
             continue
         public = style.public_dict()
         public["supportedAspectRatios"] = supported_aspect_ratios_for_style(style_id)
+        public["supportedCanvases"] = supported_canvases_for_style(style_id)
         aliases = sorted(
             old_id for old_id, target in AUTHORED_STYLE_ALIASES.items()
             if target == style_id

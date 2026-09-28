@@ -129,7 +129,7 @@ class PresentationGenerationRequestV2(PublicWireModel):
     slide_count: int | None = Field(default=None, ge=1, le=100)
     language: str | None = Field(default=None, min_length=1, max_length=64)
     authored_style: str | None = Field(default=None, min_length=1, max_length=160)
-    aspect_ratio: Literal["16:9", "9:16"] = "16:9"
+    aspect_ratio: Literal["16:9", "9:16", "1:1", "21:9"] = "16:9"
     page_size: Literal["A4"] | None = None
     orientation: Literal["landscape", "portrait"] | None = None
 

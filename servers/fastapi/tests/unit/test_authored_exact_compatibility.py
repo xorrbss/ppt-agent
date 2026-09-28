@@ -67,7 +67,17 @@ def test_public_style_listing_keeps_exact_mapping_and_mode_private(
 
     response = authored_endpoint.get_authored_styles()
 
-    assert response == [{**exact.public_dict(), "supportedAspectRatios": ["16:9"]}]
+    assert response == [{
+        **exact.public_dict(),
+        "supportedAspectRatios": ["16:9"],
+        "supportedCanvases": [
+            {"id": "wide-16x9", "enabled": True, "reason": None},
+            {"id": "tall-9x16", "enabled": False, "reason": "style_not_supported"},
+            {"id": "tall-9x13", "enabled": False, "reason": "style_not_supported"},
+            {"id": "square-1x1", "enabled": False, "reason": "canvas_stage_disabled"},
+            {"id": "ultrawide-21x9", "enabled": False, "reason": "canvas_stage_disabled"},
+        ],
+    }]
     assert "reference_mode" not in response[0]
     assert "slide_reference_images" not in response[0]
     assert "reference_images" not in response[0]
