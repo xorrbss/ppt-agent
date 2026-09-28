@@ -156,25 +156,16 @@ def test_converter_patch_rebuild_matches_shipped_bytes(tmp_path):
     patch_root = root / "compatibility/slide-master"
     baseline = tmp_path / "baseline"
     shutil.copytree(VENDOR_ROOT, baseline, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-    subprocess.run(
-        [
-            "git",
-            "-c",
-            "core.autocrlf=false",
-            "-c",
-            "core.eol=lf",
-            "apply",
-            "--no-index",
-            "--reverse",
-            "-p5",
-            str(patch_root / "patches/document-canvas-1.patch"),
-        ],
-        cwd=baseline,
-        check=True,
-    )
     spec = importlib.util.spec_from_file_location("rebuild_slide_master", patch_root / "rebuild.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    for patch, _suffix, _note in reversed(module.PATCHES):
+        subprocess.run(
+            ["git", "-c", "core.autocrlf=false", "-c", "core.eol=lf",
+             "apply", "--no-index", "--reverse", "-p5", str(patch)],
+            cwd=baseline,
+            check=True,
+        )
     output = tmp_path / "rebuilt"
     module.rebuild(output, source=baseline)
     assert (output / "MANIFEST.json").read_bytes() == (VENDOR_ROOT / "MANIFEST.json").read_bytes()
