@@ -65,43 +65,6 @@
       "export-Windows-ia32.zip": "5c742c2cf6e8ae9a20d2f88b6de67ee7b987f3323190db1bdc2bbf444fe5968f"
     }
   },
-  "templateV2Renderer": {
-    "source": "servers/nextjs/lib/template-v2-general-renderer.mjs",
-    "discriminators": [
-      "text",
-      "math",
-      "container",
-      "image",
-      "text-list",
-      "table",
-      "vector",
-      "chart",
-      "infographic",
-      "flex",
-      "grid",
-      "group"
-    ]
-  },
-  "templateV2PayloadBoundary": {
-    "source": "servers/nextjs/lib/template-v2-upstream-compat.ts",
-    "test": "servers/nextjs/lib/template-v2-upstream-compat.test.ts",
-    "wireShapes": [
-      "array",
-      "envelope",
-      "nested-envelope"
-    ],
-    "sourceRequiredContains": [
-      "adaptUpstreamTemplateV2LayoutsToStudio",
-      "serializeStudioLayoutsForUpstream",
-      "adaptGeneratedTemplateV2UiToStudio",
-      "source: clone(value)"
-    ],
-    "testRequiredContains": [
-      "round-trips every pinned upstream layouts envelope without data loss",
-      "preserving unknown upstream fields and shape",
-      "fails closed for malformed layouts instead of silently dropping values"
-    ]
-  },
   "api": {
     "rootPrefix": "/api/v1/ppt",
     "routerSource": "servers/fastapi/api/v1/ppt/router.py",

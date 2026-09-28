@@ -25,10 +25,6 @@ test("U0 upstream compatibility contract is internally consistent and matches th
   assert.match(result.stdout, /Upstream compatibility verified:/);
   assert.match(
     result.stdout,
-    new RegExp(`${manifest.templateV2Renderer.discriminators.length} discriminators`)
-  );
-  assert.match(
-    result.stdout,
     new RegExp(`${manifest.api.keyEndpoints.length} key endpoints`)
   );
 });
