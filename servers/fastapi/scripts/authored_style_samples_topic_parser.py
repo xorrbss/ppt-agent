@@ -48,11 +48,25 @@ def extract_prompt(topic_text: str) -> str:
 
 
 def _bullet_value(section_text: str, label: str) -> str:
-    pattern = re.compile(rf"^- {re.escape(label)}:\s*(.+)$", re.MULTILINE)
-    match = pattern.search(section_text)
-    if not match:
-        raise ValueError(f"topic file: missing '- {label}:' bullet in the Fixed section")
-    return match.group(1).strip()
+    """Return a bullet's value, joining its indented continuation lines.
+
+    Markdown bullets wrap onto lines indented under the ``- `` marker; the
+    value runs until the next bullet, heading, or blank line.
+    """
+    lines = section_text.split("\n")
+    prefix = f"- {label}:"
+    for index, line in enumerate(lines):
+        if not line.startswith(prefix):
+            continue
+        parts = [line[len(prefix):].strip()]
+        for continuation in lines[index + 1:]:
+            if not continuation.strip() or not continuation.startswith((" ", "\t")):
+                break
+            parts.append(continuation.strip())
+        value = " ".join(part for part in parts if part)
+        if value:
+            return value
+    raise ValueError(f"topic file: missing '- {label}:' bullet in the Fixed section")
 
 
 def parse_fixed_params(topic_text: str) -> FixedParams:

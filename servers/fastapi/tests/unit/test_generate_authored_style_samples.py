@@ -371,3 +371,15 @@ def test_dry_run_rejects_empty_style_list(tmp_path: Path, capsys):
         ]
     )
     assert exit_code == 1
+
+
+def test_parse_fixed_params_joins_wrapped_bullets_in_the_real_topic_file():
+    """Regression: the real topic wraps both bullets; only the first line used to parse."""
+    topic = Path(__file__).resolve().parents[2] / "scripts" / "authored_style_samples_topic.md"
+    fixed = parse_fixed_params(topic.read_text(encoding="utf-8"))
+
+    assert len(fixed.titles) == 12
+    assert fixed.titles[0] == "표지"
+    assert fixed.titles[-1] == "마무리"
+    assert sorted(fixed.guard_keywords) == [1, 2, 8, 9, 11, 12]
+    assert fixed.guard_keywords[9] == ("한결상회",)
