@@ -38,7 +38,7 @@ _HTML_ONLY = frozenset({"html"})
 def _is_korean(*candidates: Optional[str]) -> bool:
     for c in candidates:
         s = (c or "").lower()
-        if "korea" in s or "?쒓뎅" in s or s.startswith("ko"):
+        if "korea" in s or "한국" in s or s.startswith("ko"):
             return True
     return False
 
