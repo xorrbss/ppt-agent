@@ -11,6 +11,11 @@ function buildBody(content, opts) {
   // svg, and sending an explicit value here would only matter if it differs
   // from that default.
   if (opts.strategy) body.strategy = opts.strategy;
+  if (opts.aspectRatio) body.aspect_ratio = opts.aspectRatio;
+  if (opts.pageSize) {
+    body.page_size = opts.pageSize;
+    body.orientation = opts.orientation;
+  }
   body.export_as = opts.exportAs;
   if (opts.instructions) body.instructions = opts.instructions;
   if (opts.tone) body.tone = opts.tone;

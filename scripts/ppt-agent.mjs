@@ -26,6 +26,9 @@
 //   --strategy <svg|authored> generation strategy (default svg, matches the server default)
 //   --style <id>             authored-mode style preset id (sent as authored_style)
 //   --export <pptx|pdf>      export_as (default pptx)
+//   --aspect-ratio <r>       deck canvas aspect_ratio: 16:9|9:16|9:13|1:1|21:9 (server default 16:9)
+//   --page-size A4 --orientation <landscape|portrait>
+//                            document canvas instead of --aspect-ratio (both flags required together)
 //   --instructions <str>     extra generation instructions
 //   --tone <str>             default|casual|professional|funny|educational|sales_pitch
 //   --verbosity <str>        concise|standard|text-heavy
@@ -62,6 +65,10 @@ const TONES = ["default", "casual", "professional", "funny", "educational", "sal
 const VERBOSITIES = ["concise", "standard", "text-heavy"];
 const EXPORTS = ["pptx", "pdf"];
 const STRATEGIES = ["svg", "authored"];
+// Mirror of GeneratePresentationRequest.aspect_ratio / page_size / orientation.
+const ASPECT_RATIOS = ["16:9", "9:16", "9:13", "1:1", "21:9"];
+const PAGE_SIZES = ["A4"];
+const ORIENTATIONS = ["landscape", "portrait"];
 // Mirror of the server constant MAX_NUMBER_OF_SLIDES (constants/presentation.py).
 const MAX_SLIDES = 50;
 
@@ -140,6 +147,8 @@ function printHelpAndExit() {
       "  --fonts <family>        authored mode: brand font family (e.g. 'Noto Sans KR')",
       "  --wordmark <text>       authored mode: footer wordmark",
       "  --export <pptx|pdf>     default pptx",
+      "  --aspect-ratio <r>      canvas " + ASPECT_RATIOS.join("|") + " (server default 16:9)",
+      "  --page-size A4 --orientation <landscape|portrait>  A4 document canvas (not with --aspect-ratio)",
       "  --instructions <str>    extra instructions",
       "  --tone <str>            " + TONES.join("|"),
       "  --verbosity <str>       " + VERBOSITIES.join("|"),
@@ -159,6 +168,33 @@ function printHelpAndExit() {
 }
 
 // ---------- request building ----------
+
+// The server rejects aspect_ratio together with page_size/orientation, and a
+// page_size without its orientation; fail the same way before any request.
+function resolveCanvas(args) {
+  const aspect = args["aspect-ratio"];
+  const pageSize = args["page-size"];
+  const orientation = args.orientation;
+  if (aspect !== undefined && !ASPECT_RATIOS.includes(aspect)) {
+    die(`--aspect-ratio must be one of ${ASPECT_RATIOS.join(", ")} (got "${aspect}")`);
+  }
+  if (pageSize === undefined && orientation === undefined) {
+    return { aspectRatio: aspect || null, pageSize: null, orientation: null };
+  }
+  if (aspect !== undefined) {
+    die(`use either --aspect-ratio or --page-size/--orientation, not both`);
+  }
+  if (pageSize === undefined || orientation === undefined) {
+    die(`--page-size and --orientation must be provided together`);
+  }
+  if (!PAGE_SIZES.includes(pageSize)) {
+    die(`--page-size must be one of ${PAGE_SIZES.join(", ")} (got "${pageSize}")`);
+  }
+  if (!ORIENTATIONS.includes(orientation)) {
+    die(`--orientation must be one of ${ORIENTATIONS.join(", ")} (got "${orientation}")`);
+  }
+  return { aspectRatio: null, pageSize, orientation };
+}
 
 async function processTopic(content, opts) {
   opts.deadline = Date.now() + opts.timeoutMs;
@@ -202,6 +238,8 @@ async function main() {
   if (args.strategy !== undefined && !STRATEGIES.includes(args.strategy)) {
     die(`--strategy must be one of ${STRATEGIES.join(", ")} (got "${args.strategy}")`);
   }
+
+  const canvas = resolveCanvas(args);
 
   // slides: default 8; "auto" (or empty) => omit n_slides so the model decides.
   let nSlides = 8;
@@ -248,6 +286,9 @@ async function main() {
     // pipeline. A supplied template is retained for explicit supported templates.
     template: args.mode === "authored" ? "authored" : args.template || "authored",
     strategy: args.strategy || null,
+    aspectRatio: canvas.aspectRatio,
+    pageSize: canvas.pageSize,
+    orientation: canvas.orientation,
     instructions: args.instructions || null,
     tone: args.tone || null,
     verbosity: args.verbosity || null,
