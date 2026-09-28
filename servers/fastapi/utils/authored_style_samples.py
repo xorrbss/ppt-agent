@@ -21,10 +21,19 @@ import yaml
 LOGGER = logging.getLogger(__name__)
 
 AUTHORED_STYLE_SAMPLES_DIRECTORY = Path(__file__).resolve().parent.parent / "authored_style_samples"
+#: The frozen demo prompt every sample deck is generated from (design §8.1).
+AUTHORED_STYLE_SAMPLES_TOPIC_FILE = (
+    Path(__file__).resolve().parent.parent / "scripts" / "authored_style_samples_topic.md"
+)
+#: Styles allowed to have no sample directory yet (design D2); one id per line.
+AUTHORED_STYLE_SAMPLES_PENDING_FILE_NAME = "pending.txt"
+_TOPIC_PROMPT_START = "## Prompt"
+_TOPIC_PROMPT_END = "## Fixed"
 
 _STYLE_ID_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 _SCHEMA = "authored-style-samples/v1"
 _GENERATOR_COMMIT_PATTERN = re.compile(r"^[0-9a-f]{40}$")
+_DIGEST_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
 _MAX_SLIDES = 24
 _MAX_TITLE_LENGTH = 80
 _MIN_CANVAS = 320
@@ -52,9 +61,19 @@ class StyleSamples:
     canvas: StyleSampleCanvas
     slides: tuple[StyleSampleSlide, ...]
     style_digest: str
+    topic_digest: str
     demo_topic_id: str
     generated_at: str
     generator_commit: str
+
+    @property
+    def cache_version(self) -> str:
+        """Short token that changes whenever the style or the topic did.
+
+        Appended to sample image URLs so a regenerated deck is fetched again
+        despite the route's day-long ``Cache-Control``.
+        """
+        return sha256(f"{self.style_digest}|{self.topic_digest}".encode("utf-8")).hexdigest()[:12]
 
 
 def _warn(style_id: str, rule: str) -> None:
@@ -139,17 +158,21 @@ def load_style_samples(style_id: str, samples_root: Optional[Path] = None) -> Op
     if not isinstance(generator_commit, str) or not _GENERATOR_COMMIT_PATTERN.fullmatch(generator_commit):
         _warn(style_id, "generatorCommit must be 40 lowercase hex characters")
         return None
-    style_digest, demo_topic_id, generated_at = (
-        data.get("styleDigest"), data.get("demoTopicId"), data.get("generatedAt"),
-    )
-    if not all(isinstance(v, str) and v for v in (style_digest, demo_topic_id, generated_at)):
-        _warn(style_id, "styleDigest/demoTopicId/generatedAt must be non-empty strings")
+    style_digest, topic_digest = data.get("styleDigest"), data.get("topicDigest")
+    for label, value in (("styleDigest", style_digest), ("topicDigest", topic_digest)):
+        if not isinstance(value, str) or not _DIGEST_PATTERN.fullmatch(value):
+            _warn(style_id, f"{label} must be 'sha256:' followed by 64 lowercase hex characters")
+            return None
+    demo_topic_id, generated_at = data.get("demoTopicId"), data.get("generatedAt")
+    if not all(isinstance(v, str) and v for v in (demo_topic_id, generated_at)):
+        _warn(style_id, "demoTopicId/generatedAt must be non-empty strings")
         return None
     return StyleSamples(
         style_id=style_id,
         canvas=canvas,
         slides=slides,
         style_digest=style_digest,
+        topic_digest=topic_digest,
         demo_topic_id=demo_topic_id,
         generated_at=generated_at,
         generator_commit=generator_commit,
@@ -217,3 +240,35 @@ def style_render_digest(style_yaml: Path, assets_root: Path) -> str:
         resolved = _resolve_reference_asset(raw_path, style_yaml, assets_root)
         tail += f"\n{raw_path}\n{sha256(resolved.read_bytes()).hexdigest()}"
     return f"sha256:{sha256((canonical + tail).encode('utf-8')).hexdigest()}"
+
+
+def topic_prompt_digest(topic_file: Optional[Path] = None) -> str:
+    """Digest of the demo prompt section of the topic file (design §5).
+
+    Only the text between the ``## Prompt`` and ``## Fixed`` headings counts,
+    with line endings normalised, so editing the surrounding notes or checking
+    out with CRLF does not stale every deck while editing the prompt does.
+    """
+    path = topic_file if topic_file is not None else AUTHORED_STYLE_SAMPLES_TOPIC_FILE
+    text = path.read_text(encoding="utf-8").replace("\r\n", "\n")
+    start = text.find(_TOPIC_PROMPT_START)
+    end = text.find(_TOPIC_PROMPT_END, start + 1 if start >= 0 else 0)
+    if start < 0 or end < 0:
+        raise ValueError(f"{path.name}: prompt section markers not found")
+    prompt = text[text.index("\n", start) + 1:end].strip()
+    if not prompt:
+        raise ValueError(f"{path.name}: prompt section is empty")
+    return f"sha256:{sha256(prompt.encode('utf-8')).hexdigest()}"
+
+
+def read_pending_style_ids(samples_root: Optional[Path] = None) -> frozenset[str]:
+    """Style ids listed in ``pending.txt``; blank lines and ``#`` comments ignored."""
+    path = _samples_directory(samples_root) / AUTHORED_STYLE_SAMPLES_PENDING_FILE_NAME
+    if not path.is_file():
+        return frozenset()
+    ids = set()
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if line:
+            ids.add(line)
+    return frozenset(ids)

@@ -5,7 +5,7 @@ import { normalizeAuthoredStyleSamples } from "./authored-style-samples.ts";
 import { normalizeAuthoredStyles } from "./authored.ts";
 
 const samplePath = (index: number, size: "thumb" | "full") =>
-  `/api/v1/ppt/authored/styles/neon-venture/samples/${index}?size=${size}`;
+  `/api/v1/ppt/authored/styles/neon-venture/samples/${index}?size=${size}&v=0123456789ab`;
 
 const validSamples = {
   canvas: { width: 1280, height: 720 },

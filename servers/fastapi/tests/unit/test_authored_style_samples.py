@@ -14,8 +14,10 @@ from api.v1.ppt.endpoints.authored import AUTHORED_ROUTER
 from utils.authored_style_catalogue import authored_style_catalogue
 from utils.authored_style_samples import (
     load_style_samples,
+    read_pending_style_ids,
     sample_file_path,
     style_render_digest,
+    topic_prompt_digest,
 )
 from scripts.check_authored_style_samples import main as check_main
 from scripts.check_authored_style_samples import run_check
@@ -43,11 +45,33 @@ def _write_noise_webp(path: Path, size: tuple[int, int]) -> None:
     Image.frombytes("RGB", size, pixels).save(path, format="WEBP", lossless=True)
 
 
+TOPIC_TEXT = """# Demo topic
+
+## Prompt (Korean, 10 slides)
+
+Fictitious company business plan, ten slides.
+
+## Fixed request parameters
+
+- strategy: svg
+"""
+# Placeholder for manifest-shape tests; check-script tests use a real topic file.
+TOPIC_DIGEST = "sha256:" + "d" * 64
+
+
+def _write_topic(directory: Path, text: str = TOPIC_TEXT, newline: str = "\n") -> Path:
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / "topic.md"
+    path.write_bytes(text.replace("\n", newline).encode("utf-8"))
+    return path
+
+
 def _base_manifest(style_id: str = "pilot", **overrides) -> dict:
     manifest = {
         "schema": "authored-style-samples/v1",
         "styleId": style_id,
         "styleDigest": "sha256:" + "a" * 64,
+        "topicDigest": TOPIC_DIGEST,
         "demoTopicId": "business-plan-v1",
         "canvas": {"width": 1280, "height": 720},
         "generatedAt": "2026-10-01T09:00:00Z",
@@ -68,6 +92,7 @@ def _build_valid_deck(
     style_id: str = "pilot",
     *,
     digest: str = "sha256:" + "b" * 64,
+    topic_digest: str = TOPIC_DIGEST,
     generator_commit: str = "c" * 40,
     slide_titles=("Cover", "Market"),
 ) -> dict:
@@ -75,6 +100,7 @@ def _build_valid_deck(
     manifest = _base_manifest(
         style_id,
         styleDigest=digest,
+        topicDigest=topic_digest,
         generatorCommit=generator_commit,
         slides=[{"title": title} for title in slide_titles],
     )
@@ -161,6 +187,9 @@ def test_load_style_samples_rejects_bad_id_shape(tmp_path):
         {"slides": [{"title": "x" * 81}]},
         {"generatorCommit": "not-hex"},
         {"generatorCommit": "a" * 39},
+        {"topicDigest": "not-a-digest"},
+        {"topicDigest": ""},
+        {"styleDigest": "sha256:" + "A" * 64},
         {"styleDigest": ""},
         {"demoTopicId": ""},
         {"generatedAt": ""},
@@ -354,14 +383,15 @@ def test_authored_style_catalogue_attaches_samples_when_present(tmp_path, monkey
     catalogue = authored_style_catalogue([_FakeStyle("alpha"), _FakeStyle("beta")])
     by_id = {style["id"]: style for style in catalogue}
 
+    version = load_style_samples("alpha", tmp_path / "samples").cache_version
     assert "samples" in by_id["alpha"]
     samples = by_id["alpha"]["samples"]
     assert samples["canvas"] == {"width": 1280, "height": 720}
     assert samples["slides"][0] == {
         "index": 1,
         "title": "Cover",
-        "thumb": "/api/v1/ppt/authored/styles/alpha/samples/1?size=thumb",
-        "full": "/api/v1/ppt/authored/styles/alpha/samples/1?size=full",
+        "thumb": f"/api/v1/ppt/authored/styles/alpha/samples/1?size=thumb&v={version}",
+        "full": f"/api/v1/ppt/authored/styles/alpha/samples/1?size=full&v={version}",
     }
 
 
@@ -464,13 +494,18 @@ def test_get_authored_style_sample_404_missing_file(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def _run(tmp_path, samples_root, styles_dir, assets_dir=None):
+def _run(tmp_path, samples_root, styles_dir, assets_dir=None, topic_file=None):
     return run_check(
         samples_root=samples_root,
         styles_directory=styles_dir,
         assets_directory=assets_dir or (tmp_path / "authored_style_assets"),
         repo_root=tmp_path,
+        topic_file=topic_file or _write_topic(tmp_path),
     )
+
+
+def _real_topic_digest(tmp_path) -> str:
+    return topic_prompt_digest(_write_topic(tmp_path))
 
 
 def _canonical_style(styles_dir, style_id, brief="Brief content"):
@@ -521,7 +556,7 @@ def test_check_script_ignores_os_metadata_files(tmp_path):
     samples_root = tmp_path / "samples"
     style_path = _write_style_yaml(styles_dir, "pilot")
     digest = style_render_digest(style_path, tmp_path / "authored_style_assets")
-    _build_valid_deck(samples_root, "pilot", digest=digest)
+    _build_valid_deck(samples_root, "pilot", digest=digest, topic_digest=_real_topic_digest(tmp_path))
     (samples_root / "pilot" / "Thumbs.db").write_bytes(b"\x00")
     (samples_root / "pilot" / ".DS_Store").write_bytes(b"\x00")
 
@@ -594,7 +629,7 @@ def test_check_script_passes_for_a_complete_valid_set(tmp_path):
     _canonical_style(styles_dir, "alpha")
     style_path = styles_dir / "alpha.yaml"
     digest = style_render_digest(style_path, tmp_path / "authored_style_assets")
-    _build_valid_deck(samples_root, "alpha", digest=digest)
+    _build_valid_deck(samples_root, "alpha", digest=digest, topic_digest=_real_topic_digest(tmp_path))
 
     problems, report = _run(tmp_path, samples_root, styles_dir)
 
@@ -643,3 +678,119 @@ def test_check_script_against_real_repo_samples_root_is_clean_or_absent():
     """Guards against a partial/broken real samples root ever landing on this branch."""
     problems, _report = run_check()
     assert problems == []
+
+
+# ---------------------------------------------------------------------------
+# Topic digest, cache version, pending list
+# ---------------------------------------------------------------------------
+
+
+def test_topic_digest_ignores_line_endings_and_surrounding_notes(tmp_path):
+    lf = _write_topic(tmp_path / "lf")
+    crlf = _write_topic(tmp_path / "crlf", newline="\r\n")
+    notes = _write_topic(tmp_path / "notes", TOPIC_TEXT.replace("# Demo topic", "# Demo topic (edited heading)"))
+
+    assert topic_prompt_digest(lf) == topic_prompt_digest(crlf) == topic_prompt_digest(notes)
+
+
+def test_topic_digest_changes_when_the_prompt_changes(tmp_path):
+    before = topic_prompt_digest(_write_topic(tmp_path / "a"))
+    after = topic_prompt_digest(_write_topic(tmp_path / "b", TOPIC_TEXT.replace("ten slides", "twelve slides")))
+    assert before != after
+
+
+def test_topic_digest_rejects_a_file_without_prompt_markers(tmp_path):
+    path = tmp_path / "topic.md"
+    path.write_text("# nothing here\n", encoding="utf-8")
+    with pytest.raises(ValueError):
+        topic_prompt_digest(path)
+
+
+def test_cache_version_follows_style_and_topic_digests(tmp_path):
+    _build_valid_deck(tmp_path, "pilot")
+    base = load_style_samples("pilot", tmp_path)
+    _build_valid_deck(tmp_path, "pilot", digest="sha256:" + "e" * 64)
+    style_changed = load_style_samples("pilot", tmp_path)
+    _build_valid_deck(tmp_path, "pilot", topic_digest="sha256:" + "f" * 64)
+    topic_changed = load_style_samples("pilot", tmp_path)
+
+    assert len(base.cache_version) == 12
+    assert len({base.cache_version, style_changed.cache_version, topic_changed.cache_version}) == 3
+
+
+def test_catalogue_sample_urls_carry_the_cache_version(tmp_path, monkeypatch):
+    styles_dir = tmp_path / "styles"
+    _canonical_style(styles_dir, "alpha")
+    _build_valid_deck(tmp_path / "samples", "alpha")
+    monkeypatch.setattr(authored_style_samples_module, "AUTHORED_STYLE_SAMPLES_DIRECTORY", tmp_path / "samples")
+    from utils.authored_styles import load_authored_styles
+
+    entry = next(s for s in authored_style_catalogue(load_authored_styles(styles_dir)) if s["id"] == "alpha")
+    version = load_style_samples("alpha", tmp_path / "samples").cache_version
+
+    assert entry["samples"]["slides"][0]["thumb"].endswith(f"?size=thumb&v={version}")
+    assert entry["samples"]["slides"][0]["full"].endswith(f"?size=full&v={version}")
+
+
+def test_route_ignores_the_cache_version_parameter(tmp_path, monkeypatch):
+    _build_valid_deck(tmp_path, "pilot")
+    monkeypatch.setattr(authored_style_samples_module, "AUTHORED_STYLE_SAMPLES_DIRECTORY", tmp_path)
+    app = FastAPI()
+    app.include_router(AUTHORED_ROUTER, prefix="/api/v1/ppt")
+
+    async def fetch():
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            return await client.get("/api/v1/ppt/authored/styles/pilot/samples/1?size=thumb&v=0123456789ab")
+
+    response = asyncio.run(fetch())
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/webp"
+
+
+def test_check_script_reports_stale_topic(tmp_path):
+    styles_dir = tmp_path / "styles"
+    samples_root = tmp_path / "samples"
+    _canonical_style(styles_dir, "alpha")
+    digest = style_render_digest(styles_dir / "alpha.yaml", tmp_path / "authored_style_assets")
+    _build_valid_deck(samples_root, "alpha", digest=digest, topic_digest=_real_topic_digest(tmp_path))
+    edited = _write_topic(tmp_path / "edited", TOPIC_TEXT.replace("ten slides", "twelve slides"))
+
+    problems, _ = _run(tmp_path, samples_root, styles_dir, topic_file=edited)
+
+    assert any("topicDigest is stale" in p for p in problems)
+
+
+def test_pending_list_parsing(tmp_path):
+    (tmp_path / "pending.txt").write_text("alpha\n# comment\n\n beta # trailing\n", encoding="utf-8")
+    assert read_pending_style_ids(tmp_path) == frozenset({"alpha", "beta"})
+    assert read_pending_style_ids(tmp_path / "missing") == frozenset()
+
+
+def test_check_script_allows_a_pending_style_to_have_no_samples(tmp_path):
+    styles_dir = tmp_path / "styles"
+    samples_root = tmp_path / "samples"
+    _canonical_style(styles_dir, "alpha")
+    _canonical_style(styles_dir, "beta")
+    digest = style_render_digest(styles_dir / "alpha.yaml", tmp_path / "authored_style_assets")
+    _build_valid_deck(samples_root, "alpha", digest=digest, topic_digest=_real_topic_digest(tmp_path))
+    (samples_root / "pending.txt").write_text("beta\n", encoding="utf-8")
+
+    problems, report = _run(tmp_path, samples_root, styles_dir)
+
+    assert problems == []
+    assert any("beta" in line and "pending" in line for line in report)
+
+
+def test_check_script_rejects_pending_entries_that_are_stale_or_unknown(tmp_path):
+    styles_dir = tmp_path / "styles"
+    samples_root = tmp_path / "samples"
+    _canonical_style(styles_dir, "alpha")
+    digest = style_render_digest(styles_dir / "alpha.yaml", tmp_path / "authored_style_assets")
+    _build_valid_deck(samples_root, "alpha", digest=digest, topic_digest=_real_topic_digest(tmp_path))
+    (samples_root / "pending.txt").write_text("alpha\nghost\n", encoding="utf-8")
+
+    problems, _ = _run(tmp_path, samples_root, styles_dir)
+
+    assert any("alpha" in p and "remove it from pending.txt" in p for p in problems)
+    assert any("ghost" in p and "not a public canonical style" in p for p in problems)

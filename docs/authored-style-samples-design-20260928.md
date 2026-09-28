@@ -1,9 +1,11 @@
-# Authored style sample preview — design (2026-09-28, revision 2)
+# Authored style sample preview — design (2026-09-28, revision 3)
 
-Status: design, not yet implemented. Revision 2 folds in the review of
-revision 1 (repository size, per-image catalogue loads, partial rollout,
-pipeline drift, private-function coupling, image element, cache headers) and
-brings sample generation into scope.
+Status: implemented on `main` (feature `5f045dc88`; revision 3 changes in
+`feat/style-samples-freshness`). Revision 2 folded in the review of revision 1
+(repository size, per-image catalogue loads, partial rollout, pipeline drift,
+private-function coupling, image element, cache headers) and brought sample
+generation into scope. Revision 3 adds the demo-topic digest, a cache version
+on image URLs, and the `pending.txt` exception to D2.
 
 ## 1. Goal
 
@@ -20,10 +22,10 @@ current slide number, so styles can be compared page for page.
 | # | Decision | Reason |
 |---|---|---|
 | D1 | Samples live in a new root, `servers/fastapi/authored_style_samples/<style-id>/`, never in `authored_style_assets/`. | `authored_style_assets/` holds reference images taken from real source documents (third-party content; several YAML briefs forbid reusing their claims). Serving only from the samples root makes "reference images are never shown to users" a structural property of one endpoint. |
-| D2 | Samples are **all or nothing**: the check script (§6.3) passes only when the samples root is empty or holds a valid deck for every public canonical style. The dialog is enabled when the loaded catalogue has samples. | Page-for-page comparison needs every style. A partial state would add a click to every card and show an empty dialog for most of them. Because the check script forbids partial states, the runtime switch is simply `styles.some((s) => s.samples)` and the dialog's empty state is defensive code. |
+| D2 | Samples are **all or nothing**: the check script (§6.3) passes only when the samples root is empty or holds a valid deck for every public canonical style not listed in `authored_style_samples/pending.txt`. The dialog is enabled when the loaded catalogue has samples. | Page-for-page comparison needs every style. A partial state would add a click to every card and show an empty dialog for most of them. Because the check script forbids partial states, the runtime switch is simply `styles.some((s) => s.samples)` and the dialog's empty state is defensive code. `pending.txt` exists so that adding a style YAML does not require generating its sample in the same change; the check prints every pending style so the list cannot grow unnoticed, and it rejects an entry whose sample directory already exists. |
 | D3 | Sample metadata is embedded in `GET /authored/styles`; only image bytes get a new endpoint. | ~39 styles × ≤24 short titles is small. Embedding removes a list endpoint, a fetch hook, and loading/abort state from the dialog. |
 | D4 | The catalogue omits `samples` entirely for a style without valid samples. | The response stays byte-identical to today while no samples exist, and the frontend normaliser keeps its "attach only when present" rule. |
-| D5 | Staleness is enforced before merge, not at runtime. The check script fails when a sample's recorded digest no longer matches its style. The request path never computes digests. | Hiding stale samples at runtime would make a style's samples vanish after any YAML edit. Computing digests per request would hash reference images per request. |
+| D5 | Staleness is enforced before merge, not at runtime. The check script fails when a sample's recorded `styleDigest` no longer matches its style or its `topicDigest` no longer matches the demo prompt. The request path never computes digests; it only derives a 12-hex `cache_version` from the two recorded digests and appends it as `&v=` to image URLs, so a regenerated deck defeats the day-long `Cache-Control` without any route change. | Hiding stale samples at runtime would make a style's samples vanish after any YAML edit. Computing digests per request would hash reference images per request. |
 | D6 | The style digest covers the parsed YAML **minus display-only keys**, plus the bytes of referenced image assets; never the YAML file bytes. It is computed by the samples module's own `yaml.safe_load`, not by the loader's private `_read_style_mapping`. | `core.autocrlf=true` rewrites line endings on Windows checkouts, so byte hashes differ across machines. Editing a description does not change rendering and must not stale a sample. Excluding a fixed display-only list treats any future key as render-affecting by default. Reading the YAML directly avoids coupling to a private loader function. |
 | D7 | The digest does not cover the generation pipeline. `manifest.json` records `generatorCommit` as provenance, and the check script prints each deck's generator commit and age without failing on it. | Prompt or renderer changes drift samples away from real output; no hash of style inputs can detect that. Regeneration after pipeline changes is an operating rule (§10), stated as a known limit. |
 | D8 | Images are WebP only, fixed names `NN.webp` (stage, long edge 1280 px) and `NN.thumb.webp` (grid, long edge 320 px), with byte caps of 96 KB and 14 KB enforced by the check script. The manifest records the canvas as pixel `width`/`height`, not an aspect-ratio label. | SVG in `<img>` cannot load web fonts. Fixed names remove file names — and path validation — from the manifest. The caps bound one generation of 39 × 10 slides to about 40 MB in git; without them a generation would be 40–60 MB and every regeneration accumulates in history. Recording pixel dimensions keeps the contract neutral between the 16:9 prompt-generation canvas (1280×720) and the A4 document canvas (landscape 1280×905, portrait 905×1280) that the source-content path uses; the sample canvas is chosen by the generation session, not by this code. |
@@ -57,6 +59,7 @@ servers/fastapi/authored_style_samples/
   "schema": "authored-style-samples/v1",
   "styleId": "kbs-company-proposal",
   "styleDigest": "sha256:<64 lowercase hex>",
+  "topicDigest": "sha256:<64 lowercase hex>",
   "demoTopicId": "business-plan-v1",
   "canvas": { "width": 1280, "height": 720 },
   "generatedAt": "2026-10-01T09:00:00Z",
@@ -80,6 +83,10 @@ Rules (runtime-validated unless marked *check only*):
 - `slides` has 1–24 entries. Entry *i* (0-based) is slide `NN = i + 1`,
   zero-padded to two digits. `title` is a non-empty string of at most 80
   characters.
+- `styleDigest` and `topicDigest` are `sha256:` followed by 64 lowercase hex
+  characters. (*check only*) `styleDigest` equals §5's style digest and
+  `topicDigest` equals §5's topic digest of the current
+  `scripts/authored_style_samples_topic.md`.
 - `generatorCommit` is 40 lowercase hex characters.
 - (*check only*) Every slide has both `NN.webp` and `NN.thumb.webp` as regular
   non-symlink files, starting with the WebP magic bytes (`RIFF….WEBP`), with
@@ -88,7 +95,10 @@ Rules (runtime-validated unless marked *check only*):
   script ignores `Thumbs.db` and `.DS_Store` so local runs on Windows/macOS do
   not fail on OS metadata.
 - (*check only*) The samples root is empty, or every public canonical style
-  has a directory that passes all rules (D2).
+  has a directory that passes all rules (D2), except styles listed one per
+  line in `authored_style_samples/pending.txt` (blank lines and `#` comments
+  ignored). A pending entry must be a public canonical style and must not have
+  a sample directory; the check prints each pending style in its report.
 - `demoTopicId` and `generatedAt` are provenance; nothing branches on them.
 
 ## 5. Style digest
@@ -109,7 +119,16 @@ in `utils/authored_style_samples.py`:
    script reports.
 5. SHA-256 the result.
 
-Only the check script and the generator call this. The request path never does.
+`topic_prompt_digest(topic_file=None)` in the same module hashes the text
+between the `## Prompt` and `## Fixed` headings of
+`scripts/authored_style_samples_topic.md`, with CRLF normalised and outer
+whitespace stripped, so notes around the prompt and checkout line endings do
+not stale decks while any prompt edit does.
+
+Only the check script and the generator call these. The request path never
+does; it reads the recorded digests from the manifest and derives
+`StyleSamples.cache_version` (first 12 hex of SHA-256 over
+`"<styleDigest>|<topicDigest>"`) for the image URLs.
 
 ## 6. Backend
 
@@ -137,8 +156,8 @@ Only the check script and the generator call this. The request path never does.
     "canvas": { "width": 1280, "height": 720 },
     "slides": [
       { "index": 1, "title": "Cover",
-        "thumb": "/api/v1/ppt/authored/styles/<id>/samples/1?size=thumb",
-        "full":  "/api/v1/ppt/authored/styles/<id>/samples/1?size=full" }
+        "thumb": "/api/v1/ppt/authored/styles/<id>/samples/1?size=thumb&v=<cache_version>",
+        "full":  "/api/v1/ppt/authored/styles/<id>/samples/1?size=full&v=<cache_version>" }
     ]
   }
   ```
@@ -155,15 +174,18 @@ Only the check script and the generator call this. The request path never does.
   - `load_style_samples(style_id)` must be non-`None` and `index` within its
     slides; else 404.
   - `sample_file_path(...)` served as `FileResponse(media_type="image/webp")`
-    with `Cache-Control: private, max-age=86400`; 404 if `None`.
+    with `Cache-Control: private, max-age=86400`; 404 if `None`. The `v`
+    query parameter is not declared and is ignored; it exists only so that
+    the URL changes when the deck does (D5).
   - Protected by `SessionAuthMiddleware` like every `/api/` path; same-origin
     `<img>` requests carry the session cookie, as the existing card preview
     already relies on.
 
 ### 6.3 Check script `servers/fastapi/scripts/check_authored_style_samples.py` (new)
 
-Enforces every rule in §4 including the *check only* ones, §5 digest
-equality, and D2 all-or-nothing. Loads the public catalogue once via
+Enforces every rule in §4 including the *check only* ones, §5 style and
+topic digest equality, D2 all-or-nothing with the `pending.txt` exception,
+and the consistency of `pending.txt` itself. Loads the public catalogue once via
 `load_authored_styles()` + `authored_style_catalogue()` to know the canonical
 ids. Prints one line per problem (`<style-id>: <rule>`), then one line per deck
 with its `generatorCommit` and the number of commits since it (via
@@ -247,7 +269,7 @@ New strings in an `authoredStyleSamples` namespace in
    quality 60).
 4. Slide titles come from the generated deck's outline
    (`GET /presentation/{id}`), truncated to 80 characters.
-5. Writes `manifest.json` with the digest (§5) and `git rev-parse HEAD`.
+5. Writes `manifest.json` with both digests (§5) and `git rev-parse HEAD`.
 6. Emits `<scratch>/contact-sheet.html`: one row per style, 10 thumbnails each,
    for review.
 7. Runs the check script at the end; a failing deck is reported, not committed.
@@ -289,6 +311,11 @@ sample-bearing catalogue. The four existing specs that intercept
 
 - Regenerate all decks after a change to the svg prompts or renderer; the
   check script's age line is the reminder, not a gate (D7).
+- Editing the demo prompt stales every deck (`topicDigest`); regenerate all
+  39 or revert the edit.
+- A new style YAML lands with its id appended to
+  `authored_style_samples/pending.txt`; the follow-up that adds its sample
+  removes the line.
 - A style YAML edit that touches non-display keys fails the check until that
   style is regenerated; regenerate that style alone with `--styles <id>`.
 - A second full generation triggers the D9 storage review before commit.

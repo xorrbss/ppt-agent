@@ -45,14 +45,17 @@ def authored_style_catalogue(styles: Iterable[AuthoredStyle]) -> list[dict]:
             ))
         samples = load_style_samples(style_id)
         if samples is not None:
+            # `v` is ignored by the image route; it only defeats browser caching
+            # after a deck is regenerated (design D5 / §6.2).
+            version = samples.cache_version
             public["samples"] = {
                 "canvas": {"width": samples.canvas.width, "height": samples.canvas.height},
                 "slides": [
                     {
                         "index": slide.index,
                         "title": slide.title,
-                        "thumb": f"/api/v1/ppt/authored/styles/{style_id}/samples/{slide.index}?size=thumb",
-                        "full": f"/api/v1/ppt/authored/styles/{style_id}/samples/{slide.index}?size=full",
+                        "thumb": f"/api/v1/ppt/authored/styles/{style_id}/samples/{slide.index}?size=thumb&v={version}",
+                        "full": f"/api/v1/ppt/authored/styles/{style_id}/samples/{slide.index}?size=full&v={version}",
                     }
                     for slide in samples.slides
                 ],

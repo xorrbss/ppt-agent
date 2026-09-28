@@ -27,8 +27,12 @@ from PIL import Image  # noqa: E402
 from utils.authored_style_catalogue import AUTHORED_STYLE_ALIASES, authored_style_catalogue  # noqa: E402
 from utils.authored_style_samples import (  # noqa: E402
     AUTHORED_STYLE_SAMPLES_DIRECTORY,
+    AUTHORED_STYLE_SAMPLES_PENDING_FILE_NAME,
+    AUTHORED_STYLE_SAMPLES_TOPIC_FILE,
     load_style_samples,
+    read_pending_style_ids,
     style_render_digest,
+    topic_prompt_digest,
 )
 from utils.authored_styles import (  # noqa: E402
     AUTHORED_STYLE_ASSETS_DIRECTORY,
@@ -93,6 +97,7 @@ def _check_style_directory(
     directory: Path,
     styles_directory: Path,
     assets_directory: Path,
+    topic_digest: Optional[str],
 ) -> tuple[list[str], Optional[tuple[int, int]]]:
     problems: list[str] = []
     samples, messages = _load_with_capture(style_id, directory.parent)
@@ -129,6 +134,8 @@ def _check_style_directory(
     else:
         if digest != samples.style_digest:
             problems.append(f"{style_id}: styleDigest is stale (style YAML or references changed since generation)")
+    if topic_digest is not None and samples.topic_digest != topic_digest:
+        problems.append(f"{style_id}: topicDigest is stale (the demo prompt changed since generation)")
 
     return problems, canvas
 
@@ -158,12 +165,14 @@ def run_check(
     styles_directory: Optional[Path] = None,
     assets_directory: Optional[Path] = None,
     repo_root: Optional[Path] = None,
+    topic_file: Optional[Path] = None,
 ) -> tuple[list[str], list[str]]:
     """Run every rule in §4/§5/D2 and return (problems, report_lines)."""
     samples_root = samples_root or AUTHORED_STYLE_SAMPLES_DIRECTORY
     styles_directory = styles_directory or AUTHORED_STYLES_DIRECTORY
     assets_directory = assets_directory or AUTHORED_STYLE_ASSETS_DIRECTORY
     repo_root = repo_root or FASTAPI_ROOT.parent.parent
+    topic_file = topic_file or AUTHORED_STYLE_SAMPLES_TOPIC_FILE
 
     if not samples_root.is_dir():
         return [], []
@@ -173,17 +182,35 @@ def run_check(
 
     catalogue = authored_style_catalogue(load_authored_styles(styles_directory))
     canonical_ids = sorted(style["id"] for style in catalogue)
+    pending = read_pending_style_ids(samples_root)
 
     problems: list[str] = []
     report: list[str] = []
     canvases: dict[tuple[int, int], list[str]] = {}
+
+    topic_digest: Optional[str]
+    try:
+        topic_digest = topic_prompt_digest(topic_file)
+    except (OSError, ValueError) as exc:
+        topic_digest = None
+        problems.append(f"topic: could not compute the demo prompt digest ({exc})")
+
+    for style_id in sorted(pending):
+        if style_id not in canonical_ids:
+            problems.append(
+                f"{style_id}: listed in {AUTHORED_STYLE_SAMPLES_PENDING_FILE_NAME} but is not a public canonical style"
+            )
+        elif style_id in entries:
+            problems.append(
+                f"{style_id}: has a sample directory; remove it from {AUTHORED_STYLE_SAMPLES_PENDING_FILE_NAME}"
+            )
 
     for style_id in entries:
         if style_id in AUTHORED_STYLE_ALIASES or style_id not in canonical_ids:
             problems.append(f"{style_id}: sample directory is not a public canonical style")
             continue
         dir_problems, canvas = _check_style_directory(
-            style_id, samples_root / style_id, styles_directory, assets_directory
+            style_id, samples_root / style_id, styles_directory, assets_directory, topic_digest
         )
         problems.extend(dir_problems)
         if canvas is not None:
@@ -200,7 +227,13 @@ def run_check(
 
     missing = sorted(set(canonical_ids) - set(entries))
     for style_id in missing:
-        problems.append(f"{style_id}: missing sample directory (D2 requires every public canonical style)")
+        if style_id in pending:
+            report.append(f"{style_id}: no samples yet (listed in {AUTHORED_STYLE_SAMPLES_PENDING_FILE_NAME})")
+        else:
+            problems.append(
+                f"{style_id}: missing sample directory (D2 requires every public canonical style "
+                f"unless listed in {AUTHORED_STYLE_SAMPLES_PENDING_FILE_NAME})"
+            )
 
     return problems, report
 
@@ -211,9 +244,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--styles-dir", type=Path, default=None)
     parser.add_argument("--assets-dir", type=Path, default=None)
     parser.add_argument("--repo-root", type=Path, default=None)
+    parser.add_argument("--topic-file", type=Path, default=None)
     args = parser.parse_args(argv)
 
-    problems, report = run_check(args.samples_root, args.styles_dir, args.assets_dir, args.repo_root)
+    problems, report = run_check(
+        args.samples_root, args.styles_dir, args.assets_dir, args.repo_root, args.topic_file
+    )
     if not problems and not report:
         print("no authored style samples")
         return 0
