@@ -65,10 +65,10 @@ function maskedKey(token: string) {
 }
 
 const primaryButtonClass =
-  "inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#7C51F8] px-5 text-xs font-semibold text-white transition hover:bg-[#6D46E6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60";
+  "inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#7C51F8] px-5 text-xs font-semibold text-white transition hover:bg-[#6D46E6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60";
 
 const inputClass =
-  "h-11 w-full rounded-lg border border-[#E1E1E5] bg-white px-4 text-sm text-[#101323] outline-none transition placeholder:text-[#98A2B3] focus:border-[#7A5AF8] focus:ring-2 focus:ring-[#7A5AF8]/15";
+  "h-11 w-full rounded-lg border border-[#E1E1E5] bg-white px-4 text-sm text-[#101323] outline-none transition placeholder:text-[#98A2B3] focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/15";
 
 export default function AdminPanel({ embedded = false }: AdminPanelProps) {
   const locale = useLocale();
@@ -470,26 +470,26 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
           </p>
 
           <Tabs defaultValue="users" className="mt-6">
-          <TabsList className="h-11 rounded-full border border-[#EDEEEF] bg-[#F9FAFB] p-1">
+          <TabsList className="h-11 rounded-full border border-surface bg-[#F9FAFB] p-1">
             <TabsTrigger
               value="users"
-              className="h-9 rounded-full px-5 text-xs text-[#667085] shadow-none data-[state=active]:bg-white data-[state=active]:text-[#5146E5] data-[state=active]:shadow-sm"
+              className="h-9 rounded-full px-5 text-xs text-[#667085] shadow-none data-[state=active]:bg-white data-[state=active]:text-brand data-[state=active]:shadow-sm"
             >
               {t("usersTab")}
             </TabsTrigger>
             <TabsTrigger
               value="keys"
-              className="h-9 rounded-full px-5 text-xs text-[#667085] shadow-none data-[state=active]:bg-white data-[state=active]:text-[#5146E5] data-[state=active]:shadow-sm"
+              className="h-9 rounded-full px-5 text-xs text-[#667085] shadow-none data-[state=active]:bg-white data-[state=active]:text-brand data-[state=active]:shadow-sm"
             >
               {t("apiKeysTab")}
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="users" className="mt-6 space-y-5">
-            <section className="rounded-[12px] border border-[#EDEEEF] bg-white p-6">
+            <section className="rounded-[12px] border border-surface bg-white p-6">
               <div className="mb-5 flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F4F3FF]">
-                  <UserPlus className="h-4 w-4 text-[#5146E5]" />
+                  <UserPlus className="h-4 w-4 text-brand" />
                 </div>
                 <div>
                   <h2 className="text-sm font-semibold text-[#101323]">
@@ -534,11 +534,11 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
               </form>
             </section>
 
-            <section className="overflow-hidden rounded-[12px] border border-[#EDEEEF] bg-white">
-              <div className="flex items-center justify-between border-b border-[#EDEEEF] px-6 py-5">
+            <section className="overflow-hidden rounded-[12px] border border-surface bg-white">
+              <div className="flex items-center justify-between border-b border-surface px-6 py-5">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F4F3FF]">
-                    <Users className="h-4 w-4 text-[#5146E5]" />
+                    <Users className="h-4 w-4 text-brand" />
                   </div>
                   <div>
                     <h2 className="text-sm font-semibold text-[#101323]">
@@ -552,13 +552,13 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
                 <button
                   type="button"
                   aria-label={t("refreshAccounts")}
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-[#EDEEEF] text-[#667085] transition hover:bg-[#F9FAFB] hover:text-[#5146E5]"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-surface text-[#667085] transition hover:bg-[#F9FAFB] hover:text-brand"
                   onClick={() => void loadUsers("manual")}
                 >
                   <RefreshCw className={`h-4 w-4 ${busy === "users" ? "animate-spin" : ""}`} />
                 </button>
               </div>
-              <div className="divide-y divide-[#EDEEEF]">
+              <div className="divide-y divide-surface">
                 {users.map((user) => (
                   <div
                     key={user.id}
@@ -579,7 +579,7 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          className="h-9 rounded-full border border-[#EDEEEF] bg-white px-4 text-xs font-semibold text-[#344054] transition hover:bg-[#F9FAFB]"
+                          className="h-9 rounded-full border border-surface bg-white px-4 text-xs font-semibold text-[#344054] transition hover:bg-[#F9FAFB]"
                           onClick={() => openResetPassword(user)}
                           disabled={busy !== null}
                         >
@@ -603,11 +603,11 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
           </TabsContent>
 
           <TabsContent value="keys" className="mt-6">
-            <section className="overflow-hidden rounded-[12px] border border-[#EDEEEF] bg-white">
-              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#EDEEEF] px-6 py-5">
+            <section className="overflow-hidden rounded-[12px] border border-surface bg-white">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-surface px-6 py-5">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F4F3FF]">
-                    <KeyRound className="h-4 w-4 text-[#5146E5]" />
+                    <KeyRound className="h-4 w-4 text-brand" />
                   </div>
                   <div>
                     <h2 className="text-sm font-semibold text-[#101323]">
@@ -628,7 +628,7 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
                   {t("generateKey")}
                 </button>
               </div>
-              <div className="divide-y divide-[#EDEEEF]">
+              <div className="divide-y divide-surface">
                 {keys.length === 0 && (
                   <div className="px-6 py-12 text-center">
                     <KeyRound className="mx-auto h-6 w-6 text-[#B8B4C7]" />
@@ -658,7 +658,7 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
                         type="button"
                         aria-label={isVisible ? t("hideApiKey") : t("showApiKey")}
                         title={isVisible ? t("hideApiKey") : t("showApiKey")}
-                        className="flex h-9 w-9 items-center justify-center rounded-full border border-[#EDEEEF] text-[#667085] transition hover:bg-[#F4F3FF] hover:text-[#5146E5]"
+                        className="flex h-9 w-9 items-center justify-center rounded-full border border-surface text-[#667085] transition hover:bg-[#F4F3FF] hover:text-brand"
                         onClick={() => toggleKeyVisibility(key.token)}
                       >
                         {isVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -667,7 +667,7 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
                         type="button"
                         aria-label={t("copyApiKey")}
                         title={t("copyApiKey")}
-                        className="flex h-9 w-9 items-center justify-center rounded-full border border-[#EDEEEF] text-[#667085] transition hover:bg-[#F4F3FF] hover:text-[#5146E5]"
+                        className="flex h-9 w-9 items-center justify-center rounded-full border border-surface text-[#667085] transition hover:bg-[#F4F3FF] hover:text-brand"
                         onClick={() => void copyKey(key.token)}
                       >
                         <Copy className="h-4 w-4" />
@@ -706,7 +706,7 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
             <form onSubmit={resetPassword}>
               <DialogHeader className="px-7 pb-5 pt-7 text-left">
                 <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F4F3FF]">
-                  <LockKeyhole className="h-5 w-5 text-[#5146E5]" />
+                  <LockKeyhole className="h-5 w-5 text-brand" />
                 </div>
                 <DialogTitle className="text-xl font-semibold leading-7 text-[#101323]">
                   {t("resetDialogTitle")}
@@ -735,7 +735,7 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
               <DialogFooter className="flex-row px-7 pb-6 pt-0 sm:justify-end">
                 <button
                   type="button"
-                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141e5]/40 disabled:pointer-events-none disabled:opacity-50"
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:pointer-events-none disabled:opacity-50"
                   onClick={() => setDialog(null)}
                   disabled={dialogBusy}
                 >
@@ -765,7 +765,7 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
               <DialogFooter className="flex-row px-7 pb-6 pt-0 sm:justify-end">
                 <button
                   type="button"
-                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141e5]/40 disabled:pointer-events-none disabled:opacity-50"
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:pointer-events-none disabled:opacity-50"
                   onClick={() => setDialog(null)}
                   disabled={dialogBusy}
                 >
@@ -800,7 +800,7 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
               <DialogFooter className="flex-row px-7 pb-6 pt-0 sm:justify-end">
                 <button
                   type="button"
-                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141e5]/40 disabled:pointer-events-none disabled:opacity-50"
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:pointer-events-none disabled:opacity-50"
                   onClick={() => setDialog(null)}
                   disabled={dialogBusy}
                 >

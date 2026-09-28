@@ -21,7 +21,7 @@ const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }
                 <p className='hidden pb-2.5 text-xs font-semibold text-zinc-500 lg:block'>제공자 선택</p>
                 {mode === 'presenton' && <div className='grid grid-cols-2 gap-2 lg:grid-cols-1'>
                     <button className={` w-full rounded-xl px-3 py-3 flex items-center gap-2.5 border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400  ${selectedProvider === 'text-provider' ? 'bg-zinc-100 border-zinc-200' : 'bg-white border-transparent hover:bg-zinc-50 hover:border-zinc-200'}`} onClick={() => setSelectedProvider('text-provider')}>
-                        <div className='relative w-[18px] h-[18px] rounded-full overflow-hidden border border-[#EDEEEF]'>
+                        <div className='relative w-[18px] h-[18px] rounded-full overflow-hidden border border-surface'>
 
                             {textProviderIcon && (
                                 <Image src={textProviderIcon} width={18} height={18} className='object-cover w-full h-full overflow-hidden' alt='text provider' />
@@ -30,7 +30,7 @@ const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }
                         <p className='text-[#191919] text-xs  font-medium' >텍스트 제공자</p>
                     </button>
                     <button className={` w-full rounded-xl px-3 py-3 flex items-center gap-2.5 border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400  ${selectedProvider === 'image-provider' ? 'bg-zinc-100 border-zinc-200' : 'bg-white border-transparent hover:bg-zinc-50 hover:border-zinc-200'}`} onClick={() => setSelectedProvider('image-provider')}>
-                        <div className='relative w-[18px] h-[18px] rounded-full overflow-hidden border border-[#EDEEEF]'>
+                        <div className='relative w-[18px] h-[18px] rounded-full overflow-hidden border border-surface'>
                             <Image src={imageProviderIcon} width={18} height={18} className='object-cover w-full h-full overflow-hidden' alt='image provider' />
                         </div>
                         <p className='text-[#191919] text-xs  font-medium' >이미지 제공자</p>
@@ -39,7 +39,7 @@ const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }
                 {
                     mode === 'nanobanana' && <div>
                         <button className={` w-full rounded-xl px-3 py-3 flex items-center gap-2.5 border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400  bg-zinc-100 border-zinc-200`}>
-                            <div className='relative w-[18px] h-[18px] rounded-full overflow-hidden border border-[#EDEEEF]'>
+                            <div className='relative w-[18px] h-[18px] rounded-full overflow-hidden border border-surface'>
 
                                 <Image src='/providers/openai.png' width={18} height={18} className='object-cover w-full h-full overflow-hidden' alt='Nanobanana provider' />
                             </div>
@@ -65,7 +65,7 @@ const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }
                         onClick={() => setMode('presenton')}
                         style={{
                             background: mode === 'presenton' ? '#F4F3FF' : 'transparent',
-                            color: mode === 'presenton' ? '#5146E5' : '#3A3A3A'
+                            color: mode === 'presenton' ? 'rgb(var(--brand))' : '#3A3A3A'
                         }}
                     >템플릿 기반
                     </button>
@@ -82,7 +82,7 @@ const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }
                         >
                             이미지 기반
                         </button>
-                        <span className='absolute -top-2 -right-5 text-[7px] uppercase tracking-wide bg-[#F4F3FF] text-[#5146E5] border border-[#D9D6FE] rounded-full px-1.5 py-0.5 whitespace-nowrap'>
+                        <span className='absolute -top-2 -right-5 text-[7px] uppercase tracking-wide bg-[#F4F3FF] text-brand border border-[#D9D6FE] rounded-full px-1.5 py-0.5 whitespace-nowrap'>
                             출시 예정
                         </span>
                     </div>
@@ -97,8 +97,8 @@ const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }
                         className={`w-full rounded-xl px-3 py-3 flex items-center gap-2.5 border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 ${selectedProvider === 'privacy' ? 'bg-zinc-100 border-zinc-200' : 'bg-white border-transparent hover:bg-zinc-50 hover:border-zinc-200'}`}
                         onClick={() => setSelectedProvider('privacy')}
                     >
-                        <div className='relative w-6 h-6 rounded-full overflow-hidden border border-[#EDEEEF] flex items-center justify-center bg-white'>
-                            <Shield className='w-3.5 h-3.5 text-[#5146E5]' />
+                        <div className='relative w-6 h-6 rounded-full overflow-hidden border border-surface flex items-center justify-center bg-white'>
+                            <Shield className='w-3.5 h-3.5 text-brand' />
                         </div>
                         <p className='text-[#191919] text-xs font-medium'>사용 분석</p>
                     </button>
@@ -106,8 +106,8 @@ const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }
                         className={`w-full rounded-xl px-3 py-3 flex items-center gap-2.5 border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 ${selectedProvider === 'admin' ? 'bg-zinc-100 border-zinc-200' : 'bg-white border-transparent hover:bg-zinc-50 hover:border-zinc-200'}`}
                         onClick={() => setSelectedProvider('admin')}
                     >
-                        <div className='relative w-6 h-6 rounded-full overflow-hidden border border-[#EDEEEF] flex items-center justify-center bg-white'>
-                            <ShieldCheck className='w-3.5 h-3.5 text-[#5146E5]' />
+                        <div className='relative w-6 h-6 rounded-full overflow-hidden border border-surface flex items-center justify-center bg-white'>
+                            <ShieldCheck className='w-3.5 h-3.5 text-brand' />
                         </div>
                         <p className='text-[#191919] text-xs font-medium'>Admin</p>
                     </button>
@@ -115,8 +115,8 @@ const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }
                         className={`w-full rounded-xl px-3 py-3 flex items-center gap-2.5 border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 ${selectedProvider === 'session' ? 'bg-zinc-100 border-zinc-200' : 'bg-white border-transparent hover:bg-zinc-50 hover:border-zinc-200'}`}
                         onClick={() => setSelectedProvider('session')}
                     >
-                        <div className='relative w-6 h-6 rounded-full overflow-hidden border border-[#EDEEEF] flex items-center justify-center bg-white'>
-                            <LogOut className='w-3.5 h-3.5 text-[#5146E5]' />
+                        <div className='relative w-6 h-6 rounded-full overflow-hidden border border-surface flex items-center justify-center bg-white'>
+                            <LogOut className='w-3.5 h-3.5 text-brand' />
                         </div>
                         <p className='text-[#191919] text-xs font-medium'>로그아웃</p>
                     </button>

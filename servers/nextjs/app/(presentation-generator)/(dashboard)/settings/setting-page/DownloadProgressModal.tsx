@@ -25,7 +25,7 @@ const DownloadProgressModal = ({
           {downloadingModel.done ? (
             <CheckCircle className="w-6 h-6 text-green-600 mx-auto" />
           ) : (
-            <Download className="w-6 h-6 text-[#5141e5] mx-auto" />
+            <Download className="w-6 h-6 text-brand mx-auto" />
           )}
         </div>
 
@@ -46,7 +46,7 @@ const DownloadProgressModal = ({
           <div className="mb-4">
             <div className="w-full bg-gray-100 rounded-full h-1 overflow-hidden">
               <div
-                className="bg-[#5141e5]/80 h-1 rounded-full transition-[width] duration-300 ease-out motion-reduce:transition-none"
+                className="bg-brand/80 h-1 rounded-full transition-[width] duration-300 ease-out motion-reduce:transition-none"
                 style={{ width: `${downloadProgress}%` }}
               />
             </div>
@@ -101,7 +101,7 @@ const DownloadProgressModal = ({
             <Button
               type="button"
               variant="outline"
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141e5]/40 disabled:pointer-events-none disabled:opacity-50"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:pointer-events-none disabled:opacity-50"
               onClick={onCancel}
             >
               다운로드 취소

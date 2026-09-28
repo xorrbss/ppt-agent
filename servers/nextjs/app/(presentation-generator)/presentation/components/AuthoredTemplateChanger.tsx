@@ -430,7 +430,7 @@ export default function AuthoredTemplateChanger({
       <DialogContent className="flex h-[90vh] max-h-[90vh] max-w-6xl flex-col overflow-hidden p-0">
         <DialogHeader className="px-7 pb-2 pt-7">
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-[#5141E5]" />
+            <Sparkles className="h-5 w-5 text-brand" />
             {t("designChange")}
           </DialogTitle>
           <DialogDescription className="leading-6">
@@ -448,7 +448,7 @@ export default function AuthoredTemplateChanger({
               <TabsTrigger
                 value="template"
                 data-testid="design-tab-template"
-                className="h-10 rounded-lg font-semibold data-[state=active]:bg-white data-[state=active]:text-[#5141E5] data-[state=active]:shadow-sm"
+                className="h-10 rounded-lg font-semibold data-[state=active]:bg-white data-[state=active]:text-brand data-[state=active]:shadow-sm"
               >
                 {t("templateStep")}
                 {styleChanged ? <span className="ml-2 text-xs">{t("changed")}</span> : null}
@@ -456,7 +456,7 @@ export default function AuthoredTemplateChanger({
               <TabsTrigger
                 value="master"
                 data-testid="design-tab-master"
-                className="h-10 rounded-lg font-semibold data-[state=active]:bg-white data-[state=active]:text-[#5141E5] data-[state=active]:shadow-sm"
+                className="h-10 rounded-lg font-semibold data-[state=active]:bg-white data-[state=active]:text-brand data-[state=active]:shadow-sm"
               >
                 {t("standardStep")}
                 {masterChanged ? <span className="ml-2 text-xs">{t("changed")}</span> : null}
@@ -481,7 +481,7 @@ export default function AuthoredTemplateChanger({
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   placeholder={t("searchPlaceholder")}
-                  className="h-10 w-full rounded-xl border border-[#E3E4E8] bg-white pl-10 pr-4 text-sm outline-none focus:border-[#5141E5] focus:ring-2 focus:ring-[#5141E5]/15"
+                  className="h-10 w-full rounded-xl border border-[#E3E4E8] bg-white pl-10 pr-4 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/15"
                 />
               </label>
             </div>
@@ -550,17 +550,17 @@ export default function AuthoredTemplateChanger({
                 }}
                 className={`relative rounded-xl border p-4 text-left transition ${
                   masterIntent.intent === "keep"
-                    ? "border-[#5141E5] bg-[#F6F4FF] ring-2 ring-[#5141E5]/10"
+                    ? "border-brand bg-[#F6F4FF] ring-2 ring-brand/10"
                     : "border-gray-200 bg-white hover:border-gray-300"
                 }`}
               >
                 <span className="flex items-center gap-2 font-semibold text-gray-950">
-                  <Layers3 className="h-4 w-4 text-[#5141E5]" />
+                  <Layers3 className="h-4 w-4 text-brand" />
                   {t("keepCurrentStandard")}
                 </span>
                 <span className="mt-2 block text-sm text-gray-600">{currentMasterName}</span>
                 {masterIntent.intent === "keep" && (
-                  <Check className="absolute right-3 top-3 h-4 w-4 text-[#5141E5]" />
+                  <Check className="absolute right-3 top-3 h-4 w-4 text-brand" />
                 )}
               </button>
 
@@ -575,7 +575,7 @@ export default function AuthoredTemplateChanger({
                 }}
                 className={`relative rounded-xl border p-4 text-left transition ${
                   masterIntent.intent === "clear"
-                    ? "border-[#5141E5] bg-[#F6F4FF] ring-2 ring-[#5141E5]/10"
+                    ? "border-brand bg-[#F6F4FF] ring-2 ring-brand/10"
                     : "border-gray-200 bg-white hover:border-gray-300"
                 }`}
               >
@@ -584,7 +584,7 @@ export default function AuthoredTemplateChanger({
                   {t("clearStandardDescription")}
                 </span>
                 {masterIntent.intent === "clear" && (
-                  <Check className="absolute right-3 top-3 h-4 w-4 text-[#5141E5]" />
+                  <Check className="absolute right-3 top-3 h-4 w-4 text-brand" />
                 )}
               </button>
 
@@ -614,7 +614,7 @@ export default function AuthoredTemplateChanger({
                       onClick={() => selectMaster(entry)}
                       className={`relative rounded-xl border p-4 text-left transition ${
                         selected
-                          ? "border-[#5141E5] bg-[#F6F4FF] ring-2 ring-[#5141E5]/10"
+                          ? "border-brand bg-[#F6F4FF] ring-2 ring-brand/10"
                           : "border-gray-200 bg-white hover:border-gray-300"
                       }`}
                     >
@@ -630,7 +630,7 @@ export default function AuthoredTemplateChanger({
                         </span>
                       ) : null}
                       {selected && (
-                        <Check className="absolute right-3 top-3 h-4 w-4 text-[#5141E5]" />
+                        <Check className="absolute right-3 top-3 h-4 w-4 text-brand" />
                       )}
                     </button>
                   );
@@ -655,7 +655,7 @@ export default function AuthoredTemplateChanger({
             <span className="ml-2 text-gray-700" data-testid="current-design-combination">
               {currentStyleName} + {currentMasterName}
             </span>
-            <span className="mx-3 text-[#5141E5]" aria-hidden="true">→</span>
+            <span className="mx-3 text-brand" aria-hidden="true">→</span>
             <span className="font-semibold text-gray-950">{t("afterChange")}</span>
             <span className="ml-2 text-gray-700" data-testid="next-design-combination">
               {selectedStyleName} + {nextMasterName}
@@ -670,7 +670,7 @@ export default function AuthoredTemplateChanger({
               checked={visionQa}
               disabled={isGenerating}
               onChange={(event) => setVisionQa(event.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 accent-[#5141E5]"
+              className="h-4 w-4 rounded border-gray-300 accent-brand"
             />
             {t("addQualityReview")}
             <span className="text-xs text-gray-500">{t("qualityReviewSlow")}</span>

@@ -134,10 +134,10 @@ const TextProvider = ({ onInputChange, llmConfig }: OpenAIConfigProps) => {
                           !(llmConfig as Record<string, unknown>)[credential.settingKey]
                       )
                     }
-                    className={`mt-4 py-2.5 bg-[#EDEEEF] px-3.5 w-fit  rounded-[48px] text-xs font-semibold text-[#101323] transition-all duration-200 border ${
+                    className={`mt-4 py-2.5 bg-surface px-3.5 w-fit  rounded-[48px] text-xs font-semibold text-[#101323] transition-all duration-200 border ${
                       modelsLoading
                         ? " border-gray-300 cursor-not-allowed text-gray-500"
-                        : " border-[#EDEEEF] text-[#101323] hover:bg-[#E8F0FF]/90 focus:ring-2 focus:ring-blue-500/20"
+                        : " border-surface text-[#101323] hover:bg-[#E8F0FF]/90 focus:ring-2 focus:ring-blue-500/20"
                     }`}
                   >
                     {modelsLoading ? (

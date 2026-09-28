@@ -29,7 +29,7 @@ interface StyleSampleDialogProps {
 }
 
 const styleNavButtonClass =
-  "flex min-h-10 flex-1 items-center justify-center gap-1 rounded-lg border border-[#EBEBEC] bg-white px-3 text-xs font-semibold text-[#3D3F48] transition hover:bg-[#F3F4F6] disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141E5]";
+  "flex min-h-10 flex-1 items-center justify-center gap-1 rounded-lg border border-[#EBEBEC] bg-white px-3 text-xs font-semibold text-[#3D3F48] transition hover:bg-[#F3F4F6] disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand";
 
 export default function StyleSampleDialog({
   styles,
@@ -136,7 +136,7 @@ export default function StyleSampleDialog({
 
         <div className="relative min-w-0 p-6 pt-14">
           <DialogClose
-            className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141e5]/40"
+            className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
             aria-label={t("close")}
             data-testid="style-sample-close"
           >
@@ -163,7 +163,7 @@ export default function StyleSampleDialog({
             type="button"
             onClick={() => onConfirm(style.id)}
             data-testid="style-sample-confirm"
-            className="flex min-h-11 items-center gap-2 rounded-lg bg-[#5141E5] px-5 text-sm font-semibold text-white transition hover:bg-[#4334C9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141E5] focus-visible:ring-offset-2"
+            className="flex min-h-11 items-center gap-2 rounded-lg bg-brand px-5 text-sm font-semibold text-white transition hover:bg-[#4334C9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
           >
             {t("useThisStyle")}
             <ArrowRight className="h-4 w-4" aria-hidden="true" />

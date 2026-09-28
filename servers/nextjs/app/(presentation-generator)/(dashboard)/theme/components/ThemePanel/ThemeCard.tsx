@@ -61,7 +61,7 @@ const ThemeCardContent: React.FC<ThemeCardProps> = ({ theme, onSelect, onDelete,
           <div className="flex flex-wrap justify-end gap-2 px-6 pb-6 sm:px-8">
             <button
               onClick={() => setShowDeleteDialog(false)}
-              className="flex-1 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141e5]/40 disabled:pointer-events-none disabled:opacity-50"
+              className="flex-1 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:pointer-events-none disabled:opacity-50"
             >
               취소
             </button>
@@ -147,17 +147,17 @@ const ThemeCardContent: React.FC<ThemeCardProps> = ({ theme, onSelect, onDelete,
     </div>
 
 
-    <div className='px-5 border-t rounded-b-xl border-[#EDEEEF] w-full py-2.5 h-[80px] bg-white flex items-center justify-between'>
+    <div className='px-5 border-t rounded-b-xl border-surface w-full py-2.5 h-[80px] bg-white flex items-center justify-between'>
       <div>
 
         <h4 className='text-sm font-semibold text-[#191919] pb-1'>{theme.name}</h4>
         <div className='flex items-center gap-1'>
 
-          <div className='w-4 h-4 rounded-full border border-[#EDEEEF] '
+          <div className='w-4 h-4 rounded-full border border-surface '
             style={{ backgroundColor: theme.data.colors['primary'] }}
           />
           <div
-            className='w-4 h-4 rounded-full border border-[#EDEEEF]   '
+            className='w-4 h-4 rounded-full border border-surface   '
             style={{ backgroundColor: theme.data.colors['background'] }}
           />
         </div>

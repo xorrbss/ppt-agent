@@ -17,7 +17,7 @@ interface ConfigurationSelectsProps {
 }
 
 const toggleClassName =
-    'h-[22px] w-[36px] border-0 bg-[#D8D8DD] data-[state=checked]:bg-[#7A5AF8] ';
+    'h-[22px] w-[36px] border-0 bg-[#D8D8DD] data-[state=checked]:bg-brand-accent ';
 
 const toneLabelKeys = {
     [ToneType.Default]: 'tone.default',
@@ -115,7 +115,7 @@ const AdvanceSettings = ({
                         title={t('title')}
                         type="button"
                         onClick={handleOpenAdvanced}
-                        className="flex h-10 w-10 items-center justify-center rounded-full border border-[#E4E5E8] bg-white text-[#1C1C27] shadow-sm transition hover:bg-[#F7F7FA] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141E5]/25"
+                        className="flex h-10 w-10 items-center justify-center rounded-full border border-[#E4E5E8] bg-white text-[#1C1C27] shadow-sm transition hover:bg-[#F7F7FA] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/25"
                         data-testid="advanced-settings-button"
                     >
                         <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
@@ -140,7 +140,7 @@ const AdvanceSettings = ({
                             type="button"
                             onClick={handleCloseAdvanced}
                             aria-label={t('close')}
-                            className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141e5]/40 disabled:pointer-events-none z-10"
+                            className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:pointer-events-none z-10"
                         >
                             <X className="h-3.5 w-3.5" />
                         </button>

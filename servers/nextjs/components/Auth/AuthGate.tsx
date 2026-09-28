@@ -329,7 +329,7 @@ export default function AuthGate() {
     return (
       <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-white p-6">
         <div className="relative z-10 w-full max-w-md">
-          <div className="rounded-2xl border border-[#EDEEEF] bg-white p-8 text-center shadow-xl">
+          <div className="rounded-2xl border border-surface bg-white p-8 text-center shadow-xl">
             <Image
               src="/logo-with-bg.png"
               alt="DevAX"
@@ -342,13 +342,13 @@ export default function AuthGate() {
             <h1 className="font-syne text-lg font-semibold text-black">DevAX</h1>
             <p className="mt-3 font-syne text-sm text-[#000000CC]">작업 공간을 준비하는 중…</p>
             <div className="mt-6 flex justify-center gap-1.5">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-[#5146E5]" />
+              <span className="h-2 w-2 animate-pulse rounded-full bg-brand" />
               <span
                 className="h-2 w-2 animate-pulse rounded-full bg-[#7C51F8]"
                 style={{ animationDelay: "0.2s" }}
               />
               <span
-                className="h-2 w-2 animate-pulse rounded-full bg-[#5146E5]"
+                className="h-2 w-2 animate-pulse rounded-full bg-brand"
                 style={{ animationDelay: "0.4s" }}
               />
             </div>
@@ -360,7 +360,7 @@ export default function AuthGate() {
 
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-white p-6 font-syne">
-      <section className="relative z-10 w-full max-w-lg rounded-[20px] border border-[#EDEEEF] bg-[#F9F8F8] p-7 sm:p-10">
+      <section className="relative z-10 w-full max-w-lg rounded-[20px] border border-surface bg-[#F9F8F8] p-7 sm:p-10">
         <div className="mb-7">
           <div className="flex items-center gap-4">
             <div className="flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-[4px] bg-[#F4F3FF] p-3">
@@ -373,7 +373,7 @@ export default function AuthGate() {
               />
             </div>
             <div>
-              <p className="font-syne text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7A5AF8]">
+              <p className="font-syne text-[10px] font-semibold uppercase tracking-[0.14em] text-brand-accent">
                 보안 인스턴스
               </p>
               <h1 className="mt-1 font-syne text-2xl font-semibold leading-tight text-black sm:text-[26px]">
@@ -406,7 +406,7 @@ export default function AuthGate() {
               required
               spellCheck={false}
               placeholder="관리자 사용자 이름"
-              className="w-full rounded-[11px] border border-[#EDEEEF] bg-white px-4 py-3 font-syne text-sm text-black outline-none transition placeholder:text-[#999999] focus:border-[#a49cfc] focus:ring-2 focus:ring-[#5146E5]/20"
+              className="w-full rounded-[11px] border border-surface bg-white px-4 py-3 font-syne text-sm text-black outline-none transition placeholder:text-[#999999] focus:border-[#a49cfc] focus:ring-2 focus:ring-brand/20"
               disabled={isSubmitting}
             />
           </div>
@@ -425,7 +425,7 @@ export default function AuthGate() {
               maxLength={128}
               required
               placeholder={isSetupMode ? "8자 이상" : "6자 이상"}
-              className="w-full rounded-[11px] border border-[#EDEEEF] bg-white px-4 py-3 font-syne text-sm text-black outline-none transition placeholder:text-[#999999] focus:border-[#a49cfc] focus:ring-2 focus:ring-[#5146E5]/20"
+              className="w-full rounded-[11px] border border-surface bg-white px-4 py-3 font-syne text-sm text-black outline-none transition placeholder:text-[#999999] focus:border-[#a49cfc] focus:ring-2 focus:ring-brand/20"
               disabled={isSubmitting}
             />
           </div>
@@ -445,7 +445,7 @@ export default function AuthGate() {
                 maxLength={128}
                 required
                 placeholder="비밀번호를 다시 입력하세요"
-                className="w-full rounded-[11px] border border-[#EDEEEF] bg-white px-4 py-3 font-syne text-sm text-black outline-none transition placeholder:text-[#999999] focus:border-[#a49cfc] focus:ring-2 focus:ring-[#5146E5]/20"
+                className="w-full rounded-[11px] border border-surface bg-white px-4 py-3 font-syne text-sm text-black outline-none transition placeholder:text-[#999999] focus:border-[#a49cfc] focus:ring-2 focus:ring-brand/20"
                 disabled={isSubmitting}
               />
             </div>
@@ -460,7 +460,7 @@ export default function AuthGate() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full rounded-[58px] border border-[#EDEEEF] bg-[#7C51F8] px-5 py-3 font-syne text-xs font-semibold text-white transition hover:bg-[#6d46e6] disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-[58px] border border-surface bg-[#7C51F8] px-5 py-3 font-syne text-xs font-semibold text-white transition hover:bg-[#6d46e6] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isSubmitting
               ? isSetupMode

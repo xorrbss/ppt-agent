@@ -16,7 +16,7 @@ interface StyleSampleSlidesProps {
 }
 
 const pagerButtonClass =
-  "absolute top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-[#27251E] shadow-md transition hover:bg-white disabled:pointer-events-none disabled:opacity-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141E5]";
+  "absolute top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-[#27251E] shadow-md transition hover:bg-white disabled:pointer-events-none disabled:opacity-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand";
 
 function slideNumber(index: number): string {
   return String(index).padStart(2, "0");
@@ -116,7 +116,7 @@ export default function StyleSampleSlides({
                 aria-current={tileIndex === position ? "true" : undefined}
                 data-testid={`style-sample-tile-${tile.index}`}
                 className={cn(
-                  "relative block w-full overflow-hidden rounded-lg border bg-[#F4F4F6] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141E5]",
+                  "relative block w-full overflow-hidden rounded-lg border bg-[#F4F4F6] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
                   tileIndex === position
                     ? "border-[#6194F4] ring-2 ring-[#6194F4]/30"
                     : "border-[#EBEBEC] hover:border-[#C9CBD2]",

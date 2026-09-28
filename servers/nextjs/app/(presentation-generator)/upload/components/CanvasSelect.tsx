@@ -267,7 +267,7 @@ export function CanvasSelect({
                                     className="flex items-start gap-3 rounded-lg px-3 py-2.5 font-syne"
                                 >
                                     <Check className={cn("mt-1 h-3.5 w-3.5 shrink-0", displayRowId === "auto" ? "opacity-100" : "opacity-0")} />
-                                    <Sparkles className="h-4 w-4 shrink-0 text-[#7A5AF8]" aria-hidden="true" />
+                                    <Sparkles className="h-4 w-4 shrink-0 text-brand-accent" aria-hidden="true" />
                                     <RowText title={tA2b("canvasAutoTitle")} description={tA2b("canvasAutoDescription")} />
                                 </CommandItem>
                                 {rows.map((row) => (

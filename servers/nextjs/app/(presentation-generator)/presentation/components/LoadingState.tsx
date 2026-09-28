@@ -31,7 +31,7 @@ const LoadingState = ({
             >
                 <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-50">
                     <Loader2
-                        className={`h-6 w-6 text-[#5141e5] ${animate ? "animate-spin motion-reduce:animate-none" : ""}`}
+                        className={`h-6 w-6 text-brand ${animate ? "animate-spin motion-reduce:animate-none" : ""}`}
                         strokeWidth={1.75}
                         aria-hidden="true"
                     />
@@ -56,7 +56,7 @@ const LoadingState = ({
                     className="mt-7 h-1 overflow-hidden rounded-full bg-gray-100"
                     aria-hidden="true"
                 >
-                    <div className={`${styles.indicator} h-full w-1/3 rounded-full bg-[#5141e5]/80 ${animate ? "" : styles.static}`} />
+                    <div className={`${styles.indicator} h-full w-1/3 rounded-full bg-brand/80 ${animate ? "" : styles.static}`} />
                 </div>
             </section>
         </div>

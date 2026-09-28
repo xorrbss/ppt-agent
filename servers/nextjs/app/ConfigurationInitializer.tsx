@@ -198,7 +198,7 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
     return (
       <div className="flex min-h-screen items-center justify-center bg-white p-4">
         <div className="w-full max-w-md">
-          <div className="rounded-2xl border border-[#EDEEEF] bg-white p-8 text-center shadow-xl">
+          <div className="rounded-2xl border border-surface bg-white p-8 text-center shadow-xl">
             <UiLocaleSwitcher className="mb-5 ml-auto" />
             {/* Logo/Branding */}
             <div className="mb-6">
@@ -211,7 +211,7 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
                   height={48}
                   priority
                 />
-                <span className="font-syne text-2xl font-bold text-[#5146E5]">
+                <span className="font-syne text-2xl font-bold text-brand">
                   DevAX
                 </span>
               </div>

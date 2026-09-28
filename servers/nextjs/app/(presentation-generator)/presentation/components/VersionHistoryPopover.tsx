@@ -109,7 +109,7 @@ const VersionHistoryPopover = ({
               "flex h-9 w-full items-center gap-2 rounded-lg px-3 text-left text-sm font-medium text-[#101323] hover:bg-[#F6F6F9]",
           )}
         >
-          <History className="h-3.5 w-3.5 shrink-0 text-[#101323] duration-300 group-hover:text-[#5141e5]" />
+          <History className="h-3.5 w-3.5 shrink-0 text-[#101323] duration-300 group-hover:text-brand" />
           {triggerLabel ? <span>{triggerLabel}</span> : null}
         </button>
       </PopoverTrigger>
@@ -150,7 +150,7 @@ const VersionHistoryPopover = ({
                   data-testid="version-restore"
                   onClick={() => handleRestore(version)}
                   disabled={!restoreAllowed || restoringId !== null}
-                  className={`flex shrink-0 items-center gap-1 rounded-full border border-gray-200 px-2.5 py-1 text-xs font-medium text-[#101323] duration-300 hover:border-[#5141e5] hover:text-[#5141e5] disabled:cursor-not-allowed disabled:opacity-50 ${
+                  className={`flex shrink-0 items-center gap-1 rounded-full border border-gray-200 px-2.5 py-1 text-xs font-medium text-[#101323] duration-300 hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-50 ${
                     restoreAllowed ? "" : "hidden"
                   }`}
                 >

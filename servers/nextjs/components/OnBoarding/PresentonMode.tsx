@@ -412,7 +412,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
 
     return (
         <div className='w-full min-w-0 max-w-[660px] pb-10 font-syne'>
-            <p className='px-2.5 py-0.5 w-fit text-[#7A5AF8] rounded-[50px]  border border-[#EDEEEF] text-[10px] font-medium mb-5 font-syne'>PRESENTON</p>
+            <p className='px-2.5 py-0.5 w-fit text-brand-accent rounded-[50px]  border border-surface text-[10px] font-medium mb-5 font-syne'>PRESENTON</p>
             <div className=''>
 
                 <h2 className='mb-4 text-black text-[26px] font-normal font-unbounded '>{t("chooseContentProvider")}</h2>
@@ -424,7 +424,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
             </div>
 
             {/* Text Provider */}
-            <div className='p-3 border border-[#EDEEEF] rounded-[11px] bg-white '>
+            <div className='p-3 border border-surface rounded-[11px] bg-white '>
                 <div className="flex items-center gap-[24.3px]  mb-[42px]">
                     <div className='w-[74px] h-[74px] rounded-[4px] pt-[16.8px] pr-[17.15px] pb-[17.2px] pl-[16.85px] flex items-center justify-center'
                         style={{ backgroundColor: '#4C55541A' }}
@@ -549,7 +549,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                                 USE_CUSTOM_URL: true,
                                                 OLLAMA_URL: prev.OLLAMA_URL || 'http://localhost:11434'
                                             }))}
-                                            className="py-2.5 bg-[#EDEEEF] px-3.5 w-fit rounded-[48px] text-xs font-semibold text-[#101323] transition-all duration-200 border border-[#EDEEEF] hover:bg-[#E8F0FF]/90 focus:ring-2 focus:ring-blue-500/20"
+                                            className="py-2.5 bg-surface px-3.5 w-fit rounded-[48px] text-xs font-semibold text-[#101323] transition-all duration-200 border border-surface hover:bg-[#E8F0FF]/90 focus:ring-2 focus:ring-blue-500/20"
                                         >
                                             {t("useOllamaUrl")}
                                         </button>
@@ -803,9 +803,9 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                     (llmConfig.LLM === 'custom' && !llmConfig.CUSTOM_LLM_URL) ||
                                     (llmConfig.LLM === 'litellm' && !currentLitellmUrl)
                                 }
-                                className={`mt-4 py-2.5 bg-[#EDEEEF] disabled:opacity-50 disabled:cursor-not-allowed px-3.5 w-full  rounded-[48px] text-xs font-semibold text-[#101323] transition-all duration-200 border ${modelsLoading
+                                className={`mt-4 py-2.5 bg-surface disabled:opacity-50 disabled:cursor-not-allowed px-3.5 w-full  rounded-[48px] text-xs font-semibold text-[#101323] transition-all duration-200 border ${modelsLoading
                                     ? " border-gray-300 cursor-not-allowed text-gray-500"
-                                    : " border-[#EDEEEF] text-[#101323] hover:bg-[#EDEEEF]/90 focus:ring-2 focus:ring-blue-500/20"
+                                    : " border-surface text-[#101323] hover:bg-surface/90 focus:ring-2 focus:ring-blue-500/20"
                                     }`}
                             >
                                 {modelsLoading ? (
@@ -910,7 +910,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                 </div>
             </div>
             {/* Image Provider */}
-            <div className={`p-3 border border-[#EDEEEF] rounded-[11px] relative mt-5 bg-white ${llmConfig.DISABLE_IMAGE_GENERATION ? "bg-[#F9FAFB]" : ""}`}>
+            <div className={`p-3 border border-surface rounded-[11px] relative mt-5 bg-white ${llmConfig.DISABLE_IMAGE_GENERATION ? "bg-[#F9FAFB]" : ""}`}>
                 <ToolTip content="이미지 생성 사용/해제" className='flex justify-end items-center absolute top-3 right-3'>
                     <div className='flex justify-end items-center'>
                         <Switch
@@ -1173,14 +1173,14 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                     onClick={() => {
                         setStep(currentStep - 1);
                     }}
-                    className='border border-[#EDEEEF] rounded-[53px] px-4 py-1 h-[36px]'>
+                    className='border border-surface rounded-[53px] px-4 py-1 h-[36px]'>
                     <ChevronLeft className='w-4 h-4 text-gray-500' />
                 </button>
                 <button
 
                     disabled={savingConfig}
                     onClick={handleSaveConfig}
-                    className='border font-syne border-[#EDEEEF] bg-[#7C51F8]  rounded-[58px] px-5 py-2.5 text-white text-xs  font-semibold'>
+                    className='border font-syne border-surface bg-[#7C51F8]  rounded-[58px] px-5 py-2.5 text-white text-xs  font-semibold'>
                     {t("continueToFinish")}
                 </button>
             </div>
@@ -1195,7 +1195,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                 {downloadingModel.done ? (
                                     <CheckCircle className="w-6 h-6 text-green-600 mx-auto" />
                                 ) : (
-                                    <Download className="w-6 h-6 text-[#5141e5] mx-auto" />
+                                    <Download className="w-6 h-6 text-brand mx-auto" />
                                 )}
                             </div>
 
@@ -1214,7 +1214,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                 <div className="mb-4">
                                     <div className="w-full bg-gray-100 rounded-full h-1 overflow-hidden">
                                         <div
-                                            className="bg-[#5141e5]/80 h-1 rounded-full transition-[width] duration-300 ease-out motion-reduce:transition-none"
+                                            className="bg-brand/80 h-1 rounded-full transition-[width] duration-300 ease-out motion-reduce:transition-none"
                                             style={{ width: `${downloadProgress}%` }}
                                         />
                                     </div>

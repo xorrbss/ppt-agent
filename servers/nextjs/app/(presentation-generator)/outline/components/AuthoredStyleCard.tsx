@@ -368,7 +368,7 @@ const AuthoredStyleCard = memo(function AuthoredStyleCard({
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
         data-testid={`authored-style-select-${style.id}`}
-        className="block h-full w-full min-w-0 cursor-pointer text-left outline-none focus-visible:ring-2 focus-visible:ring-[#5141E5] focus-visible:ring-inset"
+        className="block h-full w-full min-w-0 cursor-pointer text-left outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-inset"
         onClick={() => onSelect(style.id)}
       >
         <AuthoredStylePreview style={style} />

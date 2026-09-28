@@ -149,8 +149,8 @@ export default function OpenAICompatibleImageFields({
               disabled={modelsLoading || !baseUrl.trim()}
               className={`mt-4 w-fit rounded-[48px] border px-3.5 py-2.5 text-xs font-semibold transition-all duration-200 ${
                 modelsLoading || !baseUrl.trim()
-                  ? "cursor-not-allowed border-gray-300 bg-[#EDEEEF] text-gray-500"
-                  : "border-[#EDEEEF] bg-[#EDEEEF] text-[#101323] hover:bg-[#E8F0FF]/90 focus:ring-2 focus:ring-blue-500/20"
+                  ? "cursor-not-allowed border-gray-300 bg-surface text-gray-500"
+                  : "border-surface bg-surface text-[#101323] hover:bg-[#E8F0FF]/90 focus:ring-2 focus:ring-blue-500/20"
               }`}
             >
               {modelsLoading ? (

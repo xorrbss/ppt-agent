@@ -18,7 +18,7 @@ export default function LoadingSettings() {
                     </div>
                     <div className="mt-6 flex-1 min-h-0">
                         <Shimmer className="h-3 w-24 mb-2.5" />
-                        <div className="p-0.5 rounded-[40px] bg-white w-full max-w-[210px] border border-[#EDEEEF] flex items-center mb-[34px] h-[30px]">
+                        <div className="p-0.5 rounded-[40px] bg-white w-full max-w-[210px] border border-surface flex items-center mb-[34px] h-[30px]">
                             <Shimmer className="h-[26px] flex-1 rounded-[70px] mx-0.5" />
                             <Shimmer className="h-[26px] flex-1 rounded-[70px] mx-0.5 opacity-70" />
                         </div>
@@ -27,7 +27,7 @@ export default function LoadingSettings() {
                             {[0, 1].map((i) => (
                                 <div
                                     key={i}
-                                    className="w-full rounded-[6px] px-3 py-4 flex items-center gap-1.5 border border-[#EDEEEF] bg-white"
+                                    className="w-full rounded-[6px] px-3 py-4 flex items-center gap-1.5 border border-surface bg-white"
                                 >
                                     <Shimmer className="h-[18px] w-[18px] rounded-full shrink-0" />
                                     <Shimmer className="h-3 flex-1 max-w-[100px]" />
@@ -37,7 +37,7 @@ export default function LoadingSettings() {
                     </div>
                     <div className="border-t border-[#E1E1E5] py-5">
                         <Shimmer className="h-3 w-12 mb-2.5" />
-                        <div className="w-full rounded-[6px] p-3 py-4 flex items-center gap-1.5 border border-[#EDEEEF] bg-white">
+                        <div className="w-full rounded-[6px] p-3 py-4 flex items-center gap-1.5 border border-surface bg-white">
                             <Shimmer className="h-6 w-6 rounded-full shrink-0" />
                             <Shimmer className="h-3 w-16" />
                         </div>

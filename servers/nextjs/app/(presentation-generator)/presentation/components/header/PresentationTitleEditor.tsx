@@ -39,7 +39,7 @@ const PresentationTitleEditor = ({
   presentationData: PresentationData | null;
 }) =>
   isEditingTitle ? (
-    <div className="flex w-full max-w-[450px] items-stretch gap-0.5 rounded-[14px] border border-[#E4E2EB] bg-white pl-3.5 pr-1 py-1 shadow-[0_2px_12px_rgba(17,3,31,0.06)] ring-2 ring-[#5141e5]/15">
+    <div className="flex w-full max-w-[450px] items-stretch gap-0.5 rounded-[14px] border border-[#E4E2EB] bg-white pl-3.5 pr-1 py-1 shadow-[0_2px_12px_rgba(17,3,31,0.06)] ring-2 ring-brand/15">
       <input
         ref={titleInputRef}
         value={draftTitle}
@@ -67,7 +67,7 @@ const PresentationTitleEditor = ({
             type="button"
             onMouseDown={onTitleSaveMouseDown}
             onClick={commitTitleEdit}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-[#5141e5] hover:bg-[#5141e5]/10 transition-colors"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-brand hover:bg-brand/10 transition-colors"
             aria-label="제목 저장"
           >
             <Check className="h-4 w-4" strokeWidth={2.25} />
@@ -94,7 +94,7 @@ const PresentationTitleEditor = ({
       data-testid="presentation-title-edit"
       className={cn(
         "group/title flex w-full min-w-0 items-center gap-2.5 rounded-[14px] px-3 py-2 text-left -mx-3 transition-colors",
-        "hover:bg-[#F6F6F9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141e5] focus-visible:ring-offset-2",
+        "hover:bg-[#F6F6F9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2",
         "disabled:pointer-events-none disabled:opacity-100 disabled:hover:bg-transparent"
       )}
     >
@@ -106,7 +106,7 @@ const PresentationTitleEditor = ({
       </h2>
       {mutationsEnabled && presentationData && !isStreaming && (
         <Pencil
-          className="h-3.5 w-3.5 shrink-0 text-[#101323]/40 transition-all duration-200 group-hover/title:text-[#5141e5] opacity-80 sm:opacity-0 sm:group-hover/title:opacity-100 group-hover/title:opacity-100"
+          className="h-3.5 w-3.5 shrink-0 text-[#101323]/40 transition-all duration-200 group-hover/title:text-brand opacity-80 sm:opacity-0 sm:group-hover/title:opacity-100 group-hover/title:opacity-100"
           aria-hidden
         />
       )}

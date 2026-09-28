@@ -44,7 +44,7 @@ const HeaderToolbar = ({
             )}
             onClick={onUndo}
           >
-            <Undo2 className="w-3.5 h-3.5 text-[#101323] group-hover:text-[#5141e5] duration-300" />
+            <Undo2 className="w-3.5 h-3.5 text-[#101323] group-hover:text-brand duration-300" />
           </button>
         </ToolTip>
         <Separator orientation="vertical" className="h-4" />
@@ -60,7 +60,7 @@ const HeaderToolbar = ({
             )}
             onClick={onRedo}
           >
-            <Redo2 className="w-3.5 h-3.5 text-[#101323] group-hover:text-[#5141e5] duration-300" />
+            <Redo2 className="w-3.5 h-3.5 text-[#101323] group-hover:text-brand duration-300" />
           </button>
         </ToolTip>
         <Separator orientation="vertical" className="h-4" />
@@ -78,7 +78,7 @@ const HeaderToolbar = ({
         aria-label={t("startPresentation")}
         className="cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group"
       >
-        <Play className="w-3.5 h-3.5 text-[#101323] group-hover:text-[#5141e5] duration-300" />
+        <Play className="w-3.5 h-3.5 text-[#101323] group-hover:text-brand duration-300" />
       </button>
     </ToolTip>
   </div>

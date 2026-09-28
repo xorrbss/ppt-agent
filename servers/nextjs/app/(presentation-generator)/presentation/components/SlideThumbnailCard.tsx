@@ -53,11 +53,11 @@ export const SlideThumbnailCard = forwardRef<
       data-slide-thumbnail-index={index}
       style={{
         backgroundColor: "var(--card-color, #ffffff)",
-        borderColor: selected ? "#5141e5" : "var(--stroke, #e5e7eb)",
+        borderColor: selected ? "rgb(var(--brand))" : "var(--stroke, #e5e7eb)",
         ...style,
       }}
       className={`border relative rounded-[12px] transition-all duration-200 ${
-        selected ? "border-[#BDB4FE]" : "border-[#EDEEEF]"
+        selected ? "border-[#BDB4FE]" : "border-surface"
       } ${className}`}
       {...props}
     >
@@ -78,7 +78,7 @@ export const SlideThumbnailCard = forwardRef<
         }}
         className="relative cursor-pointer overflow-hidden rounded-[11px] p-1.5 outline-none focus-visible:ring-2 focus-visible:ring-[#6D28D9] focus-visible:ring-inset"
       >
-        <p className="pointer-events-none absolute -left-1 top-1/2 z-50 flex h-[18px] min-w-[18px] -translate-y-1/2 items-center justify-center rounded-full border border-[#EDEEEF] bg-white px-1 text-[10px] font-medium text-[#191919] shadow-sm">
+        <p className="pointer-events-none absolute -left-1 top-1/2 z-50 flex h-[18px] min-w-[18px] -translate-y-1/2 items-center justify-center rounded-full border border-surface bg-white px-1 text-[10px] font-medium text-[#191919] shadow-sm">
           {index + 1}
         </p>
 

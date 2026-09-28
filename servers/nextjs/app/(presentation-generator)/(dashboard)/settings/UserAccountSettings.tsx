@@ -33,9 +33,9 @@ export default function UserAccountSettings({
               className="flex w-full items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-100 px-3 py-3"
               aria-current="page"
             >
-              <div className="flex h-[18px] w-[18px] items-center justify-center rounded-full border border-[#EDEEEF] bg-white">
+              <div className="flex h-[18px] w-[18px] items-center justify-center rounded-full border border-surface bg-white">
                 <UserRound
-                  className="h-3 w-3 text-[#5146E5]"
+                  className="h-3 w-3 text-brand"
                   aria-hidden="true"
                 />
               </div>
@@ -68,11 +68,11 @@ export default function UserAccountSettings({
               {t("description")}
             </p>
 
-            <div className="mt-6 rounded-[12px] border border-[#EDEEEF] bg-white p-6">
+            <div className="mt-6 rounded-[12px] border border-surface bg-white p-6">
               <div className="flex items-center gap-4">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-violet-50">
                   <UserRound
-                    className="h-5 w-5 text-[#5146E5]"
+                    className="h-5 w-5 text-brand"
                     aria-hidden="true"
                   />
                 </div>
@@ -86,7 +86,7 @@ export default function UserAccountSettings({
                 </div>
               </div>
 
-              <div className="mt-6 border-t border-[#EDEEEF] pt-6">
+              <div className="mt-6 border-t border-surface pt-6">
                 <p className="text-sm font-semibold text-[#191919]">
                   {t("signOut")}
                 </p>
@@ -95,7 +95,7 @@ export default function UserAccountSettings({
                 </p>
                 <LogoutButton
                   label={t("signOut")}
-                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#EDEEEF] bg-zinc-900 px-5 py-3 text-xs font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                  className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-surface bg-zinc-900 px-5 py-3 text-xs font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                 />
               </div>
             </div>
