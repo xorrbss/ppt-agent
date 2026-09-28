@@ -129,7 +129,7 @@
     "servers/fastapi/services/source_content/browser_readback.py": 882,
     "servers/fastapi/services/source_content/coverage.py": 714,
     "servers/fastapi/services/source_content/materializer.py": 986,
-    "servers/fastapi/services/source_content/pipeline.py": 690,
+    "servers/fastapi/services/source_content/pipeline.py": 656,
     "servers/fastapi/services/source_content/pptx.py": 646,
     "servers/fastapi/services/source_content/publication.py": 867,
     "servers/fastapi/services/source_locked/job_store.py": 804,
