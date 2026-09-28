@@ -76,7 +76,9 @@ DEMO_TOPIC_ID = "business-plan-v1"
 MANIFEST_SCHEMA = "authored-style-samples/v1"
 CANVAS = (1280, 720)
 DEFAULT_BASE = "http://127.0.0.1:8000"
-PPT_AGENT_TIMEOUT_SECONDS = 1800
+# One deck is ~10-12 min, but the server runs one owner's decks one at a time,
+# so a deck can also wait for others ahead of it in the queue.
+PPT_AGENT_TIMEOUT_SECONDS = 3600
 MAX_ATTEMPTS = 2  # one retry per deck (plan §2)
 _COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 
@@ -196,7 +198,7 @@ def _attempt_once(
     ``None`` unless the deck was fully accepted and rasterised.
     """
     result = run_ppt_agent(
-        repo_root, prompt, style_id, attempt_scratch, args.base, PPT_AGENT_TIMEOUT_SECONDS
+        repo_root, prompt, style_id, attempt_scratch, args.base, args.timeout_seconds
     )
     if result.returncode != 0:
         detail = (result.stderr or result.stdout or "").strip()[-2000:]
@@ -353,13 +355,14 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument("--scratch", type=Path, required=True, help="working directory for PDFs and result.json")
     parser.add_argument("--dry-run", action="store_true", help="print the plan; generate nothing")
     parser.add_argument("--base", type=str, default=DEFAULT_BASE)
+    parser.add_argument("--timeout-seconds", type=int, default=PPT_AGENT_TIMEOUT_SECONDS)
     return parser.parse_args(argv)
 
 
 def _print_dry_run(style_ids: list[str], prompt: str, args: argparse.Namespace, repo_root: Path) -> None:
     for style_id in style_ids:
         out_dir = args.scratch / style_id / "attempt-1"
-        command = build_ppt_agent_command(repo_root, prompt, style_id, out_dir, args.base, PPT_AGENT_TIMEOUT_SECONDS)
+        command = build_ppt_agent_command(repo_root, prompt, style_id, out_dir, args.base, args.timeout_seconds)
         print(f"style: {style_id}")
         print(f"  command: {shlex.join(command)}")
         print(f"  target:  {args.samples_root / style_id}")
