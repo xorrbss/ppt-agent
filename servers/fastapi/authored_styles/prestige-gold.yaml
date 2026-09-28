@@ -27,6 +27,13 @@ preview:
   image: catalogue-previews/prestige-gold.png
 reference_images:
   content: [catalogue-previews/prestige-gold.png]
+svg_overrides:
+  # GENERAL: the composition line is html-only only for the shared "freely
+  # authored HTML/CSS" boilerplate; the intent (single broad evidence field,
+  # alternation, risk-statement column, matrix limit) is restated for SVG.
+  resolved_sections: [GENERAL]
+  layout_hints:
+    - "Give the central decision one broad evidence field rather than a collection of KPI tiles. Alternate a navy decision brief slide, an uncluttered comparative ledger slide and a quiet chapter interruption slide across the deck. Keep long risk statements as their own SVG text column with generous line spacing; split a matrix beyond four options or five criteria onto another slide. Compose freely from SVG primitives rather than a fixed slot grid."
 brief: |-
   MOOD:
   Create nocturnal heritage prestige with the atmosphere of an estate, private club, or executive library at dusk. Make the composition cinematic, symmetrical, and assured. Unlike editorial-tritone, avoid cream paper, coral accents, and magazine pull-quote structures. Unlike luxury-editorial, favor monumental architecture and centered ceremony over tactile fashion asymmetry and script overlays.

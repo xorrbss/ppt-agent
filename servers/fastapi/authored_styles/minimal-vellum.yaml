@@ -23,6 +23,13 @@ preview:
   image: catalogue-previews/minimal-vellum.png
 reference_images:
   content: [catalogue-previews/minimal-vellum.png]
+svg_overrides:
+  # LAYOUT SYSTEM: the composition line is html-only only for the shared
+  # "freely authored HTML/CSS" boilerplate; the intent (asymmetric margin,
+  # alternation, per-observation lines) is restated below for SVG.
+  resolved_sections: [LAYOUT SYSTEM]
+  layout_hints:
+    - "Use a generous outer margin and an asymmetric text-to-specimen relationship; let a margin note or caption rail of SVG text support a larger primary specimen image or shape. Vary the sequence between a spacious specimen study, a two-option evidence spread and a compact research index across the deck. For dense material, give each observation its own short text line and move methods to a companion slide instead of compressing the page. Compose freely from SVG primitives rather than a fixed slot grid."
 brief: |-
   MOOD
   Compose a calm, tactile presentation inspired by vellum paper, natural materials, and quiet editorial craft. Let restraint and close attention create the sense of quality.

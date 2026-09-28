@@ -22,6 +22,13 @@ preview:
   image: catalogue-previews/neo-grid-bold.png
 reference_images:
   content: [catalogue-previews/neo-grid-bold.png]
+svg_overrides:
+  # LAYOUT SYSTEM: the composition line is html-only only for the shared
+  # "freely authored HTML/CSS" boilerplate; the intent (unequal aligned
+  # zones, alternation, matrix limit) is restated below for SVG.
+  resolved_sections: [LAYOUT SYSTEM]
+  layout_hints:
+    - "Use unequal but aligned rect zones with thick rule lines (wide stroked rects or lines) and strong negative space. Alternate a black thesis slide, a light comparison matrix and a typography-led decision slide across the deck. Limit a matrix to three options and four criteria; extend the canvas for dense evidence instead of filling every grid cell. Compose freely from SVG primitives rather than a fixed slot grid."
 brief: |-
   MOOD
   Build an energetic neo-brutalist system with visible structure, sharp corners, and intentional high-contrast geometry. The tone should feel direct, provocative, and controlled.

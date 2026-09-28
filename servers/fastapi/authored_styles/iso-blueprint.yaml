@@ -30,6 +30,15 @@ illustration:
     quality, generous empty margin around the scene
 reference_images:
   content: [catalogue-previews/iso-blueprint.png]
+svg_overrides:
+  # GENERAL: the folded brief scalar (">-") means every section header is
+  # inline text rather than a standalone line, so tag_brief_lines never
+  # switches sections and all three html-only lines land in GENERAL.
+  resolved_sections: [GENERAL]
+  layout_hints:
+    - "The signature composition places ONE large isometric illustration slot occupying roughly the left 55-65% of the slide, with short bold SVG text callout labels (separate text/tspan elements, not baked into the image) floating directly beside the parts of the scene they describe, connected by proximity, and a right-hand column of 2-4 concise takeaway bullets as SVG text. Vary the arrangement per role: cover slides may center the scene under the title; content slides may flip the illustration to the right. Reserve the slot area with explicit width/height so the layout holds even without the image. Keep a visible gutter between scene and takeaway column and keep label text within the slide safe margins. Connector ticks (short straight line segments) end at the relevant part without crossing another label; move crowded callouts into a numbered key beside the scene."
+    - "Let one isometric system occupy the main field with a separate caption or findings rail of SVG text. Keep a common projection, clear foreground/background separation and ample empty space around leader lines. Alternate the whole-system scene, a component cutaway and a flat evidence page across slides. Show at most four labeled components per view; detail complex mechanisms on another slide. Compose freely from SVG primitives rather than a fixed slot grid."
+    - "Describe one coherent isometric scene per slide that physically embodies the concept (pipelines, gates, control panels, locks, conveyor flows, server stacks); the illustration is offered as a single image slot. Composition only -- all text, numbers and labels live in separate SVG text elements placed around the image slot, never baked into the illustration itself."
 brief: >-
   MOOD: Create a confident systems-engineering explainer with the warmth of a
   well-made product manual. Every slide should feel like a precision diagram

@@ -25,6 +25,14 @@ preview:
   image: catalogue-previews/geometric-mono.png
 reference_images:
   content: [catalogue-previews/geometric-mono.png]
+svg_overrides:
+  # GENERAL: the LAYOUT SYSTEM composition line is html-only only because it
+  # closes with the shared "freely authored HTML/CSS" boilerplate; the design
+  # intent (black/white mass, alternation, comparable-item limit) is format
+  # neutral and restated below in SVG-safe terms.
+  resolved_sections: [GENERAL]
+  layout_hints:
+    - "Compose one dominant black or white solid SVG mass (a large rect or polygon fill) with a sharply aligned evidence area beside it. Alternate a geometry-led thesis slide, a white analytical spread and a reversed black comparison slide. Keep up to four comparable items on one slide; give long explanatory text its own slide with a wider reading column instead of shrinking type. Compose freely from SVG primitives rather than a fixed slot grid."
 brief: |-
   MOOD:
   Create cool architectural precision through monochrome mass, hard edges, and controlled photography. The tone is analytical and monumental, never playful. Distinguish this style from neo-grid-bold: use no visible grid-paper texture, no acid-lime accent, and no fragmented sticker energy; rely on continuous tonal slabs, grayscale architecture, and measured hierarchy.
