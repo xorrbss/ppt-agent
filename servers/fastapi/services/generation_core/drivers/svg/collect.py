@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from services.authored_checkpoint_errors import AuthoredStageError
 from services.generation_core.drivers.svg import author, render
 from services.generation_core.drivers.svg import quality as deck_quality
+from services.generation_core.drivers.svg import timing
 from services.generation_core.drivers.svg.terminal import rescue_terminal_page
 from services.svg_presentation_checkpoint import _collect_pages_or_fail, _digest, _provider_attempt_count
 from services.svg_presentation_prepare import _prepare_generation
@@ -46,6 +47,8 @@ async def _generate(request, presentation_id, outline, language, session, job):
     publish = _facade._publish
 
     ctx = await _prepare_generation(request, presentation_id, outline, session, job)
+    timing.record_outline(request)
+    timing.enter_deck_stage(request, "author")
     state = _RunState()
     hooks = _PageHooks(checkpoint=checkpoint, async_session_maker=async_session_maker,
                        read_png=read_png, write_png=write_png)
@@ -78,11 +81,16 @@ async def _generate(request, presentation_id, outline, language, session, job):
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
         raise
-    summary = await deck_quality.classify_pages(pages, job=job, checkpoint=checkpoint)
-    advisory = await deck_quality.deck_advisory(ctx, pages, job=job, read_png=read_png,
-                                                run_advisory=_facade.run_vision_advisory)
-    return await publish(request, presentation_id, outline, language, session, job,
-                         ctx.snapshot, ctx.roles, pages, quality_summary=summary, advisory=advisory)
+    timing.settle_page_loop(request)
+    timing.enter_deck_stage(request, "quality")
+    with timing.observe_stage(request, "quality"):
+        summary = await deck_quality.classify_pages(pages, job=job, checkpoint=checkpoint)
+        advisory = await deck_quality.deck_advisory(ctx, pages, job=job, read_png=read_png,
+                                                    run_advisory=_facade.run_vision_advisory)
+    timing.enter_deck_stage(request, "publication")
+    with timing.observe_stage(request, "publication"):
+        return await publish(request, presentation_id, outline, language, session, job,
+                             ctx.snapshot, ctx.roles, pages, quality_summary=summary, advisory=advisory)
 
 
 @dataclass
@@ -140,8 +148,9 @@ async def _page(ctx, request, presentation_id, outline, language, job, index, st
             if payload.get("raster_approval_digest") not in {None, ctx.raster_pin.approval_digest}:
                 raise ValueError("raster_checkpoint_approval_mismatch")
             if svg is None:
-                svg, advisories = await author.raster_reconstruct_svg(
-                    ctx.raster_analysis, ctx.raster_pin, request, index)
+                with timing.observe_stage(request, "author"):
+                    svg, advisories = await author.raster_reconstruct_svg(
+                        ctx.raster_analysis, ctx.raster_pin, request, index)
                 payload["svg_content"] = svg
                 # Non-blocking receipt evidence: which pixel-carried
                 # regions the dense-page fallback substituted for a group.
@@ -161,9 +170,10 @@ async def _page(ctx, request, presentation_id, outline, language, job, index, st
         except AuthoredStageError as error:
             if error is state.fatal_error:
                 raise
-            rescued = await rescue_terminal_page(ctx=ctx, request=request, index=index, content=content,
-                payload=payload, error=error, job=job, checkpoint=hooks.checkpoint,
-                write_png=hooks.write_png)
+            with timing.observe_stage(request, "render"):
+                rescued = await rescue_terminal_page(ctx=ctx, request=request, index=index, content=content,
+                    payload=payload, error=error, job=job, checkpoint=hooks.checkpoint,
+                    write_png=hooks.write_png)
             if rescued is None:
                 raise
             return rescued
@@ -180,17 +190,19 @@ async def _attempt_loop(ctx, request, presentation_id, index, content, payload, 
         ordinal = provider_count if svg is None else max(0, provider_count - 1)
         if svg is None:
             provider_ordinal = ordinal + len(payload.get("provider_failures", [])) + 1
-            author_result = await author.attempt_author(
-                ctx=ctx, request=request, index=index, content=content, role=role, count=ctx.count,
-                payload=payload, ordinal=ordinal, provider_ordinal=provider_ordinal, job=job,
-                state=state, checkpoint=hooks.checkpoint, async_session_maker=hooks.async_session_maker)
+            with timing.observe_stage(request, "author"):
+                author_result = await author.attempt_author(
+                    ctx=ctx, request=request, index=index, content=content, role=role, count=ctx.count,
+                    payload=payload, ordinal=ordinal, provider_ordinal=provider_ordinal, job=job,
+                    state=state, checkpoint=hooks.checkpoint, async_session_maker=hooks.async_session_maker)
             if author_result.retry:
                 continue
             svg = author_result.svg
-        render_result = await render.attempt_render(
-            ctx=ctx, request=request, presentation_id=presentation_id, index=index, content=content,
-            payload=payload, svg=svg, ordinal=ordinal, job=job, checkpoint=hooks.checkpoint,
-            async_session_maker=hooks.async_session_maker, write_png=hooks.write_png)
+        with timing.observe_stage(request, "render"):
+            render_result = await render.attempt_render(
+                ctx=ctx, request=request, presentation_id=presentation_id, index=index, content=content,
+                payload=payload, svg=svg, ordinal=ordinal, job=job, checkpoint=hooks.checkpoint,
+                async_session_maker=hooks.async_session_maker, write_png=hooks.write_png)
         if render_result is render.RETRY:
             continue
         return render_result
