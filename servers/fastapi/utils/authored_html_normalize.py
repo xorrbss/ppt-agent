@@ -61,7 +61,7 @@ The ``hidden`` and ``name`` whitelists genuinely need tag structure (whether
 a "hidden" element has bound-text descendants; the exact span of a ``name``
 attribute on its own tag), so each uses ``html.parser.HTMLParser``, the same
 parser ``renderer_isolation._PolicyParser`` and
-``utils.llm_calls.author_slide._SourceSpanParser`` already use, exactly as
+``utils.llm_calls.author_source_tags._SourceSpanParser`` already use, exactly as
 those do: to locate exact byte spans of real tags via ``get_starttag_text()``
 and line/column position, never to reserialize. Each runs only when its
 literal substring (``hidden``, ``name``) appears anywhere in the document, so
@@ -288,7 +288,7 @@ class _OpenFrame:
 class _HiddenScanParser(HTMLParser):
     """Locate byte spans of elements carrying a literal ``hidden`` attribute.
 
-    Mirrors ``utils.llm_calls.author_slide._SourceSpanParser``'s technique
+    Mirrors ``utils.llm_calls.author_source_tags._SourceSpanParser``'s technique
     (``get_starttag_text()`` plus line/column -> absolute offset) so tags are
     never reserialized, only sliced by exact byte offset.
     """

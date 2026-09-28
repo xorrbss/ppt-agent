@@ -283,6 +283,7 @@ def author_prompt(
     infographic: AuthoredSlideInfographic | None = None,
     capacity_brief: str | None = None,
     style_anchor: object | None = None,
+    canvas_height_px: int = 720,
 ) -> str:
     """Compose one slide's authoring prompt.
 
@@ -374,7 +375,11 @@ def author_prompt(
         "structure": structure_role_brief(role),
         "illustration": illustration_marker(illustration_allowed),
         "visual_story": visual_story_marker(visual_intent),
-        "figure": infographic_marker(infographic, page_number_mode=page_number_mode),
+        "figure": infographic_marker(
+            infographic,
+            page_number_mode=page_number_mode,
+            canvas_height_px=canvas_height_px,
+        ),
         "direction": user_direction_brief(instructions),
         "capacity": capacity_brief or "",
         "anchor": (

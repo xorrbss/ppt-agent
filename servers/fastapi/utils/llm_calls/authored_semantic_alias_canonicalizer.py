@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from html.parser import HTMLParser
 
-from utils.llm_calls.author_slide import (
+from utils.llm_calls.author_source_tags import (
     _append_start_tag_attribute,
     _apply_source_replacements,
     _remove_start_tag_attribute,

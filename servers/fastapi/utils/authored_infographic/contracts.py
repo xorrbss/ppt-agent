@@ -97,27 +97,43 @@ _ARCHETYPE_NOTES: dict[str, str] = {
 }
 
 
-#: The lowest y a figure container may stop at, per page-number mode. These are
-#: the lines ``author_slide_rules`` already states to the model: a numbered deck
-#: reserves a 72px footer (content ends at or above y=648) and an unnumbered one
+#: Only page geometry depends on the canvas: the bottom content line is the
+#: canvas height minus a fixed footer band. The box floor, the low-height
+#: ceilings and the measured shortfalls are figure-intrinsic — the library CSS
+#: draws the same px at any canvas — so they hold on every canvas as stated.
+BASELINE_CANVAS_HEIGHT_PX = 720
+
+#: The band under the content line, per page-number mode. These are the lines
+#: ``author_slide_rules`` already states to the model: a numbered deck reserves
+#: a 72px footer (content ends at or above y=648 on 720) and an unnumbered one
 #: keeps a 32px bottom margin (y=688). ``companyStandard`` numbering is composed
 #: into the same 72px band after rendering, so it shares the numbered line.
-CONTENT_BOTTOM_PX_BY_PAGE_NUMBER_MODE: dict[str, int] = {
-    "template": 648,
-    "companyStandard": 648,
-    "none": 688,
+#: The bands are fixed px, like the rules' own ``y={height - 72}`` rewrite.
+_FOOTER_BAND_PX_BY_PAGE_NUMBER_MODE: dict[str, int] = {
+    "template": 72,
+    "companyStandard": 72,
+    "none": 32,
 }
+#: What the contract falls back to when a caller states no mode: the wider
+#: band, so a figure sized against it can never cross the other line.
+_DEFAULT_FOOTER_BAND_PX = 72
 
-#: What the contract falls back to when a caller states no mode: the higher of
-#: the two lines, so a figure sized against it can never cross the other.
-DEFAULT_CONTENT_BOTTOM_PX = 648
+#: The lowest y a figure container may stop at on a 720px-high canvas.
+CONTENT_BOTTOM_PX_BY_PAGE_NUMBER_MODE: dict[str, int] = {
+    mode: BASELINE_CANVAS_HEIGHT_PX - band
+    for mode, band in _FOOTER_BAND_PX_BY_PAGE_NUMBER_MODE.items()
+}
+DEFAULT_CONTENT_BOTTOM_PX = BASELINE_CANVAS_HEIGHT_PX - _DEFAULT_FOOTER_BAND_PX
 
 
-def content_bottom_px(page_number_mode: str | None) -> int:
+def content_bottom_px(
+    page_number_mode: str | None, *, canvas_height_px: int = BASELINE_CANVAS_HEIGHT_PX
+) -> int:
     """The bottom content line a figure on this deck has to reach."""
-    return CONTENT_BOTTOM_PX_BY_PAGE_NUMBER_MODE.get(
-        page_number_mode or "", DEFAULT_CONTENT_BOTTOM_PX
+    band = _FOOTER_BAND_PX_BY_PAGE_NUMBER_MODE.get(
+        page_number_mode or "", _DEFAULT_FOOTER_BAND_PX
     )
+    return canvas_height_px - band
 
 
 #: Archetypes whose figure has an honest ceiling well under the 430px floor
@@ -207,9 +223,18 @@ def _box_rule(slide: AuthoredSlideInfographic, bottom: int) -> str:
 
 
 def slot_contract(
-    slide: AuthoredSlideInfographic, *, page_number_mode: str | None = None
+    slide: AuthoredSlideInfographic,
+    *,
+    page_number_mode: str | None = None,
+    canvas_height_px: int = BASELINE_CANVAS_HEIGHT_PX,
 ) -> str:
-    """The figure contract for one planned figure slide."""
+    """The figure contract for one planned figure slide.
+
+    Only the vertical budget depends on the canvas: the contract states no
+    horizontal px (the width is "your full content width"), and the figure
+    markup's px values are component sizes the library draws at any canvas.
+    """
+    bottom = content_bottom_px(page_number_mode, canvas_height_px=canvas_height_px)
     skeleton = render_skeleton(slide)
     note = _ARCHETYPE_NOTES[slide.archetype]
     if slide.archetype == "comparison" and any(n.before or n.after for n in slide.nodes):
@@ -218,7 +243,7 @@ def slot_contract(
         "FIGURE CONTRACT (the figure below is finished markup; reproduce it, do not redesign it):\n"
         "1. Paste the following figure into the slide body EXACTLY as given — every element, class, "
         "data-qid, data-native, data-qid-ignore and text — at the place your layout reserves for it. "
-        + _box_rule(slide, content_bottom_px(page_number_mode))
+        + _box_rule(slide, bottom)
         +
         "2. The figure's stylesheet is injected by the server. Do NOT write CSS for any .ig* class, "
         "do NOT add a class the library does not define, and do NOT put a style attribute or a "
@@ -239,6 +264,7 @@ def slot_contract(
 
 
 __all__ = [
+    "BASELINE_CANVAS_HEIGHT_PX",
     "CONTENT_BOTTOM_PX_BY_PAGE_NUMBER_MODE",
     "DEFAULT_CONTENT_BOTTOM_PX",
     "LOW_HEIGHT_MAX_PX",

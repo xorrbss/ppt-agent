@@ -920,6 +920,7 @@ async def _author_one_resilient(
                 infographic=infographic,
                 capacity_brief=capacity_brief,
                 style_anchor=style_anchor,
+                canvas_height_px=canvas_height_px,
                 **kwargs,
             )
             if is_valid_slide_html(html):
@@ -1280,7 +1281,6 @@ def prepare_authored_deck(
         if infographic_plan is not None
         and reference_mode != EXACT_RECONSTRUCTION
         and not structured
-        and (canvas_width_px, canvas_height_px) == (1280, 720)
         else ()
     )
     visual_plan = (
@@ -1442,6 +1442,7 @@ def _planned_batch_request(
         correction_hint=(failure.correction_hint if failure is not None else None),
         rejected_html=(failure.rejected_html if failure is not None else None),
         style_anchor=style_anchor,
+        canvas_height_px=getattr(plan, "canvas_height_px", 720),
     )
 
 

@@ -9,7 +9,11 @@ keep the pre-plan behaviour where the model composes for itself.
 from __future__ import annotations
 
 from models.authored_infographic_plan import AuthoredSlideInfographic
-from utils.authored_infographic.contracts import LOW_HEIGHT_MAX_PX, slot_contract
+from utils.authored_infographic.contracts import (
+    BASELINE_CANVAS_HEIGHT_PX,
+    LOW_HEIGHT_MAX_PX,
+    slot_contract,
+)
 
 _ARCHETYPE_SHAPES: dict[str, str] = {
     "process": "ordered steps on one directional rail, first to last",
@@ -114,7 +118,10 @@ def _node_lines(slide: AuthoredSlideInfographic) -> str:
 
 
 def infographic_marker(
-    slide: AuthoredSlideInfographic | None, *, page_number_mode: str | None = None
+    slide: AuthoredSlideInfographic | None,
+    *,
+    page_number_mode: str | None = None,
+    canvas_height_px: int = BASELINE_CANVAS_HEIGHT_PX,
 ) -> str:
     """Render one slide's figure brief, or nothing when no plan ran.
 
@@ -122,6 +129,8 @@ def infographic_marker(
     tells the model to reach; it is the deck's own mode, already resolved by
     ``author_prompt``, so the figure is sized against the same line the
     PAGE-NUMBER SYSTEM rules state a few paragraphs later in the same prompt.
+    ``canvas_height_px`` is the deck canvas's height, which places that line;
+    the figure's own box floor and ceilings do not depend on the canvas.
     """
     if slide is None:
         return ""
@@ -158,7 +167,7 @@ def infographic_marker(
         "shape, this brief wins. The figure itself is drawn by the archetype "
         "component library under the contract below; the server rejects a "
         "slide that departs from it.\n"
-        f"{slot_contract(slide, page_number_mode=page_number_mode)}"
+        f"{slot_contract(slide, page_number_mode=page_number_mode, canvas_height_px=canvas_height_px)}"
     )
 
 

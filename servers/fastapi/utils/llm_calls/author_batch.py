@@ -108,6 +108,7 @@ class AuthoredBatchSlideRequest:
     rejected_html: str | None = None
     # G0: the deck's already-authored anchor slide, offered as data.
     style_anchor: object | None = None
+    canvas_height_px: int = 720
 
 
 @dataclass(frozen=True)
@@ -158,6 +159,7 @@ def _prepare_slide(
         infographic=request.infographic,
         capacity_brief=request.capacity_brief,
         style_anchor=request.style_anchor,
+        canvas_height_px=request.canvas_height_px,
     )
     if request.correction_hint:
         prompt += (
