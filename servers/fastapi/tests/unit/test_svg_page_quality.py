@@ -238,7 +238,9 @@ def test_visual_review_passes_with_a_matching_clean_advisory():
     assert review["evidence"]["measurements"]["advisoryDigest"] == advisory["digest"]
 
 
-def test_visual_review_fails_when_the_advisory_names_an_issue():
+def test_visual_review_records_but_does_not_flag_on_an_advisory_issue():
+    # The advisory is advisory by contract: generation reports this deck as
+    # 0 flagged pages, and the export review must agree.
     slides = [_slide("<svg>a</svg>")]
     digests = slide_page_digests(slides)
     vision = {"slides": [{"index": 0, "issues": ["off-brand color"]}], "promptVersion": "v1", "model": "m"}
@@ -246,9 +248,10 @@ def test_visual_review_fails_when_the_advisory_names_an_issue():
 
     review = svg_visual_review(slides=slides, advisory=advisory)
 
-    assert review["status"] == "failed"
-    assert review["reasonCode"] == "svg_visual_review_flagged"
-    assert "evidence" in review
+    assert review["status"] == "passed"
+    assert "reasonCode" not in review
+    assert review["evidence"]["measurements"]["advisoryFlaggedPages"] == 1
+    assert review["evidence"]["measurements"]["reviewPages"] == 0
 
 
 def test_visual_review_stale_when_a_page_svg_changed_after_the_advisory():
@@ -306,21 +309,26 @@ def test_ordinary_deck_receipt_is_camel_case_and_visual_review_passes_but_blocke
 
     assert "visualReview" in receipt and "releaseReadiness" in receipt
     assert validated.visual_review.status == "passed"
-    # Ordinary decks carry no authoring/geometry evidence, so they never
-    # reach "ready" -- only a source-preserving deck can.
+    # These fixture pages carry no measured page quality, so authoring and
+    # geometry/font stay fail-closed and the deck is not release ready.
+    assert receipt["authoring"]["reasonCode"] == "svg_authoring_evidence_missing"
+    assert receipt["geometryFont"]["reasonCode"] == "svg_geometry_font_evidence_missing"
     assert receipt["releaseReadiness"] == "blocked"
     with pytest.raises(NonRetryableWorkspaceOperationError, match="svg_release_quality_not_release_ready"):
         require_release_v1_receipt(receipt)
 
 
 def test_ordinary_deck_receipt_flagged_visual_review_is_rejected_by_the_gate():
-    slides = _ordinary_slides()
-    digests = slide_page_digests(slides)
-    vision = {"slides": [{"index": 0, "issues": ["off-brand color"]}, {"index": 1, "issues": []}],
-              "promptVersion": "v1", "model": "m"}
-    receipt = _ordinary_receipt(advisory_record(vision, digests))
+    slides = [_slide("<svg>1</svg>", verified=False), _slide("<svg>2</svg>")]
+    receipt = svg_public_quality_receipt(
+        slides=slides, advisory=_clean_advisory(slides), source_preservation=None, worker_metrics={},
+        exporter_version="x", quality_receipt_id="quality-t", operation_id="operation-t",
+        presentation_id="presentation-t", artifact_digest="sha256:" + "a" * 64, source_revision=1,
+        scene_digest="sha256:" + "b" * 64, evaluated_at=datetime.now(timezone.utc),
+    )
 
     assert receipt["visualReview"]["status"] == "failed"
+    assert receipt["visualReview"]["reasonCode"] == "svg_visual_review_flagged"
     with pytest.raises(NonRetryableWorkspaceOperationError,
                         match="svg_release_quality_visual_review_not_passed"):
         require_release_v1_receipt(receipt)

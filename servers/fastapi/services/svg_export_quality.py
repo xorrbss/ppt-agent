@@ -12,6 +12,7 @@ import json
 
 from api.v2.contracts import QualityReceiptV3
 from services.authored_vnext.capability_registry import CAPABILITY_REGISTRY_DIGEST
+from services.svg_export_page_evidence import svg_authoring, svg_geometry_font
 from services.svg_export_visual_review import release_readiness, svg_visual_review
 
 TEMPLATE_CHECKS = ("identity", "slots", "typography", "background", "table_style", "shape_style", "decorations")
@@ -91,18 +92,26 @@ def source_svg_public_quality_receipt(*, slides, source_preservation, worker_met
 
 def svg_public_quality_receipt(*, slides, advisory, source_preservation, worker_metrics,
                                exporter_version, **receipt_args):
-    """The export quality receipt for any SVG deck, source-preserving or not."""
+    """The export quality receipt for any SVG deck, source-preserving or not.
+
+    A generated deck's ``authoring`` and ``geometry_font`` come from the page
+    evidence its generation persisted (``svg_export_page_evidence``).
+    """
 
     if source_preservation and all(
             r.get("layout_schema_version") == "svg-source-layout/v2" for r in source_preservation):
         return source_svg_public_quality_receipt(slides=slides, source_preservation=source_preservation,
             worker_metrics=worker_metrics, exporter_version=exporter_version, advisory=advisory,
             **receipt_args)
-    from services.workspace_export_quality_evidence import _legacy_fidelity_public_quality_receipt
-
-    receipt = json.loads(json.dumps(_legacy_fidelity_public_quality_receipt(**receipt_args))
-                         .replace("legacy_", "svg_"))
-    receipt["visualReview"] = svg_visual_review(slides=slides, advisory=advisory)
-    domains = [value for key, value in receipt.items() if isinstance(value, dict) and "status" in value]
-    receipt["releaseReadiness"] = release_readiness(domains)
-    return QualityReceiptV3.model_validate(receipt).model_dump(mode="json", by_alias=True)
+    domains = dict(
+        content_brief=dict(required=False, status="not_required"),
+        authoring=svg_authoring(slides),
+        geometry_font=svg_geometry_font(slides),
+        image_content_integrity=dict(required=False, status="not_required"),
+        visual_review=svg_visual_review(slides=slides, advisory=advisory),
+        performance=dict(required=False, status="not_assessed", reasonCode="svg_performance_evidence_missing"),
+        native_coverage_ooxml=dict(required=False, status="pending",
+                                   reasonCode="ooxml_checker_evidence_not_persisted"))
+    return QualityReceiptV3(**receipt_args, capability_registry_digest=CAPABILITY_REGISTRY_DIGEST,
+        exporter_version=exporter_version, **domains,
+        release_readiness=release_readiness(domains.values())).model_dump(mode="json", by_alias=True)
