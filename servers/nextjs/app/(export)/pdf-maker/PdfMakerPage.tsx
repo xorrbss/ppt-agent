@@ -24,8 +24,15 @@ import {
   renderArtifactSlides,
   type RenderArtifact,
 } from "@/lib/render-service";
+import {
+  LEGACY_AUTHORED_CANVAS,
+  resolveAuthoredCanvas,
+  type AuthoredCanvasContract,
+} from "@/lib/authored-canvas";
 
-const PDF_PRINT_STYLE = `
+function pdfPrintStyle(canvas: AuthoredCanvasContract): string {
+  const { widthPx, heightPx } = canvas;
+  return `
   html,
   body {
     margin: 0 !important;
@@ -52,21 +59,21 @@ const PDF_PRINT_STYLE = `
   }
 
   #presentation-slides-wrapper .main-slide {
-    width: 1280px !important;
-    min-width: 1280px !important;
-    max-width: 1280px !important;
-    height: 720px !important;
-    min-height: 720px !important;
-    max-height: 720px !important;
-    flex: 0 0 720px !important;
+    width: ${widthPx}px !important;
+    min-width: ${widthPx}px !important;
+    max-width: ${widthPx}px !important;
+    height: ${heightPx}px !important;
+    min-height: ${heightPx}px !important;
+    max-height: ${heightPx}px !important;
+    flex: 0 0 ${heightPx}px !important;
     margin: 0 !important;
     padding: 0 !important;
     overflow: hidden !important;
   }
 
   #presentation-slides-wrapper .slide-export-inner {
-    width: 1280px !important;
-    height: 720px !important;
+    width: ${widthPx}px !important;
+    height: ${heightPx}px !important;
     margin: 0 !important;
     padding: 0 !important;
     overflow: hidden !important;
@@ -74,7 +81,7 @@ const PDF_PRINT_STYLE = `
 
   @media print {
     @page {
-      size: 1280px 720px;
+      size: ${widthPx}px ${heightPx}px;
       margin: 0;
     }
 
@@ -95,6 +102,7 @@ const PDF_PRINT_STYLE = `
     }
   }
 `;
+}
 
 /**
  * Point SVG <img> icons at the PNG-rasterizing route. The "editable PPTX"
@@ -138,9 +146,11 @@ type PresentationPageProps = {
 const AuthoredHtmlPdfSlide = ({
   slide,
   index,
+  canvas,
 }: {
   slide: { id?: string | null; index?: number; html_content?: string | null };
   index: number;
+  canvas: AuthoredCanvasContract;
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const html = slide.html_content?.trim() ?? "";
@@ -148,6 +158,7 @@ const AuthoredHtmlPdfSlide = ({
     () => `pdf-authored-html-${slide.id ?? index}`,
     [index, slide.id]
   );
+  const size = { width: canvas.widthPx, height: canvas.heightPx };
 
   useHtmlChartInjection({
     html,
@@ -157,14 +168,15 @@ const AuthoredHtmlPdfSlide = ({
   });
 
   return (
-    <div className="authored-html-export-root h-[720px] w-[1280px] overflow-hidden bg-white">
-      <div className="authored-html-export-content h-[720px] w-[1280px] overflow-hidden bg-white">
+    <div className="authored-html-export-root overflow-hidden bg-white" style={size}>
+      <div className="authored-html-export-content overflow-hidden bg-white" style={size}>
         <div
           ref={containerRef}
           data-html-slide-instance={instanceId}
           data-screenshot="true"
           data-screenshot-include-children="true"
-          className="h-[720px] w-[1280px] overflow-hidden bg-white"
+          className="overflow-hidden bg-white"
+          style={size}
           dangerouslySetInnerHTML={{ __html: html }}
         />
       </div>
@@ -207,6 +219,14 @@ const PresentationPage = ({
   }, [normalizedInitialPresentationData, storedPresentationData]);
   const presentationData =
     normalizedInitialPresentationData ?? storedPresentationData;
+  const canvas = useMemo<AuthoredCanvasContract>(() => {
+    if (!presentationData?.theme) return LEGACY_AUTHORED_CANVAS;
+    try {
+      return resolveAuthoredCanvas(presentationData.theme);
+    } catch {
+      return LEGACY_AUTHORED_CANVAS;
+    }
+  }, [presentationData?.theme]);
   const [error, setError] = useState(false);
   const renderArtifact = useMemo<RenderArtifact | null>(() => {
     if (!presentationData || !renderTarget) return null;
@@ -360,7 +380,7 @@ const PresentationPage = ({
         </div>
       ) : (
         <>
-          <style jsx global>{PDF_PRINT_STYLE}</style>
+          <style jsx global>{pdfPrintStyle(canvas)}</style>
           <div
             id="presentation-slides-wrapper"
             className="relative m-0 flex w-full flex-col items-center overflow-visible p-0"
@@ -375,7 +395,8 @@ const PresentationPage = ({
                   {Array.from({ length: 2 }).map((_, index) => (
                     <Skeleton
                       key={index}
-                      className="m-0 h-[720px] w-[1280px] bg-gray-400 p-0"
+                      className="m-0 bg-gray-400 p-0"
+                      style={{ width: canvas.widthPx, height: canvas.heightPx }}
                     />
                   ))}
                 </div>
@@ -396,7 +417,7 @@ const PresentationPage = ({
                     >
                       {typeof slide?.html_content === "string" &&
                         slide.html_content.trim() ? (
-                        <AuthoredHtmlPdfSlide slide={slide} index={index} />
+                        <AuthoredHtmlPdfSlide slide={slide} index={index} canvas={canvas} />
                       ) : (
                         <SlideScale
                           slide={slide}

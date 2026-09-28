@@ -805,11 +805,13 @@ def _run_powerpoint_com_qa(
     geometry_contract_digest: str | None = None,
     interactive_observation: bool = False,
     require_font_embedding: bool = True,
-    release_required: bool = False,
+    release_required: bool = False, theme: object | None = None,
 ) -> dict[str, Any]:
     import pythoncom  # type: ignore[import-not-found]
     import win32com.client  # type: ignore[import-not-found]
+    from services.authored_canvas import presentation_canvas_contract
 
+    canvas_contract = presentation_canvas_contract(theme)
     pythoncom.CoInitialize()
     application = first = reopened = None
     owned_application = False
@@ -875,7 +877,7 @@ def _run_powerpoint_com_qa(
                 for i in range(1, slide_count + 1)
             ]
             first_snapshot, first_snapshot_failures = _powerpoint_deck_snapshot(first)
-            first.Export(str(first_render), "PNG", 1280, 720)
+            first.Export(str(first_render), "PNG", canvas_contract.width_px, canvas_contract.height_px)
             first.SaveCopyAs(str(copy_path), 24)
             _advance_powerpoint_qa_observation(observation_states, "save-copy")
             first.Close()
@@ -948,7 +950,7 @@ def _run_powerpoint_com_qa(
                                 typography_gt_10pt += 1
                     except Exception:
                         inspection_failures += 1
-            reopened.Export(str(reopen_render), "PNG", 1280, 720)
+            reopened.Export(str(reopen_render), "PNG", canvas_contract.width_px, canvas_contract.height_px)
             first_pngs = sorted(first_render.glob("*.PNG"))
             pngs = sorted(reopen_render.glob("*.PNG"))
             first_png_hashes = [_sha256_file(png) for png in first_pngs]
@@ -1131,7 +1133,7 @@ async def trusted_powerpoint_qa(
     expected_geometry: dict[tuple[int, str], tuple[float, float, float, float]] | None = None,
     geometry_contract_digest: str | None = None,
     require_font_embedding: bool = True,
-    release_required: bool = False,
+    release_required: bool = False, theme: object | None = None,
 ) -> dict[str, Any]:
     if os.name != "nt":
         return {
@@ -1159,12 +1161,9 @@ async def trusted_powerpoint_qa(
             expected_qid_owners,
             expected_geometry,
             geometry_contract_digest,
-            os.getenv(
-                "AUTHORED_POWERPOINT_QA_INTERACTIVE_OBSERVATION", "false"
-            ).lower()
-            == "true",
+            os.getenv("AUTHORED_POWERPOINT_QA_INTERACTIVE_OBSERVATION", "false").lower() == "true",
             require_font_embedding,
-            release_required,
+            release_required, theme,
         )
     except Exception as error:
         reason = (

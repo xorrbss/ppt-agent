@@ -364,6 +364,7 @@ async def complete_direct_hybrid_export_attempt(
             expected_geometry=expected_geometry,
             geometry_contract_digest=geometry_contract_digest,
             release_required=release_policy.require_native_coverage,
+            theme=presentation.theme,
         )
     )
     if qa.status == "passed" and (

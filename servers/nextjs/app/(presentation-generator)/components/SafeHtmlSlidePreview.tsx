@@ -10,6 +10,11 @@ import {
 const SLIDE_WIDTH = 1280;
 const SLIDE_HEIGHT = 720;
 
+export interface SafeHtmlSlidePreviewCanvas {
+  widthPx: number;
+  heightPx: number;
+}
+
 const PREVIEW_CSP = [
   "default-src 'none'",
   "base-uri 'none'",
@@ -44,13 +49,18 @@ function fontAssets(fonts: unknown) {
     .join("\n");
 }
 
-function isolatedPreviewDocument(html: string, fonts: unknown) {
+function isolatedPreviewDocument(
+  html: string,
+  fonts: unknown,
+  canvas: SafeHtmlSlidePreviewCanvas,
+) {
+  const { widthPx, heightPx } = canvas;
   return `<!doctype html>
   <html>
     <head>
       <meta charset="utf-8">
       <meta http-equiv="Content-Security-Policy" content="${PREVIEW_CSP}">
-      <meta name="viewport" content="width=1280, initial-scale=1">
+      <meta name="viewport" content="width=${widthPx}, initial-scale=1">
       ${fontAssets(fonts)}
       <script src="https://cdn.tailwindcss.com"></script>
       <script src="${CHART_BROWSER_SCRIPT_URL}"></script>
@@ -61,7 +71,7 @@ function isolatedPreviewDocument(html: string, fonts: unknown) {
         }
       </script>
       <style>
-        html,body{width:1280px;height:720px;min-width:1280px;min-height:720px;margin:0;overflow:hidden;background:#fff}
+        html,body{width:${widthPx}px;height:${heightPx}px;min-width:${widthPx}px;min-height:${heightPx}px;margin:0;overflow:hidden;background:#fff}
         *{box-sizing:border-box}
       </style>
     </head>
@@ -69,22 +79,30 @@ function isolatedPreviewDocument(html: string, fonts: unknown) {
   </html>`;
 }
 
+const DEFAULT_CANVAS: SafeHtmlSlidePreviewCanvas = {
+  widthPx: SLIDE_WIDTH,
+  heightPx: SLIDE_HEIGHT,
+};
+
 export default function SafeHtmlSlidePreview({
   html,
   fonts,
   fixedSize = false,
   title = "Presentation design preview",
+  canvas = DEFAULT_CANVAS,
 }: {
   html: string;
   fonts?: unknown;
   fixedSize?: boolean;
   title?: string;
+  canvas?: SafeHtmlSlidePreviewCanvas;
 }) {
+  const { widthPx, heightPx } = canvas;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(0);
   const srcDoc = useMemo(
-    () => isolatedPreviewDocument(html, fonts),
-    [fonts, html],
+    () => isolatedPreviewDocument(html, fonts, canvas),
+    [fonts, html, canvas],
   );
 
   useEffect(() => {
@@ -98,7 +116,7 @@ export default function SafeHtmlSlidePreview({
     return () => observer.disconnect();
   }, [fixedSize]);
 
-  const scale = fixedSize ? 1 : width ? Math.min(width / SLIDE_WIDTH, 1) : 0;
+  const scale = fixedSize ? 1 : width ? Math.min(width / widthPx, 1) : 0;
 
   return (
     <div
@@ -106,22 +124,23 @@ export default function SafeHtmlSlidePreview({
       className="relative w-full overflow-hidden bg-white"
       data-safe-html-preview="true"
       style={{
-        width: fixedSize ? SLIDE_WIDTH : undefined,
-        height: fixedSize ? SLIDE_HEIGHT : SLIDE_HEIGHT * (scale || 1),
+        width: fixedSize ? widthPx : undefined,
+        height: fixedSize ? heightPx : heightPx * (scale || 1),
       }}
     >
       <div
         className="absolute left-1/2 top-0"
         style={{
-          width: SLIDE_WIDTH,
-          height: SLIDE_HEIGHT,
+          width: widthPx,
+          height: heightPx,
           transform: `translateX(-50%) scale(${scale || 1})`,
           transformOrigin: "top center",
           opacity: scale ? 1 : 0,
         }}
       >
         <iframe
-          className="block h-[720px] w-[1280px] border-0 bg-white"
+          className="block border-0 bg-white"
+          style={{ width: widthPx, height: heightPx }}
           sandbox="allow-scripts"
           referrerPolicy="no-referrer"
           srcDoc={srcDoc}

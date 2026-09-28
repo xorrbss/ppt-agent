@@ -1,7 +1,7 @@
 """Headless per-slide capture for the vision-QA pass. Pure subprocess chrome
 screenshot (no browser dependency — consistent with export spawning an external
-binary) + a deterministic PIL crop: the /pdf-maker page stacks slides at exactly
-1280x720 with gap 0 / margin 0, so slide i is the box (0, i*720, 1280, (i+1)*720)."""
+binary) + a deterministic PIL crop: the /pdf-maker page stacks slides at the deck's canvas with gap 0/margin 0, so
+slide i is (0, i*height_px, width_px, (i+1)*height_px); see capture_slides_impl in slide_capture_batch.py."""
 
 import asyncio
 import atexit
@@ -1509,7 +1509,7 @@ async def capture_slides(
     presentation_id: str,
     n_slides: int,
     base_url: str = "http://127.0.0.1:5000",
-    timeout: int = 90,
+    timeout: int = 90, *, width_px: int = SLIDE_W, height_px: int = SLIDE_H,
 ) -> List[bytes]:  # noqa: ASYNC109
     from utils.slide_capture_batch import capture_slides_impl
 
@@ -1521,7 +1521,7 @@ async def capture_slides(
         env_enabled=env_enabled,
         find_chrome=find_chrome,
         run_chrome_screenshot=_run_chrome_screenshot,
-        wait_for_output=_wait_for_output,
+        wait_for_output=_wait_for_output, width_px=width_px, height_px=height_px,
     )
 
 

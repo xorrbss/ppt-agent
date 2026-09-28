@@ -24,9 +24,14 @@ async def capture_slides_impl(
     find_chrome: Callable[[], str | None],
     run_chrome_screenshot: Callable[[List[str], int], bytes],
     wait_for_output: Callable[[str], Awaitable[bool]],
+    width_px: int = SLIDE_W,
+    height_px: int = SLIDE_H,
 ) -> List[bytes]:  # noqa: ASYNC109
     """Capture the deck via headless chrome and slice it into per-slide PNG bytes.
-    Raises RuntimeError if no chrome is found or the screenshot fails."""
+    Raises RuntimeError if no chrome is found or the screenshot fails.
+    ``width_px``/``height_px`` must match the deck's own canvas (the /pdf-maker
+    page it screenshots sizes each stacked slide to that canvas); they default
+    to the legacy 1280x720 canvas."""
     from PIL import Image
 
     if not env_enabled("AUTHORED_RENDERER_LEGACY_ENABLED"):
@@ -40,7 +45,7 @@ async def capture_slides_impl(
             "No chrome/chromium found for slide capture (set CHROME_PATH)."
         )
     n = max(1, int(n_slides))
-    height = n * SLIDE_H
+    height = n * height_px
     url = f"{base_url}/pdf-maker?id={presentation_id}"
     # ignore_cleanup_errors: the detached headless-chrome child can outlive the
     # screenshot and keep the --user-data-dir profile locked; on Windows that turns
@@ -69,7 +74,7 @@ async def capture_slides_impl(
             "--no-default-browser-check",
             "--hide-scrollbars",
             "--force-device-scale-factor=1",
-            f"--window-size={SLIDE_W},{height}",
+            f"--window-size={width_px},{height}",
             f"--screenshot={out}",
             "--virtual-time-budget=20000",
             url,
@@ -80,8 +85,8 @@ async def capture_slides_impl(
         img = Image.open(out).convert("RGB")
         slides: List[bytes] = []
         for i in range(n):
-            top = i * SLIDE_H
-            crop = img.crop((0, top, SLIDE_W, top + SLIDE_H))
+            top = i * height_px
+            crop = img.crop((0, top, width_px, top + height_px))
             buf = io.BytesIO()
             crop.save(buf, format="PNG")
             slides.append(buf.getvalue())
