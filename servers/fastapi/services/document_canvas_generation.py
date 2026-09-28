@@ -26,3 +26,12 @@ def generation_font_floor(instructions: str | None, physical_canvas: object | No
     scale = float(getattr(physical_canvas, "point_per_unit", 0.75))
     requested = requested_font_floor_px(instructions, point_per_unit=scale)
     return requested if requested is not None else MIN_AUTHORED_FONT_SIZE_PX * 0.75 / scale
+
+
+def source_restyle_font_floor(instructions: str | None, physical_canvas: object | None = None) -> float:
+    """Fit page-locked source content down to 7 CSS px on the output canvas."""
+    from utils.authored_font_policy import requested_font_floor_px
+
+    scale = float(getattr(physical_canvas, "point_per_unit", 0.75))
+    requested = requested_font_floor_px(instructions, point_per_unit=scale)
+    return max(7.0, requested) if requested is not None else 7.0

@@ -52,7 +52,7 @@ class AuthorAttempt:
 
 async def attempt_author(*, ctx, request, index, content, role, count, payload, ordinal,
                          provider_ordinal, job, state, checkpoint, async_session_maker) -> AuthorAttempt:
-    from services.document_canvas_generation import generation_font_floor
+    from services.document_canvas_generation import source_restyle_font_floor
     from utils.llm_calls.author_slide_svg import author_slide_svg
     from utils.provider_overload import ProviderOutcomeError
 
@@ -79,7 +79,7 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
                 raise asyncio.CancelledError()
 
         image_slots = {candidate.occurrence_id: slot for slot, candidate in ctx.planned[index].items()}
-        min_font_size_px = generation_font_floor(request.instructions, getattr(request, "_document_canvas", None))
+        min_font_size_px = source_restyle_font_floor(request.instructions, getattr(request, "_document_canvas", None))
         try:
             local_result = await asyncio.to_thread(
                 try_template_source_layout, ctx.source_document, index, ctx.snapshot,
@@ -134,7 +134,7 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
                     source_images=offered_images,
                     image_slots={candidate.occurrence_id: slot
                                 for slot, candidate in ctx.planned[index].items()},
-                    min_font_size_px=generation_font_floor(
+                    min_font_size_px=source_restyle_font_floor(
                         request.instructions, getattr(request, "_document_canvas", None)),
                     width=ctx.canvas.width_px, height=ctx.canvas.height_px,
                     instructions=request.instructions, correction_hint=hint,

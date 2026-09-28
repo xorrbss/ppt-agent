@@ -228,8 +228,7 @@ describe("useUploadPageState source-content abort paths", () => {
     cy.get('[data-testid="harness-is-loading"]').should("have.text", "false");
   });
 
-  for (const blocker of ["chart", "source-canvas"] as const) {
-  it(`accepts default A4, preserves the ${blocker} reason and reanalyses the owned source SVG snapshot`, () => {
+  it("accepts default A4, preserves the chart reason and reanalyses the owned source SVG snapshot", () => {
     cy.intercept("GET", "**/api/v1/ppt/authored/canvas-capabilities*", {
       statusCode: 200,
       body: {
@@ -247,8 +246,7 @@ describe("useUploadPageState source-content abort paths", () => {
       statusCode: 200,
       body: {
         ...analysisResponse,
-        documentCanvas: blocker === "source-canvas" ? null : analysisResponse.documentCanvas,
-        summary: { ...analysisResponse.summary, charts: blocker === "chart" ? 1 : 0 },
+        summary: { ...analysisResponse.summary, charts: 1 },
       },
     }).as("freshAnalyzeSourceContent");
     mountHarness({ generationStrategy: "svg", authoredStyle: "default" });
@@ -258,7 +256,7 @@ describe("useUploadPageState source-content abort paths", () => {
     cy.get('[data-testid="harness-generate"]').click();
     cy.wait("@freshAnalyzeSourceContent");
     cy.get('[data-testid="harness-is-loading"]').should("have.text", "false");
-    cy.get('[data-testid="harness-message"]').should("contain", blocker === "chart" ? "원본에 차트" : "A4 가로 원본만 지원");
+    cy.get('[data-testid="harness-message"]').should("contain", "원본에 차트");
     cy.get('[data-testid="harness-message"]').should("not.contain", "설정을 확인한 뒤 다시 진행");
 
     cy.get('[data-testid="harness-generate"]').click();
@@ -268,5 +266,35 @@ describe("useUploadPageState source-content abort paths", () => {
     cy.get("@freshAnalyzeSourceContent.all").should("have.length", 2);
     cy.get("@createSnapshot.all").should("have.length", 1);
   });
-  }
+
+  it("sends selected A4 for a source SVG PPTX without an A4 source canvas", () => {
+    cy.intercept("GET", "**/api/v1/ppt/authored/canvas-capabilities*", {
+      statusCode: 200,
+      body: {
+        a4: { enabled: true, reason: null },
+        sourceContentSvg: {
+          enabled: true,
+          reason: null,
+          canvasSource: "selected-a4",
+          inputFormats: ["pptx"],
+          productVerified: false,
+        },
+      },
+    }).as("canvasCapabilities");
+    cy.intercept("POST", "**/api/v1/ppt/source-content/v1/analyze", {
+      statusCode: 200,
+      body: { ...analysisResponse, documentCanvas: null },
+    }).as("freshAnalyzeSourceContent");
+    cy.intercept("POST", "**/api/v1/ppt/presentation/create", {
+      statusCode: 200,
+      body: { id: "presentation-a4-source-svg" },
+    }).as("createPresentation");
+    mountHarness({ generationStrategy: "svg", authoredStyle: "default" });
+
+    cy.get('[data-testid="harness-generate"]').click();
+    cy.wait("@freshAnalyzeSourceContent");
+    cy.wait("@createPresentation")
+      .its("request.body")
+      .should("include", { page_size: "A4", orientation: "landscape" });
+  });
 });

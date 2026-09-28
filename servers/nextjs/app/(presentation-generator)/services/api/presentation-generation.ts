@@ -701,7 +701,7 @@ export class PresentationGenerationApi {
             // a max-quality, slower pass.
             vision_qa: resolvedStrategy === "svg" ? false : (body.vision_qa ?? false),
             authored_style: body.authored_style ?? "default",
-            ...(body.sourceMode === "source_content_restyle" && resolvedStrategy === "svg"
+            ...(body.sourceMode === "source_content_restyle" && resolvedStrategy === "svg" && body.page_size !== "A4"
               ? {}
               : body.page_size && body.orientation
                 ? { page_size: body.page_size, orientation: body.orientation }

@@ -180,7 +180,7 @@
     "presentation.conversation-first-generation-ui": "decisions/presentation.conversation-first-generation-ui.2.json",
     "presentation.conversation-workspace-contracts": "decisions/presentation.conversation-workspace-contracts.1.json",
     "presentation.workspace-capability-refresh": "decisions/presentation.workspace-capability-refresh.1.json",
-    "svg.source-preserving-layout-contract": "decisions/svg.source-preserving-layout-contract.2.json",
+    "svg.source-preserving-layout-contract": "decisions/svg.source-preserving-layout-contract.3.json",
     "svg.source-preserving-publication": "decisions/svg.source-preserving-publication.1.json",
     "svg.template-layout-admission": "decisions/svg.template-layout-admission.1.json",
     "svg.source-layout-v2-runtime": "decisions/svg.source-layout-v2-runtime.1.json",
@@ -202,5 +202,5 @@
   "readFirst": [
     "docs/composer-source-preservation-and-7px-fit-design-20260913.md"
   ],
-  "updatedAt": "2026-09-26T15:22:50.5702120+00:00"
+  "updatedAt": "2026-09-27T23:39:49.4467716+00:00"
 }

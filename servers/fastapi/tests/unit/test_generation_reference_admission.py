@@ -170,6 +170,75 @@ def test_source_svg_admission_retry_preserves_failure_without_synthesized_pins()
         presentation_generate._durable_request_payload(request)
 
 
+@pytest.mark.parametrize("orientation", ["landscape", "portrait"])
+def test_source_svg_admission_reflows_widescreen_to_selected_a4(monkeypatch, orientation) -> None:
+    from test_svg_source_layout import manifest_for
+    from services.document_canvas import canvas_digest, document_canvas_for_orientation
+    from services.document_canvas_generation import source_restyle_font_floor
+    from services.source_content.contracts import SourceSlideSize
+    from services.source_content.digests import digest_json
+    from services.source_content.errors import SourceContentError
+    from services.source_content.pipeline import admit_source_content_request
+
+    owner_id = str(uuid.uuid4())
+    snapshot_id = uuid.uuid4()
+    manifest = manifest_for([("text", {"text": "원문 125% 보존"})]).model_copy(update={
+        "manifest_id": "manifest-widescreen-a4",
+        "owner_id": owner_id,
+        "reference_snapshot_id": str(snapshot_id),
+        "slide_size": SourceSlideSize(cx=14630400, cy=8229600),
+    })
+    manifest = manifest.model_copy(update={"manifest_digest": digest_json(
+        manifest.model_dump(mode="json", by_alias=True, exclude={"manifest_digest"})
+    )})
+    original = manifest.model_dump(mode="json", by_alias=True)
+
+    async def admit_manifest(_session, **pin):
+        assert pin == {"owner_id": owner_id, "manifest_id": manifest.manifest_id,
+                       "digest": manifest.manifest_digest}
+        return manifest
+
+    monkeypatch.setattr(
+        "services.source_content.manifest_store.admit_source_content_manifest_pin",
+        admit_manifest,
+    )
+    request = GeneratePresentationRequest(
+        content="", strategy="svg", authored_style="osb-smart-banking",
+        page_size="A4", orientation=orientation,
+        reference_snapshot_ids=[snapshot_id], sourceMode="source_content_restyle",
+        sourceContentManifestPin={"manifestId": manifest.manifest_id, "digest": manifest.manifest_digest},
+        contentPolicy={"text": "verbatim", "preserveAllTableCells": True,
+                       "preserveAllChartValues": False, "preserveAllImageOccurrences": True,
+                       "preserveSourceOrder": True, "preserveSourceSlideCount": True,
+                       "allowSlideExpansion": False, "allowSummarization": False,
+                       "overflowPolicy": "same_page_recompose_or_fail"},
+    )
+    asyncio.run(admit_source_content_request(request, sql_session=object(), owner_id=owner_id))
+    target = document_canvas_for_orientation(orientation)
+    assert source_restyle_font_floor(None, target) == 7
+    assert source_restyle_font_floor("body 5px", target) == 7
+    assert source_restyle_font_floor("body 10px", target) == 10
+    binding = request._svg_source_binding
+    assert request._document_canvas == target
+    assert request._authored_canvas == target.canvas_contract()
+    assert binding["version"] == "svg-source-input/v2"
+    assert binding["sourceSlideSize"] == {"cx": 14630400, "cy": 8229600}
+    assert binding["documentCanvas"] == target.model_dump(mode="json", by_alias=True)
+    assert binding["canvasDigest"] == canvas_digest(target)
+    assert request.n_slides == len(manifest.units) == 1
+    assert manifest.model_dump(mode="json", by_alias=True) == original
+
+    # Replayed requests retain separate source geometry and target canvas.
+    payload = presentation_generate._durable_request_payload(request)
+    restored = presentation_generate._request_from_durable_payload(payload)
+    asyncio.run(admit_source_content_request(restored, sql_session=object(), owner_id=owner_id))
+    assert restored._svg_source_binding == binding
+    assert restored._document_canvas == target
+    restored.orientation = "portrait" if orientation == "landscape" else "landscape"
+    with pytest.raises(SourceContentError, match="svg_source_input_binding_mismatch"):
+        asyncio.run(admit_source_content_request(restored, sql_session=object(), owner_id=owner_id))
+
+
 def test_legacy_files_are_immediately_replaced_by_snapshot_identity(
     monkeypatch,
 ) -> None:

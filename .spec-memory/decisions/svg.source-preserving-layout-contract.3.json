@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "key": "svg.source-preserving-layout-contract",
+  "revision": 3,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "SVG source restyle maps each PPTX page to selected A4 output, including 16:9 input, preserving content with a 7 CSS px text floor.",
+  "scope": [
+    "svg",
+    "source-content",
+    "canvas"
+  ],
+  "invariants": [
+    "One source page maps to one output slide",
+    "Keep source text, tables, and image occurrences",
+    "Output and export use the selected A4 orientation"
+  ],
+  "forbidden": [
+    "Reject a valid 16:9 PPTX solely because its source canvas is not A4"
+  ],
+  "evidence": [
+    "servers/fastapi/services/source_content/pipeline.py",
+    "servers/nextjs/app/(presentation-generator)/upload/components/upload-page/useUploadPageState.ts",
+    "servers/fastapi/tests/unit/test_generation_reference_admission.py"
+  ],
+  "supersedes": "svg.source-preserving-layout-contract@2",
+  "recordedAt": "2026-09-27T23:39:49.4141330+00:00"
+}

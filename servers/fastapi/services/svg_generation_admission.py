@@ -39,7 +39,7 @@ def source_svg_capability(*, strategy: str | None, source_content: bool | None,
         else "svg_exact_reconstruction_not_supported" if reference_mode == "exact_reconstruction"
         else template_reason
     )
-    return {"enabled": reason is None, "reason": reason, "canvasSource": "source-manifest",
+    return {"enabled": reason is None, "reason": reason, "canvasSource": "selected-a4",
             "inputFormats": ["pptx"], "productVerified": False}
 
 
@@ -62,9 +62,11 @@ def svg_creation_admission_violation(request: object) -> str | None:
         if condition:
             return code() if callable(code) else code
     if getattr(request, "source_mode", None) == "source_content_restyle":
-        if (getattr(request, "page_size", None) is not None
-                or getattr(request, "orientation", None) is not None):
-            return "svg_source_canvas_override_not_supported"
+        page_size = getattr(request, "page_size", None)
+        orientation = getattr(request, "orientation", None)
+        if page_size is not None or orientation is not None:
+            if page_size != "A4" or orientation not in {"landscape", "portrait"}:
+                return "document_canvas_selectors_invalid"
         policy = getattr(request, "content_policy", None)
         if policy is None or policy.text != "verbatim" or policy.allow_summarization:
             return "svg_source_verbatim_required"
@@ -174,6 +176,8 @@ def pin_svg_style(request: object) -> dict:
                 import hashlib
                 import json
 
+                # Historical field name: binds the source-restyle OUTPUT
+                # canvas, including a selected A4 target in v2 input bindings.
                 frozen["source_canvas_digest"] = canvas_digest(
                     request._document_canvas.model_dump(mode="json", by_alias=True)
                 )

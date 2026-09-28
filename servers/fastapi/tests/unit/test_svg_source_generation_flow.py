@@ -31,7 +31,7 @@ async def test_source_generation_verifies_before_publish_and_bounds_repair(monke
     manifest = manifest_for([("text", {"text": "원본 내용 125%"})])
     request = SimpleNamespace(_source_content_svg_reflow=True, _source_content_manifest=manifest,
         _source_content_authored_reflow=False, _document_canvas=None, strategy="svg",
-        authored_style="default", include_title_slide=False, instructions=None,
+        authored_style="default", include_title_slide=False, instructions="body 5px",
         codex_generation_preset=None)
     job = SimpleNamespace(id=uuid.uuid4(), attempt_token="attempt", workspace_operation_id=uuid.uuid4(),
         svg_style_snapshot=None, attempt_number=1)
@@ -51,6 +51,7 @@ async def test_source_generation_verifies_before_publish_and_bounds_repair(monke
         return deepcopy(saved.get(index, {}))
 
     async def author(source, index, style, **kwargs):
+        assert kwargs["min_font_size_px"] == 7
         await kwargs["before_dispatch"]()
         result = assemble_source_svg(source, index, plan_for(source),
             source_images=kwargs["source_images"], image_slots=kwargs["image_slots"],
@@ -83,6 +84,7 @@ async def test_source_generation_verifies_before_publish_and_bounds_repair(monke
     author_mock = AsyncMock(side_effect=author)
     monkeypatch.setattr("utils.llm_calls.author_source_svg_layout.author_source_svg_layout", author_mock)
     def local(source, index, style, **kwargs):
+        assert kwargs["min_font_size_px"] == 7
         if not local_success:
             return {"escalation_reason": "layout_candidate_unavailable", "model_calls": 0,
                     "model_layout_allowed": True}
@@ -92,8 +94,11 @@ async def test_source_generation_verifies_before_publish_and_bounds_repair(monke
         return SvgAuthorResult(result.svg_content, "", {
             "validation_error": None, "source_preservation": result.receipt})
     monkeypatch.setattr("services.svg_source_template_layout.try_template_source_layout", local)
-    monkeypatch.setattr("services.svg_renderer.render_svg_with_metrics", AsyncMock(side_effect=lambda *a, **kw:
-        SimpleNamespace(png=b"png", quality={"passed": geometry_passed, "verified": False, "failures": []})))
+    def render(*args, **kwargs):
+        assert kwargs["minimum_font_px"] == 7
+        assert kwargs["instructions"] is None
+        return SimpleNamespace(png=b"png", quality={"passed": geometry_passed, "verified": False, "failures": []})
+    monkeypatch.setattr("services.svg_renderer.render_svg_with_metrics", AsyncMock(side_effect=render))
     outline = SimpleNamespace(slides=[SimpleNamespace(content="source")])
 
     if not geometry_passed:

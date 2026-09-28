@@ -7,6 +7,7 @@ import { clearOutlines, setPresentationId } from "@/store/slices/presentationGen
 import { setPptGenUploadState, type CompanyStandardSelection } from "@/store/slices/presentationGenUpload";
 import type { RootState } from "@/store/store";
 import { documentCanvasRequestForConfig, LanguageType, type PresentationConfig } from "../../type";
+import { documentCanvasForOrientation } from "@/lib/document-canvas";
 import { notify } from "@/components/ui/sonner";
 import { uploadExtraTranslator } from "./uploadExtraTranslator";
 import { isAbortError, PresentationGenerationApi, type DocumentUploadAdmission } from "../../../services/api/presentation-generation";
@@ -53,6 +54,11 @@ export function createUploadGenerationHandlers({
   dispatch, setLoadingState, setCanCancelDocumentProcessing, decomposeAbortControllerRef,
   setPendingPresentationId, getUploadSnapshotProps, recoverCreateRef, onPresentationCreated, saveAdmission, captureLiveness,
 }: GenerationHandlersContext) {
+  const sourceContentCanvasForConfig = (sourceContent: SourceContentAnalysisResponseV1, config: PresentationConfig) =>
+    generationStrategy === "svg" && config.pageSize === "A4" && config.orientation
+      ? documentCanvasForOrientation(config.orientation)
+      : sourceContent.documentCanvas;
+
   const stageAutoAuthoredGeneration = (
     presentationId: string,
     master: CompanyStandardSelection | undefined,
@@ -65,14 +71,15 @@ export function createUploadGenerationHandlers({
       .map((value) => value?.trim())
       .filter((value): value is string => Boolean(value))
       .join("\n");
+    const sourceContentCanvas = sourceContent && sourceContentCanvasForConfig(sourceContent, config);
     if (sourceContent) {
       dispatch(setPptGenUploadState({
         sourceContentMode: true,
         sourceContentAdmission: {
           manifestPin: sourceContent.manifestPin,
           referenceSnapshotId: sourceContent.referenceSnapshotBinding.referenceSnapshotId,
-          ...(sourceContent.documentCanvas
-            ? { documentCanvas: sourceContent.documentCanvas }
+          ...(sourceContentCanvas
+            ? { documentCanvas: sourceContentCanvas }
             : {}),
         },
       }));
@@ -99,10 +106,10 @@ export function createUploadGenerationHandlers({
         ...(sourceContent ? { instructions: sourceContentInstructions || null } : {}),
         visionQa: sourceContent ? false : authoredVisionQa,
         authoredStyle,
-        ...(sourceContent?.documentCanvas
-          ? { documentCanvas: sourceContent.documentCanvas }
+        ...(sourceContentCanvas
+          ? { documentCanvas: sourceContentCanvas }
           : {}),
-        ...(sourceContent && generationStrategy === "svg"
+        ...(sourceContent && generationStrategy === "svg" && config.pageSize !== "A4"
           ? {}
           : config.pageSize === "A4" && config.orientation
             ? { pageSize: "A4" as const, orientation: config.orientation }
@@ -177,7 +184,7 @@ export function createUploadGenerationHandlers({
     setLoadingState({
       isLoading: true,
       message: sourceContentMode && generationStrategy === "svg"
-        ? "원본 분석을 마치고 가로 SVG 배치를 준비하는 중…"
+        ? "원본 분석을 마치고 SVG 배치를 준비하는 중…"
         : "문서를 처리하는 중…",
       showProgress: true,
       duration: 90,
@@ -201,6 +208,17 @@ export function createUploadGenerationHandlers({
     const sourceContentAnalysis = admittedSourceContent?.analysis ?? null;
     if (sourceContentMode && !sourceContentAnalysis) {
       throw new Error("source_content_manifest_invalid");
+    }
+    const sourceContentCanvas = sourceContentAnalysis && sourceContentCanvasForConfig(sourceContentAnalysis, config);
+    if (sourceContentAnalysis) {
+      dispatch(setPptGenUploadState({
+        sourceContentMode: true,
+        sourceContentAdmission: {
+          manifestPin: sourceContentAnalysis.manifestPin,
+          referenceSnapshotId: sourceContentAnalysis.referenceSnapshotBinding.referenceSnapshotId,
+          ...(sourceContentCanvas ? { documentCanvas: sourceContentCanvas } : {}),
+        },
+      }));
     }
 
     const selectedLanguage = config?.language ?? "";
@@ -280,7 +298,7 @@ export function createUploadGenerationHandlers({
       include_table_of_contents: sourceContentMode ? false : !!config?.includeTableOfContents,
       include_title_slide: sourceContentMode ? false : !!config?.includeTitleSlide,
       web_search: sourceContentMode ? false : !!config?.webSearch,
-      ...(sourceContentMode && generationStrategy === "svg"
+      ...(sourceContentMode && generationStrategy === "svg" && config.pageSize !== "A4"
         ? {}
         : documentCanvasRequestForConfig(config)),
       theme: selectedTheme,
@@ -316,8 +334,8 @@ export function createUploadGenerationHandlers({
       sourceContentAdmission: sourceContentAnalysis ? {
         manifestPin: sourceContentAnalysis.manifestPin,
         referenceSnapshotId: sourceContentAnalysis.referenceSnapshotBinding.referenceSnapshotId,
-        ...(sourceContentAnalysis.documentCanvas
-          ? { documentCanvas: sourceContentAnalysis.documentCanvas }
+        ...(sourceContentCanvas
+          ? { documentCanvas: sourceContentCanvas }
           : {}),
       } : null,
     } });

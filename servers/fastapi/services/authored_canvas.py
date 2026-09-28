@@ -106,6 +106,7 @@ def request_canvas_contract(request: Any) -> CanvasContract:
         source_document_canvas is not None
         and getattr(request, "strategy", None) == "svg"
         and getattr(request, "source_mode", None) == "source_content_restyle"
+        and getattr(request, "page_size", None) is None
     ):
         from services.document_canvas import DocumentCanvasMetadata
 

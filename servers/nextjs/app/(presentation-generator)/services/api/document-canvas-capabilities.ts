@@ -12,7 +12,7 @@ export interface DocumentCanvasCapabilities {
   sourceContentSvg: {
     enabled: boolean;
     reason: string | null;
-    canvasSource: "source-manifest";
+    canvasSource: "source-manifest" | "selected-a4";
     inputFormats: readonly ["pptx"];
     productVerified: boolean;
   };
@@ -32,14 +32,14 @@ export function normalizeDocumentCanvasCapabilities(
     return unavailableDocumentCanvasCapabilities();
   }
   const sourceContentSvg = isRecord(payload.sourceContentSvg)
-    && payload.sourceContentSvg.canvasSource === "source-manifest"
+    && (payload.sourceContentSvg.canvasSource === "source-manifest" || payload.sourceContentSvg.canvasSource === "selected-a4")
     && Array.isArray(payload.sourceContentSvg.inputFormats)
     && payload.sourceContentSvg.inputFormats.length === 1
     && payload.sourceContentSvg.inputFormats[0] === "pptx"
     ? {
         enabled: payload.sourceContentSvg.enabled === true,
         reason: typeof payload.sourceContentSvg.reason === "string" ? payload.sourceContentSvg.reason : null,
-        canvasSource: "source-manifest" as const,
+        canvasSource: payload.sourceContentSvg.canvasSource as "source-manifest" | "selected-a4",
         inputFormats: ["pptx"] as const,
         productVerified: payload.sourceContentSvg.productVerified === true,
       }

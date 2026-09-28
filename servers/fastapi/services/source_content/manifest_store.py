@@ -95,9 +95,8 @@ def _analysis_receipt(
                 height_emu=manifest.slide_size.cy,
             )
         except ValueError:
-            # Analysis still reports the immutable source inventory.  SVG
-            # source-restyle admission later fails closed for unsupported
-            # physical canvases instead of replacing them with 16:9.
+            # This optional projection describes the source, not the output.
+            # SVG admission can reflow any valid source size to selected A4.
             document_canvas = None
     return SourceContentAnalysisReceipt(
         manifest_pin=SourceContentManifestPin(

@@ -491,11 +491,6 @@ export const useUploadPageState = ({
         startInFlightRef.current = false;
         return;
       }
-      runConfig = {
-        ...config,
-        pageSize: undefined,
-        orientation: undefined,
-      };
     }
     setGenerationAttemptActive(true);
     workspace?.beginSession({
@@ -589,21 +584,11 @@ export const useUploadPageState = ({
         abandonRun("원본 SVG 생성을 시작하지 않았습니다. 자료와 생성 방식을 확인해 주세요.");
         return;
       }
-      runConfig = { ...config, pageSize: undefined, orientation: undefined };
     }
     if (admitted && generationStrategy === "svg" && admitted.analysis.summary.charts > 0) {
       const reason = "원본에 차트가 있어 SVG 재구성을 시작하지 않았습니다. 차트를 이미지로 바꾼 PPTX를 사용해 주세요.";
       notify.warning(
         tA2b("pagesContainingChartsCannotBeRearranged"),
-        reason,
-      );
-      abandonRun(reason);
-      return;
-    }
-    if (admitted && generationStrategy === "svg" && !admitted.analysis.documentCanvas) {
-      const reason = "첨부 PPTX의 원본 크기가 지원 범위와 맞지 않아 SVG 재구성을 시작하지 않았습니다. 현재 원본 콘텐츠 유지 SVG는 A4 가로 원본만 지원합니다. A4 가로 PPTX를 사용하거나 생성 방식을 변경해 주세요.";
-      notify.warning(
-        tA2b("sourceCanvasIsUnsupported"),
         reason,
       );
       abandonRun(reason);

@@ -27,6 +27,7 @@ import {
 import { generationMasterPin } from "@/lib/authored-vnext/master/selection-storage";
 import { DEFAULT_AUTHORED_STYLE } from "../../services/api/authored";
 import { SOURCE_CONTENT_POLICY } from "../../services/api/source-content/contract";
+import { documentCanvasForOrientation } from "@/lib/document-canvas";
 
 const DEFAULT_LOADING_STATE: LoadingState = {
   message: "",
@@ -295,10 +296,12 @@ export const usePresentationGeneration = (
         generationConfig?.pageSize !== "A4" && generationConfig?.aspectRatio === "9:16"
           ? DEFAULT_AUTHORED_STYLE.id
           : authoredStyle,
-      ...(sourceContentAdmission?.documentCanvas
-        ? { documentCanvas: sourceContentAdmission.documentCanvas }
+      ...(isSourceContentGeneration && generationStrategy === "svg" && generationConfig?.pageSize === "A4" && generationConfig.orientation
+        ? { documentCanvas: documentCanvasForOrientation(generationConfig.orientation) }
+        : sourceContentAdmission?.documentCanvas
+          ? { documentCanvas: sourceContentAdmission.documentCanvas }
         : {}),
-      ...(isSourceContentGeneration && generationStrategy === "svg"
+      ...(isSourceContentGeneration && generationStrategy === "svg" && generationConfig?.pageSize !== "A4"
         ? {}
         : generationConfig?.pageSize === "A4" && generationConfig.orientation
           ? { pageSize: "A4" as const, orientation: generationConfig.orientation }
@@ -359,7 +362,7 @@ export const usePresentationGeneration = (
         vision_qa: authoredRequest.visionQa,
         strategy: authoredRequest.strategy ?? "svg",
         authored_style: authoredRequest.authoredStyle,
-        ...(authoredRequest.sourceMode === "source_content_restyle" && authoredRequest.strategy === "svg"
+        ...(authoredRequest.sourceMode === "source_content_restyle" && authoredRequest.strategy === "svg" && requestPageSize !== "A4"
           ? {}
           : requestPageSize === "A4" && requestOrientation
             ? { page_size: "A4" as const, orientation: requestOrientation }

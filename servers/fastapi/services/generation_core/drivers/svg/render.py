@@ -107,9 +107,19 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
                 required_text, raster_authorized_measurement, font_profile = raster_measurement_inputs(
                     ctx.raster_analysis, ctx.raster_pin, index + 1, final)
             async with ctx.render_semaphore:
+                source_font_kwargs = {}
+                if ctx.source_reflow:
+                    from services.document_canvas_generation import source_restyle_font_floor
+
+                    source_font_kwargs["minimum_font_px"] = source_restyle_font_floor(
+                        request.instructions, getattr(request, "_document_canvas", None)
+                    )
                 rendered = await render_svg_with_metrics(final, width=ctx.canvas.width_px,
                                                      height=ctx.canvas.height_px,
-                                                     instructions=request.instructions,
+                                                     # Source instructions are resolved into the hard
+                                                     # minimum above, including the 7px lower bound.
+                                                     instructions=None if ctx.source_reflow else request.instructions,
+                                                     **source_font_kwargs,
                                                      required_text=required_text,
                                                      **({"allow_image_only": True}
                                                         if raster_authorized_measurement else {}),

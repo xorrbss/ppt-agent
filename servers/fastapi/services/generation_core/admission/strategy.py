@@ -51,6 +51,14 @@ def resolve_generation_strategy_with_reason(
         return "authored", "registered_template"
     if getattr(request, "design_pack_pin", None) is not None:
         return "authored", "design_pack_pin"
+    # A4 source reflow is opted into with an explicit SVG strategy. Keep
+    # previously omitted-strategy requests on their existing authored route.
+    if (
+        getattr(request, "source_mode", None) == "source_content_restyle"
+        and (getattr(request, "page_size", None) is not None
+             or getattr(request, "orientation", None) is not None)
+    ):
+        return "authored", "svg_source_canvas_override_not_supported"
     from services.svg_generation_admission import svg_creation_admission_violation
 
     violation = svg_creation_admission_violation(request)
