@@ -6,6 +6,10 @@ import {
   normalizeStringList,
 } from "./authored-quality-normalize-base";
 import { getHeader } from "./header";
+import {
+  normalizeAuthoredStyleSamples,
+  type AuthoredStyleSamples,
+} from "./authored-style-samples";
 
 export interface AuthoredStylePreview {
   bg: string;
@@ -305,6 +309,7 @@ export interface AuthoredStyleSummary {
   preview: AuthoredStylePreview;
   aliases?: string[];
   supportedAspectRatios: Array<"16:9" | "9:16" | "9:13">;
+  samples?: AuthoredStyleSamples;
 }
 
 export const DEFAULT_AUTHORED_STYLE: AuthoredStyleSummary = {
@@ -370,6 +375,8 @@ function toAuthoredStyleSummary(value: unknown): AuthoredStyleSummary | null {
     previewShape.image = getApiUrl(preview.image.trim());
   }
 
+  const samples = normalizeAuthoredStyleSamples(value.samples);
+
   // Rebuild the public shape so internal fields such as `brief` never reach UI state.
   return {
     id: id.trim(),
@@ -387,6 +394,8 @@ function toAuthoredStyleSummary(value: unknown): AuthoredStyleSummary | null {
     ...(Array.isArray(value.aliases)
       ? { aliases: normalizeStringList(value.aliases) }
       : {}),
+    // Same rule as `preview.image`: no own `samples` property unless valid.
+    ...(samples ? { samples } : {}),
   };
 }
 

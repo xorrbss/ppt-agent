@@ -19,6 +19,7 @@ import type { RootState } from "@/store/store";
 import { cn } from "@/lib/utils";
 
 import AuthoredStyleCard from "./AuthoredStyleCard";
+import StyleSampleDialog from "./style-sample/StyleSampleDialog";
 
 const CATEGORY_LABELS: Record<AuthoredStyleCategory, string> = {
   general: "범용",
@@ -77,6 +78,7 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
   const [loadStatus, setLoadStatus] = useState<LoadStatus>("loading");
   const [category, setCategory] = useState<CategoryFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [previewStyleId, setPreviewStyleId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -157,6 +159,20 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
     },
     [dispatch, onActivate]
   );
+  // Samples are all-or-nothing (D2): any style with samples switches the grid
+  // from direct radio selection to "open the sample dialog, then confirm".
+  const samplePreviewEnabled = useMemo(
+    () => styles.some((style) => style.samples),
+    [styles]
+  );
+  const handleSampleConfirm = useCallback(
+    (styleId: string) => {
+      handleStyleSelect(styleId);
+      setPreviewStyleId(null);
+    },
+    [handleStyleSelect]
+  );
+  const handleSampleClose = useCallback(() => setPreviewStyleId(null), []);
   const handleToggleVisionQa = useCallback(
     (next: boolean) =>
       dispatch(setPptGenUploadState({ authoredVisionQa: next })),
@@ -272,7 +288,7 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
 
       {visibleStyles.length > 0 ? (
         <div
-          role="radiogroup"
+          role={samplePreviewEnabled ? "list" : "radiogroup"}
           aria-label="AI 저작 스타일"
           aria-busy={loadStatus === "loading"}
           data-testid="authored-style-grid"
@@ -287,7 +303,10 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
                 isActive && resolvedSelectedStyleId === style.id
               }
               isTabStop={tabStopStyleId === style.id}
-              onSelect={handleStyleSelect}
+              onSelect={
+                samplePreviewEnabled ? setPreviewStyleId : handleStyleSelect
+              }
+              mode={samplePreviewEnabled ? "preview" : "radio"}
             />
           ))}
         </div>
@@ -311,6 +330,17 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
             필터 초기화
           </button>
         </div>
+      )}
+
+      {previewStyleId !== null && (
+        <StyleSampleDialog
+          styles={visibleStyles}
+          initialStyleId={previewStyleId}
+          selectedStyleId={isActive ? resolvedSelectedStyleId : undefined}
+          categoryLabels={CATEGORY_LABELS}
+          onConfirm={handleSampleConfirm}
+          onClose={handleSampleClose}
+        />
       )}
 
       {visibleStyles.length > 4 && (

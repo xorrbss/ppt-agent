@@ -5154,5 +5154,22 @@
     "uncertainItemsNotice": "서버가 확신하지 못한 항목 {count}개가 있습니다. 생성은 그대로 진행되며, 결과에서 해당 부분을 확인해 주세요.",
     "viewPreviousConversation": "이전 대화 보기",
     "youCanUploadUpToValueDocuments": "문서는 최대 {value0}개까지만 업로드할 수 있습니다."
+  },
+  "authoredStyleSamples": {
+    "allSlides": "전체 슬라이드 · {count}",
+    "close": "닫기",
+    "currentlySelected": "현재 선택된 스타일",
+    "keyboardHint": "← → 슬라이드 · Shift+← → 스타일 · Esc 닫기",
+    "nextSlide": "다음 슬라이드",
+    "nextStyle": "다음 스타일",
+    "previousSlide": "이전 슬라이드",
+    "previousStyle": "이전 스타일",
+    "samplesPreparing": "이 스타일의 샘플 슬라이드를 준비하고 있습니다.",
+    "slideAlt": "{index}. {title}",
+    "slideCounter": "{current} / {total}",
+    "styleCounter": "스타일 {current} / {total}",
+    "tags": "태그",
+    "useCases": "추천 용도",
+    "useThisStyle": "이 스타일 사용"
   }
 }

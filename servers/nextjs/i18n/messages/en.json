@@ -5154,5 +5154,22 @@
     "uncertainItemsNotice": "The server is uncertain about {count} items. Generation continues; check those areas in the result.",
     "viewPreviousConversation": "View previous conversation",
     "youCanUploadUpToValueDocuments": "You can upload up to {value0} documents."
+  },
+  "authoredStyleSamples": {
+    "allSlides": "All slides · {count}",
+    "close": "Close",
+    "currentlySelected": "Currently selected",
+    "keyboardHint": "← → slides · Shift+← → styles · Esc closes",
+    "nextSlide": "Next slide",
+    "nextStyle": "Next style",
+    "previousSlide": "Previous slide",
+    "previousStyle": "Previous style",
+    "samplesPreparing": "Sample slides for this style are being prepared.",
+    "slideAlt": "{index}. {title}",
+    "slideCounter": "{current} / {total}",
+    "styleCounter": "Style {current} of {total}",
+    "tags": "Tags",
+    "useCases": "Recommended uses",
+    "useThisStyle": "Use this style"
   }
 }
