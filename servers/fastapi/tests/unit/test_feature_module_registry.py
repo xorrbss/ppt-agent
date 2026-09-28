@@ -38,7 +38,6 @@ def test_static_registry_composes_declared_modules_in_order() -> None:
 
 def test_ppt_router_is_composed_from_an_explicit_static_feature_tuple() -> None:
     assert PPT_FEATURE_MODULES[0].name == "files"
-    assert "community" in {module.name for module in PPT_FEATURE_MODULES}
     assert PPT_FEATURE_MODULES[-1].name == "design-packs"
     assert API_V1_PPT_ROUTER.routes
 
@@ -49,10 +48,6 @@ def test_ppt_feature_route_names_are_unique_and_reverse_to_the_public_paths() ->
         "get_available_openai_models": ("POST", "/api/v1/ppt/openai/models/available"),
         "get_available_anthropic_models": ("POST", "/api/v1/ppt/anthropic/models/available"),
         "get_available_google_models": ("POST", "/api/v1/ppt/google/models/available"),
-        "get_community_presentation": (
-            "GET",
-            "/api/v1/ppt/community/presentations/{community_id}",
-        ),
     }
     routes = {route.name: route for route in API_V1_PPT_ROUTER.routes}
 
@@ -63,9 +58,6 @@ def test_ppt_feature_route_names_are_unique_and_reverse_to_the_public_paths() ->
     assert str(API_V1_PPT_ROUTER.url_path_for("get_available_openai_models")) == expected[
         "get_available_openai_models"
     ][1]
-    assert str(
-        API_V1_PPT_ROUTER.url_path_for("get_community_presentation", community_id=1)
-    ) == "/api/v1/ppt/community/presentations/1"
 
 
 def test_ppt_feature_routes_produce_unique_openapi_operation_ids() -> None:
