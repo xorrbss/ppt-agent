@@ -10,6 +10,10 @@ import {
   normalizeAuthoredStyleSamples,
   type AuthoredStyleSamples,
 } from "./authored-style-samples";
+import {
+  normalizeSupportedCanvases,
+  type AuthoredStyleSupportedCanvas,
+} from "./authored-supported-canvases";
 
 export interface AuthoredStylePreview {
   bg: string;
@@ -299,6 +303,12 @@ export const AUTHORED_STYLE_CATEGORIES = [
 
 export type AuthoredStyleCategory = (typeof AUTHORED_STYLE_CATEGORIES)[number];
 
+export type {
+  AuthoredCanvasDisabledReason,
+  AuthoredCanvasRowId,
+  AuthoredStyleSupportedCanvas,
+} from "./authored-supported-canvases";
+
 export interface AuthoredStyleSummary {
   id: string;
   name: string;
@@ -308,7 +318,9 @@ export interface AuthoredStyleSummary {
   use_cases: string[];
   preview: AuthoredStylePreview;
   aliases?: string[];
-  supportedAspectRatios: Array<"16:9" | "9:16" | "9:13">;
+  supportedAspectRatios: Array<"16:9" | "9:16" | "9:13" | "1:1" | "21:9">;
+  /** Preferred over `supportedAspectRatios` when present (canvas-expansion rollout). */
+  supportedCanvases?: AuthoredStyleSupportedCanvas[];
   samples?: AuthoredStyleSamples;
 }
 
@@ -376,6 +388,7 @@ function toAuthoredStyleSummary(value: unknown): AuthoredStyleSummary | null {
   }
 
   const samples = normalizeAuthoredStyleSamples(value.samples);
+  const supportedCanvases = normalizeSupportedCanvases(value.supportedCanvases);
 
   // Rebuild the public shape so internal fields such as `brief` never reach UI state.
   return {
@@ -387,7 +400,8 @@ function toAuthoredStyleSummary(value: unknown): AuthoredStyleSummary | null {
     use_cases: normalizeStringList(value.use_cases),
     supportedAspectRatios: Array.isArray(value.supportedAspectRatios)
       ? value.supportedAspectRatios.filter(
-          (ratio): ratio is "16:9" | "9:16" | "9:13" => ratio === "16:9" || ratio === "9:16" || ratio === "9:13",
+          (ratio): ratio is "16:9" | "9:16" | "9:13" | "1:1" | "21:9" =>
+            ratio === "16:9" || ratio === "9:16" || ratio === "9:13" || ratio === "1:1" || ratio === "21:9",
         )
       : ["16:9"],
     preview: previewShape,
@@ -396,6 +410,7 @@ function toAuthoredStyleSummary(value: unknown): AuthoredStyleSummary | null {
       : {}),
     // Same rule as `preview.image`: no own `samples` property unless valid.
     ...(samples ? { samples } : {}),
+    ...(supportedCanvases ? { supportedCanvases } : {}),
   };
 }
 

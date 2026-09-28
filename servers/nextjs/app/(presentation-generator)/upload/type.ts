@@ -129,7 +129,7 @@ export interface PresentationConfig {
   includeTableOfContents: boolean;
   includeTitleSlide: boolean;
   webSearch: boolean;
-  aspectRatio: "16:9" | "9:16" | "9:13";
+  aspectRatio: "16:9" | "9:16" | "9:13" | "1:1" | "21:9";
   /** Present only for newly created documents using the common physical canvas. */
   pageSize?: "A4";
   orientation?: "landscape" | "portrait";

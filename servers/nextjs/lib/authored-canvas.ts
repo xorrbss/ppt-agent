@@ -2,7 +2,7 @@ import { parseDocumentCanvas, documentCanvasPhysicalSize, type DocumentCanvas } 
 
 export const AUTHORED_CANVAS_CONTRACT_VERSION = "authored-canvas/v1" as const;
 
-export type AuthoredAspectRatio = "16:9" | "9:16" | "9:13";
+export type AuthoredAspectRatio = "16:9" | "9:16" | "9:13" | "1:1" | "21:9";
 
 const MIN_CANVAS_WIDTH_PX = 320;
 const MAX_CANVAS_WIDTH_PX = 7_680;
@@ -52,6 +52,8 @@ export const AUTHORED_CANVAS_BY_ASPECT_RATIO = Object.freeze({
   "16:9": preset("16:9", 1280, 720),
   "9:16": preset("9:16", 720, 1280),
   "9:13": preset("9:13", 720, 1040),
+  "1:1": preset("1:1", 720, 720),
+  "21:9": preset("21:9", 1680, 720),
 } satisfies Record<AuthoredAspectRatio, AuthoredCanvasContract>);
 
 export const LEGACY_AUTHORED_CANVAS = AUTHORED_CANVAS_BY_ASPECT_RATIO["16:9"];

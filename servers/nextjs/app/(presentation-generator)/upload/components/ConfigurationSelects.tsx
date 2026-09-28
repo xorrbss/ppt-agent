@@ -1,4 +1,3 @@
-import { useTranslations as useA2bTranslations } from "next-intl";
 import { PresentationConfig } from "../type";
 import { useEffect, useState } from "react";
 import { Check, ChevronUp } from "lucide-react";
@@ -20,7 +19,7 @@ import {
     MAX_NUMBER_OF_SLIDES,
 } from "@/utils/presentationLimits";
 import AdvanceSettings from "./AdvanceSettings";
-import AuthoredStylesApi from "../../services/api/authored";
+import { CanvasSelect } from "./CanvasSelect";
 import type { DocumentCanvas } from "@/lib/document-canvas";
 
 // Types
@@ -33,8 +32,6 @@ interface ConfigurationSelectsProps {
     generationStrategy?: "authored" | "svg";
     sourceDocumentCanvas?: DocumentCanvas | null;
 }
-
-type AspectRatio = PresentationConfig["aspectRatio"];
 
 // Constants
 const SLIDE_OPTIONS = [
@@ -175,66 +172,7 @@ export function ConfigurationSelects({
     generationStrategy = "svg",
     sourceDocumentCanvas = null,
 }: ConfigurationSelectsProps) {
-  const tA2b = useA2bTranslations("uploadExtras");
     const [openSlides, setOpenSlides] = useState(false);
-    const [supportedAspectRatios, setSupportedAspectRatios] = useState<AspectRatio[]>(["16:9"]);
-    const [a4Enabled, setA4Enabled] = useState<boolean | null>(null);
-    const [a4SelectionAllowed, setA4SelectionAllowed] = useState(false);
-    const sourceSvgLandscape = sourceContentMode && generationStrategy === "svg" && sourceDocumentCanvas !== null;
-    const rasterSourceCandidate = sourceContentMode && generationStrategy === "svg" && sourceDocumentCanvas === null;
-    const sourceCanvasLabel = sourceDocumentCanvas
-        ? `${Math.round(sourceDocumentCanvas.physicalSize.widthEmu / 36000)} × ${Math.round(sourceDocumentCanvas.physicalSize.heightEmu / 36000)} mm · 원본`
-        : "원본 크기 · 분석 후 유지";
-
-    useEffect(() => {
-        let cancelled = false;
-        void AuthoredStylesApi.getStyles()
-            .then((styles) => {
-                if (cancelled) return;
-                const selected = styles.find((style) => style.id === authoredStyle);
-                const supported = selected?.supportedAspectRatios;
-                setSupportedAspectRatios(
-                    Array.isArray(supported) && supported.length > 0
-                        ? supported
-                        : ["16:9"],
-                );
-            })
-            .catch(() => {
-                if (!cancelled) setSupportedAspectRatios(["16:9"]);
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [authoredStyle]);
-
-    useEffect(() => {
-        let cancelled = false;
-        setA4Enabled(null);
-        setA4SelectionAllowed(false);
-        void AuthoredStylesApi.getDocumentCanvasCapabilities({
-            generationStrategy, authoredStyle, sourceContentMode, hasCompanyStandard,
-        }).then((capabilities) => {
-            if (cancelled) return;
-            setA4Enabled(capabilities.a4.enabled);
-            setA4SelectionAllowed(capabilities.a4.enabled && capabilities.a4.selection?.enabled === true);
-        });
-        return () => {
-            cancelled = true;
-        };
-    }, [generationStrategy, authoredStyle, sourceContentMode, hasCompanyStandard]);
-
-    useEffect(() => {
-        if (sourceSvgLandscape || !a4Enabled || config.pageSize === "A4") return;
-        onConfigChange("pageSize", "A4");
-        onConfigChange("orientation", config.orientation ?? "landscape");
-    }, [a4Enabled, config.orientation, config.pageSize, onConfigChange, sourceSvgLandscape]);
-
-    const portraitSupported = sourceContentMode || (!hasCompanyStandard && supportedAspectRatios.includes("9:16"));
-    const proposalSupported = sourceContentMode || (!hasCompanyStandard && supportedAspectRatios.includes("9:13"));
-    const portraitUnavailableReason = hasCompanyStandard
-        ? "회사 표준 마스터에서는 세로형을 지원하지 않습니다"
-        : "선택한 템플릿에서 미지원";
-    const showA4Controls = !sourceSvgLandscape && (a4Enabled !== false || config.pageSize === "A4");
 
     return (
         <div className="flex min-w-0 flex-wrap order-1 gap-2 items-center">
@@ -244,55 +182,15 @@ export function ConfigurationSelects({
                 open={openSlides}
                 onOpenChange={setOpenSlides}
             /> : null}
-            {sourceSvgLandscape ? (
-                <div className="flex h-9 items-center gap-2 rounded-xl bg-slate-50 px-3 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-200/80" data-testid="source-svg-landscape-canvas">
-                    <span>{tA2b("canvas")}</span>
-                    <span className="text-slate-900">{sourceCanvasLabel}</span>
-                </div>
-            ) : showA4Controls ? <label className="flex h-9 items-center gap-2 rounded-xl bg-slate-50 px-3 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-200/80">
-                <span>{tA2b("orientation")}</span>
-                <select
-                    value={config.orientation ?? "landscape"}
-                    disabled={a4Enabled === null && !rasterSourceCandidate}
-                    aria-busy={a4Enabled === null && !rasterSourceCandidate}
-                    onChange={(event) => {
-                        onConfigChange("pageSize", "A4");
-                        onConfigChange(
-                            "orientation",
-                            event.target.value as "landscape" | "portrait",
-                        );
-                    }}
-                    className="bg-transparent outline-none"
-                    aria-label={tA2b("orientation")}
-                    data-testid="document-orientation-select"
-                >
-                    <option value="landscape">{tA2b("landscape")}</option>
-                    <option value="portrait">{tA2b("portrait")}</option>
-                </select>
-            </label> : <label className="flex h-9 items-center gap-2 rounded-xl bg-slate-50 px-3 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-200/80">
-                <span>{tA2b("aspectRatio")}</span>
-                <select
-                    value={config.aspectRatio}
-                    onChange={(event) => onConfigChange("aspectRatio", event.target.value as AspectRatio)}
-                    className="bg-transparent outline-none"
-                    aria-label={tA2b("aspectRatio")}
-                    data-testid="aspect-ratio-select"
-                >
-                    <option value="16:9">{tA2b("landscape169")}</option>
-                    <option value="9:16" disabled={!portraitSupported}>{tA2b("portrait916")}{portraitSupported ? "" : ` (${portraitUnavailableReason})`}</option>
-                    <option value="9:13" disabled={!proposalSupported}>{tA2b("portrait913")}{proposalSupported ? "" : ` (${portraitUnavailableReason})`}</option>
-                </select>
-            </label>}
-            {!sourceSvgLandscape && !rasterSourceCandidate && a4Enabled !== null && showA4Controls && !a4SelectionAllowed ? (
-                <p className="w-full text-xs text-amber-700" role="status">
-                    {tA2b("a4SupportForTheSelectedGenerationMode")}
-                </p>
-            ) : null}
-            {!a4Enabled && hasCompanyStandard && config.aspectRatio !== "16:9" ? (
-                <p className="w-full text-xs text-amber-700" role="note" data-testid="portrait-master-unavailable">
-                    {tA2b("portraitAuthoredGenerationCannotBeUsedWith")}
-                </p>
-            ) : null}
+            <CanvasSelect
+                config={config}
+                onConfigChange={onConfigChange}
+                sourceContentMode={sourceContentMode}
+                authoredStyle={authoredStyle}
+                hasCompanyStandard={hasCompanyStandard}
+                generationStrategy={generationStrategy}
+                sourceDocumentCanvas={sourceDocumentCanvas}
+            />
             <AdvanceSettings
                 config={config}
                 onConfigChange={onConfigChange}

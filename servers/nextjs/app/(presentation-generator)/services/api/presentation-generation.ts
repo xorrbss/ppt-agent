@@ -378,7 +378,7 @@ export class PresentationGenerationApi {
     include_table_of_contents?: boolean;
     include_title_slide?: boolean;
     web_search?: boolean;
-    aspect_ratio?: "16:9" | "9:16" | "9:13";
+    aspect_ratio?: "16:9" | "9:16" | "9:13" | "1:1" | "21:9";
     page_size?: "A4";
     orientation?: "landscape" | "portrait";
     theme?: PresentationThemePayload | null;
@@ -653,7 +653,7 @@ export class PresentationGenerationApi {
       vision_qa?: boolean;
       strategy?: "authored" | "svg";
       authored_style?: string;
-      aspect_ratio?: "16:9" | "9:16" | "9:13";
+      aspect_ratio?: "16:9" | "9:16" | "9:13" | "1:1" | "21:9";
       page_size?: "A4";
       orientation?: "landscape" | "portrait";
       masterPin?: {

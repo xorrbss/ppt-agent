@@ -39,7 +39,7 @@ export interface DurableGenerationTask {
     visionQa: boolean;
     authoredStyle: string;
     /** Legacy selector, omitted for common physical-canvas documents. */
-    aspectRatio?: "16:9" | "9:16" | "9:13";
+    aspectRatio?: "16:9" | "9:16" | "9:13" | "1:1" | "21:9";
     pageSize?: "A4";
     orientation?: "landscape" | "portrait";
     /** Server-derived source geometry retained for UI/resume identity only. */
