@@ -1032,6 +1032,23 @@ test("Dashboard component coverage is required on both CI providers", () => {
   assert.match(pipeline, /branches:[\s\S]*\*dashboard-component-gate/u);
 });
 
+test("the structural layering gate is wired into the shared Next.js CI Node suite", () => {
+  const rootPackage = readJson("package.json");
+
+  assert.equal(
+    rootPackage.scripts["check:structural-layering"],
+    "node scripts/check-structural-layering.mjs",
+  );
+  assert.match(
+    rootPackage.scripts["test:next-ci"],
+    /npm run check:structural-layering/u,
+  );
+  assert.match(
+    rootPackage.scripts["test:next-ci"],
+    /scripts\/check-structural-layering\.test\.mjs/u,
+  );
+});
+
 test("developer documentation matches the executable lint and test workflow", () => {
   const claude = read("CLAUDE.md");
   const workflow = read(".github/workflows/test-all.yml");
