@@ -9,7 +9,6 @@ workspace operation.
 from __future__ import annotations
 
 import base64
-import hashlib
 import json
 from collections.abc import Mapping
 from pathlib import Path
@@ -18,6 +17,7 @@ import uuid
 
 from sqlalchemy import select
 
+from utils.hashing import canonical_json_bytes, sha256_prefixed
 from models.sql.public_artifact import PublicArtifact, PublicSlideCheckpoint
 from models.sql.workspace import WorkspaceOperation
 from services.artifact_store import (
@@ -38,17 +38,11 @@ STAGE_VERSION = "authored-original-capture/v1"
 
 
 def _canonical_json(value: object) -> bytes:
-    return json.dumps(
-        value,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-        allow_nan=False,
-    ).encode("utf-8")
+    return canonical_json_bytes(value)
 
 
 def _sha256(payload: bytes) -> str:
-    return "sha256:" + hashlib.sha256(payload).hexdigest()
+    return sha256_prefixed(payload)
 
 
 def _html_digest(html: str) -> str:

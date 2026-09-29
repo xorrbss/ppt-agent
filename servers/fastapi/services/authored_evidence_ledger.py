@@ -14,7 +14,6 @@ recollection observable instead of silently replacing the evidence.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import base64
 import os
@@ -24,10 +23,11 @@ from dataclasses import dataclass, replace
 from threading import RLock
 from types import MappingProxyType
 from typing import Any, Iterable, Mapping
+from utils.hashing import sha256_prefixed
 
 
 def _sha256(value: bytes) -> str:
-    return "sha256:" + hashlib.sha256(value).hexdigest()
+    return sha256_prefixed(value)
 
 
 def digest_html(html: str) -> str:

@@ -7,12 +7,11 @@ silently coerce missing evidence into a pass.
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Literal
+from utils.hashing import canonical_json_digest
 
 
 _MISSING = object()
@@ -144,14 +143,7 @@ def _canonical_digest(payload: object) -> str:
             return digest
     except (ImportError, TypeError, ValueError):
         pass
-    encoded = json.dumps(
-        _plain(payload),
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-        allow_nan=False,
-    ).encode("utf-8")
-    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+    return canonical_json_digest(_plain(payload))
 
 
 @dataclass(frozen=True, slots=True)

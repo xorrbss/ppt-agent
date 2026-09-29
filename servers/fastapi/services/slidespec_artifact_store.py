@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Mapping
 from typing import Any
 import uuid
@@ -11,6 +10,7 @@ from sqlalchemy import cast, literal, select, update
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from utils.hashing import sha256_prefixed
 from models.slidespec_v1 import (
     AcceptanceDecision,
     RenderRequest,
@@ -46,7 +46,7 @@ def _json(value: Any) -> Any:
 
 
 def _sha256_bytes(value: bytes) -> str:
-    return "sha256:" + hashlib.sha256(value).hexdigest()
+    return sha256_prefixed(value)
 
 
 def _json_cas_predicate(session: AsyncSession, column: Any, expected: Any) -> Any:

@@ -17,6 +17,7 @@ from typing import Any
 import xml.etree.ElementTree as ET
 import zipfile
 
+from utils.hashing import sha256_file
 from services.presentation_export_capabilities import PresentationExportContractError
 from services.presentation_export_evidence_sidecars import (
     publish_finalized_hybrid_sidecars,
@@ -91,14 +92,6 @@ def _powerpoint_release_gate_failures(
     if tuple(observation_states) != _POWERPOINT_QA_OBSERVATION_STATES:
         failures.append("observation-state-incomplete")
     return list(dict.fromkeys(failures))
-
-
-def _sha256_file(path: Path) -> str:
-    digest = sha256()
-    with path.open("rb") as stream:
-        while chunk := stream.read(1024 * 1024):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def resolve_hybrid_artifact(path_value: str) -> Path:
@@ -953,8 +946,8 @@ def _run_powerpoint_com_qa(
             reopened.Export(str(reopen_render), "PNG", canvas_contract.width_px, canvas_contract.height_px)
             first_pngs = sorted(first_render.glob("*.PNG"))
             pngs = sorted(reopen_render.glob("*.PNG"))
-            first_png_hashes = [_sha256_file(png) for png in first_pngs]
-            reopen_png_hashes = [_sha256_file(png) for png in pngs]
+            first_png_hashes = [sha256_file(png) for png in first_pngs]
+            reopen_png_hashes = [sha256_file(png) for png in pngs]
             comparison = _snapshot_comparison(first_snapshot, reopened_snapshot)
             inspection_failures += first_snapshot_failures + reopened_snapshot_failures
             observed_shape_names = {

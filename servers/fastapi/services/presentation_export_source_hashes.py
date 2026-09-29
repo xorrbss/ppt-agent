@@ -6,13 +6,12 @@ import asyncio
 from collections.abc import Sequence
 from hashlib import sha256
 import hmac
-import json
-from pathlib import Path
 from typing import Any, Literal
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from utils.hashing import canonical_json_bytes, sha256_file, sha256_hex
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from services.presentation_export_capabilities import (
@@ -23,21 +22,16 @@ from services.workspace_service import WorkspaceServiceError
 
 
 def _canonical_json(value: Any) -> bytes:
+    """Contract A bytes (see ``utils.hashing``), failing closed as a contract error."""
+
     try:
-        serialized = json.dumps(
-            value,
-            allow_nan=False,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        )
+        return canonical_json_bytes(value)
     except (TypeError, ValueError) as error:
         raise PresentationExportContractError("presentation_export_snapshot_invalid") from error
-    return serialized.encode("utf-8")
 
 
 def sha256_canonical_json(value: Any) -> str:
-    return sha256(_canonical_json(value)).hexdigest()
+    return sha256_hex(_canonical_json(value))
 
 
 def build_export_source_snapshot_sha256(
@@ -164,14 +158,6 @@ def build_export_asset_manifest_sha256(asset_digests: dict[str, str]) -> str:
     )
 
 
-def _sha256_file(path: Path) -> str:
-    digest = sha256()
-    with path.open("rb") as stream:
-        while chunk := stream.read(1024 * 1024):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 async def require_export_asset_digests(
     session: AsyncSession,
     *,
@@ -208,7 +194,7 @@ async def require_export_asset_digests(
             )
         try:
             stat_size = private_path.stat().st_size
-            actual_digest = await asyncio.to_thread(_sha256_file, private_path)
+            actual_digest = await asyncio.to_thread(sha256_file, private_path)
         except OSError as error:
             raise PresentationExportFreshnessError(
                 "presentation_export_asset_unavailable",

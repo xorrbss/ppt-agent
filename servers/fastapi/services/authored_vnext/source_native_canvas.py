@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import hashlib
-import json
 import math
 import re
 from typing import Mapping
 
 from lxml import html as lxml_html
 
+from utils.hashing import canonical_json_digest, sha256_prefixed
 from services.document_canvas import canvas_digest, parse_canvas_metadata
 from services.document_canvas_contain import CanvasRect, ContainPlan, build_contain_plan
 from services.document_canvas_contain import (
@@ -33,14 +32,11 @@ SOURCE_NATIVE_FONT_POLICY_ID = "source-native/min-body-12-physical-pt"
 
 
 def _sha256_text(value: str) -> str:
-    return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
+    return sha256_prefixed(value.encode("utf-8"))
 
 
 def _canonical_digest(value: object) -> str:
-    encoded = json.dumps(
-        value, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
-    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+    return canonical_json_digest(value)
 
 
 @dataclass(frozen=True, slots=True)

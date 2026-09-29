@@ -20,6 +20,7 @@ import xml.etree.ElementTree as ET
 from typing import Any
 from zipfile import ZipFile
 
+from utils.hashing import sha256_prefixed
 from services.authored_vnext.retained_reference_marker import (
     RETAINED_REFERENCE_MARKER_CODEC,
     canonical_reference_digest,
@@ -1003,7 +1004,7 @@ def _anchors_from_envelopes(
 
 
 def _sha256_digest(value: bytes) -> str:
-    return f"sha256:{hashlib.sha256(value).hexdigest()}"
+    return sha256_prefixed(value)
 
 
 def _relationship_part_name(source_part: str) -> str:

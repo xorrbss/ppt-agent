@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
+from utils.hashing import canonical_json_digest
 
 
 Digest = str
@@ -18,14 +17,7 @@ def _camel(value: str) -> str:
 
 
 def canonical_digest(value: Any) -> str:
-    payload = json.dumps(
-        value,
-        ensure_ascii=False,
-        allow_nan=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    return f"sha256:{hashlib.sha256(payload).hexdigest()}"
+    return canonical_json_digest(value)
 
 
 class PackModel(BaseModel):

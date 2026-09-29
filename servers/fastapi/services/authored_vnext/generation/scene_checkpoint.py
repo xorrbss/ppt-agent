@@ -12,6 +12,7 @@ from threading import RLock
 from typing import Any, Iterable, Mapping
 import uuid
 
+from utils.hashing import canonical_json_bytes, sha256_prefixed
 from services.authored_checkpoint_artifacts import atomic_write, checkpoint_root
 from services.authored_vnext.generation.scene_envelope import (
     AuthoredSlideSceneEnvelope,
@@ -41,18 +42,12 @@ class SceneRepairBudgetExhausted(RuntimeError):
 
 
 def _canonical_json(value: object) -> str:
-    return json.dumps(
-        value,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-        allow_nan=False,
-    )
+    return canonical_json_bytes(value).decode("utf-8")
 
 
 def _digest(value: object) -> str:
     payload = value if isinstance(value, str) else _canonical_json(value)
-    return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return sha256_prefixed(payload.encode("utf-8"))
 
 
 def repair_failure_fingerprint(

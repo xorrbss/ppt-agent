@@ -26,12 +26,9 @@ from services.presentation_export_source_hashes import (
     build_export_html_source_sha256 as build_export_html_source_sha256,
     build_export_composition_sha256 as build_export_composition_sha256,
     build_export_asset_manifest_sha256 as build_export_asset_manifest_sha256,
-    _sha256_file as _sha256_file,
     require_export_asset_digests as require_export_asset_digests,
     build_sync_export_hashes as build_sync_export_hashes,
 )
-
-
 
 
 def initial_export_attempt_provenance(

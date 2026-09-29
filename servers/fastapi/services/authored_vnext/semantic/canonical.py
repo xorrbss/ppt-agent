@@ -13,6 +13,7 @@ import unicodedata
 from typing import Any, Mapping
 
 from pydantic import BaseModel
+from utils.hashing import sha256_prefixed
 from utils.authored_dom_quality import validate_declared_authored_qids
 
 from models.authored_vnext.semantic.contracts import (
@@ -113,7 +114,7 @@ def canonical_digest(value: Any) -> str:
 
 
 def bytes_digest(value: bytes) -> str:
-    return "sha256:" + sha256(value).hexdigest()
+    return sha256_prefixed(value)
 
 
 def seal_component(component: BaseModel, digest_field: str = "digest") -> BaseModel:

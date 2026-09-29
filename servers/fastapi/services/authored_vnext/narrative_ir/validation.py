@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-import hashlib
-import json
 import re
 from typing import Any
 from uuid import UUID
@@ -12,6 +10,7 @@ from uuid import UUID
 from pydantic import ValidationError
 
 from .contracts import ContentGraphV1, NarrativeDraftV1, NarrativeIRV1, model_payload
+from utils.hashing import canonical_json_bytes, sha256_prefixed
 
 
 _FORBIDDEN_KEYS = frozenset(
@@ -75,17 +74,11 @@ class NarrativeIRValidationError(ValueError):
 def canonical_json(value: Any) -> str:
     if hasattr(value, "model_dump"):
         value = value.model_dump(mode="json", by_alias=True)
-    return json.dumps(
-        value,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-        allow_nan=False,
-    )
+    return canonical_json_bytes(value).decode("utf-8")
 
 
 def canonical_digest(value: Any) -> str:
-    return "sha256:" + hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
+    return sha256_prefixed(canonical_json(value).encode("utf-8"))
 
 
 def reject_provider_layout_or_policy(value: Any) -> None:

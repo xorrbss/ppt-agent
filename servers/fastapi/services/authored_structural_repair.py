@@ -10,13 +10,13 @@ from collections import Counter
 from collections.abc import Callable, Mapping
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field, replace
-import hashlib
 from html.parser import HTMLParser
 import inspect
 import json
 import re
 from typing import Any
 
+from utils.hashing import sha256_prefixed
 from services.authored_structural_repair_compare import (
     _composition_comparison,
     _field,
@@ -37,7 +37,7 @@ from utils.authored_dom_quality import (
 
 REPAIR_GATE_VERSION = "source-structural-repair-v3"
 def _digest(value: str | bytes) -> str:
-    return "sha256:" + hashlib.sha256(value.encode("utf-8") if isinstance(value, str) else value).hexdigest()
+    return sha256_prefixed(value.encode("utf-8") if isinstance(value, str) else value)
 
 
 def _plain_copy(value: Any) -> Any:

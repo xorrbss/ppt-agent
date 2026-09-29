@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import PurePath
 from typing import Any
 
 from pydantic import BaseModel
 
+from utils.hashing import sha256_prefixed
 from services.source_locked.contracts import AdmissionContractV1, IdempotencyPayloadV1, SourceMediaType
 
 
 def sha256_digest(data: bytes) -> str:
-    return f"sha256:{hashlib.sha256(data).hexdigest()}"
+    return sha256_prefixed(data)
 
 
 def canonical_json_bytes(value: BaseModel | dict[str, Any]) -> bytes:

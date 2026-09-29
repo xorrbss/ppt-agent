@@ -7,12 +7,12 @@ serializer readiness, and editability remain server-issued derived receipts.
 
 from __future__ import annotations
 
-import hashlib
 from html.parser import HTMLParser
 import re
 from collections.abc import Callable
 from typing import Any
 
+from utils.hashing import sha256_prefixed
 from utils.authored_dom_quality import validate_declared_authored_qids
 
 
@@ -42,7 +42,7 @@ _VOID_TAGS = frozenset({
 
 
 def _sha256_bytes(value: bytes) -> str:
-    return "sha256:" + hashlib.sha256(value).hexdigest()
+    return sha256_prefixed(value)
 
 
 def _normalized_text(value: str) -> str:

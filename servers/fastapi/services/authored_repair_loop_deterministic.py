@@ -11,16 +11,16 @@ introduces no repair of its own and no new predicate.
 
 from __future__ import annotations
 
-import hashlib
 import logging
 from collections.abc import Mapping
 from typing import Any, Awaitable, Callable
+from utils.hashing import sha256_prefixed
 
 LOGGER = logging.getLogger(__name__)
 
 
 def digest(value: str) -> str:
-    return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
+    return sha256_prefixed(value.encode("utf-8"))
 
 
 async def deterministic_candidate(

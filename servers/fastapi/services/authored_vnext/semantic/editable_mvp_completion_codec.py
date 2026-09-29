@@ -6,10 +6,10 @@ import base64
 import binascii
 from copy import deepcopy
 from datetime import datetime, timezone
-import hashlib
 import json
 import re
 from typing import Any
+from utils.hashing import canonical_json_bytes, sha256_prefixed
 
 
 DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -23,13 +23,7 @@ class EditableMvpCompletionError(ValueError):
 
 def _canonical_json(value: Any) -> str:
     try:
-        return json.dumps(
-            value,
-            ensure_ascii=False,
-            allow_nan=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        )
+        return canonical_json_bytes(value).decode("utf-8")
     except (TypeError, ValueError) as error:
         raise EditableMvpCompletionError(
             "editable_mvp_non_canonical_json", status_code=422
@@ -37,11 +31,11 @@ def _canonical_json(value: Any) -> str:
 
 
 def _digest(value: Any) -> str:
-    return "sha256:" + hashlib.sha256(_canonical_json(value).encode("utf-8")).hexdigest()
+    return sha256_prefixed(_canonical_json(value).encode("utf-8"))
 
 
 def _sha256_bytes(value: bytes) -> str:
-    return "sha256:" + hashlib.sha256(value).hexdigest()
+    return sha256_prefixed(value)
 
 
 def _without(value: dict[str, Any], *fields: str) -> dict[str, Any]:

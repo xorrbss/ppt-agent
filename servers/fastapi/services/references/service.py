@@ -15,6 +15,7 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from utils.hashing import canonical_json_bytes
 from models.sql.reference_snapshot import ReferenceSnapshot
 from services.assets import AssetBinding, AssetGateway, AssetGatewayError, AssetKind
 from services.references.contracts import (
@@ -48,13 +49,7 @@ _FORBIDDEN_KEYS = frozenset(
 
 def _canonical_json(value: Any) -> str:
     try:
-        return json.dumps(
-            value,
-            ensure_ascii=False,
-            allow_nan=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        )
+        return canonical_json_bytes(value).decode("utf-8")
     except (TypeError, ValueError) as error:
         raise ReferenceProviderError("reference_payload_not_json") from error
 

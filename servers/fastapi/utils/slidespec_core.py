@@ -5,12 +5,12 @@ from __future__ import annotations
 from collections import Counter
 from hashlib import sha256
 from html import escape
-import json
 import re
 from typing import Any, Iterable, Mapping
 
 from pydantic import BaseModel
 
+from utils.hashing import canonical_json_bytes, sha256_prefixed
 from models.slidespec_v1 import (
     AppliedRepair,
     Bounds,
@@ -55,15 +55,9 @@ def _json_value(value: Any) -> Any:
 def canonical_json(value: Any) -> str:
     """Return the RFC-8259 subset used by every SlideSpec digest."""
 
-    return json.dumps(
-        _json_value(value),
-        ensure_ascii=False,
-        allow_nan=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    )
+    return canonical_json_bytes(_json_value(value)).decode("utf-8")
 def digest(value: Any) -> str:
-    return "sha256:" + sha256(canonical_json(value).encode("utf-8")).hexdigest()
+    return sha256_prefixed(canonical_json(value).encode("utf-8"))
 def _content_projection(spec: SlideSpec) -> list[dict[str, Any]]:
     projection = []
     for node in spec.content:

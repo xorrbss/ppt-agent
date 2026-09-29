@@ -18,6 +18,7 @@ import uuid
 import aiohttp
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from utils.hashing import canonical_json_bytes, sha256_hex
 from services.assets import AssetGateway, AssetKind
 from services.documents_loader import DocumentsLoader
 from services.references.contracts import (
@@ -210,19 +211,13 @@ _CONTROL_CHARACTERS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 def _canonical_json(value: Any) -> str:
     try:
-        return json.dumps(
-            value,
-            ensure_ascii=False,
-            allow_nan=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        )
+        return canonical_json_bytes(value).decode("utf-8")
     except (TypeError, ValueError) as error:
         raise ReferenceProviderError("reference_payload_not_json") from error
 
 
 def _digest(value: Any) -> str:
-    return sha256(_canonical_json(value).encode("utf-8")).hexdigest()
+    return sha256_hex(_canonical_json(value).encode("utf-8"))
 
 
 def _strict_keys(request: Mapping[str, Any], expected: frozenset[str]) -> None:

@@ -7,12 +7,12 @@ artifact reader. This module does not enable the v2 writer.
 from __future__ import annotations
 
 import hashlib
-import json
 import uuid
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, model_validator
 from pydantic.alias_generators import to_camel
+from utils.hashing import canonical_json_digest
 
 POLICY_VERSION = "svg-image-preservation/v1"
 PROFILE_VERSION = "svg-image-derivative/v1"
@@ -142,8 +142,7 @@ class ExtractionDiagnostic(Metadata):
 def canonical_digest(value: BaseModel | dict) -> str:
     data = value.model_dump(mode="json", by_alias=True) if isinstance(value, BaseModel) else dict(value)
     data.pop("digest", None)
-    payload = json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
-    return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return canonical_json_digest(data)
 
 
 class SourceManifest(Metadata):

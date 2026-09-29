@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-import hashlib
-import json
 import os
 from pathlib import Path
 from typing import Any
 import uuid
 
+from utils.hashing import canonical_json_digest
 from services.authored_vnext.design_pack import (
     DesignPackRegistry,
     DesignPackRegistryError,
@@ -28,14 +27,7 @@ class GenerationRouteError(ValueError):
 
 
 def _digest(value: Mapping[str, object]) -> str:
-    encoded = json.dumps(
-        value,
-        ensure_ascii=False,
-        allow_nan=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+    return canonical_json_digest(value)
 
 
 def design_pack_storage_root(owner_id: uuid.UUID | str) -> Path:

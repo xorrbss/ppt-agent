@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -12,6 +11,7 @@ from pydantic import ValidationError
 
 from .canvases import canvas_id_for_size, registered_canvases
 from .models import MANIFEST_V1, DesignPackManifest, DesignPackStructure
+from utils.hashing import sha256_hex
 
 
 class DesignPackRegistryError(ValueError):
@@ -41,7 +41,7 @@ class RegisteredDesignPack:
 
 
 def _sha256(value: bytes) -> str:
-    return hashlib.sha256(value).hexdigest()
+    return sha256_hex(value)
 
 
 def _load_json(path: Path, label: str) -> Any:

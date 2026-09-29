@@ -34,6 +34,7 @@ from sqlalchemy import (
 )
 from sqlmodel import Field, SQLModel
 
+from utils.hashing import canonical_json_sha256, is_sha256_hex
 from models.sql.workspace import get_workspace_owner_scope
 from models.sql.presentation_export_receipt_models import (
     ExportEvidenceSidecarPointer,
@@ -75,10 +76,6 @@ _SENSITIVE_PROVENANCE_KEYS = {
 _SENSITIVE_PROVENANCE_KEYS_COMPACT = {
     re.sub(r"[^a-z0-9]", "", key) for key in _SENSITIVE_PROVENANCE_KEYS
 }
-
-
-def _is_sha256(value: str) -> bool:
-    return len(value) == 64 and all(character in "0123456789abcdef" for character in value)
 
 
 def _sha256_sql(column: str) -> str:
@@ -151,7 +148,7 @@ class ExportFreshnessProvenance(BaseModel):
         if value is None:
             return None
         normalized = value.lower()
-        if not _is_sha256(normalized):
+        if not is_sha256_hex(normalized):
             raise ValueError("export freshness digests must be SHA-256 values")
         return normalized
 
@@ -173,7 +170,7 @@ class ExportAtomicBinding(BaseModel):
     @classmethod
     def validate_binding_digest(cls, value: str) -> str:
         normalized = value.lower()
-        if not _is_sha256(normalized):
+        if not is_sha256_hex(normalized):
             raise ValueError("export atomic binding digest must be SHA-256")
         return normalized
 
@@ -288,7 +285,7 @@ class ExportQualityReceiptBinding(BaseModel):
     @classmethod
     def validate_receipt_digest(cls, value: str) -> str:
         normalized = value.lower()
-        if not normalized.startswith("sha256:") or not _is_sha256(normalized[7:]):
+        if not normalized.startswith("sha256:") or not is_sha256_hex(normalized[7:]):
             raise ValueError("quality receipt digest must be prefixed SHA-256")
         return normalized
 
@@ -307,7 +304,7 @@ class ExportQualityReceiptBinding(BaseModel):
         if value is None:
             return None
         normalized = value.lower()
-        if not normalized.startswith("sha256:") or not _is_sha256(normalized[7:]):
+        if not normalized.startswith("sha256:") or not is_sha256_hex(normalized[7:]):
             raise ValueError("quality receipt atomic digest must be prefixed SHA-256")
         return normalized
 
@@ -315,7 +312,7 @@ class ExportQualityReceiptBinding(BaseModel):
     @classmethod
     def validate_sidecar_sha256(cls, value: str) -> str:
         normalized = value.lower()
-        if not _is_sha256(normalized):
+        if not is_sha256_hex(normalized):
             raise ValueError("quality receipt sidecar binding must be SHA-256")
         return normalized
 
@@ -409,7 +406,7 @@ class ExportFontPreflightEvidence(BaseModel):
     @classmethod
     def validate_ooxml_readback_sha256(cls, value: str) -> str:
         normalized = value.lower()
-        if not _is_sha256(normalized):
+        if not is_sha256_hex(normalized):
             raise ValueError("PowerPoint OOXML font readback digest is invalid")
         return normalized
 
@@ -528,7 +525,7 @@ class ExportPowerPointQaEvidence(BaseModel):
         if value is None:
             return None
         normalized = value.lower()
-        if not normalized.startswith("sha256:") or not _is_sha256(normalized[7:]):
+        if not normalized.startswith("sha256:") or not is_sha256_hex(normalized[7:]):
             raise ValueError("PowerPoint geometry contract digest must be SHA-256")
         return normalized
     first_open_chart_readback: list[ExportPowerPointChartReadback] = PydanticField(
@@ -547,7 +544,7 @@ class ExportPowerPointQaEvidence(BaseModel):
     def validate_rendered_digests(cls, value: list[str]) -> list[str]:
         normalized = [digest.lower() for digest in value]
         if len(normalized) != len(set(normalized)) or any(
-            not _is_sha256(digest) for digest in normalized
+            not is_sha256_hex(digest) for digest in normalized
         ):
             raise ValueError("PowerPoint rendered PNG digests are invalid")
         return normalized
@@ -555,7 +552,7 @@ class ExportPowerPointQaEvidence(BaseModel):
     @field_validator("first_open_readback_sha256", "reopen_readback_sha256")
     @classmethod
     def validate_readback_digests(cls, value: str | None) -> str | None:
-        if value is not None and not _is_sha256(value):
+        if value is not None and not is_sha256_hex(value):
             raise ValueError("PowerPoint readback digest is invalid")
         return value.lower() if value is not None else None
 
@@ -615,7 +612,7 @@ class ExportCoverageSource(BaseModel):
         if value is None:
             return None
         normalized = value.lower()
-        if not _is_sha256(normalized):
+        if not is_sha256_hex(normalized):
             raise ValueError("export coverage source digest must be SHA-256")
         return normalized
 
@@ -680,7 +677,7 @@ class ExportSemanticReceipts(BaseModel):
         if value is None:
             return None
         normalized = value.lower()
-        if not normalized.startswith("sha256:") or not _is_sha256(normalized[7:]):
+        if not normalized.startswith("sha256:") or not is_sha256_hex(normalized[7:]):
             raise ValueError("semantic receipt digest must be prefixed SHA-256")
         return normalized
 
@@ -1016,15 +1013,7 @@ def validate_export_quality_coverage_consistency(
 
 
 def _canonical_sidecar_sha256(value: dict[str, Any]) -> str:
-    return sha256(
-        json.dumps(
-            value,
-            allow_nan=False,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        ).encode("utf-8")
-    ).hexdigest()
+    return canonical_json_sha256(value)
 
 
 def _quality_qid_owner_census_digest(quality: dict[str, Any]) -> str:
@@ -1105,7 +1094,7 @@ class ExportVisualParityEvidence(BaseModel):
     @classmethod
     def validate_sidecar_digest(cls, value: str) -> str:
         normalized = value.lower()
-        if not _is_sha256(normalized):
+        if not is_sha256_hex(normalized):
             raise ValueError("visual parity sidecar digest must be SHA-256")
         return normalized
 
@@ -1183,7 +1172,7 @@ class PresentationExportAttemptProvenance(BaseModel):
         for asset_id, digest in value.items():
             key = asset_id.strip()
             candidate = digest.lower()
-            if not key or not _is_sha256(candidate):
+            if not key or not is_sha256_hex(candidate):
                 raise ValueError("export asset digests must use nonblank keys and SHA-256 values")
             normalized[key] = candidate
         return normalized
