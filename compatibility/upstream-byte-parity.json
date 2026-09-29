@@ -11332,7 +11332,6 @@
       "servers/fastapi/scripts/canvas_bench_render.py",
       "servers/fastapi/scripts/canvas_bench_rules.py",
       "servers/fastapi/scripts/check_authored_style_samples.py",
-      "servers/fastapi/scripts/design_pack_variants.py",
       "servers/fastapi/scripts/generate_authored_style_samples.py",
       "servers/fastapi/scripts/generate_canvas_registry.py",
       "servers/fastapi/scripts/provider_operations.py",
@@ -11652,9 +11651,6 @@
       "servers/fastapi/services/authored_vnext/design_pack/models.py",
       "servers/fastapi/services/authored_vnext/design_pack/registry.py",
       "servers/fastapi/services/authored_vnext/design_pack/structural_render.py",
-      "servers/fastapi/services/authored_vnext/design_pack/variant_source.py",
-      "servers/fastapi/services/authored_vnext/design_pack/variant_store.py",
-      "servers/fastapi/services/authored_vnext/design_pack/variants.py",
       "servers/fastapi/services/authored_vnext/generation/__init__.py",
       "servers/fastapi/services/authored_vnext/generation/account_lifecycle.py",
       "servers/fastapi/services/authored_vnext/generation/ai_text_zones.py",
@@ -12772,8 +12768,8 @@
       "servers/fastapi/tests/unit/test_deck_ir_core_integration.py",
       "servers/fastapi/tests/unit/test_decompose_job_service.py",
       "servers/fastapi/tests/unit/test_deleted_presentation_tombstone.py",
-      "servers/fastapi/tests/unit/test_design_pack_variants.py",
-      "servers/fastapi/tests/unit/test_design_pack_variants_admission.py",
+      "servers/fastapi/tests/unit/test_design_pack_canvas_admission.py",
+      "servers/fastapi/tests/unit/test_design_pack_manifest_and_render.py",
       "servers/fastapi/tests/unit/test_document_canvas.py",
       "servers/fastapi/tests/unit/test_document_canvas_contain.py",
       "servers/fastapi/tests/unit/test_document_canvas_svg_export.py",
@@ -14223,8 +14219,8 @@
       "upstreamOwned": 10163,
       "identical": 9250,
       "exceptions": 913,
-      "localOnly": 7802
+      "localOnly": 7798
     },
-    "policySha256": "5be2f714672207acb4e707afbf7272609f545ad746a2256c1341783ecf8d361f"
+    "policySha256": "616d703a775a8f8077a8340352ed1bc83a5f1691f2a647c179a3655ebda9deb1"
   }
 }

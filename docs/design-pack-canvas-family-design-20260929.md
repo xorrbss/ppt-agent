@@ -1,5 +1,8 @@
 # Design-pack canvas family: design (2026-09-29)
 
+**Status 2026-09-29: deferred.** Design packs are declared 16:9-only (`design_pack_canvas_unsupported`), so this canvas-native family is not being built. The variant store, variant source drafting and manifest v2 that this design retires were removed in `docs/svg-master-no-stretch-and-variant-removal-design-20260929.md` section 2 (implemented); its S0 executor work and v3 manifest were not.
+
+
 Status: design only. No code was changed. Supersedes the drafting half of
 `docs/aspect-ratio-expansion-design-20260928.md` decision 9 / section 5 (per-canvas variants by one
 deck-level re-layout, commit `17059ccb6`). The admission half of that decision (a pack serves another

@@ -10,8 +10,8 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from .canvases import canvas_id_for_size, registered_canvases
-from .models import MANIFEST_V1, DesignPackManifest, DesignPackStructure
+from .canvases import canvas_id_for_size
+from .models import DesignPackManifest, DesignPackStructure
 
 
 class DesignPackRegistryError(ValueError):
@@ -26,18 +26,10 @@ class RegisteredDesignPack:
 
     @property
     def canvas_id(self) -> str | None:
-        if self.manifest.schema_version == MANIFEST_V1:
-            canvas = self.structure.canvas
-            return canvas_id_for_size(canvas.width, canvas.height, canvas.unit)
-        return self.manifest.canvas_id
+        """The registered canvas of the pack's own compiled source, if any."""
 
-    @property
-    def status(self) -> str:
-        return self.manifest.effective_status
-
-    @property
-    def is_variant(self) -> bool:
-        return self.manifest.variant_of is not None
+        canvas = self.structure.canvas
+        return canvas_id_for_size(canvas.width, canvas.height, canvas.unit)
 
 
 def _sha256(value: bytes) -> str:
@@ -65,38 +57,7 @@ def _confined(package_root: Path, relative: str) -> Path:
     return target
 
 
-def _check_identity(package_root: Path, manifest: DesignPackManifest, *, variant: bool) -> None:
-    if not variant:
-        if (
-            package_root.name != manifest.package_version
-            or package_root.parent.name != manifest.pack_id
-            or manifest.variant_of is not None
-        ):
-            raise DesignPackRegistryError("design_pack_package_identity_mismatch")
-        return
-    # <root>/<pack-id>/<semver>/variants/<canvas-id>/manifest.json
-    version_root = package_root.parent.parent
-    if (
-        manifest.variant_of is None
-        or package_root.name != manifest.canvas_id
-        or package_root.parent.name != "variants"
-        or version_root.name != manifest.variant_of.package_version
-        or version_root.parent.name != manifest.variant_of.pack_id
-    ):
-        raise DesignPackRegistryError("design_pack_variant_identity_mismatch")
-
-
-def _check_variant_canvas(package: "RegisteredDesignPack") -> None:
-    target = registered_canvases()[package.manifest.canvas_id or ""]
-    canvas = package.structure.canvas
-    expected = (target.width_emu, target.height_emu) if canvas.unit == "emu" else (target.width, target.height)
-    if (canvas.width, canvas.height) != (float(expected[0]), float(expected[1])):
-        raise DesignPackRegistryError("design_pack_variant_canvas_mismatch")
-
-
-def _load_package(
-    manifest_path: Path, storage_root: Path, *, variant: bool = False
-) -> RegisteredDesignPack:
+def _load_package(manifest_path: Path, storage_root: Path) -> RegisteredDesignPack:
     if manifest_path.is_symlink():
         raise DesignPackRegistryError("design_pack_manifest_invalid")
     package_root = manifest_path.parent.resolve(strict=True)
@@ -110,7 +71,11 @@ def _load_package(
         )
     except ValidationError as error:
         raise DesignPackRegistryError("design_pack_manifest_invalid") from error
-    _check_identity(package_root, manifest, variant=variant)
+    if (
+        package_root.name != manifest.package_version
+        or package_root.parent.name != manifest.pack_id
+    ):
+        raise DesignPackRegistryError("design_pack_package_identity_mismatch")
 
     inventory_by_path = {item.path: item for item in manifest.inventory}
     for item in manifest.inventory:
@@ -146,14 +111,11 @@ def _load_package(
         item = render_inventory.get(render.asset_path)
         if item is None or item.sha256 != render.sha256:
             raise DesignPackRegistryError("design_pack_render_binding_mismatch")
-    package = RegisteredDesignPack(
+    return RegisteredDesignPack(
         root=package_root,
         manifest=manifest,
         structure=structure,
     )
-    if variant:
-        _check_variant_canvas(package)
-    return package
 
 
 def _version_key(value: str) -> tuple[int, int, int]:
@@ -162,23 +124,16 @@ def _version_key(value: str) -> tuple[int, int, int]:
 
 
 class DesignPackRegistry:
-    """Discover base packages from ``<root>/<pack-id>/<semver>/manifest.json``.
-
-    Canvas variants live at ``<root>/<pack-id>/<semver>/variants/<canvas-id>/``
-    and are kept apart from the bases, so ``get``/``latest``/``list`` never
-    return a variant.
-    """
+    """Discover packages from ``<root>/<pack-id>/<semver>/manifest.json``."""
 
     def __init__(self, storage_root: Path | str) -> None:
         self.storage_root = Path(storage_root).expanduser().resolve(strict=False)
         self._packages: dict[tuple[str, str], RegisteredDesignPack] = {}
-        self._variants: dict[tuple[str, str], dict[str, RegisteredDesignPack]] = {}
         self.reload()
 
     def reload(self) -> tuple[RegisteredDesignPack, ...]:
         if not self.storage_root.exists():
             self._packages = {}
-            self._variants = {}
             return ()
         if not self.storage_root.is_dir() or self.storage_root.is_symlink():
             raise DesignPackRegistryError("design_pack_storage_root_invalid")
@@ -196,20 +151,7 @@ class DesignPackRegistry:
             if key in packages:
                 raise DesignPackRegistryError("design_pack_package_duplicate")
             packages[key] = package
-        variants: dict[tuple[str, str], dict[str, RegisteredDesignPack]] = {}
-        for manifest_path in sorted(
-            self.storage_root.glob("*/*/variants/*/manifest.json"),
-            key=lambda path: path.as_posix().casefold(),
-        ):
-            package = _load_package(manifest_path, self.storage_root, variant=True)
-            variant_of = package.manifest.variant_of
-            assert variant_of is not None and package.manifest.canvas_id is not None
-            base_key = (variant_of.pack_id, variant_of.package_version)
-            if base_key not in packages:
-                raise DesignPackRegistryError("design_pack_variant_base_missing")
-            variants.setdefault(base_key, {})[package.manifest.canvas_id] = package
         self._packages = packages
-        self._variants = variants
         return self.list()
 
     def list(self) -> tuple[RegisteredDesignPack, ...]:
@@ -239,26 +181,6 @@ class DesignPackRegistry:
             versions,
             key=lambda package: _version_key(package.manifest.package_version),
         )
-
-    def variants(
-        self, pack_id: str, package_version: str, *, include_drafts: bool = False
-    ) -> dict[str, RegisteredDesignPack]:
-        found = self._variants.get((pack_id, package_version), {})
-        return {
-            canvas_id: package
-            for canvas_id, package in sorted(found.items())
-            if include_drafts or package.status == "approved"
-        }
-
-    def pinnable(self) -> tuple[RegisteredDesignPack, ...]:
-        """Bases plus approved variants: every package a generation pin may name."""
-
-        approved = tuple(
-            package
-            for pack_id, package_version in sorted(self._variants)
-            for package in self.variants(pack_id, package_version).values()
-        )
-        return self.list() + approved
 
 
 __all__ = [

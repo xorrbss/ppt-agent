@@ -89,7 +89,7 @@ RASTER_APPROVAL_PIN = {
     "analysisDigest": _HEX, "sourceSha256": _HEX, "approvedRegionIds": [], "approvalDigest": _HEX,
 }
 _SNAPSHOT_ID = str(uuid.UUID(int=1))
-_MAPPED_PREFIXES = ("document_canvas", "authored_canvas", "authored_portrait")
+_MAPPED_PREFIXES = ("document_canvas", "authored_canvas", "authored_portrait", "design_pack_canvas")
 
 
 def axes() -> dict[str, Any]:

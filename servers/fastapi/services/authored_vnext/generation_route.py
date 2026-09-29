@@ -17,6 +17,9 @@ from services.authored_vnext.design_pack import (
 )
 from utils.owner_context import get_current_owner_id
 
+# Design packs execute on the canvas of their own compiled source only.
+DESIGN_PACK_CANVAS_ID = "wide-16x9"
+
 
 class GenerationRouteError(ValueError):
     code = "generation_route_invalid"
@@ -88,8 +91,7 @@ def load_pinned_design_pack(
 ) -> RegisteredDesignPack:
     pin = normalize_design_pack_pin(design_pack_pin)
     try:
-        # Admission may have re-pinned the request to an approved canvas variant.
-        packages = DesignPackRegistry(design_pack_storage_root(owner_id)).pinnable()
+        packages = DesignPackRegistry(design_pack_storage_root(owner_id)).list()
     except DesignPackRegistryError as error:
         raise GenerationRouteError(str(error)) from error
     matches = [
@@ -101,6 +103,8 @@ def load_pinned_design_pack(
     ]
     if len(matches) != 1:
         raise GenerationRouteError("design_pack_pin_digest_mismatch")
+    if matches[0].canvas_id != DESIGN_PACK_CANVAS_ID:
+        raise GenerationRouteError("design_pack_canvas_unsupported")
     return matches[0]
 
 

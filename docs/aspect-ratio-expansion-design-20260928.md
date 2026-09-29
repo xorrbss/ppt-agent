@@ -1,5 +1,8 @@
 # Canvas expansion — decisions and index (rev 4, 2026-09-29)
 
+**Status 2026-09-29 (variant path removed).** Decision 9 and section 5 are superseded by `docs/svg-master-no-stretch-and-variant-removal-design-20260929.md` section 2: design packs are 16:9-only, the per-canvas variant path (`17059ccb6`: manifest v2, `variants/` discovery, the `design-pack-canvas-variant` A4 route, the drafting script) is deleted, and a pack pin on any other canvas fails with `design_pack_canvas_unsupported` (422).
+
+
 This is the stable decisions document. Each workstream has (or will have) its own spec that is reviewed and locked independently:
 
 | Workstream | Spec | Status |

@@ -1,23 +1,17 @@
-"""Sealed package manifest, v1 (base packs) and v2 (canvas-bound packs and variants)."""
+"""Sealed package manifest (v1)."""
 
 from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import Field, model_serializer, model_validator
+from pydantic import Field, model_validator
 
-from .base import Digest, PackModel, _camel, canonical_digest
-from .canvases import registered_canvases
+from .base import Digest, PackModel, canonical_digest
 
 
 MANIFEST_V1 = "source-native-design-pack/v1"
-MANIFEST_V2 = "source-native-design-pack/v2"
 PACK_ID_PATTERN = r"^[a-z0-9][a-z0-9-]{1,119}$"
 VERSION_PATTERN = r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$"
-# A v1 digest surface predates these fields; dumping them for v1 would break
-# every v1 package seal already on disk.
-_V2_ONLY_FIELDS = ("canvas_id", "variant_of", "status")
-PackStatus = Literal["draft", "approved"]
 
 
 class PackageFile(PackModel):
@@ -28,16 +22,8 @@ class PackageFile(PackModel):
     role: Literal["structure", "source", "representative-render"]
 
 
-class VariantOf(PackModel):
-    pack_id: str = Field(pattern=PACK_ID_PATTERN)
-    package_version: str = Field(pattern=VERSION_PATTERN)
-
-
 class DesignPackManifest(PackModel):
-    schema_version: Literal[
-        "source-native-design-pack/v1",
-        "source-native-design-pack/v2",
-    ] = MANIFEST_V1
+    schema_version: Literal["source-native-design-pack/v1"] = MANIFEST_V1
     pack_id: str = Field(pattern=PACK_ID_PATTERN)
     package_version: str = Field(pattern=VERSION_PATTERN)
     source_kind: Literal["pptx", "authored"]
@@ -48,38 +34,9 @@ class DesignPackManifest(PackModel):
     inventory: tuple[PackageFile, ...] = Field(min_length=2, max_length=5000)
     inventory_digest: Digest = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     package_digest: Digest = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    canvas_id: str | None = Field(default=None, min_length=1, max_length=64)
-    variant_of: VariantOf | None = None
-    status: PackStatus | None = None
-
-    @model_serializer(mode="wrap")
-    def _version_conditional(self, handler: Any) -> Any:
-        data = handler(self)
-        if self.schema_version == MANIFEST_V1 and isinstance(data, dict):
-            for name in _V2_ONLY_FIELDS:
-                data.pop(name, None)
-                data.pop(_camel(name), None)
-        return data
-
-    @property
-    def effective_status(self) -> PackStatus:
-        return "approved" if self.schema_version == MANIFEST_V1 else self.status or "draft"
 
     @model_validator(mode="after")
     def _sealed(self) -> "DesignPackManifest":
-        if self.schema_version == MANIFEST_V1:
-            if any(getattr(self, name) is not None for name in _V2_ONLY_FIELDS):
-                raise ValueError("design_pack_manifest_v2_fields_on_v1")
-        else:
-            if self.canvas_id not in registered_canvases():
-                raise ValueError("design_pack_canvas_id_invalid")
-            if self.status is None:
-                raise ValueError("design_pack_status_required")
-            if self.variant_of is not None and (
-                self.variant_of.pack_id != self.pack_id
-                or self.variant_of.package_version != self.package_version
-            ):
-                raise ValueError("design_pack_variant_identity_mismatch")
         paths = [item.path for item in self.inventory]
         if len(paths) != len(set(paths)) or "structure.json" not in paths:
             raise ValueError("design_pack_inventory_invalid")
@@ -119,9 +76,6 @@ def seal_manifest(**values: Any) -> DesignPackManifest:
 __all__ = [
     "DesignPackManifest",
     "MANIFEST_V1",
-    "MANIFEST_V2",
-    "PackStatus",
     "PackageFile",
-    "VariantOf",
     "seal_manifest",
 ]

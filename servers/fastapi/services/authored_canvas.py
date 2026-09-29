@@ -317,34 +317,15 @@ def supported_aspect_ratios_for_style(style_id: str) -> list[AuthoredAspectRatio
     ]
 
 
-def _admit_design_pack_variant(request: Any, *, style_id: str) -> bool:
-    """A preset pin is admitted only through an approved variant for that canvas."""
-
-    if (
-        request.design_pack_pin is None
-        or getattr(request, "strategy", None) == "svg"
-        or str(request.template or "").strip().lower() != "authored"
-        or request.aspect_ratio not in supported_aspect_ratios_for_style(style_id)
-        or request.master_pin is not None
-        or getattr(request, "_authored_master_pin", None) is not None
-        or request.source_mode is not None
-        or request.generation_mode != "registered-template"
-        or request.generation_engine not in {None, "authored"}
-    ):
-        return False
-    from services.authored_vnext.design_pack.variants import (
-        apply_design_pack_variant_pin,
-        design_pack_variant_for_canvas,
-    )
-
-    variant = design_pack_variant_for_canvas(request.design_pack_pin, PRESET_CANVAS_IDS.get(request.aspect_ratio))
-    if variant is None:
-        return False
-    apply_design_pack_variant_pin(request, variant)
-    return True
-
-
 def validate_authored_canvas_admission(request: Any, *, style_id: str) -> None:
+    # Design packs compile from a 1280x720 source only, so a pack pin is
+    # admitted on that canvas and on no other. This runs before the A4 branch
+    # and the stage gate so the code is stable across styles and stages.
+    if getattr(request, "design_pack_pin", None) is not None and (
+        getattr(request, "page_size", None) is not None
+        or request.aspect_ratio != LANDSCAPE_ASPECT_RATIO
+    ):
+        raise ValueError("design_pack_canvas_unsupported")
     if getattr(request, "page_size", None) is not None:
         from services.document_canvas_capabilities import evaluate_a4_request
         from utils.authored_styles import resolve_authored_style
@@ -370,9 +351,6 @@ def validate_authored_canvas_admission(request: Any, *, style_id: str) -> None:
         and request.generation_mode in {"auto", "free-design"}
         and request.generation_engine in {None, "authored"}
     ):
-        request_canvas_contract(request)
-        return
-    if _admit_design_pack_variant(request, style_id=style_id):
         request_canvas_contract(request)
         return
     if (
