@@ -11,6 +11,7 @@ from typing import Awaitable, Callable, Sequence
 
 from llmai import get_client
 from llmai.shared import ImageContentPart
+from services.generation_core.drivers.svg.canvas_brief import reference_caveat
 from services.generation_core.drivers.svg.native_declarations import (
     declaration_receipt, extract_native_declarations, native_author_rules,
 )
@@ -76,7 +77,8 @@ def svg_author_rules(style_snapshot: dict, body_floor: float) -> str:
     canvas = style_snapshot.get("canvas") or {}
     width, height = int(canvas.get("width", 1280)), int(canvas.get("height", 720))
     return (SVG_AUTHOR_RULES + native_author_rules() + f"\nBody text minimum: {body_floor:g} CSS px. "
-            "Honor explicit user typography constraints.\n" + composition_clause(width, height))
+            "Honor explicit user typography constraints.\n" + composition_clause(width, height)
+            + reference_caveat(width, height))
 
 
 def svg_design_text(style_snapshot: dict) -> str:

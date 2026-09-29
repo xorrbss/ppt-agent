@@ -12,6 +12,7 @@ from models.authored_header_contract import default_header_contract
 from models.presentation_outline_model import PresentationOutlineModel, SlideOutlineModel
 from services.authored_vnext.capability_registry import prompt_capability_clause
 from services.document_canvas_generation import generation_font_floor
+from services.generation_core.drivers.svg.canvas_brief import reference_caveat
 from utils.authored_fragmentation_gate import fragmentation_prompt_clause
 from utils.authored_style_exemplars import exemplar_block
 from utils.authored_styles import resolve_authored_style
@@ -237,7 +238,7 @@ def test_portrait_output_matches_the_old_table_except_the_two_fixed_misses(h, pr
 def test_svg_rules_carry_the_shape_clause(size):
     w, h = size
     rules = svg_author_rules({"canvas": {"width": w, "height": h}}, 16)
-    assert rules.endswith(composition_clause(w, h))
+    assert rules.endswith(composition_clause(w, h) + reference_caveat(w, h))
     assert rules.count(COMPOSITION_MARKER) == 1
 
 
