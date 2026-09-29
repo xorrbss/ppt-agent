@@ -44,6 +44,7 @@ from models.authored_vnext.master.ai_import import (
 )
 from models.authored_vnext.master.contract import DeckMasterContract
 from services.authored_vnext.master.catalog_seed import _base_contract
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX, default_canvas_size
 
 
 NS = {
@@ -244,7 +245,7 @@ def _canvas(package: dict[str, bytes]) -> tuple[int, int]:
     root = ET.fromstring(package["ppt/presentation.xml"])
     size = root.find("p:sldSz", NS)
     if size is None:
-        return 1280, 720
+        return default_canvas_size()
     scale = PX_PER_INCH / EMU_PER_INCH
     return max(320, round(int(size.attrib["cx"]) * scale)), max(180, round(int(size.attrib["cy"]) * scale))
 
@@ -1583,8 +1584,8 @@ def build_contract_draft(analysis: AiMasterAnalysis) -> DeckMasterContract:
         "locale": "ko-KR",
         "safeArea": {"x": width * 0.047, "y": height * 0.07, "width": width * 0.906, "height": height * 0.84},
     }
-    scale_x = width / 1280.0
-    scale_y = height / 720.0
+    scale_x = width / DEFAULT_CANVAS_WIDTH_PX
+    scale_y = height / DEFAULT_CANVAS_HEIGHT_PX
     for furniture in payload["furniture"].values():
         bounds = furniture["bounds"]
         furniture["bounds"] = {

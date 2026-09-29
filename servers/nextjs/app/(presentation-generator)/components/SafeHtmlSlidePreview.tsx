@@ -3,12 +3,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  AUTHORED_SLIDE_HEIGHT_PX,
+  AUTHORED_SLIDE_WIDTH_PX,
+} from "@/lib/authored-hybrid/schema";
+import {
   CHART_BROWSER_SCRIPT_URL,
   CHART_DATALABELS_SCRIPT_URL,
 } from "@/lib/chart-browser";
 
-const SLIDE_WIDTH = 1280;
-const SLIDE_HEIGHT = 720;
+const SLIDE_WIDTH = AUTHORED_SLIDE_WIDTH_PX;
+const SLIDE_HEIGHT = AUTHORED_SLIDE_HEIGHT_PX;
 
 export interface SafeHtmlSlidePreviewCanvas {
   widthPx: number;

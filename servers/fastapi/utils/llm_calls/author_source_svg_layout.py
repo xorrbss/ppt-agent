@@ -12,6 +12,7 @@ import re
 from services.svg_source_layout import SvgLayoutPlan, assemble_source_svg, page_digest, source_pages
 from services.svg_contract import source_digest
 from utils.llm_calls.author_slide_svg import SvgAuthorResult
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 
 @lru_cache(maxsize=2)
@@ -106,8 +107,8 @@ async def author_source_svg_layout(
     source_images,
     image_slots,
     min_font_size_px,
-    width=1280,
-    height=720,
+    width=DEFAULT_CANVAS_WIDTH_PX,
+    height=DEFAULT_CANVAS_HEIGHT_PX,
     instructions=None,
     correction_hint=None,
     receipt_attempt_ordinal=1,

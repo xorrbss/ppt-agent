@@ -36,6 +36,7 @@ import logging
 from collections.abc import Mapping, Sequence
 from functools import partial
 from typing import Any
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX, canvas_render_kwargs
 
 LOGGER = logging.getLogger(__name__)
 
@@ -70,8 +71,8 @@ async def resolve_final_browser_metrics(
     *,
     retained: Sequence[Any] | None = None,
     overrides: Mapping[int, Any] | None = None,
-    width_px: int = 1280,
-    height_px: int = 720,
+    width_px: int = DEFAULT_CANVAS_WIDTH_PX,
+    height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
 ) -> list[Any]:
     """Browser metrics for every final slide, re-rendering only what is missing."""
 
@@ -102,14 +103,7 @@ async def resolve_final_browser_metrics(
     if missing:
         from services.authored_admission_capture import captured_metrics_or_existing
         from utils.slide_capture import ensure_browser_metrics
-        ensure = partial(
-            ensure_browser_metrics,
-            **(
-                {}
-                if (width_px, height_px) == (1280, 720)
-                else {"width_px": width_px, "height_px": height_px}
-            ),
-        )
+        ensure = partial(ensure_browser_metrics, **canvas_render_kwargs(width_px, height_px))
 
         gathered = await asyncio.gather(
             *(

@@ -43,6 +43,7 @@ from services.authored_local_fit_evidence_types import (
     RECEIPT_KEY,
 )
 from services.authored_local_fit_policy import html_digest
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 
 def _report(capture: object) -> Mapping[str, Any]:
@@ -380,8 +381,8 @@ def cache_accepted_capture(
     accepted: AcceptedLocalFit,
     *,
     timeout: int,
-    width_px: int = 1280,
-    height_px: int = 720,
+    width_px: int = DEFAULT_CANVAS_WIDTH_PX,
+    height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
 ) -> None:
     """Publish only an accepted final tuple to the existing bounded caches."""
 

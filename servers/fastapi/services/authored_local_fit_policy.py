@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from decimal import Decimal, ROUND_CEILING
 from typing import Any
 from utils.hashing import canonical_json_digest, sha256_prefixed
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,7 +120,8 @@ def ceil_output_pt(value: float) -> float:
 
 
 def pt_per_css_px(*, width_pt: float, height_pt: float,
-                  viewport_width: float = 1280, viewport_height: float = 720) -> float:
+                  viewport_width: float = DEFAULT_CANVAS_WIDTH_PX,
+                  viewport_height: float = DEFAULT_CANVAS_HEIGHT_PX) -> float:
     horizontal = _positive(width_pt) / _positive(viewport_width)
     vertical = _positive(height_pt) / _positive(viewport_height)
     if not math.isclose(horizontal, vertical, rel_tol=1e-10, abs_tol=1e-12):
@@ -182,7 +184,7 @@ def local_fit_applies(
 
 def local_fit_policy(*, author_revision: str, original_html_digest: str,
                      export_width_pt: float = 960, export_height_pt: float = 540,
-                     viewport_width: int = 1280, viewport_height: int = 720,
+                     viewport_width: int = DEFAULT_CANVAS_WIDTH_PX, viewport_height: int = DEFAULT_CANVAS_HEIGHT_PX,
                      baseline: Mapping[str, Any] | None = None,
                      slide_index: int = 0, fit_budget_ms: float = 6000,
                      policy_revision: str = POLICY_REVISION) -> dict[str, Any]:

@@ -33,6 +33,12 @@ _CANVAS_SIZE_BY_ASPECT_RATIO: dict[AuthoredAspectRatio, tuple[int, int]] = {
     SQUARE_ASPECT_RATIO: (720, 720),
     ULTRAWIDE_ASPECT_RATIO: (1680, 720),
 }
+# The product default: every canvas fallback and every "is this the legacy
+# 16:9 deck" branch resolves here, never through a repeated 1280/720 literal.
+DEFAULT_CANVAS_ASPECT_RATIO: AuthoredAspectRatio = LANDSCAPE_ASPECT_RATIO
+DEFAULT_CANVAS_SIZE_PX: tuple[int, int] = _CANVAS_SIZE_BY_ASPECT_RATIO[DEFAULT_CANVAS_ASPECT_RATIO]
+DEFAULT_CANVAS_WIDTH_PX: int = DEFAULT_CANVAS_SIZE_PX[0]
+DEFAULT_CANVAS_HEIGHT_PX: int = DEFAULT_CANVAS_SIZE_PX[1]
 _SAFE_MARGIN_PX = 64.0
 PRESET_CANVAS_IDS: dict[AuthoredAspectRatio, str] = {
     LANDSCAPE_ASPECT_RATIO: "wide-16x9",
@@ -70,6 +76,51 @@ class AuthoredCanvasMetadata(StrictCamelModel):
             locale=self.locale,
             safe_area=self.safe_area,
         )
+
+
+def default_canvas_size() -> tuple[int, int]:
+    """``(width_px, height_px)`` of the default landscape canvas."""
+
+    return DEFAULT_CANVAS_SIZE_PX
+
+
+def canvas_size_for_aspect_ratio(aspect_ratio: AuthoredAspectRatio) -> tuple[int, int]:
+    return _CANVAS_SIZE_BY_ASPECT_RATIO[aspect_ratio]
+
+
+def canvas_or_default(canvas: object | None) -> tuple[int, int]:
+    """``(width_px, height_px)`` of a canvas-like object, or the default canvas when absent.
+
+    Any object carrying ``width_px``/``height_px`` (a ``CanvasContract``, a
+    deck plan, a metadata model) qualifies; ``None`` and objects without those
+    attributes resolve to the default landscape canvas.
+    """
+
+    return (
+        int(getattr(canvas, "width_px", DEFAULT_CANVAS_WIDTH_PX)),
+        int(getattr(canvas, "height_px", DEFAULT_CANVAS_HEIGHT_PX)),
+    )
+
+
+def is_default_landscape(width_px: object, height_px: object) -> bool:
+    """True when a pixel size is exactly the default landscape canvas."""
+
+    return (width_px, height_px) == DEFAULT_CANVAS_SIZE_PX
+
+
+def is_default_landscape_canvas(canvas: object | None) -> bool:
+    """True when a canvas-like object (or its absence) means the default canvas."""
+
+    return canvas_or_default(canvas) == DEFAULT_CANVAS_SIZE_PX
+
+
+def canvas_render_kwargs(width_px: int, height_px: int) -> dict[str, int]:
+    """Renderer size keywords: empty on the default canvas so legacy renderers and
+    test doubles that take no size keep working, explicit otherwise."""
+
+    if is_default_landscape(width_px, height_px):
+        return {}
+    return {"width_px": int(width_px), "height_px": int(height_px)}
 
 
 def _safe_area(width_px: int, height_px: int) -> Rect:
@@ -395,6 +446,10 @@ __all__ = [
     "AuthoredCanvasMetadata",
     "CANVAS_STAGES_PATH",
     "CanvasStage",
+    "DEFAULT_CANVAS_ASPECT_RATIO",
+    "DEFAULT_CANVAS_HEIGHT_PX",
+    "DEFAULT_CANVAS_SIZE_PX",
+    "DEFAULT_CANVAS_WIDTH_PX",
     "GATED_ASPECT_RATIOS",
     "LANDSCAPE_ASPECT_RATIO",
     "PORTRAIT_ASPECT_RATIO",
@@ -404,7 +459,13 @@ __all__ = [
     "SQUARE_ASPECT_RATIO",
     "ULTRAWIDE_ASPECT_RATIO",
     "canvas_metadata_for_aspect_ratio",
+    "canvas_or_default",
+    "canvas_render_kwargs",
+    "canvas_size_for_aspect_ratio",
     "canvas_stage",
+    "default_canvas_size",
+    "is_default_landscape",
+    "is_default_landscape_canvas",
     "merge_authored_vnext_projection",
     "presentation_canvas_contract",
     "presentation_canvas_metadata",

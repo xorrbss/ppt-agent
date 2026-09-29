@@ -9,6 +9,7 @@ import {
   type AuthoredCanvasContract,
 } from "../authored-canvas.ts";
 import type { LocalFitCaptureEvidence } from "./local-fit-export-evidence.ts";
+import { DEFAULT_SLIDE_HEIGHT_EMU, DEFAULT_SLIDE_WIDTH_EMU } from "./pptx-quality-primitives.ts";
 
 import {
   AUTHORED_NATIVE_OWNER_ALTERNATIVE_TEXT_PREFIX,
@@ -50,8 +51,8 @@ import {
   xmlAttributeValue as relationshipAttribute,
 } from "./pptx-archive.ts";
 
-const SLIDE_WIDTH_EMU = 12_192_000;
-const SLIDE_HEIGHT_EMU = 6_858_000;
+const SLIDE_WIDTH_EMU = DEFAULT_SLIDE_WIDTH_EMU;
+const SLIDE_HEIGHT_EMU = DEFAULT_SLIDE_HEIGHT_EMU;
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 export interface AuthoredHybridSlideLayer {
   localFitCapture?: LocalFitCaptureEvidence;

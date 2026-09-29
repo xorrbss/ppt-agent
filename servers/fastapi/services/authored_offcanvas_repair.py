@@ -27,10 +27,12 @@ from collections.abc import Mapping, Sequence
 import re
 from typing import Any
 from utils.coerce import finite_float
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
-#: The authored frame. A slide is authored against this exact box.
-CANVAS_WIDTH = 1280.0
-CANVAS_HEIGHT = 720.0
+#: The authored frame. A slide is authored against this exact box: the product
+#: default canvas named once in services.authored_canvas.
+CANVAS_WIDTH = float(DEFAULT_CANVAS_WIDTH_PX)
+CANVAS_HEIGHT = float(DEFAULT_CANVAS_HEIGHT_PX)
 
 #: Sub-pixel layout noise, not an overhang.
 _TOLERANCE = 0.5

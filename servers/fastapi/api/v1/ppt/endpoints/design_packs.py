@@ -31,6 +31,7 @@ from services.presentation_access_service import require_live_presentation
 from utils.authored_dom_quality import normalize_browser_metrics
 from utils.owner_context import get_current_owner_id
 from utils.slide_capture import render_html_to_png_with_metrics
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 
 DESIGN_PACKS_ROUTER = APIRouter(
@@ -249,8 +250,8 @@ async def _authored_frame(
         try:
             x = max(0.0, float(bounds.get("x", 0)))
             y = max(0.0, float(bounds.get("y", 0)))
-            width = min(1280.0 - x, float(bounds.get("width", 0)))
-            height = min(720.0 - y, float(bounds.get("height", 0)))
+            width = min(DEFAULT_CANVAS_WIDTH_PX - x, float(bounds.get("width", 0)))
+            height = min(DEFAULT_CANVAS_HEIGHT_PX - y, float(bounds.get("height", 0)))
         except (TypeError, ValueError):
             continue
         if width <= 0 or height <= 0:
@@ -356,7 +357,7 @@ async def register_design_pack_from_presentation(
     ]
     source = {
         "schemaVersion": "authored-design-source/v1",
-        "canvas": {"width": 1280, "height": 720},
+        "canvas": {"width": DEFAULT_CANVAS_WIDTH_PX, "height": DEFAULT_CANVAS_HEIGHT_PX},
         "sourcePresentationId": str(request.presentation_id),
         "frames": frames,
     }

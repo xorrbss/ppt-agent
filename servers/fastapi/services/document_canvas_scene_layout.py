@@ -6,6 +6,7 @@ from models.authored_vnext.master.contract import DeckMasterContract, Rect
 from services.document_canvas import DocumentCanvasMetadata
 from services.document_canvas_contain import CanvasRect, build_contain_plan
 from services.authored_vnext.master.digests import seal_master_contract
+from services.authored_canvas import is_default_landscape_canvas
 
 
 def document_scene_master(contract: DeckMasterContract, canvas: object | None) -> DeckMasterContract:
@@ -42,14 +43,14 @@ def document_scene_master(contract: DeckMasterContract, canvas: object | None) -
 
 
 def canonical_safe_area(contract: DeckMasterContract) -> Rect:
-    if (contract.canvas.width_px, contract.canvas.height_px) == (1280, 720):
+    if is_default_landscape_canvas(contract.canvas):
         return Rect(x=60.0, y=80.0, width=1160.0, height=560.0)
     return contract.canvas.safe_area
 
 
 def safe_title_bounds(title_bounds: Rect, contract: DeckMasterContract, *, slide_role: str) -> Rect:
     _source_binding(title_bounds, contract, "title")
-    if (contract.canvas.width_px, contract.canvas.height_px) == (1280, 720):
+    if is_default_landscape_canvas(contract.canvas):
         top = {"cover": 176.0, "section": 146.0}.get(slide_role, 84.0)
         height = 240.0 if slide_role == "longTitle" else 180.0 if slide_role in {"cover", "section"} else 140.0
         return Rect(x=92.0, y=top, width=1096.0, height=height)

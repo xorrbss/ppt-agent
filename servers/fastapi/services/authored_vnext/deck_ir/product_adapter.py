@@ -80,6 +80,7 @@ from services.database import async_session_maker
 from utils.authored_dom_quality import inspect_authored_dom, normalize_browser_metrics
 from utils.renderer_isolation import RendererDisabledError, RendererPolicyError
 from utils.slide_capture import render_html_to_png_with_metrics
+from services.authored_canvas import is_default_landscape
 
 
 def _strict_object(
@@ -712,7 +713,7 @@ async def observe_compiled_slide(compiled: Mapping[str, object]):
         item["severity"] == "P1" for item in issue_records
     )
     checks = {
-        "viewportContainment": bool(viewport["width"] == 1280 and viewport["height"] == 720) and not any(issue.category == "off_canvas" for issue in report.issues),
+        "viewportContainment": is_default_landscape(viewport["width"], viewport["height"]) and not any(issue.category == "off_canvas" for issue in report.issues),
         "overflow": not any(issue.category == "overflow" for issue in report.issues),
         "clipping": not any(issue.category == "clipping" for issue in report.issues),
         "overlap": not any(issue.category == "overlap" for issue in report.issues),

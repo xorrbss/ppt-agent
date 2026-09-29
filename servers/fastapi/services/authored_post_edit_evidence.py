@@ -32,6 +32,7 @@ from services.authored_vnext.semantic.remake import (
     republish_authored_semantic_bundle_graph_for_remake,
 )
 from utils.slide_capture import render_html_to_png_with_metrics
+from services.authored_canvas import canvas_or_default, canvas_render_kwargs
 
 
 class AuthoredPostEditEvidenceError(RuntimeError):
@@ -60,16 +61,8 @@ async def _fit_or_preserve_content_revision(
         if remaining <= 0:
             raise
         budget = slide_budget(60, remaining)
-        width_px = int(getattr(canvas, "width_px", 1280))
-        height_px = int(getattr(canvas, "height_px", 720))
-        render = partial(
-            render_html_to_png_with_metrics,
-            **(
-                {}
-                if (width_px, height_px) == (1280, 720)
-                else {"width_px": width_px, "height_px": height_px}
-            ),
-        )
+        width_px, height_px = canvas_or_default(canvas)
+        render = partial(render_html_to_png_with_metrics, **canvas_render_kwargs(width_px, height_px))
         digest = html_digest(html)
         policy = local_fit_policy(
             author_revision=digest,

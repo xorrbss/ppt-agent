@@ -11,6 +11,7 @@ import xml.etree.ElementTree as ET
 
 from services.svg_contract import PAGE_NUMBER_ID, SVG_CONTRACT_VERSION, source_digest, validate_svg
 from services.svg_trusted_fonts import trusted_font_weights_used as _trusted_font_weights_used
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 SVG_RENDERER_VERSION = "svg-chromium/v1"
 
@@ -168,7 +169,7 @@ def admit_preserved_raster_preview(svg: str, materialized_svg: str, *, width: in
                    source_digest=source_digest(wrapper)), wrapper
 
 
-def svg_preview_html(svg: str, *, width: int = 1280, height: int = 720,
+def svg_preview_html(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH_PX, height: int = DEFAULT_CANVAS_HEIGHT_PX,
                      materialized_svg: str | None = None,
                      source_font_profile: str | None = None,
                      allow_image_only: bool = False) -> str:
@@ -225,7 +226,8 @@ class SvgRenderResult:
     source_digest: str
 
 
-async def render_svg_with_metrics(svg: str, *, width: int = 1280, height: int = 720,
+async def render_svg_with_metrics(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH_PX,
+                                  height: int = DEFAULT_CANVAS_HEIGHT_PX,
                                   timeout: int = 60, deck_scope: str | None = None,
                                   minimum_font_px: float | None = None,
                                   instructions: str | None = None,

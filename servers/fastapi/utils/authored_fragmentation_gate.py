@@ -36,6 +36,7 @@ from utils.get_env_programme import (
     is_authored_fragmentation_gate_enabled,
 )
 from utils.runtime_settings import RuntimeSettings
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 #: Issue category the gate reports under; routed like ``capacity`` failures.
 FRAGMENTATION_CATEGORY = "fragmentation"
@@ -108,8 +109,8 @@ def _is_furniture(item: Mapping[str, Any], role: str, viewport: Mapping[str, Any
         return True
     return _looks_like_page_number(
         item,
-        viewport_width=float(viewport.get("width", 1280) or 1280),
-        viewport_height=float(viewport.get("height", 720) or 720),
+        viewport_width=float(viewport.get("width") or DEFAULT_CANVAS_WIDTH_PX),
+        viewport_height=float(viewport.get("height") or DEFAULT_CANVAS_HEIGHT_PX),
         max_font_px=page_number_max_font_px(),
     )
 

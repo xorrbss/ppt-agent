@@ -21,6 +21,7 @@ import {
   authoredRendererEnvironment,
   authoredRendererIsolationPolicy,
 } from "./renderer-isolation.ts";
+import { AUTHORED_SLIDE_HEIGHT_PX, AUTHORED_SLIDE_WIDTH_PX } from "./schema.ts";
 import { preflightAuthoredHtmlForHybrid } from "./security.ts";
 import {
   acquireAuthoredExportProcess,
@@ -35,6 +36,9 @@ export {
   __testOnlyRunWindowsHelper,
 } from "./chrome-process.ts";
 const DEFAULT_TIMEOUT_MS = 20_000;
+// The capture window defaults to the authored slide itself; callers pass a
+// size only for a non-default canvas.
+const DEFAULT_WINDOW_SIZE_PX = { width: AUTHORED_SLIDE_WIDTH_PX, height: AUTHORED_SLIDE_HEIGHT_PX };
 
 export interface AuthoredHybridChromeOptions {
   chromeExecutable?: string;
@@ -239,7 +243,7 @@ async function captureThroughCdp(
     { urls: ["http://*", "https://*", "file://*", "ftp://*", "ws://*", "wss://*", "blob:*"] },
     sessionId
   );
-  const windowSize = options.windowSizePx ?? { width: 1280, height: 720 };
+  const windowSize = options.windowSizePx ?? DEFAULT_WINDOW_SIZE_PX;
   await cdp.send(
     "Emulation.setDeviceMetricsOverride",
     { width: windowSize.width, height: windowSize.height, deviceScaleFactor: BACKPLATE_SCALE, mobile: false },
@@ -353,7 +357,7 @@ async function runIsolatedAuthoredHybridChrome(
   let profileCleanupDeferred = false;
   let child: ChildProcess | undefined;
   try {
-    const windowSize = options.windowSizePx ?? { width: 1280, height: 720 };
+    const windowSize = options.windowSizePx ?? DEFAULT_WINDOW_SIZE_PX;
     const args = authoredRendererChromeArguments(profilePath, windowSize);
     child = spawn(executable, args, {
       stdio: ["ignore", "ignore", "ignore", "pipe", "pipe"],

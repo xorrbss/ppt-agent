@@ -16,6 +16,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from services.authored_local_fit_policy import POLICY_REVISION, font_policy
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 _MARKER = re.compile(r"<!--codex-local-fit-v1[2345]:([A-Za-z0-9_=-]+)-->")
 
@@ -124,7 +125,7 @@ def merge_image_text_verdicts(metrics: Mapping[str, Any], report: Mapping[str, A
 
 async def capture_with_policy(html: str, timeout: int, *, deck_scope: str | None,
                               fit: bool, policy: Mapping[str, Any], fresh: bool,
-                              width_px: int = 1280, height_px: int = 720):
+                              width_px: int = DEFAULT_CANVAS_WIDTH_PX, height_px: int = DEFAULT_CANVAS_HEIGHT_PX):
     from services.authored_local_fit_policy import html_digest, image_text_evidence_for_html
     from utils import slide_capture as capture
     from utils.authored_fit_edits import apply_fit_edits

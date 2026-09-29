@@ -59,6 +59,7 @@ from utils.authored_image_slots import (
     source_slot_id_for_asset,
 )
 from utils.renderer_isolation import MAX_ASSET_BYTES, MAX_HTML_BYTES
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 LOGGER = logging.getLogger(__name__)
 
@@ -478,11 +479,11 @@ def validate_visible_source_images(
         raise ValueError("authored_source_image_visibility_telemetry_missing")
     viewport_width = _metric_number(
         browser_metrics.get("width", browser_metrics.get("viewportWidth")),
-        1280.0,
+        float(DEFAULT_CANVAS_WIDTH_PX),
     )
     viewport_height = _metric_number(
         browser_metrics.get("height", browser_metrics.get("viewportHeight")),
-        720.0,
+        float(DEFAULT_CANVAS_HEIGHT_PX),
     )
     expected = Counter(
         candidate.digest.removeprefix("sha256:").lower()

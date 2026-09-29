@@ -18,6 +18,7 @@ from services.authored_original_capture_checkpoint import (
 )
 from utils.slide_capture import get_cached_browser_metrics
 from services.document_canvas_generation import export_size_points
+from services.authored_canvas import canvas_or_default, canvas_render_kwargs
 
 LOGGER = logging.getLogger(__name__)
 
@@ -317,15 +318,10 @@ async def _author_illustrate_render_pipeline(
         else str(uuid.uuid4())
     )
     evidence_ledger = DeckEvidenceLedger(attempt_id=evidence_attempt_id)
-    canvas_width_px = int(getattr(canvas, "width_px", 1280))
-    canvas_height_px = int(getattr(canvas, "height_px", 720))
+    canvas_width_px, canvas_height_px = canvas_or_default(canvas)
 
     export_width_pt, export_height_pt = export_size_points(canvas, physical_canvas)
-    render_kwargs = (
-        {}
-        if (canvas_width_px, canvas_height_px) == (1280, 720)
-        else {"width_px": canvas_width_px, "height_px": canvas_height_px}
-    )
+    render_kwargs = canvas_render_kwargs(canvas_width_px, canvas_height_px)
 
     render_png = partial(
         render_html_to_png,

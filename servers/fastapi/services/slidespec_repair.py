@@ -19,6 +19,7 @@ from services.slidespec_geometry_candidates import (
     GeometryCandidateRejection,
     generate_geometry_candidates,
 )
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 
 CASCADE_POLICY_VERSION = "repair-cascade/1.1"
@@ -173,8 +174,8 @@ def repair_cost(plan: object) -> RepairCost:
         default=0.0,
     )
     viewport = _mapping(_get(plan, "viewport", default={}))
-    width = max(1.0, _number(viewport.get("width"), 1280.0))
-    height = max(1.0, _number(viewport.get("height"), 720.0))
+    width = max(1.0, _number(viewport.get("width"), float(DEFAULT_CANVAS_WIDTH_PX)))
+    height = max(1.0, _number(viewport.get("height"), float(DEFAULT_CANVAS_HEIGHT_PX)))
     geometry_delta = sum(_bounds_delta(operation, width, height) for operation in operations)
     plan_id = str(_get(plan, "planId", "plan_id", default=""))
     if not plan_id:

@@ -13,10 +13,10 @@ def export_size_points(canvas: object | None, physical_canvas: object | None = N
         ) != (getattr(logical, "width_px", None), getattr(logical, "height_px", None)):
             raise ValueError("document_canvas_geometry_mismatch")
         return width / 12700, height / 12700
-    return (
-        int(getattr(canvas, "width_px", 1280)) * 0.75,
-        int(getattr(canvas, "height_px", 720)) * 0.75,
-    )
+    from services.authored_canvas import canvas_or_default
+
+    width_px, height_px = canvas_or_default(canvas)
+    return width_px * 0.75, height_px * 0.75
 
 
 def generation_font_floor(instructions: str | None, physical_canvas: object | None = None) -> float:

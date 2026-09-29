@@ -15,6 +15,7 @@ from utils.authored_review_routing import (
     plan_authored_review_routing,
 )
 from utils.llm_calls.critique_slide import SlideCritique
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX, default_canvas_size
 
 CritiqueBatch = Callable[..., Awaitable[Iterable[SlideCritique | None]]]
 ObserveCache = Callable[..., tuple[int, int]]
@@ -30,9 +31,9 @@ def render_review_montage(
         raise ValueError("A review montage must contain between 1 and 9 slides")
     columns = 3 if len(selected) > 4 else 2
     rows = math.ceil(len(selected) / columns)
-    cell_width = 1280 // columns
-    cell_height = 720 // rows
-    canvas = Image.new("RGB", (1280, 720), "#E2E8F0")
+    cell_width = DEFAULT_CANVAS_WIDTH_PX // columns
+    cell_height = DEFAULT_CANVAS_HEIGHT_PX // rows
+    canvas = Image.new("RGB", default_canvas_size(), "#E2E8F0")
     draw = ImageDraw.Draw(canvas)
     for offset, slide_index in enumerate(selected):
         source = Image.open(io.BytesIO(slide_pngs[slide_index])).convert("RGB")

@@ -39,6 +39,7 @@ from utils.authored_dom_quality import (
     normalize_browser_metrics,
 )
 from utils.authored_fragmentation_gate import fragmentation_repair_instruction
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX, LANDSCAPE_ASPECT_RATIO, PORTRAIT_ASPECT_RATIO, canvas_size_for_aspect_ratio
 
 CompositionProfileId = Literal["ordinary", "source-verbatim", "source-outline"]
 QualityProfileId = Literal["development", "release"]
@@ -164,8 +165,8 @@ class SlideCapacity:
         self,
         profile: CompositionProfile,
         *,
-        canvas_width_px: int = 1280,
-        canvas_height_px: int = 720,
+        canvas_width_px: int = DEFAULT_CANVAS_WIDTH_PX,
+        canvas_height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
     ) -> str:
         if not self.enforced:
             return ""
@@ -2046,7 +2047,11 @@ def repair_authored_owned_text_paint_order(
         or browser_metrics.get("dom_metrics_version") != "authored-dom-metrics-v16-owned-text"
         or (
             browser_metrics.get("width"), browser_metrics.get("height")
-        ) not in ({(1280, 720), (720, 1280)} if canvas_size is None else {canvas_size})
+        ) not in (
+            {canvas_size_for_aspect_ratio(LANDSCAPE_ASPECT_RATIO), canvas_size_for_aspect_ratio(PORTRAIT_ASPECT_RATIO)}
+            if canvas_size is None
+            else {canvas_size}
+        )
         or browser_metrics.get("fonts_ready") is not True
         or browser_metrics.get("source_digest") != "sha256:" + sha256(html.encode("utf-8")).hexdigest()
         or re.fullmatch(r"sha256:[0-9a-f]{64}", str(browser_metrics.get("render_digest", ""))) is None

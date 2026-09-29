@@ -87,6 +87,7 @@ from utils.llm_calls.author_call_spans import ProviderCallSpans, record_call_spa
 from utils.llm_calls.author_slide_fallback import reraise_author_call_error, text_only_fallback_applies
 from services.authored_generation_performance import authored_provider_concurrency
 from utils.llm_utils import extract_text, get_generate_kwargs
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 logger = logging.getLogger(__name__)
 
@@ -254,8 +255,8 @@ def build_design_system(
     *,
     page_number_mode: str = TEMPLATE_PAGE_NUMBER_MODE,
     header_contract: Optional[AuthoredHeaderContract] = None,
-    canvas_width_px: int = 1280,
-    canvas_height_px: int = 720,
+    canvas_width_px: int = DEFAULT_CANVAS_WIDTH_PX,
+    canvas_height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
     canvas_safe_area: object | None = None,
 ) -> str:
     """Build the concrete shared brief for a brand and optional authored style.
@@ -321,7 +322,7 @@ def _author_prompt(
     infographic: Optional[AuthoredSlideInfographic] = None,
     capacity_brief: Optional[str] = None,
     style_anchor: object | None = None,
-    canvas_height_px: int = 720,
+    canvas_height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
 ) -> str:
     kwargs: dict[str, object] = {
         "structured_context": structured_context,
@@ -647,8 +648,8 @@ def fallback_slide_html(
     n: int,
     *,
     page_number_mode: str = TEMPLATE_PAGE_NUMBER_MODE,
-    canvas_width_px: int = 1280,
-    canvas_height_px: int = 720,
+    canvas_width_px: int = DEFAULT_CANVAS_WIDTH_PX,
+    canvas_height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
 ) -> str:
     """A clean, on-brand placeholder slide used when authoring a slide fails or returns
     invalid HTML — so one bad slide degrades to a simple branded slide instead of
@@ -789,7 +790,7 @@ async def author_slide_html(
     # G0 anchor inheritance: the deck's already-authored anchor slide, offered
     # as data. ``None`` reproduces the prompt byte for byte.
     style_anchor: object | None = None,
-    canvas_height_px: int = 720,
+    canvas_height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
     correction_hint: Optional[str] = None,
     rejected_html: Optional[str] = None,
     allow_provider_fallback: bool = True,

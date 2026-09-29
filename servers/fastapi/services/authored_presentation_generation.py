@@ -296,6 +296,7 @@ from services.source_content.browser_readback import (
     BrowserSourceReadbackError,
     stamp_source_block_ids,
 )
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX, canvas_or_default, canvas_render_kwargs
 
 
 LOGGER = logging.getLogger(__name__)
@@ -1655,13 +1656,8 @@ async def _fit_content_revision(
     first_deadline = min(
         slide_deadline, started_at + budget["first_seconds"]
     )
-    canvas_width_px = int(getattr(canvas, "width_px", 1280))
-    canvas_height_px = int(getattr(canvas, "height_px", 720))
-    render_kwargs = (
-        {}
-        if (canvas_width_px, canvas_height_px) == (1280, 720)
-        else {"width_px": canvas_width_px, "height_px": canvas_height_px}
-    )
+    canvas_width_px, canvas_height_px = canvas_or_default(canvas)
+    render_kwargs = canvas_render_kwargs(canvas_width_px, canvas_height_px)
     render_capture = partial(
         render_html_to_png_with_metrics,
         **render_kwargs,
@@ -1914,7 +1910,7 @@ def _finalize_attempt_evidence(
     htmls: list[str],
     pngs: list[bytes],
     metrics_override: dict[int, object] | None = None,
-    *, width_px: int = 1280, height_px: int = 720,
+    *, width_px: int = DEFAULT_CANVAS_WIDTH_PX, height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
 ):
     """Bind final slide bytes to the attempt ledger without browser replay."""
 
@@ -2068,11 +2064,7 @@ async def _generate_authored_presentation(
         request.instructions,
         policy_revision=getattr(request, "_authored_local_fit_policy_revision", None) or POLICY_REVISION,
     )
-    render_kwargs = (
-        {}
-        if (canvas_width_px, canvas_height_px) == (1280, 720)
-        else {"width_px": canvas_width_px, "height_px": canvas_height_px}
-    )
+    render_kwargs = canvas_render_kwargs(canvas_width_px, canvas_height_px)
     render_capture = partial(
         render_html_to_png_with_metrics,
         **render_kwargs,

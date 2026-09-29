@@ -1,5 +1,9 @@
 import type { PublicV2OperationKind, PublicV2OperationStatus, PublicV2OperationPhase, PublicV2Lifecycle, PublicV2GenerationMode, PublicV2DesignPackPin, PublicV2GenerationRequest, PublicV2GenerationRouteReceipt, PublicV2ExportRequest, PublicV2Artifact, PublicV2OperationEvent, PublicV2OperationFailure, PublicV2Quality, PublicV2Readiness, PublicV2GenerationStageTiming, PublicV2GenerationTiming, PublicV2OperationSnapshot } from "./operation-client-contracts"; export type { PublicV2OperationKind, PublicV2OperationStatus, PublicV2OperationPhase, PublicV2Lifecycle, PublicV2GenerationMode, PublicV2DesignPackPin, PublicV2GenerationRequest, PublicV2GenerationRouteReceipt, PublicV2ExportRequest, PublicV2Artifact, PublicV2OperationEvent, PublicV2OperationFailure, PublicV2Quality, PublicV2Readiness, PublicV2GenerationStageTiming, PublicV2GenerationTiming, PublicV2OperationSnapshot } from "./operation-client-contracts"; 
 import { isRecord } from "../guards.ts";
+import {
+  AUTHORED_SLIDE_HEIGHT_PX,
+  AUTHORED_SLIDE_WIDTH_PX,
+} from "../authored-hybrid/schema.ts";
 export function shouldPollPublicV2Operation(snapshot: PublicV2OperationSnapshot): boolean {
   return Boolean(snapshot.operationId && (
     snapshot.status === "queued"
@@ -14,7 +18,7 @@ export const PUBLIC_V2_FIDELITY_CAPABILITY = {
   supportsPdf: true,
   /** Fidelity artifacts preserve the rendered screen, not editable objects. */
   editableObjects: false,
-  canvas: { width: 1280, height: 720 },
+  canvas: { width: AUTHORED_SLIDE_WIDTH_PX, height: AUTHORED_SLIDE_HEIGHT_PX },
   accessibility: "raster-only" as const,
   cjkSafety: "release-receipt-required" as const,
   visualSafety: "overflow-and-occlusion-receipt-required" as const,

@@ -171,6 +171,7 @@ from utils.slide_capture import (
     render_html_to_png,
     render_html_to_png_with_metrics,
 )
+from services.authored_canvas import canvas_or_default, canvas_render_kwargs
 
 LOGGER = logging.getLogger(__name__)
 _ORIGINAL_RENDER_HTML_TO_PNG = render_html_to_png
@@ -375,13 +376,7 @@ async def _render_review_html(
     html: str, *, canvas: object | None = None
 ) -> tuple[bytes, Mapping | None]:
     """Render with co-located telemetry while preserving legacy test doubles."""
-    width_px = int(getattr(canvas, "width_px", 1280))
-    height_px = int(getattr(canvas, "height_px", 720))
-    render_kwargs = (
-        {}
-        if (width_px, height_px) == (1280, 720)
-        else {"width_px": width_px, "height_px": height_px}
-    )
+    render_kwargs = canvas_render_kwargs(*canvas_or_default(canvas))
     if render_html_to_png is not _ORIGINAL_RENDER_HTML_TO_PNG:
         png = await render_html_to_png(html, **render_kwargs)
         return (
@@ -877,13 +872,7 @@ async def finish_clean_legacy_review(ctx):
 
 async def revise_legacy_review(ctx):
     canvas = getattr(ctx, "canvas", None)
-    width_px = int(getattr(canvas, "width_px", 1280))
-    height_px = int(getattr(canvas, "height_px", 720))
-    render_kwargs = (
-        {}
-        if (width_px, height_px) == (1280, 720)
-        else {"width_px": width_px, "height_px": height_px}
-    )
+    render_kwargs = canvas_render_kwargs(*canvas_or_default(canvas))
     await _set_status(
         ctx.session,
         ctx.task,
@@ -1102,15 +1091,7 @@ async def review_exact_candidates(ctx):
 
 async def review_style_candidates(ctx):
     canvas = getattr(ctx, "canvas", None)
-    canvas_dimensions = (
-        int(getattr(canvas, "width_px", 1280)),
-        int(getattr(canvas, "height_px", 720)),
-    )
-    render_kwargs = (
-        {}
-        if canvas_dimensions == (1280, 720)
-        else {"width_px": canvas_dimensions[0], "height_px": canvas_dimensions[1]}
-    )
+    render_kwargs = canvas_render_kwargs(*canvas_or_default(canvas))
     ctx.accepted_local_indices = []
     ctx.chosen_critiques = list(ctx.initial_critiques)
     ctx.comparison_metadata = _style_comparison_observation_metadata()

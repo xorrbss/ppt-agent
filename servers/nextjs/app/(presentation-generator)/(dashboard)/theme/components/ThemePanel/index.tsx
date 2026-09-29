@@ -1,6 +1,10 @@
 'use client'
 
 import { createFallbackTheme, errorMessage } from "./themePanelDefaults";
+import {
+  AUTHORED_SLIDE_HEIGHT_PX,
+  AUTHORED_SLIDE_WIDTH_PX,
+} from "@/lib/authored-hybrid/schema";
 import { useTranslations as useA2bTranslations } from "next-intl";
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -71,7 +75,7 @@ const ThemePanel: React.FC = () => {
 
   // Calculate scale dynamically based on container width
   const slideScale = () => {
-    const BASE_WIDTH = 1280
+    const BASE_WIDTH = AUTHORED_SLIDE_WIDTH_PX
     const SCROLLBAR_WIDTH = 8 // account for scrollbar
     if (!slideContainerWidth) return 0.68 // fallback
     const availableWidth = slideContainerWidth - SCROLLBAR_WIDTH
@@ -1122,13 +1126,13 @@ const ThemePanel: React.FC = () => {
                 >
                   <div
                     className="relative w-full"
-                    style={{ height: `${720 * slideScale()}px` }}
+                    style={{ height: `${AUTHORED_SLIDE_HEIGHT_PX * slideScale()}px` }}
                   >
                     <div
                       className="absolute left-0 top-0 flex flex-col justify-between p-16"
                       style={{
-                        width: 1280,
-                        height: 720,
+                        width: AUTHORED_SLIDE_WIDTH_PX,
+                        height: AUTHORED_SLIDE_HEIGHT_PX,
                         backgroundColor: "var(--background-color)",
                         color: "var(--primary-text)",
                         transformOrigin: "top left",

@@ -89,6 +89,7 @@ from utils.llm_calls.critique_slide import (
     critique_slide_style_comparison,
 )
 from utils.llm_provider import get_model
+from services.authored_canvas import canvas_or_default, canvas_render_kwargs
 
 
 async def review_planned_source_images(
@@ -430,13 +431,8 @@ async def revise_authored_deck(
     if instructions:
         from utils.llm_calls.author_slide_prompt import user_direction_brief
         design_system += "\n\n" + user_direction_brief(instructions)
-    canvas_width_px = int(getattr(canvas, "width_px", 1280))
-    canvas_height_px = int(getattr(canvas, "height_px", 720))
-    render_kwargs = (
-        {}
-        if (canvas_width_px, canvas_height_px) == (1280, 720)
-        else {"width_px": canvas_width_px, "height_px": canvas_height_px}
-    )
+    canvas_width_px, canvas_height_px = canvas_or_default(canvas)
+    render_kwargs = canvas_render_kwargs(canvas_width_px, canvas_height_px)
     ensure_metrics = partial(ensure_browser_metrics, **render_kwargs)
     cached_metrics = partial(get_cached_browser_metrics, **render_kwargs)
     if candidate_evaluator is not None and candidate_evaluators is not None:

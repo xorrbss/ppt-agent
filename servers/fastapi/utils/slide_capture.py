@@ -70,9 +70,10 @@ from utils.render_cache_budget import (
     metrics_payload_bytes,
     render_cache_resident_bytes,
 )
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
-SLIDE_W = 1280
-SLIDE_H = 720
+SLIDE_W = DEFAULT_CANVAS_WIDTH_PX
+SLIDE_H = DEFAULT_CANVAS_HEIGHT_PX
 LOGGER = logging.getLogger(__name__)
 _BLOCKED_RENDERER_URL_PATTERNS = [
     "http://*",
