@@ -48,6 +48,7 @@ from services.authored_vnext.retained_reference_marker import (
 from services.authored_vnext.body_grammar import BODY_GRAMMAR_ROLE_PREFIX
 from services.authored_vnext.master.digests import canonical_digest
 from utils.authored_styles import AuthoredStyle
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX, is_default_landscape_canvas
 
 
 _COMPOSED_ROLES = frozenset(
@@ -320,13 +321,10 @@ def _canonical_role_policy(contract: DeckMasterContract, role: str) -> SlideRole
     evidence for overlay validation only, not inputs to authored layout.
     """
 
-    if (
-        abs(contract.canvas.width_px - 1280.0) > 0.01
-        or abs(contract.canvas.height_px - 720.0) > 0.01
-    ):
+    if not is_default_landscape_canvas(contract.canvas):
         raise ValueError(
             "authored_vnext_canonical_canvas_unsupported: company composition "
-            "requires the 1280x720 authored canvas"
+            f"requires the {DEFAULT_CANVAS_WIDTH_PX}x{DEFAULT_CANVAS_HEIGHT_PX} authored canvas"
         )
     if role == "cover":
         title = Rect(x=92.0, y=176.0, width=1096.0, height=180.0)

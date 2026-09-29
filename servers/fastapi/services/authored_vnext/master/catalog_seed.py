@@ -19,6 +19,7 @@ from .assets import OwnerMasterAssetStore
 from .digests import seal_master_contract
 from .errors import MasterNotFoundError
 from .service import AuthoredVNextMasterService
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 
 IBIZ_MASTER_ID = "master:ibiz-proposal-blue"
@@ -147,8 +148,8 @@ def _base_contract(
         "semanticVersion": "1.0.0",
         "name": name,
         "canvas": {
-            "widthPx": 1280,
-            "heightPx": 720,
+            "widthPx": DEFAULT_CANVAS_WIDTH_PX,
+            "heightPx": DEFAULT_CANVAS_HEIGHT_PX,
             "locale": "ko-KR",
             "safeArea": _bounds(60, 76, 1160, 572),
         },

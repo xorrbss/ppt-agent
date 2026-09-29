@@ -8,6 +8,7 @@ import io
 import math
 import re
 import xml.etree.ElementTree as ET
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 SVG_CONTRACT_VERSION = "svg-static/v1"
 SVG_NS = "http://www.w3.org/2000/svg"
@@ -103,8 +104,8 @@ def _numbers(value: str) -> list[float]:
 def validate_svg(
     svg: str,
     *,
-    width: int = 1280,
-    height: int = 720,
+    width: int = DEFAULT_CANVAS_WIDTH_PX,
+    height: int = DEFAULT_CANVAS_HEIGHT_PX,
     allow_system_page_number: bool = True,
     source_manifest: dict | None = None,
     allow_image_only: bool = False,
@@ -249,8 +250,8 @@ def finalize_svg(
     *,
     index: int,
     n: int,
-    width: int = 1280,
-    height: int = 720,
+    width: int = DEFAULT_CANVAS_WIDTH_PX,
+    height: int = DEFAULT_CANVAS_HEIGHT_PX,
     style_snapshot: dict | None = None,
     page_number_mode: str = "template",
     source_manifest: dict | None = None,

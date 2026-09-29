@@ -112,6 +112,7 @@ from utils.authored_dom_quality import (
     normalize_browser_metrics,
 )
 from utils.slide_capture import render_html_to_png_with_metrics
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 
 logger = logging.getLogger(__name__)
@@ -1288,13 +1289,13 @@ def _append_fixed_text_columns(
     spacing = _flow_mapping(slot, "spacing")
     content_width = max(
         1.0,
-        _flow_number(bounds.get("width"), 1280.0)
+        _flow_number(bounds.get("width"), float(DEFAULT_CANVAS_WIDTH_PX))
         - max(0.0, _flow_number(spacing.get("insetLeft")))
         - max(0.0, _flow_number(spacing.get("insetRight"))),
     ) * max(0.05, min(1.0, width_fraction))
     usable_height = max(
         1.0,
-        _flow_number(bounds.get("height"), 720.0)
+        _flow_number(bounds.get("height"), float(DEFAULT_CANVAS_HEIGHT_PX))
         - max(0.0, _flow_number(spacing.get("insetTop")))
         - max(0.0, _flow_number(spacing.get("insetBottom"))),
     ) * max(0.05, min(1.0, height_fraction))
@@ -2902,8 +2903,8 @@ def _build_slide_quality_observation(
     elements = [item for item in raw_elements if isinstance(item, Mapping)] if isinstance(raw_elements, list) else []
     viewport = normalized_metrics.get("viewport")
     viewport = viewport if isinstance(viewport, Mapping) else {}
-    viewport_width = max(1.0, _flow_number(viewport.get("width"), 1280.0))
-    viewport_height = max(1.0, _flow_number(viewport.get("height"), 720.0))
+    viewport_width = max(1.0, _flow_number(viewport.get("width"), float(DEFAULT_CANVAS_WIDTH_PX)))
+    viewport_height = max(1.0, _flow_number(viewport.get("height"), float(DEFAULT_CANVAS_HEIGHT_PX)))
     slide_area = viewport_width * viewport_height
     by_qid = {
         str(item.get("qid") or ""): item
@@ -3477,7 +3478,7 @@ class _SourceNativeExecutor:
                         **self._canvas_session.expected_viewport,
                     }
                     if self._canvas_session is not None
-                    else {"width": 1280, "height": 720}
+                    else {"width": DEFAULT_CANVAS_WIDTH_PX, "height": DEFAULT_CANVAS_HEIGHT_PX}
                 )
                 or not normalized["fonts_ready"]
                 or report.telemetry_status != "available"

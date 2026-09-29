@@ -13,6 +13,7 @@ from services.authored_composition_policy import _AuthoredStartTagCollector, _at
 from services.authored_decoration_panel_sheen import (
     panel_sheen_family, panel_sheen_geometry, without_approved_panel_sheen_clip,
 )
+from services.authored_canvas import is_default_landscape
 
 _MARKER = "authored-decoration-containment-v3"
 _QID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
@@ -221,7 +222,7 @@ def _bound_metrics(html, metrics):
         return None
     if re.fullmatch(r"sha256:[0-9a-f]{64}", str(metrics.get("render_digest", ""))) is None:
         return None
-    if metrics.get("width") != 1280 or metrics.get("height") != 720:
+    if not is_default_landscape(metrics.get("width"), metrics.get("height")):
         return None
     elements = metrics.get("elements")
     if not isinstance(elements, list) or any(not isinstance(item, Mapping) for item in elements):

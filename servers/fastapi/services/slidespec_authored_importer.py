@@ -61,6 +61,7 @@ from utils.slide_capture import render_html_to_png_with_metrics
 from utils.slidespec_core import ZERO_DIGEST, digest, seal_slidespec, validate_slidespec
 from utils.slidespec_deck_constraints import evaluate_deck_consistency
 from utils.slidespec_solver import solve_constraints
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 
 _BLOCKED_TAGS = frozenset({"script", "iframe", "object", "embed", "canvas"})
@@ -686,8 +687,8 @@ async def build_authored_import_request(
     if report.telemetry_status != "available":
         raise SlideSpecImportError("import.telemetry.incomplete")
 
-    viewport_width = finite_float(metrics.get("width"), 1280.0)
-    viewport_height = finite_float(metrics.get("height"), 720.0)
+    viewport_width = finite_float(metrics.get("width"), float(DEFAULT_CANVAS_WIDTH_PX))
+    viewport_height = finite_float(metrics.get("height"), float(DEFAULT_CANVAS_HEIGHT_PX))
     if viewport_width <= 0 or viewport_height <= 0:
         raise SlideSpecImportError("import.viewport.invalid")
     raw_metrics = metrics.get("elements", metrics.get("nodes", ()))

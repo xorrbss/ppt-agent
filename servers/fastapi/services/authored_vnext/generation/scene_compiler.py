@@ -57,6 +57,7 @@ from models.authored_vnext.master.slide import SlideSpecV2
 from services.authored_vnext.capability_registry import scene_capabilities
 from services.authored_vnext.generation.body_grammar import build_body_grammar_snapshot
 from services.authored_vnext.master.digests import canonical_digest
+from services.authored_canvas import is_default_landscape_canvas
 
 
 SceneMutationKind = Literal[
@@ -2521,7 +2522,7 @@ def compile_slide_scene(
     # Preserve explicit planner breaks. Legacy uses their exact line count;
     # target-canvas revisions measure any additional wrapping below.
     title_text = "\n".join(slide.title.lines)
-    target_reflow = (contract.canvas.width_px, contract.canvas.height_px) != (1280, 720)
+    target_reflow = not is_default_landscape_canvas(contract.canvas)
     title_style = _fit_text_style(
         contract=contract,
         text=title_text,

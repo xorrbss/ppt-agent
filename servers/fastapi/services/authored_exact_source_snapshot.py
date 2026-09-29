@@ -27,6 +27,7 @@ from utils.get_env import get_app_data_directory_env
 from utils.slide_capture import RENDER_CACHE_VERSION, render_html_to_png
 
 from services.authored_checkpoint_service import atomic_write
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX, default_canvas_size
 
 SNAPSHOT_SCHEMA_VERSION = 1
 _SNAPSHOT_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
@@ -148,7 +149,7 @@ async def create_exact_source_snapshot(
     for (expected_index, html_bytes, digest, filename), png in zip(captured, rendered):
         try:
             with Image.open(io.BytesIO(png)) as image:
-                if image.size != (1280, 720):
+                if image.size != default_canvas_size():
                     raise ExactSourceSnapshotError(
                         "Exact reconstruction source render size is invalid"
                     )
@@ -183,7 +184,7 @@ async def create_exact_source_snapshot(
         "snapshot_id": snapshot_id,
         "style_id": style_id,
         "renderer_version": RENDER_CACHE_VERSION,
-        "viewport": {"width": 1280, "height": 720},
+        "viewport": {"width": DEFAULT_CANVAS_WIDTH_PX, "height": DEFAULT_CANVAS_HEIGHT_PX},
         "slides": entries,
     }
     manifest = {**body, "manifest_fingerprint": _canonical_sha256(body)}
@@ -247,7 +248,7 @@ def _validated_entries(
         raise ExactSourceSnapshotError(
             "Exact reconstruction source renderer identity is invalid"
         )
-    if manifest.get("viewport") != {"width": 1280, "height": 720}:
+    if manifest.get("viewport") != {"width": DEFAULT_CANVAS_WIDTH_PX, "height": DEFAULT_CANVAS_HEIGHT_PX}:
         raise ExactSourceSnapshotError(
             "Exact reconstruction source viewport is invalid"
         )
@@ -330,7 +331,7 @@ async def materialize_exact_source_style(
                     "Exact reconstruction source image changed"
                 )
             with Image.open(io.BytesIO(png)) as image:
-                if image.size != (1280, 720):
+                if image.size != default_canvas_size():
                     raise ExactSourceSnapshotError(
                         "Exact reconstruction source render size is invalid"
                     )

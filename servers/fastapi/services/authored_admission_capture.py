@@ -21,6 +21,7 @@ from typing import Any, Mapping
 
 from services.authored_admission_context import canonical_json, digest_html
 from services.authored_admission_session import current_session
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 #: Captures retain PNG bytes, so the coalescing map is bounded: a deck renders
 #: far more documents than it can hold at once, and dropping an entry costs at
@@ -196,8 +197,8 @@ def _prepare_capture_kwargs(html: str, prepared_html: str, kwargs: Mapping[str, 
         ),
         export_width_pt=float(scale.get("width_pt", 960)),
         export_height_pt=float(scale.get("height_pt", 540)),
-        viewport_width=int(scale.get("viewport_width", 1280)),
-        viewport_height=int(scale.get("viewport_height", 720)),
+        viewport_width=int(scale.get("viewport_width", DEFAULT_CANVAS_WIDTH_PX)),
+        viewport_height=int(scale.get("viewport_height", DEFAULT_CANVAS_HEIGHT_PX)),
         baseline=(policy_value.get("baseline") if isinstance(policy_value.get("baseline"), Mapping) else None),
         slide_index=int(policy_value.get("slide_index", 0)),
         fit_budget_ms=float(policy_value.get("fit_budget_ms", 6000)),

@@ -11,6 +11,7 @@ from services.slidespec_repair_context.numeric import off_canvas_fraction as _of
 from services.slidespec_repair_context.owner_ancestors import bound_ancestor_candidates as _bound_ancestor_candidates
 from services.slidespec_repair_context.owner_pairs import coordinated_owner_pairs as _coordinated_owner_pairs
 from services.slidespec_repair_context.state import RepairContextState
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 
 def project_geometry_issues(state: RepairContextState, artifacts: RepairArtifacts) -> None:
@@ -214,8 +215,8 @@ def project_geometry_issues(state: RepairContextState, artifacts: RepairArtifact
         metric = metric_by_qid.get(qid) if qid else None
         if node is None or node.bounds is None or qid is None or metric is None:
             continue
-        width_basis = source.viewportWidth if source is not None else 1280.0
-        height_basis = source.viewportHeight if source is not None else 720.0
+        width_basis = source.viewportWidth if source is not None else float(DEFAULT_CANVAS_WIDTH_PX)
+        height_basis = source.viewportHeight if source is not None else float(DEFAULT_CANVAS_HEIGHT_PX)
         magnitude = max(
             max(
                 0.0,

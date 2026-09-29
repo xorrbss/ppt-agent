@@ -58,6 +58,7 @@ from utils.llm_calls.author_slide_stream import (
     OUTPUT_TOKEN_LIMIT_GUIDANCE,
     output_token_limit_in_cause_chain,
 )
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 LOGGER = logging.getLogger(__name__)
 
@@ -191,8 +192,9 @@ def simplified_author_brief(*, role: str, contract: Any) -> str:
         "slide that fits beats an ambitious one that does not."
     )
     rules.append(
-        "3. Keep EVERY element inside the 1280x720 frame. No element may extend "
-        "past x=1280 or y=720, and no absolutely positioned element may start "
+        f"3. Keep EVERY element inside the {DEFAULT_CANVAS_WIDTH_PX}x{DEFAULT_CANVAS_HEIGHT_PX} frame. "
+        f"No element may extend past x={DEFAULT_CANVAS_WIDTH_PX} or y={DEFAULT_CANVAS_HEIGHT_PX}, "
+        "and no absolutely positioned element may start "
         f"below y={SAFE_BOTTOM_Y_PX}. Carry fewer, shorter lines than you would "
         "normally: leaving the lower part of the slide empty is correct here."
     )

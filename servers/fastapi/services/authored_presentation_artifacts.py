@@ -29,6 +29,7 @@ from utils.asset_directory_utils import (
 from utils.filename_utils import safe_export_basename
 from utils.get_env import is_authored_retain_checkpoint_html_enabled
 from utils.llm_calls.author_deck import build_image_pptx
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX, canvas_or_default
 
 __all__ = ["authored_title", "resolve_brand"]
 
@@ -115,7 +116,7 @@ def _remove_partial_slide_pngs(
 
 def _build_image_pdf(
     pngs: List[bytes], out_path: str, *,
-    canvas_width_px: int = 1280, canvas_height_px: int = 720,
+    canvas_width_px: int = DEFAULT_CANVAS_WIDTH_PX, canvas_height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
     physical_size_emu: tuple[int, int] | None = None,
 ) -> str:
     from PIL import Image
@@ -154,8 +155,7 @@ def _build_authored_export(
     exports = os.path.dirname(destination)
     stem, extension = os.path.splitext(os.path.basename(destination))
     os.makedirs(exports, exist_ok=True)
-    canvas_width_px = int(getattr(canvas, "width_px", 1280))
-    canvas_height_px = int(getattr(canvas, "height_px", 720))
+    canvas_width_px, canvas_height_px = canvas_or_default(canvas)
     physical_kwargs = {}
     document_canvas = getattr(request, "_document_canvas", None)
     if document_canvas is not None:

@@ -15,6 +15,7 @@ from services.source_content.contracts import SourceContentManifest
 from services.source_content.digests import digest_json
 from services.source_content.pptx_custom_geometry import validate_custom_geometry, flatten_custom_geometry
 from services.svg_contract import SVG_NS, source_digest, validate_svg
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 
 class _PlanModel(BaseModel):
@@ -45,8 +46,8 @@ class SvgLayoutPlan(_PlanModel):
     schema_version: str = "svg-source-layout/v2"
     source_unit_id: str
     page_digest: str
-    width: int = Field(default=1280, gt=0)
-    height: int = Field(default=720, gt=0)
+    width: int = Field(default=DEFAULT_CANVAS_WIDTH_PX, gt=0)
+    height: int = Field(default=DEFAULT_CANVAS_HEIGHT_PX, gt=0)
     background: str = "#FFFFFF"
     template_digest: str = ""
     layout_id: str = ""
