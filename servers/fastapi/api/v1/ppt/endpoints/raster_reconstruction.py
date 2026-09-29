@@ -94,7 +94,6 @@ async def _analysis_retry_target(
         seen.add(existing.id)
         child = await session.scalar(select(WorkspaceOperation).where(
             WorkspaceOperation.retry_of_operation_id == existing.id,
-            WorkspaceOperation.owner_id == owner_id,
             WorkspaceOperation.owner_scope == str(owner_id),
             WorkspaceOperation.presentation_id == presentation_id,
             WorkspaceOperation.kind == "raster.analysis",
@@ -184,7 +183,6 @@ async def analyze_raster(
     try:
         presentation = await session.scalar(select(PresentationModel).where(
             PresentationModel.id == request.presentation_id,
-            PresentationModel.owner_id == owner,
             PresentationModel.deleted_at.is_(None),
         ))
         if presentation is None:
@@ -204,7 +202,6 @@ async def analyze_raster(
         conversation = await _get_or_create_conversation(session, presentation.id)
         await session.scalar(select(WorkspaceConversation).where(
             WorkspaceConversation.id == conversation.id,
-            WorkspaceConversation.owner_id == owner,
             WorkspaceConversation.owner_scope == str(owner),
         ).with_for_update())
         request_payload = request.model_dump(mode="json") | {"tenant_id": tenant}
@@ -212,7 +209,6 @@ async def analyze_raster(
             request_payload | {"owner_id": str(owner), "source_sha256": source_sha},
         )
         existing = await session.scalar(select(WorkspaceOperation).where(
-            WorkspaceOperation.owner_id == owner,
             WorkspaceOperation.owner_scope == str(owner),
             WorkspaceOperation.presentation_id == presentation.id,
             WorkspaceOperation.kind == "raster.analysis",

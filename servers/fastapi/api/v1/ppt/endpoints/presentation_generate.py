@@ -38,6 +38,7 @@ from models.sql.async_presentation_generation_status import (
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from services.authored_checkpoint_service import progress_for_task
 from services.database import get_async_session, sql_engine
+from services.database_owner_scope import ownerless_rows_predicate
 from services.presentation_generation_job_service import cancel_generation_job
 from services import presentation_generation_pipeline as generation_pipeline
 from services.presentation_generation_pipeline import (  # noqa: F401 - re-exported
@@ -56,7 +57,6 @@ from services.presentation_generation_pipeline import (  # noqa: F401 - re-expor
 from services.workspace_legacy_write_gate import (
     require_legacy_presentation_write_path,
 )
-from utils.owner_context import get_current_owner_id
 
 
 @PRESENTATION_GENERATE_ROUTER.post(
@@ -143,17 +143,11 @@ async def check_async_presentation_generation_status(
     id: str = Path(description="ID of the presentation generation task"),
     sql_session: AsyncSession = Depends(get_async_session),
 ):
-    owner_id = get_current_owner_id()
-    owner_filter = (
-        AsyncPresentationGenerationTaskModel.owner_id.is_(None)
-        if owner_id is None
-        else AsyncPresentationGenerationTaskModel.owner_id == owner_id
-    )
     status = (
         await sql_session.execute(
             select(AsyncPresentationGenerationTaskModel)
             .where(AsyncPresentationGenerationTaskModel.id == id)
-            .where(owner_filter)
+            .where(ownerless_rows_predicate(AsyncPresentationGenerationTaskModel))
         )
     ).scalar_one_or_none()
     if not status:

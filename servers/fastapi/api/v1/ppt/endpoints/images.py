@@ -74,12 +74,9 @@ def _stable_image_errors(code: str):
 
 
 def _image_owner_predicate():
-    from utils.owner_context import get_current_owner_id
+    from services.database_owner_scope import ownerless_rows_predicate
 
-    owner_id = get_current_owner_id()
-    if owner_id is None:
-        return ImageAsset.owner_id.is_(None)
-    return ImageAsset.owner_id == owner_id
+    return ownerless_rows_predicate(ImageAsset)
 
 
 def _validate_uploaded_image(file: UploadFile, image_path: str) -> None:

@@ -6,7 +6,7 @@ connection setup.  ``services.database`` imports this module and calls
 already imports the engine keeps the same hooks with the same behaviour.
 """
 
-from sqlalchemy import event, inspect, text
+from sqlalchemy import event, inspect, text, true
 from sqlalchemy.orm import Session, with_loader_criteria
 from sqlalchemy.sql.schema import Table
 from sqlalchemy.sql.util import find_tables
@@ -97,6 +97,24 @@ _STRICT_TENANT_MODELS = (
 _OWNER_SCOPED_TABLE_NAMES = frozenset(
     model.__tablename__ for model in _STRICT_OWNER_MODELS
 )
+
+
+def ownerless_rows_predicate(model):
+    """The one owner predicate a SELECT on an owner-scoped model still needs.
+
+    With an owner in context, ``_scope_owned_statements`` already restricts
+    every SELECT of a ``_STRICT_OWNER_MODELS`` class to that owner
+    (``tests/unit/test_owner_scope_hook_coverage.py``), so a hand-rolled
+    ``owner_id ==`` filter is redundant. Without one (workers, unauthenticated
+    local contexts) the hook adds nothing, and callers that must only see
+    ownerless rows keep that restriction through this predicate. UPDATE and
+    DELETE statements are not scoped by the hook and keep their own filters.
+    """
+    if model not in _STRICT_OWNER_MODELS:
+        raise ValueError(f"{model.__name__} is not owner-scoped by the ORM hook")
+    if get_current_owner_id() is not None:
+        return true()
+    return model.owner_id.is_(None)
 
 
 def owner_scoped_table_names() -> tuple[str, ...]:

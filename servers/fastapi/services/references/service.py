@@ -13,6 +13,8 @@ import uuid
 
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from services.database_owner_scope import ownerless_rows_predicate
 from sqlmodel import select
 
 from utils.hashing import canonical_json_bytes
@@ -31,7 +33,6 @@ from services.workspace_asset_service import import_workspace_document_asset
 from services.workspace_service import WorkspaceServiceError
 from utils.datetime_utils import get_current_utc_datetime
 from utils.document_path_security import validate_document_paths
-from utils.owner_context import get_current_owner_id
 
 
 MAX_GENERATION_REFERENCE_SNAPSHOTS = 16
@@ -94,10 +95,8 @@ def _source_fingerprint(normalized: NormalizedReference) -> str:
 
 
 def _owner_predicate():
-    owner_id = get_current_owner_id()
-    if owner_id is None:
-        return ReferenceSnapshot.owner_id.is_(None)
-    return ReferenceSnapshot.owner_id == owner_id
+    # Every caller is a SELECT, which the ORM owner-scope hook already scopes.
+    return ownerless_rows_predicate(ReferenceSnapshot)
 
 
 def _binding_from_json(value: dict[str, Any]) -> AssetBinding:
