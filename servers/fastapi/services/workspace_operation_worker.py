@@ -21,6 +21,7 @@ from services.database import (
     sql_engine,
 )
 from services.artifact_store import configured_public_artifact_worker_object_port
+from services.mem0_presentation_memory_service import MEM0_PRESENTATION_MEMORY_SERVICE
 from services.artifact_lifecycle_runtime import (
     start_public_artifact_lifecycle_runtime,
     stop_public_artifact_lifecycle_runtime,
@@ -197,6 +198,8 @@ async def run_external_worker(stop: asyncio.Event | None = None) -> None:
         asset_maintenance_started = True
         await start_workspace_event_retention()
         event_retention_started = True
+        if profile.role == "generation":
+            MEM0_PRESENTATION_MEMORY_SERVICE.enqueue(MEM0_PRESENTATION_MEMORY_SERVICE.warm_up)
         logger.info("Workspace operation external worker started")
         await stop.wait()
     finally:
@@ -237,6 +240,7 @@ async def run_external_worker(stop: asyncio.Event | None = None) -> None:
                                                 install_trusted_worker_dispatcher(None)
                                                 await trusted_worker_runtime.close()
                                         finally:
+                                            await MEM0_PRESENTATION_MEMORY_SERVICE.drain()
                                             await dispose_engines()
 
 

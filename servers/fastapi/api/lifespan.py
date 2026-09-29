@@ -74,6 +74,7 @@ from utils.model_availability import (
     check_llm_and_image_provider_api_or_model_availability,
 )
 from utils.renderer_warmup import warm_up_authored_renderer
+from services.mem0_presentation_memory_service import MEM0_PRESENTATION_MEMORY_SERVICE
 
 logger = logging.getLogger(__name__)
 _LOCAL_ENVIRONMENTS = {"local", "development", "dev", "test"}
@@ -189,6 +190,8 @@ async def app_lifespan(_: FastAPI):
             # external worker binary/isolation check) at boot instead of on
             # the first slide of the first real deck. Never fails startup.
             await warm_up_authored_renderer()
+            # Pay Mem0's one-time client init (about 8 s) off the first deck's path.
+            MEM0_PRESENTATION_MEMORY_SERVICE.enqueue(MEM0_PRESENTATION_MEMORY_SERVICE.warm_up)
         await bootstrap_database_admin()
         # Settings also arrive without passing the admin route -- env, compose,
         # a seeded secret store -- so the model/pricing invariant is compared
@@ -227,6 +230,11 @@ async def app_lifespan(_: FastAPI):
             (source_locked_maintenance_started, stop_source_locked_maintenance),
             (artifact_lifecycle_started, stop_public_artifact_lifecycle_runtime),
         )
+        # Let queued Mem0 writes finish (bounded) before the engines go away.
+        try:
+            await MEM0_PRESENTATION_MEMORY_SERVICE.drain()
+        except Exception:
+            logger.exception("Mem0 background write drain failed")
         for started, stop in cleanup_steps:
             if not started:
                 continue
