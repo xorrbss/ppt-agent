@@ -660,6 +660,7 @@ async def _run_worker_lane(
     gate_override: Callable[[pytest.MonkeyPatch], None] | None = None,
 ) -> LaneOutcome:
     from api.v1.ppt.endpoints import presentation_generate as endpoint
+    from services import presentation_generation_pipeline as generation_pipeline
 
     # Two SQLite databases, on purpose.  The lane itself (endpoint, runner,
     # generation handler, checkpoints, receipts -- every module that binds
@@ -764,13 +765,13 @@ async def _run_worker_lane(
     async def fake_header_contract(*_args, **_kwargs):
         return contract
 
-    monkeypatch.setattr(endpoint, "generate_content_brief", fake_brief)
-    monkeypatch.setattr(endpoint, "generate_ppt_outline", fake_outline)
+    monkeypatch.setattr(generation_pipeline, "generate_content_brief", fake_brief)
+    monkeypatch.setattr(generation_pipeline, "generate_ppt_outline", fake_outline)
     monkeypatch.setattr(
-        endpoint.MEM0_PRESENTATION_MEMORY_SERVICE, "store_generation_context", no_op
+        generation_pipeline.MEM0_PRESENTATION_MEMORY_SERVICE, "store_generation_context", no_op
     )
     monkeypatch.setattr(
-        endpoint.MEM0_PRESENTATION_MEMORY_SERVICE, "store_generated_outlines", no_op
+        generation_pipeline.MEM0_PRESENTATION_MEMORY_SERVICE, "store_generated_outlines", no_op
     )
     monkeypatch.setattr(authored_service, "resolve_header_contract", fake_header_contract)
     _install_chromium_and_gate_stubs(monkeypatch)

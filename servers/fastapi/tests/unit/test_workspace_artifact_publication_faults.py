@@ -35,7 +35,7 @@ from models.sql.workspace import (
 )
 from services import workspace_artifact_publication_service as publication
 from services import workspace_operation_runner
-from api.v1.ppt.endpoints.presentation_generate import _publish_staged_presentation
+from services.presentation_generation_pipeline import _publish_staged_presentation
 from services.account_deletion_service import mark_account_deleting
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
 

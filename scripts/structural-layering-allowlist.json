@@ -42,13 +42,8 @@
     "servers/fastapi/utils/user_config.py"
   ],
   "services_import_api": [
-    "servers/fastapi/services/presentation_generation_job_service.py",
     "servers/fastapi/services/presentation_generation_operation_handler.py",
-    "servers/fastapi/services/public_v2_orchestrator.py",
-    "servers/fastapi/services/workspace_authored_template_confirmation_service.py",
-    "servers/fastapi/services/workspace_quality_export_operation_handlers.py",
-    "servers/fastapi/services/workspace_service.py",
-    "servers/fastapi/services/workspace_timeline_projection.py"
+    "servers/fastapi/services/workspace_quality_export_operation_handlers.py"
   ],
   "models_import_services_or_api": [
     "servers/fastapi/models/generate_presentation_request.py",

@@ -155,7 +155,7 @@ def test_invalid_cluster_limit_falls_back_to_existing_job_limit(monkeypatch):
 
 
 def test_capacity_wait_is_cancellable_before_an_attempt_is_claimed(monkeypatch):
-    from api.v1.ppt.endpoints import presentation_generate as endpoint
+    from services import presentation_generation_pipeline as endpoint
 
     async def scenario():
         claim_attempted = asyncio.Event()

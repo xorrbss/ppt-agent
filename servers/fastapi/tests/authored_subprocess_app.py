@@ -17,6 +17,7 @@ from types import SimpleNamespace
 from fastapi import FastAPI
 
 from api.v1.ppt.endpoints import presentation_generate as endpoint
+from services import presentation_generation_pipeline as generation_pipeline
 from services import authored_presentation_service as authored
 from services import database
 from services import presentation_generation_job_service as jobs
@@ -102,10 +103,10 @@ async def _no_op(*_args, **_kwargs):
     return None
 
 
-endpoint.generate_content_brief = _fake_brief
-endpoint.generate_ppt_outline = _fake_outline
-endpoint.MEM0_PRESENTATION_MEMORY_SERVICE.store_generation_context = _no_op
-endpoint.MEM0_PRESENTATION_MEMORY_SERVICE.store_generated_outlines = _no_op
+generation_pipeline.generate_content_brief = _fake_brief
+generation_pipeline.generate_ppt_outline = _fake_outline
+generation_pipeline.MEM0_PRESENTATION_MEMORY_SERVICE.store_generation_context = _no_op
+generation_pipeline.MEM0_PRESENTATION_MEMORY_SERVICE.store_generated_outlines = _no_op
 authored.prepare_authored_deck = lambda *_args, **_kwargs: PLAN
 authored.resolve_header_contract = fixed_header_contract
 authored.author_planned_slide = _fake_author

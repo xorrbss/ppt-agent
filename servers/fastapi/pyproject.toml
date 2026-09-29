@@ -129,7 +129,7 @@ select = ["E", "F", "B", "ASYNC"]
 "api/v1/ppt/endpoints/presentation_export_attempts.py" = ["B008"]
 # E501 added 2026-09-11: long conditionals in the request-admission branch
 # added alongside presentation_generate_admission.py; F401/E402 fixed outright.
-"api/v1/ppt/endpoints/presentation_generate.py" = ["B008", "B904", "E501", "F811", "F841"]
+"api/v1/ppt/endpoints/presentation_generate.py" = ["B008", "B904"]
 "api/v1/ppt/endpoints/presentation_share.py" = ["ASYNC240", "B008"]
 "api/v1/ppt/endpoints/presentation_versions.py" = ["B008", "F841"]
 "api/v1/ppt/endpoints/slide.py" = ["B008"]
@@ -241,6 +241,8 @@ select = ["E", "F", "B", "ASYNC"]
 # One-off PNG-identity read inside a per-slide export step; matches the
 # existing ASYNC240 tolerance for non-hot-path blocking calls in
 # services/workspace_asset_service.py.
+# Moved 2026-09-29 from api/v1/ppt/endpoints/presentation_generate.py with its baseline.
+"services/presentation_generation_pipeline.py" = ["B008", "B904", "E501", "F811", "F841"]
 "services/public_export_operation.py" = ["ASYNC240"]
 "services/public_quality_receipt_v3_projection.py" = ["E501"]
 "services/slidespec_authored_executor.py" = ["B905", "E501", "F841"]

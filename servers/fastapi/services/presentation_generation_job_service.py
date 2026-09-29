@@ -1049,7 +1049,7 @@ async def launch_generation_job(
         )
         return
 
-    from api.v1.ppt.endpoints.presentation_generate import run_generation_job
+    from services.presentation_generation_pipeline import run_generation_job
     existing = _active_jobs.get(job_id)
     if existing is not None and not existing.done():
         return

@@ -50,7 +50,7 @@ def _png() -> bytes:
 def test_90_slide_bounded_workers_resume_without_repeating_successful_work(
     tmp_path, monkeypatch
 ):
-    from api.v1.ppt.endpoints import presentation_generate as endpoint
+    from services import presentation_generation_pipeline as endpoint
     from utils import llm_provider
 
     async def scenario():

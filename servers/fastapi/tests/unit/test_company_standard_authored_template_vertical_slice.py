@@ -9,7 +9,7 @@ import uuid
 from api.v1.ppt.endpoints.authored_operations import (
     build_authored_retemplate_generation_request,
 )
-from api.v1.ppt.endpoints.presentation_generation_staging import (
+from services.presentation_generation_staging import (
     _durable_request_payload,
 )
 from models.authored_vnext.deck import (

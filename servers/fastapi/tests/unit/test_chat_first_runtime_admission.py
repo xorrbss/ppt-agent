@@ -8,7 +8,7 @@ from fastapi import BackgroundTasks, HTTPException
 import pytest
 
 from api.v1.ppt.endpoints import presentation_crud, presentation_generate
-from api.v1.ppt.endpoints import presentation_generate_admission
+from services import presentation_generation_pipeline, presentation_generation_staging
 from api.v1.ppt.endpoints import workspace as workspace_endpoint
 from enums.tone import Tone
 from enums.verbosity import Verbosity
@@ -81,21 +81,21 @@ def test_generation_queue_fails_before_validation_or_job_mutation(
     reason,
     status_code,
 ):
-    # The generate endpoint delegates the runtime guard to its admission
+    # The generation pipeline delegates the runtime guard to its staging
     # module, which reads its own ``sql_engine`` binding.
     _configure_invalid_runtime(
-        monkeypatch, presentation_generate_admission, database_url
+        monkeypatch, presentation_generation_staging, database_url
     )
     validation_calls: list[object] = []
     monkeypatch.setattr(
-        presentation_generate,
+        presentation_generation_pipeline,
         "_validate_authored_exact_admission",
         lambda request: validation_calls.append(request),
     )
 
     with pytest.raises(HTTPException) as caught:
         asyncio.run(
-            presentation_generate.queue_presentation_generation(
+            presentation_generation_pipeline.queue_presentation_generation(
                 GeneratePresentationRequest(
                     presentation_id=uuid.uuid4(),
                     content="runtime admission",
@@ -150,7 +150,7 @@ def test_workspace_bootstrap_fails_before_service_mutation(
 def test_supported_runtime_admits_create_and_generation(monkeypatch):
     sqlite = SimpleNamespace(url="sqlite+aiosqlite:///local.db")
     monkeypatch.setattr(presentation_crud, "sql_engine", sqlite)
-    monkeypatch.setattr(presentation_generate, "sql_engine", sqlite)
+    monkeypatch.setattr(presentation_generation_staging, "sql_engine", sqlite)
 
     assert presentation_crud._chat_first_create_enabled() is True
     assert presentation_generate._chat_first_generation_enabled() is True

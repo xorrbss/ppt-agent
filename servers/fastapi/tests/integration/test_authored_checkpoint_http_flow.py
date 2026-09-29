@@ -86,6 +86,7 @@ def test_tcp_api_failure_status_same_key_resume_and_pptx(tmp_path, monkeypatch):
     """Exercise the product router over a real loopback uvicorn socket."""
 
     from api.v1.ppt.endpoints import presentation_generate as endpoint
+    from services import presentation_generation_pipeline as generation_pipeline
     from utils import llm_provider
 
     async def scenario():
@@ -98,7 +99,7 @@ def test_tcp_api_failure_status_same_key_resume_and_pptx(tmp_path, monkeypatch):
         await seed_checkpoint_owner(maker)
         monkeypatch.setattr(checkpoints, "async_session_maker", maker)
         monkeypatch.setattr(jobs, "async_session_maker", maker)
-        monkeypatch.setattr(endpoint, "async_session_maker", maker)
+        monkeypatch.setattr(generation_pipeline, "async_session_maker", maker)
         monkeypatch.setattr(database, "async_session_maker", maker)
         monkeypatch.setattr(database, "sql_engine", engine)
         monkeypatch.setattr(original_capture, "async_session_maker", maker)
@@ -164,15 +165,15 @@ def test_tcp_api_failure_status_same_key_resume_and_pptx(tmp_path, monkeypatch):
         async def no_op(*_args, **_kwargs):
             return None
 
-        monkeypatch.setattr(endpoint, "generate_content_brief", fake_brief)
-        monkeypatch.setattr(endpoint, "generate_ppt_outline", fake_outline)
+        monkeypatch.setattr(generation_pipeline, "generate_content_brief", fake_brief)
+        monkeypatch.setattr(generation_pipeline, "generate_ppt_outline", fake_outline)
         monkeypatch.setattr(
-            endpoint.MEM0_PRESENTATION_MEMORY_SERVICE,
+            generation_pipeline.MEM0_PRESENTATION_MEMORY_SERVICE,
             "store_generation_context",
             no_op,
         )
         monkeypatch.setattr(
-            endpoint.MEM0_PRESENTATION_MEMORY_SERVICE,
+            generation_pipeline.MEM0_PRESENTATION_MEMORY_SERVICE,
             "store_generated_outlines",
             no_op,
         )

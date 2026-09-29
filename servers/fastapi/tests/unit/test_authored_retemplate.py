@@ -154,14 +154,14 @@ def test_retemplate_exact_snapshots_fresh_html_before_queue(fake_async_session):
 
     with (
         patch(
-            "api.v1.ppt.endpoints.authored_operations.load_authored_styles",
+            "services.authored_retemplate_request.load_authored_styles",
             return_value=[exact_style],
         ),
         patch(
-            "api.v1.ppt.endpoints.authored_operations.validate_exact_reconstruction_style"
+            "services.authored_retemplate_request.validate_exact_reconstruction_style"
         ),
         patch(
-            "api.v1.ppt.endpoints.authored_operations.create_exact_source_snapshot",
+            "services.authored_retemplate_request.create_exact_source_snapshot",
             new=snapshot,
         ),
     ):
@@ -195,7 +195,7 @@ def test_retemplate_style_reference_does_not_snapshot_current_html(
     snapshot = AsyncMock()
 
     with patch(
-        "api.v1.ppt.endpoints.authored_operations.create_exact_source_snapshot",
+        "services.authored_retemplate_request.create_exact_source_snapshot",
         new=snapshot,
     ):
         asyncio.run(
@@ -243,14 +243,14 @@ def test_retemplate_exact_snapshot_failure_is_422_before_queue(fake_async_sessio
     )
     with (
         patch(
-            "api.v1.ppt.endpoints.authored_operations.load_authored_styles",
+            "services.authored_retemplate_request.load_authored_styles",
             return_value=[exact_style],
         ),
         patch(
-            "api.v1.ppt.endpoints.authored_operations.validate_exact_reconstruction_style"
+            "services.authored_retemplate_request.validate_exact_reconstruction_style"
         ),
         patch(
-            "api.v1.ppt.endpoints.authored_operations.create_exact_source_snapshot",
+            "services.authored_retemplate_request.create_exact_source_snapshot",
             new=AsyncMock(side_effect=ValueError("private source failure")),
         ),
         pytest.raises(HTTPException) as exc_info,

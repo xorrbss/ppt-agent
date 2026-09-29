@@ -9,7 +9,7 @@ import pytest
 from fastapi import BackgroundTasks
 
 from api.v1.ppt.endpoints import outlines as outlines_endpoint
-from api.v1.ppt.endpoints import presentation_generate
+from services import presentation_generation_pipeline as presentation_generate
 from models.generate_presentation_request import GeneratePresentationRequest
 from models.sql.presentation import PresentationModel
 from services.documents_loader import DocumentsLoader

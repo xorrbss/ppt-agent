@@ -177,7 +177,7 @@ def _source_inputs_present(request: Any) -> bool:
 async def build_job_context(session: Any, job: Any) -> JobContext:
     """Rebuild the gate inputs the pipeline used for one job."""
 
-    from api.v1.ppt.endpoints.presentation_generation_staging import (
+    from services.presentation_generation_staging import (
         _request_from_durable_payload,
     )
     from services.authored_composition_policy import (

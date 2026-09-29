@@ -1087,7 +1087,7 @@ async def _submit_source_restyle(
     monkeypatch.setattr("services.public_v2_orchestrator.claim_reference_snapshots", nothing)
     monkeypatch.setattr("services.public_v2_orchestrator.append_operation_event", nothing)
     monkeypatch.setattr("services.public_v2_orchestrator.wake_workspace_operation_runner", lambda: None)
-    monkeypatch.setattr("api.v1.ppt.endpoints.presentation_generate._validate_authored_master_pin_admission", nothing)
+    monkeypatch.setattr("services.presentation_generation_pipeline._validate_authored_master_pin_admission", nothing)
     monkeypatch.setattr(
         "services.public_generation_slide_count.admit_source_content_request",
         admit_with_owner,
@@ -1173,7 +1173,7 @@ def test_api_submit_source_restyle_charges_source_pages_and_pins_master(
         assert route["outputCapability"] == "fidelity"
         assert operation.request_payload["generation_strategy"]["selectedStrategy"] == "legacy-authored"
         if verbatim:
-            from api.v1.ppt.endpoints.presentation_generation_staging import _request_from_durable_payload
+            from services.presentation_generation_staging import _request_from_durable_payload
             from services.authored_rollout_profile import ROLLOUT_PROFILE_PAYLOAD_KEY
 
             expected_profile = {

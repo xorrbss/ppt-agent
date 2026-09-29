@@ -2032,7 +2032,7 @@ async def apply_workspace_action(
                     )
                 if source_operation.kind == "presentation.generate":
                     from fastapi import HTTPException
-                    from api.v1.ppt.endpoints.presentation_generate import (
+                    from services.presentation_generation_pipeline import (
                         _admit_generation_operation_v2_compatible,
                         _request_from_durable_payload,
                     )

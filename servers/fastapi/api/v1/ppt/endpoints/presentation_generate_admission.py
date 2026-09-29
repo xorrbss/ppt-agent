@@ -7,21 +7,14 @@ import uuid
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from services.database import sql_engine
+# The generation pipeline owns the chat-first runtime guard; one definition.
+from services.presentation_generation_staging import _chat_first_generation_enabled  # noqa: F401
 from services.workspace_runtime_profile import (
     UnsupportedWorkspaceRuntimeError,
     WorkspaceRuntimeKind,
     require_supported_workspace_runtime,
     resolve_workspace_runtime_profile,
 )
-
-
-def _chat_first_generation_enabled() -> bool:
-    try:
-        require_supported_workspace_runtime(sql_engine.url)
-    except UnsupportedWorkspaceRuntimeError as error:
-        raise HTTPException(status_code=501, detail=error.code) from error
-    return True
 
 
 def _require_local_sync_generation(database_url_or_dialect: Any) -> None:

@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 import pytest
 from pydantic import ValidationError
 
-from api.v1.ppt.endpoints.presentation_generate import (
+from api.v1.ppt.endpoints.presentation_generate_admission import (
     _require_local_legacy_async_generation,
 )
 from models.public_v2_contracts import (

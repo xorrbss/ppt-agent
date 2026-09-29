@@ -55,7 +55,7 @@ class TestPresentationGenerationAPI:
         )
 
         with patch(
-            "api.v1.ppt.endpoints.presentation_generate.generate_presentation_handler",
+            "services.presentation_generation_pipeline.generate_presentation_handler",
             new=AsyncMock(return_value=response_payload),
         ) as mock_handler:
             response = asyncio.run(
@@ -83,7 +83,7 @@ class TestPresentationGenerationAPI:
         )
 
         with patch(
-            "api.v1.ppt.endpoints.presentation_generate.generate_presentation_handler",
+            "services.presentation_generation_pipeline.generate_presentation_handler",
             new=AsyncMock(return_value=response_payload),
         ) as mock_handler:
             response = asyncio.run(
@@ -142,7 +142,7 @@ class TestPresentationGenerationAPI:
         )
 
         with patch(
-            "api.v1.ppt.endpoints.presentation_generate.generate_presentation_handler",
+            "services.presentation_generation_pipeline.generate_presentation_handler",
             new=AsyncMock(return_value=response_payload),
         ):
             response = asyncio.run(

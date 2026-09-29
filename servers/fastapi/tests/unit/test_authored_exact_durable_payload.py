@@ -1,7 +1,7 @@
 import pytest
 from types import SimpleNamespace
 
-from api.v1.ppt.endpoints.presentation_generate import (
+from services.presentation_generation_pipeline import (
     _durable_request_payload,
     _request_from_durable_payload,
 )

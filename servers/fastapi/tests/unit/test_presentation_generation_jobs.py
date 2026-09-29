@@ -543,7 +543,7 @@ def test_restart_reconciliation_recovers_only_abandoned_attempts(
 
 
 def test_worker_restores_correlation_request_id_from_durable_job():
-    from api.v1.ppt.endpoints import presentation_generate as endpoint
+    from services import presentation_generation_pipeline as endpoint
 
     status = AsyncPresentationGenerationTaskModel(status="running")
     job = PresentationGenerationJob(

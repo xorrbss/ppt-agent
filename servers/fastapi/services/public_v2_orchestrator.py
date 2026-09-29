@@ -87,7 +87,7 @@ from services.artifact_store import (
 from services.compatibility_migration.admission import (
     stamp_new_authored_presentation,
 )
-from api.v1.ppt.endpoints.presentation_generation_staging import (
+from services.presentation_generation_staging import (
     _durable_request_payload,
 )
 from services.public_operation_admission import (
@@ -764,7 +764,7 @@ class SqlPublicV2Orchestrator:
             )
             try:
                 if internal_request.master_pin is not None:
-                    from api.v1.ppt.endpoints.presentation_generate import (
+                    from services.presentation_generation_pipeline import (
                         _validate_authored_master_pin_admission,
                     )
 
