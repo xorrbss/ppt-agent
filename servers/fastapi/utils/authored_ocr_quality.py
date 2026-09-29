@@ -716,31 +716,6 @@ def compare_authored_ocr(
     )
 
 
-def ocr_confidence(
-    metrics: dict[str, Any],
-    *,
-    min_characters: int = 12,
-    max_cer: float = 0.08,
-    max_missing_rate: float = 0.03,
-) -> dict[str, Any]:
-    """Conservative decision helper for callers that must avoid OCR false alarms."""
-    chars = int(metrics.get("source_characters", 0))
-    sufficient = metrics.get("available", True) and chars >= min_characters
-    pass_thresholds = (
-        float(metrics.get("cer", 1.0)) <= max_cer
-        and float(metrics.get("missing_rate", 1.0)) <= max_missing_rate
-    )
-    return {
-        "confidence": "high" if sufficient else "insufficient",
-        "needs_attention": bool(sufficient and not pass_thresholds),
-        "thresholds": {
-            "min_characters": min_characters,
-            "max_cer": max_cer,
-            "max_missing_rate": max_missing_rate,
-        },
-    }
-
-
 def compare_expected_candidate(
     expected: OcrQualityResult | str,
     baseline: OcrQualityResult | str,

@@ -1,4 +1,3 @@
-import ipaddress
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -75,24 +74,6 @@ def _secure_request(request: Request) -> bool:
         request.headers.get("x-forwarded-proto", "").lower() == "https"
         or request.url.scheme == "https"
     )
-
-
-def _login_client_host(request: Request) -> str | None:
-    peer_host = request.client.host if request.client else None
-    try:
-        peer_is_loopback = bool(
-            peer_host and ipaddress.ip_address(peer_host).is_loopback
-        )
-    except ValueError:
-        peer_is_loopback = False
-    if peer_is_loopback:
-        forwarded_host = request.headers.get("x-real-ip", "").strip()
-        try:
-            if forwarded_host:
-                return str(ipaddress.ip_address(forwarded_host))
-        except ValueError:
-            pass
-    return peer_host
 
 
 def _set_login_cookie(response: JSONResponse, token: str, request: Request) -> None:

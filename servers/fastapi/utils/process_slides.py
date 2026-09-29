@@ -230,24 +230,3 @@ async def process_old_and_new_slides_and_fetch_assets(
 
     return new_assets
 
-
-def process_slide_add_placeholder_assets(slide: SlideModel):
-
-    image_paths = get_dict_paths_with_key(slide.content, "__image_prompt__")
-    icon_paths = get_dict_paths_with_key(slide.content, "__icon_query__")
-
-    for image_path in image_paths:
-        image_dict = get_dict_at_path(slide.content, image_path)
-        # Use FastAPI static path for placeholder image
-        image_dict["__image_url__"] = normalize_slide_asset_url(
-            "/static/images/placeholder.jpg"
-        )
-        set_dict_at_path(slide.content, image_path, image_dict)
-
-    for icon_path in icon_paths:
-        icon_dict = get_dict_at_path(slide.content, icon_path)
-        # Use FastAPI static path for placeholder icon
-        icon_dict["__icon_url__"] = normalize_slide_asset_url(
-            "/static/icons/placeholder.svg"
-        )
-        set_dict_at_path(slide.content, icon_path, icon_dict)

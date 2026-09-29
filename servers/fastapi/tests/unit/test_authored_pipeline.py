@@ -3319,33 +3319,6 @@ def test_render_html_cache_reuses_successful_identical_render(monkeypatch):
     assert second == rendered
 
 
-def test_render_list_uses_placeholder_on_partial_failure(monkeypatch):
-    calls = 0
-
-    async def boom(html, timeout=60):
-        nonlocal calls
-        calls += 1
-        if calls == 1:
-            raise RuntimeError("one bad slide")
-        return _png_1280x720((10, 20, 30))
-
-    monkeypatch.setattr(slide_capture, "render_html_to_png", boom)
-    pngs = _run(slide_capture.render_html_list_to_pngs([_VALID, _VALID]))
-    assert len(pngs) == 2
-    for png in pngs:
-        img = Image.open(io.BytesIO(png))
-        assert img.size == (slide_capture.SLIDE_W, slide_capture.SLIDE_H)
-
-
-def test_render_list_rejects_deck_when_every_slide_fails(monkeypatch):
-    async def boom(html, timeout=60):
-        raise RuntimeError("no working chrome")
-
-    monkeypatch.setattr(slide_capture, "render_html_to_png", boom)
-    with pytest.raises(RuntimeError, match="Every authored slide failed"):
-        _run(slide_capture.render_html_list_to_pngs([_VALID, _VALID]))
-
-
 # --- image PPTX assembly -----------------------------------------------------
 
 

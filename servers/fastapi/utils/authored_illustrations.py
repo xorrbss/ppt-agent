@@ -30,18 +30,15 @@ import logging
 import os
 import re
 from collections import Counter
-from collections.abc import Mapping as MappingABC
 from pathlib import Path
 from typing import (
     Dict,
-    List,
     Mapping,
     NamedTuple,
     Optional,
     Protocol,
     Sequence,
     Set,
-    Union,
 )
 
 from models.image_prompt import ImagePrompt
@@ -140,11 +137,6 @@ _MIME_BY_SUFFIX = {
 #: One slide's offer: asset id -> candidate. ``None`` means source images are
 #: not in play at all, which keeps ``data-asset-id`` inert.
 SlideSourceImages = Optional[Mapping[str, SourceImageCandidate]]
-DeckSourceImages = Union[
-    Mapping[str, SourceImageCandidate],
-    Sequence[Mapping[str, SourceImageCandidate]],
-    None,
-]
 
 
 def _env_int(name: str, default: int) -> int:
@@ -733,66 +725,3 @@ async def apply_authored_illustration(
     )
 
 
-def _content_at(slide_contents: Optional[Sequence[str]], index: int) -> str:
-    if not slide_contents or index >= len(slide_contents):
-        return ""
-    return slide_contents[index] or ""
-
-
-def _per_slide_source_images(
-    htmls: Sequence[str], source_images: DeckSourceImages
-) -> List[SlideSourceImages]:
-    """Split a deck-wide offer into per-slide offers without consuming assets."""
-    if source_images is None:
-        return [None] * len(htmls)
-    per_slide: List[SlideSourceImages] = []
-    for index, html in enumerate(htmls):
-        if isinstance(source_images, MappingABC):
-            candidates: Mapping[str, SourceImageCandidate] = source_images
-        else:
-            candidates = source_images[index] if index < len(source_images) else {}
-        per_slide.append(reserve_source_images_for_slide(html, candidates))
-    return per_slide
-
-
-async def apply_authored_illustrations(
-    htmls: List[str],
-    style: _StyleLike,
-    image_service: _ImageServiceLike,
-    slide_contents: Optional[Sequence[str]] = None,
-    *,
-    source_images: DeckSourceImages = None,
-) -> List[str]:
-    """Fill each slide's source slots, with generated illustration as fallback.
-
-    ``source_images`` is either one deck-wide mapping of source-slot/legacy asset
-    id -> candidate or one mapping per slide; candidates may be reused across
-    slides. ``slide_contents`` is the per-slide outline markdown,
-    positionally aligned with ``htmls``; a slide without content simply gets the
-    no-text prompt. Extra slots beyond the placed one are removed, as is the slot
-    of a slide whose generation failed, returned a provider placeholder, gave
-    unreadable output or named an unknown asset id — the HTML layout reserves the
-    area explicitly, so the slide still renders. Never raises.
-    """
-    if _is_exact_reconstruction(style):
-        return htmls
-    style_prompt = (getattr(style, "illustration_prompt", None) or "").strip()
-    if not style_prompt and source_images is None:
-        return htmls
-
-    per_slide = _per_slide_source_images(htmls, source_images)
-    return list(
-        await asyncio.gather(
-            *(
-                apply_authored_illustration(
-                    html,
-                    style,
-                    image_service,
-                    i,
-                    slide_content=_content_at(slide_contents, i),
-                    source_images=per_slide[i],
-                )
-                for i, html in enumerate(htmls)
-            )
-        )
-    )

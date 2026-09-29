@@ -4,8 +4,6 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 
 from fastapi import HTTPException
-from google import genai
-from openai import OpenAI
 
 from constants.llm import (
     DEFAULT_ANTHROPIC_MODEL,
@@ -31,13 +29,11 @@ from utils.get_env import (
     get_codex_model_env,
     get_custom_model_env,
     get_fireworks_model_env,
-    get_google_api_key_env,
     get_google_model_env,
     get_litellm_model_env,
     get_lmstudio_model_env,
     get_llm_provider_env,
     get_ollama_model_env,
-    get_openai_api_key_env,
     get_openai_model_env,
     get_cerebras_model_env,
     get_openrouter_model_env,
@@ -323,24 +319,6 @@ def get_model_for(task: str, settings: RuntimeSettings | None = None) -> str:
         if light_model:
             return light_model
     return get_model(snapshot)
-
-
-def get_google_llm_client(settings: RuntimeSettings | None = None) -> genai.Client:
-    snapshot = resolve_runtime_settings(settings)
-    get_llm_provider(snapshot)
-    api_key = get_google_api_key_env(snapshot)
-    if not api_key:
-        raise HTTPException(status_code=400, detail="Google API Key is not set")
-    return genai.Client(api_key=api_key)
-
-
-def get_llm_client(settings: RuntimeSettings | None = None) -> OpenAI:
-    snapshot = resolve_runtime_settings(settings)
-    get_llm_provider(snapshot)
-    api_key = get_openai_api_key_env(snapshot)
-    if not api_key:
-        raise HTTPException(status_code=400, detail="OpenAI API Key is not set")
-    return OpenAI(api_key=api_key)
 
 
 def get_large_model(settings: RuntimeSettings | None = None) -> str:

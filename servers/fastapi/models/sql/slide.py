@@ -1,4 +1,3 @@
-from copy import deepcopy
 from typing import Literal, Optional
 import uuid
 from pydantic import field_validator, model_validator
@@ -111,23 +110,6 @@ class SlideModel(SQLModel, table=True):
             self.layout_group == "authored"
             or (self.layout or "").startswith("authored:")
             or (isinstance(self.content, dict) and self.content.get("__authored__") is True)
-        )
-
-    def get_new_slide(self, presentation: uuid.UUID, content: Optional[dict] = None):
-        return SlideModel(
-            id=uuid.uuid4(),
-            owner_id=self.owner_id,
-            presentation=presentation,
-            layout_group=self.layout_group,
-            layout=self.layout,
-            index=self.index,
-            speaker_note=self.speaker_note,
-            content=deepcopy(self.content if content is None else content),
-            html_content=self.html_content,
-            svg_content=self.svg_content,
-            source_format=self.get_source_format(),
-            ui=canonicalize_slide_ui(self.ui),
-            properties=deepcopy(self.properties),
         )
 
 

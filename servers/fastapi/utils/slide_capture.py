@@ -2150,32 +2150,4 @@ def _placeholder_png() -> bytes:
     return buf.getvalue()
 
 
-async def render_html_list_to_pngs(htmls: List[str], timeout: int = 60) -> List[bytes]:
-    """Render many authored HTML slides to PNG bytes (order preserved), with per-slide
-    resilience: a slide that fails to render becomes a neutral placeholder so one failure
-    can't abort the whole deck. Concurrency is bounded inside render_html_to_png."""
-
-    async def render_one(index: int, html: str) -> tuple[bytes, bool]:
-        try:
-            return await render_html_to_png(html, timeout=timeout), False
-        except (RendererDisabledError, RendererPolicyError, RendererIsolationError):
-            # Security/isolation failures are deck-level failures.  Publishing a
-            # fresh neutral placeholder would replace the last-known-good artifact
-            # and make a failed isolation attempt look successful.
-            raise
-        except Exception as exc:
-            LOGGER.warning(
-                "Authored slide render failed at index %d: %s", index, exc
-            )
-            return _placeholder_png(), True
-
-    results = list(
-        await asyncio.gather(*[render_one(index, html) for index, html in enumerate(htmls)])
-    )
-    if results and all(failed for _, failed in results):
-        raise RuntimeError(
-            "Every authored slide failed to render. Install Playwright's Chromium "
-            "headless shell or set CHROME_PATH to a working headless browser."
-        )
-    return [png for png, _ in results]
 # ruff: noqa: E402, F401

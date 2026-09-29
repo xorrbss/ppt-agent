@@ -1,4 +1,3 @@
-import re
 import uuid
 from typing import Annotated, List, Literal
 
@@ -10,37 +9,6 @@ from models.generate_presentation_request import AuthoredMasterPinInput
 ReviewScope = Literal["all", "current", "subset"]
 SlideIndex = Annotated[int, Field(strict=True, ge=0)]
 
-
-def parse_review_page_range(value: str, *, slide_count: int) -> list[int]:
-    """Parse a 1-based chat page range into sorted, unique 0-based indices.
-
-    The accepted grammar is a comma-separated list of pages or inclusive
-    ascending ranges, for example ``3,5-8,12``.  Keeping this parser at the API
-    model boundary gives chat and other clients one canonical normalization
-    contract while the review pipeline continues to use zero-based indices.
-    """
-
-    if slide_count < 1:
-        raise ValueError("slide_count must be positive")
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError("Page range is required")
-
-    pages: set[int] = set()
-    for raw_token in value.split(","):
-        token = raw_token.strip()
-        match = re.fullmatch(r"([0-9]+)(?:\s*-\s*([0-9]+))?", token)
-        if match is None:
-            raise ValueError(f"Invalid page range token: {token or '<empty>'}")
-        start = int(match.group(1))
-        end = int(match.group(2) or start)
-        if start < 1 or end < 1:
-            raise ValueError("Page numbers must be positive")
-        if end < start:
-            raise ValueError("Page ranges must be ascending")
-        if end > slide_count:
-            raise ValueError("Page number is outside the presentation")
-        pages.update(range(start, end + 1))
-    return [page - 1 for page in sorted(pages)]
 
 class SlideContentUpdate(BaseModel):
     index: int

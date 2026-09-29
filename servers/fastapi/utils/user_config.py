@@ -5,26 +5,14 @@ import threading
 from typing import Any, Mapping
 
 from constants.settings_registry import get_settings_registry
-from models.user_config import UserConfig
 from utils.runtime_settings import (
     RuntimeSettings,
     publish_process_runtime_settings,
     replace_process_runtime_settings,
-    resolve_runtime_settings,
 )
 from utils.user_config_store import read_user_config_file, update_user_config_file
 
 
-_PERSISTED_TARGETS = {
-    "start.user_config",
-    "user_config.managed",
-    "user_config.ui",
-}
-_PERSISTED_KEYS = tuple(
-    entry["key"]
-    for entry in get_settings_registry()
-    if _PERSISTED_TARGETS.intersection(entry["targets"])
-)
 _CODEX_MANAGED_KEYS = frozenset(
     entry["key"]
     for entry in get_settings_registry()
@@ -91,25 +79,6 @@ def refresh_process_runtime_settings(
         else:
             publish_process_runtime_settings(revision, snapshot)
         return snapshot
-
-
-def get_user_config(
-    settings: RuntimeSettings | None = None,
-    *,
-    environ: Mapping[str, object] | None = None,
-) -> UserConfig:
-    """Return the persisted provider shape while preserving historical precedence."""
-    environment = os.environ if environ is None else environ
-    persisted = _read_persisted_user_config(environment)
-    active = resolve_runtime_settings(settings) if settings is not None else None
-    values: dict[str, Any] = {}
-    for key in _PERSISTED_KEYS:
-        value = persisted.get(key)
-        if value is None or value == "":
-            value = active.get(key) if active is not None else environment.get(key)
-        if value is not None and value != "":
-            values[key] = value
-    return UserConfig(**values)
 
 
 def save_codex_tokens_to_user_config(values: Mapping[str, object]) -> None:
