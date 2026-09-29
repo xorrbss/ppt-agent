@@ -7,7 +7,6 @@ The canonical source and immutable manifest are not modified or persisted here.
 from __future__ import annotations
 
 import base64
-import hashlib
 import io
 import xml.etree.ElementTree as ET
 
@@ -15,6 +14,7 @@ from PIL import Image
 
 from services.svg_asset_manifest import PlacementManifest, RasterDerivative, SourceManifest
 from services.svg_contract import validate_svg
+from utils.hashing import sha256_hex
 
 
 async def resolve_slide_svg_preview(
@@ -120,7 +120,7 @@ def materialize_svg(
             raise ValueError("svg_asset_derivative_missing")
         derivative = RasterDerivative.model_validate(derivatives[slot_id])
         payload = payloads[slot_id]
-        if len(payload) != derivative.byte_size or hashlib.sha256(payload).hexdigest() != derivative.sha256:
+        if len(payload) != derivative.byte_size or sha256_hex(payload) != derivative.sha256:
             raise ValueError("svg_asset_derivative_digest_mismatch")
         with Image.open(io.BytesIO(payload)) as image:
             if (

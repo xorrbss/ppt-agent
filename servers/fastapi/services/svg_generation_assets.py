@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import base64
-from hashlib import sha256
 import uuid
 import xml.etree.ElementTree as ET
 
@@ -10,6 +9,7 @@ from services.svg_asset_manifest import SourceManifest, PlacementManifest, decid
 from services.svg_asset_persistence import (SvgPublicationContext, persist_derivative_if_current,
     persist_manifest_if_current, load_source_manifest_pointer)
 from services.svg_contract import source_digest
+from utils.hashing import sha256_hex
 
 def slot_writer_enabled(*, strategy: str | None = None, durable: bool = False) -> bool:
     """New durable SVG requests publish canonical assets without local setup."""
@@ -53,7 +53,7 @@ def _source_bytes(candidate):
     if candidate.path.stat().st_size > 32 * 1024 * 1024:
         raise ValueError("svg_asset_source_byte_budget_exceeded")
     payload = candidate.path.read_bytes()
-    if sha256(payload).hexdigest() != candidate.digest.removeprefix("sha256:"):
+    if sha256_hex(payload) != candidate.digest.removeprefix("sha256:"):
         raise ValueError("svg_source_image_digest_mismatch")
     return payload
 
@@ -86,7 +86,7 @@ async def prepare_source_manifest(session, service, *, context, revision, presen
     for slot_id, candidate in unique.items():
         preview = previews[slot_id]
         derivative = await persist_derivative_if_current(session, service, context=context, preview=preview,
-            publication_name="svg-model-" + sha256(slot_id.encode()).hexdigest()[:32], revision=revision)
+            publication_name="svg-model-" + sha256_hex(slot_id.encode())[:32], revision=revision)
         if derivative is None:
             raise ValueError("svg_asset_publication_fence_lost")
         original_locator = candidate.source_locator or {}
@@ -185,7 +185,7 @@ async def screen_placement(session, service, *, context, revision, manifest, sou
         preview = build_purpose_derivative(_source_bytes(candidate), purpose="screen",
             width_css_px=float(node.get("width")), height_css_px=float(node.get("height")))
         derivative = await persist_derivative_if_current(session, service, context=context, preview=preview,
-            publication_name=f"svg-screen-{page_index}-{ordinal}-{sha256(svg.encode()).hexdigest()[:12]}",
+            publication_name=f"svg-screen-{page_index}-{ordinal}-{sha256_hex(svg.encode())[:12]}",
             revision=revision)
         if derivative is None:
             raise ValueError("svg_asset_publication_fence_lost")
@@ -196,7 +196,7 @@ async def screen_placement(session, service, *, context, revision, manifest, sou
         slideRevision=revision, purpose="screen", placements=placements, rendererVersion="svg-browser/v1"))
     placement.validate_source(manifest, page_index=page_index)
     pointer = await persist_manifest_if_current(session, service, context=context, manifest=placement,
-        publication_name=f"svg-screen-manifest-{page_index}-{sha256(svg.encode()).hexdigest()[:12]}", revision=revision)
+        publication_name=f"svg-screen-manifest-{page_index}-{sha256_hex(svg.encode())[:12]}", revision=revision)
     if pointer is None:
         raise ValueError("svg_asset_publication_fence_lost")
     materialized = await resolve_svg_for_render(svg, manifest=manifest,

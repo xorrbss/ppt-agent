@@ -10,11 +10,11 @@ sentinel by continuing its own loop.
 """
 from __future__ import annotations
 
-from hashlib import sha256
 import json
 
 from services.authored_checkpoint_errors import AuthoredStageError
 from services.svg_presentation_checkpoint import _required_numeric_claims
+from utils.hashing import sha256_hex
 
 RETRY = object()
 
@@ -182,7 +182,7 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
             })
     from services.generation_core.drivers.svg.embed_assets import apply_vector_icon_quality
     apply_vector_icon_quality(rendered.quality, payload)
-    payload.update(svg_content=final, source_digest=sha256(final.encode()).hexdigest(),
+    payload.update(svg_content=final, source_digest=sha256_hex(final.encode()),
                    quality=rendered.quality, **write_png(rendered.png))
     if ctx.source_reflow:
         if rendered.quality.get("passed") is not True:

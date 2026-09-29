@@ -7,13 +7,13 @@ per-page classification publication recorded (``svg_visual_review``), and
 """
 from __future__ import annotations
 
-from hashlib import sha256
 import json
 
 from api.v2.contracts import QualityReceiptV3
 from services.authored_vnext.capability_registry import CAPABILITY_REGISTRY_DIGEST
 from services.svg_export_page_evidence import svg_authoring, svg_geometry_font
 from services.svg_export_visual_review import release_readiness, svg_visual_review
+from utils.hashing import sha256_prefixed
 
 TEMPLATE_CHECKS = ("identity", "slots", "typography", "background", "table_style", "shape_style", "decorations")
 SOURCE_CHECKS = ("source_ids_exact", "text_exact", "table_structure_exact", "image_occurrences_exact")
@@ -21,7 +21,7 @@ SOURCE_CHECKS = ("source_ids_exact", "text_exact", "table_structure_exact", "ima
 
 def _digest(value):
     encoded = json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()
-    return "sha256:" + sha256(encoded).hexdigest()
+    return sha256_prefixed(encoded)
 
 
 def source_svg_public_quality_receipt(*, slides, source_preservation, worker_metrics,

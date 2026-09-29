@@ -43,6 +43,7 @@ from services.provider_runtime_job_registration import (
 )
 from services.provider_operation_usage import ProviderOperationUsage
 from utils.get_env_programme import is_authored_local_stage_async_enabled
+from utils.hashing import sha256_hex
 
 
 _RECEIPT_OBSERVABILITY = {
@@ -104,14 +105,14 @@ class ProviderUsageScope:
         if self._receipt_request_ids:
             request_id = self._receipt_request_ids.pop(0)
             key = f"receipt-v2:{self.job_id}:{request_id}:{outcome}"
-            return sha256(key.encode("utf-8")).hexdigest()
+            return sha256_hex(key.encode("utf-8"))
         self._sequence += 1
         key = (
             f"receipt-v1:{self.job_id}:{self.operation}:{self.stage}:"
             f"{self.attempt_number}:{self.slide_index}:{self._sequence}:{outcome}"
             f"{self._round_suffix(':')}"
         )
-        return sha256(key.encode("utf-8")).hexdigest()
+        return sha256_hex(key.encode("utf-8"))
 
     def _round_suffix(self, separator: str) -> str:
         # A later repair round may remake the same slide: without it the key repeats.
@@ -156,7 +157,7 @@ class ProviderUsageScope:
             return normalized
         if len(normalized) + len(suffix) <= 128:
             return normalized + suffix
-        digest = sha256(normalized.encode("utf-8")).hexdigest()[:12]
+        digest = sha256_hex(normalized.encode("utf-8"))[:12]
         suffix = f".{digest}{suffix}"
         return normalized[: 128 - len(suffix)] + suffix
 

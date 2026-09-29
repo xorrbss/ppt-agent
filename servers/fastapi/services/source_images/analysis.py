@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import uuid
 from dataclasses import replace
@@ -15,6 +14,7 @@ from pydantic import BaseModel, Field, model_validator
 from models.sql.image_asset import ImageAsset
 from services.source_images.models import SourceImageCandidate
 from services.source_images.budget import MAX_SOURCE_IMAGE_ANALYSES, SOURCE_IMAGE_PHYSICAL_CALL_LIMIT
+from utils.hashing import sha256_hex
 
 ANALYSIS_VERSION = "source-image-analysis-v1"
 
@@ -51,7 +51,7 @@ async def _analyze(candidate: SourceImageCandidate, *, attempt_number: int = 0) 
     from utils.structured_call_budget import StructuredProviderCallBudget
 
     payload = await asyncio.to_thread(candidate.path.read_bytes)
-    if hashlib.sha256(payload).hexdigest() != candidate.digest.removeprefix("sha256:"):
+    if sha256_hex(payload) != candidate.digest.removeprefix("sha256:"):
         raise ValueError("source_image_digest_mismatch")
     enforce_llm_egress_policy()
     schema = prepare_schema_for_validation(SourceImageAnalysis.model_json_schema(), strict=False)
@@ -118,8 +118,7 @@ async def analyze_source_images(
                 replace(candidate, analysis_status="failed", analysis_error="source_image_analysis_budget_exceeded")
             )
             continue
-        fingerprint = hashlib.sha256(
-            json.dumps(
+        fingerprint = sha256_hex(json.dumps(
                 [
                     ANALYSIS_VERSION,
                     candidate.digest,
@@ -129,8 +128,7 @@ async def analyze_source_images(
                     candidate.source_text,
                 ],
                 ensure_ascii=False,
-            ).encode()
-        ).hexdigest()
+            ).encode())
         asset = await session.get(ImageAsset, uuid.UUID(candidate.asset_id))
         cached = (asset.extras or {}).get("source_image_analysis", {}) if asset else {}
         try:

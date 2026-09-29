@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
 from services.source_images.models import SourceImageCandidate
+from utils.hashing import sha256_hex
 
 POLICY_VERSION = "source-image-placement/v1"
 _TERMINAL = {"assigned", "no_relevant_slide"}
@@ -146,7 +146,7 @@ async def build_source_image_placement_plan(
         "repeated_asset_ids": sorted(set(repeated_asset_ids)),
     }
     encoded = json.dumps(context, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    input_hash = hashlib.sha256(encoded.encode()).hexdigest()
+    input_hash = sha256_hex(encoded.encode())
     plan = {"version": POLICY_VERSION, "input_hash": input_hash, "decisions": []}
     ids = {c.asset_id for c in candidates}
     repeat_ids = set(repeated_asset_ids)

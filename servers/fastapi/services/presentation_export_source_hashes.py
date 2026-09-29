@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Sequence
-from hashlib import sha256
 import hmac
 from typing import Any, Literal
 import uuid
@@ -226,5 +225,5 @@ def build_sync_export_hashes(
             "source_snapshot_sha256": source_snapshot_sha256,
         }
     )
-    idempotency_key_hash = sha256(f"presentation-export:{identity}".encode("utf-8")).hexdigest()
+    idempotency_key_hash = sha256_hex(f"presentation-export:{identity}".encode("utf-8"))
     return request_hash, idempotency_key_hash

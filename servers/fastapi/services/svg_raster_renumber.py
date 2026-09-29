@@ -19,9 +19,9 @@ from __future__ import annotations
 import json
 import re
 from copy import deepcopy
-from hashlib import sha256
 
 from services.svg_contract import PAGE_NUMBER_ID, source_digest, validate_svg
+from utils.hashing import sha256_hex
 
 _FOOTER = re.compile(rf'(<text id="{PAGE_NUMBER_ID}"[^>]*>)(\d+)(</text>)')
 
@@ -88,7 +88,7 @@ async def renumber_redesign_page(session, presentation, slide, index, *, width, 
     receipt = dict(content.get("svgReceipt") or {})
     previous_digest = receipt.get("source_digest")
     receipt.update(
-        source_digest=sha256(svg.encode()).hexdigest(),
+        source_digest=sha256_hex(svg.encode()),
         rasterDisplayPageNumber=display,
         # The measured page differs from this SVG only in the footer page-number
         # text (excluded from the body-text floor and from required text).

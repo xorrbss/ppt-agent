@@ -149,7 +149,7 @@ def seal_supervised_dispatch_evidence(
         "dispatchId": observation.dispatch_id,
         "operationId": str(job.operation_id),
         "role": job.role,
-        "attemptTokenSha256": hashlib.sha256(job.attempt_token.encode()).hexdigest(),
+        "attemptTokenSha256": sha256_hex(job.attempt_token.encode()),
         "fencingToken": job.fencing_token,
         "inputDigest": job.input_digest,
         "inputBytes": job.input_artifact.size_bytes,

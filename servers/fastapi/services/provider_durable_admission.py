@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from hashlib import sha256
 import re
 import uuid
 
@@ -27,6 +26,7 @@ from utils.get_env import (
     get_vnext_tenant_id,
 )
 from utils.owner_context import get_current_owner_id
+from utils.hashing import sha256_hex
 
 
 _TRUE = frozenset({"1", "true", "yes", "on"})
@@ -75,9 +75,7 @@ async def reserve_provider_call_detached(
     if owner_id is None:
         raise CancellationRequested("provider_durable_owner_required")
     service_key = _service_key(operation, stage)
-    reservation_key = sha256(
-        f"provider-reservation-v1:{job_id}:{request_id}".encode()
-    ).hexdigest()
+    reservation_key = sha256_hex(f"provider-reservation-v1:{job_id}:{request_id}".encode())
     async with async_session_maker() as session:
         budget = await register_durable_budget(
             session,

@@ -27,6 +27,7 @@ from utils.env_settings.authored_runtime import (
     is_authored_powerpoint_qa_interactive_observation_enabled,
 )
 from utils.get_env import get_app_data_directory_env
+from utils.hashing import sha256_hex
 
 
 _POWERPOINT_QA_OBSERVATION_STATES = (
@@ -620,7 +621,7 @@ def _snapshot_sha256(value: list[list[dict[str, Any]]]) -> str:
     payload = json.dumps(
         value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
     ).encode("utf-8")
-    return sha256(payload).hexdigest()
+    return sha256_hex(payload)
 
 
 def _contains_cjk(value: str) -> bool:

@@ -11,10 +11,10 @@ import json
 import re
 from collections.abc import Iterator
 from copy import deepcopy
-from hashlib import sha256
 from typing import Any
 
 from templates.native_ui.persistence import canonicalize_slide_ui
+from utils.hashing import sha256_prefixed
 
 _PATH_SEGMENT = re.compile(
     r"^(?P<key>components|elements|children)(?:\[(?P<index>[0-9]+)\])$"
@@ -34,7 +34,7 @@ def slide_ui_revision(ui: dict[str, Any]) -> str:
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
-    return f"sha256:{sha256(encoded).hexdigest()}"
+    return sha256_prefixed(encoded)
 
 
 def parse_element_path(path: str) -> list[tuple[str, int | None]]:

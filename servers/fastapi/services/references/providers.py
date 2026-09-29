@@ -6,7 +6,6 @@ import asyncio
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import timedelta, timezone
-from hashlib import sha256
 from html import escape
 from html.parser import HTMLParser
 import json
@@ -51,7 +50,7 @@ def _uploaded_reference_payload(
     normalized_documents = [
         {
             **item,
-            "contentSha256": sha256(item["text"].encode("utf-8")).hexdigest(),
+            "contentSha256": sha256_hex(item["text"].encode("utf-8")),
         }
         for item in documents
     ]

@@ -1,5 +1,4 @@
 """Keep system page numbers and derivatives coherent after structural edits."""
-from hashlib import sha256
 from copy import deepcopy
 from sqlalchemy import select
 from models.sql.slide import SlideModel
@@ -7,6 +6,7 @@ from services.authored_canvas import presentation_canvas_contract
 from services.authored_presentation_artifacts import _save_slide_pngs
 from services.svg_contract import finalize_svg
 from services.svg_renderer import render_svg_with_metrics
+from utils.hashing import sha256_hex
 
 
 def _preserve_source_pages(presentation, slides, canvas):
@@ -206,7 +206,7 @@ async def refresh_svg_page_numbers(session, presentation, *, operation_id=None, 
             slide.properties = {**(slide.properties or {}), "image": image}
             content = deepcopy(slide.content or {})
             content["svgReceipt"] = {**content.get("svgReceipt", {}),
-                                     "source_digest": sha256(final.encode()).hexdigest(),
+                                     "source_digest": sha256_hex(final.encode()),
                                      "quality": capture.quality}
             slide.content = content
         session.add(slide)

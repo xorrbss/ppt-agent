@@ -61,6 +61,7 @@ from utils.env_settings.public_service import (
     get_worker_artifact_cache_ttl_seconds,
 )
 from utils.get_env import get_environment_name
+from utils.hashing import sha256_hex, sha256_prefixed
 
 
 class ArtifactStoreError(RuntimeError):
@@ -327,7 +328,7 @@ def provisional_artifact_storage_key(
     normalized_tenant = tenant_id.strip()
     if not normalized_tenant:
         raise ValueError("artifact tenant binding is required")
-    tenant_digest = sha256(normalized_tenant.encode("utf-8")).hexdigest()
+    tenant_digest = sha256_hex(normalized_tenant.encode("utf-8"))
     return (
         f"provisional/v1/tenant/{tenant_digest}/owner/{owner_id}/upload/{upload_id}"
     )
@@ -583,7 +584,7 @@ class LocalDevelopmentArtifactObjectStore:
     async def put_bytes(self, artifact: ArtifactRef, payload: bytes) -> None:
         if len(payload) != artifact.size_bytes:
             raise ArtifactBindingError("artifact.size_binding_invalid")
-        if sha256(payload).hexdigest() != artifact.sha256:
+        if sha256_hex(payload) != artifact.sha256:
             raise ArtifactBindingError("artifact.digest_binding_invalid")
         if len(payload) > self._max_object_bytes:
             raise ArtifactStoreError("artifact.object_too_large")
@@ -660,7 +661,7 @@ class LocalDevelopmentArtifactObjectStore:
                 payload = await asyncio.to_thread(opened.body.read)
             finally:
                 opened.close()
-            if len(payload) != artifact.size_bytes or sha256(payload).hexdigest() != artifact.sha256:
+            if len(payload) != artifact.size_bytes or sha256_hex(payload) != artifact.sha256:
                 raise ArtifactStoreError("artifact.object_readback_mismatch")
             return payload
         finally:
@@ -982,7 +983,7 @@ class WorkerArtifactTransportCache(LocalDevelopmentArtifactObjectStore):
             payload = await asyncio.to_thread(opened.body.read)
             if (
                 len(payload) != artifact.size_bytes
-                or sha256(payload).hexdigest() != artifact.sha256
+                or sha256_hex(payload) != artifact.sha256
             ):
                 raise ArtifactStoreError("artifact.object_readback_mismatch")
         except ArtifactStoreError:
@@ -1061,7 +1062,7 @@ class S3ArtifactObjectStore:
         return {
             "sha256": artifact.sha256,
             "owner-id": str(artifact.owner_id),
-            "tenant-binding": sha256(artifact.tenant_id.encode("utf-8")).hexdigest(),
+            "tenant-binding": sha256_hex(artifact.tenant_id.encode("utf-8")),
             "artifact-kind": artifact.kind,
         }
 
@@ -1093,7 +1094,7 @@ class S3ArtifactObjectStore:
             raise ArtifactStoreError("artifact.immutable_object_conflict")
 
     async def put_bytes(self, artifact: ArtifactRef, payload: bytes) -> None:
-        if len(payload) != artifact.size_bytes or sha256(payload).hexdigest() != artifact.sha256:
+        if len(payload) != artifact.size_bytes or sha256_hex(payload) != artifact.sha256:
             raise ArtifactBindingError("artifact.payload_binding_invalid")
         if len(payload) > self._max_object_bytes:
             raise ArtifactStoreError("artifact.object_too_large")
@@ -1261,7 +1262,7 @@ class S3ArtifactObjectStore:
                 payload = await asyncio.to_thread(opened.body.read)
             finally:
                 opened.close()
-            if len(payload) != artifact.size_bytes or sha256(payload).hexdigest() != artifact.sha256:
+            if len(payload) != artifact.size_bytes or sha256_hex(payload) != artifact.sha256:
                 raise ArtifactStoreError("artifact.object_readback_mismatch")
             return payload
         finally:
@@ -1885,7 +1886,7 @@ class DurableArtifactService:
         created_by_operation_id: uuid.UUID,
         retention_class: Literal["checkpoint", "ephemeral", "published"],
     ) -> ArtifactRef:
-        digest = sha256(payload).hexdigest()
+        digest = sha256_hex(payload)
         return await self.persist_stream(
             session,
             owner_id=owner_id,
@@ -2165,7 +2166,7 @@ class ExportClaim:
 
 
 def _attempt_token_hash(token: str) -> str:
-    return "sha256:" + sha256(token.encode("utf-8")).hexdigest()
+    return sha256_prefixed(token.encode("utf-8"))
 
 
 async def _retain_artifact_reference(

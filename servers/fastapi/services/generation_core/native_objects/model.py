@@ -15,7 +15,6 @@ PPTX object is a driver concern (``drivers/svg/export_scene.py`` for svg).
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 import re
@@ -27,6 +26,7 @@ from services.generation_core.native_objects.payload import (
     parse_chart_payload,
     parse_table_payload,
 )
+from utils.hashing import sha256_prefixed
 
 NATIVE_OBJECTS_SCHEMA = "native-objects/v1"
 SLIDE_CONTENT_KEY = "nativeObjects"
@@ -153,7 +153,7 @@ class NativeObjects:
 
     def digest(self) -> str:
         encoded = json.dumps(self.to_wire(), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-        return "sha256:" + hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+        return sha256_prefixed(encoded.encode("utf-8"))
 
     def by_id(self) -> dict[str, NativeObject]:
         return {item.id: item for item in self.objects}

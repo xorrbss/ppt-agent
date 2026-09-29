@@ -19,6 +19,7 @@ from services.source_locked.lifecycle import (
     utc_now,
 )
 from utils.get_env import get_app_data_directory_env
+from utils.hashing import sha256_hex
 
 
 _ARTIFACT_ID = re.compile(r"^sla_[0-9a-f]{64}$")
@@ -128,7 +129,7 @@ class DurableSourceLockedGenerationStore:
                 "idempotency_payload_digest": payload_digest,
             }
         )
-        identity = hashlib.sha256(material).hexdigest()
+        identity = sha256_hex(material)
         return f"slgen_{identity}", f"sla_{identity}"
 
     def _validated_path(self, relative_path: str) -> Path:

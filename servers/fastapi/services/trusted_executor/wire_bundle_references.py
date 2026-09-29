@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from services.isolated_worker_contracts import ArtifactRef, IsolatedWorkerJob
 from services.trusted_executor.worker_dispatcher import TrustedWorkerWireError
+from utils.hashing import sha256_hex
 
 MAX_EXPORT_BUNDLE_BYTES = 8 * 1024 * 1024
 
@@ -199,7 +199,7 @@ def _validated_success_output(payload: bytes, job: IsolatedWorkerJob) -> Artifac
         value.get("operationId") == str(job.operation_id),
         value.get("fencingToken") == job.fencing_token,
         value.get("inputDigest") == job.input_digest,
-        value.get("attemptTokenSha256") == hashlib.sha256(job.attempt_token.encode("utf-8")).hexdigest(),
+        value.get("attemptTokenSha256") == sha256_hex(job.attempt_token.encode("utf-8")),
     )
     if not all(bindings) or not isinstance(value.get("outputArtifact"), Mapping):
         raise TrustedWorkerWireError("trusted_worker_result_binding_mismatch")
