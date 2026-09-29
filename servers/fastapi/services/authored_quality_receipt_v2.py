@@ -30,6 +30,7 @@ from services.authored_quality_receipt_helpers import (
     read as _read,
     status as _status,
 )
+from constants.timeouts import BUSY_WAIT_POLL_INTERVAL_SECONDS
 
 
 def quality_receipt_root() -> Path:
@@ -1183,7 +1184,7 @@ def _manifest_lock(path: Path, *, timeout_seconds: float = 5.0):
                             raise ValueError(
                                 "quality_receipt_manifest_lock_timeout"
                             ) from busy
-                        time.sleep(0.01)
+                        time.sleep(BUSY_WAIT_POLL_INTERVAL_SECONDS)
             else:
                 import fcntl
 
@@ -1196,7 +1197,7 @@ def _manifest_lock(path: Path, *, timeout_seconds: float = 5.0):
                             raise ValueError(
                                 "quality_receipt_manifest_lock_timeout"
                             ) from busy
-                        time.sleep(0.01)
+                        time.sleep(BUSY_WAIT_POLL_INTERVAL_SECONDS)
             yield
         finally:
             if locked:
