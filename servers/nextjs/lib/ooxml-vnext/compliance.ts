@@ -1,3 +1,4 @@
+import { isRecord } from "../guards.ts";
 /**
  * Fail-closed third-party intake policy for the optional GenOffice lab oracle.
  *
@@ -180,10 +181,6 @@ const FORBIDDEN_PATH_SEGMENTS = new Set([
   "electron",
   "pptist",
 ]);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function stringsEqualAsSet(actual: readonly string[], expected: readonly string[]) {
   return (

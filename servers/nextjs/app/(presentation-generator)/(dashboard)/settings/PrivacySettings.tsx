@@ -3,23 +3,14 @@ import React, { useEffect, useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import { setTelemetryEnabled } from "@/utils/mixpanel";
 import { Loader2 } from "lucide-react";
+import { fetchTelemetryStatus } from "@/app/(presentation-generator)/services/api/telemetry-status";
 
 const PrivacySettings = () => {
   const [trackingEnabled, setTrackingEnabled] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    async function fetchStatus() {
-      try {
-        const data = await fetch("/api/telemetry-status").then((res) => res.json());
-        setTrackingEnabled(data.telemetryEnabled);
-      } catch {
-        // Fail closed: an unreachable status probe must not display
-        // tracking as enabled.
-        setTrackingEnabled(false);
-      }
-    }
-    fetchStatus();
+    void fetchTelemetryStatus().then(setTrackingEnabled);
   }, []);
 
   const handleTrackingToggle = async (enabled: boolean) => {

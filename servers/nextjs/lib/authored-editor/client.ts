@@ -1,5 +1,6 @@
 import { getHeader } from "../../app/(presentation-generator)/services/api/header.ts";
 import { getApiUrl } from "../../utils/api.ts";
+import { isRecord } from "../guards.ts";
 
 export type AuthoredEditorKind =
   "text" | "image" | "shape" | "table" | "chart" | "unsupported";
@@ -52,10 +53,6 @@ type ApiErrorPayload = {
   code?: unknown;
   current?: unknown;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function errorCode(payload: ApiErrorPayload): string {
   if (typeof payload.code === "string") return payload.code;

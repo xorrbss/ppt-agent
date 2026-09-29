@@ -1,17 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { proxyV2Request } from "@/app/api/v2/_proxy";
+import { recordOrNull } from "@/lib/guards";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ presentationId: string }> };
-
-function record(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null;
-}
 
 function rejected(reasonCode: string): NextResponse {
   return NextResponse.json(
@@ -22,8 +17,8 @@ function rejected(reasonCode: string): NextResponse {
 
 export async function POST(request: NextRequest, context: RouteContext) {
   const payload = await request.json().catch(() => null);
-  const body = record(payload);
-  const output = body ? record(body.output) : null;
+  const body = recordOrNull(payload);
+  const output = body ? recordOrNull(body.output) : null;
   if (!body || !output) return rejected("public_v2_invalid_export_request");
   // This browser route is intentionally Fidelity-only. Do not let a caller
   // turn an unsupported Hybrid mode into a public capability claim.

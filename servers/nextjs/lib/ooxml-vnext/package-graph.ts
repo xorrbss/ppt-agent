@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { posix } from "node:path";
 
 import {
@@ -22,61 +21,40 @@ import {
   type PackagePreservationManifest,
   type PackageRelationship,
 } from "./package-graph-contracts.ts";
+import { xmlUnescape as decodeXmlReferences } from "./package-ops.ts";
+import { sha256, stableDigest } from "./digest.ts";
 export * from "./package-graph-contracts.ts";
 export { assertPackageGraphPrecondition, assertPackagePreservation } from "./package-preservation.ts";
 export { buildPackageGraph } from "./package-graph-builder.ts";
-
-const XML_ENTITIES = Object.freeze({
-  amp: "&",
-  apos: "'",
-  gt: ">",
-  lt: "<",
-  quot: '"',
-});
 
 function reject(code: string, message: string): never {
   throw new PackageGraphError(code, message);
 }
 
-function sha256(value: string | Buffer): string {
-  return createHash("sha256").update(value).digest("hex");
-}
-
-function stableDigest(records: readonly string[]): string {
-  const hash = createHash("sha256");
-  for (const record of [...records].sort()) {
-    const bytes = Buffer.from(record, "utf8");
-    hash.update(String(bytes.length)).update(":").update(bytes).update("\0");
-  }
-  return hash.digest("hex");
-}
-
+/**
+ * Validating wrapper: the package graph rejects malformed references and
+ * surrogate/out-of-range code points, then decodes through the shared helper.
+ */
 function xmlUnescape(value: string): string {
   if (/&(?!#x[0-9a-f]+;|#\d+;|amp;|apos;|gt;|lt;|quot;)/i.test(value)) {
     reject("MALFORMED_XML", "OOXML attribute contains an invalid entity reference.");
   }
-  return value.replace(
-    /&(#x[0-9a-f]+|#\d+|amp|apos|gt|lt|quot);/gi,
-    (match, entity: string) => {
-      if (entity.startsWith("#")) {
-        const hexadecimal = entity[1]?.toLowerCase() === "x";
-        const point = Number.parseInt(
-          entity.slice(hexadecimal ? 2 : 1),
-          hexadecimal ? 16 : 10
-        );
-        if (
-          !Number.isInteger(point) ||
-          point < 0 ||
-          point > 0x10ffff ||
-          (point >= 0xd800 && point <= 0xdfff)
-        ) {
-          reject("MALFORMED_XML", "OOXML attribute has an invalid character entity.");
-        }
-        return String.fromCodePoint(point);
-      }
-      return XML_ENTITIES[entity.toLowerCase() as keyof typeof XML_ENTITIES] ?? match;
+  for (const [, entity] of value.matchAll(/&#(x[0-9a-f]+|\d+);/gi)) {
+    const hexadecimal = entity[0]?.toLowerCase() === "x";
+    const point = Number.parseInt(
+      entity.slice(hexadecimal ? 1 : 0),
+      hexadecimal ? 16 : 10
+    );
+    if (
+      !Number.isInteger(point) ||
+      point < 0 ||
+      point > 0x10ffff ||
+      (point >= 0xd800 && point <= 0xdfff)
+    ) {
+      reject("MALFORMED_XML", "OOXML attribute has an invalid character entity.");
     }
-  );
+  }
+  return decodeXmlReferences(value);
 }
 
 function parseAttributes(fragment: string): Readonly<Record<string, string>> {

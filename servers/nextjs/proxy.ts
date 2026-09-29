@@ -1,24 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getFastApiBaseUrl } from "@/lib/fastapi-internal";
 
 /**
  * API-only: session required for all /api/* except auth, telemetry, and
  * Page routes are protected in server layouts (unknown URLs still 404; login uses relative redirects).
  */
-function getFastApiBaseUrl(): string {
-  const internal = process.env.FAST_API_INTERNAL_URL?.trim();
-  if (internal) {
-    return internal.replace(/\/+$/, "");
-  }
-  const configured = process.env.NEXT_PUBLIC_FAST_API?.trim();
-  if (configured) {
-    return configured.replace(/\/+$/, "");
-  }
-  if (process.env.NODE_ENV === "development") {
-    return "http://127.0.0.1:8000";
-  }
-  return "http://127.0.0.1:8000";
-}
-
 function isFastApiApiPath(pathname: string): boolean {
   return (
     pathname === "/api/v1" ||

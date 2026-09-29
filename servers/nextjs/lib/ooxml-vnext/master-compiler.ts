@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import path from "node:path";
 
 import type {
@@ -28,6 +27,9 @@ import type {
   SemanticLayoutMapping,
   SemanticElementExportMapping,
 } from "./master-compiler-contracts.ts";
+import { digest } from "./master-readback-primitives.ts";
+import { xmlEscape } from "./package-ops.ts";
+import { sha256 } from "./digest.ts";
 export * from "./master-compiler-contracts.ts";
 
 const XML_HEADER = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
@@ -52,35 +54,6 @@ const PNG_CONTENT_TYPE = "image/png";
 const JPEG_CONTENT_TYPE = "image/jpeg";
 const SVG_CONTENT_TYPE = "image/svg+xml";
 const PNG_SIGNATURE = Buffer.from("89504e470d0a1a0a", "hex");
-
-function xmlEscape(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&apos;");
-}
-
-function stableValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(stableValue);
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .sort(([left], [right]) => left.localeCompare(right, "en"))
-        .map(([key, child]) => [key, stableValue(child)]),
-    );
-  }
-  return value;
-}
-
-function stableJson(value: unknown): string {
-  return JSON.stringify(stableValue(value));
-}
-
-function digest(value: unknown): string {
-  return `sha256:${createHash("sha256").update(typeof value === "string" ? value : stableJson(value)).digest("hex")}`;
-}
 
 function contractDigest(contract: NormalizedDeckMasterContract): string {
   const semanticContract = { ...contract } as Record<string, unknown>;
@@ -323,7 +296,7 @@ function verifiedAssetBytes(
       bytes.length > 5_000_000 ||
       bytes.toString("base64") !== asset.bytesBase64 ||
       !bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE) ||
-      createHash("sha256").update(bytes).digest("hex") !== asset.sha256 ||
+      sha256(bytes) !== asset.sha256 ||
       expected.get(asset.assetId)!.assetSha256 !== asset.sha256
     ) {
       throw new Error("Deck master logo asset bytes do not match the contract digest");
@@ -655,7 +628,7 @@ export function compileAuthoredDeckMasterParts(
         throw new Error(`Semantic image ${element.id} requires matching digest-pinned asset bytes`);
       }
       const bytes = Buffer.from(asset.bytesBase64, "base64");
-      if (bytes.length === 0 || bytes.length > 10_000_000 || createHash("sha256").update(bytes).digest("hex") !== asset.sha256) {
+      if (bytes.length === 0 || bytes.length > 10_000_000 || sha256(bytes) !== asset.sha256) {
         throw new Error(`Semantic image ${element.id} bytes do not match its digest`);
       }
     }

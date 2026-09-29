@@ -1,3 +1,5 @@
+import { recordOrNull } from "@/lib/guards";
+
 type UnknownRecord = Record<string, unknown>;
 
 export interface PresentationMasterPin {
@@ -13,12 +15,6 @@ export interface EditableHybridWorkbenchProjection {
   deckId: string;
   status: "shadow" | "ready" | "blocked";
   reasonCode?: string;
-}
-
-function record(value: unknown): UnknownRecord | null {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as UnknownRecord)
-    : null;
 }
 
 function firstString(source: UnknownRecord, keys: readonly string[]): string | undefined {
@@ -44,16 +40,16 @@ function firstPositiveInteger(
 export function presentationMasterPin(
   presentation: unknown,
 ): PresentationMasterPin | null {
-  const source = record(presentation);
+  const source = recordOrNull(presentation);
   if (!source) return null;
   const authoredMetadata =
-    record(record(source.theme)?.authored_vnext) ??
-    record(record(source.profile)?.authored_vnext);
+    recordOrNull(recordOrNull(source.theme)?.authored_vnext) ??
+    recordOrNull(recordOrNull(source.profile)?.authored_vnext);
   const pin =
-    record(source.masterPin) ??
-    record(source.master_pin) ??
-    record(authoredMetadata?.masterPin) ??
-    record(authoredMetadata?.master_pin);
+    recordOrNull(source.masterPin) ??
+    recordOrNull(source.master_pin) ??
+    recordOrNull(authoredMetadata?.masterPin) ??
+    recordOrNull(authoredMetadata?.master_pin);
   if (!pin) return null;
 
   const masterId = firstString(pin, ["masterId", "master_id"]);
@@ -92,8 +88,8 @@ export function presentationMasterPin(
 export function presentationEditableHybridWorkbench(
   presentation: unknown,
 ): EditableHybridWorkbenchProjection | null {
-  const source = record(presentation);
-  const bridge = record(record(source?.theme)?.authored_vnext);
+  const source = recordOrNull(presentation);
+  const bridge = recordOrNull(recordOrNull(source?.theme)?.authored_vnext);
   if (
     !bridge ||
     bridge.schemaVersion !== "authored-editable-hybrid-scene-projection/v1" ||
@@ -113,11 +109,11 @@ export function presentationSlideLayoutId(
   slideIndex: number | undefined,
 ): string | null {
   if (!Number.isInteger(slideIndex) || Number(slideIndex) < 0) return null;
-  const source = record(presentation);
+  const source = recordOrNull(presentation);
   const slides = Array.isArray(source?.slides) ? source.slides : [];
-  const slide = record(slides[Number(slideIndex)]);
+  const slide = recordOrNull(slides[Number(slideIndex)]);
   if (!slide) return null;
-  const content = record(slide.content);
+  const content = recordOrNull(slide.content);
 
   // Authored publication stores the immutable master layout in slide.content.
   // The top-level `layout` value identifies the editor renderer
@@ -197,8 +193,8 @@ export function masterPinnedBodyOnlyContext(
 
 /** The blockers a deck's sealed V3 receipt still carries, if any. */
 function unresolvedQualityBlockers(presentation: unknown): string[] | undefined {
-  const gate = record(record(record(presentation)?.theme)?.authoredQualityGate);
-  const receipt = record(gate?.qualityReceiptV3);
+  const gate = recordOrNull(recordOrNull(recordOrNull(presentation)?.theme)?.authoredQualityGate);
+  const receipt = recordOrNull(gate?.qualityReceiptV3);
   if (!receipt) return [];
   if (receipt.gatePassed === true) return undefined;
   return Array.isArray(receipt.blockers)

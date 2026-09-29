@@ -10,6 +10,7 @@ import type {
   RenderArtifact,
   RenderSourceIdentity,
 } from "./render-service/contracts.ts";
+import { isRecord } from "./guards.ts";
 
 export type PersistedExportStrategy = "authored-hybrid";
 
@@ -84,10 +85,6 @@ export interface PresentationExportAdapterRegistry<
   hybrid(
     params: PresentationExportExecutionParams
   ): Promise<Result>;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function readThemeMode(theme: unknown): unknown {

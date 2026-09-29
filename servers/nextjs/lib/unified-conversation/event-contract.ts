@@ -1,3 +1,4 @@
+import { isRecord } from "../guards.ts";
 /** Transport-neutral mirror of contracts/unified-conversation/v1/event-envelope.json. */
 
 export const UNIFIED_CONVERSATION_SCHEMA_VERSION = 1 as const;
@@ -40,9 +41,6 @@ const allowedEnvelopeKeys = new Set([
   "schema_version", "id", "type", "durability", "conversation_id", "run_id",
   "message_id", "presentation_id", "cursor", "checkpoint_cursor", "occurred_at", "data",
 ]);
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 function normalizedDataKey(key: string): string {
   return key

@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { getFastApiBaseUrl } from "@/lib/fastapi-internal";
 
 export type AuthStatus = {
   configured: boolean;
@@ -13,24 +14,6 @@ export type AuthStatus = {
 function isAuthDisabled(): boolean {
   const raw = process.env.DISABLE_AUTH?.trim().toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
-}
-
-/**
- * Resolves the FastAPI base used from Next server components (same as start.js).
- */
-function getServerFastApiBase(): string {
-  const internal = process.env.FAST_API_INTERNAL_URL?.trim();
-  if (internal) {
-    return internal.replace(/\/+$/, "");
-  }
-  const fromEnv = process.env.NEXT_PUBLIC_FAST_API?.trim();
-  if (fromEnv) {
-    return fromEnv.replace(/\/+$/, "");
-  }
-  if (process.env.NODE_ENV === "development") {
-    return "http://127.0.0.1:8000";
-  }
-  return "http://127.0.0.1:8000";
 }
 
 /**
@@ -54,7 +37,7 @@ export async function getServerAuthStatus(): Promise<AuthStatus> {
   const cookie = h.get("cookie") ?? "";
 
   try {
-    const response = await fetch(`${getServerFastApiBase()}/api/v1/auth/status`, {
+    const response = await fetch(`${getFastApiBaseUrl()}/api/v1/auth/status`, {
       method: "GET",
       headers: cookie ? { cookie } : undefined,
       cache: "no-store",

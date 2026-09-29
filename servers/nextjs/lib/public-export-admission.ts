@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isRecord } from "./guards.ts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SENSITIVE_KEYS = new Set([
@@ -41,10 +42,6 @@ export interface PublicExportReceipt {
   receiptId: string;
   status: string;
   duplicate: boolean;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function rejectSensitiveKeys(value: Record<string, unknown>): void {

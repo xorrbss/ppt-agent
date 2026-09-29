@@ -1,6 +1,7 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { sha256 } from "./digest.ts";
 
 const SHA256 = /^[a-f0-9]{64}$/i;
 const OPTIONAL_FSYNC_ERROR_CODES = new Set([
@@ -55,10 +56,6 @@ interface DestinationState {
 
 function publicationError(reason: string): Error {
   return new Error(`ooxml-publication-rejected:${reason}`);
-}
-
-function sha256(value: Uint8Array): string {
-  return createHash("sha256").update(value).digest("hex");
 }
 
 function errorCode(error: unknown): string | undefined {

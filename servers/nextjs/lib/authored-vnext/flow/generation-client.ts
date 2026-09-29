@@ -2,6 +2,7 @@ import { getApiUrl } from "@/utils/api";
 import type { EditableHybridMvpReadiness, NativeCapabilityProjectionV1 } from "@/components/authored-vnext";
 
 import type { MasterDigest, SlideSpecV2 } from "../master/contracts.ts";
+import { isRecord } from "../../guards.ts";
 
 export interface GenerationMasterPin {
   masterId: `master:${string}`;
@@ -116,10 +117,10 @@ export interface EditableHybridReadinessV4 {
 type FetchLike = typeof fetch;
 
 function record(value: unknown): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (!isRecord(value)) {
     throw new Error("authored_vnext_invalid_response");
   }
-  return value as Record<string, unknown>;
+  return value;
 }
 
 async function payload(response: Response): Promise<unknown> {

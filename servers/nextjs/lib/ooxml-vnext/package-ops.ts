@@ -43,13 +43,33 @@ export function xmlEscape(value: string): string {
     .replaceAll("'", "&apos;");
 }
 
+const XML_ENTITIES = Object.freeze({
+  amp: "&",
+  apos: "'",
+  gt: ">",
+  lt: "<",
+  quot: '"',
+});
+
+/**
+ * Decodes the five named references plus decimal/hexadecimal character
+ * references in a single pass (so `&amp;lt;` yields `&lt;`, one level).
+ * Unknown names and out-of-range code points are left as written; callers
+ * that must reject malformed input validate before delegating here.
+ */
 export function xmlUnescape(value: string): string {
-  return value
-    .replaceAll("&lt;", "<")
-    .replaceAll("&gt;", ">")
-    .replaceAll("&quot;", '"')
-    .replaceAll("&apos;", "'")
-    .replaceAll("&amp;", "&");
+  return value.replace(
+    /&(#x[0-9a-f]+|#\d+|amp|apos|gt|lt|quot);/gi,
+    (match, entity: string) => {
+      if (entity[0] === "#") {
+        const hexadecimal = entity[1]?.toLowerCase() === "x";
+        const point = Number.parseInt(entity.slice(hexadecimal ? 2 : 1), hexadecimal ? 16 : 10);
+        if (!Number.isInteger(point) || point < 0 || point > 0x10ffff) return match;
+        return String.fromCodePoint(point);
+      }
+      return XML_ENTITIES[entity.toLowerCase() as keyof typeof XML_ENTITIES] ?? match;
+    },
+  );
 }
 
 function requireXml(entries: ReadonlyMap<string, Buffer>, partName: string): string {

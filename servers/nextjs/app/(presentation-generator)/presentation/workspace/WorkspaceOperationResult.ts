@@ -6,6 +6,8 @@ import {
   RESULT_LABELS,
   STATUS_LABELS,
 } from "./WorkspaceOperationLabels";
+import { isRecord } from "@/lib/guards";
+import { finiteNumber } from "@/lib/math-utils";
 
 export function resultLabel(key: string): string | undefined {
   return RESULT_LABELS[key];
@@ -17,16 +19,15 @@ export function displayResultValue(value: string | number | boolean): string {
 }
 
 export function recordValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+  return isRecord(value) ? value : {};
 }
 
 export function numberValue(...values: unknown[]): number | undefined {
-  return values.find(
-    (value): value is number =>
-      typeof value === "number" && Number.isFinite(value),
-  );
+  for (const value of values) {
+    const parsed = finiteNumber(value);
+    if (parsed !== undefined) return parsed;
+  }
+  return undefined;
 }
 
 export function stringValue(...values: unknown[]): string | undefined {

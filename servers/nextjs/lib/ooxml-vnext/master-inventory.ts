@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 
 import {
   buildPackageGraph,
@@ -36,6 +35,7 @@ import {
   relationshipSnapshot,
   xmlFor,
 } from "./master-inventory-xml.ts";
+import { localeStableDigest, sha256 } from "./digest.ts";
 export * from "./master-inventory-contracts.ts";
 
 const INVENTORY_VERSION = MASTER_LAYOUT_INVENTORY_VERSION;
@@ -49,19 +49,6 @@ const LAYOUT_CONTENT_TYPE =
 
 function reject(code: string, message: string): never {
   throw new MasterInventoryError(code, message);
-}
-
-function sha256(bytes: Uint8Array | string): string {
-  return createHash("sha256").update(bytes).digest("hex");
-}
-
-function stableDigest(records: readonly string[]): string {
-  const hash = createHash("sha256");
-  for (const record of [...records].sort((left, right) => left.localeCompare(right, "en"))) {
-    const bytes = Buffer.from(record, "utf8");
-    hash.update(String(bytes.length)).update(":").update(bytes).update("\0");
-  }
-  return hash.digest("hex");
 }
 
 function inventoryFromGraph(
@@ -309,7 +296,7 @@ function captureDigestFor(
   members: readonly OpaqueCorporateMasterMember[],
   relationships: readonly MasterLayoutRelationshipRecord[],
 ): string {
-  return stableDigest([
+  return localeStableDigest([
     `master\u001f${masterPartName}`,
     ...members.map(
       (member) =>

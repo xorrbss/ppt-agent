@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 
 import {
   evaluateGenOfficeCompliance,
@@ -8,6 +7,8 @@ import {
   type GenOfficeComplianceEvidenceDto,
   type GenOfficeLabCapabilityDto,
 } from "./compliance.ts";
+import { isRecord } from "../guards.ts";
+import { sha256 } from "./digest.ts";
 
 interface PrivateGenOfficeModule {
   readonly openPptx: (input: Uint8Array) => Promise<unknown>;
@@ -60,14 +61,6 @@ export interface GenOfficeBufferedNoopLabOracle {
   readonly capabilities: GenOfficeLabCapabilityDto;
   readonly compliance: GenOfficeComplianceDecisionDto;
   runBufferedNoop(inputBytes: Uint8Array): Promise<BufferedNoopOracleResult>;
-}
-
-function sha256(bytes: Uint8Array): string {
-  return createHash("sha256").update(bytes).digest("hex");
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 function requirePrivateModule(value: unknown): PrivateGenOfficeModule {

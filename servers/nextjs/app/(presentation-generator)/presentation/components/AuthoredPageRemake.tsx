@@ -35,9 +35,7 @@ import {
   presentationMasterPin,
   presentationSlideLayoutId,
 } from "../utils/masterPresentation";
-
-const POLL_INTERVAL_MS = 2_000;
-const PREVIEW_TIMEOUT_MS = 15 * 60 * 1_000;
+import { POLL_INTERVAL_MS, PREVIEW_TIMEOUT_MS } from "@/lib/timeouts";
 
 function PageRemakeFlow({
   presentationId,

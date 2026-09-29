@@ -7,6 +7,7 @@ import { composeStyledTheme } from "@/app/(presentation-generator)/presentation/
 import { applyPresentationThemeToElement } from "@/app/(presentation-generator)/presentation/utils/applyPresentationThemeDom";
 import { notify } from "@/components/ui/sonner";
 import type { Theme, ThemeData } from "@/app/(presentation-generator)/services/api/types";
+import { errorMessage } from "./ThemePanel/themePanelDefaults";
 
 // Palette keys previewed as swatches; all are real `ThemeColors` keys.
 const PREVIEW_COLOR_KEYS = [
@@ -18,9 +19,6 @@ const PREVIEW_COLOR_KEYS = [
   "graph_2",
   "graph_5",
 ] as const;
-
-const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : "";
 
 // C2: compose a new theme = a curated STYLE preset (fonts + typography/shape/
 // elevation/density) + a brand COLOUR palette generated from primary/background

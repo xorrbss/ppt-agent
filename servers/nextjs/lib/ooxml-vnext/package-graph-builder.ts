@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { posix } from "node:path";
 
 import { evaluateExternalRelationshipPolicy } from "./external-relationship-policy.ts";
@@ -24,22 +23,10 @@ import {
   immutablePackageEntries,
   inspectOoxmlEntriesSecurity,
 } from "./security.ts";
+import { sha256, stableDigest } from "./digest.ts";
 
 function reject(code: string, message: string): never {
   throw new PackageGraphError(code, message);
-}
-
-function sha256(value: string | Buffer): string {
-  return createHash("sha256").update(value).digest("hex");
-}
-
-function stableDigest(records: readonly string[]): string {
-  const hash = createHash("sha256");
-  for (const record of [...records].sort()) {
-    const bytes = Buffer.from(record, "utf8");
-    hash.update(String(bytes.length)).update(":").update(bytes).update("\0");
-  }
-  return hash.digest("hex");
 }
 
 function macroEvidence(

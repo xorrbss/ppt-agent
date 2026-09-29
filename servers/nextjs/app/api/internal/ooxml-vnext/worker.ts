@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -20,6 +19,8 @@ import {
   type SlideMaterializationRequest,
 } from "../../../../lib/ooxml-vnext/index.ts";
 import { OoxmlWorkerError } from "./worker-error.ts";
+import { isRecord } from "@/lib/guards";
+import { sha256 } from "@/lib/ooxml-vnext/digest";
 
 export { OoxmlWorkerError } from "./worker-error.ts";
 
@@ -44,10 +45,6 @@ export interface OoxmlWorkerRequestV1 extends Omit<WorkerRequestEnvelope, "maste
 }
 
 export type OoxmlWorkerSuccessV1 = WorkerResponseEnvelope;
-
-function isRecord(value: unknown): value is JsonRecord {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function assertKeys(value: JsonRecord, allowed: readonly string[], name: string): void {
   const allowedSet = new Set(allowed);
@@ -108,11 +105,7 @@ function canonicalJson(value: unknown): string {
 }
 
 export function sha256CanonicalJson(value: unknown): string {
-  return createHash("sha256").update(canonicalJson(value), "utf8").digest("hex");
-}
-
-function sha256Bytes(value: Uint8Array): string {
-  return createHash("sha256").update(value).digest("hex");
+  return sha256(canonicalJson(value));
 }
 
 function assertDigest(actual: string, expected: string, kind: string): void {
@@ -250,7 +243,7 @@ function parseAsset(value: unknown, index: number): OoxmlWorkerAssetDescriptor {
   if (bytes.toString("base64") !== asset.bytesBase64 || bytes.byteLength === 0) {
     throw new OoxmlWorkerError("INVALID_ENVELOPE", 400, `assets[${index}].bytesBase64 is invalid`);
   }
-  assertDigest(sha256Bytes(bytes), asset.sha256, "asset");
+  assertDigest(sha256(bytes), asset.sha256, "asset");
   return asset;
 }
 
@@ -422,7 +415,7 @@ export async function executeWorkerExport(
     }
     throwIfAborted(options.signal);
     const bytes = await readFile(candidatePath);
-    const artifactSha256 = sha256Bytes(bytes);
+    const artifactSha256 = sha256(bytes);
     if (saved.publication.sha256 !== artifactSha256 || saved.publication.publishedReadBackSha256 !== artifactSha256) {
       throw new OoxmlWorkerError("PACKAGE_DIGEST_MISMATCH", 409, "package digest mismatch");
     }

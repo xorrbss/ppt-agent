@@ -25,14 +25,11 @@ import {
   validateOverflow,
   validateRuntimeDependencies,
 } from "./runtime-policy.ts";
+import { isRecord } from "../guards.ts";
 
 type JsonRecord = Record<string, unknown>;
 
 const SHA256 = /^[0-9a-f]{64}$/i;
-
-function isRecord(value: unknown): value is JsonRecord {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function deepFreeze<T>(value: T): T {
   if (value && typeof value === "object" && !Object.isFrozen(value)) {

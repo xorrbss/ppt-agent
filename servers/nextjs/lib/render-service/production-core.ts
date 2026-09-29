@@ -11,6 +11,7 @@ import {
   RenderService,
 } from "./render-service.ts";
 import { RenderPolicyError } from "./runtime-policy.ts";
+import { isRecord } from "../guards.ts";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -24,10 +25,6 @@ export interface InlineSceneAssetCheck {
 const SHA256 = /^[0-9a-f]{64}$/i;
 const SCENE_DIGEST = /^sha256:([0-9a-f]{64})$/;
 const SCENE_MEDIA_TYPE = /^image\/(?:png|jpeg|svg\+xml|webp)$/;
-
-function isRecord(value: unknown): value is JsonRecord {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function visit(value: unknown, visitor: (record: JsonRecord) => void): void {
   if (Array.isArray(value)) {

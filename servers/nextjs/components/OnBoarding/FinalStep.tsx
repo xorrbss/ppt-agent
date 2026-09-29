@@ -5,6 +5,7 @@ import { trackEvent, MixpanelEvent, setTelemetryEnabled } from "@/utils/mixpanel
 import { Switch } from '../ui/switch';
 import confetti from 'canvas-confetti';
 import Image from 'next/image';
+import { fetchTelemetryStatus } from "@/app/(presentation-generator)/services/api/telemetry-status";
 
 const CONFETTI_COLORS = ['#ff00c5', '#f3ff00', '#9500d0', '#00d2f2', '#00ea9b', '#ff7f36'];
 
@@ -33,17 +34,7 @@ const FinalStep = () => {
     }, []);
 
     useEffect(() => {
-        async function fetchStatus() {
-            try {
-                const data = await fetch('/api/telemetry-status').then((res) => res.json());
-                setTrackingEnabled(data.telemetryEnabled);
-            } catch {
-                // Fail closed: an unreachable status probe must not display
-                // tracking as enabled.
-                setTrackingEnabled(false);
-            }
-        }
-        fetchStatus();
+        void fetchTelemetryStatus().then(setTrackingEnabled);
     }, []);
 
     const handleTrackingToggle = useCallback(async (enabled: boolean) => {

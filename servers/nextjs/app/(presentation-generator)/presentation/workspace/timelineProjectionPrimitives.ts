@@ -1,9 +1,10 @@
+import { isRecord } from "@/lib/guards";
+import { finiteNumber } from "@/lib/math-utils";
+
 type UnknownRecord = Record<string, unknown>;
 
 export function asRecord(value: unknown): UnknownRecord {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as UnknownRecord)
-    : {};
+  return isRecord(value) ? value : {};
 }
 
 export function stringValue(...values: unknown[]): string | undefined {
@@ -12,15 +13,11 @@ export function stringValue(...values: unknown[]): string | undefined {
   ) as string | undefined;
 }
 
+/** First finite number; numeric strings are parsed (timeline cursors arrive as text). */
 export function numberValue(...values: unknown[]): number | undefined {
   for (const value of values) {
-    const parsed =
-      typeof value === "number"
-        ? value
-        : typeof value === "string"
-          ? Number(value)
-          : NaN;
-    if (Number.isFinite(parsed)) return parsed;
+    const parsed = finiteNumber(typeof value === "string" ? Number(value) : value);
+    if (parsed !== undefined) return parsed;
   }
   return undefined;
 }
@@ -70,10 +67,7 @@ export function booleanValue(...values: unknown[]): boolean | undefined {
 }
 
 export function objectValue(...values: unknown[]): UnknownRecord | undefined {
-  return values.find(
-    (value) =>
-      value !== null && typeof value === "object" && !Array.isArray(value),
-  ) as UnknownRecord | undefined;
+  return values.find(isRecord);
 }
 
 export function operationStatus(...values: unknown[]): string | undefined {

@@ -1,3 +1,4 @@
+import { clamp } from "../math-utils.ts";
 export const INFOGRAPHIC_POLICY_VERSION = "a6552331" as const;
 
 export type InfographicKind = "progress_bar" | "gauge";
@@ -22,10 +23,6 @@ export interface InfographicViewModelInput {
   readonly highlight_color: string;
   readonly base_color: string;
   readonly frame_height?: number;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
 }
 
 export function createInfographicViewModel(

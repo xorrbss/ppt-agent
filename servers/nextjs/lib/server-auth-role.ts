@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getFastApiBaseUrl } from "./fastapi-internal.ts";
 
 export type ServerAuthStatus = {
   configured: boolean;
@@ -8,20 +9,12 @@ export type ServerAuthStatus = {
   role: "admin" | "user" | null;
 };
 
-function fastApiBase(): string {
-  return (
-    process.env.FAST_API_INTERNAL_URL?.trim() ||
-    process.env.NEXT_PUBLIC_FAST_API?.trim() ||
-    "http://127.0.0.1:8000"
-  ).replace(/\/+$/, "");
-}
-
 export async function authStatusForRequest(
   request: Request
 ): Promise<ServerAuthStatus> {
   const cookie = request.headers.get("cookie") || "";
   try {
-    const response = await fetch(`${fastApiBase()}/api/v1/auth/status`, {
+    const response = await fetch(`${getFastApiBaseUrl()}/api/v1/auth/status`, {
       headers: cookie ? { cookie } : undefined,
       cache: "no-store",
     });

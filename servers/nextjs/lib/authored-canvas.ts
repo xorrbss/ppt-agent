@@ -1,4 +1,5 @@
 import { parseDocumentCanvas, documentCanvasPhysicalSize, type DocumentCanvas } from "./document-canvas.ts";
+import { recordOrNull } from "./guards.ts";
 
 export const AUTHORED_CANVAS_CONTRACT_VERSION = "authored-canvas/v1" as const;
 
@@ -106,12 +107,6 @@ export function authoredCanvasForSize(
   });
 }
 
-function record(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
 function parseCanvas(value: Record<string, unknown>): AuthoredCanvasContract | null {
   const canvasKeys = [
     "contractVersion",
@@ -126,7 +121,7 @@ function parseCanvas(value: Record<string, unknown>): AuthoredCanvasContract | n
     canvasKeys.some((key) => !(key in value))
   ) return null;
   const aspectRatio = value.aspectRatio;
-  const safeArea = record(value.safeArea);
+  const safeArea = recordOrNull(value.safeArea);
   const numbers = safeArea
     ? [safeArea.x, safeArea.y, safeArea.width, safeArea.height]
     : [];
@@ -167,12 +162,12 @@ function parseCanvas(value: Record<string, unknown>): AuthoredCanvasContract | n
 
 /** Resolve the durable document canvas. Only a missing canvas is legacy 16:9. */
 export function resolveAuthoredCanvas(theme: unknown): AuthoredCanvasContract {
-  const root = record(theme);
-  const authored = record(root?.authored_vnext);
+  const root = recordOrNull(theme);
+  const authored = recordOrNull(root?.authored_vnext);
   if (root && "documentCanvas" in root) {
     const canvas = authoredCanvasForDocument(parseDocumentCanvas(root.documentCanvas));
     if (authored && "canvas" in authored) {
-      const legacy = record(authored.canvas);
+      const legacy = recordOrNull(authored.canvas);
       const parsed = legacy ? parseCanvas(legacy) : null;
       if (!parsed || JSON.stringify(authoredCanvasPhysicalSize(parsed)) !== JSON.stringify(authoredCanvasPhysicalSize(canvas)) ||
           parsed.widthPx !== canvas.widthPx || parsed.heightPx !== canvas.heightPx ||
@@ -183,7 +178,7 @@ export function resolveAuthoredCanvas(theme: unknown): AuthoredCanvasContract {
     return canvas;
   }
   if (!authored || !("canvas" in authored)) return LEGACY_AUTHORED_CANVAS;
-  const canvas = record(authored.canvas);
+  const canvas = recordOrNull(authored.canvas);
   const parsed = canvas ? parseCanvas(canvas) : null;
   if (parsed) return parsed;
   throw new Error("authored_canvas_contract_invalid");

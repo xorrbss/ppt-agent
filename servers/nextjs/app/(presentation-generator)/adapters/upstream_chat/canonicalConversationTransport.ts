@@ -12,6 +12,7 @@ import type {
   ConversationTransport,
   SendConversationMessageRequest,
 } from "../../presentation/conversation/types";
+import { isRecord } from "@/lib/guards";
 
 const ROOT = "/api/v1/ppt/conversations";
 type RecordValue = Record<string, unknown>;
@@ -29,7 +30,7 @@ export class CanonicalConversationTransportError extends Error {
 }
 
 function record(value: unknown): RecordValue {
-  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as RecordValue : {};
+  return isRecord(value) ? value : {};
 }
 function text(value: unknown, fallback = ""): string { return typeof value === "string" ? value : fallback; }
 function number(value: unknown): number | undefined { return typeof value === "number" && Number.isFinite(value) ? value : undefined; }

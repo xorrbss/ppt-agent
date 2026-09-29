@@ -16,9 +16,7 @@ import { getApiUrl, normalizeBackendAssetUrls } from "@/utils/api";
 import { store } from "@/store/store";
 import type { Slide } from "@/app/(presentation-generator)/types/slide";
 import { deriveFlaggedSlideMap } from "../utils/flaggedSlides";
-
-const MAX_STREAM_RETRIES = 3;
-const STREAM_RETRY_DELAY_MS = 1_000;
+import { createStreamRetryScheduler } from "@/app/(presentation-generator)/hooks/streamRetry";
 
 /** Chunk JSON replays each slide as first streamed; don't clobber URLs filled by `slide_assets`. */
 const PLACEHOLDER_ASSET_MARKERS = [
@@ -182,9 +180,6 @@ export const usePresentationStreaming = (
 
     let eventSource: EventSource | null = null;
     let accumulatedChunks = "";
-    let retryCount = 0;
-    let isClosed = false;
-    let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
     const closeEventSource = () => {
       if (eventSource) {
@@ -193,45 +188,23 @@ export const usePresentationStreaming = (
       }
     };
 
-    const clearRetryTimer = () => {
-      if (retryTimer) {
-        clearTimeout(retryTimer);
-        retryTimer = null;
-      }
-    };
+    const retry = createStreamRetryScheduler({
+      streamName: "Presentation",
+      beforeRetry: () => {
+        closeEventSource();
+        accumulatedChunks = "";
+        previousSlidesLength.current = 0;
+      },
+      reopen: () => openStream(),
+    });
 
     const finalizeFailure = (description: string) => {
       closeEventSource();
-      clearRetryTimer();
+      retry.clearTimer();
       setLoading(false);
       dispatch(setStreaming(false));
       setError(true);
       notify.error("프레젠테이션 스트리밍 실패", description);
-    };
-
-    const scheduleRetry = (reason: string): boolean => {
-      if (retryCount >= MAX_STREAM_RETRIES || isClosed) {
-        return false;
-      }
-
-      retryCount += 1;
-      const retryDelay = STREAM_RETRY_DELAY_MS * retryCount;
-      console.warn(
-        `Presentation stream retry ${retryCount}/${MAX_STREAM_RETRIES}: ${reason}`
-      );
-
-      closeEventSource();
-      clearRetryTimer();
-      accumulatedChunks = "";
-      previousSlidesLength.current = 0;
-
-      retryTimer = setTimeout(() => {
-        if (!isClosed) {
-          openStream();
-        }
-      }, retryDelay);
-
-      return true;
     };
 
     const openStream = () => {
@@ -251,7 +224,7 @@ export const usePresentationStreaming = (
         try {
           data = JSON.parse(event.data) as PresentationStreamEvent;
         } catch {
-          if (!scheduleRetry("invalid SSE payload")) {
+          if (!retry.schedule("invalid SSE payload")) {
             finalizeFailure("스트림 응답을 해석하지 못했습니다.");
           }
           return;
@@ -365,10 +338,9 @@ export const usePresentationStreaming = (
               dispatch(setFlaggedSlides(deriveFlaggedSlideMap(completedPresentation)));
               dispatch(setStreaming(false));
               setLoading(false);
-              isClosed = true;
+              retry.close();
               closeEventSource();
-              clearRetryTimer();
-              retryCount = 0;
+              retry.reset();
 
               // Remove stream parameter from URL
               const newUrl = new URL(window.location.href);
@@ -376,7 +348,7 @@ export const usePresentationStreaming = (
               newUrl.searchParams.delete("regenerate");
               window.history.replaceState({}, "", newUrl.toString());
             } catch {
-              if (!scheduleRetry("failed to parse complete payload")) {
+              if (!retry.schedule("failed to parse complete payload")) {
                 finalizeFailure("최종 발표자료 데이터를 해석하지 못했습니다.");
               }
             }
@@ -389,10 +361,9 @@ export const usePresentationStreaming = (
             dispatch(setFlaggedSlides(deriveFlaggedSlideMap(closingPresentation)));
             setLoading(false);
             dispatch(setStreaming(false));
-            isClosed = true;
+            retry.close();
             closeEventSource();
-            clearRetryTimer();
-            retryCount = 0;
+            retry.reset();
 
             // Remove stream parameter from URL
             const newUrl = new URL(window.location.href);
@@ -403,7 +374,7 @@ export const usePresentationStreaming = (
           }
           case "error":
             if (
-              !scheduleRetry(
+              !retry.schedule(
                 data.detail || "server returned stream error response"
               )
             ) {
@@ -418,7 +389,7 @@ export const usePresentationStreaming = (
 
       eventSource.onerror = (error) => {
         console.error("EventSource failed:", error);
-        if (!scheduleRetry("connection lost")) {
+        if (!retry.schedule("connection lost")) {
           finalizeFailure("서버에 연결하지 못했습니다. 다시 시도해 주세요.");
         }
       };
@@ -430,9 +401,8 @@ export const usePresentationStreaming = (
     openStream();
 
     return () => {
-      isClosed = true;
+      retry.close();
       closeEventSource();
-      clearRetryTimer();
     };
   }, [presentationId, stream, dispatch, setLoading, setError, fetchUserSlides, t]);
 };

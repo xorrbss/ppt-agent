@@ -1,4 +1,5 @@
 import { validateDeckMasterContract } from "./validation.ts";
+import { isRecord } from "../../guards.ts";
 
 export { validateDeckMasterContract } from "./validation.ts";
 
@@ -777,9 +778,7 @@ export function isAuthoredVnextMasterEnabled(
   return value === "true";
 }
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+export { isRecord };
 
 export function isMasterDigest(value: unknown): value is MasterDigest {
   return typeof value === "string" && /^sha256:[0-9a-f]{64}$/.test(value);
