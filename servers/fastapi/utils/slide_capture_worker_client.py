@@ -31,6 +31,7 @@ from utils.slide_capture import _admit_render_source, _cache_browser_metrics
 from utils.slide_capture_worker_lease import acquire_lease
 from utils.slide_capture_worker_session import RendererWorkerSession
 from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX, is_default_landscape
+from constants.timeouts import CAPTURE_WORKER_TERMINATE_GRACE_SECONDS
 
 async def _render_html_in_isolated_worker(  # noqa: ASYNC109
     html: str, timeout: int, *, width_px: int = DEFAULT_CANVAS_WIDTH_PX, height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
@@ -70,7 +71,7 @@ async def _render_html_in_isolated_worker(  # noqa: ASYNC109
                 if os.name != "nt":
                     os.killpg(process.pid, signal.SIGTERM)
                     try:
-                        await asyncio.wait_for(process.wait(), timeout=12)
+                        await asyncio.wait_for(process.wait(), timeout=CAPTURE_WORKER_TERMINATE_GRACE_SECONDS)
                     except asyncio.TimeoutError:
                         os.killpg(process.pid, signal.SIGKILL)
                 else:

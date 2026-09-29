@@ -71,6 +71,15 @@ from utils.render_cache_budget import (
     render_cache_resident_bytes,
 )
 from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
+from constants.timeouts import PROCESS_REAP_TIMEOUT_SECONDS
+
+# `chrome --version` probe.
+_CHROME_VERSION_PROBE_TIMEOUT_SECONDS = 10
+# Poll interval while waiting for the screenshot file to appear.
+_SCREENSHOT_FILE_POLL_INTERVAL_SECONDS = 0.25
+# Poll interval while waiting for a Chrome process to exit.
+_CHROME_EXIT_POLL_INTERVAL_SECONDS = 0.05
+
 
 SLIDE_W = DEFAULT_CANVAS_WIDTH_PX
 SLIDE_H = DEFAULT_CANVAS_HEIGHT_PX
@@ -176,7 +185,7 @@ def _run_chrome_screenshot(args: List[str], timeout: int) -> bytes:
     except subprocess.TimeoutExpired:
         _kill_process_tree(proc)
         try:
-            stdout, _ = proc.communicate(timeout=5)
+            stdout, _ = proc.communicate(timeout=PROCESS_REAP_TIMEOUT_SECONDS)
             return stdout or b""
         except Exception:
             return b""
@@ -1251,7 +1260,7 @@ async def _wait_for_output(out: str, timeout: float = 15.0) -> bool:
     while time.monotonic() < deadline:
         if os.path.isfile(out) and os.path.getsize(out) > 0:
             return True
-        await asyncio.sleep(0.25)
+        await asyncio.sleep(_SCREENSHOT_FILE_POLL_INTERVAL_SECONDS)
     return os.path.isfile(out) and os.path.getsize(out) > 0
 from utils.slide_capture_chrome_discovery import _playwright_headless_shell_candidates, find_chrome
 _runtime_counter_lock = threading.Lock()
@@ -1352,7 +1361,7 @@ def chrome_runtime_digest() -> str:
             [str(path), "--version"],
             capture_output=True,
             check=False,
-            timeout=10,
+            timeout=_CHROME_VERSION_PROBE_TIMEOUT_SECONDS,
             creationflags=(
                 getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
             ),
@@ -1389,7 +1398,7 @@ class _ReusableChromeRuntime:
         if self.process.poll() is None:
             _kill_process_tree(self.process)
             try:
-                self.process.communicate(timeout=5)
+                self.process.communicate(timeout=PROCESS_REAP_TIMEOUT_SECONDS)
             except Exception:
                 pass
         self.profile.cleanup()
@@ -1452,7 +1461,7 @@ def _launch_reusable_chrome() -> _ReusableChromeRuntime:
                 pass
         if process.poll() is not None:
             break
-        time.sleep(0.05)
+        time.sleep(_CHROME_EXIT_POLL_INTERVAL_SECONDS)
     if process.poll() is None:
         _kill_process_tree(process)
     profile.cleanup()

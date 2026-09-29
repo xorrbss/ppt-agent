@@ -41,6 +41,11 @@ from utils.renderer_worker_response import (
     response_ordinal,
     source_digest_for,
 )
+from constants.timeouts import CAPTURE_WORKER_TERMINATE_GRACE_SECONDS
+
+# Wait for the worker to exit on its own after its stdin is closed.
+_WORKER_CLEAN_EXIT_TIMEOUT_SECONDS = 10
+
 
 
 #: Worker processes this process has started and not yet reaped. A hard exit
@@ -70,7 +75,7 @@ async def terminate_process_tree(process: Any) -> None:
             if os.name != "nt":
                 os.killpg(process.pid, signal.SIGTERM)
                 try:
-                    await asyncio.wait_for(process.wait(), timeout=12)
+                    await asyncio.wait_for(process.wait(), timeout=CAPTURE_WORKER_TERMINATE_GRACE_SECONDS)
                 except asyncio.TimeoutError:
                     os.killpg(process.pid, signal.SIGKILL)
             else:
@@ -216,7 +221,7 @@ class RendererWorkerSession:
                     await process.stdin.wait_closed()
                 except (BrokenPipeError, ConnectionResetError):
                     pass
-            await asyncio.wait_for(process.wait(), timeout=10)
+            await asyncio.wait_for(process.wait(), timeout=_WORKER_CLEAN_EXIT_TIMEOUT_SECONDS)
         except (asyncio.TimeoutError, ProcessLookupError, OSError):
             await terminate_process_tree(process)
         except asyncio.CancelledError:
