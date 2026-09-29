@@ -1,20 +1,13 @@
 from __future__ import annotations
 
+import hashlib
 import sys
-from services import authored_pipeline_small_helpers as _small_helpers
-from services.authored_pipeline_small_helpers import (
-    _call_pipeline_helper as _call_pipeline_helper,
-    _evaluate_slide_quality as _evaluate_slide_quality,
-    _local_fit_quality_flag as _local_fit_quality_flag,
-    _local_fit_unresolved_flag as _local_fit_unresolved_flag,
-)
 
 from dataclasses import replace
 from services.authored_local_fit_evidence_types import AcceptedLocalFit
 
 from services.authored_presentation_pipeline_deps import *
 from services import authored_presentation_author_batch as author_batch_impl
-from services import authored_presentation_pipeline_helpers as _pipeline_helpers  # noqa: F401
 from services.authored_local_fit_policy import local_fit_applies, requested_font_policy_revision, policy_floor_pt
 from services.authored_admission_producers import author_html as admit_author_html, source_image_html
 from services.authored_admission_capture import capture_once, captured_metrics_or_existing
@@ -39,9 +32,15 @@ except Exception:
 _AUTHORED_AUTHOR_WORKERS = authored_provider_concurrency(_selected_provider)
 
 
-def _resolve_authored_render_workers(author_workers: int, environment: Mapping[str, str] = os.environ) -> int:
-    _small_helpers.bind_runtime(sys.modules[__name__])
-    return _small_helpers._resolve_authored_render_workers(author_workers, environment)
+def _resolve_authored_render_workers(
+    author_workers: int,
+    environment: Mapping[str, str] = os.environ,
+) -> int:
+    """Resolve the authored render queue against the managed Chromium ceiling."""
+    raw = environment.get("AUTHORED_SLIDE_RENDER_CONCURRENCY")
+    if raw is None:
+        raw = environment.get("PUBLIC_RENDER_MAX_CONCURRENCY", str(author_workers))
+    return max(1, int(raw))
 
 
 _AUTHORED_RENDER_WORKERS = _resolve_authored_render_workers(_AUTHORED_AUTHOR_WORKERS)
@@ -51,17 +50,225 @@ _DEFAULT_AUTHOR_PLANNED_SLIDE = author_planned_slide
 
 
 
-def _reusable_source_repair_scene(*, source_reflow: bool, durable_evidence: Any, original_html: str, scene_html: str, slide_index: int) -> bool:  # noqa: E501
-    _small_helpers.bind_runtime(sys.modules[__name__])
-    return _small_helpers._reusable_source_repair_scene(
-        source_reflow=source_reflow, durable_evidence=durable_evidence,
-        original_html=original_html, scene_html=scene_html, slide_index=slide_index,
+# ---- Folded back from authored_pipeline_small_helpers.py (bind_runtime split) ----
+
+def _reusable_source_repair_scene(
+    *,
+    source_reflow: bool,
+    durable_evidence: Any,
+    original_html: str,
+    scene_html: str,
+    slide_index: int,
+) -> bool:
+    """Reuse an admitted source repair only through its validated durable tuple.
+
+    The caller has already obtained the checkpoint under attempt fencing and
+    verified its immutable artifact revision. Admission additionally binds the
+    reconstructed original, exact repaired scene, PNG, metrics, and slide index.
+    """
+    if not source_reflow or durable_evidence is None or durable_evidence.html != scene_html:
+        return False
+    return validate_structural_checkpoint(
+        html=scene_html,
+        png=durable_evidence.png,
+        metrics=durable_evidence.metrics,
+        expected_slide_index=slide_index,
+        baseline_html_digest=html_digest(original_html),
     )
 
 
-def _rehydrate_accepted_local_fit(receipt: Mapping[str, Any], *, html: str, png: bytes | None, metrics: Mapping[str, Any]) -> AcceptedLocalFit | None:  # noqa: E501
-    _small_helpers.bind_runtime(sys.modules[__name__])
-    return _small_helpers._rehydrate_accepted_local_fit(receipt, html=html, png=png, metrics=metrics)
+def _rehydrate_accepted_local_fit(
+    receipt: Mapping[str, Any],
+    *,
+    html: str,
+    png: bytes | None,
+    metrics: Mapping[str, Any],
+) -> AcceptedLocalFit | None:
+    """Restore only an already validated, immutable normal-fit acceptance."""
+
+    if receipt_is_preserved_original(receipt) or png is None:
+        return None
+    if receipt.get("png_digest") != "sha256:" + hashlib.sha256(png).hexdigest():
+        return None
+    return AcceptedLocalFit(
+        html=html,
+        png=png,
+        metrics=dict(metrics),
+        receipt=dict(receipt),
+    )
+
+
+# ---- Folded back from authored_presentation_pipeline_helpers.py (bind_runtime split) ----
+
+def _evaluate_slide_quality(
+    *,
+    index: int,
+    html: str,
+    browser_metrics: Mapping[str, Any] | None,
+    capacity_plan: AuthoredCapacityPlan | None,
+    composition_profile: CompositionProfile | None,
+    reference_mode: str,
+    fit_report: Mapping[str, Any] | None = None,
+) -> tuple[Any | None, dict[str, Any] | None]:
+    """Evaluate one exact render before its durable checkpoint is advanced."""
+
+    if (
+        composition_profile is None
+        or not composition_profile.strict_dom_gate
+        or reference_mode == EXACT_RECONSTRUCTION
+    ):
+        return None, None
+    issues: list[dict[str, Any]] = []
+    if capacity_plan is not None:
+        issues.extend(
+            {
+                "category": "capacity",
+                "severity": "error",
+                "message": violation,
+            }
+            for violation in capacity_violations(
+                html,
+                browser_metrics,
+                capacity_plan.at(index),
+            )
+        )
+    report = inspect_authored_dom(
+        html,
+        browser_metrics,
+        reference_mode=reference_mode,
+        strict_structural_off_canvas=(composition_profile.profile_id != "ordinary"),
+    )
+    defects = blocking_safety_issues(report)
+    if report.telemetry_status != "available":
+        detail = (
+            ", ".join(
+                f"{issue.category}:{issue.severity}" for issue in defects[:6]
+            )
+            or f"telemetry:{report.telemetry_status}"
+        )
+        raise AuthoredStageError(
+            slide_index=index,
+            stage="render",
+            code="authored_composition_safety_gate_failed",
+            retryable=True,
+            message=f"Slide {index + 1} failed the composition safety gate ({detail})",
+        )
+    issues.extend(
+        issue.to_dict() if hasattr(issue, "to_dict") else {"message": str(issue)}
+        for issue in defects
+    )
+    issues.extend(measured_gate_issues(browser_metrics=browser_metrics, fit_report=fit_report))  # last
+    return report, ({"slide_index": index, "issues": issues} if issues else None)
+
+
+def _local_fit_quality_flag(
+    index: int, failure: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Preserve a post-acceptance visual failure as bounded receipt evidence."""
+
+    reasons = ["local_fit:whole_page_quality"]
+    raw_issues = failure.get("issues")
+    if isinstance(raw_issues, Sequence) and not isinstance(raw_issues, (str, bytes)):
+        for issue in raw_issues:
+            if not isinstance(issue, Mapping):
+                continue
+            parts = [
+                str(issue.get(key) or "").strip()
+                for key in ("category", "severity", "message")
+            ]
+            detail = ":".join(part for part in parts if part)[:160]
+            if detail and detail not in reasons:
+                reasons.append(detail)
+            if len(reasons) == 8:
+                break
+    return {
+        "index": int(index),
+        "reason": "composition_safety:local_fit",
+        "reasons": reasons,
+        "remakeAttempted": False,
+        "remakeOutcome": "not_attempted",
+    }
+
+
+def _local_fit_unresolved_flag(
+    index: int, unresolved_reasons: Sequence[object]
+) -> dict[str, Any]:
+    reasons = [
+        f"local_fit:{str(reason).strip()}"
+        for reason in unresolved_reasons
+        if str(reason).strip()
+    ]
+    return {
+        "index": int(index),
+        "reason": "composition_safety:local_fit",
+        "reasons": reasons[:8] or ["local_fit:unsupported_geometry"],
+        "remakeAttempted": False,
+        "remakeOutcome": "not_attempted",
+    }
+
+
+def build_pipeline_result(
+    completed_results, *, plan, started, evidence_ledger, evidence_attempt_id,
+    author_flagged_slides, authoring_cooldown_wait_seconds,
+):
+    htmls = [result[1] for result in completed_results]
+    pngs = [result[2] for result in completed_results]
+    quality_gate_reports = [
+        result[7] for result in completed_results if result[7] is not None
+    ]
+    quality_gate_failures = [
+        result[8] for result in completed_results if result[8] is not None
+    ]
+    quality_gate_failed_indices = [
+        int(failure["slide_index"]) for failure in quality_gate_failures
+    ]
+    scene_envelope = seal_deck_scene_envelope(
+        result[9] for result in completed_results
+    )
+    return AuthoredGenerationPipelineResult(
+        deck=AuthoredDeckResult(htmls=htmls, design_system=plan.design_system),
+        pngs=pngs,
+        elapsed=time.monotonic() - started,
+        author_work=sum(result[3] for result in completed_results),
+        illustration_work=sum(result[4] for result in completed_results),
+        render_work=sum(result[5] for result in completed_results),
+        quality_work=sum(result[6] for result in completed_results),
+        quality_gate_reports=tuple(quality_gate_reports),
+        quality_gate_failed_indices=tuple(quality_gate_failed_indices),
+        quality_gate_failures=tuple(quality_gate_failures),
+        evidence_ledger=evidence_ledger,
+        evidence_attempt_id=evidence_attempt_id,
+        scene_envelope=scene_envelope,
+        author_provider_attempt_counts=tuple(
+            int(result[10]) for result in completed_results
+        ),
+        author_flagged_slides=tuple(
+            author_flagged_slides[index] for index in sorted(author_flagged_slides)
+        ),
+        cooldown_wait_seconds=authoring_cooldown_wait_seconds[0],
+        # Slides are authored in parallel child tasks, so the quality loop's
+        # per-slide choice has no ambient way back to the measurement stage.
+        # It travels with the slide's own result instead. E4: the same result
+        # slot carries this slide's fired A2 normalisation rules (possibly
+        # empty), merged in under "normalizations" so a slide that needed
+        # normalisation is still recorded even when the quality loop did not
+        # run for it.
+        slide_quality_receipts={
+            int(result[0]): {**dict(result[11]), "normalizations": list(result[12])}
+            for result in completed_results
+            if (isinstance(result[11], dict) and result[11]) or result[12]
+        },
+        local_fit_receipts=tuple(
+            dict(result[13]) if isinstance(result[13], Mapping) else {}
+            for result in completed_results
+        ),
+        # In-render fit reports (opt-in knob); slot 14 of ``SlideStageResult``.
+        slide_fit_reports={
+            int(result[0]): result[14]
+            for result in completed_results
+            if isinstance(result[14], Mapping)
+        },
+    )
 
 
 async def _author_illustrate_render_pipeline(
@@ -1485,8 +1692,7 @@ async def _author_illustrate_render_pipeline(
                 worker_count=_AUTHORED_SLIDE_WORKERS,
             )
         )
-    return _call_pipeline_helper(
-        "build_pipeline_result",
+    return build_pipeline_result(
         completed_results,
         plan=plan,
         started=started,
