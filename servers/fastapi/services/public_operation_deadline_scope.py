@@ -18,6 +18,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime, timezone
+from utils.datetime_utils import as_utc
 
 _OPERATION_DEADLINE: ContextVar[datetime | None] = ContextVar(
     "public_operation_deadline_at", default=None
@@ -30,7 +31,7 @@ def public_operation_deadline_scope(
 ) -> Iterator[None]:
     """Publish ``deadline_at`` to everything running inside the block."""
 
-    token = _OPERATION_DEADLINE.set(_as_utc(deadline_at))
+    token = _OPERATION_DEADLINE.set(as_utc(deadline_at) if deadline_at is not None else None)
     try:
         yield
     finally:
@@ -53,14 +54,8 @@ def remaining_public_operation_seconds(*, now: datetime | None = None) -> float 
     deadline = _OPERATION_DEADLINE.get()
     if deadline is None:
         return None
-    reference = _as_utc(now) or datetime.now(timezone.utc)
+    reference = as_utc(now) if now is not None else datetime.now(timezone.utc)
     return max(0.0, (deadline - reference).total_seconds())
-
-
-def _as_utc(value: datetime | None) -> datetime | None:
-    if value is None:
-        return None
-    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
 
 
 __all__ = [

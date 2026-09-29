@@ -110,10 +110,6 @@ def _timestamp(value: Any, label: str) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
-def _as_utc(value: datetime) -> datetime:
-    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
-
-
 def _require_digest(value: Any, label: str) -> str:
     if not isinstance(value, str) or DIGEST_RE.fullmatch(value) is None:
         raise EditableMvpCompletionError(

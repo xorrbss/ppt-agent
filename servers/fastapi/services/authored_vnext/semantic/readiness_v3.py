@@ -15,6 +15,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from utils.datetime_utils import as_utc
 from models.authored_vnext.semantic.readiness import (
     CapabilityEnvironmentV2,
     CapabilityProjectionEntryV2,
@@ -45,7 +46,6 @@ from services.authored_vnext.semantic.readiness import (
     _kill_switches_from_environment,
     _receipt_from_record,
     _records,
-    _utc,
     issue_capability_receipt,
     validate_visual_evidence_authority,
 )
@@ -178,7 +178,7 @@ async def get_workbench_capability_projection_v3(
         owner_id=owner_id,
         tenant_id=tenant_id,
     )
-    evaluated_at = _utc(now or get_current_utc_datetime())
+    evaluated_at = as_utc(now or get_current_utc_datetime())
     target = target or release_authority_target_v3_from_environment()
     definition = target.profile_definition
     from services.authored_vnext.semantic.readiness_validators import (
@@ -230,7 +230,7 @@ async def get_workbench_capability_projection_v3(
             or receipt.feature_set_digest != trusted_capability_feature_set_digest(capability_id, target)
             or not validate_actual_product_record_v3(matches[0], now=evaluated_at)
         )
-        expired = _utc(receipt.expires_at) <= evaluated_at
+        expired = as_utc(receipt.expires_at) <= evaluated_at
         serializer_mismatch = (
             receipt.serializer_id != target.scope.renderer
             or receipt.serializer_version != definition.platform_scope.serializer_version
@@ -410,7 +410,7 @@ async def get_workbench_capability_projection_v3(
         else []
     )
     expiries = [
-        _utc(receipt.expires_at) for receipt in ready_receipts.values() if _utc(receipt.expires_at) > evaluated_at
+        as_utc(receipt.expires_at) for receipt in ready_receipts.values() if as_utc(receipt.expires_at) > evaluated_at
     ]
     expires_at = min(expiries) if expiries else evaluated_at + timedelta(minutes=1)
     reason_code = (

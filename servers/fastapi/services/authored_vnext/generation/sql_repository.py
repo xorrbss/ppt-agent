@@ -17,6 +17,7 @@ from sqlalchemy import and_, or_, select, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import sessionmaker
 
+from utils.datetime_utils import as_utc
 from models.authored_vnext.deck import (
     AuthoredCompositionPin,
     DeckGenerationSnapshot,
@@ -73,12 +74,6 @@ LOGGER = logging.getLogger(__name__)
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
-
-
-def _as_utc(value: datetime) -> datetime:
-    if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
 
 
 def _hash(value: str) -> str:
@@ -438,7 +433,7 @@ class SqlGenerationRepository:
                 or row.worker_id != claim.worker_id
                 or row.fencing_token != claim.fencing_token
                 or row.lease_expires_at is None
-                or _as_utc(row.lease_expires_at) <= now
+                or as_utc(row.lease_expires_at) <= now
             ):
                 raise GenerationConflictError("stale operation fence")
             changed = session.execute(
@@ -515,7 +510,7 @@ class SqlGenerationRepository:
                     or operation.worker_id != claim.worker_id
                     or operation.fencing_token != claim.fencing_token
                     or operation.lease_expires_at is None
-                    or _as_utc(operation.lease_expires_at) <= now
+                    or as_utc(operation.lease_expires_at) <= now
                 ):
                     raise GenerationConflictError("stale operation fence")
                 _assert_generation_composition(operation.request_payload, deck, result)
@@ -616,7 +611,7 @@ class SqlGenerationRepository:
                     or operation.worker_id != claim.worker_id
                     or operation.fencing_token != claim.fencing_token
                     or operation.lease_expires_at is None
-                    or _as_utc(operation.lease_expires_at) <= now
+                    or as_utc(operation.lease_expires_at) <= now
                 ):
                     raise GenerationConflictError("stale operation fence")
 

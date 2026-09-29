@@ -18,6 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from utils.datetime_utils import as_utc
 from models.workspace import (
     WorkspaceAttachmentInput,
     WorkspaceBootstrapRequest,
@@ -126,7 +127,7 @@ def _attachment_unavailable_code(
         return "workspace_asset_deleted"
     if asset.deleted_at is not None or asset.state == "deleted":
         return "workspace_asset_deleted"
-    if asset.expires_at is not None and _as_utc(asset.expires_at) <= now:
+    if asset.expires_at is not None and as_utc(asset.expires_at) <= now:
         return "workspace_asset_expired"
     return {
         "uploaded": "workspace_asset_not_ready",
@@ -223,8 +224,6 @@ def _safe_basename(value: str) -> str:
     return PurePosixPath(value.replace("\\", "/")).name[:512] or "attachment"
 
 
-
-
 def _destructive_approval_ttl_seconds() -> int:
     raw = os.getenv(
         "WORKSPACE_DESTRUCTIVE_APPROVAL_TTL_SECONDS",
@@ -235,12 +234,6 @@ def _destructive_approval_ttl_seconds() -> int:
     except (TypeError, ValueError):
         seconds = _DEFAULT_DESTRUCTIVE_APPROVAL_TTL_SECONDS
     return max(60, min(seconds, 7 * 24 * 60 * 60))
-
-
-def _as_utc(value: datetime) -> datetime:
-    if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
 
 
 def _asset_operation_state(states: list[str]) -> str:
@@ -544,8 +537,6 @@ async def _replay_action_receipt_after_conflict(
     if result_operation is None:
         raise WorkspaceServiceError("idempotency_record_incomplete", status_code=409)
     return receipt, result_operation, True
-
-
 
 
 async def _first_message_for_operation(
@@ -1039,18 +1030,6 @@ async def activate_workspace_operation(
     if commit:
         await session.commit()
     return operation, False
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 async def _verified_authored_local_fit_checkpoint_recovery(
@@ -2128,7 +2107,7 @@ async def apply_workspace_action(
             )
         if (
             operation.approval_expires_at is not None
-            and _as_utc(operation.approval_expires_at) <= _as_utc(now)
+            and as_utc(operation.approval_expires_at) <= as_utc(now)
         ):
             raise WorkspaceServiceError("approval_expired", status_code=409)
         allowed_states = ("approval_required", "awaiting_approval")

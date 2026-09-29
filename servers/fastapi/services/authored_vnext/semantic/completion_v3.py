@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from hashlib import sha256
 import os
 from typing import Any
@@ -11,6 +11,7 @@ import uuid
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from utils.datetime_utils import as_utc
 from models.authored_vnext.semantic.release_authority_v3 import (
     EvidenceBundleCompletionCreateRequestV3,
     EvidenceBundleCompletionSealRequestV3,
@@ -41,10 +42,6 @@ from services.authored_vnext.semantic.release_authority_v3 import (
     validate_actual_product_record_v3,
 )
 from utils.datetime_utils import get_current_utc_datetime
-
-
-def _utc(value: datetime) -> datetime:
-    return value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
 def _required_runtime_pins() -> dict[str, str]:
@@ -289,7 +286,7 @@ async def create_evidence_graph_root_v3(
     tenant_id: str,
     now: datetime | None = None,
 ) -> EvidenceGraphRootV3:
-    observed_at = _utc(now or get_current_utc_datetime())
+    observed_at = as_utc(now or get_current_utc_datetime())
     signed_payload = request.model_dump(mode="json", by_alias=True)
     signed_payload.pop("authority", None)
     signed_payload.pop("completionDigest", None)
@@ -421,7 +418,7 @@ async def seal_evidence_bundle_completion_v3(
     tenant_id: str,
     now: datetime | None = None,
 ) -> EvidenceBundleCompletionV3:
-    observed_at = _utc(now or get_current_utc_datetime())
+    observed_at = as_utc(now or get_current_utc_datetime())
     completion = await session.get(AuthoredEvidenceBundleCompletionV3, completion_id)
     if completion is None or completion.tenant_id != tenant_id:
         raise SemanticContractError("authored_evidence_completion_not_found")

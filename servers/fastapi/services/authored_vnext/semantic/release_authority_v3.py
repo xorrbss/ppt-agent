@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import base64
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from hashlib import sha256
 import json
 import math
@@ -20,6 +20,7 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from utils.datetime_utils import as_utc
 from models.authored_vnext.semantic.release_authority_v3 import (
     CapabilityReceiptIssueRequestV3,
     EvidenceIssuerEnvelopeV3,
@@ -101,7 +102,7 @@ def validate_bound_evidence_subject_v3(
     for field, status_code, code in equality_rules:
         if candidate[field] != expected[field]:
             reject(status_code, code)
-    observed_at = _utc(now or get_current_utc_datetime())
+    observed_at = as_utc(now or get_current_utc_datetime())
     issued_at = datetime.fromisoformat(candidate["issuedAt"].replace("Z", "+00:00"))
     expires_at = datetime.fromisoformat(candidate["expiresAt"].replace("Z", "+00:00"))
     if issued_at > observed_at + _MAX_FUTURE_SKEW:
@@ -178,10 +179,6 @@ def build_bound_capability_subject_v3(
     }
 
 
-def _utc(value: datetime) -> datetime:
-    return value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
-
-
 def _trust_bundle() -> list[dict[str, Any]]:
     raw = os.getenv("AUTHORED_RELEASE_SIGNER_TRUST_BUNDLE_JSON", "")
     try:
@@ -212,7 +209,7 @@ def sign_server_readback_v3(
     public_key_bytes = private_key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
     if "sha256:" + sha256(public_key_bytes).hexdigest() != READBACK_PUBLIC_KEY_DIGEST_V3:
         raise SemanticContractError("authored_release_readback_signer_digest_mismatch")
-    issued_at = _utc(now or get_current_utc_datetime()).replace(microsecond=0)
+    issued_at = as_utc(now or get_current_utc_datetime()).replace(microsecond=0)
     unsigned = dict(payload)
     unsigned.pop("serverReadbackDigest", None)
     unsigned.pop("readbackSignerKeyId", None)
@@ -266,7 +263,7 @@ def release_trust_readback_v3(*, execution_nonce: str) -> dict[str, Any]:
 def validate_server_readback_v3(
     payload: dict[str, Any], *, execution_nonce: str, public_key_bytes: bytes, now: datetime | None = None
 ) -> None:
-    observed_at = _utc(now or get_current_utc_datetime())
+    observed_at = as_utc(now or get_current_utc_datetime())
     if (
         payload.get("executionNonce") != execution_nonce
         or payload.get("readbackSignerKeyId") != READBACK_SIGNER_KEY_ID_V3
@@ -443,9 +440,9 @@ def validate_actual_product_authority_v3(
     *,
     now: datetime | None = None,
 ) -> str:
-    observed_at = _utc(now or get_current_utc_datetime())
-    issued_at = _utc(authority.issued_at)
-    expires_at = _utc(authority.expires_at)
+    observed_at = as_utc(now or get_current_utc_datetime())
+    issued_at = as_utc(authority.issued_at)
+    expires_at = as_utc(authority.expires_at)
     expected_environment = os.getenv("AUTHORED_RELEASE_AUTHORITY_ENVIRONMENT_ID", "").strip()
     if (
         not expected_environment
@@ -546,7 +543,7 @@ def validate_actual_product_record_v3(
         and signed_request.policy_digest == persisted_receipt.policy_digest
         and signed_request.evidence_bundle_id == persisted_receipt.evidence_bundle_id
         and signed_request.evidence_digest == persisted_receipt.evidence_digest
-        and _utc(signed_request.expires_at) == _utc(persisted_receipt.expires_at)
+        and as_utc(signed_request.expires_at) == as_utc(persisted_receipt.expires_at)
         and signed_request.reason_code == persisted_receipt.reason_code
         and signed_request.visual_evidence_authority == persisted_receipt.visual_evidence_authority
         and record.export_attempt_id is not None
@@ -607,9 +604,9 @@ async def issue_actual_product_capability_receipt_v3(
         or request.authority.key_purpose != "actual-product-capability"
     ):
         raise SemanticContractError("authored_capability_receipt_authority_class_invalid")
-    observed_at = _utc(now or get_current_utc_datetime())
+    observed_at = as_utc(now or get_current_utc_datetime())
     receipt_wire = request.receipt.model_dump(mode="json", by_alias=True)
-    if _utc(request.receipt.expires_at) > _utc(request.authority.expires_at):
+    if as_utc(request.receipt.expires_at) > as_utc(request.authority.expires_at):
         raise SemanticContractError("authored_evidence_receipt_outlives_authority")
     binding = await session.scalar(
         select(AuthoredSemanticExportBinding).where(

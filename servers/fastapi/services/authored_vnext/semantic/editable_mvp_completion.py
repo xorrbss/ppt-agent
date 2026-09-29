@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from utils.datetime_utils import as_utc
 from services.authored_vnext.semantic.editable_mvp_completion_codec import (
     DIGEST_RE as DIGEST_RE,
     EditableMvpCompletionError as EditableMvpCompletionError,
@@ -13,7 +14,6 @@ from services.authored_vnext.semantic.editable_mvp_completion_codec import (
     _json_bytes as _json_bytes,
     _decode as _decode,
     _timestamp as _timestamp,
-    _as_utc as _as_utc,
     _require_digest as _require_digest,
 )
 
@@ -432,7 +432,7 @@ def _response(
         profileId=PROFILE_ID,
         resultSetDigest=record.result_set_digest,
         artifactInventoryDigest=record.artifact_inventory_digest,
-        expiresAt=_as_utc(record.expires_at),
+        expiresAt=as_utc(record.expires_at),
         idempotent=idempotent,
         editableHybridMvpReady=True,
         nativeEditableReady=True,
@@ -644,7 +644,7 @@ def match_current_editable_mvp_completion(
             != record.verifier_trust_sha256
         ):
             return None, "editable_hybrid_mvp_completion_bytes_changed"
-        if _as_utc(record.expires_at) <= evaluated_at:
+        if as_utc(record.expires_at) <= evaluated_at:
             return None, "editable_hybrid_mvp_completion_expired"
         if record.verifier_trust_sha256 != configured_trust_digest:
             return None, "editable_hybrid_mvp_trust_pin_changed"
