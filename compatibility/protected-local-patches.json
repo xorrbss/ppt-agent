@@ -151,12 +151,11 @@
     {
       "id": "presentation-export-strategy-boundary",
       "category": "export-boundary",
-      "rationale": "Keep authored HTML, adaptive legacy, authored-hybrid, and Template V2 general export identities separate and fail closed on mixed payloads.",
+      "rationale": "Keep the authored-hybrid export identity validated and fail closed on mixed or spoofed payloads (Template V2 and legacy identities were removed 2026-09-25).",
       "files": [
         {
           "path": "servers/nextjs/lib/presentation-export-strategy.ts",
           "requiredContains": [
-            "\"template-v2-general\"",
             "\"authored-hybrid\"",
             "mixed_slide_payload_forbidden"
           ]
@@ -164,7 +163,6 @@
         {
           "path": "servers/nextjs/lib/presentation-export-strategy.test.ts",
           "requiredContains": [
-            "Template V2 delegates only to the existing general executor",
             "authored HTML delegates only to the existing hybrid executor",
             "invalid identities fail closed before either executor"
           ]
