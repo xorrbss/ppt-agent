@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="720" viewBox="0 0 720 720">
+  <rect x="0" y="0" width="720" height="720" fill="#F8FAFC" />
+
+  <text x="64" y="57" font-family="Noto Sans KR" font-size="15" font-weight="700" fill="#2563EB">실행 로드맵 · 1단계</text>
+  <text x="64" y="112" font-family="Noto Sans KR" font-size="32" font-weight="700" fill="#0F172A">6개월 내 실시간 데이터</text>
+  <text x="64" y="154" font-family="Noto Sans KR" font-size="32" font-weight="700" fill="#0F172A">기반 구축</text>
+  <text x="64" y="191" font-family="Noto Sans KR" font-size="17" fill="#64748B">핵심 설비의 데이터 수집부터 현장 검증까지 진행합니다.</text>
+
+  <line x1="64" y1="222" x2="656" y2="222" stroke="#CBD5E1" />
+  <text x="64" y="252" font-family="Noto Sans KR" font-size="15" font-weight="700" fill="#2563EB">01</text>
+  <text x="112" y="252" font-family="Noto Sans KR" font-size="19" font-weight="700" fill="#0F172A">실시간 수집</text>
+  <text x="112" y="282" font-family="Noto Sans KR" font-size="16" fill="#334155">핵심 설비에 센서를 설치하고 MES와 연동해</text>
+  <text x="112" y="307" font-family="Noto Sans KR" font-size="16" fill="#334155">가동·정지·불량 데이터를 실시간으로 수집</text>
+
+  <line x1="64" y1="337" x2="656" y2="337" stroke="#CBD5E1" />
+  <text x="64" y="367" font-family="Noto Sans KR" font-size="15" font-weight="700" fill="#2563EB">02</text>
+  <text x="112" y="367" font-family="Noto Sans KR" font-size="19" font-weight="700" fill="#0F172A">신호 확인과 기록 표준화</text>
+  <text x="112" y="397" font-family="Noto Sans KR" font-size="16" fill="#334155">설비별 기존 신호와 통신 가능 여부를 확인</text>
+  <text x="112" y="422" font-family="Noto Sans KR" font-size="16" fill="#334155">상태·정지 사유 코드, 생산오더·품목 식별자를</text>
+  <text x="112" y="447" font-family="Noto Sans KR" font-size="16" fill="#334155">표준화해 라인 간 기록을 비교</text>
+
+  <line x1="64" y1="475" x2="656" y2="475" stroke="#CBD5E1" />
+  <text x="64" y="505" font-family="Noto Sans KR" font-size="15" font-weight="700" fill="#2563EB">03</text>
+  <text x="112" y="505" font-family="Noto Sans KR" font-size="19" font-weight="700" fill="#0F172A">단계 종료 검증</text>
+  <text x="112" y="535" font-family="Noto Sans KR" font-size="16" fill="#334155">이벤트 누락·중복, 시간 동기화 및 생산실적과의</text>
+  <text x="112" y="560" font-family="Noto Sans KR" font-size="16" fill="#334155">일치 여부와 교대조별 실제 사용 여부를 검증</text>
+
+  <rect x="64" y="599" width="4" height="62" fill="#2563EB" />
+  <text x="84" y="623" font-family="Noto Sans KR" font-size="15" font-weight="700" fill="#2563EB">완료 기준</text>
+  <text x="84" y="650" font-family="Noto Sans KR" font-size="19" font-weight="700" fill="#0F172A">데이터 품질과 현장 사용 여부를 함께 확인</text>
+<text id="svg-system-page-number" x="688" y="700" font-family="Noto Sans KR" font-size="12" fill="#2563EB" text-anchor="end">03</text></svg>

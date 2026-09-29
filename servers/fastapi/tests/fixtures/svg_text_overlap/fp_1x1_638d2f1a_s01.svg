@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="720" viewBox="0 0 720 720">
+  <rect x="0" y="0" width="720" height="720" fill="#F8FAFC" />
+
+  <text x="64" y="60" font-family="Noto Sans KR" font-size="15" font-weight="700" fill="#2563EB">운영 현황</text>
+  <text x="64" y="108" font-family="Noto Sans KR" font-size="31" font-weight="700" fill="#0F172A">수기 기록이 원인 분석을 지연</text>
+  <text x="64" y="148" font-family="Noto Sans KR" font-size="17" font-weight="400" fill="#475569">3개 생산라인에서 정지 기록과 불량 발생 시점을</text>
+  <text x="64" y="174" font-family="Noto Sans KR" font-size="17" font-weight="400" fill="#475569">일관된 시간축으로 연결하기 어렵습니다.</text>
+
+  <rect x="64" y="203" width="592" height="250" fill="#FFFFFF" />
+  <rect x="64" y="203" width="4" height="250" fill="#2563EB" />
+  <text x="86" y="236" font-family="Noto Sans KR" font-size="17" font-weight="700" fill="#0F172A">3개 생산라인 · 수기 가동 기록</text>
+
+  <text x="198" y="277" font-family="Noto Sans KR" font-size="14" font-weight="700" fill="#64748B" text-anchor="middle">정지 시각·사유</text>
+  <text x="480" y="277" font-family="Noto Sans KR" font-size="14" font-weight="700" fill="#64748B" text-anchor="middle">불량 발생 시점</text>
+
+  <line x1="86" y1="291" x2="634" y2="291" fill="none" stroke="#E2E8F0" stroke-width="1" />
+  <text x="90" y="321" font-family="Noto Sans KR" font-size="15" font-weight="700" fill="#0F172A">라인 1</text>
+  <rect x="163" y="301" width="174" height="34" fill="#F1F5F9" />
+  <rect x="391" y="301" width="174" height="34" fill="#F1F5F9" />
+  <text x="250" y="323" font-family="Noto Sans KR" font-size="13" font-weight="400" fill="#475569" text-anchor="middle">수기 기록</text>
+  <text x="478" y="323" font-family="Noto Sans KR" font-size="13" font-weight="400" fill="#475569" text-anchor="middle">수기 기록</text>
+
+  <line x1="86" y1="346" x2="634" y2="346" fill="none" stroke="#E2E8F0" stroke-width="1" />
+  <text x="90" y="376" font-family="Noto Sans KR" font-size="15" font-weight="700" fill="#0F172A">라인 2</text>
+  <rect x="163" y="356" width="174" height="34" fill="#F1F5F9" />
+  <rect x="391" y="356" width="174" height="34" fill="#F1F5F9" />
+  <text x="250" y="378" font-family="Noto Sans KR" font-size="13" font-weight="400" fill="#475569" text-anchor="middle">수기 기록</text>
+  <text x="478" y="378" font-family="Noto Sans KR" font-size="13" font-weight="400" fill="#475569" text-anchor="middle">수기 기록</text>
+
+  <line x1="86" y1="401" x2="634" y2="401" fill="none" stroke="#E2E8F0" stroke-width="1" />
+  <text x="90" y="431" font-family="Noto Sans KR" font-size="15" font-weight="700" fill="#0F172A">라인 3</text>
+  <rect x="163" y="411" width="174" height="34" fill="#F1F5F9" />
+  <rect x="391" y="411" width="174" height="34" fill="#F1F5F9" />
+  <text x="250" y="433" font-family="Noto Sans KR" font-size="13" font-weight="400" fill="#475569" text-anchor="middle">수기 기록</text>
+  <text x="478" y="433" font-family="Noto Sans KR" font-size="13" font-weight="400" fill="#475569" text-anchor="middle">수기 기록</text>
+
+  <text x="64" y="489" font-family="Noto Sans KR" font-size="14" font-weight="700" fill="#64748B">현재 성과</text>
+  <text x="64" y="541" font-family="Noto Sans KR" font-size="43" font-weight="700" fill="#2563EB">5일</text>
+  <text x="64" y="565" font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#475569">평균 불량 원인 분석 기간</text>
+  <line x1="350" y1="487" x2="350" y2="565" fill="none" stroke="#CBD5E1" stroke-width="1" />
+  <text x="382" y="541" font-family="Noto Sans KR" font-size="43" font-weight="700" fill="#0F172A">68%</text>
+  <text x="382" y="565" font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#475569">현재 설비 종합효율(OEE)</text>
+
+  <line x1="64" y1="591" x2="656" y2="591" fill="none" stroke="#CBD5E1" stroke-width="1" />
+  <text x="64" y="618" font-family="Noto Sans KR" font-size="14" font-weight="700" fill="#2563EB">개선 대상 선정 기준</text>
+  <text x="64" y="648" font-family="Noto Sans KR" font-size="18" font-weight="700" fill="#0F172A">OEE = 가동률 × 성능률 × 양품률</text>
+  <text x="64" y="678" font-family="Noto Sans KR" font-size="16" font-weight="400" fill="#475569">손실을 설비·라인·품목별로 구분해야 합니다.</text>
+<text id="svg-system-page-number" x="688" y="700" font-family="Noto Sans KR" font-size="12" fill="#2563EB" text-anchor="end">02</text></svg>

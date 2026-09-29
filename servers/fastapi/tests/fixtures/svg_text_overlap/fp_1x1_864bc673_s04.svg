@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="720" viewBox="0 0 720 720">
+  <rect x="0" y="0" width="720" height="720" fill="#F8FAFC" />
+
+  <text x="64" y="47" font-family="Noto Sans KR" font-size="14" font-weight="700" fill="#2563EB">실행 로드맵</text>
+  <text x="64" y="96" font-family="Noto Sans KR" font-size="32" font-weight="700" fill="#0F172A">2개 본부 파일럿에서</text>
+  <text x="64" y="136" font-family="Noto Sans KR" font-size="32" font-weight="700" fill="#0F172A">전사 확대까지</text>
+
+  <text x="64" y="183" font-family="Noto Sans KR" font-size="15" font-weight="700" fill="#64748B">추진 순서</text>
+  <rect x="64" y="199" width="284" height="145" fill="#FFFFFF" />
+  <rect x="64" y="199" width="284" height="3" fill="#2563EB" />
+  <text x="84" y="230" font-family="Noto Sans KR" font-size="14" font-weight="700" fill="#2563EB">01 · 파일럿</text>
+  <text x="84" y="271" font-family="Noto Sans KR" font-size="24" font-weight="700" fill="#0F172A">2026년 4분기</text>
+  <text x="84" y="309" font-family="Noto Sans KR" font-size="17" fill="#475569">2개 본부에서 시작</text>
+
+  <line x1="350" y1="272" x2="370" y2="272" stroke="#2563EB" stroke-width="2" />
+  <rect x="372" y="199" width="284" height="145" fill="#FFFFFF" />
+  <rect x="372" y="199" width="284" height="3" fill="#2563EB" />
+  <text x="392" y="230" font-family="Noto Sans KR" font-size="14" font-weight="700" fill="#2563EB">02 · 전사 확대</text>
+  <text x="392" y="271" font-family="Noto Sans KR" font-size="24" font-weight="700" fill="#0F172A">반기 후 추진</text>
+  <text x="392" y="305" font-family="Noto Sans KR" font-size="14" fill="#475569">정확한 날짜는 실행계획에서</text>
+  <text x="392" y="326" font-family="Noto Sans KR" font-size="14" fill="#475569">확정</text>
+
+  <text x="64" y="383" font-family="Noto Sans KR" font-size="15" font-weight="700" fill="#64748B">운영 책임</text>
+  <line x1="64" y1="400" x2="656" y2="400" stroke="#CBD5E1" stroke-width="1" />
+  <line x1="64" y1="462" x2="656" y2="462" stroke="#E2E8F0" stroke-width="1" />
+  <line x1="64" y1="524" x2="656" y2="524" stroke="#CBD5E1" stroke-width="1" />
+  <line x1="360" y1="400" x2="360" y2="524" stroke="#E2E8F0" stroke-width="1" />
+
+  <text x="64" y="426" font-family="Noto Sans KR" font-size="14" font-weight="700" fill="#2563EB">인사팀</text>
+  <text x="64" y="450" font-family="Noto Sans KR" font-size="16" fill="#0F172A">제도와 평가 기준</text>
+  <text x="380" y="426" font-family="Noto Sans KR" font-size="14" font-weight="700" fill="#2563EB">본부</text>
+  <text x="380" y="450" font-family="Noto Sans KR" font-size="16" fill="#0F172A">공통 출근일</text>
+
+  <text x="64" y="488" font-family="Noto Sans KR" font-size="14" font-weight="700" fill="#2563EB">IT 담당 조직</text>
+  <text x="64" y="512" font-family="Noto Sans KR" font-size="16" fill="#0F172A">협업 도구</text>
+  <text x="380" y="488" font-family="Noto Sans KR" font-size="14" font-weight="700" fill="#2563EB">총무·시설 담당 조직</text>
+  <text x="380" y="512" font-family="Noto Sans KR" font-size="16" fill="#0F172A">공간 예약 운영</text>
+
+  <rect x="64" y="552" width="592" height="121" fill="#EFF6FF" />
+  <rect x="64" y="552" width="4" height="121" fill="#2563EB" />
+  <text x="84" y="579" font-family="Noto Sans KR" font-size="15" font-weight="700" fill="#2563EB">파일럿 시작 전 확인</text>
+  <text x="84" y="607" font-family="Noto Sans KR" font-size="16" fill="#0F172A">기본 재택 일수와 예외 기준 명시</text>
+  <text x="84" y="633" font-family="Noto Sans KR" font-size="15" fill="#0F172A">온보딩 소요 기간 · 회의 일정 조율 시간</text>
+  <text x="84" y="659" font-family="Noto Sans KR" font-size="15" fill="#0F172A">직무별 생산성의 기준치 확보</text>
+<text id="svg-system-page-number" x="688" y="700" font-family="Noto Sans KR" font-size="12" fill="#2563EB" text-anchor="end">05</text></svg>

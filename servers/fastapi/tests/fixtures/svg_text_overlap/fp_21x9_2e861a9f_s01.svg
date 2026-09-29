@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1680" height="720" viewBox="0 0 1680 720">
+  <rect x="0" y="0" width="1680" height="720" fill="#F8FAFC" />
+  <text x="56" y="53" font-family="Noto Sans KR" font-size="17" font-weight="700" fill="#2563EB">현황 / 투자 필요성</text>
+  <text x="56" y="111" font-family="Noto Sans KR" font-size="40" font-weight="700" fill="#0F172A">수기 기록을 연결해 OEE 손실을 진단해야 합니다</text>
+  <text x="57" y="157" font-family="Noto Sans KR" font-size="21" font-weight="400" fill="#475569">3개 생산라인의 정지·불량 이력을 같은 기준으로 추적하는 것이 출발점입니다.</text>
+  <line x1="56" y1="190" x2="1624" y2="190" stroke="#CBD5E1" stroke-width="1" />
+
+  <text x="56" y="239" font-family="Noto Sans KR" font-size="22" font-weight="700" fill="#0F172A">현재 기록의 한계</text>
+  <rect x="56" y="255" width="44" height="3" fill="#2563EB" />
+  <text x="56" y="299" font-family="Noto Sans KR" font-size="19" font-weight="400" fill="#334155">3개 생산라인의 설비 가동 데이터를</text>
+  <text x="56" y="328" font-family="Noto Sans KR" font-size="19" font-weight="400" fill="#334155">수기로 기록하고 있습니다.</text>
+  <text x="56" y="370" font-family="Noto Sans KR" font-size="19" font-weight="400" fill="#334155">정지 시각·설비 상태·불량 발생 시점을</text>
+  <text x="56" y="399" font-family="Noto Sans KR" font-size="19" font-weight="400" fill="#334155">신속하게 대조하기 어렵습니다.</text>
+  <line x1="56" y1="432" x2="456" y2="432" stroke="#CBD5E1" stroke-width="1" />
+  <text x="56" y="474" font-family="Noto Sans KR" font-size="17" font-weight="700" fill="#2563EB">불량 원인 분석 평균</text>
+  <text x="56" y="540" font-family="Noto Sans KR" font-size="58" font-weight="700" fill="#0F172A">5일</text>
+  <text x="56" y="582" font-family="Noto Sans KR" font-size="18" font-weight="400" fill="#334155">가동·정지 기록을 품목, 생산 시각,</text>
+  <text x="56" y="610" font-family="Noto Sans KR" font-size="18" font-weight="400" fill="#334155">검사 결과와 연결해 분석 대상 탐색</text>
+  <text x="56" y="638" font-family="Noto Sans KR" font-size="18" font-weight="400" fill="#334155">시간을 줄여야 합니다.</text>
+
+  <line x1="495" y1="220" x2="495" y2="647" stroke="#E2E8F0" stroke-width="1" />
+  <text x="526" y="239" font-family="Noto Sans KR" font-size="22" font-weight="700" fill="#0F172A">OEE 개선 격차</text>
+  <rect x="526" y="255" width="44" height="3" fill="#2563EB" />
+  <g id="native-chart-oee-gap">
+    <text x="526" y="299" font-family="Noto Sans KR" font-size="18" font-weight="400" fill="#475569">설비 종합효율(OEE) · 단위 %</text>
+    <text x="1001" y="299" text-anchor="end" font-family="Noto Sans KR" font-size="15" font-weight="400" fill="#64748B">OEE</text>
+    <text x="526" y="359" font-family="Noto Sans KR" font-size="19" font-weight="400" fill="#334155">현재</text>
+    <text x="526" y="447" font-family="Noto Sans KR" font-size="19" font-weight="400" fill="#334155">2년 이내 목표</text>
+    <rect x="674" y="328" width="272" height="48" fill="#94A3B8" />
+    <rect x="674" y="416" width="320" height="48" fill="#2563EB" />
+    <text x="927" y="359" text-anchor="end" font-family="Noto Sans KR" font-size="21" font-weight="700" fill="#0F172A">68%</text>
+    <text x="975" y="447" text-anchor="end" font-family="Noto Sans KR" font-size="21" font-weight="700" fill="#FFFFFF">80%</text>
+  </g>
+  <text x="526" y="541" font-family="Noto Sans KR" font-size="43" font-weight="700" fill="#2563EB">12%포인트</text>
+  <text x="526" y="573" font-family="Noto Sans KR" font-size="17" font-weight="400" fill="#475569">2년 이내 높여야 할 격차</text>
+  <text x="526" y="612" font-family="Noto Sans KR" font-size="18" font-weight="400" fill="#334155">개선 과제는 가동률·성능률·양품률 손실을</text>
+  <text x="526" y="640" font-family="Noto Sans KR" font-size="18" font-weight="400" fill="#334155">라인별로 구분해 결정합니다.</text>
+
+  <line x1="1091" y1="220" x2="1091" y2="647" stroke="#E2E8F0" stroke-width="1" />
+  <text x="1122" y="239" font-family="Noto Sans KR" font-size="22" font-weight="700" fill="#0F172A">착수 시점에 비교 기준 통일</text>
+  <rect x="1122" y="255" width="44" height="3" fill="#2563EB" />
+  <text x="1122" y="299" font-family="Noto Sans KR" font-size="18" font-weight="400" fill="#334155">도입 전후 성과를 같은 기준으로 비교하려면</text>
+  <text x="1122" y="329" font-family="Noto Sans KR" font-size="18" font-weight="400" fill="#334155">계획생산시간·휴지시간·정지 사유,</text>
+  <text x="1122" y="359" font-family="Noto Sans KR" font-size="18" font-weight="400" fill="#334155">불량 판정·품목별 표준 사이클타임을</text>
+  <text x="1122" y="389" font-family="Noto Sans KR" font-size="18" font-weight="400" fill="#334155">통일해야 합니다.</text>
+  <line x1="1122" y1="420" x2="1624" y2="420" stroke="#CBD5E1" stroke-width="1" />
+  <text x="1122" y="463" font-family="Noto Sans KR" font-size="22" font-weight="700" fill="#0F172A">초기 진단</text>
+  <text x="1122" y="505" font-family="Noto Sans KR" font-size="18" font-weight="400" fill="#334155">3개 라인의 수기 기록을 실제 정지·불량</text>
+  <text x="1122" y="535" font-family="Noto Sans KR" font-size="18" font-weight="400" fill="#334155">이력과 대조합니다.</text>
+  <text x="1122" y="577" font-family="Noto Sans KR" font-size="18" font-weight="400" fill="#334155">핵심 설비별 신호 취득 가능 여부를 확인해</text>
+  <text x="1122" y="607" font-family="Noto Sans KR" font-size="18" font-weight="400" fill="#334155">1단계 연동 범위를 확정합니다.</text>
+<text id="svg-system-page-number" x="1648" y="700" font-family="Noto Sans KR" font-size="12" fill="#2563EB" text-anchor="end">02</text></svg>

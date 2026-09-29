@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect x="0" y="0" width="1280" height="720" fill="#F8FAFC" />
+  <rect x="64" y="77" width="38" height="4" fill="#2563EB" />
+  <text x="64" y="112" font-family="Noto Sans KR" font-size="17" font-weight="700" fill="#2563EB">경영진 보고 · 스마트팩토리 도입 계획</text>
+
+  <text x="64" y="199" font-family="Noto Sans KR" font-size="51" font-weight="700" fill="#0F172A">중견 제조기업</text>
+  <text x="64" y="266" font-family="Noto Sans KR" font-size="51" font-weight="700" fill="#0F172A">스마트팩토리</text>
+  <text x="64" y="333" font-family="Noto Sans KR" font-size="51" font-weight="700" fill="#0F172A">단계별 도입 계획</text>
+
+  <text x="64" y="407" font-family="Noto Sans KR" font-size="23" fill="#334155">3개 생산라인의 수기 기록을</text>
+  <text x="64" y="443" font-family="Noto Sans KR" font-size="23" fill="#334155">데이터 기반 운영으로 전환합니다.</text>
+
+  <rect x="778" y="131" width="438" height="359" fill="#FFFFFF" />
+  <text x="809" y="174" font-family="Noto Sans KR" font-size="18" font-weight="700" fill="#0F172A">3개 생산라인 전환 범위</text>
+  <line x1="809" y1="192" x2="1185" y2="192" stroke="#CBD5E1" stroke-width="1" />
+
+  <text x="809" y="230" font-family="Noto Sans KR" font-size="16" font-weight="700" fill="#64748B">현재</text>
+  <text x="899" y="230" font-family="Noto Sans KR" font-size="20" fill="#0F172A">수기 기록</text>
+  <line x1="809" y1="251" x2="1185" y2="251" stroke="#E2E8F0" stroke-width="1" />
+
+  <text x="809" y="290" font-family="Noto Sans KR" font-size="16" font-weight="700" fill="#2563EB">1단계</text>
+  <text x="899" y="290" font-family="Noto Sans KR" font-size="20" fill="#0F172A">실시간 데이터 수집</text>
+  <line x1="809" y1="311" x2="1185" y2="311" stroke="#E2E8F0" stroke-width="1" />
+
+  <text x="809" y="350" font-family="Noto Sans KR" font-size="16" font-weight="700" fill="#2563EB">2단계</text>
+  <text x="899" y="350" font-family="Noto Sans KR" font-size="20" fill="#0F172A">예지보전·품질 조기경보</text>
+  <line x1="809" y1="371" x2="1185" y2="371" stroke="#E2E8F0" stroke-width="1" />
+
+  <text x="809" y="410" font-family="Noto Sans KR" font-size="16" font-weight="700" fill="#2563EB">3단계</text>
+  <text x="899" y="410" font-family="Noto Sans KR" font-size="20" fill="#0F172A">생산계획 자동 조정</text>
+
+  <rect x="64" y="520" width="1152" height="116" fill="#EFF6FF" />
+  <rect x="64" y="520" width="4" height="116" fill="#2563EB" />
+  <text x="91" y="555" font-family="Noto Sans KR" font-size="16" font-weight="700" fill="#2563EB">이번 보고의 검토 사항</text>
+  <text x="91" y="589" font-family="Noto Sans KR" font-size="23" font-weight="700" fill="#0F172A">총 투자비 약 24억 원 · 예상 회수기간 2.5년</text>
+  <text x="91" y="619" font-family="Noto Sans KR" font-size="17" fill="#475569">산정 근거와 단계별 일정의 해석, 2년 내 성과 목표를 확인합니다.</text>
+
+  <text x="64" y="680" font-family="Noto Sans KR" font-size="15" fill="#64748B">2026년 9월 29일</text>
+  <text x="250" y="680" font-family="Noto Sans KR" font-size="15" fill="#64748B">발표자: 경영진 보고 담당자 (성명 미제공)</text>
+<text id="svg-system-page-number" x="1248" y="700" font-family="Noto Sans KR" font-size="12" fill="#2563EB" text-anchor="end">01</text></svg>

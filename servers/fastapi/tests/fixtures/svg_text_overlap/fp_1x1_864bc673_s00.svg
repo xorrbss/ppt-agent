@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="720" viewBox="0 0 720 720">
+  <rect x="0" y="0" width="720" height="720" fill="#F8FAFC" />
+
+  <text x="64" y="68" font-family="Noto Sans KR" font-size="15" font-weight="700" fill="#2563EB">인사 제도 개편 제안</text>
+  <rect x="64" y="91" width="40" height="4" fill="#2563EB" />
+
+  <text x="64" y="156" font-family="Noto Sans KR" font-size="39" font-weight="700" fill="#0F172A">전사 하이브리드 근무</text>
+  <text x="64" y="211" font-family="Noto Sans KR" font-size="39" font-weight="700" fill="#0F172A">제도 개편안</text>
+
+  <rect x="64" y="263" width="592" height="207" fill="#FFFFFF" />
+  <rect x="64" y="263" width="5" height="207" fill="#2563EB" />
+  <text x="99" y="414" font-family="Noto Sans KR" font-size="112" font-weight="700" fill="#2563EB">2</text>
+  <text x="208" y="365" font-family="Noto Sans KR" font-size="27" font-weight="700" fill="#0F172A">주 2일 재택</text>
+  <text x="208" y="405" font-family="Noto Sans KR" font-size="19" font-weight="400" fill="#64748B">시범 운영을 바탕으로</text>
+
+  <text x="64" y="521" font-family="Noto Sans KR" font-size="23" font-weight="700" fill="#0F172A">유지할 성과, 보완할 과제</text>
+  <text x="64" y="558" font-family="Noto Sans KR" font-size="18" font-weight="400" fill="#0F172A">만족도·이직률 개선을 유지하면서</text>
+  <text x="64" y="585" font-family="Noto Sans KR" font-size="18" font-weight="400" fill="#0F172A">온보딩과 부서 간 협업 문제를 보완합니다.</text>
+  <text x="64" y="619" font-family="Noto Sans KR" font-size="17" font-weight="400" fill="#64748B">공간 전환 계획과 2개 본부 파일럿,</text>
+  <text x="64" y="645" font-family="Noto Sans KR" font-size="17" font-weight="400" fill="#64748B">전사 확대 판단 기준을 제안합니다.</text>
+
+  <line x1="64" y1="665" x2="656" y2="665" stroke="#CBD5E1" stroke-width="1" />
+  <text x="64" y="694" font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#64748B">인사팀  ·  2026년 9월 29일</text>
+<text id="svg-system-page-number" x="688" y="700" font-family="Noto Sans KR" font-size="12" fill="#2563EB" text-anchor="end">01</text></svg>
