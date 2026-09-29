@@ -27,6 +27,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import Session as SyncSession
 
+from utils.env_settings.workspace_maintenance import positive_int_knob
 from models.sql.image_asset import ImageAsset
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
@@ -1305,12 +1306,10 @@ async def sweep_workspace_cleanup_journal(
 
 
 def _cleanup_maintenance_interval_seconds() -> int:
-    raw = (os.getenv("WORKSPACE_CLEANUP_MAINTENANCE_INTERVAL_SECONDS") or "").strip()
-    try:
-        value = int(raw)
-    except ValueError:
-        return DEFAULT_CLEANUP_MAINTENANCE_INTERVAL_SECONDS
-    return max(1, value) if value > 0 else DEFAULT_CLEANUP_MAINTENANCE_INTERVAL_SECONDS
+    return positive_int_knob(
+        "WORKSPACE_CLEANUP_MAINTENANCE_INTERVAL_SECONDS",
+        DEFAULT_CLEANUP_MAINTENANCE_INTERVAL_SECONDS,
+    )
 
 
 async def _workspace_cleanup_maintenance_loop() -> None:

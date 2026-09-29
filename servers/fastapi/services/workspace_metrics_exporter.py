@@ -10,8 +10,9 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 import logging
-import os
 
+from utils.env_parse import EnvValueError
+from utils.env_settings.workspace_maintenance import get_metrics_exporter_settings
 from services.workspace_metrics import WORKSPACE_METRICS
 from services.database import async_session_maker
 from services.public_operation_admission import public_prometheus_metrics_text
@@ -33,16 +34,14 @@ def workspace_worker_metrics_endpoint() -> tuple[str, int] | None:
     unobservable external worker.
     """
 
-    raw_port = os.getenv(_PORT_ENV)
-    if raw_port is None or not raw_port.strip():
-        return None
     try:
-        port = int(raw_port)
-    except ValueError as error:
+        exporter = get_metrics_exporter_settings()
+    except EnvValueError as error:
         raise RuntimeError("workspace_operation_metrics_port_invalid") from error
-    if port < 1 or port > 65_535:
-        raise RuntimeError("workspace_operation_metrics_port_invalid")
-    host = os.getenv(_HOST_ENV, _DEFAULT_HOST).strip()
+    port = exporter.port
+    if port is None:
+        return None
+    host = exporter.host
     if not host:
         raise RuntimeError("workspace_operation_metrics_host_invalid")
     return host, port

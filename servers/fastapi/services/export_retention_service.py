@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import time
 
+from utils.env_settings.workspace_maintenance import positive_int_knob
 from utils.get_env import get_app_data_directory_env
 
 
@@ -22,12 +23,7 @@ _export_sweep_stop: asyncio.Event | None = None
 
 
 def _configured_positive_int(name: str, default: int) -> int:
-    raw = (os.getenv(name) or "").strip()
-    try:
-        value = int(raw)
-    except ValueError:
-        return default
-    return value if value > 0 else default
+    return positive_int_knob(name, default)
 
 
 def _exports_root() -> Path:

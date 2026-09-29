@@ -12,12 +12,12 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta
 import logging
-import os
 from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from utils.env_settings.workspace_maintenance import positive_int_knob
 from models.sql.workspace import WorkspaceAsset
 from models.workspace import WorkspaceAssetTransitionRequest
 from services.database import async_session_maker
@@ -50,12 +50,7 @@ _maintenance_stop: asyncio.Event | None = None
 
 
 def _configured_positive_int(name: str, default: int, *, minimum: int = 1) -> int:
-    raw = (os.getenv(name) or "").strip()
-    try:
-        value = int(raw)
-    except ValueError:
-        return default
-    return max(minimum, value) if value > 0 else default
+    return positive_int_knob(name, default, minimum=minimum)
 
 
 async def reconcile_timed_out_workspace_assets(

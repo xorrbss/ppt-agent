@@ -6,13 +6,16 @@ import asyncio
 from dataclasses import dataclass
 from datetime import timedelta
 import logging
-import os
 from pathlib import Path
 import uuid
 
 from sqlalchemy import delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from utils.env_settings.workspace_maintenance import (
+    get_account_deletion_interval_seconds,
+    is_authored_vnext_ooxml_storage_required,
+)
 from models.sql.account_deletion_request import AccountDeletionRequest
 from models.sql.key_value import KeyValueSqlModel
 from services.account_deletion_service import (
@@ -50,20 +53,7 @@ _DEFAULT_INTERVAL_SECONDS = 5
 
 
 def _account_deletion_controller_interval_seconds() -> int:
-    raw_interval = os.getenv("ACCOUNT_DELETION_CONTROLLER_INTERVAL_SECONDS")
-    try:
-        configured_interval = (
-            _DEFAULT_INTERVAL_SECONDS
-            if raw_interval is None
-            else int(raw_interval)
-        )
-    except (TypeError, ValueError):
-        LOGGER.warning(
-            "Invalid account deletion controller interval; using default=%s",
-            _DEFAULT_INTERVAL_SECONDS,
-        )
-        configured_interval = _DEFAULT_INTERVAL_SECONDS
-    return max(1, configured_interval)
+    return get_account_deletion_interval_seconds(_DEFAULT_INTERVAL_SECONDS)
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,13 +86,7 @@ async def _apply_external_account_deletion_io(
             owner_id=str(owner_id),
             expected_generation=generation,
         )
-    elif any(
-        os.getenv(flag, "false").lower() in {"1", "true", "yes", "on"}
-        for flag in (
-            "AUTHORED_VNEXT_OOXML_PACKAGE_ENABLED",
-            "AUTHORED_VNEXT_MASTER_ENABLED",
-        )
-    ):
+    elif is_authored_vnext_ooxml_storage_required():
         raise RuntimeError("authored_vnext_ooxml_storage_unavailable")
 
     await revoke_account_provider_credentials(session, owner_id=owner_id)

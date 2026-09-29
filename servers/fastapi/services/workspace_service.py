@@ -18,6 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from utils.env_settings.workspace_maintenance import get_destructive_approval_ttl_seconds
 from models.workspace import (
     WorkspaceAttachmentInput,
     WorkspaceBootstrapRequest,
@@ -226,15 +227,9 @@ def _safe_basename(value: str) -> str:
 
 
 def _destructive_approval_ttl_seconds() -> int:
-    raw = os.getenv(
-        "WORKSPACE_DESTRUCTIVE_APPROVAL_TTL_SECONDS",
-        str(_DEFAULT_DESTRUCTIVE_APPROVAL_TTL_SECONDS),
+    return get_destructive_approval_ttl_seconds(
+        _DEFAULT_DESTRUCTIVE_APPROVAL_TTL_SECONDS
     )
-    try:
-        seconds = int(raw)
-    except (TypeError, ValueError):
-        seconds = _DEFAULT_DESTRUCTIVE_APPROVAL_TTL_SECONDS
-    return max(60, min(seconds, 7 * 24 * 60 * 60))
 
 
 def _as_utc(value: datetime) -> datetime:
