@@ -29,6 +29,7 @@ from utils.llm_config import enforce_llm_egress_policy, get_llm_config
 from utils.llm_provider import get_llm_provider, get_model
 from utils.llm_utils import extract_text, get_generate_kwargs
 from utils.provider_idempotency import provider_generate_call, supports_provider_idempotency
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 SVG_AUTHOR_RULES = """Author one complete self-contained SVG slide, not HTML, markdown, or explanatory prose.
 Return <svg xmlns="http://www.w3.org/2000/svg" width="W" height="H" viewBox="0 0 W H">.
@@ -74,7 +75,8 @@ class SvgAuthorResult:
 
 def svg_author_rules(style_snapshot: dict, body_floor: float) -> str:
     canvas = style_snapshot.get("canvas") or {}
-    width, height = int(canvas.get("width", 1280)), int(canvas.get("height", 720))
+    width = int(canvas.get("width", DEFAULT_CANVAS_WIDTH_PX))
+    height = int(canvas.get("height", DEFAULT_CANVAS_HEIGHT_PX))
     return (SVG_AUTHOR_RULES + native_author_rules() + f"\nBody text minimum: {body_floor:g} CSS px. "
             "Honor explicit user typography constraints.\n" + composition_clause(width, height))
 

@@ -35,6 +35,7 @@ from utils.llm_calls.author_slide_brief import (
 from services.source_images.models import SourceImageCandidate
 from services.source_content.placeholder.prompt import placeholder_prompt_for_slide
 from utils.prompt_safety import format_untrusted_source_documents
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX
 
 
 #: Historical sample budget; retained for callers. Explicit user instructions
@@ -283,7 +284,7 @@ def author_prompt(
     infographic: AuthoredSlideInfographic | None = None,
     capacity_brief: str | None = None,
     style_anchor: object | None = None,
-    canvas_height_px: int = 720,
+    canvas_height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
 ) -> str:
     """Compose one slide's authoring prompt.
 

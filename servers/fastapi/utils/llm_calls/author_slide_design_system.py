@@ -18,6 +18,7 @@ from utils.llm_calls.author_slide_brief import (
     SHARED_UNIVERSALS,
     composition_intent_block,
 )
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 LOCAL_FONT_FALLBACKS = {
     "noto sans kr": ("Noto Sans KR", "Malgun Gothic", "sans-serif"),
@@ -76,8 +77,8 @@ def build_design_system(
     page_number_system: str,
     type_scale: str,
     header_system: str = "",
-    canvas_width_px: int = 1280,
-    canvas_height_px: int = 720,
+    canvas_width_px: int = DEFAULT_CANVAS_WIDTH_PX,
+    canvas_height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
     canvas_safe_area: object | None = None,
 ) -> str:
     """Build the concrete shared brief for a brand and optional authored style."""

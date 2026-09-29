@@ -83,6 +83,12 @@ from services.authored_batch_policy import (
 from utils.authored_styles import reference_images_for_role
 from utils.get_env import is_authored_visual_story_plan_enabled
 from utils.renderer_worker_policy import RendererPolicyError
+from services.authored_canvas import (
+    DEFAULT_CANVAS_HEIGHT_PX,
+    DEFAULT_CANVAS_WIDTH_PX,
+    canvas_or_default,
+    is_default_landscape,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -149,8 +155,8 @@ class AuthoredDeckPlan:
     # Exact title/body/visible-text accounting produced before provider work.
     # It shares the capacity authority above and never mutates source content.
     text_plan: AuthoredTextPlan | None = None
-    canvas_width_px: int = 1280
-    canvas_height_px: int = 720
+    canvas_width_px: int = DEFAULT_CANVAS_WIDTH_PX
+    canvas_height_px: int = DEFAULT_CANVAS_HEIGHT_PX
 
     def header_contract_at(self, index: int) -> AuthoredHeaderContract | None:
         """The contract governing one slide, or None when its source has none.
@@ -843,8 +849,8 @@ async def _author_one_resilient(
     # H2: fired deterministic repairs are appended here when the caller has a
     # per-slide quality receipt to carry them.
     normalization_receipt: list[dict] | None = None,
-    canvas_width_px: int = 1280,
-    canvas_height_px: int = 720,
+    canvas_width_px: int = DEFAULT_CANVAS_WIDTH_PX,
+    canvas_height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
 ) -> str:
     """Author one slide with one explicit correction and a branded fallback.
 
@@ -1220,8 +1226,7 @@ def prepare_authored_deck(
             for value in structured_slide_contexts
         )
     effective_brand = apply_style_defaults(brand, style)
-    canvas_width_px = int(getattr(canvas, "width_px", 1280))
-    canvas_height_px = int(getattr(canvas, "height_px", 720))
+    canvas_width_px, canvas_height_px = canvas_or_default(canvas)
     roles = tuple(plan_deck_roles(outline, chapter_plan))
     reference_mode = normalize_reference_mode(getattr(style, "reference_mode", STYLE_REFERENCE))
     if reference_mode == EXACT_RECONSTRUCTION:
@@ -1322,7 +1327,7 @@ def prepare_authored_deck(
             **(
                 {"canvas_safe_area": canvas.safe_area}
                 if canvas is not None
-                and (canvas_width_px, canvas_height_px) != (1280, 720)
+                and not is_default_landscape(canvas_width_px, canvas_height_px)
                 else {}
             ),
         )
@@ -1395,8 +1400,8 @@ def _capacity_brief(plan: AuthoredDeckPlan, index: int, capacity: SlideCapacity)
         return relaxed_geometry_brief(plan, index)
     brief = capacity.prompt_brief(
         capacity_plan.profile,
-        canvas_width_px=getattr(plan, "canvas_width_px", 1280),
-        canvas_height_px=getattr(plan, "canvas_height_px", 720),
+        canvas_width_px=getattr(plan, "canvas_width_px", DEFAULT_CANVAS_WIDTH_PX),
+        canvas_height_px=getattr(plan, "canvas_height_px", DEFAULT_CANVAS_HEIGHT_PX),
     )
     if not brief:
         return None
@@ -1442,7 +1447,7 @@ def _planned_batch_request(
         correction_hint=(failure.correction_hint if failure is not None else None),
         rejected_html=(failure.rejected_html if failure is not None else None),
         style_anchor=style_anchor,
-        canvas_height_px=getattr(plan, "canvas_height_px", 720),
+        canvas_height_px=getattr(plan, "canvas_height_px", DEFAULT_CANVAS_HEIGHT_PX),
     )
 
 
@@ -1726,8 +1731,8 @@ async def author_planned_slide(
         prior_failure_hint=prior_failure_hint,
         style_anchor=style_anchor,
         normalization_receipt=normalization_receipt,
-        canvas_width_px=getattr(plan, "canvas_width_px", 1280),
-        canvas_height_px=getattr(plan, "canvas_height_px", 720),
+        canvas_width_px=getattr(plan, "canvas_width_px", DEFAULT_CANVAS_WIDTH_PX),
+        canvas_height_px=getattr(plan, "canvas_height_px", DEFAULT_CANVAS_HEIGHT_PX),
     )
 
 
@@ -1806,8 +1811,8 @@ async def author_deck(
             index,
             len(plan.contents),
             page_number_mode=plan.page_number_mode,
-            canvas_width_px=getattr(plan, "canvas_width_px", 1280),
-            canvas_height_px=getattr(plan, "canvas_height_px", 720),
+            canvas_width_px=getattr(plan, "canvas_width_px", DEFAULT_CANVAS_WIDTH_PX),
+            canvas_height_px=getattr(plan, "canvas_height_px", DEFAULT_CANVAS_HEIGHT_PX),
         )
     return AuthoredDeckResult(
         htmls=[html_by_index[index] for index in range(len(plan.contents))],
@@ -1819,8 +1824,8 @@ def build_image_pptx(
     images: List[bytes],
     out_path: str,
     *,
-    canvas_width_px: int = 1280,
-    canvas_height_px: int = 720,
+    canvas_width_px: int = DEFAULT_CANVAS_WIDTH_PX,
+    canvas_height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
     physical_size_emu: tuple[int, int] | None = None,
 ) -> str:
     """Assemble rendered slide PNGs into a PPTX, one full-bleed picture per

@@ -30,9 +30,10 @@ from utils.renderer_worker_response import (
 from utils.slide_capture import _admit_render_source, _cache_browser_metrics
 from utils.slide_capture_worker_lease import acquire_lease
 from utils.slide_capture_worker_session import RendererWorkerSession
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX, is_default_landscape
 
 async def _render_html_in_isolated_worker(  # noqa: ASYNC109
-    html: str, timeout: int, *, width_px: int = 1280, height_px: int = 720,
+    html: str, timeout: int, *, width_px: int = DEFAULT_CANVAS_WIDTH_PX, height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
     preserved_raster_svg: str | None = None,
 ) -> tuple[bytes, Mapping[str, Any] | None]:
     if preserved_raster_svg is not None:
@@ -134,8 +135,8 @@ async def render_with_lease(  # noqa: ASYNC109
     timeout: int = 60,
     *,
     render_fn: Any = None,
-    width_px: int = 1280,
-    height_px: int = 720,
+    width_px: int = DEFAULT_CANVAS_WIDTH_PX,
+    height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
 ) -> tuple[bytes, Mapping[str, Any] | None]:
     """Render one authored slide, batching same-deck renders behind a lease.
 
@@ -170,7 +171,7 @@ async def render_with_lease(  # noqa: ASYNC109
     exchange = _render_html_in_isolated_worker if render_fn is None else render_fn
 
     async def dimensioned_exchange(value: str, value_timeout: int):
-        if (width_px, height_px) == (1280, 720):
+        if is_default_landscape(width_px, height_px):
             return await exchange(value, value_timeout)
         return await exchange(
             value, value_timeout, width_px=width_px, height_px=height_px

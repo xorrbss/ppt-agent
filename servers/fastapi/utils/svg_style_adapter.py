@@ -17,6 +17,7 @@ from services.generation_core.drivers.svg.project_style import (
     project_style,
 )
 from services.generation_core.style.build import build_style_context
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 __all__ = ["SVG_STYLE_ADAPTER_VERSION", "adapt_svg_style"]
 
@@ -40,8 +41,8 @@ _MAPPINGS = {
 def adapt_svg_style(
     style,
     *,
-    width: int = 1280,
-    height: int = 720,
+    width: int = DEFAULT_CANVAS_WIDTH_PX,
+    height: int = DEFAULT_CANVAS_HEIGHT_PX,
     source_template: bool = False,
     request: object | None = None,
     master_rules: dict | None = None,

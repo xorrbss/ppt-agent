@@ -55,6 +55,7 @@ from utils.renderer_css_admission import (
     _validate_css as _validate_css,
     duplicate_attribute_counts as duplicate_attribute_counts,
 )
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 
 MAX_REQUEST_BYTES = 12 * 1024 * 1024 + 4096
@@ -444,7 +445,7 @@ def admit_internal_instrumented_html(source: str, capability: str) -> AdmittedHt
 
 
 def encode_request(
-    html: str, timeout: int, *, width_px: int = 1280, height_px: int = 720,
+    html: str, timeout: int, *, width_px: int = DEFAULT_CANVAS_WIDTH_PX, height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
     preserved_raster_svg: str | None = None,
 ) -> bytes:
     wire = json.dumps(

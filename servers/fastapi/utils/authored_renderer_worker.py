@@ -47,6 +47,7 @@ from utils.renderer_isolation import (
     admit_static_output_html,
     assert_no_provider_secrets,
 )
+from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 RESPONSE_SCHEMA = "authored-render-response/v1"
 
@@ -79,7 +80,7 @@ def _validate_request(value: Any) -> Mapping[str, Any]:
         raise RendererPolicyError("renderer timeout must be between 1 and 120 seconds")
     if "max_requests" in fields:
         clamp_max_requests(value["max_requests"])
-    for field_name, default in (("width_px", 1280), ("height_px", 720)):
+    for field_name, default in (("width_px", DEFAULT_CANVAS_WIDTH_PX), ("height_px", DEFAULT_CANVAS_HEIGHT_PX)):
         dimension = value.get(field_name, default)
         if (
             not isinstance(dimension, int)
@@ -117,8 +118,8 @@ async def _render(
 
     source = str(request["html"])
     timeout = int(request["timeout"])
-    width_px = int(request.get("width_px", 1280))
-    height_px = int(request.get("height_px", 720))
+    width_px = int(request.get("width_px", DEFAULT_CANVAS_WIDTH_PX))
+    height_px = int(request.get("height_px", DEFAULT_CANVAS_HEIGHT_PX))
     if request.get("preserved_raster_svg") is not None:
         from services.svg_renderer import admit_preserved_raster_preview
         admitted, _ = admit_preserved_raster_preview(
