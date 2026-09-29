@@ -1,5 +1,6 @@
 import { notify } from "@/components/ui/sonner";
 import { getApiUrl } from "@/utils/api";
+import { openaiAvailableModels } from "@/app/(presentation-generator)/services/api/openai-models";
 import { LLM_PROVIDER_OPTIONS } from "@/utils/provider-registry.generated";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -78,7 +79,7 @@ export const useTextProviderForm = ({ onInputChange, llmConfig }: OpenAIConfigPr
       } else {
         const urlCredential = credentialFields.find((credential) => credential.kind === "url");
         const configuredUrl = urlCredential ? getValue(urlCredential.settingKey).trim() : "";
-        response = await fetch(getApiUrl("/api/v1/ppt/openai/models/available"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: configuredUrl || selectedProviderMeta?.url || "", api_key: currentApiKey }) });
+        response = await openaiAvailableModels({ url: configuredUrl || selectedProviderMeta?.url || "", apiKey: currentApiKey });
       }
       if (!response.ok) throw new Error("model discovery failed");
       const data = await response.json();

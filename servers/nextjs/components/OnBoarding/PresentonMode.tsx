@@ -4,7 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Button } from '../ui/button';
 import { ArrowUpRight, Check, CheckCircle, ChevronLeft, ChevronUp, Download, Eye, EyeOff, Info, Loader2 } from 'lucide-react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
-import { IMAGE_PROVIDER_OPTIONS, IMAGE_QUALITY_OPTIONS, LLM_PROVIDER_OPTIONS, PROVIDER_MODEL_BINDINGS, PUBLIC_PROVIDER_CREDENTIAL_DESCRIPTORS } from '@/utils/provider-registry.generated';
+import { IMAGE_PROVIDER_OPTIONS, LLM_PROVIDER_OPTIONS, PROVIDER_MODEL_BINDINGS, PUBLIC_PROVIDER_CREDENTIAL_DESCRIPTORS } from '@/utils/provider-registry.generated';
 import { cn } from '@/lib/utils';
 import { LLMConfig } from '@/types/llm_config';
 import { RootState } from '@/store/store';
@@ -12,12 +12,14 @@ import { useSelector } from 'react-redux';
 import { notify } from '@/components/ui/sonner';
 import ToolTip from '../ToolTip';
 import { Switch } from '../ui/switch';
-import { Select, SelectItem, SelectContent, SelectValue, SelectTrigger } from '../ui/select';
 import { MixpanelEvent, trackEvent } from '@/utils/mixpanel';
 import { usePathname } from 'next/navigation';
 import { getLLMConfigValidationError, handleSaveLLMConfig } from '@/utils/storeHelpers';
 import { checkIfSelectedOllamaModelIsPulled, pullOllamaModel } from '@/utils/providerUtils';
 import { getApiUrl } from '@/utils/api';
+import { isCodexAuthenticated } from '@/app/(presentation-generator)/services/api/codex-auth';
+import { openaiAvailableModels } from '@/app/(presentation-generator)/services/api/openai-models';
+import { ImageProviderPicker, ImageQualitySelect, MaskedApiKeyInput } from '@/components/provider-settings/ImageProviderFields';
 import CodexConfig, { CODEX_GENERATION_PRESETS } from '@/components/codex-config';
 import VertexAzureManualFields from '@/components/VertexAzureManualFields';
 import BedrockManualFields from '@/components/BedrockManualFields';
@@ -160,15 +162,9 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                 : llmConfig.LLM === 'together'
                                     ? currentTogetherUrl || LLM_PROVIDER_OPTIONS[llmConfig.LLM!]?.url || ''
                             : LLM_PROVIDER_OPTIONS[llmConfig.LLM!]?.url || '';
-                response = await fetch(getApiUrl('/api/v1/ppt/openai/models/available'), {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        url: openAiCompatibleUrl,
-                        api_key: currentApiKey
-                    }),
+                response = await openaiAvailableModels({
+                    url: openAiCompatibleUrl,
+                    apiKey: currentApiKey,
                 });
             }
 
@@ -226,95 +222,19 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
         llmConfig,
     ]);
 
-    const renderQualitySelector = (llmConfig: LLMConfig) => {
-        if (llmConfig.IMAGE_PROVIDER === "dall-e-3") {
-            return (
-                <div className="w-full ">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        {t("dalleQuality")}
-                    </label>
-                    <div className="">
-                        <Select value={llmConfig.DALL_E_3_QUALITY || 'standard'} onValueChange={(value) => setLlmConfig((prev) => ({
-                            ...prev,
-                            DALL_E_3_QUALITY: value
-                        }))}>
-                            <SelectTrigger className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between">
-                                <SelectValue placeholder={t("selectQuality")} />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {IMAGE_QUALITY_OPTIONS["dall-e-3"].map((option) => (
-                                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-
-                    </div>
-                </div>
-            );
-        }
-
-        if (llmConfig.IMAGE_PROVIDER === "gpt-image-1.5") {
-            return (
-                <div className="w-full">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        {t("gptImageQuality")}
-                    </label>
-                    <div className="">
-                        <Select
-                            value={llmConfig.GPT_IMAGE_1_5_QUALITY || 'low'}
-                            onValueChange={(value) => setLlmConfig((prev) => ({
-                                ...prev,
-                                GPT_IMAGE_1_5_QUALITY: value
-                            }))}
-                        >
-                            <SelectTrigger
-
-                                className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between">
-                                <SelectValue placeholder={t("selectQuality")} />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {IMAGE_QUALITY_OPTIONS["gpt-image-1.5"].map((option) => (
-                                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-
-                    </div>
-                </div>
-            );
-        }
-
-        if (llmConfig.IMAGE_PROVIDER === "gpt-image-2" || llmConfig.IMAGE_PROVIDER === "gpt-image-2.5-flare" || llmConfig.IMAGE_PROVIDER === "gpt-image-2.5-sunburst" || llmConfig.IMAGE_PROVIDER === "codex_image") {
-            const qualityKey = llmConfig.IMAGE_PROVIDER === "gpt-image-2" ? "GPT_IMAGE_2_QUALITY" : "GPT_IMAGE_2_5_QUALITY";
-            return (
-                <div className="w-full">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        {IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER].label} {t("quality")}
-                    </label>
-                    <div className="">
-                        <Select
-                            value={llmConfig[qualityKey] || 'medium'}
-                            onValueChange={(value) => setLlmConfig((prev) => ({
-                                ...prev,
-                                [qualityKey]: value
-                            }))}
-                        >
-                            <SelectTrigger className="w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between">
-                                <SelectValue placeholder={t("selectQuality")} />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {IMAGE_QUALITY_OPTIONS[llmConfig.IMAGE_PROVIDER === "codex_image" ? "gpt-image-2.5-sunburst" : llmConfig.IMAGE_PROVIDER].map((option) => (
-                                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </div>
-            );
-        }
-
-        return null;
-    };
+    const renderQualitySelector = (llmConfig: LLMConfig) => (
+        <ImageQualitySelect
+            llmConfig={llmConfig}
+            variant="onboarding"
+            onChange={(field, value) => setLlmConfig((prev) => ({ ...prev, [field]: value }))}
+            labels={{
+                dalle3: t("dalleQuality"),
+                gptImage15: t("gptImageQuality"),
+                qualitySuffix: t("quality"),
+                placeholder: t("selectQuality"),
+            }}
+        />
+    );
     const handleModelDownload = async () => {
         try {
             await pullOllamaModel(llmConfig.OLLAMA_MODEL!, setDownloadingModel);
@@ -324,26 +244,10 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
             setShowDownloadModal(false);
         }
     };
-    const checkCurrentAuthStatus = async () => {
-        try {
-            const res = await fetch(getApiUrl("/api/v1/ppt/codex/auth/status"));
-            if (!res.ok) {
-                return false;
-            }
-            const data = await res.json();
-            if (data.status === "authenticated") {
-                return true;
-            } else {
-                return false;
-            }
-        } catch {
-            return false;
-        }
-    };
     const handleSaveConfig = async () => {
         try {
             if (llmConfig.LLM === 'codex') {
-                const isAuthenticated = await checkCurrentAuthStatus();
+                const isAuthenticated = await isCodexAuthenticated();
                 if (!isAuthenticated) {
                     notify.error(t("signInRequired"), t("signInToContinue"));
                     return;
@@ -952,80 +856,18 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                 {t("chooseImageProvider")}
                             </label>
                             <div className="w-full">
-                                <Popover
+                                <ImageProviderPicker
+                                    value={llmConfig.IMAGE_PROVIDER}
                                     open={openImageProviderSelect}
                                     onOpenChange={setOpenImageProviderSelect}
-
-                                >
-                                    <PopoverTrigger asChild>
-                                        <Button
-                                            variant="outline"
-                                            role="combobox"
-                                            aria-expanded={openImageProviderSelect}
-                                            className=" w-full h-12 px-4 py-4 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors hover:border-gray-400 justify-between"
-                                        >
-                                            <div className="flex gap-3 items-center">
-                                                <span className="text-sm font-medium capitalize text-gray-900">
-                                                    {llmConfig.IMAGE_PROVIDER
-                                                        ? IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER]
-                                                            ?.label || llmConfig.IMAGE_PROVIDER
-                                                        : t("chooseImageProvider")}
-                                                </span>
-                                            </div>
-                                            <ChevronUp className="w-4 h-4 text-gray-500" />
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent
-                                        className="p-0 w-full"
-                                        align="start"
-
-                                    >
-                                        <Command>
-                                            <CommandInput placeholder={t("searchProvider")} />
-                                            <CommandList>
-                                                <CommandEmpty>{t("providerNotFound")}</CommandEmpty>
-                                                <CommandGroup>
-                                                    {Object.values(IMAGE_PROVIDER_OPTIONS).map(
-                                                        (provider, index) => (
-                                                            <CommandItem
-                                                                key={index}
-                                                                value={provider.value}
-                                                                onSelect={(value) => {
-                                                                    setLlmConfig(prev => ({
-                                                                        ...prev,
-                                                                        IMAGE_PROVIDER: value
-                                                                    }));
-                                                                    setOpenImageProviderSelect(false);
-                                                                }}
-                                                            >
-                                                                <Check
-                                                                    className={cn(
-                                                                        "mr-2 h-4 w-4",
-                                                                        llmConfig.IMAGE_PROVIDER === provider.value
-                                                                            ? "opacity-100"
-                                                                            : "opacity-0"
-                                                                    )}
-                                                                />
-                                                                <div className="flex gap-3 items-center">
-                                                                    <div className="flex flex-col space-y-1 flex-1">
-                                                                        <div className="flex items-center justify-between gap-2">
-                                                                            <span className="text-sm font-medium text-gray-900 capitalize">
-                                                                                {provider.label}
-                                                                            </span>
-                                                                        </div>
-                                                                        <span className="text-xs text-gray-600 leading-relaxed">
-                                                                            {provider.description}
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
-                                                            </CommandItem>
-                                                        )
-                                                    )}
-                                                </CommandGroup>
-                                            </CommandList>
-                                        </Command>
-                                    </PopoverContent>
-                                </Popover>
+                                    variant="onboarding"
+                                    labels={{
+                                        placeholder: t("chooseImageProvider"),
+                                        search: t("searchProvider"),
+                                        notFound: t("providerNotFound"),
+                                    }}
+                                    onSelect={(value) => setLlmConfig((prev) => ({ ...prev, IMAGE_PROVIDER: value }))}
+                                />
                             </div>
                         </div>
 
@@ -1109,29 +951,19 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                             </label>
                                             {provider.getApiKeyUrl && <a href={provider.getApiKeyUrl || ""} target='_blank' className='text-[#666666] text-xs font-normal flex items-center gap-1'>{t("getApiKey")} <ArrowUpRight className='w-3.5 h-3.5' /></a>}
                                         </div>
-                                        <div className="relative">
-                                            <input
-                                                type={showApiKey ? 'text' : 'password'}
-                                                placeholder={t("enterField", { field: provider.apiKeyFieldLabel ?? "" })}
-                                                className="w-full px-4 py-2.5 h-12 outline-none border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
-                                                value={getFieldValue(provider.apiKeyField)}
-                                                onChange={(e) => {
-                                                    setLlmConfig((prev) => ({
-                                                        ...prev,
-                                                        [provider.apiKeyField as keyof LLMConfig]: e.target.value
-                                                    }))
-                                                }
-
-                                                }
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() => setShowApiKey((prev) => !prev)}
-                                                className='absolute right-2 top-1/2 -translate-y-1/2 bg-white px-2 py-1 cursor-pointer'
-                                            >
-                                                {showApiKey ? <Eye className='w-4 h-4 text-gray-500' /> : <EyeOff className='w-4 h-4 text-gray-500' />}
-                                            </button>
-                                        </div>
+                                        <MaskedApiKeyInput
+                                            variant="onboarding"
+                                            value={getFieldValue(provider.apiKeyField)}
+                                            placeholder={t("enterField", { field: provider.apiKeyFieldLabel ?? "" })}
+                                            show={showApiKey}
+                                            onToggleShow={() => setShowApiKey((prev) => !prev)}
+                                            onChange={(value) =>
+                                                setLlmConfig((prev) => ({
+                                                    ...prev,
+                                                    [provider.apiKeyField as keyof LLMConfig]: value,
+                                                }))
+                                            }
+                                        />
 
                                     </div>
                                 );

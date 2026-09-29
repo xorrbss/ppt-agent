@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { getApiUrl } from "@/utils/api";
+import { openaiAvailableModels } from "@/app/(presentation-generator)/services/api/openai-models";
 import { notify } from "@/components/ui/sonner";
 
 export interface OpenAICompatibleImageFieldsProps {
@@ -70,15 +70,9 @@ export default function OpenAICompatibleImageFields({
 
     setModelsLoading(true);
     try {
-      const response = await fetch(getApiUrl("/api/v1/ppt/openai/models/available"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          url: baseUrl.trim(),
-          api_key: apiKey,
-        }),
+      const response = await openaiAvailableModels({
+        url: baseUrl.trim(),
+        apiKey,
       });
 
       if (response.ok) {

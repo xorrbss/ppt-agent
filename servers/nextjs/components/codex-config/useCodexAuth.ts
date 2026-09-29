@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { notify } from "@/components/ui/sonner";
+import { codexAuthStatus } from "@/app/(presentation-generator)/services/api/codex-auth";
 import { getApiUrl } from "@/utils/api";
 import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
 import { DEFAULT_CODEX_MODEL } from "./constants";
@@ -88,13 +89,8 @@ export const useCodexAuth = ({
 
   const checkCurrentAuthStatus = useCallback(async () => {
     try {
-      const res = await fetch(getApiUrl("/api/v1/ppt/codex/auth/status"));
-      if (!res.ok) {
-        markSignedOut();
-        return;
-      }
-      const data: StatusResponse = await res.json();
-      if (data.status !== "authenticated") {
+      const data = await codexAuthStatus<StatusResponse>();
+      if (!data || data.status !== "authenticated") {
         markSignedOut();
         return;
       }
