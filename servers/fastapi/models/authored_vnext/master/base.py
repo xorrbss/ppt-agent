@@ -7,18 +7,14 @@ import unicodedata
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-
-
-def _to_camel(name: str) -> str:
-    first, *rest = name.split("_")
-    return first + "".join(part.capitalize() for part in rest)
+from utils.naming import snake_to_camel
 
 
 class StrictCamelModel(BaseModel):
     """Closed Pydantic model with a camelCase JSON surface."""
 
     model_config = ConfigDict(
-        alias_generator=_to_camel,
+        alias_generator=snake_to_camel,
         allow_inf_nan=False,
         extra="forbid",
         frozen=True,

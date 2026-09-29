@@ -10,11 +10,7 @@ from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-
-
-def _to_camel(name: str) -> str:
-    first, *rest = name.split("_")
-    return first + "".join(part.capitalize() for part in rest)
+from utils.naming import snake_to_camel
 
 
 Digest = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
@@ -32,7 +28,7 @@ UnitScore = Annotated[float, Field(ge=0, le=1)]
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(
-        alias_generator=_to_camel,
+        alias_generator=snake_to_camel,
         extra="forbid",
         frozen=True,
         populate_by_name=True,

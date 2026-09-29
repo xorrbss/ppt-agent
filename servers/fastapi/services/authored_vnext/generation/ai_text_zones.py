@@ -11,6 +11,7 @@ from llmai import get_client
 from llmai.shared import JSONSchemaResponse, Message, SystemMessage, UserMessage
 from pydantic import BaseModel, ConfigDict, Field
 
+from utils.naming import snake_to_camel
 from models.authored_vnext.master.contract import (
     AIEditZone,
     AITextBinding,
@@ -28,14 +29,9 @@ from .errors import GenerationNotFoundError
 from .repository import AsyncGenerationRepository
 
 
-def _to_camel(name: str) -> str:
-    first, *rest = name.split("_")
-    return first + "".join(part.capitalize() for part in rest)
-
-
 class _FrozenModel(BaseModel):
     model_config = ConfigDict(
-        alias_generator=_to_camel,
+        alias_generator=snake_to_camel,
         extra="forbid",
         frozen=True,
         populate_by_name=True,

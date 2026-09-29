@@ -6,8 +6,9 @@ from typing import Any, Literal
 
 from pydantic import Field, model_serializer, model_validator
 
-from .base import Digest, PackModel, _camel, canonical_digest
+from .base import Digest, PackModel, canonical_digest
 from .canvases import registered_canvases
+from utils.naming import snake_to_camel
 
 
 MANIFEST_V1 = "source-native-design-pack/v1"
@@ -58,7 +59,7 @@ class DesignPackManifest(PackModel):
         if self.schema_version == MANIFEST_V1 and isinstance(data, dict):
             for name in _V2_ONLY_FIELDS:
                 data.pop(name, None)
-                data.pop(_camel(name), None)
+                data.pop(snake_to_camel(name), None)
         return data
 
     @property
