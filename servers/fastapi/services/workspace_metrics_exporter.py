@@ -19,9 +19,6 @@ from services.public_operation_admission import public_prometheus_metrics_text
 
 
 LOGGER = logging.getLogger(__name__)
-_HOST_ENV = "WORKSPACE_OPERATION_METRICS_HOST"
-_PORT_ENV = "WORKSPACE_OPERATION_METRICS_PORT"
-_DEFAULT_HOST = "127.0.0.1"
 _MAX_REQUEST_BYTES = 8_192
 _READ_TIMEOUT_SECONDS = 5.0
 
