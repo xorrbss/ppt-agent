@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import os
+from utils.env_settings.workspace_maintenance import positive_int_knob
 
 
 def configured_positive_int(
@@ -11,9 +11,4 @@ def configured_positive_int(
 ) -> int:
     """Read a positive bounded artifact lifecycle setting fail-closed."""
 
-    raw = (os.getenv(name) or "").strip()
-    try:
-        value = int(raw)
-    except ValueError:
-        return default
-    return max(minimum, value) if value > 0 else default
+    return positive_int_knob(name, default, minimum=minimum)

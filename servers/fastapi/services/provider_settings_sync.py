@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 import time
 from typing import Mapping
 
@@ -22,6 +21,7 @@ from services.provider_settings_values import (
 )
 from utils.datetime_utils import get_current_utc_datetime
 from utils.db_utils import get_database_url_and_connect_args, to_sync_sqlalchemy_url
+from utils.env_settings.provider_credentials import get_provider_credential_settings
 from utils.get_env import get_user_config_path_env
 from utils.user_config_store import read_user_config_file
 
@@ -71,7 +71,7 @@ def sync_legacy_file_to_provider_settings(
     # config into an isolated database while keeping USER_CONFIG_PATH pointed at
     # the RC-local compatibility mirror. The import path is scoped to the
     # one-shot sync process and is never inherited by API or worker processes.
-    path = os.getenv("PRESENTON_PROVIDER_CONFIG_IMPORT_PATH") or get_user_config_path_env()
+    path = get_provider_credential_settings().config_import_path or get_user_config_path_env()
     if not path:
         return None
     raw_legacy_config = read_user_config_file(path)

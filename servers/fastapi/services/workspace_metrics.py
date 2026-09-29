@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-import os
 from threading import RLock
 from typing import Mapping
 
+from utils.env_settings.workspace_maintenance import get_slo_threshold
 from models.workspace_operation_kinds import WORKSPACE_OPERATION_KINDS
 
 _LAG_BUCKETS_MS = (100, 500, 1_000, 5_000, 15_000, 60_000)
@@ -106,10 +106,7 @@ _PUBLIC_CORRELATION_OUTCOMES = frozenset({"succeeded", "failed", "replayed"})
 
 
 def _threshold(name: str, default: float) -> float:
-    try:
-        return float(os.getenv(name, str(default)))
-    except (TypeError, ValueError):
-        return default
+    return get_slo_threshold(name, default)
 
 
 @dataclass(frozen=True)

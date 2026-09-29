@@ -7,7 +7,7 @@ keeps the historical 8, the api profile takes ``AUTHORED_API_PROVIDER_CONCURRENC
 
 from __future__ import annotations
 
-import os
+from utils.get_env import env_int
 import re
 
 from services.authored_provider_rate_profile import (
@@ -19,12 +19,9 @@ from services.authored_provider_rate_profile import (
 AUTHORED_PROVIDER_CONCURRENCY_MIN = 1
 
 
-def _positive_int(value: str | None) -> int | None:
-    try:
-        parsed = int((value or "").strip())
-    except (TypeError, ValueError):
-        return None
-    return parsed if parsed > 0 else None
+def _positive_int(name: str) -> int | None:
+    """Explicit positive override for ``name``, or ``None`` when unset/invalid."""
+    return env_int(name, None, minimum=1)
 
 
 def _provider_setting_name(provider: str | None) -> str | None:
@@ -48,9 +45,9 @@ def authored_provider_concurrency(
 
     resolved = profile if profile is not None else resolve_authored_rate_profile()
     provider_name = _provider_setting_name(provider)
-    configured = _positive_int(os.getenv(provider_name)) if provider_name else None
+    configured = _positive_int(provider_name) if provider_name else None
     if configured is None:
-        configured = _positive_int(os.getenv("AUTHORED_PROVIDER_CONCURRENCY"))
+        configured = _positive_int("AUTHORED_PROVIDER_CONCURRENCY")
     if configured is None:
         configured = resolved.author_concurrency_default
     return max(

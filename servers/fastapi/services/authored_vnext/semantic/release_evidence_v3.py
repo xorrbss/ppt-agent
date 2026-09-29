@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from hashlib import sha256
 import hmac
-import os
 from typing import Any
 import uuid
 
@@ -40,6 +39,10 @@ from services.authored_vnext.semantic.release_authority_v3 import (
     validate_actual_product_authority_v3,
 )
 from utils.datetime_utils import get_current_utc_datetime
+from utils.env_settings.authored_release import (
+    get_authored_release_settings,
+    stripped,
+)
 
 
 _CI_POLICY_ID = "authored-trusted-capability/ci-required-checks/v1"
@@ -49,14 +52,14 @@ _MAX_FUTURE_SKEW = timedelta(seconds=30)
 
 
 def _ci_key() -> bytes:
-    value = os.getenv("AUTHORED_RELEASE_CI_EVIDENCE_HMAC_KEY", "")
+    value = get_authored_release_settings().ci_evidence_hmac_key or ""
     if len(value.encode("utf-8")) < 32:
         raise SemanticContractError("authored_ci_evidence_signing_key_unconfigured")
     return value.encode("utf-8")
 
 
 def _expected_commit() -> str:
-    value = os.getenv("AUTHORED_RELEASE_BACKEND_COMMIT_SHA", "").strip().lower()
+    value = stripped(get_authored_release_settings().backend_commit_sha).lower()
     if len(value) not in {40, 64} or any(character not in "0123456789abcdef" for character in value):
         raise SemanticContractError("authored_ci_evidence_backend_commit_unconfigured")
     return value
@@ -173,14 +176,11 @@ async def _validate_ci_attempt_binding_v3(
     tenant_id: str,
 ) -> None:
     binding = report.attempt_binding
+    release = get_authored_release_settings()
     expected_runtime = {
-        "source_tree_census_digest": os.getenv(
-            "AUTHORED_RELEASE_SOURCE_TREE_CENSUS_DIGEST", ""
-        ).strip(),
-        "evidence_policy_digest": os.getenv(
-            "AUTHORED_RELEASE_EVIDENCE_POLICY_DIGEST", ""
-        ).strip(),
-        "execution_nonce": os.getenv("AUTHORED_RELEASE_GATE1_EXECUTION_NONCE", "").strip(),
+        "source_tree_census_digest": stripped(release.source_tree_census_digest),
+        "evidence_policy_digest": stripped(release.evidence_policy_digest),
+        "execution_nonce": stripped(release.gate1_execution_nonce),
     }
     if (
         binding.source_head_commit != report.commit

@@ -5,7 +5,6 @@ from __future__ import annotations
 import base64
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
-import os
 from typing import Any
 import uuid
 
@@ -61,6 +60,11 @@ from services.authored_vnext.semantic.readiness_v3 import (
 from services.authored_vnext.semantic.release_authority_v3 import (
     BoundEvidenceSubjectRejectionV3,
     validate_bound_evidence_subject_v3,
+)
+from utils.env_settings.authored_release import (
+    get_authored_gate0_settings,
+    get_authored_release_settings,
+    stripped,
 )
 from utils.owner_context import get_current_owner_id
 
@@ -151,10 +155,16 @@ class _ObservedRejection(Exception):
         self.code = code
 
 
+def _pin_or(value: str | None, synthetic: str) -> str:
+    """Unset runtime pin -> synthetic Gate 0 placeholder; a set value is used verbatim."""
+    return synthetic if value is None else value
+
+
 def _pins(request: Gate0StructuralCaseExecutionV1) -> tuple[str, str]:
-    expected_manifest = os.getenv("AUTHORED_GATE0_STRUCTURAL_MANIFEST_DIGEST", "").strip()
-    policy_digest = os.getenv("AUTHORED_RELEASE_EVIDENCE_POLICY_DIGEST", "").strip()
-    source_digest = os.getenv("AUTHORED_RELEASE_SOURCE_TREE_CENSUS_DIGEST", "").strip()
+    release = get_authored_release_settings()
+    expected_manifest = stripped(get_authored_gate0_settings().manifest_digest)
+    policy_digest = stripped(release.evidence_policy_digest)
+    source_digest = stripped(release.source_tree_census_digest)
     if (
         not expected_manifest
         or request.manifest_digest != expected_manifest
@@ -166,8 +176,9 @@ def _pins(request: Gate0StructuralCaseExecutionV1) -> tuple[str, str]:
 
 
 def _sign(trace: dict[str, Any]) -> tuple[str, str, str]:
-    key_value = os.getenv("AUTHORED_GATE0_STRUCTURAL_ED25519_PRIVATE_KEY_BASE64", "")
-    signer_key_id = os.getenv("AUTHORED_GATE0_STRUCTURAL_SIGNER_KEY_ID", "").strip()
+    gate0 = get_authored_gate0_settings()
+    key_value = gate0.ed25519_private_key_base64 or ""
+    signer_key_id = stripped(gate0.signer_key_id)
     try:
         key_bytes = base64.b64decode(key_value, validate=True)
         private_key = Ed25519PrivateKey.from_private_bytes(key_bytes)
@@ -524,6 +535,7 @@ async def execute_gate0_structural_case_v3(
         tenant_id=tenant_id,
     )
     definition, profile_digest = load_release_profile_definition_v3()
+    release = get_authored_release_settings()
     baseline = {
         "authorityDomain": "structural_test",
         "evidenceClass": "synthetic_structural_only",
@@ -531,7 +543,7 @@ async def execute_gate0_structural_case_v3(
         "evidencePolicyId": "authored-evidence-policy/v2-candidate-20260823-build20326",
         "evidencePolicyDigest": policy_digest,
         "issuerId": "gate0.structural.issuer",
-        "signerKeyId": os.getenv("AUTHORED_GATE0_STRUCTURAL_SIGNER_KEY_ID", ""),
+        "signerKeyId": get_authored_gate0_settings().signer_key_id or "",
         "issuedAt": now.isoformat().replace("+00:00", "Z"),
         "expiresAt": (now + timedelta(minutes=15)).isoformat().replace("+00:00", "Z"),
         "nonce": f"gate0_{request.run_id.hex}_{request.ordinal:02d}",
@@ -550,15 +562,15 @@ async def execute_gate0_structural_case_v3(
         "reopenInputPptxDigest": canonical_digest({"gate0": "reopen-input-pptx"}),
         "releaseProfileId": definition.profile_id,
         "releaseProfileDigest": profile_digest,
-        "featureSetDigest": os.getenv(
-            "AUTHORED_RELEASE_FEATURE_SET_DIGEST", canonical_digest({"gate0": "feature-set"})
+        "featureSetDigest": _pin_or(
+            release.feature_set_digest, canonical_digest({"gate0": "feature-set"})
         ),
-        "environmentAttestationDigest": os.getenv(
-            "AUTHORED_RELEASE_ENVIRONMENT_ATTESTATION_DIGEST",
+        "environmentAttestationDigest": _pin_or(
+            release.environment_attestation_digest,
             canonical_digest({"gate0": "environment"}),
         ),
-        "workerAttestationDigest": os.getenv(
-            "AUTHORED_RELEASE_WORKER_ATTESTATION_DIGEST", canonical_digest({"gate0": "worker"})
+        "workerAttestationDigest": _pin_or(
+            release.worker_attestation_digest, canonical_digest({"gate0": "worker"})
         ),
         "fontInventory": {"faces": [{"sourceContainerSha256": bytes_digest(seed_bytes)}]},
         "allRequiredCapabilityIds": list(definition.all_required_capability_ids),

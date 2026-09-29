@@ -8,7 +8,6 @@ brief as an editable prompt contract.
 from __future__ import annotations
 
 import logging
-import os
 import re
 from dataclasses import dataclass, field
 from hashlib import sha256
@@ -18,6 +17,10 @@ from typing import Any, Mapping, Optional, Sequence
 
 from PIL import Image, UnidentifiedImageError
 import yaml
+
+from utils.env_settings.authored_runtime import (
+    get_authored_exact_reconstruction_settings,
+)
 
 # Re-exported: the loader lives apart only because this file is past the ratchet.
 from utils.authored_style_exemplars import load_style_exemplar  # noqa: F401
@@ -63,7 +66,6 @@ _REFERENCE_MODES = frozenset({_STYLE_REFERENCE, _EXACT_RECONSTRUCTION})
 _EXACT_ENABLED_ENV = "AUTHORED_EXACT_RECONSTRUCTION_ENABLED"
 _EXACT_STYLE_IDS_ENV = "AUTHORED_EXACT_STYLE_IDS"
 _EXACT_SOURCE_SIZE = (1280, 720)
-_TRUTHY_ENV_VALUES = frozenset({"1", "true", "yes", "on"})
 
 
 class AuthoredExactReconstructionUnavailableError(ValueError):
@@ -71,18 +73,18 @@ class AuthoredExactReconstructionUnavailableError(ValueError):
 
 
 def _configured_exact_style_ids() -> frozenset[str]:
-    raw = os.getenv(_EXACT_STYLE_IDS_ENV, "")
+    configured = get_authored_exact_reconstruction_settings()
     return frozenset(
         item
-        for item in (part.strip() for part in raw.split(","))
-        if item and _ENGLISH_IDENTIFIER_PATTERN.fullmatch(item)
+        for item in configured.style_ids
+        if _ENGLISH_IDENTIFIER_PATTERN.fullmatch(item)
     )
 
 
 def exact_reconstruction_is_allowed(style_id: str) -> bool:
     """Return whether a private exact preset passes both rollout controls."""
-    enabled = os.getenv(_EXACT_ENABLED_ENV, "").strip().lower()
-    return enabled in _TRUTHY_ENV_VALUES and style_id in _configured_exact_style_ids()
+    configured = get_authored_exact_reconstruction_settings()
+    return configured.enabled and style_id in _configured_exact_style_ids()
 
 
 @dataclass(frozen=True)

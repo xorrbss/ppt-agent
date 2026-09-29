@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 from hashlib import sha256
 import json
 import math
-import os
 from functools import cmp_to_key
 from typing import Any
 import unicodedata
@@ -42,6 +41,10 @@ from services.authored_vnext.semantic.readiness_v3 import (
     release_authority_target_v3_from_environment,
 )
 from utils.datetime_utils import get_current_utc_datetime
+from utils.env_settings.authored_release import (
+    get_authored_release_settings,
+    stripped,
+)
 
 
 _MAX_FUTURE_SKEW = timedelta(seconds=30)
@@ -133,9 +136,10 @@ def build_bound_capability_subject_v3(
     tenant_id: str,
 ) -> dict[str, Any]:
     payload = dict(binding.payload)
-    font_digest = os.getenv("AUTHORED_RELEASE_FONT_INVENTORY_DIGEST", "").strip()
-    environment_digest = os.getenv("AUTHORED_RELEASE_ENVIRONMENT_ATTESTATION_DIGEST", "").strip()
-    worker_digest = os.getenv("AUTHORED_RELEASE_WORKER_ATTESTATION_DIGEST", "").strip()
+    release = get_authored_release_settings()
+    font_digest = stripped(release.font_inventory_digest)
+    environment_digest = stripped(release.environment_attestation_digest)
+    worker_digest = stripped(release.worker_attestation_digest)
     if not all(value.startswith("sha256:") for value in (font_digest, environment_digest, worker_digest)):
         raise SemanticContractError("authored_bound_evidence_runtime_pins_unconfigured")
     return {
@@ -180,7 +184,7 @@ def build_bound_capability_subject_v3(
 
 
 def _trust_bundle() -> list[dict[str, Any]]:
-    raw = os.getenv("AUTHORED_RELEASE_SIGNER_TRUST_BUNDLE_JSON", "")
+    raw = get_authored_release_settings().signer_trust_bundle_json or ""
     try:
         parsed = json.loads(raw)
     except (json.JSONDecodeError, TypeError) as error:
@@ -193,7 +197,8 @@ def _trust_bundle() -> list[dict[str, Any]]:
 def sign_server_readback_v3(
     payload: dict[str, Any], *, execution_nonce: str, now: datetime | None = None
 ) -> dict[str, Any]:
-    expected_nonce = os.getenv("AUTHORED_RELEASE_GATE1_EXECUTION_NONCE", "").strip()
+    release = get_authored_release_settings()
+    expected_nonce = stripped(release.gate1_execution_nonce)
     if (
         not expected_nonce
         or execution_nonce != expected_nonce
@@ -201,7 +206,7 @@ def sign_server_readback_v3(
         or not execution_nonce.replace("-", "").replace("_", "").isalnum()
     ):
         raise SemanticContractError("authored_release_readback_execution_nonce_invalid")
-    encoded_key = os.getenv("AUTHORED_RELEASE_READBACK_ED25519_PRIVATE_KEY_BASE64", "")
+    encoded_key = release.readback_ed25519_private_key_base64 or ""
     try:
         private_key = Ed25519PrivateKey.from_private_bytes(base64.b64decode(encoded_key, validate=True))
     except (ValueError, TypeError) as error:
@@ -231,7 +236,7 @@ def sign_server_readback_v3(
 
 
 def release_trust_readback_v3(*, execution_nonce: str) -> dict[str, Any]:
-    environment_id = os.getenv("AUTHORED_RELEASE_AUTHORITY_ENVIRONMENT_ID", "").strip()
+    environment_id = stripped(get_authored_release_settings().authority_environment_id)
     keys = []
     for item in _trust_bundle():
         try:
@@ -443,7 +448,7 @@ def validate_actual_product_authority_v3(
     observed_at = as_utc(now or get_current_utc_datetime())
     issued_at = as_utc(authority.issued_at)
     expires_at = as_utc(authority.expires_at)
-    expected_environment = os.getenv("AUTHORED_RELEASE_AUTHORITY_ENVIRONMENT_ID", "").strip()
+    expected_environment = stripped(get_authored_release_settings().authority_environment_id)
     if (
         not expected_environment
         or authority.environment_id != expected_environment

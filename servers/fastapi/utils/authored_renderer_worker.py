@@ -30,6 +30,7 @@ import sys
 from typing import Any, Mapping
 
 from services.authored_vnext.capability_registry import capability_metadata
+from utils.env_settings.authored_runtime import is_authored_renderer_worker_process
 from utils.renderer_frame_codec import (
     DEFAULT_MAX_REQUESTS_PER_PROCESS,
     FRAME_HEADER_BYTES,
@@ -230,7 +231,7 @@ def _serve_framed(first_header: bytes) -> int:
 def main() -> int:
     framed = False
     try:
-        if os.getenv("AUTHORED_RENDERER_WORKER") != "1":
+        if not is_authored_renderer_worker_process():
             raise RendererPolicyError("renderer worker boundary marker is missing")
         assert_no_provider_secrets(os.environ)
         header = sys.stdin.buffer.read(FRAME_HEADER_BYTES)

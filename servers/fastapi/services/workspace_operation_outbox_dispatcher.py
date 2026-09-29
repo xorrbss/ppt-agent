@@ -6,7 +6,7 @@ import asyncio
 from collections.abc import Awaitable, Callable, Mapping
 import inspect
 import logging
-import os
+from utils.get_env import env_float, env_int
 from typing import Any
 import uuid
 
@@ -91,17 +91,12 @@ def register_workspace_outbox_topic_handler(
 
 
 def _positive_int_env(name: str, default: int) -> int:
-    try:
-        return max(1, int(os.getenv(name, str(default))))
-    except (TypeError, ValueError):
-        return default
+    """Silent clamp: a sub-minimum value becomes the minimum, malformed text the default."""
+    return env_int(name, default, minimum=1, on_invalid="clamp")
 
 
 def _positive_float_env(name: str, default: float) -> float:
-    try:
-        return max(0.05, float(os.getenv(name, str(default))))
-    except (TypeError, ValueError):
-        return default
+    return env_float(name, default, minimum=0.05, on_invalid="clamp")
 
 
 def _wake_operation_topic(_payload: Mapping[str, Any]) -> None:

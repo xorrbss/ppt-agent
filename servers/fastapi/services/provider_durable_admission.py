@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from hashlib import sha256
-import os
 import re
 import uuid
 
@@ -18,9 +17,14 @@ from services.provider_durable_runtime import (
     reserve_provider_call,
 )
 from services.provider_runtime_primitives import CancellationRequested
+from utils.env_settings.provider_credentials import (
+    provider_optional_limit,
+    provider_required_int,
+)
 from utils.get_env import (
     get_provider_durable_runtime_required_env,
     get_template_v2_deployment_tier_env,
+    get_vnext_tenant_id,
 )
 from utils.owner_context import get_current_owner_id
 
@@ -39,29 +43,11 @@ def durable_provider_runtime_required() -> bool:
 
 
 def _integer(name: str, default: int, *, minimum: int = 1) -> int:
-    raw = (os.getenv(name) or "").strip()
-    if not raw:
-        return default
-    try:
-        value = int(raw)
-    except ValueError as error:
-        raise RuntimeError(f"{name}_must_be_an_integer") from error
-    if value < minimum:
-        raise RuntimeError(f"{name}_must_be_at_least_{minimum}")
-    return value
+    return provider_required_int(name, default, minimum=minimum)
 
 
 def _optional_limit(name: str) -> int | None:
-    raw = (os.getenv(name) or "").strip()
-    if not raw:
-        return None
-    try:
-        value = int(raw)
-    except ValueError as error:
-        raise RuntimeError(f"{name}_must_be_an_integer") from error
-    if value < 0:
-        raise RuntimeError(f"{name}_must_be_nonnegative")
-    return value
+    return provider_optional_limit(name)
 
 
 def _service_key(operation: str, stage: str) -> str:
@@ -95,7 +81,7 @@ async def reserve_provider_call_detached(
     async with async_session_maker() as session:
         budget = await register_durable_budget(
             session,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
             owner_id=owner_id,
             job_id=job_id,
             estimated_limit=_optional_limit(

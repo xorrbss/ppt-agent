@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from functools import lru_cache
-import os
 from pathlib import Path
 from typing import Annotated
 
@@ -26,6 +25,7 @@ from services.authored_vnext.master.assets import (
     OwnerMasterAssetStore,
 )
 from utils.owner_context import get_current_owner_id
+from utils.get_env import get_app_data_directory_env
 
 
 class MasterAssetReceipt(BaseModel):
@@ -50,7 +50,7 @@ def get_master_asset_store() -> OwnerMasterAssetStore:
     owner_id = get_current_owner_id()
     if owner_id is None:
         raise HTTPException(status_code=401, detail="authored_vnext_owner_required")
-    root = str(Path(os.getenv("APP_DATA_DIRECTORY", "app_data")).resolve())
+    root = str(Path((get_app_data_directory_env() or "app_data")).resolve())
     return _store_for_owner(root, str(owner_id))
 
 

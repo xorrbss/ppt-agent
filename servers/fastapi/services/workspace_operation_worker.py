@@ -73,6 +73,14 @@ from services.trusted_executor.composition import (
     TrustedWorkerExecutorRuntime,
     create_configured_trusted_worker_executor_runtime,
 )
+from utils.env_settings.public_service import (
+    WORKSPACE_OPERATION_EXTERNAL_CONTROLLER_ENV,
+    WORKSPACE_OPERATION_WORKER_MODE_ENV,
+    get_log_level,
+    get_public_worker_node_id,
+    get_workspace_operation_external_controller_text,
+    get_workspace_operation_worker_mode_text,
+)
 from utils.get_env import get_app_data_directory_env
 
 
@@ -80,13 +88,13 @@ logger = logging.getLogger(__name__)
 EMBEDDED_WORKER_MODE = "embedded"
 EXTERNAL_WORKER_MODE = "external"
 SPLIT_WORKER_MODE = "split"
-_WORKER_MODE_ENV = "WORKSPACE_OPERATION_WORKER_MODE"
-_EXTERNAL_CONTROLLER_ENV = "WORKSPACE_OPERATION_EXTERNAL_CONTROLLER"
+_WORKER_MODE_ENV = WORKSPACE_OPERATION_WORKER_MODE_ENV
+_EXTERNAL_CONTROLLER_ENV = WORKSPACE_OPERATION_EXTERNAL_CONTROLLER_ENV
 EXPORT_CONTROLLER = "export"
 
 
 def get_workspace_operation_worker_mode() -> str:
-    value = os.getenv(_WORKER_MODE_ENV, EMBEDDED_WORKER_MODE).strip().lower()
+    value = get_workspace_operation_worker_mode_text()
     if value not in {
         EMBEDDED_WORKER_MODE,
         EXTERNAL_WORKER_MODE,
@@ -124,7 +132,7 @@ def external_workspace_operation_kinds(profile_role: str) -> tuple[str, ...]:
     with no canonical DB credentials.
     """
 
-    controller = os.getenv(_EXTERNAL_CONTROLLER_ENV, "").strip().lower()
+    controller = get_workspace_operation_external_controller_text()
     if profile_role == "generation":
         if controller not in {"", "generation"}:
             raise RuntimeError("workspace_operation_external_controller_invalid")
@@ -189,7 +197,7 @@ async def run_external_worker(stop: asyncio.Event | None = None) -> None:
             await start_public_artifact_lifecycle_runtime()
             artifact_lifecycle_started = True
             await start_account_deletion_controller(
-                worker_id=(os.getenv("PUBLIC_WORKER_NODE_ID") or "").strip() + ":account-deletion",
+                worker_id=get_public_worker_node_id() + ":account-deletion",
             )
             account_deletion_controller_started = True
         await start_workspace_cleanup_maintenance()
@@ -248,7 +256,7 @@ def main() -> None:
     logging.basicConfig(
         level=getattr(
             logging,
-            (os.getenv("LOG_LEVEL") or "INFO").strip().upper(),
+            get_log_level(),
             logging.INFO,
         )
     )

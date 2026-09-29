@@ -23,6 +23,9 @@ from services.presentation_export_evidence_sidecars import (
     publish_finalized_hybrid_sidecars,
     require_matching_hybrid_sidecars,
 )
+from utils.env_settings.authored_runtime import (
+    is_authored_powerpoint_qa_interactive_observation_enabled,
+)
 from utils.get_env import get_app_data_directory_env
 
 
@@ -1154,7 +1157,7 @@ async def trusted_powerpoint_qa(
             expected_qid_owners,
             expected_geometry,
             geometry_contract_digest,
-            os.getenv("AUTHORED_POWERPOINT_QA_INTERACTIVE_OBSERVATION", "false").lower() == "true",
+            is_authored_powerpoint_qa_interactive_observation_enabled(),
             require_font_embedding,
             release_required, theme,
         )

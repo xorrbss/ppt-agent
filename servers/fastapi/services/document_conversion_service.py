@@ -7,6 +7,7 @@ from typing import Dict, List, Optional
 
 from services.libreoffice_profile import unique_user_installation_arg
 from utils.runtime_limits import log_memory
+from utils.env_settings.tooling import get_external_tool_paths
 
 
 class DocumentConversionError(Exception):
@@ -99,7 +100,7 @@ class DocumentConversionService:
 
     @staticmethod
     def _resolve_soffice_binary() -> str:
-        configured = (os.getenv("SOFFICE_PATH") or "").strip()
+        configured = (get_external_tool_paths().soffice_path or "").strip()
         if configured:
             return configured
         return "soffice.exe" if os.name == "nt" else "soffice"
@@ -122,7 +123,7 @@ class DocumentConversionService:
             return False
 
     def _resolve_imagemagick_binary(self) -> Optional[str]:
-        configured = (os.getenv("IMAGEMAGICK_BINARY") or "").strip()
+        configured = (get_external_tool_paths().imagemagick_binary or "").strip()
         if configured:
             resolved = shutil.which(configured)
             if resolved and self._can_execute(resolved, ["-version"]):

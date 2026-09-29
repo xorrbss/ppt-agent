@@ -11,7 +11,7 @@ import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 import logging
-import os
+from utils.get_env import env_int, get_setting_env
 
 from sqlalchemy import case, delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -70,25 +70,14 @@ _maintenance_stop: asyncio.Event | None = None
 
 
 def _positive_int_env(name: str, default: int, *, maximum: int | None = None) -> int:
-    raw = os.getenv(name)
-    if raw is None or not raw.strip():
-        return default
-    try:
-        value = int(raw.strip())
-    except ValueError as error:
-        raise ValueError(f"{name}_must_be_a_positive_integer") from error
-    if value <= 0 or (maximum is not None and value > maximum):
-        suffix = (
-            f"_between_1_and_{maximum}"
-            if maximum is not None
-            else "_must_be_a_positive_integer"
-        )
-        raise ValueError(f"{name}{suffix}")
-    return value
+    """Fail closed: a malformed retention knob raises ``EnvValueError`` (a
+    ``ValueError``) whose code is ``NAME_must_be_a_positive_integer`` or
+    ``NAME_between_1_and_MAX`` so startup refuses a mis-typed policy."""
+    return env_int(name, default, minimum=1, maximum=maximum, on_invalid="raise")
 
 
 def get_workspace_event_retention_config() -> WorkspaceEventRetentionConfig:
-    raw_retention = os.getenv(WORKSPACE_EVENT_RETENTION_SECONDS_ENV)
+    raw_retention = get_setting_env(WORKSPACE_EVENT_RETENTION_SECONDS_ENV)
     if raw_retention is not None and raw_retention.strip().lower() == _DISABLED_VALUE:
         retention_seconds = None
     else:

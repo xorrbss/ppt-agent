@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from datetime import datetime
-import os
 from pathlib import Path
 from typing import Any, Literal, Protocol, runtime_checkable
 
@@ -25,6 +24,9 @@ from services.authored_quality_receipt_v3_helpers import (
     prefixed_sha256 as _prefixed_sha256,
 )
 from services.authored_visual_review_evidence import seal_visual_review_evidence
+from utils.env_settings.authored_runtime import (
+    get_authored_quality_receipt_v3_profile,
+)
 from services.authored_vnext.capability_registry import (
     CAPABILITY_REGISTRY_DIGEST,
     prompt_capability_clause,
@@ -115,12 +117,7 @@ def _sealed_scene_consumer(scene_envelope: object | None) -> dict[str, object]:
 
 
 def _durability_profile() -> QualityReceiptV3DurabilityProfile:
-    value = os.getenv("AUTHORED_QUALITY_RECEIPT_V3_PROFILE", "public").strip().lower()
-    if value == "local-development":
-        return "local-development"
-    if value == "unit-test":
-        return "unit-test"
-    return "public"
+    return get_authored_quality_receipt_v3_profile()
 
 
 def _observed_registry_status(

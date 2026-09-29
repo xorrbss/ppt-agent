@@ -13,7 +13,6 @@ from dataclasses import dataclass
 import hashlib
 import json
 import logging
-import os
 import time
 from typing import Protocol
 
@@ -27,6 +26,7 @@ from services.authored_vnext.deck_ir.strategy import (
     GenerationStrategyCapabilityError,
     validate_sealed_generation_strategy,
 )
+from utils.env_settings.authored_vnext import is_deck_ir_generation_enabled
 
 
 logger = logging.getLogger(__name__)
@@ -84,9 +84,7 @@ def ensure_product_deck_ir_execution_adapter(*, explicit: bool = False) -> bool:
     before the adapter can reserve a provider call.
     """
 
-    if not explicit and os.getenv("DECK_IR_GENERATION_ENABLED", "").strip().lower() not in {
-        "1", "true", "yes", "on"
-    }:
+    if not explicit and not is_deck_ir_generation_enabled():
         return False
     if _configured_execution_adapter is None:
         from services.authored_vnext.deck_ir.product_adapter import (

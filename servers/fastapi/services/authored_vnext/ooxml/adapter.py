@@ -10,6 +10,8 @@ import subprocess
 import tempfile
 from typing import Any
 
+from utils.env_settings.tooling import get_external_tool_paths
+
 
 class OoxmlAdapterError(RuntimeError):
     def __init__(self, code: str, message: str) -> None:
@@ -35,7 +37,7 @@ class NodeOoxmlProductAdapter:
         self.runner = (
             self.nextjs_root / "lib" / "ooxml-vnext" / "product-runner.mjs"
         )
-        configured = node_executable or os.getenv("NODE_BINARY") or "node"
+        configured = node_executable or get_external_tool_paths().node_binary or "node"
         self.node_executable = shutil.which(configured) or configured
         self.timeout_seconds = timeout_seconds
 

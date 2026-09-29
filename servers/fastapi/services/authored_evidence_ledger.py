@@ -16,12 +16,15 @@ from __future__ import annotations
 
 import json
 import base64
-import os
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, replace
 from threading import RLock
 from types import MappingProxyType
+
+from utils.env_settings.authored_runtime import (
+    get_authored_evidence_retention_settings,
+)
 from typing import Any, Iterable, Mapping
 from utils.hashing import sha256_prefixed
 
@@ -286,14 +289,17 @@ class DeckEvidenceLedger:
         # retention byte accounting reflects resident memory rather than
         # multiplying the same payload for every revision in the history.
         self._attempt_payload_digests: dict[str, set[str]] = {}
-        self.retention_ttl_seconds = max(0.0, float(
-            os.getenv("AUTHORED_EVIDENCE_RETENTION_TTL_SECONDS", "86400")
-            if retention_ttl_seconds is None else retention_ttl_seconds
-        ))
-        self.retention_byte_budget = max(0, int(
-            os.getenv("AUTHORED_EVIDENCE_RETENTION_BYTE_BUDGET", str(512 * 1024 * 1024))
-            if retention_byte_budget is None else retention_byte_budget
-        ))
+        retention = get_authored_evidence_retention_settings()
+        self.retention_ttl_seconds = (
+            retention.ttl_seconds
+            if retention_ttl_seconds is None
+            else max(0.0, float(retention_ttl_seconds))
+        )
+        self.retention_byte_budget = (
+            retention.byte_budget
+            if retention_byte_budget is None
+            else max(0, int(retention_byte_budget))
+        )
         # Receipt construction is owned by the unified evaluator.  Storing its
         # cache here prevents separate final-gate owners creating two receipts.
         self.receipt_store: dict[tuple[str, int], Any] = {}

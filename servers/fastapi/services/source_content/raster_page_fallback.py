@@ -20,6 +20,7 @@ import logging
 import os
 
 from services.source_content.raster_page_plan import PagePlan, PlannedRegion
+from utils.env_settings.authored_runtime import get_raster_strict_page_errors
 
 logger = logging.getLogger(__name__)
 STRICT_ENV = "RASTER_STRICT_PAGE_ERRORS"
@@ -27,9 +28,9 @@ TITLE_BAND = 0.25
 
 
 def strict_page_errors() -> bool:
-    value = os.environ.get(STRICT_ENV)
-    if value in ("0", "1"):
-        return value == "1"
+    declared = get_raster_strict_page_errors()
+    if declared is not None:
+        return declared
     return "PYTEST_CURRENT_TEST" in os.environ
 
 

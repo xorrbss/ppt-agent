@@ -35,38 +35,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from hashlib import sha256
-import os
 import uuid
+
+from utils.env_settings.authored_runtime import get_slidespec_rollout_settings
 
 
 PAGE_11_SLIDE_INDEX = 10
-_TRUE = frozenset({"1", "true", "on", "yes"})
-_IMPORT_SHADOW = "SLIDESPEC_IMPORT_SHADOW"
-_REPAIR_SHADOW = "SLIDESPEC_REPAIR_SHADOW"
-_REPAIR_CANARY = "SLIDESPEC_REPAIR_CANARY"
-_REPAIR_APPLY = "SLIDESPEC_REPAIR_APPLY"
-_REPAIR_ALL_SLIDES = "SLIDESPEC_REPAIR_ALL_SLIDES"
-_KILL_SWITCH = "SLIDESPEC_KILL_SWITCH"
-_ROLLOUT_SALT = "SLIDESPEC_REPAIR_ROLLOUT_SALT"
-
-
-def _enabled(name: str, *, default: bool = False) -> bool:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    return raw.strip().lower() in _TRUE
-
-
-def _canary_basis_points() -> int:
-    """Parse an explicit percent, with true as an intentional 100% opt-in."""
-
-    raw = os.getenv(_REPAIR_CANARY, "100").strip().lower()
-    if raw in _TRUE:
-        return 10_000
-    try:
-        return max(0, min(10_000, round(float(raw) * 100)))
-    except (TypeError, ValueError):
-        return 0
 
 
 def slidespec_cohort_bucket(
@@ -79,7 +53,9 @@ def slidespec_cohort_bucket(
 
     seed = ":".join(
         (
-            salt if salt is not None else os.getenv(_ROLLOUT_SALT, "v1"),
+            salt
+            if salt is not None
+            else get_slidespec_rollout_settings().rollout_salt,
             str(owner_id if owner_id is not None else "anonymous"),
             str(presentation_id),
         )
@@ -130,16 +106,17 @@ def resolve_slidespec_repair_rollout(
     mode, or set ``SLIDESPEC_KILL_SWITCH=true`` to force the legacy path.
     """
 
-    import_shadow = _enabled(_IMPORT_SHADOW)
-    repair_shadow = _enabled(_REPAIR_SHADOW)
-    kill_switch = _enabled(_KILL_SWITCH)
-    apply_enabled = _enabled(_REPAIR_APPLY, default=True)
+    rollout = get_slidespec_rollout_settings()
+    import_shadow = rollout.import_shadow
+    repair_shadow = rollout.repair_shadow
+    kill_switch = rollout.kill_switch
+    apply_enabled = rollout.repair_apply
     slide_scope_eligible = (
-        _enabled(_REPAIR_ALL_SLIDES, default=True)
+        rollout.repair_all_slides
         or slide_index == PAGE_11_SLIDE_INDEX
     )
     bucket = slidespec_cohort_bucket(presentation_id, owner_id=owner_id)
-    canary_eligible = bucket < _canary_basis_points()
+    canary_eligible = bucket < rollout.canary_basis_points
 
     if kill_switch:
         return SlideSpecRepairRolloutDecision(

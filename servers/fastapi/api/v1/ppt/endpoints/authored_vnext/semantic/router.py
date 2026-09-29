@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
@@ -54,6 +53,7 @@ from models.authored_vnext.semantic.release_evidence_v3 import (
 )
 from services.authored_vnext.semantic.canonical import SemanticContractError
 from services.authored_vnext.semantic.export_binding import bind_existing_export_attempt
+from utils.env_settings.authored_vnext import is_authored_semantic_bundle_writes_enabled
 from services.authored_vnext.semantic.query import (
     get_active_authored_emission,
     get_workbench_capability_projection,
@@ -104,6 +104,7 @@ from services.authored_vnext.semantic.gate0_structural_v3 import (
 )
 from services.database import get_async_session
 from utils.owner_context import get_current_owner_id, get_current_owner_is_admin
+from utils.get_env import get_vnext_tenant_id
 
 
 AUTHORED_SEMANTIC_ROUTER = APIRouter(tags=["Authored Semantic Emission"])
@@ -188,7 +189,7 @@ async def read_active_authored_emission(
             session,
             presentation_id=presentation_id,
             owner_id=_owner(),
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
     except SemanticContractError as error:
         raise _error(error) from error
@@ -207,7 +208,7 @@ async def read_workbench_capability_projection(
             session,
             presentation_id=presentation_id,
             owner_id=_owner(),
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
     except SemanticContractError as error:
         raise _error(error) from error
@@ -226,7 +227,7 @@ async def read_workbench_capability_projection_v2(
             session,
             presentation_id=presentation_id,
             owner_id=_owner(),
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
     except SemanticContractError as error:
         raise _error(error) from error
@@ -245,7 +246,7 @@ async def read_workbench_capability_projection_v3(
             session,
             presentation_id=presentation_id,
             owner_id=_owner(),
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
     except SemanticContractError as error:
         raise _error(error) from error
@@ -267,7 +268,7 @@ async def create_capability_receipt_v2(
             request=request,
             issuer_principal_id=issuer_id,
             issuer_is_admin=True,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
         await session.commit()
         return receipt
@@ -292,7 +293,7 @@ async def create_capability_receipt_v3(
             request=request,
             issuer_principal_id=issuer_id,
             issuer_is_admin=True,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
         await session.commit()
         return receipt
@@ -319,7 +320,7 @@ async def create_structural_capability_receipt_v3(
             request=request,
             issuer_principal_id=issuer_id,
             issuer_is_admin=True,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
         await session.commit()
         return receipt
@@ -346,7 +347,7 @@ async def create_visual_evidence_artifact_v2(
             request=request,
             publisher_principal_id=publisher_id,
             publisher_is_admin=True,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
         await session.commit()
         return artifact
@@ -371,7 +372,7 @@ async def create_ci_evidence_artifact_v3(
             request=request,
             publisher_principal_id=publisher_id,
             publisher_is_admin=True,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
         await session.commit()
         return artifact
@@ -395,7 +396,7 @@ async def read_ci_evidence_artifact_v3(
             session,
             evidence_bundle_id=evidence_bundle_id,
             publisher_principal_id=publisher_id,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
         return CiEvidenceArtifactV3.model_validate(
             sign_server_readback_v3(
@@ -422,7 +423,7 @@ async def create_release_artifact_v3(
         artifact = await put_durable_artifact_v3(
             session,
             request=request,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
         await session.commit()
         return artifact
@@ -448,7 +449,7 @@ async def bind_release_artifact_v3(
             export_attempt_id=request.export_attempt_id,
             expected_version_id=request.expected_version_id,
             expected_sha256=request.expected_sha256,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
         await session.commit()
         return artifact
@@ -471,7 +472,7 @@ async def create_com_qualification_v3(
         job = await create_com_qualification_job_v3(
             session,
             request=request,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
         await session.commit()
         return job
@@ -494,7 +495,7 @@ async def read_com_qualification_v3(
         job = await get_com_qualification_job_v3(
             session,
             job_id=job_id,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
         return ComQualificationJobV3.model_validate(
             sign_server_readback_v3(job.model_dump(mode="json", by_alias=True), execution_nonce=execution_nonce),
@@ -530,7 +531,7 @@ async def claim_com_qualification_v3(
             session,
             job_id=job_id,
             worker_id=request.worker_id,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
         await session.commit()
         return job
@@ -554,7 +555,7 @@ async def transition_com_qualification_v3(
             session,
             job_id=job_id,
             request=request,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
         await session.commit()
         return job
@@ -578,7 +579,7 @@ async def create_evidence_graph_root_api_v3(
             session,
             request=request,
             owner_id=owner_id,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
         await session.commit()
         return root
@@ -601,7 +602,7 @@ async def read_evidence_graph_root_api_v3(
         graph = await get_evidence_graph_root_v3(
             session,
             graph_root_id=graph_root_id,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
         return EvidenceGraphRootV3.model_validate(
             sign_server_readback_v3(graph.model_dump(mode="json", by_alias=True), execution_nonce=execution_nonce),
@@ -625,7 +626,7 @@ async def create_evidence_bundle_completion_api_v3(
         completion = await create_evidence_bundle_completion_v3(
             session,
             request=request,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
         await session.commit()
         return completion
@@ -648,7 +649,7 @@ async def read_evidence_bundle_completion_api_v3(
         completion = await get_evidence_bundle_completion_v3(
             session,
             completion_id=completion_id,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
         return EvidenceBundleCompletionV3.model_validate(
             sign_server_readback_v3(
@@ -676,7 +677,7 @@ async def seal_evidence_bundle_completion_api_v3(
             session,
             completion_id=completion_id,
             request=request,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
         await session.commit()
         return completion
@@ -750,7 +751,7 @@ async def revoke_capability_receipt_v2(
             request=request,
             issuer_principal_id=issuer_id,
             issuer_is_admin=True,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
         await session.commit()
         return receipt
@@ -769,11 +770,7 @@ async def create_export_attempt_binding(
     presentation_id: uuid.UUID = Path(),
     session: AsyncSession = Depends(get_async_session),
 ) -> ExportAttemptDigestBindingV1:
-    if os.getenv("AUTHORED_SEMANTIC_BUNDLE_WRITES_ENABLED", "false").lower() != "true":
-        raise HTTPException(
-            status_code=404,
-            detail={"code": "authored_semantic_bundle_writes_disabled"},
-        )
+    _writes_enabled()
     if binding.presentation_id != presentation_id:
         raise HTTPException(
             status_code=422,
@@ -784,7 +781,7 @@ async def create_export_attempt_binding(
             session,
             owner_id=_owner(),
             binding=binding,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
         await session.commit()
         return sealed
@@ -805,11 +802,7 @@ async def create_export_attempt_binding_v2(
 ) -> ReleasePinnedExportAttemptDigestBindingV2:
     """Bind evidence receipts and independently validated release-authority pins."""
 
-    if os.getenv("AUTHORED_SEMANTIC_BUNDLE_WRITES_ENABLED", "false").lower() != "true":
-        raise HTTPException(
-            status_code=404,
-            detail={"code": "authored_semantic_bundle_writes_disabled"},
-        )
+    _writes_enabled()
     if binding.presentation_id != presentation_id:
         raise HTTPException(
             status_code=422,
@@ -820,7 +813,7 @@ async def create_export_attempt_binding_v2(
             session,
             owner_id=_owner(),
             binding=binding,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
         if not isinstance(sealed, ReleasePinnedExportAttemptDigestBindingV2):
             raise SemanticContractError("authored_semantic_export_binding_version_mismatch")
@@ -832,7 +825,7 @@ async def create_export_attempt_binding_v2(
 
 
 def _writes_enabled() -> None:
-    if os.getenv("AUTHORED_SEMANTIC_BUNDLE_WRITES_ENABLED", "false").lower() != "true":
+    if not is_authored_semantic_bundle_writes_enabled():
         raise HTTPException(
             status_code=404,
             detail={"code": "authored_semantic_bundle_writes_disabled"},
@@ -855,7 +848,7 @@ async def remake_ordered_set(
             presentation_id=presentation_id,
             owner_id=_owner(),
             request=request,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
         await session.commit()
         return receipt
@@ -880,7 +873,7 @@ async def rollback_manifest(
             presentation_id=presentation_id,
             owner_id=_owner(),
             request=request,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
         await session.commit()
         return receipt
@@ -905,7 +898,7 @@ async def cutover_legacy_html(
             presentation_id=presentation_id,
             owner_id=_owner(),
             request=request,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
         await session.commit()
         return receipt

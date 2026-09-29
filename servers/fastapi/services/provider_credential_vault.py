@@ -18,6 +18,8 @@ import secrets
 from typing import Protocol, runtime_checkable
 from uuid import UUID
 
+from utils.env_settings.provider_credentials import get_provider_credential_settings
+
 
 _COMPONENT_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _KEY_ID_PATTERN = re.compile(r"^[a-f0-9]{32}$")
@@ -459,7 +461,7 @@ def validate_persisted_credential_ref(value: object) -> CredentialRef:
 
 def configured_credential_backend_name() -> str:
     """The normalized PROVIDER_CREDENTIAL_BACKEND selection; empty when unconfigured."""
-    return (os.getenv("PROVIDER_CREDENTIAL_BACKEND") or "").strip().lower()
+    return get_provider_credential_settings().backend
 
 
 def credential_backend_from_environment() -> CredentialBackend:

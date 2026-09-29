@@ -5,7 +5,6 @@ from __future__ import annotations
 from copy import deepcopy
 from html.parser import HTMLParser
 import hashlib
-import os
 import re
 import uuid
 from typing import Any, Iterable
@@ -43,6 +42,7 @@ from utils.authored_patch_engine import (
     inspect_authored_edit_capabilities,
 )
 from utils.datetime_utils import get_current_utc_datetime
+from utils.get_env import get_vnext_tenant_id
 
 
 SCHEMA_VERSION = "authored-canonical/v1"
@@ -665,7 +665,7 @@ class AuthoredCanonicalService:
         owner_id = presentation.owner_id
         if owner_id is None:
             return
-        tenant_id = os.getenv("AUTHORED_VNEXT_TENANT_ID", "default")
+        tenant_id = get_vnext_tenant_id()
         active = await get_active_authored_emission(
             session,
             presentation_id=presentation.id,
@@ -737,7 +737,7 @@ class AuthoredCanonicalService:
             session,
             presentation_id=presentation.id,
             owner_id=presentation.owner_id,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
         if active.canonical_mode != "bundleGraph":
             return {}

@@ -14,6 +14,7 @@ import json
 import logging
 import math
 import os
+from utils.get_env import env_bool, env_int
 import pathlib
 import re
 import signal
@@ -1772,7 +1773,9 @@ async def _render_admitted_html_in_worker(
 ) -> tuple[bytes, Mapping[str, Any] | None]:
     """Low-level worker-only CDP entry; never starts another worker or file render."""
 
-    if os.getenv("AUTHORED_RENDERER_WORKER") != "1":
+    from utils.env_settings.authored_runtime import is_authored_renderer_worker_process
+
+    if not is_authored_renderer_worker_process():
         raise RendererIsolationError("worker-only renderer called outside isolation boundary")
     # This worker owns no author/network work and renders one request in a
     # private Chrome process.  Keeping POSIX FD inheritance on its main thread
@@ -1954,19 +1957,11 @@ async def _render_html_to_png_cached(
 # and all callers in this process. Tune per deploy via AUTHORED_RENDER_CONCURRENCY
 # (low-RAM hosts: 2; beefy: 8).
 def _env_int(name: str, default: int) -> int:
-    try:
-        v = int(os.getenv(name, "").strip())
-        return v if v > 0 else default
-    except (TypeError, ValueError):
-        return default
+    return env_int(name, default, minimum=1)
 
 
 def _env_nonnegative_int(name: str, default: int) -> int:
-    try:
-        value = int(os.getenv(name, "").strip())
-        return value if value >= 0 else default
-    except (TypeError, ValueError):
-        return default
+    return env_int(name, default, minimum=0)
 
 
 RENDER_CACHE_SIZE = _env_nonnegative_int("AUTHORED_RENDER_CACHE_SIZE", 32)
@@ -2021,12 +2016,7 @@ RENDER_CONCURRENCY = _env_int(
     "AUTHORED_RENDER_CONCURRENCY",
     _env_int("PUBLIC_RENDER_MAX_CONCURRENCY", 4),
 )
-CHROME_REUSE_ENABLED = os.getenv("AUTHORED_CHROME_REUSE", "1").strip().lower() not in {
-    "0",
-    "false",
-    "off",
-    "no",
-}
+CHROME_REUSE_ENABLED = env_bool("AUTHORED_CHROME_REUSE", True)
 _render_sem: Optional[asyncio.Semaphore] = None
 
 

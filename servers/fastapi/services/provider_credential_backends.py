@@ -12,7 +12,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from services.provider_credential_vault import (
@@ -26,6 +25,8 @@ from services.provider_credential_vault import (
     credential_entry_path,
     write_credential_file,
 )
+from utils.env_settings.provider_credentials import get_provider_credential_settings
+from utils.get_env import get_app_data_directory_env, get_environment_name
 
 
 LOCAL_FILE_ENVIRONMENTS = frozenset({"local", "development", "dev", "test"})
@@ -34,7 +35,7 @@ LOCAL_FILE_VAULT_DIRECTORY_ENV = "PROVIDER_LOCAL_FILE_VAULT_DIRECTORY"
 
 def _environment_name() -> str:
     """Default to production so an unset ENVIRONMENT never unlocks a plaintext vault."""
-    return (os.getenv("ENVIRONMENT") or "production").strip().lower()
+    return get_environment_name("production")
 
 
 class LocalFileCredentialBackend:
@@ -78,15 +79,15 @@ class LocalFileCredentialBackend:
 
 def local_file_vault_root() -> Path:
     return Path(
-        os.getenv(LOCAL_FILE_VAULT_DIRECTORY_ENV)
-        or Path(os.getenv("APP_DATA_DIRECTORY") or "app_data") / "local-file-credential-vault"
+        get_provider_credential_settings().local_file_vault_directory
+        or Path(get_app_data_directory_env() or "app_data") / "local-file-credential-vault"
     )
 
 
 def desktop_vault_root() -> Path:
     return Path(
-        os.getenv("PROVIDER_DESKTOP_VAULT_DIRECTORY")
-        or Path(os.getenv("APP_DATA_DIRECTORY") or "app_data") / "provider-credential-vault"
+        get_provider_credential_settings().desktop_vault_directory
+        or Path(get_app_data_directory_env() or "app_data") / "provider-credential-vault"
     )
 
 
@@ -96,9 +97,10 @@ def backend_from_environment() -> CredentialBackend:
     if backend == "desktop_vault":
         return WindowsDpapiCredentialBackend(desktop_vault_root())
     if backend == "server_kms":
+        credential_settings = get_provider_credential_settings()
         return AwsSecretsManagerCredentialBackend(
-            region=(os.getenv("AWS_REGION") or "").strip() or None,
-            prefix=(os.getenv("PROVIDER_SERVER_KMS_PREFIX") or "presenton/provider"),
+            region=credential_settings.aws_region,
+            prefix=credential_settings.server_kms_prefix,
         )
     if backend == "local_file":
         return LocalFileCredentialBackend(local_file_vault_root())

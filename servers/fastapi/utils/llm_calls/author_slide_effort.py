@@ -14,7 +14,6 @@ reasoning budget across roles.
 from __future__ import annotations
 
 import logging
-import os
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -116,15 +115,16 @@ def resolve_authoring_reasoning_level(
     if override:
         raw, source = override, "reasoning_effort argument"
     else:
-        from utils.get_env import (
-            get_codex_reasoning_effort_env,
+        from utils.env_settings.authored_runtime import (
+            get_authored_reasoning_effort,
+            get_codex_reasoning_effort,
         )
 
-        codex_effort = get_codex_reasoning_effort_env() or ""
+        codex_effort = get_codex_reasoning_effort() or ""
         raw, source = (
             (codex_effort, "CODEX_REASONING_EFFORT")
             if codex_effort.strip()
-            else (os.getenv("AUTHORED_REASONING_EFFORT", ""), "AUTHORED_REASONING_EFFORT")
+            else (get_authored_reasoning_effort(), "AUTHORED_REASONING_EFFORT")
         )
     level = raw.strip().lower()
     if not level:

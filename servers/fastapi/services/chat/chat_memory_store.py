@@ -1,47 +1,25 @@
 import asyncio
 from datetime import datetime, timezone
 import logging
-import os
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from services.mem0_oss_memory import get_shared_mem0_client
+from utils.env_settings.mem0 import get_mem0_settings
 
 LOGGER = logging.getLogger(__name__)
 CHAT_TURN_TAG = "[chat_turn]"
-DEFAULT_MAX_STORED_TURNS = 20
 
 
 class ChatMemoryStore:
     def __init__(self):
-        self._enabled = self._to_bool(os.getenv("MEM0_ENABLED"), default=True)
+        mem0 = get_mem0_settings()
+        self._enabled = mem0.enabled
         self._runtime_enabled = True
-        self._top_k = self._to_int(os.getenv("MEM0_TOP_K"), default=8)
-        self._max_context_chars = self._to_int(
-            os.getenv("MEM0_MAX_CONTEXT_CHARS"), default=6000
-        )
-        self._max_stored_turns = self._to_int(
-            os.getenv("CHAT_MAX_STORED_TURNS"), default=DEFAULT_MAX_STORED_TURNS
-        )
-        self._namespace_prefix = (
-            os.getenv("MEM0_CHAT_NAMESPACE_PREFIX")
-            or os.getenv("MEM0_PRESENTATION_NAMESPACE_PREFIX")
-            or "presentation"
-        ).strip() or "presentation"
-
-    @staticmethod
-    def _to_bool(value: Optional[str], default: bool = False) -> bool:
-        if value is None:
-            return default
-        return str(value).strip().lower() in {"1", "true", "yes", "on"}
-
-    @staticmethod
-    def _to_int(value: Optional[str], default: int) -> int:
-        try:
-            parsed = int(value) if value is not None else default
-            return max(1, parsed)
-        except Exception:
-            return default
+        self._top_k = mem0.top_k
+        self._max_context_chars = mem0.max_context_chars
+        self._max_stored_turns = mem0.max_stored_turns
+        self._namespace_prefix = mem0.chat_namespace_prefix
 
     @staticmethod
     def _normalize(value: str) -> str:

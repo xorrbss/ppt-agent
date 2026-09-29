@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from typing import Protocol
 import uuid
 
@@ -26,6 +25,7 @@ from services.provider_runtime_control import (
     JobKillConditions,
     ProviderRuntimeControl,
 )
+from utils.env_settings.provider_credentials import provider_optional_limit
 
 LOGGER = logging.getLogger(__name__)
 
@@ -47,16 +47,7 @@ class RuntimeJobScope(Protocol):
 
 
 def optional_env_int(name: str) -> int | None:
-    raw = (os.getenv(name) or "").strip()
-    if not raw:
-        return None
-    try:
-        value = int(raw)
-    except ValueError as error:
-        raise RuntimeError(f"{name}_must_be_an_integer") from error
-    if value < 0:
-        raise RuntimeError(f"{name}_must_be_nonnegative")
-    return value
+    return provider_optional_limit(name)
 
 
 async def persisted_request_counts(job_id: uuid.UUID) -> tuple[int, int]:

@@ -10,6 +10,7 @@ Some deployments run with cwd under a read-only install location (often under
 from __future__ import annotations
 
 import os
+from utils.get_env import get_app_data_directory_env
 
 
 def get_resource_path(relative_path: str) -> str:
@@ -19,7 +20,7 @@ def get_resource_path(relative_path: str) -> str:
 
 def get_writable_path(relative_path: str) -> str:
     """Absolute path for caches and generated files; ensures the directory exists."""
-    app_data = (os.getenv("APP_DATA_DIRECTORY") or "").strip()
+    app_data = (get_app_data_directory_env() or "").strip()
     if app_data:
         base = app_data
     else:

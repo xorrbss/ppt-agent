@@ -11,7 +11,6 @@ import base64
 import copy
 import hashlib
 import math
-import os
 from pathlib import Path
 import posixpath
 import unicodedata
@@ -27,6 +26,7 @@ from services.authored_vnext.retained_reference_marker import (
     decode_reference_layout_marker,
     encode_reference_layout_marker,
 )
+from utils.env_settings.authored_vnext import get_authored_retained_reference_root
 
 
 RETAINED_REFERENCE_LAYOUT_SCHEMA_VERSION = "retained-reference-layout/v1"
@@ -137,7 +137,7 @@ def _reference_skill_name(retained_reference_id: str) -> str:
 
 
 def _reference_path(retained_reference_id: str) -> Path | None:
-    configured = os.environ.get("AUTHORED_RETAINED_REFERENCE_ROOT")
+    configured = get_authored_retained_reference_root()
     candidates: list[Path] = []
     skill_name = _reference_skill_name(retained_reference_id)
     if configured:

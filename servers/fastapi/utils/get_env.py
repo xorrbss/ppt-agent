@@ -2,9 +2,17 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable
+from typing import overload
 
 from constants.settings_registry import get_settings_by_key
 from services.provider_settings_values import SECRET_SETTING_KEYS
+from utils.env_parse import (
+    InvalidPolicy,
+    is_truthy,
+    parse_bool,
+    parse_float,
+    parse_int,
+)
 from utils.parsers import parse_bool_or_none
 from utils.runtime_settings import RuntimeSettings, resolve_runtime_settings
 from utils.get_env_authored_publish import (
@@ -25,10 +33,7 @@ from utils.get_env_concurrency import (
 )
 
 
-def _is_truthy(value: str | None) -> bool:
-    if value is None:
-        return False
-    return value.strip().lower() in {"1", "true", "yes", "on"}
+_is_truthy = is_truthy
 
 
 def get_setting_env(
@@ -55,6 +60,111 @@ def get_setting_env(
 
         return resolve_provider_secret(setting_credential_id(key), value)
     return value
+
+
+@overload
+def env_int(
+    name: str,
+    default: int,
+    *,
+    minimum: int | None = ...,
+    maximum: int | None = ...,
+    on_invalid: InvalidPolicy = ...,
+    settings: RuntimeSettings | None = ...,
+) -> int: ...
+
+
+@overload
+def env_int(
+    name: str,
+    default: None,
+    *,
+    minimum: int | None = ...,
+    maximum: int | None = ...,
+    on_invalid: InvalidPolicy = ...,
+    settings: RuntimeSettings | None = ...,
+) -> int | None: ...
+
+
+def env_int(
+    name: str,
+    default: int | None,
+    *,
+    minimum: int | None = None,
+    maximum: int | None = None,
+    on_invalid: InvalidPolicy = "default",
+    settings: RuntimeSettings | None = None,
+) -> int | None:
+    """Integer knob read through ``get_setting_env`` (admin values honoured).
+
+    The malformed/out-of-range contract is chosen per call site by
+    ``on_invalid``; see ``utils/env_parse.py`` for the four policies.
+    ``default=None`` expresses an optional override ("explicit value or
+    nothing").
+    """
+    return parse_int(
+        get_setting_env(name, settings),
+        name=name,
+        default=default,
+        minimum=minimum,
+        maximum=maximum,
+        on_invalid=on_invalid,
+    )
+
+
+def env_float(
+    name: str,
+    default: float,
+    *,
+    minimum: float | None = None,
+    maximum: float | None = None,
+    on_invalid: InvalidPolicy = "default",
+    settings: RuntimeSettings | None = None,
+) -> float:
+    """Finite float knob read through ``get_setting_env``; see ``env_int``."""
+    return parse_float(
+        get_setting_env(name, settings),
+        name=name,
+        default=default,
+        minimum=minimum,
+        maximum=maximum,
+        on_invalid=on_invalid,
+    )
+
+
+def env_bool(
+    name: str,
+    default: bool,
+    *,
+    settings: RuntimeSettings | None = None,
+) -> bool:
+    """Boolean knob: ``1/true/yes/on`` or ``0/false/no/off``, else ``default``."""
+    return parse_bool(get_setting_env(name, settings), default=default)
+
+
+def get_vnext_tenant_id(settings: RuntimeSettings | None = None) -> str:
+    """Tenant scope for authored-vNext repositories (``AUTHORED_VNEXT_TENANT_ID``).
+
+    Single-tenant deployments leave it unset and get ``"default"``; an empty
+    value is treated the same way rather than producing an empty scope.
+    """
+    return (get_setting_env("AUTHORED_VNEXT_TENANT_ID", settings) or "").strip() or "default"
+
+
+def get_environment_name(
+    default: str = "",
+    *,
+    settings: RuntimeSettings | None = None,
+) -> str:
+    """Normalised deployment tier from ``ENVIRONMENT`` (stripped, lower-cased).
+
+    Call sites disagree on what an unset tier means (``development`` at boot,
+    ``production`` for public-service decisions, ``""`` for "not declared"),
+    so the caller passes its own ``default`` and only the normalisation is
+    shared.
+    """
+    value = (get_setting_env("ENVIRONMENT", settings) or "").strip().lower()
+    return value or default
 
 
 def _make_getter(key: str) -> Callable[[RuntimeSettings | None], str | None]:
@@ -211,13 +321,7 @@ def is_authored_source_images_enabled(
 
 
 def _int_setting(key: str, default: int, settings: RuntimeSettings | None) -> int:
-    raw = (get_setting_env(key, settings) or "").strip()
-    if not raw:
-        return default
-    try:
-        return int(raw)
-    except ValueError:
-        return default
+    return env_int(key, default, settings=settings)
 
 
 def is_authored_html_normalize_enabled(
@@ -349,14 +453,7 @@ def _optional_positive_int_setting(
     key: str, settings: RuntimeSettings | None
 ) -> int | None:
     """An explicit positive integer knob, or ``None`` when unset or invalid."""
-    raw = (get_setting_env(key, settings) or "").strip()
-    if not raw:
-        return None
-    try:
-        value = int(raw)
-    except ValueError:
-        return None
-    return value if value > 0 else None
+    return parse_int(get_setting_env(key, settings), name=key, default=None, minimum=1)
 
 
 def get_authored_provider_rate_profile_env(
@@ -443,14 +540,7 @@ def _optional_nonnegative_float_setting(
     key: str, settings: RuntimeSettings | None
 ) -> float | None:
     """An explicit non-negative float knob, or ``None`` when unset or invalid."""
-    raw = (get_setting_env(key, settings) or "").strip()
-    if not raw:
-        return None
-    try:
-        value = float(raw)
-    except ValueError:
-        return None
-    return value if value >= 0 else None
+    return parse_float(get_setting_env(key, settings), name=key, default=None, minimum=0)
 
 
 # Content brief stage deadlines (api/v1/ppt/endpoints/content_brief_policy.py).

@@ -22,7 +22,6 @@ same split as authored.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Sequence
 
@@ -48,6 +47,7 @@ from services.public_export_operation import (
     prepare_canonical_export_execution,
 )
 from services.svg_contract import SVG_CONTRACT_VERSION
+from utils.env_settings.public_service import get_public_worker_node_id
 from workers.public_svg_export_worker import CONVERTER_VERSION, converter_digest
 
 SVG_EXPORT_OUTPUT_MODE = "svg-native"
@@ -160,7 +160,7 @@ async def export_svg_through_identity(claim, *, tenant_id, request: SvgExportReq
     async with session_factory() as session:
         execution = await prepare_canonical_export_execution(
             session, claim, identity=identity,
-            worker_id=os.getenv("PUBLIC_WORKER_NODE_ID") or "export-controller")
+            worker_id=get_public_worker_node_id("export-controller"))
         await session.commit()
     join = await resolve_export_join(claim, execution=execution, session_factory=session_factory,
                                      artifact_service_factory=configured_public_artifact_service, grant=grant)

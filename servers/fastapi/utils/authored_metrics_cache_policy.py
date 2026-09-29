@@ -16,7 +16,9 @@ into module load.
 
 from __future__ import annotations
 
-import os
+from utils.env_settings.authored_runtime import (
+    get_authored_dom_metrics_cache_byte_budget,
+)
 
 #: The legacy, unregistered override that predates the knobs. An operator who
 #: set it explicitly asked for a specific budget and still gets it.
@@ -43,15 +45,13 @@ def resolve_metrics_cache_limits(
         # An explicit AUTHORED_RENDER_CACHE_SIZE above the knob is honoured
         # rather than lowered; the knob is a floor for the metrics cache.
         entries = max(entries, int(get_authored_metrics_cache_entries()))
-        raw_budget = os.getenv(LEGACY_BYTE_BUDGET_ENV, "").strip()
-        if not raw_budget:
+        # A malformed or negative legacy budget raises EnvValueError and
+        # is caught below, keeping the import-time default (documented).
+        legacy_budget = get_authored_dom_metrics_cache_byte_budget()
+        if legacy_budget is None:
             budget = int(get_authored_metrics_cache_mb()) * 1024 * 1024
         else:
-            try:
-                parsed = int(raw_budget)
-                budget = parsed if parsed >= 0 else budget
-            except ValueError:
-                pass
+            budget = legacy_budget
     except Exception:
         pass
     return entries, budget

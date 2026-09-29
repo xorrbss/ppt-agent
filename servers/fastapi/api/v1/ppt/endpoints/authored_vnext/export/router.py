@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from functools import lru_cache
-import os
 from pathlib import Path
 from typing import Annotated
 import uuid
@@ -36,10 +35,12 @@ from .models import (
     OperationFenceRequest,
     PublicationCasRequest,
 )
+from utils.env_settings.authored_vnext import is_authored_vnext_export_enabled
+from utils.get_env import get_app_data_directory_env, get_vnext_tenant_id
 
 
 def _enabled() -> bool:
-    return os.getenv("AUTHORED_VNEXT_EXPORT_ENABLED", "false").lower() == "true"
+    return is_authored_vnext_export_enabled()
 
 
 def _require_enabled() -> None:
@@ -51,18 +52,18 @@ def _require_enabled() -> None:
 def _service_for_scope(owner_scope: str, owner_id: str | None) -> AuthoredVNextExportService:
     repository = AuthoredVNextSqlRepository.from_application_database(
         owner_scope=owner_scope,
-        tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+        tenant_id=get_vnext_tenant_id(),
         owner_id=uuid.UUID(owner_id) if owner_id else None,
     )
     store = BufferedArtifactStore(
-        Path(os.getenv("APP_DATA_DIRECTORY", "app_data"))
+        Path((get_app_data_directory_env() or "app_data"))
         / "exports"
         / "users"
         / owner_scope
         / "authored-vnext"
     )
     asset_store = OwnerMasterAssetStore(
-        Path(os.getenv("APP_DATA_DIRECTORY", "app_data"))
+        Path((get_app_data_directory_env() or "app_data"))
         / "authored_vnext"
         / "master-assets"
         / "users"

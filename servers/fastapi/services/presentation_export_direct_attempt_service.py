@@ -7,7 +7,6 @@ from copy import deepcopy
 import hmac
 from typing import Any
 import uuid
-import os
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,6 +25,7 @@ from models.authored_vnext.semantic.contracts import (
     SemanticUnavailableReceiptV1,
 )
 from models.sql.workspace import get_workspace_owner_scope
+from utils.env_settings.authored_vnext import is_authored_semantic_bundle_writes_enabled
 from services.presentation_export_attempt_service import (
     begin_export_attempt,
     build_export_asset_manifest_sha256,
@@ -85,6 +85,7 @@ from services.presentation_export_direct_attempt_history import (
     list_direct_hybrid_export_attempt_history,
 )
 from utils.owner_context import get_current_owner_id
+from utils.get_env import get_vnext_tenant_id
 
 
 async def _begin_direct_authored_export_attempt(
@@ -151,11 +152,7 @@ async def _begin_direct_authored_export_attempt(
             composition_digest = (
                 active_semantic.manifest.composition_digest.removeprefix("sha256:")
             )
-    elif (
-        export_mode == "hybrid"
-        and os.getenv("AUTHORED_SEMANTIC_BUNDLE_WRITES_ENABLED", "false").lower()
-        == "true"
-    ):
+    elif export_mode == "hybrid" and is_authored_semantic_bundle_writes_enabled():
         raise PresentationExportContractError(
             "authored_semantic_hybrid_manifest_required"
         )
@@ -187,7 +184,7 @@ async def _begin_direct_authored_export_attempt(
             session,
             presentation_id=presentation_id,
             owner_id=owner_id,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
         provenance["capability_evidence"]["release_authority"] = (
             _release_authority_pin_from_projection(

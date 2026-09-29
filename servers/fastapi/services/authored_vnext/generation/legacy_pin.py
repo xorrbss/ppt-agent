@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-import os
 import uuid
 
 from models.authored_vnext.deck import MasterDigestPin
@@ -22,6 +21,7 @@ from services.authored_vnext.integration.sql_repository import (
 )
 from services.authored_vnext.master.digests import canonical_digest
 from services.authored_vnext.master.errors import MasterNotFoundError
+from utils.get_env import get_vnext_tenant_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,7 +92,7 @@ def generation_repository_for_owner(owner_id: uuid.UUID) -> SqlGenerationReposit
     owner_scope = str(owner_id)
     base = AuthoredVNextSqlRepository.from_application_database(
         owner_scope=owner_scope,
-        tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+        tenant_id=get_vnext_tenant_id(),
         owner_id=owner_id,
     )
     return SqlGenerationRepository(base)

@@ -1,13 +1,13 @@
 import asyncio
 import json
 import logging
-import os
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Optional
 from uuid import UUID
 
 from services.mem0_oss_memory import get_shared_mem0_client
-from utils.get_env import get_mem0_timeout_seconds, is_mem0_enabled
+from utils.env_settings.mem0 import get_mem0_settings
+from utils.get_env import get_mem0_timeout_seconds
 
 
 LOGGER = logging.getLogger(__name__)
@@ -31,25 +31,14 @@ _MEM0_EXECUTOR = ThreadPoolExecutor(
 
 class Mem0PresentationMemoryService:
     def __init__(self):
-        self._enabled = is_mem0_enabled()
+        mem0 = get_mem0_settings()
+        self._enabled = mem0.enabled
         self._runtime_enabled = True
         self._background_tasks: set[asyncio.Task] = set()
         self._timeout_seconds = get_mem0_timeout_seconds()
-        self._top_k = self._to_int(os.getenv("MEM0_TOP_K"), default=8)
-        self._max_context_chars = self._to_int(
-            os.getenv("MEM0_MAX_CONTEXT_CHARS"), default=6000
-        )
-        self._namespace_prefix = (
-            os.getenv("MEM0_PRESENTATION_NAMESPACE_PREFIX") or "presentation"
-        ).strip() or "presentation"
-
-    @staticmethod
-    def _to_int(value: Optional[str], default: int) -> int:
-        try:
-            parsed = int(value) if value is not None else default
-            return max(1, parsed)
-        except Exception:
-            return default
+        self._top_k = mem0.top_k
+        self._max_context_chars = mem0.max_context_chars
+        self._namespace_prefix = mem0.presentation_namespace_prefix
 
     def _scope_user_id(self, presentation_id: UUID) -> str:
         return f"{self._namespace_prefix}:{presentation_id}"

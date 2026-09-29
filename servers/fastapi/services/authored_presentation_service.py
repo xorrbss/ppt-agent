@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import uuid
 from typing import Optional
 
@@ -17,6 +16,9 @@ from models.sql.presentation_generation_job import PresentationGenerationJob
 from services import authored_presentation_generation as _generation
 from services import authored_presentation_artifacts as _artifacts
 from services.authored_header_contract_service import resolve_header_contract
+from utils.env_settings.authored_runtime import (
+    get_authored_slide_pipeline_concurrency,
+)
 from services import authored_presentation_pipeline as _pipeline
 from services import authored_presentation_publication as _publication
 from services.authored_presentation_artifacts import (
@@ -57,9 +59,7 @@ from utils.slide_capture import (
 # Read once at import time; changing AUTHORED_JOB_CONCURRENCY needs a
 # process restart to take effect.
 _AUTHORED_JOB_SEMAPHORE = asyncio.Semaphore(get_authored_job_concurrency_env())
-_AUTHORED_SLIDE_WORKERS = max(
-    1, int(os.getenv("AUTHORED_SLIDE_PIPELINE_CONCURRENCY", "8"))
-)
+_AUTHORED_SLIDE_WORKERS = get_authored_slide_pipeline_concurrency()
 
 
 def _sync_runtime_dependencies() -> None:

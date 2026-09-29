@@ -27,6 +27,7 @@ from constants.documents import (
     UPLOAD_ACCEPTED_EXTENSIONS,
     UPLOAD_ACCEPTED_MIME_TYPES,
 )
+from utils.env_settings.workspace_maintenance import get_workspace_asset_settings
 from models.sql.workspace import (
     WorkspaceAsset,
     WorkspaceConversation,
@@ -179,11 +180,7 @@ def normalize_workspace_asset_name(value: str | None) -> str:
 
 
 def _asset_expiry(now: datetime) -> datetime:
-    try:
-        seconds = int(os.getenv("WORKSPACE_ASSET_ORPHAN_TTL_SECONDS", "86400"))
-    except ValueError:
-        seconds = 86400
-    return now + timedelta(seconds=max(300, min(seconds, 30 * 86400)))
+    return now + timedelta(seconds=get_workspace_asset_settings().orphan_ttl_seconds)
 
 
 def _validate_declared_mime(extension: str, content_type: str | None) -> str | None:
@@ -265,7 +262,8 @@ def _content_sha256_and_signature(path: Path, extension: str) -> str:
 def _scan_workspace_asset(path: Path) -> None:
     """Run an optional fail-closed malware scan before immutable promotion."""
 
-    mode = os.getenv(_MALWARE_SCAN_MODE_ENV, "disabled").strip().lower()
+    asset_settings = get_workspace_asset_settings()
+    mode = asset_settings.malware_scan_mode
     if mode == "disabled":
         return
     if mode != "required":
@@ -274,7 +272,7 @@ def _scan_workspace_asset(path: Path) -> None:
             status_code=503,
             retryable=True,
         )
-    configured = os.getenv(_MALWARE_SCANNER_ENV, "").strip()
+    configured = asset_settings.malware_scanner
     executable = shutil.which(configured or "clamscan")
     if executable is None:
         raise WorkspaceServiceError(

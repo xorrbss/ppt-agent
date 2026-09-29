@@ -1,6 +1,7 @@
 import os
 import tempfile
-from utils.get_env import get_app_data_directory_env
+from utils.env_parse import is_truthy
+from utils.get_env import env_bool, env_int, get_app_data_directory_env
 from urllib.parse import urlsplit, urlunsplit, parse_qsl
 import ssl
 from collections.abc import Mapping
@@ -10,8 +11,7 @@ _LOCAL_ENVIRONMENTS = {"local", "development", "dev", "test"}
 _PUBLIC_DATABASE_ROLES = {"api", "controller", "migration"}
 
 
-def _truthy(value: str | None) -> bool:
-    return (value or "").strip().lower() in {"1", "true", "yes", "on"}
+_truthy = is_truthy
 
 
 def resolve_runtime_database_url(
@@ -84,14 +84,13 @@ def _ensure_sqlite_parent_dir(database_url: str) -> None:
     if parent:
         os.makedirs(parent, exist_ok=True)
 def _int_env(name: str, default: int) -> int:
-    """Read an integer from an environment variable, falling back to *default*."""
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    try:
-        return int(raw)
-    except ValueError:
-        return default
+    """Integer pool knob, falling back to *default* on unset or malformed text.
+
+    Deliberately unbounded: SQLAlchemy gives ``pool_size=0`` and
+    ``max_overflow=-1`` their own meanings (no pooling / unlimited overflow),
+    so a positivity check here would silently discard a valid operator choice.
+    """
+    return env_int(name, default)
 
 
 def get_pool_kwargs() -> dict:
@@ -112,8 +111,7 @@ def get_pool_kwargs() -> dict:
         "max_overflow": _int_env("DB_MAX_OVERFLOW", 10),
         "pool_timeout": _int_env("DB_POOL_TIMEOUT", 30),
         "pool_recycle": _int_env("DB_POOL_RECYCLE", 1800),
-        "pool_pre_ping": os.getenv("DB_POOL_PRE_PING", "true").lower()
-        not in ("false", "0", "no"),
+        "pool_pre_ping": env_bool("DB_POOL_PRE_PING", True),
     }
 
 

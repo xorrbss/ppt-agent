@@ -73,7 +73,7 @@ def test_resolve_master_rules_projects_the_published_master():
         master_pin=AuthoredMasterPinInput(master_id="master:acme-1", revision=1, digest="sha256:" + "1" * 64)
     )
     canvas = SimpleNamespace(width_px=1280, height_px=720)
-    with patch("services.svg_generation_admission.os.getenv", return_value="true"), \
+    with patch("services.svg_generation_admission.is_authored_vnext_master_enabled", return_value=True), \
          patch("utils.owner_context.get_current_owner_id", return_value=uuid.uuid4()), \
          patch("services.authored_vnext.generation.legacy_pin.resolve_legacy_master_pin", return_value=resolved):
         rules, pin = _resolve_master_rules(request, canvas)
@@ -86,7 +86,7 @@ def test_resolve_master_rules_requires_an_owner():
         master_pin=AuthoredMasterPinInput(master_id="master:acme-1", revision=1, digest="sha256:" + "1" * 64)
     )
     canvas = SimpleNamespace(width_px=1280, height_px=720)
-    with patch("services.svg_generation_admission.os.getenv", return_value="true"), \
+    with patch("services.svg_generation_admission.is_authored_vnext_master_enabled", return_value=True), \
          patch("utils.owner_context.get_current_owner_id", return_value=None):
         with pytest.raises(HTTPException) as excinfo:
             _resolve_master_rules(request, canvas)
@@ -98,7 +98,7 @@ def test_resolve_master_rules_maps_pipeline_errors_to_409():
         master_pin=AuthoredMasterPinInput(master_id="master:acme-1", revision=1, digest="sha256:" + "1" * 64)
     )
     canvas = SimpleNamespace(width_px=1280, height_px=720)
-    with patch("services.svg_generation_admission.os.getenv", return_value="true"), \
+    with patch("services.svg_generation_admission.is_authored_vnext_master_enabled", return_value=True), \
          patch("utils.owner_context.get_current_owner_id", return_value=uuid.uuid4()), \
          patch(
              "services.authored_vnext.generation.legacy_pin.resolve_legacy_master_pin",

@@ -12,6 +12,7 @@ the existing sweeper tests rely on.
 from __future__ import annotations
 
 import os
+from utils.get_env import env_int
 from pathlib import Path
 
 
@@ -30,12 +31,9 @@ def _configured_positive_int(
     *,
     maximum: int | None = None,
 ) -> int:
-    try:
-        value = int(os.getenv(name, "").strip())
-    except (TypeError, ValueError):
-        value = default
-    if value <= 0:
-        value = default
+    # Non-positive or malformed text keeps the default; only the upper bound
+    # is clamped, so an over-generous batch size is honoured up to the cap.
+    value = env_int(name, default, minimum=1)
     return min(value, maximum) if maximum is not None else value
 
 

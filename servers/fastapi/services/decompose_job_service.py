@@ -18,6 +18,7 @@ import hmac
 import json
 import logging
 import os
+from utils.get_env import env_int
 import shutil
 import traceback
 import uuid
@@ -50,18 +51,8 @@ _TERMINAL_STATUSES = frozenset({"succeeded", "failed", "cancelled"})
 
 
 def _positive_int_env(name: str, default: int, *, maximum: int) -> int:
-    raw = (os.getenv(name) or "").strip()
-    if not raw:
-        return default
-    try:
-        value = int(raw)
-    except ValueError:
-        LOGGER.warning("Ignoring invalid %s=%r", name, raw)
-        return default
-    if value < 1 or value > maximum:
-        LOGGER.warning("Ignoring out-of-range %s=%r", name, raw)
-        return default
-    return value
+    """Warn-and-default: an operator typo is logged, never silently clamped."""
+    return env_int(name, default, minimum=1, maximum=maximum, on_invalid="warn")
 
 
 class DecomposeJobConflictError(Exception):

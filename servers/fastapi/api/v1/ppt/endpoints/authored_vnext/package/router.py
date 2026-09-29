@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from functools import lru_cache
-import os
 from pathlib import Path
 from typing import Annotated
 
@@ -24,6 +23,7 @@ from services.authored_vnext.ooxml.service import (
     MAX_UPLOAD_BYTES,
     OoxmlPackageService,
 )
+from utils.env_settings.authored_vnext import is_authored_vnext_ooxml_package_enabled
 from utils.get_env import get_app_data_directory_env
 from utils.owner_context import get_current_owner_id
 
@@ -43,12 +43,7 @@ OPERATION_ID_PATTERN = r"^operation:[a-f0-9]{32}$"
 
 
 def _enabled() -> bool:
-    return os.getenv("AUTHORED_VNEXT_OOXML_PACKAGE_ENABLED", "false").lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    return is_authored_vnext_ooxml_package_enabled()
 
 
 def _require_enabled() -> None:

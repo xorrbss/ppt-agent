@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from functools import lru_cache
-import os
 from typing import Annotated, Callable, TypeVar
 import uuid
 
@@ -66,10 +65,16 @@ from .models import (
     SceneMutationOperationRequest,
     LocalRasterQualificationStateV4,
 )
+from utils.env_settings.authored_vnext import (
+    is_authored_vnext_generation_enabled,
+    is_authored_vnext_internal_compatibility_enabled,
+    is_authored_vnext_new_generation_enabled,
+)
+from utils.get_env import get_vnext_tenant_id
 
 
 def _enabled() -> bool:
-    return os.getenv("AUTHORED_VNEXT_GENERATION_ENABLED", "false").lower() == "true"
+    return is_authored_vnext_generation_enabled()
 
 
 def _require_enabled() -> None:
@@ -86,18 +91,8 @@ def _require_internal_new_generation() -> None:
     through the canonical presentation endpoint instead.
     """
 
-    internal_compat = (
-        os.getenv("AUTHORED_VNEXT_INTERNAL_COMPATIBILITY_ENABLED", "false")
-        .strip()
-        .lower()
-        == "true"
-    )
-    new_generation = (
-        os.getenv("AUTHORED_VNEXT_NEW_GENERATION_ENABLED", "false")
-        .strip()
-        .lower()
-        == "true"
-    )
+    internal_compat = is_authored_vnext_internal_compatibility_enabled()
+    new_generation = is_authored_vnext_new_generation_enabled()
     if internal_compat and new_generation:
         return
     raise HTTPException(
@@ -116,7 +111,7 @@ def _base_repository_for_owner(owner_id: str) -> AuthoredVNextSqlRepository:
     owner_uuid = uuid.UUID(owner_id)
     return AuthoredVNextSqlRepository.from_application_database(
         owner_scope=owner_id,
-        tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+        tenant_id=get_vnext_tenant_id(),
         owner_id=owner_uuid,
     )
 

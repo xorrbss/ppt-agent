@@ -8,8 +8,11 @@ import pathlib
 import sys
 from typing import Mapping, Sequence
 
+from utils.env_settings.authored_runtime import (
+    get_authored_renderer_settings,
+    renderer_flag,
+)
 
-_TRUE = {"1", "true", "yes", "on"}
 _PROVIDER_ENV_MARKERS = (
     "API_KEY",
     "APIKEY",
@@ -56,12 +59,12 @@ class RendererDisabledError(RuntimeError):
 
 
 def env_enabled(name: str, *, default: bool = False) -> bool:
-    value = os.getenv(name)
-    return default if value is None else value.strip().lower() in _TRUE
+    """Renderer boundary flag (one of ``RENDERER_FLAG_NAMES``)."""
+    return renderer_flag(name, default=default)
 
 
 def renderer_mode() -> str:
-    mode = os.getenv("AUTHORED_RENDERER_MODE", "isolated").strip().lower()
+    mode = get_authored_renderer_settings().mode
     if mode not in {"isolated", "legacy"}:
         raise RendererPolicyError("AUTHORED_RENDERER_MODE must be isolated or legacy")
     if mode == "legacy" and not env_enabled("AUTHORED_RENDERER_LEGACY_ENABLED"):
@@ -77,7 +80,7 @@ def ensure_renderer_enabled() -> None:
 
 
 def renderer_requires_external_worker() -> bool:
-    deployment_tier = os.getenv("TEMPLATE_V2_DEPLOYMENT_TIER", "").strip().lower()
+    deployment_tier = get_authored_renderer_settings().deployment_tier
     return (
         deployment_tier == "production"
         or env_enabled("AUTHORED_RENDERER_PRODUCTION")
@@ -87,9 +90,10 @@ def renderer_requires_external_worker() -> bool:
 
 
 def worker_command() -> list[str]:
-    configured = os.getenv("AUTHORED_RENDERER_WORKER_COMMAND_JSON", "").strip()
+    renderer = get_authored_renderer_settings()
+    configured = renderer.worker_command_json
     strict = renderer_requires_external_worker()
-    if strict and os.getenv("AUTHORED_RENDERER_OS_ISOLATION", "").strip() != (
+    if strict and renderer.os_isolation != (
         "nonroot-readonly-tmpfs-network-none"
     ):
         raise RendererPolicyError(

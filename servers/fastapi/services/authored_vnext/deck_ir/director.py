@@ -6,9 +6,10 @@ import asyncio
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 import json
-import os
 from typing import Any, Protocol
 from uuid import UUID
+
+from utils.env_settings.authored_vnext import is_deck_ir_dev_fixture_allowed
 
 
 class DeckDirectorError(RuntimeError):
@@ -38,9 +39,7 @@ Reservation = Callable[[str], Awaitable[None]]
 
 
 def _fixture_enabled() -> bool:
-    return os.getenv("DECK_IR_ALLOW_DEV_FIXTURE", "").strip().lower() in {
-        "1", "true", "yes", "on"
-    }
+    return is_deck_ir_dev_fixture_allowed()
 
 
 @dataclass(frozen=True, slots=True)

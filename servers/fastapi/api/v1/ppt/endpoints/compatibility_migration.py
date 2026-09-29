@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import uuid
 from typing import Annotated
 
@@ -30,6 +29,7 @@ from services.compatibility_migration.upgrade import (
     upgrade_presentation_fork,
 )
 from services.database import get_async_session
+from utils.env_settings.authored_runtime import get_compatibility_archive_signing
 
 COMPATIBILITY_MIGRATION_ROUTER = APIRouter(
     prefix="/compatibility",
@@ -42,10 +42,8 @@ def _error_detail(code: str) -> dict[str, str]:
 
 
 def _archive_signing_config() -> tuple[bytes, str]:
-    return (
-        os.getenv("COMPATIBILITY_ARCHIVE_SIGNING_KEY", "").encode("utf-8"),
-        os.getenv("COMPATIBILITY_ARCHIVE_SIGNING_KEY_ID", "compatibility-v1"),
-    )
+    signing = get_compatibility_archive_signing()
+    return signing.key, signing.key_id
 
 
 @COMPATIBILITY_MIGRATION_ROUTER.get("/capabilities")

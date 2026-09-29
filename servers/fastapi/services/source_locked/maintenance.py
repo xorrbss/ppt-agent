@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 import logging
-import os
+from utils.get_env import env_int
 
 from services.source_locked.generation_store import DurableSourceLockedGenerationStore
 from services.source_locked.job_runner import run_source_locked_job
@@ -22,16 +22,8 @@ _MAX_RECOVERY_BATCH = 1000
 
 
 def _positive_environment_integer(name: str, default: int) -> int:
-    raw = (os.getenv(name) or "").strip()
-    if not raw:
-        return default
-    try:
-        value = int(raw)
-    except ValueError as exc:
-        raise ValueError(f"{name} must be a positive integer") from exc
-    if value <= 0:
-        raise ValueError(f"{name} must be a positive integer")
-    return value
+    """Fail closed: raises ``EnvValueError`` (``NAME_must_be_a_positive_integer``)."""
+    return env_int(name, default, minimum=1, on_invalid="raise")
 
 
 @dataclass(frozen=True, slots=True)

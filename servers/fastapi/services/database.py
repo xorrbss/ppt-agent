@@ -1,5 +1,4 @@
 from collections.abc import AsyncGenerator
-import os
 import time
 
 from sqlalchemy import BigInteger, event, inspect, text
@@ -77,7 +76,8 @@ from models.sql.public_artifact import (
 )
 from models.sql.authored_vnext_repository import AUTHORED_VNEXT_SQL_TABLES
 from services.database_owner_scope import register_owner_scope_hooks
-from utils.get_env import get_migrate_database_on_startup_env
+from utils.env_settings.public_service import get_public_process_identity_settings
+from utils.get_env import get_environment_name, get_migrate_database_on_startup_env
 from utils.db_utils import get_database_url_and_connect_args, get_pool_kwargs
 
 
@@ -156,14 +156,18 @@ PUBLIC_CONTROLLER_DATABASE_ROLE = "presenton_public_controller"
 PUBLIC_API_DATABASE_ROLE = "presenton_public_api"
 
 
-def _local_development_environment() -> bool:
-    configured_public_runtime = bool(
-        (os.getenv("PUBLIC_DATABASE_PROCESS_ROLE") or "").strip()
-        or (os.getenv("PPT_PUBLIC_OIDC_ISSUER") or "").strip()
-        or (os.getenv("PUBLIC_V2_INTEGRATION_PROFILE") or "").strip()
-        == "postgresql-strict"
+def _configured_public_runtime() -> bool:
+    identity = get_public_process_identity_settings()
+    return bool(
+        identity.database_process_role
+        or identity.oidc_issuer
+        or identity.v2_integration_profile == "postgresql-strict"
     )
-    raw_environment = (os.getenv("ENVIRONMENT") or "").strip().lower()
+
+
+def _local_development_environment() -> bool:
+    configured_public_runtime = _configured_public_runtime()
+    raw_environment = get_environment_name()
     if configured_public_runtime and not raw_environment:
         raise RuntimeError("public_environment_required")
     return (raw_environment or "development") in {
@@ -268,9 +272,11 @@ async def require_public_controller_database_authority(
 
     await require_database_schema_revision_authority(engine)
     local_development = _local_development_environment()
-    if not local_development and (
-        os.getenv("PUBLIC_DATABASE_PROCESS_ROLE") or ""
-    ).strip().lower() != "controller":
+    if (
+        not local_development
+        and get_public_process_identity_settings().database_process_role
+        != "controller"
+    ):
         raise RuntimeError("public_controller_database_process_role_required")
     if engine.dialect.name != "postgresql":
         if local_development and engine.dialect.name == "sqlite":
@@ -296,19 +302,14 @@ async def require_public_api_database_authority(
 
     await require_database_schema_revision_authority(engine)
     local_development = _local_development_environment()
-    public_runtime = bool(
-        (os.getenv("PUBLIC_DATABASE_PROCESS_ROLE") or "").strip()
-        or (os.getenv("PPT_PUBLIC_OIDC_ISSUER") or "").strip()
-        or (os.getenv("PUBLIC_V2_INTEGRATION_PROFILE") or "").strip()
-        == "postgresql-strict"
-    )
+    public_runtime = _configured_public_runtime()
     if local_development and (
         engine.dialect.name == "sqlite" or not public_runtime
     ):
         return
     if not public_runtime:
         return
-    if (os.getenv("PUBLIC_DATABASE_PROCESS_ROLE") or "").strip().lower() != "api":
+    if get_public_process_identity_settings().database_process_role != "api":
         raise RuntimeError("public_api_database_process_role_required")
     if engine.dialect.name != "postgresql":
         raise RuntimeError("public_api_postgresql_required")
