@@ -9,6 +9,9 @@ from services.libreoffice_profile import unique_user_installation_arg
 from utils.runtime_limits import log_memory
 from utils.env_settings.tooling import get_external_tool_paths
 
+_CONVERSION_PROBE_TIMEOUT_SECONDS = 10
+
+
 
 class DocumentConversionError(Exception):
     """Actionable document conversion failure safe to expose to API clients.
@@ -114,7 +117,7 @@ class DocumentConversionService:
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                timeout=10,
+                timeout=_CONVERSION_PROBE_TIMEOUT_SECONDS,
                 check=False,
                 **_windows_hidden_subprocess_kwargs(),
             )

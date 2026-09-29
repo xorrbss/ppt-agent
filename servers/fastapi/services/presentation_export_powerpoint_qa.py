@@ -27,6 +27,15 @@ from utils.env_settings.authored_runtime import (
     is_authored_powerpoint_qa_interactive_observation_enabled,
 )
 from utils.get_env import get_app_data_directory_env
+from constants.timeouts import WATCHER_THREAD_JOIN_SECONDS
+
+# Window scan interval of the dialog watcher.
+_DIALOG_SCAN_INTERVAL_SECONDS = 0.05
+# Wait for the dialog watcher thread to start scanning.
+_DIALOG_WATCH_READY_TIMEOUT_SECONDS = 1
+# Observation-only settle window before the dialog watch is sealed.
+_DIALOG_SETTLE_SECONDS = 0.15
+
 
 
 _POWERPOINT_QA_OBSERVATION_STATES = (
@@ -394,7 +403,7 @@ def _start_powerpoint_dialog_watch(main_hwnd: int) -> _PowerPointDialogWatch:
 
     def scan() -> None:
         ready.set()
-        while not stop.wait(0.05):
+        while not stop.wait(_DIALOG_SCAN_INTERVAL_SECONDS):
             def visit(hwnd: int, _context: object) -> bool:
                 try:
                     _, candidate_pid = win32process.GetWindowThreadProcessId(hwnd)
@@ -419,9 +428,9 @@ def _start_powerpoint_dialog_watch(main_hwnd: int) -> _PowerPointDialogWatch:
         target=scan, name="presenton-powerpoint-dialog-watch", daemon=True
     )
     thread.start()
-    if not ready.wait(timeout=1) or not thread.is_alive():
+    if not ready.wait(timeout=_DIALOG_WATCH_READY_TIMEOUT_SECONDS) or not thread.is_alive():
         stop.set()
-        thread.join(timeout=1)
+        thread.join(timeout=WATCHER_THREAD_JOIN_SECONDS)
         raise RuntimeError("powerpoint_dialog_watcher_unavailable")
     return _PowerPointDialogWatch(
         stop=stop,
@@ -441,14 +450,14 @@ def _seal_powerpoint_dialog_watch(
     interrupted = bool(dialog_watch.failures) or not dialog_watch.thread.is_alive()
     # Allow delayed Office notifications to become visible before sealing the
     # observation window. This is an observation only; dialogs are never dismissed.
-    time.sleep(0.15)
+    time.sleep(_DIALOG_SETTLE_SECONDS)
     interrupted = (
         interrupted
         or bool(dialog_watch.failures)
         or not dialog_watch.thread.is_alive()
     )
     dialog_watch.stop.set()
-    dialog_watch.thread.join(timeout=1)
+    dialog_watch.thread.join(timeout=WATCHER_THREAD_JOIN_SECONDS)
     if dialog_watch.thread.is_alive():
         status = "stop-failed"
     elif interrupted:
@@ -1104,7 +1113,7 @@ def _run_powerpoint_com_qa(
     finally:
         if dialog_watch is not None:
             dialog_watch.stop.set()
-            dialog_watch.thread.join(timeout=1)
+            dialog_watch.thread.join(timeout=WATCHER_THREAD_JOIN_SECONDS)
         for deck in (reopened, first) if owned_application else ():
             if deck is not None:
                 try:
