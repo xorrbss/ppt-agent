@@ -1,4 +1,8 @@
 {
-  "1:1": {},
-  "21:9": {}
+  "1:1": {
+    "default": "candidate"
+  },
+  "21:9": {
+    "default": "candidate"
+  }
 }
