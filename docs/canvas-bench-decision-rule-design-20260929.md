@@ -10,6 +10,35 @@ Related: `docs/canvas-bench-pilot-20260929.md`, `docs/canvas-bench-square-ultraw
 `svg-text-overlap-false-positives-design-20260929.md`; section 3.7 makes the rule valid whether
 or not that fix lands.
 
+## Implementation (2026-09-29)
+
+Implemented with the section 8 defaults accepted: margins 0.20 / 0.15, rho 0.15 constant, retries kept as a
+gate, serial runs. Code: `servers/fastapi/scripts/canvas_bench_stats.py` (Wilson, Newcombe, design effect),
+`canvas_bench_assess.py` (pooling, tiers, verdicts `pass`/`fail`/`hold`, `canvas-bench-compare/v2`),
+`canvas_bench_epoch.py`, `canvas_bench_matrix.py` (unattended resumable `matrix` runs), `canvas_bench_rules.py`
+(promotion from the pooled `earnedStage`), tests in `tests/unit/test_canvas_bench.py`. Manuscripts 03
+(retail loyalty) and 04 (clinical data security) were added beside 01 and 02.
+
+- **Metric epoch.** Receipts carry `metricEpoch`; a receipt without one is `svg-overlap-linebox-v1`
+  (all pilot and sq-uw data). The text_overlap ink-box fix records `overlap_basis` and does not bump
+  `SVG_RENDERER_VERSION`, so the version cannot separate the epochs. A run labels its decks
+  `svg-overlap-ink-v1` or `svg-overlap-linebox-v1` by: (1) an `overlap_basis` found in the generation
+  operation's published result, per deck, stored as `overlapBasis`; (2) `--metric-epoch` explicit;
+  (3) `--ink-fix-commit` being an ancestor of `--backend-commit` (`git merge-base --is-ancestor`). With none
+  of these the run refuses to start. `compare` pools one epoch (default: the newest candidate deck's) and lists
+  the other-epoch decks under `excluded`. Gap: whether the backend exposes `overlap_basis` in the operation
+  result is unverified, so the ancestry or explicit path is the reliable one until it is.
+- **Data gaps.** `gate.flags.flaggedSlides` is still empty, so the primary metric uses deck-level
+  `flaggedPages` over `slideCount`; per-page classifications and attempts remain unrecorded. Per-manuscript
+  guard (open decision 6) stays informational (no rule), `fail` only blocks promotion.
+- **Semantics chosen where the design was open.** Hard gates (PPTX size, generation and export failures among
+  candidate decks) give `fail` regardless of sample size; otherwise an insufficient sample, more than 10%
+  unmeasured decks, or any secondary gate that cannot be decided gives `hold`. A secondary gate fails only when
+  its lower bound is beyond the margin. `promote` never lowers a stage: a lower earned stage prints "stays" and
+  exits 0. `localFitUnresolved` is informational (not gated) and `not_applicable` for svg.
+- **Re-evaluation of sq-uw** with the new `compare`: 1:1 D +0.19 [-0.09, +0.44], 21:9 D -0.04 [-0.29, +0.25];
+  both `hold` (insufficient sample), earned stage `disabled`, as section 6 predicted.
+
 ## 1. The current rule and why it fails
 
 `canvas_bench_rules.compare()` compares one candidate deck set with the same-round 16:9 deck

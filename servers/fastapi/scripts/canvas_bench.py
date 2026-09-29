@@ -6,17 +6,29 @@ only on measured evidence, never by hand edits
 docs/canvas-expansion-content-budget-spec-20260929.md §6).
 
     cd servers/fastapi
+    # one canvas, one deck per manuscript
     uv run python scripts/canvas_bench.py run --base http://127.0.0.1:8091 \\
         --app-data <backend APP_DATA_DIRECTORY> --canvas a4-landscape --style default \\
-        --manuscripts tests/fixtures/canvas_bench_manuscripts --slides 6 --out <dir>
-    uv run python scripts/canvas_bench.py compare --baseline <dir|json> --candidate <dir|json> --out <dir>
-    uv run python scripts/canvas_bench.py promote --canvas square-1x1 --style default \\
-        --receipts <compare.json> [<compare.json> ...]
+        --manuscripts tests/fixtures/canvas_bench_manuscripts --slides 6 --out <dir> \\
+        --backend-commit <sha> --ink-fix-commit <sha>
+    # pooled matrix: serial, interleaved, resumable (rerun the same command to resume)
+    uv run python scripts/canvas_bench.py matrix --base http://127.0.0.1:8091 --app-data <dir> \\
+        --style default --manuscripts tests/fixtures/canvas_bench_manuscripts --limit 3 --slides 6 \\
+        --canvas-decks wide-16x9=18 --canvas-decks square-1x1=12 --backend-commit <sha> \\
+        --ink-fix-commit <sha> --out <dir>
+    # decision rule on the pooled receipts of any number of run/matrix directories
+    uv run python scripts/canvas_bench.py compare --baseline <dir> [<dir> ...] --baseline-canvas wide-16x9 \\
+        --candidate <dir> [<dir> ...] --candidate-canvas square-1x1 --out <dir>
+    uv run python scripts/canvas_bench.py promote --canvas square-1x1 --style default --receipts <compare.json>
+    uv run python scripts/canvas_bench.py invalidate <receipt.json> --note "machine restarted"
 
-``run`` drives one deck at a time and attributes QualityReceipt ledgers by
-write time, so point it at a backend no one else is generating on.  Rules
-live in ``canvas_bench_rules.py``; API and evidence reading in
-``canvas_bench_live.py``; PPTX checks and renders in ``canvas_bench_render.py``.
+``run``/``matrix`` drive one deck at a time and attribute QualityReceipt
+ledgers by write time, so point them at a backend no one else is generating
+on.  The decision rule lives in ``canvas_bench_assess.py`` (statistics in
+``canvas_bench_stats.py``, metric epochs in ``canvas_bench_epoch.py``, matrix
+planning in ``canvas_bench_matrix.py``, registry and promotion in
+``canvas_bench_rules.py``); API and evidence reading in ``canvas_bench_live.py``;
+PPTX checks and renders in ``canvas_bench_render.py``.
 """
 
 from __future__ import annotations
@@ -33,7 +45,9 @@ FASTAPI_ROOT = Path(__file__).resolve().parents[1]
 if str(FASTAPI_ROOT) not in sys.path:
     sys.path.insert(0, str(FASTAPI_ROOT))
 
+from scripts import canvas_bench_epoch as epochs  # noqa: E402
 from scripts import canvas_bench_live as live  # noqa: E402
+from scripts import canvas_bench_matrix as matrix  # noqa: E402
 from scripts import canvas_bench_render as render  # noqa: E402
 from scripts import canvas_bench_rules as rules  # noqa: E402
 
@@ -92,9 +106,10 @@ def _export_evidence(client: live.BenchClient, presentation_id: str, operation_i
 
 
 def run_one(client: live.BenchClient, manuscript: Path, args: argparse.Namespace,
-            registry: dict[str, Any], out_dir: Path) -> dict[str, Any]:
+            registry: dict[str, Any], out_dir: Path, stem: str | None = None,
+            repeat: int | None = None) -> dict[str, Any]:
     body = _request_body(manuscript.read_text(encoding="utf-8").strip(), args, registry)
-    deck_dir = out_dir / args.canvas / manuscript.stem
+    deck_dir = out_dir / args.canvas / (stem or manuscript.stem)
     started = time.time()
     status = client.generate(body)
     finished = time.time()
@@ -102,6 +117,7 @@ def run_one(client: live.BenchClient, manuscript: Path, args: argparse.Namespace
     presentation_id = data.get("presentation_id")
     receipt: dict[str, Any] = {
         "schemaVersion": rules.RECEIPT_SCHEMA, "createdAt": _now(), "backendCommit": args.backend_commit,
+        "metricEpoch": args.run_epoch, "batch": args.batch, "repeat": repeat,
         "manuscript": manuscript.name, "canvas": args.canvas, "style": args.style,
         "strategy": args.strategy, "requestedSlides": args.slides,
         "request": {k: v for k, v in body.items() if k != "content"},
@@ -130,6 +146,9 @@ def run_one(client: live.BenchClient, manuscript: Path, args: argparse.Namespace
     formats = live.source_formats(presentation)
     total = timing["totalSeconds"]
     theme = presentation.get("theme") if isinstance(presentation.get("theme"), dict) else {}
+    overlap_basis = epochs.find_overlap_basis((generation_card or {}).get("result"))
+    receipt["overlapBasis"] = overlap_basis
+    receipt["metricEpoch"] = epochs.observed_epoch(overlap_basis) or args.run_epoch
     receipt.update(
         slideCount=slides,
         sourceFormats=formats,
@@ -148,12 +167,39 @@ def run_one(client: live.BenchClient, manuscript: Path, args: argparse.Namespace
     return receipt
 
 
-def cmd_run(args: argparse.Namespace) -> int:
+def _prepare(args: argparse.Namespace) -> dict[str, Any]:
+    """Validate the canvas ids and resolve the metric epoch and batch before any deck runs."""
+
     registry = rules.load_registry()
-    rules.canvas_emu(args.canvas, registry)
+    for canvas in getattr(args, "canvas_ids", None) or [args.canvas]:
+        rules.canvas_emu(canvas, registry)
+    try:
+        args.run_epoch = epochs.resolve_run_epoch(args.metric_epoch, args.backend_commit, args.ink_fix_commit)
+    except ValueError as error:
+        raise SystemExit(str(error)) from error
+    args.batch = args.batch or datetime.now(timezone.utc).strftime("%Y%m%d")
+    print(f"metric epoch: {args.run_epoch}; batch: {args.batch}", flush=True)
+    return registry
+
+
+def _manuscripts(args: argparse.Namespace) -> list[Path]:
     manuscripts = sorted(Path(args.manuscripts).glob("*.txt"))[: args.limit or None]
     if not manuscripts:
         raise SystemExit(f"no *.txt manuscripts in {args.manuscripts}")
+    return manuscripts
+
+
+def _contact_sheet(out_dir: Path, canvas: str) -> None:
+    runs = sorted(p / "slides" for p in (out_dir / canvas).iterdir() if (p / "slides").is_dir())
+    if runs:
+        skipped = render.contact_sheet(runs, out_dir / canvas / "contact-sheet")
+        if skipped:
+            print(f"contact sheet skipped: {skipped}")
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    registry = _prepare(args)
+    manuscripts = _manuscripts(args)
     out_dir = Path(args.out)
     client = live.BenchClient(args.base, timeout_seconds=args.timeout)
     try:
@@ -165,28 +211,66 @@ def cmd_run(args: argparse.Namespace) -> int:
             print(f"  -> {path} generation={receipt['generation']['ok']} export={receipt['export']['ok']}", flush=True)
     finally:
         client.close()
-    runs = sorted(p / "slides" for p in (out_dir / args.canvas).iterdir() if (p / "slides").is_dir())
-    if runs and not args.no_render:
-        skipped = render.contact_sheet(runs, out_dir / args.canvas / "contact-sheet")
-        if skipped:
-            print(f"contact sheet skipped: {skipped}")
+    if not args.no_render:
+        _contact_sheet(out_dir, args.canvas)
     return 0
 
 
-def _load_receipts(target: str) -> list[dict[str, Any]]:
-    path = Path(target)
-    files = sorted(path.glob("*.receipt.json")) if path.is_dir() else [path]
+def cmd_matrix(args: argparse.Namespace) -> int:
+    try:
+        canvas_decks = matrix.parse_canvas_decks(args.canvas_decks)
+    except ValueError as error:
+        raise SystemExit(str(error)) from error
+    args.canvas_ids, args.canvas = list(canvas_decks), None
+    registry = _prepare(args)
+    plan = matrix.plan_matrix(canvas_decks, _manuscripts(args), args.seed)
+    out_dir = Path(args.out)
+    if args.dry_run:
+        todo = {(d.canvas, d.stem) for d in matrix.pending(plan, out_dir)}
+        for deck in plan:
+            print(f"{'todo' if (deck.canvas, deck.stem) in todo else 'done'}  {deck.canvas}  {deck.stem}")
+        return 0
+    client = live.BenchClient(args.base, timeout_seconds=args.timeout)
+    base_receipt = {"schemaVersion": rules.RECEIPT_SCHEMA, "backendCommit": args.backend_commit,
+                    "metricEpoch": args.run_epoch, "batch": args.batch, "style": args.style,
+                    "strategy": args.strategy, "requestedSlides": args.slides}
+
+    def run_deck(deck: matrix.Deck) -> dict[str, Any]:
+        deck_args = argparse.Namespace(**{**vars(args), "canvas": deck.canvas})
+        return run_one(client, deck.manuscript, deck_args, registry, out_dir, stem=deck.stem, repeat=deck.repeat)
+
+    try:
+        return matrix.run_matrix(plan, out_dir, run_deck, base_receipt, _write_json)
+    finally:
+        client.close()
+
+
+def load_receipts(targets: list[str], canvas: str | None = None) -> list[dict[str, Any]]:
+    """Receipts under directories (recursively) or single files, optionally one canvas only."""
+
+    files: list[Path] = []
+    for target in targets:
+        path = Path(target)
+        files += sorted(path.rglob("*.receipt.json")) if path.is_dir() else [path]
     receipts = [json.loads(f.read_text(encoding="utf-8")) for f in files]
-    if not receipts:
-        raise SystemExit(f"no *.receipt.json under {target}")
-    bad = [r for r in receipts if r.get("schemaVersion") != rules.RECEIPT_SCHEMA]
+    bad = [r for r in receipts if r.get("schemaVersion") not in rules.ACCEPTED_RECEIPT_SCHEMAS]
     if bad:
-        raise SystemExit(f"{target}: not a {rules.RECEIPT_SCHEMA} receipt")
+        raise SystemExit(f"{targets}: not a {rules.RECEIPT_SCHEMA} (or v1) receipt")
+    if canvas:
+        receipts = [r for r in receipts if r.get("canvas") == canvas]
+    if not receipts:
+        raise SystemExit(f"no *.receipt.json under {targets}" + (f" for canvas {canvas}" if canvas else ""))
     return receipts
 
 
 def cmd_compare(args: argparse.Namespace) -> int:
-    result = rules.compare(_load_receipts(args.baseline), _load_receipts(args.candidate))
+    baseline = load_receipts(args.baseline, args.baseline_canvas)
+    candidate = load_receipts(args.candidate, args.candidate_canvas)
+    try:
+        result = rules.compare(baseline, candidate, epoch=args.epoch, slides=args.slides)
+    except ValueError as error:
+        print(f"compare refused: {error}", file=sys.stderr)
+        return 2
     result["createdAt"] = _now()
     markdown = rules.compare_markdown(result)
     out = Path(args.out)
@@ -194,7 +278,9 @@ def cmd_compare(args: argparse.Namespace) -> int:
     _write_json(out / f"{stem}.json", result)
     (out / f"{stem}.md").write_text(markdown, encoding="utf-8")
     print(markdown)
-    return 0 if result["passed"] else 1
+    if result["earnedStage"] != "disabled":
+        return 0
+    return 1 if any(t["verdict"] == "fail" for t in result["tiers"].values()) else 3
 
 
 def cmd_promote(args: argparse.Namespace) -> int:
@@ -206,6 +292,11 @@ def cmd_promote(args: argparse.Namespace) -> int:
         if any(c.get("schemaVersion") != rules.COMPARE_SCHEMA for c in compares):
             raise ValueError(f"--receipts must be {rules.COMPARE_SCHEMA} outputs of `compare`")
         earned = rules.promotion_stage(compares, args.canvas, args.style)
+        current = stages.get(ratio, {}).get(args.style, "disabled")
+        if rules.STAGE_ORDER.index(earned) < rules.STAGE_ORDER.index(current):
+            print(f"{args.canvas} ({ratio}) / {args.style}: earned {earned}; stays {current} "
+                  "(a bench result never lowers a stage; demotion is a manual decision)")
+            return 0
         updated, outcome = rules.apply_promotion(stages, ratio, args.style, earned)
     except ValueError as error:
         print(f"promote refused: {error}", file=sys.stderr)
@@ -216,34 +307,66 @@ def cmd_promote(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_invalidate(args: argparse.Namespace) -> int:
+    path = Path(args.receipt)
+    receipt = json.loads(path.read_text(encoding="utf-8"))
+    receipt["invalid"] = {"reason": "infra_lost", "note": args.note}
+    _write_json(path, receipt)
+    print(f"{path}: marked invalid (infra_lost); it no longer pools")
+    return 0
+
+
+def _add_run_options(sub: argparse.ArgumentParser) -> None:
+    sub.add_argument("--base", required=True, help="backend API origin, e.g. http://127.0.0.1:8091")
+    sub.add_argument("--style", required=True)
+    sub.add_argument("--manuscripts", required=True, help="directory of *.txt prompts")
+    sub.add_argument("--slides", type=int, default=6)
+    sub.add_argument("--strategy", choices=("svg", "authored"), default=None, help="omit for the product default")
+    sub.add_argument("--out", required=True)
+    sub.add_argument("--app-data", default=None, help="the backend's APP_DATA_DIRECTORY, for QualityReceipts")
+    sub.add_argument("--language", default=DEFAULT_LANGUAGE)
+    sub.add_argument("--limit", type=int, default=0, help="use only the first N manuscripts")
+    sub.add_argument("--timeout", type=float, default=3600.0, help="seconds per deck and per export")
+    sub.add_argument("--backend-commit", default=None, help="commit the backend runs, recorded in receipts")
+    sub.add_argument("--ink-fix-commit", default=None,
+                     help="commit that introduced svg text_overlap ink boxes; decides the metric epoch by ancestry")
+    sub.add_argument("--metric-epoch", default=None, help="explicit metric epoch label (overrides ancestry)")
+    sub.add_argument("--batch", default=None, help="batch label recorded in receipts (default: today, UTC)")
+    sub.add_argument("--no-render", action="store_true", help="skip PNG renders and the contact sheet")
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
     run = sub.add_parser("run", help="generate, export and measure decks on one canvas")
-    run.add_argument("--base", required=True, help="backend API origin, e.g. http://127.0.0.1:8091")
+    _add_run_options(run)
     run.add_argument("--canvas", required=True, help="canvas_registry.json id, e.g. a4-landscape")
-    run.add_argument("--style", required=True)
-    run.add_argument("--manuscripts", required=True, help="directory of *.txt prompts")
-    run.add_argument("--slides", type=int, default=6)
-    run.add_argument("--strategy", choices=("svg", "authored"), default=None, help="omit for the product default")
-    run.add_argument("--out", required=True)
-    run.add_argument("--app-data", default=None, help="the backend's APP_DATA_DIRECTORY, for QualityReceipts")
-    run.add_argument("--language", default=DEFAULT_LANGUAGE)
-    run.add_argument("--limit", type=int, default=0, help="use only the first N manuscripts")
-    run.add_argument("--timeout", type=float, default=3600.0, help="seconds per deck and per export")
-    run.add_argument("--backend-commit", default=None, help="commit the backend runs, recorded in receipts")
-    run.add_argument("--no-render", action="store_true", help="skip PNG renders and the contact sheet")
     run.set_defaults(func=cmd_run)
-    compare = sub.add_parser("compare", help="apply the promotion rule to two receipt sets")
-    compare.add_argument("--baseline", required=True)
-    compare.add_argument("--candidate", required=True)
+    matrix_cmd = sub.add_parser("matrix", help="run a pooled canvas matrix serially and resumably")
+    _add_run_options(matrix_cmd)
+    matrix_cmd.add_argument("--canvas-decks", action="append", default=[], metavar="CANVAS=N",
+                            help="decks for a canvas, repeatable; spread round-robin over the manuscripts")
+    matrix_cmd.add_argument("--seed", type=int, default=20260929, help="interleave order seed")
+    matrix_cmd.add_argument("--dry-run", action="store_true", help="print the plan (done/todo) and exit")
+    matrix_cmd.set_defaults(func=cmd_matrix)
+    compare = sub.add_parser("compare", help="apply the pooled decision rule to receipt sets")
+    compare.add_argument("--baseline", nargs="+", required=True, help="receipt directories or files")
+    compare.add_argument("--candidate", nargs="+", required=True)
+    compare.add_argument("--baseline-canvas", default=None, help="keep only this canvas from --baseline")
+    compare.add_argument("--candidate-canvas", default=None)
+    compare.add_argument("--epoch", default=None, help="metric epoch to pool (default: newest candidate deck's)")
+    compare.add_argument("--slides", type=int, default=None, help="requested slide count to pool")
     compare.add_argument("--out", required=True)
     compare.set_defaults(func=cmd_compare)
     promote = sub.add_parser("promote", help="write the earned stage into canvas_stages.json")
     promote.add_argument("--canvas", required=True)
     promote.add_argument("--style", required=True)
-    promote.add_argument("--receipts", nargs="+", required=True, help="compare outputs, oldest first")
+    promote.add_argument("--receipts", nargs="+", required=True, help="compare output (newest last)")
     promote.set_defaults(func=cmd_promote)
+    invalidate = sub.add_parser("invalidate", help="mark a deck lost to the environment (infra_lost)")
+    invalidate.add_argument("receipt")
+    invalidate.add_argument("--note", required=True)
+    invalidate.set_defaults(func=cmd_invalidate)
     return parser.parse_args(argv)
 
 
