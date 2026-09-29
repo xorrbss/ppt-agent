@@ -17,6 +17,10 @@ import os
 import subprocess
 import threading
 
+_WHOAMI_TIMEOUT_SECONDS = 5
+_ACL_COMMAND_TIMEOUT_SECONDS = 10
+
+
 
 _WINDOWS_PRIVATE_ACL_CACHE: dict[str, tuple[int, int, int, int]] = {}
 _WINDOWS_PRIVATE_ACL_CACHE_LOCK = threading.Lock()
@@ -38,7 +42,7 @@ def _windows_current_user_sid() -> str | None:
             ["whoami", "/user", "/fo", "csv", "/nh"],
             check=True,
             capture_output=True,
-            timeout=5,
+            timeout=_WHOAMI_TIMEOUT_SECONDS,
             **_subprocess_text_kwargs(),
         )
         rows = list(csv.reader(result.stdout.splitlines()))
@@ -129,7 +133,7 @@ def _windows_acl_snapshot(file_path: str) -> dict | None:
             ],
             check=True,
             capture_output=True,
-            timeout=10,
+            timeout=_ACL_COMMAND_TIMEOUT_SECONDS,
             env=environment,
             **_subprocess_text_kwargs(),
         )
@@ -238,7 +242,7 @@ def _secure_config_file(file_path: str) -> bool:
             ],
             check=False,
             capture_output=True,
-            timeout=10,
+            timeout=_ACL_COMMAND_TIMEOUT_SECONDS,
             **_subprocess_text_kwargs(),
         )
     except (OSError, subprocess.SubprocessError):

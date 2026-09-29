@@ -518,7 +518,7 @@ def test_outer_worker_watchdog_allows_launcher_cleanup_and_kills_posix_group() -
     assert "timeout + 25" in worker
     assert "os.killpg(process.pid, signal.SIGTERM)" in worker
     assert "os.killpg(process.pid, signal.SIGKILL)" in worker
-    assert "await asyncio.wait_for(process.wait(), timeout=12)" in worker
+    assert "await asyncio.wait_for(process.wait(), timeout=CAPTURE_WORKER_TERMINATE_GRACE_SECONDS)" in worker
     assert "asyncio.CancelledError" in worker
     assert "await terminate_process_tree()" in worker
 

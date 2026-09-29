@@ -297,6 +297,7 @@ from services.source_content.browser_readback import (
     stamp_source_block_ids,
 )
 from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX, canvas_or_default, canvas_render_kwargs
+from constants.timeouts import LOCAL_FIT_CAPTURE_TIMEOUT_SECONDS
 
 
 LOGGER = logging.getLogger(__name__)
@@ -2749,7 +2750,7 @@ async def _generate_authored_presentation(
             return None
         local_fit_receipts[index] = fitted.receipt
         cache_accepted_capture(
-            fitted, timeout=60,
+            fitted, timeout=LOCAL_FIT_CAPTURE_TIMEOUT_SECONDS,
             width_px=canvas_width_px, height_px=canvas_height_px,
         )
         return fitted.html, fitted.png, fitted.metrics
@@ -2770,7 +2771,7 @@ async def _generate_authored_presentation(
             )
             source_repair_fit_receipts[(slide_index, digest_html(fitted.html))] = fitted.receipt
             cache_accepted_capture(
-                fitted, timeout=60,
+                fitted, timeout=LOCAL_FIT_CAPTURE_TIMEOUT_SECONDS,
                 width_px=canvas_width_px, height_px=canvas_height_px,
             )
             return fitted.html, fitted.png, fitted.metrics
@@ -3649,7 +3650,7 @@ async def _generate_authored_presentation(
                     if candidate_fit is not None:
                         local_fit_receipts[index] = candidate_fit.receipt
                         cache_accepted_capture(
-                            candidate_fit, timeout=60,
+                            candidate_fit, timeout=LOCAL_FIT_CAPTURE_TIMEOUT_SECONDS,
                             width_px=canvas_width_px,
                             height_px=canvas_height_px,
                         )

@@ -10,6 +10,11 @@ from typing import Any
 
 from services.source_images.models import SourceImageCandidate
 
+# Per structured-provider call, and the outer bound around one placement attempt.
+_PLACEMENT_CALL_TIMEOUT_SECONDS = 60
+_PLACEMENT_ATTEMPT_TIMEOUT_SECONDS = 130
+
+
 POLICY_VERSION = "source-image-placement/v1"
 _TERMINAL = {"assigned", "no_relevant_slide"}
 _MAX_INPUT_CHARS = 160_000
@@ -226,9 +231,9 @@ async def build_source_image_placement_plan(
                     semantic_slot_prefix="source-image-placement",
                     semantic_slot_suffix=f"attempt-{attempt_number}",
                     call_budget=StructuredProviderCallBudget(limit=2),
-                    call_timeout_seconds=60,
+                    call_timeout_seconds=_PLACEMENT_CALL_TIMEOUT_SECONDS,
                 ),
-                timeout=130,
+                timeout=_PLACEMENT_ATTEMPT_TIMEOUT_SECONDS,
             )
         decisions = _validate_decisions(
             response.get("decisions"), {i["asset_id"] for i in eligible}, len(contents), repeat_ids

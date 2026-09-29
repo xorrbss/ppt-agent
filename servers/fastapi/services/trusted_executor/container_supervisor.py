@@ -57,6 +57,7 @@ from services.trusted_executor.process_supervisor import (
     ProcessSupervisorError,
     ProcessTerminationReason,
 )
+from constants.timeouts import BUSY_WAIT_POLL_INTERVAL_SECONDS, WATCHER_THREAD_JOIN_SECONDS
 
 
 class ContainerProcessSupervisor:
@@ -220,7 +221,7 @@ class ContainerProcessSupervisor:
                 return True
             if time.monotonic() >= expires:
                 return False
-            time.sleep(0.01)
+            time.sleep(BUSY_WAIT_POLL_INTERVAL_SECONDS)
 
     def _record_exit(self, code: int) -> None:
         with self._lock:
@@ -330,7 +331,7 @@ class ContainerProcessSupervisor:
                 return
         self._terminate_and_verify(reason="closed", zero_timeout=5.0, raise_on_failure=True)
         if self._watchdog is not None and threading.current_thread() is not self._watchdog:
-            self._watchdog.join(timeout=1.0)
+            self._watchdog.join(timeout=WATCHER_THREAD_JOIN_SECONDS)
         with self._lock:
             if self._closed:
                 return

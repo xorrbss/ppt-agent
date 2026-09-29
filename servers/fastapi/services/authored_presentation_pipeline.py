@@ -19,6 +19,7 @@ from services.authored_original_capture_checkpoint import (
 from utils.slide_capture import get_cached_browser_metrics
 from services.document_canvas_generation import export_size_points
 from services.authored_canvas import canvas_or_default, canvas_render_kwargs
+from constants.timeouts import LOCAL_FIT_CAPTURE_TIMEOUT_SECONDS
 
 LOGGER = logging.getLogger(__name__)
 
@@ -1565,7 +1566,7 @@ async def _author_illustrate_render_pipeline(
                     # any later visual advisory is carried by the slide flag.
                     cache_accepted_capture(
                         accepted_fit,
-                        timeout=60,
+                        timeout=LOCAL_FIT_CAPTURE_TIMEOUT_SECONDS,
                         width_px=canvas_width_px,
                         height_px=canvas_height_px,
                     )

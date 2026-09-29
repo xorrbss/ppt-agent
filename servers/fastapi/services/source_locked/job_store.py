@@ -25,6 +25,7 @@ from services.source_locked.contracts import (
 from services.source_locked.digests import canonical_json_bytes, sha256_digest
 from services.source_locked.errors import SourceLockedError
 from utils.get_env import get_app_data_directory_env
+from constants.timeouts import SQLITE_BUSY_TIMEOUT_SECONDS
 
 
 _JOB_ID = re.compile(r"^sljob_[0-9a-f]{64}$")
@@ -74,7 +75,7 @@ class DurableSourceLockedJobStore:
         return cls(Path(app_data) / "source_locked" / "v1")
 
     def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.database_path, timeout=30, isolation_level=None)
+        connection = sqlite3.connect(self.database_path, timeout=SQLITE_BUSY_TIMEOUT_SECONDS, isolation_level=None)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA journal_mode=WAL")
         connection.execute("PRAGMA synchronous=FULL")

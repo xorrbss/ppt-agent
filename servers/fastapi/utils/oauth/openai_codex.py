@@ -19,6 +19,14 @@ import httpx
 
 from utils.oauth.pkce import generate_pkce
 
+# Callback server poll interval (lets the serve loop notice cancellation).
+_CALLBACK_POLL_INTERVAL_SECONDS = 0.2
+# Callback server thread start / stop waits.
+_CALLBACK_THREAD_TIMEOUT_SECONDS = 2
+# Token endpoint request timeout.
+_TOKEN_REQUEST_TIMEOUT_SECONDS = 30
+
+
 CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 AUTHORIZE_URL = "https://auth.openai.com/oauth/authorize"
 TOKEN_URL = "https://auth.openai.com/oauth/token"
@@ -453,7 +461,7 @@ class OAuthCallbackServer:
             server = HTTPServer(("0.0.0.0", CALLBACK_PORT), _CallbackHandler)
             server.expected_state = self._state  # type: ignore[attr-defined]
             server.captured_code = None  # type: ignore[attr-defined]
-            server.timeout = 0.2  # short poll interval so we can check cancel
+            server.timeout = _CALLBACK_POLL_INTERVAL_SECONDS  # short poll interval so we can check cancel
             self._server = server
 
             def _serve():
@@ -464,7 +472,7 @@ class OAuthCallbackServer:
 
             self._thread = threading.Thread(target=_serve, daemon=True)
             self._thread.start()
-            self._started.wait(timeout=2)
+            self._started.wait(timeout=_CALLBACK_THREAD_TIMEOUT_SECONDS)
             return True
         except OSError:
             return False
@@ -481,7 +489,7 @@ class OAuthCallbackServer:
     def close(self):
         self._cancelled = True
         if self._thread:
-            self._thread.join(timeout=2)
+            self._thread.join(timeout=_CALLBACK_THREAD_TIMEOUT_SECONDS)
 
 
 # ---------------------------------------------------------------------------
@@ -505,7 +513,7 @@ def exchange_authorization_code(
                 "code_verifier": verifier,
                 "redirect_uri": redirect_uri,
             },
-            timeout=30,
+            timeout=_TOKEN_REQUEST_TIMEOUT_SECONDS,
         )
         if not response.is_success:
             return TokenFailure(reason=f"HTTP {response.status_code}: {response.text[:200]}")
@@ -538,7 +546,7 @@ def refresh_access_token(refresh_token: str) -> TokenResult:
                 "refresh_token": refresh_token,
                 "client_id": CLIENT_ID,
             },
-            timeout=30,
+            timeout=_TOKEN_REQUEST_TIMEOUT_SECONDS,
         )
         if not response.is_success:
             return TokenFailure(reason=f"HTTP {response.status_code}: {response.text[:200]}")

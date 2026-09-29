@@ -46,6 +46,7 @@ from services.trusted_executor.worker_dispatcher import (
     TrustedWorkerWireError,
     TrustedWorkerWireResult,
 )
+from constants.timeouts import SUBPROCESS_DRAIN_JOIN_SECONDS
 
 
 MAX_WIRE_STDOUT_BYTES = 16 * 1024 * 1024
@@ -531,8 +532,8 @@ def _communicate(process: object, payload: bytes) -> _CapturedProcess:
         process.stdin.close()
         exit_code = process.wait()
     finally:
-        stdout_thread.join(timeout=5.0)
-        stderr_thread.join(timeout=5.0)
+        stdout_thread.join(timeout=SUBPROCESS_DRAIN_JOIN_SECONDS)
+        stderr_thread.join(timeout=SUBPROCESS_DRAIN_JOIN_SECONDS)
     if stdout_thread.is_alive() or stderr_thread.is_alive():
         raise TrustedWorkerWireError("trusted_worker_stdio_drain_incomplete")
     if read_error is not None:

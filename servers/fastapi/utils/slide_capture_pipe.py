@@ -13,6 +13,7 @@ from typing import Any, List, Mapping
 from utils.process_kill_on_parent_death import bind_to_parent_lifetime
 from utils.renderer_isolation import build_worker_environment
 from utils.slide_capture import _count_runtime, _kill_process_tree
+from constants.timeouts import BUSY_WAIT_POLL_INTERVAL_SECONDS, PROCESS_REAP_TIMEOUT_SECONDS
 
 def _runtime_value(result: Mapping[str, Any]) -> Any:
     remote = result.get("result", {})
@@ -45,7 +46,7 @@ class _SpawnedProcess:
         while self.poll() is None:
             if deadline is not None and time.monotonic() >= deadline:
                 raise subprocess.TimeoutExpired("chrome", timeout)
-            time.sleep(0.01)
+            time.sleep(BUSY_WAIT_POLL_INTERVAL_SECONDS)
         return b"", b""
 
 
@@ -206,10 +207,10 @@ class _ChromePipe:
                 except Exception:
                     _kill_process_tree(self.process)
             try:
-                self.process.communicate(timeout=5)
+                self.process.communicate(timeout=PROCESS_REAP_TIMEOUT_SECONDS)
             except subprocess.TimeoutExpired:
                 _kill_process_tree(self.process)
-                self.process.communicate(timeout=5)
+                self.process.communicate(timeout=PROCESS_REAP_TIMEOUT_SECONDS)
         finally:
             os.close(self._read_fd)
             os.close(self._write_fd)
