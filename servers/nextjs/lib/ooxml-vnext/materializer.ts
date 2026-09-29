@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
 
 import { xmlEscape } from "./package-ops.ts";
+import { canonicalJson, prefixedSha256, sha256 } from "./digest.ts";
 
 const XML_HEADER = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
 const P_NS = "http://schemas.openxmlformats.org/presentationml/2006/main";
@@ -164,25 +164,13 @@ export interface MaterializedSlideParts {
   };
 }
 
+/** Digest of the value's plain (key-order-preserving) JSON form. */
 function stableDigest(value: unknown): string {
-  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
-}
-
-function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  if (value !== null && typeof value === "object") {
-    return `{${Object.entries(value as Record<string, unknown>)
-      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-      .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`)
-      .join(",")}}`;
-  }
-  const encoded = JSON.stringify(value);
-  if (encoded === undefined) throw new Error("Body grammar is not canonical JSON");
-  return encoded;
+  return sha256(JSON.stringify(value));
 }
 
 function canonicalDigest(value: unknown): string {
-  return `sha256:${createHash("sha256").update(canonicalJson(value), "utf8").digest("hex")}`;
+  return prefixedSha256(canonicalJson(value));
 }
 
 interface BodyGrammarBounds {
@@ -468,7 +456,7 @@ function parseRetainedNativeScene(value: unknown, expectedDigest: unknown): Reta
       }
       previousSourceIndex = element.sourceIndex as number;
       const fragmentDigest = requireDigest(element.fragmentDigest, "nativeScene.element.fragmentDigest");
-      const actualFragmentDigest = `sha256:${createHash("sha256").update(element.fragmentXml, "utf8").digest("hex")}`;
+      const actualFragmentDigest = prefixedSha256(element.fragmentXml);
       if (actualFragmentDigest !== fragmentDigest) {
         throw new Error("Retained native scene element fragment digest mismatch");
       }
@@ -497,7 +485,7 @@ function parseRetainedNativeScene(value: unknown, expectedDigest: unknown): Reta
           bytes.byteLength === 0
           || bytes.byteLength > 10_000_000
           || bytes.toString("base64") !== relationship.targetBytesBase64
-          || `sha256:${createHash("sha256").update(bytes).digest("hex")}` !== targetDigest
+          || prefixedSha256(bytes) !== targetDigest
         ) {
           throw new Error("Retained native scene relationship asset digest mismatch");
         }
@@ -911,7 +899,7 @@ function parseBodyGrammar(values: Readonly<Record<string, MaterializedTextValue>
   }
   const bodyText = textValue(values[bodyRole]);
   const composedText = blocks.map(({ text }) => text).join("");
-  const sourceTextDigest = `sha256:${createHash("sha256").update(bodyText, "utf8").digest("hex")}`;
+  const sourceTextDigest = prefixedSha256(bodyText);
   if (composedText !== bodyText || record.sourceTextDigest !== sourceTextDigest) {
     throw new Error("Body grammar must preserve source text exactly once");
   }

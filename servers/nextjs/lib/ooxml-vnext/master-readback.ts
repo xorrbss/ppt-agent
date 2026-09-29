@@ -1,5 +1,4 @@
 import { attributes, digest, requirePart, stableJson } from "./master-readback-primitives.ts";
-import { createHash } from "node:crypto";
 import path from "node:path";
 
 import {
@@ -22,6 +21,7 @@ import type {
   SemanticPlaceholderMapping,
   SemanticElementExportMapping,
 } from "./master-compiler-contracts.ts";
+import { sha256 } from "./digest.ts";
 
 const MASTER_PART = "ppt/slideMasters/slideMaster1.xml";
 const MASTER_RELS_PART = "ppt/slideMasters/_rels/slideMaster1.xml.rels";
@@ -372,7 +372,7 @@ export function readDeckMasterParts(
       if (
         bytes.length === 0 ||
         !bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE) ||
-        createHash("sha256").update(bytes).digest("hex") !== mapping.assetSha256
+        sha256(bytes) !== mapping.assetSha256
       ) {
         throw new Error(`Logo asset bytes for ${mapping.id} do not match semantic metadata`);
       }
@@ -456,7 +456,7 @@ export function readDeckMasterParts(
     }
     if (mapping.assetPartName && mapping.assetSha256) {
       const bytes = Buffer.from(parts.get(mapping.assetPartName) ?? []);
-      if (bytes.length === 0 || createHash("sha256").update(bytes).digest("hex") !== mapping.assetSha256) {
+      if (bytes.length === 0 || sha256(bytes) !== mapping.assetSha256) {
         throw new Error(`Semantic image bytes for ${mapping.id} do not match metadata`);
       }
       verified.add(mapping.assetPartName);

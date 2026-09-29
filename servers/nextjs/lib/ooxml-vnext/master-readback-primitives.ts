@@ -1,13 +1,5 @@
-import { createHash } from "node:crypto";
-
-function xmlUnescape(value: string): string {
-  return value
-    .replaceAll("&quot;", '"')
-    .replaceAll("&apos;", "'")
-    .replaceAll("&gt;", ">")
-    .replaceAll("&lt;", "<")
-    .replaceAll("&amp;", "&");
-}
+import { prefixedSha256 } from "./digest.ts";
+import { xmlUnescape } from "./package-ops.ts";
 
 export function attributes(source: string): Record<string, string> {
   const result: Record<string, string> = {};
@@ -35,7 +27,7 @@ export function stableJson(value: unknown): string {
 
 export function digest(value: unknown): string {
   const payload = typeof value === "string" ? value : stableJson(value);
-  return `sha256:${createHash("sha256").update(payload).digest("hex")}`;
+  return prefixedSha256(payload);
 }
 
 export function requirePart(parts: ReadonlyMap<string, Uint8Array>, partName: string): string {

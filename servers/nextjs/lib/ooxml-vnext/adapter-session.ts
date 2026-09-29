@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 
 import { OOXML_RELATIONSHIP_TYPES } from "./package-ops.ts";
 import {
@@ -16,15 +15,12 @@ import type {
   PreservationPartStatus,
   PreservationReadBackReceipt,
 } from "./adapter-contracts.ts";
+import { sha256 } from "./digest.ts";
 
 const PRESENTATION_RELS = "ppt/_rels/presentation.xml.rels";
 
 export function asBuffer(bytes: Uint8Array): Buffer {
   return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-}
-
-function sha256(bytes: Uint8Array): string {
-  return createHash("sha256").update(bytes).digest("hex");
 }
 
 export function originalPackageInventory(

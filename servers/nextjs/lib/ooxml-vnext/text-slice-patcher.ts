@@ -1,5 +1,5 @@
-﻿import { createHash } from "node:crypto";
-import type {
+import { sha256 } from "./digest.ts";
+﻿import type {
   StableTextSelector,
   TextSlicePatchReceipt,
   TextSlicePatchRequest,
@@ -37,10 +37,6 @@ interface XmlTagToken {
 }
 function reject(reason: string): never {
   throw new Error(`ooxml-text-patch-rejected:${reason}`);
-}
-
-function sha256(value: Uint8Array | string): string {
-  return createHash("sha256").update(value).digest("hex");
 }
 
 function assertNonNegativeInteger(value: number | undefined, name: string): void {

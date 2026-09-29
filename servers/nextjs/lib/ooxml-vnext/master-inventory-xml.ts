@@ -6,6 +6,7 @@ import {
   MasterInventoryError,
   type MasterLayoutRelationshipRecord,
 } from "./master-inventory-contracts.ts";
+import { xmlUnescape } from "./package-ops.ts";
 
 export function relationshipPartFor(source: string): string {
   return posix.join(posix.dirname(source), "_rels", `${posix.basename(source)}.rels`);
@@ -16,23 +17,6 @@ export function isRelationshipType(
   localName: string
 ): boolean {
   return relationship.type.endsWith(`/${localName}`);
-}
-
-function xmlUnescape(value: string): string {
-  return value.replace(
-    /&(#x[0-9a-f]+|#\d+|amp|apos|gt|lt|quot);/gi,
-    (match, entity: string) => {
-      if (entity[0] === "#") {
-        const hexadecimal = entity[1]?.toLowerCase() === "x";
-        const point = Number.parseInt(entity.slice(hexadecimal ? 2 : 1), hexadecimal ? 16 : 10);
-        if (!Number.isInteger(point) || point < 0 || point > 0x10ffff) return match;
-        return String.fromCodePoint(point);
-      }
-      return ({ amp: "&", apos: "'", gt: ">", lt: "<", quot: '"' } as const)[
-        entity.toLowerCase() as "amp" | "apos" | "gt" | "lt" | "quot"
-      ] ?? match;
-    }
-  );
 }
 
 function attributes(fragment: string): Readonly<Record<string, string>> {

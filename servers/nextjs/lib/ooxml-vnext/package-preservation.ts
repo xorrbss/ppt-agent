@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 
 import { buildPackageGraph } from "./package-graph.ts";
 import {
@@ -16,15 +15,7 @@ import {
   DEFAULT_OOXML_SECURITY_POLICY,
   type OoxmlSecurityPolicy,
 } from "./security.ts";
-
-function stableDigest(records: readonly string[]): string {
-  const hash = createHash("sha256");
-  for (const record of [...records].sort()) {
-    const bytes = Buffer.from(record, "utf8");
-    hash.update(String(bytes.length)).update(":").update(bytes).update("\0");
-  }
-  return hash.digest("hex");
-}
+import { stableDigest } from "./digest.ts";
 
 function classifiedPartNames(
   manifest: PackagePreservationManifest,
