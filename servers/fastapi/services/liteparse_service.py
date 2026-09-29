@@ -12,6 +12,7 @@ from services.document_conversion_service import (
     DocumentConversionService,
 )
 from services.liteparse_pdf_input import pdf_input_for_liteparse
+from utils.env_settings.tooling import get_external_tool_paths, get_liteparse_settings
 from utils.runtime_limits import (
     BoundedTextBuffer,
     log_memory,
@@ -51,37 +52,20 @@ def _subprocess_text_kwargs() -> Mapping[str, object]:
     return {"text": True, "encoding": "utf-8", "errors": "replace"}
 
 
-def _env_int(name: str, default: int, minimum: int, maximum: int) -> int:
-    raw = (os.getenv(name) or "").strip()
-    if not raw:
-        return default
-
-    try:
-        parsed = int(raw)
-    except Exception:
-        LOGGER.warning(
-            "[LiteParse] Invalid %s=%r, using default=%s",
-            name,
-            raw,
-            default,
-        )
-        return default
-
-    return min(max(parsed, minimum), maximum)
-
-
 class LiteParseService:
     def __init__(self, timeout_seconds: int = 600):
         self.timeout_seconds = timeout_seconds
-        self.node_binary = os.getenv("LITEPARSE_NODE_BINARY", "node")
-        self.dpi = _env_int("LITEPARSE_DPI", _DEFAULT_DPI, minimum=72, maximum=600)
-        self.num_workers = _env_int(
-            "LITEPARSE_NUM_WORKERS",
-            _DEFAULT_NUM_WORKERS,
-            minimum=1,
-            maximum=64,
+        cfg = get_liteparse_settings(
+            default_dpi=_DEFAULT_DPI, default_num_workers=_DEFAULT_NUM_WORKERS
         )
-        self.runner_path = os.getenv("LITEPARSE_RUNNER_PATH", self._resolve_runner_path())
+        self.node_binary = cfg.node_binary
+        self.dpi = cfg.dpi
+        self.num_workers = cfg.num_workers
+        self.runner_path = (
+            cfg.runner_path
+            if cfg.runner_path is not None
+            else self._resolve_runner_path()
+        )
         self.runner_dir = os.path.dirname(self.runner_path)
         self._npm_project_root = self._resolve_npm_project_root()
         self._document_conversion_service = DocumentConversionService()
@@ -252,13 +236,15 @@ class LiteParseService:
         falls back to its own env/CDN handling.
         """
         env_path = (
-            os.getenv("LITEPARSE_TESSDATA_PATH") or os.getenv("TESSDATA_PREFIX") or ""
+            get_liteparse_settings().tessdata_path
+            or get_external_tool_paths().tessdata_prefix
+            or ""
         ).strip()
         if env_path:
             return env_path
 
         service_dir = os.path.dirname(os.path.abspath(__file__))
-        app_root = (os.getenv("PRESENTON_APP_ROOT") or "").strip()
+        app_root = (get_external_tool_paths().presenton_app_root or "").strip()
         candidates = []
         if app_root:
             candidates.append(os.path.join(app_root, "tessdata"))
@@ -281,7 +267,7 @@ class LiteParseService:
     @staticmethod
     def _use_json_runner_output() -> bool:
         """If true, expect one JSON line on stdout (legacy). Default is plain UTF-8 text (better for large PDFs)."""
-        return (os.getenv("LITEPARSE_RUNNER_OUTPUT") or "").strip().lower() == "json"
+        return (get_liteparse_settings().runner_output or "").strip().lower() == "json"
 
     @contextlib.contextmanager
     def _pdf_input(self, file_path: str) -> Iterator[str]:
@@ -346,7 +332,7 @@ class LiteParseService:
                 "--num-workers",
                 str(self.num_workers),
             ]
-            ocr_server = (os.getenv("LITEPARSE_OCR_SERVER_URL") or "").strip()
+            ocr_server = (get_liteparse_settings().ocr_server_url or "").strip()
             if ocr_server:
                 command.extend(["--ocr-server-url", ocr_server])
             tessdata = self._resolve_tessdata_path()

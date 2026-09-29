@@ -6,6 +6,8 @@ import os
 import pathlib
 from typing import List, Optional
 
+from utils.env_settings.tooling import get_external_tool_paths
+
 def _playwright_headless_shell_candidates() -> List[pathlib.Path]:
     """Return installed Playwright headless-shell executables, newest first.
 
@@ -15,7 +17,7 @@ def _playwright_headless_shell_candidates() -> List[pathlib.Path]:
     most reliable automatic choice for server-side slide rendering.
     """
     roots: List[pathlib.Path] = []
-    configured_root = os.getenv("PLAYWRIGHT_BROWSERS_PATH")
+    configured_root = get_external_tool_paths().playwright_browsers_path
     if configured_root and configured_root != "0":
         roots.append(pathlib.Path(configured_root).expanduser())
 

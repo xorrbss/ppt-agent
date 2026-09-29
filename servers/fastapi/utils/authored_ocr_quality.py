@@ -23,6 +23,8 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
+from utils.env_settings.tooling import get_external_tool_paths
+
 DEFAULT_TIMEOUT_SECONDS = 20.0
 MAX_TIMEOUT_SECONDS = 60.0
 MAX_CONCURRENT_OCR = 2
@@ -350,8 +352,9 @@ def find_tesseract(explicit_command: str | Path | None = None) -> tuple[str, ...
         return (
             (candidate,) if Path(candidate).is_file() or shutil.which(candidate) else ()
         )
-    if os.environ.get("TESSERACT_CMD"):
-        candidates.append(os.environ["TESSERACT_CMD"])
+    configured_cmd = get_external_tool_paths().tesseract_cmd
+    if configured_cmd:
+        candidates.append(configured_cmd)
     discovered = shutil.which("tesseract")
     if discovered:
         candidates.append(discovered)
@@ -367,12 +370,12 @@ def find_tesseract(explicit_command: str | Path | None = None) -> tuple[str, ...
 
 
 def discover_tessdata(explicit: str | Path | None = None) -> Path | None:
+    tools = get_external_tool_paths()
     roots = [
         explicit,
-        os.environ.get("AUTHORED_OCR_TESSDATA_PATH"),
-        os.environ.get("TESSDATA_PREFIX"),
-        os.environ.get("PRESENTON_APP_ROOT")
-        and str(Path(os.environ["PRESENTON_APP_ROOT"]) / "tessdata"),
+        tools.authored_ocr_tessdata_path,
+        tools.tessdata_prefix,
+        tools.presenton_app_root and str(Path(tools.presenton_app_root) / "tessdata"),
         str(Path(__file__).resolve().parents[3] / "tessdata"),
         str(Path.cwd() / "tessdata"),
         "/app/tessdata",
@@ -521,7 +524,7 @@ def _ocr_bytes(
         data = discover_tessdata(tessdata_dir)
         selected_command = str(
             command
-            or os.environ.get("TESSERACT_CMD")
+            or get_external_tool_paths().tesseract_cmd
             or shutil.which("tesseract")
             or ""
         )
