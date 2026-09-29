@@ -1,10 +1,11 @@
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Optional, Sequence
 
 from fastapi import HTTPException
+
+from utils.get_env import env_int
 
 
 DEFAULT_MAX_DOCUMENT_CONTEXT_CHARS = 500_000
@@ -21,17 +22,8 @@ LOGGER = logging.getLogger(__name__)
 
 
 def _configured_limit(name: str, default: int) -> int:
-    raw_value = os.getenv(name)
-    if raw_value is None:
-        return default
-
-    try:
-        value = int(raw_value)
-    except ValueError:
-        return default
-
-    if value <= 0:
-        return default
+    """Positive int from ``name`` (``PRESENTON_MAX_DOCUMENT_*``), capped at the hard max."""
+    value = env_int(name, default, minimum=1)
     return min(value, HARD_MAX_DOCUMENT_CONTEXT_CHARS)
 
 

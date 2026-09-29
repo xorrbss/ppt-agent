@@ -6,6 +6,7 @@ import threading
 from typing import Any, Mapping
 
 from constants.settings_registry import get_settings_registry
+from utils.get_env import get_user_config_path_env
 from utils.runtime_settings import (
     RuntimeSettings,
     publish_process_runtime_settings,
@@ -98,7 +99,7 @@ def save_codex_tokens_to_user_config(values: Mapping[str, object]) -> None:
     if unknown:
         raise ValueError("only managed Codex settings may be persisted by this path")
 
-    path = os.getenv("USER_CONFIG_PATH")
+    path = get_user_config_path_env()
     if not path:
         return
 

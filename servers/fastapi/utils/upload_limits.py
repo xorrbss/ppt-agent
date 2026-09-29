@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import BinaryIO
 
 from fastapi import HTTPException, UploadFile
+
+from utils.get_env import env_int
 
 
 MIB = 1024 * 1024
@@ -26,15 +27,8 @@ def _configured_mib(
     default_mib: int,
     hard_max_mib: int,
 ) -> int:
-    raw_value = os.getenv(env_name, "").strip()
-    if not raw_value:
-        return default_mib
-    try:
-        requested_mib = int(raw_value)
-    except ValueError:
-        return default_mib
-    if requested_mib <= 0:
-        return default_mib
+    """Positive MiB from ``env_name`` (``PRESENTON_MAX_*_MB``), capped at the hard max."""
+    requested_mib = env_int(env_name, default_mib, minimum=1)
     return min(requested_mib, hard_max_mib)
 
 
