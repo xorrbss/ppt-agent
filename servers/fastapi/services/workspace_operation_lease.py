@@ -23,7 +23,6 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from datetime import datetime, timedelta
-from hashlib import sha256
 from inspect import Parameter, signature
 import logging
 import uuid
@@ -45,6 +44,7 @@ from services.workspace_operation_handler_registry import (
     WorkspaceOperationLeaseLost,
 )
 from utils.datetime_utils import as_utc, get_current_utc_datetime
+from utils.hashing import sha256_hex
 
 LOGGER = logging.getLogger(__name__)
 
@@ -190,7 +190,7 @@ async def heartbeat_workspace_operation(
                     PublicResourceLease.attempt == operation.attempt_number,
                     PublicResourceLease.fence == fencing_token,
                     PublicResourceLease.lease_owner_hash
-                    == sha256(attempt_token.encode("utf-8")).hexdigest(),
+                    == sha256_hex(attempt_token.encode("utf-8")),
                     PublicResourceLease.deadline_at == public_admission.deadline_at,
                     exists(
                         select(PublicOperationAdmission.id).where(

@@ -134,6 +134,7 @@ from utils.owner_context import (
 )
 from utils.runtime_settings import create_runtime_settings_task
 from models.sql.workspace import get_workspace_owner_scope
+from utils.hashing import sha256_hex
 
 
 LOGGER = logging.getLogger(__name__)
@@ -943,7 +944,7 @@ def _canonical_hash(payload: Mapping[str, Any]) -> str:
         separators=(",", ":"),
         default=str,
     ).encode("utf-8")
-    return sha256(encoded).hexdigest()
+    return sha256_hex(encoded)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1600,7 +1601,7 @@ async def claim_next_workspace_operation(
                     await activate_public_operation_v2(
                         session,
                         admission_id=admission.id,
-                        lease_owner_hash=sha256(token.encode("utf-8")).hexdigest(),
+                        lease_owner_hash=sha256_hex(token.encode("utf-8")),
                         lease_seconds=max(1, lease_seconds),
                         attempt=proposed_attempt,
                         fence=int(admission.fence),
@@ -1706,7 +1707,7 @@ async def claim_next_workspace_operation(
                     await activate_public_operation_v2(
                         session,
                         admission_id=admission.id,
-                        lease_owner_hash=sha256(token.encode("utf-8")).hexdigest(),
+                        lease_owner_hash=sha256_hex(token.encode("utf-8")),
                         lease_seconds=max(1, lease_seconds),
                         attempt=proposed_attempt,
                         fence=admission_fence,
@@ -3766,9 +3767,7 @@ async def recover_expired_workspace_operations(
                     "fencing_token": stale["fencing_token"],
                     **(
                         {
-                            "reclaimed_attempt_token_sha256": sha256(
-                                str(stale["attempt_token"]).encode("utf-8")
-                            ).hexdigest()
+                            "reclaimed_attempt_token_sha256": sha256_hex(str(stale["attempt_token"]).encode("utf-8"))
                         }
                         if stale["attempt_token"] is not None
                         else {}

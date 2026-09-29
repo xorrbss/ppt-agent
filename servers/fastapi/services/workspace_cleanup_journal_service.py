@@ -18,7 +18,6 @@ import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from hashlib import sha256
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -67,6 +66,7 @@ from services.workspace_metrics import WORKSPACE_METRICS
 from utils.datetime_utils import get_current_utc_datetime
 from utils.get_env import get_app_data_directory_env, get_temp_directory_env
 from utils.path_helpers import get_writable_path
+from utils.hashing import sha256_hex
 
 DEFAULT_CLEANUP_LEASE_SECONDS = 60
 DEFAULT_CLEANUP_RETRY_SECONDS = 15
@@ -571,7 +571,7 @@ def _idempotency_hash(
         sort_keys=True,
         separators=(",", ":"),
     )
-    return sha256(canonical.encode("utf-8")).hexdigest()
+    return sha256_hex(canonical.encode("utf-8"))
 
 
 def _json_snapshot(value: Mapping[str, Any] | None) -> dict[str, Any] | None:

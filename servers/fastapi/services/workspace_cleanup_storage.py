@@ -12,7 +12,6 @@ import json
 import os
 import re
 import uuid
-from hashlib import sha256
 from pathlib import Path, PurePosixPath
 from typing import Any, Protocol
 
@@ -23,6 +22,7 @@ from services.workspace_artifact_publication_service import (
     _delete_claimed_artifact_files,
     _remove_owned_tree,
 )
+from utils.hashing import sha256_hex
 
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _CLEANUP_METADATA_SCHEMA_VERSION = "workspace.cleanup-target/v2"
@@ -86,7 +86,7 @@ def _storage_backend_generation(*, root_kind: str, root: Path) -> str:
         sort_keys=True,
         separators=(",", ":"),
     )
-    return sha256(canonical.encode("utf-8")).hexdigest()
+    return sha256_hex(canonical.encode("utf-8"))
 
 
 def storage_root_metadata(*, root_kind: str, root: Path) -> dict[str, str]:
