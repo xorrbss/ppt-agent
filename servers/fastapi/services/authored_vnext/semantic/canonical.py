@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
-from hashlib import sha256
 from html.parser import HTMLParser
 import json
 import math
@@ -111,7 +110,7 @@ def canonical_json(value: Any) -> str:
 
 
 def canonical_digest(value: Any) -> str:
-    return "sha256:" + sha256(canonical_json(value).encode("utf-8")).hexdigest()
+    return sha256_prefixed(canonical_json(value).encode("utf-8"))
 
 
 def bytes_digest(value: bytes) -> str:

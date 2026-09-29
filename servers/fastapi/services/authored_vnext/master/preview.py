@@ -5,7 +5,6 @@ from __future__ import annotations
 import base64
 import binascii
 from html import escape
-import hashlib
 from io import BytesIO
 import json
 import math
@@ -32,6 +31,7 @@ from services.authored_vnext.body_grammar import (
 )
 
 from .digests import canonical_digest
+from utils.hashing import sha256_prefixed
 
 
 def _css_string(value: str) -> str:
@@ -128,7 +128,7 @@ def _native_scene_image_source(element: dict) -> str | None:
             value = base64.b64decode(encoded, validate=True)
         except (ValueError, binascii.Error) as error:
             raise ValueError("native scene image bytes are invalid") from error
-        actual_digest = f"sha256:{hashlib.sha256(value).hexdigest()}"
+        actual_digest = sha256_prefixed(value)
         if expected_digest != actual_digest:
             raise ValueError("native scene image digest is invalid")
         # Retained-reference images keep their original bytes for native PPTX
@@ -183,7 +183,7 @@ def _native_scene_inline_svg(element: dict) -> str | None:
             root = ET.fromstring(value)
         except (ValueError, binascii.Error, ET.ParseError) as error:
             raise ValueError("native scene SVG bytes are invalid") from error
-        actual_digest = f"sha256:{hashlib.sha256(value).hexdigest()}"
+        actual_digest = sha256_prefixed(value)
         if relationship.get("targetDigest") != actual_digest:
             raise ValueError("native scene SVG digest is invalid")
         if root.tag.rsplit("}", 1)[-1].lower() != "svg":

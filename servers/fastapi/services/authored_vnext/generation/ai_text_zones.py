@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from hashlib import sha256
 import json
 from typing import Literal
 
@@ -27,6 +26,7 @@ from utils.schema_utils import prepare_schema_for_validation
 
 from .errors import GenerationNotFoundError
 from .repository import AsyncGenerationRepository
+from utils.hashing import sha256_prefixed
 
 
 class _FrozenModel(BaseModel):
@@ -245,7 +245,7 @@ def _digest(value: object) -> str:
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
-    return f"sha256:{sha256(payload).hexdigest()}"
+    return sha256_prefixed(payload)
 
 
 def _effective_pattern(zone: AIEditZone) -> str:

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 from typing import Any
@@ -11,6 +10,7 @@ import unicodedata
 from pydantic import BaseModel
 
 from models.authored_vnext.master.contract import DeckMasterContract, FontManifest
+from utils.hashing import sha256_prefixed
 
 
 def canonical_json(value: BaseModel | dict[str, Any] | list[Any]) -> str:
@@ -50,7 +50,7 @@ def _canonical_value(value: Any) -> Any:
 
 def canonical_digest(value: BaseModel | dict[str, Any] | list[Any]) -> str:
     encoded = canonical_json(value).encode("utf-8")
-    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
+    return sha256_prefixed(encoded)
 
 
 def seal_font_manifest(manifest: FontManifest) -> FontManifest:

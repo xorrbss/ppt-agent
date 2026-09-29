@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import base64
-import hashlib
 import json
 from typing import Any
 import zlib
+from utils.hashing import sha256_prefixed
 
 
 RETAINED_REFERENCE_MARKER_CODEC = "zlib-base64-v1"
@@ -20,7 +20,7 @@ def canonical_reference_digest(value: dict[str, Any]) -> str:
         separators=(",", ":"),
         sort_keys=True,
     ).encode("utf-8")
-    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
+    return sha256_prefixed(encoded)
 
 
 def encode_reference_layout_marker(value: dict[str, Any]) -> str:

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 from datetime import datetime, timedelta
-from hashlib import sha256
 import json
 import math
 from functools import cmp_to_key
@@ -45,6 +44,7 @@ from utils.env_settings.authored_release import (
     get_authored_release_settings,
     stripped,
 )
+from utils.hashing import sha256_prefixed
 
 
 _MAX_FUTURE_SKEW = timedelta(seconds=30)
@@ -212,7 +212,7 @@ def sign_server_readback_v3(
     except (ValueError, TypeError) as error:
         raise SemanticContractError("authored_release_readback_signer_unconfigured") from error
     public_key_bytes = private_key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
-    if "sha256:" + sha256(public_key_bytes).hexdigest() != READBACK_PUBLIC_KEY_DIGEST_V3:
+    if sha256_prefixed(public_key_bytes) != READBACK_PUBLIC_KEY_DIGEST_V3:
         raise SemanticContractError("authored_release_readback_signer_digest_mismatch")
     issued_at = as_utc(now or get_current_utc_datetime()).replace(microsecond=0)
     unsigned = dict(payload)
@@ -253,7 +253,7 @@ def release_trust_readback_v3(*, execution_nonce: str) -> dict[str, Any]:
                 "rotationEpoch": item.get("rotationEpoch"),
                 "algorithm": item.get("algorithm"),
                 "revoked": item.get("revoked"),
-                "publicKeyDigest": "sha256:" + sha256(public_bytes).hexdigest(),
+                "publicKeyDigest": sha256_prefixed(public_bytes),
             }
         )
     body = {
@@ -272,7 +272,7 @@ def validate_server_readback_v3(
     if (
         payload.get("executionNonce") != execution_nonce
         or payload.get("readbackSignerKeyId") != READBACK_SIGNER_KEY_ID_V3
-        or "sha256:" + sha256(public_key_bytes).hexdigest() != READBACK_PUBLIC_KEY_DIGEST_V3
+        or sha256_prefixed(public_key_bytes) != READBACK_PUBLIC_KEY_DIGEST_V3
     ):
         raise SemanticContractError("authored_release_readback_identity_invalid")
     try:
@@ -426,7 +426,7 @@ def actual_product_canonical_digest_v2(value: Any) -> str:
     """Digest an actual-product wire value with the Gate1 JS canonical-v2 contract."""
 
     canonical = _actual_product_canonical_json_v2(value)
-    return "sha256:" + sha256(canonical.encode("utf-8")).hexdigest()
+    return sha256_prefixed(canonical.encode("utf-8"))
 
 
 def actual_product_canonical_json_v2(value: Any) -> str:

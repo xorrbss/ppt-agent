@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import base64
 from dataclasses import dataclass
-from hashlib import sha256
 import logging
 import re
 from typing import Any, Protocol
@@ -17,6 +16,7 @@ from utils.env_settings.authored_vnext import (
     get_authored_vnext_ooxml_worker_token,
     get_authored_vnext_ooxml_worker_url,
 )
+from utils.hashing import sha256_hex
 
 
 _SAFE_WORKER_CODE = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
@@ -74,12 +74,12 @@ class NativeSceneOoxmlWorkerTransport:
             if isinstance(item, dict)
         ]
         expected = {
-            "masterSha256": sha256(canonical_json(payload.get("master")).encode("utf-8")).hexdigest(),
+            "masterSha256": sha256_hex(canonical_json(payload.get("master")).encode("utf-8")),
             "specSha256": str(scene.get("sceneDigest", "")).removeprefix("sha256:"),
-            "assetManifestSha256": sha256(canonical_json(asset_manifest).encode("utf-8")).hexdigest(),
-            "fontManifestSha256": sha256(
+            "assetManifestSha256": sha256_hex(canonical_json(asset_manifest).encode("utf-8")),
+            "fontManifestSha256": sha256_hex(
                 canonical_json(payload.get("master", {}).get("fontManifest")).encode("utf-8")
-            ).hexdigest(),
+            ),
         }
         if any(digests.get(key) != value for key, value in expected.items()):
             raise WorkerError("authored_vnext_scene_worker_digest_mismatch")
@@ -89,7 +89,7 @@ class NativeSceneOoxmlWorkerTransport:
             )
         except NativeSceneError as error:
             raise WorkerError(error.code) from error
-        artifact_digest = sha256(content).hexdigest()
+        artifact_digest = sha256_hex(content)
         master = payload.get("master", {})
         furniture = master.get("furniture", [])
         font_files = master.get("fontManifest", {}).get("files", [])

@@ -9,7 +9,6 @@ the bounded reviewed policy below.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
 import unicodedata
@@ -24,6 +23,7 @@ from models.authored_vnext.semantic.typography import (
     NativeTypographyRunReceiptV1,
 )
 from services.authored_vnext.semantic.canonical import canonical_digest
+from utils.hashing import sha256_prefixed
 
 
 _MICROSOFT_DOCUMENT_FONT_FAMILIES = frozenset(
@@ -151,7 +151,7 @@ class NativeFontByteRegistry:
                 family=family,
                 face=face,
                 collection_index=collection_index,
-                font_byte_digest="sha256:" + sha256(content).hexdigest(),
+                font_byte_digest=sha256_prefixed(content),
                 size_bytes=len(content),
                 face_class=_face_class(font),
                 license_policy=license_policy,

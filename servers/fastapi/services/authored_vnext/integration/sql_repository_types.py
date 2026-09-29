@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-import hashlib
 import json
 from typing import Any
 
 from models.authored_vnext.deck.operations import DeckGenerationSnapshot
 from models.authored_vnext.master.slide import DeckSnapshot
+from utils.hashing import sha256_hex
 
 
 ExportableDeck = DeckSnapshot | DeckGenerationSnapshot
@@ -60,7 +60,7 @@ def _json(model: Any) -> dict[str, Any]:
 
 
 def _hash(value: str) -> str:
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+    return sha256_hex(value.encode("utf-8"))
 
 
 def _now() -> datetime:
