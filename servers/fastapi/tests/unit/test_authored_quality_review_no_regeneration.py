@@ -103,7 +103,7 @@ def test_review_import_failure_never_calls_legacy_page_reauthor(monkeypatch) -> 
         _release_review_task_policy_matches, release_review_checker_policy,
         release_review_checker_policy_digest,
     )
-    from services.authored_quality_review_canonical import _bind_canonical_review_policy
+    from services.authored_quality_review_service import _bind_canonical_review_policy
 
     runtime = {"model": "paired-review-model", "change_during_import": False}
     monkeypatch.setattr(quality_service.author_vision_qa, "get_model", lambda: runtime["model"])

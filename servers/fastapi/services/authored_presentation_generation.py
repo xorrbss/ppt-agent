@@ -9,8 +9,6 @@ from hashlib import sha256
 import logging
 import math
 import os
-import sys
-from services import authored_generation_more_helpers as _more_helpers_impl
 import time
 import traceback
 import uuid
@@ -268,13 +266,12 @@ from services.authored_structural_repair import (
     structural_checkpoint_metrics,
     validate_repair_result,
 )
+from services.authored_generation_grid_repair import (
+    _repair_authored_intrinsic_grid_overlap,
+)
 from services.authored_generation_timing_receipt import (
     create_generation_timing_receipt,
 )
-from services import authored_generation_quality_gate as _quality_gate_impl
-from services import authored_generation_repair as _repair_impl
-from services import authored_generation_repair_inputs as _repair_inputs_impl
-from services import authored_generation_scene_persistence as _scene_persistence_impl
 from services.authored_quality_receipt_v2 import (
     create_quality_receipt_v2,
     evaluate_capacity_browser_metrics,
@@ -284,6 +281,19 @@ from services.authored_quality_receipt_v3_pipeline import (
     create_generation_quality_receipt_v3,
 )
 from services.authored_font_signal import body_font_median_signal
+from services.authored_admission_producers import require_bound_source_html
+from services.document_canvas_generation import export_size_points
+from services.authored_source_image_stage import prepare_source_image_stage
+from utils.llm_calls.author_slide_prompt import planned_source_image_brief
+from services.authored_planned_image_visibility import inspect_planned_source_images
+from utils.llm_calls.author_vision_qa import review_planned_source_images
+from services.authored_slide_quality_receipt import (
+    build_slide_quality_records,
+    record_slide_quality_receipt,
+)
+from services.public_operation_admission import (
+    public_operation_observability_metrics,
+)
 from services.authored_visual_review_evidence import visual_review_not_assessed, visual_review_outcome
 from services.source_content.browser_readback import (
     BrowserSourceReadbackError,
@@ -307,77 +317,1099 @@ _PERFORMANCE_STAGE_NAMES = (
 )
 
 
-def _call_extracted(module, name: str, *args, **kwargs):
-    module.bind_runtime(sys.modules[__name__])
-    return getattr(module, name)(*args, **kwargs)
+# ---- Folded back from authored_generation_repair_inputs.py (bind_runtime split) ----
+
+def _dom_repair_detail(
+    category: str, message: str, qids: object
+) -> str:
+    """One repair instruction that says which elements the gate measured.
+
+    The gate reports per element and the caller collapses identical sentences,
+    so without the element names a slide with four overflowing boxes is
+    repaired from "something overflows".  The names come from the measurement,
+    fit inside the detail budget, and the count is kept when they do not.
+    """
+
+    names = [
+        str(value).strip()
+        for value in (qids if isinstance(qids, (list, tuple)) else ())
+        if str(value).strip()
+    ]
+    head = f"DOM {category}: {message}."
+    tail = " Keep every QID, semantic role, source owner and header text."
+    # Name as many elements as fit whole. Slicing the finished sentence would
+    # cut a QID in half, and half a QID points at nothing.
+    for count in range(len(names), 0, -1):
+        listed = ", ".join(names[:count])
+        remaining = len(names) - count
+        elements = listed + (f" +{remaining} more" if remaining else "")
+        candidate = f"{head} Elements: {elements}.{tail}"
+        if len(candidate) <= _MAX_CRITIQUE_DETAIL:
+            return candidate
+    return (head + tail)[:_MAX_CRITIQUE_DETAIL]
 
 
-def _dom_repair_detail(*args, **kwargs):
-    return _call_extracted(_repair_inputs_impl, "_dom_repair_detail", *args, **kwargs)
+
+def _bounded_critique_issues(
+    issues: list[CritiqueIssue], *, slide_index: int
+) -> list[CritiqueIssue]:
+    """Fit one slide's gate findings into the critique contract.
+
+    The gate reports per element, so the four boxes that overflowed slide 10 of
+    operation b3e18cc2 produced four identical sentences.  Collapsing those is
+    what makes the cap bite only on genuinely different findings, and it is
+    also the better repair prompt: one instruction beats the same instruction
+    four times.  Anything still over the cap keeps the gate's own reporting
+    order -- every issue it raises here carries the same severity -- and the
+    drop is logged rather than raised, because a slide with many defects is
+    exactly the slide that must reach repair.
+    """
+
+    unique: list[CritiqueIssue] = []
+    seen: set[tuple[str, str, str]] = set()
+    for issue in issues:
+        key = (issue.type, issue.severity, issue.detail)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(issue)
+    if len(unique) <= _MAX_CRITIQUE_ISSUES:
+        return unique
+    # A single container escaping the canvas usually explains the many child
+    # clipping reports that follow it. Keep structural/root-cause findings in
+    # the bounded prompt before their downstream symptoms so the patch planner
+    # can reflow the existing grid instead of nudging individual text leaves.
+    def repair_priority(issue: CritiqueIssue) -> int:
+        detail = issue.detail.casefold()
+        if "off_canvas" in detail or "off-canvas" in detail:
+            return 0
+        if "text_escapes_card" in detail:
+            return 1
+        if "overlap" in detail:
+            return 2
+        if "clipping" in detail:
+            return 3
+        return 4
+
+    unique = sorted(unique, key=repair_priority)
+    LOGGER.warning(
+        "[authored] slide %d reported %d distinct gate issues; repairing the "
+        "first %d",
+        slide_index + 1,
+        len(unique),
+        _MAX_CRITIQUE_ISSUES,
+    )
+    return unique[:_MAX_CRITIQUE_ISSUES]
 
 
-def _bounded_critique_issues(*args, **kwargs):
-    return _call_extracted(_repair_inputs_impl, "_bounded_critique_issues", *args, **kwargs)
+
+def _capacity_gate_initial_critiques(
+    gate_failures: list[dict[str, object]],
+    slide_indices: list[int],
+    roles: list[str],
+    *,
+    allow_text_reduction: bool = True,
+) -> list[SlideCritique | None]:
+    """Make deterministic capacity failures start the existing one-cycle repair."""
+
+    details_by_slide: dict[int, list[CritiqueIssue]] = {}
+    dom_groups: dict[int, dict[tuple[str, str, str], list[str]]] = {}
+    for failure in gate_failures:
+        slide_index = failure.get("slide_index")
+        if not isinstance(slide_index, int):
+            continue
+        for issue in failure.get("issues", ()):
+            if not isinstance(issue, dict):
+                continue
+            category = str(issue.get("category") or "other").strip().lower()
+            message = str(issue.get("message") or issue.get("detail") or "").strip()
+            if not message:
+                continue
+            if category in {"capacity", "fragmentation"}:
+                instructions = capacity_repair_instructions(
+                    roles[slide_index],
+                    (message,),
+                    allow_text_reduction=allow_text_reduction,
+                )
+                details_by_slide.setdefault(slide_index, []).extend(
+                    CritiqueIssue(type="overflow", severity="high", detail=detail)
+                    for detail in instructions
+                )
+                continue
+            issue_type = "overlap" if category == "overlap" else "overflow"
+            # One instruction per distinct defect, naming every element the
+            # gate measured it on. Reported per element, the same sentence
+            # would otherwise arrive four times and say nothing about where.
+            group = dom_groups.setdefault(slide_index, {}).setdefault(
+                (issue_type, category, message), []
+            )
+            for value in issue.get("qids") or ():
+                name = str(value).strip()
+                if name and name not in group:
+                    group.append(name)
+    for slide_index, groups in dom_groups.items():
+        details_by_slide.setdefault(slide_index, []).extend(
+            CritiqueIssue(
+                type=issue_type,
+                severity="high",
+                detail=_dom_repair_detail(category, message, qids),
+            )
+            for (issue_type, category, message), qids in groups.items()
+        )
+    return [
+        (
+            SlideCritique(
+                needs_fix=True,
+                issues=_bounded_critique_issues(
+                    details_by_slide[index], slide_index=index
+                ),
+            )
+            if details_by_slide.get(index)
+            else None
+        )
+        for index in slide_indices
+    ]
 
 
-def _capacity_gate_initial_critiques(*args, **kwargs):
-    return _call_extracted(_repair_inputs_impl, "_capacity_gate_initial_critiques", *args, **kwargs)
+
+# ---- Folded back from authored_generation_repair.py (bind_runtime split) ----
+
+def _deterministic_repair_candidate(
+    *,
+    html: str,
+    browser_metrics: object,
+    capacity,
+    header_contract: AuthoredHeaderContract | None,
+    role: str,
+    profile_id: str,
+    allow_immutable_checkpoint_geometry: bool,
+    repair_intrinsic_grid_overlap: bool = False,
+    canvas_size: tuple[int, int] | None = None,
+) -> str:
+    """Compose every applicable local repair before a single recapture."""
+
+    candidate = html
+    source_visibility_candidate = (
+        repair_source_decoration_paint_order(candidate, browser_metrics)
+        if repair_intrinsic_grid_overlap
+        else candidate
+    )
+    candidate = repair_authored_owned_text_paint_order(
+        source_visibility_candidate,
+        browser_metrics,
+        profile_id=profile_id,
+        canvas_size=canvas_size,
+    )
+    stale_geometry_metrics = (
+        source_visibility_candidate != html or candidate != source_visibility_candidate
+    )
+    # A wrapper inset from the edge that was given the full canvas width runs
+    # past the right edge by exactly its inset, taking its children with it.
+    # Clamping the measured overhang costs no provider call and leaves the
+    # slide otherwise untouched; the gate re-measures the result.
+    # If an intrinsic grid repair changed the candidate, these baseline metrics
+    # are stale.  Both reducers append source-visible style rules and can also
+    # collapse the just-released grid item to its old escaped width.  Let the
+    # single recapture validate the intrinsic repair instead.
+    if repair_intrinsic_grid_overlap:
+        intrinsic_candidate = _repair_authored_intrinsic_grid_overlap(
+            candidate, browser_metrics
+        )
+        candidate = intrinsic_candidate
+        stale_geometry_metrics = stale_geometry_metrics or intrinsic_candidate != html
+    if not stale_geometry_metrics:
+        candidate = repair_authored_offcanvas_width(candidate, browser_metrics)
+        # A source blank field is a run of underscores the deck must reproduce
+        # literally, so when the author's size makes it wider than the box drawn
+        # for it, the size is the only thing left to give.
+        candidate = repair_authored_blank_field_clipping(candidate, browser_metrics)
+    candidate = reduce_authored_owner_text_capacity(
+        candidate,
+        capacity,
+        profile_id=profile_id,
+        allow_summarization=(profile_id == "ordinary"),
+    )
+    reduced = reduce_authored_closing_capacity(
+        candidate,
+        browser_metrics,
+        capacity,
+        profile_id=profile_id,
+    )
+    candidate = reduced
+    if capacity_violations(
+        candidate,
+        browser_metrics,
+        capacity,
+    ) == ("browser_text_not_visible:header.eyebrow",):
+        candidate = repair_authored_header_eyebrow_clip(
+            candidate,
+            browser_metrics,
+            header_contract,
+            role,
+            allow_immutable_checkpoint_geometry=allow_immutable_checkpoint_geometry,
+        )
+    if profile_id == "ordinary":
+        candidate = repair_authored_layout_alignment(candidate, role=role)
+    return canonicalize_authored_roles(candidate, role=role)
 
 
-def _deterministic_repair_candidate(*args, **kwargs):
-    return _call_extracted(_repair_impl, "_deterministic_repair_candidate", *args, **kwargs)
 
 
-def _repair_authored_intrinsic_grid_overlap(*args, **kwargs):
-    return _call_extracted(_repair_impl, "_repair_authored_intrinsic_grid_overlap", *args, **kwargs)
+
+def _admit_vqa_capacity_candidate(
+    *,
+    slide_index: int,
+    original_html: str,
+    original_png: bytes,
+    original_metrics: object | None,
+    candidate_html: str,
+    candidate_png: bytes,
+    candidate_metrics: object | None,
+    capacity: object,
+    allow_original_fallback: bool = True,
+    terminal_fallback_enabled: bool = False,
+) -> tuple[str, bytes, object | None, bool]:
+    """Admit a VQA rewrite only when it stays inside the frozen envelope.
+
+    VQA has no authority to expand capacity or delete QIDs to make a candidate
+    pass. An unmeasured or over-capacity candidate is discarded intact and the
+    pre-VQA bytes are restored; the ordinary final gate still verifies that
+    restored source before publication.
+    """
+
+    candidate_violations = (
+        capacity_violations(candidate_html, candidate_metrics, capacity)
+        if candidate_metrics is not None
+        else ("browser_metrics_unavailable",)
+    )
+    if not candidate_violations:
+        return candidate_html, candidate_png, candidate_metrics, True
+
+    original_violations = (
+        capacity_violations(original_html, original_metrics, capacity)
+        if original_metrics is not None
+        else ("browser_metrics_unavailable",)
+    )
+    LOGGER.warning(
+        "[authored] rejected post-VQA capacity candidate slide=%d candidate_digest=%s "
+        "candidate_violations=%s restored_digest=%s restored_violations=%s",
+        slide_index + 1, digest_html(candidate_html), list(candidate_violations),
+        digest_html(original_html), list(original_violations),
+    )
+    if not allow_original_fallback and not gate_repair_rejection_is_terminal_slide(
+        enabled=terminal_fallback_enabled, candidate_violations=candidate_violations,
+        original_violations=original_violations,
+    ):
+        raise AuthoredStageError(
+            slide_index=slide_index,
+            stage="render",
+            code="authored_slide_capacity_exceeded",
+            retryable=False,
+            message=(
+                f"Slide {slide_index + 1} bounded gate-repair candidate exceeded "
+                "its frozen capacity envelope: "
+                + ", ".join(candidate_violations)
+            ),
+        )
+    return original_html, original_png, original_metrics, False
 
 
-def _admit_vqa_capacity_candidate(*args, **kwargs):
-    return _call_extracted(_repair_impl, "_admit_vqa_capacity_candidate", *args, **kwargs)
+
+def _admit_gate_repair_capacity_candidate(
+    *,
+    allow_primary_title_shortening: bool = False,
+    **kwargs,
+):
+    """Gate-repair originals remain failed, so an invalid rewrite is terminal."""
+
+    semantic_violations = semantic_repair_boundary_violations(
+        kwargs["original_html"],
+        kwargs["candidate_html"],
+        allow_primary_title_shortening=allow_primary_title_shortening,
+    )
+    if semantic_violations:
+        LOGGER.warning(
+            "[authored] rejected bounded gate repair semantic boundary slide=%d "
+            "violations=%s",
+            int(kwargs["slide_index"]) + 1,
+            list(semantic_violations),
+        )
+        raise AuthoredStageError(
+            slide_index=int(kwargs["slide_index"]),
+            stage="render",
+            code="authored_composition_safety_gate_failed",
+            retryable=False,
+            message="bounded repair changed protected semantic ownership",
+        )
+    return _admit_vqa_capacity_candidate(
+        **kwargs,
+        allow_original_fallback=False,
+    )
 
 
-def _admit_gate_repair_capacity_candidate(*args, **kwargs):
-    return _call_extracted(_repair_impl, "_admit_gate_repair_capacity_candidate", *args, **kwargs)
+
+async def _revise_gate_repair_candidates(
+    *,
+    flagged: list[int],
+    htmls: list[str],
+    pngs: list[bytes],
+    contents: list[str],
+    roles: list[str],
+    deterministic_candidates: Mapping[int, str],
+    brand: object,
+    design_system: str,
+    repair_kwargs: Mapping[str, object],
+    terminal_fallback_enabled: bool = False,
+) -> tuple[list[str], list[int]]:
+    """Review unchanged inputs only; admit all candidates after one fresh bind.
+
+    A changed deterministic candidate has no matching pixels/telemetry yet.
+    Passing its failed original into strict VQA would reject that original
+    before the candidate can be captured.  Unchanged originals, including
+    provider-disabled slides, retain the existing strict residual gate.
+    """
+
+    if (
+        repair_kwargs.get("candidate_evaluator") is not None
+        or repair_kwargs.get("candidate_evaluators") is not None
+    ):
+        return await _revise_source_gate_repair_candidates(
+            flagged=flagged, htmls=htmls, pngs=pngs, contents=contents,
+            roles=roles, deterministic_candidates=deterministic_candidates,
+            brand=brand, design_system=design_system, repair_kwargs=repair_kwargs,
+        )
+
+    revised_htmls = [deterministic_candidates[index] for index in flagged]
+    reviewed_local_indices = [
+        local_index
+        for local_index, absolute_index in enumerate(flagged)
+        if digest_html(revised_htmls[local_index]) == digest_html(htmls[absolute_index])
+    ]
+    if not reviewed_local_indices or not are_repair_calls_enabled():
+        return revised_htmls, []
+
+    subset_kwargs = dict(repair_kwargs)
+    for key in (
+        "slide_indices",
+        "initial_critiques",
+        "capacity_briefs",
+        "provider_recovery_allowed",
+        "chapter_prefixes",
+        "illustration_slots",
+        "infographic_briefs",
+        "reference_images_by_slide",
+        "source_images_by_slide",
+        "source_image_placement_plans_by_slide",
+    ):
+        values = subset_kwargs.get(key)
+        if values is not None:
+            if not isinstance(values, (list, tuple)) or len(values) != len(flagged):
+                raise ValueError(f"gate repair {key} must match flagged slides")
+            subset_kwargs[key] = [values[index] for index in reviewed_local_indices]
+    accepted_kwargs = inspect.signature(revise_authored_deck).parameters
+    subset_kwargs = {
+        key: value for key, value in subset_kwargs.items() if key in accepted_kwargs
+    }
+    reviewed_absolute_indices = [flagged[index] for index in reviewed_local_indices]
+    try:
+        repaired = await revise_authored_deck(
+            [htmls[index] for index in reviewed_absolute_indices],
+            [pngs[index] for index in reviewed_absolute_indices],
+            [contents[index] for index in reviewed_absolute_indices],
+            [roles[index] for index in reviewed_absolute_indices],
+            brand,
+            design_system,
+            **subset_kwargs,
+        )
+        reviewed_htmls, reviewed_pngs, fixed = repaired[:3]
+    except AuthoredVqaResidualDomIssuesError as error:
+        # D7: a residual DOM defect reported by the round is the same defect the
+        # final gate reports, and it must reach the terminal-slide fallback the
+        # same way. Recover the round's own bound state instead of throwing the
+        # whole round away; every candidate below is still re-rendered into one
+        # fresh (html, png, metrics) capture before admission.
+        recovered = recover_residual_repair_round(
+            error, enabled=terminal_fallback_enabled
+        )
+        if recovered is None:
+            # The VQA call above may run against only the unchanged subset of
+            # the flagged slides. Preserve that subset mapping so successful
+            # repairs can be checkpointed at their real deck positions before
+            # the residual failure is reported.
+            error.checkpoint_absolute_indices = tuple(reviewed_absolute_indices)
+            raise
+        reviewed_htmls, reviewed_pngs, fixed = recovered
+    if not (
+        len(reviewed_htmls) == len(reviewed_pngs) == len(reviewed_local_indices)
+    ):
+        raise ValueError("gate repair result must match reviewed slides")
+    for local_index, html in zip(reviewed_local_indices, reviewed_htmls, strict=True):
+        revised_htmls[local_index] = html
+    fixed_local_indices: list[int] = []
+    for index in fixed:
+        reviewed_index = int(index)
+        if not 0 <= reviewed_index < len(reviewed_local_indices):
+            raise ValueError("gate repair fixed index is outside reviewed slides")
+        fixed_local_indices.append(reviewed_local_indices[reviewed_index])
+    # Returned PNGs are intentionally not merged: the caller binds every final
+    # candidate to fresh pixels and telemetry before semantic/capacity admission.
+    return revised_htmls, fixed_local_indices
 
 
-async def _revise_gate_repair_candidates(*args, **kwargs):
-    return await _call_extracted(_repair_impl, "_revise_gate_repair_candidates", *args, **kwargs)
+
+async def _revise_source_gate_repair_candidates(
+    *, flagged, htmls, pngs, contents, roles, deterministic_candidates,
+    brand, design_system, repair_kwargs,
+) -> tuple[list[str], list[int]]:
+    """Feed measured deterministic improvements into the bounded repair loop."""
+    kwargs = dict(repair_kwargs)
+    shared_evaluator = kwargs.get("candidate_evaluator")
+    evaluators = kwargs.get("candidate_evaluators")
+    capture = kwargs["structural_candidate_capture"]
+    initial_metrics = list(kwargs["initial_browser_metrics"])
+    initial_assessments = [None] * len(flagged)
+    initial_repair_history: list[list[dict[str, object]]] = [
+        [] for _ in flagged
+    ]
+    budgets = kwargs.get("structural_budgets") or {
+        index: StructuralRepairBudget() for index in flagged
+    }
+    selected_htmls = [htmls[index] for index in flagged]
+    selected_pngs = [pngs[index] for index in flagged]
+    for local_index, absolute_index in enumerate(flagged):
+        evaluator = (
+            evaluators[absolute_index]
+            if evaluators is not None
+            else shared_evaluator
+        )
+        if evaluator is None:
+            raise ValueError("candidate evaluator is required for structural repair")
+        budget = budgets[absolute_index]
+        candidate = deterministic_candidates[absolute_index]
+        if digest_html(candidate) == digest_html(selected_htmls[local_index]):
+            continue
+        # Keep at least one capture for a provider candidate whenever that path
+        # is authorized. A failed/cancelled capture is still charged here.
+        recovery_allowed = kwargs.get("provider_recovery_allowed")
+        provider_allowed = bool(
+            True if recovery_allowed is None else recovery_allowed[local_index]
+        )
+        if not budget.claim_capture(reserve_for_model=1 if provider_allowed else 0):
+            initial_repair_history[local_index].append({
+                "cycle": -1,
+                "path": "deterministic",
+                "stop_reason": "model_capture_reserved",
+                "selected_html_digest": digest_html(selected_htmls[local_index]),
+                "budget": budget.receipt(),
+            })
+            continue
+        candidate_html, candidate_png, metrics = await capture(
+            candidate, absolute_index
+        )
+        assessment = await evaluator(absolute_index, candidate_html, metrics)
+        accepted = assessment.decision in {"provisional", "admitted"}
+        initial_repair_history[local_index].append({
+            "cycle": -1,
+            "path": "deterministic",
+            "decision": assessment.decision,
+            "reasons": list(getattr(assessment, "reasons", ())),
+            "selected_html_digest": digest_html(selected_htmls[local_index]),
+            "html_digest": digest_html(candidate_html),
+            "capture_calls": 1,
+            "proposal_calls": 0,
+            "stop_reason": (
+                "admitted" if assessment.decision == "admitted"
+                else "provisional_selected" if accepted
+                else "deterministic_rejected"
+            ),
+            "budget": budget.receipt(),
+        })
+        if accepted:
+            _advance_repair_evaluator(
+                evaluator, assessment, candidate_html, metrics
+            )
+            selected_htmls[local_index] = candidate_html
+            selected_pngs[local_index] = candidate_png
+            initial_metrics[local_index] = metrics
+            initial_assessments[local_index] = assessment
+    kwargs["initial_browser_metrics"] = initial_metrics
+    kwargs["initial_assessments"] = initial_assessments
+    kwargs["initial_repair_history"] = initial_repair_history
+    kwargs["structural_budgets"] = budgets
+    repaired = await revise_authored_deck(
+        selected_htmls, selected_pngs,
+        [contents[index] for index in flagged],
+        [roles[index] for index in flagged], brand, design_system, **kwargs,
+    )
+    return repaired[0], repaired[2]
 
 
-async def _revise_source_gate_repair_candidates(*args, **kwargs):
-    return await _call_extracted(_repair_impl, "_revise_source_gate_repair_candidates", *args, **kwargs)
+
+async def _bind_bounded_repair_evidence(
+    htmls: list[str], indices: Sequence[int | None] | None = None,
+) -> tuple[list[str], list[bytes], list[object]]:
+    """Capture exact final HTML/pixels/metrics for bounded repair results."""
+
+    bound_htmls: list[str] = []
+    bound_pngs: list[bytes] = []
+    bound_metrics: list[object] = []
+    for html, index in zip(htmls, indices or [None] * len(htmls), strict=True):
+        # Bind the reducer's exact document: role immutability already keeps a
+        # title owner here.  ``index`` only attributes the capture to a slide.
+        canonical_html = ensure_authored_semantic_roles(ensure_authored_qids(html))
+        capture = await capture_once(canonical_html, index=index, capture=render_html_to_png_with_metrics)
+        if (
+            capture.prepared_html is None
+            or capture.png == _placeholder_png()
+            or capture.browser_metrics is None
+        ):
+            raise RuntimeError("bounded repair browser evidence unavailable")
+        bound_htmls.append(capture.prepared_html)
+        bound_pngs.append(capture.png)
+        bound_metrics.append(capture.browser_metrics)
+    return bound_htmls, bound_pngs, bound_metrics
 
 
-async def _bind_bounded_repair_evidence(*args, **kwargs):
-    return await _call_extracted(_repair_impl, "_bind_bounded_repair_evidence", *args, **kwargs)
+
+# ---- Folded back from authored_generation_quality_gate.py (bind_runtime split) ----
+
+def _source_block_bindings(request) -> tuple[tuple[tuple[str, str], ...], ...] | None:
+    """Project immutable source text into deterministic HTML binding pairs."""
+
+    manifest = getattr(request, "_source_content_manifest", None)
+    outline = getattr(request, "_source_document_outline", None)
+    if manifest is None or outline is None:
+        return None
+    dump = getattr(manifest, "model_dump", None)
+    value = dump(mode="json", by_alias=True) if callable(dump) else manifest
+    odump = getattr(outline, "model_dump", None)
+    outline_value = odump(mode="json", by_alias=True) if callable(odump) else outline
+    units = value.get("units", ()) if isinstance(value, dict) else ()
+    slides = outline_value.get("slides", ()) if isinstance(outline_value, dict) else ()
+    blocks_by_id: dict[str, dict] = {}
+    for unit in units:
+        for block in unit.get("blocks", ()) if isinstance(unit, dict) else ():
+            if isinstance(block, dict):
+                blocks_by_id[str(block.get("sourceBlockId", ""))] = block
+    result: list[tuple[tuple[str, str], ...]] = []
+    for slide in slides:
+        pairs: list[tuple[str, str]] = []
+        for block_id in slide.get("readingOrder", ()) if isinstance(slide, dict) else ():
+            block = blocks_by_id.get(str(block_id))
+            if not block or block.get("kind") != "text":
+                continue
+            payload = block.get("payload") or {}
+            text = payload.get("text") if isinstance(payload, dict) else None
+            if isinstance(text, str) and text.strip():
+                pairs.append((str(block_id), text))
+        result.append(tuple(pairs))
+    return tuple(result)
 
 
-def _source_block_bindings(*args, **kwargs):
-    return _call_extracted(_quality_gate_impl, "_source_block_bindings", *args, **kwargs)
+
+def _require_source_verbatim_bindings(htmls, bindings) -> None:
+
+    require_bound_source_html(htmls, bindings, stamp=stamp_source_block_ids)
 
 
-def _require_source_verbatim_bindings(*args, **kwargs):
-    return _call_extracted(_quality_gate_impl, "_require_source_verbatim_bindings", *args, **kwargs)
+
+def _source_image_block_bindings(request) -> tuple[tuple[str, ...], ...] | None:
+    """Project source image *occurrences* into deterministic DOM bindings."""
+
+    manifest = getattr(request, "_source_content_manifest", None)
+    outline = getattr(request, "_source_document_outline", None)
+    if manifest is None or outline is None:
+        return None
+    dump = getattr(manifest, "model_dump", None)
+    value = dump(mode="json", by_alias=True) if callable(dump) else manifest
+    odump = getattr(outline, "model_dump", None)
+    outline_value = odump(mode="json", by_alias=True) if callable(odump) else outline
+    units = value.get("units", ()) if isinstance(value, dict) else ()
+    slides = outline_value.get("slides", ()) if isinstance(outline_value, dict) else ()
+    blocks_by_id: dict[str, dict] = {}
+    for unit in units:
+        for block in unit.get("blocks", ()) if isinstance(unit, dict) else ():
+            if isinstance(block, dict):
+                blocks_by_id[str(block.get("sourceBlockId", ""))] = block
+    result: list[tuple[str, ...]] = []
+    for slide in slides:
+        ids: list[str] = []
+        for block_id in slide.get("readingOrder", ()) if isinstance(slide, dict) else ():
+            block = blocks_by_id.get(str(block_id))
+            if block and block.get("kind") == "image":
+                ids.append(str(block_id))
+        result.append(tuple(ids))
+    return tuple(result)
 
 
-def _source_image_block_bindings(*args, **kwargs):
-    return _call_extracted(_quality_gate_impl, "_source_image_block_bindings", *args, **kwargs)
+
+async def _final_authored_quality_gate(
+    *,
+    presentation_id: uuid.UUID | None = None,
+    htmls: list[str],
+    capacity_plan,
+    profile,
+    reference_mode: str,
+    browser_metrics_by_slide=None,
+    flagged_slide_indices: Sequence[int] = (),
+    # M1 (docs/authored-fit-magnitude-measurement-design-20260904.md, 3.4): an
+    # out-parameter rather than a new key in the residual dicts, so the gate
+    # receipt this function feeds keeps its exact recorded shape.
+    fit_summaries: dict[int, Mapping[str, object]] | None = None,
+) -> list[dict[str, object]]:
+    """Re-check the exact final HTML before export/publication.
+
+    The first pipeline pass can be followed by VQA or a bounded slide repair.
+    This final readback keeps the receipt bound to the bytes that are actually
+    exported and prevents a post-gate edit from reintroducing a safety defect.
+    Browser metrics are cache hits for unchanged HTML, so shadow semantic mode
+    does not launch a second render merely to collect the gate evidence.
+    """
+    if browser_metrics_by_slide is not None:
+        metrics = browser_metrics_by_slide
+    else:
+        with set_render_deck_scope(str(presentation_id)):
+            metrics = await asyncio.gather(
+                *(
+                    captured_metrics_or_existing(html, index=index, ensure=ensure_browser_metrics)
+                    for index, html in enumerate(htmls)
+                )
+            )
+    residual: list[dict[str, object]] = []
+    for index, (html, browser_metrics) in enumerate(zip(htmls, metrics, strict=True)):
+        if capacity_plan is not None:
+            violations = capacity_violations(html, browser_metrics, capacity_plan.at(index))
+            if violations and not flagged_slide_absorbs_capacity(index, violations, flagged=flagged_slide_indices):
+                # Keep a content-free, digest-bound diagnostic in the service
+                # log even though the workspace projection exposes only a safe
+                # terminal code.
+                LOGGER.error(
+                    "[authored] final capacity failure slide=%d html_digest=%s violations=%s",
+                    index + 1,
+                    digest_html(html),
+                    list(violations),
+                )
+                raise AuthoredStageError(
+                    slide_index=index,
+                    stage="render",
+                    code="authored_slide_capacity_exceeded",
+                    # The first-pass gate already sent this slide through the
+                    # one bounded repair cycle. Replaying the same completed
+                    # checkpoint cannot change a residual deterministic limit.
+                    retryable=False,
+                    message=(
+                        f"Slide {index + 1} exceeded its frozen capacity envelope: "
+                        + ", ".join(violations)
+                    ),
+                )
+        report = inspect_authored_dom(
+            html,
+            browser_metrics,
+            reference_mode=reference_mode,
+            strict_structural_off_canvas=(profile.profile_id != "ordinary"),
+        )
+        if report.telemetry_status != "available":
+            if index in {int(value) for value in flagged_slide_indices}:
+                residual.append(
+                    {
+                        "slide_index": index,
+                        "issues": [
+                            {
+                                "category": "telemetry_unavailable",
+                                "severity": "high",
+                                "message": (
+                                    "composition safety telemetry is "
+                                    + str(report.telemetry_status)
+                                ),
+                            }
+                        ],
+                    }
+                )
+                continue
+            raise AuthoredStageError(
+                slide_index=index,
+                stage="render",
+                code="authored_composition_safety_gate_failed",
+                retryable=True,
+                message=f"Slide {index + 1} failed the composition safety gate (telemetry:{report.telemetry_status})",
+            )
+        defects = blocking_safety_issues(report)
+        if defects:
+            residual.append(
+                {
+                    "slide_index": index,
+                    "issues": [issue.to_dict() for issue in defects],
+                }
+            )
+            if fit_summaries is not None and report.fit_summary is not None:
+                fit_summaries[index] = dict(report.fit_summary)
+    return residual
 
 
-async def _final_authored_quality_gate(*args, **kwargs):
-    return await _call_extracted(_quality_gate_impl, "_final_authored_quality_gate", *args, **kwargs)
+
+# ---- Folded back from authored_generation_scene_persistence.py (bind_runtime split) ----
+
+def _semantic_deck_difference_paths(
+    stored: object,
+    candidate: object,
+    *,
+    path: str = "$",
+    limit: int = 20,
+) -> list[str]:
+    """Return bounded structural paths without exposing scene payload values."""
+
+    if type(stored) is not type(candidate):
+        return [path]
+    if isinstance(stored, dict):
+        paths: list[str] = []
+        for key in sorted(set(stored) | set(candidate), key=str):
+            if len(paths) >= limit:
+                break
+            key_path = f"{path}.{key}"
+            if key not in stored or key not in candidate:
+                paths.append(key_path)
+                continue
+            paths.extend(
+                _semantic_deck_difference_paths(
+                    stored[key], candidate[key], path=key_path,
+                    limit=limit - len(paths),
+                )
+            )
+        return paths[:limit]
+    if isinstance(stored, list):
+        paths = []
+        if len(stored) != len(candidate):
+            paths.append(f"{path}.length")
+        for index, (left, right) in enumerate(zip(stored, candidate, strict=False)):
+            if len(paths) >= limit:
+                break
+            paths.extend(
+                _semantic_deck_difference_paths(
+                    left, right, path=f"{path}[{index}]", limit=limit - len(paths)
+                )
+            )
+        return paths[:limit]
+    return [] if stored == candidate else [path]
 
 
-def _persist_or_reuse_identical_semantic_deck(*args, **kwargs):
-    return _call_extracted(_scene_persistence_impl, "_persist_or_reuse_identical_semantic_deck", *args, **kwargs)
+def _persist_or_reuse_identical_semantic_deck(
+    repository,
+    deck: DeckGenerationSnapshot,
+) -> DeckSceneIR:
+    """Recover only the same immutable import; never advance an existing head."""
+
+    try:
+        current = repository.get_deck(deck.deck_id)
+    except GenerationNotFoundError:
+        try:
+            repository.append_imported_deck(deck)
+        except DeckAlreadyExistsError:
+            # A concurrent importer may have won after the read. Inspect its
+            # current head with the same exact predicate as restart recovery.
+            pass
+        current = repository.get_deck(deck.deck_id)
+
+    stored_payload = current.model_dump(mode="json", by_alias=True)
+    stored_digest = stored_payload.pop("digest")
+    if stored_digest != canonical_digest(stored_payload):
+        raise DeckAlreadyExistsError()
+    candidate_payload = deck.model_dump(
+        mode="json", by_alias=True, exclude={"digest"}
+    )
+    # _seal_deck and slide checkpoints include wall-clock timestamps. All other
+    # payload fields (including the complete Scene, assets and checkpoint
+    # digests) must still match; a new source, revision or geometry is not a retry.
+    stored_payload.pop("createdAt")
+    candidate_payload.pop("createdAt")
+    for payload in (stored_payload, candidate_payload):
+        for item in payload.get("slides", []):
+            checkpoint = item.get("checkpoint")
+            if isinstance(checkpoint, dict):
+                checkpoint.pop("validatedAt", None)
+    if current.scene is None or stored_payload != candidate_payload:
+        paths = _semantic_deck_difference_paths(stored_payload, candidate_payload)
+        LOGGER.warning(
+            "authored semantic deck retry mismatch deck=%s paths=%s count=%d "
+            "source_digest_matches=%s",
+            deck.deck_id,
+            paths,
+            len(paths),
+            stored_payload.get("sourceDigest") == candidate_payload.get("sourceDigest"),
+        )
+        raise DeckAlreadyExistsError()
+    return current.scene
 
 
-async def _persist_master_pinned_editable_scene_deck(*args, **kwargs):
-    return await _call_extracted(_scene_persistence_impl, "_persist_master_pinned_editable_scene_deck", *args, **kwargs)
+
+def _append_staging_retry_semantic_deck(repository, deck, recovery_context):
+    """Append a separately named, fenced pre-publication recovery candidate."""
+
+    return repository.append_staging_retry_imported_deck(
+        deck, recovery_context=recovery_context
+    )
 
 
-def _deck_plan_checkpoint_input(*args, **kwargs):
-    return _call_extracted(_more_helpers_impl, "_deck_plan_checkpoint_input", *args, **kwargs)
+async def _persist_master_pinned_editable_scene_deck(
+    *,
+    request: GeneratePresentationRequest,
+    presentation_id: uuid.UUID,
+    outline: PresentationOutlineModel,
+    owner_id: uuid.UUID,
+    style,
+    htmls: list[str],
+    pngs: list[bytes],
+    semantic_components: list[dict[str, object]],
+    scene_envelope: AuthoredDeckSceneEnvelope,
+    revision: int,
+    browser_metrics_by_slide=None,
+    recovery_context=None,
+    recovery_deck_id: str | None = None,
+):
+    """Bridge normal Authored output into the vNext durable CAS deck log.
+
+    Authored HTML plus browser telemetry is the sole visual/semantic authority.
+    The pinned master contributes provenance and compatibility metadata only;
+    raw outline text is never compiled into a second, competing Scene.
+    """
+
+    if tuple(htmls) != scene_envelope.html_projections:
+        raise ValueError("authored_scene_envelope_publication_projection_mismatch")
+    if tuple(semantic_components) != scene_envelope.semantic_components:
+        raise ValueError("authored_scene_envelope_publication_semantics_mismatch")
+    # Async boundary: nothing below may touch the synchronous CAS on the loop.
+    repository = async_generation_repository(generation_repository_for_owner(owner_id))
+    resolved = request._authored_master_resolution
+    composition_pin = request._authored_composition_pin
+    if resolved is None:
+        if request.master_pin is not None:
+            raise RuntimeError("authored_master_resolution_missing")
+        internal = build_internal_authored_composition(
+            owner_id=owner_id,
+            style=style,
+            metadata=request._authored_deck_metadata,
+        )
+        await repository.append_imported_master(internal.master)
+        resolved = internal.resolved
+        composition_pin = internal.composition
+    master = await repository.get_master(
+        resolved.pin.master_id, resolved.pin.master_revision
+    )
+    if composition_pin is None:
+        composition, _effective_contract = resolve_authored_composition(
+            master.contract,
+            style=style,
+            visual_direction=master.visual_direction,
+        )
+    else:
+        materialize_authored_composition(master.contract, composition_pin)
+        composition = composition_pin
+    if revision != 1:
+        raise ValueError("normal Authored semantic deck must start at revision 1")
+    # Author/render checkpoints survive process restarts, while the DOM metrics
+    # cache is intentionally process-local.  Recollect the exact instrumented
+    # HTML before Scene compilation so a retry cannot publish every owner as
+    # geometry-unavailable merely because its PNG outlived the worker process.
+    if browser_metrics_by_slide is not None:
+        telemetry = tuple(browser_metrics_by_slide)
+    else:
+        with set_render_deck_scope(str(presentation_id)):
+            telemetry = await asyncio.gather(
+                *(
+                    captured_metrics_or_existing(html, index=index, ensure=ensure_browser_metrics)
+                    for index, html in enumerate(htmls)
+                )
+            )
+    if any(metrics is None for metrics in telemetry):
+        raise ValueError("editable Hybrid Scene browser telemetry is unavailable")
+    deck_id = recovery_deck_id or f"deck:semantic-{presentation_id.hex}"
+    slide_ids = [f"slide:legacy-{index + 1}" for index in range(len(htmls))]
+    scene = build_editable_hybrid_scene(
+        presentation_id=str(presentation_id),
+        revision=revision,
+        slides=None,
+        slide_ids=slide_ids,
+        deck_id=deck_id,
+        htmls=htmls,
+        pngs=pngs,
+        semantic_drafts=semantic_components,
+        composition_digest=composition.digest,
+        source_digest_override=scene_envelope.scene_digest,
+        browser_metrics_by_slide=telemetry,
+        document_canvas=(
+            request._document_canvas.model_dump(mode="json", by_alias=True)
+            if getattr(request, "_document_canvas", None) is not None else None
+        ),
+    )
+    sealed_slides: list[ValidatedSlideSpecV2] = []
+    for index, (html, scene_slide) in enumerate(
+        zip(htmls, scene.slides, strict=True)
+    ):
+        projected_title, projected_body = project_authored_owned_text(html)
+        fallback = " ".join(outline.slides[index].content.split()).strip()
+        title_text = projected_title or fallback or f"Slide {index + 1}"
+        body_text = "\n".join(projected_body).strip() or fallback or title_text
+        layout = (
+            master.contract.layouts.cover
+            if index == 0
+            else master.contract.layouts.standard
+        )
+        body_slot = next(
+            (slot for slot in layout.slots if slot.role == "body"), None
+        )
+        title = ExplicitTitle(text=title_text, lines=[title_text])
+        title_fit = TitleFitResult(
+            layout_id=layout.id,
+            explicit_lines=title.lines,
+            font_family=master.contract.font_manifest.windows_fallback,
+            font_manifest_digest=resolved.pin.font_manifest_digest,
+            chosen_font_pt=master.contract.semantic_styles.title.font_pt,
+            margins=master.contract.semantic_styles.title.margins,
+            clipped=False,
+        )
+        content_digest = canonical_digest(
+            {
+                "title": title.model_dump(mode="json", by_alias=True),
+                "body": body_text,
+            }
+        )
+        slide_payload = {
+            "schemaVersion": "slidespec/v2",
+            "slideId": scene_slide.slide_id,
+            "revision": revision,
+            "layoutId": layout.id,
+            "title": title.model_dump(mode="json", by_alias=True),
+            "body": body_text,
+            "ownership": {"locked": False, "modelWritable": True},
+            "masterDigest": resolved.pin.master_digest,
+            "titleFit": title_fit.model_dump(mode="json", by_alias=True),
+            "contentDigest": content_digest,
+        }
+        slide = SlideSpecV2(
+            **slide_payload,
+            specDigest=canonical_digest(slide_payload),
+        )
+        visual_plan_digest = canonical_digest(
+            {
+                "schemaVersion": "authored-semantic-import-plan/v1",
+                "slideId": scene_slide.slide_id,
+                "sourceDigest": scene.source_digest,
+                "sceneDigest": scene_slide.slide_digest,
+                "ownedTextDigest": content_digest,
+            }
+        )
+        sealed_slides.append(
+            ValidatedSlideSpecV2(
+                slide=slide,
+                checkpoint=SlideValidationCheckpoint(
+                    master_digest=resolved.pin.master_digest,
+                    layout_registry_digest=resolved.pin.layout_registry_digest,
+                    font_manifest_digest=resolved.pin.font_manifest_digest,
+                    source_digest=scene.source_digest,
+                    composition=composition,
+                    visual_plan_digest=visual_plan_digest,
+                    scene_digest=scene_slide.slide_digest,
+                    quality_policy_version="authored-semantic-browser/v1",
+                    layout_id=layout.id,
+                    body_slot_id=(
+                        body_slot.id if body_slot is not None else "slot:semantic-body"
+                    ),
+                    validated_at=datetime.now(timezone.utc)
+                    .isoformat(timespec="seconds")
+                    .replace("+00:00", "Z"),
+                ),
+                scene=scene_slide,
+            )
+        )
+    deck = _seal_deck(
+        deck_id=deck_id,
+        revision=revision,
+        parent=None,
+        pin=resolved.pin,
+        composition=composition,
+        source_digest=scene.source_digest,
+        slides=sealed_slides,
+        canonical_scene=scene,
+    )
+    if recovery_deck_id is not None:
+        binding = await repository.run(
+            _append_staging_retry_semantic_deck, deck, recovery_context
+        )
+        object.__setattr__(request, "_authored_staging_scene_binding", binding)
+        return deck.scene
+    try:
+        return await repository.run(_persist_or_reuse_identical_semantic_deck, deck)
+    except DeckAlreadyExistsError:
+        if recovery_context is None:
+            raise
+        candidate_identity = canonical_digest(
+            {
+                "sceneEnvelope": scene_envelope.scene_digest,
+                "pngDigests": [sha256(png).hexdigest() for png in pngs],
+                # The sealed Scene carries all geometry.  Do not let transient
+                # browser timing/cache counters create a new recovery identity.
+                "sceneDigest": scene.scene_digest,
+                "masterDigest": resolved.pin.master_digest,
+                "compositionDigest": composition.digest,
+            }
+        )
+        candidate_uuid = uuid.uuid5(
+            uuid.NAMESPACE_URL,
+            "presenton:authored:staging-recovery:"
+            f"{presentation_id}:{recovery_context['job_id']}:{candidate_identity}",
+        )
+        return await _persist_master_pinned_editable_scene_deck(
+            request=request,
+            presentation_id=presentation_id,
+            outline=outline,
+            owner_id=owner_id,
+            style=style,
+            htmls=htmls,
+            pngs=pngs,
+            semantic_components=semantic_components,
+            scene_envelope=scene_envelope,
+            revision=1,
+            browser_metrics_by_slide=telemetry,
+            recovery_context=recovery_context,
+            recovery_deck_id=f"deck:semantic-{candidate_uuid.hex}",
+        )
+
+
+
+# ---- Folded back from authored_generation_more_helpers.py (bind_runtime split) ----
+
+def _deck_plan_checkpoint_input(
+    *,
+    generation_job: PresentationGenerationJob | None,
+    request: GeneratePresentationRequest,
+    outline: PresentationOutlineModel,
+    brand: object,
+    style: object,
+    stage: str,
+) -> dict[str, object]:
+    """Build a digest-only input contract; the payload itself is never stored."""
+
+    return {
+        "schemaVersion": "authored-deck-plan-input/v1",
+        "stage": stage,
+        "requestSha256": (
+            generation_job.request_sha256 if generation_job is not None else "legacy"
+        ),
+        "outline": outline.model_dump(mode="json"),
+        "brand": {
+            "topic": getattr(brand, "topic", None),
+            "language": getattr(brand, "language", None),
+            "primary": getattr(brand, "primary", None),
+            "fonts": getattr(brand, "fonts", None),
+        },
+        "styleId": getattr(style, "id", None),
+        "referenceMode": getattr(style, "reference_mode", None),
+        "includeTableOfContents": request.include_table_of_contents,
+        "hasFixedSlidesMarkdown": bool(request.slides_markdown),
+        "instructionsDigest": canonical_checkpoint_digest(
+            request.instructions or ""
+        ),
+    }
+
 
 
 def _encode_deck_plans(value: AuthoredDeckPlans) -> dict[str, object]:
@@ -428,8 +1460,91 @@ def _encode_optional_model(
     }
 
 
-async def _provider_stage_observability_metrics(*args, **kwargs):
-    return await _call_extracted(_more_helpers_impl, "_provider_stage_observability_metrics", *args, **kwargs)
+async def _provider_stage_observability_metrics(
+    session: AsyncSession,
+    operation_id: uuid.UUID,
+) -> dict[str, dict[str, object]]:
+    admission = await session.scalar(
+        select(PublicOperationAdmission).where(
+            PublicOperationAdmission.operation_id == operation_id
+        )
+    )
+    if admission is None:
+        return {
+            name: _unavailable_metric("public_admission_not_found")
+            for name in (
+                "queuePosition",
+                "stageRetryCalls",
+                "stageEstimatedCost",
+                "stageActualCost",
+            )
+        }
+    calls = list(
+        (
+            await session.execute(
+                select(PublicProviderLogicalCall).where(
+                    PublicProviderLogicalCall.admission_id == admission.id
+                )
+            )
+        ).scalars()
+    )
+    queue_ahead = int(
+        await session.scalar(
+            select(func.count())
+            .select_from(PublicOperationAdmission)
+            .where(PublicOperationAdmission.id != admission.id)
+            .where(PublicOperationAdmission.policy_version == admission.policy_version)
+            .where(PublicOperationAdmission.tenant_id == admission.tenant_id)
+            .where(PublicOperationAdmission.operation_kind == admission.operation_kind)
+            .where(PublicOperationAdmission.queued_at < admission.queued_at)
+            .where(
+                or_(
+                    PublicOperationAdmission.activated_at.is_(None),
+                    PublicOperationAdmission.activated_at > admission.queued_at,
+                )
+            )
+        )
+        or 0
+    )
+    if not calls:
+        return {
+            "queuePosition": _observed_metric(queue_ahead + 1),
+            **{
+            name: _not_applicable_metric("provider_not_used")
+            for name in (
+                "stageRetryCalls",
+                "stageEstimatedCost",
+                "stageActualCost",
+            )
+            },
+        }
+    retry_by_stage: dict[str, int] = {}
+    estimated_by_stage: dict[str, int] = {}
+    actual_by_stage: dict[str, int] = {}
+    actual_available = True
+    for call in calls:
+        stage = str(call.stage).strip().lower()
+        retry_by_stage.setdefault(stage, 0)
+        estimated_by_stage.setdefault(stage, 0)
+        actual_by_stage.setdefault(stage, 0)
+        if call.retry_class != "initial":
+            retry_by_stage[stage] += 1
+        estimated_by_stage[stage] += max(0, int(call.estimated_cost_microunits))
+        if call.actual_cost_microunits is None:
+            actual_available = False
+        else:
+            actual_by_stage[stage] += max(0, int(call.actual_cost_microunits))
+    return {
+        "queuePosition": _observed_metric(queue_ahead + 1),
+        "stageRetryCalls": _observed_metric(retry_by_stage),
+        "stageEstimatedCost": _observed_metric(estimated_by_stage),
+        "stageActualCost": (
+            _observed_metric(actual_by_stage)
+            if actual_available
+            else _unavailable_metric("provider_actual_cost_not_reported")
+        ),
+    }
+
 
 
 async def _record_deck_stage_latency(
@@ -518,8 +1633,109 @@ _MAX_CRITIQUE_ISSUES = 8
 _MAX_CRITIQUE_DETAIL = 200
 
 
-async def _fit_content_revision(*args, **kwargs):
-    return await _call_extracted(_more_helpers_impl, "_fit_content_revision", *args, **kwargs)
+async def _fit_content_revision(
+    html: str,
+    *,
+    slide_index: int,
+    policy_revision: str | None = None,
+    canvas: object | None = None,
+    physical_canvas: object | None = None,
+) -> AcceptedLocalFit:
+    """Run a provider content correction through the same local-fit boundary.
+
+    The provider result starts a new author revision.  A changed fitter result
+    therefore receives its own one-shot, fit-disabled reconstruction instead
+    of inheriting the receipt for the pre-VQA HTML.
+    """
+
+    original_digest = html_digest(html)
+    remaining_operation_seconds = remaining_authored_local_fit_seconds(cap=120)
+    if remaining_operation_seconds <= 0:
+        raise AuthoredLocalFitRejected("deadline_exceeded")
+    budget = slide_budget(60, remaining_operation_seconds)
+    started_at = time.monotonic()
+    slide_deadline = started_at + budget["total_seconds"]
+    first_deadline = min(
+        slide_deadline, started_at + budget["first_seconds"]
+    )
+    canvas_width_px = int(getattr(canvas, "width_px", 1280))
+    canvas_height_px = int(getattr(canvas, "height_px", 720))
+    render_kwargs = (
+        {}
+        if (canvas_width_px, canvas_height_px) == (1280, 720)
+        else {"width_px": canvas_width_px, "height_px": canvas_height_px}
+    )
+    render_capture = partial(
+        render_html_to_png_with_metrics,
+        **render_kwargs,
+    )
+
+    export_width_pt, export_height_pt = export_size_points(canvas, physical_canvas)
+    policy = local_fit_policy(
+        author_revision=original_digest,
+        original_html_digest=original_digest,
+        export_width_pt=export_width_pt,
+        export_height_pt=export_height_pt,
+        viewport_width=canvas_width_px,
+        viewport_height=canvas_height_px,
+        slide_index=slide_index,
+        policy_revision=policy_revision or POLICY_REVISION,
+    )
+    first_remaining = max(0.001, first_deadline - time.monotonic())
+    async with asyncio.timeout(first_remaining):
+        fitted = await capture_once(
+            html, index=slide_index, capture=render_capture,
+            timeout=max(1, min(60, int(first_remaining))),
+            fit=True,
+            fit_policy=policy,
+        )
+    prepared_original_html = fitted.prepared_html
+    if prepared_original_html is None:
+        raise AuthoredLocalFitRejected("reconstruction_mismatch")
+    policy = fitted.prepared_fit_policy or policy
+    report = fitted.fit_report or {}
+    changed = bool(report.get("changed")) or bool(
+        fitted.fitted_html and fitted.fitted_html != prepared_original_html
+    )
+    if not changed:
+        return accept_unchanged_capture(
+            fitted,
+            original_html=prepared_original_html,
+            policy=policy,
+        )
+    verify_queued_at = time.monotonic()
+    verify_started_at = time.monotonic()
+    verify_deadline = min(
+        slide_deadline,
+        verify_queued_at + budget["verify_seconds"],
+    )
+    verify_remaining = max(0.001, verify_deadline - time.monotonic())
+    async with asyncio.timeout(verify_remaining):
+        verified = await capture_once(
+            fitted.fitted_html, index=slide_index, capture=render_capture,
+            timeout=max(1, min(60, int(verify_remaining))),
+            fit=False,
+            fit_policy={
+                **dict(policy),
+                "baseline": dict(report.get("baseline") or {}),
+            },
+            fresh=True,
+        )
+    verify_finished_at = time.monotonic()
+    if verified.prepared_html is None:
+        raise AuthoredLocalFitRejected("reconstruction_mismatch")
+    policy = verified.prepared_fit_policy or policy
+    return accept_verified_capture(
+        fitted,
+        verified,
+        prepared_html=verified.prepared_html,
+        original_html=prepared_original_html,
+        policy=policy,
+        verify_queued_at=verify_queued_at,
+        verify_started_at=verify_started_at,
+        verify_finished_at=verify_finished_at,
+    )
+
 
 
 async def _apply_bounded_header_eyebrow_fallback(
@@ -555,8 +1771,60 @@ async def _apply_bounded_header_eyebrow_fallback(
     return bound_htmls[0], bound_pngs[0], bound_metrics[0]
 
 
-async def _apply_final_checkpoint_header_eyebrow_fallback(*args, **kwargs):
-    return await _call_extracted(_more_helpers_impl, "_apply_final_checkpoint_header_eyebrow_fallback", *args, **kwargs)
+async def _apply_final_checkpoint_header_eyebrow_fallback(
+    *,
+    pipeline,
+    htmls: list[str],
+    pngs: list[bytes],
+    capacity_plan,
+    header_contract: AuthoredHeaderContract | None,
+    roles: list[str],
+    metrics_override: dict[int, object],
+    already_attempted: bool,
+) -> tuple[bool, int | None]:
+    """Try the strict local fallback once when the first gate missed recovery.
+
+    The candidate metrics must be retained for the exact final HTML.  A caller
+    that already entered the fallback after provider repair cannot enter again,
+    even when its post-capture gate failed, so one deck attempt performs at most
+    one deterministic eyebrow recapture.
+    """
+
+    if already_attempted:
+        return True, None
+    ledger = getattr(pipeline, "evidence_ledger", None)
+    attempt_id = getattr(pipeline, "evidence_attempt_id", None)
+    if ledger is None or not attempt_id:
+        return False, None
+    for index, html in enumerate(htmls):
+        latest = ledger.latest(attempt_id, index)
+        if (
+            latest is None
+            or latest.html != html
+            or latest.browser_metrics is None
+            or capacity_violations(
+                html, latest.browser_metrics, capacity_plan.at(index)
+            )
+            != ("browser_text_not_visible:header.eyebrow",)
+        ):
+            continue
+        fallback = await _apply_bounded_header_eyebrow_fallback(
+            html=html,
+            browser_metrics=latest.browser_metrics,
+            capacity=capacity_plan.at(index),
+            header_contract=header_contract,
+            role=roles[index],
+            slide_index=index,
+            allow_immutable_checkpoint_geometry=(
+                latest.capture_policy == "hydrated"
+            ),
+        )
+        if fallback is None:
+            return True, None
+        htmls[index], pngs[index], metrics_override[index] = fallback
+        return True, index
+    return False, None
+
 
 
 def _merge_flagged_slide_entries(
@@ -696,8 +1964,58 @@ def _finalize_attempt_evidence(
     return ledger, attempt_id, tuple(metrics)
 
 
-async def _checkpoint_source_reflow_vqa_repairs(*args, **kwargs):
-    return await _call_extracted(_more_helpers_impl, "_checkpoint_source_reflow_vqa_repairs", *args, **kwargs)
+async def _checkpoint_source_reflow_vqa_repairs(
+    generation_job: PresentationGenerationJob | None,
+    error: AuthoredVqaResidualDomIssuesError,
+    *,
+    absolute_indices: Sequence[int] | None = None,
+    persist_scene=None,
+) -> None:
+    """Persist successful local VQA patches before source-reflow fails closed."""
+
+    if generation_job is None or not generation_job.attempt_token:
+        return
+    results = getattr(error, "repair_results", ())
+    # Legacy `fixed` only means changed: it cannot authorize source checkpoints.
+    if not results:
+        return
+    if absolute_indices is not None:
+        expected = tuple(int(index) for index in absolute_indices)
+        if len(expected) != len(set(expected)) or set(expected) != {
+            result.slide_index for result in results
+        }:
+            raise ValueError("authored_vqa_checkpoint_index_mapping_invalid")
+    seen: set[int] = set()
+    for result in results:
+        if result.slide_index < 0 or result.slide_index in seen:
+            raise ValueError("authored_vqa_checkpoint_index_mapping_invalid")
+        seen.add(result.slide_index)
+    admitted_results = [
+        result for result in results if result.final_status == "admitted" and result.changed
+    ]
+    for result in admitted_results:
+        validate_repair_result(result, expected_slide_index=result.slide_index)
+    fencing_token = getattr(generation_job, "_workspace_fencing_token", None)
+    for result in admitted_results:
+        absolute_index = result.slide_index
+        if persist_scene is not None:
+            persist_scene(result)
+        # The original illustrate/render checkpoint is already complete here.
+        # Updating its HTML first while leaving the old render evidence pointer
+        # in place creates an intentionally inconsistent tuple, so the following
+        # render CAS rejects its own repair as checkpoint corruption. Publish the
+        # repaired HTML/PNG/metrics together through the render mutation instead.
+        await _complete_stage_after_external_success(
+            job_id=generation_job.id,
+            slide_index=absolute_index,
+            stage="render",
+            attempt_token=generation_job.attempt_token,
+            fencing_token=fencing_token,
+            html=result.html,
+            png=result.png,
+            browser_metrics=structural_checkpoint_metrics(result),
+        )
+
 
 
 @admission_scope
@@ -1112,7 +2430,6 @@ async def _generate_authored_presentation(
     planned_source_images = None
     source_image_assignments = None
     if not request._source_content_authored_reflow and source_images:
-        from services.authored_source_image_stage import prepare_source_image_stage
         source_image_placement_plan, planned_source_images, source_image_assignments = (
             await prepare_source_image_stage(
                 source_images, session=sql_session,
@@ -1331,7 +2648,6 @@ async def _generate_authored_presentation(
         for index in range(len(contents))
     ]
     if source_image_assignments:
-        from utils.llm_calls.author_slide_prompt import planned_source_image_brief
         capacity_briefs = [
             brief + planned_source_image_brief({"assignments": source_image_assignments[index]})
             for index, brief in enumerate(capacity_briefs)
@@ -1350,7 +2666,6 @@ async def _generate_authored_presentation(
     planned_image_repair_indices: set[int] = set()
     planned_image_missing_indices: set[int] = set()
     if source_image_assignments and not source_reflow:
-        from services.authored_planned_image_visibility import inspect_planned_source_images
         for index, assignments in enumerate(source_image_assignments):
             if not assignments:
                 continue
@@ -2546,8 +3861,6 @@ async def _generate_authored_presentation(
     source_image_placement_failures: list[dict] = []
     source_image_plan_failed = False
     if not source_reflow and (source_image_placement_plan is not None or source_image_registration_report):
-        from services.authored_planned_image_visibility import inspect_planned_source_images
-        from utils.llm_calls.author_vision_qa import review_planned_source_images
         placement_slides = []
         for index, assignments in enumerate(source_image_assignments or ()):
             if not assignments:
@@ -3113,11 +4426,6 @@ async def _generate_authored_presentation(
     # variant and the critic score come from the quality loop's own per-slide
     # receipts; a slide the loop did not run for records them as absent rather
     # than as zero.
-    from services.authored_slide_quality_receipt import (
-        build_slide_quality_records,
-        record_slide_quality_receipt,
-    )
-
     loop_receipts = dict(getattr(pipeline, "slide_quality_receipts", {}) or {})
     record_slide_quality_receipt(
         presentation_id,
@@ -3145,10 +4453,6 @@ async def _generate_authored_presentation(
         ),
     )
     if generation_job is not None and quality_receipt_v2 is not None:
-        from services.public_operation_admission import (
-            public_operation_observability_metrics,
-        )
-
         public_metrics = (
             await public_operation_observability_metrics(
                 sql_session, generation_job.workspace_operation_id
