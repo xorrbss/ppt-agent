@@ -27,7 +27,7 @@ import base64
 import hashlib
 import io
 import logging
-import os
+from utils.get_env import env_int
 import re
 from collections import Counter
 from pathlib import Path
@@ -140,11 +140,8 @@ SlideSourceImages = Optional[Mapping[str, SourceImageCandidate]]
 
 
 def _env_int(name: str, default: int) -> int:
-    try:
-        value = int(os.getenv(name, "").strip())
-        return value if value > 0 else default
-    except (TypeError, ValueError):
-        return default
+    """Positive-int knob; unset/malformed/non-positive text keeps ``default``."""
+    return env_int(name, default, minimum=1)
 
 
 ILLUSTRATION_CONCURRENCY = _env_int("AUTHORED_ILLUSTRATION_CONCURRENCY", 4)

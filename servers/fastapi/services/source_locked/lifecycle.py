@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-import os
+from utils.env_parse import EnvValueError
+from utils.get_env import env_int
 from pathlib import Path
 import sqlite3
 
@@ -18,24 +19,15 @@ _DEFAULT_ORPHAN_GRACE_SECONDS = 60 * 60
 
 
 def _positive_environment_integer(name: str, default: int) -> int:
-    raw = (os.getenv(name) or "").strip()
-    if not raw:
-        return default
+    """Fail closed, translated into the source-locked error contract."""
     try:
-        value = int(raw)
-    except ValueError as exc:
+        return env_int(name, default, minimum=1, on_invalid="raise")
+    except EnvValueError as exc:
         raise SourceLockedError(
             "SOURCE_LOCKED_LIFECYCLE_CONFIG_INVALID",
             AnalysisStage.MISSING_CONTENT_VALIDATION,
             f"{name} must be a positive integer",
         ) from exc
-    if value <= 0:
-        raise SourceLockedError(
-            "SOURCE_LOCKED_LIFECYCLE_CONFIG_INVALID",
-            AnalysisStage.MISSING_CONTENT_VALIDATION,
-            f"{name} must be a positive integer",
-        )
-    return value
 
 
 def utc_now() -> datetime:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import html as _html
-import os
+from utils.get_env import env_float, env_int
 import re
 from typing import Optional
 
@@ -48,20 +48,12 @@ def _rejected_html_context(rejected_html: object) -> str:
 
 def _env_int(name: str, default: int) -> int:
     """Positive-int env override, falling back to `default` on unset/blank/invalid."""
-    try:
-        v = int(os.getenv(name, "").strip())
-        return v if v > 0 else default
-    except (TypeError, ValueError):
-        return default
+    return env_int(name, default, minimum=1)
 
 
 def _env_nonnegative_float(name: str, default: float) -> float:
     """Non-negative float override; zero deliberately disables an optional gate."""
-    try:
-        value = float(os.getenv(name, "").strip())
-        return value if value >= 0 else default
-    except (TypeError, ValueError):
-        return default
+    return env_float(name, default, minimum=0)
 
 def normalize_reference_mode(reference_mode: Optional[str]) -> str:
     """Validate the opt-in meaning of attached images.

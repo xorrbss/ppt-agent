@@ -122,7 +122,11 @@ from services.workspace_operation_observability import (
 from services.workspace_poll_backoff import IdleCycle
 from services.workspace_worker_lane_probe import workspace_operation_work_pending
 from utils.datetime_utils import get_current_utc_datetime
-from utils.get_env import get_workspace_operation_max_concurrency_env
+from utils.get_env import (
+    env_float,
+    env_int,
+    get_workspace_operation_max_concurrency_env,
+)
 from utils.owner_context import (
     get_current_owner_id,
     reset_current_owner_id,
@@ -468,17 +472,12 @@ _QUALITY_REVIEW_COUNT_KEYS = frozenset(
 
 
 def _positive_int_env(name: str, default: int) -> int:
-    try:
-        return max(1, int(os.getenv(name, str(default))))
-    except (TypeError, ValueError):
-        return default
+    """Silent clamp: a sub-minimum value becomes the minimum, malformed text the default."""
+    return env_int(name, default, minimum=1, on_invalid="clamp")
 
 
 def _positive_float_env(name: str, default: float) -> float:
-    try:
-        return max(0.05, float(os.getenv(name, str(default))))
-    except (TypeError, ValueError):
-        return default
+    return env_float(name, default, minimum=0.05, on_invalid="clamp")
 
 
 def _utc_now() -> datetime:

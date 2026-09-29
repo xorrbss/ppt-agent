@@ -14,6 +14,7 @@ from importlib import import_module
 import logging
 import math
 import os
+from utils.get_env import env_int
 import sys
 from utils.llm_calls import author_vision_qa_helpers as _vision_helpers
 import time
@@ -144,19 +145,11 @@ async def _render_correction_html(
 
 
 def _env_int(name: str, default: int) -> int:
-    try:
-        value = int(os.getenv(name, "").strip())
-        return value if value > 0 else default
-    except (TypeError, ValueError):
-        return default
+    return env_int(name, default, minimum=1)
 
 
 def _env_nonnegative_int(name: str, default: int) -> int:
-    try:
-        value = int(os.getenv(name, "").strip())
-        return value if value >= 0 else default
-    except (TypeError, ValueError):
-        return default
+    return env_int(name, default, minimum=0)
 
 
 # Vision review and slide authoring have different provider/latency characteristics, so

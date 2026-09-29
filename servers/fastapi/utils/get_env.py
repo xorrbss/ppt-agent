@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable
+from typing import overload
 
 from constants.settings_registry import get_settings_by_key
 from services.provider_settings_values import SECRET_SETTING_KEYS
@@ -61,19 +62,45 @@ def get_setting_env(
     return value
 
 
+@overload
 def env_int(
     name: str,
     default: int,
+    *,
+    minimum: int | None = ...,
+    maximum: int | None = ...,
+    on_invalid: InvalidPolicy = ...,
+    settings: RuntimeSettings | None = ...,
+) -> int: ...
+
+
+@overload
+def env_int(
+    name: str,
+    default: None,
+    *,
+    minimum: int | None = ...,
+    maximum: int | None = ...,
+    on_invalid: InvalidPolicy = ...,
+    settings: RuntimeSettings | None = ...,
+) -> int | None: ...
+
+
+def env_int(
+    name: str,
+    default: int | None,
     *,
     minimum: int | None = None,
     maximum: int | None = None,
     on_invalid: InvalidPolicy = "default",
     settings: RuntimeSettings | None = None,
-) -> int:
+) -> int | None:
     """Integer knob read through ``get_setting_env`` (admin values honoured).
 
     The malformed/out-of-range contract is chosen per call site by
     ``on_invalid``; see ``utils/env_parse.py`` for the four policies.
+    ``default=None`` expresses an optional override ("explicit value or
+    nothing").
     """
     return parse_int(
         get_setting_env(name, settings),

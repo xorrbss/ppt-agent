@@ -1,5 +1,6 @@
 import logging
 import os
+from utils.env_parse import is_truthy
 
 from sqlalchemy import delete, func, select, update
 
@@ -29,8 +30,7 @@ from api.v1.auth.config import (
 logger = logging.getLogger(__name__)
 
 
-def _truthy(value: str | None) -> bool:
-    return bool(value and value.strip().lower() in {"1", "true", "yes", "on"})
+_truthy = is_truthy
 
 
 def _validate_new_environment_password(password: str | None) -> None:

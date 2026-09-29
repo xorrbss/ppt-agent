@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from datetime import timedelta
 import logging
-import os
+from utils.get_env import env_int
 
 from services.artifact_lifecycle import (
     configured_artifact_lifecycle_service,
@@ -20,10 +20,8 @@ _runtime: "PublicArtifactLifecycleRuntime | None" = None
 
 
 def _positive_int(name: str, default: int, *, minimum: int) -> int:
-    try:
-        return max(minimum, int(os.getenv(name, str(default))))
-    except (TypeError, ValueError):
-        return default
+    """Silent clamp to ``minimum``; malformed text keeps ``default``."""
+    return env_int(name, default, minimum=minimum, on_invalid="clamp")
 
 
 class PublicArtifactLifecycleRuntime:

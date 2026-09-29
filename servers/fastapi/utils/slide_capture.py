@@ -14,6 +14,7 @@ import json
 import logging
 import math
 import os
+from utils.get_env import env_bool, env_int
 import pathlib
 import re
 import signal
@@ -1954,19 +1955,11 @@ async def _render_html_to_png_cached(
 # and all callers in this process. Tune per deploy via AUTHORED_RENDER_CONCURRENCY
 # (low-RAM hosts: 2; beefy: 8).
 def _env_int(name: str, default: int) -> int:
-    try:
-        v = int(os.getenv(name, "").strip())
-        return v if v > 0 else default
-    except (TypeError, ValueError):
-        return default
+    return env_int(name, default, minimum=1)
 
 
 def _env_nonnegative_int(name: str, default: int) -> int:
-    try:
-        value = int(os.getenv(name, "").strip())
-        return value if value >= 0 else default
-    except (TypeError, ValueError):
-        return default
+    return env_int(name, default, minimum=0)
 
 
 RENDER_CACHE_SIZE = _env_nonnegative_int("AUTHORED_RENDER_CACHE_SIZE", 32)
@@ -2021,12 +2014,7 @@ RENDER_CONCURRENCY = _env_int(
     "AUTHORED_RENDER_CONCURRENCY",
     _env_int("PUBLIC_RENDER_MAX_CONCURRENCY", 4),
 )
-CHROME_REUSE_ENABLED = os.getenv("AUTHORED_CHROME_REUSE", "1").strip().lower() not in {
-    "0",
-    "false",
-    "off",
-    "no",
-}
+CHROME_REUSE_ENABLED = env_bool("AUTHORED_CHROME_REUSE", True)
 _render_sem: Optional[asyncio.Semaphore] = None
 
 
