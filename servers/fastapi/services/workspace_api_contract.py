@@ -10,6 +10,7 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from utils.datetime_utils import as_utc
 from models.workspace import (
     WorkspaceActionResponse,
     WorkspaceEventPageResponse,
@@ -20,7 +21,9 @@ from services.workspace_error_registry import resolve_workspace_error
 from models.sql.workspace import WorkspaceOperation, get_workspace_owner_scope
 
 
-def _as_utc(value: object) -> datetime | None:
+def _parse_utc(value: object) -> datetime | None:
+    """Parse an ISO-8601 string or datetime, then normalise it to aware UTC."""
+
     if value is None:
         return None
     if isinstance(value, datetime):
@@ -30,9 +33,7 @@ def _as_utc(value: object) -> datetime | None:
             parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
         except (TypeError, ValueError):
             return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+    return as_utc(parsed)
 
 
 def allowed_workspace_actions(
@@ -48,7 +49,7 @@ def allowed_workspace_actions(
         return []
     actions: list[dict[str, Any]] = []
     current = now or datetime.now(timezone.utc)
-    approval_expires_at = _as_utc(operation.get("approval_expires_at"))
+    approval_expires_at = _parse_utc(operation.get("approval_expires_at"))
     if status in {"approval_required", "awaiting_approval"}:
         if approval_expires_at is None or approval_expires_at > current:
             actions.append(

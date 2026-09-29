@@ -6,7 +6,6 @@ review candidates; this module cannot issue an approval pin.
 
 from __future__ import annotations
 
-import hashlib
 import io
 import posixpath
 import re
@@ -18,6 +17,7 @@ from pathlib import Path
 
 from PIL import Image
 
+from utils.hashing import sha256_hex
 from services.source_content.raster_contracts import RasterAnalysis, seal_analysis
 from services.source_content.raster_regions import (
     RegionCandidate,
@@ -55,7 +55,7 @@ class RasterDraft:
 
 
 def _sha256(value: bytes) -> str:
-    return hashlib.sha256(value).hexdigest()
+    return sha256_hex(value)
 
 
 def _pixel_sha256(image: Image.Image) -> str:

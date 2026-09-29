@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from utils.coerce import finite_float
 from services.authored_local_fit_evidence_types import AuthoredLocalFitRejected
 from services.authored_local_fit_policy import GEOMETRY_TOLERANCE_PX
 
@@ -27,13 +28,6 @@ def _elements(metrics: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
         if qid:
             result[qid] = item
     return result
-
-
-def _number(value: Any) -> float | None:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
 
 
 def _validate_image_text_scope(metrics: Mapping[str, Any]) -> None:
@@ -53,7 +47,7 @@ def _validate_image_text_scope(metrics: Mapping[str, Any]) -> None:
             else ""
         )
         visible = item.get("css_visible") is not False and (
-            _number(item.get("viewport_intersection_ratio")) or 0
+            finite_float(item.get("viewport_intersection_ratio")) or 0
         ) > 0
         if visible and (
             str(item.get("tag") or "").lower() == "img"
@@ -78,7 +72,7 @@ def _compare_reconstruction(
         if left.get("computed_style") != right.get("computed_style"):
             mismatches.append(f"{qid}:computed_style")
         for field in ("effective_opacity", "viewport_intersection_ratio"):
-            a, b = _number(left.get(field)), _number(right.get(field))
+            a, b = finite_float(left.get(field)), finite_float(right.get(field))
             if a is None or b is None or abs(a - b) > 1e-6:
                 mismatches.append(f"{qid}:{field}")
         if left.get("owned_text") != right.get("owned_text"):
@@ -89,7 +83,7 @@ def _compare_reconstruction(
             mismatches.append(f"{qid}:bbox")
             continue
         for field in ("x", "y", "width", "height"):
-            a, b = _number(left_box.get(field)), _number(right_box.get(field))
+            a, b = finite_float(left_box.get(field)), finite_float(right_box.get(field))
             if a is None or b is None:
                 mismatches.append(f"{qid}:{field}")
                 continue
@@ -97,7 +91,7 @@ def _compare_reconstruction(
             max_delta = max(max_delta, delta)
             if delta > GEOMETRY_TOLERANCE_PX:
                 mismatches.append(f"{qid}:{field}")
-        a, b = _number(left.get("font_size")), _number(right.get("font_size"))
+        a, b = finite_float(left.get("font_size")), finite_float(right.get("font_size"))
         # Font floors have no geometry epsilon.  Browser readback itself is
         # compared at a small numeric precision to avoid JSON float noise.
         if a is None or b is None or abs(a - b) > 1e-6:
@@ -107,7 +101,6 @@ def _compare_reconstruction(
 
 __all__ = [
     "_elements",
-    "_number",
     "_validate_image_text_scope",
     "_compare_reconstruction",
 ]

@@ -26,6 +26,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from utils.coerce import finite_float
 from utils.authored_dom_quality import BoundingBox, normalize_browser_metrics
 
 #: The ink ratio band a slide is not penalised inside. Below it the page reads
@@ -62,11 +63,7 @@ def _bbox(item: Mapping[str, Any]) -> BoundingBox:
 
 
 def _number(item: Mapping[str, Any], key: str) -> float:
-    value = item.get(key)
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return 0.0
+    return finite_float(item.get(key), 0.0)
 
 
 def _paints_text(item: Mapping[str, Any]) -> bool:

@@ -11,6 +11,7 @@ from pydantic import (
     SerializerFunctionWrapHandler,
     model_serializer,
 )
+from utils.naming import snake_to_camel
 from services.document_canvas import DocumentCanvasMetadata
 
 
@@ -18,14 +19,9 @@ DESIGN_ONLY_KINDS = frozenset({"source_note"})
 SOURCE_LAYOUT_VERSION_V2 = "source-layout/v2"
 
 
-def _camel(name: str) -> str:
-    head, *tail = name.split("_")
-    return head + "".join(part[:1].upper() + part[1:] for part in tail)
-
-
 class ContractModel(BaseModel):
     model_config = ConfigDict(
-        alias_generator=_camel,
+        alias_generator=snake_to_camel,
         populate_by_name=True,
         extra="forbid",
         frozen=True,

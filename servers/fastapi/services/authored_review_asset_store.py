@@ -15,18 +15,11 @@ import tempfile
 import uuid
 from pathlib import Path
 
+from utils.hashing import sha256_file
 from utils.asset_directory_utils import (
     filesystem_image_path_to_app_data_reference,
     get_images_directory,
 )
-
-
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as image_file:
-        for chunk in iter(lambda: image_file.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _fsync_directory(directory: Path) -> None:
@@ -77,7 +70,7 @@ def publish_reviewed_png(
         if absolute_path.exists():
             if (
                 not absolute_path.is_file()
-                or _sha256_file(absolute_path) != content_sha256
+                or sha256_file(absolute_path) != content_sha256
             ):
                 raise RuntimeError("Existing reviewed PNG violates its content hash")
             return filesystem_image_path_to_app_data_reference(str(absolute_path))
@@ -97,7 +90,7 @@ def publish_reviewed_png(
         os.replace(temporary_path, absolute_path)
         temporary_path = None
         _fsync_directory(absolute_directory)
-        if _sha256_file(absolute_path) != content_sha256:
+        if sha256_file(absolute_path) != content_sha256:
             raise RuntimeError("Published reviewed PNG failed content verification")
         return filesystem_image_path_to_app_data_reference(str(absolute_path))
     except OSError:

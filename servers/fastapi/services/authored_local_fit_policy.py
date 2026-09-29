@@ -5,14 +5,13 @@ Physical output dimensions, never capture DPR, determine the font conversion.
 """
 from __future__ import annotations
 
-import hashlib
-import json
 import math
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_CEILING
 from typing import Any
+from utils.hashing import canonical_json_digest, sha256_prefixed
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,13 +52,11 @@ GEOMETRY_TOLERANCE_PX = 0.5
 
 
 def digest(value: Any) -> str:
-    encoded = json.dumps(value, sort_keys=True, separators=(",", ":"),
-                         ensure_ascii=False, allow_nan=False).encode("utf-8")
-    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+    return canonical_json_digest(value)
 
 
 def html_digest(html: str) -> str:
-    return "sha256:" + hashlib.sha256(html.encode("utf-8")).hexdigest()
+    return sha256_prefixed(html.encode("utf-8"))
 
 
 def _positive(value: float) -> float:

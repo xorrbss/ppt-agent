@@ -13,6 +13,7 @@ import json
 import os
 import unicodedata
 from typing import Literal
+from utils.coerce import as_mapping
 
 
 GenerationStrategy = Literal["deck-ir", "legacy-authored", "reject"]
@@ -76,16 +77,12 @@ def deck_ir_generation_enabled() -> bool:
     return _truthy_env("DECK_IR_GENERATION_ENABLED")
 
 
-def _mapping(value: object) -> Mapping[str, object]:
-    return value if isinstance(value, Mapping) else {}
-
-
 def _requested_capabilities(request: object) -> tuple[str, ...]:
     """Extract only public, non-content capability declarations."""
 
     values: list[object] = []
-    output = _mapping(getattr(request, "output", None))
-    values.extend(_mapping(getattr(request, "model_dump", lambda **_: {})()).get("required_capabilities", ()) if callable(getattr(request, "model_dump", None)) else ())
+    output = as_mapping(getattr(request, "output", None))
+    values.extend(as_mapping(getattr(request, "model_dump", lambda **_: {})()).get("required_capabilities", ()) if callable(getattr(request, "model_dump", None)) else ())
     values.extend(output.get("required_capabilities", ()))
     values.extend(getattr(request, "required_capabilities", ()) or ())
     return tuple(
@@ -160,7 +157,7 @@ def capability_preflight(
         missing.add("source-binding")
     # The current Deck IR compiler is Fidelity-only.  Never represent an
     # editable/native request as a raster success.
-    output = _mapping(getattr(request, "output", None))
+    output = as_mapping(getattr(request, "output", None))
     if str(output.get("mode", "")).strip().lower() == "editable-hybrid":
         missing.add("editable-hybrid")
     style_profile_digest: str | None = None

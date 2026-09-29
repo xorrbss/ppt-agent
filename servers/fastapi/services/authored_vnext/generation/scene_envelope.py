@@ -9,10 +9,10 @@ Every later consumer receives the envelope's exact HTML projection and digests.
 from __future__ import annotations
 
 from dataclasses import dataclass
-import hashlib
 import json
 from typing import Any, Iterable, Mapping
 
+from utils.hashing import canonical_json_bytes, sha256_prefixed
 from services.authored_semantic_candidate import compile_authored_semantic_source
 
 
@@ -21,18 +21,12 @@ DECK_SCHEMA_VERSION = "authored-deck-scene-envelope/v1"
 
 
 def _canonical_json(value: object) -> str:
-    return json.dumps(
-        value,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-        allow_nan=False,
-    )
+    return canonical_json_bytes(value).decode("utf-8")
 
 
 def _digest(value: object) -> str:
     payload = value if isinstance(value, str) else _canonical_json(value)
-    return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return sha256_prefixed(payload.encode("utf-8"))
 
 
 @dataclass(frozen=True, slots=True)

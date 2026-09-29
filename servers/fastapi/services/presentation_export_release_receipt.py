@@ -2,21 +2,12 @@
 
 from __future__ import annotations
 
-from hashlib import sha256
-import json
 from typing import Any
+from utils.hashing import canonical_json_digest
 
 
 def _receipt_digest(payload: dict[str, Any]) -> str:
-    return "sha256:" + sha256(
-        json.dumps(
-            payload,
-            allow_nan=False,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        ).encode("utf-8")
-    ).hexdigest()
+    return canonical_json_digest(payload)
 
 
 def build_unified_release_receipt(

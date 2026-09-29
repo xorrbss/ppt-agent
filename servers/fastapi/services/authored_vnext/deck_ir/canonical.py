@@ -9,6 +9,7 @@ from typing import Any, TypeVar, cast
 
 from pydantic import BaseModel
 
+from utils.naming import snake_to_camel
 from services.authored_vnext.semantic.canonical import (
     canonical_digest as _canonical_digest,
     canonical_json as _canonical_json,
@@ -51,11 +52,6 @@ def derive_qid_registry(deck: DeckIRV1) -> dict[str, str]:
     return registry
 
 
-def _camel(value: str) -> str:
-    first, *rest = value.split("_")
-    return first + "".join(part.capitalize() for part in rest)
-
-
 def seal_contract(
     value: ModelT | Mapping[str, Any],
     digest_field: str | None = None,
@@ -72,7 +68,7 @@ def seal_contract(
         field = digest_field or SEALED_CONTRACT_DIGEST_FIELDS.get(type(value))
         if field is None:
             raise ValueError("deck_ir_digest_field_unknown")
-        alias = value.__class__.model_fields[field].alias or _camel(field)
+        alias = value.__class__.model_fields[field].alias or snake_to_camel(field)
         payload = value.model_dump(mode="json", by_alias=True)
         payload.pop(alias, None)
         return cast(ModelT, value.model_copy(update={field: canonical_digest(payload)}))
@@ -81,10 +77,10 @@ def seal_contract(
         field = digest_field or SEALED_CONTRACT_DIGEST_FIELDS.get(model_type)
         if field is None:
             raise ValueError("deck_ir_digest_field_unknown")
-        alias = model_type.model_fields[field].alias or _camel(field)
+        alias = model_type.model_fields[field].alias or snake_to_camel(field)
     elif digest_field is not None:
         field = digest_field
-        alias = _camel(field)
+        alias = snake_to_camel(field)
     else:
         raise ValueError("deck_ir_digest_field_unknown")
     payload = dict(value)

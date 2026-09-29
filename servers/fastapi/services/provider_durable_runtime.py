@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from hashlib import sha256
 import re
 import secrets
@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from utils.datetime_utils import as_utc
 from models.sql.presentation_generation_job import PresentationGenerationJob  # noqa: F401
 from models.sql.provider_runtime_reservation import (
     ProviderRuntimeBudget,
@@ -33,10 +34,6 @@ _HASH_RE = re.compile(r"^[a-f0-9]{64}$")
 _SERVICE_RE = re.compile(r"^[a-z0-9][a-z0-9._:-]{0,127}$")
 _OUTCOMES = frozenset({"success", "failure", "retryable_failure", "cancelled"})
 _CIRCUIT_CAS_ATTEMPTS = 8
-
-
-def _as_utc(value: datetime) -> datetime:
-    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
 
 
 def _require_hash(value: str, field: str) -> None:
@@ -361,12 +358,12 @@ async def admit_provider_rpm_and_circuit(
     for _attempt in range(_CIRCUIT_CAS_ATTEMPTS):
         state = circuit.state
         if state == "open":
-            if circuit.open_until is not None and _as_utc(circuit.open_until) > now:
+            if circuit.open_until is not None and as_utc(circuit.open_until) > now:
                 raise CircuitOpenError("provider_circuit_open")
             state = "half_open"
         window_started_at = circuit.rpm_window_started_at
         rpm_count = circuit.rpm_count
-        if now - _as_utc(window_started_at) >= timedelta(minutes=1):
+        if now - as_utc(window_started_at) >= timedelta(minutes=1):
             window_started_at = now
             rpm_count = 0
         if rpm_count >= requests_per_minute:

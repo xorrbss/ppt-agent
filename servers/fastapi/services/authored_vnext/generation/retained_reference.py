@@ -14,12 +14,13 @@ import math
 import os
 from pathlib import Path
 import posixpath
-import re
 import unicodedata
 import xml.etree.ElementTree as ET
 from typing import Any
 from zipfile import ZipFile
 
+from utils.color_contrast import contrast_ratio
+from utils.hashing import sha256_prefixed
 from services.authored_vnext.retained_reference_marker import (
     RETAINED_REFERENCE_MARKER_CODEC,
     canonical_reference_digest,
@@ -720,26 +721,6 @@ def _dict_union(values: list[dict[str, float]]) -> dict[str, float]:
     return _rect(left, top, right - left, bottom - top)
 
 
-def _relative_luminance(color: str) -> float:
-    if not isinstance(color, str) or not re.fullmatch(r"#[0-9A-Fa-f]{6}", color):
-        raise ValueError(f"retained template color is not canonical hex: {color}")
-    channels = [int(color[index : index + 2], 16) / 255 for index in (1, 3, 5)]
-    linear = [
-        value / 12.92
-        if value <= 0.04045
-        else ((value + 0.055) / 1.055) ** 2.4
-        for value in channels
-    ]
-    return linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722
-
-
-def _contrast_ratio(left: str, right: str) -> float:
-    lighter, darker = sorted(
-        (_relative_luminance(left), _relative_luminance(right)), reverse=True
-    )
-    return (lighter + 0.05) / (darker + 0.05)
-
-
 def _readable_template_title_color(
     source_color: str,
     *,
@@ -749,17 +730,17 @@ def _readable_template_title_color(
     """Keep the source color when readable, otherwise use its own palette."""
 
     candidates = tuple(dict.fromkeys((source_color, *palette)))
-    if _contrast_ratio(source_color, background_color) >= 4.5:
+    if contrast_ratio(source_color, background_color) >= 4.5:
         return source_color
     readable = [
         color
         for color in candidates[1:]
-        if _contrast_ratio(color, background_color) >= 4.5
+        if contrast_ratio(color, background_color) >= 4.5
     ]
     if readable:
         return max(
             readable,
-            key=lambda color: (_contrast_ratio(color, background_color), -candidates.index(color)),
+            key=lambda color: (contrast_ratio(color, background_color), -candidates.index(color)),
         )
     raise ValueError("retained template palette has no readable company-background title color")
 
@@ -1003,7 +984,7 @@ def _anchors_from_envelopes(
 
 
 def _sha256_digest(value: bytes) -> str:
-    return f"sha256:{hashlib.sha256(value).hexdigest()}"
+    return sha256_prefixed(value)
 
 
 def _relationship_part_name(source_part: str) -> str:

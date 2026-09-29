@@ -8,11 +8,10 @@ order or on provider-owned objects.
 from __future__ import annotations
 
 from dataclasses import dataclass
-import hashlib
-import json
 import re
 from types import MappingProxyType
 from typing import Any, Mapping, Sequence
+from utils.hashing import canonical_json_bytes, sha256_prefixed
 
 
 GRAMMAR_SCHEMA_VERSION = "design-grammar-manifest/v1"
@@ -87,7 +86,7 @@ def canonical_json(value: Any) -> str:
     try:
         from .canonical import canonical_json as contract_canonical_json
     except ImportError:
-        return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        return canonical_json_bytes(value).decode("utf-8")
     return contract_canonical_json(value)
 
 
@@ -95,7 +94,7 @@ def digest(value: Any) -> str:
     try:
         from .canonical import canonical_digest
     except ImportError:
-        return "sha256:" + hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
+        return sha256_prefixed(canonical_json(value).encode("utf-8"))
     return canonical_digest(value)
 
 

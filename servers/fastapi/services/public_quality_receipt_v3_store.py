@@ -9,7 +9,6 @@ the full payload remains an internal durability record.
 from __future__ import annotations
 
 from collections.abc import Mapping
-import hashlib
 import json
 from typing import Any
 import uuid
@@ -17,6 +16,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from utils.hashing import canonical_json_digest
 from models.sql.workspace import WorkspaceOperation, WorkspaceOperationEvent
 from services.authored_quality_receipt_v2 import (
     QualityReceiptV3,
@@ -35,9 +35,7 @@ _GENERATION_OPERATION_KINDS = frozenset({
 
 def quality_evidence_digest(payload: Mapping[str, object]) -> str:
     """Use the receipt ledger's exact JSON hashing, not NFC normalization."""
-    encoded = json.dumps(dict(payload), ensure_ascii=False, sort_keys=True,
-                         separators=(",", ":"), allow_nan=False).encode("utf-8")
-    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+    return canonical_json_digest(dict(payload))
 
 
 async def load_public_quality_evidence(

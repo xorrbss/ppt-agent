@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from hashlib import sha256
 import hmac
 import os
@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from utils.datetime_utils import as_utc
 from models.authored_vnext.semantic.readiness import CapabilityReceiptIssueRequestV2
 from models.authored_vnext.semantic.release_evidence_v3 import (
     BitbucketRequiredChecksReceiptV3,
@@ -47,10 +48,6 @@ _MAX_CI_EVIDENCE_AGE = timedelta(seconds=1800)
 _MAX_FUTURE_SKEW = timedelta(seconds=30)
 
 
-def _utc(value: datetime) -> datetime:
-    return value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
-
-
 def _ci_key() -> bytes:
     value = os.getenv("AUTHORED_RELEASE_CI_EVIDENCE_HMAC_KEY", "")
     if len(value.encode("utf-8")) < 32:
@@ -81,9 +78,9 @@ def validate_ci_evidence_report_v3(
     expected_signature = "hmac-sha256:" + hmac.new(
         _ci_key(), expected_digest.encode("utf-8"), sha256
     ).hexdigest()
-    observed_at = _utc(now or get_current_utc_datetime())
-    verified_at = _utc(report.verified_at)
-    expires_at = _utc(report.expires_at)
+    observed_at = as_utc(now or get_current_utc_datetime())
+    verified_at = as_utc(report.verified_at)
+    expires_at = as_utc(report.expires_at)
     if (
         report.commit != _expected_commit()
         or report.receipt_digest != expected_digest
@@ -474,7 +471,7 @@ async def validate_ci_required_checks_evidence_v3(
     validate_actual_product_authority_v3(receipt_wire, published.authority)
     if (
         request.evidence_digest != report.receipt_digest
-        or _utc(request.expires_at) > _utc(report.expires_at)
+        or as_utc(request.expires_at) > as_utc(report.expires_at)
     ):
         raise SemanticContractError("authored_ci_evidence_receipt_claim_invalid")
 

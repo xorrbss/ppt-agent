@@ -21,12 +21,12 @@ The module deliberately takes plain numbers and mappings rather than the gate's
 
 from __future__ import annotations
 
-import math
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from typing import Any
 
+from utils.coerce import finite_float
 from utils.authored_dom_categories import RATIO_MAGNITUDE_CATEGORIES
 from utils.authored_dom_footer_zone import FOOTER_ZONE_CATEGORY
 from utils.authored_dom_text_escape import TEXT_ESCAPE_CATEGORY
@@ -276,11 +276,7 @@ def element_kind(
 
 
 def _number(value: object, default: float = 0.0) -> float:
-    try:
-        number = float(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return default
-    return number if math.isfinite(number) else default
+    return finite_float(value, default)
 
 
 def _axis_ratio(scroll: float, client: float) -> float:

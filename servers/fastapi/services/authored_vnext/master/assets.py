@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
 import os
 from pathlib import Path
 import re
 import struct
 from uuid import uuid4
+from utils.hashing import sha256_prefixed
 
 
 PNG_SIGNATURE = bytes.fromhex("89504e470d0a1a0a")
@@ -44,7 +44,7 @@ class OwnerMasterAssetStore:
 
     @staticmethod
     def digest_bytes(value: bytes) -> str:
-        return f"sha256:{hashlib.sha256(value).hexdigest()}"
+        return sha256_prefixed(value)
 
     def _path(self, digest: str) -> Path:
         match = _DIGEST.fullmatch(digest)

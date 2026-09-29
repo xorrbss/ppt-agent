@@ -16,6 +16,7 @@ from hashlib import sha256
 from pathlib import Path, PurePosixPath
 from typing import Any, Protocol
 
+from utils.hashing import sha256_file
 from constants.documents import UPLOAD_ACCEPTED_EXTENSIONS
 from services.workspace_artifact_publication_service import (
     WorkspaceArtifactCleanupClaim,
@@ -100,14 +101,6 @@ def storage_root_metadata(*, root_kind: str, root: Path) -> dict[str, str]:
             root=canonical_root,
         ),
     }
-
-
-def sha256_file(path: Path) -> str:
-    digest = sha256()
-    with path.open("rb") as source:
-        while chunk := source.read(1024 * 1024):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _claim_storage_root(

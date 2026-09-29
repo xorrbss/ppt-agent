@@ -6,12 +6,12 @@ the existing bounded repair and flagged-slide path instead of normalization.
 
 from __future__ import annotations
 
-import math
 import re
 from collections.abc import Mapping, Sequence
 from html.parser import HTMLParser
 from typing import Any
 
+from utils.coerce import finite_float
 from utils.authored_dom_tags import VOID_TAGS
 
 EMPTY_MEDIA_CATEGORY = "empty_media_panel"
@@ -72,12 +72,8 @@ class _LeafContainers(HTMLParser):
                 self.leaves[qid] = attrs
 
 
-def _number(value: object) -> float:
-    try:
-        number = float(value)
-        return number if math.isfinite(number) else 0.0
-    except (TypeError, ValueError):
-        return 0.0
+def _number(value: object, default: float = 0.0) -> float:
+    return finite_float(value, default)
 
 
 def find_empty_media_panels(

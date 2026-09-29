@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from copy import deepcopy
 from typing import Any
 
+from utils.coerce import finite_float
 from models.slidespec_v1 import LayoutNode, RenderRequest, RepairPlan
 from services.slidespec_repair_pattern_index import _layout_indexes, _target_selector
 from services.slidespec_repair_patterns import (
@@ -13,12 +14,6 @@ from services.slidespec_repair_patterns import (
     _RecipeOperation,
     _digest,
 )
-
-def _number(value: object) -> float | None:
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return float(value)
-    return None
-
 
 def _compile_adjustment(
     node: LayoutNode, raw: Mapping[str, Any]
@@ -28,7 +23,7 @@ def _compile_adjustment(
         bounds = raw.get("bounds")
         if node.bounds is None or not isinstance(bounds, Mapping):
             return None
-        values = tuple(_number(bounds.get(axis)) for axis in ("x", "y", "width", "height"))
+        values = tuple(finite_float(bounds.get(axis)) for axis in ("x", "y", "width", "height"))
         if any(value is None for value in values):
             return None
         source = node.bounds
@@ -43,8 +38,8 @@ def _compile_adjustment(
         point = raw.get("value")
         if node.bounds is None or not isinstance(point, Mapping):
             return None
-        x = _number(point.get("x"))
-        y = _number(point.get("y"))
+        x = finite_float(point.get("x"))
+        y = finite_float(point.get("y"))
         if x is None or y is None:
             return None
 
@@ -60,8 +55,8 @@ def _compile_adjustment(
     if operation == "resizeWithinBounds":
         if node.bounds is None:
             return None
-        width = _number(raw.get("width"))
-        height = _number(raw.get("height"))
+        width = finite_float(raw.get("width"))
+        height = finite_float(raw.get("height"))
         if width is None or height is None:
             return None
         return operation, {
@@ -70,7 +65,7 @@ def _compile_adjustment(
             "height": height / node.bounds.height,
         }
     if operation == "setFontScale":
-        scale = _number(raw.get("scale"))
+        scale = finite_float(raw.get("scale"))
         if scale is None:
             return None
         payload: dict[str, Any] = {
@@ -81,7 +76,7 @@ def _compile_adjustment(
             payload["bounds"] = deepcopy(raw["bounds"])
         return operation, payload
     if operation == "setSpacing":
-        gap = _number(raw.get("gap"))
+        gap = finite_float(raw.get("gap"))
         if gap is None:
             return None
         return operation, {"mode": "spacing_delta", "delta": gap - node.spacing}
@@ -90,7 +85,7 @@ def _compile_adjustment(
         if not isinstance(padding, Mapping):
             return None
         current = node.padding.model_dump(mode="json", by_alias=True)
-        values = {key: _number(padding.get(key)) for key in current}
+        values = {key: finite_float(padding.get(key)) for key in current}
         if any(value is None for value in values.values()):
             return None
         return operation, {

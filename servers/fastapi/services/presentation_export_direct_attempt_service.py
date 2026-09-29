@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from copy import deepcopy
-from hashlib import sha256
 import hmac
-from pathlib import Path
 from typing import Any
 import uuid
 import os
@@ -14,6 +12,7 @@ import os
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from utils.hashing import sha256_file
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_export_attempt import (
     ExportPowerPointQaEvidence,
@@ -87,13 +86,6 @@ from services.presentation_export_direct_attempt_history import (
 )
 from utils.owner_context import get_current_owner_id
 
-
-def _sha256_file(path: Path) -> str:
-    digest = sha256()
-    with path.open("rb") as stream:
-        while chunk := stream.read(1024 * 1024):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 async def _begin_direct_authored_export_attempt(
     session: AsyncSession,
@@ -326,7 +318,7 @@ async def complete_direct_hybrid_export_attempt(
         ) from error
     artifact = resolve_hybrid_artifact(artifact_path)
     actual_size = artifact.stat().st_size
-    actual_sha256 = await asyncio.to_thread(_sha256_file, artifact)
+    actual_sha256 = await asyncio.to_thread(sha256_file, artifact)
     if actual_size != pptx_size_bytes or not hmac.compare_digest(actual_sha256, pptx_sha256):
         raise PresentationExportFreshnessError("presentation_export_artifact_digest_mismatch")
     local_fit_receipts = resolve_authored_local_fit_receipts(
@@ -708,7 +700,7 @@ async def complete_direct_fidelity_export_attempt(
 
     artifact = resolve_hybrid_artifact(artifact_path)
     actual_size = artifact.stat().st_size
-    actual_sha256 = await asyncio.to_thread(_sha256_file, artifact)
+    actual_sha256 = await asyncio.to_thread(sha256_file, artifact)
     if actual_size != pptx_size_bytes or not hmac.compare_digest(actual_sha256, pptx_sha256):
         raise PresentationExportFreshnessError("presentation_export_artifact_digest_mismatch")
     local_fit_receipts = resolve_authored_local_fit_receipts(

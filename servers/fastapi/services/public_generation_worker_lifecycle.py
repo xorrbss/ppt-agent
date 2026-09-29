@@ -14,6 +14,7 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from services.presentation_generation_attempt_timing import _safe_failure
 from models.sql.workspace import WorkspaceOperation
 from services.presentation_generation_job_service import (
     WorkspaceLinkedGenerationProjectionPoisoned,
@@ -126,24 +127,6 @@ def recovery_retry_transition(
         ),
     }
     return payload, projection
-
-
-def _safe_failure(payload: Mapping[str, object]) -> tuple[str, bool]:
-    detail = payload.get("detail")
-    nested = detail if isinstance(detail, Mapping) else {}
-    code = payload.get("code") or nested.get("code")
-    if not code and isinstance(detail, str):
-        code = detail
-    code = str(code or "presentation_generation_failed")[:128]
-    explicit_retryable = payload.get("retryable", nested.get("retryable"))
-    if isinstance(explicit_retryable, bool):
-        return code, explicit_retryable
-    status_code = payload.get("status_code")
-    try:
-        numeric_status = int(status_code)
-    except (TypeError, ValueError):
-        numeric_status = 500
-    return code, numeric_status == 429 or numeric_status >= 500
 
 
 def durable_generation_failure(error: BaseException) -> tuple[str, bool]:

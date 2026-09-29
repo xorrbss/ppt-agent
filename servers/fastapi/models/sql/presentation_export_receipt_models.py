@@ -3,28 +3,16 @@
 from __future__ import annotations
 
 from hashlib import sha256
-import json
 from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
-
-
-def _is_sha256(value: str) -> bool:
-    return len(value) == 64 and all(character in "0123456789abcdef" for character in value)
+from utils.hashing import canonical_json_sha256, is_sha256_hex
 
 
 def _canonical_sidecar_sha256(value: dict[str, Any]) -> str:
-    return sha256(
-        json.dumps(
-            value,
-            allow_nan=False,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        ).encode("utf-8")
-    ).hexdigest()
+    return canonical_json_sha256(value)
 
 
 class ExportEvidenceSidecarPointer(BaseModel):
@@ -44,13 +32,13 @@ class ExportEvidenceSidecarPointer(BaseModel):
                 raise ValueError("export evidence pointer member is invalid")
             filename = member["file"]
             digest = member["sha256"].lower()
-            if Path(filename).name != filename or not _is_sha256(digest):
+            if Path(filename).name != filename or not is_sha256_hex(digest):
                 raise ValueError("export evidence pointer member is invalid")
             member["sha256"] = digest
         expected = sha256(
             f"{self.quality['sha256']}:{self.coverage['sha256']}".encode("ascii")
         ).hexdigest()
-        if not _is_sha256(self.pair_digest) or self.pair_digest.lower() != expected:
+        if not is_sha256_hex(self.pair_digest) or self.pair_digest.lower() != expected:
             raise ValueError("export evidence pointer digest is inconsistent")
         self.pair_digest = expected
         return self
@@ -89,7 +77,7 @@ class ExportUnifiedReleaseReceipt(BaseModel):
             self.generation_receipt_digest,
             self.receipt_digest,
         ):
-            if not digest.startswith("sha256:") or not _is_sha256(digest[7:]):
+            if not digest.startswith("sha256:") or not is_sha256_hex(digest[7:]):
                 raise ValueError("unified release receipt digest is invalid")
         expected_blockers: list[str] = []
         if self.require_source_readback and self.source_readback_status != "passed":

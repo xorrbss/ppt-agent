@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import hashlib
 import os
 from pathlib import Path
 import re
 from uuid import uuid4
+from utils.hashing import sha256_prefixed
 
 
 _SHA256 = re.compile(r"^sha256:([0-9a-f]{64})$")
@@ -26,7 +26,7 @@ class BufferedArtifactStore:
 
     @staticmethod
     def digest_bytes(value: bytes) -> str:
-        return f"sha256:{hashlib.sha256(value).hexdigest()}"
+        return sha256_prefixed(value)
 
     def _path(self, digest: str, storage_namespace: str | None = None) -> Path:
         match = _SHA256.fullmatch(digest)

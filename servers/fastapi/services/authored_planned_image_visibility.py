@@ -5,18 +5,10 @@ Strict source-content visibility deliberately does not use this module.
 """
 
 import hashlib
-import math
 from collections.abc import Mapping, Sequence
 
+from utils.coerce import finite_float
 from utils.authored_illustrations import _data_image_digest
-
-
-def _number(value):
-    try:
-        result = float(value)
-        return result if math.isfinite(result) else None
-    except (ValueError, TypeError):
-        return None
 
 
 def inspect_planned_source_images(
@@ -62,32 +54,32 @@ def inspect_planned_source_images(
         # A detail crop is meaningful only alongside a fully measured anchor of
         # the same original. Never let several fragments replace the original.
         anchors = [item for item in found if (
-            (_number(item["image"].get("viewportIntersectionRatio")) or 0) >= .99
+            (finite_float(item["image"].get("viewportIntersectionRatio")) or 0) >= .99
             and (item.get("occlusion_measurement_evidence") or {}).get("status") == "measured"
-            and _number(item.get("occlusion_unknown_fraction")) == 0
-            and (_number(item.get("occluded_fraction")) is not None)
-            and _number(item.get("occluded_fraction")) < .95
+            and finite_float(item.get("occlusion_unknown_fraction")) == 0
+            and (finite_float(item.get("occluded_fraction")) is not None)
+            and finite_float(item.get("occluded_fraction")) < .95
             and item["image"].get("complete") is True
             and item["image"].get("cssVisible") is True
-            and (_number(item["image"].get("effectiveOpacity")) or 0) >= .95
+            and (finite_float(item["image"].get("effectiveOpacity")) or 0) >= .95
         )]
         if found and not anchors:
             issues.append({"asset_id": asset_id, "code": "full_image_anchor_missing"})
         for item in found:
             image = item["image"]
             box = item.get("bbox") or {}
-            width, height = _number(box.get("width")), _number(box.get("height"))
-            opacity = _number(image.get("effectiveOpacity"))
-            intersection = _number(image.get("viewportIntersectionRatio"))
-            occluded = _number(item.get("occluded_fraction"))
+            width, height = finite_float(box.get("width")), finite_float(box.get("height"))
+            opacity = finite_float(image.get("effectiveOpacity"))
+            intersection = finite_float(image.get("viewportIntersectionRatio"))
+            occluded = finite_float(item.get("occluded_fraction"))
             evidence = item.get("occlusion_measurement_evidence") or {}
-            unknown = _number(item.get("occlusion_unknown_fraction"))
+            unknown = finite_float(item.get("occlusion_unknown_fraction"))
             detail = len(found) > 1 and bool(anchors) and item not in anchors
             # Partial clones still need real Chrome paint evidence and at least
             # a 16px visible viewport intersection. VQA checks the crop's actual
             # informational usefulness; unmeasured/hidden clones fail closed.
-            viewport_width, viewport_height = _number(metrics.get("width")), _number(metrics.get("height"))
-            x, y = _number(box.get("x")), _number(box.get("y"))
+            viewport_width, viewport_height = finite_float(metrics.get("width")), finite_float(metrics.get("height"))
+            x, y = finite_float(box.get("x")), finite_float(box.get("y"))
             visible_width = (min(x + width, viewport_width) - max(x, 0)
                              if None not in (x, width, viewport_width) else 0)
             visible_height = (min(y + height, viewport_height) - max(y, 0)
@@ -96,8 +88,8 @@ def inspect_planned_source_images(
                                and intersection is not None and intersection > 0
                                and unknown is not None and 0 <= unknown < .95)
             if (image.get("complete") is not True or image.get("cssVisible") is not True
-                    or not (_number(image.get("naturalWidth")) or 0) > 0
-                    or not (_number(image.get("naturalHeight")) or 0) > 0
+                    or not (finite_float(image.get("naturalWidth")) or 0) > 0
+                    or not (finite_float(image.get("naturalHeight")) or 0) > 0
                     or width is None or height is None or min(width, height) < 16
                     or opacity is None or opacity < .95 or intersection is None
                     or (intersection < .99 and not detail_measured) or evidence.get("status") != "measured"

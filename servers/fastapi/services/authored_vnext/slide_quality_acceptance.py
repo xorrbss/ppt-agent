@@ -12,12 +12,11 @@ evaluate and bind their integrity receipt independently.
 
 from __future__ import annotations
 
-import hashlib
-import json
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal
+from utils.hashing import canonical_json_sha256
 
 
 SCHEMA_VERSION = "slide-document-quality-acceptance-receipt/v1"
@@ -47,14 +46,7 @@ _QUALITY_FLOORS: Mapping[str, float] = {
 
 
 def canonical_digest(value: object) -> str:
-    encoded = json.dumps(
-        value,
-        ensure_ascii=False,
-        allow_nan=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    return _DIGEST_PREFIX + hashlib.sha256(encoded).hexdigest()
+    return _DIGEST_PREFIX + canonical_json_sha256(value)
 
 
 def _is_digest(value: object) -> bool:

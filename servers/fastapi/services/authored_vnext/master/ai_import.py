@@ -20,6 +20,7 @@ import zipfile
 from io import BytesIO
 from xml.etree import ElementTree as ET
 
+from utils.hashing import sha256_prefixed
 from models.authored_vnext.master.ai_import import (
     AI_MASTER_FEATURE_ALGORITHM_VERSION,
     AiAnalysisSource,
@@ -70,7 +71,7 @@ class AiImportError(RuntimeError):
 
 
 def _digest(value: bytes) -> str:
-    return f"sha256:{hashlib.sha256(value).hexdigest()}"
+    return sha256_prefixed(value)
 
 
 def _part_rels(part: str) -> str:

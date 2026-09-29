@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Collection, Mapping
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from functools import lru_cache
 from hashlib import sha256
 import hmac
@@ -17,6 +17,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from utils.datetime_utils import as_utc
 from models.authored_vnext.semantic.contracts import KillSwitchProjectionV1
 from models.authored_vnext.semantic.readiness import (
     CapabilityEnvironmentV2,
@@ -99,12 +100,6 @@ CapabilityEvidenceValidatorV2 = Callable[
     [AsyncSession, CapabilityReceiptIssueRequestV2, ReleaseAuthorityTargetV2, str],
     Awaitable[None],
 ]
-
-
-def _utc(value: datetime) -> datetime:
-    if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
 
 
 def _digest_model(value: object) -> str:
@@ -291,19 +286,19 @@ async def validate_visual_evidence_authority(
     except ValueError:
         generated_at = None
     expected_expiry = (
-        _utc(generated_at) + timedelta(seconds=policy.receipt_ttl_seconds)
+        as_utc(generated_at) + timedelta(seconds=policy.receipt_ttl_seconds)
         if generated_at is not None
         else None
     )
-    observed_at = _utc(get_current_utc_datetime())
+    observed_at = as_utc(get_current_utc_datetime())
     if (
         not target.configured
         or request.scope != target.scope
         or request.environment != target.environment
         or expected_expiry is None
-        or _utc(request.expires_at) != expected_expiry
+        or as_utc(request.expires_at) != expected_expiry
         or generated_at is None
-        or _utc(generated_at) > observed_at + timedelta(minutes=5)
+        or as_utc(generated_at) > observed_at + timedelta(minutes=5)
         or expected_expiry <= observed_at
     ):
         raise SemanticContractError("authored_visual_evidence_authority_invalid")
@@ -424,8 +419,8 @@ async def issue_capability_receipt(
     )
     if request.capability_id not in allowed_ids:
         raise SemanticContractError("authored_capability_receipt_capability_unknown")
-    evaluated_at = _utc(now or get_current_utc_datetime())
-    expires_at = _utc(request.expires_at)
+    evaluated_at = as_utc(now or get_current_utc_datetime())
+    expires_at = as_utc(request.expires_at)
     if expires_at <= evaluated_at or expires_at - evaluated_at > _MAX_RECEIPT_TTL:
         raise SemanticContractError("authored_capability_receipt_expiry_invalid")
     target = release_target or release_authority_target_from_environment()
@@ -459,7 +454,7 @@ async def issue_capability_receipt(
         if item.capability_id == request.capability_id
         and item.scope_digest == scope_digest
         and item.environment_digest == environment_digest
-        and _utc(item.expires_at) > evaluated_at
+        and as_utc(item.expires_at) > evaluated_at
     ]
     transition_target: AuthoredCapabilityReceiptRecordV2 | None = None
     if request.supersedes_receipt_digest is not None:
@@ -596,7 +591,7 @@ async def revoke_capability_receipt(
         issuer_principal_id=issuer_principal_id,
         issuer_is_admin=issuer_is_admin,
     )
-    evaluated_at = _utc(now or get_current_utc_datetime())
+    evaluated_at = as_utc(now or get_current_utc_datetime())
     records = await _records(session, tenant_id=tenant_id)
     target_record = next(
         (item for item in _active_records(records) if item.receipt_digest == receipt_digest),
@@ -605,7 +600,7 @@ async def revoke_capability_receipt(
     if target_record is None:
         raise SemanticContractError("authored_capability_receipt_revoke_target_invalid")
     target = _receipt_from_record(target_record)
-    if _utc(target.expires_at) <= evaluated_at:
+    if as_utc(target.expires_at) <= evaluated_at:
         raise SemanticContractError("authored_capability_receipt_revoke_target_expired")
     receipt = CapabilityReceiptV2(
         capability_id=target.capability_id,
@@ -627,7 +622,7 @@ async def revoke_capability_receipt(
         issuer_principal_id=issuer_id,
         issuer_authority="authenticated-admin",
         evaluated_at=evaluated_at,
-        expires_at=_utc(target.expires_at),
+        expires_at=as_utc(target.expires_at),
         reason_code=request.reason_code,
         transition_kind="revoke",
         revokes_receipt_digest=receipt_digest,
@@ -648,7 +643,7 @@ async def revoke_capability_receipt(
             issuer_principal_id=issuer_id,
             issuer_authority=receipt.issuer_authority,
             evaluated_at=evaluated_at,
-            expires_at=_utc(target.expires_at),
+            expires_at=as_utc(target.expires_at),
             transition_kind="revoke",
             transition_target_digest=receipt_digest,
             receipt_digest=receipt.receipt_digest,
@@ -693,7 +688,7 @@ async def get_workbench_capability_projection_v2(
         owner_id=owner_id,
         tenant_id=tenant_id,
     )
-    evaluated_at = _utc(now or get_current_utc_datetime())
+    evaluated_at = as_utc(now or get_current_utc_datetime())
     target = target or release_authority_target_from_environment()
     definition = target.profile_definition
     promotion_capability_ids = tuple(definition.promotion_capability_ids)
@@ -731,7 +726,7 @@ async def get_workbench_capability_projection_v2(
             )
             continue
         receipt = _receipt_from_record(matches[0])
-        expired = _utc(receipt.expires_at) <= evaluated_at
+        expired = as_utc(receipt.expires_at) <= evaluated_at
         serializer_mismatch = (
             receipt.serializer_id != definition.platform_scope.renderer
             or receipt.serializer_version != definition.serializer_version
@@ -811,9 +806,9 @@ async def get_workbench_capability_projection_v2(
     else:
         reason_code = "promotion_formula_satisfied"
     expiries = [
-        _utc(receipt.expires_at)
+        as_utc(receipt.expires_at)
         for receipt in receipts_by_capability.values()
-        if _utc(receipt.expires_at) > evaluated_at
+        if as_utc(receipt.expires_at) > evaluated_at
     ]
     profile_expires_at = min(expiries) if promotion_ready and expiries else evaluated_at
     renderer = next(
@@ -822,7 +817,7 @@ async def get_workbench_capability_projection_v2(
     renderer_receipt = receipts_by_capability.get(_RENDERER_ATTESTATION_ID)
     if renderer_receipt is None:
         renderer_state = "unattested"
-    elif _utc(renderer_receipt.expires_at) <= evaluated_at:
+    elif as_utc(renderer_receipt.expires_at) <= evaluated_at:
         renderer_state = "expired"
     elif renderer_receipt.state == "ready":
         renderer_state = "attested"
@@ -975,7 +970,7 @@ async def validate_attempt_receipt_pins(
         raise SemanticContractError("authored_export_release_authority_pins_required")
     if len(receipt_digests) != len(set(receipt_digests)):
         raise SemanticContractError("authored_export_receipt_pins_duplicate")
-    evaluated_at = _utc(now or get_current_utc_datetime())
+    evaluated_at = as_utc(now or get_current_utc_datetime())
     records = await _records(session, tenant_id=tenant_id)
     by_digest = {item.receipt_digest: item for item in records}
     pinned = [by_digest.get(digest) for digest in receipt_digests]
@@ -1005,7 +1000,7 @@ async def validate_attempt_receipt_pins(
     if any(
         item.receipt_digest not in active_digests
         or item.state != "ready"
-        or _utc(item.expires_at) <= evaluated_at
+        or as_utc(item.expires_at) <= evaluated_at
         or item.serializer_id != definition.platform_scope.renderer
         or item.serializer_version != definition.serializer_version
         for item in receipts

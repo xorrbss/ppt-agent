@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import posixpath
 import re
@@ -35,6 +34,7 @@ from .models import (
     seal_structure,
 )
 from .structural_render import structural_svg
+from utils.hashing import sha256_hex
 
 
 _P = "http://schemas.openxmlformats.org/presentationml/2006/main"
@@ -90,7 +90,7 @@ class CompiledDesignSource:
 
 
 def _sha256(value: bytes) -> str:
-    return hashlib.sha256(value).hexdigest()
+    return sha256_hex(value)
 
 
 def _digest_bytes(value: bytes) -> str:

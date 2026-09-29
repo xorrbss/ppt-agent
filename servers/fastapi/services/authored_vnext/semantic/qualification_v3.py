@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from hashlib import sha256
 import secrets
 from typing import Any
@@ -12,6 +12,7 @@ from typing import Any
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from utils.datetime_utils import as_utc
 from models.authored_vnext.semantic.release_authority_v3 import (
     ComQualificationCreateRequestV3,
     ComQualificationJobV3,
@@ -47,10 +48,6 @@ _ORDER = (
     "comVerified",
     "sealed",
 )
-
-
-def _utc(value: datetime) -> datetime:
-    return value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
 def _artifact_ref(record: AuthoredReleaseArtifactV3) -> DurableArtifactRefV3:
@@ -237,7 +234,7 @@ async def claim_com_qualification_job_v3(
     tenant_id: str,
     now: datetime | None = None,
 ) -> ComQualificationJobV3:
-    observed_at = _utc(now or get_current_utc_datetime())
+    observed_at = as_utc(now or get_current_utc_datetime())
     token = secrets.token_urlsafe(32)
     result = await session.execute(
         update(AuthoredComQualificationJobV3)
@@ -348,7 +345,7 @@ async def transition_com_qualification_job_v3(
     tenant_id: str,
     now: datetime | None = None,
 ) -> ComQualificationJobV3:
-    observed_at = _utc(now or get_current_utc_datetime())
+    observed_at = as_utc(now or get_current_utc_datetime())
     signed_transition = request.model_dump(mode="json", by_alias=True)
     signed_transition.pop("authority", None)
     transition_authority_digest = validate_actual_product_authority_v3(
@@ -373,7 +370,7 @@ async def transition_com_qualification_job_v3(
         or record.lease_owner != request.worker_id
         or record.lease_token_hash != _lease_token_hash(request.lease_token)
         or record.lease_expires_at is None
-        or _utc(record.lease_expires_at) <= observed_at
+        or as_utc(record.lease_expires_at) <= observed_at
         or record.state != request.expected_state
         or record.transition_sequence != request.expected_transition_sequence
     ):

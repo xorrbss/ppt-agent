@@ -100,7 +100,6 @@ from services.slidespec_repair_pattern_index import (
 )
 
 
-
 from services.slidespec_repair_pattern_identity import (
     _defect_selector,
     _normalize_constraint_value,
@@ -110,13 +109,10 @@ from services.slidespec_repair_pattern_identity import (
 )
 
 
-
 from services.slidespec_repair_pattern_recipe import (
     _compile_adjustment,
     _compile_recipe,
-    _number,
 )
-
 
 
 def _bounded(value: float, low: float, high: float) -> float:

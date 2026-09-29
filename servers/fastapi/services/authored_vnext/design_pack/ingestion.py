@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -13,6 +12,7 @@ from typing import Any, Mapping
 
 from .compiler import CompiledDesignSource, compile_design_source
 from .models import DesignPackManifest, PackageFile, seal_manifest
+from utils.hashing import sha256_hex
 
 
 _PACK_ID = re.compile(r"^[a-z0-9][a-z0-9-]{1,119}$")
@@ -24,7 +24,7 @@ class DesignPackIngestionError(ValueError):
 
 
 def _sha256(value: bytes) -> str:
-    return hashlib.sha256(value).hexdigest()
+    return sha256_hex(value)
 
 
 def _json_bytes(value: Any) -> bytes:

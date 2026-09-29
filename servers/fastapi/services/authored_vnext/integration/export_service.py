@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from utils.color_contrast import contrast_ratio, relative_luminance
 from services.authored_vnext.integration.export_admission_policy import (
     ExportServiceError as ExportServiceError,
     _HEX_COLOR,
@@ -49,8 +50,6 @@ from services.authored_vnext.capability_registry import (
 )
 
 
-
-
 def _hex_color(value: object, default: str) -> str:
     match = _HEX_COLOR.fullmatch(value) if isinstance(value, str) else None
     return f"#{(match.group(1) if match is not None else default).upper()}"
@@ -72,26 +71,19 @@ def _master_background_identity(master: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _relative_luminance(color: str) -> float:
+def _validated_hex(color: str) -> str:
     match = _HEX_COLOR.fullmatch(color)
     if match is None:
         raise ExportServiceError("authored_vnext_master_furniture_color_invalid")
-    hexadecimal = match.group(1)
-    channels = [
-        int(hexadecimal[index:index + 2], 16) / 255 for index in (0, 2, 4)
-    ]
-    linear = [
-        value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
-        for value in channels
-    ]
-    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+    return f"#{match.group(1)}"
+
+
+def _relative_luminance(color: str) -> float:
+    return relative_luminance(_validated_hex(color))
 
 
 def _contrast_ratio(foreground: str, background: str) -> float:
-    left = _relative_luminance(foreground)
-    right = _relative_luminance(background)
-    lighter, darker = max(left, right), min(left, right)
-    return (lighter + 0.05) / (darker + 0.05)
+    return contrast_ratio(_validated_hex(foreground), _validated_hex(background))
 
 
 def _expected_furniture_text_style(

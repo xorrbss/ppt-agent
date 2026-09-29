@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-import math
 from typing import Any
+from utils.coerce import finite_float
 
 
 def _number(value: Any, *, name: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise TypeError(f"{name}_must_be_numeric")
-    result = float(value)
-    if not math.isfinite(result):
+    result = finite_float(value)
+    if result is None:
         raise ValueError(f"{name}_must_be_finite")
     return result
 

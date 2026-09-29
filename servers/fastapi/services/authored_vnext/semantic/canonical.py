@@ -13,6 +13,8 @@ import unicodedata
 from typing import Any, Mapping
 
 from pydantic import BaseModel
+from utils.naming import snake_to_camel
+from utils.hashing import sha256_prefixed
 from utils.authored_dom_quality import validate_declared_authored_qids
 
 from models.authored_vnext.semantic.contracts import (
@@ -113,12 +115,12 @@ def canonical_digest(value: Any) -> str:
 
 
 def bytes_digest(value: bytes) -> str:
-    return "sha256:" + sha256(value).hexdigest()
+    return sha256_prefixed(value)
 
 
 def seal_component(component: BaseModel, digest_field: str = "digest") -> BaseModel:
     payload = component.model_dump(mode="json", by_alias=True)
-    payload.pop(_camel(digest_field), None)
+    payload.pop(snake_to_camel(digest_field), None)
     return component.model_copy(update={digest_field: canonical_digest(payload)})
 
 
@@ -273,11 +275,6 @@ def validate_declared_qids(html: str, source: AuthoredSemanticSourceV1) -> tuple
 def require_digest(actual: str | None, expected: str | None, code: str) -> None:
     if actual is None or expected is None or actual != expected:
         raise SemanticContractError(code)
-
-
-def _camel(value: str) -> str:
-    first, *rest = value.split("_")
-    return first + "".join(item.capitalize() for item in rest)
 
 
 @dataclass(frozen=True)

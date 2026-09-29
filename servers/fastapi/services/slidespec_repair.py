@@ -9,6 +9,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from utils.coerce import finite_float
 from models.slidespec_v1 import REPAIR_PLAN_SCHEMA, LayoutNode, RepairPlan, SlideSpec
 from services.slidespec_coupled_repair import (
     CoupledRepairRejection,
@@ -83,13 +84,7 @@ def _get(value: object, *names: str, default: Any = None) -> Any:
 
 
 def _number(value: object, default: float = 0.0) -> float:
-    if isinstance(value, bool):
-        return default
-    try:
-        result = float(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return default
-    return result if result == result and abs(result) != float("inf") else default
+    return finite_float(value, default)
 
 
 def _operations(plan: object) -> tuple[Mapping[str, Any], ...]:

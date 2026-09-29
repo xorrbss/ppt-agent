@@ -26,6 +26,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 import re
 from typing import Any
+from utils.coerce import finite_float
 
 #: The authored frame. A slide is authored against this exact box.
 CANVAS_WIDTH = 1280.0
@@ -37,12 +38,6 @@ _TOLERANCE = 0.5
 _STYLE_CLOSE = re.compile(r"</style\s*>", re.IGNORECASE)
 _HEAD_CLOSE = re.compile(r"</head\s*>", re.IGNORECASE)
 _QID = re.compile(r'^[A-Za-z][\w.\-]*$')
-
-
-def _number(value: Any) -> float | None:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
-    return float(value)
 
 
 def _elements(metrics: Any) -> Sequence[Mapping[str, Any]]:
@@ -74,8 +69,8 @@ def overhanging_widths(browser_metrics: Any) -> tuple[tuple[str, float], ...]:
         box = element.get("bbox")
         if not isinstance(box, Mapping):
             continue
-        left = _number(box.get("x"))
-        width = _number(box.get("width"))
+        left = finite_float(box.get("x"))
+        width = finite_float(box.get("width"))
         if left is None or width is None or width <= 0:
             continue
         if left + width > CANVAS_WIDTH + _TOLERANCE and left > _TOLERANCE:
@@ -158,8 +153,8 @@ def _fit_ratio(element: Mapping[str, Any]) -> float | None:
         ("scrollWidth", "clientWidth"),
         ("scrollHeight", "clientHeight"),
     ):
-        content = _number(element.get(content_key))
-        box = _number(element.get(box_key))
+        content = finite_float(element.get(content_key))
+        box = finite_float(element.get(box_key))
         if content is None or box is None or box <= 0 or content <= box:
             continue
         ratios.append(box / content)
@@ -183,7 +178,7 @@ def clipped_text_sizes(browser_metrics: Any) -> tuple[tuple[str, float, bool], .
         if not qid or not _QID.match(qid) or qid in seen or not _clipped(element):
             continue
         text = str(element.get("rendered_text") or "")
-        size = _number(element.get("font_size"))
+        size = finite_float(element.get("font_size"))
         if not text or size is None or size <= MIN_FONT_PX:
             continue
         ratio = _fit_ratio(element)

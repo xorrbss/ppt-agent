@@ -20,6 +20,7 @@ from .errors import (
     OoxmlPackageError,
     OoxmlPackageNotFound,
 )
+from utils.hashing import sha256_prefixed
 
 MAX_UPLOAD_BYTES = 256 * 1024 * 1024
 _LOCKS: dict[str, threading.RLock] = {}
@@ -31,7 +32,7 @@ def _now() -> str:
 
 
 def _sha256_bytes(value: bytes) -> str:
-    return "sha256:" + hashlib.sha256(value).hexdigest()
+    return sha256_prefixed(value)
 
 
 def _canonical_digest(value: object) -> str:

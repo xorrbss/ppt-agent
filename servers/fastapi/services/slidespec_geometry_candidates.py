@@ -41,6 +41,8 @@ import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
+from utils.coerce import as_mapping
+from utils.coerce import finite_float
 
 
 _EPSILON = 1e-9
@@ -111,10 +113,6 @@ class _Rect:
         }
 
 
-def _mapping(value: object) -> Mapping[str, Any]:
-    return value if isinstance(value, Mapping) else {}
-
-
 def _sequence(value: object) -> tuple[object, ...]:
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
         return tuple(value)
@@ -122,17 +120,11 @@ def _sequence(value: object) -> tuple[object, ...]:
 
 
 def _number(value: object, default: float = math.nan) -> float:
-    if isinstance(value, bool):
-        return default
-    try:
-        result = float(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return default
-    return result if math.isfinite(result) else default
+    return finite_float(value, default)
 
 
 def _rect(value: object) -> _Rect | None:
-    raw = _mapping(value)
+    raw = as_mapping(value)
     values = tuple(_number(raw.get(name)) for name in ("x", "y", "width", "height"))
     if not all(math.isfinite(item) for item in values):
         return None
@@ -159,7 +151,7 @@ def _inside(rect: _Rect, container: _Rect) -> bool:
 
 
 def _envelope(issue: Mapping[str, Any], name: str = "mutationEnvelope") -> Mapping[str, Any]:
-    return _mapping(issue.get(name))
+    return as_mapping(issue.get(name))
 
 
 def _allowed(envelope: Mapping[str, Any], operation: str) -> bool:
@@ -216,7 +208,7 @@ def _operation_for_bounds(
             if abs(before - after) > 1e-7:
                 return None
 
-    raw_expected = _mapping(expected_bounds)
+    raw_expected = as_mapping(expected_bounds)
     expected = (
         {name: raw_expected[name] for name in ("x", "y", "width", "height")}
         if all(name in raw_expected for name in ("x", "y", "width", "height"))
@@ -299,8 +291,8 @@ def _candidate(
     qid = str(issue.get("qid", ""))
     constraint_id = str(issue["constraintId"]) if issue.get("constraintId") else None
     target = str(issue.get("target", ""))
-    detector = _mapping(issue.get("detectorEvidence"))
-    promoted = _mapping(promoted_ancestor)
+    detector = as_mapping(issue.get("detectorEvidence"))
+    promoted = as_mapping(promoted_ancestor)
     refs = _diagnostic_refs(
         issue_group_id,
         issue_code,
@@ -409,7 +401,7 @@ def _non_overlap(issue: Mapping[str, Any], current: _Rect, other: _Rect) -> list
 
 def _containment(issue: Mapping[str, Any], current: _Rect) -> list[GeometryCandidate]:
     container = _rect(issue.get("containerBounds")) or _Rect(0, 0, 1, 1)
-    insets = _mapping(issue.get("insets"))
+    insets = as_mapping(issue.get("insets"))
     left = container.x + container.width * max(0.0, _number(insets.get("left"), 0.0))
     right = container.right - container.width * max(0.0, _number(insets.get("right"), 0.0))
     top = container.y + container.height * max(0.0, _number(insets.get("top"), 0.0))
@@ -502,7 +494,7 @@ def _overflow(issue: Mapping[str, Any], current: _Rect) -> list[GeometryCandidat
         if operations:
             result.append(_candidate(issue, operations))
 
-    font = _mapping(issue.get("fontScale"))
+    font = as_mapping(issue.get("fontScale"))
     current_scale = _number(font.get("current"), 1.0)
     required_scale = _number(font.get("required"))
     minimum_scale = _number(font.get("minimum"), 0.85)
@@ -543,7 +535,7 @@ def _ancestor_promotions(
 
     candidates: list[GeometryCandidate] = []
     reasons: list[str] = []
-    detector = _mapping(issue.get("detectorEvidence"))
+    detector = as_mapping(issue.get("detectorEvidence"))
     sources = (
         ("boundAncestors", frozenset((str(issue.get("qid", "")),))),
         (
@@ -560,7 +552,7 @@ def _ancestor_promotions(
         ),
     )
     raw_ancestors = (
-        (field, expected_qids, _mapping(value))
+        (field, expected_qids, as_mapping(value))
         for field, expected_qids in sources
         for value in _sequence(issue.get(field))
     )
@@ -575,7 +567,7 @@ def _ancestor_promotions(
     )
     for field, expected_qids, ancestor in ordered:
         if ancestor.get("coordinatedOwnerOnly") is True:
-            physical_owner_failure = _mapping(
+            physical_owner_failure = as_mapping(
                 ancestor.get("physicalOwnerFailure")
             )
             if physical_owner_failure:
@@ -588,7 +580,7 @@ def _ancestor_promotions(
             continue
         layout_id = str(ancestor.get("layoutId", ""))
         qid = str(ancestor.get("qid", ""))
-        proof = _mapping(ancestor.get("browserProof"))
+        proof = as_mapping(ancestor.get("browserProof"))
         if not layout_id or not qid:
             reasons.append("repair.geometry.ancestor.identity_missing")
             continue
@@ -606,13 +598,13 @@ def _ancestor_promotions(
         if current is None:
             reasons.append("repair.geometry.ancestor.bounds_invalid")
             continue
-        envelope = _mapping(ancestor.get("mutationEnvelope"))
+        envelope = as_mapping(ancestor.get("mutationEnvelope"))
         if issue.get("requiresEnvelope") is True and not envelope:
             reasons.append("repair.geometry.ancestor.envelope_missing")
             continue
         container = _rect(ancestor.get("containerBounds")) or _Rect(0, 0, 1, 1)
         raw_deltas = tuple(
-            _mapping(value) for value in _sequence(ancestor.get("candidateDeltas"))
+            as_mapping(value) for value in _sequence(ancestor.get("candidateDeltas"))
         )
         deltas = sorted(
             raw_deltas,
@@ -641,14 +633,14 @@ def _ancestor_promotions(
                 or (abs(dx) <= _EPSILON and abs(dy) <= _EPSILON)
             ):
                 continue
-            physical_proof = _mapping(delta.get("physicalOwnerProof"))
+            physical_proof = as_mapping(delta.get("physicalOwnerProof"))
             if physical_proof:
                 owner_px = _pixel_bounds(physical_proof.get("ownerBoundsPx"))
                 candidate_px = _pixel_bounds(
                     physical_proof.get("candidateOwnerBoundsPx")
                 )
-                delta_px = _mapping(delta.get("deltaPx"))
-                blocker_bounds = _mapping(
+                delta_px = as_mapping(delta.get("deltaPx"))
+                blocker_bounds = as_mapping(
                     physical_proof.get("blockerBoundsPx")
                 )
                 boundary_y = _number(
@@ -727,7 +719,7 @@ def _rects_do_not_overlap(first: _Rect, second: _Rect) -> bool:
 
 
 def _pixel_bounds(value: object) -> tuple[float, float, float, float] | None:
-    raw = _mapping(value)
+    raw = as_mapping(value)
     values = tuple(_number(raw.get(name)) for name in ("x", "y", "width", "height"))
     if (
         not all(math.isfinite(item) for item in values)
@@ -750,17 +742,17 @@ def _expected_connected_issue_qids(
     """
 
     issues = tuple(
-        _mapping(value)
+        as_mapping(value)
         for value in _sequence(context.get("geometryIssues"))
-        if _mapping(value).get("kind") == "nonOverlap"
-        and _mapping(_mapping(value).get("detectorEvidence")).get("confirmed")
+        if as_mapping(value).get("kind") == "nonOverlap"
+        and as_mapping(as_mapping(value).get("detectorEvidence")).get("confirmed")
         is True
     )
     endpoints_by_group: dict[str, frozenset[str]] = {}
     ancestors_by_qid: dict[str, set[str]] = {}
     seed_group = str(seed_issue.get("issueGroupId", ""))
     for item in issues:
-        detector = _mapping(item.get("detectorEvidence"))
+        detector = as_mapping(item.get("detectorEvidence"))
         group_id = str(item.get("issueGroupId", ""))
         endpoints = frozenset(
             str(value)
@@ -775,7 +767,7 @@ def _expected_connected_issue_qids(
             endpoints_by_group[group_id] = endpoints
         for field in ("boundAncestors", "otherBoundAncestors"):
             for raw_ancestor in _sequence(item.get(field)):
-                proof = _mapping(_mapping(raw_ancestor).get("browserProof"))
+                proof = as_mapping(as_mapping(raw_ancestor).get("browserProof"))
                 target_qid = str(proof.get("targetQid", ""))
                 chain = tuple(
                     str(value)
@@ -785,11 +777,11 @@ def _expected_connected_issue_qids(
                 if target_qid and chain and chain[0] == target_qid:
                     ancestors_by_qid.setdefault(target_qid, set()).update(chain[1:])
         for raw_pair in _sequence(item.get("coordinatedAncestorMoves")):
-            pair_proof = _mapping(_mapping(raw_pair).get("proof"))
-            owner_coverage = _mapping(pair_proof.get("ownerCoverage"))
+            pair_proof = as_mapping(as_mapping(raw_pair).get("proof"))
+            owner_coverage = as_mapping(pair_proof.get("ownerCoverage"))
             for role in ("target", "peer"):
-                role_coverage = _mapping(owner_coverage.get(role))
-                chains = _mapping(role_coverage.get("ancestorQidChains"))
+                role_coverage = as_mapping(owner_coverage.get(role))
+                chains = as_mapping(role_coverage.get("ancestorQidChains"))
                 for qid, raw_chain in chains.items():
                     chain = tuple(
                         str(value) for value in _sequence(raw_chain) if value
@@ -842,12 +834,12 @@ def _coordinated_ancestor_moves(
     """
 
     raw_pairs = tuple(
-        _mapping(value)
+        as_mapping(value)
         for value in _sequence(issue.get("coordinatedAncestorMoves"))
     )
     if not raw_pairs:
         return [], ()
-    limits = _mapping(context.get("limits"))
+    limits = as_mapping(context.get("limits"))
     max_operations = int(max(1, min(32, _number(limits.get("maxOperations"), 8))))
     max_affected = int(
         max(
@@ -873,12 +865,12 @@ def _coordinated_ancestor_moves(
         key=lambda pair: json.dumps(pair, sort_keys=True, separators=(",", ":")),
     )
     for pair in ordered_pairs:
-        proof = _mapping(pair.get("proof"))
-        moves = tuple(_mapping(value) for value in _sequence(pair.get("moves")))
+        proof = as_mapping(pair.get("proof"))
+        moves = tuple(as_mapping(value) for value in _sequence(pair.get("moves")))
         axis = str(proof.get("axis", ""))
         direction = _number(proof.get("direction"))
         separation_px = _number(proof.get("separationPx"))
-        capacities = _mapping(proof.get("capacityPx"))
+        capacities = as_mapping(proof.get("capacityPx"))
         target_capacity = _number(capacities.get("target"))
         peer_capacity = _number(capacities.get("peer"))
         if (
@@ -911,17 +903,17 @@ def _coordinated_ancestor_moves(
             reasons.append("repair.geometry.coordinated_ancestor.identity_mismatch")
             continue
 
-        coverage = _mapping(proof.get("ownerCoverage"))
-        target_coverage = _mapping(coverage.get("target"))
-        peer_coverage = _mapping(coverage.get("peer"))
+        coverage = as_mapping(proof.get("ownerCoverage"))
+        target_coverage = as_mapping(coverage.get("target"))
+        peer_coverage = as_mapping(coverage.get("peer"))
         target_owned = tuple(
             str(value) for value in _sequence(target_coverage.get("ownedQids"))
         )
         peer_owned = tuple(
             str(value) for value in _sequence(peer_coverage.get("ownedQids"))
         )
-        target_chains = _mapping(target_coverage.get("ancestorQidChains"))
-        peer_chains = _mapping(peer_coverage.get("ancestorQidChains"))
+        target_chains = as_mapping(target_coverage.get("ancestorQidChains"))
+        peer_chains = as_mapping(peer_coverage.get("ancestorQidChains"))
         blocked_raw = coverage.get("blockedPaintOwnerQids")
         blocked = tuple(str(value) for value in _sequence(blocked_raw))
         connected_raw = coverage.get("connectedIssueQids")
@@ -940,7 +932,7 @@ def _coordinated_ancestor_moves(
                 if value
             )
         )
-        owner_depth = _mapping(proof.get("ownerDepth"))
+        owner_depth = as_mapping(proof.get("ownerDepth"))
         target_depth = _number(owner_depth.get("target"))
         peer_depth = _number(owner_depth.get("peer"))
 
@@ -957,7 +949,7 @@ def _coordinated_ancestor_moves(
 
         target_owner_qid = str(target_move.get("qid", ""))
         peer_owner_qid = str(peer_move.get("qid", ""))
-        detector = _mapping(issue.get("detectorEvidence"))
+        detector = as_mapping(issue.get("detectorEvidence"))
         occluder_qid = str(detector.get("occluderQid", ""))
         exact_target_chains = all(
             chain_is_exact(qid, target_owner_qid, target_chains)
@@ -1021,10 +1013,10 @@ def _coordinated_ancestor_moves(
             )
             continue
 
-        target_delta = _mapping(target_move.get("delta"))
-        peer_delta = _mapping(peer_move.get("delta"))
-        target_delta_px = _mapping(target_move.get("deltaPx"))
-        peer_delta_px = _mapping(peer_move.get("deltaPx"))
+        target_delta = as_mapping(target_move.get("delta"))
+        peer_delta = as_mapping(peer_move.get("delta"))
+        target_delta_px = as_mapping(target_move.get("deltaPx"))
+        peer_delta_px = as_mapping(peer_move.get("deltaPx"))
         orthogonal = "y" if axis == "x" else "x"
         target_axis = _number(target_delta.get(axis))
         peer_axis = _number(peer_delta.get(axis))
@@ -1040,7 +1032,7 @@ def _coordinated_ancestor_moves(
             _number(target_delta_px.get(orthogonal)),
             _number(peer_delta_px.get(orthogonal)),
         )
-        capacity_evidence = _mapping(proof.get("capacityEvidence"))
+        capacity_evidence = as_mapping(proof.get("capacityEvidence"))
 
         def capacity_is_exact(
             role: str,
@@ -1050,15 +1042,15 @@ def _coordinated_ancestor_moves(
             role_direction: float,
             declared_capacity: float,
         ) -> bool:
-            evidence = _mapping(capacity_evidence.get(role))
-            boundary = _mapping(evidence.get("boundary"))
+            evidence = as_mapping(capacity_evidence.get(role))
+            boundary = as_mapping(evidence.get("boundary"))
             boundary_bounds = _pixel_bounds(boundary.get("boundsPx"))
             subtree_bounds = _pixel_bounds(evidence.get("subtreeContentBoundsPx"))
             raw_content_qids = evidence.get("contentQids")
             content_qids = tuple(
                 str(value) for value in _sequence(raw_content_qids) if value
             )
-            content_kinds = _mapping(evidence.get("contentKinds"))
+            content_kinds = as_mapping(evidence.get("contentKinds"))
             normalized_kinds = {
                 str(qid): str(kind) for qid, kind in content_kinds.items()
             }
@@ -1135,7 +1127,7 @@ def _coordinated_ancestor_moves(
                 if abs(normalized_axis_delta) > _EPSILON
                 else math.nan
             )
-            envelope = _mapping(move.get("mutationEnvelope"))
+            envelope = as_mapping(move.get("mutationEnvelope"))
             envelope_normalized = _number(envelope.get("maxTranslation"))
             return (
                 math.isfinite(viewport_axis)
@@ -1201,14 +1193,14 @@ def _coordinated_ancestor_moves(
             target=str(target_move["layoutId"]),
             current=target_bounds,
             candidate=target_after,
-            envelope=_mapping(target_move.get("mutationEnvelope")),
+            envelope=as_mapping(target_move.get("mutationEnvelope")),
             expected_bounds=target_move.get("bounds"),
         )
         peer_operations = _operation_for_bounds(
             target=str(peer_move["layoutId"]),
             current=peer_bounds,
             candidate=peer_after,
-            envelope=_mapping(peer_move.get("mutationEnvelope")),
+            envelope=as_mapping(peer_move.get("mutationEnvelope")),
             expected_bounds=peer_move.get("bounds"),
         )
         if (
@@ -1285,7 +1277,7 @@ def _relational_issue_present(
         )
     if kind == "containment":
         container = _rect(issue.get("containerBounds")) or _Rect(0, 0, 1, 1)
-        insets = _mapping(issue.get("insets"))
+        insets = as_mapping(issue.get("insets"))
         allowed = _Rect(
             container.x
             + container.width * max(0.0, _number(insets.get("left"), 0.0)),
@@ -1352,12 +1344,12 @@ def _glyph_composition_candidates(
     """
 
     raw_items = tuple(
-        _mapping(value)
+        as_mapping(value)
         for value in _sequence(context.get("geometryGlyphCompositions"))
     )
     if not raw_items:
         return [], ()
-    limits = _mapping(context.get("limits"))
+    limits = as_mapping(context.get("limits"))
     max_operations = int(max(1, min(32, _number(limits.get("maxOperations"), 8))))
     max_affected = int(
         max(
@@ -1406,7 +1398,7 @@ def _glyph_composition_candidates(
             for issue in issues
             if str(issue.get("issueGroupId", "")) in group_ids
             and issue.get("kind") == "nonOverlap"
-            and _mapping(issue.get("detectorEvidence")).get("confirmed") is True
+            and as_mapping(issue.get("detectorEvidence")).get("confirmed") is True
         )
         issue = matching[0] if matching else {}
         if (
@@ -1420,11 +1412,11 @@ def _glyph_composition_candidates(
             reject(issue, "repair.geometry.glyph_composition.identity_or_limits_invalid")
             continue
 
-        glyph = _mapping(item.get("glyph"))
-        glyph_envelope = _mapping(glyph.get("mutationEnvelope"))
-        glyph_precondition = _mapping(glyph.get("precondition"))
-        glyph_measurement = _mapping(glyph.get("measurement"))
-        glyph_roundtrip = _mapping(glyph.get("roundTrip"))
+        glyph = as_mapping(item.get("glyph"))
+        glyph_envelope = as_mapping(glyph.get("mutationEnvelope"))
+        glyph_precondition = as_mapping(glyph.get("precondition"))
+        glyph_measurement = as_mapping(glyph.get("measurement"))
+        glyph_roundtrip = as_mapping(glyph.get("roundTrip"))
         glyph_target = str(glyph.get("target", ""))
         current_scale = _number(glyph.get("currentScale"))
         minimum_scale = _number(glyph.get("minimumScale"))
@@ -1505,24 +1497,24 @@ def _glyph_composition_candidates(
             reject(issue, "repair.geometry.glyph_composition.glyph_proof_invalid")
             continue
 
-        moves = tuple(_mapping(value) for value in _sequence(item.get("moves")))
+        moves = tuple(as_mapping(value) for value in _sequence(item.get("moves")))
         by_role = {str(move.get("role", "")): move for move in moves}
         if len(moves) != 2 or set(by_role) != {"owner", "subtitle"}:
             reject(issue, "repair.geometry.glyph_composition.moves_invalid")
             continue
         owner_move = by_role["owner"]
         subtitle_move = by_role["subtitle"]
-        detector = _mapping(issue.get("detectorEvidence"))
+        detector = as_mapping(issue.get("detectorEvidence"))
         ancestor = next(
             (
-                _mapping(value)
+                as_mapping(value)
                 for value in _sequence(issue.get("boundAncestors"))
-                if str(_mapping(value).get("qid", ""))
+                if str(as_mapping(value).get("qid", ""))
                 == str(owner_move.get("qid", ""))
             ),
             {},
         )
-        ancestor_proof = _mapping(ancestor.get("browserProof"))
+        ancestor_proof = as_mapping(ancestor.get("browserProof"))
         ancestor_chain = tuple(
             str(value)
             for value in _sequence(ancestor_proof.get("parentQidChain"))
@@ -1530,21 +1522,21 @@ def _glyph_composition_candidates(
         owner_bounds = _rect(owner_move.get("currentBounds"))
         subtitle_bounds = _rect(subtitle_move.get("currentBounds"))
         owner_expected = _rect(
-            _mapping(owner_move.get("precondition")).get("expectedBounds")
+            as_mapping(owner_move.get("precondition")).get("expectedBounds")
         )
         subtitle_expected = _rect(
-            _mapping(subtitle_move.get("precondition")).get("expectedBounds")
+            as_mapping(subtitle_move.get("precondition")).get("expectedBounds")
         )
         issue_bounds = _rect(issue.get("currentBounds"))
-        owner_delta = _mapping(owner_move.get("delta"))
-        subtitle_delta = _mapping(subtitle_move.get("delta"))
-        owner_delta_px = _mapping(owner_move.get("deltaPx"))
-        subtitle_delta_px = _mapping(subtitle_move.get("deltaPx"))
-        proof = _mapping(item.get("proof"))
-        capacity = _mapping(proof.get("canvasCapacity"))
+        owner_delta = as_mapping(owner_move.get("delta"))
+        subtitle_delta = as_mapping(subtitle_move.get("delta"))
+        owner_delta_px = as_mapping(owner_move.get("deltaPx"))
+        subtitle_delta_px = as_mapping(subtitle_move.get("deltaPx"))
+        proof = as_mapping(item.get("proof"))
+        capacity = as_mapping(proof.get("canvasCapacity"))
         viewport_height = _number(capacity.get("viewportHeightPx"))
-        owner_envelope = _mapping(owner_move.get("mutationEnvelope"))
-        subtitle_envelope = _mapping(subtitle_move.get("mutationEnvelope"))
+        owner_envelope = as_mapping(owner_move.get("mutationEnvelope"))
+        subtitle_envelope = as_mapping(subtitle_move.get("mutationEnvelope"))
 
         def valid_move(
             move: Mapping[str, Any],
@@ -1559,7 +1551,7 @@ def _glyph_composition_candidates(
             verified = frozenset(
                 str(value)
                 for value in _sequence(
-                    _mapping(move.get("roundTrip")).get("verifiedProperties")
+                    as_mapping(move.get("roundTrip")).get("verifiedProperties")
                 )
             )
             allowed = frozenset(
@@ -1576,7 +1568,7 @@ def _glyph_composition_candidates(
                 and envelope.get("locked") is not True
                 and "translateWithinParent" in allowed
                 and move.get("staticTranslationSafe") is True
-                and _mapping(move.get("roundTrip")).get("supported") is True
+                and as_mapping(move.get("roundTrip")).get("supported") is True
                 and "bounds" in verified
                 and all(math.isfinite(value) for value in (dx, dy, dx_px, dy_px))
                 and abs(dx) <= _EPSILON
@@ -1609,7 +1601,7 @@ def _glyph_composition_candidates(
             or str(owner_move.get("layoutId", ""))
             != str(ancestor.get("layoutId", ""))
             or owner_bounds != _rect(ancestor.get("bounds"))
-            or owner_envelope != _mapping(ancestor.get("mutationEnvelope"))
+            or owner_envelope != as_mapping(ancestor.get("mutationEnvelope"))
             or ancestor.get("sameCoordinateSpace") is not True
             or ancestor.get("ownershipProven") is not True
             or ancestor_proof.get("source") != "chrome"
@@ -1624,7 +1616,7 @@ def _glyph_composition_candidates(
             or str(subtitle_move.get("qid", "")) != str(issue.get("qid", ""))
             or str(subtitle_move.get("layoutId", "")) != str(issue.get("target", ""))
             or subtitle_bounds != issue_bounds
-            or subtitle_envelope != _mapping(issue.get("mutationEnvelope"))
+            or subtitle_envelope != as_mapping(issue.get("mutationEnvelope"))
         ):
             reject(issue, "repair.geometry.glyph_composition.move_proof_invalid")
             continue
@@ -1632,16 +1624,16 @@ def _glyph_composition_candidates(
         baseline_text = _pixel_bounds(proof.get("baselineSubtitleTextBoundsPx"))
         candidate_text = _pixel_bounds(proof.get("candidateSubtitleTextBoundsPx"))
         occluder_text = _pixel_bounds(proof.get("occluderTextBoundsPx"))
-        boundary = _mapping(proof.get("occluderPaintBoundaryPx"))
-        owner_subtree = _mapping(proof.get("ownerSubtreeBoundsPx"))
+        boundary = as_mapping(proof.get("occluderPaintBoundaryPx"))
+        owner_subtree = as_mapping(proof.get("ownerSubtreeBoundsPx"))
         owner_subtree_baseline = _pixel_bounds(owner_subtree.get("baseline"))
         owner_subtree_candidate = _pixel_bounds(owner_subtree.get("candidate"))
-        proof_roundtrip = _mapping(proof.get("roundTrip"))
+        proof_roundtrip = as_mapping(proof.get("roundTrip"))
         proof_verified = frozenset(
             str(value)
             for value in _sequence(proof_roundtrip.get("verifiedProperties"))
         )
-        postconditions = _mapping(proof.get("requiredPostconditions"))
+        postconditions = as_mapping(proof.get("requiredPostconditions"))
         soft_cost_maximum = _number(
             postconditions.get("softCostMaximum"), float("nan")
         )
@@ -1793,12 +1785,12 @@ def _exact_geometry_composition_candidates(
     """Validate producer-supplied exact Chrome translation compositions."""
 
     raw_items = tuple(
-        _mapping(value)
+        as_mapping(value)
         for value in _sequence(context.get("geometryExactCompositions"))
     )
     if not raw_items:
         return [], ()
-    limits = _mapping(context.get("limits"))
+    limits = as_mapping(context.get("limits"))
     max_operations = int(max(1, min(32, _number(limits.get("maxOperations"), 8))))
     max_affected = int(
         max(
@@ -1857,7 +1849,7 @@ def _exact_geometry_composition_candidates(
         matching = tuple(issue for issue in issues if issue_is_bound(issue))
         fallback_issue: Mapping[str, Any] = matching[0] if matching else {}
         operations_raw = tuple(
-            _mapping(value) for value in _sequence(item.get("operations"))
+            as_mapping(value) for value in _sequence(item.get("operations"))
         )
         if item.get("required") is not True:
             continue
@@ -1884,9 +1876,9 @@ def _exact_geometry_composition_candidates(
             )
             continue
 
-        proof = _mapping(item.get("proof"))
-        baseline_bounds_raw = _mapping(proof.get("baselineBoundsPx"))
-        candidate_bounds_raw = _mapping(proof.get("candidateBoundsPx"))
+        proof = as_mapping(item.get("proof"))
+        baseline_bounds_raw = as_mapping(proof.get("baselineBoundsPx"))
+        candidate_bounds_raw = as_mapping(proof.get("candidateBoundsPx"))
         baseline_bounds_px = {
             str(qid): bounds
             for qid, value in baseline_bounds_raw.items()
@@ -1910,22 +1902,22 @@ def _exact_geometry_composition_candidates(
             qid = str(operation.get("qid", ""))
             current = _rect(operation.get("currentBounds"))
             expected = _rect(
-                _mapping(operation.get("precondition")).get("expectedBounds")
+                as_mapping(operation.get("precondition")).get("expectedBounds")
             )
-            value = _mapping(operation.get("value"))
-            value_px = _mapping(operation.get("valuePx"))
+            value = as_mapping(operation.get("value"))
+            value_px = as_mapping(operation.get("valuePx"))
             dx, dy = _number(value.get("x")), _number(value.get("y"))
             dx_px, dy_px = _number(value_px.get("x")), _number(value_px.get("y"))
             candidate_bounds = _rect(operation.get("bounds"))
             candidate_operation_px = _pixel_bounds(operation.get("boundsPx"))
-            envelope = _mapping(operation.get("mutationEnvelope"))
+            envelope = as_mapping(operation.get("mutationEnvelope"))
             allowed = frozenset(
                 str(value)
                 for value in _sequence(envelope.get("allowedOperations"))
             )
-            projection = _mapping(operation.get("projectionProof"))
+            projection = as_mapping(operation.get("projectionProof"))
             mechanism = str(projection.get("mechanism", ""))
-            roundtrip = _mapping(operation.get("roundTrip"))
+            roundtrip = as_mapping(operation.get("roundTrip"))
             verified = frozenset(
                 str(value)
                 for value in _sequence(roundtrip.get("verifiedProperties"))
@@ -2071,7 +2063,7 @@ def _exact_geometry_composition_candidates(
             continue
 
         relationships = tuple(
-            _mapping(value) for value in _sequence(proof.get("relationships"))
+            as_mapping(value) for value in _sequence(proof.get("relationships"))
         )
 
         def vertical_gap(
@@ -2139,7 +2131,7 @@ def _exact_geometry_composition_candidates(
                 relationship_invalid = True
                 break
 
-        postconditions = _mapping(proof.get("requiredPostconditions"))
+        postconditions = as_mapping(proof.get("requiredPostconditions"))
         soft_cost_maximum = _number(
             postconditions.get("softCostMaximum"), float("nan")
         )
@@ -2208,9 +2200,9 @@ def _exact_geometry_composition_candidates(
 def _candidate_key(candidate: GeometryCandidate) -> tuple[int, float, int, str]:
     delta = 0.0
     for operation in candidate.operations:
-        expected = _rect(_mapping(operation.get("precondition")).get("expectedBounds"))
+        expected = _rect(as_mapping(operation.get("precondition")).get("expectedBounds"))
         proposed = _rect(operation.get("bounds"))
-        value = _mapping(operation.get("value"))
+        value = as_mapping(operation.get("value"))
         if expected is not None and proposed is not None:
             delta += sum(
                 abs(getattr(proposed, field) - getattr(expected, field))
@@ -2303,14 +2295,14 @@ def _composition_candidates(
 ) -> tuple[GeometryCandidate, ...]:
     """Bounded best-first products for explicitly authorized issue groups."""
 
-    raw_compositions = _mapping(context.get("geometryCompositionGroups"))
+    raw_compositions = as_mapping(context.get("geometryCompositionGroups"))
     required_groups = frozenset(
         str(value)
         for value in _sequence(context.get("requiredGeometryIssueGroups"))
     )
     if not raw_compositions or not required_groups:
         return ()
-    limits = _mapping(context.get("limits"))
+    limits = as_mapping(context.get("limits"))
     max_operations = int(max(1, min(32, _number(limits.get("maxOperations"), 8))))
     max_affected = int(
         max(
@@ -2421,13 +2413,13 @@ def generate_geometry_candidates(
     """Generate bounded alternatives in stable minimum-change order."""
 
     raw_issues = context.get("geometryIssues", ())
-    issues = tuple(_mapping(value) for value in _sequence(raw_issues))
+    issues = tuple(as_mapping(value) for value in _sequence(raw_issues))
     candidate_groups: dict[str, list[GeometryCandidate]] = {}
     rejections: list[GeometryCandidateRejection] = []
     maximum = int(max(1, min(32, _number(context.get("maxGeometryCandidates"), 16))))
 
     def reject(issue: Mapping[str, Any], operation: str, code: str) -> None:
-        detector = _mapping(issue.get("detectorEvidence"))
+        detector = as_mapping(issue.get("detectorEvidence"))
         rejections.append(
             GeometryCandidateRejection(
                 str(issue.get("code", "")),
@@ -2466,7 +2458,7 @@ def generate_geometry_candidates(
         if not issue_code or not semantic_id or not qid or not target:
             reject(issue, "candidate_generation", "repair.geometry.identity_missing")
             continue
-        if _mapping(issue.get("detectorEvidence")).get("confirmed") is not True:
+        if as_mapping(issue.get("detectorEvidence")).get("confirmed") is not True:
             reject(
                 issue,
                 "candidate_generation",
@@ -2475,7 +2467,7 @@ def generate_geometry_candidates(
             continue
         if (
             kind == "nonOverlap"
-            and _mapping(issue.get("detectorEvidence")).get("independentElements")
+            and as_mapping(issue.get("detectorEvidence")).get("independentElements")
             is not True
         ):
             reject(

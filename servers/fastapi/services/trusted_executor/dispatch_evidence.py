@@ -14,6 +14,7 @@ import time
 from typing import Any
 import uuid
 
+from utils.hashing import canonical_json_bytes, sha256_hex
 from services.isolated_worker_contracts import ArtifactRef, IsolatedWorkerJob
 
 
@@ -44,11 +45,12 @@ _KEYS = frozenset({
 
 
 def _canonical(value: object) -> bytes:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode()
+    # ASCII-escaped on purpose: the evidence digest is persisted in that form.
+    return canonical_json_bytes(value, ensure_ascii=True)
 
 
 def _digest(value: object) -> str:
-    return hashlib.sha256(_canonical(value)).hexdigest()
+    return sha256_hex(_canonical(value))
 
 
 def _require(condition: bool) -> None:

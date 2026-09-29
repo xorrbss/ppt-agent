@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from utils.hashing import canonical_json_bytes, sha256_prefixed
 from services.authored_admission_policy import (
     HTML_REPRESENTATIONS,
     MANIFEST_DIGEST_MISMATCH,
@@ -12,13 +13,12 @@ from services.authored_admission_policy import (
 
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, replace
-import hashlib
 import json
 from typing import Any
 
 
 def digest_bytes(value: bytes) -> str:
-    return "sha256:" + hashlib.sha256(value).hexdigest()
+    return sha256_prefixed(value)
 
 
 def digest_html(value: str) -> str:
@@ -55,9 +55,7 @@ def canonical_json(value: Any) -> str:
     dump = getattr(value, "model_dump", None)
     if callable(dump):
         value = dump(mode="json", by_alias=True)
-    return json.dumps(
-        json_value(value), ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
-    )
+    return canonical_json_bytes(json_value(value)).decode("utf-8")
 
 
 @dataclass(frozen=True, slots=True)
