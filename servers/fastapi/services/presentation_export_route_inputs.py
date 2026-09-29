@@ -12,7 +12,6 @@ owns no state, and is therefore unit-testable on its own.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from hashlib import sha256
 from pathlib import Path
 
 from models.sql.presentation import PresentationModel
@@ -21,16 +20,6 @@ from services.presentation_export_capabilities import (
     PresentationExportFreshnessError,
 )
 from services.authored_local_fit_policy import html_digest
-
-
-def hash_export_artifact(path: Path) -> tuple[str, int]:
-    digest = sha256()
-    size_bytes = 0
-    with path.open("rb") as stream:
-        while chunk := stream.read(1024 * 1024):
-            digest.update(chunk)
-            size_bytes += len(chunk)
-    return digest.hexdigest(), size_bytes
 
 
 def resolve_authored_local_fit_receipts(
