@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import sys
 
 from dataclasses import replace
@@ -19,6 +18,7 @@ from services.authored_original_capture_checkpoint import (
 from utils.slide_capture import get_cached_browser_metrics
 from services.document_canvas_generation import export_size_points
 from services.authored_canvas import canvas_or_default, canvas_render_kwargs
+from utils.hashing import sha256_prefixed
 
 LOGGER = logging.getLogger(__name__)
 
@@ -90,7 +90,7 @@ def _rehydrate_accepted_local_fit(
 
     if receipt_is_preserved_original(receipt) or png is None:
         return None
-    if receipt.get("png_digest") != "sha256:" + hashlib.sha256(png).hexdigest():
+    if receipt.get("png_digest") != sha256_prefixed(png):
         return None
     return AcceptedLocalFit(
         html=html,

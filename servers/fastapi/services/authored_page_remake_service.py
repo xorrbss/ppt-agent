@@ -88,6 +88,7 @@ from utils.llm_calls.author_slide import (
 )
 from utils.llm_calls.author_vision_qa import revise_authored_deck
 from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
+from utils.hashing import sha256_hex, sha256_prefixed
 
 LOGGER = logging.getLogger(__name__)
 PREVIEW_KIND = "authored_page_remake_preview"
@@ -111,7 +112,7 @@ def _canonical_digest(value: object) -> str:
         separators=(",", ":"),
         default=str,
     ).encode("utf-8")
-    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+    return sha256_prefixed(encoded)
 
 
 def authored_page_source_digest(slide: SlideModel) -> str:
@@ -356,7 +357,7 @@ def _theme_with_remake_local_fit_receipt(
 
 def _png_matches_content_addressed_reference(reference: str, png: bytes) -> bool:
     filename = reference.replace("\\", "/").rsplit("/", 1)[-1]
-    return filename.endswith(f"_{hashlib.sha256(png).hexdigest()}.png")
+    return filename.endswith(f"_{sha256_hex(png)}.png")
 
 
 async def run_authored_page_remake_preview(

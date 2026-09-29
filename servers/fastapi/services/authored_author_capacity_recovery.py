@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import html as html_lib
 import re
-from hashlib import sha256
 from typing import Any, Mapping, Sequence
 from services.authored_title_recovery_contract import (
     TITLE_CAPACITY_UNRESOLVABLE,
@@ -27,6 +26,7 @@ from services.authored_composition_policy import (
     _is_title_role,
     canonicalize_authored_capacity_html,
 )
+from utils.hashing import sha256_hex
 
 DIAGNOSTIC_SCHEMA = "authored-owner-capacity-diagnostic/v1"
 DIAGNOSTIC_OWNER_LIMIT = 32
@@ -70,11 +70,11 @@ def owner_capacity_measurements(
             )
             owners.append({
                 "ordinal": index,
-                "qidDigest": sha256(qid.encode("utf-8")).hexdigest(),
+                "qidDigest": sha256_hex(qid.encode("utf-8")),
                 "role": role_class,
                 "tag": tag if tag in DIAGNOSTIC_TAGS else "other",
                 "charCount": len(text),
-                "textDigest": sha256(text.encode("utf-8")).hexdigest(),
+                "textDigest": sha256_hex(text.encode("utf-8")),
             })
         if tag == "img":
             measured["owner_images"] += 1
@@ -96,7 +96,7 @@ def authored_owner_capacity_diagnostic(html: str, capacity: SlideCapacity) -> di
     ordered = sorted(owners, key=lambda owner: (owner["role"] != "title", owner["ordinal"]))
     return {
         "schemaVersion": DIAGNOSTIC_SCHEMA,
-        "htmlDigest": sha256(normalized.encode("utf-8")).hexdigest(),
+        "htmlDigest": sha256_hex(normalized.encode("utf-8")),
         "ownerCount": len(owners),
         "truncated": len(owners) > DIAGNOSTIC_OWNER_LIMIT,
         "measured": measured,

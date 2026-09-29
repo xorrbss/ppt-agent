@@ -13,7 +13,6 @@ import html as html_lib
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
-from hashlib import sha256
 from html.parser import HTMLParser
 from typing import Any, Literal, Sequence
 
@@ -40,6 +39,7 @@ from utils.authored_dom_quality import (
 )
 from utils.authored_fragmentation_gate import fragmentation_repair_instruction
 from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX, LANDSCAPE_ASPECT_RATIO, PORTRAIT_ASPECT_RATIO, canvas_size_for_aspect_ratio
+from utils.hashing import sha256_prefixed
 
 CompositionProfileId = Literal["ordinary", "source-verbatim", "source-outline"]
 QualityProfileId = Literal["development", "release"]
@@ -2053,7 +2053,7 @@ def repair_authored_owned_text_paint_order(
             else {canvas_size}
         )
         or browser_metrics.get("fonts_ready") is not True
-        or browser_metrics.get("source_digest") != "sha256:" + sha256(html.encode("utf-8")).hexdigest()
+        or browser_metrics.get("source_digest") != sha256_prefixed(html.encode("utf-8"))
         or re.fullmatch(r"sha256:[0-9a-f]{64}", str(browser_metrics.get("render_digest", ""))) is None
         or re.search(
             r"<(?:script|link|iframe|object|embed)\b|::?(?:before|after|first-letter|first-line)\b|"

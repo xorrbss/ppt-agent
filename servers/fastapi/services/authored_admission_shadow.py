@@ -7,12 +7,12 @@ from services.authored_admission_policy import PRODUCER_INVALID, UNCODED_ERROR
 from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-import hashlib
 import json
 import logging
 import re
 
 from services.authored_admission_policy import PRODUCERS
+from utils.hashing import sha256_hex
 
 
 LOGGER = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ def bounded_block_ids(values: Sequence[str] | None) -> tuple[str, ...]:
         sample.append(
             text
             if _BLOCK_ID.fullmatch(text)
-            else hashlib.sha256(text.encode("utf-8", "replace")).hexdigest()[:16]
+            else sha256_hex(text.encode("utf-8", "replace"))[:16]
         )
     return tuple(sample)
 
@@ -71,7 +71,7 @@ def bounded_error(error: BaseException | None) -> tuple[str, str]:
     payload = f"{type(error).__module__}.{name}:{error}".encode("utf-8", "replace")
     return (
         name if _CLASS_NAME.fullmatch(name) else UNCODED_ERROR,
-        hashlib.sha256(payload).hexdigest()[:16],
+        sha256_hex(payload)[:16],
     )
 
 

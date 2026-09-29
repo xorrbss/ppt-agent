@@ -16,7 +16,6 @@ from services.authored_local_fit_receipt_checks import (
     _check_receipt,
 )
 
-import hashlib
 import io
 import json
 import math
@@ -32,6 +31,7 @@ from services.authored_local_fit_evidence import (
 from services.authored_local_fit_policy import (
     POLICY_REVISION, font_size_allowed,
 )
+from utils.hashing import sha256_prefixed
 
 
 def _full_picture(picture: ET.Element, width: float, height: float) -> None:
@@ -98,7 +98,7 @@ def _owner(shape: ET.Element) -> dict[str, Any]:
 
 def _content_digest(text: str, expected: str) -> str:
     if expected.startswith("sha256:"):
-        return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
+        return sha256_prefixed(text.encode("utf-8"))
     value = 2166136261
     encoded = text.encode("utf-16-le", errors="surrogatepass")
     for offset in range(0, len(encoded), 2):
@@ -336,11 +336,11 @@ def verify_local_fit_pptx(path_or_bytes: str | Path | bytes,
                         _fail("raster_evidence_mismatch")
                     image_payload = archive.read(image_path)
                     image_payloads.append(image_payload)
-                    image_digests.append("sha256:" + hashlib.sha256(image_payload).hexdigest())
+                    image_digests.append(sha256_prefixed(image_payload))
                 if mode == "fidelity":
                     if len(image_digests) != 1 or root.findall(".//a:t", NS):
                         _fail("fidelity_content_mismatch")
-                    expected = ("sha256:" + hashlib.sha256(pngs[index]).hexdigest()
+                    expected = (sha256_prefixed(pngs[index])
                                 if pngs is not None else receipt.get("png_digest"))
                     if (not expected or image_digests[0] != expected
                             or expected != receipt.get("png_digest")):
@@ -452,4 +452,4 @@ def verify_local_fit_pptx(path_or_bytes: str | Path | bytes,
             "reviewPages": review_pages,
             "qualityAdvisories": hybrid_quality_advisories,
             "slides": len(receipts), "native_runs": native_runs,
-            "pptx_digest": "sha256:" + hashlib.sha256(payload).hexdigest()}
+            "pptx_digest": sha256_prefixed(payload)}

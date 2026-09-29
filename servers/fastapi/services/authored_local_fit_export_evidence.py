@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 from collections.abc import Mapping, Sequence
@@ -14,6 +13,7 @@ from services.authored_local_fit_policy import (
     font_size_allowed,
     pt_per_css_px,
 )
+from utils.hashing import sha256_hex, sha256_prefixed
 
 
 def _reject(reason: str) -> None:
@@ -44,7 +44,7 @@ def load_export_evidence(
     if (
         not isinstance(evidence, Mapping)
         or evidence.get("schemaVersion") != "authored-local-fit-export-evidence/v1"
-        or evidence.get("pptxDigest") != "sha256:" + hashlib.sha256(payload).hexdigest()
+        or evidence.get("pptxDigest") != sha256_prefixed(payload)
         or not evidence.get("sourceDigest")
     ):
         _reject("export_evidence_identity_mismatch")
@@ -322,7 +322,7 @@ def validate_raster_fragments(
                     diagnostic_candidates.append(
                         {
                             "imageIndex": candidate_index,
-                            "digestSha256": hashlib.sha256(payload).hexdigest(),
+                            "digestSha256": sha256_hex(payload),
                             "placementPt": {
                                 key: float(actual[key])
                                 for key in expected
@@ -337,7 +337,7 @@ def validate_raster_fragments(
                         "schemaVersion": "raster-fragment-diagnostic/v1",
                         "bandIndex": band_index,
                         "fragmentOrder": order,
-                        "fragmentIdSha256": hashlib.sha256(identifier.encode("utf-8")).hexdigest(),
+                        "fragmentIdSha256": sha256_hex(identifier.encode("utf-8")),
                         "expectedDigest": expected_digest
                         if (
                             isinstance(expected_digest, str)

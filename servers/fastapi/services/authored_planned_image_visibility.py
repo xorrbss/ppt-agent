@@ -4,11 +4,11 @@ Geometry is necessary evidence, never a substitute for semantic/visual review.
 Strict source-content visibility deliberately does not use this module.
 """
 
-import hashlib
 from collections.abc import Mapping, Sequence
 
 from utils.coerce import finite_float
 from utils.authored_illustrations import _data_image_digest
+from utils.hashing import sha256_prefixed
 
 
 def inspect_planned_source_images(
@@ -20,7 +20,7 @@ def inspect_planned_source_images(
     ``visual_review`` must identify this HTML digest and explicitly affirm
     relevance, critical-region visibility and readability for every asset.
     """
-    digest = "sha256:" + hashlib.sha256(html.encode("utf-8")).hexdigest()
+    digest = sha256_prefixed(html.encode("utf-8"))
     issues = []
     receipt = {"html_digest": digest, "geometry_passed": False,
                "visual_passed": False, "passed": False, "issues": issues,

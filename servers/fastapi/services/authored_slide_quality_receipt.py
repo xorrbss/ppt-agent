@@ -20,7 +20,6 @@ must never be the reason a deck does not ship.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import time
@@ -30,6 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from services.authored_quality_receipt_v2 import _manifest_lock, quality_receipt_root
+from utils.hashing import sha256_hex, sha256_prefixed
 
 LOGGER = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ def slide_quality_receipt_path(presentation_id: object) -> Path:
     value = str(presentation_id or "").strip()
     if not value:
         raise ValueError("slide_quality_presentation_id_missing")
-    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:32]
+    digest = sha256_hex(value.encode("utf-8"))[:32]
     return quality_receipt_root() / f"deck-{digest}-slide-quality.json"
 
 
@@ -184,7 +184,7 @@ def _optional_count(value: object) -> int | None:
 
 def _manifest_digest(slides: Mapping[str, Any]) -> str:
     payload = json.dumps(slides, sort_keys=True, separators=(",", ":"))
-    return "sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return sha256_prefixed(payload.encode("utf-8"))
 
 
 def _read_manifest(path: Path) -> dict[str, Any]:

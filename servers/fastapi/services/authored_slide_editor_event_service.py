@@ -9,7 +9,6 @@ stamper fills ``owner_id`` -- so nothing here filters by owner.
 
 from __future__ import annotations
 
-import hashlib
 import uuid
 from collections.abc import Sequence
 
@@ -22,6 +21,7 @@ from models.authored_slide_editor_event import (
     AuthoredSlideEditorEventResponse,
 )
 from models.sql.authored_slide_editor_event import AuthoredSlideEditorEvent
+from utils.hashing import sha256_hex
 
 
 def editor_event_key_hash(
@@ -41,7 +41,7 @@ def editor_event_key_hash(
             request.event_key.strip(),
         )
     )
-    return hashlib.sha256(identity.encode("utf-8")).hexdigest()
+    return sha256_hex(identity.encode("utf-8"))
 
 
 def _response(

@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from collections import Counter
-from hashlib import sha256
 import json
 import re
 import secrets
 from typing import Any, Mapping, Sequence
+from utils.hashing import sha256_hex
 
 _NAMED_WORD = r"(?<![A-Za-z0-9])[A-Z][A-Za-z0-9]*(?:[-.][A-Za-z0-9]+)*(?![A-Za-z0-9])"
 _LEXICAL_WORD = r"(?<![A-Za-z0-9])[A-Za-z][A-Za-z0-9]*(?:[-.][A-Za-z0-9]+)*(?![A-Za-z0-9])"
@@ -309,7 +309,7 @@ def select_larger_compatible_layout(
 
 def _json_digest(value: Any) -> str:
     payload = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return sha256(payload.encode("utf-8")).hexdigest()
+    return sha256_hex(payload.encode("utf-8"))
 
 
 def _title_recovery_receipt(
@@ -436,15 +436,15 @@ def title_token_diagnostic(
             total += 1
             if len(differences) < _MAX_TOKEN_DIFFERENCES:
                 differences.append({
-                    "qidDigest": sha256(qid.encode()).hexdigest(),
+                    "qidDigest": sha256_hex(qid.encode()),
                     "tokenClass": token_class,
-                    "tokenDigest": sha256(salt + token.encode()).hexdigest(),
+                    "tokenDigest": sha256_hex(salt + token.encode()),
                     "beforeCount": old_count, "afterCount": new_count,
                 })
     return {
         "schemaVersion": _TOKEN_SCHEMA,
-        "beforeHtmlDigest": sha256(before_html.encode()).hexdigest(),
-        "afterHtmlDigest": sha256(after_html.encode()).hexdigest(),
+        "beforeHtmlDigest": sha256_hex(before_html.encode()),
+        "afterHtmlDigest": sha256_hex(after_html.encode()),
         "differenceCount": total, "truncated": total > _MAX_TOKEN_DIFFERENCES,
         "differences": differences,
     }

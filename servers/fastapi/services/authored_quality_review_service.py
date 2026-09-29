@@ -172,6 +172,7 @@ from utils.slide_capture import (
     render_html_to_png_with_metrics,
 )
 from services.authored_canvas import canvas_or_default, canvas_render_kwargs
+from utils.hashing import sha256_prefixed
 
 LOGGER = logging.getLogger(__name__)
 _ORIGINAL_RENDER_HTML_TO_PNG = render_html_to_png
@@ -1495,7 +1496,7 @@ async def finalize_legacy_review(ctx):
                     "apply_status": "committed",
                     "publish_status": "active",
                     "post_verify_status": "passed",
-                    "html_hash": "sha256:" + hashlib.sha256(ctx.html.encode("utf-8")).hexdigest(),
+                    "html_hash": sha256_prefixed(ctx.html.encode("utf-8")),
                     "applied": True,
                 }
             )

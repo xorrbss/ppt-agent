@@ -7,7 +7,6 @@ export code reads back via ``reusable_checkpoint_receipt``.
 """
 from __future__ import annotations
 
-import hashlib
 import io
 from collections.abc import Mapping
 from typing import Any
@@ -28,6 +27,7 @@ from services.authored_local_fit_policy import (
     digest,
     html_digest,
 )
+from utils.hashing import sha256_prefixed
 
 
 def _render_key(
@@ -175,7 +175,7 @@ def _delivery_receipt(
         "operations": [],
         "baseline": baseline,
         "runs": [],
-        "png_digest": "sha256:" + hashlib.sha256(png).hexdigest(),
+        "png_digest": sha256_prefixed(png),
         "pngSize": {"width": width, "height": height},
         "telemetry": {
             **dict(report.get("telemetry") or {}),
@@ -226,7 +226,7 @@ def _receipt(
             "evidence_cache_hit": False,
         }
     )
-    png_digest = "sha256:" + hashlib.sha256(final_png).hexdigest()
+    png_digest = sha256_prefixed(final_png)
     return {
         "schema": RECEIPT_SCHEMA,
         "policy_revision": policy_revision,

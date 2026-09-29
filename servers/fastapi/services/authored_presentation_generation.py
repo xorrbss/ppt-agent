@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-from hashlib import sha256
 import logging
 import os
 import time
@@ -297,6 +296,7 @@ from services.source_content.browser_readback import (
     stamp_source_block_ids,
 )
 from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX, canvas_or_default, canvas_render_kwargs
+from utils.hashing import sha256_hex, sha256_prefixed
 
 
 LOGGER = logging.getLogger(__name__)
@@ -1342,7 +1342,7 @@ async def _persist_master_pinned_editable_scene_deck(
         candidate_identity = canonical_digest(
             {
                 "sceneEnvelope": scene_envelope.scene_digest,
-                "pngDigests": [sha256(png).hexdigest() for png in pngs],
+                "pngDigests": [sha256_hex(png) for png in pngs],
                 # The sealed Scene carries all geometry.  Do not let transient
                 # browser timing/cache counters create a new recovery identity.
                 "sceneDigest": scene.scene_digest,
@@ -2714,7 +2714,7 @@ async def _generate_authored_presentation(
             zip(htmls, local_fit_receipts, strict=True)
         ):
             if receipt.get("finalHtmlDigest") != (
-                "sha256:" + sha256(html.encode("utf-8")).hexdigest()
+                sha256_prefixed(html.encode("utf-8"))
             ):
                 raise AuthoredStageError(
                     slide_index=index,
@@ -3796,7 +3796,7 @@ async def _generate_authored_presentation(
             zip(htmls, local_fit_receipts, strict=True)
         ):
             if receipt.get("finalHtmlDigest") != (
-                "sha256:" + sha256(html.encode("utf-8")).hexdigest()
+                sha256_prefixed(html.encode("utf-8"))
             ):
                 raise AuthoredStageError(
                     slide_index=index,
