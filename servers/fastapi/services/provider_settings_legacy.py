@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Mapping
 
 from utils.get_env import get_user_config_path_env
 from utils.user_config_store import update_user_config_file
 
+
+logger = logging.getLogger(__name__)
 
 LEGACY_PROVIDER_SETTINGS_REVISION_KEY = (
     "_PRESENTON_PROVIDER_SETTINGS_REVISION"
@@ -12,6 +15,20 @@ LEGACY_PROVIDER_SETTINGS_REVISION_KEY = (
 LEGACY_PROVIDER_SETTINGS_PENDING_REFRESH_KEY = (
     "_PRESENTON_PROVIDER_SETTINGS_PENDING_REFRESH"
 )
+_LEGACY_BOOKKEEPING_KEYS = frozenset(
+    {
+        LEGACY_PROVIDER_SETTINGS_REVISION_KEY,
+        LEGACY_PROVIDER_SETTINGS_PENDING_REFRESH_KEY,
+    }
+)
+
+
+def _has_provider_settings(config: Mapping[str, object]) -> bool:
+    """Whether ``config`` carries any real provider setting, not bookkeeping."""
+    return any(
+        key not in _LEGACY_BOOKKEEPING_KEYS and not key.upper().startswith("AUTH_")
+        for key in config
+    )
 
 
 def legacy_provider_settings_revision(
@@ -61,6 +78,29 @@ def mirror_provider_settings_to_legacy_file(
             and existing_revision is not None
             and existing_revision >= revision
         ):
+            return existing
+
+        if (
+            force
+            and not _has_provider_settings(config)
+            and _has_provider_settings(existing)
+        ):
+            # ``force`` exists to bypass the revision/pending-token ordering
+            # checks above for bootstrap and pending-write-recovery mirrors,
+            # never to bypass correctness. Every ``force=True`` caller is one
+            # of those two cases; a normal, user-driven save never sets it.
+            # An empty incoming projection winning over a file that already
+            # holds real provider settings is never that recovery's intent --
+            # it is the read path that produced ``config`` having silently
+            # failed (see ``read_user_config_file``). Leave the file alone and
+            # log loudly instead of erasing configured providers.
+            logger.error(
+                "Refusing to mirror provider settings revision=%d: the "
+                "incoming projection has no provider settings but the "
+                "existing file does. Leaving the file unchanged instead of "
+                "overwriting it with an empty/less-complete projection.",
+                revision,
+            )
             return existing
 
         mirrored = dict(config)

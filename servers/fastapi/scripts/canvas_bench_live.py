@@ -20,6 +20,11 @@ from typing import Any
 import httpx
 
 POLL_SECONDS = 5.0
+# uvicorn closes an idle keep-alive connection after 5 s, the same interval
+# the bench polls at; with httpx's default 5 s pool expiry the client
+# occasionally reuses a socket the server is closing and gets WinError 10054.
+# Expiring pooled connections well before the server does removes the race.
+KEEPALIVE_EXPIRY_SECONDS = 1.0
 TERMINAL_OPERATION_STATES = {"succeeded", "failed", "cancelled", "dead_letter"}
 QUALITY_RECEIPT_DIR = "authored-quality-receipts"
 DOCUMENT_CANVAS_CONTRACT = "document-canvas/v1"
@@ -29,7 +34,11 @@ class BenchClient:
     def __init__(self, base: str, *, timeout_seconds: float) -> None:
         self.base = base.rstrip("/")
         self.deadline_seconds = timeout_seconds
-        self.http = httpx.Client(timeout=httpx.Timeout(120.0), trust_env=False)
+        self.http = httpx.Client(
+            timeout=httpx.Timeout(120.0),
+            limits=httpx.Limits(keepalive_expiry=KEEPALIVE_EXPIRY_SECONDS),
+            trust_env=False,
+        )
 
     def close(self) -> None:
         self.http.close()

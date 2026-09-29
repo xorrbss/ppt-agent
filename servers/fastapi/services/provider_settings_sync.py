@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import time
@@ -28,6 +29,32 @@ from utils.user_config_store import read_user_config_file
 logger = logging.getLogger(__name__)
 
 
+class ProviderSettingsImportError(RuntimeError):
+    """Raised when an import would silently discard an on-disk config."""
+
+
+def _raw_file_config_for_divergence_check(path: str) -> dict | None:
+    """Parse ``path`` directly, bypassing ACL hardening and the ``.bak`` sibling.
+
+    This exists only to sanity-check ``read_user_config_file``'s result
+    against what is plainly on disk. It is not a substitute source of truth
+    (it never consults the backup file), so it must only be used to detect
+    divergence, never to source the config that gets imported.
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            content = handle.read().strip()
+    except OSError:
+        return None
+    if not content:
+        return {}
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
 def sync_legacy_file_to_provider_settings(
     *,
     managed_updates: Mapping[str, object] | None = None,
@@ -47,7 +74,25 @@ def sync_legacy_file_to_provider_settings(
     path = os.getenv("PRESENTON_PROVIDER_CONFIG_IMPORT_PATH") or get_user_config_path_env()
     if not path:
         return None
-    config = sanitize_provider_settings_for_storage(read_user_config_file(path))
+    raw_legacy_config = read_user_config_file(path)
+    if not raw_legacy_config:
+        # A genuinely missing/empty config is a normal bootstrap state. But a
+        # file that plainly has content on disk yet read back empty means a
+        # read failure was silently swallowed somewhere upstream (this is
+        # exactly how a readable userConfig.json was previously imported as
+        # nothing while this function still reported success). Refuse to
+        # proceed rather than committing an empty import.
+        on_disk = _raw_file_config_for_divergence_check(path)
+        if on_disk:
+            raise ProviderSettingsImportError(
+                f"Refusing to import provider settings from {path}: the file "
+                "has content on disk but read_user_config_file returned an "
+                "empty config. This indicates a read failure was silently "
+                "swallowed rather than the config genuinely being empty; fix "
+                "the underlying read failure (e.g. ACL hardening) and retry "
+                "instead of importing nothing."
+            )
+    config = sanitize_provider_settings_for_storage(raw_legacy_config)
     database_url, connect_args = get_database_url_and_connect_args()
     engine = create_engine(
         to_sync_sqlalchemy_url(database_url),
