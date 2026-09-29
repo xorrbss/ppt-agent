@@ -24,6 +24,10 @@ from utils.upload_limits import (
 import uuid
 from constants.documents import POWERPOINT_TYPES
 
+# Upper bound for one LibreOffice PPTX-to-PDF conversion.
+_LIBREOFFICE_CONVERT_TIMEOUT_SECONDS = 500
+
+
 
 PPTX_SLIDES_ROUTER = APIRouter(prefix="/pptx-slides", tags=["PPTX Slides"])
 
@@ -588,7 +592,7 @@ async def _convert_pptx_to_pdf(pptx_path: str, temp_dir: str) -> str:
                 check=True,
                 capture_output=True,
                 text=True,
-                timeout=500,
+                timeout=_LIBREOFFICE_CONVERT_TIMEOUT_SECONDS,
                 env=env,
             )
 
