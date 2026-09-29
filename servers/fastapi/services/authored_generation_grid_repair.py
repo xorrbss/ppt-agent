@@ -2,20 +2,24 @@
 
 from __future__ import annotations
 
+import math
+from collections.abc import Mapping, Sequence
+
+from utils.authored_patch_engine import apply_authored_patch
+
 
 def _repair_authored_intrinsic_grid_overlap(
     html: str,
     browser_metrics: object,
 ) -> str:
     """Release intrinsic grid minimums only for measured collisions."""
-    from services import authored_generation_repair as runtime
 
-    if not isinstance(browser_metrics, runtime.Mapping):
+    if not isinstance(browser_metrics, Mapping):
         return html
     raw_elements = browser_metrics.get("elements")
-    if not isinstance(raw_elements, runtime.Sequence):
+    if not isinstance(raw_elements, Sequence):
         return html
-    elements = [item for item in raw_elements if isinstance(item, runtime.Mapping)]
+    elements = [item for item in raw_elements if isinstance(item, Mapping)]
     by_qid = {str(item["qid"]): item for item in elements if item.get("qid")}
     children: dict[str, list[str]] = {}
     for qid, item in by_qid.items():
@@ -28,7 +32,7 @@ def _repair_authored_intrinsic_grid_overlap(
             parsed = float(str(value).removesuffix("px"))
         except (TypeError, ValueError):
             return None
-        return parsed if runtime.math.isfinite(parsed) else None
+        return parsed if math.isfinite(parsed) else None
 
     def descendants(qid: str) -> set[str]:
         found: set[str] = set()
@@ -44,7 +48,7 @@ def _repair_authored_intrinsic_grid_overlap(
     actions: list[dict[str, object]] = []
     for grid_qid, grid in sorted(by_qid.items()):
         style = grid.get("computed_style") or grid.get("computedStyle") or {}
-        if not isinstance(style, runtime.Mapping) or style.get("display") != "grid":
+        if not isinstance(style, Mapping) or style.get("display") != "grid":
             continue
         client_width = number(grid.get("clientWidth", grid.get("client_width")))
         scroll_width = number(grid.get("scrollWidth", grid.get("scroll_width")))
@@ -70,7 +74,7 @@ def _repair_authored_intrinsic_grid_overlap(
             )
             for item in elements
         )
-        grid_box = grid.get("bbox") if isinstance(grid.get("bbox"), runtime.Mapping) else {}
+        grid_box = grid.get("bbox") if isinstance(grid.get("bbox"), Mapping) else {}
         grid_left = number(grid_box.get("x", grid_box.get("left")))
         grid_width = number(grid_box.get("width"))
         direct_child_escape = any(
@@ -78,7 +82,7 @@ def _repair_authored_intrinsic_grid_overlap(
             or (
                 grid_left is not None
                 and grid_width is not None
-                and isinstance(by_qid[qid].get("bbox"), runtime.Mapping)
+                and isinstance(by_qid[qid].get("bbox"), Mapping)
                 and number(by_qid[qid]["bbox"].get("x")) is not None
                 and number(by_qid[qid]["bbox"].get("width")) is not None
                 and number(by_qid[qid]["bbox"].get("x")) + number(by_qid[qid]["bbox"].get("width"))
@@ -92,7 +96,7 @@ def _repair_authored_intrinsic_grid_overlap(
         for child_qid in sorted(children.get(grid_qid, ())):
             child = by_qid[child_qid]
             child_style = child.get("computed_style") or child.get("computedStyle") or {}
-            if isinstance(child_style, runtime.Mapping) and str(
+            if isinstance(child_style, Mapping) and str(
                 child_style.get("minWidth", child_style.get("min-width", ""))
             ) in {"0", "0px"}:
                 continue
@@ -105,7 +109,7 @@ def _repair_authored_intrinsic_grid_overlap(
             )
     if not actions or len(actions) > 16:
         return html
-    applied = runtime.apply_authored_patch(
+    applied = apply_authored_patch(
         html,
         {
             "strategy": "patch",

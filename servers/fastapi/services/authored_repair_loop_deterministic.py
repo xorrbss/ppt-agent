@@ -1,7 +1,7 @@
 """Step one of the single repair loop: the repairs that need no model.
 
 The candidate itself is the existing composed deterministic repair
-(``services/authored_generation_repair._deterministic_repair_candidate``:
+(``services/authored_presentation_generation._deterministic_repair_candidate``:
 normalization rewrites, paint-order and overlap repairs, the off-canvas and
 blank-field reducers, the header-eyebrow repair, alignment) plus the local fit
 the capture callback applies. This module only spends the bounded capture and
