@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import math
 
-from api.v1.ppt.endpoints.content_brief_policy import content_brief_timeout_policy
+from services.content_brief_policy import content_brief_timeout_policy
 from services.authored_provider_rate_profile import (
     AuthoredRateProfile,
     resolve_authored_rate_profile,

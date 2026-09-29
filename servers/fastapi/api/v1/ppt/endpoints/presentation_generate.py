@@ -209,7 +209,7 @@ from utils.env_settings.authored_vnext import is_authored_vnext_master_enabled
 from utils.get_env import get_authored_resume_max_attempts_env
 from utils.get_env_programme import is_authored_content_brief_enabled
 from services.public_operation_deadline_scope import remaining_public_operation_seconds
-from api.v1.ppt.endpoints.content_brief_policy import (
+from services.content_brief_policy import (
     brief_failure_is_terminal, log_content_brief_skipped, merge_brief_context,
 )
 from services.authored_content_brief_checkpoint import run_content_brief_with_checkpoint

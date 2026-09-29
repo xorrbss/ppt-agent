@@ -34,7 +34,7 @@ import logging
 from time import monotonic
 from typing import Optional
 
-from api.v1.ppt.endpoints.content_brief_policy import (
+from services.content_brief_policy import (
     BRIEF_STATUS_APPLIED,
     BRIEF_STATUS_RETRY_APPLIED,
     BRIEF_STATUS_REUSED,

@@ -17,7 +17,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
-from api.v1.ppt.endpoints.content_brief_policy import (
+from services.content_brief_policy import (
     BRIEF_STATUS_APPLIED,
     BRIEF_STATUS_REUSED,
     BRIEF_STATUS_TIMED_OUT_FALLBACK,

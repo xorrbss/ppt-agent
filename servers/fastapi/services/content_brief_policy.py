@@ -89,7 +89,7 @@ from dataclasses import dataclass
 from time import monotonic
 from typing import Literal, Optional
 
-from api.v1.ppt.endpoints.content_brief_operation_share import (
+from services.content_brief_operation_share import (
     clamp_brief_policy_to_operation,
 )
 from utils.get_env import (

@@ -12,12 +12,12 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from api.v1.ppt.endpoints.content_brief_operation_share import (
+from services.content_brief_operation_share import (
     DEFAULT_OPERATION_DEADLINE_SHARE,
     clamp_brief_policy_to_operation,
     operation_deadline_share,
 )
-from api.v1.ppt.endpoints.content_brief_policy import (
+from services.content_brief_policy import (
     BRIEF_STATUS_APPLIED,
     ContentBriefTimeoutPolicy,
     content_brief_timeout_policy,
