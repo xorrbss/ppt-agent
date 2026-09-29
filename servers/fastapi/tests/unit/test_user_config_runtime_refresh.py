@@ -1,3 +1,4 @@
+import logging
 import threading
 
 from utils import user_config
@@ -13,6 +14,36 @@ def _settings(model: str) -> RuntimeSettings:
             "OPENAI_MODEL": model,
         },
     )
+
+
+def test_read_persisted_user_config_logs_loudly_instead_of_silently_swallowing(
+    monkeypatch, caplog, tmp_path
+):
+    """A read failure must be visible in server logs, not silently reduced to
+    ``{}`` with no trace (the second half of the reported defect: this is the
+    same blanket-except-Exception anti-pattern as ``read_user_config_file``
+    used to have, just one caller further out)."""
+    config_path = tmp_path / "userConfig.json"
+
+    def fake_read(_path):
+        raise RuntimeError("simulated read failure with a secret in it: sk-leak")
+
+    monkeypatch.setattr(user_config, "read_user_config_file", fake_read)
+
+    with caplog.at_level(logging.ERROR, logger="utils.user_config"):
+        result = user_config._read_persisted_user_config({"USER_CONFIG_PATH": str(config_path)})
+
+    assert result == {}
+    assert "Failed to read persisted user config" in caplog.text
+    assert "error_type=RuntimeError" in caplog.text
+    # The exception message (which could carry paths/secrets) must not be
+    # logged, only its type.
+    assert "sk-leak" not in caplog.text
+    assert str(config_path) not in caplog.text
+
+
+def test_read_persisted_user_config_returns_empty_without_path(tmp_path):
+    assert user_config._read_persisted_user_config({}) == {}
 
 
 def test_concurrent_refreshes_cannot_publish_an_older_snapshot_last(monkeypatch):

@@ -1774,7 +1774,38 @@ def _estimate_text_runs_width(
         base, ceiling = _SERIF_TEXT_WIDTH_HEADROOM_BASE, _SERIF_TEXT_WIDTH_HEADROOM_CAPS
     else:
         base, ceiling = _TEXT_WIDTH_HEADROOM_BASE, _TEXT_WIDTH_HEADROOM_CAPS
-    return width * (base + (ceiling - base) * caps)
+    estimated = width * (base + (ceiling - base) * caps)
+    # A single-line frame narrower than its text's true advance is folded by
+    # renderers that ignore wrap="none" (LibreOffice breaks "68%" before "%").
+    # The per-character table cannot know every glyph, so exact metrics, when
+    # the caller supplies them, are a floor under the estimate.
+    measured = _measured_text_runs_width(runs)
+    return estimated if measured is None else max(estimated, measured)
+
+
+def _measured_text_runs_width(runs: list[dict[str, Any]]) -> float | None:
+    """Exact advance of a line from the context's measurer, or ``None``.
+
+    Every run must be measurable; one unknown family, weight or glyph makes
+    the whole line fall back to the estimate. DrawingML ``spc`` tracks every
+    character, so the measured line carries one spacing step per character.
+    """
+    measure = current_conversion_context().text_advance
+    if measure is None:
+        return None
+    total = 0.0
+    for run in runs:
+        text = str(run.get('text', ''))
+        advance = measure(
+            text,
+            float(run.get('font_size', 16)),
+            str(run.get('font_weight', '400')),
+            str(run.get('font_family', '')),
+        )
+        if advance is None:
+            return None
+        total += advance + float(run.get('letter_spacing', 0.0) or 0.0) * len(text)
+    return total
 
 
 def _first_nonspace_run(runs: list[dict[str, Any]]) -> dict[str, Any] | None:

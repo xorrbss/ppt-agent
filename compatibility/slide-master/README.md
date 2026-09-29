@@ -13,8 +13,8 @@ uv run --project servers/fastapi python compatibility/slide-master/rebuild.py --
 ```
 
 Alternatively pass `--source` with a tree matching every baseline manifest hash.
-The command verifies all baseline bytes, applies the checked-in patch, and
-deterministically generates the manifest including the patch hash. It never
+The command verifies all baseline bytes, applies the checked-in patches in
+order, and deterministically generates the manifest including the patch hashes. It never
 overwrites the active vendor directory. Review changes before copying individual
 files into a checkout. The readback test rebuilds in a temporary directory and
 compares every manifest-covered byte with the shipped vendor.
@@ -30,6 +30,16 @@ flat native worker path only, reject explicit parallelism, and run serially;
 other structures need their own integration evidence before being enabled.
 Legacy font quantization remains 0.1pt; new-contract text uses the native OOXML
 0.01pt storage grid. SVG/CSS unit parsing and logical layout are unchanged.
+
+`text-advance.1` (applied after `document-canvas-1.patch`; `rebuild.py` lists
+the patches in order) lets the caller put an exact text measurer on the
+conversion context. A single-line text frame is then never narrower than its
+text's advance in the deck's bundled font: LibreOffice ignores `wrap="none"`
+and folded frames the per-character estimate made too narrow ("68%" broke
+before "%"). The estimate stays the width whenever it is already wider, and
+paragraph (`wrap="square"`) frames are unchanged. The worker supplies
+`services.svg_text_advance.text_advance`, which answers only for the bundled
+families and returns `None` (estimate kept) for anything else.
 
 Bundle producers import the worker's converter version and current manifest
 digest. Old bundles are rejected with `svg_export_version_mismatch`; reconstruct

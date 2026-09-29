@@ -1,4 +1,4 @@
-"""Rebuild the converter from a verified baseline and reviewed local patch.
+"""Rebuild the converter from a verified baseline and reviewed local patches.
 
 Use --source for an unpacked baseline vendor tree or --baseline-revision for a
 local Git commit. Output must not exist; the active vendor tree is never replaced.
@@ -16,7 +16,13 @@ import tempfile
 HERE = Path(__file__).resolve().parent
 REPOSITORY = HERE.parents[1]
 VENDOR_PREFIX = "servers/fastapi/vendor/slide_master/"
-PATCH = HERE / "patches/document-canvas-1.patch"
+#: Applied in order; each entry is (patch file, manifest version suffix, note).
+PATCHES = (
+    (HERE / "patches/document-canvas-1.patch", "document-canvas.2",
+     "document-canvas.2: invocation-local physical units and bounded source-canvas rounding"),
+    (HERE / "patches/text-advance-1.patch", "text-advance.1",
+     "text-advance.1: single-line text frames never narrower than the caller's exact font advance"),
+)
 
 
 def rebuild(output: Path, *, source: Path | None = None, revision: str | None = None):
@@ -37,16 +43,16 @@ def rebuild(output: Path, *, source: Path | None = None, revision: str | None = 
             destination = tree / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(payload)
-        subprocess.run(["git", "-c", "core.autocrlf=false", "-c", "core.eol=lf",
-                        "apply", "--no-index", "-p5", str(PATCH)], cwd=tree, check=True)
+        for patch, _suffix, _note in PATCHES:
+            subprocess.run(["git", "-c", "core.autocrlf=false", "-c", "core.eol=lf",
+                            "apply", "--no-index", "-p5", str(patch)], cwd=tree, check=True)
         manifest = dict(baseline)
-        manifest["version"] = "vendored-20260916+document-canvas.2"
+        manifest["version"] = "+".join(["vendored-20260916", *(suffix for _patch, suffix, _note in PATCHES)])
         names = sorted(set(baseline["files"]) | {"svg_to_pptx/conversion_context.py"})
         manifest["files"] = {name: hashlib.sha256((tree / name).read_bytes()).hexdigest() for name in names}
-        manifest["presentonPatches"] = baseline["presentonPatches"] + [
-            "document-canvas.2: invocation-local physical units and bounded source-canvas rounding"
-        ]
-        manifest["patches"] = {PATCH.name: hashlib.sha256(PATCH.read_bytes()).hexdigest()}
+        manifest["presentonPatches"] = baseline["presentonPatches"] + [note for _patch, _suffix, note in PATCHES]
+        manifest["patches"] = {patch.name: hashlib.sha256(patch.read_bytes()).hexdigest()
+                               for patch, _suffix, _note in PATCHES}
         (tree / "MANIFEST.json").write_bytes((json.dumps(manifest, indent=2, ensure_ascii=False) + "\n").encode("utf-8"))
         shutil.copytree(tree, output)
 
