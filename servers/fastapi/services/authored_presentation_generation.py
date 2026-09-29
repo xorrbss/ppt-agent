@@ -7,7 +7,6 @@ import asyncio
 import inspect
 from hashlib import sha256
 import logging
-import math
 import os
 import time
 import traceback
@@ -157,7 +156,6 @@ from services.authored_composition_policy import (
     project_authored_owned_text,
     reduce_authored_owner_text_capacity,
     reduce_authored_closing_capacity,
-    reduce_authored_closing_title_punctuation,
     repair_authored_header_eyebrow_clip,
     repair_authored_layout_alignment,
     repair_authored_owned_text_paint_order,
@@ -207,7 +205,6 @@ from services.authored_decoration_containment import (
 )
 from services.provider_usage_instrumentation import provider_usage_scope, record_local_stage
 from utils.authored_dom_quality import ensure_authored_qids, inspect_authored_dom
-from utils.authored_patch_engine import apply_authored_patch
 from utils.authored_illustrations import validate_visible_source_images
 from utils.authored_styles import resolve_authored_style, validate_exact_reconstruction_style
 from utils.llm_calls.author_deck import (
