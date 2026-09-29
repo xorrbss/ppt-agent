@@ -19,6 +19,8 @@ import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
+from utils.coerce import as_mapping
+from utils.coerce import finite_float
 
 
 _EPSILON_PX = 0.5
@@ -70,10 +72,6 @@ class CoupledRepairBuildResult:
     rejections: tuple[CoupledRepairRejection, ...] = ()
 
 
-def _mapping(value: object) -> Mapping[str, Any]:
-    return value if isinstance(value, Mapping) else {}
-
-
 def _sequence(value: object) -> tuple[object, ...]:
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
         return tuple(value)
@@ -81,13 +79,7 @@ def _sequence(value: object) -> tuple[object, ...]:
 
 
 def _number(value: object, default: float = math.nan) -> float:
-    if isinstance(value, bool):
-        return default
-    try:
-        result = float(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return default
-    return result if math.isfinite(result) else default
+    return finite_float(value, default)
 
 
 def _strings(value: object) -> tuple[str, ...]:
@@ -105,7 +97,7 @@ def _close(first: float, second: float) -> bool:
 def _validate_numeric_model(proof: Mapping[str, Any]) -> str | None:
     """Recompute the claimed post-mutation result from Chrome pixel inputs."""
 
-    model = _mapping(proof.get("numericModel"))
+    model = as_mapping(proof.get("numericModel"))
     if not model:
         # Sanitized historical fixtures predate the explicit arithmetic model.
         # Newly projected candidates always include one; retain fixture replay
@@ -159,7 +151,7 @@ def _validate_numeric_model(proof: Mapping[str, Any]) -> str | None:
 
 
 def _validate_proof(item: Mapping[str, Any]) -> str | None:
-    proof = _mapping(item.get("proof"))
+    proof = as_mapping(item.get("proof"))
     if proof.get("source") != "chrome" or proof.get("telemetryComplete") is not True:
         return "repair.coupled.chrome_proof_incomplete"
     if proof.get("hardGatePolicy") != "preserve":
@@ -190,7 +182,7 @@ def _validate_proof(item: Mapping[str, Any]) -> str | None:
 def _validate_footprint(
     item: Mapping[str, Any], operations: Sequence[Mapping[str, Any]]
 ) -> str | None:
-    footprint = _mapping(item.get("constraintFootprint"))
+    footprint = as_mapping(item.get("constraintFootprint"))
     layout_ids = frozenset(_strings(footprint.get("layoutIds")))
     blocking_core = frozenset(_strings(footprint.get("blockingCore")))
     parent_space = str(footprint.get("parentSpaceId", ""))
@@ -229,7 +221,7 @@ def _validate_operations(
     proof_by_key = {
         (str(proof.get("target", "")), str(proof.get("op", ""))): proof
         for value in proofs
-        if (proof := _mapping(value))
+        if (proof := as_mapping(value))
     }
     seen: set[tuple[str, str]] = set()
     for operation in operations:
@@ -239,7 +231,7 @@ def _validate_operations(
         if op not in _SAFE_OPERATIONS or not target or key in seen:
             return "repair.coupled.operation_unsupported"
         seen.add(key)
-        operation_proof = _mapping(proof_by_key.get(key))
+        operation_proof = as_mapping(proof_by_key.get(key))
         if (
             operation_proof.get("mutationAllowed") is not True
             or operation_proof.get("roundTripSupported") is not True
@@ -251,7 +243,7 @@ def _validate_operations(
     if font_operations:
         if not any(operation.get("op") in _PARENT_FIRST_OPERATIONS for operation in operations):
             return "repair.coupled.font_shrink_without_parent_reclaim"
-        ocr = _mapping(item.get("ocrSafety"))
+        ocr = as_mapping(item.get("ocrSafety"))
         if (
             ocr.get("textNodeMappingComplete") is not True
             or ocr.get("tokenMappingComplete") is not True
@@ -264,7 +256,7 @@ def _validate_operations(
             return "repair.coupled.ocr_retry_budget_invalid"
         for operation in font_operations:
             scale = _number(operation.get("scale"))
-            bounds = _mapping(operation.get("bounds"))
+            bounds = as_mapping(operation.get("bounds"))
             minimum = max(
                 _MIN_OCR_SAFE_FONT_SCALE,
                 _number(bounds.get("minScale"), _MIN_OCR_SAFE_FONT_SCALE),
@@ -281,7 +273,7 @@ def build_coupled_repair_candidates(
 
     candidates: list[CoupledRepairCandidate] = []
     rejections: list[CoupledRepairRejection] = []
-    raw_items = tuple(_mapping(value) for value in _sequence(context.get("coupledRepairs")))
+    raw_items = tuple(as_mapping(value) for value in _sequence(context.get("coupledRepairs")))
     ordered = sorted(
         raw_items,
         key=lambda item: (
@@ -296,7 +288,7 @@ def build_coupled_repair_candidates(
         semantic_id = str(item.get("semanticId", ""))
         qid = str(item.get("qid", ""))
         target = str(item.get("target", ""))
-        operations = tuple(_mapping(value) for value in _sequence(item.get("operations")))
+        operations = tuple(as_mapping(value) for value in _sequence(item.get("operations")))
 
         reason: str | None = None
         if not all((issue_group_id, issue_code, semantic_id, qid, target)):
@@ -318,7 +310,7 @@ def build_coupled_repair_candidates(
             )
             continue
 
-        footprint = _mapping(item.get("constraintFootprint"))
+        footprint = as_mapping(item.get("constraintFootprint"))
         refs = tuple(
             dict.fromkeys(
                 (

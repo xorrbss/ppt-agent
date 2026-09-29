@@ -27,6 +27,7 @@ from pptx.enum.chart import XL_CHART_TYPE
 from pptx.enum.shapes import MSO_AUTO_SHAPE_TYPE, MSO_SHAPE_TYPE
 from pptx.enum.text import MSO_AUTO_SIZE, PP_ALIGN, MSO_VERTICAL_ANCHOR
 from pptx.parts.image import Image as PptxImage
+from utils.coerce import finite_float
 from services.authored_vnext.ooxml.scene_canvas import (
     canvas_identity, intended_font_points, logical_canvas, master_for_canvas, physical_border_points,
     scene_font, scene_points, scene_px, shape_bounds_px as _shape_bounds_px,
@@ -129,8 +130,8 @@ def _string(value: object, code: str) -> str:
 def _number(value: object, code: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise NativeSceneError(code)
-    result = float(value)
-    if not math.isfinite(result):
+    result = finite_float(value)
+    if result is None:
         raise NativeSceneError(code)
     return result
 

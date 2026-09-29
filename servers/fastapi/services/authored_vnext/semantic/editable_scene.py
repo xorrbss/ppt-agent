@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from utils.coerce import finite_float
 from services.authored_vnext.semantic.editable_scene_chart_payload import _bounded_native_chart_payload
 
 import base64
@@ -75,7 +76,6 @@ _CSS_CAPABILITY_BY_FEATURE = (
     (frozenset({"box-shadow", "shadow"}), "css.shadow.v1"),
     (frozenset({"gradient"}), "css.gradient.v1"),
 )
-
 
 
 def _requested_capability_id(
@@ -235,13 +235,6 @@ class _NativeHtmlParser(HTMLParser):
             self._table_qid = None
 
 
-def _number(value: object, default: float = 0) -> float:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
-
-
 def _css_px(value: object) -> float | None:
     text = str(value or "").strip().lower()
     if text.endswith("px"):
@@ -332,8 +325,8 @@ def _semantic_text(element: Mapping[str, Any], fallback: str) -> tuple[str, Scen
     text = "\n".join(texts).strip() or fallback.strip()
     return text, SceneTextStyle(
         font_family=str(first_run.get("fontFamily") or "Malgun Gothic"),
-        font_size=_number(first_run.get("fontSizePt"), 18),
-        font_weight=int(_number(first_run.get("weight"), 400)),
+        font_size=finite_float(first_run.get("fontSizePt"), 18),
+        font_weight=int(finite_float(first_run.get("weight"), 400)),
         color=_hex_color(first_run.get("color")) or "#111827",
         text_align=alignment if alignment in {"left", "center", "right", "justify"} else "left",
     )
@@ -351,7 +344,7 @@ def _reviewed_text_style(node) -> SceneTextStyle | None:
         for char in text
     ):
         return None
-    weight = int(_number(node.style.get("fontWeight"), 400))
+    weight = int(finite_float(node.style.get("fontWeight"), 400))
     weight = min(900, max(100, round(weight / 100) * 100))
     align = str(node.style.get("textAlign", "left"))
     font_size_px = _css_px(node.style.get("fontSize")) or 18

@@ -8,6 +8,7 @@ import math
 import re
 from typing import Any
 
+from utils.coerce import finite_float
 from models.slidespec_v1 import (
     AlignmentConstraint,
     AnchorConstraint,
@@ -875,14 +876,6 @@ def _contrast(foreground: object, background: object) -> float | None:
     return (max(first, second) + 0.05) / (min(first, second) + 0.05)
 
 
-def _number(value: object) -> float | None:
-    try:
-        parsed = float(value)
-    except (TypeError, ValueError):
-        return None
-    return parsed if math.isfinite(parsed) else None
-
-
 def observations_from_browser_metrics(
     request: RenderRequest,
     metrics: Mapping[str, Any],
@@ -902,8 +895,8 @@ def observations_from_browser_metrics(
     }
     viewport = metrics.get("viewport", {})
     viewport = viewport if isinstance(viewport, Mapping) else {}
-    measured_width = _number(metrics.get("width")) or _number(viewport.get("width"))
-    measured_height = _number(metrics.get("height")) or _number(viewport.get("height"))
+    measured_width = finite_float(metrics.get("width")) or finite_float(viewport.get("width"))
+    measured_height = finite_float(metrics.get("height")) or finite_float(viewport.get("height"))
     width = measured_width or source.viewportWidth
     height = measured_height or source.viewportHeight
     result: dict[str, LayoutObservation] = {}
@@ -936,24 +929,24 @@ def observations_from_browser_metrics(
         bbox = item.get("bbox", {})
         if not isinstance(bbox, Mapping):
             continue
-        x = _number(bbox.get("x"))
-        y = _number(bbox.get("y"))
-        box_width = _number(bbox.get("width"))
-        box_height = _number(bbox.get("height"))
+        x = finite_float(bbox.get("x"))
+        y = finite_float(bbox.get("y"))
+        box_width = finite_float(bbox.get("width"))
+        box_height = finite_float(bbox.get("height"))
         if None in (x, y, box_width, box_height):
             continue
         style = item.get("computed_style", item.get("style", {}))
         style = style if isinstance(style, Mapping) else {}
-        font_size = _number(item.get("font_size")) or _number(
+        font_size = finite_float(item.get("font_size")) or finite_float(
             str(style.get("fontSize", "")).removesuffix("px")
         )
-        line_height = _number(str(style.get("lineHeight", "")).removesuffix("px"))
+        line_height = finite_float(str(style.get("lineHeight", "")).removesuffix("px"))
         line_height_ratio = (
             line_height / font_size if line_height is not None and font_size else None
         )
         display = str(style.get("display", "")).lower()
         visibility = str(style.get("visibility", "")).lower()
-        opacity = _number(style.get("opacity"))
+        opacity = finite_float(style.get("opacity"))
         visible = (
             box_width > 0.5
             and box_height > 0.5
@@ -965,10 +958,10 @@ def observations_from_browser_metrics(
         if isinstance(clipped, bool):
             truncated = clipped
         else:
-            client_width = _number(item.get("client_width", item.get("clientWidth")))
-            client_height = _number(item.get("client_height", item.get("clientHeight")))
-            scroll_width = _number(item.get("scroll_width", item.get("scrollWidth")))
-            scroll_height = _number(item.get("scroll_height", item.get("scrollHeight")))
+            client_width = finite_float(item.get("client_width", item.get("clientWidth")))
+            client_height = finite_float(item.get("client_height", item.get("clientHeight")))
+            scroll_width = finite_float(item.get("scroll_width", item.get("scrollWidth")))
+            scroll_height = finite_float(item.get("scroll_height", item.get("scrollHeight")))
             overflow = {
                 str(style.get("overflow", "")).lower(),
                 str(style.get("overflowX", "")).lower(),
@@ -982,13 +975,13 @@ def observations_from_browser_metrics(
                     or scroll_height > client_height + 1  # type: ignore[operator]
                 )
             )
-        direct_contrast = _number(item.get("contrast_ratio", item.get("contrastRatio")))
+        direct_contrast = finite_float(item.get("contrast_ratio", item.get("contrastRatio")))
         contrast_ratio = (
             direct_contrast
             if direct_contrast is not None
             else _contrast(style.get("color"), style.get("backgroundColor"))
         )
-        z_index = _number(
+        z_index = finite_float(
             item.get(
                 "effective_z_index",
                 item.get("effectiveZIndex", style.get("zIndex")),
@@ -999,15 +992,15 @@ def observations_from_browser_metrics(
         if isinstance(quad_value, Sequence) and not isinstance(quad_value, (str, bytes)):
             for point in quad_value:
                 if isinstance(point, Mapping):
-                    point_x = _number(point.get("x"))
-                    point_y = _number(point.get("y"))
+                    point_x = finite_float(point.get("x"))
+                    point_y = finite_float(point.get("y"))
                 elif (
                     isinstance(point, Sequence)
                     and not isinstance(point, (str, bytes))
                     and len(point) >= 2
                 ):
-                    point_x = _number(point[0])
-                    point_y = _number(point[1])
+                    point_x = finite_float(point[0])
+                    point_y = finite_float(point[1])
                 else:
                     continue
                 if point_x is not None and point_y is not None:
@@ -1023,10 +1016,10 @@ def observations_from_browser_metrics(
             truncated=truncated,
             z_index=z_index,
             quad=tuple(quad),
-            rotation_degrees=_number(
+            rotation_degrees=finite_float(
                 item.get("rotation_degrees", item.get("rotationDegrees"))
             ),
-            occluded_fraction=_number(
+            occluded_fraction=finite_float(
                 item.get("occluded_fraction", item.get("occludedFraction"))
             ),
             glyph_clipped=glyph_clipped if isinstance(glyph_clipped, bool) else None,
@@ -1066,9 +1059,9 @@ def imported_projection_roundtrip_errors(
     errors: list[str] = []
 
     def css_px(value: object) -> float | None:
-        return _number(str(value or "").strip().removesuffix("px"))
+        return finite_float(str(value or "").strip().removesuffix("px"))
 
-    def css_number(value: object, fallback: float) -> float:
+    def cssfinite_float(value: object, fallback: float) -> float:
         parsed = css_px(value)
         return fallback if parsed is None else parsed
 
@@ -1183,7 +1176,7 @@ def imported_projection_roundtrip_errors(
                 ):
                     return False
                 parent_actual = tuple(
-                    _number(parent_bbox.get(key))
+                    finite_float(parent_bbox.get(key))
                     for key in ("x", "y", "width", "height")
                 )
                 if any(value is None for value in parent_actual):
@@ -1221,8 +1214,8 @@ def imported_projection_roundtrip_errors(
         total = sum(float(item) for item in parsed if item is not None)
         return tuple(float(item) / total for item in parsed if item is not None)
 
-    metrics_width = _number(metrics.get("width"))
-    metrics_height = _number(metrics.get("height"))
+    metrics_width = finite_float(metrics.get("width"))
+    metrics_height = finite_float(metrics.get("height"))
     if (
         metrics_width is None
         or metrics_height is None
@@ -1257,7 +1250,7 @@ def imported_projection_roundtrip_errors(
             projected_height,
         )
         actual = tuple(
-            _number(bbox.get(key)) for key in ("x", "y", "width", "height")
+            finite_float(bbox.get(key)) for key in ("x", "y", "width", "height")
         )
         bounds_mismatch = any(value is None for value in actual) or any(
             abs(float(got) - wanted) > pixel_tolerance
@@ -1278,11 +1271,11 @@ def imported_projection_roundtrip_errors(
                 (
                     "font-size",
                     binding.fontSizePx * node.fontScale,
-                    css_number(style.get("fontSize"), -1),
+                    cssfinite_float(style.get("fontSize"), -1),
                 )
             )
         if abs(node.spacing - binding.gapPx) > 1e-6:
-            checks.append(("gap", node.spacing, css_number(style.get("gap"), -1)))
+            checks.append(("gap", node.spacing, cssfinite_float(style.get("gap"), -1)))
         desired_padding = (
             node.padding.top * projected_height,
             node.padding.right * projected_width,
@@ -1295,7 +1288,7 @@ def imported_projection_roundtrip_errors(
             ("paddingTop", "paddingRight", "paddingBottom", "paddingLeft"),
             strict=True,
         ):
-            checks.append((name, wanted, css_number(style.get(css_name), -1)))
+            checks.append((name, wanted, cssfinite_float(style.get(css_name), -1)))
         for name, wanted, got in checks:
             if abs(wanted - got) > pixel_tolerance:
                 errors.append(f"projection.{name}.mismatch:{binding.qid}")

@@ -5,13 +5,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from utils.coerce import as_mapping
 from services.slidespec_repair_context.artifacts import RepairArtifacts
 from services.slidespec_repair_context.coupled_projection import (
     _CLEARANCE_EPSILON_PX,
     _allowed,
     _hard_footprint,
     _issue_group,
-    _mapping,
     _operation_proof,
     _padding_reclaim,
     _parent_context,
@@ -51,11 +51,11 @@ def _project_overlap_clearance(
         return
     target_metric = state.metric_by_qid.get(target_binding.qid)
     other_metric = state.metric_by_qid.get(other_binding.qid)
-    target_box = _mapping(target_metric.get("bbox")) if isinstance(target_metric, Mapping) else {}
-    other_box = _mapping(other_metric.get("bbox")) if isinstance(other_metric, Mapping) else {}
+    target_box = as_mapping(target_metric.get("bbox")) if isinstance(target_metric, Mapping) else {}
+    other_box = as_mapping(other_metric.get("bbox")) if isinstance(other_metric, Mapping) else {}
     if not target_box or not other_box:
         return
-    computed = _mapping(parent_metric.get("computed_style"))
+    computed = as_mapping(parent_metric.get("computed_style"))
     direction = str(computed.get("flexDirection", "row"))
     axis = "y" if direction.startswith("column") else "x"
     start = "y" if axis == "y" else "x"
@@ -69,7 +69,7 @@ def _project_overlap_clearance(
     deficit = required - actual_gap
     if deficit <= _CLEARANCE_EPSILON_PX:
         return
-    parent_box = _mapping(parent_metric.get("bbox"))
+    parent_box = as_mapping(parent_metric.get("bbox"))
     if not parent_box:
         return
     children = tuple(
@@ -79,7 +79,7 @@ def _project_overlap_clearance(
         and isinstance(state.metric_by_qid.get(binding.qid), Mapping)
     )
     child_boxes = [
-        _mapping(state.metric_by_qid[binding_by_layout[child.layoutId].qid].get("bbox"))
+        as_mapping(state.metric_by_qid[binding_by_layout[child.layoutId].qid].get("bbox"))
         for child in children
     ]
     child_boxes = [box for box in child_boxes if box]

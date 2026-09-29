@@ -8,6 +8,7 @@ from hashlib import sha256
 import math
 import re
 
+from utils.coerce import finite_float
 from services.authored_composition_policy import _AuthoredStartTagCollector, _attribute_map
 from services.authored_decoration_panel_sheen import (
     panel_sheen_family, panel_sheen_geometry, without_approved_panel_sheen_clip,
@@ -51,10 +52,6 @@ class _Document(_AuthoredStartTagCollector):
         super().handle_startendtag(tag, attrs)
 
 
-def _number(value):
-    return float(value) if type(value) in (int, float) and math.isfinite(value) else None
-
-
 def _px(value):
     match = re.fullmatch(r"(-?\d+(?:\.\d+)?)px", str(value))
     number = float(match[1]) if match else None
@@ -64,14 +61,14 @@ def _px(value):
 def _box(value):
     if not isinstance(value, Mapping):
         return None
-    values = tuple(_number(value.get(key)) for key in ("x", "y", "width", "height"))
+    values = tuple(finite_float(value.get(key)) for key in ("x", "y", "width", "height"))
     return values if all(v is not None for v in values) and min(values[2:]) > 0 else None
 
 
 def _quad(value):
     if not isinstance(value, list) or len(value) != 4 or not all(isinstance(p, Mapping) for p in value):
         return None
-    points = tuple((_number(p.get("x")), _number(p.get("y"))) for p in value)
+    points = tuple((finite_float(p.get("x")), finite_float(p.get("y"))) for p in value)
     return points if all(v is not None for point in points for v in point) else None
 
 
@@ -286,7 +283,7 @@ def plan_decoration_containment(html, browser_metrics, *, profile_id="ordinary",
             or style.get("position") != "absolute" or style.get("display") != "block"
             or (family != "panel-sheen" and style.get("backgroundImage") != "none") or style.get("opacity") != "1"
             or not _plain_effects(style, target=True, panel_sheen=family == "panel-sheen")
-            or item.get("css_visible") is not True or _number(item.get("effective_opacity")) != 1
+            or item.get("css_visible") is not True or finite_float(item.get("effective_opacity")) != 1
             or any(measured.get(k) is not True for k in ("geometry", "transform", "clipping", "stacking"))
             or points is None or bounds is None):
             continue
@@ -404,14 +401,14 @@ def validate_decoration_containment(plan, original_html, original_metrics, candi
             return False
         if item.get("measurement", {}).get("occlusion") is not True:
             return False
-        fraction = _number(item.get("occluded_fraction"))
+        fraction = finite_float(item.get("occluded_fraction"))
         if fraction is None:
             return False
         if qid not in plan.targets:
             if any(item.get(k) != original.get(k) for k in ("bbox", "quad", "computed_style", "text_fragments")):
                 return False
             for key in ("occluded_fraction", "continuous_occluded_fraction", "occlusion_unknown_fraction"):
-                prior, current = _number(original.get(key)), _number(item.get(key))
+                prior, current = finite_float(original.get(key)), finite_float(item.get(key))
                 if prior is None or current is None or not 0 <= prior <= 1 or not 0 <= current <= prior + 1e-9:
                     return False
             old_occluders, new_occluders = original.get("occlusion_occluder_qids"), item.get("occlusion_occluder_qids")
@@ -421,7 +418,7 @@ def validate_decoration_containment(plan, original_html, original_metrics, candi
                 return False
         else:
             points = _quad(item.get("quad"))
-            if points is None or not _inside(points, plan.clips[qid]) or fraction != 0 or _number(item.get("occlusion_unknown_fraction")) != 0:
+            if points is None or not _inside(points, plan.clips[qid]) or fraction != 0 or finite_float(item.get("occlusion_unknown_fraction")) != 0:
                 return False
             dx, dy = plan.translations[qid]
             prior_points, scale = _quad(original.get("quad")), plan.scales[qid]

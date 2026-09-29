@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from utils.coerce import as_mapping
 from models.slidespec_v1 import LayoutNode
 from services.slidespec_repair_context.artifacts import RepairArtifacts
 from services.slidespec_repair_context.state import RepairContextState
@@ -14,10 +15,6 @@ from utils.slidespec_constraints import constraint_targets
 _FLOW_DISPLAYS = frozenset({"flex", "inline-flex", "grid", "inline-grid"})
 _GRID_DISPLAYS = frozenset({"grid", "inline-grid"})
 _CLEARANCE_EPSILON_PX = 0.5
-
-
-def _mapping(value: object) -> Mapping[str, Any]:
-    return value if isinstance(value, Mapping) else {}
 
 
 def _allowed(node: LayoutNode, operation: str, *, imported: bool) -> bool:
@@ -225,7 +222,7 @@ def _measured_text_deficits(
         - state.finite_number(target_metric.get("client_height")),
     )
     fragments = tuple(
-        _mapping(value)
+        as_mapping(value)
         for value in target_metric.get("text_fragments", ())
         if isinstance(value, Mapping)
     )
@@ -244,12 +241,12 @@ def _measured_text_deficits(
         metric = state.metric_by_qid.get(current_qid)
         if not isinstance(metric, Mapping):
             break
-        style = _mapping(metric.get("computed_style"))
+        style = as_mapping(metric.get("computed_style"))
         if any(
             str(style.get(name, "visible")) in {"hidden", "clip", "scroll", "auto"}
             for name in ("overflowX", "overflowY")
         ):
-            box = _mapping(metric.get("bbox"))
+            box = as_mapping(metric.get("bbox"))
             left = state.finite_number(box.get("x"))
             top = state.finite_number(box.get("y"))
             clip["left"] = max(clip["left"], left)
@@ -329,7 +326,6 @@ def _grid_track_reclaim(
 
 
 from services.slidespec_repair_context.coupled_text_capacity import _project_text_capacity
-
 
 
 from services.slidespec_repair_context.coupled_overlap_clearance import _project_overlap_clearance

@@ -15,6 +15,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
+from utils.coerce import as_mapping
 from services.trusted_executor.container_runtime import (
     CONTAINER_BACKEND_NAME,
     parse_numeric_user,
@@ -42,10 +43,6 @@ class ContainerIsolationExpectation:
     input_source: str
 
 
-def _mapping(value: object) -> Mapping[str, object]:
-    return value if isinstance(value, Mapping) else {}
-
-
 def _bounded_positive(value: object, limit: int) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and 0 < value <= limit
 
@@ -68,9 +65,9 @@ def _tmpfs_option(options: object, name: str) -> str | None:
 
 
 def _network_none(inspect: Mapping[str, object]) -> tuple[bool, str]:
-    host_config = _mapping(inspect.get("HostConfig"))
+    host_config = as_mapping(inspect.get("HostConfig"))
     mode = host_config.get("NetworkMode")
-    networks = _mapping(_mapping(inspect.get("NetworkSettings")).get("Networks"))
+    networks = as_mapping(as_mapping(inspect.get("NetworkSettings")).get("Networks"))
     attached = sorted(str(name) for name in networks)
     if mode != "none":
         return False, f"HostConfig.NetworkMode={mode!r}"
@@ -80,7 +77,7 @@ def _network_none(inspect: Mapping[str, object]) -> tuple[bool, str]:
 
 
 def _root_read_only(inspect: Mapping[str, object]) -> tuple[bool, str]:
-    value = _mapping(inspect.get("HostConfig")).get("ReadonlyRootfs")
+    value = as_mapping(inspect.get("HostConfig")).get("ReadonlyRootfs")
     if value is True:
         return True, "HostConfig.ReadonlyRootfs=true"
     return False, f"HostConfig.ReadonlyRootfs={value!r}"
@@ -93,7 +90,7 @@ def _inputs_read_only(
     mounts = inspect.get("Mounts")
     if isinstance(mounts, list):
         for mount in mounts:
-            entry = _mapping(mount)
+            entry = as_mapping(mount)
             if entry.get("Destination") != destination:
                 continue
             if entry.get("Type") != "bind":
@@ -103,7 +100,7 @@ def _inputs_read_only(
             if entry.get("RW") is not False:
                 return False, f"Mounts[{destination}].RW={entry.get('RW')!r}"
             return True, f"Mounts[{destination}] is a read-only bind of the staged inputs"
-    binds = _mapping(inspect.get("HostConfig")).get("Binds")
+    binds = as_mapping(inspect.get("HostConfig")).get("Binds")
     if isinstance(binds, list):
         expected = f"{expectation.input_source}:{destination}:ro"
         for bind in binds:
@@ -119,7 +116,7 @@ def _inputs_read_only(
 def _tmpfs(
     inspect: Mapping[str, object], expectation: ContainerIsolationExpectation
 ) -> tuple[tuple[bool, str], tuple[bool, str]]:
-    tmpfs = _mapping(_mapping(inspect.get("HostConfig")).get("Tmpfs"))
+    tmpfs = as_mapping(as_mapping(inspect.get("HostConfig")).get("Tmpfs"))
     options = tmpfs.get(str(expectation.temporary_root))
     if options is None:
         reason = f"HostConfig.Tmpfs has no entry for {expectation.temporary_root}"
@@ -141,7 +138,7 @@ def _tmpfs(
 
 
 def _low_privilege(inspect: Mapping[str, object]) -> tuple[bool, str]:
-    user = _mapping(inspect.get("Config")).get("User")
+    user = as_mapping(inspect.get("Config")).get("User")
     parsed = parse_numeric_user(user)
     if parsed is None:
         return False, f"Config.User={user!r} is not a numeric non-root identity"
@@ -151,7 +148,7 @@ def _low_privilege(inspect: Mapping[str, object]) -> tuple[bool, str]:
 def _resource_limits(
     inspect: Mapping[str, object], expectation: ContainerIsolationExpectation
 ) -> tuple[bool, str]:
-    host_config = _mapping(inspect.get("HostConfig"))
+    host_config = as_mapping(inspect.get("HostConfig"))
     memory = host_config.get("Memory")
     pids = host_config.get("PidsLimit")
     problems: list[str] = []

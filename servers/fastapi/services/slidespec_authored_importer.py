@@ -6,7 +6,6 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from hashlib import sha256
 from html.parser import HTMLParser
-import math
 import re
 from typing import Any
 import uuid
@@ -14,6 +13,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from utils.coerce import finite_float
 from models.slidespec_v1 import (
     SLIDESPEC_SCHEMA,
     AlignmentConstraint,
@@ -228,14 +228,6 @@ class _AuthoredSourceParser(HTMLParser):
 def _stable_id(prefix: str, slide_id: uuid.UUID, qid: str) -> str:
     token = sha256(f"{slide_id}:{qid}".encode("utf-8")).hexdigest()[:24]
     return f"{prefix}import-{token}"
-
-
-def _number(value: object, default: float = 0.0) -> float:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return default
-    return number if math.isfinite(number) else default
 
 
 def _px(value: object) -> float | None:
@@ -694,8 +686,8 @@ async def build_authored_import_request(
     if report.telemetry_status != "available":
         raise SlideSpecImportError("import.telemetry.incomplete")
 
-    viewport_width = _number(metrics.get("width"), 1280.0)
-    viewport_height = _number(metrics.get("height"), 720.0)
+    viewport_width = finite_float(metrics.get("width"), 1280.0)
+    viewport_height = finite_float(metrics.get("height"), 720.0)
     if viewport_width <= 0 or viewport_height <= 0:
         raise SlideSpecImportError("import.viewport.invalid")
     raw_metrics = metrics.get("elements", metrics.get("nodes", ()))
@@ -737,7 +729,7 @@ async def build_authored_import_request(
         position = str(style.get("position", "static")).strip().lower()
         if position not in {"static", "relative", "absolute", "fixed", "sticky"}:
             position = "static"
-        font_size = _number(metric.get("font_size"), 0.0) or _px(style.get("fontSize"))
+        font_size = finite_float(metric.get("font_size"), 0.0) or _px(style.get("fontSize"))
         font_family = str(style.get("fontFamily", "")).strip()
         if font_family:
             font_families.add(font_family)
@@ -784,8 +776,8 @@ async def build_authored_import_request(
             and static_probe.get("position") == "static"
             and static_probe.get("transformComposable") is True
             and static_probe.get("layoutIsolation") is True
-            and abs(_number(static_probe.get("flowImpactPx"), float("inf"))) <= 0.5
-            and _number(static_probe.get("maxSiblingDeltaPx"), float("inf")) <= 0.5
+            and abs(finite_float(static_probe.get("flowImpactPx"), float("inf"))) <= 0.5
+            and finite_float(static_probe.get("maxSiblingDeltaPx"), float("inf")) <= 0.5
         )
         object_fit = str(style.get("objectFit", "fill")).strip().lower()
         if object_fit not in {"contain", "cover", "fill"}:

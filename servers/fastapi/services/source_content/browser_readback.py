@@ -23,6 +23,7 @@ import math
 import re
 from typing import Any
 
+from utils.coerce import finite_float
 from services.authored_vnext.capability_registry import capability_metadata
 from services.source_content.source_runs import (
     SourceRunProjection,
@@ -366,14 +367,6 @@ def _block_projection(block: Mapping[str, Any]) -> SourceRunProjection | None:
         return None
 
 
-def _number(value: Any) -> float | None:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return None
-    return number if math.isfinite(number) else None
-
-
 def _slides_metrics(browser_metrics: Any) -> list[Mapping[str, Any]]:
     if isinstance(browser_metrics, Sequence) and not isinstance(browser_metrics, (str, bytes)):
         return [_mapping(item, "browser slide metrics") for item in browser_metrics]
@@ -457,8 +450,8 @@ def _observe(metric: Mapping[str, Any], canvas_width: float, canvas_height: floa
     ]
     clipped = any(value is True for value in clip_values)
     clipping_known = all(isinstance(value, bool) for value in clip_values)
-    occluded = _number(_field(metric, "occluded_fraction", "occludedFraction", default=None))
-    continuous = _number(_field(metric, "continuous_occluded_fraction", "continuousOccludedFraction", default=None))
+    occluded = finite_float(_field(metric, "occluded_fraction", "occludedFraction", default=None))
+    continuous = finite_float(_field(metric, "continuous_occluded_fraction", "continuousOccludedFraction", default=None))
     occlusion_known = (
         occluded is not None
         and continuous is not None
@@ -500,7 +493,7 @@ def _observe(metric: Mapping[str, Any], canvas_width: float, canvas_height: floa
         clip_bounds = _field(metric, "source_clip_bounds", "sourceClipBounds", default=None)
         if clip_bounds is not None:
             edges = (
-                [_number(clip_bounds.get(key)) for key in ("left", "top", "right", "bottom")]
+                [finite_float(clip_bounds.get(key)) for key in ("left", "top", "right", "bottom")]
                 if isinstance(clip_bounds, Mapping) else []
             )
             if len(edges) != 4 or any(value is None for value in edges) or bbox is None:
@@ -518,8 +511,8 @@ def _observe(metric: Mapping[str, Any], canvas_width: float, canvas_height: floa
                 )
     natural_width = natural_height = None
     if image_payload is not None:
-        natural_width = _number(_field(image_payload, "natural_width", "naturalWidth", default=None))
-        natural_height = _number(_field(image_payload, "natural_height", "naturalHeight", default=None))
+        natural_width = finite_float(_field(image_payload, "natural_width", "naturalWidth", default=None))
+        natural_height = finite_float(_field(image_payload, "natural_height", "naturalHeight", default=None))
     return _Observation(
         tag=tag,
         qid=qid,
@@ -546,10 +539,10 @@ def _image_failed(observation: _Observation, payload: Mapping[str, Any]) -> bool
     complete = _field(image, "complete", default=None)
     image_visible = _field(image, "cssVisible", "css_visible", default=None)
     role = observation.semantic_role.lower()
-    expected_width = _number(
+    expected_width = finite_float(
         _field(payload, "naturalWidth", "natural_width", "intrinsicWidth", "intrinsic_width", default=None)
     )
-    expected_height = _number(
+    expected_height = finite_float(
         _field(payload, "naturalHeight", "natural_height", "intrinsicHeight", "intrinsic_height", default=None)
     )
     width, height = observation.natural_width, observation.natural_height
@@ -767,7 +760,7 @@ def _check_slide_capture(metrics: Mapping[str, Any], html_source: str | None, in
             )
     if _field(metrics, "probe_error", "probeError", default=None) or _field(metrics, "fonts_ready", "fontsReady", default=None) is not True:
         raise BrowserSourceReadbackError("source_content_browser_readback_failed", detail="browser font/probe telemetry is incomplete", slide_indices=(index,))
-    canvas_width, canvas_height = _number(metrics.get("width")), _number(metrics.get("height"))
+    canvas_width, canvas_height = finite_float(metrics.get("width")), finite_float(metrics.get("height"))
     if canvas_width is None or canvas_height is None or canvas_width <= 0 or canvas_height <= 0:
         raise BrowserSourceReadbackError("source_content_browser_readback_failed", detail="browser canvas geometry is unavailable", slide_indices=(index,))
     return canvas_width, canvas_height

@@ -21,6 +21,7 @@ import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
+from utils.coerce import finite_float
 
 #: Registered as a blocking safety category (``authored_dom_text_escape``)
 #: and a magnitude category (``authored_dom_fit_magnitude``) elsewhere.
@@ -53,11 +54,7 @@ class FooterZoneIntrusion:
 
 
 def _number(value: object, default: float = 0.0) -> float:
-    try:
-        result = float(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return default
-    return default if result != result else result
+    return finite_float(value, default)
 
 
 def _edges(box: object) -> tuple[float, float, float, float] | None:

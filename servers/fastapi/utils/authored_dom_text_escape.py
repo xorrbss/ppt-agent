@@ -30,6 +30,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from utils.coerce import finite_float
 from utils.authored_dom_footer_zone import FooterZoneIntrusion
 
 #: Category name for the issue this module feeds.  Deliberately not
@@ -66,11 +67,7 @@ class TextEscape:
 
 
 def _number(value: object, default: float = 0.0) -> float:
-    try:
-        result = float(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return default
-    return default if result != result else result
+    return finite_float(value, default)
 
 
 def _edges(box: object) -> tuple[float, float, float, float] | None:

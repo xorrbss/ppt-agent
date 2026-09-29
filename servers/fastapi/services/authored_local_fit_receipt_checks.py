@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 import posixpath
 import re
 from collections.abc import Mapping, Sequence
@@ -10,6 +9,7 @@ from typing import Any
 from xml.etree import ElementTree as ET
 from zipfile import ZipFile
 
+from utils.coerce import finite_float
 from services.authored_local_fit_evidence import (
     extended_shrink_basis_valid,
     receipt_is_preserved_original,
@@ -83,11 +83,8 @@ def _relationships(archive: ZipFile, part: str) -> dict[str, str]:
 
 
 def _number(node: ET.Element | None, attribute: str) -> float:
-    try:
-        result = float(node.attrib[attribute]) if node is not None else math.nan
-    except (KeyError, ValueError):
-        result = math.nan
-    if not math.isfinite(result):
+    result = finite_float(node.attrib.get(attribute) if node is not None else None)
+    if result is None:
         _fail("unverifiable_font_size")
     return result
 
