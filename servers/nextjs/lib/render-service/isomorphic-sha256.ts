@@ -4,7 +4,7 @@
  *
  * `production.ts` verifies inline scene-asset bytes while building a render
  * artifact, and that artifact is built on both sides of the wire: the export
- * boundary (`lib/presentation-export-boundary.ts`, server) and the editor
+ * worker (server) and the editor
  * preview (`usePresentationPreviewArtifact` -> `presentationRenderGateway`,
  * browser). `node:crypto` and `Buffer` are unavailable in a browser bundle, so
  * the verification cannot be expressed with them. `crypto.subtle.digest` is the

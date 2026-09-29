@@ -162,13 +162,6 @@
           ]
         },
         {
-          "path": "servers/nextjs/lib/presentation-export-boundary.ts",
-          "requiredContains": [
-            "executePersistedPresentationExport",
-            "executeExportAtProductionBoundary"
-          ]
-        },
-        {
           "path": "servers/nextjs/lib/presentation-export-strategy.test.ts",
           "requiredContains": [
             "Template V2 delegates only to the existing general executor",
