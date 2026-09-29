@@ -53,6 +53,7 @@ from services.worker_artifact_cache_maintenance import (
     touch_admitted,
 )
 from utils.path_helpers import get_writable_path
+from utils.get_env import get_environment_name
 
 
 class ArtifactStoreError(RuntimeError):
@@ -93,7 +94,7 @@ async def try_artifact_key_guard(
 
     dialect = session.get_bind().dialect.name
     if dialect == "sqlite":
-        if (os.getenv("ENVIRONMENT") or "").strip().lower() not in {
+        if get_environment_name() not in {
             "local", "development", "test",
         }:
             raise ArtifactStoreError("artifact.cas_guard_sqlite_not_development")
@@ -2035,7 +2036,7 @@ def configured_worker_artifact_cache() -> WorkerArtifactTransportCache:
     backend = (os.getenv("PUBLIC_ARTIFACT_STORE_BACKEND") or "").strip().lower()
     if not root_value:
         # Compatibility is limited to the explicitly development-only backend.
-        environment = (os.getenv("ENVIRONMENT") or "production").strip().lower()
+        environment = get_environment_name("production")
         if backend == "local-development" and environment in {
             "development",
             "dev",
@@ -2079,7 +2080,7 @@ def configured_local_development_artifact_store() -> LocalDevelopmentArtifactObj
     """Build the loopback-only development store; never fall back in production."""
 
     backend = (os.getenv("PUBLIC_ARTIFACT_STORE_BACKEND") or "").strip().lower()
-    environment = (os.getenv("ENVIRONMENT") or "production").strip().lower()
+    environment = get_environment_name("production")
     if backend != "local-development" or environment != "local":
         raise RuntimeError("artifact.local_download_development_only")
     root_value = (os.getenv("PUBLIC_WORKER_OBJECT_STORE_ROOT") or "").strip()

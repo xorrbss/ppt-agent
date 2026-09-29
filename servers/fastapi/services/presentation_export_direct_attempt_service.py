@@ -86,6 +86,7 @@ from services.presentation_export_direct_attempt_history import (
     list_direct_hybrid_export_attempt_history,
 )
 from utils.owner_context import get_current_owner_id
+from utils.get_env import get_vnext_tenant_id
 
 
 def _sha256_file(path: Path) -> str:
@@ -195,7 +196,7 @@ async def _begin_direct_authored_export_attempt(
             session,
             presentation_id=presentation_id,
             owner_id=owner_id,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
         provenance["capability_evidence"]["release_authority"] = (
             _release_authority_pin_from_projection(

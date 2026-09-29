@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any
 import uuid
 
@@ -45,6 +44,7 @@ from services.presentation_export_capabilities import (
     PresentationExportFreshnessError,
 )
 from utils.owner_context import get_current_owner_id
+from utils.get_env import get_vnext_tenant_id
 
 
 def prefixed_digest(value: str) -> str:
@@ -186,7 +186,7 @@ async def active_semantic_emission(
         session,
         presentation_id=presentation_id,
         owner_id=owner_id,
-        tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+        tenant_id=get_vnext_tenant_id(),
     )
 
 
@@ -228,7 +228,7 @@ async def bind_completed_semantic_export_attempt(
         session,
         presentation_id=attempt.presentation_id,
         owner_id=semantic_owner_id,
-        tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+        tenant_id=get_vnext_tenant_id(),
     )
     if (
         active is None
@@ -308,7 +308,7 @@ async def bind_completed_semantic_export_attempt(
                 session,
                 presentation_id=attempt.presentation_id,
                 owner_id=semantic_owner_id,
-                tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+                tenant_id=get_vnext_tenant_id(),
             )
             validate_v3_release_authority_claim(
                 projection_v3, claim, export_mode=mode
@@ -318,7 +318,7 @@ async def bind_completed_semantic_export_attempt(
                 session,
                 presentation_id=attempt.presentation_id,
                 owner_id=semantic_owner_id,
-                tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+                tenant_id=get_vnext_tenant_id(),
             )
             validate_export_authority_claim(projection_v2, claim)
         else:
@@ -330,7 +330,7 @@ async def bind_completed_semantic_export_attempt(
         session,
         owner_id=semantic_owner_id,
         binding=binding,
-        tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+        tenant_id=get_vnext_tenant_id(),
     )
     return sealed.binding_digest
 

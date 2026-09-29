@@ -66,6 +66,7 @@ from .models import (
     SceneMutationOperationRequest,
     LocalRasterQualificationStateV4,
 )
+from utils.get_env import get_vnext_tenant_id
 
 
 def _enabled() -> bool:
@@ -116,7 +117,7 @@ def _base_repository_for_owner(owner_id: str) -> AuthoredVNextSqlRepository:
     owner_uuid = uuid.UUID(owner_id)
     return AuthoredVNextSqlRepository.from_application_database(
         owner_scope=owner_id,
-        tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+        tenant_id=get_vnext_tenant_id(),
         owner_id=owner_uuid,
     )
 

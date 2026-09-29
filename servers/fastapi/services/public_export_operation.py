@@ -101,6 +101,7 @@ from services.isolated_worker_process import (
 from services.trusted_executor.dispatch_evidence import private_dispatch_evidence_summary
 from services.workspace_operation_handler_registry import WorkspaceOperationClaim
 from utils.asset_directory_utils import resolve_image_path_to_filesystem
+from utils.get_env import get_vnext_tenant_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -472,7 +473,7 @@ async def build_isolated_hybrid_semantic_slides(
             session,
             presentation_id=claim.presentation_id,
             owner_id=claim.owner_id,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
         )
     except Exception:
         # A deck with no publication, or one whose emission no longer

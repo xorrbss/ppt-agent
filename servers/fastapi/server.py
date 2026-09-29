@@ -59,7 +59,11 @@ BACKEND_LOG_BACKUP_COUNT = 5
 
 
 def configure_file_logging(log_level: str) -> RotatingFileHandler | None:
-    app_data_directory = (os.getenv("APP_DATA_DIRECTORY") or "").strip()
+    # Imported here, not at module top: the repository .env must be loaded
+    # before anything under utils/ (and the services it pulls in) is imported.
+    from utils.get_env import get_app_data_directory_env
+
+    app_data_directory = (get_app_data_directory_env() or "").strip()
     if not app_data_directory:
         return None
 

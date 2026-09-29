@@ -1,5 +1,4 @@
 import logging
-import os
 import uuid
 from typing import Any
 
@@ -61,6 +60,7 @@ from services.workspace_cleanup_journal_service import (
 )
 from utils.get_env import (
     get_can_change_keys_env,
+    get_vnext_tenant_id,
     is_disable_auth_enabled,
 )
 from utils.user_config import refresh_process_runtime_settings
@@ -157,7 +157,7 @@ async def put_provider_credential(
     session: AsyncSession = Depends(get_async_session),
 ) -> dict[str, object]:
     scope = CredentialScope(
-        os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"), admin.id
+        get_vnext_tenant_id(), admin.id
     )
     try:
         vault = provider_credential_vault_from_environment()
@@ -185,7 +185,7 @@ async def delete_provider_credential(
     session: AsyncSession = Depends(get_async_session),
 ) -> None:
     scope = CredentialScope(
-        os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"), admin.id
+        get_vnext_tenant_id(), admin.id
     )
     try:
         vault = provider_credential_vault_from_environment()

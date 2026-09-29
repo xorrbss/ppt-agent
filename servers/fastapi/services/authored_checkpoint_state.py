@@ -56,6 +56,7 @@ from services.authored_generation_observability import log_authored_slide_failur
 from services.database import async_session_maker
 from utils.datetime_utils import get_current_utc_datetime
 from utils.get_env_programme import is_authored_checkpoint_batching_enabled
+from utils.get_env import get_environment_name
 
 
 STAGES = ("author", "illustrate", "render", "persist")
@@ -513,7 +514,7 @@ def should_inject_failure(
 ) -> bool:
     if os.getenv("AUTHORED_TEST_FAILURES_ENABLED", "").lower() not in {"1", "true"}:
         return False
-    if os.getenv("ENVIRONMENT", "").lower() not in {
+    if get_environment_name() not in {
         "development",
         "test",
     } and not os.getenv("PYTEST_CURRENT_TEST"):

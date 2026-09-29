@@ -23,6 +23,7 @@ from models.sql.public_principal_binding import (
 )
 from models.sql.user import User
 from api.v1.auth.config import SESSION_COOKIE_NAME
+from utils.get_env import get_environment_name
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,7 +81,7 @@ def _is_public_api_request(request: Request) -> bool:
 
 
 def is_loopback_development_request(request: Request) -> bool:
-    environment = (os.getenv("ENVIRONMENT") or "production").strip().lower()
+    environment = get_environment_name("production")
     if environment not in {"development", "dev", "local", "test"}:
         return False
     client = request.client

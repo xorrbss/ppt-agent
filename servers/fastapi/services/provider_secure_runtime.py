@@ -19,6 +19,7 @@ from services.provider_credential_vault import (
 )
 from utils.db_utils import get_database_url_and_connect_args, to_sync_sqlalchemy_url
 from utils.owner_context import get_current_owner_id
+from utils.get_env import get_vnext_tenant_id
 
 
 _TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
@@ -70,7 +71,7 @@ def _stored_reference(provider: str) -> CredentialRef | None:
             row = session.scalar(
                 select(ProviderCredentialReference).where(
                     ProviderCredentialReference.tenant_id
-                    == os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+                    == get_vnext_tenant_id(),
                     ProviderCredentialReference.user_id == owner_id,
                     ProviderCredentialReference.provider == provider,
                 )
@@ -99,7 +100,7 @@ def _configured_storage_scope() -> CredentialScope:
     if owner_id is None and not configured_owner:
         raise CredentialVaultError("credential_owner_context_required")
     return CredentialScope(
-        os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+        get_vnext_tenant_id(),
         owner_id or configured_owner,
     )
 

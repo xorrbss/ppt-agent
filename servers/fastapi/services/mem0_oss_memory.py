@@ -18,7 +18,7 @@ import threading
 from importlib import import_module
 from typing import Any, Optional
 
-from utils.get_env import get_ollama_model_env, get_ollama_url_env
+from utils.get_env import get_app_data_directory_env, get_ollama_model_env, get_ollama_url_env
 from utils.runtime_settings import RuntimeSettings, resolve_runtime_settings
 
 LOGGER = logging.getLogger(__name__)
@@ -80,7 +80,7 @@ def _oss_config_from_env(
 ) -> tuple[str, str, str, str, int, dict[str, Any]]:
     """Return (mem0_dir, qdrant_path, history_db, collection, dims, from_config_dict)."""
     runtime_settings = resolve_runtime_settings(settings)
-    app_data_dir = (os.getenv("APP_DATA_DIRECTORY") or "/tmp/presenton").strip()
+    app_data_dir = (get_app_data_directory_env() or "/tmp/presenton").strip()
     mem0_dir = (os.getenv("MEM0_DIR") or os.path.join(app_data_dir, "mem0")).strip()
     qdrant_path = (
         os.getenv("MEM0_QDRANT_PATH") or os.path.join(mem0_dir, "qdrant")

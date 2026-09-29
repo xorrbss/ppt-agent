@@ -77,7 +77,7 @@ from models.sql.public_artifact import (
 )
 from models.sql.authored_vnext_repository import AUTHORED_VNEXT_SQL_TABLES
 from services.database_owner_scope import register_owner_scope_hooks
-from utils.get_env import get_migrate_database_on_startup_env
+from utils.get_env import get_environment_name, get_migrate_database_on_startup_env
 from utils.db_utils import get_database_url_and_connect_args, get_pool_kwargs
 
 
@@ -163,7 +163,7 @@ def _local_development_environment() -> bool:
         or (os.getenv("PUBLIC_V2_INTEGRATION_PROFILE") or "").strip()
         == "postgresql-strict"
     )
-    raw_environment = (os.getenv("ENVIRONMENT") or "").strip().lower()
+    raw_environment = get_environment_name()
     if configured_public_runtime and not raw_environment:
         raise RuntimeError("public_environment_required")
     return (raw_environment or "development") in {

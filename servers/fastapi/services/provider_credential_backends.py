@@ -26,6 +26,7 @@ from services.provider_credential_vault import (
     credential_entry_path,
     write_credential_file,
 )
+from utils.get_env import get_app_data_directory_env, get_environment_name
 
 
 LOCAL_FILE_ENVIRONMENTS = frozenset({"local", "development", "dev", "test"})
@@ -34,7 +35,7 @@ LOCAL_FILE_VAULT_DIRECTORY_ENV = "PROVIDER_LOCAL_FILE_VAULT_DIRECTORY"
 
 def _environment_name() -> str:
     """Default to production so an unset ENVIRONMENT never unlocks a plaintext vault."""
-    return (os.getenv("ENVIRONMENT") or "production").strip().lower()
+    return get_environment_name("production")
 
 
 class LocalFileCredentialBackend:
@@ -79,14 +80,14 @@ class LocalFileCredentialBackend:
 def local_file_vault_root() -> Path:
     return Path(
         os.getenv(LOCAL_FILE_VAULT_DIRECTORY_ENV)
-        or Path(os.getenv("APP_DATA_DIRECTORY") or "app_data") / "local-file-credential-vault"
+        or Path(get_app_data_directory_env() or "app_data") / "local-file-credential-vault"
     )
 
 
 def desktop_vault_root() -> Path:
     return Path(
         os.getenv("PROVIDER_DESKTOP_VAULT_DIRECTORY")
-        or Path(os.getenv("APP_DATA_DIRECTORY") or "app_data") / "provider-credential-vault"
+        or Path(get_app_data_directory_env() or "app_data") / "provider-credential-vault"
     )
 
 

@@ -21,6 +21,7 @@ from services.provider_runtime_primitives import CancellationRequested
 from utils.get_env import (
     get_provider_durable_runtime_required_env,
     get_template_v2_deployment_tier_env,
+    get_vnext_tenant_id,
 )
 from utils.owner_context import get_current_owner_id
 
@@ -95,7 +96,7 @@ async def reserve_provider_call_detached(
     async with async_session_maker() as session:
         budget = await register_durable_budget(
             session,
-            tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+            tenant_id=get_vnext_tenant_id(),
             owner_id=owner_id,
             job_id=job_id,
             estimated_limit=_optional_limit(

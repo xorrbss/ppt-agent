@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 import hashlib
 import json
-import os
 from pathlib import Path
 from typing import Any
 import uuid
@@ -16,6 +15,7 @@ from services.authored_vnext.design_pack import (
     RegisteredDesignPack,
 )
 from utils.owner_context import get_current_owner_id
+from utils.get_env import get_app_data_directory_env
 
 
 class GenerationRouteError(ValueError):
@@ -43,7 +43,7 @@ def design_pack_storage_root(owner_id: uuid.UUID | str) -> Path:
         owner = uuid.UUID(str(owner_id))
     except (TypeError, ValueError) as error:
         raise GenerationRouteError("design_pack_owner_invalid") from error
-    configured = os.getenv("APP_DATA_DIRECTORY", "").strip()
+    configured = (get_app_data_directory_env() or "").strip()
     app_data = Path(configured or "app_data").expanduser().resolve(strict=False)
     return app_data / "design-packs" / "users" / str(owner)
 

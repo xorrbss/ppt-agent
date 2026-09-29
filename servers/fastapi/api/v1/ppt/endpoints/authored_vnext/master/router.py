@@ -89,6 +89,7 @@ from .asset_router import (
     AUTHORED_VNEXT_MASTER_ASSET_ROUTER,
     get_master_asset_store,
 )
+from utils.get_env import get_app_data_directory_env, get_environment_name, get_vnext_tenant_id
 
 
 def authored_vnext_master_enabled() -> bool:
@@ -108,12 +109,12 @@ def _master_service_for_scope(
     owner_scope: str, owner_id: str | None
 ) -> AuthoredVNextMasterService:
     mode = os.getenv("AUTHORED_VNEXT_REPOSITORY_MODE", "sql").strip().lower()
-    tenant_id = os.getenv("AUTHORED_VNEXT_TENANT_ID", "default")
+    tenant_id = get_vnext_tenant_id()
     if mode == "file":
-        environment = os.getenv("ENVIRONMENT", "production").strip().lower()
+        environment = get_environment_name("production")
         if environment not in {"dev", "development", "local", "test"}:
             raise RuntimeError("authored_vnext_file_repository_forbidden_in_production")
-        app_data = Path(os.getenv("APP_DATA_DIRECTORY", "app_data"))
+        app_data = Path((get_app_data_directory_env() or "app_data"))
         repository = FileAuthoredVNextMasterRepository(
             app_data
             / "authored_vnext"
@@ -167,7 +168,7 @@ def get_ai_master_analysis_store() -> AiMasterAnalysisStore:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="authored_vnext_owner_required",
         )
-    root = str(Path(os.getenv("APP_DATA_DIRECTORY", "app_data")).resolve())
+    root = str(Path((get_app_data_directory_env() or "app_data")).resolve())
     return _analysis_store_for_scope(root, str(owner_id))
 
 

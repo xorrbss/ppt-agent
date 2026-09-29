@@ -36,7 +36,7 @@ from models.sql.user import User
 from services.database import async_session_maker
 from services.provider_settings import import_legacy_file_to_provider_settings
 from services.provider_settings import save_provider_settings_record
-from utils.get_env import is_disable_auth_enabled
+from utils.get_env import get_environment_name, is_disable_auth_enabled
 from utils.runtime_settings import (
     get_process_runtime_settings,
     reset_current_runtime_settings,
@@ -165,7 +165,7 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
             request.method == "GET"
             and path == request.url.path
             and self._LOCAL_SIGNED_DOWNLOAD_PATH.fullmatch(path) is not None
-            and (os.getenv("ENVIRONMENT") or "").strip().lower() == "local"
+            and get_environment_name() == "local"
             and (os.getenv("PUBLIC_ARTIFACT_STORE_BACKEND") or "").strip().lower()
             == "local-development"
             and is_loopback_development_request(request)

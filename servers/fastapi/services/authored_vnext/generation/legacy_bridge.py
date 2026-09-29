@@ -86,6 +86,7 @@ from .legacy_pin import (
     generation_repository_for_owner,
 )
 from .repository import async_generation_repository
+from utils.get_env import get_app_data_directory_env, get_vnext_tenant_id
 
 
 _HEADING = re.compile(r"^\s{0,3}#{1,6}\s+")
@@ -485,10 +486,10 @@ async def generate_legacy_master_owned_deck(
 
 def _export_service(owner_id: uuid.UUID) -> AuthoredVNextExportService:
     owner_scope = str(owner_id)
-    app_data = Path(os.getenv("APP_DATA_DIRECTORY", "app_data"))
+    app_data = Path((get_app_data_directory_env() or "app_data"))
     repository = AuthoredVNextSqlRepository.from_application_database(
         owner_scope=owner_scope,
-        tenant_id=os.getenv("AUTHORED_VNEXT_TENANT_ID", "default"),
+        tenant_id=get_vnext_tenant_id(),
         owner_id=owner_id,
     )
     return AuthoredVNextExportService(

@@ -15,7 +15,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from hashlib import sha256
 import json
-import os
 import threading
 from typing import AsyncIterator, Awaitable, Callable, Literal, Sequence
 import uuid
@@ -40,6 +39,7 @@ from services.artifact_store import (
     promote_artifact_publication_if_current,
 )
 from services.workspace_operation_handler_registry import WorkspaceOperationClaim
+from utils.get_env import get_environment_name
 
 
 EXPORT_IDENTITY_SCHEMA_VERSION = "public-export-identity/v2"
@@ -294,7 +294,7 @@ async def acquire_slide_render_authority(
     bind = session.get_bind()
     dialect = bind.dialect.name
     if dialect != "postgresql":
-        environment = (os.getenv("ENVIRONMENT") or "production").strip().lower()
+        environment = get_environment_name("production")
         if environment not in {"local", "development", "test"}:
             raise PublicSlideRenderSingleflightError(
                 "public_render_database_authority_required"

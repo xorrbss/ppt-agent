@@ -69,7 +69,7 @@ from services.workspace_event_retention import (
 )
 from services.workspace_runtime_profile import require_supported_workspace_runtime
 from services.provider_pricing_admission import pricing_gap_message
-from utils.get_env import get_app_data_directory_env, get_can_change_keys_env
+from utils.get_env import get_app_data_directory_env, get_can_change_keys_env, get_environment_name
 from utils.model_availability import (
     check_llm_and_image_provider_api_or_model_availability,
 )
@@ -94,7 +94,7 @@ def _configure_application_logging() -> None:
 def _should_start_local_account_deletion_controller() -> bool:
     """Keep cross-owner deletion work out of every public PostgreSQL API."""
 
-    environment = (os.getenv("ENVIRONMENT") or "development").strip().lower()
+    environment = get_environment_name("development")
     return (
         environment in _LOCAL_ENVIRONMENTS
         and sql_engine.dialect.name == "sqlite"
@@ -124,7 +124,7 @@ async def app_lifespan(_: FastAPI):
     await create_db_and_tables()
     await require_public_api_database_authority()
     if (
-        (os.getenv("ENVIRONMENT") or "development").strip().lower()
+        get_environment_name("development")
         not in {"local", "development", "dev", "test"}
         and (os.getenv("PPT_PUBLIC_OIDC_ISSUER") or "").strip()
         and should_start_embedded_workspace_operation_worker()
