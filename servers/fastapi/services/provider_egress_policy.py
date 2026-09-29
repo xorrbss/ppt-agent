@@ -8,8 +8,9 @@ from enum import Enum
 import ipaddress
 import re
 import socket
-import os
 from urllib.parse import parse_qsl, urlsplit
+
+from utils.env_settings.provider_credentials import get_egress_allowlist_text
 
 
 _SERVICE_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
@@ -355,7 +356,7 @@ def validate_configured_provider_endpoint(
     no permissive fallback for a URL stored in user settings.
     """
 
-    raw = os.getenv(allowlist_env, "")
+    raw = get_egress_allowlist_text(allowlist_env)
     allowed = tuple(item.strip() for item in raw.split(",") if item.strip())
     requested_category = EgressCategory(category)
     requested_service = _normalize_service_id(service_id)

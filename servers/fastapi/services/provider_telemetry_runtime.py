@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from urllib.parse import urlsplit
 
 from services.provider_egress_policy import (
@@ -11,6 +10,9 @@ from services.provider_egress_policy import (
     validate_configured_provider_endpoint,
 )
 from services.provider_transport_security import require_pinned_transport
+from utils.env_settings.provider_credentials import (
+    is_provider_telemetry_egress_opted_in,
+)
 from utils.get_env import (
     get_sentry_dsn_env,
     get_sentry_send_default_pii_env,
@@ -18,13 +20,7 @@ from utils.get_env import (
 )
 
 
-_TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
 _TELEMETRY_ALLOWLIST_ENV = "PROVIDER_TELEMETRY_EGRESS_ALLOWLIST"
-_TELEMETRY_OPT_IN_ENV = "PROVIDER_TELEMETRY_EGRESS_OPT_IN"
-
-
-def _is_true(value: str | None) -> bool:
-    return (value or "").strip().lower() in _TRUE_VALUES
 
 
 def _endpoint_without_dsn_credentials(dsn: str) -> str:
@@ -58,7 +54,7 @@ def maybe_init_sentry() -> bool:
             category=EgressCategory.TELEMETRY,
             service_id="sentry",
             allowlist_env=_TELEMETRY_ALLOWLIST_ENV,
-            telemetry_opt_in=_is_true(os.getenv(_TELEMETRY_OPT_IN_ENV)),
+            telemetry_opt_in=is_provider_telemetry_egress_opted_in(),
         )
         require_pinned_transport(
             endpoint,

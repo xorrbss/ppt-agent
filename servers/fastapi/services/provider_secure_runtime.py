@@ -19,6 +19,7 @@ from services.provider_credential_vault import (
 )
 from utils.db_utils import get_database_url_and_connect_args, to_sync_sqlalchemy_url
 from utils.owner_context import get_current_owner_id
+from utils.env_settings.provider_credentials import get_provider_credential_settings
 from utils.get_env import get_vnext_tenant_id
 
 
@@ -94,9 +95,7 @@ def setting_credential_id(setting_key: str) -> str:
 
 def _configured_storage_scope() -> CredentialScope:
     owner_id = get_current_owner_id()
-    configured_owner = (
-        os.getenv("PROVIDER_CREDENTIAL_SCOPE_USER_ID") or ""
-    ).strip()
+    configured_owner = get_provider_credential_settings().scope_user_id
     if owner_id is None and not configured_owner:
         raise CredentialVaultError("credential_owner_context_required")
     return CredentialScope(
@@ -205,9 +204,7 @@ def resolve_provider_secret(
             raise CredentialVaultError("credential_reference_required")
         return configured_value or None
     owner_id = get_current_owner_id()
-    configured_owner = (
-        os.getenv("PROVIDER_CREDENTIAL_SCOPE_USER_ID") or ""
-    ).strip()
+    configured_owner = get_provider_credential_settings().scope_user_id
     expected_user_id = (
         configured_owner
         if configured_owner and reference.user_id == configured_owner
