@@ -18,6 +18,7 @@ import threading
 from importlib import import_module
 from typing import Any, Optional
 
+from utils.env_settings.mem0 import get_mem0_settings
 from utils.get_env import get_app_data_directory_env, get_ollama_model_env, get_ollama_url_env
 from utils.runtime_settings import RuntimeSettings, resolve_runtime_settings
 
@@ -28,26 +29,12 @@ _shared_client: Any | None = None
 _init_attempted = False
 
 
-def _to_bool(value: Optional[str], default: bool = False) -> bool:
-    if value is None:
-        return default
-    return str(value).strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _to_int(value: Optional[str], default: int) -> int:
-    try:
-        parsed = int(value) if value is not None else default
-        return max(1, parsed)
-    except Exception:
-        return default
-
-
 def _spacy_model_name() -> str:
-    return (os.getenv("MEM0_SPACY_MODEL") or "en_core_web_sm").strip() or "en_core_web_sm"
+    return get_mem0_settings().spacy_model
 
 
 def _spacy_model_available() -> bool:
-    if not _to_bool(os.getenv("MEM0_REQUIRE_SPACY_MODEL"), default=True):
+    if not get_mem0_settings().require_spacy_model:
         return True
 
     model = _spacy_model_name()
@@ -81,32 +68,22 @@ def _oss_config_from_env(
     """Return (mem0_dir, qdrant_path, history_db, collection, dims, from_config_dict)."""
     runtime_settings = resolve_runtime_settings(settings)
     app_data_dir = (get_app_data_directory_env() or "/tmp/presenton").strip()
-    mem0_dir = (os.getenv("MEM0_DIR") or os.path.join(app_data_dir, "mem0")).strip()
-    qdrant_path = (
-        os.getenv("MEM0_QDRANT_PATH") or os.path.join(mem0_dir, "qdrant")
-    ).strip()
-    history_db_path = (
-        os.getenv("MEM0_HISTORY_DB_PATH") or os.path.join(mem0_dir, "history.db")
-    ).strip()
-    collection = (
-        os.getenv("MEM0_COLLECTION_NAME") or "presenton_memories"
-    ).strip() or "presenton_memories"
-    embedder = (os.getenv("MEM0_EMBEDDER_PROVIDER") or "fastembed").strip() or "fastembed"
-    model = (
-        os.getenv("MEM0_EMBEDDER_MODEL") or "BAAI/bge-small-en-v1.5"
-    ).strip() or "BAAI/bge-small-en-v1.5"
-    dims = _to_int(os.getenv("MEM0_EMBEDDING_DIMS"), default=384)
+    mem0 = get_mem0_settings(runtime_settings)
+    mem0_dir = mem0.mem0_dir or os.path.join(app_data_dir, "mem0")
+    qdrant_path = mem0.qdrant_path or os.path.join(mem0_dir, "qdrant")
+    history_db_path = mem0.history_db_path or os.path.join(mem0_dir, "history.db")
+    collection = mem0.collection_name
+    embedder = mem0.embedder_provider
+    model = mem0.embedder_model
+    dims = mem0.embedding_dims
     llm_model = (
-        os.getenv("MEM0_LLM_MODEL")
+        mem0.llm_model
         or get_ollama_model_env(runtime_settings)
         or "llama3.1:latest"
     ).strip() or "llama3.1:latest"
-    llm_api_key = (
-        os.getenv("MEM0_LLM_API_KEY")
-        or "ollama"
-    ).strip() or "ollama"
+    llm_api_key = mem0.llm_api_key
     llm_base_url = _normalize_openai_base_url(
-        os.getenv("MEM0_LLM_BASE_URL")
+        mem0.llm_base_url
         or get_ollama_url_env(runtime_settings)
         or "http://host.docker.internal:11434"
     )
@@ -156,7 +133,7 @@ def get_shared_mem0_client() -> Any | None:
     """Return the process-wide mem0 client, or ``None`` if disabled or init failed."""
     global _shared_client, _init_attempted
 
-    if not _to_bool(os.getenv("MEM0_ENABLED"), default=True):
+    if not get_mem0_settings().enabled:
         return None
     if _shared_client is not None:
         return _shared_client
