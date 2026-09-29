@@ -25,6 +25,12 @@ from typing import Awaitable, Callable, Protocol
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from constants.user_messages import (
+    UserMessage,
+    UserMessageKey,
+    UserMessageLike,
+    user_message,
+)
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from services.database import async_session_maker
@@ -44,16 +50,23 @@ _PROGRESS_CEILING = 95
 # Each durable stage owns a monotonic band.  The poller may advance inside the
 # active band as a heartbeat, but it never crosses into a stage that has not
 # actually been persisted by the generation owner.
-_STAGE_PROGRESS_BANDS: dict[str, tuple[int, int, str, str]] = {
-    "outline": (8, 19, "authored_outline", "발표 구조와 작성 기준을 준비하고 있습니다."),
-    "author": (20, 44, "authored_author", "슬라이드 내용을 작성하고 있습니다."),
-    "illustrate": (45, 59, "authored_illustrate", "시각 요소를 구성하고 있습니다."),
-    "render": (60, 74, "authored_render", "슬라이드를 렌더링하고 있습니다."),
-    "persist": (75, 79, "authored_checkpoint", "슬라이드 체크포인트를 저장하고 있습니다."),
-    "repair": (80, 84, "authored_repair", "문제가 있는 슬라이드만 복구하고 있습니다."),
-    "checkpoint": (85, 88, "authored_checkpoint", "최종 품질 증거를 확인하고 있습니다."),
-    "export": (89, 92, "authored_export", "PowerPoint 파일을 만들고 있습니다."),
-    "publication": (93, 94, "authored_publication", "생성 결과를 게시하고 있습니다."),
+_STAGE_PROGRESS_BANDS: dict[str, tuple[int, int, str, UserMessageKey]] = {
+    "outline": (8, 19, "authored_outline", UserMessageKey.GENERATION_STAGE_OUTLINE),
+    "author": (20, 44, "authored_author", UserMessageKey.GENERATION_STAGE_AUTHOR),
+    "illustrate": (45, 59, "authored_illustrate", UserMessageKey.GENERATION_STAGE_ILLUSTRATE),
+    "render": (60, 74, "authored_render", UserMessageKey.GENERATION_STAGE_RENDER),
+    "persist": (75, 79, "authored_checkpoint", UserMessageKey.GENERATION_STAGE_PERSIST),
+    "repair": (80, 84, "authored_repair", UserMessageKey.GENERATION_STAGE_REPAIR),
+    "checkpoint": (85, 88, "authored_checkpoint", UserMessageKey.GENERATION_STAGE_CHECKPOINT),
+    "export": (89, 92, "authored_export", UserMessageKey.GENERATION_STAGE_EXPORT),
+    "publication": (93, 94, "authored_publication", UserMessageKey.GENERATION_STAGE_PUBLICATION),
+}
+# Stages whose message carries a slide counter (``completed``/``total``).
+_COUNTED_STAGE_KEYS: dict[str, UserMessageKey] = {
+    "author": UserMessageKey.GENERATION_STAGE_AUTHOR_COUNTED,
+    "illustrate": UserMessageKey.GENERATION_STAGE_ILLUSTRATE_COUNTED,
+    "render": UserMessageKey.GENERATION_STAGE_RENDER_COUNTED,
+    "persist": UserMessageKey.GENERATION_STAGE_PERSIST_COUNTED,
 }
 
 
@@ -67,7 +80,7 @@ class ProgressReporter(Protocol):
         percent: int | None = None,
         current: int | None = None,
         total: int | None = None,
-        message: str | None = None,
+        message: UserMessageLike = None,
     ) -> bool | None: ...
 
 
@@ -75,34 +88,33 @@ def describe_authored_progress(
     completed: int,
     total: int,
     current_stage: str | None,
-) -> tuple[str, int, str]:
+) -> tuple[str, int, UserMessage]:
     """Map job counters to (stage, percent, message)."""
 
     normalized_stage = str(current_stage or "").strip().lower()
     band = _STAGE_PROGRESS_BANDS.get(normalized_stage)
     if band is not None:
-        floor, ceiling, public_stage, message = band
+        floor, ceiling, public_stage, key = band
         bounded_total = max(0, total)
         bounded_completed = max(0, min(bounded_total, completed))
-        if bounded_total and normalized_stage in {
-            "author",
-            "illustrate",
-            "render",
-            "persist",
-        }:
+        counted_key = _COUNTED_STAGE_KEYS.get(normalized_stage)
+        if bounded_total and counted_key is not None:
             percent = floor + int(
                 round((ceiling - floor) * (bounded_completed / bounded_total))
             )
-            message = f"{message} · {bounded_completed}/{bounded_total}장"
+            message = user_message(
+                counted_key, completed=bounded_completed, total=bounded_total
+            )
         else:
             percent = floor
+            message = user_message(key)
         return public_stage, percent, message
 
     if total <= 0:
         return (
             "authored_generation",
             _PROGRESS_FLOOR,
-            "슬라이드를 준비하고 있습니다.",
+            user_message(UserMessageKey.GENERATION_PREPARING_SLIDES),
         )
     bounded = max(0, min(total, completed))
     span = _PROGRESS_CEILING - _PROGRESS_FLOOR
@@ -111,21 +123,29 @@ def describe_authored_progress(
         return (
             "authored_generation_finalizing",
             _PROGRESS_CEILING,
-            "생성한 슬라이드를 저장하고 있습니다.",
+            user_message(UserMessageKey.GENERATION_SAVING_SLIDES),
         )
-    stage_suffix = f" · {current_stage}" if current_stage else ""
     return (
         "authored_slide_generation",
         percent,
-        f"슬라이드를 작성하고 있습니다 · {bounded}/{total}장{stage_suffix}",
+        user_message(
+            UserMessageKey.GENERATION_WRITING_SLIDES_STAGED,
+            completed=bounded,
+            total=total,
+            stage=current_stage,
+        )
+        if current_stage
+        else user_message(
+            UserMessageKey.GENERATION_WRITING_SLIDES, completed=bounded, total=total
+        ),
     )
 
 
 def advance_authored_progress_heartbeat(
-    update: tuple[str, int, str],
-    previous: tuple[str, int, str] | None,
+    update: tuple[str, int, UserMessage],
+    previous: tuple[str, int, UserMessage] | None,
     current_stage: str | None,
-) -> tuple[str, int, str]:
+) -> tuple[str, int, UserMessage]:
     """Move a long-running stage within its own band without inventing stages."""
 
     normalized_stage = str(current_stage or "").strip().lower()
@@ -221,7 +241,7 @@ async def stream_authored_generation_progress(
 ) -> None:
     """Poll job counters until cancelled, reporting each distinct change."""
 
-    last_reported: tuple[str, int, str] | None = None
+    last_reported: tuple[str, int, UserMessage] | None = None
     # Narration is advisory, so an unchanging deck must not keep paying for
     # reads that contend with the generation lane's own writes.  Any change
     # resets the interval to the base cadence.

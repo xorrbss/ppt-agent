@@ -6,6 +6,7 @@ from copy import deepcopy
 import xml.etree.ElementTree as ET
 
 from sqlalchemy import update
+from constants.user_messages import UserMessageKey, user_message
 from models.sql.slide import SlideModel
 from services.authored_canvas import presentation_canvas_contract, presentation_canvas_metadata
 from services.authored_presentation_artifacts import _save_slide_pngs
@@ -45,7 +46,8 @@ async def preview_svg(presentation, slides, index, request, task, session):
         contract = {key: value for key, value in _contract_manifest(assets[0]).items() if key in manifest}
     source = target.content.get("source") or "\n".join(ET.fromstring(target.svg_content).itertext())
     baseline_digest = authored_page_source_digest(target)
-    await _set_task(session, task, status="running", message=f"{index + 1}페이지 SVG를 작성하고 있습니다.")
+    await _set_task(session, task, status="running",
+                    message=user_message(UserMessageKey.REMAKE_SVG_RUNNING, page=index + 1))
     from utils.generation_model import generation_model_context
     instruction = "\n".join(value for value in [presentation.instructions, request.instruction] if value)
     with generation_model_context(presentation.theme["svg"].get("codexGenerationPreset")):
@@ -64,7 +66,7 @@ async def preview_svg(presentation, slides, index, request, task, session):
                                            instructions=instruction, **physical_kwargs)
     image = _save_slide_pngs(presentation.id, [render.png], str(task.id))[0]
     digest = _canonical_digest({"svg": final, "image": image})
-    ready_message = f"{index + 1}페이지 SVG 미리보기가 준비되었습니다."
+    ready_message = user_message(UserMessageKey.REMAKE_SVG_READY, page=index + 1)
     await _set_task(session, task, status="completed", message=ready_message, data={
         "kind": PREVIEW_KIND, "phase": "preview_ready", "source_format": "svg",
         "presentation_id": str(presentation.id), "slide_id": str(target.id), "slide_index": index,
@@ -116,7 +118,8 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
         raise AuthoredPageRemakeError("svg_page_remake_capture_changed", stage="publish_validation")
     if snapshot:
         await version_service.snapshot_slides(session, presentation.id,
-            [item.model_dump(mode="json") for item in slides], label=f"페이지 다시 만들기: {index + 1}", force=True)
+            [item.model_dump(mode="json") for item in slides],
+            label=user_message(UserMessageKey.VERSION_LABEL_PAGE_REMAKE, page=index + 1), force=True)
     content = deepcopy(target.content or {})
     if envelope is not None:
         content["svgAssetManifest"] = envelope

@@ -8,6 +8,7 @@ from pathlib import Path
 
 from sqlalchemy import select
 
+from constants.user_messages import UserMessageKey, user_message
 from models.sql.public_artifact import ArtifactRef
 from models.sql.workspace import WorkspaceOperation
 from services.artifact_store import configured_public_artifact_service
@@ -87,10 +88,11 @@ async def _run_analyzer_with_progress(
                 await context.progress(
                     stage="raster_analysis",
                     percent=min(75, 5 + elapsed // 5),
-                    message=(
-                        f"원본 화면을 편집 가능한 텍스트와 표로 재구성하는 중입니다… ({elapsed}초 경과)"
+                    message=user_message(
+                        UserMessageKey.RASTER_ANALYSIS_REDESIGN_ELAPSED
                         if analysis_mode == "auto_redesign"
-                        else f"원본 페이지의 화면과 텍스트 영역을 분석하는 중입니다… ({elapsed}초 경과)"
+                        else UserMessageKey.RASTER_ANALYSIS_REGIONS_ELAPSED,
+                        elapsed=elapsed,
                     ),
                 )
 
@@ -219,10 +221,10 @@ class RasterAnalysisOperationHandler:
                 tenant_id=tenant, expected_digest=reference.sha256,
             )
         await context.raise_if_cancelled()
-        await context.progress(stage="raster_analysis", percent=5, message=(
-            "원본 화면을 순서대로 보존하고 있습니다." if analysis_mode == "auto_preserve"
-            else "원본 화면을 편집 가능한 텍스트와 표로 재구성하고 있습니다." if analysis_mode == "auto_redesign"
-            else "원본 페이지의 화면과 텍스트 영역을 분석하고 있습니다."
+        await context.progress(stage="raster_analysis", percent=5, message=user_message(
+            UserMessageKey.RASTER_ANALYSIS_PRESERVE if analysis_mode == "auto_preserve"
+            else UserMessageKey.RASTER_ANALYSIS_REDESIGN if analysis_mode == "auto_redesign"
+            else UserMessageKey.RASTER_ANALYSIS_REGIONS
         ))
         await context.extend_lease(seconds=_ANALYSIS_LEASE_WINDOW_SECONDS)
         with tempfile.TemporaryDirectory(prefix="raster-analysis-") as directory:
@@ -239,7 +241,7 @@ class RasterAnalysisOperationHandler:
             raise NonRetryableWorkspaceOperationError("raster_source_digest_mismatch")
         await context.progress(
             stage="raster_persisting", percent=85,
-            message="검토할 원본 영역과 분석 결과를 저장하고 있습니다.",
+            message=user_message(UserMessageKey.RASTER_ANALYSIS_PERSISTING),
         )
         await context.extend_lease(seconds=900)
         async with async_session_maker() as session:

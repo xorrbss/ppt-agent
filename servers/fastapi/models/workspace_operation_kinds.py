@@ -84,11 +84,11 @@ _SPECS = (
     ),
     WorkspaceOperationKindSpec(
         "raster.analysis", False, False, False,
-        "원본 화면 분석", "원본 페이지 영역 분석", "원본 분석",
+        "Analyze source screens", "Source page regions", "Source analysis",
     ),
     WorkspaceOperationKindSpec(
         "raster.review", False, False, False,
-        "원본 영역 검토", "원본 영역 분류 및 OCR 검토", "영역 검토",
+        "Review source regions", "Source region classification and OCR review", "Region review",
     ),
 )
 

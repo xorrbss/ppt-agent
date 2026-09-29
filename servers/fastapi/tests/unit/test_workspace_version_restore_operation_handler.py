@@ -188,7 +188,8 @@ async def _restore_publishes_once_and_preserves_authored_boundary(tmp_path: Path
         assert result.result_revision == 4
         assert result.payload == {
             "kind": "version.restore",
-            "summary": "선택한 버전으로 복원했습니다.",
+            "summary": "Restored the selected version.",
+            "summary_key": "version.restore.summary",
             "restored_version_id": str(target_id),
             "slide_count": 1,
             "source_revision": 3,
@@ -233,7 +234,7 @@ async def _restore_publishes_once_and_preserves_authored_boundary(tmp_path: Path
             assert slides[0].html_content == "<section>target</section>"
             assert slides[0].ui is None
             assert len(versions) == 2
-            assert versions[-1].label == "복원 전 자동 저장"
+            assert versions[-1].label_key == "version.label.before_restore"
             assert versions[-1].slides[0]["html_content"] == (
                 "<section>current</section>"
             )

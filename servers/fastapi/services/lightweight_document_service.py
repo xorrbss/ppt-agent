@@ -21,6 +21,7 @@ import zipfile
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
+from constants.user_messages import UserMessageKey, user_message
 from services.document_conversion_service import DocumentConversionError
 
 # python-pptx officially supports these; other extensions (.ppsx, legacy .ppt)
@@ -42,9 +43,14 @@ class DocumentService:
             return _parse_xlsx(file_path)
         if ext in TEXT_EXTENSIONS:
             return _read_text(file_path)
+        filename = Path(file_path).name
         raise DocumentConversionError(
-            f"'{Path(file_path).name}' 형식은 LibreOffice 없이는 변환할 수 없습니다. "
-            "PDF로 변환해 업로드하거나 LibreOffice를 설치해 주세요."
+            f"{filename!r} cannot be converted without LibreOffice",
+            code="DOCUMENT_CONVERTER_UNAVAILABLE",
+            filename=filename,
+            public_message=user_message(
+                UserMessageKey.FILES_FORMAT_REQUIRES_LIBREOFFICE, filename=filename
+            ),
         )
 
 
@@ -69,7 +75,7 @@ def _parse_pptx(file_path: str) -> str:
         raise
     except Exception as exc:
         raise DocumentConversionError(
-            f"'{Path(file_path).name}' PowerPoint 파일을 읽을 수 없습니다: {exc}"
+            f"PowerPoint file {Path(file_path).name!r} could not be read: {exc}"
         ) from exc
 
 
@@ -99,11 +105,11 @@ def _parse_docx(file_path: str) -> str:
             xml = zf.read("word/document.xml").decode("utf-8", errors="replace")
     except KeyError as exc:
         raise DocumentConversionError(
-            f"'{Path(file_path).name}'에서 본문(word/document.xml)을 찾을 수 없습니다."
+            f"Word file {Path(file_path).name!r} has no body part (word/document.xml)"
         ) from exc
     except Exception as exc:
         raise DocumentConversionError(
-            f"'{Path(file_path).name}' Word 파일을 읽을 수 없습니다: {exc}"
+            f"Word file {Path(file_path).name!r} could not be read: {exc}"
         ) from exc
 
     # Turn structural markers into whitespace, then strip the remaining tags so
@@ -139,11 +145,11 @@ def _read_xml(zf: zipfile.ZipFile, part_name: str) -> ET.Element:
         return ET.fromstring(zf.read(part_name))
     except KeyError as exc:
         raise DocumentConversionError(
-            f"스프레드시트에 필요한 XML 파일({part_name})을 찾을 수 없습니다."
+            f"Spreadsheet part {part_name} is missing"
         ) from exc
     except ET.ParseError as exc:
         raise DocumentConversionError(
-            f"스프레드시트 XML 파일({part_name})이 손상되었습니다: {exc}"
+            f"Spreadsheet part {part_name} is corrupt: {exc}"
         ) from exc
 
 
@@ -306,9 +312,9 @@ def _parse_xlsx(file_path: str) -> str:
         raise
     except zipfile.BadZipFile as exc:
         raise DocumentConversionError(
-            f"'{Path(file_path).name}' Excel 파일이 손상되었거나 올바른 XLSX 형식이 아닙니다."
+            f"Excel file {Path(file_path).name!r} is corrupt or not a valid XLSX archive"
         ) from exc
     except Exception as exc:
         raise DocumentConversionError(
-            f"'{Path(file_path).name}' Excel 파일을 읽을 수 없습니다: {exc}"
+            f"Excel file {Path(file_path).name!r} could not be read: {exc}"
         ) from exc

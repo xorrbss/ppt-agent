@@ -56,7 +56,11 @@ async def test_ticker_extends_lease_and_reports_elapsed_progress(monkeypatch, tm
     assert all(seconds == handler_module._ANALYSIS_LEASE_WINDOW_SECONDS for seconds in context.extend_calls)
     assert len(context.progress_calls) >= 2
     assert all(call["stage"] == "raster_analysis" for call in context.progress_calls)
-    assert all("재구성" in call["message"] for call in context.progress_calls)
+    assert all(
+        call["message"].key == "raster.analysis.redesign.elapsed"
+        for call in context.progress_calls
+    )
+    assert all("elapsed" in call["message"].params for call in context.progress_calls)
 
 
 @pytest.mark.anyio
@@ -72,7 +76,10 @@ async def test_ticker_uses_analyze_wording_for_reconstruct_mode(monkeypatch, tmp
     )
 
     assert context.progress_calls
-    assert all("분석" in call["message"] for call in context.progress_calls)
+    assert all(
+        call["message"].key == "raster.analysis.regions.elapsed"
+        for call in context.progress_calls
+    )
 
 
 @pytest.mark.anyio

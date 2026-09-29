@@ -3445,7 +3445,7 @@ async def _generate_authored_presentation(
                 code="authored_composition_safety_gate_failed",
                 cause=error,
                 retryable=False,
-                message="제한된 슬라이드 품질 게이트 복구 후에도 안전성 검증을 완료하지 못했습니다.",
+                message="Safety verification did not complete even after the bounded slide quality-gate repair.",
             ) from error
     quality_gate_receipt = None
     # QUAL-04: the receipt records what VQA did, not whether it was requested.
