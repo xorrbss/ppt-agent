@@ -29,7 +29,7 @@ from services.compatibility_migration.upgrade import (
     CompatibilityUpgradeError,
     upgrade_presentation_fork,
 )
-from services.presentation_profiles import resolve_presentation_profile
+from models.presentation_profiles import resolve_presentation_profile
 from services.workspace_chat_operation_handler import _build_run_context
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
@@ -67,7 +67,7 @@ def _non_authored_presentation(owner_id: uuid.UUID) -> PresentationModel:
 
     ``svg-v1`` is now the only driver a persisted row can resolve to besides
     ``authored``: Template V2 was removed from the driver registry in
-    ``services.presentation_profiles`` (2026-09-25), and the row it used to
+    ``models.presentation_profiles`` (2026-09-25), and the row it used to
     describe (``mode="template"``, ``version="v2-standard"``) can no longer
     even be committed -- ``services.database_owner_scope`` stamps every new
     presentation's profile on flush, and that stamp now raises for such a

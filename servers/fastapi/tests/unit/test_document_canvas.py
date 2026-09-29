@@ -312,7 +312,7 @@ def test_export_only_readiness_does_not_enable_a4_writer(monkeypatch):
 
 
 def test_public_v2_request_pair_roundtrip():
-    from api.v2.contracts import PresentationGenerationRequestV2
+    from models.public_v2_contracts import PresentationGenerationRequestV2
 
     request = PresentationGenerationRequestV2(content="fixture", pageSize="A4", orientation="portrait")
     wire = request.model_dump(mode="json", by_alias=True)

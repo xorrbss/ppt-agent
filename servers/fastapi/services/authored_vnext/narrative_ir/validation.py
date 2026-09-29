@@ -9,7 +9,7 @@ from uuid import UUID
 
 from pydantic import ValidationError
 
-from .contracts import ContentGraphV1, NarrativeDraftV1, NarrativeIRV1, model_payload
+from models.authored_vnext.narrative_ir_contracts import ContentGraphV1, NarrativeDraftV1, NarrativeIRV1, model_payload
 from utils.hashing import canonical_json_bytes, sha256_prefixed
 
 

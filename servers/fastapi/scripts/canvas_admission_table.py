@@ -48,8 +48,8 @@ from pydantic import ValidationError  # noqa: E402
 
 import services.authored_vnext.generation_route as generation_route  # noqa: E402
 import utils.authored_styles as style_catalogue  # noqa: E402
-from api.v2.contracts import PresentationGenerationRequestV2  # noqa: E402
-from api.v2.orchestration import PublicRequestActor, PublicV2OrchestrationError  # noqa: E402
+from models.public_v2_contracts import PresentationGenerationRequestV2  # noqa: E402
+from services.public_v2_orchestration_types import PublicRequestActor, PublicV2OrchestrationError  # noqa: E402
 from models.generate_presentation_request import GeneratePresentationRequest  # noqa: E402
 from services.authored_canvas import validate_authored_canvas_admission  # noqa: E402
 from services.authored_presentation_service import AUTHORED_TEMPLATE  # noqa: E402

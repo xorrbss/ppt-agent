@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import datetime
 
-from api.v2.contracts import (
+from models.public_v2_contracts import (
     PublicGenerationStageDurationV1,
     PublicGenerationStageTimingsV1,
     PublicGenerationTimingV1,

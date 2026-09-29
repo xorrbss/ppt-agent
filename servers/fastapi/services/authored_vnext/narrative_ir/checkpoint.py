@@ -10,7 +10,7 @@ from uuid import UUID
 
 from pydantic import ValidationError
 
-from .contracts import (
+from models.authored_vnext.narrative_ir_contracts import (
     FrameSearchReceiptV1,
     FrameSelectionReceiptV1,
     NarrativeCheckpointV1,

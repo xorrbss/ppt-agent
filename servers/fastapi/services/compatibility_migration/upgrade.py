@@ -19,7 +19,7 @@ from models.sql.slide import SlideModel
 from services.compatibility_migration.archive import build_signed_archive_manifest
 from services.compatibility_migration.census import classify_presentation
 from services.presentation_profile_persistence import stamp_presentation_profile
-from services.presentation_profiles import (
+from models.presentation_profiles import (
     PresentationProfileError,
     resolve_presentation_profile,
 )

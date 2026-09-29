@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from api.v2.contracts import QualityReceiptV3
+from models.public_v2_contracts import QualityReceiptV3
 from services.generation_core.quality.advisory_record import (
     advisory_flagged_pages, advisory_ran, advisory_record, record_matches,
 )

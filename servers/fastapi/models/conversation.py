@@ -14,7 +14,7 @@ import uuid
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from models.workspace_operation_kinds import WORKSPACE_COMMAND_KINDS
-from services.presentation_profiles import (
+from models.presentation_profiles import (
     PresentationCapabilities,
     PresentationDriverId,
     PresentationProfile,

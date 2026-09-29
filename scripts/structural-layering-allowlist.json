@@ -27,7 +27,6 @@
     "servers/fastapi/utils/llm_calls/author_vision_qa.py",
     "servers/fastapi/utils/llm_calls/critique_slide.py",
     "servers/fastapi/utils/llm_config.py",
-    "servers/fastapi/utils/llm_provider.py",
     "servers/fastapi/utils/llm_utils.py",
     "servers/fastapi/utils/process_slides.py",
     "servers/fastapi/utils/provider_idempotency.py",
@@ -44,27 +43,19 @@
   ],
   "services_import_api": [
     "servers/fastapi/services/authored_content_brief_checkpoint.py",
-    "servers/fastapi/services/authored_quality_receipt_v3_pipeline.py",
     "servers/fastapi/services/presentation_generation_job_service.py",
     "servers/fastapi/services/presentation_generation_operation_handler.py",
     "servers/fastapi/services/public_generation_deadline_policy.py",
-    "servers/fastapi/services/public_generation_route.py",
-    "servers/fastapi/services/public_quality_receipt_v3_projection.py",
-    "servers/fastapi/services/public_v2_generation_timing.py",
     "servers/fastapi/services/public_v2_orchestrator.py",
-    "servers/fastapi/services/public_v2_request_bridge.py",
-    "servers/fastapi/services/svg_export_quality.py",
     "servers/fastapi/services/workspace_authored_template_confirmation_service.py",
-    "servers/fastapi/services/workspace_export_quality_evidence.py",
     "servers/fastapi/services/workspace_quality_export_operation_handlers.py",
     "servers/fastapi/services/workspace_service.py",
     "servers/fastapi/services/workspace_timeline_projection.py"
   ],
   "models_import_services_or_api": [
-    "servers/fastapi/models/authored_vnext/deck/scene.py",
-    "servers/fastapi/models/conversation.py",
     "servers/fastapi/models/generate_presentation_request.py",
-    "servers/fastapi/models/presentation_with_slides.py"
+    "servers/fastapi/models/presentation_with_slides.py",
+    "servers/fastapi/models/public_v2_contracts.py"
   ],
   "globals_injection": [
     "servers/fastapi/utils/llm_calls/author_vision_qa_helpers.py",

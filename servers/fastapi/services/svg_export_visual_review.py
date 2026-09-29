@@ -4,7 +4,7 @@ Filled from what publication recorded: the deck's contact-sheet vision
 advisory (``theme.svg.advisory``, see
 ``services/generation_core/quality/advisory_record.py``) and each page's
 classification in ``svgReceipt.quality``. The public contract
-(``api.v2.contracts.VisualReviewQualityV3``) has no ``flagged`` status and
+(``models.public_v2_contracts.VisualReviewQualityV3``) has no ``flagged`` status and
 forbids extra evidence keys, so the agreed field shape maps onto it as:
 
 * ``passed``      -- the advisory ran on exactly the pages being exported and no

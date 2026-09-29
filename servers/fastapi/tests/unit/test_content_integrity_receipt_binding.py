@@ -8,7 +8,7 @@ import uuid
 import pytest
 from pydantic import ValidationError
 
-from api.v2.contracts import GenerationRouteReceiptV1, OperationStatusV2
+from models.public_v2_contracts import GenerationRouteReceiptV1, OperationStatusV2
 from services.authored_vnext.narrative_ir.content_graph import (
     ContentGraphValidationError,
     seal_content_integrity_receipt,

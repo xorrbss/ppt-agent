@@ -2,7 +2,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from services.presentation_profiles import (
+from models.presentation_profiles import (
     GENERATION_MODE_COMPATIBILITY,
     PRESENTATION_DRIVER_REGISTRY,
     PresentationProfileError,

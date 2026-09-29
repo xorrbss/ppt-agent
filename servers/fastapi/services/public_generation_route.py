@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
-from api.v2.contracts import GenerationRouteReceiptV1, PresentationGenerationRequestV2
+from models.public_v2_contracts import GenerationRouteReceiptV1, PresentationGenerationRequestV2
 from models.generate_presentation_request import GeneratePresentationRequest
 from services.authored_rollout_profile import RolloutProfile
 from services.generation_core.admission.strategy import resolve_generation_strategy

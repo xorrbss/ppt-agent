@@ -43,7 +43,7 @@ from services.workspace_service import (
     workspace_timeline,
 )
 from services.workspace_api_contract import allowed_workspace_actions
-from services.presentation_profiles import resolve_presentation_driver
+from models.presentation_profiles import resolve_presentation_driver
 from utils.owner_context import get_current_owner_id
 from models.sql.workspace import get_workspace_owner_scope
 

@@ -12,7 +12,7 @@ from fastapi import HTTPException
 from pydantic import ValidationError
 
 from api.v1.ppt.endpoints import presentation_generate as endpoint
-from api.v2.contracts import PresentationGenerationRequestV2
+from models.public_v2_contracts import PresentationGenerationRequestV2
 from models.generate_presentation_request import GeneratePresentationRequest
 from services.generation_core.admission.strategy import (
     recorded_generation_strategy,

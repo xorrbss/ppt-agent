@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from api.v2.contracts import QualityReceiptV3
+from models.public_v2_contracts import QualityReceiptV3
 from services.generation_core.drivers.svg.publish import svg_slide_content
 from services.generation_core.drivers.svg.quality import page_outcome
 from services.generation_core.drivers.svg.terminal import FALLBACK_OUTCOME, FALLBACK_REASON

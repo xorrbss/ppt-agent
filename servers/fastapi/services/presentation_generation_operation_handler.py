@@ -224,7 +224,7 @@ class PresentationGenerationOperationHandler:
                     generation_provider_capabilities,
                     server_generation_profile_identity,
                 )
-                from services.presentation_profiles import resolve_presentation_profile
+                from models.presentation_profiles import resolve_presentation_profile
                 from services.provider_usage_instrumentation import (
                     public_operation_scope,
                 )
@@ -383,7 +383,7 @@ class PresentationGenerationOperationHandler:
                                 generation_provider_capabilities,
                                 server_generation_profile_identity,
                             )
-                            from services.presentation_profiles import (
+                            from models.presentation_profiles import (
                                 resolve_presentation_profile,
                             )
                             from services.provider_usage_instrumentation import (

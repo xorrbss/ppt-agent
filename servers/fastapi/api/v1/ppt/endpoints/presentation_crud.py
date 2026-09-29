@@ -57,7 +57,7 @@ from services.compatibility_migration.admission import (
 )
 from services.presentation_deletion_service import PresentationDeletionService as PresentationDeletionService
 from services.presentation_access_service import require_live_presentation
-from services.presentation_profiles import PresentationProfileError, resolve_presentation_driver
+from models.presentation_profiles import PresentationProfileError, resolve_presentation_driver
 from services.presentation_export_projection import (
     PRESENTATION_EXPORT_PROJECTION,
     PRESENTATION_EXPORT_PROJECTION_HEADER,

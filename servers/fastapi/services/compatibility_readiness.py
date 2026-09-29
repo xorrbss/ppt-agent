@@ -11,7 +11,7 @@ from models.sql.image_asset import ImageAsset
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from services.assets.compatibility import dangling_canonical_image_count
-from services.presentation_profiles import (
+from models.presentation_profiles import (
     GENERATION_MODE_COMPATIBILITY,
     PROFILE_SCHEMA_VERSION,
     PresentationProfileError,

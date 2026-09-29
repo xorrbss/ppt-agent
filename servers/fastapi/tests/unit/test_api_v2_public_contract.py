@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from api.v2.contracts import (
+from models.public_v2_contracts import (
     AuthorizedDownloadGrant,
     CancelOperationReceiptV2,
     OperationEventPageV2,

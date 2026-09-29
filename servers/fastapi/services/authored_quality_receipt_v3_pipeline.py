@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, Protocol, runtime_checkable
 
-from api.v2.contracts import QualityReceiptV3 as PublicQualityReceiptV3
+from models.public_v2_contracts import QualityReceiptV3 as PublicQualityReceiptV3
 from services.authored_quality_receipt_v2 import (
     QualityReceiptV2,
     QualityReceiptV3,

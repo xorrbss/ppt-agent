@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from api.v2.contracts import QualityReceiptV3
+from models.public_v2_contracts import QualityReceiptV3
 from services.authored_canvas import canvas_metadata_for_aspect_ratio
 from services.public_export_errors import PublicExportOperationError
 from services.svg_contract import source_digest

@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
-from api.v2.contracts import (
+from models.public_v2_contracts import (
     AuthorizedDownloadGrant,
     CancelOperationReceiptV2,
     OperationEventPageV2,
@@ -53,7 +53,7 @@ from services.artifact_store import SignedArtifactDownload
 from services.authored_vnext.narrative_ir.content_graph import (
     seal_content_integrity_receipt,
 )
-from services.authored_vnext.narrative_ir.contracts import model_payload
+from models.authored_vnext.narrative_ir_contracts import model_payload
 from services.authored_vnext.narrative_ir.validation import canonical_digest
 from services.source_content.errors import SourceContentError
 

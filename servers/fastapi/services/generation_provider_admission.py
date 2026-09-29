@@ -15,7 +15,7 @@ from models.generate_presentation_request import GeneratePresentationRequest
 from models.sql.presentation import PresentationModel
 from models.sql.workspace import WorkspaceOperation
 from services.generation_core.admission.strategy import resolve_generation_strategy
-from services.presentation_profiles import (
+from models.presentation_profiles import (
     PresentationDriverId,
     PresentationProfileError,
     resolve_presentation_profile,
@@ -36,7 +36,7 @@ def requested_generation_driver(
     # A request can no longer name the template-v2 driver: the strategy
     # literal that produced it was retired with the Template V2 generation
     # entry, and the driver id itself was later removed from the registry in
-    # ``services.presentation_profiles`` (2026-09-25), so a persisted deck
+    # ``models.presentation_profiles`` (2026-09-25), so a persisted deck
     # can no longer resolve to it either -- there is no remaining identity
     # this function needs to describe for it.
     if resolve_generation_strategy(request) == "svg":

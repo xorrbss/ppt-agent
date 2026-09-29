@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from api.v1.ppt.endpoints.presentation_generate import (
     _require_local_legacy_async_generation,
 )
-from api.v2.contracts import (
+from models.public_v2_contracts import (
     GenerationRouteReceiptV1,
     OperationLinksV2,
     OperationReceiptV2,

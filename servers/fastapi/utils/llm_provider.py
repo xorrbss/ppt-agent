@@ -41,7 +41,7 @@ from utils.get_env import (
     get_vertex_model_env,
 )
 from constants.provider_registry import ProviderResolutionError, resolve_provider
-from services.presentation_profiles import (
+from models.presentation_profiles import (
     PersistedIdentity,
     PresentationDriverId,
     PresentationProfile,

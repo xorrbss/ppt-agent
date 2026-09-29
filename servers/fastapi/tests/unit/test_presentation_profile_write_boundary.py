@@ -7,7 +7,7 @@ import pytest
 # Import registers the canonical before-flush write boundary.
 from services import database as _database  # noqa: F401
 from models.sql.presentation import PresentationModel
-from services.presentation_profiles import PresentationProfileError
+from models.presentation_profiles import PresentationProfileError
 
 
 def _presentation(**identity: object) -> PresentationModel:
