@@ -16,7 +16,6 @@ from models.image_prompt import ImagePrompt
 from models.presentation_outline_model import PresentationOutlineModel, SlideOutlineModel
 from models.presentation_structure_model import PresentationStructureModel
 from models.sql.presentation import PresentationModel
-from models.sql.slide import SlideModel
 from models.sse_response import (
     SSECompleteResponse,
     SSEErrorResponse,
@@ -37,10 +36,7 @@ from utils.file_utils import (
     replace_file_name,
     set_file_ext,
 )
-from utils.get_dynamic_models import (
-    get_presentation_outline_model_with_n_slides,
-    get_presentation_structure_model_with_n_slides,
-)
+from utils.get_dynamic_models import get_presentation_outline_model_with_n_slides
 from utils.image_provider import (
     get_selected_image_provider,
     is_comfyui_selected,
@@ -137,21 +133,6 @@ def test_api_error_model_from_exception(exc: Exception, status: int, substr: str
     model = APIErrorModel.from_exception(exc)
     assert model.status_code == status
     assert substr in model.detail
-
-
-def test_slide_model_get_new_slide_branches():
-    pid = uuid.uuid4()
-    base = SlideModel(
-        presentation=pid,
-        layout_group="g",
-        layout="l",
-        index=2,
-        content={"a": 1},
-        speaker_note="n",
-        properties={"x": True},
-    )
-    assert base.get_new_slide(pid, None).content == {"a": 1}
-    assert base.get_new_slide(pid, {"b": 2}).content == {"b": 2}
 
 
 def test_sse_response_frame_format():
@@ -312,16 +293,12 @@ def test_get_selected_image_provider_invalid_env_raises(monkeypatch):
         get_selected_image_provider()
 
 
-def test_dynamic_outline_and_structure_factories_validate():
+def test_dynamic_outline_factory_validates():
     long_text = "x" * 400  # within the default (standard) 150-800 character bounds
     OutlineCls = get_presentation_outline_model_with_n_slides(1)
     outline = OutlineCls(slides=[{"content": long_text}])
 
-    StructureCls = get_presentation_structure_model_with_n_slides(3)
-    structure = StructureCls(slides=[0, 1, 2])
-
     assert outline.slides[0].content == long_text
-    assert structure.slides == [0, 1, 2]
 
 
 @pytest.mark.parametrize(

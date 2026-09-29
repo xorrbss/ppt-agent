@@ -475,23 +475,6 @@ class OAuthCallbackServer:
             return None
         return self._server.captured_code  # type: ignore[attr-defined]
 
-    def wait_for_code(self, timeout_seconds: int = 120) -> Optional[str]:
-        """
-        Block until the callback delivers a code or timeout / cancellation.
-        Returns the authorization code or None.
-        """
-        if self._server is None:
-            return None
-        deadline = time.monotonic() + timeout_seconds
-        while time.monotonic() < deadline:
-            if self._cancelled:
-                return None
-            code = self._server.captured_code  # type: ignore[attr-defined]
-            if code:
-                return code
-            time.sleep(0.1)
-        return None
-
     def cancel(self):
         self._cancelled = True
 

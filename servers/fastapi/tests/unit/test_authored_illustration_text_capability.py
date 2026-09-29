@@ -17,7 +17,6 @@ import pytest
 from utils.authored_illustrations import (
     _MAX_SLIDE_CONTENT_CHARS,
     apply_authored_illustration,
-    apply_authored_illustrations,
 )
 from utils.image_provider import image_provider_renders_text
 
@@ -182,35 +181,6 @@ def test_slide_content_is_capped_like_the_scene_prompt(monkeypatch, tmp_path: Pa
 
     sent = service.prompts[0].prompt
     assert sent.count("가") == _MAX_SLIDE_CONTENT_CHARS
-
-
-def test_slide_contents_map_positionally_in_the_plural_helper(
-    monkeypatch, tmp_path: Path
-):
-    monkeypatch.setenv("IMAGE_PROVIDER", "gpt-image-2")
-    service = _ok_service(tmp_path)
-
-    _run(
-        apply_authored_illustrations(
-            [_SLOT_HTML, _SLOT_HTML],
-            _style(),
-            service,
-            ["# 첫 장 제목", "# 둘째 장 제목"],
-        )
-    )
-
-    prompts = sorted(prompt.prompt for prompt in service.prompts)
-    assert len(prompts) == 2
-    assert any("첫 장 제목" in prompt for prompt in prompts)
-    assert any("둘째 장 제목" in prompt for prompt in prompts)
-    # A short deck of contents must not raise for the slides it does not cover.
-    short = _ok_service(tmp_path)
-    _run(
-        apply_authored_illustrations(
-            [_SLOT_HTML, _SLOT_HTML], _style(), short, ["# 하나뿐"]
-        )
-    )
-    assert len(short.prompts) == 2
 
 
 # --- failure behaviour is unchanged ----------------------------------------

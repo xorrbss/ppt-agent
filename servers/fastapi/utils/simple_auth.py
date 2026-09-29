@@ -25,8 +25,6 @@ SESSION_TTL_SECONDS = 60 * 60 * 24 * 30
 # persists the credential pair and clears the legacy secret field on reset.
 AUTH_CONFIG_FIELDS = ("AUTH_USERNAME", "AUTH_PASSWORD_HASH", "AUTH_SECRET_KEY")
 _PERSISTED_CREDENTIAL_FIELDS = ("AUTH_USERNAME", "AUTH_PASSWORD_HASH")
-DISABLED_AUTH_OWNER_SCOPE = "local-disabled-auth-scope-v1"
-_OWNER_SCOPE_PURPOSE = b"template-v2-pptx-import-owner-v1\x00"
 
 
 def _base64url_encode(data: bytes) -> str:
@@ -242,28 +240,6 @@ def get_session_token_from_request(request: Request) -> Optional[str]:
     return None
 
 
-def get_basic_auth_credentials_from_request(
-    request: Request,
-) -> Optional[tuple[str, str]]:
-    auth_header = request.headers.get("Authorization", "")
-    if not auth_header.lower().startswith("basic "):
-        return None
-
-    encoded_value = auth_header[6:].strip()
-    if not encoded_value:
-        return None
-
-    try:
-        decoded_value = base64.b64decode(encoded_value).decode("utf-8")
-    except Exception:
-        return None
-
-    if ":" not in decoded_value:
-        return None
-    username, password = decoded_value.split(":", 1)
-    return username, password
-
-
 def get_auth_status(session_token: Optional[str] = None) -> dict:
     config = _load_user_config()
     configured = bool(config.get("AUTH_USERNAME") and config.get("AUTH_PASSWORD_HASH"))
@@ -287,26 +263,6 @@ def get_internal_auth_headers() -> dict[str, str]:
     if not username:
         return {}
     return {"Authorization": f"Bearer {create_session_token(username)}"}
-
-
-def get_request_owner_scope(request: Request) -> str:
-    """Return a stable, privacy-preserving owner scope for local resources."""
-    if is_disable_auth_enabled():
-        return DISABLED_AUTH_OWNER_SCOPE
-
-    username = getattr(request.state, "auth_username", None)
-    if not isinstance(username, str) or not username.strip():
-        raise ValueError("Authenticated request identity is unavailable")
-
-    secret = peek_auth_secret()
-    if not secret:
-        raise ValueError("Authentication signing secret is unavailable")
-
-    return hmac.new(
-        secret.encode("utf-8"),
-        _OWNER_SCOPE_PURPOSE + username.strip().encode("utf-8"),
-        hashlib.sha256,
-    ).hexdigest()
 
 
 def _is_secure_request(request: Request) -> bool:

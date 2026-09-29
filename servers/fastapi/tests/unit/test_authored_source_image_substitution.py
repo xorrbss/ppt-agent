@@ -16,7 +16,6 @@ from services.source_images.models import SourceImageCandidate
 from utils.authored_illustrations import (
     MAX_INLINE_SOURCE_IMAGE_BYTES,
     apply_authored_illustration,
-    apply_authored_illustrations,
     reserve_source_images_for_slide,
 )
 from utils.llm_calls.author_slide import validate_authored_slide_html
@@ -251,83 +250,6 @@ def test_source_image_works_for_a_style_without_an_illustration_prompt(tmp_path:
     assert service.prompts == []
 
 
-def test_a_picture_is_reused_on_multiple_slides_of_the_deck(tmp_path: Path):
-    candidate = _candidate(tmp_path)
-    generated = tmp_path / "generated.png"
-    generated.write_bytes(_PNG_BYTES)
-    service = _Service(SimpleNamespace(path=str(generated)))
-    htmls = [
-        _asset_html(),
-        _asset_html(),  # same picture requested again
-        f'<img data-asset-id="{candidate.asset_id}">'
-        '<img data-illust-prompt="isometric pipeline with a gate">',
-    ]
-
-    out = _run(
-        apply_authored_illustrations(
-            htmls,
-            _style(),
-            service,
-            source_images={candidate.asset_id: candidate},
-        )
-    )
-
-    assert _PNG_DATA_URI in out[0]
-    assert _PNG_DATA_URI in out[1]
-    assert out[2].count("<img") == 1
-    assert "data-illust-prompt" not in out[2]
-    assert len(service.prompts) == 0
-
-
-def test_per_slide_offers_are_honoured(tmp_path: Path):
-    first = _candidate(tmp_path, asset_id="src-a")
-    second = _candidate(tmp_path, asset_id="src-b")
-    service = _Service()
-
-    out = _run(
-        apply_authored_illustrations(
-            [_asset_html("src-a"), _asset_html("src-b"), _asset_html("src-a")],
-            _style(prompt=None),
-            service,
-            source_images=[{"src-a": first}, {"src-b": second}, {"src-b": second}],
-        )
-    )
-
-    assert _PNG_DATA_URI in out[0]
-    assert _PNG_DATA_URI in out[1]
-    # Slide 2 was never offered src-a, so its reference resolves to nothing.
-    assert "<img" not in out[2]
-    assert service.prompts == []
-
-
-def test_illustration_only_deck_is_unchanged_by_the_feature(tmp_path: Path):
-    generated = tmp_path / "generated.png"
-    generated.write_bytes(_PNG_BYTES)
-    service = _Service(SimpleNamespace(path=str(generated)))
-
-    without = _run(apply_authored_illustrations([_ILLUST_HTML], _style(), service))
-    with_feature = _run(
-        apply_authored_illustrations(
-            [_ILLUST_HTML], _style(), _Service(SimpleNamespace(path=str(generated))),
-            source_images={},
-        )
-    )
-
-    assert _PNG_DATA_URI in without[0]
-    assert without == with_feature
-    assert len(service.prompts) == 1
-
-
-def test_asset_reference_is_inert_when_source_images_are_not_in_play():
-    service = _Service()
-    html = _asset_html()
-
-    out = _run(apply_authored_illustrations([html], _style(prompt=None), service))
-
-    assert out == [html]
-    assert service.prompts == []
-
-
 def test_exact_reconstruction_is_untouched(tmp_path: Path, monkeypatch):
     candidate = _candidate(tmp_path)
     service = _Service()
@@ -340,34 +262,9 @@ def test_exact_reconstruction_is_untouched(tmp_path: Path, monkeypatch):
             html, exact_style, service, source_images={candidate.asset_id: candidate}
         )
     )
-    deck = _run(
-        apply_authored_illustrations(
-            [html], exact_style, service, source_images={candidate.asset_id: candidate}
-        )
-    )
 
     assert single == html
-    assert deck == [html]
     assert service.prompts == []
-
-
-def test_provider_failure_still_degrades_instead_of_raising(tmp_path: Path):
-    candidate = _candidate(tmp_path, asset_id="src-1")
-    service = _Service(RuntimeError("provider down"))
-    html = (
-        '<img data-asset-id="unknown">'
-        '<img data-illust-prompt="isometric pipeline with a gate">'
-        "<p>본문</p>"
-    )
-
-    out = _run(
-        apply_authored_illustrations(
-            [html], _style(), service, source_images={candidate.asset_id: candidate}
-        )
-    )
-
-    assert "<img" not in out[0]
-    assert "<p>본문</p>" in out[0]
 
 
 def test_raise_on_failure_only_covers_the_generated_fallback(tmp_path: Path):

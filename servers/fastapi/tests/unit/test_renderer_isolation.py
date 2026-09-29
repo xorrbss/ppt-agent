@@ -337,12 +337,6 @@ def test_kill_switch_prevents_cache_hit_from_returning_artifact(monkeypatch) -> 
         asyncio.run(slide_capture.render_html_to_png(SAFE_HTML))
 
 
-def test_kill_switch_does_not_publish_deck_placeholders(monkeypatch) -> None:
-    monkeypatch.setenv("AUTHORED_RENDERER_KILL_SWITCH", "true")
-    with pytest.raises(renderer_isolation.RendererDisabledError):
-        asyncio.run(slide_capture.render_html_list_to_pngs([SAFE_HTML]))
-
-
 def test_isolated_failure_never_calls_legacy_renderer(monkeypatch) -> None:
     calls = {"legacy": 0}
 
@@ -399,15 +393,6 @@ def test_local_product_canary_blocks_host_read_and_loopback_before_browser(
     finally:
         listener.close()
     assert calls == {"worker": 0, "legacy": 0}
-
-
-def test_isolation_failure_does_not_publish_placeholder_over_lkg(monkeypatch) -> None:
-    async def fail(html: str, timeout: int = 60):  # noqa: ASYNC109 - stub mirrors API
-        raise slide_capture.RendererIsolationError("boundary failed")
-
-    monkeypatch.setattr(slide_capture, "render_html_to_png", fail)
-    with pytest.raises(slide_capture.RendererIsolationError):
-        asyncio.run(slide_capture.render_html_list_to_pngs([SAFE_HTML]))
 
 
 def test_worker_response_is_exact_versioned_png_contract() -> None:

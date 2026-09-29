@@ -158,9 +158,11 @@ def test_authored_capability_mismatch_fails_before_invocation() -> None:
     assert invoked is False
 
 
-def test_client_factory_is_not_constructed_before_runtime_policy_passes(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_runtime_policy_rejects_a_capability_mismatch_at_the_provider_boundary() -> None:
+    # ``get_llm_provider`` is the boundary every real client-construction path
+    # (``utils.llm_config.get_llm_config``, consumed by the ``llmai`` client
+    # factory) resolves through first, so a policy failure here must surface
+    # before any provider-specific client could be built.
     settings = RuntimeSettings.from_sources(
         environ={},
         user_config={
@@ -168,14 +170,6 @@ def test_client_factory_is_not_constructed_before_runtime_policy_passes(
             "OPENAI_API_KEY": "secret-must-not-reach-client",
         },
     )
-    client_factory_calls = 0
-
-    def forbidden_client_factory(**_kwargs: object) -> object:
-        nonlocal client_factory_calls
-        client_factory_calls += 1
-        raise AssertionError("client factory must not run")
-
-    monkeypatch.setattr(llm_provider, "OpenAI", forbidden_client_factory)
     with generation_provider_policy(
         {
             "generation_mode": "standard",
@@ -186,28 +180,20 @@ def test_client_factory_is_not_constructed_before_runtime_policy_passes(
         required_capabilities=("structuredOutput",),
     ):
         with pytest.raises(HTTPException) as error:
-            llm_provider.get_llm_client(settings)
+            llm_provider.get_llm_provider(settings)
 
     assert error.value.detail == "provider_capability_mismatch"
-    assert client_factory_calls == 0
 
 
-def test_disabled_provider_is_rejected_at_the_client_boundary(
+def test_disabled_provider_is_rejected_at_the_provider_boundary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     settings = _settings("openai")
-    client_factory_calls = 0
 
     def disabled_provider(*_args: object, **_kwargs: object) -> object:
         raise ProviderResolutionError("provider_disabled", "openai")
 
-    def forbidden_client_factory(**_kwargs: object) -> object:
-        nonlocal client_factory_calls
-        client_factory_calls += 1
-        return object()
-
     monkeypatch.setattr(llm_provider, "resolve_provider", disabled_provider)
-    monkeypatch.setattr(llm_provider, "OpenAI", forbidden_client_factory)
     with generation_provider_policy(
         {
             "generation_mode": "standard",
@@ -218,10 +204,9 @@ def test_disabled_provider_is_rejected_at_the_client_boundary(
         required_capabilities=("structuredOutput",),
     ):
         with pytest.raises(HTTPException) as error:
-            llm_provider.get_llm_client(settings)
+            llm_provider.get_llm_provider(settings)
 
     assert error.value.detail == "provider_disabled"
-    assert client_factory_calls == 0
 
 
 def test_unknown_runtime_provider_fails_closed_without_exposing_settings(

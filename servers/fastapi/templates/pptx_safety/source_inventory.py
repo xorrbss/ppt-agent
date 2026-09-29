@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import hashlib
-import json
 import re
 from typing import Literal
 import unicodedata
@@ -135,30 +134,6 @@ def hashed_inventory_item(
         size_bytes=len(payload),
         sha256=hashlib.sha256(payload).hexdigest(),
         media_type=media_type,
-    )
-
-
-def candidate_inventory_item(
-    identifier: str,
-    candidate: object,
-) -> HashedInventoryItem:
-    """Hash a canonical JSON candidate without retaining its possibly sensitive body."""
-
-    try:
-        payload = json.dumps(
-            candidate,
-            allow_nan=False,
-            ensure_ascii=True,
-            separators=(",", ":"),
-            sort_keys=True,
-        ).encode("ascii")
-    except (TypeError, ValueError) as error:
-        raise ValueError("candidate_inventory_requires_canonical_json") from error
-    return hashed_inventory_item(
-        "candidate",
-        identifier,
-        payload,
-        media_type="application/json",
     )
 
 

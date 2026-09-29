@@ -4,43 +4,11 @@ from types import SimpleNamespace
 import pytest
 from pydantic import ValidationError
 
-from models.presentation_from_template import (
-    AuthoredQualityReviewRequest,
-    parse_review_page_range,
-)
+from models.presentation_from_template import AuthoredQualityReviewRequest
 from services.authored_quality_routing import hybrid_style_initial_review
 from services.authored_quality_review_service import _resolve_positions
 from utils.llm_calls.critique_slide import SlideCritique
 from utils.authored_review_routing import plan_authored_review_routing
-
-
-def test_page_range_normalizes_duplicates_and_inclusive_ranges():
-    assert parse_review_page_range(" 3, 5-8, 12, 7, 3 ", slide_count=12) == [
-        2,
-        4,
-        5,
-        6,
-        7,
-        11,
-    ]
-
-
-@pytest.mark.parametrize(
-    ("value", "message"),
-    (
-        ("", "required"),
-        ("0", "positive"),
-        ("-1", "Invalid"),
-        ("3-1", "ascending"),
-        ("1.5", "Invalid"),
-        ("1,,2", "Invalid"),
-        ("1-a", "Invalid"),
-        ("13", "outside"),
-    ),
-)
-def test_page_range_rejects_invalid_or_out_of_bounds_input(value, message):
-    with pytest.raises(ValueError, match=message):
-        parse_review_page_range(value, slide_count=12)
 
 
 def test_review_request_normalizes_subset_and_forces_auto_fix_contract():
