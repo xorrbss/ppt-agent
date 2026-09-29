@@ -33,6 +33,7 @@ class Mem0PresentationMemoryService:
     def __init__(self):
         self._enabled = is_mem0_enabled()
         self._runtime_enabled = True
+        self._background_tasks: set[asyncio.Task] = set()
         self._timeout_seconds = get_mem0_timeout_seconds()
         self._top_k = self._to_int(os.getenv("MEM0_TOP_K"), default=8)
         self._max_context_chars = self._to_int(
@@ -65,7 +66,55 @@ class Mem0PresentationMemoryService:
     async def _get_client(self):
         if not self._enabled or not self._runtime_enabled:
             return None
-        return get_shared_mem0_client()
+        # First use builds the embedder and opens Qdrant (seconds). Do it on
+        # mem0's own executor so it never blocks the event loop.
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(_MEM0_EXECUTOR, get_shared_mem0_client)
+
+    async def warm_up(self) -> None:
+        """Build the shared client ahead of the first deck; never raises."""
+        try:
+            await self._get_client()
+        except BaseException as exc:  # noqa: BLE001 - warm-up is best effort
+            if not self._is_nonfatal_mem0_error(exc):
+                raise
+            LOGGER.warning("Mem0 warm-up failed: %s", type(exc).__name__)
+
+    def enqueue(self, write, *args, **kwargs) -> None:
+        """Run one Mem0 write in the background; never blocks, never raises.
+
+        ``write`` is a coroutine function of this service. Failures are logged
+        and swallowed, each add is bounded by the mem0 timeout, and
+        :meth:`drain` lets normal shutdown finish pending writes.
+        """
+        try:
+            task = asyncio.get_running_loop().create_task(
+                self._run_background(write, *args, **kwargs)
+            )
+        except RuntimeError:
+            LOGGER.warning("Mem0 background write skipped: no running event loop")
+            return
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+
+    async def _run_background(self, write, *args, **kwargs) -> None:
+        try:
+            await write(*args, **kwargs)
+        except asyncio.CancelledError:
+            raise
+        except BaseException:  # noqa: BLE001 - a memory write must not surface
+            LOGGER.exception("Mem0 background write failed")
+
+    async def drain(self, wait_seconds: float = 10.0) -> None:
+        """Wait (bounded) for pending background writes; cancel the rest."""
+        pending = list(self._background_tasks)
+        if not pending:
+            return
+        _, still = await asyncio.wait(pending, timeout=wait_seconds)
+        for task in still:
+            task.cancel()
+        if still:
+            LOGGER.warning("Mem0 drain cancelled %d pending writes", len(still))
 
     def _disable_runtime(self, reason: str, *, exc: BaseException | None = None) -> None:
         if not self._runtime_enabled:

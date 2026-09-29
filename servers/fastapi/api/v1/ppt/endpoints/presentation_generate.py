@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import re
+import time
 import traceback
 import uuid
 from collections.abc import Awaitable, Callable
@@ -133,6 +134,7 @@ from services.compatibility_migration.authored_vnext_contract import (
 from services.compatibility_migration.admission import (
     stamp_new_authored_presentation,
 )
+from services import svg_outline_spans
 from services.mem0_presentation_memory_service import (
     MEM0_PRESENTATION_MEMORY_SERVICE,
 )
@@ -898,6 +900,8 @@ async def generate_presentation_handler(
     generated_assets: list[ImageAsset] = []
     try:
         using_slides_markdown = False
+        outline_spans = svg_outline_spans.begin()
+        outline_post_started: float | None = None
         language_to_use = (request.language or "").strip() or None
         additional_context = _immutable_reference_context(
             request._reference_snapshots
@@ -929,10 +933,11 @@ async def generate_presentation_handler(
                 await sql_session.commit()
 
             if request.files:
-                document_context = await _load_document_context(
-                    request.files,
-                    request.language,
-                )
+                with outline_spans.span("doc_load"):
+                    document_context = await _load_document_context(
+                        request.files,
+                        request.language,
+                    )
                 additional_context = (
                     f"{document_context}\n\n{additional_context}".strip()
                     if additional_context
@@ -945,7 +950,7 @@ async def generate_presentation_handler(
             outline_context = additional_context
             if is_authored_content_brief_enabled():
                 try:
-                    with provider_usage_scope(
+                    with outline_spans.span("content_brief"), provider_usage_scope(
                         job_id=(generation_job.id if generation_job is not None else None),
                         operation="authored_generation",
                         stage="content_brief",
@@ -1009,24 +1014,30 @@ async def generate_presentation_handler(
                 request.include_title_slide,
                 request.include_table_of_contents, canvas_budget,
             )
-            await MEM0_PRESENTATION_MEMORY_SERVICE.store_generation_context(
-                presentation_id=presentation_id,
-                system_prompt=(
-                    message_content_to_text(outline_messages[0].content)
-                    if len(outline_messages) > 0
-                    else None
-                ),
-                user_prompt=(
-                    message_content_to_text(outline_messages[1].content)
-                    if len(outline_messages) > 1
-                    else None
-                ),
-                extracted_document_text=additional_context,
-                source_content=request.content,
-                instructions=request.instructions,
-            )
+            # Mem0 is write-only memory here (nothing in this generation reads it
+            # back), so the saves run in the background and never delay or fail
+            # the deck.
+            with outline_spans.span("mem0_pre"):
+                MEM0_PRESENTATION_MEMORY_SERVICE.enqueue(
+                    MEM0_PRESENTATION_MEMORY_SERVICE.store_generation_context,
+                    presentation_id=presentation_id,
+                    system_prompt=(
+                        message_content_to_text(outline_messages[0].content)
+                        if len(outline_messages) > 0
+                        else None
+                    ),
+                    user_prompt=(
+                        message_content_to_text(outline_messages[1].content)
+                        if len(outline_messages) > 1
+                        else None
+                    ),
+                    extracted_document_text=additional_context,
+                    source_content=request.content,
+                    instructions=request.instructions,
+                )
 
             presentation_outlines_text = ""
+            outline_started = time.monotonic()
             with provider_usage_scope(
                 job_id=(generation_job.id if generation_job is not None else None),
                 operation="authored_generation",
@@ -1050,7 +1061,16 @@ async def generate_presentation_handler(
                     if isinstance(chunk, HTTPException):
                         raise chunk
 
+                    if not presentation_outlines_text:
+                        outline_spans.set(
+                            "outline_first_chunk",
+                            (time.monotonic() - outline_started) * 1000,
+                        )
                     presentation_outlines_text += chunk
+            outline_spans.set(
+                "outline_total", (time.monotonic() - outline_started) * 1000
+            )
+            outline_post_started = time.monotonic()
 
             try:
                 presentation_outlines_json = dict(
@@ -1094,7 +1114,8 @@ async def generate_presentation_handler(
             )
             total_outlines = len(request.slides_markdown)
 
-            await MEM0_PRESENTATION_MEMORY_SERVICE.store_generation_context(
+            MEM0_PRESENTATION_MEMORY_SERVICE.enqueue(
+                MEM0_PRESENTATION_MEMORY_SERVICE.store_generation_context,
                 presentation_id=presentation_id,
                 system_prompt=None,
                 user_prompt=None,
@@ -1121,10 +1142,16 @@ async def generate_presentation_handler(
             sql_session.add(generation_job)
             await sql_session.commit()
 
-        await MEM0_PRESENTATION_MEMORY_SERVICE.store_generated_outlines(
+        MEM0_PRESENTATION_MEMORY_SERVICE.enqueue(
+            MEM0_PRESENTATION_MEMORY_SERVICE.store_generated_outlines,
             presentation_id,
             presentation_outlines.model_dump(mode="json"),
         )
+
+        if outline_post_started is not None:
+            outline_spans.set(
+                "outline_post", (time.monotonic() - outline_post_started) * 1000
+            )
 
         # Authored mode (opt-in via template="authored"): the model AUTHORS bespoke
         # HTML per slide instead of filling a React archetype. Self-contained pipeline

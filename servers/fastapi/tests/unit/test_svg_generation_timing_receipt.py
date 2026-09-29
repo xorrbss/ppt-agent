@@ -209,3 +209,20 @@ def test_a_failed_svg_attempt_is_charged_to_the_stage_that_was_running(monkeypat
     assert receipt["stages"]["authoring"]["state"] == "observed"
     assert receipt["stages"]["chromiumReview"]["state"] == "observed"
     assert receipt["stages"]["publication"] == {"state": "not_started"}
+
+
+def test_a_generated_svg_deck_logs_one_outline_span_line(monkeypatch, caplog):
+    import logging
+
+    from services import svg_outline_spans
+
+    _install_harness(monkeypatch)
+    svg_outline_spans.begin().set("outline_total", 42)
+    with caplog.at_level(logging.INFO, logger=svg_outline_spans.LOGGER.name):
+        assert _run(_request()) == "published"
+    lines = [r.getMessage() for r in caplog.records if "svg_outline_span" in r.getMessage()]
+    assert len(lines) == 1
+    for key in svg_outline_spans.SPAN_KEYS:
+        assert f"{key}_ms=" in lines[0]
+    assert "outline_total_ms=42" in lines[0]
+    assert "prepare_total_ms=" in lines[0] and "prepare_total_ms=na" not in lines[0]

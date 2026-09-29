@@ -24,6 +24,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Literal, Optional, Sequence
 
+from services import svg_outline_spans
+
 LOGGER = logging.getLogger(__name__)
 
 OFFER_SCHEMA_VERSION = "asset-offer/v1"
@@ -224,8 +226,9 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
         return AssetOffer(receipt={**receipt, "status": "prohibited_by_instructions"})
     if normalize_reference_mode(getattr(style, "reference_mode", None)) == EXACT_RECONSTRUCTION:
         return AssetOffer(receipt={**receipt, "status": "exact_reconstruction"})
-    plan = await resolve_infographic_plan(outline, brand, style, roles=list(roles),
-                                          instructions=instructions)
+    with svg_outline_spans.span("plan_llm"):
+        plan = await resolve_infographic_plan(outline, brand, style, roles=list(roles),
+                                              instructions=instructions)
     if plan is None:
         return AssetOffer(receipt={**receipt, "status": "plan_unavailable"})
     context = build_infographic_asset_context(style=style, brand=brand, instructions=instructions,
@@ -246,13 +249,15 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
             failures.append({"page": slide.index, "reason": type(error).__name__})
             return None
 
-    scene_slots = await asyncio.gather(*(scene(slide) for slide in scenes))
+    with svg_outline_spans.span("scenes"):
+        scene_slots = await asyncio.gather(*(scene(slide) for slide in scenes))
     icon_receipt: dict = {}
     style_id = (getattr(style, "id", None) or "").strip() or DEFAULT_PACK_KEY
     try:
-        icon_slots = await _icon_slots(figures, pack_key=getattr(context, "pack_key", style_id),
-                                       context=context, spend=spend, receipt=icon_receipt,
-                                       color=getattr(brand, "primary", None) or "#1E5EFF")
+        with svg_outline_spans.span("icon_sheets"):
+            icon_slots = await _icon_slots(figures, pack_key=getattr(context, "pack_key", style_id),
+                                           context=context, spend=spend, receipt=icon_receipt,
+                                           color=getattr(brand, "primary", None) or "#1E5EFF")
     except Exception as error:  # noqa: BLE001 - icons are optional
         LOGGER.warning("[svg] asset offer icon resolution failed: %s", type(error).__name__)
         icon_slots, icon_receipt = [], {"error": type(error).__name__}

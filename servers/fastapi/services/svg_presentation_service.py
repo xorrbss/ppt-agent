@@ -18,6 +18,7 @@ those split-out modules -- exactly as they did before the split.
 """
 from __future__ import annotations
 
+from services import svg_outline_spans
 from services.authored_canvas import request_canvas_contract
 from services.authored_checkpoint_fence import owned_job
 from services.authored_checkpoint_service import initialize_checkpoints
@@ -53,8 +54,12 @@ async def generate_svg_presentation(request, presentation_id, outline, language,
             context, _ = await publication_context(authority_session, generation_job)
         tenant_token = set_current_tenant_id(context.tenant_id)
     try:
-        async with _AUTHORED_JOB_SEMAPHORE:
+        with svg_outline_spans.span("job_semaphore_wait"):
+            await _AUTHORED_JOB_SEMAPHORE.acquire()
+        try:
             return await _generate(request, presentation_id, outline, language, sql_session, generation_job)
+        finally:
+            _AUTHORED_JOB_SEMAPHORE.release()
     finally:
         if tenant_token is not None:
             reset_current_tenant_id(tenant_token)

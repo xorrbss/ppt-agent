@@ -27,6 +27,7 @@ from services.authored_checkpoint_errors import AuthoredStageError
 from services.generation_core.drivers.svg import author, render
 from services.generation_core.drivers.svg import quality as deck_quality
 from services.generation_core.drivers.svg import timing
+from services import svg_outline_spans
 from services.generation_core.drivers.svg.terminal import rescue_terminal_page
 from services.svg_presentation_checkpoint import _collect_pages_or_fail, _digest, _provider_attempt_count
 from services.svg_presentation_prepare import _prepare_generation
@@ -46,8 +47,11 @@ async def _generate(request, presentation_id, outline, language, session, job):
     write_png = _facade._write_png
     publish = _facade._publish
 
-    ctx = await _prepare_generation(request, presentation_id, outline, session, job)
+    spans = svg_outline_spans.current() or svg_outline_spans.begin()
+    with spans.span("prepare_total"):
+        ctx = await _prepare_generation(request, presentation_id, outline, session, job)
     timing.record_outline(request)
+    spans.emit(presentation_id)
     timing.enter_deck_stage(request, "author")
     state = _RunState()
     hooks = _PageHooks(checkpoint=checkpoint, async_session_maker=async_session_maker,
