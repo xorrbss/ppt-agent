@@ -6,6 +6,10 @@ import type {
   TitleStressCase,
   VisualDirection,
 } from "./contracts.ts";
+import {
+  AUTHORED_SLIDE_HEIGHT_PX,
+  AUTHORED_SLIDE_WIDTH_PX,
+} from "../../authored-hybrid/schema.ts";
 
 const locked = { locked: true, modelWritable: false } as const;
 const writable = { locked: false, modelWritable: true } as const;
@@ -94,8 +98,8 @@ export const DEFAULT_MASTER_CONTRACT: DeckMasterContractV1 = {
   semanticVersion: "1.0.0",
   name: "Authored vNext Master",
   canvas: {
-    widthPx: 1280,
-    heightPx: 720,
+    widthPx: AUTHORED_SLIDE_WIDTH_PX,
+    heightPx: AUTHORED_SLIDE_HEIGHT_PX,
     locale: "ko-KR",
     safeArea: { x: 76, y: 72, width: 1128, height: 576 },
   },

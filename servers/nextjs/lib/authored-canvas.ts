@@ -1,5 +1,6 @@
 import { parseDocumentCanvas, documentCanvasPhysicalSize, type DocumentCanvas } from "./document-canvas.ts";
 import { recordOrNull } from "./guards.ts";
+import { AUTHORED_SLIDE_HEIGHT_PX, AUTHORED_SLIDE_WIDTH_PX } from "./authored-hybrid/schema.ts";
 
 export const AUTHORED_CANVAS_CONTRACT_VERSION = "authored-canvas/v1" as const;
 
@@ -50,7 +51,7 @@ function preset(
 }
 
 export const AUTHORED_CANVAS_BY_ASPECT_RATIO = Object.freeze({
-  "16:9": preset("16:9", 1280, 720),
+  "16:9": preset("16:9", AUTHORED_SLIDE_WIDTH_PX, AUTHORED_SLIDE_HEIGHT_PX),
   "9:16": preset("9:16", 720, 1280),
   "9:13": preset("9:13", 720, 1040),
   "1:1": preset("1:1", 720, 720),

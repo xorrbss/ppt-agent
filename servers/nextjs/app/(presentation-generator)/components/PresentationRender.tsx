@@ -6,12 +6,16 @@ import {
     resolveAuthoredCanvas,
     type AuthoredCanvasContract,
 } from "@/lib/authored-canvas";
+import {
+    AUTHORED_SLIDE_HEIGHT_PX,
+    AUTHORED_SLIDE_WIDTH_PX,
+} from "@/lib/authored-hybrid/schema";
 import { PresentationContentRender } from "./PresentationContentRender";
 import { isAuthoredSlide } from "../presentation/utils/isAuthoredPresentation";
 
 
-const BASE_WIDTH = 1280;
-const BASE_HEIGHT = 720;
+const BASE_WIDTH = AUTHORED_SLIDE_WIDTH_PX;
+const BASE_HEIGHT = AUTHORED_SLIDE_HEIGHT_PX;
 
 // Fit-to-container constants for the default (non-present, non-fixed) path.
 // The stage is scaled by ((containerWidth + BLEED) / BASE_WIDTH) * SAFETY, capped at 1.
