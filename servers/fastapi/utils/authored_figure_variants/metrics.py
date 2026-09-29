@@ -28,6 +28,7 @@ from typing import Any
 
 from utils.coerce import finite_float
 from utils.authored_dom_quality import BoundingBox, normalize_browser_metrics
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 #: The ink ratio band a slide is not penalised inside. Below it the page reads
 #: as empty, above it as crowded; both ends were taken from the design brief's
@@ -45,8 +46,8 @@ class CandidateMetrics:
     whitespace_balance: float
     ink_ratio: float
     measured_elements: int
-    viewport_width: float = 1280.0
-    viewport_height: float = 720.0
+    viewport_width: float = float(DEFAULT_CANVAS_WIDTH_PX)
+    viewport_height: float = float(DEFAULT_CANVAS_HEIGHT_PX)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -132,8 +133,8 @@ def _union_area(boxes: Sequence[BoundingBox]) -> float:
 def measure_candidate(browser_metrics: Mapping[str, Any] | None) -> CandidateMetrics:
     """Reduce one render's browser telemetry to the four comparable numbers."""
     normalized = normalize_browser_metrics(browser_metrics)
-    width = float(normalized["viewport"]["width"]) or 1280.0
-    height = float(normalized["viewport"]["height"]) or 720.0
+    width = float(normalized["viewport"]["width"]) or float(DEFAULT_CANVAS_WIDTH_PX)
+    height = float(normalized["viewport"]["height"]) or float(DEFAULT_CANVAS_HEIGHT_PX)
     elements = normalized["elements"]
 
     overflow = 0.0

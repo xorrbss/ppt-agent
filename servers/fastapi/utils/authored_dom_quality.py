@@ -65,6 +65,7 @@ from utils.authored_qid_namespace import (
     is_valid_authored_qid,  # noqa: F401
     validate_declared_authored_qids,  # noqa: F401
 )
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 EXACT_RECONSTRUCTION = "exact_reconstruction"
 STYLE_REFERENCE = "style_reference"
@@ -350,10 +351,10 @@ def normalize_browser_metrics(metrics: Mapping[str, Any] | None) -> dict[str, An
     normalized: dict[str, Any] = {
         "viewport": {
             "width": _coerce_number(
-                viewport.get("width", source.get("width", 1280)), 1280
+                viewport.get("width", source.get("width", DEFAULT_CANVAS_WIDTH_PX)), DEFAULT_CANVAS_WIDTH_PX
             ),
             "height": _coerce_number(
-                viewport.get("height", source.get("height", 720)), 720
+                viewport.get("height", source.get("height", DEFAULT_CANVAS_HEIGHT_PX)), DEFAULT_CANVAS_HEIGHT_PX
             ),
         },
         "fonts_ready": bool(
@@ -672,8 +673,8 @@ def inspect_authored_dom(
     compact = build_compact_dom_map(html, normalized)
     expected = _expected_text_by_qid(html)
     issues: list[DomQualityIssue] = []
-    width = normalized["viewport"]["width"] or viewport_width or 1280
-    height = normalized["viewport"]["height"] or viewport_height or 720
+    width = normalized["viewport"]["width"] or viewport_width or DEFAULT_CANVAS_WIDTH_PX
+    height = normalized["viewport"]["height"] or viewport_height or DEFAULT_CANVAS_HEIGHT_PX
     elements = normalized["elements"]
     item_by_qid = {str(item.get("qid")): item for item in elements}
     parent_by_qid = {

@@ -9,8 +9,9 @@ text a profile supplies rather than placeholders inside that text. The
 from __future__ import annotations
 
 from math import gcd
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_SIZE_PX, DEFAULT_CANVAS_WIDTH_PX
 
-BASELINE_SIZE = (1280, 720)
+BASELINE_SIZE = DEFAULT_CANVAS_SIZE_PX
 
 BASELINE = "baseline"
 PORTRAIT = "portrait"
@@ -61,7 +62,9 @@ def baseline_replacements(width: int, height: int) -> tuple[tuple[str, str], ...
     )
 
 
-BASELINE_TOKENS: tuple[str, ...] = tuple(old for old, _ in baseline_replacements(720, 1280))
+BASELINE_TOKENS: tuple[str, ...] = tuple(
+    old for old, _ in baseline_replacements(DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX)
+)
 
 
 def apply_canvas_tokens(rules: str, width: int, height: int) -> str:

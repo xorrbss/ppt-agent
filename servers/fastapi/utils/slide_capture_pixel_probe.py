@@ -9,9 +9,10 @@ import re
 from typing import Any, Mapping
 
 from utils.authored_dom_quality import ensure_authored_qids
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
-SLIDE_W = 1280
-SLIDE_H = 720
+SLIDE_W = DEFAULT_CANVAS_WIDTH_PX
+SLIDE_H = DEFAULT_CANVAS_HEIGHT_PX
 
 def _append_probe_style(html: str, css: str) -> str:
     style = f"<style data-codex-pixel-probe>{css}</style>"

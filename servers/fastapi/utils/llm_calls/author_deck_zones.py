@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 from html.parser import HTMLParser
 from typing import Any, Mapping
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 
 _ZONE_ID_PATTERN = re.compile(r"^ai-zone:[a-z0-9][a-z0-9._-]*$")
@@ -186,8 +187,8 @@ def _constrain_structured_zone_html(
             or y < 0
             or width <= 0
             or height <= 0
-            or x + width > 1280
-            or y + height > 720
+            or x + width > DEFAULT_CANVAS_WIDTH_PX
+            or y + height > DEFAULT_CANVAS_HEIGHT_PX
         ):
             raise ValueError("structured zone leaves the 1280x720 canvas")
         generation_state = raw_zone.get("generationState")

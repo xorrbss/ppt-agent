@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Mapping, Optional, Sequence
 from utils.llm_calls.author_slide import STYLE_REFERENCE
+from models.canvas_defaults import canvas_or_default, canvas_render_kwargs
 
 
 async def review_planned_source_images(
@@ -71,13 +72,7 @@ async def _render_correction_html(
     html: str, *, index: int | None = None, canvas: object | None = None,
 ) -> tuple[str, bytes]:
     """Render and retain browser metrics for the subsequent deterministic gate."""
-    width_px = int(getattr(canvas, "width_px", 1280))
-    height_px = int(getattr(canvas, "height_px", 720))
-    render_kwargs = (
-        {}
-        if (width_px, height_px) == (1280, 720)
-        else {"width_px": width_px, "height_px": height_px}
-    )
+    render_kwargs = canvas_render_kwargs(*canvas_or_default(canvas))
     if render_html_to_png is not _ORIGINAL_RENDER_HTML_TO_PNG:
         return html, await render_html_to_png(html, **render_kwargs)
     capture = await capture_once(

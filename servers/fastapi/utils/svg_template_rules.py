@@ -14,6 +14,7 @@ import json
 from pathlib import Path
 
 from utils.svg_template_fonts import FONT_FAMILY, font_material
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 RULE_VERSION = "svg-source-template-rules/v2.3"
 SUPPORTED_TEMPLATE_IDS = frozenset({"default", "osb-smart-banking", "screenshot-blue"})
@@ -71,7 +72,7 @@ def template_snapshot(style_spec: dict, width: int, height: int) -> dict:
 def _cached_snapshot(serialized_key: str) -> dict:
     key = json.loads(serialized_key)
     style_id, width, height = key["style_id"], key["width"], key["height"]
-    scale = min(width / 1280, height / 720)
+    scale = min(width / DEFAULT_CANVAS_WIDTH_PX, height / DEFAULT_CANVAS_HEIGHT_PX)
     margin, gap = 56 * scale, 24 * scale
     title = dict(x=margin, y=36 * scale, width=width - 2 * margin, height=130 * scale)
     body = dict(x=margin, y=198 * scale, width=width - 2 * margin, height=height - 246 * scale)

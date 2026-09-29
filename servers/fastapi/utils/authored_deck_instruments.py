@@ -34,6 +34,7 @@ from typing import Any
 
 from utils.authored_dom_footer_zone import find_footer_zone_intrusions
 from utils.authored_infographic.contracts import DEFAULT_CONTENT_BOTTOM_PX
+from models.canvas_defaults import DEFAULT_CANVAS_SIZE_PX
 
 #: A slide's neutral ink/paper says nothing about deck colour discipline.
 _IGNORED_RGB = {(255, 255, 255), (0, 0, 0)}
@@ -449,7 +450,7 @@ def _compute_slide(slide: SlideInstrumentInput, canvas: tuple[float, float]) -> 
 
 
 def compute_deck_instruments(
-    slides: Sequence[SlideInstrumentInput], *, canvas: tuple[float, float] = (1280.0, 720.0)
+    slides: Sequence[SlideInstrumentInput], *, canvas: tuple[float, float] = DEFAULT_CANVAS_SIZE_PX
 ) -> DeckInstruments:
     """Every slide's instruments, then the deck-wide aggregates: distinct
     radius families used anywhere, and each slide's inset deviation from the

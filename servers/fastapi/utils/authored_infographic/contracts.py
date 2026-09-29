@@ -31,6 +31,7 @@ from models.authored_infographic_plan import AuthoredSlideInfographic
 
 from utils.authored_infographic.icons import icon_reference_lines
 from utils.authored_infographic.skeleton import render_skeleton
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX
 
 _ARCHETYPE_NOTES: dict[str, str] = {
     "process": "The arrows between the nodes are the empty .ig-arrow blocks; keep them in place.",
@@ -101,7 +102,7 @@ _ARCHETYPE_NOTES: dict[str, str] = {
 #: canvas height minus a fixed footer band. The box floor, the low-height
 #: ceilings and the measured shortfalls are figure-intrinsic — the library CSS
 #: draws the same px at any canvas — so they hold on every canvas as stated.
-BASELINE_CANVAS_HEIGHT_PX = 720
+BASELINE_CANVAS_HEIGHT_PX = DEFAULT_CANVAS_HEIGHT_PX
 
 #: The band under the content line, per page-number mode. These are the lines
 #: ``author_slide_rules`` already states to the model: a numbered deck reserves

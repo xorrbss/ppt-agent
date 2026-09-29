@@ -12,6 +12,16 @@ from pydantic import Field, model_validator
 
 from models.authored_vnext.master.base import StrictCamelModel
 from models.authored_vnext.master.contract import CanvasContract, Rect
+from models.canvas_defaults import (
+    DEFAULT_CANVAS_HEIGHT_PX,
+    DEFAULT_CANVAS_SIZE_PX,
+    DEFAULT_CANVAS_WIDTH_PX,
+    canvas_or_default,
+    canvas_render_kwargs,
+    default_canvas_size,
+    is_default_landscape,
+    is_default_landscape_canvas,
+)
 
 
 AUTHORED_CANVAS_CONTRACT_VERSION = "authored-canvas/v1"
@@ -27,18 +37,17 @@ CanvasStage = Literal["disabled", "candidate", "verified"]
 # readback acceptance. Backend admission remains available for that acceptance run.
 PORTRAIT_RELEASE_VERIFIED = True
 _CANVAS_SIZE_BY_ASPECT_RATIO: dict[AuthoredAspectRatio, tuple[int, int]] = {
-    LANDSCAPE_ASPECT_RATIO: (1280, 720),
-    PORTRAIT_ASPECT_RATIO: (720, 1280),
+    LANDSCAPE_ASPECT_RATIO: DEFAULT_CANVAS_SIZE_PX,
+    PORTRAIT_ASPECT_RATIO: (DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX),
     PROPOSAL_ASPECT_RATIO: (720, 1040),
     SQUARE_ASPECT_RATIO: (720, 720),
     ULTRAWIDE_ASPECT_RATIO: (1680, 720),
 }
 # The product default: every canvas fallback and every "is this the legacy
-# 16:9 deck" branch resolves here, never through a repeated 1280/720 literal.
+# 16:9 deck" branch resolves through ``models.canvas_defaults`` (re-exported
+# here), never through a repeated 1280/720 literal.
 DEFAULT_CANVAS_ASPECT_RATIO: AuthoredAspectRatio = LANDSCAPE_ASPECT_RATIO
-DEFAULT_CANVAS_SIZE_PX: tuple[int, int] = _CANVAS_SIZE_BY_ASPECT_RATIO[DEFAULT_CANVAS_ASPECT_RATIO]
-DEFAULT_CANVAS_WIDTH_PX: int = DEFAULT_CANVAS_SIZE_PX[0]
-DEFAULT_CANVAS_HEIGHT_PX: int = DEFAULT_CANVAS_SIZE_PX[1]
+assert _CANVAS_SIZE_BY_ASPECT_RATIO[DEFAULT_CANVAS_ASPECT_RATIO] == DEFAULT_CANVAS_SIZE_PX
 _SAFE_MARGIN_PX = 64.0
 PRESET_CANVAS_IDS: dict[AuthoredAspectRatio, str] = {
     LANDSCAPE_ASPECT_RATIO: "wide-16x9",
@@ -78,49 +87,8 @@ class AuthoredCanvasMetadata(StrictCamelModel):
         )
 
 
-def default_canvas_size() -> tuple[int, int]:
-    """``(width_px, height_px)`` of the default landscape canvas."""
-
-    return DEFAULT_CANVAS_SIZE_PX
-
-
 def canvas_size_for_aspect_ratio(aspect_ratio: AuthoredAspectRatio) -> tuple[int, int]:
     return _CANVAS_SIZE_BY_ASPECT_RATIO[aspect_ratio]
-
-
-def canvas_or_default(canvas: object | None) -> tuple[int, int]:
-    """``(width_px, height_px)`` of a canvas-like object, or the default canvas when absent.
-
-    Any object carrying ``width_px``/``height_px`` (a ``CanvasContract``, a
-    deck plan, a metadata model) qualifies; ``None`` and objects without those
-    attributes resolve to the default landscape canvas.
-    """
-
-    return (
-        int(getattr(canvas, "width_px", DEFAULT_CANVAS_WIDTH_PX)),
-        int(getattr(canvas, "height_px", DEFAULT_CANVAS_HEIGHT_PX)),
-    )
-
-
-def is_default_landscape(width_px: object, height_px: object) -> bool:
-    """True when a pixel size is exactly the default landscape canvas."""
-
-    return (width_px, height_px) == DEFAULT_CANVAS_SIZE_PX
-
-
-def is_default_landscape_canvas(canvas: object | None) -> bool:
-    """True when a canvas-like object (or its absence) means the default canvas."""
-
-    return canvas_or_default(canvas) == DEFAULT_CANVAS_SIZE_PX
-
-
-def canvas_render_kwargs(width_px: int, height_px: int) -> dict[str, int]:
-    """Renderer size keywords: empty on the default canvas so legacy renderers and
-    test doubles that take no size keep working, explicit otherwise."""
-
-    if is_default_landscape(width_px, height_px):
-        return {}
-    return {"width_px": int(width_px), "height_px": int(height_px)}
 
 
 def _safe_area(width_px: int, height_px: int) -> Rect:

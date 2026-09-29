@@ -41,6 +41,7 @@ from utils.renderer_worker_response import (
     response_ordinal,
     source_digest_for,
 )
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 
 #: Worker processes this process has started and not yet reaped. A hard exit
@@ -85,7 +86,7 @@ class RendererWorkerSession:
 
     def __init__(
         self, *, max_requests: int | None = None,
-        width_px: int = 1280, height_px: int = 720,
+        width_px: int = DEFAULT_CANVAS_WIDTH_PX, height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
     ) -> None:
         self._max_requests = clamp_max_requests(
             DEFAULT_MAX_REQUESTS_PER_PROCESS if max_requests is None else max_requests

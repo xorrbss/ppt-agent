@@ -9,9 +9,10 @@ import os
 import tempfile
 from collections.abc import Awaitable, Callable
 from typing import List
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
-SLIDE_W = 1280
-SLIDE_H = 720
+SLIDE_W = DEFAULT_CANVAS_WIDTH_PX
+SLIDE_H = DEFAULT_CANVAS_HEIGHT_PX
 
 
 async def capture_slides_impl(

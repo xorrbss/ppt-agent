@@ -20,6 +20,7 @@ of truth ``author_slide_rules`` already states the footer safe zone from.
 """
 
 from __future__ import annotations
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 
 _HEADER_SENTENCE = (
@@ -43,8 +44,8 @@ def geometry_brief(
     *,
     page_number_mode: str | None = None,
     header_in_force: bool = False,
-    canvas_width_px: int = 1280,
-    canvas_height_px: int = 720,
+    canvas_width_px: int = DEFAULT_CANVAS_WIDTH_PX,
+    canvas_height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
 ) -> str:
     """The GEOMETRY paragraph for one slide with no composition envelope.
 
@@ -89,8 +90,8 @@ def relaxed_geometry_brief(plan: object, index: int) -> str:
     return geometry_brief(
         page_number_mode=getattr(plan, "page_number_mode", None),
         header_in_force=header_in_force,
-        canvas_width_px=getattr(plan, "canvas_width_px", 1280),
-        canvas_height_px=getattr(plan, "canvas_height_px", 720),
+        canvas_width_px=getattr(plan, "canvas_width_px", DEFAULT_CANVAS_WIDTH_PX),
+        canvas_height_px=getattr(plan, "canvas_height_px", DEFAULT_CANVAS_HEIGHT_PX),
     )
 
 

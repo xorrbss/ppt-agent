@@ -6,6 +6,7 @@ from typing import Literal
 
 from pydantic import AliasChoices, Field, model_validator
 
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 from .base import Digest, LayoutId, MasterId, StrictCamelModel
 
 
@@ -233,8 +234,8 @@ class SemanticMasterElement(StrictCamelModel):
 
 
 class CanvasContract(StrictCamelModel):
-    width_px: int = Field(default=1280, ge=320, le=7680)
-    height_px: int = Field(default=720, ge=180, le=4320)
+    width_px: int = Field(default=DEFAULT_CANVAS_WIDTH_PX, ge=320, le=7680)
+    height_px: int = Field(default=DEFAULT_CANVAS_HEIGHT_PX, ge=180, le=4320)
     locale: str = Field(default="ko-KR", min_length=2, max_length=32)
     safe_area: Rect
 

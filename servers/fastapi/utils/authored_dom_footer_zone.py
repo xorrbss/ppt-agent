@@ -22,6 +22,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 from utils.coerce import finite_float
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX
 
 #: Registered as a blocking safety category (``authored_dom_text_escape``)
 #: and a magnitude category (``authored_dom_fit_magnitude``) elsewhere.
@@ -134,7 +135,7 @@ def find_footer_zone_intrusions(
         (i for i in items if _looks_like_page_number(i, viewport_width=vw, viewport_height=vh)), None
     )
     content_bottom = vh - (
-        720.0 - (
+        float(DEFAULT_CANVAS_HEIGHT_PX) - (
             NUMBERED_CONTENT_BOTTOM_PX
             if page_number is not None
             else UNNUMBERED_CONTENT_BOTTOM_PX
