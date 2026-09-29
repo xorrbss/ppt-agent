@@ -27,6 +27,7 @@ from pptx.enum.chart import XL_CHART_TYPE
 from pptx.enum.shapes import MSO_AUTO_SHAPE_TYPE, MSO_SHAPE_TYPE
 from pptx.enum.text import MSO_AUTO_SIZE, PP_ALIGN, MSO_VERTICAL_ANCHOR
 from pptx.parts.image import Image as PptxImage
+from utils.color_contrast import contrast_ratio, relative_luminance
 from utils.coerce import finite_float
 from services.authored_vnext.ooxml.scene_canvas import (
     canvas_identity, intended_font_points, logical_canvas, master_for_canvas, physical_border_points,
@@ -255,24 +256,19 @@ def _read_slide_background(slide: Any) -> str:
     return f"#{str(value).upper()}"
 
 
-def _relative_luminance(color: str) -> float:
+def _validated_hex(color: str) -> str:
     match = _HEX_COLOR.fullmatch(color)
     if match is None:
         raise NativeSceneError("authored_vnext_master_furniture_color_invalid")
-    hexadecimal = match.group(1)
-    channels = [int(hexadecimal[index:index + 2], 16) / 255 for index in (0, 2, 4)]
-    linear = [
-        value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
-        for value in channels
-    ]
-    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+    return f"#{match.group(1)}"
+
+
+def _relative_luminance(color: str) -> float:
+    return relative_luminance(_validated_hex(color))
 
 
 def _contrast_ratio(foreground: str, background: str) -> float:
-    left = _relative_luminance(foreground)
-    right = _relative_luminance(background)
-    lighter, darker = max(left, right), min(left, right)
-    return (lighter + 0.05) / (darker + 0.05)
+    return contrast_ratio(_validated_hex(foreground), _validated_hex(background))
 
 
 def _mix_color(left: str, right: str, ratio: float) -> str:

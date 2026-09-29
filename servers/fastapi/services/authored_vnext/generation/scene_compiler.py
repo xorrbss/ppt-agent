@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from utils.color_contrast import contrast_ratio
 from services.document_canvas_scene_layout import (
     canonical_safe_area as _canonical_safe_area,
     safe_title_bounds as _safe_title_bounds,
@@ -158,28 +159,6 @@ def _data_id(digest: str) -> str:
     return f"data:{digest.removeprefix('sha256:')[:48]}"
 
 
-def _rgb(color: str) -> tuple[float, float, float]:
-    return tuple(int(color[index : index + 2], 16) / 255 for index in (1, 3, 5))
-
-
-def _relative_luminance(color: str) -> float:
-    channels = tuple(
-        channel / 12.92
-        if channel <= 0.04045
-        else ((channel + 0.055) / 1.055) ** 2.4
-        for channel in _rgb(color)
-    )
-    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
-
-
-def _contrast_ratio(foreground: str, background: str) -> float:
-    lighter, darker = sorted(
-        (_relative_luminance(foreground), _relative_luminance(background)),
-        reverse=True,
-    )
-    return (lighter + 0.05) / (darker + 0.05)
-
-
 def _contrasting_authored_color(
     contract: DeckMasterContract,
     *,
@@ -199,8 +178,8 @@ def _contrasting_authored_color(
             )
         )
     )
-    selected = max(candidates, key=lambda color: _contrast_ratio(color, background))
-    ratio = _contrast_ratio(selected, background)
+    selected = max(candidates, key=lambda color: contrast_ratio(color, background))
+    ratio = contrast_ratio(selected, background)
     if ratio < 4.5:
         raise ValueError(
             f"{consumer} has no Authored color token with 4.5:1 contrast "
@@ -245,7 +224,7 @@ def _emphasis_style(
     surface = _CANONICAL_BODY_COLORS["surface"]
     color = (
         accent
-        if _contrast_ratio(accent, surface) >= 4.5
+        if contrast_ratio(accent, surface) >= 4.5
         else _contrasting_authored_color(
             contract,
             background=surface,
