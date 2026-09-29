@@ -27,6 +27,7 @@ from services.authored_admission_checkpoint import (
     admit_checkpoint_write, checkpoint_receipt_metadata, enforce_receipts,
 )
 from services.authored_admission_receipt import AdmissionReceipt
+from utils.env_settings.authored_runtime import get_authored_test_failure_hooks
 from services.authored_checkpoint_fence import (
     checkpoint_mutation_session as _checkpoint_mutation_session,
     completed_count as _completed_count,
@@ -512,18 +513,18 @@ async def progress_for_task(
 def should_inject_failure(
     checkpoint: AuthoredSlideCheckpoint, *, slide_index: int, stage: str
 ) -> bool:
-    if os.getenv("AUTHORED_TEST_FAILURES_ENABLED", "").lower() not in {"1", "true"}:
+    hooks = get_authored_test_failure_hooks()
+    if not hooks.enabled:
         return False
     if get_environment_name() not in {
         "development",
         "test",
     } and not os.getenv("PYTEST_CURRENT_TEST"):
         return False
-    try:
-        target_slide = int(os.getenv("AUTHORED_TEST_FAILURE_SLIDE", "0"))
-    except ValueError:
+    if hooks.slide is None:
         return False
-    target_stage = os.getenv("AUTHORED_TEST_FAILURE_STAGE", "").strip().lower()
+    target_slide = hooks.slide
+    target_stage = hooks.stage
     already_injected = bool(
         checkpoint.error and checkpoint.error.get("code") == "authored_injected_failure"
     )

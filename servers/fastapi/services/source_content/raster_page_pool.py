@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from constants.settings_registry import get_setting_default
+from utils.env_settings.authored_runtime import get_raster_analysis_process_workers
 from services.source_content.raster_stage_timing import (
     activate,
     bind,
@@ -59,9 +60,9 @@ def _run_page(page_data: Any, slide_size: tuple[int, int], tesseract: Path,
 
 
 def _page_count(page_count: int, override: int | None) -> int:
-    configured = int(os.environ.get("RASTER_ANALYSIS_PROCESS_WORKERS", get_setting_default(
-        "RASTER_ANALYSIS_PROCESS_WORKERS"
-    )))
+    configured = get_raster_analysis_process_workers(
+        default=int(get_setting_default("RASTER_ANALYSIS_PROCESS_WORKERS"))
+    )
     if configured < 0:
         raise ValueError("raster_analysis_process_workers_invalid")
     limit = configured or min(4, max(1, (os.cpu_count() or 2) - 1))

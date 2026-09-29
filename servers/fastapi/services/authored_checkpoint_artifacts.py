@@ -27,6 +27,7 @@ from services.database import async_session_maker
 from services.artifact_store import configured_public_artifact_service
 from services.workspace_service import canonical_payload_hash
 from utils.datetime_utils import get_current_utc_datetime
+from utils.env_settings.authored_runtime import get_authored_checkpoint_directory
 from utils.get_env import get_app_data_directory_env
 from services.authored_checkpoint_html import checkpoint_stage_html
 from services.authored_checkpoint_sweep_budget import (
@@ -56,7 +57,7 @@ def _has_unsealed_evidence(directory: Path) -> bool:
 
 
 def checkpoint_root() -> Path:
-    configured = os.getenv("AUTHORED_CHECKPOINT_DIRECTORY", "").strip()
+    configured = get_authored_checkpoint_directory()
     if configured:
         root = Path(configured)
     else:

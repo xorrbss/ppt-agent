@@ -18,6 +18,9 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from services.authored_composition_policy import _normalized_capacity_owned_text
+from utils.env_settings.authored_runtime import (
+    get_authored_quality_receipt_directory,
+)
 from services.authored_font_signal import body_font_median_px
 from services.authored_quality_receipt_helpers import (
     append_unique as _append,
@@ -39,7 +42,7 @@ def quality_receipt_root() -> Path:
     app-data fallback as authored checkpoints.
     """
 
-    configured = os.getenv("AUTHORED_QUALITY_RECEIPT_DIRECTORY", "").strip()
+    configured = get_authored_quality_receipt_directory()
     if configured:
         root = Path(configured)
     else:

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-import os
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -19,10 +18,8 @@ from services.presentation_profiles import (
     resolve_presentation_profile,
 )
 from utils.datetime_utils import get_current_utc_datetime
+from utils.env_settings.authored_runtime import get_compatibility_retirement_flags
 from utils.owner_context import get_current_owner_id, get_current_owner_is_admin
-
-
-_TRUE = frozenset({"1", "true", "yes", "on"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,10 +98,6 @@ def _owner_predicate(model):
     owner_id = get_current_owner_id()
     column = model.owner_id
     return column.is_(None) if owner_id is None else column == owner_id
-
-
-def _env_true(name: str) -> bool:
-    return (os.getenv(name) or "").strip().lower() in _TRUE
 
 
 async def backfill_presentation_profiles(
@@ -208,6 +201,7 @@ async def compatibility_readiness(
         and isinstance(job.request_payload, dict)
         and bool(job.request_payload.get("files"))
     )
+    retirement = get_compatibility_retirement_flags()
     return CompatibilityReadiness(
         evidence_scope="global" if aggregate_all_owners else "owner",
         global_removal_evidence=aggregate_all_owners,
@@ -231,14 +225,14 @@ async def compatibility_readiness(
             bool(row.file_paths) for row in presentations
         ),
         jobs_with_raw_file_paths=raw_jobs,
-        legacy_image_path_callers_disabled=_env_true(
-            "LEGACY_IMAGE_PATH_CALLERS_DISABLED"
+        legacy_image_path_callers_disabled=(
+            retirement.legacy_image_path_callers_disabled
         ),
-        legacy_generation_mode_readers_disabled=_env_true(
-            "LEGACY_GENERATION_MODE_READERS_DISABLED"
+        legacy_generation_mode_readers_disabled=(
+            retirement.legacy_generation_mode_readers_disabled
         ),
-        legacy_raw_path_callers_disabled=_env_true(
-            "LEGACY_RAW_PATH_CALLERS_DISABLED"
+        legacy_raw_path_callers_disabled=(
+            retirement.legacy_raw_path_callers_disabled
         ),
     )
 

@@ -9,7 +9,6 @@ import asyncio
 import html as _html
 import inspect
 import logging
-import os
 import re
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
@@ -107,7 +106,11 @@ _normalized_authoring_reasoning_effort = (
 def authored_semantic_dual_output_mode() -> str:
     """Return the fail-closed rollout mode for new Authored candidates."""
 
-    value = os.getenv("AUTHORED_SEMANTIC_DUAL_OUTPUT_MODE", "shadow").strip().lower()
+    from utils.env_settings.authored_runtime import (
+        get_authored_semantic_dual_output_mode,
+    )
+
+    value = get_authored_semantic_dual_output_mode()
     if value not in {"shadow", "declared"}:
         logger.warning(
             "Unsupported AUTHORED_SEMANTIC_DUAL_OUTPUT_MODE=%r; using shadow",

@@ -33,6 +33,10 @@ from models.slidespec_v1 import (
     SlideSpec,
 )
 from models.sql.slide import SlideModel
+from utils.env_settings.authored_runtime import (
+    get_slidespec_slide_concurrency,
+    is_slidespec_repair_proposal_llm_enabled,
+)
 from models.sql.slidespec_artifact_bundle import SlideSpecArtifactBundle
 from services import presentation_version_service as version_service
 from services.authored_quality_acceptance import (
@@ -163,12 +167,7 @@ def _proposal_llm_enabled() -> bool:
     unchanged hard/content/OCR/source/VQA gates.
     """
 
-    return os.getenv("SLIDESPEC_REPAIR_PROPOSAL_LLM_ENABLED", "1").strip().lower() not in {
-        "0",
-        "false",
-        "no",
-        "off",
-    }
+    return is_slidespec_repair_proposal_llm_enabled()
 
 _DOM_CODE = {
     "clipping": "dom.clipping",
@@ -2901,13 +2900,7 @@ async def execute_slidespec_authored_review(
     slide_ids = {position: slides[position].id for position in claimed}
     deck_snapshot = tuple(slide.model_dump(mode="json") for slide in slides)
     adjacency = adjacent_influence_digests(deck_snapshot)
-    try:
-        slide_concurrency = max(
-            1,
-            min(8, int(os.getenv("SLIDESPEC_SLIDE_CONCURRENCY", "3"))),
-        )
-    except ValueError:
-        slide_concurrency = 3
+    slide_concurrency = get_slidespec_slide_concurrency()
     scheduler = BoundedSlideScheduler(slide_concurrency)
     pattern_registry = RepairPatternRegistry()
     max_incremental_repairs = 12

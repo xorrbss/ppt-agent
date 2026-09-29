@@ -3,6 +3,7 @@ import json
 import os
 from fastembed_vectorstore import FastembedEmbeddingModel, FastembedVectorstore
 from utils.asset_directory_utils import absolute_fastapi_asset_url
+from utils.env_settings.authored_runtime import get_fastembed_icon_cache_dir
 from utils.icon_weights import (
     ALLOWED_ICON_WEIGHTS,
     DEFAULT_ICON_WEIGHT,
@@ -15,7 +16,7 @@ def _icon_fastembed_cache_directory() -> str:
     """ONNX weights for icon search (MiniLM). Prefer a path outside ``APP_DATA_DIRECTORY``
     in Docker: ``./app_data`` is often bind-mounted and would hide weights baked at image build.
     """
-    override = (os.getenv("PRESENTON_FASTEMBED_ICON_CACHE_DIR") or "").strip()
+    override = get_fastembed_icon_cache_dir()
     if override:
         path = os.path.abspath(override)
         os.makedirs(path, exist_ok=True)

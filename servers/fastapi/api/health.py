@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from typing import Any
 
 import httpx
@@ -42,6 +41,7 @@ from utils.get_env import (
     get_codex_token_refresh_leeway_seconds,
     get_llm_provider_env,
     get_next_internal_base_url,
+    get_setting_env,
     is_codex_token_auto_refresh_enabled,
 )
 from utils.runtime_settings import get_process_runtime_settings
@@ -97,7 +97,7 @@ async def _check_chrome() -> dict[str, Any]:
 
 
 async def _check_nextjs() -> dict[str, Any]:
-    if not (os.getenv("NEXT_INTERNAL_URL") or "").strip():
+    if not (get_setting_env("NEXT_INTERNAL_URL") or "").strip():
         return {"ok": True, "skipped": True, "detail": "NEXT_INTERNAL_URL not set"}
 
     base_url = get_next_internal_base_url()

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import os
 import time
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import replace
@@ -13,6 +12,7 @@ from typing import Any, Awaitable, Callable, Optional
 from services.authored_admission_capture import capture_once, captured_metrics_or_existing
 from services.authored_structural_repair import RepairAssessment, SlideRepairResult
 from services.provider_usage_instrumentation import _ACTIVE_SCOPE, provider_usage_scope
+from utils.env_settings.authored_runtime import get_codex_reasoning_effort
 from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
 
 async def revise_structural_candidates(
@@ -182,7 +182,7 @@ async def revise_structural_candidates(
                     "affected_qids": list(scope.affected_qids),
                 },
                 "configured_model": None,
-                "reasoning_effort": os.getenv("CODEX_REASONING_EFFORT") or None,
+                "reasoning_effort": get_codex_reasoning_effort(),
             }
             try:
                 if not budget.claim_provider_transmission():

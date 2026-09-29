@@ -1773,7 +1773,9 @@ async def _render_admitted_html_in_worker(
 ) -> tuple[bytes, Mapping[str, Any] | None]:
     """Low-level worker-only CDP entry; never starts another worker or file render."""
 
-    if os.getenv("AUTHORED_RENDERER_WORKER") != "1":
+    from utils.env_settings.authored_runtime import is_authored_renderer_worker_process
+
+    if not is_authored_renderer_worker_process():
         raise RendererIsolationError("worker-only renderer called outside isolation boundary")
     # This worker owns no author/network work and renders one request in a
     # private Chrome process.  Keeping POSIX FD inheritance on its main thread
