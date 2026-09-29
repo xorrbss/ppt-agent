@@ -13,7 +13,6 @@ import asyncio
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
-from hashlib import sha256
 import json
 import threading
 from typing import AsyncIterator, Awaitable, Callable, Literal, Sequence
@@ -40,6 +39,7 @@ from services.artifact_store import (
 )
 from services.workspace_operation_handler_registry import WorkspaceOperationClaim
 from utils.get_env import get_environment_name
+from utils.hashing import canonical_json_sha256, sha256_hex, sha256_prefixed
 
 
 EXPORT_IDENTITY_SCHEMA_VERSION = "public-export-identity/v2"
@@ -81,7 +81,7 @@ def _normalized_text(value: str, *, field: str, maximum: int = 160) -> str:
 def _attempt_token_hash(value: str) -> str:
     if not value:
         raise PublicExportIdentityBindingError("public_export_attempt_token_required")
-    return "sha256:" + sha256(value.encode("utf-8")).hexdigest()
+    return sha256_prefixed(value.encode("utf-8"))
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,14 +163,7 @@ class CanonicalSlideRenderIdentity:
 
     @property
     def canonical_digest(self) -> str:
-        return sha256(
-            json.dumps(
-                self.content_wire(),
-                ensure_ascii=True,
-                sort_keys=True,
-                separators=(",", ":"),
-            ).encode("utf-8")
-        ).hexdigest()
+        return canonical_json_sha256(self.content_wire(), ensure_ascii=True, allow_nan=True)
 
     @property
     def stage_version(self) -> str:
@@ -649,14 +642,7 @@ class CanonicalExportIdentity:
 
     @property
     def canonical_digest(self) -> str:
-        return sha256(
-            json.dumps(
-                self.canonical_wire(),
-                ensure_ascii=True,
-                sort_keys=True,
-                separators=(",", ":"),
-            ).encode("utf-8")
-        ).hexdigest()
+        return canonical_json_sha256(self.canonical_wire(), ensure_ascii=True, allow_nan=True)
 
     def export_key(self, source_checkpoint: ArtifactRef) -> ExportIdentityKey:
         if (
@@ -665,7 +651,7 @@ class CanonicalExportIdentity:
             or source_checkpoint.owner_id != self.owner_id
             or source_checkpoint.tenant_id != self.tenant_id
             or source_checkpoint.sha256
-            != sha256(self.checkpoint_payload()).hexdigest()
+            != sha256_hex(self.checkpoint_payload())
         ):
             raise PublicExportIdentityBindingError(
                 "public_export_identity_checkpoint_binding_invalid"
@@ -733,7 +719,7 @@ def restore_canonical_export_identity(
         raise PublicExportIdentityBindingError(
             "public_export_checkpoint_size_mismatch"
         )
-    if sha256(payload).hexdigest() != source_checkpoint.sha256:
+    if sha256_hex(payload) != source_checkpoint.sha256:
         raise PublicExportIdentityBindingError(
             "public_export_checkpoint_digest_mismatch"
         )

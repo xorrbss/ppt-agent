@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import datetime, timedelta, timezone
-from hashlib import sha256
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -27,6 +26,7 @@ from services.workspace_operation_handler_registry import (
 )
 from services.workspace_operation_retry_policy import WorkspaceOperationRetryDecision
 from utils.datetime_utils import as_utc
+from utils.hashing import sha256_hex
 
 
 PUBLIC_OPERATION_CONTRACT_VERSION = "public-operation/v2"
@@ -104,9 +104,7 @@ def recovery_retry_transition(
         "next_attempt_at": decision.next_attempt_at,
     }
     if attempt_token is not None:
-        payload["reclaimed_attempt_token_sha256"] = sha256(
-            str(attempt_token).encode("utf-8")
-        ).hexdigest()
+        payload["reclaimed_attempt_token_sha256"] = sha256_hex(str(attempt_token).encode("utf-8"))
     projection: dict[str, object] = {
         "state": decision.state,
         "retry_count": decision.retry_count,
