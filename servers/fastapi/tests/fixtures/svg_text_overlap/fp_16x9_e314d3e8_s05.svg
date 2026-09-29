@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect x="0" y="0" width="1280" height="720" fill="#F8FAFC" />
+
+  <text x="56" y="49" font-family="Noto Sans KR" font-size="15" font-weight="bold" fill="#2563EB">투자 의사결정</text>
+  <text x="56" y="101" font-family="Noto Sans KR" font-size="38" font-weight="bold" fill="#0F172A">투자 검증, 리스크 대응과 승인 요청</text>
+  <text x="56" y="139" font-family="Noto Sans KR" font-size="19" font-weight="normal" fill="#475569">회수기간은 현금흐름 검증이 필요하며, 확대 기준은 경영진 승인이 필요합니다.</text>
+
+  <line x1="56" y1="165" x2="1224" y2="165" stroke="#CBD5E1" stroke-width="1" />
+  <text x="56" y="195" font-family="Noto Sans KR" font-size="20" font-weight="bold" fill="#0F172A">투자 검증 현황</text>
+
+  <text x="56" y="231" font-family="Noto Sans KR" font-size="15" font-weight="normal" fill="#64748B">총 투자비</text>
+  <text x="56" y="271" font-family="Noto Sans KR" font-size="30" font-weight="bold" fill="#0F172A">약 24억 원</text>
+  <text x="249" y="231" font-family="Noto Sans KR" font-size="15" font-weight="normal" fill="#64748B">예상 회수기간</text>
+  <text x="249" y="271" font-family="Noto Sans KR" font-size="30" font-weight="bold" fill="#0F172A">2.5년</text>
+  <text x="432" y="231" font-family="Noto Sans KR" font-size="15" font-weight="normal" fill="#64748B">균등 회수 가정 시 연간 필요액</text>
+  <text x="432" y="271" font-family="Noto Sans KR" font-size="30" font-weight="bold" fill="#2563EB">약 9.6억 원</text>
+
+  <line x1="661" y1="205" x2="661" y2="290" stroke="#2563EB" stroke-width="3" />
+  <text x="681" y="226" font-family="Noto Sans KR" font-size="16" font-weight="normal" fill="#334155">단계별 지출·편익 발생 시점과 운영비를 포함한</text>
+  <text x="681" y="250" font-family="Noto Sans KR" font-size="16" font-weight="normal" fill="#334155">현금흐름이 없어 2.5년 회수기간은 검증할 수 없습니다.</text>
+  <text x="681" y="281" font-family="Noto Sans KR" font-size="15" font-weight="normal" fill="#64748B">연 9.6억 원은 단순 균등 회수 가정의 필요액이며, 검증된 편익 전망치가 아닙니다.</text>
+
+  <text x="56" y="329" font-family="Noto Sans KR" font-size="21" font-weight="bold" fill="#0F172A">주요 리스크와 확인 기준</text>
+
+  <g id="native-table-risk-response">
+    <rect x="56" y="344" width="1168" height="227" fill="#FFFFFF" />
+    <rect x="56" y="344" width="1168" height="39" fill="#EAF1FF" />
+    <line x1="56" y1="344" x2="1224" y2="344" stroke="#CBD5E1" stroke-width="1" />
+    <line x1="56" y1="383" x2="1224" y2="383" stroke="#CBD5E1" stroke-width="1" />
+    <line x1="56" y1="445" x2="1224" y2="445" stroke="#CBD5E1" stroke-width="1" />
+    <line x1="56" y1="507" x2="1224" y2="507" stroke="#CBD5E1" stroke-width="1" />
+    <line x1="56" y1="571" x2="1224" y2="571" stroke="#CBD5E1" stroke-width="1" />
+    <line x1="56" y1="344" x2="56" y2="571" stroke="#CBD5E1" stroke-width="1" />
+    <line x1="274" y1="344" x2="274" y2="571" stroke="#CBD5E1" stroke-width="1" />
+    <line x1="617" y1="344" x2="617" y2="571" stroke="#CBD5E1" stroke-width="1" />
+    <line x1="1224" y1="344" x2="1224" y2="571" stroke="#CBD5E1" stroke-width="1" />
+
+    <text x="73" y="370" font-family="Noto Sans KR" font-size="16" font-weight="bold" fill="#0F172A">리스크</text>
+    <text x="291" y="370" font-family="Noto Sans KR" font-size="16" font-weight="bold" fill="#0F172A">대응</text>
+    <text x="634" y="370" font-family="Noto Sans KR" font-size="16" font-weight="bold" fill="#0F172A">효과·완료 확인 기준</text>
+
+    <text x="73" y="407" font-family="Noto Sans KR" font-size="17" font-weight="bold" fill="#0F172A"><tspan x="73" y="407">현장 인력의</tspan><tspan x="73" y="431">변화 수용</tspan></text>
+    <text x="291" y="407" font-family="Noto Sans KR" font-size="16" font-weight="normal" fill="#334155"><tspan x="291" y="407">정지·불량 기록 기준과</tspan><tspan x="291" y="431">경보 대응 교육</tspan></text>
+    <text x="634" y="407" font-family="Noto Sans KR" font-size="16" font-weight="normal" fill="#334155"><tspan x="634" y="407">기록의 일관성과 조치 이력으로</tspan><tspan x="634" y="431">교육 효과 확인</tspan></text>
+
+    <text x="73" y="469" font-family="Noto Sans KR" font-size="17" font-weight="bold" fill="#0F172A"><tspan x="73" y="469">레거시 설비의</tspan><tspan x="73" y="493">데이터 호환성</tspan></text>
+    <text x="291" y="480" font-family="Noto Sans KR" font-size="16" font-weight="normal" fill="#334155">게이트웨이 표준화</text>
+    <text x="634" y="469" font-family="Noto Sans KR" font-size="16" font-weight="normal" fill="#334155"><tspan x="634" y="469">설비별 원본 신호와 공통 형식 변환값을 대조해</tspan><tspan x="634" y="493">상태 오분류 점검</tspan></text>
+
+    <text x="73" y="546" font-family="Noto Sans KR" font-size="17" font-weight="bold" fill="#0F172A">보안 체계 구축</text>
+    <text x="291" y="546" font-family="Noto Sans KR" font-size="16" font-weight="normal" fill="#334155">OT 보안 진단</text>
+    <text x="634" y="531" font-family="Noto Sans KR" font-size="16" font-weight="normal" fill="#334155"><tspan x="634" y="531">설비망 연결·원격 접속 권한·계정 관리·</tspan><tspan x="634" y="555">사고 시 생산 복구 지적사항의 조치 완료 확인</tspan></text>
+  </g>
+
+  <rect x="56" y="591" width="1168" height="91" fill="#EAF1FF" />
+  <rect x="56" y="591" width="4" height="91" fill="#2563EB" />
+  <text x="77" y="625" font-family="Noto Sans KR" font-size="19" font-weight="bold" fill="#2563EB">경영진 승인 요청</text>
+  <text x="287" y="625" font-family="Noto Sans KR" font-size="17" font-weight="normal" fill="#0F172A">단계별 기간의 의미 · 24억 원의 배분 원칙 · 2.5년 회수기간의 산정 기준</text>
+  <text x="287" y="654" font-family="Noto Sans KR" font-size="17" font-weight="normal" fill="#0F172A">3개 라인의 적용 우선순위 · 단계 종료 시 확대 기준</text>
+<text id="svg-system-page-number" x="1248" y="700" font-family="Noto Sans KR" font-size="12" fill="#2563EB" text-anchor="end">06</text></svg>

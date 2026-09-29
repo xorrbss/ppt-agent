@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1680" height="720" viewBox="0 0 1680 720">
+  <rect x="0" y="0" width="1680" height="720" fill="#F8FAFC" />
+  <rect x="80" y="80" width="58" height="5" fill="#2563EB" />
+  <text x="80" y="119" font-family="Noto Sans KR" font-size="17" font-weight="700" fill="#2563EB">인사제도 제안</text>
+
+  <text x="76" y="230" font-family="Noto Sans KR" font-size="60" font-weight="700" fill="#0F172A">전사 하이브리드 근무</text>
+  <text x="76" y="314" font-family="Noto Sans KR" font-size="60" font-weight="700" fill="#0F172A">제도 개편안</text>
+
+  <text x="80" y="407" font-family="Noto Sans KR" font-size="23" font-weight="normal" fill="#334155">주 2일 재택 시범 운영의 성과를 유지하면서</text>
+  <text x="80" y="444" font-family="Noto Sans KR" font-size="23" font-weight="normal" fill="#334155">온보딩과 부서 간 협업 문제를 해결하기 위한</text>
+  <text x="80" y="481" font-family="Noto Sans KR" font-size="23" font-weight="normal" fill="#334155">운영·공간 개편안을 제안합니다.</text>
+
+  <line x1="1000" y1="165" x2="1000" y2="548" stroke="#2563EB" stroke-width="3" />
+  <text x="1035" y="198" font-family="Noto Sans KR" font-size="18" font-weight="700" fill="#2563EB">추진 방향</text>
+  <text x="1035" y="251" font-family="Noto Sans KR" font-size="29" font-weight="700" fill="#0F172A">성과는 유지하고,</text>
+  <text x="1035" y="295" font-family="Noto Sans KR" font-size="29" font-weight="700" fill="#0F172A">협업 경험은 개선합니다.</text>
+
+  <line x1="1035" y1="337" x2="1560" y2="337" stroke="#CBD5E1" stroke-width="1" />
+  <text x="1035" y="378" font-family="Noto Sans KR" font-size="18" font-weight="700" fill="#2563EB">확대 검토와 점검</text>
+  <text x="1035" y="420" font-family="Noto Sans KR" font-size="21" font-weight="normal" fill="#334155">다음 분기 2개 본부에서 파일럿을 운영하고,</text>
+  <text x="1035" y="454" font-family="Noto Sans KR" font-size="21" font-weight="normal" fill="#334155">반기 후 전사 확대를 검토합니다.</text>
+  <text x="1035" y="500" font-family="Noto Sans KR" font-size="21" font-weight="normal" fill="#334155">분기별 성과 점검 결과에 따라</text>
+  <text x="1035" y="534" font-family="Noto Sans KR" font-size="21" font-weight="normal" fill="#334155">제도를 조정합니다.</text>
+
+  <line x1="80" y1="613" x2="1600" y2="613" stroke="#CBD5E1" stroke-width="1" />
+  <text x="80" y="659" font-family="Noto Sans KR" font-size="17" font-weight="normal" fill="#64748B">발표  인사팀</text>
+  <text x="310" y="659" font-family="Noto Sans KR" font-size="17" font-weight="normal" fill="#64748B">2026년 9월 29일</text>
+<text id="svg-system-page-number" x="1648" y="700" font-family="Noto Sans KR" font-size="12" fill="#2563EB" text-anchor="end">01</text></svg>

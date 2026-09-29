@@ -322,6 +322,7 @@ def _instrument_authored_html(
     from utils.slide_capture_local_fit import observation_script
     from utils.source_canvas_normalization import normalization_probe_js
     from utils.slide_capture_font_paint import FONT_AND_PAINT_JS
+    from utils.slide_capture_text_ink import TEXT_INK_JS
     fit_prelude = probe_fit_prelude(html)  # local fit, else in-render class, else none
     script = rf"""<script data-codex-dom-probe{nonce_attribute}>
 (() => {{
@@ -331,6 +332,7 @@ def _instrument_authored_html(
     const fit = __codexFitPass(pass);
     const px = (value) => {{ const parsed = parseFloat(value || '0'); return Number.isFinite(parsed) ? parsed : 0; }};
     {FONT_AND_PAINT_JS}
+    {TEXT_INK_JS}
     {ROUNDED_PAINT_DOMAIN_JS}
     {POLYGON_PAINT_DOMAIN_JS}
     const ownedSurfaceRectCache = new WeakMap();
@@ -786,6 +788,7 @@ def _instrument_authored_html(
       const glyph = glyphClip(node);
       const contrast = contrastRatio(node, style);
       const textRects = ownedTextRects(node);
+      const textInkRects = textRects.length ? ownedTextInkRects(node) : null;
       const surfaceRects = ownedSurfaceRects(node);
       const q = quad(node, rect);
       const occultation = occlusion(node, rect, q.points, textRects, surfaceRects);
@@ -874,6 +877,7 @@ def _instrument_authored_html(
         effective_z_index: (Number.isFinite(explicitZ) ? explicitZ * 100000 : 0) + domIndex,
         contrast_ratio: contrast,
         text_fragments: textRects,
+        ...(textInkRects ? {{text_ink_fragments: textInkRects}} : {{}}),
         requires_pixel_contrast: textRects.length > 0 && contrast === null,
         visual_effects: effectValues,
         measurement: {{geometry: true, transform: q.measured, clipping: true, contrast: contrast !== null, occlusion: occultation.fraction !== null, stacking: true, visual_effects: !complexEffect}},

@@ -1,6 +1,6 @@
 # svg `text_overlap` false positives: measure glyph ink, not font line boxes
 
-Date: 2026-09-29. Status: **design only, no product code changed.** Scope: svg decks
+Date: 2026-09-29. Status: **option A implemented** (see section 9). Scope: svg decks
 (`strategy=svg`, driver `svg-v1`). Follows the observation in
 `docs/canvas-bench-square-ultrawide-20260929.md` ("Most flags look like false positives").
 
@@ -336,3 +336,47 @@ Tests:
    alone? It is frozen (generation-core programme), so the default here is to leave it.
 5. **Fallback page leading.** Once the fix lands, should `fallback.py:44-47` return to a normal 1.4
    leading, or keep 1.6?
+
+## 9. Implementation (2026-09-29)
+
+Option A is implemented with the section 8 defaults the user approved: `SVG_RENDERER_VERSION` is
+unchanged, existing `review_required` decks are not re-measured, line-box-only overlaps are dropped
+(no advisory), and the authored path and the fallback page's 1.6 leading are untouched.
+
+- **Probe:** `utils/slide_capture_text_ink.py` (`TEXT_INK_JS`) adds `text_ink_fragments` next to
+  `text_fragments`, aligned one-to-one, only on SVG text content elements (HTML payloads carry no new
+  key; `text_fragments` is byte-identical on all 36 round-1 pages).
+- **Decision:** `services/svg_text_overlap.py` is the single decision point, called from
+  `render_svg_with_metrics`. Same 0.5 px rule, same failure kind and pair output. `quality.overlap_basis`
+  records `{version: "glyph-ink/v1", fragments: {ink, line_box}, pairs: [{pair, basis}]}` with
+  `basis` in `ink` | `line_box` | `mixed`.
+- **Deviation from section 5 (measurement):** one `measureText` of the whole run did not reproduce
+  Chromium's SVG layout. Spaces and U+00B7 after Hangul are laid out with different advances than canvas
+  shapes them, so the run-level `|m.width·k − rect.width|` check rejected most Korean titles. The probe
+  instead measures **each grapheme cluster** and places its ink at the cluster's laid-out start
+  (`getStartPositionOfChar` through `getScreenCTM`); the fragment's ink box is the union. The self-check
+  is per cluster: the in-context canvas advance (`width(c + next) − width(next)`, so pair kerning
+  counts) must equal the laid-out advance within 1 px, and every cluster must sit on the run's baseline.
+  The run-level checks that remain are the line-box height (`fontBoundingBox` ascent + descent) and the
+  origin (baseline − ascent = rect top, start x = rect left), each within 1 px.
+- **Fallbacks (entry `null` → line box):** more than one client rect for the text node; a non-uniform,
+  rotated or skewed screen CTM; `textPath`, `textLength`/`lengthAdjust`, multi-value `x`/`y`/`dx`/`dy`,
+  non-zero `rotate`; `filter`, `text-shadow` or text decoration on the run or an ancestor; mixed content
+  (the element has child elements); non-horizontal writing mode, RTL, `text-transform`, font variant,
+  feature/variation settings, `font-stretch`, `font-size-adjust`; the font is not a loaded `@font-face`
+  covering the computed weight and style; addressable-character count mismatch; any cluster advance or
+  baseline mismatch. Stroked text is not a fallback: the box is inflated by half the stroke width
+  (times the miter limit for miter joins).
+- **Offline re-measure** (round-1 bench, 36 pages, new code path): the 12 replay-flagged pages all
+  clear (12 of the 13 receipt-flagged pages; the 13th was not reproducible offline under the old code
+  either). No page is flagged. 753 of 852 fragments were decided on ink; 97 of the 99 line-box
+  fallbacks are runs containing U+00B7 (the middle dot or its neighbour has a different laid-out advance
+  than canvas gives it), 2 are mixed-content
+  `<text>` elements. Synthetic controls: TP1–TP6 still `text_overlap`, all on the ink basis; N1–N4 pass.
+- **Tests:** `tests/unit/test_svg_text_overlap.py` (pure decision) and
+  `tests/unit/test_svg_text_overlap_browser.py` (Chrome: the 12 bench fixtures, TP1–TP6, N1–N4, and each
+  fallback condition reproducing the line-box verdict), fixtures in
+  `tests/fixtures/svg_text_overlap/`. Not done: the pixel-truth oracle test (section 7.2) and the live
+  regeneration check (section 7.6).
+- **Not bumped:** `DOM_METRICS_VERSION`. The metrics cache is in-process; a cached pre-change capture
+  has no ink array and therefore keeps the line-box verdict, which is the fail-closed direction.

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="720" viewBox="0 0 720 720">
+  <rect x="0" y="0" width="720" height="720" fill="#F8FAFC" />
+
+  <rect x="64" y="65" width="34" height="4" fill="#2563EB" />
+  <text x="64" y="94" font-family="Noto Sans KR" font-size="15" font-weight="700" fill="#2563EB">스마트팩토리 투자 계획</text>
+
+  <text x="64" y="153" font-family="Noto Sans KR" font-size="35" font-weight="700" fill="#0F172A">중견 제조기업</text>
+  <text x="64" y="201" font-family="Noto Sans KR" font-size="35" font-weight="700" fill="#0F172A">스마트팩토리 단계별 도입</text>
+  <text x="64" y="240" font-family="Noto Sans KR" font-size="17" font-weight="400" fill="#64748B">수기 기록을 실시간 데이터 체계로 전환합니다.</text>
+
+  <rect x="64" y="282" width="592" height="237" fill="#FFFFFF" />
+  <rect x="64" y="282" width="592" height="3" fill="#2563EB" />
+  <text x="88" y="319" font-family="Noto Sans KR" font-size="15" font-weight="700" fill="#64748B">도입 대상</text>
+  <text x="88" y="391" font-family="Noto Sans KR" font-size="62" font-weight="700" fill="#2563EB">3</text>
+  <text x="137" y="386" font-family="Noto Sans KR" font-size="24" font-weight="700" fill="#0F172A">개 생산라인</text>
+  <line x1="88" y1="416" x2="632" y2="416" stroke="#E2E8F0" stroke-width="1" />
+  <text x="88" y="454" font-family="Noto Sans KR" font-size="15" font-weight="700" fill="#64748B">전환 목표</text>
+  <text x="88" y="488" font-family="Noto Sans KR" font-size="21" font-weight="700" fill="#0F172A">실시간 데이터 기반 생산 운영</text>
+
+  <text x="64" y="563" font-family="Noto Sans KR" font-size="15" font-weight="700" fill="#2563EB">확장 방향</text>
+  <text x="64" y="595" font-family="Noto Sans KR" font-size="22" font-weight="700" fill="#0F172A">예지보전과 공급망 연계</text>
+
+  <line x1="64" y1="625" x2="656" y2="625" stroke="#CBD5E1" stroke-width="1" />
+  <text x="64" y="655" font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#64748B">발표: 스마트팩토리 추진 담당자</text>
+  <text x="64" y="680" font-family="Noto Sans KR" font-size="14" font-weight="400" fill="#64748B">보고일: 2026년 9월 29일</text>
+<text id="svg-system-page-number" x="688" y="700" font-family="Noto Sans KR" font-size="12" fill="#2563EB" text-anchor="end">01</text></svg>

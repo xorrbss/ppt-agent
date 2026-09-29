@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="720" viewBox="0 0 720 720">
+  <rect x="0" y="0" width="720" height="720" fill="#F8FAFC" />
+
+  <text x="64" y="57" font-family="Noto Sans KR" font-size="15" font-weight="bold" fill="#2563EB">시범 운영 성과와 남은 문제</text>
+  <text x="64" y="105" font-family="Noto Sans KR" font-size="31" font-weight="bold" fill="#0F172A">성과를 유지하며 운영 문제를 개선합니다</text>
+  <text x="64" y="141" font-family="Noto Sans KR" font-size="17" font-weight="normal" fill="#64748B">지난 1년간 · 주 2일 재택 시범 운영</text>
+
+  <rect x="64" y="172" width="592" height="266" fill="#FFFFFF" />
+  <rect x="64" y="172" width="4" height="266" fill="#2563EB" />
+  <text x="86" y="206" font-family="Noto Sans KR" font-size="15" font-weight="bold" fill="#64748B">관찰된 변화</text>
+
+  <text x="86" y="249" font-family="Noto Sans KR" font-size="19" font-weight="bold" fill="#0F172A">직원 만족도</text>
+  <text x="86" y="275" font-family="Noto Sans KR" font-size="14" font-weight="normal" fill="#64748B">점수</text>
+  <text x="306" y="242" font-family="Noto Sans KR" font-size="13" font-weight="normal" fill="#64748B">시범 전</text>
+  <text x="306" y="276" font-family="Noto Sans KR" font-size="29" font-weight="bold" fill="#0F172A">72점</text>
+  <text x="440" y="242" font-family="Noto Sans KR" font-size="13" font-weight="normal" fill="#64748B">시범 후</text>
+  <text x="440" y="276" font-family="Noto Sans KR" font-size="29" font-weight="bold" fill="#2563EB">81점</text>
+  <text x="632" y="267" text-anchor="end" font-family="Noto Sans KR" font-size="15" font-weight="bold" fill="#2563EB">9점 상승</text>
+
+  <line x1="86" y1="303" x2="634" y2="303" stroke="#E2E8F0" stroke-width="1" />
+
+  <text x="86" y="348" font-family="Noto Sans KR" font-size="19" font-weight="bold" fill="#0F172A">자발적 퇴직률</text>
+  <text x="86" y="374" font-family="Noto Sans KR" font-size="14" font-weight="normal" fill="#64748B">비율</text>
+  <text x="306" y="341" font-family="Noto Sans KR" font-size="13" font-weight="normal" fill="#64748B">시범 전</text>
+  <text x="306" y="375" font-family="Noto Sans KR" font-size="29" font-weight="bold" fill="#0F172A">9%</text>
+  <text x="440" y="341" font-family="Noto Sans KR" font-size="13" font-weight="normal" fill="#64748B">시범 후</text>
+  <text x="440" y="375" font-family="Noto Sans KR" font-size="29" font-weight="bold" fill="#2563EB">6%</text>
+  <text x="632" y="366" text-anchor="end" font-family="Noto Sans KR" font-size="15" font-weight="bold" fill="#2563EB">3%p 하락</text>
+  <text x="86" y="415" font-family="Noto Sans KR" font-size="13" font-weight="normal" fill="#64748B">두 변화가 재택근무만의 효과인지는 현재 자료로 구분할 수 없습니다.</text>
+
+  <text x="64" y="480" font-family="Noto Sans KR" font-size="16" font-weight="bold" fill="#0F172A">남은 운영 문제</text>
+  <line x1="64" y1="494" x2="656" y2="494" stroke="#CBD5E1" stroke-width="1" />
+  <circle cx="75" cy="523" r="4" fill="#2563EB" />
+  <text x="91" y="529" font-family="Noto Sans KR" font-size="16" font-weight="normal" fill="#0F172A">신규 입사자의 온보딩 기간 증가</text>
+  <circle cx="75" cy="559" r="4" fill="#2563EB" />
+  <text x="91" y="565" font-family="Noto Sans KR" font-size="16" font-weight="normal" fill="#0F172A">부서 간 협업 회의의 일정 조율 부담 증가</text>
+  <text x="64" y="592" font-family="Noto Sans KR" font-size="13" font-weight="normal" fill="#64748B">두 문제의 기존 소요 시간은 제시되지 않았습니다.</text>
+
+  <rect x="64" y="616" width="592" height="68" fill="#EAF1FF" />
+  <rect x="64" y="616" width="4" height="68" fill="#2563EB" />
+  <text x="82" y="641" font-family="Noto Sans KR" font-size="14" font-weight="bold" fill="#2563EB">개편의 초점</text>
+  <text x="82" y="667" font-family="Noto Sans KR" font-size="17" font-weight="bold" fill="#0F172A">성과를 유지하며 확인된 운영 문제를 개선합니다.</text>
+<text id="svg-system-page-number" x="688" y="700" font-family="Noto Sans KR" font-size="12" fill="#2563EB" text-anchor="end">02</text></svg>

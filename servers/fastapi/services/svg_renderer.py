@@ -265,7 +265,7 @@ async def render_svg_with_metrics(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH
     metrics = json.loads(json.dumps(capture.browser_metrics or {}).replace("\\u0000", "\\u241f"))
     elements = metrics.get("elements") or []
     text = [item for item in elements if item.get("has_owned_text")]
-    failures, overlaps = [], []
+    failures = []
     from services.document_canvas_generation import generation_font_floor
     floor = minimum_font_px if minimum_font_px is not None else generation_font_floor(None, physical_canvas)
     requested_floor = requested_font_floor_px(
@@ -304,19 +304,9 @@ async def render_svg_with_metrics(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH
             failures.append({"kind": "small_body_text", "qid": qid, "minimum_px": floor})
         if item.get("font_loaded") is False:
             failures.append({"kind": "font_unresolved", "qid": qid})
-    for i, a in enumerate(text):
-        for b in text[i + 1:]:
-            if a.get("parent_qid") == b.get("qid") or b.get("parent_qid") == a.get("qid"):
-                continue
-            collision = False
-            for ar in a.get("text_fragments", []):
-                for br in b.get("text_fragments", []):
-                    dx = min(ar["x"] + ar["width"], br["x"] + br["width"]) - max(ar["x"], br["x"])
-                    dy = min(ar["y"] + ar["height"], br["y"] + br["height"]) - max(ar["y"], br["y"])
-                    if dx > 0.5 and dy > 0.5:
-                        collision = True
-            if collision:
-                overlaps.append([a.get("qid"), b.get("qid")])
+    # Glyph ink where the probe established it, else the line box (fail closed).
+    from services.svg_text_overlap import text_overlaps
+    overlaps, overlap_basis = text_overlaps(text)
     if overlaps:
         failures.append({"kind": "text_overlap", "pairs": overlaps})
     normalized = "".join("".join(item.get("owned_text", "") for item in text).split())
@@ -348,5 +338,6 @@ async def render_svg_with_metrics(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH
                "geometry_passed": not failures, "passed": not failures,
                "verified": False, "semantic_review": "required", "failures": failures,
                "body_font_floor_px": floor, "browser_metrics": metrics,
+               "overlap_basis": overlap_basis,
                "trusted_font_materialization": font_profile}
     return SvgRenderResult(capture.png, quality, wrapper, source_digest(svg))

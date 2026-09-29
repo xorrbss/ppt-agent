@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="720" viewBox="0 0 720 720">
+  <rect x="0" y="0" width="720" height="720" fill="#F8FAFC" />
+
+  <text x="64" y="65" font-family="Noto Sans KR" font-size="14" font-weight="bold" fill="#2563EB">대면 업무 운영 설계</text>
+  <rect x="64" y="83" width="42" height="4" fill="#2563EB" />
+  <text x="64" y="129" font-family="Noto Sans KR" font-size="30" font-weight="bold" fill="#0F172A">공통 출근일과 집중 출근으로</text>
+  <text x="64" y="169" font-family="Noto Sans KR" font-size="30" font-weight="bold" fill="#0F172A">대면 업무를 재설계</text>
+
+  <text x="64" y="205" font-family="Noto Sans KR" font-size="15" fill="#64748B">대면 협업을 위한 두 가지 출근 운영 방식</text>
+
+  <rect x="64" y="222" width="592" height="143" fill="#FFFFFF" />
+  <rect x="64" y="222" width="4" height="143" fill="#2563EB" />
+  <text x="86" y="253" font-family="Noto Sans KR" font-size="19" font-weight="bold" fill="#0F172A">팀별 공통 출근일</text>
+  <text x="86" y="284" font-family="Noto Sans KR" font-size="17" fill="#0F172A">의사결정·피드백을 같은 날 진행하고,</text>
+  <text x="86" y="312" font-family="Noto Sans KR" font-size="17" fill="#0F172A">부서 간 협업이 잦은 팀은 상대 부서와</text>
+  <text x="86" y="340" font-family="Noto Sans KR" font-size="17" fill="#0F172A">출근일을 조율합니다.</text>
+
+  <rect x="64" y="376" width="592" height="143" fill="#FFFFFF" />
+  <rect x="64" y="376" width="4" height="143" fill="#2563EB" />
+  <text x="86" y="407" font-family="Noto Sans KR" font-size="19" font-weight="bold" fill="#0F172A">신규 입사자 집중 출근</text>
+  <text x="86" y="438" font-family="Noto Sans KR" font-size="17" fill="#0F172A">입사 후 3개월간 집중 출근하며,</text>
+  <text x="86" y="466" font-family="Noto Sans KR" font-size="17" fill="#0F172A">관리자·동료와의 대면 학습 및 업무 피드백을</text>
+  <text x="86" y="494" font-family="Noto Sans KR" font-size="17" fill="#0F172A">온보딩 일정에 연결합니다.</text>
+
+  <line x1="64" y1="541" x2="656" y2="541" stroke="#CBD5E1" />
+  <text x="64" y="568" font-family="Noto Sans KR" font-size="17" font-weight="bold" fill="#2563EB">함께 보완할 운영 기준</text>
+  <text x="64" y="598" font-family="Noto Sans KR" font-size="16" fill="#0F172A">회의 예약·문서 공유·결정 기록에 쓰는 협업 도구를 표준화합니다.</text>
+  <text x="64" y="629" font-family="Noto Sans KR" font-size="16" fill="#0F172A">평가는 출근 시간보다 직무별 결과물의 품질·납기와</text>
+  <text x="64" y="655" font-family="Noto Sans KR" font-size="16" fill="#0F172A">협업 기여를 반영하도록 보완합니다.</text>
+<text id="svg-system-page-number" x="688" y="700" font-family="Noto Sans KR" font-size="12" fill="#2563EB" text-anchor="end">03</text></svg>
