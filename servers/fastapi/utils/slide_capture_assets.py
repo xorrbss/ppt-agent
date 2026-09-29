@@ -23,13 +23,13 @@ dependencies rather than on their own stat alone.
 
 from __future__ import annotations
 
-import hashlib
 import html as html_lib
 import pathlib
 import re
 import threading
 import urllib.parse
 import urllib.request
+from utils.hashing import sha256_hex, sha256_prefixed
 
 _ASSET_REFERENCE_PATTERN = re.compile(
     r'''(?:\b(?:src|srcset|poster|href|data)\s*=\s*["\']([^"\']+)["\'])|'''
@@ -87,16 +87,14 @@ def _fingerprint_local_asset(path: pathlib.Path, seen: set[pathlib.Path]) -> str
             cached = None if is_stylesheet else _asset_digest_cache.get(key)
         if cached is None:
             content = resolved.read_bytes()
-            digest = hashlib.sha256(content).hexdigest()
+            digest = sha256_hex(content)
             if is_stylesheet:
                 children = [
                     _fingerprint_local_asset(child, seen)
                     for ref in _asset_references(content.decode("utf-8", errors="replace"))
                     if (child := _local_asset_path(ref, base=resolved.parent)) is not None
                 ]
-                digest = hashlib.sha256(
-                    (digest + "\0" + "\0".join(sorted(children))).encode("utf-8")
-                ).hexdigest()
+                digest = sha256_hex((digest + "\0" + "\0".join(sorted(children))).encode("utf-8"))
             cached = f"sha256:{digest}"
             if not is_stylesheet:
                 with _asset_digest_lock:
@@ -105,9 +103,7 @@ def _fingerprint_local_asset(path: pathlib.Path, seen: set[pathlib.Path]) -> str
     except OSError as error:
         # The sentinel itself is identity-bearing, so a later readable asset
         # creates a different key rather than reusing an uncertain render.
-        return "unreadable:" + hashlib.sha256(
-            f"{path}\0{type(error).__name__}".encode("utf-8")
-        ).hexdigest()
+        return "unreadable:" + sha256_hex(f"{path}\0{type(error).__name__}".encode("utf-8"))
     finally:
         if resolved is not None:
             seen.discard(resolved)
@@ -119,7 +115,7 @@ def _asset_fingerprint(html: str) -> str:
     components: list[str] = []
     for reference in _asset_references(html):
         if reference.lower().startswith("data:"):
-            components.append("data:" + hashlib.sha256(reference.encode("utf-8")).hexdigest())
+            components.append("data:" + sha256_hex(reference.encode("utf-8")))
             continue
         path = _local_asset_path(reference)
         if path is not None:
@@ -128,8 +124,8 @@ def _asset_fingerprint(html: str) -> str:
             # This covers relative/blocked remote references deterministically;
             # their literal URL is already part of HTML, but retaining it makes
             # the asset boundary explicit in identity receipts.
-            components.append("reference:" + hashlib.sha256(reference.encode("utf-8")).hexdigest())
-    return "sha256:" + hashlib.sha256("\0".join(sorted(components)).encode("utf-8")).hexdigest()
+            components.append("reference:" + sha256_hex(reference.encode("utf-8")))
+    return sha256_prefixed("\0".join(sorted(components)).encode("utf-8"))
 
 
 __all__ = [

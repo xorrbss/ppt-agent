@@ -11,12 +11,12 @@ from __future__ import annotations
 
 import base64
 import binascii
-import hashlib
 import json
 import re
 from typing import Any, Mapping
 
 from utils.renderer_isolation import MAX_RESPONSE_BYTES, RendererPolicyError
+from utils.hashing import sha256_prefixed
 
 SHA256_DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 RESPONSE_SCHEMA = "authored-render-response/v1"
@@ -36,7 +36,7 @@ class RendererIsolationError(RuntimeError):
 
 
 def source_digest_for(html: str) -> str:
-    return "sha256:" + hashlib.sha256(html.encode("utf-8")).hexdigest()
+    return sha256_prefixed(html.encode("utf-8"))
 
 
 def decode_worker_response(

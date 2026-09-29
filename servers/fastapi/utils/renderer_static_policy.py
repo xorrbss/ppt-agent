@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import base64
 import binascii
-import hashlib
 import re
 import urllib.parse
 import xml.etree.ElementTree as ET
 
 from utils.renderer_worker_policy import RendererPolicyError
+from utils.hashing import sha256_prefixed
 
 
 MAX_STATIC_ASSET_BYTES = 1536 * 1024
@@ -169,7 +169,7 @@ def _neutralize_css(css: str, asset_digests: list[str]) -> str:
         if not value.lower().startswith("data:image/"):
             raise RendererPolicyError("static CSS URLs must be embedded images")
         payload = _decode_static_data_url(value)
-        asset_digests.append("sha256:" + hashlib.sha256(payload).hexdigest())
+        asset_digests.append(sha256_prefixed(payload))
         return "none"
 
     neutralized = _CSS_URL.sub(replace_url, css)

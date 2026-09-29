@@ -9,7 +9,6 @@ bytes) and builds the :class:`StyleContext` that
 from __future__ import annotations
 
 import base64
-import hashlib
 import json
 
 from services.generation_core.drivers.svg.project_style import (
@@ -18,6 +17,7 @@ from services.generation_core.drivers.svg.project_style import (
 )
 from services.generation_core.style.build import build_style_context
 from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
+from utils.hashing import sha256_prefixed
 
 __all__ = ["SVG_STYLE_ADAPTER_VERSION", "adapt_svg_style"]
 
@@ -75,7 +75,7 @@ def adapt_svg_style(
                 raise ValueError("svg_style_reference_format_unsupported")
             encoded = base64.b64encode(data).decode("ascii")
             refs.append({
-                "digest": "sha256:" + hashlib.sha256(data).hexdigest(),
+                "digest": sha256_prefixed(data),
                 "data_url": f"data:{mime};base64,{encoded}",
             })
         references[role] = refs
@@ -105,9 +105,7 @@ def adapt_svg_style(
     from utils.authored_styles import AUTHORED_STYLE_ASSETS_DIRECTORY
     if getattr(style, "assets_root", None) == AUTHORED_STYLE_ASSETS_DIRECTORY.resolve():
         result["provenance"]["registry_authority"] = "packaged-authored-catalogue"
-    result["digest"] = "sha256:" + hashlib.sha256(
-        json.dumps(result, ensure_ascii=False, sort_keys=True).encode()
-    ).hexdigest()
+    result["digest"] = sha256_prefixed(json.dumps(result, ensure_ascii=False, sort_keys=True).encode())
     if source_template:
         from utils.svg_template_rules import template_snapshot
         result["source_template"] = template_snapshot(result, width, height)

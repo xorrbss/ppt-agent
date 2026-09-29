@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import hashlib
 import io
 import logging
 from utils.get_env import env_int
@@ -60,6 +59,7 @@ from utils.authored_image_slots import (
 )
 from utils.renderer_isolation import MAX_ASSET_BYTES, MAX_HTML_BYTES
 from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
+from utils.hashing import sha256_hex
 
 LOGGER = logging.getLogger(__name__)
 
@@ -359,7 +359,7 @@ def validate_bound_source_images(
             payload = base64.b64decode(data_match.group(2), validate=True)
         except (ValueError, TypeError) as error:
             raise ValueError("authored_source_image_binding_invalid") from error
-        actual[hashlib.sha256(payload).hexdigest()] += 1
+        actual[sha256_hex(payload)] += 1
     if actual != expected:
         raise ValueError(
             "authored_source_image_binding_mismatch:"
@@ -453,7 +453,7 @@ def _data_image_digest(value: object) -> str | None:
         payload = base64.b64decode(data_match.group(2), validate=True)
     except (ValueError, TypeError):
         return None
-    return hashlib.sha256(payload).hexdigest()
+    return sha256_hex(payload)
 
 
 def _metric_number(value: object, default: float = 0.0) -> float:

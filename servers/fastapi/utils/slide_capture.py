@@ -71,6 +71,7 @@ from utils.render_cache_budget import (
     render_cache_resident_bytes,
 )
 from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
+from utils.hashing import sha256_hex, sha256_prefixed
 
 SLIDE_W = DEFAULT_CANVAS_WIDTH_PX
 SLIDE_H = DEFAULT_CANVAS_HEIGHT_PX
@@ -119,7 +120,7 @@ def _scene_digest(html: str, source_digest: str) -> str:
 def _render_cache_identity(
     html: str, *, width_px: int = SLIDE_W, height_px: int = SLIDE_H
 ) -> _RenderCacheIdentity:
-    source_digest = "sha256:" + hashlib.sha256(html.encode("utf-8")).hexdigest()
+    source_digest = sha256_prefixed(html.encode("utf-8"))
     scene_digest = _scene_digest(html, source_digest)
     chrome_digest = chrome_runtime_digest()
     asset_digest = _asset_fingerprint(html)
@@ -136,7 +137,7 @@ def _render_cache_identity(
         asset_fingerprint=asset_digest,
         measurement_version=MEASUREMENT_CACHE_VERSION,
         fit_font_floor_px=floor_px,
-        digest="sha256:" + hashlib.sha256(payload.encode("utf-8")).hexdigest(),
+        digest=sha256_prefixed(payload.encode("utf-8")),
     )
 
 def _kill_process_tree(proc: "subprocess.Popen") -> None:
@@ -194,7 +195,7 @@ _INTERNAL_CAPABILITY_LIMIT = 64
 
 
 def _register_internal_render_source(source: str) -> None:
-    digest = hashlib.sha256(source.encode("utf-8")).hexdigest()
+    digest = sha256_hex(source.encode("utf-8"))
     token = issue_internal_render_capability(source)
     with _internal_capability_lock:
         _internal_capabilities[digest] = token
@@ -205,7 +206,7 @@ def _register_internal_render_source(source: str) -> None:
 
 def _take_probe_capability(source: str) -> str | None:
     """Consume this source's single-use internal probe capability, if any."""
-    digest = hashlib.sha256(source.encode("utf-8")).hexdigest()
+    digest = sha256_hex(source.encode("utf-8"))
     with _internal_capability_lock:
         return _internal_capabilities.pop(digest, None)
 
@@ -231,8 +232,8 @@ def _source_render_digests(html: str) -> tuple[str, str]:
     treating a source-preserving instrumentation change as equivalent evidence.
     """
 
-    source = hashlib.sha256(html.encode("utf-8")).hexdigest()
-    rendered = hashlib.sha256(ensure_authored_qids(html).encode("utf-8")).hexdigest()
+    source = sha256_hex(html.encode("utf-8"))
+    rendered = sha256_hex(ensure_authored_qids(html).encode("utf-8"))
     return f"sha256:{source}", f"sha256:{rendered}"
 
 
@@ -279,7 +280,7 @@ def _metric_evidence_cache_key_from_digests(
             render_digest,
         )
     )
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return sha256_hex(payload.encode("utf-8"))
 
 
 def _metrics_cache_key(
@@ -300,8 +301,8 @@ def _instrument_authored_html(
 ) -> tuple[str, str]:
     """Add stable edit ids and an invisible, same-render browser probe."""
     enriched = ensure_authored_qids(html)
-    source_digest = "sha256:" + hashlib.sha256(html.encode("utf-8")).hexdigest()
-    render_digest = "sha256:" + hashlib.sha256(enriched.encode("utf-8")).hexdigest()
+    source_digest = sha256_prefixed(html.encode("utf-8"))
+    render_digest = sha256_prefixed(enriched.encode("utf-8"))
     key = _metric_evidence_cache_key_from_digests(
         source_digest,
         render_digest,
@@ -1011,7 +1012,7 @@ def _cache_browser_metrics(
     # Preserve the admitted/instrumented projection separately as render_digest.
     metrics = {
         **dict(metrics),
-        "source_digest": "sha256:" + hashlib.sha256(html.encode("utf-8")).hexdigest(),
+        "source_digest": sha256_prefixed(html.encode("utf-8")),
     }
     key = _metrics_cache_key(html, width_px=width_px, height_px=height_px)
     _browser_metrics_cache[key] = metrics
@@ -1132,7 +1133,7 @@ async def render_html_to_png_with_metrics(
             raise ValueError("a fresh render requires an explicit authored local policy")
         require_qid_complete(html)
     request_html = fit_request_html(html) if fit else html
-    html_digest = "sha256:" + hashlib.sha256(html.encode("utf-8")).hexdigest()
+    html_digest = sha256_prefixed(html.encode("utf-8"))
     if fresh:
         # Bypass every pixel/capture cache and in-flight alias. The renderer
         # opens a disposable document even when its Chrome process is reused.
@@ -1337,7 +1338,7 @@ def chrome_runtime_digest() -> str:
     global _chrome_identity_cache
     chrome = find_chrome()
     if not chrome:
-        return "sha256:" + hashlib.sha256(b"chrome:unavailable").hexdigest()
+        return sha256_prefixed(b"chrome:unavailable")
     path = pathlib.Path(chrome).resolve()
     try:
         stat = path.stat()
@@ -1363,7 +1364,7 @@ def chrome_runtime_digest() -> str:
     except Exception:
         version = "version-unavailable"
     payload = f"{path}\0{size}\0{modified}\0{version}".encode("utf-8")
-    result = "sha256:" + hashlib.sha256(payload).hexdigest()
+    result = sha256_prefixed(payload)
     _chrome_identity_cache = (str(path), size, modified, result)
     return result
 class _ReusableChromeRuntime:
@@ -1938,7 +1939,7 @@ async def _render_html_to_png_cached(
             html,
             timeout,
             RenderCapture.from_payload(
-                html_digest="sha256:" + hashlib.sha256(html.encode("utf-8")).hexdigest(),
+                html_digest=sha256_prefixed(html.encode("utf-8")),
                 png=rendered,
                 browser_metrics=metrics,
                 runtime_counters=get_render_runtime_counters(),

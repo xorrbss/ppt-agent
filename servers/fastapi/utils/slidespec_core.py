@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections import Counter
-from hashlib import sha256
 from html import escape
 import re
 from typing import Any, Iterable, Mapping
@@ -35,6 +34,7 @@ from utils.slidespec_projection import (
     project_positioned_bounds_styles,
     projected_source_box_px,
 )
+from utils.hashing import sha256_hex
 
 ZERO_DIGEST = "sha256:" + "0" * 64
 class SlideSpecError(ValueError):
@@ -511,7 +511,7 @@ def _render_node(
         # Semantic/layout ids may contain '/', while authored patch qids may not.
         # Keep the browser target opaque and publish the reversible association in
         # ``semanticDom`` instead of weakening either identifier contract.
-        return "q-" + sha256(value.encode("utf-8")).hexdigest()[:24]
+        return "q-" + sha256_hex(value.encode("utf-8"))[:24]
 
     styles: dict[str, str] = {"box-sizing": "border-box"}
     if node.bounds is not None:

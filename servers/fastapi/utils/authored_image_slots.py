@@ -10,9 +10,9 @@ be resolved at all, belongs to ``authored_illustrations``.
 from __future__ import annotations
 
 import re
-import hashlib
 from dataclasses import dataclass
 from typing import List, Mapping, Optional, Sequence
+from utils.hashing import sha256_hex
 
 _IMG_TAG_PATTERN = re.compile(r"<img\b[^>]*>", re.IGNORECASE)
 _ILLUST_PROMPT_ATTRIBUTE = re.compile(
@@ -43,7 +43,7 @@ def source_slot_id_for_asset(asset_id: str) -> str:
     The id is deliberately not the asset id itself: model output only receives a
     slot handle and the server performs the owner-scoped asset binding later.
     """
-    digest = hashlib.sha256((asset_id or "").encode("utf-8")).hexdigest()[:20]
+    digest = sha256_hex((asset_id or "").encode("utf-8"))[:20]
     return f"source-slot-{digest}"
 
 

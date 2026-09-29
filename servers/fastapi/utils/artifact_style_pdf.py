@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from binascii import Error as BinasciiError
 from collections import Counter, defaultdict
-from hashlib import sha256
 from io import BytesIO
 import math
 from pathlib import Path
@@ -26,6 +25,7 @@ from utils.artifact_style_analysis import (
     ArtifactAnalysisError,
     _signal,
 )
+from utils.hashing import sha256_hex
 
 
 _SUBSET_FONT = re.compile(r"^[A-Z]{6}\+")
@@ -369,7 +369,7 @@ def _layout_signature(
     payload = "|".join(
         f"{key}={min(count, 9)}" for key, count in sorted(regions.items())
     )
-    return sha256(payload.encode("utf-8")).hexdigest()[:12]
+    return sha256_hex(payload.encode("utf-8"))[:12]
 
 
 def _open_pdf(source: Path, raw: bytes) -> Any:

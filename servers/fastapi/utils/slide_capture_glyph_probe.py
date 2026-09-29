@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 import asyncio
-import hashlib
 import html as html_lib
 import io
 import json
@@ -16,6 +15,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from utils.authored_dom_quality import ensure_authored_qids
+from utils.hashing import sha256_hex, sha256_prefixed
 
 GLYPH_CLIPPING_SENSOR_VERSION = "glyph-paint-v1-current-reference"
 MAX_GLYPH_SUSPECTS = 4
@@ -141,7 +141,7 @@ def build_glyph_probe(
     if not suspects:
         return None
     enriched = ensure_authored_qids(html)
-    render_digest = "sha256:" + hashlib.sha256(enriched.encode()).hexdigest()
+    render_digest = sha256_prefixed(enriched.encode())
     valid_source = render_digest == metrics.get("render_digest")
     targets = [item["qid"] for item in suspects[:MAX_GLYPH_SUSPECTS] if isinstance(item.get("qid"), str)] if valid_source else []
     if len(enriched.encode()) > 512 * 1024 or len(metrics.get("elements", ())) > MAX_GLYPH_OWNERS:
@@ -182,7 +182,7 @@ def apply_glyph_probe(metrics, plan, proof, probe_png, original_png):
             "sensor_version": GLYPH_CLIPPING_SENSOR_VERSION, "status": "unknown",
             "reason": plan.get("failure", "probe_incomplete"), "render_digest": metrics.get("render_digest"),
             "source_digest": metrics.get("source_digest"),
-            "original_png_digest": hashlib.sha256(original_png).hexdigest(),
+            "original_png_digest": sha256_hex(original_png),
         }
         item["glyph_clipping_evidence"] = evidence
         measurement = item.get("measurement")
@@ -234,8 +234,8 @@ def apply_glyph_probe(metrics, plan, proof, probe_png, original_png):
         evidence.update({
             "status": "measured", "reason": None, "geometry_invariant": True,
             "font_invariant": True, "reference_ink_pixels": ink, "paint_loss_pixels": loss,
-            "current_mask_digest": hashlib.sha256(current.tobytes()).hexdigest(),
-            "reference_mask_digest": hashlib.sha256(reference.tobytes()).hexdigest(),
+            "current_mask_digest": sha256_hex(current.tobytes()),
+            "reference_mask_digest": sha256_hex(reference.tobytes()),
         })
         if loss or equal:
             measurement["clipping"] = True

@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
-from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
@@ -25,6 +24,7 @@ from utils.env_settings.authored_runtime import (
 # Re-exported: the loader lives apart only because this file is past the ratchet.
 from utils.authored_style_exemplars import load_style_exemplar  # noqa: F401
 from utils.authored_style_catalogue import canonical_authored_style_id
+from utils.hashing import sha256_hex
 
 
 LOGGER = logging.getLogger(__name__)
@@ -345,7 +345,7 @@ def _validate_exact_source_image(path: Path, source: Path) -> str:
         raise ValueError(f"{source.name}: exact source image is corrupt") from None
     if size != _EXACT_SOURCE_SIZE:
         raise ValueError(f"{source.name}: exact source must be 1280x720 pixels, got {size[0]}x{size[1]}")
-    return sha256(payload).hexdigest()
+    return sha256_hex(payload)
 
 
 def _validate_exact_sources(paths: Sequence[Path], source: Path, assets_directory: Path) -> tuple[str, ...]:
