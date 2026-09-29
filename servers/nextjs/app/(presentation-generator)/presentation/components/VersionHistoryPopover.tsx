@@ -15,6 +15,7 @@ import { formatViewerTimestamp } from "@/i18n/viewer-time";
 import { cn } from "@/lib/utils";
 import { pickBackendMessage } from "@/lib/backend-messages";
 import { translateBackendMessage } from "@/lib/backend-messages-intl";
+import type { UiLocale } from "@/i18n/locale";
 
 interface VersionSummary {
   id: string;
@@ -25,9 +26,9 @@ interface VersionSummary {
   slide_count: number;
 }
 
-function versionLabel(version: VersionSummary): string | undefined {
+function versionLabel(version: VersionSummary, locale: UiLocale): string | undefined {
   return (
-    translateBackendMessage(pickBackendMessage(version, "label")) ??
+    translateBackendMessage(pickBackendMessage(version, "label"), locale) ??
     version.label ??
     undefined
   );
@@ -153,7 +154,7 @@ const VersionHistoryPopover = ({
                     {formatWhen(version.created_at, locale)}
                   </p>
                   <p className="truncate text-xs text-gray-500">
-                    {versionLabel(version) ? `${versionLabel(version)} · ` : ""}
+                    {versionLabel(version, locale) ? `${versionLabel(version, locale)} · ` : ""}
                     {version.slide_count}개 슬라이드
                   </p>
                 </div>
