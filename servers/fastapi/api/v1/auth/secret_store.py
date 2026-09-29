@@ -20,7 +20,6 @@ module, so the storage location is decided in exactly one place:
 from __future__ import annotations
 
 import base64
-import hashlib
 import secrets
 import threading
 import time
@@ -36,6 +35,7 @@ from services.provider_credential_vault import (
 )
 from utils.get_env import get_user_config_path_env
 from utils.user_config_store import read_user_config_file, update_user_config_file
+from utils.hashing import sha256_hex
 
 
 AUTH_SECRET_VAULT_KEY = "auth/session-signing-secret/v1"
@@ -48,7 +48,7 @@ AUTH_SECRET_VAULT_UNAVAILABLE = "auth_secret_vault_unavailable"
 AUTH_SECRET_VAULT_READ_FAILED = "auth_secret_vault_read_failed"
 AUTH_SECRET_VAULT_WRITE_FAILED = "auth_secret_vault_write_failed"
 
-_VAULT_KEY_ID = hashlib.sha256(AUTH_SECRET_VAULT_KEY.encode("utf-8")).hexdigest()[:32]
+_VAULT_KEY_ID = sha256_hex(AUTH_SECRET_VAULT_KEY.encode("utf-8"))[:32]
 
 
 class AuthSecretError(RuntimeError):

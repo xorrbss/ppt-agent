@@ -50,6 +50,7 @@ from utils.datetime_utils import get_current_utc_datetime
 from utils.asset_directory_utils import get_images_directory
 from utils.get_env import get_app_data_directory_env
 from utils.owner_context import get_current_owner_id, get_current_owner_is_admin
+from utils.hashing import sha256_hex
 
 
 ASSET_GATEWAY_ROUTER = APIRouter(tags=["Asset Gateway"])
@@ -71,7 +72,7 @@ def _idempotency_scope(value: str | None) -> tuple[str, str] | None:
     normalized = value.strip()
     if not normalized or len(normalized) > 255:
         raise HTTPException(status_code=400, detail="invalid_idempotency_key")
-    return _owner_scope(), sha256(normalized.encode("utf-8")).hexdigest()
+    return _owner_scope(), sha256_hex(normalized.encode("utf-8"))
 
 
 async def _cleanup_expired_idempotency_receipts(
@@ -301,7 +302,7 @@ async def _upload_payload_sha256(
         separators=(",", ":"),
         sort_keys=True,
     )
-    return sha256(payload.encode("utf-8")).hexdigest()
+    return sha256_hex(payload.encode("utf-8"))
 
 
 def _snapshot_payload_sha256(request: "ReferenceSnapshotCreateRequest") -> str:
@@ -312,7 +313,7 @@ def _snapshot_payload_sha256(request: "ReferenceSnapshotCreateRequest") -> str:
         separators=(",", ":"),
         sort_keys=True,
     )
-    return sha256(payload.encode("utf-8")).hexdigest()
+    return sha256_hex(payload.encode("utf-8"))
 
 
 class CanonicalAssetReceipt(BaseModel):

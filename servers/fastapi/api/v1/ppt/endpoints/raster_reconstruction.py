@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import io
 import uuid
 from typing import Annotated, Literal
@@ -29,6 +28,7 @@ from services.workspace_asset_service import resolve_workspace_asset_download
 from services.workspace_operation_principal import PRINCIPAL_TENANT_PAYLOAD_KEY
 from services.workspace_service import _get_or_create_conversation
 from utils.owner_context import get_current_owner_id, get_current_tenant_id
+from utils.hashing import sha256_hex
 
 
 RASTER_RECONSTRUCTION_ROUTER = APIRouter(prefix="/source-content/raster", tags=["Raster source reconstruction"])
@@ -198,7 +198,7 @@ async def analyze_raster(
         if source_path.stat().st_size > 128 * 1024 * 1024:
             raise RasterReviewError("raster_source_too_large")
         source_bytes = await asyncio.to_thread(source_path.read_bytes)
-        source_sha = hashlib.sha256(source_bytes).hexdigest()
+        source_sha = sha256_hex(source_bytes)
         if not asset.sha256 or asset.sha256 != source_sha:
             raise RasterReviewError("raster_source_digest_mismatch")
         conversation = await _get_or_create_conversation(session, presentation.id)
