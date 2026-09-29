@@ -12,6 +12,7 @@ from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
+from constants.user_messages import UserMessageLike, message_fields
 from services.workspace_batch_payload import BATCH_KIND, BATCH_RESULT_KEYS, sanitize_batch_value
 from services.workspace_attempt_timing import (
     ATTEMPT_TIMING_KEY, attempt_timing, sanitize_attempt_timing, with_attempt_timing,
@@ -4006,7 +4007,7 @@ class _ExecutionContext(WorkspaceOperationExecutionContext):
         current: int | None = None,
         total: int | None = None,
         percent: int | None = None,
-        message: str | None = None,
+        message: UserMessageLike = None,
     ) -> bool:
         reported_progress = {
             "stage": stage,
@@ -4016,7 +4017,7 @@ class _ExecutionContext(WorkspaceOperationExecutionContext):
         }
         event_payload = {"state": "running", **reported_progress}
         if message:
-            event_payload["message"] = message
+            event_payload.update(message_fields(message))
         try:
             async with self._session_factory() as session:
                 operation = await session.get(

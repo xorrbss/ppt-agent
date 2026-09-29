@@ -19,6 +19,13 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from constants.user_messages import (
+    UserMessage,
+    UserMessageKey,
+    UserMessageLike,
+    message_text,
+    user_message,
+)
 from models.sql.presentation_version import PresentationVersionModel
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
@@ -91,7 +98,7 @@ async def snapshot_slides(
     presentation_id: uuid.UUID,
     slides_dumps: List[dict],
     *,
-    label: Optional[str] = None,
+    label: UserMessageLike = None,
     force: bool = False,
 ) -> Optional[PresentationVersionModel]:
     """Append a version snapshot if one is due (or forced). Returns the created
@@ -123,7 +130,9 @@ async def snapshot_slides(
     version = PresentationVersionModel(
         presentation_id=presentation_id,
         slides=canonical_slides,
-        label=label,
+        label=message_text(label),
+        label_key=str(label.key) if isinstance(label, UserMessage) else None,
+        label_params=(dict(label.params) or None) if isinstance(label, UserMessage) else None,
     )
     session.add(version)
     # The prune SELECT sees the row just added only when autoflush is on.  A
@@ -213,7 +222,7 @@ async def restore_version(
             session,
             presentation_id,
             [slide.model_dump(mode="json") for slide in current],
-            label="복원 전 자동 저장",
+            label=user_message(UserMessageKey.VERSION_LABEL_BEFORE_RESTORE),
             force=True,
         )
 

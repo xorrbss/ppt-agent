@@ -581,6 +581,10 @@ class WorkspaceMessageTimelineItem(BaseModel):
     position: int = Field(ge=1)
     role: str
     content: str
+    # ``constants/user_messages.py``: set on a command the server wrote on the
+    # user's behalf, so the client renders it in the UI locale.
+    content_key: Optional[str] = None
+    content_params: Optional[dict[str, Any]] = None
     created_at: Optional[datetime] = None
     attachments: list[WorkspaceTimelineAttachmentResponse] = Field(
         default_factory=list
@@ -633,6 +637,8 @@ class WorkspaceOperationTimelineItem(BaseModel):
     position: int = Field(ge=1)
     operation_type: str
     title: str
+    # ``workspace.operation.<kind>``; the client renders it in the UI locale.
+    title_key: Optional[str] = None
     status: str
     progress: Optional[float] = None
     error: Optional[str] = None

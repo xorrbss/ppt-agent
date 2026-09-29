@@ -8,6 +8,8 @@ from datetime import datetime
 from typing import Any, Literal, Protocol
 import uuid
 
+from constants.user_messages import UserMessageLike
+
 
 @dataclass(frozen=True, slots=True)
 class WorkspaceOperationClaim:
@@ -42,7 +44,7 @@ class WorkspaceOperationExecutionContext(Protocol):
         current: int | None = None,
         total: int | None = None,
         percent: int | None = None,
-        message: str | None = None,
+        message: UserMessageLike = None,
     ) -> bool: ...
 
     async def emit_durable_event(
