@@ -8,6 +8,7 @@ import type {
   VirtualRailWindow,
   WorkbenchEntityId,
 } from "./types";
+import { clamp } from "@/lib/math-utils";
 
 export interface VirtualSlideRailProps {
   slides: readonly SlideRailItem[];
@@ -17,10 +18,6 @@ export interface VirtualSlideRailProps {
   onSelect: (slideId: WorkbenchEntityId) => void;
   onReorder: (slideId: WorkbenchEntityId, targetPosition: number) => void;
   onWindowChange?: (startIndex: number) => void;
-}
-
-function clamp(value: number, minimum: number, maximum: number) {
-  return Math.max(minimum, Math.min(maximum, value));
 }
 
 export function VirtualSlideRail({

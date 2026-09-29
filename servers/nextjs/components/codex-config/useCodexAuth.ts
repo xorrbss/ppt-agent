@@ -6,6 +6,7 @@ import { notify } from "@/components/ui/sonner";
 import { getApiUrl } from "@/utils/api";
 import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
 import { DEFAULT_CODEX_MODEL } from "./constants";
+import { POLL_INTERVAL_MS } from "@/lib/timeouts";
 
 export type CodexAuthStatus =
   | "checking"
@@ -32,8 +33,6 @@ export interface CodexAuthOptions {
    */
   adoptProviderOnSignedIn: boolean;
 }
-
-const POLL_INTERVAL_MS = 2000;
 
 export const useCodexAuth = ({
   codexModel,

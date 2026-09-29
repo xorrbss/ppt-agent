@@ -2,12 +2,7 @@ import type {
   WorkspaceOperationAnchor,
   WorkspacePresentationChange,
 } from "./types";
-
-function numberValue(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
-}
+import { finiteNumber } from "@/lib/math-utils";
 
 /** Returns unique, zero-based editor slide indexes from the durable result. */
 export function fixedWorkspaceSlideIndexes(
@@ -56,12 +51,12 @@ export function workspacePresentationChangeFor(
   }
 
   if (operation.operationType === "quality.review") {
-    const fixedCount = numberValue(
+    const fixedCount = finiteNumber(
       operation.result?.fixed_count ?? operation.result?.fixedCount,
     );
     const resultRevision =
       operation.resultRevision ??
-      numberValue(
+      finiteNumber(
         operation.result?.result_revision ?? operation.result?.resultRevision,
       );
     if (

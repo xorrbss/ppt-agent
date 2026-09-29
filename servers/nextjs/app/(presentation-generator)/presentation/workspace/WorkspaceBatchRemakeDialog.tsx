@@ -21,9 +21,7 @@ import {
   type BatchRemakeSlide,
 } from "./batchRemakeStatus";
 import type { WorkspaceCommandDispatcher } from "./types";
-
-const POLL_INTERVAL_MS = 2_000;
-const PREVIEW_TIMEOUT_MS = 15 * 60 * 1_000;
+import { POLL_INTERVAL_MS, PREVIEW_TIMEOUT_MS } from "@/lib/timeouts";
 
 type BatchRemakeError = "start" | "timeout" | "stalled";
 

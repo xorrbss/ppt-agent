@@ -1,3 +1,4 @@
+import { clamp } from "./math-utils.ts";
 export const CHART_BROWSER_SCRIPT_URL = "/vendor/chart-4.5.1.umd.min.js";
 export const CHART_DATALABELS_SCRIPT_URL =
   "/vendor/chartjs-plugin-datalabels-2.2.0.min.js";
@@ -101,10 +102,6 @@ function formatChartValue(value: number): string {
     : String(Math.round(value * 10) / 10).replace(/\.0$/, "");
 }
 
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
-}
 
 function parseColor(color: string | null): [number, number, number, number] | null {
   if (!color) return null;

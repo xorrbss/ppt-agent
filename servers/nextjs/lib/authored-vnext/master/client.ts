@@ -35,6 +35,7 @@ import {
   type ValidationIssue,
   type VisualDirection,
 } from "./contracts.ts";
+import { finiteNumber } from "../../math-utils.ts";
 
 type FetchLike = typeof fetch;
 
@@ -89,7 +90,8 @@ function stringValue(record: Record<string, unknown>, ...keys: string[]): string
 
 function numberValue(record: Record<string, unknown>, ...keys: string[]): number | undefined {
   for (const key of keys) {
-    if (typeof record[key] === "number") return record[key];
+    const parsed = finiteNumber(record[key]);
+    if (parsed !== undefined) return parsed;
   }
   return undefined;
 }

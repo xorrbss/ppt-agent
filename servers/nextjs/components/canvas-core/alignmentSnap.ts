@@ -1,3 +1,4 @@
+import { clamp } from "@/lib/math-utils";
 export interface CanvasCoreBounds {
   x: number;
   y: number;
@@ -112,10 +113,6 @@ function closestAlignment(
     }
   }
   return closest;
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
 }
 
 function guideForCandidate(

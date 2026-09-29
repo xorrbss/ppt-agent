@@ -16,8 +16,8 @@ import {
 import { UiLocaleSwitcher } from "@/components/i18n/UiLocaleSwitcher";
 import { getServerI18n } from "@/i18n/server";
 import { createTranslator } from "next-intl";
+import { PRESENTATION_FETCH_TIMEOUT_MS } from "@/lib/timeouts";
 
-const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
 const MAX_PRESENTATION_RESPONSE_BYTES = 50 * 1024 * 1024;
 
 type PdfMakerRouteProps = {

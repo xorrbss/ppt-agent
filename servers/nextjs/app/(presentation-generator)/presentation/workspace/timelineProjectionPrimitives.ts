@@ -1,4 +1,5 @@
 import { isRecord } from "@/lib/guards";
+import { finiteNumber } from "@/lib/math-utils";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -12,15 +13,11 @@ export function stringValue(...values: unknown[]): string | undefined {
   ) as string | undefined;
 }
 
+/** First finite number; numeric strings are parsed (timeline cursors arrive as text). */
 export function numberValue(...values: unknown[]): number | undefined {
   for (const value of values) {
-    const parsed =
-      typeof value === "number"
-        ? value
-        : typeof value === "string"
-          ? Number(value)
-          : NaN;
-    if (Number.isFinite(parsed)) return parsed;
+    const parsed = finiteNumber(typeof value === "string" ? Number(value) : value);
+    if (parsed !== undefined) return parsed;
   }
   return undefined;
 }

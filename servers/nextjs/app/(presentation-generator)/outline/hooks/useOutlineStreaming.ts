@@ -8,9 +8,8 @@ import { RootState } from "@/store/store";
 import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
 import { CodexAuthApi } from "@/app/(presentation-generator)/services/api/codex-auth";
 import { useTranslations } from "next-intl";
+import { createStreamRetryScheduler } from "@/app/(presentation-generator)/hooks/streamRetry";
 
-const MAX_STREAM_RETRIES = 3;
-const STREAM_RETRY_DELAY_MS = 1_000;
 const OUTLINE_RECOVERY_INTERVAL_MS = 5_000;
 
 export type OutlineEventSourceFactory = (url: string) => EventSource;
@@ -86,9 +85,6 @@ export const useOutlineStreaming = (
 
     let eventSource: EventSource | null = null;
     let accumulatedChunks = "";
-    let retryCount = 0;
-    let isClosed = false;
-    let retryTimer: ReturnType<typeof setTimeout> | null = null;
     let recoveryTimer: ReturnType<typeof setInterval> | null = null;
     let recoveryInFlight = false;
     let codexRefreshAttempted = false;
@@ -100,12 +96,17 @@ export const useOutlineStreaming = (
       }
     };
 
-    const clearRetryTimer = () => {
-      if (retryTimer) {
-        clearTimeout(retryTimer);
-        retryTimer = null;
-      }
-    };
+    const retry = createStreamRetryScheduler({
+      streamName: "Outline",
+      beforeRetry: () => {
+        closeEventSource();
+        accumulatedChunks = "";
+        prevSlidesRef.current = [];
+        activeIndexRef.current = -1;
+        highestIndexRef.current = -1;
+      },
+      reopen: () => openStream(),
+    });
 
     const clearRecoveryTimer = () => {
       if (recoveryTimer) {
@@ -126,9 +127,8 @@ export const useOutlineStreaming = (
 
     const stopStreaming = () => {
       resetStreamingState();
-      isClosed = true;
+      retry.close();
       closeEventSource();
-      clearRetryTimer();
       clearRecoveryTimer();
     };
 
@@ -161,15 +161,14 @@ export const useOutlineStreaming = (
       prevSlidesRef.current = outlineSlides;
       activeIndexRef.current = -1;
       highestIndexRef.current = -1;
-      isClosed = true;
+      retry.close();
       closeEventSource();
-      clearRetryTimer();
       clearRecoveryTimer();
-      retryCount = 0;
+      retry.reset();
     };
 
     const recoverSavedOutlines = async (): Promise<boolean> => {
-      if (isClosed || recoveryInFlight) return false;
+      if (retry.closed || recoveryInFlight) return false;
 
       recoveryInFlight = true;
       try {
@@ -189,33 +188,6 @@ export const useOutlineStreaming = (
       return false;
     };
 
-    const scheduleRetry = (reason: string): boolean => {
-      if (retryCount >= MAX_STREAM_RETRIES || isClosed) {
-        return false;
-      }
-
-      retryCount += 1;
-      const retryDelay = STREAM_RETRY_DELAY_MS * retryCount;
-      console.warn(
-        `Outline stream retry ${retryCount}/${MAX_STREAM_RETRIES}: ${reason}`
-      );
-
-      closeEventSource();
-      clearRetryTimer();
-      accumulatedChunks = "";
-      prevSlidesRef.current = [];
-      activeIndexRef.current = -1;
-      highestIndexRef.current = -1;
-
-      retryTimer = setTimeout(() => {
-        if (!isClosed) {
-          openStream();
-        }
-      }, retryDelay);
-
-      return true;
-    };
-
     const openStream = () => {
       closeEventSource();
       eventSource = createEventSource(
@@ -227,7 +199,7 @@ export const useOutlineStreaming = (
         try {
           data = JSON.parse(event.data) as OutlineStreamEvent;
         } catch {
-          if (!scheduleRetry("invalid SSE payload")) {
+          if (!retry.schedule("invalid SSE payload")) {
             stopStreaming();
             notify.error("스트림 파싱 실패", "개요 스트림 응답을 파싱하지 못했습니다.");
           }
@@ -285,7 +257,7 @@ export const useOutlineStreaming = (
                 data.presentation.outlines.slides;
               finishStreaming(outlinesData);
             } catch {
-              if (!scheduleRetry("failed to parse complete payload")) {
+              if (!retry.schedule("failed to parse complete payload")) {
                 stopStreaming();
                 notify.error("파싱 실패", "프레젠테이션 데이터를 파싱하지 못했습니다.");
               }
@@ -295,7 +267,7 @@ export const useOutlineStreaming = (
 
           case "closing":
             stopStreaming();
-            retryCount = 0;
+            retry.reset();
             break;
           case "error":
             if (isModelAvailabilityError(data.detail || "")) {
@@ -325,15 +297,15 @@ export const useOutlineStreaming = (
               closeEventSource();
               void refreshCodexSession(true)
                 .then((refreshed) => {
-                  if (!isClosed && refreshed) {
-                    retryCount = 0;
+                  if (!retry.closed && refreshed) {
+                    retry.reset();
                     openStream();
                   }
                 })
                 .catch(failExpiredCodexSession);
               break;
             }
-            if (!scheduleRetry(data.detail || "server returned stream error")) {
+            if (!retry.schedule(data.detail || "server returned stream error")) {
               stopStreaming();
               notify.error(
                 "개요 스트리밍 실패",
@@ -346,7 +318,7 @@ export const useOutlineStreaming = (
       });
 
       eventSource.onerror = () => {
-        if (!scheduleRetry("connection lost")) {
+        if (!retry.schedule("connection lost")) {
           stopStreaming();
           notify.error("연결 실패", "서버에 연결하지 못했습니다. 다시 시도해 주세요.");
         }
@@ -360,20 +332,19 @@ export const useOutlineStreaming = (
       void recoverSavedOutlines();
     }, OUTLINE_RECOVERY_INTERVAL_MS);
     void recoverSavedOutlines().then(async (recovered) => {
-      if (recovered || isClosed) return;
+      if (recovered || retry.closed) return;
       try {
         await refreshCodexSession();
       } catch {
         failExpiredCodexSession();
         return;
       }
-      if (!isClosed) openStream();
+      if (!retry.closed) openStream();
     });
 
     return () => {
-      isClosed = true;
+      retry.close();
       closeEventSource();
-      clearRetryTimer();
       clearRecoveryTimer();
     };
   }, [presentationId, dispatch, createEventSource, llmProvider, retryNonce, t]);

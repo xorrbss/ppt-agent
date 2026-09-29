@@ -5,8 +5,8 @@ import {
   fetchPersistedPresentationProjectionForExport,
 } from "@/lib/export-presentation-route";
 import { getFastApiBaseUrl } from "@/lib/fastapi-internal";
+import { PRESENTATION_FETCH_TIMEOUT_MS } from "@/lib/timeouts";
 
-const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
 const MAX_PRESENTATION_RESPONSE_BYTES = 50 * 1024 * 1024;
 
 function normalizePresentationId(id: string): string {

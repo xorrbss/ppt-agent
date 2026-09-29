@@ -1,3 +1,4 @@
+import { clamp, finiteNumber } from "@/lib/math-utils";
 export const MIN_IMAGE_CROP_SCALE = 0.1;
 export const MAX_IMAGE_CROP_SCALE = 6;
 
@@ -20,12 +21,6 @@ export type ImageEditorProperties = {
 };
 
 const EMPTY_IMAGE_PROPERTIES: ImageEditorProperties = {};
-
-const finiteNumber = (value: unknown): number | null =>
-  typeof value === "number" && Number.isFinite(value) ? value : null;
-
-const clamp = (value: number, min: number, max: number) =>
-  Math.min(max, Math.max(min, value));
 
 export function normalizeImageCropScale(value: unknown): number {
   return clamp(

@@ -51,8 +51,8 @@ import type {
   WorkspaceMasterIntent,
 } from "../workspace/types";
 import type { PresentationMasterPin } from "../utils/masterPresentation";
+import { POLL_INTERVAL_MS } from "@/lib/timeouts";
 
-const POLL_INTERVAL_MS = 2_000;
 const GENERATION_TIMEOUT_MS = 30 * 60 * 1_000;
 const MAX_POLL_ERRORS = 4;
 const masterClient = new AuthoredVnextMasterClient();
