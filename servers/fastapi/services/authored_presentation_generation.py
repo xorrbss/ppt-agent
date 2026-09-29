@@ -281,6 +281,19 @@ from services.authored_quality_receipt_v3_pipeline import (
     create_generation_quality_receipt_v3,
 )
 from services.authored_font_signal import body_font_median_signal
+from services.authored_admission_producers import require_bound_source_html
+from services.document_canvas_generation import export_size_points
+from services.authored_source_image_stage import prepare_source_image_stage
+from utils.llm_calls.author_slide_prompt import planned_source_image_brief
+from services.authored_planned_image_visibility import inspect_planned_source_images
+from utils.llm_calls.author_vision_qa import review_planned_source_images
+from services.authored_slide_quality_receipt import (
+    build_slide_quality_records,
+    record_slide_quality_receipt,
+)
+from services.public_operation_admission import (
+    public_operation_observability_metrics,
+)
 from services.authored_visual_review_evidence import visual_review_not_assessed, visual_review_outcome
 from services.source_content.browser_readback import (
     BrowserSourceReadbackError,
@@ -895,7 +908,6 @@ def _source_block_bindings(request) -> tuple[tuple[tuple[str, str], ...], ...] |
 
 
 def _require_source_verbatim_bindings(htmls, bindings) -> None:
-    from services.authored_admission_producers import require_bound_source_html
 
     require_bound_source_html(htmls, bindings, stamp=stamp_source_block_ids)
 
@@ -1657,7 +1669,6 @@ async def _fit_content_revision(
         render_html_to_png_with_metrics,
         **render_kwargs,
     )
-    from services.document_canvas_generation import export_size_points
 
     export_width_pt, export_height_pt = export_size_points(canvas, physical_canvas)
     policy = local_fit_policy(
@@ -2419,7 +2430,6 @@ async def _generate_authored_presentation(
     planned_source_images = None
     source_image_assignments = None
     if not request._source_content_authored_reflow and source_images:
-        from services.authored_source_image_stage import prepare_source_image_stage
         source_image_placement_plan, planned_source_images, source_image_assignments = (
             await prepare_source_image_stage(
                 source_images, session=sql_session,
@@ -2638,7 +2648,6 @@ async def _generate_authored_presentation(
         for index in range(len(contents))
     ]
     if source_image_assignments:
-        from utils.llm_calls.author_slide_prompt import planned_source_image_brief
         capacity_briefs = [
             brief + planned_source_image_brief({"assignments": source_image_assignments[index]})
             for index, brief in enumerate(capacity_briefs)
@@ -2657,7 +2666,6 @@ async def _generate_authored_presentation(
     planned_image_repair_indices: set[int] = set()
     planned_image_missing_indices: set[int] = set()
     if source_image_assignments and not source_reflow:
-        from services.authored_planned_image_visibility import inspect_planned_source_images
         for index, assignments in enumerate(source_image_assignments):
             if not assignments:
                 continue
@@ -3853,8 +3861,6 @@ async def _generate_authored_presentation(
     source_image_placement_failures: list[dict] = []
     source_image_plan_failed = False
     if not source_reflow and (source_image_placement_plan is not None or source_image_registration_report):
-        from services.authored_planned_image_visibility import inspect_planned_source_images
-        from utils.llm_calls.author_vision_qa import review_planned_source_images
         placement_slides = []
         for index, assignments in enumerate(source_image_assignments or ()):
             if not assignments:
@@ -4420,11 +4426,6 @@ async def _generate_authored_presentation(
     # variant and the critic score come from the quality loop's own per-slide
     # receipts; a slide the loop did not run for records them as absent rather
     # than as zero.
-    from services.authored_slide_quality_receipt import (
-        build_slide_quality_records,
-        record_slide_quality_receipt,
-    )
-
     loop_receipts = dict(getattr(pipeline, "slide_quality_receipts", {}) or {})
     record_slide_quality_receipt(
         presentation_id,
@@ -4452,10 +4453,6 @@ async def _generate_authored_presentation(
         ),
     )
     if generation_job is not None and quality_receipt_v2 is not None:
-        from services.public_operation_admission import (
-            public_operation_observability_metrics,
-        )
-
         public_metrics = (
             await public_operation_observability_metrics(
                 sql_session, generation_job.workspace_operation_id

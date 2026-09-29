@@ -131,6 +131,7 @@ from services.authored_quality_telemetry import (
     style_comparison_observation_metadata as _style_comparison_observation_metadata,
 )
 from services.authored_review_asset_store import publish_reviewed_png
+from services.slidespec_artifact_store import ACTIVE_POINTER_KEY
 from services.database import async_session_maker
 from services.workspace_authored_async_admission import admit_workspace_authored_task
 from services.image_generation_service import ImageGenerationService
@@ -1993,7 +1994,6 @@ async def _run_authored_quality_review_unlocked(
     positions = _resolve_positions(request, len(slides))
     if any((not slides[position].html_content for position in positions)):
         raise ValueError("One or more slides are missing their editable authored HTML")
-    from services.slidespec_artifact_store import ACTIVE_POINTER_KEY
     from services.slidespec_authored_importer import ensure_authored_slidespec_imports
 
     # Canonical repair acceptance uses paired style comparison, not the legacy

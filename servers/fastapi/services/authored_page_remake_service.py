@@ -71,6 +71,7 @@ from services.image_generation_service import ImageGenerationService
 from services.database import async_session_maker
 from services.workspace_authored_async_admission import admit_workspace_authored_task
 from services.slidespec_artifact_store import ACTIVE_POINTER_KEY, _json_cas_predicate
+from services.svg_page_remake import preview_svg, publish_svg_candidate
 from utils.authored_dom_quality import inspect_authored_dom
 from utils.asset_directory_utils import get_images_directory
 from utils.authored_styles import (
@@ -379,7 +380,6 @@ async def run_authored_page_remake_preview(
         )
     target = slides[slide_index]
     if target.is_svg():
-        from services.svg_page_remake import preview_svg
 
         return await preview_svg(presentation, slides, slide_index, request, task, session)
     if not target.html_content:
@@ -931,7 +931,6 @@ async def publish_authored_page_remake(
             "authored_page_remake_preview_not_found", stage="publish_validation"
         )
     if slide.is_svg():
-        from services.svg_page_remake import publish_svg_candidate
 
         return await publish_svg_candidate(session, presentation, slides, slide_index, task, snapshot=snapshot,
             operation_id=operation_id, attempt_token=attempt_token, expected_revision=expected_revision)

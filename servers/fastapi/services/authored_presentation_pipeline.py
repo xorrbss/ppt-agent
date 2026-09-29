@@ -10,13 +10,14 @@ from services.authored_presentation_pipeline_deps import *
 from services import authored_presentation_author_batch as author_batch_impl
 from services.authored_local_fit_policy import local_fit_applies, requested_font_policy_revision, policy_floor_pt
 from services.authored_admission_producers import author_html as admit_author_html, source_image_html
-from services.authored_admission_capture import capture_once, captured_metrics_or_existing
+from services.authored_admission_capture import canonical_capture_html, capture_once, captured_metrics_or_existing
 from services.authored_local_fit_admission import capture_original_first
 from services.authored_original_capture_checkpoint import (
     load_original_capture_checkpoint,
     persist_original_capture_checkpoint,
 )
 from utils.slide_capture import get_cached_browser_metrics
+from services.document_canvas_generation import export_size_points
 
 LOGGER = logging.getLogger(__name__)
 
@@ -318,7 +319,6 @@ async def _author_illustrate_render_pipeline(
     evidence_ledger = DeckEvidenceLedger(attempt_id=evidence_attempt_id)
     canvas_width_px = int(getattr(canvas, "width_px", 1280))
     canvas_height_px = int(getattr(canvas, "height_px", 720))
-    from services.document_canvas_generation import export_size_points
 
     export_width_pt, export_height_pt = export_size_points(canvas, physical_canvas)
     render_kwargs = (
@@ -1151,8 +1151,6 @@ async def _author_illustrate_render_pipeline(
                     infographic=(infographic_briefs[index] if infographic_briefs else None),
                     **quality_loop_kwargs,
                 )
-            from services.authored_admission_capture import canonical_capture_html
-
             illustrated_html = canonical_capture_html(illustrated_html, index=index)
             # Capture the authored baseline before any local fit. A resumed
             # fitted checkpoint must not become a new baseline and acquire a
