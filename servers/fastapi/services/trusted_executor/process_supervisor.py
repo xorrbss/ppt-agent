@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from typing import BinaryIO, Literal, Mapping
 
 from services.trusted_executor.contracts import ExecutionIdentity, ResourceLimits, SandboxLaunchSpec
+from constants.timeouts import BUSY_WAIT_POLL_INTERVAL_SECONDS, WATCHER_THREAD_JOIN_SECONDS
 
 
 class ProcessSupervisorError(RuntimeError):
@@ -783,7 +784,7 @@ class OperationProcessSupervisor:
                 return True
             if time.monotonic() >= expires:
                 return False
-            time.sleep(0.01)
+            time.sleep(BUSY_WAIT_POLL_INTERVAL_SECONDS)
 
     def _enforce_deadline(self) -> None:
         remaining = max(0.0, self._deadline_at - time.monotonic())
@@ -899,9 +900,9 @@ class OperationProcessSupervisor:
             raise_on_failure=True,
         )
         if threading.current_thread() is not self._watchdog:
-            self._watchdog.join(timeout=1.0)
+            self._watchdog.join(timeout=WATCHER_THREAD_JOIN_SECONDS)
         if threading.current_thread() is not self._notification_watcher:
-            self._notification_watcher.join(timeout=1.0)
+            self._notification_watcher.join(timeout=WATCHER_THREAD_JOIN_SECONDS)
         with self._lock:
             if self._closed:
                 return
