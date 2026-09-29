@@ -1,14 +1,13 @@
 """Server-owned SVG creation admission; existing authored DTO remains frozen."""
 from __future__ import annotations
 
-import os
-
 from fastapi import HTTPException
 
 from services.generation_core.style.design_pack_projection import (
     DesignPackProjectionError,
     assert_design_pack_projects,
 )
+from utils.env_settings.authored_vnext import is_authored_vnext_master_enabled
 
 
 def _design_pack_admission_reason() -> str:
@@ -116,7 +115,7 @@ def _resolve_master_rules(request: object, canvas: object) -> tuple[dict | None,
         return None, None
     if not isinstance(pin_request, AuthoredMasterPinInput):
         pin_request = AuthoredMasterPinInput.model_validate(pin_request)
-    if os.getenv("AUTHORED_VNEXT_MASTER_ENABLED", "true").strip().lower() != "true":
+    if not is_authored_vnext_master_enabled():
         raise HTTPException(status_code=404, detail="authored_vnext_master_disabled")
     from utils.owner_context import get_current_owner_id
 

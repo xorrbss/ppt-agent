@@ -20,7 +20,6 @@ from services.authored_vnext.semantic.editable_mvp_completion_codec import (
 import base64
 import binascii
 from datetime import datetime, timedelta, timezone
-import os
 import re
 from typing import Any
 import uuid
@@ -49,12 +48,19 @@ from models.sql.authored_vnext_repository import (
     AuthoredVNextExportJob,
 )
 from services.authored_vnext.generation.sql_repository import SqlGenerationRepository
+from utils.env_settings.authored_release import (
+    EDITABLE_MVP_TRUST_DIGEST_ENV,
+    get_editable_mvp_trust_digest,
+)
+from utils.env_settings.authored_vnext import (
+    is_authored_editable_mvp_kill_switch_active,
+)
 
 
 PROFILE_ID = "authored-editable-hybrid-ko-en-basic-v1"
 PROFILE_DIGEST = "sha256:498fee109aa0c0b2b6920c0f01dd5d16f86bc2bb089e83ab14d473416077df54"
 GATE1E_MANIFEST_DIGEST = "sha256:9a9b4ce37108c60a38811c92b46ee29be321516a67b515eab9bd959c936f2023"
-TRUST_DIGEST_ENV = "AUTHORED_EDITABLE_MVP_TRUST_SHA256"
+TRUST_DIGEST_ENV = EDITABLE_MVP_TRUST_DIGEST_ENV
 HEAD_RE = re.compile(r"^[0-9a-f]{40}$")
 REQUIRED_ARTIFACT_IDS = (
     "source-prompt-json",
@@ -306,7 +312,7 @@ def _validate_trust_and_receipt(
     attempt: dict[str, Any],
     now: datetime,
 ) -> tuple[dict[str, Any], datetime, datetime, str]:
-    configured_trust_digest = os.getenv(TRUST_DIGEST_ENV, "").strip()
+    configured_trust_digest = get_editable_mvp_trust_digest()
     if DIGEST_RE.fullmatch(configured_trust_digest) is None:
         raise EditableMvpCompletionError("editable_mvp_verifier_trust_not_configured")
     trust_digest = _sha256_bytes(trust_bytes)
@@ -606,12 +612,12 @@ def match_current_editable_mvp_completion(
     now: datetime | None = None,
 ) -> tuple[AuthoredEditableHybridMvpCompletion | None, str]:
     evaluated_at = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
-    if os.getenv("AUTHORED_EDITABLE_MVP_KILL_SWITCH", "false").strip().lower() == "true":
+    if is_authored_editable_mvp_kill_switch_active():
         return None, "editable_hybrid_mvp_kill_switch_active"
     scene = deck.scene
     if scene is None or scene.hybrid_profile_id != PROFILE_ID:
         return None, "editable_hybrid_mvp_not_evaluated"
-    configured_trust_digest = os.getenv(TRUST_DIGEST_ENV, "").strip()
+    configured_trust_digest = get_editable_mvp_trust_digest()
     if DIGEST_RE.fullmatch(configured_trust_digest) is None:
         return None, "editable_hybrid_mvp_trust_not_configured"
     base = repository._base

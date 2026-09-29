@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from functools import lru_cache
-import os
 from pathlib import Path
 from typing import Annotated
 import uuid
@@ -36,11 +35,12 @@ from .models import (
     OperationFenceRequest,
     PublicationCasRequest,
 )
+from utils.env_settings.authored_vnext import is_authored_vnext_export_enabled
 from utils.get_env import get_app_data_directory_env, get_vnext_tenant_id
 
 
 def _enabled() -> bool:
-    return os.getenv("AUTHORED_VNEXT_EXPORT_ENABLED", "false").lower() == "true"
+    return is_authored_vnext_export_enabled()
 
 
 def _require_enabled() -> None:

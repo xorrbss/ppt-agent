@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 from functools import lru_cache
 from hashlib import sha256
 import json
-import os
 from pathlib import Path
 from typing import Any, Mapping
 import uuid
@@ -50,9 +49,13 @@ from services.authored_vnext.semantic.readiness import (
     validate_visual_evidence_authority,
 )
 from utils.datetime_utils import get_current_utc_datetime
+from utils.env_settings.authored_release import (
+    ZERO_DIGEST,
+    get_authored_release_settings,
+)
 
 
-_ZERO_DIGEST = "sha256:" + "0" * 64
+_ZERO_DIGEST = ZERO_DIGEST
 _PROFILE_PATH = (
     Path(__file__).resolve().parents[5] / "contracts" / "authored_vnext" / "semantic" / "release-profile.v3.json"
 )
@@ -102,19 +105,13 @@ class ReleaseAuthorityTargetV3:
 
 def release_authority_target_v3_from_environment() -> ReleaseAuthorityTargetV3:
     definition, definition_digest = load_release_profile_definition_v3()
-    deployment = os.getenv("AUTHORED_RELEASE_DEPLOYMENT_ENVIRONMENT", "development")
-    if deployment not in {"development", "staging", "production"}:
-        deployment = "development"
-    digest_names = (
-        "AUTHORED_RELEASE_RENDERER_IMAGE_DIGEST",
-        "AUTHORED_RELEASE_FONT_INVENTORY_DIGEST",
-        "AUTHORED_RELEASE_BACKEND_BUILD_DIGEST",
-    )
-    digests = [os.getenv(name, _ZERO_DIGEST) for name in digest_names]
+    release = get_authored_release_settings()
+    deployment = release.deployment_environment
+    digests = release.environment_digests
     configured = bool(
         deployment == "production"
-        and os.getenv("AUTHORED_RELEASE_OS_BUILD")
-        and os.getenv("AUTHORED_RELEASE_OFFICE_BUILD")
+        and release.os_build
+        and release.office_build
         and all(value != _ZERO_DIGEST for value in digests)
     )
     return ReleaseAuthorityTargetV3(
@@ -128,8 +125,8 @@ def release_authority_target_v3_from_environment() -> ReleaseAuthorityTargetV3:
         ),
         environment=CapabilityEnvironmentV2(
             deployment_environment=deployment,
-            os_build=os.getenv("AUTHORED_RELEASE_OS_BUILD", "unconfigured"),
-            office_build=os.getenv("AUTHORED_RELEASE_OFFICE_BUILD", "unconfigured"),
+            os_build="unconfigured" if release.os_build is None else release.os_build,
+            office_build="unconfigured" if release.office_build is None else release.office_build,
             renderer_image_digest=digests[0],
             font_inventory_digest=digests[1],
             backend_build_digest=digests[2],

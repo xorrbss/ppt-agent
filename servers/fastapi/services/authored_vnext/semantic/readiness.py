@@ -9,7 +9,6 @@ from functools import lru_cache
 from hashlib import sha256
 import hmac
 import json
-import os
 from pathlib import Path
 from typing import Any
 import uuid
@@ -45,10 +44,14 @@ from services.authored_vnext.semantic.canonical import (
 )
 from services.authored_vnext.semantic.query import get_active_authored_emission
 from utils.datetime_utils import get_current_utc_datetime
+from utils.env_settings.authored_release import (
+    ZERO_DIGEST,
+    get_authored_release_settings,
+)
 
 
 _MAX_RECEIPT_TTL = timedelta(days=31)
-_ZERO_DIGEST = "sha256:" + "0" * 64
+_ZERO_DIGEST = ZERO_DIGEST
 _RELEASE_PROFILE_PATH = (
     Path(__file__).resolve().parents[5]
     / "contracts"
@@ -78,7 +81,6 @@ PROMOTION_REQUIRED_CAPABILITY_IDS_V2 = tuple(
 _RENDERER_ATTESTATION_ID = _PROFILE_DEFINITION.renderer_attestation_capability_id
 _VISUAL_EVIDENCE_ID = _PROFILE_DEFINITION.visual_evidence_capability_id
 _VISUAL_GATE_ISSUER = "authored-visual-parity-gate/v1"
-_VISUAL_GATE_SIGNING_KEY_ENV = "AUTHORED_RELEASE_VISUAL_GATE_HMAC_KEY"
 
 
 @dataclass(frozen=True)
@@ -114,7 +116,7 @@ def _digest_model(value: object) -> str:
 def _validate_visual_gate_signature(report: VisualParityGateReportV1) -> None:
     """Require a server-held authority key; admin-uploaded JSON is not authority."""
 
-    signing_key = os.getenv(_VISUAL_GATE_SIGNING_KEY_ENV, "").encode("utf-8")
+    signing_key = (get_authored_release_settings().visual_gate_hmac_key or "").encode("utf-8")
     if len(signing_key) < 32 or report.trusted_issuer != _VISUAL_GATE_ISSUER:
         raise SemanticContractError("authored_visual_evidence_trusted_issuer_unconfigured")
     supplied = report.authority_signature or ""
@@ -131,19 +133,13 @@ def _validate_visual_gate_signature(report: VisualParityGateReportV1) -> None:
 
 def release_authority_target_from_environment() -> ReleaseAuthorityTargetV2:
     definition, definition_digest = load_release_profile_definition()
-    deployment = os.getenv("AUTHORED_RELEASE_DEPLOYMENT_ENVIRONMENT", "development")
-    if deployment not in {"development", "staging", "production"}:
-        deployment = "development"
-    digest_names = (
-        "AUTHORED_RELEASE_RENDERER_IMAGE_DIGEST",
-        "AUTHORED_RELEASE_FONT_INVENTORY_DIGEST",
-        "AUTHORED_RELEASE_BACKEND_BUILD_DIGEST",
-    )
-    digests = [os.getenv(name, _ZERO_DIGEST) for name in digest_names]
+    release = get_authored_release_settings()
+    deployment = release.deployment_environment
+    digests = release.environment_digests
     configured = all(
         (
-            bool(os.getenv("AUTHORED_RELEASE_OS_BUILD")),
-            bool(os.getenv("AUTHORED_RELEASE_OFFICE_BUILD")),
+            bool(release.os_build),
+            bool(release.office_build),
             all(value != _ZERO_DIGEST for value in digests),
         )
     )
@@ -154,8 +150,8 @@ def release_authority_target_from_environment() -> ReleaseAuthorityTargetV2:
         scope=definition.platform_scope,
         environment=CapabilityEnvironmentV2(
             deployment_environment=deployment,
-            os_build=os.getenv("AUTHORED_RELEASE_OS_BUILD", "unconfigured"),
-            office_build=os.getenv("AUTHORED_RELEASE_OFFICE_BUILD", "unconfigured"),
+            os_build="unconfigured" if release.os_build is None else release.os_build,
+            office_build="unconfigured" if release.office_build is None else release.office_build,
             renderer_image_digest=digests[0],
             font_inventory_digest=digests[1],
             backend_build_digest=digests[2],
@@ -667,13 +663,7 @@ def _kill_switches_from_environment(now: datetime) -> list[KillSwitchProjectionV
             reason="release_kill_switch_active",
             expires_at=None,
         )
-        for capability_id in sorted(
-            {
-                item.strip()
-                for item in os.getenv("AUTHORED_RELEASE_KILL_SWITCHES", "").split(",")
-                if item.strip()
-            }
-        )
+        for capability_id in get_authored_release_settings().kill_switches
     ]
 
 

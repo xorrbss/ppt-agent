@@ -9,7 +9,6 @@ import hmac
 from pathlib import Path
 from typing import Any
 import uuid
-import os
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +26,7 @@ from models.authored_vnext.semantic.contracts import (
     SemanticUnavailableReceiptV1,
 )
 from models.sql.workspace import get_workspace_owner_scope
+from utils.env_settings.authored_vnext import is_authored_semantic_bundle_writes_enabled
 from services.presentation_export_attempt_service import (
     begin_export_attempt,
     build_export_asset_manifest_sha256,
@@ -160,11 +160,7 @@ async def _begin_direct_authored_export_attempt(
             composition_digest = (
                 active_semantic.manifest.composition_digest.removeprefix("sha256:")
             )
-    elif (
-        export_mode == "hybrid"
-        and os.getenv("AUTHORED_SEMANTIC_BUNDLE_WRITES_ENABLED", "false").lower()
-        == "true"
-    ):
+    elif export_mode == "hybrid" and is_authored_semantic_bundle_writes_enabled():
         raise PresentationExportContractError(
             "authored_semantic_hybrid_manifest_required"
         )

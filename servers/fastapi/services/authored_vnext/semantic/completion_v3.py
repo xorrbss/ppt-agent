@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from hashlib import sha256
-import os
 from typing import Any
 import uuid
 
@@ -41,26 +40,37 @@ from services.authored_vnext.semantic.release_authority_v3 import (
     validate_actual_product_record_v3,
 )
 from utils.datetime_utils import get_current_utc_datetime
+from utils.env_settings.authored_release import (
+    get_authored_release_settings,
+    stripped,
+)
 
 
 def _utc(value: datetime) -> datetime:
     return value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
+# Field names double as ``AuthoredReleaseSettings`` attribute names
+# (``AUTHORED_RELEASE_<FIELD>`` in the environment).
+_RUNTIME_PIN_FIELDS = (
+    "source_tree_census_digest",
+    "source_head_commit",
+    "evidence_policy_digest",
+    "feature_set_digest",
+    "gate_minus1_manifest_digest",
+    "gate_minus1_result_set_digest",
+    "gate_minus1_receipt_artifact_digest",
+    "gate_minus1_validator_contract_digest",
+    "environment_attestation_digest",
+    "worker_attestation_digest",
+)
+
+
 def _required_runtime_pins() -> dict[str, str]:
-    mapping = {
-        "source_tree_census_digest": "AUTHORED_RELEASE_SOURCE_TREE_CENSUS_DIGEST",
-        "source_head_commit": "AUTHORED_RELEASE_SOURCE_HEAD_COMMIT",
-        "evidence_policy_digest": "AUTHORED_RELEASE_EVIDENCE_POLICY_DIGEST",
-        "feature_set_digest": "AUTHORED_RELEASE_FEATURE_SET_DIGEST",
-        "gate_minus1_manifest_digest": "AUTHORED_RELEASE_GATE_MINUS1_MANIFEST_DIGEST",
-        "gate_minus1_result_set_digest": "AUTHORED_RELEASE_GATE_MINUS1_RESULT_SET_DIGEST",
-        "gate_minus1_receipt_artifact_digest": "AUTHORED_RELEASE_GATE_MINUS1_RECEIPT_ARTIFACT_DIGEST",
-        "gate_minus1_validator_contract_digest": "AUTHORED_RELEASE_GATE_MINUS1_VALIDATOR_CONTRACT_DIGEST",
-        "environment_attestation_digest": "AUTHORED_RELEASE_ENVIRONMENT_ATTESTATION_DIGEST",
-        "worker_attestation_digest": "AUTHORED_RELEASE_WORKER_ATTESTATION_DIGEST",
+    release = get_authored_release_settings()
+    pins = {
+        field: stripped(getattr(release, field)).lower() for field in _RUNTIME_PIN_FIELDS
     }
-    pins = {field: os.getenv(name, "").strip().lower() for field, name in mapping.items()}
     if any(not value for value in pins.values()):
         raise SemanticContractError("authored_evidence_completion_runtime_pins_unconfigured")
     return pins

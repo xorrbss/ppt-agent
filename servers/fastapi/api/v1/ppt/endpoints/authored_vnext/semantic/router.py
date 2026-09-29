@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
@@ -54,6 +53,7 @@ from models.authored_vnext.semantic.release_evidence_v3 import (
 )
 from services.authored_vnext.semantic.canonical import SemanticContractError
 from services.authored_vnext.semantic.export_binding import bind_existing_export_attempt
+from utils.env_settings.authored_vnext import is_authored_semantic_bundle_writes_enabled
 from services.authored_vnext.semantic.query import (
     get_active_authored_emission,
     get_workbench_capability_projection,
@@ -770,11 +770,7 @@ async def create_export_attempt_binding(
     presentation_id: uuid.UUID = Path(),
     session: AsyncSession = Depends(get_async_session),
 ) -> ExportAttemptDigestBindingV1:
-    if os.getenv("AUTHORED_SEMANTIC_BUNDLE_WRITES_ENABLED", "false").lower() != "true":
-        raise HTTPException(
-            status_code=404,
-            detail={"code": "authored_semantic_bundle_writes_disabled"},
-        )
+    _writes_enabled()
     if binding.presentation_id != presentation_id:
         raise HTTPException(
             status_code=422,
@@ -806,11 +802,7 @@ async def create_export_attempt_binding_v2(
 ) -> ReleasePinnedExportAttemptDigestBindingV2:
     """Bind evidence receipts and independently validated release-authority pins."""
 
-    if os.getenv("AUTHORED_SEMANTIC_BUNDLE_WRITES_ENABLED", "false").lower() != "true":
-        raise HTTPException(
-            status_code=404,
-            detail={"code": "authored_semantic_bundle_writes_disabled"},
-        )
+    _writes_enabled()
     if binding.presentation_id != presentation_id:
         raise HTTPException(
             status_code=422,
@@ -833,7 +825,7 @@ async def create_export_attempt_binding_v2(
 
 
 def _writes_enabled() -> None:
-    if os.getenv("AUTHORED_SEMANTIC_BUNDLE_WRITES_ENABLED", "false").lower() != "true":
+    if not is_authored_semantic_bundle_writes_enabled():
         raise HTTPException(
             status_code=404,
             detail={"code": "authored_semantic_bundle_writes_disabled"},

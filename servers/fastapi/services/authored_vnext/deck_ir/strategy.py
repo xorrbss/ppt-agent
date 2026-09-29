@@ -10,9 +10,10 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 import hashlib
 import json
-import os
 import unicodedata
 from typing import Literal
+
+from utils.env_settings.authored_vnext import is_deck_ir_generation_enabled
 
 
 GenerationStrategy = Literal["deck-ir", "legacy-authored", "reject"]
@@ -63,17 +64,10 @@ def _digest(payload: Mapping[str, object]) -> str:
     ).hexdigest()
 
 
-def _truthy_env(name: str, *, default: bool = False) -> bool:
-    value = os.getenv(name)
-    if value is None:
-        return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
-
-
 def deck_ir_generation_enabled() -> bool:
     """Return the admission kill switch; default is safely legacy authored."""
 
-    return _truthy_env("DECK_IR_GENERATION_ENABLED")
+    return is_deck_ir_generation_enabled()
 
 
 def _mapping(value: object) -> Mapping[str, object]:

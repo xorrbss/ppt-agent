@@ -7,13 +7,16 @@ import base64
 from dataclasses import dataclass
 from hashlib import sha256
 import logging
-import os
 import re
 from typing import Any, Protocol
 
 import httpx
 
 from services.authored_vnext.master.digests import canonical_json
+from utils.env_settings.authored_vnext import (
+    get_authored_vnext_ooxml_worker_token,
+    get_authored_vnext_ooxml_worker_url,
+)
 
 
 _SAFE_WORKER_CODE = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
@@ -180,11 +183,10 @@ class HttpOoxmlWorkerTransport:
 
     @classmethod
     def from_environment(cls) -> "HttpOoxmlWorkerTransport":
-        base_url = os.getenv("NEXT_INTERNAL_URL", "http://127.0.0.1:3000").rstrip("/")
-        token = os.getenv("AUTHORED_VNEXT_OOXML_WORKER_TOKEN", "").strip()
+        token = get_authored_vnext_ooxml_worker_token()
         if len(token) < 32:
             raise WorkerError("authored_vnext_worker_token_not_configured")
-        return cls(f"{base_url}/api/internal/ooxml-vnext", token)
+        return cls(get_authored_vnext_ooxml_worker_url(), token)
 
     async def execute(self, payload: dict[str, Any], timeout_ms: int) -> dict[str, Any]:
         if payload.get("scene") is not None:

@@ -15,7 +15,6 @@ import asyncio
 from services.source_images.budget import source_image_admission_budget
 import json
 import logging
-import os
 import re
 import traceback
 import uuid
@@ -204,6 +203,7 @@ from utils.authored_styles import (
     resolve_authored_style,
 )
 from utils.document_context import build_document_context
+from utils.env_settings.authored_vnext import is_authored_vnext_master_enabled
 from utils.get_env import get_authored_resume_max_attempts_env
 from utils.get_env_programme import is_authored_content_brief_enabled
 from services.public_operation_deadline_scope import remaining_public_operation_seconds
@@ -284,8 +284,7 @@ async def _validate_authored_master_pin_admission(request: GeneratePresentationR
         return
     if request.master_pin is None and request._authored_master_pin is None and request._authored_composition_pin is None:
         return
-    master_enabled = os.getenv("AUTHORED_VNEXT_MASTER_ENABLED", "true").strip().lower() == "true"
-    if not master_enabled:
+    if not is_authored_vnext_master_enabled():
         raise HTTPException(status_code=404, detail="authored_vnext_master_disabled")
     owner_id = get_current_owner_id()
     if owner_id is None:

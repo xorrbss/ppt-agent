@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import uuid
 
 from sqlalchemy import select
@@ -34,6 +33,9 @@ from models.sql.authored_semantic_bundle import (
     AuthoredEmissionBundleRecord,
 )
 from models.sql.presentation import PresentationModel
+from utils.env_settings.authored_vnext import (
+    is_authored_semantic_hybrid_kill_switch_active,
+)
 
 from .canonical import SemanticContractError, canonical_digest
 
@@ -185,7 +187,7 @@ async def get_workbench_capability_projection(
                     read_only_reason=read_only_reason,
                 )
             )
-    kill_active = os.getenv("AUTHORED_SEMANTIC_HYBRID_KILL_SWITCH", "false").lower() == "true"
+    kill_active = is_authored_semantic_hybrid_kill_switch_active()
     disabled = kill_active or degraded or active.canonical_mode == "legacyHtml"
     disabled_reason = (
         "authored_semantic_kill_switch_active"
