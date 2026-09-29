@@ -11,7 +11,6 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime
-import os
 from typing import Literal, Protocol
 import uuid
 
@@ -34,6 +33,10 @@ from services.artifact_store import (
     try_artifact_key_guard,
 )
 from utils.datetime_utils import get_current_utc_datetime
+from utils.env_settings.public_service import (
+    PUBLIC_ARTIFACT_LIFECYCLE_ENV as _PUBLIC_ARTIFACT_LIFECYCLE_ENV,
+    is_public_artifact_lifecycle_enabled,
+)
 
 
 ArtifactLifecycleState = Literal[
@@ -42,7 +45,7 @@ ArtifactLifecycleState = Literal[
     "tombstoned",
     "deleted",
 ]
-PUBLIC_ARTIFACT_LIFECYCLE_ENV = "PUBLIC_ARTIFACT_LIFECYCLE_ENABLED"
+PUBLIC_ARTIFACT_LIFECYCLE_ENV = _PUBLIC_ARTIFACT_LIFECYCLE_ENV
 
 _NEXT_STATE: dict[ArtifactLifecycleState, ArtifactLifecycleState] = {
     "provisional": "committed",
@@ -492,12 +495,7 @@ ShadowArtifactLifecycleService = ArtifactLifecycleService
 
 
 def public_artifact_lifecycle_enabled() -> bool:
-    value = os.getenv(PUBLIC_ARTIFACT_LIFECYCLE_ENV, "").strip().lower()
-    if value in {"1", "true", "yes", "on"}:
-        return True
-    if value in {"", "0", "false", "no", "off"}:
-        return False
-    raise RuntimeError("artifact.lifecycle_feature_flag_invalid")
+    return is_public_artifact_lifecycle_enabled()
 
 
 def configured_artifact_lifecycle_service(

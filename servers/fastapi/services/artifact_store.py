@@ -53,6 +53,13 @@ from services.worker_artifact_cache_maintenance import (
     touch_admitted,
 )
 from utils.path_helpers import get_writable_path
+from utils.env_settings.public_service import (
+    get_public_artifact_store_backend,
+    get_public_artifact_store_settings,
+    get_public_worker_settings,
+    get_worker_artifact_cache_max_bytes,
+    get_worker_artifact_cache_ttl_seconds,
+)
 from utils.get_env import get_environment_name
 
 
@@ -1975,20 +1982,19 @@ class DurableArtifactWorkerObjectPort:
 def configured_public_artifact_service() -> DurableArtifactService:
     """Create the configured authority adapter without accepting request input."""
 
-    backend = (os.getenv("PUBLIC_ARTIFACT_STORE_BACKEND") or "").strip().lower()
+    store_settings = get_public_artifact_store_settings()
+    backend = store_settings.backend
     if backend == "local-development":
         return DurableArtifactService(configured_local_development_artifact_store())
     if backend == "s3":
-        bucket = (os.getenv("PUBLIC_ARTIFACT_S3_BUCKET") or "").strip()
-        prefix = (os.getenv("PUBLIC_ARTIFACT_S3_PREFIX") or "presenton-artifacts").strip()
-        endpoint_url = (os.getenv("PUBLIC_ARTIFACT_S3_ENDPOINT_URL") or "").strip()
-        region_name = (os.getenv("PUBLIC_ARTIFACT_S3_REGION") or "us-east-1").strip()
-        addressing_style = (
-            os.getenv("PUBLIC_ARTIFACT_S3_ADDRESSING_STYLE") or "virtual"
-        ).strip().lower()
+        bucket = store_settings.s3_bucket
+        prefix = store_settings.s3_prefix
+        endpoint_url = store_settings.s3_endpoint_url
+        region_name = store_settings.s3_region
+        addressing_style = store_settings.s3_addressing_style
         if addressing_style not in {"virtual", "path"}:
             raise RuntimeError("artifact.s3_addressing_style_invalid")
-        verify_raw = (os.getenv("PUBLIC_ARTIFACT_S3_TLS_VERIFY") or "true").strip().lower()
+        verify_raw = store_settings.s3_tls_verify_text
         if verify_raw not in {"true", "false"}:
             raise RuntimeError("artifact.s3_tls_verify_invalid")
         try:
@@ -2011,12 +2017,7 @@ def configured_public_artifact_service() -> DurableArtifactService:
                 bucket=bucket,
                 key_prefix=prefix,
                 client=client,
-                server_side_encryption=(
-                    os.getenv("PUBLIC_ARTIFACT_S3_SERVER_SIDE_ENCRYPTION")
-                    if "PUBLIC_ARTIFACT_S3_SERVER_SIDE_ENCRYPTION" in os.environ
-                    else "AES256"
-                )
-                or "",
+                server_side_encryption=store_settings.s3_server_side_encryption,
             )
         )
     raise RuntimeError("artifact.backend_required")
@@ -2032,8 +2033,9 @@ def configured_worker_artifact_cache() -> WorkerArtifactTransportCache:
     still owns.
     """
 
-    root_value = (os.getenv("PUBLIC_WORKER_ARTIFACT_CACHE_ROOT") or "").strip()
-    backend = (os.getenv("PUBLIC_ARTIFACT_STORE_BACKEND") or "").strip().lower()
+    worker_settings = get_public_worker_settings()
+    root_value = worker_settings.artifact_cache_root or ""
+    backend = get_public_artifact_store_backend()
     if not root_value:
         # Compatibility is limited to the explicitly development-only backend.
         environment = get_environment_name("production")
@@ -2052,23 +2054,14 @@ def configured_worker_artifact_cache() -> WorkerArtifactTransportCache:
     if not root_value or not root.is_absolute():
         raise RuntimeError("artifact.worker_cache_root_required")
     if backend == "local-development":
-        authority_root_value = (os.getenv("PUBLIC_WORKER_OBJECT_STORE_ROOT") or "").strip()
+        authority_root_value = worker_settings.object_store_root or ""
         if authority_root_value and Path(authority_root_value).resolve() == root.resolve():
             raise RuntimeError("artifact.worker_cache_root_must_differ_from_authority")
     try:
-        max_cache_bytes = int(
-            os.getenv(
-                "PUBLIC_WORKER_ARTIFACT_CACHE_MAX_BYTES",
-                str(1024 * 1024 * 1024),
-            )
-        )
-        ttl_seconds = int(
-            os.getenv("PUBLIC_WORKER_ARTIFACT_CACHE_TTL_SECONDS", "900")
-        )
+        max_cache_bytes = get_worker_artifact_cache_max_bytes()
+        ttl_seconds = get_worker_artifact_cache_ttl_seconds()
     except ValueError as exc:
         raise RuntimeError("artifact.worker_cache_limits_invalid") from exc
-    if max_cache_bytes <= 0 or ttl_seconds <= 0:
-        raise RuntimeError("artifact.worker_cache_limits_invalid")
     return WorkerArtifactTransportCache(
         root,
         max_cache_bytes=max_cache_bytes,
@@ -2079,20 +2072,19 @@ def configured_worker_artifact_cache() -> WorkerArtifactTransportCache:
 def configured_local_development_artifact_store() -> LocalDevelopmentArtifactObjectStore:
     """Build the loopback-only development store; never fall back in production."""
 
-    backend = (os.getenv("PUBLIC_ARTIFACT_STORE_BACKEND") or "").strip().lower()
+    store_settings = get_public_artifact_store_settings()
+    backend = store_settings.backend
     environment = get_environment_name("production")
     if backend != "local-development" or environment != "local":
         raise RuntimeError("artifact.local_download_development_only")
-    root_value = (os.getenv("PUBLIC_WORKER_OBJECT_STORE_ROOT") or "").strip()
+    root_value = get_public_worker_settings().object_store_root or ""
     root = Path(root_value)
     if not root_value or not root.is_absolute():
         raise RuntimeError("artifact.local_root_required")
-    signing_key = os.getenv("PUBLIC_LOCAL_ARTIFACT_DOWNLOAD_SIGNING_KEY")
+    signing_key = store_settings.local_download_signing_key
     if not signing_key:
         raise RuntimeError("artifact.local_download_signing_key_required")
-    origin = (
-        os.getenv("PUBLIC_LOCAL_ARTIFACT_DOWNLOAD_ORIGIN") or "http://127.0.0.1:8010"
-    ).strip()
+    origin = store_settings.local_download_origin
     return LocalDevelopmentArtifactObjectStore(
         root,
         download_signing_key=signing_key,

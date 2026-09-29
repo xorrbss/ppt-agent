@@ -23,6 +23,7 @@ from models.sql.public_principal_binding import (
 )
 from models.sql.user import User
 from api.v1.auth.config import SESSION_COOKIE_NAME
+from utils.env_settings.public_service import get_public_process_identity_settings
 from utils.get_env import get_environment_name
 
 
@@ -70,7 +71,7 @@ _LOCAL_PUBLIC_SCOPES = (
 
 
 def _trusted_tenant_id() -> str:
-    tenant_id = (os.getenv("PPT_SERVICE_TENANT_ID") or "default").strip()
+    tenant_id = get_public_process_identity_settings().service_tenant_id
     if not _SAFE_PRINCIPAL_ID.fullmatch(tenant_id):
         raise RuntimeError("ppt_service_tenant_id_invalid")
     return tenant_id
@@ -104,9 +105,10 @@ def local_development_tenant_id() -> str:
 
 
 def _public_oidc_configuration() -> tuple[str, str, Path] | None:
-    issuer = (os.getenv("PPT_PUBLIC_OIDC_ISSUER") or "").strip()
-    audience = (os.getenv("PPT_PUBLIC_OIDC_AUDIENCE") or "").strip()
-    jwks_path_value = (os.getenv("PPT_PUBLIC_OIDC_JWKS_FILE") or "").strip()
+    identity = get_public_process_identity_settings()
+    issuer = identity.oidc_issuer
+    audience = identity.oidc_audience
+    jwks_path_value = identity.oidc_jwks_file
     supplied = (bool(issuer), bool(audience), bool(jwks_path_value))
     if not any(supplied):
         return None

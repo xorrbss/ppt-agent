@@ -101,6 +101,12 @@ from services.isolated_worker_process import (
 from services.trusted_executor.dispatch_evidence import private_dispatch_evidence_summary
 from services.workspace_operation_handler_registry import WorkspaceOperationClaim
 from utils.asset_directory_utils import resolve_image_path_to_filesystem
+from utils.env_settings.public_service import (
+    get_public_render_max_concurrency,
+    get_public_render_settings,
+    get_public_worker_node_id,
+    get_public_worker_settings,
+)
 from utils.get_env import get_vnext_tenant_id
 
 
@@ -206,7 +212,7 @@ def _resource_summary(
 def load_worker_capability_signing_key() -> bytes:
     """Load a mounted workload key without copying it into child argv or env."""
 
-    value = os.getenv("PUBLIC_WORKER_CAPABILITY_KEY_FILE", "").strip()
+    value = get_public_worker_settings().capability_key_file or ""
     if not value or not pathlib.Path(value).is_absolute():
         raise PublicExportOperationError("public_worker_capability_key_file_required")
     try:
@@ -1083,9 +1089,7 @@ async def render_and_export_authored_htmls(
                 ).encode("utf-8")
             ).hexdigest()
     try:
-        configured_concurrency = int(
-            os.getenv("PUBLIC_RENDER_MAX_CONCURRENCY", "2").strip()
-        )
+        configured_concurrency = get_public_render_max_concurrency(2)
     except ValueError as error:
         raise PublicExportOperationError(
             "public_render_concurrency_invalid"
@@ -1167,13 +1171,8 @@ async def render_and_export_authored_htmls(
                     )
                 )
             await session.commit()
-    singleflight_wait_seconds = max(
-        1.0,
-        min(
-            600.0,
-            float(os.getenv("PUBLIC_RENDER_SINGLEFLIGHT_WAIT_SECONDS", "125")),
-        ),
-    )
+    render_settings = get_public_render_settings()
+    singleflight_wait_seconds = render_settings.singleflight_wait_seconds
 
     async def render_fresh_batch(
         references: list[PublicArtifactRef],
@@ -1445,13 +1444,7 @@ async def render_and_export_authored_htmls(
         rendered, joined = await run_slide_render_singleflight(
             identity,
             render_under_database_authority,
-            max_in_flight=max(
-                1,
-                min(
-                    256,
-                    int(os.getenv("PUBLIC_RENDER_SINGLEFLIGHT_MAX", "64")),
-                ),
-            ),
+            max_in_flight=render_settings.singleflight_max,
             wait_seconds=singleflight_wait_seconds,
             on_follower_wait=lambda: render_batcher.settle(index),
         )
@@ -1625,9 +1618,7 @@ async def render_and_export_authored_htmls(
                 session,
                 claim,
                 identity=canonical_identity(hybrid=hybrid),
-                worker_id=(
-                    os.getenv("PUBLIC_WORKER_NODE_ID") or "export-controller"
-                ),
+                worker_id=get_public_worker_node_id("export-controller"),
             )
             await session.commit()
         return await execute_canonical_export_execution(

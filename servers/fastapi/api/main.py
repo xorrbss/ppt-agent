@@ -29,6 +29,7 @@ from utils.get_env import (
     get_app_data_directory_env,
     get_enable_mock_endpoints_env,
 )
+from utils.env_settings.public_service import get_cors_allowed_origins
 from utils.path_helpers import get_resource_path
 from utils.slide_capture import get_render_runtime_snapshot
 
@@ -78,9 +79,9 @@ if os.path.isdir(static_dir):
 # CORS is only needed for local dev cross-origin; use a tight allowlist (extend via
 # CORS_ALLOWED_ORIGINS, comma-separated) instead of a credentialed wildcard.
 def _cors_origins() -> list[str]:
-    raw = (os.getenv("CORS_ALLOWED_ORIGINS") or "").strip()
-    if raw:
-        return [o.strip() for o in raw.split(",") if o.strip()]
+    configured = get_cors_allowed_origins()
+    if configured:
+        return list(configured)
     return [
         "http://localhost:3000",
         "http://127.0.0.1:3000",

@@ -69,6 +69,11 @@ from services.workspace_event_retention import (
 )
 from services.workspace_runtime_profile import require_supported_workspace_runtime
 from services.provider_pricing_admission import pricing_gap_message
+from utils.env_settings.public_service import (
+    get_log_level,
+    get_public_process_identity_settings,
+    get_public_worker_node_id,
+)
 from utils.get_env import get_app_data_directory_env, get_can_change_keys_env, get_environment_name
 from utils.model_availability import (
     check_llm_and_image_provider_api_or_model_availability,
@@ -81,7 +86,7 @@ _LOCAL_ENVIRONMENTS = {"local", "development", "dev", "test"}
 
 def _configure_application_logging() -> None:
     """Honor LOG_LEVEL (default INFO) so template/export diagnostics are visible."""
-    raw = (os.getenv("LOG_LEVEL") or "INFO").strip().upper()
+    raw = get_log_level()
     level = getattr(logging, raw, logging.INFO)
     # A level alone is inert: uvicorn's default LOGGING_CONFIG attaches handlers only to
     # the uvicorn.* loggers, so application INFO records fall through to
@@ -126,7 +131,7 @@ async def app_lifespan(_: FastAPI):
     if (
         get_environment_name("development")
         not in {"local", "development", "dev", "test"}
-        and (os.getenv("PPT_PUBLIC_OIDC_ISSUER") or "").strip()
+        and get_public_process_identity_settings().oidc_issuer
         and should_start_embedded_workspace_operation_worker()
     ):
         raise RuntimeError("public_controller_process_separation_required")
@@ -156,7 +161,7 @@ async def app_lifespan(_: FastAPI):
         register_workspace_operation_handlers()
         if (
             should_start_embedded_workspace_operation_worker()
-            and os.getenv("PUBLIC_V2_INTEGRATION_PROFILE", "").strip()
+            and get_public_process_identity_settings().v2_integration_profile
             == "postgresql-strict"
         ):
             # The public embedded/split profile owns export claims in this
@@ -174,7 +179,7 @@ async def app_lifespan(_: FastAPI):
             )
             workspace_operation_runner_started = True
         if _should_start_local_account_deletion_controller():
-            node_id = (os.getenv("PUBLIC_WORKER_NODE_ID") or "").strip()
+            node_id = get_public_worker_node_id()
             await start_account_deletion_controller(
                 worker_id=f"{node_id or 'embedded-local'}:account-deletion"
             )

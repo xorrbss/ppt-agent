@@ -1,5 +1,4 @@
 import ipaddress
-import os
 import posixpath
 import re
 import secrets
@@ -36,6 +35,12 @@ from models.sql.user import User
 from services.database import async_session_maker
 from services.provider_settings import import_legacy_file_to_provider_settings
 from services.provider_settings import save_provider_settings_record
+from utils.env_settings.public_service import (
+    RUNTIME_SETTINGS_REFRESH_TOKEN_ENV,
+    get_public_artifact_store_backend,
+    get_public_process_identity_settings,
+    get_runtime_settings_refresh_token,
+)
 from utils.get_env import get_environment_name, is_disable_auth_enabled
 from utils.runtime_settings import (
     get_process_runtime_settings,
@@ -46,9 +51,7 @@ from utils.user_config import refresh_process_runtime_settings
 
 
 _RUNTIME_SETTINGS_REFRESH_PATH = "/_presenton/runtime-settings/refresh"
-_RUNTIME_SETTINGS_REFRESH_TOKEN_ENV = (
-    "PRESENTON_RUNTIME_SETTINGS_REFRESH_TOKEN"
-)
+_RUNTIME_SETTINGS_REFRESH_TOKEN_ENV = RUNTIME_SETTINGS_REFRESH_TOKEN_ENV
 _RUNTIME_SETTINGS_REFRESH_TOKEN_HEADER = (
     "x-presenton-runtime-settings-token"
 )
@@ -65,7 +68,7 @@ def _is_loopback_request(request: Request) -> bool:
 
 
 async def _refresh_runtime_settings(request: Request) -> Response:
-    expected_token = os.getenv(_RUNTIME_SETTINGS_REFRESH_TOKEN_ENV, "")
+    expected_token = get_runtime_settings_refresh_token()
     provided_token = request.headers.get(_RUNTIME_SETTINGS_REFRESH_TOKEN_HEADER, "")
     authorized = (
         request.method == "POST"
@@ -166,8 +169,7 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
             and path == request.url.path
             and self._LOCAL_SIGNED_DOWNLOAD_PATH.fullmatch(path) is not None
             and get_environment_name() == "local"
-            and (os.getenv("PUBLIC_ARTIFACT_STORE_BACKEND") or "").strip().lower()
-            == "local-development"
+            and get_public_artifact_store_backend() == "local-development"
             and is_loopback_development_request(request)
         )
 
@@ -220,7 +222,7 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
                     tenant_id=(
                         local_development_tenant_id()
                         if public_loopback
-                        else (os.getenv("PPT_SERVICE_TENANT_ID") or "default").strip()
+                        else get_public_process_identity_settings().service_tenant_id
                     ),
                     trace_id=str(getattr(request.state, "request_id", "") or secrets.token_hex(16)),
                     subject=str(admin.id),
