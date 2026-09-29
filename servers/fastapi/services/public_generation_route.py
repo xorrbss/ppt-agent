@@ -1,7 +1,5 @@
 """Server-owned routing and durable placeholder policy for public generation."""
 
-from hashlib import sha256
-import json
 
 from collections.abc import Mapping
 from typing import Any
@@ -10,6 +8,7 @@ from api.v2.contracts import GenerationRouteReceiptV1, PresentationGenerationReq
 from models.generate_presentation_request import GeneratePresentationRequest
 from services.authored_rollout_profile import RolloutProfile
 from services.generation_core.admission.strategy import resolve_generation_strategy
+from utils.hashing import canonical_json_digest
 
 #: Durable key the withdrawn server-owned restyle composer wrote into staged
 #: job payloads. Nothing writes it any more; staging only strips it so a
@@ -60,14 +59,7 @@ def pin_source_restyle_authoring(
             "fallbackReason": "source-content-authored-reflow",
             "outputCapability": "fidelity",
         }
-        digest = "sha256:" + sha256(
-            json.dumps(
-                unsigned_receipt,
-                ensure_ascii=True,
-                sort_keys=True,
-                separators=(",", ":"),
-            ).encode("utf-8")
-        ).hexdigest()
+        digest = canonical_json_digest(unsigned_receipt, ensure_ascii=True, allow_nan=True)
         route_receipt = GenerationRouteReceiptV1.model_validate(
             {**unsigned_receipt, "receiptDigest": digest}
         ).model_dump(mode="json", by_alias=True)

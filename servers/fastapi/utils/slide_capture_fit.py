@@ -25,7 +25,6 @@ two entries would be evicted independently by the LRU and reproduce the
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 from collections.abc import Callable, Mapping
@@ -39,6 +38,7 @@ from utils.slide_capture_fit_in_render_script import FIT_CLASS
 from utils.slide_capture_fit_in_render_script import FIT_VERSION as IN_RENDER_FIT_VERSION
 from utils.slide_capture_fit_in_render_script import fit_script_fragment as in_render_fit_script_fragment
 from utils.slide_capture_fit_script import FIT_VERSION, fit_script_fragment
+from utils.hashing import sha256_prefixed
 
 _HTML_TAG_PATTERN = re.compile(r"<html(?:\s[^>]*)?>", re.IGNORECASE)
 _CLASS_PATTERN = re.compile(
@@ -49,7 +49,7 @@ _TAG_END_PATTERN = re.compile(r"\s*/?>\s*$")
 
 
 def html_digest(html: str) -> str:
-    return "sha256:" + hashlib.sha256(html.encode("utf-8")).hexdigest()
+    return sha256_prefixed(html.encode("utf-8"))
 
 
 def require_qid_complete(html: str) -> None:

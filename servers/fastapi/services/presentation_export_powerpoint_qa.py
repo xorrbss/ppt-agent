@@ -3,21 +3,21 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import nullcontext
-from dataclasses import dataclass
-from hashlib import sha256
 import json
 import os
-from pathlib import Path
 import shutil
 import tempfile
 import threading
 import time
-from typing import Any
 import xml.etree.ElementTree as ET
 import zipfile
+from contextlib import nullcontext
+from dataclasses import dataclass
+from hashlib import sha256
+from pathlib import Path
+from typing import Any
 
-from utils.hashing import sha256_file
+from constants.timeouts import WATCHER_THREAD_JOIN_SECONDS
 from services.presentation_export_capabilities import PresentationExportContractError
 from services.presentation_export_evidence_sidecars import (
     publish_finalized_hybrid_sidecars,
@@ -27,7 +27,7 @@ from utils.env_settings.authored_runtime import (
     is_authored_powerpoint_qa_interactive_observation_enabled,
 )
 from utils.get_env import get_app_data_directory_env
-from constants.timeouts import WATCHER_THREAD_JOIN_SECONDS
+from utils.hashing import sha256_file, sha256_hex
 
 # Window scan interval of the dialog watcher.
 _DIALOG_SCAN_INTERVAL_SECONDS = 0.05
@@ -629,7 +629,7 @@ def _snapshot_sha256(value: list[list[dict[str, Any]]]) -> str:
     payload = json.dumps(
         value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
     ).encode("utf-8")
-    return sha256(payload).hexdigest()
+    return sha256_hex(payload)
 
 
 def _contains_cjk(value: str) -> bool:
@@ -814,6 +814,7 @@ def _run_powerpoint_com_qa(
 ) -> dict[str, Any]:
     import pythoncom  # type: ignore[import-not-found]
     import win32com.client  # type: ignore[import-not-found]
+
     from services.authored_canvas import presentation_canvas_contract
 
     canvas_contract = presentation_canvas_contract(theme)

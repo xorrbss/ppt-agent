@@ -5,6 +5,7 @@ import xml.etree.ElementTree as ET
 
 from services.svg_asset_manifest import ArtifactPointer, PlacementManifest, SourceManifest
 from services.svg_contract import source_digest, validate_svg
+from utils.hashing import sha256_hex
 
 SOURCE_KIND = "source-manifest"
 PLACEMENT_KIND = "placement-manifest"
@@ -85,7 +86,6 @@ async def _load_sealed_source_bytes(
     slot, *, session, row, owner_id, presentation_id, page_index, receipt
 ):
     """Read a source-preserving image only from its sealed source manifest."""
-    import hashlib
     from sqlalchemy import select
     from models.sql.source_content import SourceContentManifestRecord
     from services.source_content.manifest_store import (
@@ -175,7 +175,7 @@ async def _load_sealed_source_bytes(
     if (
         sealed.content_digest != expected_asset_digest
         or len(payload) > 32 * 1024 * 1024
-        or hashlib.sha256(payload).hexdigest() != slot.source_sha256
+        or sha256_hex(payload) != slot.source_sha256
     ):
         raise ValueError("svg_export_source_asset_digest_mismatch")
     return payload
@@ -186,7 +186,6 @@ async def _load_original_bytes(
     page_index=None, source_preservation=None,
 ):
     import asyncio
-    import hashlib
     from sqlalchemy import select
     from models.sql.image_asset import ImageAsset
     from services.assets import AssetGateway, canonicalize_legacy_image_asset
@@ -224,7 +223,7 @@ async def _load_original_bytes(
                 return stream.read(32 * 1024 * 1024 + 1)
         payload = await asyncio.to_thread(read)
         if (len(payload) > 32 * 1024 * 1024 or len(payload) != binding.size_bytes
-                or hashlib.sha256(payload).hexdigest() != slot.source_sha256):
+                or sha256_hex(payload) != slot.source_sha256):
             raise ValueError("svg_export_source_asset_digest_mismatch")
         if await gateway.bind(session, asset_id=binding.asset_id, kind=binding.kind) != binding:
             raise ValueError("svg_export_source_asset_changed")

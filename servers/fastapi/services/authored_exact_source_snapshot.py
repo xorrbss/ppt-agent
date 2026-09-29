@@ -10,7 +10,6 @@ the background worker without exposing paths or content in API payloads.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import io
 import json
 import re
@@ -28,6 +27,7 @@ from utils.slide_capture import RENDER_CACHE_VERSION, render_html_to_png
 
 from services.authored_checkpoint_service import atomic_write
 from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX, default_canvas_size
+from utils.hashing import sha256_hex
 
 SNAPSHOT_SCHEMA_VERSION = 1
 _SNAPSHOT_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
@@ -84,7 +84,7 @@ def _canonical_sha256(value: object) -> str:
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
+    return sha256_hex(encoded)
 
 
 def _manifest_path(snapshot_id: str) -> Path:
@@ -126,7 +126,7 @@ async def create_exact_source_snapshot(
             raise ExactSourceSnapshotError(
                 "Exact reconstruction source HTML exceeds the safe limit"
             )
-        digest = hashlib.sha256(html_bytes).hexdigest()
+        digest = sha256_hex(html_bytes)
         filename = f"slide-{expected_index:04d}-{digest}.html"
         captured.append((expected_index, html_bytes, digest, filename))
 
@@ -142,7 +142,7 @@ async def create_exact_source_snapshot(
             "Exact reconstruction source rendering failed"
         ) from None
 
-    renderer_digest = hashlib.sha256(RENDER_CACHE_VERSION.encode("utf-8")).hexdigest()[
+    renderer_digest = sha256_hex(RENDER_CACHE_VERSION.encode("utf-8"))[
         :12
     ]
     entries: list[dict[str, Any]] = []
@@ -158,7 +158,7 @@ async def create_exact_source_snapshot(
             raise ExactSourceSnapshotError(
                 "Exact reconstruction source rendering failed"
             ) from None
-        png_digest = hashlib.sha256(png).hexdigest()
+        png_digest = sha256_hex(png)
         png_filename = (
             f"slide-{expected_index:04d}-{digest}-{renderer_digest}-{png_digest}.png"
         )
@@ -277,7 +277,7 @@ def _validated_entries(
                 "Exact reconstruction source snapshot is invalid"
             )
         png_digest = entry.get("source_png_sha256")
-        renderer_digest = hashlib.sha256(renderer_version.encode("utf-8")).hexdigest()[
+        renderer_digest = sha256_hex(renderer_version.encode("utf-8"))[
             :12
         ]
         expected_png_filename = (
@@ -320,13 +320,13 @@ async def materialize_exact_source_style(
             raise ExactSourceSnapshotError(
                 "Exact reconstruction source HTML is unavailable"
             ) from None
-        if hashlib.sha256(html_bytes).hexdigest() != html_digest:
+        if sha256_hex(html_bytes) != html_digest:
             raise ExactSourceSnapshotError("Exact reconstruction source HTML changed")
 
         png_path = directory / str(entry["source_png_file"])
         try:
             png = png_path.read_bytes()
-            if hashlib.sha256(png).hexdigest() != entry["source_png_sha256"]:
+            if sha256_hex(png) != entry["source_png_sha256"]:
                 raise ExactSourceSnapshotError(
                     "Exact reconstruction source image changed"
                 )

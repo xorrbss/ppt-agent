@@ -1,7 +1,6 @@
 """SVG candidates on the existing preview-task and revision-CAS workflow."""
 from __future__ import annotations
 
-from hashlib import sha256
 from copy import deepcopy
 import xml.etree.ElementTree as ET
 
@@ -13,6 +12,7 @@ from services.authored_presentation_artifacts import _save_slide_pngs
 from services.svg_contract import finalize_svg
 from services.svg_renderer import render_svg_with_metrics
 from utils.llm_calls.author_slide_svg import author_slide_svg
+from utils.hashing import sha256_hex
 
 
 async def preview_svg(presentation, slides, index, request, task, session):
@@ -114,7 +114,7 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
     physical_kwargs = {"physical_canvas": metadata} if isinstance(metadata, DocumentCanvasMetadata) else {}
     rendered = await render_svg_with_metrics(render_source, width=canvas.width_px, height=canvas.height_px,
                                              instructions=data.get("instruction"), **physical_kwargs)
-    if not image.endswith(f"-{sha256(rendered.png).hexdigest()}.png"):
+    if not image.endswith(f"-{sha256_hex(rendered.png)}.png"):
         raise AuthoredPageRemakeError("svg_page_remake_capture_changed", stage="publish_validation")
     if snapshot:
         await version_service.snapshot_slides(session, presentation.id,
@@ -124,7 +124,7 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
     if envelope is not None:
         content["svgAssetManifest"] = envelope
     content["svgReceipt"] = {**content.get("svgReceipt", {}),
-                             "source_digest": sha256(svg.encode()).hexdigest(), "quality": rendered.quality}
+                             "source_digest": sha256_hex(svg.encode()), "quality": rendered.quality}
     properties = {**(target.properties or {}), "image": image}
     changed = await session.execute(update(SlideModel).where(
         SlideModel.id == target.id, SlideModel.presentation == presentation.id,

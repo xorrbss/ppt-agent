@@ -8,7 +8,6 @@ process and the deterministic result remains usable without an AI provider.
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-import hashlib
 import math
 import os
 from pathlib import Path, PurePosixPath
@@ -45,6 +44,7 @@ from models.authored_vnext.master.ai_import import (
 from models.authored_vnext.master.contract import DeckMasterContract
 from services.authored_vnext.master.catalog_seed import _base_contract
 from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX, default_canvas_size
+from utils.hashing import sha256_hex
 
 
 NS = {
@@ -416,7 +416,7 @@ def _design_family_key(slide: dict[str, object], width: int, height: int) -> str
             str(background.get("fill") if background else "none"),
         ]
     )
-    return hashlib.sha256(material.encode("utf-8")).hexdigest()[:16]
+    return sha256_hex(material.encode("utf-8"))[:16]
 
 
 def _furniture_eligible(
@@ -786,7 +786,7 @@ def _medoid(features: list[dict[str, object]]) -> dict[str, object]:
 
 def _stable_layout_candidate_id(slide_numbers: Iterable[int]) -> str:
     membership = ",".join(str(number) for number in sorted(slide_numbers))
-    return f"layout-candidate:{hashlib.sha256(membership.encode('ascii')).hexdigest()[:16]}"
+    return f"layout-candidate:{sha256_hex(membership.encode('ascii'))[:16]}"
 
 
 def _slot_evidence(
@@ -1432,7 +1432,7 @@ def _repeat_candidates(
             differences.append(f"fontSizeRangePt={min(font_sizes):.1f}-{max(font_sizes):.1f}")
         confidence = (len(unique_slides) / len(slides)) * max(0.5, 1 - position_delta / max(width, height))
         type_name = "pageNumber" if role == "pageNumber" else exemplar["type"]
-        candidate_key = hashlib.sha256(repr(_element_key(exemplar, width, height, geometry_tolerance_ratio)).encode()).hexdigest()[:16]
+        candidate_key = sha256_hex(repr(_element_key(exemplar, width, height, geometry_tolerance_ratio)).encode())[:16]
         results.append(
             AiCandidateElement(
                 id=f"candidate:{candidate_key}",

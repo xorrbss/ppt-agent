@@ -20,7 +20,6 @@ from services.public_v2_request_bridge import (
 from collections.abc import Awaitable, Callable, Mapping
 from contextlib import contextmanager
 from datetime import timedelta
-from hashlib import sha256
 import inspect
 import json
 from typing import Any, Iterator
@@ -158,6 +157,7 @@ from utils.owner_context import (
     set_current_tenant_id,
     set_current_trace_id,
 )
+from utils.hashing import sha256_hex, sha256_prefixed
 
 
 AdmissionCallable = Callable[..., Awaitable[PublicOperationAdmission]]
@@ -180,7 +180,7 @@ def _canonical_hash(payload: Mapping[str, Any]) -> str:
         separators=(",", ":"),
         default=str,
     ).encode("utf-8")
-    return sha256(encoded).hexdigest()
+    return sha256_hex(encoded)
 
 
 def _generation_request_hash_payload(
@@ -244,7 +244,7 @@ def _generation_route_digest(payload: Mapping[str, Any]) -> str:
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
-    return "sha256:" + sha256(encoded).hexdigest()
+    return sha256_prefixed(encoded)
 
 
 def _installed_generation_route_resolver() -> GenerationRouteResolver | None:
@@ -420,9 +420,7 @@ def _idempotency_hash(
     kind: str,
     key: str,
 ) -> str:
-    return sha256(
-        f"public-v2:{actor.tenant_id}:{actor.owner_id}:{kind}:{key}".encode("utf-8")
-    ).hexdigest()
+    return sha256_hex(f"public-v2:{actor.tenant_id}:{actor.owner_id}:{kind}:{key}".encode("utf-8"))
 
 
 def resolve_public_v2_integration_profile(

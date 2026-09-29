@@ -18,10 +18,10 @@ and never mutates a master.
 """
 from __future__ import annotations
 
-from hashlib import sha256
 import json
 
 from models.authored_vnext.master.contract import DeckMasterContract, MasterLayout
+from utils.hashing import sha256_prefixed
 
 RULE_VERSION = "svg-master-projection/v1"
 
@@ -31,7 +31,7 @@ class MasterProjectionError(ValueError):
 
 
 def _digest(value: object) -> str:
-    return "sha256:" + sha256(json.dumps(value, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    return sha256_prefixed(json.dumps(value, sort_keys=True, ensure_ascii=False).encode())
 
 
 def _scaled_box(rect, scale_x: float, scale_y: float) -> dict:

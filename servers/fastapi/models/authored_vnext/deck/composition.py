@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 from typing import Any, Literal
 
@@ -10,6 +9,7 @@ from pydantic import Field, model_validator
 
 from ..master.base import Digest, StrictCamelModel
 from ..master.contract import Rect
+from utils.hashing import sha256_prefixed
 
 
 HexColor = str
@@ -22,7 +22,7 @@ def _canonical_digest(payload: object) -> str:
         separators=(",", ":"),
         sort_keys=True,
     ).encode("utf-8")
-    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
+    return sha256_prefixed(encoded)
 
 
 class BodyVisualSnapshot(StrictCamelModel):

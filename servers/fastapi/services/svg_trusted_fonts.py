@@ -8,13 +8,13 @@ Windows system face such as Malgun Gothic.
 
 from __future__ import annotations
 
-import hashlib
 from pathlib import Path
 from typing import Final
 import xml.etree.ElementTree as ET
 
 from services.authored_vnext.semantic.typography import NativeFontByteRegistry
 from utils.svg_template_fonts import FONT_FAMILY as DEFAULT_FONT_FAMILY
+from utils.hashing import sha256_prefixed
 
 #: Repository root: ``servers/fastapi/services/svg_trusted_fonts.py`` -> 3 parents.
 _REPOSITORY_ROOT: Final[Path] = Path(__file__).resolve().parents[3]
@@ -128,7 +128,7 @@ def read_trusted_pretendard_faces() -> tuple[tuple[int, str, bytes], ...]:
             raise ValueError("svg_trusted_font_identity_invalid")
         if not receipt.embedding_permitted:
             raise ValueError("svg_trusted_font_embedding_not_permitted")
-        digest = "sha256:" + hashlib.sha256(payload).hexdigest()
+        digest = sha256_prefixed(payload)
         result.append((weight, digest, payload))
     return tuple(result)
 

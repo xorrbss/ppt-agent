@@ -8,10 +8,10 @@ implementation from becoming an implicit Fidelity downgrade.
 
 from __future__ import annotations
 
-from hashlib import sha256
 import json
 from types import MappingProxyType
 from typing import Any, Literal, Mapping
+from utils.hashing import sha256_prefixed
 
 
 CAPABILITY_REGISTRY_SCHEMA_VERSION = "authored-capability-registry/v1"
@@ -108,7 +108,7 @@ _REGISTRY_PAYLOAD = {
     },
     "authoredFontFloor": {"px": AUTHORED_FONT_FLOOR_PX, "pt": AUTHORED_FONT_FLOOR_PT},
 }
-CAPABILITY_REGISTRY_DIGEST = "sha256:" + sha256(_canonical_json(_REGISTRY_PAYLOAD)).hexdigest()
+CAPABILITY_REGISTRY_DIGEST = sha256_prefixed(_canonical_json(_REGISTRY_PAYLOAD))
 
 
 def scene_capabilities() -> list[Any]:

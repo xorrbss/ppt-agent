@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from .scene_digest import scene_digest
 
-import hashlib
 import base64
 import binascii
 import math
@@ -20,6 +19,7 @@ from pydantic import Field, StringConstraints, field_validator, model_validator
 
 from ..master.base import DeckId, Digest, SlideId, StrictCamelModel
 from ..master.contract import Rect
+from utils.hashing import sha256_prefixed
 
 
 # A Scene owner ID is the authored QID.  Older generated decks used the
@@ -283,7 +283,7 @@ class SceneAssetManifestEntry(StrictCamelModel):
                 raise ValueError("scene asset data URI bytes are invalid") from error
             if len(content) != self.size_bytes:
                 raise ValueError("scene asset data URI size mismatch")
-            if f"sha256:{hashlib.sha256(content).hexdigest()}" != self.asset_digest:
+            if sha256_prefixed(content) != self.asset_digest:
                 raise ValueError("scene asset data URI digest mismatch")
         elif self.storage_reference != asset_store_reference:
             raise ValueError("scene asset storageReference must be a sealed data URI or asset-store reference")

@@ -14,6 +14,7 @@ from models.compatibility_migration import (
     ArchiveManifestPayload,
     SignedArchiveManifest,
 )
+from utils.hashing import sha256_hex
 
 MINIMUM_SIGNING_KEY_BYTES = 32
 _SIGNING_KEY_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
@@ -42,7 +43,7 @@ def _canonical_payload_bytes(payload: ArchiveManifestPayload) -> bytes:
 def _digest(role: str, value: bytes) -> ArchiveDigest:
     return ArchiveDigest(
         role=role,
-        value=hashlib.sha256(value).hexdigest(),
+        value=sha256_hex(value),
         byte_length=len(value),
     )
 
@@ -70,7 +71,7 @@ def build_signed_archive_manifest(
         archive_id=archive_id or uuid.uuid4(),
         source_presentation_id=source_presentation_id,
         target_presentation_id=target_presentation_id,
-        owner_scope_sha256=hashlib.sha256(owner_scope.encode("utf-8")).hexdigest(),
+        owner_scope_sha256=sha256_hex(owner_scope.encode("utf-8")),
         created_at=created_at or datetime.now(timezone.utc),
         digests=(
             _digest("source", source_payload),

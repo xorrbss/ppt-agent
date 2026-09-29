@@ -8,7 +8,6 @@ style-only comparison.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import string
 from pathlib import Path
@@ -16,6 +15,7 @@ from typing import Any, Mapping, Sequence
 
 from utils.authored_styles import AuthoredStyle
 from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION, normalize_reference_mode
+from utils.hashing import sha256_hex
 
 
 PROVENANCE_SCHEMA_VERSION = 1
@@ -32,11 +32,11 @@ def _canonical_sha256(value: object) -> str:
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
+    return sha256_hex(encoded)
 
 
 def _source_sha256(source: bytes) -> str:
-    return hashlib.sha256(source).hexdigest()
+    return sha256_hex(source)
 
 
 def _preset_revision_payload(style: AuthoredStyle) -> dict[str, Any]:

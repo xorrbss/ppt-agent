@@ -19,7 +19,6 @@ the file-size ratchet and must not grow.
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Mapping
 import uuid
 
@@ -51,6 +50,7 @@ from services.authored_slide_checkpoint_bundle import (
 )
 from utils.datetime_utils import get_current_utc_datetime
 from utils.get_env_programme import is_authored_checkpoint_batching_enabled
+from utils.hashing import sha256_hex
 
 
 def store_downstream_html(checkpoint: AuthoredSlideCheckpoint, html: str) -> None:
@@ -197,7 +197,7 @@ async def complete_render_stage_batched(
                 checkpoint_revision = (prior.revision + 1) if prior else 0
             elif prior is not None and checkpoint_revision <= prior.revision:
                 raise SlideCheckpointConflict("checkpoint_revision_regressed")
-        render_sha256 = hashlib.sha256(png).hexdigest()
+        render_sha256 = sha256_hex(png)
         render_path: str | None = None
         artifact_refs: dict | None = None
         # Resolved through the state module so its existing monkeypatch seam

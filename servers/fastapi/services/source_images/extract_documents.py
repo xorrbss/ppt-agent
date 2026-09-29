@@ -7,7 +7,6 @@ vectors use page appearances through the existing conversion/rendering services.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-import hashlib
 from io import BytesIO
 from pathlib import Path
 import zipfile
@@ -22,6 +21,7 @@ from services.source_images.extract import (
     NS,
     _relationships,
 )
+from utils.hashing import sha256_hex
 
 MAX_PIXELS = 40_000_000
 MAX_PDF_PAGES = 200
@@ -64,10 +64,10 @@ class DocumentImageCollection:
             if mime not in {"image/png", "image/jpeg", "image/webp"}:
                 raise ValueError("unsupported_raster_format")
             width, height = image.size
-        digest = hashlib.sha256(payload).hexdigest()
+        digest = sha256_hex(payload)
         identity = f"{locator['sourceDocumentSha256']}:{locator['objectLocator']}"
         item = DocumentImage(
-            payload, mime, width, height, digest, hashlib.sha256(identity.encode()).hexdigest(), locator, text
+            payload, mime, width, height, digest, sha256_hex(identity.encode()), locator, text
         )
         self.assets.setdefault(digest, item)
         self.occurrences.append(item)
@@ -78,7 +78,7 @@ def extract_document_images(path: Path) -> DocumentImageCollection:
     try:
         if path.stat().st_size > MAX_PPTX_BYTES:
             raise ValueError("document_byte_budget_exceeded")
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        digest = sha256_hex(path.read_bytes())
         if path.suffix.lower() == ".docx":
             _docx(path, digest, result)
         elif path.suffix.lower() == ".pdf":

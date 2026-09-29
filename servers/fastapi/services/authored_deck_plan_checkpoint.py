@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from hashlib import sha256
 import json
 from time import monotonic
 from typing import TypeVar
@@ -24,6 +23,7 @@ from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.public_admission import AuthoredDeckPlanCheckpoint
 from models.sql.workspace import WorkspaceOperation
 from utils.datetime_utils import get_current_utc_datetime
+from utils.hashing import sha256_hex
 
 
 _T = TypeVar("_T")
@@ -77,7 +77,7 @@ def canonical_checkpoint_digest(value: object) -> str:
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
-    return sha256(encoded).hexdigest()
+    return sha256_hex(encoded)
 
 
 def _validate_stage(stage: str) -> str:

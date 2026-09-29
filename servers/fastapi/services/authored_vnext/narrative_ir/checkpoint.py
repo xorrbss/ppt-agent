@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Mapping
-import hashlib
 from typing import Protocol
 from uuid import UUID
 
@@ -20,6 +19,7 @@ from .contracts import (
     model_payload,
 )
 from .validation import canonical_digest, validate_narrative_ir
+from utils.hashing import sha256_prefixed
 
 
 class NarrativeCheckpointError(ValueError):
@@ -45,7 +45,7 @@ class NarrativeCheckpointRepository(Protocol):
 def attempt_id(attempt_token: str) -> str:
     if not attempt_token:
         raise NarrativeCheckpointError("narrative_checkpoint_attempt_missing")
-    return "sha256:" + hashlib.sha256(attempt_token.encode("utf-8")).hexdigest()
+    return sha256_prefixed(attempt_token.encode("utf-8"))
 
 
 def _lineage_payload(

@@ -36,6 +36,7 @@ from models.slidespec_v1 import (
     SlideConstraint,
     SlideSpec,
 )
+from utils.hashing import sha256_hex
 
 
 SOLVER_POLICY_VERSION = "mixed-constraint-solver/1.0"
@@ -809,7 +810,7 @@ def build_constraint_repair_plan(
         "proposedBy": {"kind": "rule_engine", "policyVersion": SOLVER_POLICY_VERSION, "costVersion": "repair-cost/1.0"},
     }
     encoded = json.dumps(common, sort_keys=True, separators=(",", ":"), default=str)
-    common["planId"] = "rp_solver_" + hashlib.sha256(encoded.encode()).hexdigest()[:16]
+    common["planId"] = "rp_solver_" + sha256_hex(encoded.encode())[:16]
     return RepairPlan.model_validate(common)
 
 

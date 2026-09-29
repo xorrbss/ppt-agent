@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import re
 from typing import Any
 
@@ -15,6 +14,7 @@ from models.authored_vnext.master.contract import (
 from models.authored_vnext.deck.operations import DeckGenerationSnapshot
 from models.authored_vnext.master.slide import DeckSnapshot, SlideSpecV2
 from services.authored_vnext.master.digests import canonical_json as _canonical_json
+from utils.hashing import sha256_hex
 
 
 ExportableDeck = DeckSnapshot | DeckGenerationSnapshot
@@ -183,7 +183,7 @@ def canonical_json(value: object) -> str:
 
 
 def raw_sha256(value: object) -> str:
-    return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
+    return sha256_hex(canonical_json(value).encode("utf-8"))
 
 
 def prefixed_sha256(value: object) -> str:

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Iterable
@@ -22,6 +21,7 @@ from utils.artifact_style_analysis import (
     ArtifactAnalysisError,
     _signal,
 )
+from utils.hashing import sha256_hex
 
 
 MAX_PACKAGE_MEMBERS = 10_000
@@ -267,7 +267,7 @@ def _layout_signature(
     payload = f"{layout_name}|" + "|".join(
         f"{key}={min(value, 9)}" for key, value in sorted(cells.items())
     )
-    return sha256(payload.encode("utf-8")).hexdigest()[:12]
+    return sha256_hex(payload.encode("utf-8"))[:12]
 
 
 def analyze_pptx(source: Path, raw: bytes) -> dict[str, Any]:

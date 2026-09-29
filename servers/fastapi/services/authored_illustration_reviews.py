@@ -21,7 +21,6 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
-import hashlib
 import json
 import logging
 import os
@@ -33,6 +32,7 @@ from typing import Any, Mapping, Optional, Sequence
 from services.authored_icon_pack.checks import check_no_text
 from services.authored_local_fit_image_text import src_digest
 from utils.get_env import get_app_data_directory_env
+from utils.hashing import sha256_prefixed
 
 try:
     from services.authored_icon_pack.store import _atomic_write_bytes
@@ -162,7 +162,7 @@ def _decode_data_uri(data_uri: str) -> Optional[tuple[str, bytes]]:
 
 
 def _prompt_digest(prompt: str) -> str:
-    return "sha256:" + hashlib.sha256((prompt or "").encode("utf-8")).hexdigest()
+    return sha256_prefixed((prompt or "").encode("utf-8"))
 
 
 async def review_illustration(

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 from typing import Any, Mapping
+from utils.hashing import sha256_hex
 
 
 MAX_ARTIFACT_BYTES = 100 * 1024 * 1024
@@ -73,7 +73,7 @@ def analyze_artifact(input_path: Path | str) -> dict[str, Any]:
         "source": {
             "filename": source.name,
             "format": artifact_format,
-            "sha256": hashlib.sha256(raw).hexdigest(),
+            "sha256": sha256_hex(raw),
             "size_bytes": len(raw),
         },
         **details,

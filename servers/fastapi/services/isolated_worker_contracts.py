@@ -19,6 +19,7 @@ import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
+from utils.hashing import sha256_hex
 
 
 ARTIFACT_REF_SCHEMA = "artifact-ref/v1"
@@ -361,9 +362,7 @@ def issue_worker_capability(
         "tenantId": job.input_artifact.tenant_id,
         "artifactId": str(job.input_artifact.artifact_id),
         "inputDigest": job.input_digest,
-        "attemptTokenSha256": hashlib.sha256(
-            job.attempt_token.encode("utf-8")
-        ).hexdigest(),
+        "attemptTokenSha256": sha256_hex(job.attempt_token.encode("utf-8")),
         "fencingToken": job.fencing_token,
         "expiresAt": issued_at + ttl_seconds,
         "nonce": nonce or uuid.uuid4().hex,
@@ -423,7 +422,7 @@ def verify_and_consume_worker_capability(
         raise IsolatedWorkerContractError("worker capability is expired")
     if not isinstance(nonce, str) or not re.fullmatch(r"[0-9a-f]{32,64}", nonce):
         raise IsolatedWorkerContractError("worker capability nonce is invalid")
-    expected_attempt = hashlib.sha256(job.attempt_token.encode("utf-8")).hexdigest()
+    expected_attempt = sha256_hex(job.attempt_token.encode("utf-8"))
     bindings = (
         payload.get("role") == job.role,
         payload.get("operationId") == str(job.operation_id),

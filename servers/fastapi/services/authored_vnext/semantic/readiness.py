@@ -49,6 +49,7 @@ from utils.env_settings.authored_release import (
     ZERO_DIGEST,
     get_authored_release_settings,
 )
+from utils.hashing import sha256_prefixed
 
 
 _MAX_RECEIPT_TTL = timedelta(days=31)
@@ -176,7 +177,7 @@ async def publish_visual_evidence_artifact(
     if request.report.identity.presentation_id != str(presentation_id):
         raise SemanticContractError("authored_visual_evidence_presentation_mismatch")
     content = canonical_json(request.report).encode("utf-8")
-    digest = "sha256:" + sha256(content).hexdigest()
+    digest = sha256_prefixed(content)
     artifact_ref = "artifact://sha256/" + digest.removeprefix("sha256:")
     existing = await session.scalar(
         select(AuthoredSemanticArtifact).where(
@@ -241,7 +242,7 @@ async def validate_visual_evidence_authority(
         )
     )
     if artifact is None or (
-        "sha256:" + sha256(artifact.content_bytes).hexdigest()
+        sha256_prefixed(artifact.content_bytes)
         != binding.report_artifact_digest
     ):
         raise SemanticContractError("authored_visual_evidence_report_unresolvable")

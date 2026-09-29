@@ -1,8 +1,6 @@
 """Optional ordinary-authored image stage; strict source preservation bypasses it."""
 from __future__ import annotations
 
-import hashlib
-import json
 import uuid
 from collections.abc import Mapping, Sequence
 
@@ -16,13 +14,13 @@ from services.source_images.models import SourceImageCandidate
 from services.source_images.placement import build_source_image_placement_plan, source_images_for_slide
 from utils.authored_image_slots import source_slot_id_for_asset
 from utils.datetime_utils import get_current_utc_datetime
+from utils.hashing import canonical_json_sha256
 
 _CACHE_KEY = "source_image_placement_plan"
 
 
 def _digest(plan: Mapping) -> str:
-    return hashlib.sha256(json.dumps(dict(plan), ensure_ascii=False, sort_keys=True,
-                                     separators=(",", ":")).encode()).hexdigest()
+    return canonical_json_sha256(dict(plan), allow_nan=True)
 
 
 async def _assert_lease(session, job_id, attempt_number, attempt_token, *, write=False):

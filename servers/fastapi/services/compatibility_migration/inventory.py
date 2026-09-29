@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
-from hashlib import sha256
 import json
 from pathlib import Path
 import re
 from typing import Any, Literal, TypeAlias
+from utils.hashing import sha256_hex
 
 ChecksumStatus: TypeAlias = Literal[
     "match", "mismatch", "missing", "not_checked", "not_recorded", "unreadable"
@@ -34,7 +34,7 @@ def _id(value: object) -> str:
 
 def _canonical_digest(value: object) -> str:
     encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
-    return sha256(encoded.encode("utf-8")).hexdigest()
+    return sha256_hex(encoded.encode("utf-8"))
 
 
 def _normalized_sha(value: object) -> str | None:
@@ -56,7 +56,7 @@ def _path_checksum(locator: str | None, storage_root: Path | None) -> tuple[str 
         resolved = path.resolve(strict=True)
         if not resolved.is_file() or resolved.is_symlink():
             return None, "unreadable"
-        return sha256(resolved.read_bytes()).hexdigest(), "not_recorded"
+        return sha256_hex(resolved.read_bytes()), "not_recorded"
     except FileNotFoundError:
         return None, "missing"
     except OSError:

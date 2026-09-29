@@ -2,10 +2,8 @@ from __future__ import annotations
 
 # The publication admission path performs one local existence check.
 # ruff: noqa: ASYNC240
-
 import asyncio
 import inspect
-from hashlib import sha256
 import logging
 import os
 import time
@@ -19,6 +17,22 @@ from typing import Optional
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from constants.timeouts import LOCAL_FIT_CAPTURE_TIMEOUT_SECONDS
+from models.authored_chapter_plan import AuthoredChapterPlan
+from models.authored_header_contract import AuthoredHeaderContract, default_header_contract
+from models.authored_illustration_plan import AuthoredIllustrationPlan
+from models.authored_infographic_plan import AuthoredInfographicPlan
+from models.authored_vnext.deck import (
+    DeckGenerationSnapshot,
+    DeckSceneIR,
+    SlideValidationCheckpoint,
+    ValidatedSlideSpecV2,
+)
+from models.authored_vnext.master.slide import (
+    ExplicitTitle,
+    SlideSpecV2,
+    TitleFitResult,
+)
 from models.generate_presentation_request import GeneratePresentationRequest
 from models.presentation_and_path import PresentationPathAndEditPath
 from models.presentation_outline_model import PresentationOutlineModel
@@ -29,58 +43,105 @@ from models.sql.presentation import (
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.public_admission import PublicOperationAdmission, PublicProviderLogicalCall
+from services.authored_admission_capture import (
+    capture_once,
+    capture_ownership_receipt,
+    captured_metrics_or_existing,
+)
+from services.authored_admission_producers import require_bound_source_html, source_candidate
+from services.authored_admission_publication import final_readback
+from services.authored_admission_session import (
+    admission_scope,
+    admission_shadow_receipt,
+    configure_admission,
+    producer_scope,
+)
+from services.authored_canvas import (
+    DEFAULT_CANVAS_HEIGHT_PX,
+    DEFAULT_CANVAS_WIDTH_PX,
+    canvas_or_default,
+    canvas_render_kwargs,
+    request_canvas_contract,
+)
 from services.authored_checkpoint_service import (
     AuthoredStageError,
     fail_stage,
     mark_checkpoint_artifacts_sealed,
 )
-from services.authored_exact_provenance import build_exact_provenance
-from services.authored_exact_source_snapshot import (
-    ExactSourceSnapshotError,
-    materialize_exact_source_style,
+from services.authored_composition_policy import (
+    blocking_safety_issues,
+    build_authored_capacity_plan,
+    capacity_repair_instructions,
+    capacity_violations,
+    ensure_authored_semantic_roles,
+    project_authored_owned_text,
+    reduce_authored_closing_capacity,
+    reduce_authored_owner_text_capacity,
+    repair_authored_header_eyebrow_clip,
+    repair_authored_layout_alignment,
+    repair_authored_owned_text_paint_order,
+    resolve_composition_profile,
+    semantic_repair_boundary_violations,
 )
-from services.authored_presentation_artifacts import (
-    _authored_export_path,
-    _build_authored_export,
-    _cleanup_published_checkpoints,
-    _complete_stage_after_external_success,
-    authored_title,
-    resolve_brand,
+from services.authored_deck_instruments_stage import attach_deck_receipt_extras
+from services.authored_deck_plan_checkpoint import (
+    AuthoredDeckPlanCheckpointError,
+    canonical_checkpoint_digest,
+    resolve_with_authored_deck_plan_checkpoint,
 )
-from models.authored_chapter_plan import AuthoredChapterPlan
-from models.authored_header_contract import AuthoredHeaderContract, default_header_contract
-from models.authored_illustration_plan import AuthoredIllustrationPlan
-from models.authored_infographic_plan import AuthoredInfographicPlan
 from services.authored_deck_plans import (
     AuthoredDeckPlans,
     derive_illustration_plan,
     resolve_deck_plans,
     resolve_final_outline_infographic_plan,
 )
-from services.authored_deck_plan_checkpoint import (
-    AuthoredDeckPlanCheckpointError,
-    canonical_checkpoint_digest,
-    resolve_with_authored_deck_plan_checkpoint,
+from services.authored_decoration_containment import (
+    plan_decoration_containment,
+    validate_decoration_containment,
 )
-from utils.llm_calls.author_slide import TEMPLATE_PAGE_NUMBER_MODE as _TEMPLATE_PAGE_NUMBER_MODE
-from utils.slide_capture_deck_scope import set_render_deck_scope
-from services.source_content.header_pages import source_pages_are_numbered
-from services.authored_vqa_source_integrity import source_vqa_candidate_integrity_passes
-from services.authored_admission_producers import source_candidate
-from services.authored_admission_capture import (
-    capture_once,
-    capture_ownership_receipt,
-    captured_metrics_or_existing,
+from services.authored_evidence_ledger import digest_html, digest_png
+from services.authored_exact_provenance import build_exact_provenance
+from services.authored_exact_source_snapshot import (
+    ExactSourceSnapshotError,
+    materialize_exact_source_style,
 )
-from services.authored_admission_publication import final_readback
-from services.authored_admission_session import admission_scope, configure_admission, admission_shadow_receipt, producer_scope
+from services.authored_final_metrics import resolve_final_browser_metrics
+from services.authored_flag_classification import (
+    classify_flagged_slides,
+    flag_pages,
+    review_pages_for,
+)
+from services.authored_font_signal import body_font_median_signal
+from services.authored_generation_grid_repair import (
+    _repair_authored_intrinsic_grid_overlap,
+)
+from services.authored_generation_observability_probes import (
+    _artifact_bytes_metric,
+    _blocked_renderer_reference_count,
+    _maximum_observed_metric,
+    _not_applicable_metric,
+    _object_store_latency_metric,
+    _observed_metric,
+    _runtime_counter_delta,
+    _unavailable_metric,
+    _worker_handle_count_metric,
+    _worker_peak_memory_metric,
+)
+from services.authored_generation_preflight import (
+    AuthoredSlideArtifact,
+    preflight_authored_provider_repair,
+)
+from services.authored_generation_progress_poller import mark_authored_generation_stage
+from services.authored_generation_timing_receipt import (
+    create_generation_timing_receipt,
+)
 from services.authored_header_contract_service import (
     page_number_mode_for,
     resolve_header_contract,
 )
-from services.authored_presentation_pipeline import _author_illustrate_render_pipeline
-from services.authored_presentation_publication import publish_authored_presentation
-from services.authored_generation_progress_poller import mark_authored_generation_stage
+from services.authored_local_fit_deadline import (
+    remaining_authored_local_fit_seconds,
+)
 from services.authored_local_fit_evidence import (
     AcceptedLocalFit,
     AuthoredLocalFitRejected,
@@ -97,86 +158,34 @@ from services.authored_local_fit_policy import (
     requested_font_policy_revision,
     slide_budget,
 )
-from services.authored_canvas import request_canvas_contract
-from services.authored_flag_classification import (
-    classify_flagged_slides, flag_pages, review_pages_for,
-)
-from services.authored_local_fit_deadline import (
-    remaining_authored_local_fit_seconds,
-)
-from models.authored_vnext.deck import (
-    DeckGenerationSnapshot,
-    DeckSceneIR,
-    SlideValidationCheckpoint,
-    ValidatedSlideSpecV2,
-)
-from models.authored_vnext.master.slide import (
-    ExplicitTitle,
-    SlideSpecV2,
-    TitleFitResult,
-)
-from services.authored_vnext.generation.errors import GenerationNotFoundError
-from services.authored_vnext.generation.effective_style import (
-    materialize_authored_composition,
-    resolve_authored_composition,
-)
-from services.authored_vnext.generation.legacy_pin import generation_repository_for_owner
-from services.authored_vnext.generation.repository import async_generation_repository
-from services.authored_vnext.generation.internal_authored_composition import (
-    build_internal_authored_composition,
-)
-from services.authored_vnext.generation.pipeline import _seal_deck
-from services.authored_vnext.generation.scene_checkpoint import (
-    SceneRepairBudgetExhausted,
-    claim_scene_repair,
-    persist_repaired_scene_envelope,
-    persist_scene_envelope,
-)
-from services.authored_vnext.generation.scene_envelope import (
-    AuthoredDeckSceneEnvelope,
-    replace_deck_scene_slide,
-    seal_deck_scene_envelope,
-    seal_slide_scene_envelope,
-)
-from services.authored_vnext.master.digests import canonical_digest
-from services.authored_vnext.master.errors import DeckAlreadyExistsError
-from services.presentation_export_attempt_service import sha256_canonical_json
-from services.authored_vnext.semantic.editable_scene import build_editable_hybrid_scene
-from services.authored_source_images import (
-    collect_source_image_candidates,
-    plan_slide_source_images,
-)
-from utils.authored_semantic_role_repair import canonicalize_authored_roles
-from services.authored_composition_policy import (
-    blocking_safety_issues,
-    build_authored_capacity_plan,
-    capacity_repair_instructions,
-    capacity_violations,
-    ensure_authored_semantic_roles,
-    project_authored_owned_text,
-    reduce_authored_owner_text_capacity,
-    reduce_authored_closing_capacity,
-    repair_authored_header_eyebrow_clip,
-    repair_authored_layout_alignment,
-    repair_authored_owned_text_paint_order,
-    resolve_composition_profile,
-    semantic_repair_boundary_violations,
-)
 from services.authored_offcanvas_repair import (
     repair_authored_blank_field_clipping,
     repair_authored_offcanvas_width,
 )
-from services.authored_generation_preflight import (
-    AuthoredSlideArtifact,
-    preflight_authored_provider_repair,
+from services.authored_planned_image_visibility import inspect_planned_source_images
+from services.authored_presentation_artifacts import (
+    _authored_export_path,
+    _build_authored_export,
+    _cleanup_published_checkpoints,
+    _complete_stage_after_external_success,
+    authored_title,
+    resolve_brand,
 )
-from services.authored_deck_instruments_stage import attach_deck_receipt_extras
-from services.authored_final_metrics import resolve_final_browser_metrics
+from services.authored_presentation_pipeline import _author_illustrate_render_pipeline
+from services.authored_presentation_publication import publish_authored_presentation
+from services.authored_prompt_cache_report import log_author_stage_prompt_cache_summary_safely
 from services.authored_quality_gate_diagnostics import (
     log_quality_receipt_gate_failure,
     quality_receipt_gate_failure,
 )
-from services.authored_prompt_cache_report import log_author_stage_prompt_cache_summary_safely
+from services.authored_quality_receipt_v2 import (
+    create_quality_receipt_v2,
+    evaluate_capacity_browser_metrics,
+    quality_receipt_manifest_path,
+)
+from services.authored_quality_receipt_v3_pipeline import (
+    create_generation_quality_receipt_v3,
+)
 from services.authored_repair_loop import single_repair_loop_enabled
 from services.authored_repair_loop_evidence import (
     vision_evidence_for_flagged,
@@ -185,6 +194,26 @@ from services.authored_repair_loop_evidence import (
 from services.authored_repair_loop_stage import run_verbatim_repair_loop
 from services.authored_repair_receipts import PATCH_ROUND, REMAKE_FIRST_ROUND, TERMINAL_ROUND, repair_round_receipts
 from services.authored_repair_round_order import are_repair_calls_enabled, remake_first_flagged_slides
+from services.authored_slide_quality_receipt import (
+    build_slide_quality_records,
+    record_slide_quality_receipt,
+)
+from services.authored_source_image_stage import prepare_source_image_stage
+from services.authored_source_images import (
+    collect_source_image_candidates,
+    plan_slide_source_images,
+)
+from services.authored_source_visibility_repair import (
+    inspect_slide_source_visibility,
+    repair_source_decoration_paint_order,
+)
+from services.authored_structural_repair import (
+    SlideRepairResult,
+    make_source_repair_evaluator,
+    source_verbatim_rejection,
+    structural_checkpoint_metrics,
+    validate_repair_result,
+)
 from services.authored_terminal_slide_fallback import (
     MAX_REMAKES_PER_SLIDE,
     replayed_plan_kwargs,
@@ -199,14 +228,50 @@ from services.authored_terminal_slide_policy import (
     recover_residual_repair_round,
     terminal_fallback_active,
 )
-from services.authored_decoration_containment import (
-    plan_decoration_containment,
-    validate_decoration_containment,
+from services.authored_visual_review_evidence import visual_review_not_assessed, visual_review_outcome
+from services.authored_vnext.generation.effective_style import (
+    materialize_authored_composition,
+    resolve_authored_composition,
 )
+from services.authored_vnext.generation.errors import GenerationNotFoundError
+from services.authored_vnext.generation.internal_authored_composition import (
+    build_internal_authored_composition,
+)
+from services.authored_vnext.generation.legacy_pin import generation_repository_for_owner
+from services.authored_vnext.generation.pipeline import _seal_deck
+from services.authored_vnext.generation.repository import async_generation_repository
+from services.authored_vnext.generation.scene_checkpoint import (
+    SceneRepairBudgetExhausted,
+    claim_scene_repair,
+    persist_repaired_scene_envelope,
+    persist_scene_envelope,
+)
+from services.authored_vnext.generation.scene_envelope import (
+    AuthoredDeckSceneEnvelope,
+    replace_deck_scene_slide,
+    seal_deck_scene_envelope,
+    seal_slide_scene_envelope,
+)
+from services.authored_vnext.master.digests import canonical_digest
+from services.authored_vnext.master.errors import DeckAlreadyExistsError
+from services.authored_vnext.semantic.editable_scene import build_editable_hybrid_scene
+from services.authored_vqa_source_integrity import source_vqa_candidate_integrity_passes
+from services.document_canvas_generation import export_size_points
+from services.presentation_export_attempt_service import sha256_canonical_json
 from services.provider_usage_instrumentation import provider_usage_scope, record_local_stage
+from services.public_operation_admission import (
+    public_operation_observability_metrics,
+)
+from services.source_content.browser_readback import (
+    BrowserSourceReadbackError,
+    stamp_source_block_ids,
+)
+from services.source_content.header_pages import source_pages_are_numbered
 from utils.authored_dom_quality import ensure_authored_qids, inspect_authored_dom
 from utils.authored_illustrations import validate_visible_source_images
+from utils.authored_semantic_role_repair import canonicalize_authored_roles
 from utils.authored_styles import resolve_authored_style, validate_exact_reconstruction_style
+from utils.hashing import sha256_hex, sha256_prefixed
 from utils.llm_calls.author_deck import (
     plan_deck_roles,
     prepare_authored_deck,
@@ -215,36 +280,23 @@ from utils.llm_calls.author_slide import (
     EXACT_RECONSTRUCTION,
     STYLE_REFERENCE,
     apply_style_defaults,
-    normalize_reference_mode,
     authored_semantic_dual_output_mode,
+    normalize_reference_mode,
 )
+from utils.llm_calls.author_slide import TEMPLATE_PAGE_NUMBER_MODE as _TEMPLATE_PAGE_NUMBER_MODE
+from utils.llm_calls.author_slide_patch import (
+    build_structural_repair_scopes,
+    protected_qids_for_repair_scopes,
+)
+from utils.llm_calls.author_slide_prompt import planned_source_image_brief
 from utils.llm_calls.author_vision_qa import (
     AuthoredVqaResidualDomIssuesError,
     StructuralRepairBudget,
     _advance_repair_evaluator,
     _measured_structural_issue_qids,
     _structural_compact_dom,
+    review_planned_source_images,
     revise_authored_deck,
-)
-from services.authored_source_visibility_repair import (
-    inspect_slide_source_visibility,
-    repair_source_decoration_paint_order,
-)
-from utils.llm_calls.author_slide_patch import (
-    build_structural_repair_scopes,
-    protected_qids_for_repair_scopes,
-)
-from services.authored_generation_observability_probes import (
-    _artifact_bytes_metric,
-    _blocked_renderer_reference_count,
-    _maximum_observed_metric,
-    _not_applicable_metric,
-    _object_store_latency_metric,
-    _observed_metric,
-    _runtime_counter_delta,
-    _unavailable_metric,
-    _worker_handle_count_metric,
-    _worker_peak_memory_metric,
 )
 from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
 from utils.slide_capture import (
@@ -255,50 +307,7 @@ from utils.slide_capture import (
     get_render_runtime_counters,
     render_html_to_png_with_metrics,
 )
-from services.authored_evidence_ledger import digest_html, digest_png
-from services.authored_structural_repair import (
-    SlideRepairResult,
-    make_source_repair_evaluator,
-    source_verbatim_rejection,
-    structural_checkpoint_metrics,
-    validate_repair_result,
-)
-from services.authored_generation_grid_repair import (
-    _repair_authored_intrinsic_grid_overlap,
-)
-from services.authored_generation_timing_receipt import (
-    create_generation_timing_receipt,
-)
-from services.authored_quality_receipt_v2 import (
-    create_quality_receipt_v2,
-    evaluate_capacity_browser_metrics,
-    quality_receipt_manifest_path,
-)
-from services.authored_quality_receipt_v3_pipeline import (
-    create_generation_quality_receipt_v3,
-)
-from services.authored_font_signal import body_font_median_signal
-from services.authored_admission_producers import require_bound_source_html
-from services.document_canvas_generation import export_size_points
-from services.authored_source_image_stage import prepare_source_image_stage
-from utils.llm_calls.author_slide_prompt import planned_source_image_brief
-from services.authored_planned_image_visibility import inspect_planned_source_images
-from utils.llm_calls.author_vision_qa import review_planned_source_images
-from services.authored_slide_quality_receipt import (
-    build_slide_quality_records,
-    record_slide_quality_receipt,
-)
-from services.public_operation_admission import (
-    public_operation_observability_metrics,
-)
-from services.authored_visual_review_evidence import visual_review_not_assessed, visual_review_outcome
-from services.source_content.browser_readback import (
-    BrowserSourceReadbackError,
-    stamp_source_block_ids,
-)
-from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX, canvas_or_default, canvas_render_kwargs
-from constants.timeouts import LOCAL_FIT_CAPTURE_TIMEOUT_SECONDS
-
+from utils.slide_capture_deck_scope import set_render_deck_scope
 
 LOGGER = logging.getLogger(__name__)
 
@@ -1343,7 +1352,7 @@ async def _persist_master_pinned_editable_scene_deck(
         candidate_identity = canonical_digest(
             {
                 "sceneEnvelope": scene_envelope.scene_digest,
-                "pngDigests": [sha256(png).hexdigest() for png in pngs],
+                "pngDigests": [sha256_hex(png) for png in pngs],
                 # The sealed Scene carries all geometry.  Do not let transient
                 # browser timing/cache counters create a new recovery identity.
                 "sceneDigest": scene.scene_digest,
@@ -2715,7 +2724,7 @@ async def _generate_authored_presentation(
             zip(htmls, local_fit_receipts, strict=True)
         ):
             if receipt.get("finalHtmlDigest") != (
-                "sha256:" + sha256(html.encode("utf-8")).hexdigest()
+                sha256_prefixed(html.encode("utf-8"))
             ):
                 raise AuthoredStageError(
                     slide_index=index,
@@ -3797,7 +3806,7 @@ async def _generate_authored_presentation(
             zip(htmls, local_fit_receipts, strict=True)
         ):
             if receipt.get("finalHtmlDigest") != (
-                "sha256:" + sha256(html.encode("utf-8")).hexdigest()
+                sha256_prefixed(html.encode("utf-8"))
             ):
                 raise AuthoredStageError(
                     slide_index=index,

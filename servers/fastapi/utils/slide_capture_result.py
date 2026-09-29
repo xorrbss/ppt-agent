@@ -2,10 +2,10 @@
 from __future__ import annotations
 
 import base64
-import hashlib
 import json
 from dataclasses import dataclass
 from typing import Any, Mapping
+from utils.hashing import sha256_prefixed
 
 @dataclass(frozen=True, slots=True)
 class RenderCapture:
@@ -50,8 +50,8 @@ class RenderCapture:
             html_digest=html_digest,
             png=png,
             browser_metrics=browser_metrics,
-            png_digest="sha256:" + hashlib.sha256(png).hexdigest(),
-            metrics_digest=("sha256:" + hashlib.sha256(canonical).hexdigest()) if canonical is not None else None,
+            png_digest=sha256_prefixed(png),
+            metrics_digest=(sha256_prefixed(canonical)) if canonical is not None else None,
             runtime_counters=dict(runtime_counters),
             fitted_html=fitted_html,
             fit_report=fit_report,
@@ -80,9 +80,7 @@ class RenderCapture:
             "runtimeCounters": dict(self.runtime_counters),
         }
         if self.prepared_html is not None:
-            result["preparedHtmlDigest"] = "sha256:" + hashlib.sha256(
-                self.prepared_html.encode("utf-8")
-            ).hexdigest()
+            result["preparedHtmlDigest"] = sha256_prefixed(self.prepared_html.encode("utf-8"))
         if self.prepared_fit_policy is not None:
             canonical_policy = json.dumps(
                 self.prepared_fit_policy,
@@ -91,9 +89,7 @@ class RenderCapture:
                 ensure_ascii=False,
                 allow_nan=False,
             ).encode("utf-8")
-            result["preparedFitPolicyDigest"] = "sha256:" + hashlib.sha256(
-                canonical_policy
-            ).hexdigest()
+            result["preparedFitPolicyDigest"] = sha256_prefixed(canonical_policy)
         if include_payload:
             result["pngBase64"] = base64.b64encode(self.png).decode("ascii")
             result["browserMetrics"] = self.browser_metrics

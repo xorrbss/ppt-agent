@@ -1,5 +1,4 @@
 from datetime import datetime
-import hashlib
 import re
 import secrets
 import uuid
@@ -8,6 +7,7 @@ from sqlalchemy import Column, DateTime, ForeignKey, String
 from sqlmodel import Field, SQLModel
 
 from utils.datetime_utils import get_current_utc_datetime
+from utils.hashing import sha256_hex
 
 
 _TOKEN_PREFIX = "sk-presenton-"
@@ -19,7 +19,7 @@ _REFERENCE_PATTERN = re.compile(r"^sk-presenton-ref-([0-9a-f]{24})$")
 def hash_access_token(token: str) -> str:
     if not isinstance(token, str) or not token.startswith(_TOKEN_PREFIX):
         raise ValueError("access_token_invalid")
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+    return sha256_hex(token.encode("utf-8"))
 
 
 def access_token_reference(token_hash: str) -> str:

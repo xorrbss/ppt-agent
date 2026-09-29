@@ -152,6 +152,7 @@ from utils.slidespec_solver import (
     build_constraint_repair_plan,
     solve_constraints,
 )
+from utils.hashing import sha256_hex
 
 
 LOGGER = logging.getLogger(__name__)
@@ -1044,7 +1045,7 @@ def _ocr_gate_diagnostics(
         entries.append(
             {
                 "token_name": token.name,
-                "token_digest": hashlib.sha256(value.encode("utf-8")).hexdigest(),
+                "token_digest": sha256_hex(value.encode("utf-8")),
                 "semantic_ids": semantic_ids,
                 "qids": sorted(
                     {

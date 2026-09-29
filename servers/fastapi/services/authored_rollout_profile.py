@@ -30,7 +30,6 @@ another.
 
 from __future__ import annotations
 
-import hashlib
 import json
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -51,6 +50,7 @@ from utils.get_env_programme import (
     is_authored_verbatim_placeholder_authoring_enabled,
     is_authored_verbatim_single_repair_loop_enabled,
 )
+from utils.hashing import sha256_hex
 
 GATE_MODES = ("shadow", "enforce")
 NORMALIZATIONS = ("legacy", "tree")
@@ -109,7 +109,7 @@ class RolloutProfile:
     @property
     def digest(self) -> str:
         payload = json.dumps(self.as_dict(), sort_keys=True, separators=(",", ":"))
-        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+        return sha256_hex(payload.encode("utf-8"))
 
     @property
     def policy_revision(self) -> str:

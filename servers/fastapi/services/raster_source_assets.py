@@ -8,7 +8,6 @@ other. This module never creates a native source-content manifest.
 from __future__ import annotations
 
 from dataclasses import dataclass
-import hashlib
 from io import BytesIO
 import uuid
 from xml.etree import ElementTree as ET
@@ -35,6 +34,7 @@ from services.svg_image_derivative import build_model_preview
 from services.source_content.raster_contracts import RasterApprovalPin, RasterRegion
 from services.source_content.raster_reconstruction_store import admit_approved_raster_analysis
 from utils.renderer_isolation import admit_authorized_svg_materialized
+from utils.hashing import sha256_hex
 
 
 _SVG_IMAGE = "{http://www.w3.org/2000/svg}image"
@@ -52,7 +52,7 @@ class RasterPageAssets:
 def raster_slot_id(page_number: int, region_id: str) -> str:
     if page_number < 1 or not region_id:
         raise ValueError("raster_slot_identity_invalid")
-    suffix = hashlib.sha256(region_id.encode("utf-8")).hexdigest()[:16]
+    suffix = sha256_hex(region_id.encode("utf-8"))[:16]
     return f"source-slot-raster-p{page_number}-{suffix}"
 
 
@@ -186,7 +186,7 @@ def _source_pixel_digest(payload: bytes) -> tuple[int, int, str]:
         if image.format != "PNG":
             raise ValueError("raster_crop_png_required")
         rgba = image.convert("RGBA")
-        return rgba.width, rgba.height, hashlib.sha256(rgba.tobytes()).hexdigest()
+        return rgba.width, rgba.height, sha256_hex(rgba.tobytes())
 
 
 async def _committed_crop(session, service, *, region: RasterRegion, owner_id: uuid.UUID, tenant_id: str):
@@ -211,7 +211,7 @@ async def _committed_crop(session, service, *, region: RasterRegion, owner_id: u
         session, artifact_id=reference.artifact_id, owner_id=owner_id,
         tenant_id=tenant_id, expected_digest=reference.sha256,
     )
-    if hashlib.sha256(payload).hexdigest() != reference.sha256 or len(payload) != reference.size_bytes:
+    if sha256_hex(payload) != reference.sha256 or len(payload) != reference.size_bytes:
         raise ValueError("raster_crop_digest_mismatch")
     width, height, pixel_digest = _source_pixel_digest(payload)
     if region.role == "full_page_preserve":

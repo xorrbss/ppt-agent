@@ -14,15 +14,15 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping, Sequence
-from hashlib import sha256
 from typing import Any
+from utils.hashing import sha256_prefixed
 
 ADVISORY_RECORD_SCHEMA = "deck-vision-advisory/v1"
 
 
 def content_digest(value: object) -> str:
     payload = json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
-    return "sha256:" + sha256(payload.encode()).hexdigest()
+    return sha256_prefixed(payload.encode())
 
 
 def advisory_record(vision: Mapping[str, Any], page_digests: Sequence[str]) -> dict[str, Any]:

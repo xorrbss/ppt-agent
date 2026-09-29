@@ -20,6 +20,7 @@ from services.slidespec_geometry_candidates import (
     generate_geometry_candidates,
 )
 from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
+from utils.hashing import sha256_hex
 
 
 CASCADE_POLICY_VERSION = "repair-cascade/1.1"
@@ -180,7 +181,7 @@ def repair_cost(plan: object) -> RepairCost:
     plan_id = str(_get(plan, "planId", "plan_id", default=""))
     if not plan_id:
         encoded = json.dumps(_mapping(plan), sort_keys=True, separators=(",", ":"), default=str)
-        plan_id = hashlib.sha256(encoded.encode()).hexdigest()
+        plan_id = sha256_hex(encoded.encode())
     return RepairCost(
         layout_changed,
         len(targets),
@@ -873,7 +874,7 @@ def _plan(
         },
     }
     encoded = json.dumps(common, sort_keys=True, separators=(",", ":"), default=str)
-    common["planId"] = "rp_rule_" + hashlib.sha256(encoded.encode()).hexdigest()[:16]
+    common["planId"] = "rp_rule_" + sha256_hex(encoded.encode())[:16]
     return RepairPlan.model_validate(common)
 
 

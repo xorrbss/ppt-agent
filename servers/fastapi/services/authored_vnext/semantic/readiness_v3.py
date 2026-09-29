@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import lru_cache
-from hashlib import sha256
 import json
 from pathlib import Path
 from typing import Any, Mapping
@@ -53,6 +52,7 @@ from utils.env_settings.authored_release import (
     ZERO_DIGEST,
     get_authored_release_settings,
 )
+from utils.hashing import sha256_prefixed
 
 
 _ZERO_DIGEST = ZERO_DIGEST
@@ -77,7 +77,7 @@ def load_release_profile_definition_v3() -> tuple[BoundedHybridReleaseProfileDef
         separators=(",", ":"),
         sort_keys=True,
     )
-    artifact_digest = "sha256:" + sha256(artifact_json.encode("utf-8")).hexdigest()
+    artifact_digest = sha256_prefixed(artifact_json.encode("utf-8"))
     return definition, artifact_digest
 
 

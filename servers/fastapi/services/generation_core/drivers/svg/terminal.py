@@ -19,12 +19,12 @@ failure keep failing the deck, because a substitute page cannot answer them.
 
 from __future__ import annotations
 
-from hashlib import sha256
 import logging
 
 from services.authored_checkpoint_errors import AuthoredStageError
 from services.generation_core.quality.terminal_policy import TerminalPolicy
 from services.generation_core.quality.terminal_slide_flag_only import flagged_entry
+from utils.hashing import sha256_hex
 
 LOGGER = logging.getLogger(__name__)
 
@@ -71,7 +71,7 @@ async def rescue_terminal_page(*, ctx, request, index, content, payload, error, 
 async def _flag_only(*, ctx, index, payload, error, job, checkpoint):
     svg, quality = payload.get("svg_content"), payload.get("quality")
     if not svg or not isinstance(quality, dict) or not payload.get("png_sha256") or (
-            payload.get("source_digest") != sha256(svg.encode()).hexdigest()):
+            payload.get("source_digest") != sha256_hex(svg.encode())):
         return None  # no rendered page to keep: the deck still fails
     if ctx.source_reflow:
         from services.svg_source_layout import verify_source_receipt
@@ -104,7 +104,7 @@ async def _fallback(*, ctx, request, index, content, payload, error, job, checkp
         LOGGER.warning("[svg] fallback page render failed slide=%d", index + 1, exc_info=True)
         return None
     rescued = {key: payload[key] for key in _IDENTITY_KEYS if key in payload}
-    rescued.update(svg_content=svg, source_digest=sha256(svg.encode()).hexdigest(),
+    rescued.update(svg_content=svg, source_digest=sha256_hex(svg.encode()),
                    quality=rendered.quality, **write_png(rendered.png),
                    terminal=flagged_entry(index=index, reason=FALLBACK_REASON, attempted=False,
                                           outcome=FALLBACK_OUTCOME),

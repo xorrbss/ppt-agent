@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from hashlib import sha256
 from typing import Any
 import uuid
 
@@ -45,6 +44,7 @@ from utils.env_settings.authored_release import (
     get_authored_release_settings,
     stripped,
 )
+from utils.hashing import sha256_prefixed
 
 
 # Field names double as ``AuthoredReleaseSettings`` attribute names
@@ -323,7 +323,7 @@ async def create_evidence_graph_root_v3(
             or artifact.media_type != item.media_type
             or artifact.encryption_key_ref != item.encryption_key_ref
             or artifact.storage_generation != item.storage_generation
-            or "sha256:" + sha256(bytes(artifact.content_bytes)).hexdigest() != item.sha256
+            or sha256_prefixed(bytes(artifact.content_bytes)) != item.sha256
         ):
             raise SemanticContractError("authored_evidence_graph_artifact_mismatch")
     existing = await session.scalar(

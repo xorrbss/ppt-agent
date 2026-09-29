@@ -8,6 +8,7 @@ from services.generation_core.style.design_pack_projection import (
     assert_design_pack_projects,
 )
 from utils.env_settings.authored_vnext import is_authored_vnext_master_enabled
+from utils.hashing import canonical_json_digest
 
 
 def _design_pack_admission_reason() -> str:
@@ -172,8 +173,6 @@ def pin_svg_style(request: object) -> dict:
                 request=request, master_rules=master_rules, master_pin=master_pin,
             )
             if source_restyle:
-                import hashlib
-                import json
 
                 # Historical field name: binds the source-restyle OUTPUT
                 # canvas, including a selected A4 target in v2 input bindings.
@@ -182,14 +181,7 @@ def pin_svg_style(request: object) -> dict:
                 )
                 frozen["selected_template_id"] = style.id
                 digest_payload = {key: value for key, value in frozen.items() if key != "digest"}
-                frozen["digest"] = "sha256:" + hashlib.sha256(
-                    json.dumps(
-                        digest_payload,
-                        ensure_ascii=False,
-                        sort_keys=True,
-                        separators=(",", ":"),
-                    ).encode("utf-8")
-                ).hexdigest()
+                frozen["digest"] = canonical_json_digest(digest_payload, allow_nan=True)
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
         request._svg_style_snapshot = frozen

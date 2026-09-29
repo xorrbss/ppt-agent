@@ -9,7 +9,7 @@ ratchet); the facade there re-exports this for importers.
 from __future__ import annotations
 
 import base64
-from hashlib import sha256
+from utils.hashing import sha256_hex, sha256_prefixed
 
 
 def _legacy_source_image_manifest(offered: dict) -> dict:
@@ -23,7 +23,7 @@ def _legacy_source_image_manifest(offered: dict) -> dict:
         if candidate.path.stat().st_size > 32 * 1024 * 1024:
             raise ValueError("svg_asset_source_byte_budget_exceeded")
         data = candidate.path.read_bytes()
-        if sha256(data).hexdigest() != candidate.digest.removeprefix("sha256:"):
+        if sha256_hex(data) != candidate.digest.removeprefix("sha256:"):
             raise ValueError("svg_source_image_digest_mismatch")
         # Apply the old raster limit to a bounded derivative, never directly
         # to a valid original. The source file and source digest stay intact.
@@ -41,5 +41,5 @@ def _legacy_source_image_manifest(offered: dict) -> dict:
                           "policyVersion": policy.policy_version, "asset_id": candidate.asset_id,
                           "source_digest": candidate.digest,
                           "model_preview": preview.metadata(),
-                          "digest": "sha256:" + sha256(data).hexdigest()}
+                          "digest": sha256_prefixed(data)}
     return preflight_svg_source_images(manifest)

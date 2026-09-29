@@ -1,7 +1,6 @@
 """The svg export bundle handed to the isolated worker, and its export identity."""
 from __future__ import annotations
 
-import hashlib
 import json
 
 from services.svg_contract import SVG_CONTRACT_VERSION
@@ -12,11 +11,12 @@ from workers.public_svg_export_worker import (
     SVG_EXPORT_SCHEMA_V3,
     converter_digest,
 )
+from utils.hashing import sha256_hex
 
 
 def digest(value) -> str:
     encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
-    return hashlib.sha256(encoded).hexdigest()
+    return sha256_hex(encoded)
 
 
 def _manifest_digests(assets):

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from utils.hashing import sha256_prefixed
 
 
 _MISSING = object()
@@ -45,7 +45,7 @@ def _digest(payload: object) -> str:
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
-    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+    return sha256_prefixed(encoded)
 
 
 @dataclass(frozen=True, slots=True)

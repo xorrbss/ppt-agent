@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from hashlib import sha256
 import hmac
 import json
 import os
@@ -11,6 +10,7 @@ from typing import Any, Callable
 import uuid
 
 from services.presentation_export_capabilities import PresentationExportContractError
+from utils.hashing import sha256_hex
 
 
 def require_matching_hybrid_sidecars(
@@ -31,14 +31,12 @@ def require_matching_hybrid_sidecars(
                 if Path(filename).name != filename:
                     raise ValueError("unsafe evidence member")
                 content = (artifact.parent / filename).read_bytes()
-                if not hmac.compare_digest(sha256(content).hexdigest(), descriptor["sha256"]):
+                if not hmac.compare_digest(sha256_hex(content), descriptor["sha256"]):
                     raise ValueError("evidence member digest mismatch")
                 members[kind] = json.loads(content)
-            pair_digest = sha256(
-                f"{manifest['quality']['sha256']}:{manifest['coverage']['sha256']}".encode(
+            pair_digest = sha256_hex(f"{manifest['quality']['sha256']}:{manifest['coverage']['sha256']}".encode(
                     "ascii"
-                )
-            ).hexdigest()
+                ))
             if (
                 manifest.get("schemaVersion") != "presenton.hybrid-evidence-pointer/v1"
                 or not hmac.compare_digest(pair_digest, manifest["pairDigest"])
@@ -91,9 +89,9 @@ def publish_finalized_hybrid_sidecars(
 
     quality_bytes = canonical_bytes(quality)
     coverage_bytes = canonical_bytes(coverage)
-    quality_digest = sha256(quality_bytes).hexdigest()
-    coverage_digest = sha256(coverage_bytes).hexdigest()
-    pair_digest = sha256(f"{quality_digest}:{coverage_digest}".encode("ascii")).hexdigest()
+    quality_digest = sha256_hex(quality_bytes)
+    coverage_digest = sha256_hex(coverage_bytes)
+    pair_digest = sha256_hex(f"{quality_digest}:{coverage_digest}".encode("ascii"))
     quality_target = Path(f"{artifact}.evidence-{pair_digest}.quality.json")
     coverage_target = Path(f"{artifact}.evidence-{pair_digest}.coverage.json")
     pointer_target = Path(f"{artifact}.evidence.json")

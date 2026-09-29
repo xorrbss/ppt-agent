@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 from typing import Any, Mapping
@@ -58,6 +57,7 @@ from services.database import async_session_maker
 from utils.datetime_utils import get_current_utc_datetime
 from utils.get_env_programme import is_authored_checkpoint_batching_enabled
 from utils.get_env import get_environment_name
+from utils.hashing import sha256_hex
 
 
 STAGES = ("author", "illustrate", "render", "persist")
@@ -247,7 +247,7 @@ async def complete_stage(
                 checkpoint_revision = (prior.revision + 1) if prior else 0
             elif prior is not None and checkpoint_revision <= prior.revision:
                 raise SlideCheckpointConflict("checkpoint_revision_regressed")
-        render_sha256 = hashlib.sha256(png).hexdigest()
+        render_sha256 = sha256_hex(png)
         public_binding = await _public_checkpoint_binding(
             job_id, attempt_token, fencing_token=fencing_token
         )

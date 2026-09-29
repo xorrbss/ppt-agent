@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import base64
 import copy
-import hashlib
 import math
 from pathlib import Path
 import posixpath
@@ -1478,7 +1477,7 @@ def _verify_packaged_source(
 ) -> None:
     packaged = _PACKAGED_RETAINED_SOURCES[retained_reference_id]
     source_bytes = reference_path.read_bytes()
-    digest = f"sha256:{hashlib.sha256(source_bytes).hexdigest()}"
+    digest = sha256_prefixed(source_bytes)
     if digest != packaged["sourceDigest"]:
         raise ValueError(
             f"retained PPTX digest differs from packaged geometry: {retained_reference_id}"

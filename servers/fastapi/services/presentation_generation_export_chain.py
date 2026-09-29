@@ -35,7 +35,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from hashlib import sha256
 import logging
 from types import MappingProxyType
 from typing import Mapping, Optional
@@ -54,6 +53,7 @@ from services.workspace_service import (
     WorkspaceServiceError,
     create_workspace_command,
 )
+from utils.hashing import sha256_hex
 
 
 LOGGER = logging.getLogger(__name__)
@@ -99,11 +99,9 @@ def chained_export_idempotency_key(
     the operation that is already in flight.
     """
 
-    digest = sha256(
-        "".join(
+    digest = sha256_hex("".join(
             ("presentation.generate.export", str(presentation_id), str(revision), command_type)
-        ).encode("utf-8")
-    ).hexdigest()
+        ).encode("utf-8"))
     return f"generation-export:{digest}"
 
 

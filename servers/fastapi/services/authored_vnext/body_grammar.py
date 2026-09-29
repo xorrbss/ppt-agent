@@ -16,6 +16,7 @@ from services.authored_vnext.retained_reference_marker import (
     canonical_reference_digest,
     decode_reference_layout_marker,
 )
+from utils.hashing import sha256_prefixed
 
 
 BODY_GRAMMAR_VALUE_KEY = "__bodyGrammar"
@@ -49,7 +50,7 @@ def authored_body_grammar_style_id(contract: DeckMasterContract) -> str | None:
 
 
 def _raw_digest(text: str) -> str:
-    return f"sha256:{hashlib.sha256(text.encode('utf-8')).hexdigest()}"
+    return sha256_prefixed(text.encode('utf-8'))
 
 
 def _canonical_value(value: Any) -> Any:
@@ -79,7 +80,7 @@ def _canonical_digest(value: dict[str, Any]) -> str:
         separators=(",", ":"),
         sort_keys=True,
     ).encode("utf-8")
-    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
+    return sha256_prefixed(encoded)
 
 
 def _partition_text(text: str, desired: int = 3) -> list[str]:

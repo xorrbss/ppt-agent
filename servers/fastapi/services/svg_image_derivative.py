@@ -15,6 +15,7 @@ from typing import Literal
 from PIL import Image, ImageCms, ImageOps, __version__ as pillow_version
 
 from services.svg_asset_manifest import DerivativeRecipe, canonical_digest
+from utils.hashing import sha256_hex
 
 
 @dataclass(frozen=True)
@@ -101,7 +102,7 @@ def _build_raster_derivative(
     appearance.update(f"{image.mode}:{image.width}:{image.height}:srgb\0".encode("ascii"))
     appearance.update(image.tobytes())
     appearance_digest = appearance.hexdigest()
-    source_digest = hashlib.sha256(source).hexdigest()
+    source_digest = sha256_hex(source)
     use_png = alpha or semantic_kind != "photo"
     original_edge = max(image.size)
     floor = min(original_edge, min_edge)
@@ -143,7 +144,7 @@ def _build_raster_derivative(
                 payload,
                 source_digest,
                 appearance_digest,
-                hashlib.sha256(payload).hexdigest(),
+                sha256_hex(payload),
                 *dimensions,
                 media_type,
                 recipe,

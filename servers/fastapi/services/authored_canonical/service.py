@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from copy import deepcopy
 from html.parser import HTMLParser
-import hashlib
 import re
 import uuid
 from typing import Any, Iterable
@@ -43,6 +42,7 @@ from utils.authored_patch_engine import (
 )
 from utils.datetime_utils import get_current_utc_datetime
 from utils.get_env import get_vnext_tenant_id
+from utils.hashing import sha256_hex
 
 
 SCHEMA_VERSION = "authored-canonical/v1"
@@ -96,7 +96,7 @@ class _SourceCollector(HTMLParser):
         if tag.lower() == "img" and values.get("src"):
             source = values["src"]
             qid = values.get("data-qid", "")
-            digest = hashlib.sha256(source.encode("utf-8")).hexdigest()
+            digest = sha256_hex(source.encode("utf-8"))
             self.assets.append(
                 {
                     "assetId": f"asset:{qid}:{digest[:12]}",

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from hashlib import sha256
 from typing import TYPE_CHECKING
+from utils.hashing import sha256_hex
 
 if TYPE_CHECKING:
     from services.provider_usage_instrumentation import PublicOperationFence, ProviderUsageScope
@@ -28,4 +28,4 @@ def _provider_idempotency_key(
         f"public-provider-call/v2:{fence.operation_id}:{scope.stage}:"
         f"{slide}:{_normalize_semantic_slot(semantic_slot)}"
     )
-    return f"ppt-{sha256(preimage.encode('utf-8')).hexdigest()}"
+    return f"ppt-{sha256_hex(preimage.encode('utf-8'))}"

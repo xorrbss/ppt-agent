@@ -17,7 +17,6 @@ the new revision synchronously instead of having to poll.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -34,6 +33,7 @@ from services.workspace_slide_order_operation_handler import (
     OPERATION_KIND as SLIDE_ORDER_OPERATION_KIND,
 )
 from utils.owner_context import get_current_owner_id, get_current_tenant_id
+from utils.hashing import sha256_hex
 
 PRESENTATION_SLIDE_ORDER_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation Slide Order"])
 
@@ -93,11 +93,9 @@ async def reorder_presentation_slides(
     # submit of the same order at the same revision collapses onto the same
     # operation instead of racing a second one. Hashed so the key stays within
     # the 255-character limit and two different orders never collide.
-    order_digest = hashlib.sha256(
-        "-".join(
+    order_digest = sha256_hex("-".join(
             (str(presentation_id), str(request.expected_revision), *(str(x) for x in request.slide_ids)),
-        ).encode("utf-8"),
-    ).hexdigest()
+        ).encode("utf-8"))
     idempotency_key = f"slide-order:{order_digest}"
     # The runner restores the submitting principal for the handler
     # (services/workspace_operation_principal.py). Only the request's own

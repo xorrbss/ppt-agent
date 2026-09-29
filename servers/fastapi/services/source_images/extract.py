@@ -14,7 +14,6 @@ edge, furniture repeats) to the candidate builder that consumes it.
 from __future__ import annotations
 
 from dataclasses import dataclass
-import hashlib
 from io import BytesIO
 import logging
 from pathlib import Path, PurePosixPath
@@ -24,6 +23,7 @@ from xml.etree import ElementTree as ET
 import zipfile
 
 from PIL import Image, UnidentifiedImageError
+from utils.hashing import sha256_hex
 
 logger = logging.getLogger(__name__)
 
@@ -298,7 +298,7 @@ def _measure(part: str, payload: bytes) -> Optional[tuple[str, int, int, str]]:
         return None
     if width <= 0 or height <= 0:
         return None
-    return declared, int(width), int(height), hashlib.sha256(payload).hexdigest()
+    return declared, int(width), int(height), sha256_hex(payload)
 
 
 def _sniff_mime(payload: bytes) -> Optional[str]:

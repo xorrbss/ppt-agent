@@ -1,7 +1,6 @@
 """Mode-neutral document geometry; physical EMU are authoritative."""
 from __future__ import annotations
 
-import hashlib
 import json
 from decimal import Decimal
 from math import gcd
@@ -11,6 +10,7 @@ from pydantic import Field, field_validator, model_validator
 
 from models.authored_vnext.master.base import StrictCamelModel
 from models.authored_vnext.master.contract import CanvasContract, Rect
+from utils.hashing import sha256_prefixed
 
 DOCUMENT_CANVAS_CONTRACT_VERSION = "document-canvas/v1"
 # Enable only after all reader/capability and product readback gates pass.
@@ -180,7 +180,7 @@ def canvas_digest(value: object) -> str:
     fields.extend(str(int(Decimal(str(getattr(canvas.safe_area, key))) * 1000000))
                   for key in ("x", "y", "width", "height"))
     canonical = json.dumps(fields, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    return "sha256:" + hashlib.sha256(canonical).hexdigest()
+    return sha256_prefixed(canonical)
 
 
 def require_canvas_capability(theme: object, supported_versions: str | None) -> None:

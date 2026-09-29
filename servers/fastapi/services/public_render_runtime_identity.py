@@ -18,6 +18,7 @@ from typing import Any, Mapping
 from models.sql.public_artifact import normalize_sha256
 from services.public_export_errors import PublicExportOperationError
 from utils.slide_capture import _render_cache_identity
+from utils.hashing import sha256_hex, sha256_prefixed
 
 
 MAX_PUBLIC_RENDER_OPERATION_SLIDES = 100
@@ -123,7 +124,7 @@ def _local_font_inventory_digest(source: Mapping[str, str]) -> str:
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
-    return "sha256:" + sha256(payload).hexdigest()
+    return sha256_prefixed(payload)
 
 
 def public_render_runtime_binding(
@@ -234,7 +235,7 @@ def public_slide_renderer_version(
     ).encode("utf-8")
     return (
         f"{PUBLIC_SLIDE_RENDERER_IDENTITY_VERSION}:"
-        f"{sha256(payload).hexdigest()}"
+        f"{sha256_hex(payload)}"
     )
 
 
@@ -256,7 +257,7 @@ def public_render_runtime_binding_digest(
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
-    return "sha256:" + sha256(payload).hexdigest()
+    return sha256_prefixed(payload)
 
 
 def public_release_review_runtime_binding(
@@ -323,4 +324,4 @@ def public_deck_render_identity_digest(
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
-    return "sha256:" + sha256(payload).hexdigest()
+    return sha256_prefixed(payload)

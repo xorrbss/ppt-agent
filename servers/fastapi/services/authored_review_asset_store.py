@@ -9,7 +9,6 @@ both live slides and every persisted presentation version.
 
 from __future__ import annotations
 
-import hashlib
 import os
 import tempfile
 import uuid
@@ -20,6 +19,7 @@ from utils.asset_directory_utils import (
     filesystem_image_path_to_app_data_reference,
     get_images_directory,
 )
+from utils.hashing import sha256_hex
 
 
 def _fsync_directory(directory: Path) -> None:
@@ -59,7 +59,7 @@ def publish_reviewed_png(
     if not png:
         raise ValueError("png must not be empty")
 
-    content_sha256 = hashlib.sha256(png).hexdigest()
+    content_sha256 = sha256_hex(png)
     relative_directory = Path("authored") / str(presentation_id)
     filename = f"slide_{slide_position}_{content_sha256}.png"
     temporary_path: Path | None = None

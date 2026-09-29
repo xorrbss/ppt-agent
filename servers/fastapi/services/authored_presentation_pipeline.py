@@ -1,25 +1,25 @@
 from __future__ import annotations
 
-import hashlib
 import sys
-
 from dataclasses import replace
-from services.authored_local_fit_evidence_types import AcceptedLocalFit
 
-from services.authored_presentation_pipeline_deps import *
+from constants.timeouts import LOCAL_FIT_CAPTURE_TIMEOUT_SECONDS
 from services import authored_presentation_author_batch as author_batch_impl
-from services.authored_local_fit_policy import local_fit_applies, requested_font_policy_revision, policy_floor_pt
-from services.authored_admission_producers import author_html as admit_author_html, source_image_html
 from services.authored_admission_capture import canonical_capture_html, capture_once, captured_metrics_or_existing
+from services.authored_admission_producers import author_html as admit_author_html
+from services.authored_admission_producers import source_image_html
+from services.authored_canvas import canvas_or_default, canvas_render_kwargs
 from services.authored_local_fit_admission import capture_original_first
+from services.authored_local_fit_evidence_types import AcceptedLocalFit
+from services.authored_local_fit_policy import local_fit_applies, policy_floor_pt, requested_font_policy_revision
 from services.authored_original_capture_checkpoint import (
     load_original_capture_checkpoint,
     persist_original_capture_checkpoint,
 )
-from utils.slide_capture import get_cached_browser_metrics
+from services.authored_presentation_pipeline_deps import *
 from services.document_canvas_generation import export_size_points
-from services.authored_canvas import canvas_or_default, canvas_render_kwargs
-from constants.timeouts import LOCAL_FIT_CAPTURE_TIMEOUT_SECONDS
+from utils.hashing import sha256_prefixed
+from utils.slide_capture import get_cached_browser_metrics
 
 LOGGER = logging.getLogger(__name__)
 
@@ -91,7 +91,7 @@ def _rehydrate_accepted_local_fit(
 
     if receipt_is_preserved_original(receipt) or png is None:
         return None
-    if receipt.get("png_digest") != "sha256:" + hashlib.sha256(png).hexdigest():
+    if receipt.get("png_digest") != sha256_prefixed(png):
         return None
     return AcceptedLocalFit(
         html=html,

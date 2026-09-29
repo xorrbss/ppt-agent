@@ -86,6 +86,7 @@ from services.workspace_timeline_projection import (
 from utils.datetime_utils import get_current_utc_datetime
 from services.workspace_operation_principal import submitting_principal_tenant
 from utils.owner_context import get_current_owner_id, get_current_tenant_id
+from utils.hashing import sha256_hex
 
 
 _ASSET_WAIT_STATES = {"uploaded", "scanning", "processing"}
@@ -209,18 +210,16 @@ def canonical_payload_hash(payload: Mapping[str, Any]) -> str:
         separators=(",", ":"),
         default=str,
     ).encode("utf-8")
-    return sha256(encoded).hexdigest()
+    return sha256_hex(encoded)
 
 
 def workspace_idempotency_hash(key: str) -> str:
     normalized = key.strip()
     if not normalized or len(normalized) > 255:
         raise WorkspaceServiceError("invalid_idempotency_key", status_code=400)
-    return sha256(
-        f"presenton.workspace/v1:{get_workspace_owner_scope()}:{normalized}".encode(
+    return sha256_hex(f"presenton.workspace/v1:{get_workspace_owner_scope()}:{normalized}".encode(
             "utf-8"
-        )
-    ).hexdigest()
+        ))
 
 
 def _safe_basename(value: str) -> str:
@@ -1981,9 +1980,9 @@ async def apply_workspace_action(
             }
         )
         retry_payload = {**submitting_principal_tenant(), **retry_payload}  # the source's wins
-        retry_operation_key_hash = sha256(
+        retry_operation_key_hash = sha256_hex(
             f"presenton.workspace.retry/v1:{idempotency_hash}:{source_operation.id}".encode("utf-8")
-        ).hexdigest()
+        )
         retry_requires_approval = source_operation.kind in _DESTRUCTIVE_OPERATION_KINDS
         retry_approval_expires_at = (
             now + timedelta(seconds=_destructive_approval_ttl_seconds())

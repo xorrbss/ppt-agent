@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-import hashlib
 import json
 import math
 import re
@@ -14,6 +13,7 @@ from .source_render_geometry import (
     TITLE_LINE_HEIGHT,
     flow_font_px,
 )
+from utils.hashing import sha256_prefixed
 
 
 MIN_SOURCE_VERBATIM_TEXT_SCALE = 0.70
@@ -31,7 +31,7 @@ def canonical_digest(value: object) -> str:
         sort_keys=True,
         default=str,
     ).encode("utf-8")
-    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+    return sha256_prefixed(encoded)
 
 
 def _value(value: object, *names: str, default: object = None) -> object:

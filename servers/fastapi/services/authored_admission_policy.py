@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 from typing import Any
+from utils.hashing import sha256_hex
 
 
 class AuthoredConfigurationError(Exception):
@@ -134,7 +134,7 @@ def _content_digest() -> str:
         "void_tags": VOID_TAGS,
     }
     payload = json.dumps(_canonical(surface), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+    return sha256_hex(payload.encode("utf-8"))[:16]
 
 
 #: Identifies the admission policy itself. The rollout profile a deck ran under

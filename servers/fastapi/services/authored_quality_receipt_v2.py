@@ -7,30 +7,40 @@ renderer implementation.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import tempfile
 import time
-from contextlib import contextmanager
 from collections.abc import Mapping, MutableMapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+from constants.timeouts import BUSY_WAIT_POLL_INTERVAL_SECONDS
 from services.authored_composition_policy import _normalized_capacity_owned_text
-from utils.env_settings.authored_runtime import (
-    get_authored_quality_receipt_directory,
-)
 from services.authored_font_signal import body_font_median_px
 from services.authored_quality_receipt_helpers import (
     append_unique as _append,
+)
+from services.authored_quality_receipt_helpers import (
     domain as _domain,
+)
+from services.authored_quality_receipt_helpers import (
     domain_status as _domain_status,
+)
+from services.authored_quality_receipt_helpers import (
     mapping as _mapping,
+)
+from services.authored_quality_receipt_helpers import (
     read as _read,
+)
+from services.authored_quality_receipt_helpers import (
     status as _status,
 )
-from constants.timeouts import BUSY_WAIT_POLL_INTERVAL_SECONDS
+from utils.env_settings.authored_runtime import (
+    get_authored_quality_receipt_directory,
+)
+from utils.hashing import canonical_json_digest, sha256_hex, sha256_prefixed
 
 
 def quality_receipt_root() -> Path:
@@ -69,7 +79,7 @@ def quality_receipt_manifest_path(job_id: object) -> Path:
     value = str(job_id or "").strip()
     if not value:
         raise ValueError("quality_receipt_job_id_missing")
-    job_digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:32]
+    job_digest = sha256_hex(value.encode("utf-8"))[:32]
     return quality_receipt_root() / f"job-{job_digest}.json"
 
 
@@ -90,7 +100,7 @@ def public_attempt_id(value: object) -> str:
         return "sha256:" + candidate.lower()
     if len(candidate) == 32 and all(char in "0123456789abcdefABCDEF" for char in candidate):
         return candidate.lower()
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:32]
+    return sha256_hex(text.encode("utf-8"))[:32]
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,14 +126,7 @@ def release_quality_policy_digest(policy: ReleaseQualityPolicy) -> str:
         "requireFontPreflight": policy.require_font_preflight,
         "minimumNativeCoverageRatio": policy.minimum_native_coverage_ratio,
     }
-    return "sha256:" + hashlib.sha256(
-        json.dumps(
-            payload,
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-        ).encode("utf-8")
-    ).hexdigest()
+    return canonical_json_digest(payload, allow_nan=True)
 
 
 def _optional_prefixed_sha256(value: object, field_name: str) -> str | None:
@@ -867,14 +870,7 @@ def _receipt_digest(receipt: QualityReceiptV2) -> str:
         "requireFontPreflight": receipt.require_font_preflight,
         "minimumNativeCoverageRatio": receipt.minimum_native_coverage_ratio,
     }
-    return "sha256:" + hashlib.sha256(
-        json.dumps(
-            payload,
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-        ).encode("utf-8")
-    ).hexdigest()
+    return canonical_json_digest(payload, allow_nan=True)
 
 
 def _receipt_digest_pre_profile_split(receipt: QualityReceiptV2) -> str:
@@ -909,14 +905,7 @@ def _receipt_digest_pre_profile_split(receipt: QualityReceiptV2) -> str:
         "requireFontPreflight": receipt.require_font_preflight,
         "minimumNativeCoverageRatio": receipt.minimum_native_coverage_ratio,
     }
-    return "sha256:" + hashlib.sha256(
-        json.dumps(
-            payload,
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-        ).encode("utf-8")
-    ).hexdigest()
+    return canonical_json_digest(payload, allow_nan=True)
 
 
 def validate_current_quality_receipt_payload(
@@ -1068,14 +1057,7 @@ def _receipt_digest_pre_font(receipt: QualityReceiptV2) -> str:
         "requireNativeCoverage": receipt.require_native_coverage,
         "minimumNativeCoverageRatio": receipt.minimum_native_coverage_ratio,
     }
-    return "sha256:" + hashlib.sha256(
-        json.dumps(
-            payload,
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-        ).encode("utf-8")
-    ).hexdigest()
+    return canonical_json_digest(payload, allow_nan=True)
 
 
 def _receipt_digest_legacy(receipt: QualityReceiptV2) -> str:
@@ -1097,9 +1079,7 @@ def _receipt_digest_legacy(receipt: QualityReceiptV2) -> str:
         "publicationStatus": receipt.publication_status,
         "releaseProfile": receipt.release_profile,
     }
-    return "sha256:" + hashlib.sha256(
-        json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-    ).hexdigest()
+    return canonical_json_digest(payload, allow_nan=True)
 
 
 def _receipt_digest_policy_v1(receipt: QualityReceiptV2) -> str:
@@ -1123,9 +1103,7 @@ def _receipt_digest_policy_v1(receipt: QualityReceiptV2) -> str:
         "requireVisualReview": receipt.require_visual_review,
         "requirePerformance": receipt.require_performance,
     }
-    return "sha256:" + hashlib.sha256(
-        json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-    ).hexdigest()
+    return canonical_json_digest(payload, allow_nan=True)
 
 
 def _manifest_digest(records: Mapping[str, object]) -> str:
@@ -1141,14 +1119,7 @@ def _manifest_digest(records: Mapping[str, object]) -> str:
         "schemaVersion": "quality-receipt-manifest/v1",
         "receipts": records,
     }
-    return "sha256:" + hashlib.sha256(
-        json.dumps(
-            canonical,
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-        ).encode("utf-8")
-    ).hexdigest()
+    return canonical_json_digest(canonical, allow_nan=True)
 
 
 @contextmanager
@@ -1737,7 +1708,7 @@ def _canonical_evidence_digest(evidence: Mapping[str, object]) -> str:
         )
     except (TypeError, ValueError) as error:
         raise ValueError("quality_receipt_v3_evidence_not_canonical") from error
-    return "sha256:" + hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+    return sha256_prefixed(serialized.encode("utf-8"))
 
 
 def quality_receipt_t1_triggers(evidence: object) -> tuple[str, ...]:
@@ -2176,9 +2147,7 @@ class QualityReceiptV3:
 def _receipt_v3_digest(receipt: QualityReceiptV3) -> str:
     payload = receipt.to_dict()
     payload.pop("receiptDigest")
-    return "sha256:" + hashlib.sha256(
-        json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-    ).hexdigest()
+    return canonical_json_digest(payload, allow_nan=True)
 
 
 def validate_quality_receipt_v3_payload(
@@ -2260,14 +2229,7 @@ def validate_quality_receipt_v3_payload(
 
 
 def _v3_manifest_digest(records: Mapping[str, object]) -> str:
-    return "sha256:" + hashlib.sha256(
-        json.dumps(
-            {"schemaVersion": "quality-receipt-manifest/v3", "events": records},
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-        ).encode("utf-8")
-    ).hexdigest()
+    return canonical_json_digest({"schemaVersion": "quality-receipt-manifest/v3", "events": records}, allow_nan=True)
 
 
 @dataclass(slots=True)

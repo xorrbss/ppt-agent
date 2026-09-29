@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import uuid
@@ -85,6 +84,7 @@ from services.workspace_quality_operation_handler import (
     validate_release_review_base_evidence_for_export,
     validate_export_release_review_receipt,
 )
+from utils.hashing import sha256_hex
 
 QUALITY_REVIEW_OPERATION_KIND = "quality.review"
 EXPORT_OPERATION_KINDS = ("export.pptx", "export.pdf")
@@ -664,13 +664,11 @@ class WorkspaceExportOperationHandler:
                             raise NonRetryableWorkspaceOperationError(
                                 "quality_receipt_v3_required"
                             )
-                        quality_receipt_digest = hashlib.sha256(
-                            (
+                        quality_receipt_digest = sha256_hex((
                                 release_review_base_receipt_digest
                                 + ":"
                                 + release_review_receipt_digest
-                            ).encode("ascii")
-                        ).hexdigest()
+                            ).encode("ascii"))
                 # Hybrid is a PPTX-only output; PDF stays a raster publication.
                 isolated_export_mode = (
                     pptx_mode if export_format == "pptx" else "fidelity"
@@ -724,13 +722,11 @@ class WorkspaceExportOperationHandler:
                         raise NonRetryableWorkspaceOperationError(
                             "release_quality_review_render_identity_changed"
                         )
-                source_snapshot_sha256 = hashlib.sha256(
-                    json.dumps(
+                source_snapshot_sha256 = sha256_hex(json.dumps(
                         htmls,
                         ensure_ascii=False,
                         separators=(",", ":"),
-                    ).encode("utf-8")
-                ).hexdigest()
+                    ).encode("utf-8"))
                 initial_provenance = {
                     "schema_version": 1,
                     "adapter_chain": ["general"],
@@ -1010,9 +1006,7 @@ class WorkspaceExportOperationHandler:
                     )
                 if public_quality_receipt is not None and export_editability is not None:
                     public_quality_receipt["exportEditability"] = export_editability
-            if public_ref is None and artifact_sha256 != hashlib.sha256(
-                export_path.read_bytes()
-            ).hexdigest():
+            if public_ref is None and artifact_sha256 != sha256_hex(export_path.read_bytes()):
                 raise PresentationExportContractError(
                     "presentation_export_artifact_digest_mismatch"
                 )
@@ -1034,9 +1028,7 @@ class WorkspaceExportOperationHandler:
                         export_attempt_id=export_attempt_id,
                     )
                 else:
-                    if artifact_sha256 != hashlib.sha256(
-                        export_path.read_bytes()
-                    ).hexdigest():
+                    if artifact_sha256 != sha256_hex(export_path.read_bytes()):
                         raise PresentationExportContractError(
                             "presentation_export_artifact_digest_mismatch"
                         )

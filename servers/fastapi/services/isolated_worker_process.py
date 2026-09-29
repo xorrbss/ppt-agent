@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import pathlib
@@ -24,6 +23,7 @@ from services.trusted_executor.worker_dispatcher import (
     TrustedWorkerDispatcher,
     TrustedWorkerWireError,
 )
+from utils.hashing import sha256_hex
 
 
 NETWORK_NONE_ATTESTATION = "nonroot-readonly-tmpfs-network-none"
@@ -271,9 +271,7 @@ def _decode_result(payload: bytes, job: IsolatedWorkerJob) -> IsolatedWorkerResu
     elif not isinstance(error_code, str) or output_artifact is not None:
         raise IsolatedWorkerProcessError("public worker failure result is incomplete")
     attempt_token_sha256 = value.get("attemptTokenSha256")
-    expected_attempt_token_sha256 = hashlib.sha256(
-        job.attempt_token.encode("utf-8")
-    ).hexdigest()
+    expected_attempt_token_sha256 = sha256_hex(job.attempt_token.encode("utf-8"))
     if (
         not isinstance(attempt_token_sha256, str)
         or attempt_token_sha256 != expected_attempt_token_sha256

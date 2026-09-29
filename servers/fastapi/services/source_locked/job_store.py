@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import sqlite3
 import tempfile
 import uuid
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
+from constants.timeouts import SQLITE_BUSY_TIMEOUT_SECONDS
 from services.source_locked.contracts import (
     AdmissionContractV1,
     AnalysisStage,
@@ -25,8 +25,7 @@ from services.source_locked.contracts import (
 from services.source_locked.digests import canonical_json_bytes, sha256_digest
 from services.source_locked.errors import SourceLockedError
 from utils.get_env import get_app_data_directory_env
-from constants.timeouts import SQLITE_BUSY_TIMEOUT_SECONDS
-
+from utils.hashing import sha256_hex
 
 _JOB_ID = re.compile(r"^sljob_[0-9a-f]{64}$")
 _LEASE_SECONDS = 90
@@ -148,7 +147,7 @@ class DurableSourceLockedJobStore:
                 "idempotency_payload_digest": payload_digest,
             }
         )
-        return "sljob_" + hashlib.sha256(material).hexdigest()
+        return "sljob_" + sha256_hex(material)
 
     def _validated_input_path(self, relative_path: str) -> Path:
         candidate = (self.root / relative_path).resolve()

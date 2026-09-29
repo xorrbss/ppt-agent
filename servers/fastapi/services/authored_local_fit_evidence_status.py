@@ -7,7 +7,6 @@ receipt is still valid to reuse for a checkpoint without re-rendering.
 """
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Mapping
 from typing import Any
 
@@ -23,6 +22,7 @@ from services.authored_local_fit_policy import (
     digest,
     html_digest,
 )
+from utils.hashing import sha256_prefixed
 
 
 def receipt_is_preserved_original(receipt: Mapping[str, Any]) -> bool:
@@ -91,7 +91,7 @@ def reusable_checkpoint_receipt(
     if (preserved_original or receipt.get("renderedFitDisabled") is True) and (
         final_png is None
         or receipt.get("png_digest")
-        != "sha256:" + hashlib.sha256(final_png).hexdigest()
+        != sha256_prefixed(final_png)
     ):
         return None
     fit_mode = (

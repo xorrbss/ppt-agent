@@ -11,7 +11,6 @@ import base64
 import binascii
 from collections.abc import Mapping
 from datetime import datetime, timezone
-from hashlib import sha256
 from io import BytesIO
 import json
 import math
@@ -47,6 +46,7 @@ from services.authored_vnext.capability_registry import (
     require_capability_metadata,
 )
 from services.authored_vnext.master.digests import canonical_digest, canonical_json
+from utils.hashing import sha256_prefixed
 
 
 PPTX_MEDIA_TYPE = (
@@ -1092,7 +1092,7 @@ def _asset_lookup(assets_value: object) -> dict[str, tuple[str, bytes, str]]:
             or size_bytes != len(content)
         ):
             raise NativeSceneError("authored_vnext_scene_asset_size_mismatch")
-        if not content or f"sha256:{sha256(content).hexdigest()}" != digest:
+        if not content or sha256_prefixed(content) != digest:
             raise NativeSceneError("authored_vnext_scene_asset_digest_mismatch")
         try:
             decoded_image = PptxImage.from_blob(content)
@@ -2862,7 +2862,7 @@ def readback_scene_pptx(content: bytes) -> dict[str, Any]:
                     if shape.shape_type != MSO_SHAPE_TYPE.PICTURE:
                         raise NativeSceneError("authored_vnext_master_furniture_readback_failed")
                     actual_furniture["assetDigest"] = (
-                        f"sha256:{sha256(shape.image.blob).hexdigest()}"
+                        sha256_prefixed(shape.image.blob)
                     )
                 elif furniture.get("unconfigured") is True:
                     actual_furniture["unconfigured"] = True
@@ -2900,7 +2900,7 @@ def readback_scene_pptx(content: bytes) -> dict[str, Any]:
                     raise NativeSceneError(
                         "authored_vnext_hybrid_raster_island_readback_failed"
                     )
-                embedded_digest = f"sha256:{sha256(shape.image.blob).hexdigest()}"
+                embedded_digest = sha256_prefixed(shape.image.blob)
                 if embedded_digest != raster.get("assetDigest"):
                     raise NativeSceneError(
                         "authored_vnext_hybrid_raster_island_readback_failed"
@@ -2986,7 +2986,7 @@ def readback_scene_pptx(content: bytes) -> dict[str, Any]:
                 if shape.shape_type != MSO_SHAPE_TYPE.PICTURE:
                     raise NativeSceneError("authored_vnext_scene_element_native_kind_mismatch")
                 actual_element["assetDigest"] = (
-                    f"sha256:{sha256(shape.image.blob).hexdigest()}"
+                    sha256_prefixed(shape.image.blob)
                 )
                 actual_element["cropGeometry"] = _picture_crop(shape)
             elif kind == "table":

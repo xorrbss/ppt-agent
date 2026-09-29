@@ -13,7 +13,6 @@ next file is started, and job-owned output is then removed.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import hmac
 import json
 import logging
@@ -43,6 +42,7 @@ from services.documents_loader import DocumentsLoader
 from services.references import ReferenceProviderError, admit_reference_snapshot
 from services.temp_file_service import TEMP_FILE_SERVICE
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
+from utils.hashing import sha256_hex
 
 
 LOGGER = logging.getLogger(__name__)
@@ -126,7 +126,7 @@ class DecomposeJobService:
             ensure_ascii=False,
             separators=(",", ":"),
         )
-        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+        return sha256_hex(payload.encode("utf-8"))
 
     @staticmethod
     def _idempotency_hash(idempotency_key: Optional[str]) -> Optional[str]:
@@ -135,7 +135,7 @@ class DecomposeJobService:
         normalized = idempotency_key.strip()
         if not normalized or len(normalized) > 255:
             raise ValueError("Idempotency-Key must be between 1 and 255 characters")
-        return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+        return sha256_hex(normalized.encode("utf-8"))
 
     @staticmethod
     def _snapshot(record: _DecomposeJobRecord) -> DecomposeJobSnapshot:
@@ -441,7 +441,7 @@ class DecomposeJobService:
                 raise ReferenceProviderError(
                     "reference_snapshot_payload_invalid", status_code=409
                 ) from error
-            actual_digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+            actual_digest = sha256_hex(text.encode("utf-8"))
             if not hmac.compare_digest(actual_digest, expected_digest):
                 raise ReferenceProviderError(
                     "reference_snapshot_integrity_failed", status_code=409

@@ -10,8 +10,6 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-import hashlib
-import json
 import logging
 import time
 from typing import Protocol
@@ -27,6 +25,7 @@ from services.authored_vnext.deck_ir.strategy import (
     validate_sealed_generation_strategy,
 )
 from utils.env_settings.authored_vnext import is_deck_ir_generation_enabled
+from utils.hashing import canonical_json_digest
 
 
 logger = logging.getLogger(__name__)
@@ -104,9 +103,7 @@ def _digest(payload: Mapping[str, object]) -> str:
             return value
     except (ImportError, TypeError, ValueError):
         pass
-    return "sha256:" + hashlib.sha256(
-        json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    ).hexdigest()
+    return canonical_json_digest(payload, allow_nan=True)
 
 
 async def _progress(context: object, *, stage: str, percent: int, message: str) -> None:

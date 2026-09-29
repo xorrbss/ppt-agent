@@ -13,8 +13,6 @@ a pure function over already-loaded payloads: no session, no lease, no I/O.
 
 from __future__ import annotations
 
-import hashlib
-import json
 import re
 from collections.abc import Mapping, Sequence
 from datetime import datetime
@@ -30,6 +28,7 @@ from services.public_export_operation import (
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
 )
+from utils.hashing import canonical_json_digest, canonical_json_sha256
 
 
 _PUBLISHED_FLAGGED_HYBRID_BLOCKER = re.compile(
@@ -212,14 +211,7 @@ def _validated_authored_quality_receipt_digest(
     ):
         raise NonRetryableWorkspaceOperationError("quality_receipt_v3_digest_invalid")
     sealed = {field: receipt[field] for field in sealed_fields}
-    actual = "sha256:" + hashlib.sha256(
-        json.dumps(
-            sealed,
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-        ).encode("utf-8")
-    ).hexdigest()
+    actual = canonical_json_digest(sealed, allow_nan=True)
     if actual != receipt_digest:
         raise NonRetryableWorkspaceOperationError("quality_receipt_v3_digest_invalid")
     compatibility = (
@@ -243,14 +235,7 @@ def _legacy_fidelity_quality_digest(scene_digest: str) -> str:
         "releaseReadiness": "blocked",
         "reasonCode": "quality_receipt_v3_required",
     }
-    return hashlib.sha256(
-        json.dumps(
-            payload,
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=True,
-        ).encode("utf-8")
-    ).hexdigest()
+    return canonical_json_sha256(payload, ensure_ascii=True, allow_nan=True)
 
 
 def _resolved_authored_quality_digest(

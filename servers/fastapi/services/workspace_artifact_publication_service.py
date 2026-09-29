@@ -64,6 +64,7 @@ from services.workspace_artifact_runtime_config import (
     configured_positive_int as _configured_positive_int,
 )
 from utils.owner_context import get_current_owner_id
+from utils.hashing import sha256_hex
 
 LOGGER = logging.getLogger(__name__)
 
@@ -827,7 +828,7 @@ async def prepare_workspace_chat_artifact_staging(
     root = _app_data_root()
     owner_scope = get_workspace_owner_scope()
     journal_id = uuid.uuid4()
-    attempt_digest = hashlib.sha256(attempt_token.encode("utf-8")).hexdigest()
+    attempt_digest = sha256_hex(attempt_token.encode("utf-8"))
     now = datetime.now(timezone.utc)
     staging_timeout = _configured_positive_int(
         "WORKSPACE_ARTIFACT_STAGING_TIMEOUT_SECONDS",
