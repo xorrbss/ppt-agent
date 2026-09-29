@@ -41,6 +41,14 @@ const config: Config = {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
         },
+        brand: {
+          DEFAULT: "rgb(var(--brand) / <alpha-value>)",
+          hover: "rgb(var(--brand-hover) / <alpha-value>)",
+          accent: "rgb(var(--brand-accent) / <alpha-value>)",
+        },
+        surface: {
+          DEFAULT: "rgb(var(--surface) / <alpha-value>)",
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

@@ -103,7 +103,7 @@ const ThemeComposer: React.FC = () => {
             data-testid={`style-option-${t.id}`}
             onClick={() => setStyleId(t.id)}
             className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-all ${
-              styleId === t.id ? "border-[#5141E5] bg-[#5141E5]/10 text-[#5141E5]" : "border-[#EAECF0] text-[#344054] hover:border-[#5141E5]/40"
+              styleId === t.id ? "border-brand bg-brand/10 text-brand" : "border-[#EAECF0] text-[#344054] hover:border-brand/40"
             }`}
           >
             {t.name}

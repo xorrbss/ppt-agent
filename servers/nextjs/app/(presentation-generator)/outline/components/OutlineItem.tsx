@@ -183,7 +183,7 @@ export function OutlineItem({
         <div
           {...attributes}
           {...listeners}
-          className="relative flex items-center justify-center rounded cursor-grab focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8]"
+          className="relative flex items-center justify-center rounded cursor-grab focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent"
           aria-label={tA2b("reorderSlideValue", { value0: index })}
         >
           <svg
@@ -248,7 +248,7 @@ export function OutlineItem({
           id={`outline-item-${index}`}
           className="flex flex-col basis-full gap-2"
         >
-          <p className="text-black w-fit text-[10px] font-medium  bg-white border border-[#EDEEEF] rounded-[80px] px-2.5">
+          <p className="text-black w-fit text-[10px] font-medium  bg-white border border-surface rounded-[80px] px-2.5">
             슬라이드 {index}
           </p>
           {/* Editable Markdown Content */}
@@ -277,7 +277,7 @@ export function OutlineItem({
                   onChange={handleTextareaChange}
                   onBlur={() => setIsEditing(false)}
                   placeholder="여기에 마크다운 내용을 입력하세요…"
-                  className="min-h-[140px] resize-none overflow-hidden rounded-[8px] border-[#D8D8DF] bg-[#FBFBFC] px-3 py-3 font-mono text-[13px] leading-6 text-[#191919] shadow-none focus-visible:border-[#7A5AF8] focus-visible:ring-2 focus-visible:ring-[#7A5AF8]/20"
+                  className="min-h-[140px] resize-none overflow-hidden rounded-[8px] border-[#D8D8DF] bg-[#FBFBFC] px-3 py-3 font-mono text-[13px] leading-6 text-[#191919] shadow-none focus-visible:border-brand-accent focus-visible:ring-2 focus-visible:ring-brand-accent/20"
                 />
               ) : (
                 <div
@@ -291,7 +291,7 @@ export function OutlineItem({
                       setIsEditing(true);
                     }
                   }}
-                  className="block min-h-[60px] w-full rounded-[8px] px-0 py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8]/25"
+                  className="block min-h-[60px] w-full rounded-[8px] px-0 py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent/25"
                 >
                   {previewHtml ? (
                     <div
@@ -316,7 +316,7 @@ export function OutlineItem({
               onClick={handleSlideDelete}
               disabled={isStreaming}
               aria-label={tA2b("deleteSlideValue", { value0: index })}
-              className="rounded-full bg-white p-1.5 shadow-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8] disabled:cursor-not-allowed disabled:opacity-50 sm:p-2"
+              className="rounded-full bg-white p-1.5 shadow-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent disabled:cursor-not-allowed disabled:opacity-50 sm:p-2"
             >
               <Trash className="w-4 h-4  text-black/70" />
             </button>

@@ -64,7 +64,7 @@ const ResumeGenerationBanner: React.FC<ResumeGenerationBannerProps> = ({
   return (
     <div
       data-cy="resume-generation-banner"
-      className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#EDEEEF] bg-[#F4F3FF] px-5 py-3"
+      className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-surface bg-[#F4F3FF] px-5 py-3"
     >
       <p className="text-sm font-medium text-[#2D2D2D]">{message}</p>
       <Button

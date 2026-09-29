@@ -177,7 +177,7 @@ const Toaster = ({
           font-weight: 400 !important;
           background: rgb(255 255 255) !important;
           color: #3F3F3F !important;
-          border: 1px solid #EDEEEF !important;
+          border: 1px solid rgb(var(--surface)) !important;
           box-shadow: none !important;
         }
 
@@ -200,7 +200,7 @@ const Toaster = ({
           align-self: center !important;
           background: rgb(255 255 255) !important;
           color: #3f3f3f !important;
-          border: 1px solid #edeeef !important;
+          border: 1px solid rgb(var(--surface)) !important;
           box-shadow: none !important;
           font-family: var(--font-syne), ui-sans-serif, system-ui, -apple-system,
             BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,

@@ -1,7 +1,7 @@
 import { Skeleton } from '@/components/ui/skeleton'
 
 const ThemeCardSkeleton = () => (
-    <div className="rounded-xl px-6 border border-[#EDEEEF] w-[305px] bg-white overflow-hidden">
+    <div className="rounded-xl px-6 border border-surface w-[305px] bg-white overflow-hidden">
         {/* Preview area */}
         <div className="relative h-[250px] p-6">
             {/* Top badges */}
@@ -17,7 +17,7 @@ const ThemeCardSkeleton = () => (
             </div>
         </div>
         {/* Bottom info */}
-        <div className="px-5 border-t border-[#EDEEEF] py-2.5 h-[80px] flex items-center justify-between">
+        <div className="px-5 border-t border-surface py-2.5 h-[80px] flex items-center justify-between">
             <div>
                 <Skeleton className="h-4 w-24 mb-2" />
                 <div className="flex items-center gap-1">

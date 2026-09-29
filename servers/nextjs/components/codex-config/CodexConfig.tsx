@@ -52,7 +52,7 @@ export default function CodexConfig({
   const badgeClass = `flex shrink-0 items-center justify-center rounded-full ${dense ? "h-8 w-8" : "h-10 w-10"
     }`;
   const titleClass = `font-medium text-[#191919] ${dense ? "text-sm" : "text-lg"}`;
-  const iconButtonClass = `flex items-center justify-center rounded-full border border-[#EDEEEF] transition-colors disabled:opacity-40 ${dense ? "h-8 w-8 bg-[#EDEEEF] hover:bg-[#E4E5E6]" : "px-3.5 py-2.5"
+  const iconButtonClass = `flex items-center justify-center rounded-full border border-surface transition-colors disabled:opacity-40 ${dense ? "h-8 w-8 bg-surface hover:bg-[#E4E5E6]" : "px-3.5 py-2.5"
     }`;
 
   const openAiBadge = (
@@ -68,7 +68,7 @@ export default function CodexConfig({
   );
 
   const spinnerBadge = (
-    <div className={`${badgeClass} bg-[#EDEEEF]`}>
+    <div className={`${badgeClass} bg-surface`}>
       <Loader2
         className={`animate-spin text-[#191919] ${dense ? "h-4 w-4" : "h-5 w-5"}`}
       />
@@ -78,7 +78,7 @@ export default function CodexConfig({
   if (authStatus === "checking") {
     return (
       <div
-        className={`flex items-center gap-3 rounded-[8px] border border-[#EDEEEF] p-3 ${dense ? "" : "mb-5 font-syne"
+        className={`flex items-center gap-3 rounded-[8px] border border-surface p-3 ${dense ? "" : "mb-5 font-syne"
           }`}
       >
         {spinnerBadge}
@@ -97,7 +97,7 @@ export default function CodexConfig({
   if (authStatus === "polling") {
     return (
       <div className={rootClass}>
-        <div className="flex items-center justify-between gap-4 rounded-[8px] border border-[#EDEEEF] p-3">
+        <div className="flex items-center justify-between gap-4 rounded-[8px] border border-surface p-3">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             {spinnerBadge}
             <div className="min-w-0 text-start">
@@ -118,7 +118,7 @@ export default function CodexConfig({
           </button>
         </div>
 
-        <div className="space-y-2 rounded-[8px] border border-[#EDEEEF] p-3">
+        <div className="space-y-2 rounded-[8px] border border-surface p-3">
           <p className="text-xs font-normal text-[#666666]">
             {t("pasteRedirectHint")}
           </p>
@@ -126,7 +126,7 @@ export default function CodexConfig({
             <input
               type="text"
               placeholder={t("pasteRedirectPlaceholder")}
-              className="min-w-0 flex-1 rounded-[8px] border border-[#EDEEEF] px-3 py-2.5 text-sm text-[#191919] outline-none transition-colors placeholder:text-[#666666] focus:border-[#555555]"
+              className="min-w-0 flex-1 rounded-[8px] border border-surface px-3 py-2.5 text-sm text-[#191919] outline-none transition-colors placeholder:text-[#666666] focus:border-[#555555]"
               value={manualCode}
               onChange={(event) => setManualCode(event.target.value)}
             />
@@ -134,7 +134,7 @@ export default function CodexConfig({
               type="button"
               onClick={handleManualExchange}
               disabled={isExchanging || !manualCode.trim()}
-              className="flex shrink-0 items-center justify-center rounded-[8px] bg-[#EDEEEF] px-4 py-2.5 text-sm font-medium text-[#191919] transition-colors hover:bg-[#E4E5E6] disabled:opacity-40 disabled:hover:bg-[#EDEEEF]"
+              className="flex shrink-0 items-center justify-center rounded-[8px] bg-surface px-4 py-2.5 text-sm font-medium text-[#191919] transition-colors hover:bg-[#E4E5E6] disabled:opacity-40 disabled:hover:bg-surface"
             >
               {isExchanging ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -152,7 +152,7 @@ export default function CodexConfig({
     return (
       <div className={rootClass}>
         <div
-          className={`flex items-center justify-between gap-3 rounded-[8px] border border-[#EDEEEF] ${dense ? "p-3" : "p-5"
+          className={`flex items-center justify-between gap-3 rounded-[8px] border border-surface ${dense ? "p-3" : "p-5"
             }`}
         >
           <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -221,7 +221,7 @@ export default function CodexConfig({
       <button
         type="button"
         onClick={handleSignIn}
-        className="w-fit rounded-[48px] bg-[#EDEEEF] px-3.5 py-2.5 text-xs font-semibold text-[#101323] transition-colors hover:bg-[#E4E5E6]"
+        className="w-fit rounded-[48px] bg-surface px-3.5 py-2.5 text-xs font-semibold text-[#101323] transition-colors hover:bg-[#E4E5E6]"
       >
         {t("signIn")}
       </button>
@@ -232,7 +232,7 @@ export default function CodexConfig({
     <button
       type="button"
       onClick={handleSignIn}
-      className="mb-5 flex w-full items-center justify-between rounded-[12px] border border-[#EDEEEF] p-5 font-syne transition-colors duration-300 hover:bg-[#F7F6F9]"
+      className="mb-5 flex w-full items-center justify-between rounded-[12px] border border-surface p-5 font-syne transition-colors duration-300 hover:bg-[#F7F6F9]"
     >
       <div className="flex flex-1 items-center gap-2">
         {openAiBadge}

@@ -14,7 +14,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { LLMConfig } from "@/types/llm_config";
 import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { ImagesApi } from "@/app/(presentation-generator)/services/api/images";
-import { getApiUrl } from "@/utils/api";
+import { isCodexAuthenticated } from "@/app/(presentation-generator)/services/api/codex-auth";
 import type {
   ButtonState,
   DownloadingModel,
@@ -106,26 +106,10 @@ export const useSettingsPageState = () => {
   };
 
 
-  const checkCurrentAuthStatus = async () => {
-    try {
-      const res = await fetch(getApiUrl("/api/v1/ppt/codex/auth/status"));
-      if (!res.ok) {
-        return false;
-      }
-      const data = await res.json();
-      if (data.status === "authenticated") {
-        return true;
-      } else {
-        return false;
-      }
-    } catch {
-      return false;
-    }
-  };
   const handleSaveConfig = async () => {
 
     if (llmConfig.LLM === 'codex') {
-      const isAuthenticated = await checkCurrentAuthStatus();
+      const isAuthenticated = await isCodexAuthenticated();
       if (!isAuthenticated) {
         notify.error("로그인이 필요합니다", "계속하려면 ChatGPT에 로그인해 주세요.");
         return;

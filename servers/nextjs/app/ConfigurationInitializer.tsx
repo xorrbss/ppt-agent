@@ -8,6 +8,8 @@ import { useDispatch } from 'react-redux';
 import { checkIfSelectedOllamaModelIsPulled } from '@/utils/providerUtils';
 import { LLMConfig } from '@/types/llm_config';
 import { getApiUrl } from '@/utils/api';
+import { openaiAvailableModels } from "@/app/(presentation-generator)/services/api/openai-models";
+
 import Image from 'next/image';
 import { notify } from '@/components/ui/sonner';
 import { AUTH_SESSION_EXPIRED_EVENT } from '@/app/(presentation-generator)/services/api/api-error-handler';
@@ -34,15 +36,9 @@ const checkIfSelectedCustomModelIsAvailable = async (llmConfig: LLMConfig) => {
       );
     }
 
-    const response = await fetch(getApiUrl('/api/v1/ppt/openai/models/available'), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        url: llmConfig.CUSTOM_LLM_URL,
-        api_key: llmConfig.CUSTOM_LLM_API_KEY,
-      }),
+    const response = await openaiAvailableModels({
+      url: llmConfig.CUSTOM_LLM_URL,
+      apiKey: llmConfig.CUSTOM_LLM_API_KEY,
     });
     if (!response.ok) return false;
 
@@ -198,7 +194,7 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
     return (
       <div className="flex min-h-screen items-center justify-center bg-white p-4">
         <div className="w-full max-w-md">
-          <div className="rounded-2xl border border-[#EDEEEF] bg-white p-8 text-center shadow-xl">
+          <div className="rounded-2xl border border-surface bg-white p-8 text-center shadow-xl">
             <UiLocaleSwitcher className="mb-5 ml-auto" />
             {/* Logo/Branding */}
             <div className="mb-6">
@@ -211,7 +207,7 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
                   height={48}
                   priority
                 />
-                <span className="font-syne text-2xl font-bold text-[#5146E5]">
+                <span className="font-syne text-2xl font-bold text-brand">
                   DevAX
                 </span>
               </div>

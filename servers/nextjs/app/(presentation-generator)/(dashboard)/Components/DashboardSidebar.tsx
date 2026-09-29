@@ -50,7 +50,7 @@ const DashboardSidebar = () => {
                             aria-label="대시보드"
                             title="대시보드"
                         >
-                            <LayoutDashboard className={["h-4 w-4", pathname === "/dashboard" ? "text-[#5146E5]" : "text-slate-600"].join(" ")} />
+                            <LayoutDashboard className={["h-4 w-4", pathname === "/dashboard" ? "text-brand" : "text-slate-600"].join(" ")} />
                             <span className="text-[11px] text-slate-800">대시보드</span>
                         </Link>
                         <Link
@@ -64,7 +64,7 @@ const DashboardSidebar = () => {
                             title="테마"
                         >
                             <div className="flex cursor-pointer flex-col items-center gap-1 text-center transition-colors sm:gap-2">
-                                <Palette className={`h-4 w-4 ${pathname === "/theme" ? "text-[#5146E5]" : "text-slate-600"}`} />
+                                <Palette className={`h-4 w-4 ${pathname === "/theme" ? "text-brand" : "text-slate-600"}`} />
                                 <span className="text-[11px] text-slate-800">테마</span>
                             </div>
                         </Link>
@@ -89,10 +89,10 @@ const DashboardSidebar = () => {
                             title={itemLabel}
                         >
                             {/* <div className="flex items-center  ">
-                                <img src={imageProviderIcon} alt="image provider" className="w-5 h-5 rounded-full object-cover border border-[#EDEEEF]" />
-                                <img src={textProviderIcon} alt="text provider" className="w-5 h-5 rounded-full object-cover border border-[#EDEEEF]" />
+                                <img src={imageProviderIcon} alt="image provider" className="w-5 h-5 rounded-full object-cover border border-surface" />
+                                <img src={textProviderIcon} alt="text provider" className="w-5 h-5 rounded-full object-cover border border-surface" />
                             </div> */}
-                            <Settings className={`h-4 w-4 ${isActive ? "text-[#5146E5]" : "text-slate-600"}`} />
+                            <Settings className={`h-4 w-4 ${isActive ? "text-brand" : "text-slate-600"}`} />
                             <span className="text-[11px] text-slate-800">{itemLabel}</span>
                         </Link>
                     );

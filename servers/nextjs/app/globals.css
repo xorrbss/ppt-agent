@@ -212,6 +212,11 @@ body {
 
 @layer base {
   :root {
+    /* Brand palette as space-separated RGB channels so Tailwind alpha modifiers work. */
+    --brand: 81 65 229; /* #5141E5 primary action / brand */
+    --brand-hover: 67 56 202; /* #4338CA */
+    --brand-accent: 122 90 248; /* #7A5AF8 toggles, spinners, selection accents */
+    --surface: 237 238 239; /* #EDEEEF hairline borders and neutral fills */
     --background: 0 0% 100%;
     --foreground: 240 10% 3.9%;
     --card: 0 0% 100%;

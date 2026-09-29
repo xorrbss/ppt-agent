@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { getApiUrl } from "@/utils/api";
+import { openaiAvailableModels } from "@/app/(presentation-generator)/services/api/openai-models";
 import { notify } from "@/components/ui/sonner";
 
 export interface OpenAICompatibleImageFieldsProps {
@@ -70,15 +70,9 @@ export default function OpenAICompatibleImageFields({
 
     setModelsLoading(true);
     try {
-      const response = await fetch(getApiUrl("/api/v1/ppt/openai/models/available"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          url: baseUrl.trim(),
-          api_key: apiKey,
-        }),
+      const response = await openaiAvailableModels({
+        url: baseUrl.trim(),
+        apiKey,
       });
 
       if (response.ok) {
@@ -149,8 +143,8 @@ export default function OpenAICompatibleImageFields({
               disabled={modelsLoading || !baseUrl.trim()}
               className={`mt-4 w-fit rounded-[48px] border px-3.5 py-2.5 text-xs font-semibold transition-all duration-200 ${
                 modelsLoading || !baseUrl.trim()
-                  ? "cursor-not-allowed border-gray-300 bg-[#EDEEEF] text-gray-500"
-                  : "border-[#EDEEEF] bg-[#EDEEEF] text-[#101323] hover:bg-[#E8F0FF]/90 focus:ring-2 focus:ring-blue-500/20"
+                  ? "cursor-not-allowed border-gray-300 bg-surface text-gray-500"
+                  : "border-surface bg-surface text-[#101323] hover:bg-[#E8F0FF]/90 focus:ring-2 focus:ring-blue-500/20"
               }`}
             >
               {modelsLoading ? (

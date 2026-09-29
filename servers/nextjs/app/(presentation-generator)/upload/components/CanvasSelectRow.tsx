@@ -13,7 +13,7 @@ export function ShapeIcon({ widthPx, heightPx }: { widthPx: number; heightPx: nu
     const h = Math.max(4, Math.round(heightPx * scale));
     return (
         <svg width="28" height="20" viewBox="0 0 28 20" aria-hidden="true" className="shrink-0">
-            <rect x={(28 - w) / 2} y={(20 - h) / 2} width={w} height={h} rx="2" className="fill-white stroke-[#7A5AF8]" strokeWidth="1.5" />
+            <rect x={(28 - w) / 2} y={(20 - h) / 2} width={w} height={h} rx="2" className="fill-white stroke-brand-accent" strokeWidth="1.5" />
         </svg>
     );
 }

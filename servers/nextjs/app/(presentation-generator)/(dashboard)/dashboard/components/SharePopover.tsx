@@ -144,9 +144,9 @@ export function SharePopover({
         overlayClassName="bg-slate-950/35 backdrop-blur-[2px]"
         onClick={(event) => event.stopPropagation()}
       >
-        <DialogHeader className="border-b border-[#EDEEEF] px-6 py-5">
+        <DialogHeader className="border-b border-surface px-6 py-5">
           <DialogTitle className="flex items-center gap-2 text-[#101828]">
-            <Link2 className="h-5 w-5 text-[#5146E5]" />
+            <Link2 className="h-5 w-5 text-brand" />
             {t("title")}
           </DialogTitle>
           <DialogDescription className="truncate pr-8">
@@ -157,7 +157,7 @@ export function SharePopover({
         <div className="space-y-5 px-6 py-5">
           {isLoading ? (
             <div className="flex min-h-[220px] items-center justify-center">
-              <Loader2 className="h-6 w-6 animate-spin text-[#7A5AF8]" />
+              <Loader2 className="h-6 w-6 animate-spin text-brand-accent" />
             </div>
           ) : loadError || !status ? (
             <div className="flex min-h-[220px] flex-col items-center justify-center gap-3 text-center">
@@ -198,7 +198,7 @@ export function SharePopover({
                     <button
                       type="button"
                       onClick={() => void copy()}
-                      className="flex h-10 items-center gap-2 rounded-lg bg-[#5146E5] px-3 text-sm font-medium text-white hover:bg-[#4338CA]"
+                      className="flex h-10 items-center gap-2 rounded-lg bg-brand px-3 text-sm font-medium text-white hover:bg-brand-hover"
                     >
                       {copied ? (
                         <Check className="h-4 w-4" />
@@ -221,7 +221,7 @@ export function SharePopover({
                     onChange={(event) =>
                       setExpiration(event.target.value as ExpirationChoice)
                     }
-                    className="h-10 w-full rounded-lg border border-[#D9D9DF] bg-white px-3 text-sm text-[#344054] outline-none focus:border-[#7A5AF8] focus:ring-2 focus:ring-[#7A5AF8]/20"
+                    className="h-10 w-full rounded-lg border border-[#D9D9DF] bg-white px-3 text-sm text-[#344054] outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/20"
                   >
                     <option value="never">{t("expiration.never")}</option>
                     <option value="1">{t("expiration.oneDay")}</option>
@@ -246,7 +246,7 @@ export function SharePopover({
                 </p>
               )}
 
-              <div className="flex flex-col-reverse gap-2 border-t border-[#EDEEEF] pt-4 sm:flex-row sm:justify-between">
+              <div className="flex flex-col-reverse gap-2 border-t border-surface pt-4 sm:flex-row sm:justify-between">
                 <div>
                   {hasActiveLink && (
                     <button
@@ -275,7 +275,7 @@ export function SharePopover({
                     type="button"
                     disabled={busy}
                     onClick={() => void save(false)}
-                    className="h-10 rounded-lg bg-[#5146E5] px-4 text-sm font-medium text-white hover:bg-[#4338CA] disabled:opacity-50"
+                    className="h-10 rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand-hover disabled:opacity-50"
                   >
                     {action === "save"
                       ? t("saving")

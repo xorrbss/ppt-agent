@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import {
-  getFastApiAuthHeaders,
-  getFastApiBaseUrl,
-} from "@/lib/fastapi-internal";
-import { fetchTimeoutSignal } from "@/lib/fetch-timeout-signal";
+import { JSON_RESPONSE_HEADERS, proxyToFastApi } from "@/lib/fastapi-proxy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,42 +25,22 @@ function unavailableResponse() {
 
 /** Starts a short-lived request that queues document processing in FastAPI. */
 export async function POST(request: NextRequest) {
-  const headers = new Headers(getFastApiAuthHeaders());
-  const contentType = request.headers.get("content-type");
-  const cookie = request.headers.get("cookie");
-  const authorization = request.headers.get("authorization");
-  const idempotencyKey = request.headers.get("idempotency-key");
-
-  headers.set("Accept", "application/json");
-  if (contentType) headers.set("Content-Type", contentType);
-  if (cookie) headers.set("Cookie", cookie);
-  if (authorization) headers.set("Authorization", authorization);
-  if (idempotencyKey) headers.set("Idempotency-Key", idempotencyKey);
-
-  try {
-    const response = await fetch(
-      `${getFastApiBaseUrl()}/api/v1/ppt/files/decompose/jobs`,
-      {
-        method: "POST",
-        headers,
-        body: await request.text(),
-        cache: "no-store",
-        signal: fetchTimeoutSignal(START_JOB_TIMEOUT_MS, request.signal),
-      },
-    );
-    const responseHeaders = new Headers({
-      "Cache-Control": "no-store",
-      "Content-Type": response.headers.get("content-type") ?? "application/json",
-    });
-    const requestId = response.headers.get("x-request-id");
-    if (requestId) responseHeaders.set("X-Request-Id", requestId);
-
-    return new NextResponse(response.body, {
-      status: response.status,
-      headers: responseHeaders,
-    });
-  } catch (error) {
-    console.error("[decompose-documents/jobs] Failed to start job", error);
-    return unavailableResponse();
-  }
+  return proxyToFastApi(request, "/api/v1/ppt/files/decompose/jobs", {
+    timeoutMs: START_JOB_TIMEOUT_MS,
+    method: "POST",
+    headers: { Accept: "application/json" },
+    forwardRequestHeaders: [
+      "content-type",
+      "cookie",
+      "authorization",
+      "idempotency-key",
+    ],
+    body: await request.text(),
+    forwardSearch: false,
+    forwardResponseHeaders: JSON_RESPONSE_HEADERS,
+    defaultContentType: "application/json",
+    logLabel: "[decompose-documents/jobs]",
+    // Timeouts and transport failures share one envelope on this route.
+    onFailure: unavailableResponse,
+  });
 }

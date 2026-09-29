@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
 
-import { fetchTimeoutSignal } from "@/lib/fetch-timeout-signal";
+import { fetchFastApi } from "@/lib/fastapi-proxy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,22 +34,19 @@ export async function GET(req: NextRequest) {
     return errorResponse(400);
   }
 
-  const base =
-    process.env.FAST_API_INTERNAL_URL?.trim() || "http://127.0.0.1:8000";
-
   try {
-    const headers = new Headers({ Accept: "image/svg+xml" });
-    const cookie = req.headers.get("cookie");
-    const authorization = req.headers.get("authorization");
     // The upstream URL is fixed by server configuration. Forward only the two
-    // credentials FastAPI accepts so owner-scoped /app_data remains protected.
-    if (cookie) headers.set("Cookie", cookie);
-    if (authorization) headers.set("Authorization", authorization);
-    const resp = await fetch(`${base}${src}`, {
-      cache: "no-store",
-      headers,
+    // credentials FastAPI accepts so owner-scoped /app_data remains protected;
+    // the server-side service credentials are deliberately not attached.
+    const resp = await fetchFastApi(req, src, {
+      timeoutMs: ICON_FETCH_TIMEOUT_MS,
+      method: "GET",
+      headers: { Accept: "image/svg+xml" },
+      forwardRequestHeaders: ["cookie", "authorization"],
+      includeServerAuth: false,
+      // `src` is the backend path; this route's own query string is not.
+      forwardSearch: false,
       redirect: "error",
-      signal: fetchTimeoutSignal(ICON_FETCH_TIMEOUT_MS, req.signal),
     });
     if (!resp.ok) {
       return errorResponse(502);

@@ -193,7 +193,7 @@ export const PresentationCard = ({
               <PopoverTrigger
                 ref={menuTriggerRef}
                 aria-label={tA2b("menuForValue", { value0: title || "발표자료" })}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5146E5]"
+                className="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
                 onClick={(event) => event.stopPropagation()}
                 onKeyDown={(event) => {
                   if (event.key !== "Enter" && event.key !== " ") return;
@@ -215,7 +215,7 @@ export const PresentationCard = ({
                   }}
                 >
                   <p>공유</p>
-                  <Share2 className="h-4 w-4 text-[#5146E5]" />
+                  <Share2 className="h-4 w-4 text-brand" />
                 </button>
                 <button
                   type="button"
@@ -276,7 +276,7 @@ export const PresentationCard = ({
                 type="button"
                 onClick={() => setShowDeleteDialog(false)}
                 disabled={isDeleting}
-                className="flex-1 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141e5]/40 disabled:pointer-events-none disabled:opacity-50"
+                className="flex-1 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:pointer-events-none disabled:opacity-50"
               >
                 취소
               </button>

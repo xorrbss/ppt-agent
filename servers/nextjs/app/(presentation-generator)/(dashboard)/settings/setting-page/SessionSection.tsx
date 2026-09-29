@@ -11,7 +11,7 @@ const SessionSection = () => (
     </div>
     <LogoutButton
       label="로그아웃"
-      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#EDEEEF] bg-zinc-900 px-5 py-3 font-syne text-xs font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-surface bg-zinc-900 px-5 py-3 font-syne text-xs font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
     />
   </div>
 );

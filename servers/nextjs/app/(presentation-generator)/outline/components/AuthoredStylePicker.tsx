@@ -220,7 +220,7 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
                 type="button"
                 onClick={() => setSearchQuery("")}
                 aria-label="검색어 지우기"
-                className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-[#6C6E78] hover:bg-[#F0EFF7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8]"
+                className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-[#6C6E78] hover:bg-[#F0EFF7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent"
               >
                 <X className="h-4 w-4" aria-hidden="true" />
               </button>
@@ -240,7 +240,7 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
             onClick={() => setCategory("all")}
             data-testid="authored-category-all"
             className={cn(
-              "flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8] focus-visible:ring-offset-2",
+              "flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2",
               category === "all"
                 ? "border-[#EBEBEC] bg-[#EEEFF1] text-[#27251E]"
                 : "border-transparent bg-transparent text-[#6B6B73] hover:bg-[#F3F4F6]"
@@ -259,7 +259,7 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
               onClick={() => setCategory(categoryId)}
               data-testid={`authored-category-${categoryId}`}
               className={cn(
-                "flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8] focus-visible:ring-offset-2",
+                "flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2",
                 category === categoryId
                   ? "border-[#EBEBEC] bg-[#EEEFF1] text-[#27251E]"
                   : "border-transparent bg-transparent text-[#6B6B73] hover:bg-[#F3F4F6]"
@@ -325,7 +325,7 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
           <button
             type="button"
             onClick={handleResetFilters}
-            className="mt-4 min-h-11 rounded-full border border-[#7A5AF8] bg-white px-4 text-xs font-semibold text-[#5745CE] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7A5AF8] focus-visible:ring-offset-2"
+            className="mt-4 min-h-11 rounded-full border border-brand-accent bg-white px-4 text-xs font-semibold text-[#5745CE] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-accent focus-visible:ring-offset-2"
           >
             필터 초기화
           </button>
@@ -373,7 +373,7 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
               </p>
             </div>
           </div>
-          <label className="flex min-h-11 shrink-0 cursor-pointer select-none items-center gap-2 rounded-xl border border-[#D6D0FF] bg-white px-3 text-xs font-semibold text-[#38324F] focus-within:ring-2 focus-within:ring-[#7A5AF8]">
+          <label className="flex min-h-11 shrink-0 cursor-pointer select-none items-center gap-2 rounded-xl border border-[#D6D0FF] bg-white px-3 text-xs font-semibold text-[#38324F] focus-within:ring-2 focus-within:ring-brand-accent">
             <input
               type="checkbox"
               checked={authoredVisionQa}

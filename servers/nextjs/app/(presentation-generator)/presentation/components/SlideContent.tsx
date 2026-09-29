@@ -227,7 +227,7 @@ const SlideContent = ({
                       id={`slide-${slide.index}-prompt`}
                       value={editPrompt}
                       placeholder="여기에 프롬프트를 입력하세요..."
-                      className="min-h-[110px] max-h-[180px] w-full resize-none rounded-xl border border-gray-200 p-3 text-sm focus-visible:ring-1 focus-visible:ring-[#5141e5]"
+                      className="min-h-[110px] max-h-[180px] w-full resize-none rounded-xl border border-gray-200 p-3 text-sm focus-visible:ring-1 focus-visible:ring-brand"
                       disabled={isUpdating}
                       onChange={(e) => setEditPrompt(e.target.value)}
                       onKeyDown={(e) => {

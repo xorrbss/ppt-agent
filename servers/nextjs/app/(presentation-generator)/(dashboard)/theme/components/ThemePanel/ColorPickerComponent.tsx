@@ -25,7 +25,7 @@ export const ColorPickerComponent: React.FC<ColorPickerComponentProps> = ({
     {label && <p className="text-xs text-[#38393D] font-medium pb-1.5">
       {label}
     </p>}
-    <div className="flex gap-2 border border-[#EDEEEF] rounded-md p-1">
+    <div className="flex gap-2 border border-surface rounded-md p-1">
       <div
         className="w-8 h-8 rounded border border-gray-300 cursor-pointer relative"
         style={{ backgroundColor: currentColor }}

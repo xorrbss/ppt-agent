@@ -1,20 +1,17 @@
 import { useTranslations as useA2bTranslations } from "next-intl";
 import ToolTip from '@/components/ToolTip'
-import { Button } from '@/components/ui/button'
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Select, SelectItem, SelectContent, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import { cn } from '@/lib/utils'
 import { LLMConfig } from '@/types/llm_config'
 import OpenAICompatibleImageFields from '@/components/OpenAICompatibleImageFields'
-import { IMAGE_PROVIDER_OPTIONS, IMAGE_QUALITY_OPTIONS, PUBLIC_PROVIDERS_BY_ID } from '@/utils/provider-registry.generated'
-import { Check, ChevronUp, Eye, EyeOff } from 'lucide-react'
+import { IMAGE_PROVIDER_OPTIONS, PUBLIC_PROVIDERS_BY_ID } from '@/utils/provider-registry.generated'
+import { Eye, EyeOff } from 'lucide-react'
 import React, { useEffect, useState } from 'react'
 import Image from 'next/image'
+import { ImageProviderPicker, ImageQualitySelect, MaskedApiKeyInput } from '@/components/provider-settings/ImageProviderFields'
 
 const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setLlmConfig: React.Dispatch<React.SetStateAction<LLMConfig>> }) => {
   const tA2b = useA2bTranslations("dashboardExtras");
+  const tOnboarding = useA2bTranslations("a2cOnboarding");
     const [openImageProviderSelect, setOpenImageProviderSelect] = useState(false);
     const [showApiKey, setShowApiKey] = useState(false);
     const [openaiCompatListMeta, setOpenaiCompatListMeta] = useState<{
@@ -57,89 +54,19 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
         }));
     };
 
-    const renderQualitySelector = (llmConfig: LLMConfig, input_field_changed: (value: string, field: string) => void) => {
-        if (llmConfig.IMAGE_PROVIDER === "dall-e-3") {
-            return (
-                <div className="ml-auto w-full sm:w-[262px]">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        DALL·E 3 이미지 품질
-                    </label>
-                    <div className="">
-                        <Select value={llmConfig.DALL_E_3_QUALITY || 'standard'} onValueChange={(value) => input_field_changed(value, "DALL_E_3_QUALITY")}>
-                            <SelectTrigger className="w-full h-11 px-3 py-2 outline-none border border-zinc-200 rounded-lg focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-colors hover:border-gray-400 justify-between">
-                                <SelectValue placeholder="품질 선택" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {IMAGE_QUALITY_OPTIONS["dall-e-3"].map((option) => (
-                                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-
-                    </div>
-                </div>
-            );
-        }
-
-        if (llmConfig.IMAGE_PROVIDER === "gpt-image-1.5") {
-            return (
-                <div className="w-full sm:w-[262px]">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        GPT Image 1.5 품질
-                    </label>
-                    <div className="">
-                        <Select
-                            value={llmConfig.GPT_IMAGE_1_5_QUALITY || 'low'}
-                            onValueChange={(value) => input_field_changed(value, "GPT_IMAGE_1_5_QUALITY")}
-                        >
-                            <SelectTrigger
-
-                                className="w-full h-11 px-3 py-2 outline-none border border-zinc-200 rounded-lg focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-colors hover:border-gray-400 justify-between">
-                                <SelectValue placeholder="품질 선택" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {IMAGE_QUALITY_OPTIONS["gpt-image-1.5"].map((option) => (
-                                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-
-                    </div>
-                </div>
-            );
-        }
-
-        if (llmConfig.IMAGE_PROVIDER === "gpt-image-2" || llmConfig.IMAGE_PROVIDER === "gpt-image-2.5-flare" || llmConfig.IMAGE_PROVIDER === "gpt-image-2.5-sunburst" || llmConfig.IMAGE_PROVIDER === "codex_image") {
-            const qualityKey = llmConfig.IMAGE_PROVIDER === "gpt-image-2" ? "GPT_IMAGE_2_QUALITY" : "GPT_IMAGE_2_5_QUALITY";
-            return (
-                <div className="w-full sm:w-[262px]">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        {IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER].label} {tA2b("quality")}
-                    </label>
-                    <div className="">
-                        <Select
-                            value={llmConfig[qualityKey] || 'medium'}
-                            onValueChange={(value) => input_field_changed(value, qualityKey)}
-                        >
-                            <SelectTrigger className="w-full h-11 px-3 py-2 outline-none border border-zinc-200 rounded-lg focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-colors hover:border-gray-400 justify-between">
-                                <SelectValue placeholder="품질 선택" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {IMAGE_QUALITY_OPTIONS[llmConfig.IMAGE_PROVIDER === "codex_image" ? "gpt-image-2.5-sunburst" : llmConfig.IMAGE_PROVIDER].map((option) => (
-                                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </div>
-            );
-        }
-
-        return null;
-    };
-
-
-
+    const renderQualitySelector = (llmConfig: LLMConfig, input_field_changed: (value: string, field: string) => void) => (
+        <ImageQualitySelect
+            llmConfig={llmConfig}
+            variant="settings"
+            onChange={(field, value) => input_field_changed(value, field)}
+            labels={{
+                dalle3: "DALL·E 3 이미지 품질",
+                gptImage15: "GPT Image 1.5 품질",
+                qualitySuffix: tA2b("quality"),
+                placeholder: tOnboarding("selectQuality"),
+            }}
+        />
+    );
 
     return (
         <div className="space-y-5 pb-6">
@@ -181,76 +108,18 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                             이미지 제공자 선택
                                         </label>
                                         <div className="w-full">
-                                            <Popover
+                                            <ImageProviderPicker
+                                                value={llmConfig.IMAGE_PROVIDER}
                                                 open={openImageProviderSelect}
                                                 onOpenChange={setOpenImageProviderSelect}
-                                            >
-                                                <PopoverTrigger asChild>
-                                                    <Button
-                                                        variant="outline"
-                                                        role="combobox"
-                                                        aria-expanded={openImageProviderSelect}
-                                                        className="w-full sm:w-[262px] h-11 px-4 py-4 outline-none border border-zinc-200 rounded-lg focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-colors hover:border-gray-400 justify-between"
-                                                    >
-                                                        <div className="flex gap-3 items-center">
-                                                            <span className="text-sm font-medium text-gray-900">
-                                                                {llmConfig.IMAGE_PROVIDER
-                                                                    ? IMAGE_PROVIDER_OPTIONS[llmConfig.IMAGE_PROVIDER]
-                                                                        ?.label || llmConfig.IMAGE_PROVIDER
-                                                                    : "이미지 제공자 선택"}
-                                                            </span>
-                                                        </div>
-                                                        <ChevronUp className="w-4 h-4 text-gray-500" />
-                                                    </Button>
-                                                </PopoverTrigger>
-                                                <PopoverContent
-                                                    className="p-0"
-                                                    align="start"
-                                                    style={{ width: "300px" }}
-                                                >
-                                                    <Command>
-                                                        <CommandInput placeholder="제공자 검색..." />
-                                                        <CommandList>
-                                                            <CommandEmpty>제공자를 찾을 수 없습니다.</CommandEmpty>
-                                                            <CommandGroup>
-                                                                {Object.values(IMAGE_PROVIDER_OPTIONS).map(
-                                                                    (provider, index) => (
-                                                                        <CommandItem
-                                                                            key={index}
-                                                                            value={provider.value}
-                                                                            onSelect={(value) => {
-                                                                                input_field_changed(value, "IMAGE_PROVIDER");
-                                                                                setOpenImageProviderSelect(false);
-                                                                            }}
-                                                                        >
-                                                                            <Check
-                                                                                className={cn(
-                                                                                    "mr-2 h-4 w-4",
-                                                                                    llmConfig.IMAGE_PROVIDER === provider.value
-                                                                                        ? "opacity-100"
-                                                                                        : "opacity-0"
-                                                                                )}
-                                                                            />
-                                                                            <div className="flex gap-3 items-center">
-                                                                                <div className="flex flex-col space-y-1 flex-1">
-                                                                                    <div className="flex items-center justify-between gap-2">
-                                                                                        <span className="text-sm font-medium text-gray-900 capitalize">
-                                                                                            {provider.label}
-                                                                                        </span>
-                                                                                    </div>
-                                                                                    <span className="text-xs text-gray-600 leading-relaxed">
-                                                                                        {provider.description}
-                                                                                    </span>
-                                                                                </div>
-                                                                            </div>
-                                                                        </CommandItem>
-                                                                    )
-                                                                )}
-                                                            </CommandGroup>
-                                                        </CommandList>
-                                                    </Command>
-                                                </PopoverContent>
-                                            </Popover>
+                                                variant="settings"
+                                                labels={{
+                                                    placeholder: tOnboarding("chooseImageProvider"),
+                                                    search: "제공자 검색...",
+                                                    notFound: "제공자를 찾을 수 없습니다.",
+                                                }}
+                                                onSelect={(value) => input_field_changed(value, "IMAGE_PROVIDER")}
+                                            />
                                         </div>
                                     </div>
 
@@ -352,27 +221,14 @@ const ImageProvider = ({ llmConfig, setLlmConfig }: { llmConfig: LLMConfig, setL
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">
                                                         {provider.apiKeyFieldLabel}
                                                     </label>
-                                                    <div className="relative">
-                                                        <input
-                                                            type={showApiKey ? 'text' : 'password'}
-                                                            placeholder={`${provider.apiKeyFieldLabel} 입력`}
-                                                            className="w-full px-4 py-2.5 h-12 outline-none border border-zinc-200 rounded-lg focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-colors"
-                                                            value={getFieldValue(provider.apiKeyField)}
-                                                            onChange={(e) =>
-                                                                updateFieldValue(
-                                                                    provider.apiKeyField,
-                                                                    e.target.value
-                                                                )
-                                                            }
-                                                        />
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setShowApiKey((prev) => !prev)}
-                                                            className='absolute right-2 top-1/2 -translate-y-1/2 bg-white px-2 py-1 cursor-pointer'
-                                                        >
-                                                            {showApiKey ? <Eye className='w-4 h-4 text-gray-500' /> : <EyeOff className='w-4 h-4 text-gray-500' />}
-                                                        </button>
-                                                    </div>
+                                                    <MaskedApiKeyInput
+                                                        variant="settings"
+                                                        value={getFieldValue(provider.apiKeyField)}
+                                                        placeholder={`${provider.apiKeyFieldLabel} 입력`}
+                                                        show={showApiKey}
+                                                        onToggleShow={() => setShowApiKey((prev) => !prev)}
+                                                        onChange={(value) => updateFieldValue(provider.apiKeyField, value)}
+                                                    />
 
                                                 </div>
                                             );

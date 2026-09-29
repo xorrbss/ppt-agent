@@ -112,7 +112,7 @@ export const OverlayLoader = ({
         )}
       >
         <div className="mb-5 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-50" aria-hidden="true">
-          <Loader2 className="h-6 w-6 animate-spin text-[#5141e5] motion-reduce:animate-none" strokeWidth={1.75} />
+          <Loader2 className="h-6 w-6 animate-spin text-brand motion-reduce:animate-none" strokeWidth={1.75} />
         </div>
         {showProgress ? (
           <div className="flex w-full flex-col gap-6">
@@ -152,7 +152,7 @@ export const OverlayLoader = ({
           <button
             type="button"
             onClick={onCancel}
-            className="mt-6 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5141e5]/40 disabled:pointer-events-none disabled:opacity-50"
+            className="mt-6 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:pointer-events-none disabled:opacity-50"
           >
             {cancelText}
           </button>

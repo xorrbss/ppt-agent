@@ -66,7 +66,7 @@ export const ProgressBar = ({ duration, onComplete, value, label }: ProgressBarP
                 aria-label={label || "Presentation generation progress"}
             >
                 <div
-                    className="h-full bg-[#5141e5]/80 rounded-full transition-[width] duration-300 ease-out motion-reduce:transition-none"
+                    className="h-full bg-brand/80 rounded-full transition-[width] duration-300 ease-out motion-reduce:transition-none"
                     style={{
                         width: `${displayedProgress}%`,
                     }}

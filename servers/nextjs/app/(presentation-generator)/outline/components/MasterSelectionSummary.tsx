@@ -21,7 +21,7 @@ export default function MasterSelectionSummary({
   const t = useTranslations("authoredVnext.master.entry");
   return (
     <section
-      className="flex min-w-0 flex-col gap-2 rounded-2xl border border-[#EDEEEF] bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+      className="flex min-w-0 flex-col gap-2 rounded-2xl border border-surface bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between"
       aria-label={t("aria")}
       data-testid="outline-master-summary"
     >
