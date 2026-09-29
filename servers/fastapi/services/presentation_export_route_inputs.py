@@ -12,7 +12,6 @@ owns no state, and is therefore unit-testable on its own.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from pathlib import Path
 
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel

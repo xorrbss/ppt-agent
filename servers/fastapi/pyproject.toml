@@ -172,10 +172,6 @@ select = ["E", "F", "B", "ASYNC"]
 # at the bottom of the file, so F821 is inherent to the split, not a bug.
 # E501/E701 are the same compressed single-line-conditional style already
 # tolerated in services/authored_vnext/semantic/editable_hybrid_libreoffice_readback.py.
-"services/authored_generation_quality_gate.py" = ["F821"]
-"services/authored_generation_repair.py" = ["E501", "E701", "F821"]
-"services/authored_generation_repair_inputs.py" = ["F821"]
-"services/authored_generation_scene_persistence.py" = ["F821"]
 "services/authored_generation_timing_receipt.py" = ["E501"]
 # Same bind_runtime()-injected-globals split as authored_generation_repair.py
 # above.
@@ -185,12 +181,11 @@ select = ["E", "F", "B", "ASYNC"]
 # module's `__all__` is built dynamically from `globals()`, so ruff cannot
 # see the re-export intent and flags every name as an unused import.
 "services/authored_presentation_pipeline_deps.py" = ["F401"]
-"services/authored_presentation_pipeline_helpers.py" = ["F821"]
 # Host module for the bind_runtime() split: `_call_extracted()` calls
 # `module.bind_runtime(sys.modules[__name__])`, passing this module's own
 # namespace as the injected-globals surface for authored_generation_repair.py
 # and its siblings above. Its "unused" imports are exactly that surface.
-"services/authored_presentation_generation.py" = ["E501", "F401"]
+"services/authored_presentation_generation.py" = ["E501"]
 "services/authored_presentation_service.py" = ["ASYNC240"]
 "services/authored_quality_receipt_helpers.py" = ["E501"]
 "services/authored_quality_receipt_v2.py" = ["E501"]

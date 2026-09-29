@@ -67,16 +67,6 @@
     "servers/fastapi/models/presentation_with_slides.py"
   ],
   "globals_injection": [
-    "servers/fastapi/services/authored_checkpoint_sweep_impl.py",
-    "servers/fastapi/services/authored_generation_more_helpers.py",
-    "servers/fastapi/services/authored_generation_quality_gate.py",
-    "servers/fastapi/services/authored_generation_repair.py",
-    "servers/fastapi/services/authored_generation_repair_inputs.py",
-    "servers/fastapi/services/authored_generation_scene_persistence.py",
-    "servers/fastapi/services/authored_page_remake_publish_impl.py",
-    "servers/fastapi/services/authored_pipeline_small_helpers.py",
-    "servers/fastapi/services/authored_presentation_pipeline_helpers.py",
-    "servers/fastapi/services/authored_vnext/generation/sql_repository_operations.py",
     "servers/fastapi/utils/llm_calls/author_vision_qa_helpers.py",
     "servers/fastapi/utils/slide_capture.py"
   ],
