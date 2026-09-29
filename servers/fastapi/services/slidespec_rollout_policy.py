@@ -3,7 +3,7 @@ quality review.
 
 Scope, stated plainly: SlideSpec import/inspect/repair/publish runs only when
 a user triggers the quality review
-(``services/authored_quality_review_canonical.py``, which calls
+(``services/authored_quality_review_service.py``, which calls
 :func:`resolve_slidespec_repair_rollout` with ``opt_in=True``). The
 generation pipeline never invokes it -- no slide is repaired while a deck is
 being generated, and production has applied zero SlideSpec repairs outside a
