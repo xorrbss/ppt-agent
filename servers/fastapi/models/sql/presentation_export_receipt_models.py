@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from hashlib import sha256
 from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
 from utils.hashing import canonical_json_sha256, is_sha256_hex
+from utils.hashing import sha256_hex
 
 
 def _canonical_sidecar_sha256(value: dict[str, Any]) -> str:
@@ -35,9 +35,7 @@ class ExportEvidenceSidecarPointer(BaseModel):
             if Path(filename).name != filename or not is_sha256_hex(digest):
                 raise ValueError("export evidence pointer member is invalid")
             member["sha256"] = digest
-        expected = sha256(
-            f"{self.quality['sha256']}:{self.coverage['sha256']}".encode("ascii")
-        ).hexdigest()
+        expected = sha256_hex(f"{self.quality['sha256']}:{self.coverage['sha256']}".encode("ascii"))
         if not is_sha256_hex(self.pair_digest) or self.pair_digest.lower() != expected:
             raise ValueError("export evidence pointer digest is inconsistent")
         self.pair_digest = expected

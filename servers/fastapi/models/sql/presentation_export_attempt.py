@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import re
-from hashlib import sha256
-import json
 from datetime import datetime
 from typing import Any, Literal, Optional
 import uuid
@@ -43,6 +41,7 @@ from models.sql.presentation_export_receipt_models import (
 from models.sql.presentation_export_render_scene import ExportRenderSceneProvenance
 from utils.datetime_utils import get_current_utc_datetime
 from utils.owner_context import get_current_owner_id
+from utils.hashing import canonical_json_digest
 
 
 PRESENTATION_EXPORT_FORMATS = ("pptx", "pdf")
@@ -364,14 +363,7 @@ class ExportQualityReceiptBinding(BaseModel):
                 "qualitySidecarSha256": self.quality_sidecar_sha256,
                 "coverageSidecarSha256": self.coverage_sidecar_sha256,
             }
-            expected = "sha256:" + sha256(
-                json.dumps(
-                    payload,
-                    sort_keys=True,
-                    separators=(",", ":"),
-                    ensure_ascii=False,
-                ).encode("utf-8")
-            ).hexdigest()
+            expected = canonical_json_digest(payload, allow_nan=True)
             if self.atomic_run_digest != expected:
                 raise ValueError("quality receipt atomic run digest is inconsistent")
         return self
