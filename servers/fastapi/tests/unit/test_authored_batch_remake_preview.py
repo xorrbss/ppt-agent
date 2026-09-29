@@ -15,6 +15,7 @@ from models.presentation_outline_model import (
     PresentationOutlineModel,
     SlideOutlineModel,
 )
+from constants.user_messages import message_fields
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
@@ -38,7 +39,7 @@ def _patch_durable_admission(monkeypatch):
         task = AsyncPresentationGenerationTaskModel(
             id=f"{task_id_prefix}-{uuid.uuid4()}",
             status="pending",
-            message=pending_message,
+            **message_fields(pending_message),
         )
         target_session.add(task)
         await target_session.commit()
@@ -144,7 +145,7 @@ async def test_queue_creates_durable_parent_and_children_without_background_task
             task = AsyncPresentationGenerationTaskModel(
                 id=f"{task_id_prefix}-{uuid.uuid4()}",
                 status="pending",
-                message=pending_message,
+                **message_fields(pending_message),
             )
             target_session.add(task)
             await target_session.commit()

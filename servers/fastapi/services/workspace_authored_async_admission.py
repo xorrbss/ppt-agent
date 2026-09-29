@@ -8,6 +8,7 @@ import uuid
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from constants.user_messages import UserMessage, UserMessageLike, message_fields, message_text
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
@@ -22,10 +23,10 @@ async def admit_workspace_authored_task(
     presentation_id: uuid.UUID,
     operation_kind: str,
     expected_revision: int,
-    command: str,
+    command: str | UserMessage,
     context: Mapping[str, object],
     task_id_prefix: str,
-    pending_message: str,
+    pending_message: UserMessageLike,
 ) -> AsyncPresentationGenerationTaskModel:
     """Persist immutable work before returning the legacy polling task.
 
@@ -40,12 +41,13 @@ async def admit_workspace_authored_task(
             session,
             presentation_id=presentation_id,
             request=WorkspaceCommandRequest(
-                command=command,
+                command=message_text(command),
                 command_type=operation_kind,
                 idempotency_key=f"legacy-authored:{uuid.uuid4()}",
                 expected_revision=expected_revision,
                 context=dict(context),
             ),
+            content_message=command if isinstance(command, UserMessage) else None,
         )
     except WorkspaceServiceError as error:
         raise HTTPException(
@@ -60,7 +62,7 @@ async def admit_workspace_authored_task(
             id=task_id,
             owner_id=operation.owner_id,
             status="pending",
-            message=pending_message,
+            **message_fields(pending_message),
             data=None,
         )
         session.add(task)

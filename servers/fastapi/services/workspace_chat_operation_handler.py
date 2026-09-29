@@ -20,6 +20,7 @@ from fastapi import HTTPException
 from sqlalchemy import inspect as sqlalchemy_inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from constants.user_messages import UserMessageKey, user_message
 from models.sql.chat_history_message import ChatHistoryMessageModel
 from models.sql.presentation import PresentationModel
 from models.sql.workspace import WorkspaceAsset, WorkspaceMessage
@@ -675,7 +676,7 @@ class VersionRestoreOperationHandler:
 
                 result_payload: dict[str, object] = {
                     "kind": "version.restore",
-                    "summary": "선택한 버전으로 복원했습니다.",
+                    **user_message(UserMessageKey.VERSION_RESTORE_SUMMARY).fields("summary"),
                     "restored_version_id": str(target_version_id),
                     "slide_count": len(restored),
                     "source_revision": claim.expected_revision,

@@ -69,10 +69,12 @@ from services.public_operation_admission import (
     admit_public_operation,
     current_principal_context,
 )
-from services.workspace_operation_titles import workspace_operation_title
+from constants.user_messages import UserMessage
+from services.workspace_operation_titles import workspace_operation_title_fields
 from services.workspace_timeline_projection import (
     _PRIVATE_PAYLOAD_KEYS as _PRIVATE_PAYLOAD_KEYS,
     _safe_payload as _safe_payload,
+    _content_message_fields as _content_message_fields,
     _linked_generation_job_id as _linked_generation_job_id,
     _event_status as _event_status,
     _event_to_wire as _event_to_wire,
@@ -1395,6 +1397,7 @@ async def workspace_timeline(
                     "generation_settings": _safe_payload(
                         metadata.get("generation_settings")
                     ),
+                    **_content_message_fields(metadata),
                 }
             )
         else:
@@ -1407,7 +1410,7 @@ async def workspace_timeline(
                     "operation_id": str(row.id),
                     "position": position,
                     "operation_type": row.kind,
-                    "title": workspace_operation_title(row.kind),
+                    **workspace_operation_title_fields(row.kind),
                     "status": row.state,
                     "progress": progress.get("progress", progress.get("percent")),
                     "capacity_waiting": capacity_waiting,
@@ -1584,7 +1587,15 @@ async def create_workspace_command(
     *,
     presentation_id: uuid.UUID,
     request: WorkspaceCommandRequest,
+    content_message: UserMessage | None = None,
 ) -> tuple[WorkspaceOperation, bool]:
+    """Persist a command; ``content_message`` keys a server-written command.
+
+    A user-typed command has no key.  A command the server writes on the
+    user's behalf (legacy remake/quality admission) passes the ``UserMessage``
+    whose text is ``request.command`` so the timeline can render it in the UI
+    locale (``content_key``/``content_params`` on the message item).
+    """
     if not is_workspace_command_kind(request.command_type):
         raise WorkspaceServiceError(
             "unsupported_operation_type", status_code=422, retryable=False
@@ -1637,7 +1648,18 @@ async def create_workspace_command(
         position=message_position,
         role="user",
         content=request.command,
-        message_metadata={"command_type": request.command_type, "context": request.context},
+        message_metadata={
+            "command_type": request.command_type,
+            "context": request.context,
+            **(
+                {
+                    "content_key": str(content_message.key),
+                    "content_params": dict(content_message.params),
+                }
+                if content_message is not None
+                else {}
+            ),
+        },
     )
     operation = WorkspaceOperation(
         owner_scope=get_workspace_owner_scope(),

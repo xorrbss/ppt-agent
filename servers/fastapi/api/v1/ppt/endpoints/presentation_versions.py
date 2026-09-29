@@ -23,6 +23,8 @@ class VersionSummary(BaseModel):
     id: uuid.UUID
     created_at: datetime
     label: Optional[str] = None
+    label_key: Optional[str] = None
+    label_params: Optional[dict] = None
     slide_count: int
 
 
@@ -40,6 +42,8 @@ async def list_presentation_versions(
             id=version.id,
             created_at=version.created_at,
             label=version.label,
+            label_key=version.label_key,
+            label_params=version.label_params,
             slide_count=len(version.slides or []),
         )
         for version in versions

@@ -27,6 +27,12 @@ from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy import inspect, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from constants.user_messages import (
+    UserMessageKey,
+    UserMessageLike,
+    set_record_message,
+    user_message,
+)
 from models.presentation_from_template import AuthoredQualityReviewRequest, ReviewScope
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
@@ -297,7 +303,7 @@ async def _set_status(
     task: AsyncPresentationGenerationTaskModel,
     *,
     status: str,
-    message: str,
+    message: UserMessageLike,
     data: dict | None = None,
     error: dict | None = None,
 ) -> None:
@@ -317,7 +323,7 @@ async def _set_status(
         else None
     )
     task.status = status
-    task.message = message
+    set_record_message(task, message)
     if release_review_base is not None:
         task.data = {
             **(data if isinstance(data, dict) else {}),
@@ -518,7 +524,8 @@ async def prepare_legacy_review(ctx):
     if any((not slide.html_content for slide in ctx.targets)):
         raise ValueError("One or more slides are missing their editable authored HTML")
     await _set_status(
-        ctx.session, ctx.task, status="processing", message="슬라이드 렌더링을 준비하고 있습니다."
+        ctx.session, ctx.task, status="processing",
+        message=user_message(UserMessageKey.QUALITY_REVIEW_PREPARING_RENDER),
     )
     ctx.theme = ctx.presentation.theme if isinstance(ctx.presentation.theme, dict) else {}
     ctx.canvas = presentation_canvas_contract(ctx.theme)
@@ -630,7 +637,8 @@ async def prepare_legacy_review(ctx):
     ctx.review_metadata = _review_observation_metadata()
     ctx.ocr_runtime = _RequestOcrRuntime(_ocr_language(ctx.plan.brand.language))
     await _set_status(
-        ctx.session, ctx.task, status="processing", message=f"{len(ctx.targets)}개 슬라이드를 렌더링하고 있습니다."
+        ctx.session, ctx.task, status="processing",
+        message=user_message(UserMessageKey.QUALITY_REVIEW_RENDERING, count=len(ctx.targets)),
     )
     ctx.render_started_at = time.perf_counter()
     ctx.rendered = list(await asyncio.gather(*(
@@ -646,7 +654,8 @@ async def prepare_legacy_review(ctx):
     ]
     ctx.local_inspection_ms = (time.perf_counter() - ctx.local_started_at) * 1000
     await _set_status(
-        ctx.session, ctx.task, status="processing", message="잘림, 겹침, 정렬, 대비를 병렬로 검사하고 있습니다."
+        ctx.session, ctx.task, status="processing",
+        message=user_message(UserMessageKey.QUALITY_REVIEW_CHECKING),
     )
     ctx.critique_kwargs = {}
     if ctx.exact_reconstruction:
@@ -760,9 +769,11 @@ async def prepare_legacy_review(ctx):
 async def finish_clean_legacy_review(ctx):
     if not ctx.initial_issues:
         ctx.message = (
-            "검수가 완료되었습니다. 수정이 필요한 슬라이드가 없습니다."
+            user_message(UserMessageKey.QUALITY_REVIEW_NO_ISSUES)
             if not ctx.initial_issues
-            else f"검수가 완료되었습니다. {len(ctx.initial_issues)}개 슬라이드에서 문제를 확인했습니다."
+            else user_message(
+                UserMessageKey.QUALITY_REVIEW_ISSUES_FOUND, count=len(ctx.initial_issues)
+            )
         )
         ctx.total_ms = (time.perf_counter() - ctx.review_started_at) * 1000
         ctx.local_high_remaining = sum(
@@ -877,7 +888,7 @@ async def revise_legacy_review(ctx):
         ctx.session,
         ctx.task,
         status="processing",
-        message=f"문제가 발견된 {len(ctx.initial_issues)}개 슬라이드를 자동 수정하고 있습니다.",
+        message=user_message(UserMessageKey.QUALITY_REVIEW_FIXING, count=len(ctx.initial_issues)),
     )
     ctx.revise_kwargs = {
         "initial_critiques": ctx.initial_critiques,
@@ -953,7 +964,8 @@ async def revise_legacy_review(ctx):
         **ctx.ocr_runtime.summary(),
     )
     await _set_status(
-        ctx.session, ctx.task, status="processing", message="수정 결과를 다시 검증하고 있습니다."
+        ctx.session, ctx.task, status="processing",
+        message=user_message(UserMessageKey.QUALITY_REVIEW_VERIFYING),
     )
 
 
@@ -1447,7 +1459,7 @@ async def finalize_legacy_review(ctx):
             ctx.session,
             ctx.presentation_id,
             [slide.model_dump(mode="json") for slide in ctx.slides],
-            label="고품질 검수 전",
+            label=user_message(UserMessageKey.VERSION_LABEL_BEFORE_QUALITY_REVIEW),
             force=True,
         )
         for ctx.local_index, ctx.revised_html, ctx.revised_content, ctx.revised_properties in ctx.pending_updates:  # noqa: B020
@@ -1620,13 +1632,18 @@ async def finalize_legacy_review(ctx):
         ctx.task,
         status="completed",
         message=(
-            f"검수가 완료되었습니다. {len(ctx.fixed_positions)}개 슬라이드를 수정했습니다."
-            + (" 잔여 이슈가 있습니다." if ctx.remaining_issues else "")
-        )
-        if ctx.fixed_positions
-        else (
-            "검수는 완료되었지만 자동 수정할 수 있는 변경은 생성되지 않았습니다."
-            + (" 잔여 이슈가 있습니다." if ctx.remaining_issues else "")
+            user_message(
+                UserMessageKey.QUALITY_REVIEW_FIXED_REMAINING
+                if ctx.remaining_issues
+                else UserMessageKey.QUALITY_REVIEW_FIXED,
+                count=len(ctx.fixed_positions),
+            )
+            if ctx.fixed_positions
+            else user_message(
+                UserMessageKey.QUALITY_REVIEW_NO_CHANGES_REMAINING
+                if ctx.remaining_issues
+                else UserMessageKey.QUALITY_REVIEW_NO_CHANGES
+            )
         ),
         data={
             "presentation_id": str(ctx.presentation_id),
@@ -2014,7 +2031,7 @@ async def _run_authored_quality_review_unlocked(
             session,
             task,
             status="completed",
-            message="검수는 완료되었지만 자동 수정으로 확정된 변경은 없습니다.",
+            message=user_message(UserMessageKey.QUALITY_REVIEW_NO_CONFIRMED_CHANGES),
             data=_bind_canonical_review_policy(data, review_policy),
         )
         return
@@ -2042,9 +2059,9 @@ async def _run_authored_quality_review_unlocked(
         session,
         task,
         status="completed",
-        message=f"검수가 완료되었습니다. {data['fixed_count']}개 슬라이드를 수정했습니다."
+        message=user_message(UserMessageKey.QUALITY_REVIEW_FIXED, count=data["fixed_count"])
         if data["fixed_count"]
-        else "검수는 완료되었지만 자동 수정으로 확정된 변경은 없습니다.",
+        else user_message(UserMessageKey.QUALITY_REVIEW_NO_CONFIRMED_CHANGES),
         data=_bind_canonical_review_policy(data, review_policy),
     )
 
@@ -2146,8 +2163,8 @@ async def queue_authored_quality_review(
         presentation_id=presentation_id,
         operation_kind="quality.review",
         expected_revision=int(presentation.revision),
-        command="AI 작성 프레젠테이션 품질 검토",
+        command=user_message(UserMessageKey.QUALITY_REVIEW_COMMAND),
         context=request.model_dump(mode="json"),
         task_id_prefix="workspace-quality",
-        pending_message="품질 검토 작업을 대기열에 추가했습니다.",
+        pending_message=user_message(UserMessageKey.QUALITY_REVIEW_QUEUED),
     )

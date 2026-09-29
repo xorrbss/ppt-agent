@@ -12,6 +12,9 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+
+import { pickBackendMessage } from "@/lib/backend-messages";
+import { translateBackendMessage } from "@/lib/backend-messages-intl";
 import { useDispatch } from "react-redux";
 
 import { Button } from "@/components/ui/button";
@@ -381,7 +384,8 @@ export default function AuthoredTemplateChanger({
           }
           if (task?.status === "error") {
             throw new Error(
-              task?.message || t("generationFailed")
+              translateBackendMessage(pickBackendMessage(task)) ||
+                t("generationFailed")
             );
           }
         } catch (error) {

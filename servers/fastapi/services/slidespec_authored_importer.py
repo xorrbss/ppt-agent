@@ -13,6 +13,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from constants.user_messages import UserMessageKey, user_message
 from utils.coerce import finite_float
 from models.slidespec_v1 import (
     SLIDESPEC_SCHEMA,
@@ -1128,7 +1129,7 @@ async def ensure_authored_slidespec_imports(
                 session,
                 presentation_id,
                 [slide.model_dump(mode="json") for slide in slides],
-                label="SlideSpec 자동 활성화 전",
+                label=user_message(UserMessageKey.VERSION_LABEL_BEFORE_SLIDESPEC),
                 force=True,
             )
             for position, slide, request, image, evidence in prepared:

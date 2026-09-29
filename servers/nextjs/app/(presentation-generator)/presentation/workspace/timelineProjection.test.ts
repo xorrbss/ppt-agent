@@ -1128,6 +1128,8 @@ test("cursor-bearing v1 events require the complete canonical contract", () => {
     type: "queued",
     status: "queued",
     message: undefined,
+    messageKey: undefined,
+    messageParams: undefined,
     progress: undefined,
     stage: undefined,
     current: undefined,

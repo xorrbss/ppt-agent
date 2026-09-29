@@ -3,6 +3,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 import uuid
 
+from constants.user_messages import UserMessageKey, user_message
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from services.database import get_async_session
@@ -53,10 +54,10 @@ async def get_svg_preview(id: uuid.UUID,
 
 # Authored decks are model-authored images (no React layout), so per-slide LLM editing
 # does not apply — the deck is view-only in-app and edited in PowerPoint via the PPTX.
-_AUTHORED_NOT_EDITABLE = (
-    "이 슬라이드는 AI 저작(authored) 모드로 생성되어 인앱 편집을 지원하지 않습니다. "
-    "내보낸 PPTX를 PowerPoint에서 편집하세요."
-)
+_AUTHORED_NOT_EDITABLE = {
+    "code": "authored_slide_not_editable",
+    **user_message(UserMessageKey.SLIDE_AUTHORED_NOT_EDITABLE).fields("message"),
+}
 
 
 @SLIDE_ROUTER.post("/edit")

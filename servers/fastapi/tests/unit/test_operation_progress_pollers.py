@@ -36,13 +36,16 @@ def test_authored_progress_walks_the_persisted_stage_bands():
     )
 
     assert author_stage == "authored_author"
-    assert "0/8장" in zero_message and "4/8장" in mid_message
+    assert zero_message.key == "generation.stage.author.counted"
+    assert zero_message.params == {"completed": 0, "total": 8}
+    assert mid_message.params == {"completed": 4, "total": 8}
+    assert "4/8" in mid_message.text
     assert zero_percent == 20 and mid_percent == 32
     # A stage that finished every slide sits at its own band ceiling, never in
     # a band the generation owner has not persisted yet.
     assert persist_stage == "authored_checkpoint"
     assert persist_percent == 79
-    assert "저장" in persist_message
+    assert persist_message.key == "generation.stage.persist.counted"
     assert checkpoint_stage == "authored_checkpoint"
     assert export_stage == "authored_export"
     assert publication_stage == "authored_publication"
@@ -63,28 +66,29 @@ def test_authored_progress_keeps_the_stageless_narration_for_legacy_jobs():
     stage, percent, message = describe_authored_progress(4, 8, None)
     assert stage == "authored_slide_generation"
     assert 5 < percent < 95
-    assert "4/8장" in message
+    assert message.key == "generation.writing_slides"
+    assert message.params == {"completed": 4, "total": 8}
 
     final_stage, final_percent, final_message = describe_authored_progress(
         8, 8, None
     )
     assert final_stage == "authored_generation_finalizing"
     assert final_percent == 95
-    assert "저장" in final_message
+    assert final_message.key == "generation.saving_slides"
 
 
 def test_authored_progress_tolerates_an_unknown_total():
     stage, percent, message = describe_authored_progress(0, 0, None)
     assert stage == "authored_generation"
     assert percent == 5
-    assert message
+    assert message.key == "generation.preparing_slides"
     # A stage with no per-slide counter yet still narrates from its band floor.
     outline_stage, outline_percent, _ = describe_authored_progress(0, 0, "outline")
     assert (outline_stage, outline_percent) == ("authored_outline", 8)
     # A count beyond the total must never exceed the active stage's band.
     _, overshoot, overshoot_message = describe_authored_progress(99, 8, "author")
     assert overshoot == 44
-    assert "8/8장" in overshoot_message
+    assert overshoot_message.params == {"completed": 8, "total": 8}
     _, legacy_overshoot, _ = describe_authored_progress(99, 8, None)
     assert legacy_overshoot == 95
 
@@ -251,4 +255,5 @@ def test_authored_poller_counts_completed_author_checkpoints_before_persist():
 
     assert reported[0]["current"] == 9
     assert reported[0]["total"] == 35
-    assert "9/35장" in reported[0]["message"]
+    assert reported[0]["message"].key == "generation.stage.author.counted"
+    assert reported[0]["message"].params == {"completed": 9, "total": 35}

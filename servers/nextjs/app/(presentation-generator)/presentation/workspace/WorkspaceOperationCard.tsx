@@ -4,6 +4,8 @@ import { ConversationMessageFrame } from "../conversation/ConversationPrimitives
 import { WorkspaceGenerationProgress } from "./WorkspaceGenerationProgress";
 import { operationFailureMessage, operationProgressEvidence, type WorkspaceOperationObservation } from "./WorkspaceOperationPresentation";
 import { useLocale, useTranslations } from "next-intl";
+
+import { translateBackendMessage } from "@/lib/backend-messages-intl";
 import {
   downloadWorkspaceArtifact,
   WorkspaceApiError,
@@ -99,9 +101,24 @@ export function WorkspaceOperationCard({
     operation.queuePosition !== undefined
       ? `생성 용량 대기 중 · 대기 순번 ${operation.queuePosition}번째`
       : "생성 용량 대기 중 · 슬롯이 확보되면 자동으로 시작합니다.";
-  const latestMessage = [...operation.events]
+  const latestEvent = [...operation.events]
     .reverse()
-    .find((event) => event.message)?.message;
+    .find((event) => event.message || event.messageKey);
+  const latestMessage = latestEvent
+    ? translateBackendMessage(
+        {
+          key: latestEvent.messageKey,
+          params: latestEvent.messageParams,
+          text: latestEvent.message,
+        },
+        locale,
+      )
+    : undefined;
+  const title =
+    translateBackendMessage(
+      { key: operation.titleKey, text: operation.title },
+      locale,
+    ) ?? operation.title;
   const isPresentationGeneration =
     operation.operationType === "presentation.generate";
   const progressEvidence = operationProgressEvidence(operation);
@@ -565,7 +582,7 @@ export function WorkspaceOperationCard({
   return (
     <article
       className="w-full text-[15px] leading-[1.6]"
-      aria-label={tOperation("operationAria", { title: operation.title })}
+      aria-label={tOperation("operationAria", { title })}
       data-workspace-anchor-id={operation.id}
       data-operation-id={operation.operationId}
       data-operation-status={operation.status}
@@ -574,7 +591,7 @@ export function WorkspaceOperationCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="truncate text-sm font-semibold text-slate-900">
-            {operation.title}
+            {title}
           </h3>
           <p
             className="mt-0.5 text-xs text-slate-500"
@@ -617,8 +634,8 @@ export function WorkspaceOperationCard({
           data-testid="operation-approval-alert"
         >
           {approvalExpired
-            ? tOperation("approvalExpired", { title: operation.title })
-            : tOperation("approvalRequired", { title: operation.title })}
+            ? tOperation("approvalExpired", { title })
+            : tOperation("approvalRequired", { title })}
         </p>
       )}
       {operationMetadata.length > 0 && (

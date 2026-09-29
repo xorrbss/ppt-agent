@@ -163,7 +163,7 @@ async def publish_authored_presentation(
                 stage="persist",
                 code="authored_quality_gate_receipt_mismatch",
                 retryable=False,
-                message="품질 게이트 영수증이 최종 슬라이드 산출물과 일치하지 않습니다.",
+                message="The quality-gate receipt does not match the final slide output.",
             )
     try:
         _require_immutable_composition_publication(

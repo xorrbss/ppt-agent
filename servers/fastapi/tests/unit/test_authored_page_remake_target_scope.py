@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
 from models.presentation_from_template import AuthoredPageRemakePreviewRequest
+from constants.user_messages import message_fields
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
@@ -123,7 +124,7 @@ async def _an_authored_page_is_remakeable_beside_a_blank_sibling(
                 task = AsyncPresentationGenerationTaskModel(
                     id=f"workspace-page-preview-{uuid.uuid4()}",
                     status="pending",
-                    message=values["pending_message"],
+                    **message_fields(values["pending_message"]),
                 )
                 target_session.add(task)
                 await target_session.commit()

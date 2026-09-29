@@ -1,34 +1,31 @@
-"""Korean display titles for durable workspace operations.
+"""Display titles for durable workspace operations.
 
-Kept out of the workspace service so the projection module stays about
-projection, and so a new operation kind only touches the catalog it belongs to.
+The backend emits the English title from the kind registry plus a message key
+(``workspace.operation.<kind>``) the frontend renders in the UI locale.  Kept
+out of the workspace service so the projection module stays about projection.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from types import MappingProxyType
+from constants.user_messages import workspace_operation_title_key
+from models.workspace_operation_kinds import get_workspace_operation_kind
 
-WORKSPACE_OPERATION_TITLES_KO: Mapping[str, str] = MappingProxyType(
-    {
-        "presentation.generate": "프레젠테이션 생성",
-        "presentation.edit": "프레젠테이션 수정",
-        "slide.edit": "슬라이드 수정",
-        "slide.regenerate": "페이지 다시 만들기",
-        "slide.regenerate.preview": "페이지 다시 만들기 미리보기",
-        "slide.regenerate.batch": "선택 페이지 다시 만들기",
-        "slide.regenerate.batch.preview": "선택 페이지 다시 만들기 미리보기",
-        "slide.delete": "슬라이드 삭제",
-        "presentation.slides.reorder": "슬라이드 순서 변경",
-        "version.restore": "버전 복원",
-        "template.apply": "AI 저작 템플릿 변경",
-        "design.apply": "디자인 변경",
-        "quality.review": "프레젠테이션 품질 검사",
-        "export.pptx": "PowerPoint 내보내기",
-        "export.pdf": "PDF 내보내기",
-    }
-)
+UNKNOWN_WORKSPACE_OPERATION_TITLE = "Workspace task"
+UNKNOWN_WORKSPACE_OPERATION_KIND = "unknown"
 
 
 def workspace_operation_title(kind: str) -> str:
-    return WORKSPACE_OPERATION_TITLES_KO.get(kind, "워크스페이스 작업")
+    spec = get_workspace_operation_kind(kind)
+    return spec.title if spec is not None else UNKNOWN_WORKSPACE_OPERATION_TITLE
+
+
+def workspace_operation_title_fields(kind: str) -> dict[str, str]:
+    """``title`` plus ``title_key`` for a timeline operation item."""
+
+    spec = get_workspace_operation_kind(kind)
+    return {
+        "title": workspace_operation_title(kind),
+        "title_key": workspace_operation_title_key(
+            spec.kind if spec is not None else UNKNOWN_WORKSPACE_OPERATION_KIND
+        ),
+    }

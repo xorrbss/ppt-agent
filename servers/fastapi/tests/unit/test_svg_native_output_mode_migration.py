@@ -39,9 +39,15 @@ def _insert_identity(connection, output_mode: str) -> None:
 
 
 def test_svg_native_output_mode_is_the_single_linear_head() -> None:
+    # One head, and this revision on its ancestry: a later revision may sit
+    # on top of it, but a second head would stop Alembic upgrading at all.
     script = ScriptDirectory.from_config(_alembic_config("sqlite://"))
     assert script.get_heads() == [revision_contract.HEAD_REVISION]
-    assert revision_contract.HEAD_REVISION == revision_contract.REVISION_SVG_NATIVE_EXPORT_OUTPUT_MODE
+    ancestry = {
+        entry.revision
+        for entry in script.iterate_revisions(revision_contract.HEAD_REVISION, "base")
+    }
+    assert revision_contract.REVISION_SVG_NATIVE_EXPORT_OUTPUT_MODE in ancestry
     revision = script.get_revision(revision_contract.REVISION_SVG_NATIVE_EXPORT_OUTPUT_MODE)
     assert revision.down_revision == revision_contract.REVISION_REMOVE_TEMPLATE_V2
 
@@ -63,11 +69,14 @@ def test_svg_native_output_mode_round_trips_the_constraint_on_sqlite(tmp_path) -
             _insert_identity(connection, "raster-lie")
 
         # A live svg-native identity holds artifact references: downgrade refuses.
+        # Downgrade to the parent of the svg-native revision explicitly: later
+        # revisions above it are stepped through first and must not change the
+        # outcome.
         with pytest.raises(RuntimeError, match="svg-native export identities must be retained"):
-            command.downgrade(config, "-1")
+            command.downgrade(config, revision_contract.REVISION_REMOVE_TEMPLATE_V2)
         with engine.begin() as connection:
             connection.execute(text("DELETE FROM public_export_identities WHERE output_mode = 'svg-native'"))
-        command.downgrade(config, "-1")
+        command.downgrade(config, revision_contract.REVISION_REMOVE_TEMPLATE_V2)
         with engine.connect() as connection:
             assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == (
                 revision_contract.REVISION_REMOVE_TEMPLATE_V2)

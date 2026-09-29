@@ -5,7 +5,7 @@ from services.workspace_error_types import definition
 CORE_ERROR_DEFINITIONS = (
         definition(
             "svg_source_export_format_unsupported",
-            "원본 보존 SVG는 현재 PPTX로만 내보낼 수 있습니다. PPTX를 선택해 주세요.",
+            "Source-preserving SVG decks can currently only be exported as PPTX. Choose PPTX.",
             status_code=422,
         ),
         definition(

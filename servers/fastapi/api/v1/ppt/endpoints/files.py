@@ -3,6 +3,7 @@ from typing import Annotated, List, Optional
 from fastapi import APIRouter, Body, UploadFile, HTTPException
 
 from constants.documents import TEXT_EXTENSIONS, UPLOAD_ACCEPTED_FILE_TYPES
+from constants.user_messages import UserMessageKey, user_message
 from models.decomposed_file_info import DecomposedFileInfo
 from services.document_conversion_service import DocumentConversionError
 from services.temp_file_service import TEMP_FILE_SERVICE
@@ -48,11 +49,9 @@ def _reject_known_drm_file(file_path: str, original_filename: str) -> None:
         status_code=422,
         detail={
             "code": "DOCUMENT_DRM_PROTECTED",
-            "message": (
-                f"'{original_filename}' 파일은 Fasoo DRM으로 보호되어 내용을 읽을 수 없습니다. "
-                "DRM을 해제하거나 PowerPoint에서 DRM 없는 .pptx 파일로 다시 저장한 뒤 "
-                "업로드해 주세요."
-            ),
+            **user_message(
+                UserMessageKey.FILES_DRM_BLOCKED, filename=original_filename
+            ).fields("message"),
             "filename": original_filename,
             "retryable": False,
         },

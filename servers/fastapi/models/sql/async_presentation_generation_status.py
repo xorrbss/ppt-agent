@@ -25,6 +25,10 @@ class AsyncPresentationGenerationTaskModel(SQLModel, table=True):
     )
     status: str
     message: Optional[str] = None
+    # ``constants/user_messages.py``: the key the frontend renders in the UI
+    # locale; ``message`` keeps the English fallback for legacy readers.
+    message_key: Optional[str] = None
+    message_params: Optional[dict] = Field(sa_column=Column(JSON), default=None)
     error: Optional[dict] = Field(sa_column=Column(JSON), default=None)
     created_at: datetime = Field(
         default_factory=get_current_utc_datetime,

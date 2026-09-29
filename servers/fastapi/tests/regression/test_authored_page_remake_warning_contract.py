@@ -569,7 +569,8 @@ async def test_preview_page_number_is_one_based(tmp_path, monkeypatch):
         queued = await remake.queue_authored_page_remake_preview(
             presentation.id, 2, request, background, session
         )
-        assert "3페이지" in queued.message
+        assert queued.message_key == "remake.page.queued"
+        assert queued.message_params == {"page": 3}
         operation = await session.get(WorkspaceOperation, uuid.UUID(queued.id.removeprefix("workspace-page-preview-")))
         assert operation.request_payload["context"]["slide_index"] == 2
 
@@ -578,7 +579,8 @@ async def test_preview_page_number_is_one_based(tmp_path, monkeypatch):
         assert task.status == "completed", task.error
         assert task.data["slide_index"] == 2
         assert task.data["slide_id"] == str(slides[2].id)
-        assert "3페이지" in task.message
+        assert task.message_key == "remake.page.ready"
+        assert task.message_params == {"page": 3}
     await engine.dispose()
 
 
@@ -653,7 +655,8 @@ async def test_warning_candidate_publishes_only_target_slide(tmp_path, monkeypat
         # The result card and the task must never disagree about post-verify.
         assert result["post_verify_status"] == task.data["publish"]["post_verify"]
         assert len(snapshots) == 1
-        assert snapshots[0][1]["label"] == "페이지 다시 만들기: 2"
+        assert snapshots[0][1]["label"].key == "version.label.page_remake"
+        assert snapshots[0][1]["label"].params == {"page": 2}
     await engine.dispose()
 
 

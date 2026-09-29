@@ -134,7 +134,7 @@ def test_restore_replaces_slides_and_checkpoints_current(tmp_path):
 
             # The pre-restore state was checkpointed into history.
             labels = [v.label for v in await vs.list_versions(session, pid)]
-            assert "복원 전 자동 저장" in labels
+            assert "Autosave before restore" in labels
         await engine.dispose()
 
     _run(runner())

@@ -32,6 +32,10 @@ class PresentationVersionModel(SQLModel, table=True):
         )
     )
     label: Optional[str] = Field(sa_column=Column(String), default=None)
+    # ``constants/user_messages.py``: set when the label is a system message
+    # the frontend renders in the UI locale; ``label`` keeps the English text.
+    label_key: Optional[str] = Field(sa_column=Column(String), default=None)
+    label_params: Optional[dict] = Field(sa_column=Column(JSON), default=None)
     # Full snapshot of the deck's slides (a list of SlideModel dumps) so a restore
     # can recreate them verbatim.
     slides: List[dict] = Field(sa_column=Column(JSON), default_factory=list)

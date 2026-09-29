@@ -92,7 +92,7 @@ def _require_immutable_composition_publication(
             stage="persist",
             code="authored_composition_publication_mismatch",
             retryable=False,
-            message="생성 요청과 미리보기의 회사표준/저작 스타일 구성이 일치하지 않습니다.",
+            message="The company-standard/authored style composition of the request and the preview do not match.",
         )
 
     if request.export_as != "pptx":
@@ -126,7 +126,7 @@ def _require_immutable_composition_publication(
             stage="persist",
             code="authored_composition_export_evidence_mismatch",
             retryable=False,
-            message="미리보기와 PowerPoint 내보내기의 구성 검증 결과가 일치하지 않습니다.",
+            message="The composition verification of the preview and the PowerPoint export do not match.",
         )
 
 

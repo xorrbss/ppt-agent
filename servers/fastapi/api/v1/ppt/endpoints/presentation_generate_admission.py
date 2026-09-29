@@ -49,6 +49,8 @@ class AsyncPresentationGenerationTaskResponse(BaseModel):
     id: str
     status: str
     message: Optional[str] = None
+    message_key: Optional[str] = None
+    message_params: Optional[dict] = None
     error: Optional[dict] = None
     created_at: datetime
     updated_at: datetime
