@@ -13,7 +13,7 @@ from types import SimpleNamespace
 import pytest
 
 from services.source_images.models import SourceImageCandidate
-from utils.authored_illustrations import (
+from services.authored_illustrations import (
     MAX_INLINE_SOURCE_IMAGE_BYTES,
     apply_authored_illustration,
     reserve_source_images_for_slide,

@@ -13,7 +13,7 @@ from __future__ import annotations
 import pytest
 
 from services.authored_source_images import plan_slide_source_images
-from utils.authored_illustrations import validate_visible_source_images
+from services.authored_illustrations import validate_visible_source_images
 
 
 def test_a_text_only_source_plans_no_pictures() -> None:

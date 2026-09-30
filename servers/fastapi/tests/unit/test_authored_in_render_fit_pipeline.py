@@ -113,7 +113,7 @@ def _fitted_document() -> str:
     fitter's inline declaration appended, stamped and canonicalized the way the
     pipeline stamps the draft, so the scene envelope can be resealed over it."""
     from utils.authored_dom_quality import ensure_authored_qids
-    from utils.authored_semantic_role_repair import canonicalize_authored_roles
+    from services.authored_semantic_role_repair import canonicalize_authored_roles
 
     variant = _RESUMABLE_HTML.replace("<main>", '<main style="font-size:15px">', 1)
     return canonicalize_authored_roles(ensure_authored_qids(variant))

@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from utils.authored_styles import resolve_authored_style
-from utils.svg_style_adapter import adapt_svg_style
+from services.generation_core.drivers.svg.svg_style_adapter import adapt_svg_style
 
 
 def _request(primary_color=None, fonts=None, wordmark=None):

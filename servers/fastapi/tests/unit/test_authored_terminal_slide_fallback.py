@@ -56,7 +56,7 @@ from services.source_content.browser_readback import (
 from services.generation_core.authoring import author_vision_qa as author_vision_qa_mod
 from services.generation_core.authoring.author_deck import AuthoredDeckResult
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
-from utils.authored_semantic_role_repair import canonicalize_authored_roles
+from services.authored_semantic_role_repair import canonicalize_authored_roles
 from utils.slide_capture_result import RenderCapture
 
 TERMINAL_MARKER = "TERMINAL-SLIDE"

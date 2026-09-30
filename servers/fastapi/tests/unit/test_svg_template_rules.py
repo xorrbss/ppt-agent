@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from utils.svg_style_adapter import adapt_svg_style
+from services.generation_core.drivers.svg.svg_style_adapter import adapt_svg_style
 from utils.svg_template_fonts import (
     FONT_DIGEST,
     FONT_FAMILY,

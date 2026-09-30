@@ -45,7 +45,7 @@ from services.source_images.models import (
     SUPPORTED_SOURCE_IMAGE_MIME_TYPES,
     SourceImageCandidate,
 )
-from utils.authored_illustration_prompt import (
+from services.generation_core.assets.illustration_prompt import (
     MAX_SLIDE_CONTENT_CHARS,
     build_illustration_prompt,
     clean_scene_prompt,

@@ -1,6 +1,6 @@
 """StyleContext -> the svg author's design-system input.
 
-This is the svg-specific half of what ``utils.svg_style_adapter.adapt_svg_style``
+This is the svg-specific half of what ``services.generation_core.drivers.svg.svg_style_adapter.adapt_svg_style``
 used to do inline: reading only the preset's own fields. Admission-shaped
 validation (canvas bounds, exact-reconstruction rejection, preset
 ``svg_overrides`` shape, reference-image bytes) stays in ``svg_style_adapter``;

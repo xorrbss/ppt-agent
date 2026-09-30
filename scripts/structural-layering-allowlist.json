@@ -1,17 +1,13 @@
 {
   "utils_import_services": [
     "servers/fastapi/utils/authored_html_normalize.py",
-    "servers/fastapi/utils/authored_illustration_prompt.py",
-    "servers/fastapi/utils/authored_illustrations.py",
     "servers/fastapi/utils/authored_renderer_worker.py",
-    "servers/fastapi/utils/authored_semantic_role_repair.py",
     "servers/fastapi/utils/authored_style_catalogue.py",
     "servers/fastapi/utils/document_path_security.py",
     "servers/fastapi/utils/get_env.py",
     "servers/fastapi/utils/llm_calls/critique_slide.py",
     "servers/fastapi/utils/llm_config.py",
     "servers/fastapi/utils/llm_utils.py",
-    "servers/fastapi/utils/process_slides.py",
     "servers/fastapi/utils/provider_idempotency.py",
     "servers/fastapi/utils/provider_overload.py",
     "servers/fastapi/utils/renderer_isolation.py",
@@ -19,7 +15,6 @@
     "servers/fastapi/utils/slide_capture_fit_script.py",
     "servers/fastapi/utils/slide_capture_local_fit.py",
     "servers/fastapi/utils/slide_capture_worker_client.py",
-    "servers/fastapi/utils/svg_style_adapter.py",
     "servers/fastapi/utils/svg_template_fonts.py",
     "servers/fastapi/utils/user_config.py"
   ],

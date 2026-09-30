@@ -215,7 +215,7 @@ _MIGRATED_MODULES = [
     "utils.artifact_style_pdf",
     "utils.artifact_style_pptx",
     "utils.authored_font_identity",
-    "utils.authored_illustrations",
+    "services.authored_illustrations",
     "utils.authored_image_slots",
     "utils.authored_ocr_quality",
     "utils.authored_qid_namespace",
@@ -232,7 +232,7 @@ _MIGRATED_MODULES = [
     "utils.slide_capture_result",
     "utils.slidespec_core",
     "utils.slidespec_solver",
-    "utils.svg_style_adapter",
+    "services.generation_core.drivers.svg.svg_style_adapter",
     "utils.svg_template_fonts",
     "utils.svg_template_rules",
 ]

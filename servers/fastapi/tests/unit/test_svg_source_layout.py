@@ -232,7 +232,7 @@ def test_template_server_path_resolves_korean_table_and_image_without_provider(s
         ("image", {"contentDigest": "sha256:image", "geometry": {"cx": 200, "cy": 30}})])
     style, width, height = _v2_style(), 1123, 794
     if style_id:
-        from utils.svg_style_adapter import adapt_svg_style
+        from services.generation_core.drivers.svg.svg_style_adapter import adapt_svg_style
         from utils.svg_template_rules import resolve_source_template_style
         width, height = 1188, 840
         style = adapt_svg_style(

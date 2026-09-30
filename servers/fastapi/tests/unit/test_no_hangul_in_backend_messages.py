@@ -59,7 +59,7 @@ _ALLOWED_HANGUL_MODULES: frozenset[str] = frozenset(
         "services/generation_core/style/build.py",
         "services/source_content/raster_structure_emit.py",
         "utils/authored_font_policy.py",
-        "utils/authored_semantic_role_repair.py",
+        "services/authored_semantic_role_repair.py",
         "utils/ocr_language.py",
         # --- Catalog data records with an explicit locale field ---
         "constants/provider_registry_generated.py",

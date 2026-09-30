@@ -222,7 +222,7 @@ def test_review_disk_failure_returns_none(tmp_path, monkeypatch):
 
 
 def _prompt(*, labels: bool) -> str:
-    from utils.authored_illustration_prompt import NO_TEXT_SUFFIX
+    from services.generation_core.assets.illustration_prompt import NO_TEXT_SUFFIX
 
     return "a lighthouse on a cliff. labels allowed" if labels else f"a lighthouse. {NO_TEXT_SUFFIX}"
 

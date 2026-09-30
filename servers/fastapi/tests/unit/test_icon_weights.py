@@ -5,7 +5,7 @@ from unittest.mock import Mock
 from models.sql.slide import SlideModel
 from services.icon_finder_service import IconFinderService
 from templates.presentation_layout import PresentationLayoutModel, SlideLayoutModel
-from utils import process_slides
+from services import process_slides
 from utils.icon_weights import extract_icon_weight_from_settings, normalize_icon_weight
 
 

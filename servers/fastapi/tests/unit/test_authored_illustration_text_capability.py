@@ -14,7 +14,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from utils.authored_illustrations import (
+from services.authored_illustrations import (
     _MAX_SLIDE_CONTENT_CHARS,
     apply_authored_illustration,
 )
@@ -232,7 +232,7 @@ def test_a_landscape_illustration_is_recompressed_to_fit_the_source_limit() -> N
 
     from PIL import Image
 
-    from utils.authored_illustrations import _recompress_illustration
+    from services.authored_illustrations import _recompress_illustration
 
     # A flat fill would compress to almost nothing as PNG and the helper would
     # correctly decline to "shrink" it; a detailed image is what the providers
@@ -260,7 +260,7 @@ def test_an_enormous_source_still_hits_the_width_safety_valve() -> None:
 
     from PIL import Image
 
-    from utils.authored_illustrations import (
+    from services.authored_illustrations import (
         _ILLUSTRATION_MAX_WIDTH,
         _recompress_illustration,
     )
@@ -276,7 +276,7 @@ def test_an_enormous_source_still_hits_the_width_safety_valve() -> None:
 
 def test_recompression_keeps_the_original_when_it_cannot_help() -> None:
     """Unreadable bytes, or a source already smaller, must pass through intact."""
-    from utils.authored_illustrations import _recompress_illustration
+    from services.authored_illustrations import _recompress_illustration
 
     garbage = b"not an image at all"
     assert _recompress_illustration("image/png", garbage) == ("image/png", garbage)
@@ -289,7 +289,7 @@ def test_markdown_markers_never_reach_the_label_source() -> None:
     attached, because the outline is markdown and the prompt demands a
     character-for-character copy.
     """
-    from utils.authored_illustrations import _clean_slide_content
+    from services.authored_illustrations import _clean_slide_content
 
     cleaned = _clean_slide_content(
         "## 조직 및 인력\n- 기술인력 54명 보유\n\n* 6개 본부 전문조직\n1. 첫째\n"

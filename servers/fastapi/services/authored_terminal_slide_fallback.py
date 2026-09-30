@@ -42,7 +42,7 @@ from services.authored_composition_policy import (
     blocking_safety_issues,
     capacity_violations,
 )
-from utils.authored_semantic_role_repair import canonicalize_authored_roles
+from services.authored_semantic_role_repair import canonicalize_authored_roles
 from services.authored_infographic_assets import (
     build_infographic_asset_context as build_infographic_asset_context,
     deck_has_picture_source as deck_has_picture_source,

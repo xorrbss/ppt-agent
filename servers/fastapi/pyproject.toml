@@ -369,7 +369,7 @@ select = ["E", "F", "B", "ASYNC"]
 "utils/llm_provider.py" = ["B904"]
 "utils/llm_utils.py" = ["B904"]
 "utils/outline_utils.py" = ["B007"]
-"utils/process_slides.py" = ["B905"]
+"services/process_slides.py" = ["B905"]
 "utils/schema_utils.py" = ["E501"]
 "utils/slide_capture.py" = ["ASYNC109", "ASYNC230", "ASYNC240", "E501"]
 # Embedded raw-JS measurement payload (a template string injected into

@@ -81,7 +81,7 @@ from services.authored_local_fit_policy import (
 from services.authored_local_fit_deadline import (
     remaining_authored_local_fit_seconds,
 )
-from utils.authored_semantic_role_repair import canonicalize_authored_roles, plan_slide_role
+from services.authored_semantic_role_repair import canonicalize_authored_roles, plan_slide_role
 from services.authored_fit_envelope import reseal_scene_envelope_after_fit
 from services.authored_vnext.generation.scene_checkpoint import persist_scene_envelope, read_scene_checkpoint_state
 from services.authored_vnext.generation.scene_envelope import (
@@ -110,7 +110,7 @@ from services.source_content.browser_readback import BrowserSourceReadbackError
 from services.source_content.header_pages import header_absent_pages
 from services.source_content.text_stamping import stamp_source_blocks
 from utils.asset_directory_utils import get_images_directory
-from utils.authored_illustrations import (
+from services.authored_illustrations import (
     enforce_strict_source_image_size_floor, validate_bound_source_images, validate_visible_source_images,
 )
 from utils.authored_font_policy import enforce_authored_font_floor

@@ -4,7 +4,7 @@ Two decisions live here, one per stage of the authored flow: which of a
 request's uploads become reusable candidates for the deck, and which of those
 candidates each slide is offered. Everything else -- extraction, filtering,
 persistence, ranking, substitution -- belongs to ``services.source_images`` and
-``utils.authored_illustrations``; this module only wires them into the
+``services.authored_illustrations``; this module only wires them into the
 generation entry and the per-slide pipeline, and it is the single place that
 reads the feature gate.
 """

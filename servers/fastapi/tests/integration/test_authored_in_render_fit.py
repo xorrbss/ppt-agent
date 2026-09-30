@@ -22,7 +22,7 @@ from services.authored_composition_policy import blocking_safety_issues
 from utils.authored_dom_quality import inspect_authored_dom
 from utils.authored_dom_text_escape import TEXT_ESCAPE_CATEGORY
 from utils.authored_fit_edits import apply_fit_edits
-from utils.authored_semantic_role_repair import canonicalize_authored_roles
+from services.authored_semantic_role_repair import canonicalize_authored_roles
 from utils.slide_capture import _placeholder_png, render_html_to_png_with_metrics
 from utils.slide_capture_fit_in_render_script import FIT_CLASS
 

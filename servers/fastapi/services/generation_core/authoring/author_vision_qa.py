@@ -56,7 +56,7 @@ from utils.authored_dom_quality import (
     validate_declared_authored_qids,
 )
 from utils.authored_patch_engine import apply_authored_patch
-from utils.authored_illustrations import (
+from services.authored_illustrations import (
     apply_authored_illustration,
     strip_illustration_slots,
 )

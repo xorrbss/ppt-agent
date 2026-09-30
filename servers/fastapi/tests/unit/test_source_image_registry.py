@@ -26,7 +26,7 @@ from services.source_images.registry import (
     register_manifest_image_occurrences,
     register_source_images,
 )
-from utils.authored_illustrations import (
+from services.authored_illustrations import (
     enforce_strict_source_image_size_floor,
     validate_bound_source_images,
     validate_visible_source_images,

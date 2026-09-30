@@ -16,8 +16,8 @@ import pytest
 from PIL import Image
 
 from services.source_images.models import SourceImageCandidate
-from utils import authored_illustrations
-from utils.authored_illustrations import (
+from services import authored_illustrations
+from services.authored_illustrations import (
     _data_uri_from_source_image,
     apply_authored_illustration,
 )

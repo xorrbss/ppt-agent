@@ -268,8 +268,8 @@ from services.source_content.browser_readback import (
 )
 from services.source_content.header_pages import source_pages_are_numbered
 from utils.authored_dom_quality import ensure_authored_qids, inspect_authored_dom
-from utils.authored_illustrations import validate_visible_source_images
-from utils.authored_semantic_role_repair import canonicalize_authored_roles
+from services.authored_illustrations import validate_visible_source_images
+from services.authored_semantic_role_repair import canonicalize_authored_roles
 from utils.authored_styles import resolve_authored_style, validate_exact_reconstruction_style
 from utils.hashing import sha256_hex, sha256_prefixed
 from services.generation_core.authoring.author_deck import (

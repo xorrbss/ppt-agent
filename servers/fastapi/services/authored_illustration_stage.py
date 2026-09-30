@@ -41,7 +41,7 @@ from services.provider_usage_instrumentation import (
     provider_usage_scope,
     record_local_stage,
 )
-from utils.authored_illustrations import (
+from services.authored_illustrations import (
     apply_authored_illustration,
     strip_illustration_slots,
 )

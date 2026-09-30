@@ -30,7 +30,7 @@ from utils.authored_font_policy import requested_font_floor_px
 from utils.authored_header_validation import validate_header_contract
 from utils.authored_infographic import CONTRACT_ERROR_PREFIX
 from services.source_images.models import SourceImageCandidate
-from utils.authored_semantic_role_repair import ensure_title_role
+from services.authored_semantic_role_repair import ensure_title_role
 from services.generation_core.authoring.author_slide_stream import (
     OUTPUT_TOKEN_LIMIT_CORRECTION_HINT,
     output_token_limit_in_cause_chain,

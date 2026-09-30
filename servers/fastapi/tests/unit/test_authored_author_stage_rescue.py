@@ -41,7 +41,7 @@ from services.source_content.browser_readback import (
     BrowserSourceReadbackResult,
 )
 from utils.authored_header_validation import validate_header_contract
-from utils.authored_semantic_role_repair import canonicalize_authored_roles
+from services.authored_semantic_role_repair import canonicalize_authored_roles
 from services.generation_core.authoring.author_deck import (
     AuthoredDeckResult,
     AuthoredProviderBudgetExhausted,

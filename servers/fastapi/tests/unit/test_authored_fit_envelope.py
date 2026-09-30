@@ -11,7 +11,7 @@ from services.authored_checkpoint_errors import AuthoredStageError
 from services.authored_fit_envelope import reseal_scene_envelope_after_fit
 from services.authored_vnext.generation.scene_envelope import seal_slide_scene_envelope
 from utils.authored_dom_quality import ensure_authored_qids
-from utils.authored_semantic_role_repair import canonicalize_authored_roles
+from services.authored_semantic_role_repair import canonicalize_authored_roles
 
 _DRAFT = canonicalize_authored_roles(ensure_authored_qids(
     "<!doctype html><html><head><meta charset='utf-8'></head>"
