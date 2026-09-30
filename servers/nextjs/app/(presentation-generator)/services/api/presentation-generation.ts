@@ -544,10 +544,7 @@ export class PresentationGenerationApi {
         getApiUrl(`/api/v1/ppt/presentation/${presentationId}/versions`),
         {
           method: "GET",
-          headers: {
-            ...getHeader(),
-            "X-Document-Canvas-Contracts": "document-canvas/v1",
-          },
+          headers: getHeader(),
           cache: "no-cache",
         },
       );
@@ -573,10 +570,7 @@ export class PresentationGenerationApi {
         ),
         {
           method: "POST",
-          headers: {
-            ...getHeader(),
-            "X-Document-Canvas-Contracts": "document-canvas/v1",
-          },
+          headers: getHeader(),
           cache: "no-cache",
         },
       );

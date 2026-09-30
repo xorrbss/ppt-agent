@@ -18,6 +18,10 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from models.document_canvas import (
+    DOCUMENT_CANVAS_CONTRACT_VERSION,
+    DOCUMENT_CANVAS_CONTRACTS_HEADER,
+)
 
 POLL_SECONDS = 5.0
 # uvicorn closes an idle keep-alive connection after 5 s, the same interval
@@ -30,7 +34,6 @@ KEEPALIVE_EXPIRY_SECONDS = 1.0
 SETTLE_SECONDS = 120.0
 TERMINAL_OPERATION_STATES = {"succeeded", "failed", "cancelled", "dead_letter"}
 QUALITY_RECEIPT_DIR = "authored-quality-receipts"
-DOCUMENT_CANVAS_CONTRACT = "document-canvas/v1"
 
 
 class BenchClient:
@@ -106,7 +109,7 @@ class BenchClient:
         # document-canvas contract.
         response = self.http.get(
             f"{self.base}/api/v1/ppt/presentation/{presentation_id}",
-            headers={"X-Document-Canvas-Contracts": DOCUMENT_CANVAS_CONTRACT},
+            headers={DOCUMENT_CANVAS_CONTRACTS_HEADER: DOCUMENT_CANVAS_CONTRACT_VERSION},
         )
         response.raise_for_status()
         return response.json()

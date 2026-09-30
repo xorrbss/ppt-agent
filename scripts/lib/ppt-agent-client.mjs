@@ -1,5 +1,10 @@
 import { followExportToArtifact } from "./ppt-agent-export-follow.mjs";
 
+export const DOCUMENT_CANVAS_CONTRACT_VERSION = "document-canvas/v1";
+export const documentCanvasHeaders = () => ({
+  "X-Document-Canvas-Contracts": DOCUMENT_CANVAS_CONTRACT_VERSION,
+});
+
 function buildBody(content, opts) {
   // Include optional fields ONLY when provided; rely on server defaults otherwise.
   const body = { content };

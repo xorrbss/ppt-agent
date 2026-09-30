@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { getPublicHeader } from "../app/(presentation-generator)/services/api/header.ts";
 
 import { readBoundedResponseText } from "./authored-hybrid/security.ts";
 import {
@@ -165,7 +166,6 @@ export async function fetchPersistedPresentationProjectionForExport(
     try {
       const headers: Record<string, string> = {
         Accept: "application/json",
-        "X-Document-Canvas-Contracts": "document-canvas/v1",
         ...options.authHeaders,
       };
       if (options.cookieHeader?.trim()) {
@@ -175,7 +175,7 @@ export async function fetchPersistedPresentationProjectionForExport(
         `${options.baseUrl.replace(/\/+$/, "")}/api/v1/ppt/presentation/${encodeURIComponent(presentationId)}/export-projection`,
         {
           method: "GET",
-          headers,
+          headers: { ...headers, ...getPublicHeader() },
           cache: "no-store",
           signal: controller.signal,
         }

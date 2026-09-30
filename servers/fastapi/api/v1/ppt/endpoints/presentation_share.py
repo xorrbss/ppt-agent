@@ -18,6 +18,7 @@ from sqlmodel import select
 from api.v1.auth.assets import normalized_app_data_parts
 from api.v1.ppt.endpoints.presentation_helpers import resolve_presentation_fonts
 from models.presentation_with_slides import PublicPresentationWithSlides
+from models.document_canvas import DOCUMENT_CANVAS_CONTRACTS_HEADER
 from models.sql.presentation import (
     PRESENTATION_LIFECYCLE_PUBLISHED,
     PresentationModel,
@@ -410,7 +411,7 @@ async def disable_share(
 )
 async def get_shared_presentation(
     share_token: str, sql_session: AsyncSession = Depends(get_async_session),
-    canvas_contracts: Annotated[Optional[str], Header(alias="X-Document-Canvas-Contracts")] = None,
+    canvas_contracts: Annotated[Optional[str], Header(alias=DOCUMENT_CANVAS_CONTRACTS_HEADER)] = None,
 ):
     """Public, read-only view of a shared deck. Reached ONLY by an unguessable
     token (never by presentation id), and exempt from the admin session in

@@ -38,6 +38,7 @@ from models.presentation_generation_info import (
     PresentationGenerationSettings,
 )
 from models.presentation_with_slides import PresentationWithSlides
+from models.document_canvas import DOCUMENT_CANVAS_CONTRACTS_HEADER
 from models.sql.presentation import (
     PRESENTATION_LIFECYCLE_PUBLISHED,
     PRESENTATION_LIFECYCLE_STAGING,
@@ -236,7 +237,7 @@ async def get_all_presentations(
 @PRESENTATION_CRUD_ROUTER.get("/{id}", response_model=PresentationWithSlides)
 async def get_presentation(
     id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session),
-    canvas_contracts: Annotated[Optional[str], Header(alias="X-Document-Canvas-Contracts")] = None,
+    canvas_contracts: Annotated[Optional[str], Header(alias=DOCUMENT_CANVAS_CONTRACTS_HEADER)] = None,
 ):
     from services.document_canvas import require_canvas_capability
 
@@ -253,7 +254,7 @@ async def get_presentation_export_projection(
     id: uuid.UUID,
     response: Response,
     sql_session: AsyncSession = Depends(get_async_session),
-    canvas_contracts: Annotated[Optional[str], Header(alias="X-Document-Canvas-Contracts")] = None,
+    canvas_contracts: Annotated[Optional[str], Header(alias=DOCUMENT_CANVAS_CONTRACTS_HEADER)] = None,
 ):
     from services.document_canvas import require_canvas_capability
 

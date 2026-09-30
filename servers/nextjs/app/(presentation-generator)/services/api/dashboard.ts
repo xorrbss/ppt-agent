@@ -111,10 +111,7 @@ export class DashboardApi {
       {
         method: "GET",
         credentials: "include",
-        headers: {
-          ...getHeader(),
-          "X-Document-Canvas-Contracts": "document-canvas/v1",
-        },
+        headers: getHeader(),
         signal,
       }
     );
