@@ -19,6 +19,7 @@ from utils.authored_styles import (
     resolve_authored_style,
 )
 from utils.authored_style_catalogue import AUTHORED_STYLE_ALIASES
+from utils.authored_style_samples import load_style_samples
 
 EXPECTED_AUTHORED_STYLE_IDS = {
     "academic-edge",
@@ -632,7 +633,10 @@ def test_authored_styles_api_hides_briefs_and_returns_exact_catalogue():
             "use_cases",
             "preview",
             "supportedAspectRatios",
-        } | ({"aliases"} if style["id"] in AUTHORED_STYLE_ALIASES.values() else set())
+        }
+        | ({"aliases"} if style["id"] in AUTHORED_STYLE_ALIASES.values() else set())
+        # Styles with rendered sample decks on disk expose them (D1-D10).
+        | ({"samples"} if load_style_samples(style["id"]) is not None else set())
         for style in body
     )
     assert all("brief" not in style for style in body)
