@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from utils.authored_styles import AuthoredStyle
-from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION, normalize_reference_mode
+from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION, normalize_reference_mode
 from utils.hashing import sha256_hex
 
 

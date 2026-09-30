@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from utils.llm_calls import author_slide_patch as patch_mod
+from services.generation_core.authoring import author_slide_patch as patch_mod
 
 PNG = b"\x89PNG\r\n\x1a\nrendered-slide"
 DOM = [
@@ -398,7 +398,7 @@ def test_slide_protected_inventory_excludes_all_independent_repair_groups():
 
 @pytest.mark.parametrize("slide", (3, 8, 14))
 def test_exact_header_overlap_repair_scopes_preserve_independent_groups(slide):
-    from utils.llm_calls.author_vision_qa import _structural_compact_dom
+    from services.generation_core.authoring.author_vision_qa import _structural_compact_dom
 
     artifact = Path(__file__).resolve().parents[4] / \
         "artifacts/authored-full-product-validation-20260910/run-2-repair-six"

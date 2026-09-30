@@ -38,7 +38,7 @@ def canonical_capture_html(
     _normalization_mode: str | None = None,
 ) -> str:
     """Finish policy preparation with the context used to admit this capture."""
-    from utils.llm_calls.author_slide import validate_authored_slide_html
+    from services.generation_core.authoring.author_slide import validate_authored_slide_html
 
     session = current_session()
     context = _context

@@ -297,7 +297,7 @@ def test_authored_type_scale_follows_deck_verbosity(
     floor sentence to the ramp's body tier. The ramp is the switchable half of
     the prompt bundle, so this test states the knob it is measuring.
     """
-    from utils.llm_calls.author_slide import Brand, build_design_system
+    from services.generation_core.authoring.author_slide import Brand, build_design_system
 
     monkeypatch.setenv("AUTHORED_PROMPT_BUNDLE_ENABLED", "true")
     brand = Brand(topic="t", verbosity=verbosity or "standard")
@@ -307,7 +307,7 @@ def test_authored_type_scale_follows_deck_verbosity(
 
 def test_concise_type_scale_leaves_the_page_number_specification_alone(monkeypatch):
     """The page number is furniture, so it keeps its own 12px size."""
-    from utils.llm_calls.author_slide import Brand, build_design_system
+    from services.generation_core.authoring.author_slide import Brand, build_design_system
 
     monkeypatch.setenv("AUTHORED_PROMPT_BUNDLE_ENABLED", "true")
     design_system = build_design_system(Brand(topic="t", verbosity="concise"))

@@ -14,7 +14,7 @@ from services.authored_exact_source_snapshot import (
     private_exact_snapshot_root,
 )
 from utils.authored_styles import AuthoredStyle
-from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION
+from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION
 
 
 def _png(color: str) -> bytes:

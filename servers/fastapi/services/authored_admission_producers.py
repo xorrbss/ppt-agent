@@ -14,7 +14,7 @@ from services.source_content.browser_readback import (
     stamp_source_image_block_ids,
 )
 from services.source_content.text_stamping import stamp_source_blocks
-from utils.llm_calls.author_slide import validate_authored_slide_html
+from services.generation_core.authoring.author_slide import validate_authored_slide_html
 
 
 def author_html(

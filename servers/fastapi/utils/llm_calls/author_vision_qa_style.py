@@ -11,7 +11,7 @@ from utils.llm_calls.critique_slide import SlideCritique, StyleComparisonCritiqu
 
 
 def _runtime():
-    return importlib.import_module("utils.llm_calls.author_vision_qa")
+    return importlib.import_module("services.generation_core.authoring.author_vision_qa")
 
 def _style_comparison_cache_key(
     baseline: bytes,

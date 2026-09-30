@@ -116,7 +116,7 @@ from utils.authored_ocr_quality import (
     inspect_authored_ocr,
     normalize_ocr_text,
 )
-from utils.llm_calls.author_vision_qa import (
+from services.generation_core.authoring.author_vision_qa import (
     critique_authored_style_comparison,
     style_comparison_failure_diagnostic,
 )

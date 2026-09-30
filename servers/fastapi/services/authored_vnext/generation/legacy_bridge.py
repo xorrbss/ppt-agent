@@ -74,7 +74,7 @@ from services.authored_vnext.integration.worker import HttpOoxmlWorkerTransport
 from services.authored_vnext.master.assets import OwnerMasterAssetStore
 from services.authored_vnext.master.digests import canonical_digest
 from services.authored_vnext.master.preview import build_preview
-from utils.llm_calls.author_deck import AuthoredDeckResult
+from services.generation_core.authoring.author_deck import AuthoredDeckResult
 from utils.authored_styles import AuthoredStyle
 from utils.slide_capture import render_html_to_png
 

@@ -116,7 +116,7 @@ from utils.authored_illustrations import (
 from utils.authored_font_policy import enforce_authored_font_floor
 from utils.authored_measured_type_clamp import merge_measured_type_clamp_receipt, render_with_measured_type_clamp
 from utils.authored_dom_quality import ensure_authored_qids, inspect_authored_dom
-from utils.llm_calls.author_deck import (
+from services.generation_core.authoring.author_deck import (
     author_correction_from_stored_failure,
     AuthoredBatchFailure,
     AuthoredDeckResult,
@@ -126,7 +126,7 @@ from utils.llm_calls.author_deck import (
     plan_deck_roles,
     prepare_authored_deck,
 )
-from utils.llm_calls.author_slide import (
+from services.generation_core.authoring.author_slide import (
     EXACT_RECONSTRUCTION,
     NO_PAGE_NUMBER_MODE,
     STYLE_REFERENCE,

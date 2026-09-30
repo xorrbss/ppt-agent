@@ -219,7 +219,7 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
         DEFAULT_PACK_KEY, build_infographic_asset_context,
     )
     from services.generation_core.assets.infographic_plan import resolve_infographic_plan
-    from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION, normalize_reference_mode
+    from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION, normalize_reference_mode
 
     receipt: dict = {"budget": budget, "timeoutSeconds": timeout_seconds}
     if illustrations_are_prohibited(instructions):

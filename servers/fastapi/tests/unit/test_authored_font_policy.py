@@ -112,8 +112,8 @@ def test_requested_floor_round_trips_to_renderer_and_export_policy():
 
 def test_user_floor_is_frozen_in_deck_capacity():
     from models.presentation_outline_model import PresentationOutlineModel, SlideOutlineModel
-    from utils.llm_calls.author_deck import prepare_authored_deck
-    from utils.llm_calls.author_slide import Brand
+    from services.generation_core.authoring.author_deck import prepare_authored_deck
+    from services.generation_core.authoring.author_slide import Brand
 
     outline = PresentationOutlineModel(slides=[SlideOutlineModel(content="개발방법론")])
     plan = prepare_authored_deck(outline, Brand(topic="제안서"), instructions="본문 10px")

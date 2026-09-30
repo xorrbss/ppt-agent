@@ -439,8 +439,8 @@ async def run_live_self_test(
         local_acceptance_decision,
         style_acceptance_decision,
     )
-    from utils.llm_calls import author_vision_qa
-    from utils.llm_calls.author_slide_patch import propose_authored_slide_patch
+    from services.generation_core.authoring import author_vision_qa
+    from services.generation_core.authoring.author_slide_patch import propose_authored_slide_patch
 
     # Exact call counts require a cold request-local observation. These are successful
     # response caches only; clearing them does not alter any authored presentation data.

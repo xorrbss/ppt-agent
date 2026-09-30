@@ -53,8 +53,8 @@ from services.source_content.browser_readback import (
     BrowserSourceReadbackResult,
     log_browser_source_readback_failure,
 )
-from utils.llm_calls import author_vision_qa as author_vision_qa_mod
-from utils.llm_calls.author_deck import AuthoredDeckResult
+from services.generation_core.authoring import author_vision_qa as author_vision_qa_mod
+from services.generation_core.authoring.author_deck import AuthoredDeckResult
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
 from utils.authored_semantic_role_repair import canonicalize_authored_roles
 from utils.slide_capture_result import RenderCapture
@@ -2679,7 +2679,7 @@ def test_repair_rounds_receipt_their_provider_calls_by_stage(monkeypatch, tmp_pa
     """Remake-first, patch round and terminal remake each file their call and
     their span; the slide remade in both rounds gets two distinct receipts."""
 
-    from utils.llm_calls.author_slide import authored_provider_semantic_slot
+    from services.generation_core.authoring.author_slide import authored_provider_semantic_slot
 
     deck = [_REMADE_HTML, _TERMINAL_HTML]
     _install_deck_stubs(monkeypatch, tmp_path, deck)

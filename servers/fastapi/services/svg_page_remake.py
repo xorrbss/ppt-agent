@@ -11,7 +11,7 @@ from services.authored_canvas import presentation_canvas_contract, presentation_
 from services.authored_presentation_artifacts import _save_slide_pngs
 from services.svg_contract import finalize_svg
 from services.svg_renderer import render_svg_with_metrics
-from utils.llm_calls.author_slide_svg import author_slide_svg
+from services.generation_core.authoring.author_slide_svg import author_slide_svg
 from utils.hashing import sha256_hex
 
 

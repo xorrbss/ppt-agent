@@ -357,7 +357,7 @@ async def test_the_model_step_asks_for_layout_change_and_forbids_source_text():
 def test_the_model_step_uses_the_one_authoring_prompt():
     """The T5 contract reaches the repair call because it is that prompt."""
 
-    from utils.llm_calls.author_slide import author_slide_html
+    from services.generation_core.authoring.author_slide import author_slide_html
     from services.authored_repair_loop_model import build_repair_author as builder
 
     assert builder.__defaults__ is None
@@ -372,7 +372,7 @@ def test_the_repair_prompt_carries_the_placeholder_contract(monkeypatch):
         build_block_table,
         placeholder_prompt_contract,
     )
-    from utils.llm_calls.author_slide_prompt import author_prompt
+    from services.generation_core.authoring.author_slide_prompt import author_prompt
     import services.authored_admission_session as session_module
 
     context = SimpleNamespace(
@@ -412,7 +412,7 @@ def test_the_repair_brief_agrees_with_the_authoring_contract(monkeypatch, placeh
 
     from services.source_content.placeholder import prompt
     from services.source_content.placeholder.prompt import placeholder_prompt_for_slide
-    from utils.llm_calls.author_slide_prompt import author_prompt
+    from services.generation_core.authoring.author_slide_prompt import author_prompt
     import services.authored_admission_session as session_module
     import services.authored_repair_loop as loop_module
 
@@ -506,7 +506,7 @@ def test_a_candidate_that_retypes_source_text_is_rejected_by_the_gate(monkeypatc
 
 @sync_async
 async def test_the_vision_review_is_an_evidence_source_and_writes_no_html(monkeypatch):
-    import utils.llm_calls.author_vision_qa as vqa
+    import services.generation_core.authoring.author_vision_qa as vqa
 
     calls: dict[str, object] = {}
 

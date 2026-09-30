@@ -18,7 +18,7 @@ from utils.authored_illustrations import (
     apply_authored_illustration,
     reserve_source_images_for_slide,
 )
-from utils.llm_calls.author_slide import validate_authored_slide_html
+from services.generation_core.authoring.author_slide import validate_authored_slide_html
 from utils.authored_image_slots import source_slot_id_for_asset
 
 _PNG_BYTES = base64.b64decode(

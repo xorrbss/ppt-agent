@@ -460,8 +460,8 @@ def test_owner_text_reducer_fixes_actual_355_427_shape_without_owner_drift(monke
 
     # Real publication regression: unaddressed title/eyebrow owners added 36
     # characters only after a 380-character reducer result reached Chromium.
-    from utils.llm_calls import author_deck as author_deck_mod
-    from utils.llm_calls.author_slide import Brand
+    from services.generation_core.authoring import author_deck as author_deck_mod
+    from services.generation_core.authoring.author_slide import Brand
 
     unaddressed_header = (
         "<html><head></head><body>"
@@ -699,7 +699,7 @@ def test_vision_qa_false_gate_repair_normalizes_short_labels_without_qid_loss(
     captures: list[str] = []
     reviews: list[dict[str, object]] = []
 
-    from utils.llm_calls.author_vision_qa import AuthoredVqaResidualDomIssuesError
+    from services.generation_core.authoring.author_vision_qa import AuthoredVqaResidualDomIssuesError
 
     residual_error = AuthoredVqaResidualDomIssuesError(
         "5:available:1",

@@ -151,7 +151,7 @@ def test_boxes_cannot_occlude_other_content_and_font_floor_cannot_drop():
 
 
 def test_actual_font_measurement_repairs_wrapping_without_editing_source():
-    from utils.llm_calls.author_source_svg_layout import _source_context, repair_source_plan
+    from services.generation_core.authoring.author_source_svg_layout import _source_context, repair_source_plan
     manifest = manifest_for([("text", {"text": "한글 English 숫자 123 " * 10})])
     context = _source_context(manifest, 0)
     assert context["measurements"]["font_digest"].startswith("sha256:")

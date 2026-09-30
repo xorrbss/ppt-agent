@@ -29,7 +29,7 @@ from models.presentation_outline_model import (
 from services import authored_checkpoint_service as checkpoints
 from services import authored_presentation_pipeline as pipeline
 from services.authored_checkpoint_html import checkpoint_stage_html
-from utils.llm_calls.author_slide import Brand
+from services.generation_core.authoring.author_slide import Brand
 from utils.runtime_settings import replace_process_runtime_settings
 from utils.renderer_isolation import RendererPolicyError
 

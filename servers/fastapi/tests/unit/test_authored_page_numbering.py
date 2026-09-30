@@ -13,7 +13,7 @@ from utils.llm_calls.author_header_contract import (
     build_header_contract_messages,
     coerce_header_contract,
 )
-from utils.llm_calls.author_slide import (
+from services.generation_core.authoring.author_slide import (
     COMPANY_STANDARD_PAGE_NUMBER_MODE,
     NO_PAGE_NUMBER_MODE,
     TEMPLATE_PAGE_NUMBER_MODE,
@@ -22,7 +22,7 @@ from utils.llm_calls.author_slide import (
     fallback_slide_html,
     validate_page_number_mode,
 )
-from utils.llm_calls.author_slide_prompt import author_prompt
+from services.generation_core.authoring.author_slide_prompt import author_prompt
 
 
 def _brand() -> Brand:

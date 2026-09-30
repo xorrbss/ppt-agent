@@ -60,7 +60,7 @@ from utils.authored_illustrations import (
     apply_authored_illustration,
     strip_illustration_slots,
 )
-from utils.llm_calls.author_slide import (
+from services.generation_core.authoring.author_slide import (
     EXACT_RECONSTRUCTION,
     STYLE_REFERENCE,
     AUTHOR_CONCURRENCY,
@@ -72,11 +72,11 @@ from utils.llm_calls.author_slide import (
     normalize_reference_mode,
     validate_authored_slide_html,
 )
-from utils.llm_calls.author_slide_patch import (
+from services.generation_core.authoring.author_slide_patch import (
     build_structural_repair_scopes,
     propose_authored_slide_patch,
 )
-from utils.llm_calls.author_deck import plan_authored_visual_story
+from services.generation_core.authoring.author_deck import plan_authored_visual_story
 from utils.authored_styles import reference_images_for_role
 from utils.llm_calls.critique_slide import (
     CRITIQUE_PROMPT_VERSION,
@@ -159,14 +159,14 @@ ensure_browser_metrics = _slide_capture.ensure_browser_metrics
 get_cached_browser_metrics = _slide_capture.get_cached_browser_metrics
 render_html_to_png = _slide_capture.render_html_to_png
 render_html_to_png_with_metrics = _slide_capture.render_html_to_png_with_metrics
-_author_structural_repair_evidence = import_module("utils.llm_calls.author_structural_repair_evidence")
+_author_structural_repair_evidence = import_module("services.generation_core.authoring.author_structural_repair_evidence")
 AuthoredVqaResidualDomIssuesError = _author_structural_repair_evidence.AuthoredVqaResidualDomIssuesError
 StructuralRepairBudget = _author_structural_repair_evidence.StructuralRepairBudget
 _advance_repair_evaluator = _author_structural_repair_evidence._advance_repair_evaluator
 _measured_structural_issue_qids = _author_structural_repair_evidence._measured_structural_issue_qids
 _repair_evaluator_for = _author_structural_repair_evidence._repair_evaluator_for
 _structural_compact_dom = _author_structural_repair_evidence._structural_compact_dom
-_author_structural_repair_loop = import_module("utils.llm_calls.author_structural_repair_loop")
+_author_structural_repair_loop = import_module("services.generation_core.authoring.author_structural_repair_loop")
 _revise_structural_candidates_impl = _author_structural_repair_loop.revise_structural_candidates
 _author_vision_qa_style = import_module("utils.llm_calls.author_vision_qa_style")
 _style_comparison_cache_key = _author_vision_qa_style._style_comparison_cache_key
@@ -507,7 +507,7 @@ async def revise_authored_deck(
     """
     n = len(htmls)
     if instructions:
-        from utils.llm_calls.author_slide_prompt import user_direction_brief
+        from services.generation_core.authoring.author_slide_prompt import user_direction_brief
         design_system += "\n\n" + user_direction_brief(instructions)
     canvas_width_px, canvas_height_px = canvas_or_default(canvas)
     render_kwargs = canvas_render_kwargs(canvas_width_px, canvas_height_px)

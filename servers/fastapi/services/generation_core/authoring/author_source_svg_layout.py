@@ -11,7 +11,7 @@ import re
 
 from services.svg_source_layout import SvgLayoutPlan, assemble_source_svg, page_digest, source_pages
 from services.svg_contract import source_digest
-from utils.llm_calls.author_slide_svg import SvgAuthorResult
+from services.generation_core.authoring.author_slide_svg import SvgAuthorResult
 from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 
@@ -20,7 +20,7 @@ def _measurement_font(weight=400):
     from PIL import ImageFont
 
     path = (
-        Path(__file__).resolve().parents[3]
+        Path(__file__).resolve().parents[4]
         / "nextjs/public/fonts/pretendard"
         / ("Pretendard-Bold.ttf" if weight == 700 else "Pretendard-Regular.ttf")
     )
@@ -123,7 +123,7 @@ async def author_source_svg_layout(
     )
     from utils.llm_calls.author_prompt_profile import authoring_model
     from utils.llm_calls.author_prompt_split import author_messages
-    from utils.llm_calls.author_slide import (
+    from services.generation_core.authoring.author_slide import (
         _AUTHOR_EXECUTOR,
         _authoring_extra_body,
         _authoring_output_profile,

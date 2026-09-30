@@ -1,6 +1,6 @@
 """Structured (AI-edit zone) authoring constraints for one authored slide.
 
-Extracted from ``utils.llm_calls.author_deck`` (above the file-size ratchet).
+Extracted from ``services.generation_core.authoring.author_deck`` (above the file-size ratchet).
 A structured authoring context freezes zone geometry, a colour/font allowlist
 and per-zone content budgets; this module fails the candidate closed when the
 model leaves that contract and pins the surviving zone containers to the

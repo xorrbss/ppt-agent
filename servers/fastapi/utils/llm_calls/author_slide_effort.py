@@ -1,6 +1,6 @@
 """Output budget and reasoning-effort resolution for one authoring call.
 
-Extracted from ``utils.llm_calls.author_slide`` (which is above the file-size
+Extracted from ``services.generation_core.authoring.author_slide`` (which is above the file-size
 ratchet) so both the single-slide and the batched authoring paths resolve the
 same profile from one place.
 

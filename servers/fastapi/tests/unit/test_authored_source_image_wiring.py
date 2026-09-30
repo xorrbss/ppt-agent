@@ -21,7 +21,7 @@ from services import authored_source_images as seam
 from services.source_images.models import SourceImageCandidate
 from utils.get_env import is_authored_source_images_enabled
 from utils.authored_image_slots import source_slot_id_for_asset
-from utils.llm_calls.author_slide import Brand
+from services.generation_core.authoring.author_slide import Brand
 from models.presentation_outline_model import (
     PresentationOutlineModel,
     SlideOutlineModel,

@@ -46,7 +46,7 @@ _ALLOWED_HANGUL_MODULES: frozenset[str] = frozenset(
         "utils/authored_infographic/icons.py",
         "utils/authored_style_converter.py",
         "utils/llm_calls/author_chapter_plan.py",
-        "utils/llm_calls/author_deck.py",
+        "services/generation_core/authoring/author_deck.py",
         "utils/llm_calls/author_header_prompt_clauses.py",
         "utils/llm_calls/author_infographic_plan.py",
         "utils/llm_calls/author_slide_brief.py",

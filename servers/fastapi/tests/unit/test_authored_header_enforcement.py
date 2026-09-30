@@ -21,7 +21,7 @@ from models.authored_header_contract import (
 )
 from utils.authored_header_prompt import render_header_contract
 from utils.authored_header_validation import validate_header_contract
-from utils.llm_calls.author_slide_prompt import requirement_marker
+from services.generation_core.authoring.author_slide_prompt import requirement_marker
 from utils.renderer_isolation import admit_authored_html
 
 

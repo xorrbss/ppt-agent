@@ -22,8 +22,8 @@ from services.authored_composition_policy import (
     reduce_authored_owner_text_capacity,
 )
 from services.authored_deck_plans import _infographic_plan_applies
-from utils.llm_calls import author_deck as author_deck_module
-from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION, STYLE_REFERENCE
+from services.generation_core.authoring import author_deck as author_deck_module
+from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION, STYLE_REFERENCE
 
 _KNOBS = (
     "AUTHORED_INFOGRAPHIC_PLAN_ENABLED",

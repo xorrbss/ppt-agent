@@ -8,7 +8,7 @@ unchanged, which the provider rejects with a 400 that is not retried.
 
 from __future__ import annotations
 
-from utils.llm_calls.author_slide import _normalized_authoring_reasoning_effort
+from services.generation_core.authoring.author_slide import _normalized_authoring_reasoning_effort
 
 
 def test_astra_maps_minimal_to_low() -> None:

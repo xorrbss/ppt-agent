@@ -11,14 +11,14 @@ from services import authored_deck_plans
 from services.authored_generation_performance import authored_provider_concurrency
 from services.public_operation_admission import PublicAdmissionRejected
 from services import slidespec_authored_executor as executor
-from utils.llm_calls.author_slide import (
+from services.generation_core.authoring.author_slide import (
     AUTHOR_MAX_TOKENS,
     Brand,
     EXACT_RECONSTRUCTION,
     _authoring_output_profile,
 )
-from utils.llm_calls import author_slide as author_slide_mod
-from utils.llm_calls import author_slide_fallback as author_slide_fallback_mod
+from services.generation_core.authoring import author_slide as author_slide_mod
+from services.generation_core.authoring import author_slide_fallback as author_slide_fallback_mod
 from utils.provider_idempotency import ProviderOutcomeError
 from utils.runtime_settings import RuntimeSettings, runtime_settings_context
 

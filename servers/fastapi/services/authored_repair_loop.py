@@ -38,7 +38,7 @@ from services.authored_repair_loop_deterministic import deterministic_candidate,
 from services.authored_repair_loop_evidence import merge_evidence, reason_evidence
 from services.authored_structural_repair import SlideRepairResult, bind_repair_candidate
 from services.authored_rollout_profile import current_rollout_profile
-from utils.llm_calls.author_structural_repair_evidence import _advance_repair_evaluator
+from services.generation_core.authoring.author_structural_repair_evidence import _advance_repair_evaluator
 
 LOGGER = logging.getLogger(__name__)
 

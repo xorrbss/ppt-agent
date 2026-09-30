@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from utils import authored_illustrations as illustrations_mod
 from utils.authored_illustrations import apply_authored_illustration
 from utils.authored_styles import load_authored_styles
-from utils.llm_calls.author_slide import Brand, build_design_system
+from services.generation_core.authoring.author_slide import Brand, build_design_system
 
 _PNG_BYTES = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgYAAAAAMAASsJTYQAAAAASUVORK5CYII="

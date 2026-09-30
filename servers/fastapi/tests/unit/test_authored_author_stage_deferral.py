@@ -46,12 +46,12 @@ from services.authored_author_stage_deferral import (
     resumed_author_budget_is_rescuable,
 )
 from services.authored_composition_policy import CompositionProfile
-from utils.llm_calls.author_deck import (
+from services.generation_core.authoring.author_deck import (
     AuthoredBatchFailure,
     AuthoredPlannedBatchResult,
     AuthoredProviderBudgetExhausted,
 )
-from utils.llm_calls.author_slide import Brand
+from services.generation_core.authoring.author_slide import Brand
 from utils.renderer_isolation import RendererPolicyError
 
 _ORDINARY = CompositionProfile("ordinary", "authored", True, True, 1)
@@ -102,7 +102,7 @@ def _enforce_gate_rejection():
     from services.authored_admission_session import AdmissionSession, _SESSION, check_producer
     from services.source_content.browser_readback import BrowserSourceReadbackError
     from tests.unit.test_authored_admission import HTML, context
-    from utils.llm_calls.author_deck import _batch_failure
+    from services.generation_core.authoring.author_deck import _batch_failure
 
     session = AdmissionSession(mode="enforce", contexts=(context(),))
     token = _SESSION.set(session)

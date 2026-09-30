@@ -39,7 +39,7 @@ from services.authored_slide_ledger import (
     batch_recorder,
 )
 from services.authored_slide_worker_pool import run_slide_worker_pool
-from utils.llm_calls.author_deck import AuthoredBatchFailure
+from services.generation_core.authoring.author_deck import AuthoredBatchFailure
 
 logger = logging.getLogger(__name__)
 

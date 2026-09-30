@@ -37,8 +37,8 @@ from services.authored_composition_envelope_profile import (
     resolve_envelope_profile,
 )
 from utils.get_env_programme import get_authored_illustration_share
-from utils.llm_calls.author_deck import plan_deck_roles
-from utils.llm_calls.author_slide import (
+from services.generation_core.authoring.author_deck import plan_deck_roles
+from services.generation_core.authoring.author_slide import (
     EXACT_RECONSTRUCTION,
     STYLE_REFERENCE,
     normalize_reference_mode,

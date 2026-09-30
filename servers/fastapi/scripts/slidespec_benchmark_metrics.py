@@ -87,7 +87,7 @@ def _clear_review_caches() -> None:
     )
     from utils import slide_capture
     from utils.authored_ocr_quality import DEFAULT_CACHE
-    from utils.llm_calls import author_vision_qa
+    from services.generation_core.authoring import author_vision_qa
 
     _BASELINE_INSPECTION_CACHE.clear()
     DEFAULT_EVIDENCE_ATOM_CACHE.clear()

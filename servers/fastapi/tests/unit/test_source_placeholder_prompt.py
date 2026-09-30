@@ -127,7 +127,7 @@ def test_placeholder_prompt_boundary_recodes_the_size_bound(monkeypatch):
 
 def test_prompt_switch_uses_pinned_slide_context(monkeypatch):
     import services.authored_admission_session as session_module
-    from utils.llm_calls.author_slide_prompt import author_prompt
+    from services.generation_core.authoring.author_slide_prompt import author_prompt
 
     context = SimpleNamespace(source_reflow=True, reference_mode="source_content_restyle", bindings=(("a", "안녕"),))
     monkeypatch.setattr(session_module, "current_session", lambda: SimpleNamespace(contexts=(context,)))

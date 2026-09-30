@@ -45,7 +45,7 @@ from utils.authored_illustrations import (
     apply_authored_illustration,
     strip_illustration_slots,
 )
-from utils.llm_calls.author_slide import validate_authored_slide_html
+from services.generation_core.authoring.author_slide import validate_authored_slide_html
 from utils.renderer_isolation import RendererPolicyError
 from services.authored_admission_producers import illustrate_html
 

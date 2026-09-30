@@ -25,8 +25,8 @@ from services.authored_exact_source_snapshot import (
 from services.presentation_access_service import require_live_presentation
 from services.presentation_export_attempt_service import sha256_canonical_json
 from utils.authored_styles import load_authored_styles, validate_exact_reconstruction_style
-from utils.llm_calls.author_deck import plan_deck_roles
-from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION, normalize_reference_mode
+from services.generation_core.authoring.author_deck import plan_deck_roles
+from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION, normalize_reference_mode
 
 
 async def build_authored_retemplate_generation_request(

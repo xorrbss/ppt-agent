@@ -14,7 +14,7 @@ from services.source_content.header_pages import (
     header_absent_pages,
     source_pages_are_numbered,
 )
-from utils.llm_calls.author_deck import AuthoredDeckPlan
+from services.generation_core.authoring.author_deck import AuthoredDeckPlan
 
 
 RUNNING_HEADER = "꿀벌쌤 | 숏폼대행 1인사업자 홀로서기"

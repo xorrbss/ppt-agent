@@ -19,7 +19,7 @@ from models.authored_header_contract import (
 )
 from models.presentation_outline_model import PresentationOutlineModel
 from utils.llm_calls.author_header_contract import generate_header_contract
-from utils.llm_calls.author_slide import (
+from services.generation_core.authoring.author_slide import (
     NO_PAGE_NUMBER_MODE,
     TEMPLATE_PAGE_NUMBER_MODE,
 )

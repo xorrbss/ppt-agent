@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
 from services.authored_checkpoint_service import AuthoredStageError, fail_stage
-from utils.llm_calls.author_deck import (
+from services.generation_core.authoring.author_deck import (
     AuthoredBatchFailure,
     author_correction_from_stored_failure,
 )

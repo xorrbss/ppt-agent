@@ -16,8 +16,8 @@ import asyncio
 
 import pytest
 
-from utils.llm_calls import author_vision_qa as author_vision_qa_mod
-from utils.llm_calls.author_vision_qa import SlideCritique
+from services.generation_core.authoring import author_vision_qa as author_vision_qa_mod
+from services.generation_core.authoring.author_vision_qa import SlideCritique
 from utils.structured_semantic_slots import (
     VQA_CRITIQUE_PREFIX,
     VQA_PATCH_PREFIX,

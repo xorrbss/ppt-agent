@@ -282,7 +282,7 @@ def test_empty_content_document_admits_after_stripping():
 
 
 def test_default_author_normalization_path_strips_empty_content(monkeypatch):
-    from utils.llm_calls.author_slide import validate_authored_slide_html
+    from services.generation_core.authoring.author_slide import validate_authored_slide_html
 
     monkeypatch.delenv("AUTHORED_HTML_NORMALIZE_ENABLED", raising=False)
     hostile = SAFE_HTML.replace(

@@ -19,28 +19,7 @@ from utils.llm_calls.author_slide_brief import (
     composition_intent_block,
 )
 from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
-
-LOCAL_FONT_FALLBACKS = {
-    "noto sans kr": ("Noto Sans KR", "Malgun Gothic", "sans-serif"),
-    "pretendard": ("Pretendard", "Malgun Gothic", "sans-serif"),
-    "noto serif kr": ("Noto Serif KR", "Batang", "serif"),
-    "inter": ("Inter", "Aptos", "sans-serif"),
-    "roboto": ("Roboto", "Aptos", "sans-serif"),
-    "dm sans": ("DM Sans", "Aptos", "sans-serif"),
-    "source serif 4": ("Source Serif 4", "Cambria", "serif"),
-    "ibm plex mono": ("IBM Plex Mono", "Consolas", "monospace"),
-}
-
-
-def css_font_stack(value: str) -> str:
-    family = (value or "Noto Sans KR").split(",", 1)[0].strip().strip("\"'")
-    logical, local, generic = LOCAL_FONT_FALLBACKS.get(
-        " ".join(family.lower().split()),
-        (family, "Aptos", "sans-serif"),
-    )
-    logical = logical.replace("\\", "\\\\").replace('"', '\\"')
-    local = local.replace("\\", "\\\\").replace('"', '\\"')
-    return f'"{logical}","{local}",{generic}'
+from utils.authored_font_stack import LOCAL_FONT_FALLBACKS, css_font_stack  # noqa: F401
 
 
 def apply_style_defaults(brand: Any, style: Any | None) -> Any:
@@ -82,7 +61,7 @@ def build_design_system(
     canvas_safe_area: object | None = None,
 ) -> str:
     """Build the concrete shared brief for a brand and optional authored style."""
-    from utils.llm_calls import author_slide_prompt
+    from services.generation_core.authoring import author_slide_prompt
 
     if style is None or style.id == "default":
         style_brief = default_style_brief.format(

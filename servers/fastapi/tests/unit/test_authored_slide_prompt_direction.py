@@ -15,8 +15,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from utils.llm_calls import author_slide as author_slide_mod
-from utils.llm_calls.author_slide_prompt import (
+from services.generation_core.authoring import author_slide as author_slide_mod
+from services.generation_core.authoring.author_slide_prompt import (
     MAX_INSTRUCTIONS_CHARS,
     author_prompt,
     illustration_marker,

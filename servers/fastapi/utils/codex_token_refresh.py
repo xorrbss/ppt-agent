@@ -14,7 +14,7 @@ and publish the same runtime-settings refresh notification.
 ``httpx`` call, so this module does all of its work on the calling thread —
 no event loop is created or bridged here. That matters because
 `_get_codex_access_token` can be invoked from worker threads inside a
-``ThreadPoolExecutor`` (see `utils/llm_calls/author_slide.py`), which is also
+``ThreadPoolExecutor`` (see `services/generation_core/authoring/author_slide.py`), which is also
 why the single-flight guard below is a `threading.Lock` rather than an
 asyncio primitive.
 """

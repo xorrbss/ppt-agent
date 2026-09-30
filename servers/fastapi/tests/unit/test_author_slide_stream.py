@@ -11,8 +11,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from utils.llm_calls import author_slide as author_slide_mod
-from utils.llm_calls.author_slide_stream import (
+from services.generation_core.authoring import author_slide as author_slide_mod
+from services.generation_core.authoring.author_slide_stream import (
     AuthoredStreamAborted,
     PROLOGUE_GRACE_CHARS,
     StreamedAuthorResponse,

@@ -8,9 +8,9 @@ from services.authored_quality_acceptance import (
     style_comparison_improvement_decision,
     style_comparison_quality_gain,
 )
-from utils.llm_calls import author_vision_qa as author_vision_qa_mod
+from services.generation_core.authoring import author_vision_qa as author_vision_qa_mod
 from utils.llm_calls import critique_slide as critique_slide_mod
-from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION, STYLE_REFERENCE
+from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION, STYLE_REFERENCE
 from utils.llm_calls.critique_slide import (
     SlideCritique,
     StyleComparisonCritique,

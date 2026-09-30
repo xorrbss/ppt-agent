@@ -20,7 +20,7 @@ from utils.get_env import (
     is_authored_publish_flagged_slides_enabled,
     is_authored_publish_flagged_slides_source_reflow_enabled,
 )
-from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION
+from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION
 
 LOGGER = logging.getLogger(__name__)
 
@@ -248,7 +248,7 @@ def recover_residual_repair_round(
 
     ``AuthoredVqaResidualDomIssuesError`` is raised AFTER the round has already
     written every successful repair into its own ``htmls``/``pngs`` lists (see
-    ``utils/llm_calls/author_vision_qa.py``: ``htmls[i] = new_html`` happens only
+    ``services/generation_core/authoring/author_vision_qa.py``: ``htmls[i] = new_html`` happens only
     on the success branch, so a residual slide still carries the exact input it
     was handed). Recovering that state is what lets the deck-level outcome stop
     depending on which of two code paths reported the same residual defect: the

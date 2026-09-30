@@ -28,17 +28,17 @@ from services.authored_author_stage_deferral import (
 )
 from services.authored_generation_timing_receipt_e4 import flagged_slide_entries
 from services.provider_usage_instrumentation import response_usage
-from utils.llm_calls import author_deck as author_deck_mod
-from utils.llm_calls.author_deck import (
+from services.generation_core.authoring import author_deck as author_deck_mod
+from services.generation_core.authoring.author_deck import (
     AuthoredBatchFailure,
     AuthoredProviderBudgetExhausted,
 )
-from utils.llm_calls.author_slide import Brand
-from utils.llm_calls.author_slide_fallback import (
+from services.generation_core.authoring.author_slide import Brand
+from services.generation_core.authoring.author_slide_fallback import (
     reraise_author_call_error,
     text_only_fallback_applies,
 )
-from utils.llm_calls.author_slide_stream import (
+from services.generation_core.authoring.author_slide_stream import (
     OUTPUT_TOKEN_LIMIT_BUDGET_EXHAUSTED_CODE,
     OUTPUT_TOKEN_LIMIT_CORRECTION_HINT,
     OUTPUT_TOKEN_LIMIT_GUIDANCE,
@@ -312,7 +312,7 @@ def _guard_incomplete_error():
 
 
 def test_the_guard_verdict_becomes_the_ceiling_abort_only_for_a_length_outcome():
-    from utils.llm_calls.author_slide_stream import (
+    from services.generation_core.authoring.author_slide_stream import (
         output_token_limit_from_provider_outcome,
     )
 

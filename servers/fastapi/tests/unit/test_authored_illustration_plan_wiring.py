@@ -33,13 +33,13 @@ from services import authored_presentation_service as authored_service
 from services.authored_admission_capture import canonical_capture_html
 from services.authored_deck_illustration_plan import load_illustration_plan
 from services.authored_deck_infographic_plan import load_infographic_plan
-from utils.llm_calls import author_deck as author_deck_mod
-from utils.llm_calls.author_deck import (
+from services.generation_core.authoring import author_deck as author_deck_mod
+from services.generation_core.authoring.author_deck import (
     AuthoredDeckResult,
     author_planned_slide,
     prepare_authored_deck,
 )
-from utils.llm_calls.author_slide import Brand
+from services.generation_core.authoring.author_slide import Brand
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
 from models.authored_header_contract import default_header_contract
 

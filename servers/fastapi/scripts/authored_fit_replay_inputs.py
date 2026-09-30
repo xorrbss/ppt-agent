@@ -186,8 +186,8 @@ async def build_job_context(session: Any, job: Any) -> JobContext:
     )
     from services.authored_presentation_generation import _decode_deck_plans
     from utils.authored_styles import resolve_authored_style
-    from utils.llm_calls.author_deck import plan_deck_roles
-    from utils.llm_calls.author_slide import STYLE_REFERENCE, normalize_reference_mode
+    from services.generation_core.authoring.author_deck import plan_deck_roles
+    from services.generation_core.authoring.author_slide import STYLE_REFERENCE, normalize_reference_mode
 
     deviations: list[str] = []
     request = _request_from_durable_payload(dict(job.request_payload))

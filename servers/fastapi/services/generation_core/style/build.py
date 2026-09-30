@@ -12,7 +12,7 @@ from typing import Mapping, Optional, Sequence
 
 from models.generate_presentation_request import GeneratePresentationRequest
 from models.presentation_outline_model import PresentationOutlineModel
-from utils.llm_calls.author_slide import Brand
+from services.generation_core.authoring.author_slide import Brand
 from utils.outline_utils import get_presentation_title_from_presentation_outline
 
 from .context import BriefLine, FontChoice, Palette, StyleContext

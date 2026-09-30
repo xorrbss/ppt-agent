@@ -407,7 +407,7 @@ def _candidate(manifest, page_index, template, layout, width, height, minimum_px
 def _try_template_source_layout(manifest, page_index, style_snapshot, *, source_images,
         image_slots, min_font_size_px, width, height, max_layout_candidates=3,
         local_layout_budget_ms=1500, deadline=None, check_cancelled=None, _validated_pages=None):
-    from utils.llm_calls.author_slide_svg import SvgAuthorResult
+    from services.generation_core.authoring.author_slide_svg import SvgAuthorResult
     fit_minimum_px = math.ceil(min_font_size_px * 100) / 100
     analysis_started = time.monotonic()
     if _validated_pages is not None and _validated_pages is not manifest.units:

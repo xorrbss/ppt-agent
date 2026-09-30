@@ -20,7 +20,7 @@ from utils.authored_font_policy import (
     MIN_AUTHORED_FONT_SIZE_PT,
     MIN_AUTHORED_FONT_SIZE_PX,
 )
-from utils.llm_calls.author_slide_prompt import build_design_system
+from services.generation_core.authoring.author_slide_prompt import build_design_system
 
 
 def test_scene_and_ooxml_use_the_same_capability_registry_binding() -> None:

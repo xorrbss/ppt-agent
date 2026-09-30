@@ -12,9 +12,9 @@ from services.authored_batch_policy import (
     plan_authored_recovery_batches,
 )
 from services.authored_provider_rate_profile import AuthoredRateProfile
-from utils.llm_calls import author_batch as author_batch_mod
-from utils.llm_calls.author_batch import AuthoredBatchSlideRequest, author_slides_html
-from utils.llm_calls.author_slide import Brand
+from services.generation_core.authoring import author_batch as author_batch_mod
+from services.generation_core.authoring.author_batch import AuthoredBatchSlideRequest, author_slides_html
+from services.generation_core.authoring.author_slide import Brand
 
 
 TOKEN = AuthoredRateProfile(

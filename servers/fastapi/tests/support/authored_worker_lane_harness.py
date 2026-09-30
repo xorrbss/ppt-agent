@@ -6,7 +6,7 @@ older loopback harness (``tests/integration/test_authored_checkpoint_http_flow.p
 stubs ``author_planned_slide``, which is exactly the seam that bypasses the
 batch wave loop in ``services/authored_presentation_pipeline.py``.  This
 harness therefore stubs one level deeper -- the llmai client inside
-``utils/llm_calls/author_batch.py`` -- so the wave scheduler, the batch
+``services/generation_core/authoring/author_batch.py`` -- so the wave scheduler, the batch
 policy, per-slide admission (``validate_authored_slide_html``), checkpoints,
 publication and the attempt-timing receipt all run for real.  Chromium is
 replaced the way the pipeline/terminal-fallback unit tests replace it (no
@@ -74,9 +74,9 @@ from services.authored_provider_rate_profile import (
 from services.presentation_generation_operation_handler import (
     register_presentation_generation_operation_handler,
 )
-from utils.llm_calls import author_batch as author_batch_mod
-from utils.llm_calls import author_deck as author_deck_mod
-from utils.llm_calls import author_slide as author_slide_mod
+from services.generation_core.authoring import author_batch as author_batch_mod
+from services.generation_core.authoring import author_deck as author_deck_mod
+from services.generation_core.authoring import author_slide as author_slide_mod
 from tests.support.authored_worker_lane_capture import capture_for_lane, _observe_dom
 from utils.owner_context import (
     reset_current_owner_id,

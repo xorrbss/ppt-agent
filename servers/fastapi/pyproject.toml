@@ -350,16 +350,16 @@ select = ["E", "F", "B", "ASYNC"]
 # `from utils.get_env import (...)`; ruff cannot see that re-export intent
 # without an explicit __all__.
 "utils/get_env.py" = ["F401"]
-"utils/llm_calls/author_slide.py" = ["B904", "E501"]
+"services/generation_core/authoring/author_slide.py" = ["B904", "E501"]
 # `runtime: Any` parameter variant of the bind_runtime pattern above:
 # StructuralRepairBudget is only ever bound from `runtime.StructuralRepairBudget`
 # inside the function body, and the annotation referencing it is never
 # evaluated eagerly because of `from __future__ import annotations`.
-"utils/llm_calls/author_structural_repair_loop.py" = ["F821"]
+"services/generation_core/authoring/author_structural_repair_loop.py" = ["F821"]
 # This module is passed whole as the `runtime` namespace object to
 # revise_structural_candidates() (`runtime=sys.modules[__name__]`); these
 # imports are its injected-globals export surface, not dead code.
-"utils/llm_calls/author_vision_qa.py" = ["ASYNC240", "E501", "F401"]
+"services/generation_core/authoring/author_vision_qa.py" = ["ASYNC240", "E501", "F401"]
 "utils/llm_calls/critique_slide.py" = ["B904"]
 "utils/llm_calls/edit_slide.py" = ["B904", "E501"]
 "utils/llm_calls/edit_slide_html.py" = ["B904", "E501"]

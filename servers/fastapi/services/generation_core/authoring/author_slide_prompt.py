@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from utils.llm_calls.author_slide_design_system import (
+from services.generation_core.authoring.author_slide_design_system import (
     LOCAL_FONT_FALLBACKS as LOCAL_FONT_FALLBACKS,
     apply_style_defaults as apply_style_defaults,
     build_design_system as build_design_system,

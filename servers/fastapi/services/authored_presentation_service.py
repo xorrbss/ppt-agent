@@ -46,9 +46,9 @@ from utils.authored_styles import (
 )
 from utils.authored_dom_quality import ensure_authored_qids
 from utils.get_env import get_authored_job_concurrency_env
-from utils.llm_calls.author_deck import author_planned_slide, prepare_authored_deck
-from utils.llm_calls.author_slide import is_fallback_slide_html
-from utils.llm_calls.author_vision_qa import revise_authored_deck
+from services.generation_core.authoring.author_deck import author_planned_slide, prepare_authored_deck
+from services.generation_core.authoring.author_slide import is_fallback_slide_html
+from services.generation_core.authoring.author_vision_qa import revise_authored_deck
 from utils.slide_capture import (
     find_chrome,
     render_html_to_png,

@@ -19,7 +19,7 @@ Receipt stages this module emits, one deck-level scope per round:
     and tokens; the round's wall clock is a span receipt in the same stage
     with ``provider='local', model='none'``.
 ``repair_patch``
-    The bounded structured patch proposal (``utils/llm_calls/author_slide_patch.py``)
+    The bounded structured patch proposal (``services/generation_core/authoring/author_slide_patch.py``)
     plus its span receipt. It makes no provider call when preflight or the
     deterministic candidate leaves nothing to propose, so a deck may have the
     span and no call.

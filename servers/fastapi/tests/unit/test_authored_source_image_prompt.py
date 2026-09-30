@@ -15,16 +15,16 @@ import pytest
 from services.authored_batch_policy import is_authored_provider_overload
 from services.public_operation_admission import PublicAdmissionRejected
 from services.source_images.models import SourceImageCandidate
-from utils.llm_calls import author_slide as author_slide_mod
-from utils.llm_calls import author_slide_prompt
-from utils.llm_calls.author_slide import (
+from services.generation_core.authoring import author_slide as author_slide_mod
+from services.generation_core.authoring import author_slide_prompt
+from services.generation_core.authoring.author_slide import (
     Brand,
     EXACT_RECONSTRUCTION,
     build_design_system,
 )
-from utils.llm_calls.author_slide_fallback import text_only_fallback_applies
+from services.generation_core.authoring.author_slide_fallback import text_only_fallback_applies
 from utils.provider_idempotency import ProviderOutcomeError
-from utils.llm_calls.author_slide_images import (
+from services.generation_core.authoring.author_slide_images import (
     ILLUSTRATION_SLOT_RULES,
     ILLUSTRATION_SLOT_RULES_WITH_SOURCE_IMAGES,
 )

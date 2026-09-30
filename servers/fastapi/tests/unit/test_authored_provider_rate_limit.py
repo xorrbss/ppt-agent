@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from utils.llm_calls import author_slide
+from services.generation_core.authoring import author_slide
 from utils.provider_idempotency import ProviderOutcomeError
 
 

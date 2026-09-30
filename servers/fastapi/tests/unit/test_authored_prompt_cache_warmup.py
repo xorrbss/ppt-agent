@@ -30,15 +30,15 @@ from services.authored_prompt_cache_report import (
 from services.authored_provider_rate_profile import AuthoredRateProfile
 from services.authored_wave_scheduler import AuthoredWaveSchedule, run_initial_authoring
 from utils.get_env_programme import is_authored_prompt_cache_warmup_enabled
-from utils.llm_calls import author_batch as batch_mod
+from services.generation_core.authoring import author_batch as batch_mod
 from utils.llm_calls import author_prompt_split
 from utils.llm_calls.author_prompt_split import (
     author_messages,
     invariant_prefix_source,
     split_deck_invariant,
 )
-from utils.llm_calls.author_slide import Brand
-from utils.llm_calls.author_slide_prompt import author_prompt
+from services.generation_core.authoring.author_slide import Brand
+from services.generation_core.authoring.author_slide_prompt import author_prompt
 
 
 def _brand() -> Brand:

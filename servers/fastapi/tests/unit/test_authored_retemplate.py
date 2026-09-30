@@ -19,7 +19,7 @@ from models.sql.async_presentation_generation_status import (
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from utils.authored_styles import AuthoredStyle
-from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION
+from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION
 
 
 def _source_presentation() -> PresentationModel:

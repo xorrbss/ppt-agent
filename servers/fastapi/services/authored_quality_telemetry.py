@@ -6,8 +6,8 @@ from collections import Counter
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-from utils.llm_calls import author_vision_qa
-from utils.llm_calls.author_slide import STYLE_REFERENCE
+from services.generation_core.authoring import author_vision_qa
+from services.generation_core.authoring.author_slide import STYLE_REFERENCE
 
 _SAFE_OBSERVATION_TOKEN = re.compile(r"^[A-Za-z0-9._:/@+-]{1,128}$")
 _WINDOWS_ABSOLUTE_PATH = re.compile(r"^[A-Za-z]:[\\/]")

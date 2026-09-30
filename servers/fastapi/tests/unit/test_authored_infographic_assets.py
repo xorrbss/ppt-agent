@@ -35,8 +35,8 @@ from utils.authored_infographic import (
     library_css,
     render_skeleton,
 )
-from utils.llm_calls import author_vision_qa as vqa_mod
-from utils.llm_calls.author_slide import Brand, validate_authored_slide_html
+from services.generation_core.authoring import author_vision_qa as vqa_mod
+from services.generation_core.authoring.author_slide import Brand, validate_authored_slide_html
 
 _CONTENT = (
     "## 프레스 3호 라인 센서 배치\n- 주 모터: 진동 센서\n- 크랭크 베어링: 온도 센서\n"

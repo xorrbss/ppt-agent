@@ -63,7 +63,7 @@ from services.authored_vnext.generation.scene_envelope import replace_deck_scene
 from services.image_generation_service import ImageGenerationService as ImageGenerationService
 from utils.asset_directory_utils import get_images_directory as get_images_directory
 from utils.authored_dom_quality import inspect_authored_dom
-from utils.llm_calls.author_vision_qa import revise_authored_deck
+from services.generation_core.authoring.author_vision_qa import revise_authored_deck
 from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
 from utils.get_env_programme import is_authored_in_render_fit_enabled
 from utils.slide_capture import (

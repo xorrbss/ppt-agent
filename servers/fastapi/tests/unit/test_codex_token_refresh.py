@@ -166,7 +166,7 @@ def test_concurrent_callers_single_flight_one_refresh(monkeypatch):
 
     Mirrors the real caller shape: `_get_codex_access_token` can be invoked
     from worker threads inside a `ThreadPoolExecutor`
-    (`utils/llm_calls/author_slide.py`).
+    (`services/generation_core/authoring/author_slide.py`).
     """
     initial_settings = _settings(
         {

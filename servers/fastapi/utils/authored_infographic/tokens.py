@@ -95,7 +95,7 @@ class InfographicTokens:
 def _font_stack(fonts: str | None) -> str:
     # Imported lazily: the prompt module imports the marker, which imports the
     # contracts of this package, so a top-level import would be circular.
-    from utils.llm_calls.author_slide_prompt import css_font_stack
+    from utils.authored_font_stack import css_font_stack
 
     return css_font_stack(fonts or _DEFAULT_FONTS)
 

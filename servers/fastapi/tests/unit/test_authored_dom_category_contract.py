@@ -44,7 +44,7 @@ from utils.authored_dom_categories import (
     critique_type_for_category,
 )
 from utils.authored_dom_quality import DomQualityIssue, DomQualityReport
-from utils.llm_calls.author_vision_qa import deterministic_dom_critique
+from services.generation_core.authoring.author_vision_qa import deterministic_dom_critique
 from utils.llm_calls.critique_slide import CritiqueIssue, IssueType
 
 #: A category no detector has ever emitted: the next one, standing in.

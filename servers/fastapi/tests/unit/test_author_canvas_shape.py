@@ -21,7 +21,7 @@ from utils.llm_calls.author_canvas_shape import (
     classify_canvas_shape,
     composition_clause,
 )
-from utils.llm_calls.author_deck import prepare_authored_deck
+from services.generation_core.authoring.author_deck import prepare_authored_deck
 from utils.llm_calls.author_deck_tokens import deck_tokens_block
 from utils.llm_calls.author_prompt_profile import (
     AUGUST,
@@ -30,8 +30,8 @@ from utils.llm_calls.author_prompt_profile import (
     AuthorPromptProfile,
     author_prompt_profile_scope,
 )
-from utils.llm_calls.author_slide import Brand, build_design_system
-from utils.llm_calls.author_slide_svg import svg_author_rules
+from services.generation_core.authoring.author_slide import Brand, build_design_system
+from services.generation_core.authoring.author_slide_svg import svg_author_rules
 
 BASELINE_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "prompt_16x9_baseline"
 MODES = ("template", "companyStandard", "none")

@@ -21,8 +21,8 @@ from services.runtime_settings_coordinator import (
     stop_runtime_settings_coordinator,
 )
 from utils.authored_styles import resolve_authored_style
-from utils.llm_calls.author_deck import build_image_pptx
-from utils.llm_calls.author_slide import Brand
+from services.generation_core.authoring.author_deck import build_image_pptx
+from services.generation_core.authoring.author_slide import Brand
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
 
 

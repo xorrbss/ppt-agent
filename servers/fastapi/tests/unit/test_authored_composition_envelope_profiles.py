@@ -35,7 +35,7 @@ from services.authored_composition_policy import (
 )
 from services.authored_deck_plans import _infographic_plan_applies
 from utils.get_env_programme import get_authored_composition_envelope_profile
-from utils.llm_calls.author_slide import STYLE_REFERENCE
+from services.generation_core.authoring.author_slide import STYLE_REFERENCE
 
 _PROFILE_KNOB = "AUTHORED_COMPOSITION_ENVELOPE_PROFILE"
 _KNOBS = (

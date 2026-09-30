@@ -272,24 +272,24 @@ from utils.authored_illustrations import validate_visible_source_images
 from utils.authored_semantic_role_repair import canonicalize_authored_roles
 from utils.authored_styles import resolve_authored_style, validate_exact_reconstruction_style
 from utils.hashing import sha256_hex, sha256_prefixed
-from utils.llm_calls.author_deck import (
+from services.generation_core.authoring.author_deck import (
     plan_deck_roles,
     prepare_authored_deck,
 )
-from utils.llm_calls.author_slide import (
+from services.generation_core.authoring.author_slide import (
     EXACT_RECONSTRUCTION,
     STYLE_REFERENCE,
     apply_style_defaults,
     authored_semantic_dual_output_mode,
     normalize_reference_mode,
 )
-from utils.llm_calls.author_slide import TEMPLATE_PAGE_NUMBER_MODE as _TEMPLATE_PAGE_NUMBER_MODE
-from utils.llm_calls.author_slide_patch import (
+from services.generation_core.authoring.author_slide import TEMPLATE_PAGE_NUMBER_MODE as _TEMPLATE_PAGE_NUMBER_MODE
+from services.generation_core.authoring.author_slide_patch import (
     build_structural_repair_scopes,
     protected_qids_for_repair_scopes,
 )
-from utils.llm_calls.author_slide_prompt import planned_source_image_brief
-from utils.llm_calls.author_vision_qa import (
+from services.generation_core.authoring.author_slide_prompt import planned_source_image_brief
+from services.generation_core.authoring.author_vision_qa import (
     AuthoredVqaResidualDomIssuesError,
     StructuralRepairBudget,
     _advance_repair_evaluator,

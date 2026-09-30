@@ -1,6 +1,6 @@
 """Per-stage aggregation of authored provider-call spans (SPEED-12).
 
-``utils/llm_calls/author_call_spans.py`` measures one call as three spans
+``services/generation_core/authoring/author_call_spans.py`` measures one call as three spans
 (admission wait, executor wait, provider time). This module keeps those
 records for one operation attempt and folds them into the attempt timing
 receipt as ``providerCallTiming``: per stage, the call count, the sum of each

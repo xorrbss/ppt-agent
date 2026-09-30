@@ -27,7 +27,7 @@ from utils.authored_figure_variants import (
     measure_candidate,
     select_candidate,
 )
-from utils.llm_calls.author_slide import STYLE_REFERENCE
+from services.generation_core.authoring.author_slide import STYLE_REFERENCE
 from services.authored_admission_capture import capture_once
 from utils.slide_capture import render_html_to_png_with_metrics
 from utils.slide_capture_result import RenderCapture

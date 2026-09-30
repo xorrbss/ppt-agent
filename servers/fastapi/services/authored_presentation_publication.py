@@ -58,7 +58,7 @@ from services.authored_vnext.semantic.editable_scene import (
     PROFILE_ID as EDITABLE_HYBRID_PROFILE_ID,
 )
 from models.authored_vnext.deck import DeckSceneIR
-from utils.llm_calls.author_slide import Brand
+from services.generation_core.authoring.author_slide import Brand
 from services.authored_canvas import (
     merge_authored_vnext_projection,
     merge_presentation_canvas,

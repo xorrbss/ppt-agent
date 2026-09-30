@@ -16,7 +16,7 @@ from services.authored_provider_attempt_ledger import (
     reserve_provider_overload_retry,
     take_provider_attempt_reservations,
 )
-from utils.llm_calls.author_deck import author_correction_from_stored_failure
+from services.generation_core.authoring.author_deck import author_correction_from_stored_failure
 from services.authored_checkpoint_errors import AuthoredStageError
 from services.authored_composition_policy import (
     CompositionProfile,
@@ -31,8 +31,8 @@ from services.authored_generation_timing_receipt import (
 )
 from services.authored_presentation_pipeline import _author_stage_failure
 from services.provider_usage_instrumentation import ProviderUsageScope
-from utils.llm_calls import author_deck as author_deck_module
-from utils.llm_calls.author_slide import Brand, authored_provider_semantic_slot
+from services.generation_core.authoring import author_deck as author_deck_module
+from services.generation_core.authoring.author_slide import Brand, authored_provider_semantic_slot
 
 
 def test_pre_author_planner_freezes_known_closing_text_and_call_budget(monkeypatch) -> None:

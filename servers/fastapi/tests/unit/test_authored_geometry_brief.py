@@ -20,7 +20,7 @@ from utils.authored_infographic.contracts import (
     CONTENT_BOTTOM_PX_BY_PAGE_NUMBER_MODE,
     content_bottom_px,
 )
-from utils.llm_calls import author_deck as author_deck_module
+from services.generation_core.authoring import author_deck as author_deck_module
 
 _ORDINARY = CompositionProfile("ordinary", "authored", True, True, 1)
 _VERBATIM = CompositionProfile("source-verbatim", "verbatim", False, True, 2)

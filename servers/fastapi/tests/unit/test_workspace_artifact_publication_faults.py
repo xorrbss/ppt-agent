@@ -1288,7 +1288,7 @@ def test_authored_publication_failure_reports_snapshotted_job_after_rollback(
     )
     from services import authored_presentation_publication as authored_publication
     from services.authored_checkpoint_service import AuthoredStageError
-    from utils.llm_calls.author_slide import Brand
+    from services.generation_core.authoring.author_slide import Brand
 
     async def scenario():
         engine, maker = await _database(tmp_path / "authored-rollback-report.db")
