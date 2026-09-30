@@ -1,0 +1,51 @@
+{
+  "schema": "authored-style-samples/v1",
+  "styleId": "default",
+  "styleDigest": "sha256:7e04c8fa94b5140cfc5e7029c8e6609d7a37d30794ebc064c390f96e05631bb2",
+  "topicDigest": "sha256:5e9a2ffbb2460a6bfc3c06fdb07e5763252e9b70cb354baa9ce32c917b5ec93b",
+  "demoTopicId": "business-plan-v1",
+  "canvas": {
+    "width": 1280,
+    "height": 720
+  },
+  "generatedAt": "2026-09-28T15:16:15Z",
+  "generatorCommit": "52ebfd9a03f0ed71f3393bcc5111feae30cf9a7c",
+  "slides": [
+    {
+      "title": "표지"
+    },
+    {
+      "title": "목차"
+    },
+    {
+      "title": "시장"
+    },
+    {
+      "title": "문제 정의"
+    },
+    {
+      "title": "제품"
+    },
+    {
+      "title": "작동 방식"
+    },
+    {
+      "title": "비즈니스 모델"
+    },
+    {
+      "title": "경쟁 비교"
+    },
+    {
+      "title": "고객 사례"
+    },
+    {
+      "title": "로드맵"
+    },
+    {
+      "title": "재무"
+    },
+    {
+      "title": "마무리"
+    }
+  ]
+}
