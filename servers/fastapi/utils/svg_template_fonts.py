@@ -6,9 +6,9 @@ No caller-supplied font paths, URLs, aliases or fallback families are accepted.
 from __future__ import annotations
 
 from functools import lru_cache
-from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
+from utils.hashing import sha256_prefixed
 
 FONT_PROFILE = "svg-template-noto-sans-kr/v1"
 FONT_FAMILY = "Noto Sans KR"
@@ -25,7 +25,7 @@ def _packaged_font() -> tuple[str, bytes, frozenset[int]]:
         payload = FONT_PATH.read_bytes()
     except OSError as exc:
         raise ValueError("svg_template_font_unavailable:Noto Sans KR") from exc
-    digest = "sha256:" + sha256(payload).hexdigest()
+    digest = sha256_prefixed(payload)
     if digest != FONT_DIGEST:
         raise ValueError("svg_template_font_digest_mismatch")
     receipt = NativeFontByteRegistry().register(payload)

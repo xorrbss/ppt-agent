@@ -10,7 +10,6 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-import hashlib
 import json
 import re
 from typing import Literal
@@ -19,6 +18,7 @@ from services.authored_vnext.narrative_ir.content_graph import seal_content_grap
 from services.authored_vnext.composition_capacity import (
     MIN_SOURCE_VERBATIM_TEXT_SCALE,
 )
+from utils.hashing import sha256_prefixed
 
 
 class SourceUnitizationError(ValueError):
@@ -113,7 +113,7 @@ def _digest(value: object) -> str:
         sort_keys=True,
         default=str,
     ).encode("utf-8")
-    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+    return sha256_prefixed(encoded)
 
 
 def _normalize_inline(value: str) -> str:

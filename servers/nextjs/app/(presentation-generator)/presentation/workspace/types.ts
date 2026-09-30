@@ -77,6 +77,9 @@ export interface WorkspaceMessageAnchor {
   position: number;
   role: "user" | "assistant" | "system" | "unknown";
   content: string;
+  /** Backend message key for a command the server wrote on the user's behalf. */
+  contentKey?: string;
+  contentParams?: Record<string, unknown>;
   createdAt?: string;
   attachments: WorkspaceAttachment[];
   generationSettings?: Record<string, unknown>;
@@ -93,6 +96,9 @@ export interface WorkspaceOperationEvent {
   type: string;
   status?: string;
   message?: string;
+  /** Backend message key (`lib/backend-messages.ts`); `message` is its fallback. */
+  messageKey?: string;
+  messageParams?: Record<string, unknown>;
   progress?: number;
   stage?: string;
   current?: number;
@@ -131,6 +137,8 @@ export interface WorkspaceOperationAnchor {
   position: number;
   operationType: string;
   title: string;
+  /** `workspace.operation.<kind>`; `title` is the English fallback. */
+  titleKey?: string;
   status: string;
   retryOfOperationId?: string;
   approvalExpiresAt?: string;

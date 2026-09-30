@@ -30,6 +30,7 @@ from utils.filename_utils import safe_export_basename
 from utils.get_env import is_authored_retain_checkpoint_html_enabled
 from utils.llm_calls.author_deck import build_image_pptx
 from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX, canvas_or_default
+from utils.hashing import sha256_hex
 
 __all__ = ["authored_title", "resolve_brand"]
 
@@ -80,7 +81,7 @@ def _save_slide_pngs(
     os.makedirs(abs_dir, exist_ok=True)
     refs: List[str] = []
     for i, png in enumerate(pngs):
-        content_hash = hashlib.sha256(png).hexdigest()
+        content_hash = sha256_hex(png)
         fname = f"slide_{i}-{content_hash}.png"
         absolute_path = os.path.join(abs_dir, fname)
         atomic_write(Path(absolute_path), png)

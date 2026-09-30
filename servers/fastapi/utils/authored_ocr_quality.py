@@ -19,11 +19,11 @@ import time
 import unicodedata
 from collections import Counter, OrderedDict
 from dataclasses import dataclass, field
-from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
 from utils.env_settings.tooling import get_external_tool_paths
+from utils.hashing import sha256_hex
 
 DEFAULT_TIMEOUT_SECONDS = 20.0
 MAX_TIMEOUT_SECONDS = 60.0
@@ -520,7 +520,7 @@ def _ocr_bytes(
         started = time.monotonic()
         with cache.lock:
             cache.requests += 1
-        fingerprint = sha256(image).hexdigest()
+        fingerprint = sha256_hex(image)
         data = discover_tessdata(tessdata_dir)
         selected_command = str(
             command
@@ -547,7 +547,7 @@ def _ocr_bytes(
                 "success",
                 None,
                 text,
-                sha256(text.encode()).hexdigest(),
+                sha256_hex(text.encode()),
                 {},
                 cache.calls,
                 cache.cache_hits,
@@ -624,7 +624,7 @@ def _ocr_bytes(
             "success",
             None,
             text,
-            sha256(text.encode()).hexdigest(),
+            sha256_hex(text.encode()),
             {},
             cache.calls,
             cache.cache_hits,

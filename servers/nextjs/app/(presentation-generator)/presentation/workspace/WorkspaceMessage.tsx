@@ -2,7 +2,9 @@ import type { WorkspaceMessageAnchor } from "./types";
 import { renderMarkdown } from "@/lib/safe-markdown";
 import { memo } from "react";
 import { FileText } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+
+import { translateBackendMessage } from "@/lib/backend-messages-intl";
 import { ConversationMessageFrame, conversationAssistantMarkdownClassName, conversationAttachmentClassName } from "../conversation/ConversationPrimitives";
 
 const SECRET_SETTING = /(?:secret|token|password|api[_-]?key|access[_-]?key)/i;
@@ -117,6 +119,7 @@ export const WorkspaceMessage = memo(function WorkspaceMessage({
 }: WorkspaceMessageProps) {
   const t = useTranslations("upload.advancedSettings");
   const tMessage = useTranslations("presentationWorkspaceMessage");
+  const locale = useLocale();
   const settings = visibleSettings(message.generationSettings, {
     tone: t("toneLabel"),
     verbosity: t("verbosityLabel"),
@@ -138,6 +141,13 @@ export const WorkspaceMessage = memo(function WorkspaceMessage({
     mode: { authored: "AI 저작", adaptive: "자동 구성", template: "템플릿" },
   });
   const isUser = message.role === "user";
+  // A command the server wrote on the user's behalf carries a backend key.
+  const userContent = isUser
+    ? (translateBackendMessage(
+        { key: message.contentKey, params: message.contentParams, text: message.content },
+        locale,
+      ) ?? message.content)
+    : message.content;
   const isInitialGenerationRequest = settings.length > 0;
   const assistantHtml = !isUser ? renderMarkdown(message.content) : "";
   return (
@@ -154,7 +164,7 @@ export const WorkspaceMessage = memo(function WorkspaceMessage({
     >
       <ConversationMessageFrame appearance={isUser ? "user" : "assistant"}>
       {isUser ? (
-        <p className="whitespace-pre-wrap break-words">{message.content || (message.attachments.length > 0 ? tMessage("attachmentRequest") : "")}</p>
+        <p className="whitespace-pre-wrap break-words">{userContent || (message.attachments.length > 0 ? tMessage("attachmentRequest") : "")}</p>
       ) : (
         <div
           className={conversationAssistantMarkdownClassName}

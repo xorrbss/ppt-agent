@@ -7,20 +7,20 @@ verified issuer and tenant and resolves to one existing Presenton user.
 from __future__ import annotations
 
 from datetime import datetime
-from hashlib import sha256
 import uuid
 
 from sqlalchemy import Column, DateTime, ForeignKey, Index, String, UniqueConstraint, Uuid, func
 from sqlmodel import Field, SQLModel
 
 from utils.datetime_utils import get_current_utc_datetime
+from utils.hashing import sha256_hex
 
 
 def external_principal_component_digest(value: str) -> str:
     normalized = value.strip()
     if not normalized:
         raise ValueError("external_principal_component_required")
-    return sha256(normalized.encode("utf-8")).hexdigest()
+    return sha256_hex(normalized.encode("utf-8"))
 
 
 def external_principal_binding_digest(
@@ -29,7 +29,7 @@ def external_principal_binding_digest(
     components = (issuer.strip(), tenant_id.strip(), subject.strip())
     if not all(components):
         raise ValueError("external_principal_binding_identity_required")
-    return sha256("\0".join(components).encode("utf-8")).hexdigest()
+    return sha256_hex("\0".join(components).encode("utf-8"))
 
 
 class PublicPrincipalBinding(SQLModel, table=True):

@@ -1,3 +1,6 @@
+import { pickBackendMessage } from "@/lib/backend-messages";
+import { translateBackendMessage } from "@/lib/backend-messages-intl";
+
 // API Error Response Interface
 interface StructuredApiError {
   status_code?: number;
@@ -152,7 +155,11 @@ export function apiErrorFromPayload(
       : undefined;
   const detail = error?.detail;
   const detailMessage =
-    typeof detail === "string" && detail.length > 0 ? detail : undefined;
+    typeof detail === "string" && detail.length > 0
+      ? detail
+      : // A structured detail carries the backend message key beside its
+        // English fallback (`constants/user_messages.py`).
+        translateBackendMessage(pickBackendMessage(detail));
   return new ApiError(error?.message || detailMessage || fallbackMessage, {
     status: error?.status_code ?? fallbackStatus,
     code: error?.code || detailMessage,

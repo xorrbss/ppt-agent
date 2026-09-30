@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import tempfile
@@ -48,6 +47,7 @@ from services.authored_quality_receipt_v2 import (
     public_attempt_id,
     quality_receipt_manifest_path,
 )
+from utils.hashing import canonical_json_digest
 
 
 GENERATION_TIMING_STAGES = (
@@ -281,14 +281,7 @@ class GenerationTimingReceipt:
 def _receipt_digest(receipt: GenerationTimingReceipt) -> str:
     payload = receipt.to_dict()
     payload.pop("timingReceiptDigest", None)
-    return "sha256:" + hashlib.sha256(
-        json.dumps(
-            payload,
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-        ).encode("utf-8")
-    ).hexdigest()
+    return canonical_json_digest(payload, allow_nan=True)
 
 
 def _from_dict(value: object) -> GenerationTimingReceipt:
@@ -594,27 +587,13 @@ class GenerationAttemptTimingReceiptV2:
 def _attempt_receipt_digest(receipt: GenerationAttemptTimingReceipt) -> str:
     payload = receipt.to_dict()
     payload.pop("receiptDigest", None)
-    return "sha256:" + hashlib.sha256(
-        json.dumps(
-            payload,
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-        ).encode("utf-8")
-    ).hexdigest()
+    return canonical_json_digest(payload, allow_nan=True)
 
 
 def _attempt_receipt_v2_digest(receipt: GenerationAttemptTimingReceiptV2) -> str:
     payload = receipt.to_dict()
     payload.pop("receiptDigest", None)
-    return "sha256:" + hashlib.sha256(
-        json.dumps(
-            payload,
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-        ).encode("utf-8")
-    ).hexdigest()
+    return canonical_json_digest(payload, allow_nan=True)
 
 
 def _authoring_cooldown_wait(value: float | int) -> float | int:

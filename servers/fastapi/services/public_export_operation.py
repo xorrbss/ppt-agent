@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from hashlib import sha256
 import json
 import os
 import pathlib
@@ -108,6 +107,7 @@ from utils.env_settings.public_service import (
     get_public_worker_settings,
 )
 from utils.get_env import get_vnext_tenant_id
+from utils.hashing import canonical_json_digest, canonical_json_sha256, sha256_hex, sha256_prefixed
 
 
 @dataclass(frozen=True, slots=True)
@@ -424,12 +424,7 @@ def declared_semantic_slide_payload(
             "kind": raw["kind"],
             # The assembler only requires a stable per-element digest to seal
             # its observation receipt; it never recomputes this server-side.
-            "sourceDigest": "sha256:"
-            + sha256(
-                json.dumps(
-                    raw, ensure_ascii=True, sort_keys=True, separators=(",", ":")
-                ).encode("utf-8")
-            ).hexdigest(),
+            "sourceDigest": canonical_json_digest(raw, ensure_ascii=True, allow_nan=True),
         }
         if raw.get("parentId") is not None:
             entry["parentId"] = raw["parentId"]
@@ -989,14 +984,7 @@ async def render_and_export_authored_htmls(
                 "public_export_local_fit_source_mismatch"
             )
     local_fit_receipt_digest = (
-        sha256(
-            json.dumps(
-                list(local_fit_receipts),
-                ensure_ascii=True,
-                sort_keys=True,
-                separators=(",", ":"),
-            ).encode("utf-8")
-        ).hexdigest()
+        canonical_json_sha256(list(local_fit_receipts), ensure_ascii=True, allow_nan=True)
         if local_fit_receipts
         else ""
     )
@@ -1083,11 +1071,9 @@ async def render_and_export_authored_htmls(
             # The declared graph changes what the assembler may promote, so it
             # is part of the export's identity. Without this, a graph-ful
             # request could reuse a graph-less completed result.
-            semantic_digest_binding = sha256(
-                json.dumps(
+            semantic_digest_binding = sha256_hex(json.dumps(
                     semantic_slides, ensure_ascii=True, separators=(",", ":")
-                ).encode("utf-8")
-            ).hexdigest()
+                ).encode("utf-8"))
     try:
         configured_concurrency = get_public_render_max_concurrency(2)
     except ValueError as error:
@@ -1150,7 +1136,7 @@ async def render_and_export_authored_htmls(
                         "public_export_approved_png_unavailable"
                     )
                 png = pathlib.Path(image_path).read_bytes()
-                actual_digest = "sha256:" + sha256(png).hexdigest()
+                actual_digest = sha256_prefixed(png)
                 if (
                     not png.startswith(b"\x89PNG\r\n\x1a\n")
                     or receipt.get("png_digest") != actual_digest
@@ -1305,8 +1291,7 @@ async def render_and_export_authored_htmls(
     async def render_fresh(index: int, reference: PublicArtifactRef) -> PublicArtifactRef:
         return await render_batcher.render(index, reference)
 
-    semantic_digest = sha256(
-        json.dumps(
+    semantic_digest = sha256_hex(json.dumps(
             [
                 json.dumps(htmls, ensure_ascii=False, separators=(",", ":")),
                 semantic_digest_binding or "",
@@ -1314,8 +1299,7 @@ async def render_and_export_authored_htmls(
             ],
             ensure_ascii=False,
             separators=(",", ":"),
-        ).encode("utf-8")
-    ).hexdigest()
+        ).encode("utf-8"))
     render_runtime_binding = public_render_runtime_binding()
     parsed_canvas = parse_canvas_metadata(canvas)
     canvas_discriminator = (
@@ -1573,13 +1557,11 @@ async def render_and_export_authored_htmls(
                 semantic_digest=semantic_digest,
                 quality_digest=normalized_quality_digest,
                 exporter_digest=worker_bundle.digest,
-                font_manifest_digest=sha256(
-                    (
+                font_manifest_digest=sha256_hex((
                         f"editable-hybrid:font-embedding={'on' if font_embedding else 'off'}"
                         if hybrid
                         else "fidelity-raster:no-font-manifest"
-                    ).encode("utf-8")
-                ).hexdigest(),
+                    ).encode("utf-8")),
             ),
             slides=tuple(
                 SlideCheckpointArtifact(
@@ -1587,9 +1569,7 @@ async def render_and_export_authored_htmls(
                     artifact=reference,
                     input_digest=slide_identities[index].canonical_digest,
                     stage_version=slide_identities[index].stage_version,
-                    validation_digest=sha256(
-                        json.dumps(
-                            {
+                    validation_digest=canonical_json_sha256({
                                 "slideIndex": index,
                                 "htmlDigest": html_refs[index].sha256,
                                 "pngDigest": reference.sha256,
@@ -1602,11 +1582,7 @@ async def render_and_export_authored_htmls(
                                     if local_fit_receipts
                                     else None
                                 ),
-                            },
-                            sort_keys=True,
-                            separators=(",", ":"),
-                        ).encode("utf-8")
-                    ).hexdigest(),
+                            }, ensure_ascii=True, allow_nan=True),
                 )
                 for index, reference in enumerate(png_refs)
             ),

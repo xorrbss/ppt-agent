@@ -10,7 +10,6 @@ import asyncio
 import base64
 from collections.abc import Mapping, Sequence
 import copy
-import hashlib
 import json
 import logging
 import math
@@ -113,6 +112,7 @@ from utils.authored_dom_quality import (
 )
 from utils.slide_capture import render_html_to_png_with_metrics
 from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
+from utils.hashing import sha256_prefixed
 
 
 logger = logging.getLogger(__name__)
@@ -145,7 +145,7 @@ def _digest(value: object) -> str:
         sort_keys=True,
         default=str,
     ).encode("utf-8")
-    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+    return sha256_prefixed(encoded)
 
 
 def _attempt_binding_digest(checkpoint: object) -> str:

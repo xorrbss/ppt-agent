@@ -5,9 +5,13 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from constants.user_messages import UserMessage
 from services.libreoffice_profile import unique_user_installation_arg
 from utils.runtime_limits import log_memory
 from utils.env_settings.tooling import get_external_tool_paths
+
+_CONVERSION_PROBE_TIMEOUT_SECONDS = 10
+
 
 
 class DocumentConversionError(Exception):
@@ -25,12 +29,14 @@ class DocumentConversionError(Exception):
         code: str = "DOCUMENT_CONVERSION_FAILED",
         filename: Optional[str] = None,
         retryable: bool = False,
-        public_message: Optional[str] = None,
+        public_message: Optional[str | UserMessage] = None,
     ):
         super().__init__(message)
         self.code = code
         self.filename = filename
         self.retryable = retryable
+        # A ``UserMessage`` carries the key the frontend renders; a plain
+        # string is a reviewed English sentence with no translation.
         self.public_message = public_message
 
     def to_detail(self) -> Dict[str, object]:
@@ -39,10 +45,13 @@ class DocumentConversionError(Exception):
             # Exception text can contain subprocess stderr/stdout, commands, or
             # local paths. Only an explicitly reviewed public message crosses
             # the API boundary.
-            "message": self.public_message
-            or "Document conversion failed. Check the file and try again.",
+            "message": str(self.public_message)
+            if self.public_message
+            else "Document conversion failed. Check the file and try again.",
             "retryable": self.retryable,
         }
+        if isinstance(self.public_message, UserMessage):
+            detail.update(self.public_message.fields("message"))
         if self.filename:
             detail["filename"] = self.filename
         return detail
@@ -114,7 +123,7 @@ class DocumentConversionService:
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                timeout=10,
+                timeout=_CONVERSION_PROBE_TIMEOUT_SECONDS,
                 check=False,
                 **_windows_hidden_subprocess_kwargs(),
             )

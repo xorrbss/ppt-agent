@@ -12,6 +12,7 @@ from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
+from constants.user_messages import UserMessageLike, message_fields
 from services.workspace_batch_payload import BATCH_KIND, BATCH_RESULT_KEYS, sanitize_batch_value
 from services.workspace_attempt_timing import (
     ATTEMPT_TIMING_KEY, attempt_timing, sanitize_attempt_timing, with_attempt_timing,
@@ -134,6 +135,7 @@ from utils.owner_context import (
 )
 from utils.runtime_settings import create_runtime_settings_task
 from models.sql.workspace import get_workspace_owner_scope
+from utils.hashing import sha256_hex
 
 
 LOGGER = logging.getLogger(__name__)
@@ -943,7 +945,7 @@ def _canonical_hash(payload: Mapping[str, Any]) -> str:
         separators=(",", ":"),
         default=str,
     ).encode("utf-8")
-    return sha256(encoded).hexdigest()
+    return sha256_hex(encoded)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1600,7 +1602,7 @@ async def claim_next_workspace_operation(
                     await activate_public_operation_v2(
                         session,
                         admission_id=admission.id,
-                        lease_owner_hash=sha256(token.encode("utf-8")).hexdigest(),
+                        lease_owner_hash=sha256_hex(token.encode("utf-8")),
                         lease_seconds=max(1, lease_seconds),
                         attempt=proposed_attempt,
                         fence=int(admission.fence),
@@ -1706,7 +1708,7 @@ async def claim_next_workspace_operation(
                     await activate_public_operation_v2(
                         session,
                         admission_id=admission.id,
-                        lease_owner_hash=sha256(token.encode("utf-8")).hexdigest(),
+                        lease_owner_hash=sha256_hex(token.encode("utf-8")),
                         lease_seconds=max(1, lease_seconds),
                         attempt=proposed_attempt,
                         fence=admission_fence,
@@ -3766,9 +3768,7 @@ async def recover_expired_workspace_operations(
                     "fencing_token": stale["fencing_token"],
                     **(
                         {
-                            "reclaimed_attempt_token_sha256": sha256(
-                                str(stale["attempt_token"]).encode("utf-8")
-                            ).hexdigest()
+                            "reclaimed_attempt_token_sha256": sha256_hex(str(stale["attempt_token"]).encode("utf-8"))
                         }
                         if stale["attempt_token"] is not None
                         else {}
@@ -4005,7 +4005,7 @@ class _ExecutionContext(WorkspaceOperationExecutionContext):
         current: int | None = None,
         total: int | None = None,
         percent: int | None = None,
-        message: str | None = None,
+        message: UserMessageLike = None,
     ) -> bool:
         reported_progress = {
             "stage": stage,
@@ -4015,7 +4015,7 @@ class _ExecutionContext(WorkspaceOperationExecutionContext):
         }
         event_payload = {"state": "running", **reported_progress}
         if message:
-            event_payload["message"] = message
+            event_payload.update(message_fields(message))
         try:
             async with self._session_factory() as session:
                 operation = await session.get(

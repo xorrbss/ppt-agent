@@ -17,7 +17,6 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-import hashlib
 import logging
 import math
 import re
@@ -39,6 +38,7 @@ from services.source_content.source_stamp_dom import (
     source_block_data_attribute,
 )
 from services.source_content.text_stamping import stamp_source_block_ids
+from utils.hashing import sha256_hex, sha256_prefixed
 
 
 LOGGER = logging.getLogger(__name__)
@@ -166,7 +166,7 @@ def deterministic_source_block_id(source_unit_id: str, order: int, text: str) ->
     """
 
     canonical = re.sub(r"\s+", " ", str(text)).strip()
-    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
+    digest = sha256_hex(canonical.encode("utf-8"))[:16]
     return f"source-block:{source_unit_id}:{int(order)}:{digest}"
 
 
@@ -188,7 +188,7 @@ def deterministic_source_image_block_id(
     if not unit or not digest or int(occurrence) < 1:
         raise ValueError("source image occurrence identity is invalid")
     canonical = f"{unit}|image|{int(order)}|{digest}|{int(occurrence)}"
-    suffix = hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
+    suffix = sha256_hex(canonical.encode("utf-8"))[:16]
     return f"source-block:{unit}:image:{int(order)}:{int(occurrence)}:{suffix}"
 
 
@@ -745,7 +745,7 @@ def _manifest_index(units: Sequence[Any]) -> tuple[dict[str, dict[str, Mapping[s
 
 def _check_slide_capture(metrics: Mapping[str, Any], html_source: str | None, index: int) -> tuple[float, float]:
     if html_source is not None:
-        expected_html_digest = "sha256:" + hashlib.sha256(html_source.encode("utf-8")).hexdigest()
+        expected_html_digest = sha256_prefixed(html_source.encode("utf-8"))
         admitted_source_digest = _field(metrics, "source_digest", "sourceDigest", default=None)
         admitted_render_digest = _field(metrics, "render_digest", "renderDigest", default=None)
         if (

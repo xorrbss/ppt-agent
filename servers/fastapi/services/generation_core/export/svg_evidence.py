@@ -28,8 +28,8 @@ receipt records these identity digests at ``evidenceDigests``.
 
 from __future__ import annotations
 
-import hashlib
 import json
+from utils.hashing import sha256_hex
 
 #: Stage version for an svg slide checkpoint (the slide's svg source bytes).
 SVG_SLIDE_CHECKPOINT_STAGE = "svg-slide/v1"
@@ -37,7 +37,7 @@ SVG_SLIDE_CHECKPOINT_STAGE = "svg-slide/v1"
 
 def _digest(value: object) -> str:
     encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
-    return hashlib.sha256(encoded).hexdigest()
+    return sha256_hex(encoded)
 
 
 def svg_slide_quality(slide):

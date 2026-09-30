@@ -51,6 +51,8 @@ export type GenerationStatusResponse = {
   id?: string;
   status: string;
   message?: string | null;
+  message_key?: string | null;
+  message_params?: Record<string, unknown> | null;
   error?: GenerationFailure | Record<string, unknown> | null;
   // Free-form task payload. Left as `any` values on purpose: consumers read
   // fields such as `data.edit_path` directly, and narrowing them here would

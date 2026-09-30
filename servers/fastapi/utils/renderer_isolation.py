@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import base64
 import binascii
-import hashlib
 import html as html_lib
 import io
 import json
@@ -56,6 +55,7 @@ from utils.renderer_css_admission import (
     duplicate_attribute_counts as duplicate_attribute_counts,
 )
 from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
+from utils.hashing import sha256_prefixed
 
 
 MAX_REQUEST_BYTES = 12 * 1024 * 1024 + 4096
@@ -156,7 +156,7 @@ def admit_authorized_svg_materialized(canonical_svg: str, materialized_svg: str,
                 raster.verify()
         except (ValueError, OSError, SyntaxError, Image.DecompressionBombError) as error:
             raise RendererPolicyError("authorized SVG raster decoder rejected") from error
-        asset_digests.append("sha256:" + hashlib.sha256(payload).hexdigest())
+        asset_digests.append(sha256_prefixed(payload))
         image_node.set("href", original.get("href", ""))
     if ET.tostring(canonical) != ET.tostring(resolved):
         raise RendererPolicyError("authorized SVG canonical source mismatch")
@@ -165,7 +165,7 @@ def admit_authorized_svg_materialized(canonical_svg: str, materialized_svg: str,
         f'body>svg{{display:block}}</style></head><body>{materialized_svg}</body></html>')
     nonce = secrets.token_urlsafe(24)
     return AdmittedHtml(html=_inject_csp(wrapper, nonce), nonce=nonce,
-        source_digest="sha256:" + hashlib.sha256(wrapper.encode("utf-8")).hexdigest(),
+        source_digest=sha256_prefixed(wrapper.encode("utf-8")),
         asset_digests=tuple(asset_digests), node_count=sum(1 for _ in canonical.iter()) + 5)
 
 
@@ -305,7 +305,7 @@ class _PolicyParser(HTMLParser):
                     raise RendererPolicyError(f"image {name} must be an integer") from exc
                 if declared <= 0 or declared > MAX_IMAGE_DIMENSION:
                     raise RendererPolicyError(f"image {name} limit exceeded")
-        self.asset_digests.append("sha256:" + hashlib.sha256(payload).hexdigest())
+        self.asset_digests.append(sha256_prefixed(payload))
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self._start(tag, attrs, void=tag.lower() in _VOID_TAGS)
@@ -382,7 +382,7 @@ def admit_authored_html(source: str) -> AdmittedHtml:
     return AdmittedHtml(
         html=_inject_csp(source, nonce),
         nonce=nonce,
-        source_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+        source_digest=sha256_prefixed(raw),
         asset_digests=tuple(parser.asset_digests),
         node_count=parser.nodes,
     )
@@ -397,7 +397,7 @@ def admit_static_output_html(source: str) -> AdmittedHtml:
     return AdmittedHtml(
         html=_inject_csp(normalized, validated.nonce),
         nonce=validated.nonce,
-        source_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+        source_digest=sha256_prefixed(raw),
         asset_digests=tuple(
             dict.fromkeys((*validated.asset_digests, *extension_assets))
         ),
@@ -438,7 +438,7 @@ def admit_internal_instrumented_html(source: str, capability: str) -> AdmittedHt
     return AdmittedHtml(
         html=_inject_csp(authorized, nonce),
         nonce=nonce,
-        source_digest="sha256:" + hashlib.sha256(raw).hexdigest(),
+        source_digest=sha256_prefixed(raw),
         asset_digests=validated.asset_digests,
         node_count=validated.node_count + 1,
     )

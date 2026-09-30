@@ -43,6 +43,7 @@ from utils.env_settings.authored_release import (
     get_authored_release_settings,
     stripped,
 )
+from utils.hashing import sha256_prefixed
 
 
 _CI_POLICY_ID = "authored-trusted-capability/ci-required-checks/v1"
@@ -107,7 +108,7 @@ def _persisted_ci_request(
         or artifact.byte_length != len(content)
         or artifact.artifact_ref
         != f"artifact://sha256/{artifact.content_digest.removeprefix('sha256:')}"
-        or artifact.content_digest != "sha256:" + sha256(content).hexdigest()
+        or artifact.content_digest != sha256_prefixed(content)
     ):
         raise SemanticContractError("authored_ci_evidence_artifact_invalid")
     try:
@@ -260,7 +261,7 @@ async def publish_ci_evidence_artifact_v3(
         receipt_wire, request.authority
     )
     content = actual_product_canonical_json_v2(request).encode("utf-8")
-    artifact_digest = "sha256:" + sha256(content).hexdigest()
+    artifact_digest = sha256_prefixed(content)
     artifact_ref = f"artifact://sha256/{artifact_digest.removeprefix('sha256:')}"
     artifact = await session.scalar(
         select(AuthoredSemanticArtifact).where(
@@ -423,7 +424,7 @@ async def validate_ci_required_checks_evidence_v3(
         or artifact.resolver_version != _CI_RESOLVER_VERSION
         or artifact.media_type != "application/json"
         or artifact.content_digest
-        != "sha256:" + sha256(artifact.content_bytes).hexdigest()
+        != sha256_prefixed(artifact.content_bytes)
     ):
         raise SemanticContractError("authored_ci_evidence_artifact_unresolvable")
     published = _persisted_ci_request(artifact)

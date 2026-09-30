@@ -18,6 +18,7 @@ from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from constants.user_messages import UserMessageKey, set_record_message, user_message
 from models.authored_batch_remake import AuthoredBatchRemakePreviewRequest
 from models.presentation_from_template import AuthoredPageRemakePreviewRequest
 from models.sql.async_presentation_generation_status import (
@@ -135,11 +136,18 @@ async def _record_child_outcome(
         if completed >= total:
             data["phase"] = "preview_ready"
             parent.status = "completed"
-            parent.message = f"{total}개 페이지의 새 버전 미리보기가 준비되었습니다."
+            set_record_message(
+                parent, user_message(UserMessageKey.REMAKE_BATCH_READY, total=total)
+            )
         else:
             data["phase"] = "previewing"
             parent.status = "processing"
-            parent.message = f"{total}개 페이지 중 {completed}개의 새 버전을 만들었습니다."
+            set_record_message(
+                parent,
+                user_message(
+                    UserMessageKey.REMAKE_BATCH_PARTIAL, completed=completed, total=total
+                ),
+            )
         parent.data = data
         parent.updated_at = get_current_utc_datetime()
         session.add(parent)
@@ -213,7 +221,7 @@ async def snapshot_slides_for_batch(
         session,
         presentation_id,
         [item.model_dump(mode="json") for item in rows.scalars().all()],
-        label="페이지 일괄 다시 만들기",
+        label=user_message(UserMessageKey.VERSION_LABEL_BATCH_REMAKE),
         force=True,
     )
 
@@ -249,13 +257,15 @@ async def queue_authored_batch_remake_preview(
         presentation_id=presentation_id,
         operation_kind="slide.regenerate.batch.preview",
         expected_revision=int(presentation.revision),
-        command=f"선택한 {len(slide_indexes)}개 페이지 다시 만들기 미리보기",
+        command=user_message(UserMessageKey.REMAKE_BATCH_COMMAND, total=len(slide_indexes)),
         context={
             "slide_indexes": slide_indexes,
             "instruction": request.instruction,
         },
         task_id_prefix="workspace-batch-preview",
-        pending_message=f"{len(slide_indexes)}개 페이지의 새 버전 작업을 대기열에 추가했습니다.",
+        pending_message=user_message(
+            UserMessageKey.REMAKE_BATCH_QUEUED, total=len(slide_indexes)
+        ),
     )
     operation_suffix = parent.id.removeprefix("workspace-batch-preview-")
     pairs: list[tuple[int, str]] = []
@@ -267,7 +277,9 @@ async def queue_authored_batch_remake_preview(
                 id=child_task_id,
                 owner_id=parent.owner_id,
                 status="pending",
-                message=f"{slide_index + 1}페이지의 새 버전 작업을 대기열에 추가했습니다.",
+                **user_message(
+                    UserMessageKey.REMAKE_PAGE_QUEUED, page=slide_index + 1
+                ).fields("message"),
                 data=None,
             )
             session.add(child)
@@ -275,7 +287,7 @@ async def queue_authored_batch_remake_preview(
 
     total = len(pairs)
     parent.status = "processing"
-    parent.message = f"{total}개 페이지의 새 버전을 만들고 있습니다."
+    set_record_message(parent, user_message(UserMessageKey.REMAKE_BATCH_RUNNING, total=total))
     parent.data = {
         "kind": BATCH_PREVIEW_KIND,
         "phase": "previewing",

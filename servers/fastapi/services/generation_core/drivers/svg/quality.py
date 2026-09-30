@@ -10,12 +10,12 @@ asks for it; the advisory never gates or fails the deck.
 """
 from __future__ import annotations
 
-from hashlib import sha256
 
 from services.generation_core.quality.advisory_record import advisory_record
 from services.generation_core.quality.page_outcome import (
     PageOutcome, classify_page_outcomes, deck_quality_summary,
 )
+from utils.hashing import sha256_hex
 
 
 def page_outcome(index: int, payload: dict) -> PageOutcome:
@@ -51,7 +51,7 @@ async def deck_advisory(ctx, pages, *, job, read_png, run_advisory):
 
     renders = [png if png is not None else read_png(payload) for payload, png in pages]
     # Bound to the SVG bytes publication stores, which is what an export reads.
-    digests = [sha256((payload.get("svg_content") or "").encode()).hexdigest() for payload, _ in pages]
+    digests = [sha256_hex((payload.get("svg_content") or "").encode()) for payload, _ in pages]
     if any(not png for png in renders):
         # The sheet numbers what it shows; a missing render would shift every
         # later slide's number, so no advisory is better than a misattributed one.

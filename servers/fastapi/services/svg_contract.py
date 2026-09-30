@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import hashlib
 import base64
 import io
 import math
 import re
 import xml.etree.ElementTree as ET
 from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
+from utils.hashing import sha256_prefixed
 
 SVG_CONTRACT_VERSION = "svg-static/v1"
 SVG_NS = "http://www.w3.org/2000/svg"
@@ -78,7 +78,7 @@ def validate_raster_data_url(value: str) -> int:
 
 
 def source_digest(svg: str) -> str:
-    return "sha256:" + hashlib.sha256(svg.encode("utf-8")).hexdigest()
+    return sha256_prefixed(svg.encode("utf-8"))
 
 
 def normalize_svg_response(value: str) -> str:

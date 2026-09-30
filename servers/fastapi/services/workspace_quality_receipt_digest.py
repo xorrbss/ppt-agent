@@ -2,21 +2,13 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Mapping
 from typing import Any
+from utils.hashing import canonical_json_digest
 
 
 def _release_review_receipt_digest(payload: Mapping[str, Any]) -> str:
-    return "sha256:" + hashlib.sha256(
-        json.dumps(
-            dict(payload),
-            sort_keys=True,
-            separators=(",", ":"),
-            ensure_ascii=False,
-        ).encode("utf-8")
-    ).hexdigest()
+    return canonical_json_digest(dict(payload), allow_nan=True)
 
 
 def _is_sha256_digest(value: object) -> bool:

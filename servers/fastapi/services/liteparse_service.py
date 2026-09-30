@@ -17,6 +17,13 @@ from utils.runtime_limits import (
     BoundedTextBuffer,
     log_memory,
 )
+from constants.timeouts import SUBPROCESS_DRAIN_JOIN_SECONDS
+
+# Probing `node --version`.
+_NODE_VERSION_PROBE_TIMEOUT_SECONDS = 10
+# Dynamic import check of the bundled liteparse package.
+_LITEPARSE_IMPORT_CHECK_TIMEOUT_SECONDS = 20
+
 
 
 class LiteParseError(Exception):
@@ -188,7 +195,7 @@ class LiteParseService:
                 cwd=self.runner_dir,
                 check=True,
                 capture_output=True,
-                timeout=10,
+                timeout=_NODE_VERSION_PROBE_TIMEOUT_SECONDS,
                 env=self._build_node_env(),
                 **_subprocess_text_kwargs(),
             )
@@ -216,7 +223,7 @@ class LiteParseService:
                 cwd=self._npm_project_root,
                 check=True,
                 capture_output=True,
-                timeout=20,
+                timeout=_LITEPARSE_IMPORT_CHECK_TIMEOUT_SECONDS,
                 env=self._build_node_env(),
                 **_subprocess_text_kwargs(),
             )
@@ -486,11 +493,11 @@ class LiteParseService:
                 except subprocess.TimeoutExpired as exc:
                     process.kill()
                     process.wait()
-                    stderr_thread.join(timeout=5)
+                    stderr_thread.join(timeout=SUBPROCESS_DRAIN_JOIN_SECONDS)
                     raise LiteParseError(
                         f"LiteParse timed out after {self.timeout_seconds} seconds"
                     ) from exc
-                stderr_thread.join(timeout=5)
+                stderr_thread.join(timeout=SUBPROCESS_DRAIN_JOIN_SECONDS)
 
             with open(stdout_path, "r", encoding="utf-8", errors="replace") as output_file:
                 stdout = output_file.read()
@@ -507,7 +514,7 @@ class LiteParseService:
                     process.kill()
                     process.wait()
                 if stderr_thread is not None and stderr_thread.is_alive():
-                    stderr_thread.join(timeout=5)
+                    stderr_thread.join(timeout=SUBPROCESS_DRAIN_JOIN_SECONDS)
                 if process.stderr is not None:
                     process.stderr.close()
             if stdout_path:

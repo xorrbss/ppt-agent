@@ -54,6 +54,10 @@ from utils.path_helpers import get_writable_path
 from utils.upload_limits import get_single_upload_limit_bytes, stream_upload_to_file
 from utils.owner_context import get_current_owner_id
 
+# Upper bound for one ClamAV scan of an uploaded asset.
+_ANTIVIRUS_SCAN_TIMEOUT_SECONDS = 60
+
+
 _ASSET_TRANSITIONS: dict[str, frozenset[str]] = {
     "uploaded": frozenset(
         {"scanning", "processing", "failed", "quarantined", "expired", "deleted"}
@@ -285,7 +289,7 @@ def _scan_workspace_asset(path: Path) -> None:
             [executable, "--no-summary", "--infected", str(path)],
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=_ANTIVIRUS_SCAN_TIMEOUT_SECONDS,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as error:

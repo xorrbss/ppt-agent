@@ -8,7 +8,6 @@ provider-response fields.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from hashlib import sha256
 from inspect import isawaitable
 import uuid
 
@@ -79,6 +78,7 @@ from services.public_operation_admission_models import (
     plan_provider_requests,
     plan_weighted_resources,
 )
+from utils.hashing import sha256_hex
 
 
 PUBLIC_DEFAULT_MAX_SLIDES = 100
@@ -172,7 +172,7 @@ def _policy_digest(policy: PublicPolicyProfile) -> str:
 
     fields = sorted(_model_columns(PublicPolicyProfile) - {"created_at"})
     values = "|".join(f"{field}={getattr(policy, field)!r}" for field in fields)
-    return sha256(f"public-policy/v2|{values}".encode("utf-8")).hexdigest()
+    return sha256_hex(f"public-policy/v2|{values}".encode("utf-8"))
 
 
 def _phase2_workspace_model() -> type[object] | None:
@@ -610,7 +610,7 @@ async def admit_public_operation(
         policy_version=policy_version,
         owner_id=principal.owner_id,
         tenant_id=principal.tenant_id,
-        trace_id_hash=sha256(principal.trace_id.encode("utf-8")).hexdigest(),
+        trace_id_hash=sha256_hex(principal.trace_id.encode("utf-8")),
         operation_kind=operation_kind,
         slide_count=slide_count,
         planned_request_limit=request_limit,
@@ -806,7 +806,7 @@ async def _admit_public_operation_v2(
         policy_version=policy_version,
         owner_id=principal.owner_id,
         tenant_id=principal.tenant_id,
-        trace_id_hash=sha256(principal.trace_id.encode("utf-8")).hexdigest(),
+        trace_id_hash=sha256_hex(principal.trace_id.encode("utf-8")),
         operation_kind=operation_kind,
         slide_count=slide_count,
         planned_request_limit=request_limit,
@@ -1663,7 +1663,7 @@ async def reserve_public_provider_call(
         logical_call_key=logical_call_key,
     )
     identity_material = (
-        sha256(logical_call_key.encode("utf-8")).hexdigest()
+        sha256_hex(logical_call_key.encode("utf-8"))
         if logical_call_key is not None
         else str(ordinal)
     )
@@ -1671,7 +1671,7 @@ async def reserve_public_provider_call(
         f"public-provider-call/v2:{admission.operation_id}:{stage}:"
         f"{normalized_slide}:{ordinal}:{identity_material}"
     )
-    idempotency_key_hash = sha256(preimage.encode("utf-8")).hexdigest()
+    idempotency_key_hash = sha256_hex(preimage.encode("utf-8"))
     existing = await session.scalar(
         select(PublicProviderLogicalCall).where(
             PublicProviderLogicalCall.admission_id == admission_id,

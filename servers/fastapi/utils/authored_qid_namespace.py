@@ -23,7 +23,6 @@ HTML is never reserialized.
 
 from __future__ import annotations
 
-import hashlib
 import re
 from collections.abc import Mapping
 
@@ -33,6 +32,7 @@ from utils.authored_dom_tags import (
     is_edit_target,
     normalize_dom_text,
 )
+from utils.hashing import sha256_hex
 
 # This is deliberately shared with the patch engine.  A qid accepted by the
 # migration must also be addressable by a patch, otherwise a seemingly harmless
@@ -55,7 +55,7 @@ def _qid_seed(tag: str, attrs: Mapping[str, str], occurrence: int) -> str:
         for name in _IDENTITY_ATTRIBUTES
         if attrs.get(name)
     )
-    digest = hashlib.sha256(f"{tag}|{stable_attrs}|{occurrence}".encode()).hexdigest()[
+    digest = sha256_hex(f"{tag}|{stable_attrs}|{occurrence}".encode())[
         :12
     ]
     return f"q-{tag}-{digest}"

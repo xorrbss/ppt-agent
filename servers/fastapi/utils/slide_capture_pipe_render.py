@@ -18,6 +18,10 @@ from utils.slide_capture_fit import fit_marker_poll_js
 from utils.slide_capture_glyph_probe import probe_glyph_clipping_sync
 from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
+# Pause before retrying metrics evaluation after a destroyed execution context.
+_METRICS_RETRY_DELAY_SECONDS = 0.05
+
+
 SLIDE_W = DEFAULT_CANVAS_WIDTH_PX
 SLIDE_H = DEFAULT_CANVAS_HEIGHT_PX
 METRICS_ELEMENT_ID = "__codex_authored_dom_metrics"
@@ -259,7 +263,7 @@ def drive_admitted_htmls_over_pipe(
                             or attempt == 2
                         ):
                             raise
-                        time.sleep(0.05)
+                        time.sleep(_METRICS_RETRY_DELAY_SECONDS)
                 if metric_result is None:
                     raise RuntimeError(
                         "Chrome DevTools metrics evaluation did not complete"

@@ -1,9 +1,9 @@
 """Canonical Scene identity, shared by validation and revision sealing."""
-import hashlib
 import json
 import math
 import unicodedata
 from typing import Any
+from utils.hashing import sha256_prefixed
 
 def _canonical_value(value: Any) -> Any:
     if isinstance(value, str):
@@ -32,4 +32,4 @@ def scene_digest(payload: dict[str, Any]) -> str:
         separators=(",", ":"),
         sort_keys=True,
     ).encode("utf-8")
-    return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
+    return sha256_prefixed(encoded)

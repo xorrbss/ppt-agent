@@ -19,6 +19,7 @@ import uuid
 from sqlalchemy import func, inspect, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from constants.user_messages import UserMessageKey, user_message
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
@@ -715,7 +716,7 @@ class PresentationGenerationOperationHandler:
             if not await context.progress(
                 stage="authored_outline",
                 percent=8,
-                message="발표 구조와 작성 기준을 준비하고 있습니다.",
+                message=user_message(UserMessageKey.GENERATION_STAGE_OUTLINE),
             ):
                 raise WorkspaceOperationLeaseLost("presentation_generation_lifecycle_fenced")
             from utils.generation_model import generation_model_context

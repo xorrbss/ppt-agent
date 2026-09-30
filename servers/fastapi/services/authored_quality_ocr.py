@@ -5,7 +5,6 @@ Every payload returned by this module is safe for persistence and UI delivery.
 """
 
 import asyncio
-import hashlib
 import logging
 import re
 import time
@@ -22,6 +21,10 @@ from utils.authored_ocr_quality import (
 )
 from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION
 from utils.ocr_language import presentation_language_to_ocr_code
+from utils.hashing import sha256_hex
+
+_TESSERACT_PROBE_TIMEOUT_SECONDS = 5.0
+
 
 InspectOcr = Callable[..., Awaitable[OcrQualityResult]]
 _SAFE_LANGUAGE = re.compile(r"^[A-Za-z0-9_]{1,32}$")
@@ -40,7 +43,7 @@ def _build_ocr_readiness() -> dict[str, Any]:
             explicit_command=None,
             tessdata_dir=None,
             language=requested,
-            timeout_seconds=5.0,
+            timeout_seconds=_TESSERACT_PROBE_TIMEOUT_SECONDS,
         )
         requested_languages = _safe_languages(runtime.requested_languages)
         available_languages = _safe_languages(runtime.available_languages)
@@ -170,7 +173,7 @@ class RequestOcrRuntime:
         role: str,
     ) -> tuple[OcrQualityResult | None, dict[str, Any]]:
         self.requests += 1
-        fingerprint = hashlib.sha256(image).hexdigest()
+        fingerprint = sha256_hex(image)
         cached = self._images.get(fingerprint)
         if cached is not None:
             self.cache_hits += 1

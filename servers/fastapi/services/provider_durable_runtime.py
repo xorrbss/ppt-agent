@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from hashlib import sha256
 import re
 import secrets
 import uuid
@@ -28,6 +27,7 @@ from services.provider_runtime_primitives import (
     CircuitOpenError,
 )
 from utils.datetime_utils import get_current_utc_datetime
+from utils.hashing import sha256_hex
 
 
 _HASH_RE = re.compile(r"^[a-f0-9]{64}$")
@@ -171,7 +171,7 @@ async def reserve_provider_call(
         budget_id=budget_id,
         reservation_key_hash=reservation_key_hash,
         estimated_cost=estimated_cost,
-        lease_token_hash=sha256(token.encode()).hexdigest(),
+        lease_token_hash=sha256_hex(token.encode()),
         lease_expires_at=get_current_utc_datetime() + timedelta(seconds=lease_seconds),
     )
     try:
@@ -206,7 +206,7 @@ async def reconcile_provider_call(
         row is None
         or row.budget_id != lease.budget_id
         or row.reservation_key_hash != lease.reservation_key_hash
-        or row.lease_token_hash != sha256(lease.lease_token.encode()).hexdigest()
+        or row.lease_token_hash != sha256_hex(lease.lease_token.encode())
     ):
         raise ValueError("provider_reservation_lease_mismatch")
     if row.state == "uncertain" and actual_cost is not None and row.outcome == outcome:

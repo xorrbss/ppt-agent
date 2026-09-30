@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import hashlib
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -32,6 +31,7 @@ from pathlib import Path
 from services.generation_core.assets.offer import AssetOffer, AssetSlot
 from services.source_images.models import SourceImageCandidate
 from utils.get_env import get_app_data_directory_env
+from utils.hashing import sha256_hex
 
 #: Page 0's checkpoint key for the deck's persisted offer. Distinct from the
 #: per-page ``assetOffer`` receipt the author step writes on every page.
@@ -57,7 +57,7 @@ def _ink(svg_text: str) -> str:
 def _store(payload: bytes, suffix: str) -> Path:
     from utils.asset_directory_utils import get_images_directory
 
-    digest = hashlib.sha256(payload).hexdigest()
+    digest = sha256_hex(payload)
     target = Path(get_images_directory()) / "svg-asset-offer" / f"{digest}{suffix}"
     target.parent.mkdir(parents=True, exist_ok=True)
     if not target.exists():
@@ -72,7 +72,7 @@ async def _register(session, presentation_id, slot: AssetSlot, payload: bytes, m
 
     suffix = ".png" if media_type == "image/png" else ".jpg"
     path = await asyncio.to_thread(_store, payload, suffix)
-    digest = hashlib.sha256(payload).hexdigest()
+    digest = sha256_hex(payload)
     asset_id = uuid.uuid5(_OFFER_NAMESPACE, f"{presentation_id}:{digest}")
     if await session.get(ImageAsset, asset_id) is None:
         session.add(ImageAsset(id=asset_id, path=str(path), is_uploaded=False, extras={

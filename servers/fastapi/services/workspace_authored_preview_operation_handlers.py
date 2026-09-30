@@ -6,6 +6,7 @@ import asyncio
 from collections.abc import Awaitable, Mapping, Sequence
 from typing import Any
 
+from constants.user_messages import UserMessageKey, UserMessageLike, message_fields, user_message
 from models.authored_batch_remake import AuthoredBatchRemakePreviewRequest
 from models.presentation_from_template import AuthoredPageRemakePreviewRequest
 from models.sql.async_presentation_generation_status import (
@@ -85,7 +86,7 @@ async def _ensure_task(
     task_id: str,
     *,
     owner_id: object,
-    message: str,
+    message: UserMessageLike,
     data: dict[str, Any] | None = None,
 ) -> AsyncPresentationGenerationTaskModel:
     async with async_session_maker() as session:
@@ -95,7 +96,7 @@ async def _ensure_task(
                 id=task_id,
                 owner_id=owner_id,
                 status="pending",
-                message=message,
+                **message_fields(message),
                 data=data,
             )
             session.add(task)
@@ -131,7 +132,7 @@ class WorkspacePageRemakePreviewOperationHandler:
         task = await _ensure_task(
             task_id,
             owner_id=claim.owner_id,
-            message=f"{slide_index + 1}페이지의 새 버전 작업을 대기열에 추가했습니다.",
+            message=user_message(UserMessageKey.REMAKE_PAGE_QUEUED, page=slide_index + 1),
         )
         if not (
             task.status == "completed"
@@ -229,7 +230,7 @@ class WorkspaceBatchRemakePreviewOperationHandler:
         parent = await _ensure_task(
             parent_id,
             owner_id=claim.owner_id,
-            message=f"{len(pairs)}개 페이지의 새 버전을 만들고 있습니다.",
+            message=user_message(UserMessageKey.REMAKE_BATCH_RUNNING, total=len(pairs)),
             data=parent_data,
         )
         if parent.status != "completed":
@@ -237,7 +238,7 @@ class WorkspaceBatchRemakePreviewOperationHandler:
                 await _ensure_task(
                     child_id,
                     owner_id=claim.owner_id,
-                    message=f"{index + 1}페이지의 새 버전 작업을 대기열에 추가했습니다.",
+                    message=user_message(UserMessageKey.REMAKE_PAGE_QUEUED, page=index + 1),
                 )
 
             retry_pairs: list[tuple[int, str]] = []

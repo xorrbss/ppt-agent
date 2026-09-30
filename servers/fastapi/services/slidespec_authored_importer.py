@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from hashlib import sha256
 from html.parser import HTMLParser
 import re
 from typing import Any
@@ -13,6 +12,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from constants.user_messages import UserMessageKey, user_message
 from utils.coerce import finite_float
 from models.slidespec_v1 import (
     SLIDESPEC_SCHEMA,
@@ -62,6 +62,7 @@ from utils.slidespec_core import ZERO_DIGEST, digest, seal_slidespec, validate_s
 from utils.slidespec_deck_constraints import evaluate_deck_consistency
 from utils.slidespec_solver import solve_constraints
 from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
+from utils.hashing import sha256_hex
 
 
 _BLOCKED_TAGS = frozenset({"script", "iframe", "object", "embed", "canvas"})
@@ -227,7 +228,7 @@ class _AuthoredSourceParser(HTMLParser):
 
 
 def _stable_id(prefix: str, slide_id: uuid.UUID, qid: str) -> str:
-    token = sha256(f"{slide_id}:{qid}".encode("utf-8")).hexdigest()[:24]
+    token = sha256_hex(f"{slide_id}:{qid}".encode("utf-8"))[:24]
     return f"{prefix}import-{token}"
 
 
@@ -276,9 +277,7 @@ def _content_kind(tag: str, text: str) -> str:
 def _constraint_id(
     slide_id: uuid.UUID, kind: str, *parts: str
 ) -> str:
-    token = sha256(
-        f"{slide_id}:{kind}:{':'.join(parts)}".encode("utf-8")
-    ).hexdigest()[:24]
+    token = sha256_hex(f"{slide_id}:{kind}:{':'.join(parts)}".encode("utf-8"))[:24]
     return f"con:import-{kind.lower()}-{token}"
 
 
@@ -1128,7 +1127,7 @@ async def ensure_authored_slidespec_imports(
                 session,
                 presentation_id,
                 [slide.model_dump(mode="json") for slide in slides],
-                label="SlideSpec 자동 활성화 전",
+                label=user_message(UserMessageKey.VERSION_LABEL_BEFORE_SLIDESPEC),
                 force=True,
             )
             for position, slide, request, image, evidence in prepared:

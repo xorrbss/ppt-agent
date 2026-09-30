@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import hashlib
 import json
 from typing import Any
 import uuid
@@ -22,6 +21,7 @@ from models.sql.authored_vnext_repository import (
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from services.authored_vnext.generation.sql_repository import SqlGenerationRepository
 from services.authored_vnext.master.digests import canonical_digest
+from utils.hashing import sha256_prefixed
 
 
 PROFILE_ID = "authored-editable-hybrid-ko-en-basic-v1"
@@ -473,8 +473,7 @@ def _load_current_baseline(
         )
         if completion is not None:
             if (
-                "sha256:"
-                + hashlib.sha256(completion.sealed_result_bytes).hexdigest()
+                sha256_prefixed(completion.sealed_result_bytes)
                 != completion.sealed_result_sha256
             ):
                 raise Gate0eProbeError("editable_mvp_gate0e_completion_bytes_changed")
@@ -596,7 +595,7 @@ def _load_current_baseline(
             ),
             completion_cas_version=(completion.cas_version if completion is not None else 0),
             signer_nonce_digest=(
-                "sha256:" + hashlib.sha256(completion.receipt_nonce.encode("utf-8")).hexdigest()
+                sha256_prefixed(completion.receipt_nonce.encode("utf-8"))
                 if completion is not None
                 else None
             ),

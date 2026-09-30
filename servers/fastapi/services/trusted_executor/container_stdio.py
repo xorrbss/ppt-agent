@@ -17,6 +17,7 @@ import threading
 from typing import BinaryIO
 
 from services.trusted_executor.container_runtime import ContainerAttachStream
+from constants.timeouts import WATCHER_THREAD_JOIN_SECONDS
 
 
 _HEADER = struct.Struct(">BxxxI")
@@ -128,7 +129,7 @@ class AttachDemultiplexer:
             self._stream.close()
         except OSError:
             pass
-        self._thread.join(timeout=1.0)
+        self._thread.join(timeout=WATCHER_THREAD_JOIN_SECONDS)
         for stream in (self.stdout, self.stderr):
             try:
                 stream.close()

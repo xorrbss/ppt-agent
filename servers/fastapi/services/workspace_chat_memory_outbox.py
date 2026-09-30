@@ -11,7 +11,6 @@ import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import timedelta
-from hashlib import sha256
 from typing import Any
 
 from sqlalchemy import and_, or_, update
@@ -33,6 +32,7 @@ from services.workspace_operation_principal import (
 )
 from utils.datetime_utils import get_current_utc_datetime
 from utils.owner_context import get_current_tenant_id
+from utils.hashing import sha256_hex
 
 
 WORKSPACE_CHAT_MEMORY_TOPIC = "workspace.chat.memory"
@@ -54,7 +54,7 @@ def _payload_hash(payload: Mapping[str, Any]) -> str:
         separators=(",", ":"),
         default=str,
     ).encode("utf-8")
-    return sha256(encoded).hexdigest()
+    return sha256_hex(encoded)
 
 
 def _delivery_id(operation_id: uuid.UUID, result_revision: int) -> str:

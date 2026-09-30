@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import base64
 from datetime import datetime, timedelta
-from hashlib import sha256
 import secrets
 from typing import Any
 
@@ -33,6 +32,7 @@ from services.authored_vnext.semantic.release_authority_v3 import (
     validate_actual_product_authority_v3,
 )
 from utils.datetime_utils import get_current_utc_datetime
+from utils.hashing import sha256_prefixed
 
 
 _LEASE_TTL = timedelta(seconds=900)
@@ -65,7 +65,7 @@ def _artifact_ref(record: AuthoredReleaseArtifactV3) -> DurableArtifactRefV3:
 
 
 def _lease_token_hash(token: str) -> str:
-    return "sha256:" + sha256(token.encode("utf-8")).hexdigest()
+    return sha256_prefixed(token.encode("utf-8"))
 
 
 def _job(
@@ -108,7 +108,7 @@ async def put_durable_artifact_v3(
         raise SemanticContractError("authored_release_artifact_base64_invalid") from error
     if len(content) > MAX_DURABLE_ARTIFACT_BYTES_V3:
         raise SemanticContractError("authored_release_artifact_too_large")
-    observed_digest = "sha256:" + sha256(content).hexdigest()
+    observed_digest = sha256_prefixed(content)
     if not content or observed_digest != request.sha256:
         raise SemanticContractError("authored_release_artifact_digest_mismatch")
     existing = await session.scalar(
@@ -119,7 +119,7 @@ async def put_durable_artifact_v3(
         )
     )
     if existing is not None:
-        readback_digest = "sha256:" + sha256(bytes(existing.content_bytes)).hexdigest()
+        readback_digest = sha256_prefixed(bytes(existing.content_bytes))
         if (
             existing.sha256 != request.sha256
             or readback_digest != existing.sha256
@@ -156,7 +156,7 @@ async def put_durable_artifact_v3(
     )
     session.add(record)
     await session.flush()
-    if "sha256:" + sha256(bytes(record.content_bytes)).hexdigest() != record.sha256:
+    if sha256_prefixed(bytes(record.content_bytes)) != record.sha256:
         raise SemanticContractError("authored_release_artifact_readback_mismatch")
     return _artifact_ref(record)
 
@@ -181,7 +181,7 @@ async def bind_durable_artifact_v3(
         record is None
         or record.version_id != expected_version_id
         or record.sha256 != expected_sha256
-        or "sha256:" + sha256(bytes(record.content_bytes)).hexdigest() != expected_sha256
+        or sha256_prefixed(bytes(record.content_bytes)) != expected_sha256
     ):
         raise SemanticContractError("authored_release_artifact_binding_mismatch")
     if record.state == "bound":
@@ -330,7 +330,7 @@ async def _sealed_artifact_error(
         (item := by_id.get(artifact_id)) is None
         or item.state != "bound"
         or item.sha256 != artifact_digests[artifact_id]
-        or "sha256:" + sha256(bytes(item.content_bytes)).hexdigest() != item.sha256
+        or sha256_prefixed(bytes(item.content_bytes)) != item.sha256
         for artifact_id in GATE1_GRAPH_BASE_ARTIFACT_IDS_V3
     ):
         return "qualification_artifact_readback_mismatch"

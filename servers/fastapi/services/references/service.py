@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from hashlib import sha256
 import hmac
 import json
 from pathlib import Path
@@ -33,6 +32,7 @@ from services.workspace_asset_service import import_workspace_document_asset
 from services.workspace_service import WorkspaceServiceError
 from utils.datetime_utils import get_current_utc_datetime
 from utils.document_path_security import validate_document_paths
+from utils.hashing import sha256_hex
 
 
 MAX_GENERATION_REFERENCE_SNAPSHOTS = 16
@@ -79,7 +79,7 @@ def _snapshot_content(
         "assetBindings": bindings,
     }
     serialized = _canonical_json(payload)
-    return serialized, sha256(serialized.encode("utf-8")).hexdigest(), bindings
+    return serialized, sha256_hex(serialized.encode("utf-8")), bindings
 
 
 def _source_fingerprint(normalized: NormalizedReference) -> str:
@@ -91,7 +91,7 @@ def _source_fingerprint(normalized: NormalizedReference) -> str:
             "assets": [binding.as_json() for binding in normalized.asset_bindings],
         }
     )
-    return sha256(serialized.encode("utf-8")).hexdigest()
+    return sha256_hex(serialized.encode("utf-8"))
 
 
 def _owner_predicate():

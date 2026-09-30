@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
 from services.source_images.models import SourceImageCandidate
+from utils.hashing import sha256_hex
+
+# Per structured-provider call, and the outer bound around one placement attempt.
+_PLACEMENT_CALL_TIMEOUT_SECONDS = 60
+_PLACEMENT_ATTEMPT_TIMEOUT_SECONDS = 130
+
 
 POLICY_VERSION = "source-image-placement/v1"
 _TERMINAL = {"assigned", "no_relevant_slide"}
@@ -146,7 +151,7 @@ async def build_source_image_placement_plan(
         "repeated_asset_ids": sorted(set(repeated_asset_ids)),
     }
     encoded = json.dumps(context, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    input_hash = hashlib.sha256(encoded.encode()).hexdigest()
+    input_hash = sha256_hex(encoded.encode())
     plan = {"version": POLICY_VERSION, "input_hash": input_hash, "decisions": []}
     ids = {c.asset_id for c in candidates}
     repeat_ids = set(repeated_asset_ids)
@@ -226,9 +231,9 @@ async def build_source_image_placement_plan(
                     semantic_slot_prefix="source-image-placement",
                     semantic_slot_suffix=f"attempt-{attempt_number}",
                     call_budget=StructuredProviderCallBudget(limit=2),
-                    call_timeout_seconds=60,
+                    call_timeout_seconds=_PLACEMENT_CALL_TIMEOUT_SECONDS,
                 ),
-                timeout=130,
+                timeout=_PLACEMENT_ATTEMPT_TIMEOUT_SECONDS,
             )
         decisions = _validate_decisions(
             response.get("decisions"), {i["asset_id"] for i in eligible}, len(contents), repeat_ids

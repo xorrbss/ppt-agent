@@ -64,6 +64,7 @@ from services.source_content.edit_lifecycle import (
 )
 from .composition import remember_composition_pin
 from .sql_publication import append_generation_deck
+from utils.hashing import sha256_hex
 
 
 SQLITE_LOCK_RETRY_DELAYS = (0.025, 0.075, 0.15)
@@ -75,7 +76,7 @@ def _utcnow() -> datetime:
 
 
 def _hash(value: str) -> str:
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+    return sha256_hex(value.encode("utf-8"))
 
 
 def _same_imported_deck(left: DeckGenerationSnapshot, right: DeckGenerationSnapshot) -> bool:

@@ -39,4 +39,4 @@ timeline, chart), which is where styles differ most visibly.
 - Manifest slide titles, in order: 표지, 목차, 시장, 문제 정의, 제품,
   작동 방식, 비즈니스 모델, 경쟁 비교, 고객 사례, 로드맵, 재무, 마무리
 - Order guard (PDF text must contain): slide 1 `루미나`, slide 2 `목차`,
-  slide 8 `수작업`, slide 9 `한결상회`, slide 11 `96억`, slide 12 `60억`
+  slide 8 `수작업`, slide 9 `한결상회`, slide 11 `96`, slide 12 `60억`

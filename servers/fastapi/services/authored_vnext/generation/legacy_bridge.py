@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from hashlib import sha256
 import os
 from pathlib import Path
 import re
@@ -87,6 +86,7 @@ from .legacy_pin import (
 )
 from .repository import async_generation_repository
 from utils.get_env import get_app_data_directory_env, get_vnext_tenant_id
+from utils.hashing import sha256_hex
 
 
 _HEADING = re.compile(r"^\s{0,3}#{1,6}\s+")
@@ -569,7 +569,7 @@ def _legacy_export_job_identity(
         return base
     if not execution_scope:
         raise ValueError("legacy export execution scope must not be empty")
-    scope_digest = sha256(execution_scope.encode("utf-8")).hexdigest()
+    scope_digest = sha256_hex(execution_scope.encode("utf-8"))
     return f"{base}:attempt:{scope_digest}"
 
 

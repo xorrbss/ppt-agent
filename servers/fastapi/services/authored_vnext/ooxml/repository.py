@@ -5,7 +5,6 @@ from __future__ import annotations
 from contextlib import contextmanager
 import copy
 from datetime import datetime, timezone
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -21,6 +20,7 @@ from .errors import (
     OoxmlPackageNotFound,
 )
 from utils.hashing import sha256_prefixed
+from utils.hashing import sha256_hex
 
 MAX_UPLOAD_BYTES = 256 * 1024 * 1024
 _LOCKS: dict[str, threading.RLock] = {}
@@ -101,7 +101,7 @@ class OoxmlPackageRepository:
             raise ValueError("owner_id is required")
         self.owner_id = owner_id
         self.app_data_root = root.resolve()
-        owner_hash = hashlib.sha256(owner_id.encode("utf-8")).hexdigest()
+        owner_hash = sha256_hex(owner_id.encode("utf-8"))
         self.root = self.app_data_root / "authored-vnext" / "ooxml-packages-v1"
         self.owner_root = self.root / "owners" / owner_hash
         self.artifact_root = self.owner_root / "artifacts"
@@ -294,7 +294,7 @@ class OoxmlPackageRepository:
 
     @staticmethod
     def _idempotency_slot(namespace: str, key: str) -> str:
-        return hashlib.sha256(f"{namespace}\0{key}".encode()).hexdigest()
+        return sha256_hex(f"{namespace}\0{key}".encode())
 
     def get_package(self, package_id: str) -> dict[str, Any]:
         with self._state(write=False) as state:

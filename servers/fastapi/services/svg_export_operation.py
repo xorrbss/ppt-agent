@@ -1,6 +1,5 @@
 """SVG export admission using the existing fenced worker and artifact authority."""
 from __future__ import annotations
-import hashlib
 import json
 import logging
 from datetime import datetime, timezone
@@ -29,6 +28,7 @@ from workers.public_svg_export_worker import (
     SVG_EXPORT_SCHEMA_V3,
     CONVERTER_VERSION,
 )
+from utils.hashing import sha256_hex
 
 LOGGER = logging.getLogger(__name__)
 
@@ -76,7 +76,7 @@ async def render_and_export_svgs(claim, *, tenant_id, svgs, notes, export_format
     if native_objects is not None and len(native_objects) != len(svgs):
         raise PublicExportOperationError("svg_export_native_objects_count_invalid")
     if slide_refs is not None and (len(slide_refs) != len(svgs) or any(
-            ref.kind != "slide-svg" or ref.sha256 != hashlib.sha256(source.encode()).hexdigest()
+            ref.kind != "slide-svg" or ref.sha256 != sha256_hex(source.encode())
             for ref, source in zip(slide_refs, svgs, strict=True))):
         raise PublicExportOperationError("svg_export_slide_checkpoint_binding_invalid")
     resolved_canvas = parse_canvas_metadata(canvas)

@@ -8,10 +8,10 @@ element's complete rendered text, with hidden script/style text ignored.
 
 from __future__ import annotations
 
-import hashlib
 import html
 from html.parser import HTMLParser
 import re
+from utils.hashing import sha256_hex
 
 
 class BrowserSourceReadbackError(ValueError):
@@ -222,7 +222,7 @@ def source_block_data_attribute(source_block_id: str) -> str:
 def deterministic_source_qid(source_block_id: str) -> str:
     """Stable qid used when source HTML has no editable identity."""
 
-    return "source-block-" + hashlib.sha256(str(source_block_id).encode("utf-8")).hexdigest()[:16]
+    return "source-block-" + sha256_hex(str(source_block_id).encode("utf-8"))[:16]
 
 
 __all__ = [

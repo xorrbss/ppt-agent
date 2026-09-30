@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
-from hashlib import sha256
 import json
 import logging
 import secrets
@@ -25,6 +24,7 @@ from utils.datetime_utils import as_utc
 from utils.get_env import get_authored_cluster_job_concurrency_env
 from utils.owner_context import get_current_owner_id
 from utils.runtime_settings import create_runtime_settings_task as create_config_task
+from utils.hashing import sha256_hex
 
 logger = logging.getLogger(__name__)
 
@@ -283,7 +283,7 @@ def request_sha256(payload: dict[str, Any]) -> str:
         sort_keys=True,
         separators=(",", ":"),
     )
-    return sha256(canonical.encode("utf-8")).hexdigest()
+    return sha256_hex(canonical.encode("utf-8"))
 
 
 def idempotency_key_hash(key: str) -> str:
@@ -300,12 +300,10 @@ def idempotency_key_hash(key: str) -> str:
         raise ValueError("invalid_idempotency_key")
     owner_id = get_current_owner_id()
     owner_scope = str(owner_id) if owner_id is not None else "anonymous"
-    return sha256(
-        (
+    return sha256_hex((
             "presenton.presentation-generation/v1:"
             f"{owner_scope}:{normalized}"
-        ).encode("utf-8")
-    ).hexdigest()
+        ).encode("utf-8"))
 
 
 async def claim_generation_job(

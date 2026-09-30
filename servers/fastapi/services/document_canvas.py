@@ -5,7 +5,6 @@ module holds the derivations that need the rest of the service layer.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 from decimal import Decimal
 
@@ -18,6 +17,7 @@ from models.document_canvas import (  # noqa: F401 - re-exported for callers
     PhysicalSize,
     SafeArea,
 )
+from utils.hashing import sha256_prefixed
 
 
 def document_canvas_for_orientation(orientation: str) -> DocumentCanvasMetadata:
@@ -96,7 +96,7 @@ def canvas_digest(value: object) -> str:
     fields.extend(str(int(Decimal(str(getattr(canvas.safe_area, key))) * 1000000))
                   for key in ("x", "y", "width", "height"))
     canonical = json.dumps(fields, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    return "sha256:" + hashlib.sha256(canonical).hexdigest()
+    return sha256_prefixed(canonical)
 
 
 def require_canvas_capability(theme: object, supported_versions: str | None) -> None:

@@ -9,12 +9,12 @@ from __future__ import annotations
 
 from copy import deepcopy
 from functools import lru_cache
-from hashlib import sha256
 import json
 from pathlib import Path
 
 from utils.svg_template_fonts import FONT_FAMILY, font_material
 from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
+from utils.hashing import sha256_prefixed
 
 RULE_VERSION = "svg-source-template-rules/v2.3"
 SUPPORTED_TEMPLATE_IDS = frozenset({"default", "osb-smart-banking", "screenshot-blue"})
@@ -22,7 +22,7 @@ _CATALOGUE = Path(__file__).resolve().parents[1] / "authored_styles"
 
 
 def _digest(value):
-    return "sha256:" + sha256(json.dumps(value, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    return sha256_prefixed(json.dumps(value, sort_keys=True, ensure_ascii=False).encode())
 
 
 def resolve_source_template_style(style_id: str):
@@ -53,7 +53,7 @@ def template_snapshot(style_spec: dict, width: int, height: int) -> dict:
         ("definition", _CATALOGUE / f"{style_id}.yaml"),
         ("exemplar", _CATALOGUE / "exemplars" / f"{style_id}.html"),
     ):
-        evidence[role] = "sha256:" + sha256(path.read_bytes()).hexdigest()
+        evidence[role] = sha256_prefixed(path.read_bytes())
     key = {
         "style_id": style_id,
         "width": width,

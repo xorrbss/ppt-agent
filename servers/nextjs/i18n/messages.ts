@@ -1,5 +1,6 @@
-import en from "./messages/en.json";
-import ko from "./messages/ko.json";
+// The attribute lets Node's ESM loader (node --test) import the catalog.
+import en from "./messages/en.json" with { type: "json" };
+import ko from "./messages/ko.json" with { type: "json" };
 import type { UiLocale } from "./locale";
 
 export type UiMessages = typeof en;

@@ -82,6 +82,11 @@ from services.workspace_service import (
 )
 from services.workspace_operation_runner import wake_workspace_operation_runner
 
+# Poll interval and heartbeat cadence (in poll ticks) of the workspace event stream.
+_EVENT_STREAM_POLL_INTERVAL_SECONDS = 1
+_EVENT_STREAM_HEARTBEAT_TICKS = 15
+
+
 
 def _workspace_error_responses() -> dict[int, dict[str, object]]:
     """Publish every stable workspace error code in the generated OpenAPI."""
@@ -675,10 +680,10 @@ async def _event_stream(
             data = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
             yield f"id: {cursor}\nevent: workspace_event\ndata: {data}\n\n"
         heartbeat_ticks += 1
-        if not events and heartbeat_ticks >= 15:
+        if not events and heartbeat_ticks >= _EVENT_STREAM_HEARTBEAT_TICKS:
             heartbeat_ticks = 0
             yield f"event: heartbeat\ndata: {{\"cursor\":{json.dumps(cursor)} }}\n\n"
-        await asyncio.sleep(1)
+        await asyncio.sleep(_EVENT_STREAM_POLL_INTERVAL_SECONDS)
 
 
 @WORKSPACE_ROUTER.get("/presentations/{presentation_id}/events")

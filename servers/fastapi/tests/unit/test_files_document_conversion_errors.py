@@ -97,10 +97,12 @@ def test_upload_rejects_fasoo_drm_with_original_filename_and_actionable_message(
     assert exc.value.detail == {
         "code": "DOCUMENT_DRM_PROTECTED",
         "message": (
-            f"'{filename}' 파일은 Fasoo DRM으로 보호되어 내용을 읽을 수 없습니다. "
-            "DRM을 해제하거나 PowerPoint에서 DRM 없는 .pptx 파일로 다시 저장한 뒤 "
-            "업로드해 주세요."
+            f"'{filename}' is protected by Fasoo DRM and cannot be read. Remove "
+            "the DRM or save it from PowerPoint as a DRM-free .pptx file, then "
+            "upload it again."
         ),
+        "message_key": "files.drm_blocked",
+        "message_params": {"filename": filename},
         "filename": filename,
         "retryable": False,
     }

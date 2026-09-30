@@ -7,7 +7,6 @@ neither storage keys nor raster payloads belong in canonical SVG/checkpoints.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from hashlib import sha256
 import json
 import uuid
 from typing import Literal
@@ -22,6 +21,7 @@ from services.artifact_store import (
 )
 from services.svg_asset_manifest import ArtifactPointer, PlacementManifest, RasterDerivative, SourceManifest
 from services.svg_image_derivative import ModelPreview
+from utils.hashing import sha256_hex
 
 
 async def _load_manifest_pointer(session, service, *, pointer, owner_id, tenant_id, kind, model):
@@ -36,7 +36,7 @@ async def _load_manifest_pointer(session, service, *, pointer, owner_id, tenant_
     if reference.kind != kind or reference.media_type != "application/json":
         raise ArtifactBindingError("svg_asset_manifest_kind_mismatch")
     payload = await service.read_ref_bytes(reference)
-    if sha256(payload).hexdigest() != pointer.sha256:
+    if sha256_hex(payload) != pointer.sha256:
         raise ArtifactBindingError("svg_asset_manifest_bytes_mismatch")
     return model.model_validate_json(payload)
 
@@ -148,7 +148,7 @@ async def persist_derivative_if_current(
     publication_name: str,
     revision: int,
 ) -> RasterDerivative | None:
-    if sha256(preview.payload).hexdigest() != preview.sha256:
+    if sha256_hex(preview.payload) != preview.sha256:
         raise ArtifactBindingError("svg_asset_derivative_digest_mismatch")
     from services.svg_asset_manifest import canonical_digest
 

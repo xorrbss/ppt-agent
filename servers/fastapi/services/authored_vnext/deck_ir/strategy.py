@@ -8,13 +8,13 @@ be created, then its digest is carried by the operation until it is terminal.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-import hashlib
 import json
 import unicodedata
 from typing import Literal
 from utils.coerce import as_mapping
 
 from utils.env_settings.authored_vnext import is_deck_ir_generation_enabled
+from utils.hashing import sha256_prefixed
 
 
 GenerationStrategy = Literal["deck-ir", "legacy-authored", "reject"]
@@ -60,9 +60,7 @@ def _digest(payload: Mapping[str, object]) -> str:
             return value
     except (ImportError, TypeError, ValueError):
         pass
-    return "sha256:" + hashlib.sha256(
-        _canonical_json(payload).encode("utf-8")
-    ).hexdigest()
+    return sha256_prefixed(_canonical_json(payload).encode("utf-8"))
 
 
 def deck_ir_generation_enabled() -> bool:

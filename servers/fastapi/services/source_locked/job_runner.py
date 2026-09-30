@@ -24,6 +24,10 @@ from services.source_locked.generation_store import (
 )
 from services.source_locked.job_store import DurableSourceLockedJobStore
 from services.source_locked.seal import WriteOnceSourceAnalysisSealStore
+from constants.timeouts import WATCHER_THREAD_JOIN_SECONDS
+
+_HEARTBEAT_INTERVAL_SECONDS = 15
+
 
 
 PhaseCallback = Callable[[AnalysisStage], bool]
@@ -202,7 +206,7 @@ def run_source_locked_job(
     stop_heartbeat = Event()
 
     def _heartbeat() -> None:
-        while not stop_heartbeat.wait(15):
+        while not stop_heartbeat.wait(_HEARTBEAT_INTERVAL_SECONDS):
             if not job_store.heartbeat(
                 owner_id=owner_id,
                 job_id=job_id,
@@ -277,4 +281,4 @@ def run_source_locked_job(
         )
     finally:
         stop_heartbeat.set()
-        heartbeat.join(timeout=1)
+        heartbeat.join(timeout=WATCHER_THREAD_JOIN_SECONDS)

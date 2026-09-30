@@ -49,6 +49,8 @@
           "position": 1,
           "role": "user",
           "content": "Create a concise quarterly planning deck.",
+          "content_key": null,
+          "content_params": null,
           "created_at": "2026-08-03T00:00:01Z",
           "attachments": [
             {
@@ -83,6 +85,7 @@
           "position": 2,
           "operation_type": "presentation.generate",
           "title": "Generate presentation",
+          "title_key": "workspace.operation.presentation.generate",
           "status": "waiting_for_assets",
           "progress": 0.0,
           "error": null,

@@ -6,13 +6,13 @@ artifact reader. This module does not enable the v2 writer.
 """
 from __future__ import annotations
 
-import hashlib
 import uuid
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, model_validator
 from pydantic.alias_generators import to_camel
 from utils.hashing import canonical_json_digest
+from utils.hashing import sha256_hex
 
 POLICY_VERSION = "svg-image-preservation/v1"
 PROFILE_VERSION = "svg-image-derivative/v1"
@@ -339,7 +339,7 @@ async def read_derivative_bytes(*, artifact_service, session, derivative: Raster
     if reference.media_type != derivative.media_type or reference.size_bytes != derivative.byte_size:
         raise ValueError("svg_asset_derivative_metadata_mismatch")
     payload = await artifact_service.read_ref_bytes(reference)
-    if len(payload) != derivative.byte_size or hashlib.sha256(payload).hexdigest() != derivative.sha256:
+    if len(payload) != derivative.byte_size or sha256_hex(payload) != derivative.sha256:
         raise ValueError("svg_asset_derivative_digest_mismatch")
 
     def verify():

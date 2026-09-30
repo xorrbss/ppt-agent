@@ -36,6 +36,8 @@ import {
   presentationSlideLayoutId,
 } from "../utils/masterPresentation";
 import { POLL_INTERVAL_MS, PREVIEW_TIMEOUT_MS } from "@/lib/timeouts";
+import { pickBackendMessage } from "@/lib/backend-messages";
+import { translateBackendMessage } from "@/lib/backend-messages-intl";
 
 function PageRemakeFlow({
   presentationId,
@@ -100,7 +102,8 @@ function PageRemakeFlow({
         if (runIdRef.current !== runId) return;
         const task = await PresentationGenerationApi.getGenerationStatus(taskId);
         if (runIdRef.current !== runId) return;
-        if (task?.message) setStatusMessage(task.message);
+        const statusMessage = translateBackendMessage(pickBackendMessage(task));
+        if (statusMessage) setStatusMessage(statusMessage);
         if (task?.status === "completed") {
           const data = task.data as PageRemakePreview | undefined;
           if (

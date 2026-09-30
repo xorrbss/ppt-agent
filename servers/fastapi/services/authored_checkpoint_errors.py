@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 from datetime import timedelta
 from collections.abc import Mapping
 from typing import Any
@@ -12,6 +11,7 @@ from sqlalchemy import update
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from utils.datetime_utils import get_current_utc_datetime
 from utils.renderer_worker_policy import RendererPolicyError
+from utils.hashing import sha256_hex
 
 
 _SECRET_PATTERNS = (
@@ -109,9 +109,7 @@ class AuthoredStageError(RuntimeError):
         cause = self.cause or self
         exception_type = type(cause).__name__
         safe_cause = sanitize_exception_message(cause)
-        fingerprint = hashlib.sha256(
-            f"{exception_type}:{safe_cause}".encode("utf-8")
-        ).hexdigest()[:16]
+        fingerprint = sha256_hex(f"{exception_type}:{safe_cause}".encode("utf-8"))[:16]
         safe_message = sanitize_exception_message(RuntimeError(self.safe_message))
         value: dict[str, Any] = {
             "status_code": 500,

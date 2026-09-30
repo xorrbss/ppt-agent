@@ -55,6 +55,15 @@ from services.workspace_runtime_profile import (
 )
 from services.workspace_service import WorkspaceServiceError
 
+# Live-event burst drain: wait for the first event, then only take what is already queued.
+_LIVE_BURST_FIRST_EVENT_TIMEOUT_SECONDS = 0.05
+_LIVE_BURST_QUEUED_EVENT_TIMEOUT_SECONDS = 0.001
+
+# Durable-poll sleep between event-stream iterations, after a live delivery and when idle.
+_POLL_AFTER_LIVE_DELIVERY_SECONDS = 0.05
+_POLL_IDLE_SECONDS = 0.5
+
+
 
 CONVERSATION_ROUTER = APIRouter(prefix="/conversations", tags=["Conversations"])
 
@@ -248,7 +257,11 @@ async def _conversation_event_stream(
                             conversation_id=conversation_id,
                             after_checkpoint=cursor,
                         ),
-                        timeout=0.05 if burst_index == 0 else 0.001,
+                        timeout=(
+                            _LIVE_BURST_FIRST_EVENT_TIMEOUT_SECONDS
+                            if burst_index == 0
+                            else _LIVE_BURST_QUEUED_EVENT_TIMEOUT_SECONDS
+                        ),
                     )
                 except TimeoutError:
                     break
@@ -272,7 +285,11 @@ async def _conversation_event_stream(
                     {"cursor": cursor}, separators=(",", ":")
                 )
                 yield f"event: heartbeat\ndata: {payload}\n\n"
-        await asyncio.sleep(0.05 if live_delivered else 0.5)
+        await asyncio.sleep(
+            _POLL_AFTER_LIVE_DELIVERY_SECONDS
+            if live_delivered
+            else _POLL_IDLE_SECONDS
+        )
 
 
 @CONVERSATION_ROUTER.get("/{conversation_id}/events")

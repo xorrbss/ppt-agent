@@ -12,11 +12,11 @@ import json
 import logging
 import re
 from dataclasses import dataclass
-from hashlib import sha256
 from pathlib import Path
 from typing import Any, Literal, Mapping, Optional, Sequence
 
 import yaml
+from utils.hashing import sha256_hex, sha256_prefixed
 
 LOGGER = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ class StyleSamples:
         Appended to sample image URLs so a regenerated deck is fetched again
         despite the route's day-long ``Cache-Control``.
         """
-        return sha256(f"{self.style_digest}|{self.topic_digest}".encode("utf-8")).hexdigest()[:12]
+        return sha256_hex(f"{self.style_digest}|{self.topic_digest}".encode("utf-8"))[:12]
 
 
 def _warn(style_id: str, rule: str) -> None:
@@ -238,8 +238,8 @@ def style_render_digest(style_yaml: Path, assets_root: Path) -> str:
     tail = ""
     for raw_path in sorted(_raw_reference_paths(data)):
         resolved = _resolve_reference_asset(raw_path, style_yaml, assets_root)
-        tail += f"\n{raw_path}\n{sha256(resolved.read_bytes()).hexdigest()}"
-    return f"sha256:{sha256((canonical + tail).encode('utf-8')).hexdigest()}"
+        tail += f"\n{raw_path}\n{sha256_hex(resolved.read_bytes())}"
+    return sha256_prefixed((canonical + tail).encode('utf-8'))
 
 
 def topic_prompt_digest(topic_file: Optional[Path] = None) -> str:
@@ -258,7 +258,7 @@ def topic_prompt_digest(topic_file: Optional[Path] = None) -> str:
     prompt = text[text.index("\n", start) + 1:end].strip()
     if not prompt:
         raise ValueError(f"{path.name}: prompt section is empty")
-    return f"sha256:{sha256(prompt.encode('utf-8')).hexdigest()}"
+    return sha256_prefixed(prompt.encode('utf-8'))
 
 
 def read_pending_style_ids(samples_root: Optional[Path] = None) -> frozenset[str]:

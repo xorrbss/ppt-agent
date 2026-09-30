@@ -284,3 +284,23 @@ def _is_explicit_authored_capacity_recovery(
         and generation_request.get("strategy") == "authored"
         and _linked_generation_job_id(operation) is not None
     )
+
+
+def _content_message_fields(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
+    """``content_key``/``content_params`` for a server-written user message.
+
+    ``create_workspace_command`` records the ``UserMessage`` behind a command
+    it wrote on the user's behalf; the frontend renders that key in the UI
+    locale and falls back to ``content`` for user-typed commands.
+    """
+
+    if not isinstance(metadata, Mapping):
+        return {}
+    key = metadata.get("content_key")
+    if not isinstance(key, str) or not key:
+        return {}
+    params = metadata.get("content_params")
+    fields: dict[str, Any] = {"content_key": key}
+    if isinstance(params, Mapping) and params:
+        fields["content_params"] = _safe_payload(dict(params))
+    return fields

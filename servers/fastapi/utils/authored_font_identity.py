@@ -1,15 +1,15 @@
 """Content identity of installed fonts for durable authored render evidence."""
 from __future__ import annotations
 
-import hashlib
 import os
 from functools import lru_cache
 from pathlib import Path
+from utils.hashing import sha256_hex, sha256_prefixed
 
 
 @lru_cache(maxsize=4096)
 def _content(path: str, size: int, modified: int) -> str:
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    return sha256_hex(Path(path).read_bytes())
 
 
 def installed_font_identity() -> str:
@@ -31,4 +31,4 @@ def installed_font_identity() -> str:
                 entries.append(str(path) + ":" + _content(str(path), stat.st_size, stat.st_mtime_ns))
     if not entries:
         raise ValueError("authored_font_inventory_unavailable")
-    return "sha256:" + hashlib.sha256("\n".join(entries).encode()).hexdigest()
+    return sha256_prefixed("\n".join(entries).encode())

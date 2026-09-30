@@ -12,7 +12,6 @@ import asyncio
 from collections import deque
 from contextlib import suppress
 from dataclasses import dataclass, field
-import hashlib
 from pathlib import Path
 import time
 from typing import Mapping, Protocol, Sequence
@@ -32,6 +31,7 @@ from services.trusted_executor.product_adapter import (
     TrustedExecutorWorkItem,
 )
 from services.trusted_executor.weighted_scheduler import ScheduledOperation
+from utils.hashing import sha256_hex
 
 
 class TrustedWorkerWireError(RuntimeError):
@@ -137,14 +137,12 @@ class TrustedWorkerDispatcher:
     ) -> TrustedWorkerWireResult:
         if not command or not Path(command[0]).is_absolute():
             raise TrustedWorkerWireError("trusted worker executable must be absolute")
-        attempt_scope = hashlib.sha256(job.attempt_token.encode("utf-8")).hexdigest()[:16]
-        dispatch_scope = hashlib.sha256(
-            (
+        attempt_scope = sha256_hex(job.attempt_token.encode("utf-8"))[:16]
+        dispatch_scope = sha256_hex((
                 f"{job.operation_id}:{job.role}:{job.fencing_token}:"
                 f"{attempt_scope}:{job.input_artifact.artifact_id}:"
                 f"{job.input_digest}"
-            ).encode("utf-8")
-        ).hexdigest()[:24]
+            ).encode("utf-8"))[:24]
         operation_root = (
             self._staging_root
             / str(job.operation_id)

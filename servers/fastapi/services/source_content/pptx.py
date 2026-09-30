@@ -5,7 +5,6 @@ from __future__ import annotations
 import base64
 from collections import Counter
 from dataclasses import dataclass
-from hashlib import sha256
 import mimetypes
 from pathlib import Path
 from typing import Any
@@ -79,6 +78,7 @@ from services.source_content.security import (
     admit_pptx_package,
     secure_xml,
 )
+from utils.hashing import sha256_hex
 
 
 
@@ -514,7 +514,7 @@ def extract_pptx_source_content(
     source_digest = digest_bytes(source_bytes)
     # Revision is part of the seed so an extractor upgrade seals a new manifest_id.
     seed = f"{MANIFEST_ID_EXTRACTOR_REVISION}\n{owner_id}\n{reference_snapshot_id}\n{source_digest}"
-    manifest_id = f"scm_{sha256(seed.encode('utf-8')).hexdigest()}"
+    manifest_id = f"scm_{sha256_hex(seed.encode('utf-8'))}"
 
     with ZipFile(path, "r") as package:
         typography = PptxTypographyResolver(package, relationship_map=_relationship_map)

@@ -1,12 +1,12 @@
 """Reusable monochrome SVGs for the existing authored icon resolver."""
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Sequence
+from utils.hashing import sha256_hex
 
 _LIBRARY = Path(__file__).resolve().parents[6] / "assets" / "infographics" / "monochrome-v1"
 
@@ -50,7 +50,7 @@ def lookup_reusable_icons(
         if source is None:
             continue
         svg = source.read_text(encoding="utf-8").replace("#000000", ink).replace("currentColor", ink)
-        digest = hashlib.sha256(svg.encode("utf-8")).hexdigest()
+        digest = sha256_hex(svg.encode("utf-8"))
         target = Path(cache_directory) / "reusable-svg" / f"{digest}.svg"
         target.parent.mkdir(parents=True, exist_ok=True)
         if not target.exists():

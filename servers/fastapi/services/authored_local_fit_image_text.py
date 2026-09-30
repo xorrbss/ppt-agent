@@ -19,7 +19,6 @@ carry ``provenance == "illustration"``.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 from html.parser import HTMLParser
@@ -29,6 +28,7 @@ from typing import Any, Mapping, Optional
 from services.authored_icon_pack.inline import icon_data_uri
 from services.authored_icon_pack.store import IconEntry, icon_pack_root
 from utils.get_env import get_app_data_directory_env
+from utils.hashing import sha256_hex, sha256_prefixed
 
 LOGGER = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ _VOID_TAGS = frozenset({
 
 
 def src_digest(src: str) -> str:
-    return "sha256:" + hashlib.sha256(src.encode("utf-8")).hexdigest()
+    return sha256_prefixed(src.encode("utf-8"))
 
 
 # -- pack index --------------------------------------------------------------
@@ -81,7 +81,7 @@ def _ocr_verified_text_free(entry: IconEntry) -> bool:
 
 def _review_digest(pack_key: str, entry: IconEntry, path: Path) -> Optional[str]:
     try:
-        file_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+        file_hash = sha256_hex(path.read_bytes())
     except OSError:
         return None
     return f"icon-pack:{pack_key}:{entry.file}:{file_hash}"

@@ -250,6 +250,18 @@ export function normalizeOperationEvent(
           raw.message,
           payload.message,
         ),
+    messageKey: stringValue(
+      raw.messageKey,
+      raw.message_key,
+      payload.messageKey,
+      payload.message_key,
+    ),
+    messageParams: objectValue(
+      raw.messageParams,
+      raw.message_params,
+      payload.messageParams,
+      payload.message_params,
+    ),
     progress: numberValue(
       raw.progress,
       raw.progress_percent,
@@ -426,6 +438,8 @@ function normalizeMessage(
         ? role
         : "unknown",
     content: stringValue(raw.content, raw.text, raw.message) ?? "",
+    contentKey: stringValue(raw.contentKey, raw.content_key),
+    contentParams: objectValue(raw.contentParams, raw.content_params),
     createdAt: stringValue(raw.createdAt, raw.created_at),
     attachments,
     generationSettings: objectValue(
@@ -467,6 +481,9 @@ function normalizeOperation(
     title: operationSupported
       ? (stringValue(raw.title, raw.label) ?? "작업")
       : "지원되지 않는 작업",
+    titleKey: operationSupported
+      ? stringValue(raw.titleKey, raw.title_key)
+      : undefined,
     status: operationStatus(raw.status, raw.state) ?? "unknown",
     retryOfOperationId: stringValue(
       raw.retryOfOperationId,

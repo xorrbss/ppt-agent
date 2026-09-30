@@ -28,11 +28,11 @@ completely, found no geometry failure, and loaded every text run's font.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from hashlib import sha256
 import json
 
 from services.svg_contract import SVG_CONTRACT_VERSION, source_digest
 from services.svg_renderer import SVG_RENDERER_VERSION
+from utils.hashing import sha256_prefixed
 
 AUTHORING_CHECKER = f"svg-author-loop/{SVG_CONTRACT_VERSION}"
 _MEASURED_KEYS = ("source_digest", "renderer_version", "contract_version", "measurement_complete",
@@ -41,7 +41,7 @@ _MEASURED_KEYS = ("source_digest", "renderer_version", "contract_version", "meas
 
 def _digest(value) -> str:
     encoded = json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()
-    return "sha256:" + sha256(encoded).hexdigest()
+    return sha256_prefixed(encoded)
 
 
 def _receipt(slide) -> Mapping:

@@ -9,8 +9,6 @@ ratchet); the facade there re-exports every name importers use.
 from __future__ import annotations
 
 import asyncio
-from hashlib import sha256
-import json
 from pathlib import Path
 import re
 
@@ -22,10 +20,11 @@ from services.authored_checkpoint_fence import owned_job
 from services.authored_presentation_artifacts import _save_slide_pngs
 from services.database import async_session_maker
 from utils.datetime_utils import get_current_utc_datetime
+from utils.hashing import canonical_json_sha256, sha256_hex
 
 
 def _digest(value: object) -> str:
-    return sha256(json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
+    return canonical_json_sha256(value, allow_nan=True)
 
 
 _NUMERIC_CLAIM = re.compile(
@@ -92,7 +91,7 @@ async def _checkpoint(job, index, *, payload=None):
 
 
 def _write_png(png: bytes) -> dict:
-    digest = sha256(png).hexdigest()
+    digest = sha256_hex(png)
     relative = Path("svg") / digest[:2] / f"{digest}.png"
     atomic_write(checkpoint_root() / relative, png)
     return {"png_sha256": digest, "png_path": relative.as_posix()}
@@ -106,7 +105,7 @@ def _read_png(payload: dict) -> bytes | None:
     if not path.is_file():
         return None
     png = path.read_bytes()
-    return png if sha256(png).hexdigest() == digest else None
+    return png if sha256_hex(png) == digest else None
 
 
 def _save_source_page_pngs(presentation_id, pages, publication_token):

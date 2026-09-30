@@ -31,18 +31,18 @@ the unified gate keeps blocking on missing telemetry exactly as before.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import logging
 from collections.abc import Mapping, Sequence
 from functools import partial
 from typing import Any
 from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX, canvas_render_kwargs
+from utils.hashing import sha256_prefixed
 
 LOGGER = logging.getLogger(__name__)
 
 
 def _source_digest(html: str) -> str:
-    return "sha256:" + hashlib.sha256(html.encode("utf-8")).hexdigest()
+    return sha256_prefixed(html.encode("utf-8"))
 
 
 def metrics_match_html(html: str, metrics: object) -> bool:

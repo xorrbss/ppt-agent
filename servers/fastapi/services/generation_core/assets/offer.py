@@ -18,13 +18,13 @@ offer's receipt; nothing here raises for a provider problem.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import logging
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Literal, Optional, Sequence
 
 from services import svg_outline_spans
+from utils.hashing import sha256_hex
 
 LOGGER = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ class AssetSlot:
     def verify(self) -> bytes:
         """Reopen the file and prove it is the bytes the offer recorded."""
         payload = Path(self.path).read_bytes()
-        if hashlib.sha256(payload).hexdigest() != self.sha256:
+        if sha256_hex(payload) != self.sha256:
             raise ValueError("asset_offer_digest_mismatch")
         return payload
 
@@ -110,7 +110,7 @@ def _file_slot(path: str | Path, **fields: Any) -> AssetSlot:
         if media_type is None:
             raise ValueError("asset_offer_unsupported_media_type")
     return AssetSlot(path=str(file), media_type=media_type, width=width, height=height,
-                     sha256=hashlib.sha256(payload).hexdigest(), **fields)
+                     sha256=sha256_hex(payload), **fields)
 
 
 class _Spend:

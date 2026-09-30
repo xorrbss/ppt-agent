@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from hashlib import sha256
 import math
 import re
 
@@ -14,6 +13,7 @@ from services.authored_decoration_panel_sheen import (
     panel_sheen_family, panel_sheen_geometry, without_approved_panel_sheen_clip,
 )
 from services.authored_canvas import is_default_landscape
+from utils.hashing import sha256_prefixed
 
 _MARKER = "authored-decoration-containment-v3"
 _QID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
@@ -218,7 +218,7 @@ def _bound_metrics(html, metrics):
 
     if not isinstance(metrics, Mapping) or metrics.get("dom_metrics_version") != DOM_METRICS_VERSION:
         return None
-    if metrics.get("source_digest") != "sha256:" + sha256(html.encode()).hexdigest() or metrics.get("fonts_ready") is not True:
+    if metrics.get("source_digest") != sha256_prefixed(html.encode()) or metrics.get("fonts_ready") is not True:
         return None
     if re.fullmatch(r"sha256:[0-9a-f]{64}", str(metrics.get("render_digest", ""))) is None:
         return None

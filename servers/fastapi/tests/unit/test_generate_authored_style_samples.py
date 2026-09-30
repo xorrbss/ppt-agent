@@ -401,3 +401,13 @@ def test_parse_fixed_params_joins_wrapped_bullets_in_the_real_topic_file():
     assert fixed.titles[-1] == "마무리"
     assert sorted(fixed.guard_keywords) == [1, 2, 8, 9, 11, 12]
     assert fixed.guard_keywords[9] == ("한결상회",)
+
+
+def test_check_deck_acceptance_ignores_letter_spacing_and_line_breaks():
+    """Regression: letter-spaced display type extracts as '루 미 나'; charts split lines."""
+    from scripts.authored_style_samples_pdf import PdfPageInfo, check_deck_acceptance
+
+    pages = [PdfPageInfo(index=i, width=960.0, height=540.0, text="filler") for i in range(1, 13)]
+    pages[0] = PdfPageInfo(index=1, width=960.0, height=540.0, text="루 미 나 로 지 스 틱 스")
+    pages[10] = PdfPageInfo(index=11, width=960.0, height=540.0, text="매출 (억 원)\n2027년 목표 9\n6")
+    assert check_deck_acceptance(pages, 12, {1: ("루미나",), 11: ("96",)}) == []

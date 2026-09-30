@@ -44,6 +44,7 @@ from services.authored_slide_checkpoint_bundle import (
     SlideCheckpointBundle,
     SlideCheckpointCorrupt,
 )
+from utils.hashing import sha256_hex, sha256_prefixed
 
 
 logger = logging.getLogger(__name__)
@@ -119,7 +120,7 @@ def render_artifact_path(
     # attempt. The checkpoint row is the publication pointer; attempt-scoped
     # filenames make any late write from an old worker an unreferenced orphan.
     attempt_suffix = (
-        hashlib.sha256(attempt_token.encode("utf-8")).hexdigest()[:12]
+        sha256_hex(attempt_token.encode("utf-8"))[:12]
         if attempt_token
         else "legacy"
     )
@@ -132,7 +133,7 @@ def _deck_ir_checkpoint_path(job_id: uuid.UUID, attempt_token: str) -> Path:
 
     if not attempt_token:
         raise ValueError("deck_ir_checkpoint_attempt_missing")
-    attempt_id = hashlib.sha256(attempt_token.encode("utf-8")).hexdigest()[:12]
+    attempt_id = sha256_hex(attempt_token.encode("utf-8"))[:12]
     return _job_directory(job_id) / f"deck-ir-{attempt_id}.checkpoint.json"
 
 
@@ -152,15 +153,15 @@ def write_detached_deck_ir_checkpoint(
     ).encode("utf-8")
     document = {
         "schemaVersion": "deck-ir-detached-checkpoint/v1",
-        "attemptId": hashlib.sha256(attempt_token.encode("utf-8")).hexdigest(),
+        "attemptId": sha256_hex(attempt_token.encode("utf-8")),
         "fencingToken": fencing_token,
         "payload": json.loads(canonical.decode("utf-8")),
-        "payloadDigest": "sha256:" + hashlib.sha256(canonical).hexdigest(),
+        "payloadDigest": sha256_prefixed(canonical),
     }
     unsigned = json.dumps(
         document, ensure_ascii=False, sort_keys=True, separators=(",", ":")
     ).encode("utf-8")
-    document["checkpointDigest"] = "sha256:" + hashlib.sha256(unsigned).hexdigest()
+    document["checkpointDigest"] = sha256_prefixed(unsigned)
     atomic_write(
         _deck_ir_checkpoint_path(job_id, attempt_token),
         json.dumps(
@@ -182,10 +183,10 @@ def write_deck_ir_execution_evidence(*, job_id: uuid.UUID, attempt_token: str, f
     if fencing_token < 1:
         raise ValueError("deck_ir_checkpoint_fence_invalid")
     document = {"schemaVersion": "deck-ir-execution-evidence/v1",
-                "attemptId": hashlib.sha256(attempt_token.encode("utf-8")).hexdigest(),
+                "attemptId": sha256_hex(attempt_token.encode("utf-8")),
                 "fencingToken": fencing_token, "payload": dict(payload)}
     encoded = json.dumps(document, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    fingerprint = hashlib.sha256(encoded).hexdigest()
+    fingerprint = sha256_hex(encoded)
     document["evidenceDigest"] = "sha256:" + fingerprint
     checkpoint = _deck_ir_checkpoint_path(job_id, attempt_token)
     path = checkpoint.with_name(f"{checkpoint.stem}.execution-{fingerprint}.json")
@@ -216,7 +217,7 @@ def read_detached_deck_ir_checkpoint(
         raw.get("schemaVersion") != "deck-ir-detached-checkpoint/v1"
         or raw.get("fencingToken") != fencing_token
         or not isinstance(supplied, str)
-        or supplied != "sha256:" + hashlib.sha256(encoded).hexdigest()
+        or supplied != sha256_prefixed(encoded)
         or not isinstance(raw.get("payload"), Mapping)
     ):
         raise SlideCheckpointCorrupt("deck_ir_checkpoint_binding_invalid")
@@ -504,7 +505,7 @@ def read_valid_render(checkpoint: AuthoredSlideCheckpoint) -> bytes | None:
     if root not in path.parents or not path.is_file():
         return None
     content = path.read_bytes()
-    if hashlib.sha256(content).hexdigest() != checkpoint.render_sha256:
+    if sha256_hex(content) != checkpoint.render_sha256:
         return None
     return content
 
@@ -830,7 +831,7 @@ def _evidence_sidecar_path(render_path: Path) -> Path:
 def evidence_attempt_id(attempt_token: str) -> str:
     """Derive a stable opaque ID without persisting the worker lease token."""
 
-    return hashlib.sha256(attempt_token.encode("utf-8")).hexdigest()[:32]
+    return sha256_hex(attempt_token.encode("utf-8"))[:32]
 
 
 def write_valid_evidence(
@@ -935,7 +936,7 @@ def read_valid_evidence(
         or bundle.png != render_bytes
         or (
             checkpoint.render_sha256 is not None
-            and hashlib.sha256(render_bytes).hexdigest() != checkpoint.render_sha256
+            and sha256_hex(render_bytes) != checkpoint.render_sha256
         )
         or (
             require_current_html_match
@@ -1059,13 +1060,13 @@ def recover_unreferenced_evidence(
                 or bundle.slide_index != checkpoint.slide_index
                 or bundle.png != content
                 or bundle.revision <= current_revision
-                or hashlib.sha256(content).hexdigest()
-                != hashlib.sha256(bundle.png).hexdigest()
+                or sha256_hex(content)
+                != sha256_hex(bundle.png)
             ):
                 continue
             candidate = (
                 str(path.relative_to(root)).replace(os.sep, "/"),
-                hashlib.sha256(content).hexdigest(),
+                sha256_hex(content),
                 bundle,
             )
             if best is None or bundle.revision > best[2].revision:

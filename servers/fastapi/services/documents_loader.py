@@ -11,6 +11,7 @@ from typing import Any, List, Optional, Tuple
 import pdfplumber
 from fastapi import HTTPException
 
+from constants.user_messages import UserMessageKey, user_message
 from constants.documents import (
     IMAGE_EXTENSIONS,
     OFFICE_EXTENSIONS,
@@ -380,8 +381,14 @@ class DocumentsLoader:
         # formats we can handle without it; otherwise surface a clear error.
         if not self.document_conversion_service.is_soffice_available():
             if self.document_service is None:
+                filename = os.path.basename(file_path)
                 raise DocumentConversionError(
-                    f"'{os.path.basename(file_path)}' 변환에 필요한 LibreOffice를 찾을 수 없습니다."
+                    f"LibreOffice required to convert {filename!r} was not found",
+                    code="DOCUMENT_CONVERTER_UNAVAILABLE",
+                    filename=filename,
+                    public_message=user_message(
+                        UserMessageKey.FILES_LIBREOFFICE_REQUIRED, filename=filename
+                    ),
                 )
             return self.document_service.parse_to_markdown(file_path)
 

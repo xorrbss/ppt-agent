@@ -7,7 +7,6 @@ from services.authored_vnext.semantic.editable_scene_chart_payload import _bound
 
 import base64
 import binascii
-import hashlib
 from html.parser import HTMLParser
 from io import BytesIO
 from pathlib import Path
@@ -42,6 +41,7 @@ from services.authored_vnext.generation.scene_compiler import default_scene_capa
 from utils.authored_dom_quality import build_compact_dom_map, normalize_browser_metrics
 from utils.slide_capture import get_cached_browser_metrics
 from utils.asset_directory_utils import resolve_image_path_to_filesystem
+from utils.hashing import sha256_prefixed
 
 
 PROFILE_ID = "authored-editable-hybrid-ko-en-basic-v1"
@@ -399,7 +399,7 @@ def _resolved_image_asset(src: str) -> tuple[SceneAssetManifestEntry, tuple[int,
         except OSError:
             return None
     try:
-        digest = "sha256:" + hashlib.sha256(content).hexdigest()
+        digest = sha256_prefixed(content)
         with Image.open(BytesIO(content)) as image:
             decoded_media_type = {"PNG": "image/png", "JPEG": "image/jpeg"}.get(str(image.format).upper())
             size = image.size
@@ -449,7 +449,7 @@ def _raster_asset(
         output = BytesIO()
         fragment.save(output, format="PNG")
     content = output.getvalue()
-    digest = "sha256:" + hashlib.sha256(content).hexdigest()
+    digest = sha256_prefixed(content)
     safe = "".join(ch if ch.isalnum() or ch in "._-" else "-" for ch in owner_id.lower())
     asset_id = f"asset:raster-{slide_id.removeprefix('slide:')[:16]}-{safe[:48]}"
     return SceneAssetManifestEntry(

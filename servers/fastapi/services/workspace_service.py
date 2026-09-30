@@ -69,10 +69,12 @@ from services.public_operation_admission import (
     admit_public_operation,
     current_principal_context,
 )
-from services.workspace_operation_titles import workspace_operation_title
+from constants.user_messages import UserMessage
+from services.workspace_operation_titles import workspace_operation_title_fields
 from services.workspace_timeline_projection import (
     _PRIVATE_PAYLOAD_KEYS as _PRIVATE_PAYLOAD_KEYS,
     _safe_payload as _safe_payload,
+    _content_message_fields as _content_message_fields,
     _linked_generation_job_id as _linked_generation_job_id,
     _event_status as _event_status,
     _event_to_wire as _event_to_wire,
@@ -84,6 +86,7 @@ from services.workspace_timeline_projection import (
 from utils.datetime_utils import get_current_utc_datetime
 from services.workspace_operation_principal import submitting_principal_tenant
 from utils.owner_context import get_current_owner_id, get_current_tenant_id
+from utils.hashing import sha256_hex
 
 
 _ASSET_WAIT_STATES = {"uploaded", "scanning", "processing"}
@@ -207,18 +210,16 @@ def canonical_payload_hash(payload: Mapping[str, Any]) -> str:
         separators=(",", ":"),
         default=str,
     ).encode("utf-8")
-    return sha256(encoded).hexdigest()
+    return sha256_hex(encoded)
 
 
 def workspace_idempotency_hash(key: str) -> str:
     normalized = key.strip()
     if not normalized or len(normalized) > 255:
         raise WorkspaceServiceError("invalid_idempotency_key", status_code=400)
-    return sha256(
-        f"presenton.workspace/v1:{get_workspace_owner_scope()}:{normalized}".encode(
+    return sha256_hex(f"presenton.workspace/v1:{get_workspace_owner_scope()}:{normalized}".encode(
             "utf-8"
-        )
-    ).hexdigest()
+        ))
 
 
 def _safe_basename(value: str) -> str:
@@ -1395,6 +1396,7 @@ async def workspace_timeline(
                     "generation_settings": _safe_payload(
                         metadata.get("generation_settings")
                     ),
+                    **_content_message_fields(metadata),
                 }
             )
         else:
@@ -1407,7 +1409,7 @@ async def workspace_timeline(
                     "operation_id": str(row.id),
                     "position": position,
                     "operation_type": row.kind,
-                    "title": workspace_operation_title(row.kind),
+                    **workspace_operation_title_fields(row.kind),
                     "status": row.state,
                     "progress": progress.get("progress", progress.get("percent")),
                     "capacity_waiting": capacity_waiting,
@@ -1584,7 +1586,15 @@ async def create_workspace_command(
     *,
     presentation_id: uuid.UUID,
     request: WorkspaceCommandRequest,
+    content_message: UserMessage | None = None,
 ) -> tuple[WorkspaceOperation, bool]:
+    """Persist a command; ``content_message`` keys a server-written command.
+
+    A user-typed command has no key.  A command the server writes on the
+    user's behalf (legacy remake/quality admission) passes the ``UserMessage``
+    whose text is ``request.command`` so the timeline can render it in the UI
+    locale (``content_key``/``content_params`` on the message item).
+    """
     if not is_workspace_command_kind(request.command_type):
         raise WorkspaceServiceError(
             "unsupported_operation_type", status_code=422, retryable=False
@@ -1637,7 +1647,18 @@ async def create_workspace_command(
         position=message_position,
         role="user",
         content=request.command,
-        message_metadata={"command_type": request.command_type, "context": request.context},
+        message_metadata={
+            "command_type": request.command_type,
+            "context": request.context,
+            **(
+                {
+                    "content_key": str(content_message.key),
+                    "content_params": dict(content_message.params),
+                }
+                if content_message is not None
+                else {}
+            ),
+        },
     )
     operation = WorkspaceOperation(
         owner_scope=get_workspace_owner_scope(),
@@ -1959,9 +1980,9 @@ async def apply_workspace_action(
             }
         )
         retry_payload = {**submitting_principal_tenant(), **retry_payload}  # the source's wins
-        retry_operation_key_hash = sha256(
+        retry_operation_key_hash = sha256_hex(
             f"presenton.workspace.retry/v1:{idempotency_hash}:{source_operation.id}".encode("utf-8")
-        ).hexdigest()
+        )
         retry_requires_approval = source_operation.kind in _DESTRUCTIVE_OPERATION_KINDS
         retry_approval_expires_at = (
             now + timedelta(seconds=_destructive_approval_ttl_seconds())

@@ -13,12 +13,25 @@ import { PresentationGenerationApi } from "../../services/api/presentation-gener
 import type { WorkspaceCommandDispatcher } from "../workspace";
 import { formatViewerTimestamp } from "@/i18n/viewer-time";
 import { cn } from "@/lib/utils";
+import { pickBackendMessage } from "@/lib/backend-messages";
+import { translateBackendMessage } from "@/lib/backend-messages-intl";
+import type { UiLocale } from "@/i18n/locale";
 
 interface VersionSummary {
   id: string;
   created_at: string;
   label?: string | null;
+  label_key?: string | null;
+  label_params?: Record<string, unknown> | null;
   slide_count: number;
+}
+
+function versionLabel(version: VersionSummary, locale: UiLocale): string | undefined {
+  return (
+    translateBackendMessage(pickBackendMessage(version, "label"), locale) ??
+    version.label ??
+    undefined
+  );
 }
 
 function formatWhen(iso: string, locale: string): string {
@@ -141,7 +154,7 @@ const VersionHistoryPopover = ({
                     {formatWhen(version.created_at, locale)}
                   </p>
                   <p className="truncate text-xs text-gray-500">
-                    {version.label ? `${version.label} · ` : ""}
+                    {versionLabel(version, locale) ? `${versionLabel(version, locale)} · ` : ""}
                     {version.slide_count}개 슬라이드
                   </p>
                 </div>

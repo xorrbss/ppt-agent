@@ -16,10 +16,10 @@ never loads them and a test-only edit must not invalidate published exports.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
+from utils.hashing import canonical_json_sha256
 
 BUNDLE_DIGEST_VERSION = "public-export-worker-bundle/v1"
 #: Recorded instead of a file inventory when the worker sources cannot be read.
@@ -124,11 +124,7 @@ def _file_digest(path: Path) -> str:
 
 
 def _canonical_digest(payload: dict[str, object]) -> str:
-    return sha256(
-        json.dumps(
-            payload, ensure_ascii=True, sort_keys=True, separators=(",", ":")
-        ).encode("utf-8")
-    ).hexdigest()
+    return canonical_json_sha256(payload, ensure_ascii=True, allow_nan=True)
 
 
 def compute_public_export_worker_bundle(

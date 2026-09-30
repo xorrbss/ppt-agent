@@ -35,7 +35,6 @@ a deck nobody looked at as releasable.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from hashlib import sha256
 
 from services.generation_core.quality.advisory_record import (
     ADVISORY_RECORD_SCHEMA,
@@ -45,12 +44,13 @@ from services.generation_core.quality.advisory_record import (
     record_matches,
 )
 from services.generation_core.quality.page_outcome import review_page_indices
+from utils.hashing import sha256_hex
 
 
 def slide_page_digests(slides) -> list[str]:
     """What the advisory record binds to: the digest of each exported SVG."""
 
-    return [sha256((slide.svg_content or "").encode()).hexdigest() for slide in slides]
+    return [sha256_hex((slide.svg_content or "").encode()) for slide in slides]
 
 
 def _review_pages(slides) -> list[int]:

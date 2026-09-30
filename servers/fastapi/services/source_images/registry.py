@@ -34,6 +34,7 @@ from services.source_images.models import (
     SourceImageCandidate,
 )
 from utils.path_helpers import get_writable_path
+from utils.hashing import sha256_hex
 
 #: Uploads we open as decks rather than as pictures. ``.ppt`` is listed because
 #: the upload surface accepts it; the extractor decides whether it can read one.
@@ -203,7 +204,7 @@ async def register_manifest_image_occurrences(
             raise ValueError("source_content_image_format_not_supported")
         payload = bytes(occurrence.payload)
         expected = occurrence.content_digest.removeprefix("sha256:").lower()
-        actual = hashlib.sha256(payload).hexdigest()
+        actual = sha256_hex(payload)
         if len(expected) != 64 or actual != expected:
             raise ValueError("source_content_image_digest_mismatch")
         try:
@@ -301,9 +302,7 @@ async def _collect_raw_images(
                     slide_coverage=image.slide_coverage,
                     source_path=path if include_document_images else None,
                     occurrence_id=(
-                        hashlib.sha256(
-                            f"{document_digest}:slide/{image.source_slide_index}/image/{index}".encode()
-                        ).hexdigest()
+                        sha256_hex(f"{document_digest}:slide/{image.source_slide_index}/image/{index}".encode())
                         if include_document_images
                         else None
                     ),

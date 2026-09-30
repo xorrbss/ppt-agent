@@ -22,6 +22,12 @@ from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from constants.user_messages import (
+    UserMessageKey,
+    UserMessageLike,
+    set_record_message,
+    user_message,
+)
 from models.presentation_from_template import AuthoredPageRemakePreviewRequest
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
@@ -88,6 +94,7 @@ from utils.llm_calls.author_slide import (
 )
 from utils.llm_calls.author_vision_qa import revise_authored_deck
 from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
+from utils.hashing import sha256_hex, sha256_prefixed
 
 LOGGER = logging.getLogger(__name__)
 PREVIEW_KIND = "authored_page_remake_preview"
@@ -111,7 +118,7 @@ def _canonical_digest(value: object) -> str:
         separators=(",", ":"),
         default=str,
     ).encode("utf-8")
-    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+    return sha256_prefixed(encoded)
 
 
 def authored_page_source_digest(slide: SlideModel) -> str:
@@ -134,12 +141,12 @@ async def _set_task(
     task: AsyncPresentationGenerationTaskModel,
     *,
     status: str,
-    message: str,
+    message: UserMessageLike,
     data: dict[str, Any] | None = None,
     error: dict[str, Any] | None = None,
 ) -> None:
     task.status = status
-    task.message = message
+    set_record_message(task, message)
     task.data = data
     task.error = error
     task.updated_at = get_current_utc_datetime()
@@ -356,7 +363,7 @@ def _theme_with_remake_local_fit_receipt(
 
 def _png_matches_content_addressed_reference(reference: str, png: bytes) -> bool:
     filename = reference.replace("\\", "/").rsplit("/", 1)[-1]
-    return filename.endswith(f"_{hashlib.sha256(png).hexdigest()}.png")
+    return filename.endswith(f"_{sha256_hex(png)}.png")
 
 
 async def run_authored_page_remake_preview(
@@ -399,7 +406,7 @@ async def run_authored_page_remake_preview(
         session,
         task,
         status="processing",
-        message=f"{slide_index + 1}페이지의 새 버전을 만들고 있습니다.",
+        message=user_message(UserMessageKey.REMAKE_PAGE_RUNNING, page=slide_index + 1),
     )
     source_html = str(target.html_content)
     source_digest = authored_page_source_digest(target)
@@ -632,7 +639,7 @@ async def run_authored_page_remake_preview(
         session,
         task,
         status="completed",
-        message=f"{slide_index + 1}페이지의 새 버전 미리보기가 준비되었습니다.",
+        message=user_message(UserMessageKey.REMAKE_PAGE_READY, page=slide_index + 1),
         data={
             "kind": PREVIEW_KIND,
             "phase": "preview_ready",
@@ -705,7 +712,7 @@ async def _run_preview_background(
                 session,
                 task,
                 status="error",
-                message="페이지의 새 버전을 만들지 못했습니다.",
+                message=user_message(UserMessageKey.REMAKE_PAGE_FAILED),
                 data=_failed_preview_breadcrumb(presentation_id, slide_index),
                 error={
                     "detail": error.code,
@@ -723,7 +730,7 @@ async def _run_preview_background(
                 session,
                 task,
                 status="error",
-                message="페이지의 새 버전을 만들지 못했습니다.",
+                message=user_message(UserMessageKey.REMAKE_PAGE_FAILED),
                 data=_failed_preview_breadcrumb(presentation_id, slide_index),
                 error={
                     "detail": "authored_page_remake_failed",
@@ -754,14 +761,14 @@ async def queue_authored_page_remake_preview(
         presentation_id=presentation_id,
         operation_kind="slide.regenerate.preview",
         expected_revision=int(presentation.revision),
-        command=f"{slide_index + 1}페이지 다시 만들기 미리보기",
+        command=user_message(UserMessageKey.REMAKE_PAGE_COMMAND, page=slide_index + 1),
         context={
             "slide_index": slide_index,
             "instruction": request.instruction,
         },
         task_id_prefix="workspace-page-preview",
-        pending_message=(
-            f"{slide_index + 1}페이지의 새 버전 작업을 대기열에 추가했습니다."
+        pending_message=user_message(
+            UserMessageKey.REMAKE_PAGE_QUEUED, page=slide_index + 1
         ),
     )
 
@@ -1039,7 +1046,7 @@ async def publish_authored_page_remake(
             session,
             presentation_id,
             [item.model_dump(mode="json") for item in slides],
-            label=f"페이지 다시 만들기: {slide_index + 1}",
+            label=user_message(UserMessageKey.VERSION_LABEL_PAGE_REMAKE, page=slide_index + 1),
             force=True,
         )
     result = await session.execute(
@@ -1113,7 +1120,9 @@ async def publish_authored_page_remake(
         "rollback_available": True,
     }
     task.data = next_data
-    task.message = f"{slide_index + 1}페이지의 새 버전을 적용했습니다."
+    set_record_message(
+        task, user_message(UserMessageKey.REMAKE_PAGE_APPLIED, page=slide_index + 1)
+    )
     task.updated_at = get_current_utc_datetime()
     session.add(task)
     await session.flush()

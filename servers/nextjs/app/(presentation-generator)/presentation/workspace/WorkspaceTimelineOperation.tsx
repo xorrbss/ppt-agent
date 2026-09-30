@@ -1,5 +1,8 @@
 import { useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+
+import { pickBackendMessage } from "@/lib/backend-messages";
+import { translateBackendMessage } from "@/lib/backend-messages-intl";
 import type {
   WorkspaceOperationAnchor,
   WorkspacePageRemakeRequester,
@@ -33,6 +36,7 @@ interface Props {
 
 export function WorkspaceTimelineOperation(props: Props) {
   const t = useTranslations("presentationTimelineOperation");
+  const locale = useLocale();
   const { operation } = props;
   const [exportPending, setExportPending] = useState(false);
   const [exportError, setExportError] = useState<string>();
@@ -49,7 +53,9 @@ export function WorkspaceTimelineOperation(props: Props) {
 
   const summary = completion
     ? `${completion.total}장 제작 완료 · 정상 ${completion.normal} · 자동 수정 ${completion.autoRepaired}`
-    : stringValue(result.summary, result.message) ?? "프레젠테이션 제작 완료";
+    : (translateBackendMessage(pickBackendMessage(result, "summary"), locale) ??
+      stringValue(result.summary, result.message) ??
+      "프레젠테이션 제작 완료");
   const history = operationProgressEvidence(operation).messages;
   const createPptx = async () => {
     if (!props.onReExport || props.disabled || exportPending) return;

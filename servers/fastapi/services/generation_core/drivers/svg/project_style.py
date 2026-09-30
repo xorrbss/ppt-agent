@@ -11,18 +11,18 @@ the flat dict the svg author prompt serializes verbatim (see
 """
 from __future__ import annotations
 
-from hashlib import sha256
 import json
 
 from services.svg_contract import SVG_CONTRACT_VERSION
 
 from ...style.context import StyleContext
+from utils.hashing import sha256_prefixed
 
 SVG_STYLE_ADAPTER_VERSION = "svg-style/v2"
 
 
 def _digest(value: object) -> str:
-    return "sha256:" + sha256(json.dumps(value, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+    return sha256_prefixed(json.dumps(value, sort_keys=True, ensure_ascii=False).encode())
 
 
 def project_style(
