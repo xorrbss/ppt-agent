@@ -15,6 +15,7 @@ from utils.env_parse import (
 )
 from utils.parsers import parse_bool_or_none
 from utils.runtime_settings import RuntimeSettings, resolve_runtime_settings
+from utils.get_env_canvas import get_canvas_stages_path_env  # noqa: F401
 from utils.get_env_authored_publish import (
     is_authored_publish_flagged_slides_enabled,
     is_authored_publish_flagged_slides_source_reflow_enabled,

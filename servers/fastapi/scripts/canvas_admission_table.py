@@ -322,6 +322,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     for name in [name for name in os.environ if name.startswith(EXACT_ENV_PREFIX)]:
         del os.environ[name]  # pinned environment: no private exact presets
+    os.environ.pop("CANVAS_STAGES_PATH", None)
+    import services.authored_canvas as authored_canvas
+
+    authored_canvas._canvas_stages.cache_clear()
     document = build_document()
     if args.write:
         FIXTURE_PATH.parent.mkdir(parents=True, exist_ok=True)

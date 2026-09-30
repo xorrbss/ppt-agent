@@ -50,6 +50,7 @@ from scripts import canvas_bench_live as live  # noqa: E402
 from scripts import canvas_bench_matrix as matrix  # noqa: E402
 from scripts import canvas_bench_render as render  # noqa: E402
 from scripts import canvas_bench_rules as rules  # noqa: E402
+from scripts import canvas_bench_watch as watch  # noqa: E402
 
 DEFAULT_LANGUAGE = "Korean (한국어)"
 
@@ -105,7 +106,7 @@ def _export_evidence(client: live.BenchClient, presentation_id: str, operation_i
     return evidence
 
 
-def run_one(client: live.BenchClient, manuscript: Path, args: argparse.Namespace,
+def _run_one(client: live.BenchClient, manuscript: Path, args: argparse.Namespace,
             registry: dict[str, Any], out_dir: Path, stem: str | None = None,
             repeat: int | None = None) -> dict[str, Any]:
     body = _request_body(manuscript.read_text(encoding="utf-8").strip(), args, registry)
@@ -146,9 +147,13 @@ def run_one(client: live.BenchClient, manuscript: Path, args: argparse.Namespace
     formats = live.source_formats(presentation)
     total = timing["totalSeconds"]
     theme = presentation.get("theme") if isinstance(presentation.get("theme"), dict) else {}
-    overlap_basis = epochs.find_overlap_basis((generation_card or {}).get("result"))
+    overlap_basis, unmeasured = epochs.deck_overlap_basis((generation_card or {}).get("result"), presentation)
     receipt["overlapBasis"] = overlap_basis
-    receipt["metricEpoch"] = epochs.observed_epoch(overlap_basis) or args.run_epoch
+    receipt["metricEpoch"] = args.metric_epoch or epochs.observed_epoch(overlap_basis) or args.run_epoch
+    if not overlap_basis and args.run_epoch == "unmeasured" and not args.metric_epoch:
+        unmeasured = unmeasured or "missing_overlap_basis"
+    if unmeasured:
+        receipt["primaryMetric"] = {"status": "unmeasured", "reason": unmeasured}
     receipt.update(
         slideCount=slides,
         sourceFormats=formats,
@@ -161,9 +166,28 @@ def run_one(client: live.BenchClient, manuscript: Path, args: argparse.Namespace
         gate=live.gate_evidence(quality, timing, generation_card, export_card),
         export=export,
     )
+    if unmeasured:
+        receipt["gate"]["flags"]["flaggedPages"] = None
     if receipt["export"]["ok"] and not args.no_render:
         pngs, skipped = render.render_pptx_slides(Path(receipt["export"]["artifact"]), deck_dir / "slides")
         receipt["renders"] = {"count": len(pngs), "dir": str(deck_dir / "slides"), "skipped": skipped}
+    return receipt
+
+
+def run_one(client: live.BenchClient, manuscript: Path, args: argparse.Namespace,
+            registry: dict[str, Any], out_dir: Path, stem: str | None = None,
+            repeat: int | None = None) -> dict[str, Any]:
+    receipt = _run_one(client, manuscript, args, registry, out_dir, stem, repeat)
+    client.watch.end()
+    overrun = watch.backend_overrun((receipt.get("timing") or {}).get("receipt") or {},
+                                   receipt["clientWallSeconds"], client.finished_seconds)
+    receipt["clock"] = client.watch.evidence(getattr(args, "power_guard", "none"), overrun)
+    if client.watch.detected:
+        clock = receipt["clock"]
+        receipt["invalid"] = {"reason": "infra_lost", "note":
+                              f"clock: slept {clock['sleptSeconds']} s; poll gap {clock['maxPollGapSeconds']} s"}
+    elif receipt["generation"]["ok"]:
+        client.finished_seconds.append(receipt["clientWallSeconds"])
     return receipt
 
 
@@ -174,7 +198,8 @@ def _prepare(args: argparse.Namespace) -> dict[str, Any]:
     for canvas in getattr(args, "canvas_ids", None) or [args.canvas]:
         rules.canvas_emu(canvas, registry)
     try:
-        args.run_epoch = epochs.resolve_run_epoch(args.metric_epoch, args.backend_commit, args.ink_fix_commit)
+        args.run_epoch = (epochs.resolve_run_epoch(args.metric_epoch, args.backend_commit, args.ink_fix_commit)
+                          if args.metric_epoch or args.backend_commit or args.ink_fix_commit else "unmeasured")
     except ValueError as error:
         raise SystemExit(str(error)) from error
     args.batch = args.batch or datetime.now(timezone.utc).strftime("%Y%m%d")
@@ -203,12 +228,15 @@ def cmd_run(args: argparse.Namespace) -> int:
     out_dir = Path(args.out)
     client = live.BenchClient(args.base, timeout_seconds=args.timeout)
     try:
-        for manuscript in manuscripts:
-            print(f"[{args.canvas}] {manuscript.name} ...", flush=True)
-            receipt = run_one(client, manuscript, args, registry, out_dir)
-            path = out_dir / args.canvas / f"{manuscript.stem}.receipt.json"
-            _write_json(path, receipt)
-            print(f"  -> {path} generation={receipt['generation']['ok']} export={receipt['export']['ok']}", flush=True)
+        with watch.power_guard(f"canvas bench: {out_dir}") as args.power_guard:
+            print(f"power guard: {args.power_guard}", flush=True)
+            for manuscript in manuscripts:
+                print(f"[{args.canvas}] {manuscript.name} ...", flush=True)
+                receipt = run_one(client, manuscript, args, registry, out_dir)
+                path = out_dir / args.canvas / f"{manuscript.stem}.receipt.json"
+                _write_json(path, receipt)
+                print(f"  -> {path} generation={receipt['generation']['ok']} "
+                      f"export={receipt['export']['ok']}", flush=True)
     finally:
         client.close()
     if not args.no_render:
@@ -240,7 +268,10 @@ def cmd_matrix(args: argparse.Namespace) -> int:
         return run_one(client, deck.manuscript, deck_args, registry, out_dir, stem=deck.stem, repeat=deck.repeat)
 
     try:
-        return matrix.run_matrix(plan, out_dir, run_deck, base_receipt, _write_json)
+        with watch.power_guard(f"canvas bench: {out_dir}") as args.power_guard:
+            print(f"power guard: {args.power_guard}", flush=True)
+            return matrix.run_matrix(plan, out_dir, run_deck, base_receipt, _write_json,
+                                     health_probe=client.health_probe)
     finally:
         client.close()
 

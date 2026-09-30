@@ -511,8 +511,7 @@ def test_matrix_command_dry_run_lists_done_and_todo(tmp_path, capsys):
     canvas_bench.main(argv)
     assert capsys.readouterr().out.count("done  ") == 1
     without_epoch = [a for a in argv if a not in ("--metric-epoch", "e1")]
-    with pytest.raises(SystemExit, match="metric epoch"):
-        canvas_bench.main(without_epoch)
+    assert canvas_bench.main(without_epoch) == 0  # per-deck evidence resolves the epoch after generation
 
 
 def test_generate_waits_for_the_export_annotation_and_the_published_result(monkeypatch):

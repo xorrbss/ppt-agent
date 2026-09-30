@@ -39,6 +39,7 @@ INTERNAL_ENV_NAMES: MappingProxyType[str, str] = MappingProxyType(
         # --- process / deployment identity -----------------------------------
         "APP_DATA_DIRECTORY": "Root for generated files, uploads, fonts, exports, userConfig.json (required).",
         "DATABASE_URL": "Async SQLAlchemy URL; falls back to SQLite under the app data directory.",
+        "CANVAS_STAGES_PATH": "Alternate stage file for an isolated canvas bench backend.",
         "TEMP_DIRECTORY": "Scratch directory override for temporary generation files.",
         "USER_CONFIG_PATH": "Path of the per-instance userConfig.json written by start.js.",
         "DISABLE_AUTH": "Bypass the session auth middleware for single-user local runs.",

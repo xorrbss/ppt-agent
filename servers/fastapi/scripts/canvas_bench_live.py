@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from scripts import canvas_bench_watch as watch
 from models.document_canvas import (
     DOCUMENT_CANVAS_CONTRACT_VERSION,
     DOCUMENT_CANVAS_CONTRACTS_HEADER,
@@ -33,15 +34,19 @@ KEEPALIVE_EXPIRY_SECONDS = 1.0
 # published generation result (see BenchClient._settle).
 SETTLE_SECONDS = 120.0
 TERMINAL_OPERATION_STATES = {"succeeded", "failed", "cancelled", "dead_letter"}
+REQUEST_TIMEOUT_SECONDS = 120.0
 QUALITY_RECEIPT_DIR = "authored-quality-receipts"
 
 
 class BenchClient:
     def __init__(self, base: str, *, timeout_seconds: float) -> None:
+        self.watch = watch.DeckWatch()
+        self.finished_seconds: list[float] = []
+        self.recovery_deadline = None
         self.base = base.rstrip("/")
         self.deadline_seconds = timeout_seconds
         self.http = httpx.Client(
-            timeout=httpx.Timeout(120.0),
+            timeout=httpx.Timeout(REQUEST_TIMEOUT_SECONDS),
             limits=httpx.Limits(keepalive_expiry=KEEPALIVE_EXPIRY_SECONDS),
             trust_env=False,
         )
@@ -49,15 +54,26 @@ class BenchClient:
     def close(self) -> None:
         self.http.close()
 
+    def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        self.watch.begin()
+        try:
+            return self.http.request(method, f"{self.base}{path}", **kwargs)
+        finally:
+            self.watch.end()
+            if self.watch.detected and self.recovery_deadline is None:
+                self.recovery_deadline = time.monotonic() + watch.LOST_TASK_SETTLE_SECONDS
+
     def _get(self, path: str) -> Any:
-        response = self.http.get(f"{self.base}{path}")
+        response = self._request("GET", path)
         response.raise_for_status()
         return response.json()
 
     def generate(self, body: Mapping[str, Any]) -> dict[str, Any]:
         """Submit, poll to a terminal status, and return the status record."""
 
-        response = self.http.post(f"{self.base}/api/v1/ppt/presentation/generate/async", json=dict(body))
+        self.watch = watch.DeckWatch()
+        self.recovery_deadline = None
+        response = self._request("POST", "/api/v1/ppt/presentation/generate/async", json=dict(body))
         if response.status_code >= 400:
             return {"status": "rejected", "http_status": response.status_code, "detail": response.text[:800]}
         admitted = response.json()
@@ -70,7 +86,9 @@ class BenchClient:
                     status = self._settle(task_id, status, admitted.get("operation_id"), bool(body.get("export_as")))
                 status["operation_id"] = admitted.get("operation_id")
                 return status
-            if time.monotonic() > deadline:
+            if self.recovery_deadline is not None and time.monotonic() > self.recovery_deadline:
+                raise ConnectionError("lost deck did not reach terminal status within recovery budget")
+            if self.recovery_deadline is None and time.monotonic() > deadline:
                 return {"status": "timeout", "id": task_id, "operation_id": admitted.get("operation_id")}
             time.sleep(POLL_SECONDS)
 
@@ -96,7 +114,10 @@ class BenchClient:
                 (operation_card(self.timeline(str(presentation_id)), operation_id=operation_id) or {}).get("status")
                 in TERMINAL_OPERATION_STATES
             )
-            if (annotated and published) or time.monotonic() > deadline:
+            if self.recovery_deadline is not None and time.monotonic() > self.recovery_deadline:
+                if not (annotated and published):
+                    raise ConnectionError("lost generation operation did not settle within recovery budget")
+            if (annotated and published) or (self.recovery_deadline is None and time.monotonic() > deadline):
                 return status
             time.sleep(POLL_SECONDS)
             status = self._get(f"/api/v1/ppt/presentation/status/{task_id}")
@@ -107,8 +128,8 @@ class BenchClient:
     def presentation(self, presentation_id: str) -> dict[str, Any]:
         # An A4 deck is withheld (409) from readers that do not advertise the
         # document-canvas contract.
-        response = self.http.get(
-            f"{self.base}/api/v1/ppt/presentation/{presentation_id}",
+        response = self._request(
+            "GET", f"/api/v1/ppt/presentation/{presentation_id}",
             headers={DOCUMENT_CANVAS_CONTRACTS_HEADER: DOCUMENT_CANVAS_CONTRACT_VERSION},
         )
         response.raise_for_status()
@@ -116,15 +137,26 @@ class BenchClient:
 
     def wait_operation(self, presentation_id: str, operation_id: str) -> dict[str, Any] | None:
         deadline = time.monotonic() + self.deadline_seconds
-        while time.monotonic() < deadline:
+        while True:
             item = operation_card(self.timeline(presentation_id), operation_id=operation_id)
             if item is not None and item.get("status") in TERMINAL_OPERATION_STATES:
                 return item
+            if time.monotonic() >= (self.recovery_deadline or deadline):
+                if self.recovery_deadline is not None:
+                    raise ConnectionError("lost export operation did not settle within recovery budget")
+                return None
             time.sleep(POLL_SECONDS)
-        return None
+
+    def health_probe(self) -> None:
+        # Both successful checks are required before another serial deck starts.
+        for index in range(2):
+            if index:
+                time.sleep(watch.HEALTH_PROBE_INTERVAL_SECONDS)
+            response = self.http.get(f"{self.base}/health")
+            response.raise_for_status()
 
     def download_artifact(self, artifact_id: str, dest: Path) -> Path:
-        response = self.http.get(f"{self.base}/api/v1/ppt/workspace/artifacts/{artifact_id}/download")
+        response = self._request("GET", f"/api/v1/ppt/workspace/artifacts/{artifact_id}/download")
         response.raise_for_status()
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(response.content)
