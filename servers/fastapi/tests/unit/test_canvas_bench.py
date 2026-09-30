@@ -513,3 +513,55 @@ def test_matrix_command_dry_run_lists_done_and_todo(tmp_path, capsys):
     without_epoch = [a for a in argv if a not in ("--metric-epoch", "e1")]
     with pytest.raises(SystemExit, match="metric epoch"):
         canvas_bench.main(without_epoch)
+
+
+def test_generate_waits_for_the_export_annotation_and_the_published_result(monkeypatch):
+    # `completed` is committed before the chained export annotates the task and
+    # before the generation operation is published; the client must not stop there.
+    from scripts import canvas_bench_live as live
+
+    monkeypatch.setattr(live, "POLL_SECONDS", 0)
+    status_reads = {"n": 0}
+    timeline_reads = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith("/generate/async"):
+            return httpx.Response(200, json={"id": "task-1", "operation_id": "op-gen"})
+        if "/presentation/status/" in path:
+            status_reads["n"] += 1
+            export_id = "op-export" if status_reads["n"] >= 3 else None
+            return httpx.Response(200, json={"status": "completed", "data": {
+                "presentation_id": "p-1", "export_operation_id": export_id, "export_error": None}})
+        if path.endswith("/timeline"):
+            timeline_reads["n"] += 1
+            state = "succeeded" if timeline_reads["n"] >= 4 else "running"
+            return httpx.Response(200, json={"items": [
+                {"anchor_type": "operation", "operation_id": "op-gen", "status": state}]})
+        return httpx.Response(404)
+
+    client = live.BenchClient("http://bench", timeout_seconds=30)
+    client.http = httpx.Client(transport=httpx.MockTransport(handler))
+    status = client.generate({"export_as": "pptx"})
+    assert status["data"]["export_operation_id"] == "op-export"
+    assert status["operation_id"] == "op-gen"
+    assert timeline_reads["n"] >= 4
+
+
+def test_generate_without_export_returns_once_published(monkeypatch):
+    from scripts import canvas_bench_live as live
+
+    monkeypatch.setattr(live, "POLL_SECONDS", 0)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith("/generate/async"):
+            return httpx.Response(200, json={"id": "task-1", "operation_id": "op-gen"})
+        if "/presentation/status/" in path:
+            return httpx.Response(200, json={"status": "completed", "data": {"presentation_id": "p-1"}})
+        return httpx.Response(200, json={"items": [
+            {"anchor_type": "operation", "operation_id": "op-gen", "status": "succeeded"}]})
+
+    client = live.BenchClient("http://bench", timeout_seconds=30)
+    client.http = httpx.Client(transport=httpx.MockTransport(handler))
+    assert client.generate({})["status"] == "completed"

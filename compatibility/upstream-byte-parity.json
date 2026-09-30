@@ -957,13 +957,6 @@
         "reasonCode": "auth-ownership-transaction"
       },
       {
-        "path": "servers/fastapi/alembic/versions/82abdbc476a7_add_theme_column_to_presentations.py",
-        "upstreamMode": "100644",
-        "upstreamBlob": "c7282a6ea14c27529c9d5291c3419e98522b6d3d",
-        "localState": "modified",
-        "reasonCode": "auth-ownership-transaction"
-      },
-      {
         "path": "servers/fastapi/alembic/versions/8a6c4d2e1f30_add_merged_components_to_template_v2.py",
         "upstreamMode": "100644",
         "upstreamBlob": "53dd219fca047a744eb9e8d8f49c0f239d6081eb",
@@ -2472,14 +2465,14 @@
         "path": "servers/fastapi/utils/llm_calls/generate_presentation_structure.py",
         "upstreamMode": "100644",
         "upstreamBlob": "eb0985b805c3d62089155fe95dbd6e90e5915887",
-        "localState": "deleted",
+        "localState": "modified",
         "reasonCode": "auth-ownership-transaction"
       },
       {
         "path": "servers/fastapi/utils/llm_calls/generate_slide_content.py",
         "upstreamMode": "100644",
         "upstreamBlob": "554f15377f89cd0a1086fc9f033dc167ade78e21",
-        "localState": "deleted",
+        "localState": "modified",
         "reasonCode": "auth-ownership-transaction"
       },
       {
@@ -2539,13 +2532,6 @@
         "reasonCode": "auth-ownership-transaction"
       },
       {
-        "path": "servers/fastapi/utils/oauth/openai_codex.py",
-        "upstreamMode": "100644",
-        "upstreamBlob": "47bee19190042df5fc7cf452f81beb03a2c8ebe4",
-        "localState": "modified",
-        "reasonCode": "auth-ownership-transaction"
-      },
-      {
         "path": "servers/fastapi/utils/ollama.py",
         "upstreamMode": "100644",
         "upstreamBlob": "198d2c0947918df074b39f7881fb87bf89af9ed5",
@@ -2560,24 +2546,10 @@
         "reasonCode": "auth-ownership-transaction"
       },
       {
-        "path": "servers/fastapi/utils/outline_utils.py",
-        "upstreamMode": "100644",
-        "upstreamBlob": "b08476433662801ec7fc14689b887e5c6e2740d5",
-        "localState": "modified",
-        "reasonCode": "auth-ownership-transaction"
-      },
-      {
         "path": "servers/fastapi/utils/path_helpers.py",
         "upstreamMode": "100644",
         "upstreamBlob": "f1565b2a7da71b0754b303c08ba61d8768c9ccde",
         "localState": "modified",
-        "reasonCode": "auth-ownership-transaction"
-      },
-      {
-        "path": "servers/fastapi/utils/ppt_utils.py",
-        "upstreamMode": "100644",
-        "upstreamBlob": "9cd3b2e04f31bbb9b49606f45e2550d3f457baed",
-        "localState": "deleted",
         "reasonCode": "auth-ownership-transaction"
       },
       {
@@ -2592,13 +2564,6 @@
         "upstreamMode": "100644",
         "upstreamBlob": "04353f1e75ed12ec71a17d97da0c511cfd61fd3a",
         "localState": "deleted",
-        "reasonCode": "auth-ownership-transaction"
-      },
-      {
-        "path": "servers/fastapi/utils/schema_utils.py",
-        "upstreamMode": "100644",
-        "upstreamBlob": "afec07a6849a8fcdb3176c9a7698f86e58f41109",
-        "localState": "modified",
         "reasonCode": "auth-ownership-transaction"
       },
       {
@@ -2843,7 +2808,7 @@
         "path": "servers/nextjs/app/(presentation-generator)/(dashboard)/Components/DashboardNav.tsx",
         "upstreamMode": "100644",
         "upstreamBlob": "6185cd7fe21f8567df98d4695943539f9e28c59e",
-        "localState": "deleted",
+        "localState": "modified",
         "reasonCode": "local-fork-replacement"
       },
       {
@@ -2945,13 +2910,6 @@
         "reasonCode": "local-fork-replacement"
       },
       {
-        "path": "servers/nextjs/app/(presentation-generator)/(dashboard)/settings/loading.tsx",
-        "upstreamMode": "100644",
-        "upstreamBlob": "409a669946cfcc3f91d85e271f22503987fee2d5",
-        "localState": "modified",
-        "reasonCode": "local-fork-replacement"
-      },
-      {
         "path": "servers/nextjs/app/(presentation-generator)/(dashboard)/settings/page.tsx",
         "upstreamMode": "100644",
         "upstreamBlob": "3144dda2dcbb26e5e1a883e2f473dfb25858017c",
@@ -3036,13 +2994,6 @@
         "reasonCode": "local-fork-replacement"
       },
       {
-        "path": "servers/nextjs/app/(presentation-generator)/(dashboard)/theme/components/ThemePanel/ColorPickerComponent.tsx",
-        "upstreamMode": "100644",
-        "upstreamBlob": "e501ab23f82700188a31073026e4b09bdac6501d",
-        "localState": "modified",
-        "reasonCode": "local-fork-replacement"
-      },
-      {
         "path": "servers/nextjs/app/(presentation-generator)/(dashboard)/theme/components/ThemePanel/constants.ts",
         "upstreamMode": "100644",
         "upstreamBlob": "95a4c08833026291e7596e281ee135427c61afbb",
@@ -3089,13 +3040,6 @@
         "upstreamMode": "100644",
         "upstreamBlob": "9aadca9ab1608a835df4e20c098a8e878b792779",
         "localState": "deleted",
-        "reasonCode": "local-fork-replacement"
-      },
-      {
-        "path": "servers/nextjs/app/(presentation-generator)/(dashboard)/theme/loading.tsx",
-        "upstreamMode": "100644",
-        "upstreamBlob": "39a7bb57ba947cc6b64351847e42f4820c17f7eb",
-        "localState": "modified",
         "reasonCode": "local-fork-replacement"
       },
       {
@@ -3480,7 +3424,7 @@
         "path": "servers/nextjs/app/(presentation-generator)/hooks/useFontLoader.tsx",
         "upstreamMode": "100644",
         "upstreamBlob": "a106fa30aef8747d275630821de1560d2475807a",
-        "localState": "deleted",
+        "localState": "modified",
         "reasonCode": "local-fork-replacement"
       },
       {
@@ -3718,7 +3662,7 @@
         "path": "servers/nextjs/app/(presentation-generator)/presentation/components/ThemeSelector.tsx",
         "upstreamMode": "100644",
         "upstreamBlob": "5efa55e977c0f732e0c73d98ba328d2e54b8705b",
-        "localState": "deleted",
+        "localState": "modified",
         "reasonCode": "local-fork-replacement"
       },
       {
@@ -3998,7 +3942,7 @@
         "path": "servers/nextjs/app/(presentation-generator)/upload/components/LanguageSelector.tsx",
         "upstreamMode": "100644",
         "upstreamBlob": "18365e60caca135ae96bcdab1c2c91c74953f8f2",
-        "localState": "deleted",
+        "localState": "modified",
         "reasonCode": "local-fork-replacement"
       },
       {
@@ -4082,13 +4026,6 @@
         "path": "servers/nextjs/app/api/github-stars/route.ts",
         "upstreamMode": "100644",
         "upstreamBlob": "81c8731a04116fa5f6792166e20c39e5a3b50ef4",
-        "localState": "deleted",
-        "reasonCode": "local-fork-replacement"
-      },
-      {
-        "path": "servers/nextjs/app/api/has-required-key/route.ts",
-        "upstreamMode": "100644",
-        "upstreamBlob": "bb4d6b9229183126d455812226d8c53b8113717f",
         "localState": "deleted",
         "reasonCode": "local-fork-replacement"
       },
@@ -5045,20 +4982,6 @@
         "reasonCode": "local-fork-replacement"
       },
       {
-        "path": "servers/nextjs/components/ui/radio-group.tsx",
-        "upstreamMode": "100644",
-        "upstreamBlob": "61686b83e63a965942f3f62c69f5d00371206908",
-        "localState": "deleted",
-        "reasonCode": "local-fork-replacement"
-      },
-      {
-        "path": "servers/nextjs/components/ui/scroll-area.tsx",
-        "upstreamMode": "100644",
-        "upstreamBlob": "0b4a48d87fabda1c6e9612172abb56a78e26c14f",
-        "localState": "deleted",
-        "reasonCode": "local-fork-replacement"
-      },
-      {
         "path": "servers/nextjs/components/ui/select.tsx",
         "upstreamMode": "100644",
         "upstreamBlob": "ac2a8f2b9c79a6ac1fb13275283000a3b11ca54d",
@@ -5188,13 +5111,6 @@
         "path": "servers/nextjs/lib/run-bundled-presentation-export.ts",
         "upstreamMode": "100644",
         "upstreamBlob": "90bedae8981bc2b46f176bfba575bc47f3202ea0",
-        "localState": "modified",
-        "reasonCode": "local-fork-replacement"
-      },
-      {
-        "path": "servers/nextjs/lib/server-auth-role.ts",
-        "upstreamMode": "100644",
-        "upstreamBlob": "f5ca4f083bcf28f42efdc962fec4ddcd70853ad1",
         "localState": "modified",
         "reasonCode": "local-fork-replacement"
       },
@@ -5402,13 +5318,6 @@
         "reasonCode": "local-fork-replacement"
       },
       {
-        "path": "servers/nextjs/public/figma/outline-check.svg",
-        "upstreamMode": "100644",
-        "upstreamBlob": "794166b4563f84fd43fd5c3204d65d6a6ffc1c16",
-        "localState": "deleted",
-        "reasonCode": "local-fork-replacement"
-      },
-      {
         "path": "servers/nextjs/public/frame.svg",
         "upstreamMode": "100644",
         "upstreamBlob": "d628354a5bcb6c6bdd4b855ac33a2544fe377a2f",
@@ -5426,13 +5335,6 @@
         "path": "servers/nextjs/public/loading.gif",
         "upstreamMode": "100644",
         "upstreamBlob": "c50eb01dacd7bd106e624c0df06fa032af8ddb2f",
-        "localState": "deleted",
-        "reasonCode": "local-fork-replacement"
-      },
-      {
-        "path": "servers/nextjs/public/logo-white.png",
-        "upstreamMode": "100644",
-        "upstreamBlob": "667267ea40cf61c055b6e9a58a66432622a9c8d8",
         "localState": "deleted",
         "reasonCode": "local-fork-replacement"
       },
@@ -10891,8 +10793,6 @@
       "scripts/benchmarks/authored_bundle_benchmark/run.py",
       "scripts/build-authored-style.py",
       "scripts/check-chat-first-deployment-config.mjs",
-      "scripts/check-structural-layering.mjs",
-      "scripts/check-structural-layering.test.mjs",
       "scripts/collect-fastapi-pytest-baseline.py",
       "scripts/collect-public-service-powerpoint-readback.ps1",
       "scripts/compatibility/verify-export-platform-archives.mjs",
@@ -10926,6 +10826,7 @@
       "scripts/lib/presentation-export-assets.cjs",
       "scripts/lib/presentation-export-readiness.cjs",
       "scripts/local-stack-lib.ps1",
+      "scripts/managed-processes.mjs",
       "scripts/multi-process-compose-contract.test.mjs",
       "scripts/ppt-agent.mjs",
       "scripts/ppt-agent.test.mjs",
@@ -10966,7 +10867,6 @@
       "scripts/start-authored-vnext-dev.ps1",
       "scripts/start-local-stack.ps1",
       "scripts/start-public-v2-rc.ps1",
-      "scripts/structural-layering-allowlist.json",
       "scripts/sync-presentation-export.test.cjs",
       "scripts/sync-settings-registry.mjs",
       "scripts/test-local.mjs",
@@ -11082,6 +10982,7 @@
       "servers/fastapi/api/v1/ppt/endpoints/authored_vnext/package/router.py",
       "servers/fastapi/api/v1/ppt/endpoints/authored_vnext/semantic/__init__.py",
       "servers/fastapi/api/v1/ppt/endpoints/authored_vnext/semantic/router.py",
+      "servers/fastapi/api/v1/ppt/endpoints/community.py",
       "servers/fastapi/api/v1/ppt/endpoints/compatibility_migration.py",
       "servers/fastapi/api/v1/ppt/endpoints/content_brief_operation_share.py",
       "servers/fastapi/api/v1/ppt/endpoints/content_brief_policy.py",
@@ -11431,7 +11332,6 @@
       "servers/fastapi/scripts/canvas_bench_render.py",
       "servers/fastapi/scripts/canvas_bench_rules.py",
       "servers/fastapi/scripts/check_authored_style_samples.py",
-      "servers/fastapi/scripts/design_pack_variants.py",
       "servers/fastapi/scripts/generate_authored_style_samples.py",
       "servers/fastapi/scripts/generate_canvas_registry.py",
       "servers/fastapi/scripts/provider_operations.py",
@@ -11751,9 +11651,6 @@
       "servers/fastapi/services/authored_vnext/design_pack/models.py",
       "servers/fastapi/services/authored_vnext/design_pack/registry.py",
       "servers/fastapi/services/authored_vnext/design_pack/structural_render.py",
-      "servers/fastapi/services/authored_vnext/design_pack/variant_source.py",
-      "servers/fastapi/services/authored_vnext/design_pack/variant_store.py",
-      "servers/fastapi/services/authored_vnext/design_pack/variants.py",
       "servers/fastapi/services/authored_vnext/generation/__init__.py",
       "servers/fastapi/services/authored_vnext/generation/account_lifecycle.py",
       "servers/fastapi/services/authored_vnext/generation/ai_text_zones.py",
@@ -11832,6 +11729,7 @@
       "servers/fastapi/services/authored_vnext/semantic/__init__.py",
       "servers/fastapi/services/authored_vnext/semantic/canonical.py",
       "servers/fastapi/services/authored_vnext/semantic/completion_v3.py",
+      "servers/fastapi/services/authored_vnext/semantic/editable_hybrid_libreoffice_readback.py",
       "servers/fastapi/services/authored_vnext/semantic/editable_mvp_completion.py",
       "servers/fastapi/services/authored_vnext/semantic/editable_mvp_completion_codec.py",
       "servers/fastapi/services/authored_vnext/semantic/editable_scene.py",
@@ -11869,6 +11767,7 @@
       "servers/fastapi/services/chat/slide_ui_mutations.py",
       "servers/fastapi/services/chat/slide_ui_query.py",
       "servers/fastapi/services/comfyui_workflow_seeds.py",
+      "servers/fastapi/services/community_presentations.py",
       "servers/fastapi/services/compatibility_migration/__init__.py",
       "servers/fastapi/services/compatibility_migration/admission.py",
       "servers/fastapi/services/compatibility_migration/archive.py",
@@ -11895,6 +11794,8 @@
       "servers/fastapi/services/document_canvas_generation.py",
       "servers/fastapi/services/document_canvas_scene_layout.py",
       "servers/fastapi/services/export_retention_service.py",
+      "servers/fastapi/services/export_task_contracts.py",
+      "servers/fastapi/services/export_task_runtime.py",
       "servers/fastapi/services/generation_core/__init__.py",
       "servers/fastapi/services/generation_core/admission/__init__.py",
       "servers/fastapi/services/generation_core/admission/strategy.py",
@@ -11971,6 +11872,7 @@
       "servers/fastapi/services/local_stage_receipt_queue.py",
       "servers/fastapi/services/migration_revision_contract.py",
       "servers/fastapi/services/outbound_url_guard.py",
+      "servers/fastapi/services/pptx_import_conversions.py",
       "servers/fastapi/services/presentation_access_service.py",
       "servers/fastapi/services/presentation_deletion_operation_handler.py",
       "servers/fastapi/services/presentation_deletion_service.py",
@@ -12114,6 +12016,7 @@
       "servers/fastapi/services/slidespec_repair_telemetry.py",
       "servers/fastapi/services/slidespec_rollout_policy.py",
       "servers/fastapi/services/source_content/__init__.py",
+      "servers/fastapi/services/source_content/allocator.py",
       "servers/fastapi/services/source_content/browser_readback.py",
       "servers/fastapi/services/source_content/browser_readback_inspection.py",
       "servers/fastapi/services/source_content/contracts.py",
@@ -12121,8 +12024,10 @@
       "servers/fastapi/services/source_content/digests.py",
       "servers/fastapi/services/source_content/edit_lifecycle.py",
       "servers/fastapi/services/source_content/errors.py",
+      "servers/fastapi/services/source_content/export_readback.py",
       "servers/fastapi/services/source_content/header_pages.py",
       "servers/fastapi/services/source_content/manifest_store.py",
+      "servers/fastapi/services/source_content/materializer.py",
       "servers/fastapi/services/source_content/outline.py",
       "servers/fastapi/services/source_content/pipeline.py",
       "servers/fastapi/services/source_content/placeholder/__init__.py",
@@ -12145,6 +12050,7 @@
       "servers/fastapi/services/source_content/pptx_semantics.py",
       "servers/fastapi/services/source_content/pptx_text_body.py",
       "servers/fastapi/services/source_content/pptx_typography.py",
+      "servers/fastapi/services/source_content/publication.py",
       "servers/fastapi/services/source_content/raster_analysis.py",
       "servers/fastapi/services/source_content/raster_boundary.py",
       "servers/fastapi/services/source_content/raster_capture_evidence.py",
@@ -12230,6 +12136,7 @@
       "servers/fastapi/services/source_content/source_runs.py",
       "servers/fastapi/services/source_content/source_stamp_dom.py",
       "servers/fastapi/services/source_content/source_text_shape.py",
+      "servers/fastapi/services/source_content/staging_projection.py",
       "servers/fastapi/services/source_content/svg_source_binding.py",
       "servers/fastapi/services/source_content/text_stamping.py",
       "servers/fastapi/services/source_images/__init__.py",
@@ -12292,6 +12199,7 @@
       "servers/fastapi/services/svg_trusted_fonts.py",
       "servers/fastapi/services/trusted_executor/PRODUCT_PATH_SEAM_HANDOFF.md",
       "servers/fastapi/services/trusted_executor/__init__.py",
+      "servers/fastapi/services/trusted_executor/chrome_runtime.py",
       "servers/fastapi/services/trusted_executor/composition.py",
       "servers/fastapi/services/trusted_executor/container_composition.py",
       "servers/fastapi/services/trusted_executor/container_isolation_evidence.py",
@@ -12303,6 +12211,7 @@
       "servers/fastapi/services/trusted_executor/contracts.py",
       "servers/fastapi/services/trusted_executor/dispatch_evidence.py",
       "servers/fastapi/services/trusted_executor/isolation_policy.py",
+      "servers/fastapi/services/trusted_executor/launcher.py",
       "servers/fastapi/services/trusted_executor/process_supervisor.py",
       "servers/fastapi/services/trusted_executor/product_adapter.py",
       "servers/fastapi/services/trusted_executor/weighted_scheduler.py",
@@ -12565,7 +12474,6 @@
       "servers/fastapi/tests/support/authored_checkpoint_process_harness.py",
       "servers/fastapi/tests/support/authored_checkpoint_public_fixture.py",
       "servers/fastapi/tests/support/authored_vnext_master_fixture.py",
-      "servers/fastapi/tests/support/authored_vnext_master_memory_repository.py",
       "servers/fastapi/tests/support/authored_worker_lane_capture.py",
       "servers/fastapi/tests/support/authored_worker_lane_harness.py",
       "servers/fastapi/tests/support/runtime_settings_sync_worker.py",
@@ -12657,6 +12565,7 @@
       "servers/fastapi/tests/unit/test_authored_fit_edits.py",
       "servers/fastapi/tests/unit/test_authored_fit_envelope.py",
       "servers/fastapi/tests/unit/test_authored_fit_replay.py",
+      "servers/fastapi/tests/unit/test_authored_fit_verify.py",
       "servers/fastapi/tests/unit/test_authored_flag_classification.py",
       "servers/fastapi/tests/unit/test_authored_font_floor_gate.py",
       "servers/fastapi/tests/unit/test_authored_font_policy.py",
@@ -12859,8 +12768,8 @@
       "servers/fastapi/tests/unit/test_deck_ir_core_integration.py",
       "servers/fastapi/tests/unit/test_decompose_job_service.py",
       "servers/fastapi/tests/unit/test_deleted_presentation_tombstone.py",
-      "servers/fastapi/tests/unit/test_design_pack_variants.py",
-      "servers/fastapi/tests/unit/test_design_pack_variants_admission.py",
+      "servers/fastapi/tests/unit/test_design_pack_canvas_admission.py",
+      "servers/fastapi/tests/unit/test_design_pack_manifest_and_render.py",
       "servers/fastapi/tests/unit/test_document_canvas.py",
       "servers/fastapi/tests/unit/test_document_canvas_contain.py",
       "servers/fastapi/tests/unit/test_document_canvas_svg_export.py",
@@ -12868,12 +12777,14 @@
       "servers/fastapi/tests/unit/test_document_conversion_service.py",
       "servers/fastapi/tests/unit/test_document_path_security.py",
       "servers/fastapi/tests/unit/test_document_upload_validation.py",
+      "servers/fastapi/tests/unit/test_editable_hybrid_libreoffice_readback.py",
       "servers/fastapi/tests/unit/test_editable_mvp_completion_v1.py",
       "servers/fastapi/tests/unit/test_evidence_lattice_active_bundle.py",
       "servers/fastapi/tests/unit/test_export_attempt_migrations.py",
       "servers/fastapi/tests/unit/test_export_canvas_sizes.py",
       "servers/fastapi/tests/unit/test_export_font_embedding_default.py",
       "servers/fastapi/tests/unit/test_export_retention_service.py",
+      "servers/fastapi/tests/unit/test_export_task_pptx_to_json.py",
       "servers/fastapi/tests/unit/test_feature_module_registry.py",
       "servers/fastapi/tests/unit/test_file_decompose_jobs_api.py",
       "servers/fastapi/tests/unit/test_files_document_conversion_errors.py",
@@ -12884,7 +12795,6 @@
       "servers/fastapi/tests/unit/test_generation_core_admission_strategy.py",
       "servers/fastapi/tests/unit/test_generation_core_asset_offer.py",
       "servers/fastapi/tests/unit/test_generation_core_runtime_profile.py",
-      "servers/fastapi/tests/unit/test_generation_core_style_language.py",
       "servers/fastapi/tests/unit/test_generation_provider_runtime.py",
       "servers/fastapi/tests/unit/test_generation_reference_admission.py",
       "servers/fastapi/tests/unit/test_gpt_image_2.py",
@@ -13053,6 +12963,7 @@
       "servers/fastapi/tests/unit/test_server_cli.py",
       "servers/fastapi/tests/unit/test_server_repository_environment.py",
       "servers/fastapi/tests/unit/test_shared_render_join_is_bounded.py",
+      "servers/fastapi/tests/unit/test_simple_auth_owner_scope.py",
       "servers/fastapi/tests/unit/test_slide_capture_fit.py",
       "servers/fastapi/tests/unit/test_slide_capture_fit_script.py",
       "servers/fastapi/tests/unit/test_slide_capture_fit_v14_chrome.py",
@@ -13081,13 +12992,16 @@
       "servers/fastapi/tests/unit/test_slidespec_solver.py",
       "servers/fastapi/tests/unit/test_slidespec_vertical_slice.py",
       "servers/fastapi/tests/unit/test_source_content_admission.py",
+      "servers/fastapi/tests/unit/test_source_content_allocator.py",
       "servers/fastapi/tests/unit/test_source_content_browser_readback.py",
       "servers/fastapi/tests/unit/test_source_content_header_pages.py",
       "servers/fastapi/tests/unit/test_source_content_manifest_enrichment.py",
       "servers/fastapi/tests/unit/test_source_content_manifest_reanalysis.py",
+      "servers/fastapi/tests/unit/test_source_content_publication_gate.py",
       "servers/fastapi/tests/unit/test_source_content_readback.py",
       "servers/fastapi/tests/unit/test_source_content_run_boundaries.py",
       "servers/fastapi/tests/unit/test_source_content_source_runs.py",
+      "servers/fastapi/tests/unit/test_source_content_style_tokens.py",
       "servers/fastapi/tests/unit/test_source_image_extract.py",
       "servers/fastapi/tests/unit/test_source_image_registry.py",
       "servers/fastapi/tests/unit/test_source_image_selection.py",
@@ -13146,6 +13060,7 @@
       "servers/fastapi/tests/unit/test_svg_vector_pdf_export.py",
       "servers/fastapi/tests/unit/test_target_issue_delta_physical_owner.py",
       "servers/fastapi/tests/unit/test_temp_file_service.py",
+      "servers/fastapi/tests/unit/test_trusted_executor_chrome_runtime.py",
       "servers/fastapi/tests/unit/test_trusted_executor_container_supervisor.py",
       "servers/fastapi/tests/unit/test_trusted_executor_contracts.py",
       "servers/fastapi/tests/unit/test_trusted_executor_process_supervisor.py",
@@ -13223,6 +13138,7 @@
       "servers/fastapi/utils/authored_figure_variants/selection.py",
       "servers/fastapi/utils/authored_figure_variants/variants.py",
       "servers/fastapi/utils/authored_fit_edits.py",
+      "servers/fastapi/utils/authored_fit_verify.py",
       "servers/fastapi/utils/authored_font_identity.py",
       "servers/fastapi/utils/authored_font_policy.py",
       "servers/fastapi/utils/authored_fragmentation_gate.py",
@@ -13293,6 +13209,8 @@
       "servers/fastapi/utils/get_env_authored_publish.py",
       "servers/fastapi/utils/get_env_concurrency.py",
       "servers/fastapi/utils/get_env_programme.py",
+      "servers/fastapi/utils/internal_http.py",
+      "servers/fastapi/utils/layout_capacity.py",
       "servers/fastapi/utils/llm_calls/author_batch.py",
       "servers/fastapi/utils/llm_calls/author_call_spans.py",
       "servers/fastapi/utils/llm_calls/author_canvas_shape.py",
@@ -13528,6 +13446,10 @@
       "servers/fastapi/workers/public_worker_store.py",
       "servers/nextjs/app/(export)/layout.tsx",
       "servers/nextjs/app/(export)/pdf-maker/pdf-maker-canvas.test.mjs",
+      "servers/nextjs/app/(presentation-generator)/(dashboard)/community/components/CommunityDesignPreviewDialog.tsx",
+      "servers/nextjs/app/(presentation-generator)/(dashboard)/community/components/CommunityPage.tsx",
+      "servers/nextjs/app/(presentation-generator)/(dashboard)/community/components/CommunityPreviewPrimitives.tsx",
+      "servers/nextjs/app/(presentation-generator)/(dashboard)/community/page.tsx",
       "servers/nextjs/app/(presentation-generator)/(dashboard)/dashboard/components/DashboardPage.cy.tsx",
       "servers/nextjs/app/(presentation-generator)/(dashboard)/dashboard/components/DeferredSlideThumbnail.tsx",
       "servers/nextjs/app/(presentation-generator)/(dashboard)/dashboard/components/SharePopover.cy.tsx",
@@ -13604,8 +13526,6 @@
       "servers/nextjs/app/(presentation-generator)/generation-workspace/GenerationPageFrame.tsx",
       "servers/nextjs/app/(presentation-generator)/generation-workspace/GenerationPreparation.tsx",
       "servers/nextjs/app/(presentation-generator)/generation-workspace/GenerationWorkspaceProvider.tsx",
-      "servers/nextjs/app/(presentation-generator)/hooks/streamRetry.test.ts",
-      "servers/nextjs/app/(presentation-generator)/hooks/streamRetry.ts",
       "servers/nextjs/app/(presentation-generator)/outline/components/AuthoredStyleCard.tsx",
       "servers/nextjs/app/(presentation-generator)/outline/components/AuthoredStylePicker.tsx",
       "servers/nextjs/app/(presentation-generator)/outline/components/MasterSelectionSummary.tsx",
@@ -13692,7 +13612,6 @@
       "servers/nextjs/app/(presentation-generator)/presentation/utils/composeStyledTheme.ts",
       "servers/nextjs/app/(presentation-generator)/presentation/utils/flaggedSlides.test.ts",
       "servers/nextjs/app/(presentation-generator)/presentation/utils/flaggedSlides.ts",
-      "servers/nextjs/app/(presentation-generator)/presentation/utils/isAuthoredPresentation.test.ts",
       "servers/nextjs/app/(presentation-generator)/presentation/utils/isAuthoredPresentation.ts",
       "servers/nextjs/app/(presentation-generator)/presentation/utils/masterPresentation.test.mjs",
       "servers/nextjs/app/(presentation-generator)/presentation/utils/masterPresentation.ts",
@@ -13772,12 +13691,12 @@
       "servers/nextjs/app/(presentation-generator)/services/api/authored.ts",
       "servers/nextjs/app/(presentation-generator)/services/api/canonical-document-admission.ts",
       "servers/nextjs/app/(presentation-generator)/services/api/codex-auth.ts",
+      "servers/nextjs/app/(presentation-generator)/services/api/community.ts",
       "servers/nextjs/app/(presentation-generator)/services/api/dashboard-list-query.test.ts",
       "servers/nextjs/app/(presentation-generator)/services/api/dashboard-list-query.ts",
       "servers/nextjs/app/(presentation-generator)/services/api/document-canvas-capabilities.ts",
       "servers/nextjs/app/(presentation-generator)/services/api/hybrid-export-history.test.mjs",
       "servers/nextjs/app/(presentation-generator)/services/api/hybrid-export-history.ts",
-      "servers/nextjs/app/(presentation-generator)/services/api/openai-models.ts",
       "servers/nextjs/app/(presentation-generator)/services/api/presentation-generation-options.ts",
       "servers/nextjs/app/(presentation-generator)/services/api/presentation-generation-types.ts",
       "servers/nextjs/app/(presentation-generator)/services/api/presentation-generation.cy.ts",
@@ -13790,16 +13709,17 @@
       "servers/nextjs/app/(presentation-generator)/services/api/source-locked/contract.test.mjs",
       "servers/nextjs/app/(presentation-generator)/services/api/source-locked/contract.test.ts",
       "servers/nextjs/app/(presentation-generator)/services/api/source-locked/contract.ts",
-      "servers/nextjs/app/(presentation-generator)/services/api/telemetry-status.test.ts",
-      "servers/nextjs/app/(presentation-generator)/services/api/telemetry-status.ts",
       "servers/nextjs/app/(presentation-generator)/services/api/workspace-assets.ts",
       "servers/nextjs/app/(presentation-generator)/services/api/workspace-commands.ts",
       "servers/nextjs/app/(presentation-generator)/services/api/workspace-core.ts",
       "servers/nextjs/app/(presentation-generator)/services/api/workspace.ts",
       "servers/nextjs/app/(presentation-generator)/upload/components/CanvasSelect.tsx",
       "servers/nextjs/app/(presentation-generator)/upload/components/CanvasSelectRow.tsx",
+      "servers/nextjs/app/(presentation-generator)/upload/components/CommunityPresentationFilters.tsx",
       "servers/nextjs/app/(presentation-generator)/upload/components/PptAiMasterUploadFlow.cy.tsx",
       "servers/nextjs/app/(presentation-generator)/upload/components/SelectedStyleSummary.tsx",
+      "servers/nextjs/app/(presentation-generator)/upload/components/TemplateCatalog.tsx",
+      "servers/nextjs/app/(presentation-generator)/upload/components/ThemeGallery.tsx",
       "servers/nextjs/app/(presentation-generator)/upload/components/UploadDesignGallery.tsx",
       "servers/nextjs/app/(presentation-generator)/upload/components/applyDeckTheme.ts",
       "servers/nextjs/app/(presentation-generator)/upload/components/upload-page/GenerateActionRow.tsx",
@@ -13903,7 +13823,6 @@
       "servers/nextjs/components/i18n/LocalizedToaster.tsx",
       "servers/nextjs/components/i18n/UiLocaleSelect.tsx",
       "servers/nextjs/components/i18n/UiLocaleSwitcher.tsx",
-      "servers/nextjs/components/provider-settings/ImageProviderFields.tsx",
       "servers/nextjs/components/runtime/TailwindCdnRuntime.tsx",
       "servers/nextjs/components/slide-editor/images/imageCrop.test.mjs",
       "servers/nextjs/components/slide-editor/images/imageCrop.ts",
@@ -14120,15 +14039,8 @@
       "servers/nextjs/lib/export-process-supervisor.ts",
       "servers/nextjs/lib/export-render-url.test.mjs",
       "servers/nextjs/lib/export-render-url.ts",
-      "servers/nextjs/lib/fastapi-internal.test.ts",
-      "servers/nextjs/lib/fastapi-proxy.test.ts",
-      "servers/nextjs/lib/fastapi-proxy.ts",
       "servers/nextjs/lib/fetch-timeout-signal.test.ts",
       "servers/nextjs/lib/fetch-timeout-signal.ts",
-      "servers/nextjs/lib/guards.test.ts",
-      "servers/nextjs/lib/guards.ts",
-      "servers/nextjs/lib/math-utils.test.ts",
-      "servers/nextjs/lib/math-utils.ts",
       "servers/nextjs/lib/ooxml-vnext/README.md",
       "servers/nextjs/lib/ooxml-vnext/adapter-contracts.ts",
       "servers/nextjs/lib/ooxml-vnext/adapter-publication.ts",
@@ -14141,8 +14053,6 @@
       "servers/nextjs/lib/ooxml-vnext/compliance.ts",
       "servers/nextjs/lib/ooxml-vnext/contract-validation.ts",
       "servers/nextjs/lib/ooxml-vnext/contracts.ts",
-      "servers/nextjs/lib/ooxml-vnext/digest.test.ts",
-      "servers/nextjs/lib/ooxml-vnext/digest.ts",
       "servers/nextjs/lib/ooxml-vnext/external-relationship-policy.ts",
       "servers/nextjs/lib/ooxml-vnext/fixtures/build-existing-90.mjs",
       "servers/nextjs/lib/ooxml-vnext/fixtures/build-powerpoint-repair-bisection.mjs",
@@ -14190,8 +14100,8 @@
       "servers/nextjs/lib/ooxml-vnext/tools/openxml-validator/Program.cs",
       "servers/nextjs/lib/ooxml-vnext/tools/openxml-validator/packages.lock.json",
       "servers/nextjs/lib/ooxml-vnext/tools/powerpoint-visible-witness.ps1",
-      "servers/nextjs/lib/ooxml-vnext/xml-escape.test.ts",
       "servers/nextjs/lib/presentation-display.ts",
+      "servers/nextjs/lib/presentation-export-boundary.ts",
       "servers/nextjs/lib/presentation-export-font-quality.ts",
       "servers/nextjs/lib/presentation-export-quality.test.mjs",
       "servers/nextjs/lib/presentation-export-quality.ts",
@@ -14225,7 +14135,6 @@
       "servers/nextjs/lib/runtime-tailwind-css.test.ts",
       "servers/nextjs/lib/runtime-tailwind-css.ts",
       "servers/nextjs/lib/safe-markdown.ts",
-      "servers/nextjs/lib/timeouts.ts",
       "servers/nextjs/lib/unified-conversation/event-contract.test.mjs",
       "servers/nextjs/lib/unified-conversation/event-contract.ts",
       "servers/nextjs/lib/upload-limits.test.ts",
@@ -14288,8 +14197,8 @@
       "servers/nextjs/scripts/test-support/node-alias-imports.mjs",
       "servers/nextjs/store/slices/presentationGenUpload.cy.ts",
       "servers/nextjs/store/slices/presentationGenUpload.source-locked.test.mjs",
+      "servers/nextjs/store/slices/presentationGenerationMedia.ts",
       "servers/nextjs/store/slices/presentationGenerationTypes.ts",
-      "servers/nextjs/tests/brand-tokens.test.mjs",
       "servers/nextjs/tests/dark-mode-withdrawal.test.mjs",
       "servers/nextjs/tests/i18n-audited-surfaces.test.mjs",
       "servers/nextjs/tests/next-config-security-headers.test.mjs",
@@ -14308,10 +14217,10 @@
     },
     "counts": {
       "upstreamOwned": 10163,
-      "identical": 9236,
-      "exceptions": 927,
-      "localOnly": 7791
+      "identical": 9250,
+      "exceptions": 913,
+      "localOnly": 7798
     },
-    "policySha256": "59e802d21fc76c36bd49d2a1a98bf1b0e0f8f8cfb64ae26fe94576e741dba77c"
+    "policySha256": "616d703a775a8f8077a8340352ed1bc83a5f1691f2a647c179a3655ebda9deb1"
   }
 }

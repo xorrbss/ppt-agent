@@ -10,10 +10,8 @@ from pydantic import Field, model_validator
 from .base import Digest, PackModel, canonical_digest
 from .manifest import (
     MANIFEST_V1,
-    MANIFEST_V2,
     DesignPackManifest,
     PackageFile,
-    VariantOf,
     seal_manifest,
 )
 
@@ -397,7 +395,6 @@ __all__ = [
     "FallbackPolicy",
     "FrameCapabilities",
     "MANIFEST_V1",
-    "MANIFEST_V2",
     "NativeElement",
     "PackageFile",
     "Paint",
@@ -408,7 +405,6 @@ __all__ = [
     "Spacing",
     "TextStyle",
     "UnsupportedElement",
-    "VariantOf",
     "canonical_digest",
     "seal_manifest",
     "seal_structure",

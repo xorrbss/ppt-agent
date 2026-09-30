@@ -227,6 +227,8 @@ const PresentationPage = ({
       return LEGACY_AUTHORED_CANVAS;
     }
   }, [presentationData?.theme]);
+  // styled-jsx only accepts an identifier or literal inside <style jsx>.
+  const printCss = useMemo(() => pdfPrintStyle(canvas), [canvas]);
   const [error, setError] = useState(false);
   const renderArtifact = useMemo<RenderArtifact | null>(() => {
     if (!presentationData || !renderTarget) return null;
@@ -380,7 +382,7 @@ const PresentationPage = ({
         </div>
       ) : (
         <>
-          <style jsx global>{pdfPrintStyle(canvas)}</style>
+          <style jsx global>{printCss}</style>
           <div
             id="presentation-slides-wrapper"
             className="relative m-0 flex w-full flex-col items-center overflow-visible p-0"

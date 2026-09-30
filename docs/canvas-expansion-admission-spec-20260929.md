@@ -1,5 +1,8 @@
 # Canvas expansion — admission spec (rev 2, 2026-09-29)
 
+**Status 2026-09-29 (design packs are 16:9-only).** Every `pack` row on a non-16:9 canvas below (9:16, 9:13, 1:1, 21:9, A4-L, A4-P) now returns `design_pack_canvas_unsupported` (422), decided before the A4 branch and the stage gate; the old codes in those rows (`authored_canvas_stage_disabled`, `authored_portrait_combination_not_supported`, `document_canvas_generation_combination_not_supported`) no longer apply to pack pins. The fixture `tests/fixtures/canvas_admission_baseline.json` changed 290 of 3,654 rows, all code-only, with 0 admitted/rejected flips. "A4 + design pack" under section 6 is no longer a pending workstream: it is out of scope by decision (see `docs/svg-master-no-stretch-and-variant-removal-design-20260929.md` section 2).
+
+
 Workstream spec under `docs/aspect-ratio-expansion-design-20260928.md`. Scope: which (canvas × style × strategy × pins × source mode) combinations the generation endpoints admit today, and the rule for the new canvases. The baseline table was produced by **executing** the real admission code; an independent reviewer reproduced all 360 rows (0 mismatches). Rev 2 folds in that review (64/100): request-boundary Literals the rule missed, axes the enumeration missed, caller differences, and the fact that svg source restyle ignores the requested aspect ratio.
 
 ## 1. How the baseline was produced

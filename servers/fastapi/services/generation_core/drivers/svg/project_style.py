@@ -16,6 +16,7 @@ import json
 from services.svg_contract import SVG_CONTRACT_VERSION
 
 from ...style.context import StyleContext
+from .canvas_brief import SVG_CANVAS_BRIEF_VERSION, adapt_brief_line, svg_brief_replacements
 from utils.hashing import sha256_prefixed
 
 SVG_STYLE_ADAPTER_VERSION = "svg-style/v2"
@@ -51,10 +52,13 @@ def project_style(
         "wordmark": context.wordmark,
         "chrome": {},
     }
+    # Brief lines are worded against 1280x720; off that canvas they are
+    # rewritten here, the one place every svg brief line passes. ``overrides``
+    # (the preset's own svg text) are deliberately left alone.
     common_guidance: dict[str, list[str]] = {}
     for line in context.brief_lines:
         if "svg" in line.applies_to:
-            common_guidance.setdefault(line.section, []).append(line.text)
+            common_guidance.setdefault(line.section, []).append(adapt_brief_line(line.text, width, height))
     result = {
         "adapter_version": SVG_STYLE_ADAPTER_VERSION,
         "contract_version": SVG_CONTRACT_VERSION,
@@ -73,6 +77,10 @@ def project_style(
             "references": "authored_style_role_images",
         },
     }
+    if svg_brief_replacements(width, height):
+        # Absent at 16:9 so that dict (and its digest) stays byte-identical;
+        # off-16:9 it lets a receipt reader tell a pre-rewrite snapshot apart.
+        result["provenance"]["canvas_brief_rewrite"] = SVG_CANVAS_BRIEF_VERSION
     if context.master_rules is not None:
         result["master_template"] = context.master_rules
         result["master_pin"] = context.master_pin

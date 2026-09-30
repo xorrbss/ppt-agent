@@ -50,14 +50,17 @@ def _request(aspect_ratio: str, *, style: str = "default", restyle: bool = False
     return GeneratePresentationRequest.model_validate(fields)
 
 
-def test_shipped_stage_file_disables_every_style() -> None:
+def test_shipped_stage_file_enables_only_the_bench_promoted_style() -> None:
+    # Promoted by the pooled canvas bench (docs/canvas-bench-pooled-candidate-20260929.md).
     authored_canvas._canvas_stages.cache_clear()
     shipped = json.loads(authored_canvas.CANVAS_STAGES_PATH.read_text(encoding="utf-8"))
 
-    assert shipped == {"1:1": {}, "21:9": {}}
+    assert shipped == {"1:1": {"default": "candidate"}, "21:9": {"default": "candidate"}}
     for ratio in GATED_ASPECT_RATIOS:
-        assert canvas_stage(ratio, "default") == "disabled"
-    assert supported_aspect_ratios_for_style("default") == ["16:9", "9:16", "9:13"]
+        assert canvas_stage(ratio, "default") == "candidate"
+        assert canvas_stage(ratio, "osb-smart-banking") == "disabled"
+    assert supported_aspect_ratios_for_style("default") == ["16:9", "9:16", "9:13", "1:1", "21:9"]
+    assert supported_aspect_ratios_for_style("kbs-company-proposal") == ["16:9", "9:13"]
 
 
 def test_canvas_stage_rejects_ungated_ratio() -> None:
@@ -77,8 +80,8 @@ def test_malformed_stage_file_fails_loudly(stages, document) -> None:
 
 @pytest.mark.parametrize("aspect_ratio", GATED_ASPECT_RATIOS)
 @pytest.mark.parametrize("restyle", [False, True])
-def test_disabled_stage_rejects_before_either_preset_branch(aspect_ratio: str, restyle: bool) -> None:
-    authored_canvas._canvas_stages.cache_clear()
+def test_disabled_stage_rejects_before_either_preset_branch(stages, aspect_ratio: str, restyle: bool) -> None:
+    stages({"1:1": {}, "21:9": {}})
     request = _request(aspect_ratio, restyle=restyle)
 
     with pytest.raises(ValueError, match="^authored_canvas_stage_disabled$"):

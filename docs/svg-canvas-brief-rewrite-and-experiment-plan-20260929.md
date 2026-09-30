@@ -24,6 +24,35 @@ Two approved items:
 
 ## Part 1. SVG style-brief canvas rewrite
 
+**Implementation (2026-09-29): landed on `serve/main-20260902` as two commits, in the order §1.6 requires.**
+
+- S1 goldens (commit `e76261cd5`): `svg_design_text()` extracted in `utils/llm_calls/author_slide_svg.py`;
+  `scripts/capture_svg_design_baseline.py`; 39 fixtures under `tests/fixtures/svg_design_16x9_baseline/`;
+  `tests/unit/test_svg_design_16x9_baseline.py` (45 ids byte-identical incl. alias → canonical and the
+  `exact-osb-last` raise, 39 digest checks, fixture-set completeness). Passed on unchanged code.
+- S2 rewrite + caveat (the commit after it): `services/generation_core/drivers/svg/canvas_brief.py`
+  (`svg_brief_replacements` R1–R9, `adapt_brief_line`, `reference_caveat`, `SVG_CANVAS_BRIEF_VERSION`);
+  the hook in `project_style.py` plus `provenance.canvas_brief_rewrite` off-16:9; public `shape_word()` in
+  `author_canvas_shape.py` (`BASELINE_TOKENS` untouched); `svg_author_rules` appends `reference_caveat`
+  after `composition_clause`; `tests/unit/test_svg_canvas_brief.py`. S1 goldens passed unchanged, which is
+  the 16:9 byte/`style_digest` proof.
+- Decisions taken as recommended: D1 unconditional, D2 px sizes unscaled, D3 `overrides` untouched, D4
+  caveat on shape only. `reference_caveat` lives in `canvas_brief.py` (imported by `author_slide_svg.py`)
+  rather than inline in `svg_author_rules`, so the three svg canvas-wording rules share one module.
+- Measured correction to §1.2: the anchored `common_guidance` occurrences number **39**, not 44
+  (A 14 + B 21 + C 3 + D 1; broadside, devax-si-proposal and signal carry two each, so 36 styles). `1280 by
+  720` occurs in no `common_guidance` line (only in screenshot-blue's override), so R9 is a pure safety net.
+  After the rewrite every registry canvas (1188x840, 840x1188, 720x720, 1680x720, 720x1280, 720x1040)
+  carries 0 anchors in `common_guidance`; both override anchors survive byte for byte.
+- Correction to the §1.3 table's 840x1188 column: `aspect_ratio_label(840, 1188)` is `840x1188` (the pair
+  reduces to 70:99, past the 32 cap), not `9:16`, so R4 yields "Compose for a fixed 840x1188 portrait
+  canvas"; the `9:16 portrait` wording belongs to 720x1280. The code follows the function as §1.3 defines
+  it; the test pins both.
+- Not implemented from §1.7 item 7: the `design_pack_template` pass-through check, because the design-pack
+  variant path was being removed by another session in the same worktree at the time; `mapped_guidance`
+  and `master_template` (stub master) are covered.
+- S3 (shared-backend restart and the two live decks of §1.9) was not part of this change.
+
 ### 1.1 Facts (re-verified)
 
 Path of a brief line into the svg prompt:

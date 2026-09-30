@@ -327,6 +327,13 @@ Defence in depth, at route resolution:
   `test_public_v2_*`, `test_source_native_*`, `test_generation_core_admission_strategy.py`,
   `uv run ruff check .`, and `npm run check:upstream-byte-parity:working-tree`.
 
+**Implementation (2026-09-29, §1a done).** Pre-removal scan of `app_data/design-packs` (53 base manifests, 1 owner store): 0 `variants/` manifests, 0 manifests with `source-native-design-pack/v2`.
+- Deleted: `variants.py`, `variant_store.py`, `variant_source.py`, `scripts/design_pack_variants.py`, `test_design_pack_variants.py`, `test_design_pack_variants_admission.py`. `authored_canvas.py`, `document_canvas_capabilities.py`, `generation_route.py` and `registry.py` were restored to their pre-`17059ccb6` content (no later commit touched them), then re-edited; the `design-pack-canvas-variant` route and manifest v2 fields are gone; `registry.canvas_id` is kept.
+- Added: the front-of-admission check in `validate_authored_canvas_admission` (`design_pack_canvas_unsupported`), the route-loader defence in `load_pinned_design_pack` (`DESIGN_PACK_CANVAS_ID = "wide-16x9"`), the `design_pack_canvas` prefix in the three 422 filters (`presentation_generate.py` x2, `public_v2_orchestrator.py`) and in the fixture script's mirror of them (`scripts/canvas_admission_table.py:_MAPPED_PREFIXES`; without it the fixture recorded `ERR ValueError`).
+- Fixture: 290 of 3,654 rows changed, code only, 0 admitted/rejected flips: 100 from `authored_canvas_stage_disabled`, 90 from `authored_portrait_combination_not_supported`, 100 from `document_canvas_generation_combination_not_supported` (the §2.2 breakdown summed).
+- Tests: new `test_design_pack_canvas_admission.py` (28) and `test_design_pack_manifest_and_render.py` (6). The async and v2 422 mappings are covered by the shared prefix filter but not by an end-to-end test (only the sync endpoint is exercised).
+- Ledger: `compatibility/upstream-byte-parity.json` edited by hand (6 entries out, 2 in, `policySha256` and `localOnly` recomputed) because `--write` would also have absorbed other sessions' untracked files and switched the ledger to working-tree mode.
+
 ---
 
 ## 3. Design 1b, option B: brand-only projection with a system furniture channel

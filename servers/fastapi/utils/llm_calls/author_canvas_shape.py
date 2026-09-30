@@ -41,6 +41,15 @@ def aspect_ratio_label(width: int, height: int) -> str:
     return f"{a}:{b}" if a <= 32 and b <= 32 else f"{width}x{height}"
 
 
+def shape_word(width: int, height: int) -> str:
+    """The shape adjective with its trailing space (``"portrait "``), or ``""``.
+
+    Empty for the baseline and for wide-landscape, so a caller writing
+    ``f"{label} {shape_word(w, h)}canvas"`` never produces a double space.
+    """
+    return _SHAPE_WORDS.get(classify_canvas_shape(width, height), "")
+
+
 def baseline_replacements(width: int, height: int) -> tuple[tuple[str, str], ...]:
     shape = classify_canvas_shape(width, height)
     if shape == BASELINE:
@@ -115,4 +124,5 @@ __all__ = [
     "baseline_replacements",
     "classify_canvas_shape",
     "composition_clause",
+    "shape_word",
 ]

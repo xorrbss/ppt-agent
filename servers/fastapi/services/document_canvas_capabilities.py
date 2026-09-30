@@ -7,7 +7,6 @@ from typing import Any, Literal
 
 
 RouteClassification = Literal["essential", "optional", "preservation"]
-DESIGN_PACK_VARIANT_ROUTE = "design-pack-canvas-variant"
 
 
 @dataclass(frozen=True)
@@ -68,15 +67,6 @@ A4_ROUTE_POLICIES: tuple[DocumentCanvasRoutePolicy, ...] = (
         True,
         False,
         ("source-native-generation", "document-canvas-contain"),
-        "document_canvas_product_readback_pending",
-    ),
-    DocumentCanvasRoutePolicy(
-        "design-pack-canvas-variant",
-        "optional",
-        True,
-        True,
-        False,
-        ("source-native-generation", "design-pack-canvas-variant"),
         "document_canvas_product_readback_pending",
     ),
     DocumentCanvasRoutePolicy(
@@ -163,19 +153,7 @@ def select_a4_route(
     template_authored: bool = True,
     generation_engine_supported: bool = True,
     generation_mode_supported: bool = True,
-    design_pack_variant: bool = False,
 ) -> DocumentCanvasRouteSelection:
-    # Only an approved per-canvas variant opens A4 to a design pack; the
-    # registered-template rejection below stands for every other pack request.
-    if (
-        design_pack_variant
-        and template_authored
-        and generation_engine_supported
-        and not source_content
-        and not exact_source
-        and strategy != "svg"
-    ):
-        return DocumentCanvasRouteSelection(DESIGN_PACK_VARIANT_ROUTE)
     if (
         not template_authored
         or not generation_engine_supported
@@ -214,32 +192,11 @@ def evaluate_a4_selection(
     return policy, True, None
 
 
-def _a4_design_pack_variant(request: Any) -> Any:
-    if (
-        getattr(request, "design_pack_pin", None) is None
-        or getattr(request, "generation_mode", None) != "registered-template"
-        or getattr(request, "master_pin", None) is not None
-        or getattr(request, "_authored_master_pin", None) is not None
-    ):
-        return None
-    from services.authored_vnext.design_pack.variants import (
-        A4_CANVAS_IDS,
-        design_pack_variant_for_canvas,
-    )
-
-    return design_pack_variant_for_canvas(
-        request.design_pack_pin, A4_CANVAS_IDS.get(getattr(request, "orientation", None) or "")
-    )
-
-
 def evaluate_a4_request(
     request: Any, *, reference_mode: str | None
 ) -> tuple[DocumentCanvasRoutePolicy, bool, str | None]:
-    """Evaluate A4 admission; an admitted variant route re-pins the request to the variant."""
-
     from services.generation_core.admission.strategy import resolve_generation_strategy
 
-    variant = _a4_design_pack_variant(request)
     selection = select_a4_route(
         strategy=resolve_generation_strategy(request),
         source_content=getattr(request, "source_mode", None) == "source_content_restyle",
@@ -255,14 +212,8 @@ def evaluate_a4_request(
         template_authored=str(getattr(request, "template", "") or "").strip().lower() == "authored",
         generation_engine_supported=getattr(request, "generation_engine", None) in {None, "authored"},
         generation_mode_supported=getattr(request, "generation_mode", None) in {"auto", "free-design"},
-        design_pack_variant=variant is not None,
     )
-    policy, enabled, reason = evaluate_a4_selection(selection)
-    if enabled and selection.route_id == DESIGN_PACK_VARIANT_ROUTE:
-        from services.authored_vnext.design_pack.variants import apply_design_pack_variant_pin
-
-        apply_design_pack_variant_pin(request, variant)
-    return policy, enabled, reason
+    return evaluate_a4_selection(selection)
 
 
 def _route_wire(policy: DocumentCanvasRoutePolicy) -> dict[str, Any]:
@@ -318,7 +269,6 @@ def a4_canvas_capabilities(
 
 __all__ = [
     "A4_ROUTE_POLICIES",
-    "DESIGN_PACK_VARIANT_ROUTE",
     "DocumentCanvasRoutePolicy",
     "DocumentCanvasRouteSelection",
     "a4_canvas_capabilities",

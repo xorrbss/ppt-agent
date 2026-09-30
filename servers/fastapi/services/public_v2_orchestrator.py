@@ -772,7 +772,9 @@ class SqlPublicV2Orchestrator:
                     style_id=resolve_canvas_style_id(internal_request),
                 )
             except ValueError as error:
-                if str(error).startswith(("document_canvas", "authored_canvas", "authored_portrait")):
+                if str(error).startswith(
+                    ("document_canvas", "authored_canvas", "authored_portrait", "design_pack_canvas")
+                ):
                     raise _public_error(422, str(error)) from error
                 raise
             # This has no provider side effect.  It must remain ahead of the

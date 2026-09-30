@@ -523,8 +523,11 @@ async def check_if_api_request_is_valid(
         )
         validate_authored_canvas_admission(request, style_id=canvas_style_id)
     except ValueError as error:
-        if str(error).startswith("document_canvas") or str(error).startswith("authored_canvas") or str(error).startswith(
-            "authored_portrait"
+        if (
+            str(error).startswith("document_canvas")
+            or str(error).startswith("authored_canvas")
+            or str(error).startswith("authored_portrait")
+            or str(error).startswith("design_pack_canvas")
         ):
             raise HTTPException(status_code=422, detail=str(error)) from error
         raise
@@ -1738,8 +1741,11 @@ async def queue_presentation_generation(
         )
         validate_authored_canvas_admission(request, style_id=canvas_style_id)
     except ValueError as error:
-        if str(error).startswith("document_canvas") or str(error).startswith("authored_canvas") or str(error).startswith(
-            "authored_portrait"
+        if (
+            str(error).startswith("document_canvas")
+            or str(error).startswith("authored_canvas")
+            or str(error).startswith("authored_portrait")
+            or str(error).startswith("design_pack_canvas")
         ):
             raise HTTPException(status_code=422, detail=str(error)) from error
         raise

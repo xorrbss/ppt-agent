@@ -11,6 +11,7 @@ from typing import Awaitable, Callable, Sequence
 
 from llmai import get_client
 from llmai.shared import ImageContentPart
+from services.generation_core.drivers.svg.canvas_brief import reference_caveat
 from services.generation_core.drivers.svg.native_declarations import (
     declaration_receipt, extract_native_declarations, native_author_rules,
 )
@@ -78,7 +79,20 @@ def svg_author_rules(style_snapshot: dict, body_floor: float) -> str:
     width = int(canvas.get("width", DEFAULT_CANVAS_WIDTH_PX))
     height = int(canvas.get("height", DEFAULT_CANVAS_HEIGHT_PX))
     return (SVG_AUTHOR_RULES + native_author_rules() + f"\nBody text minimum: {body_floor:g} CSS px. "
-            "Honor explicit user typography constraints.\n" + composition_clause(width, height))
+            "Honor explicit user typography constraints.\n" + composition_clause(width, height)
+            + reference_caveat(width, height))
+
+
+def svg_design_text(style_snapshot: dict) -> str:
+    """The design-system string the svg author prepends to every slide prompt.
+
+    Everything in the frozen style snapshot except the reference-image bytes
+    and admission diagnostics, dumped verbatim. The 16:9 goldens under
+    ``tests/fixtures/svg_design_16x9_baseline`` pin this exact string (and so
+    the receipt-visible ``digest``) for every canonical style.
+    """
+    return json.dumps({k: v for k, v in style_snapshot.items() if k not in {"references", "diagnostics"}},
+                      ensure_ascii=False)
 
 
 def preflight_svg_source_images(source_images) -> dict:
@@ -111,8 +125,7 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
                            canonical_source_images: bool = False) -> SvgAuthorResult:
     manifest = preflight_svg_source_images(source_images)
     preflight_svg_style_images(style_snapshot, [role] if not reference_images else [])
-    design = json.dumps({k: v for k, v in style_snapshot.items() if k not in {"references", "diagnostics"}},
-                        ensure_ascii=False)
+    design = svg_design_text(style_snapshot)
     from services.document_canvas_generation import generation_font_floor
     body_floor = generation_font_floor(instructions, physical_canvas)
     # ``kind`` is present only for planned AssetOffer slots, so a deck of

@@ -25,6 +25,9 @@ POLL_SECONDS = 5.0
 # occasionally reuses a socket the server is closing and gets WinError 10054.
 # Expiring pooled connections well before the server does removes the race.
 KEEPALIVE_EXPIRY_SECONDS = 1.0
+# Upper bound on waiting for a completed task's export annotation and
+# published generation result (see BenchClient._settle).
+SETTLE_SECONDS = 120.0
 TERMINAL_OPERATION_STATES = {"succeeded", "failed", "cancelled", "dead_letter"}
 QUALITY_RECEIPT_DIR = "authored-quality-receipts"
 DOCUMENT_CANVAS_CONTRACT = "document-canvas/v1"
@@ -60,11 +63,40 @@ class BenchClient:
         while True:
             status = self._get(f"/api/v1/ppt/presentation/status/{task_id}")
             if status.get("status") in {"completed", "error"}:
+                if status.get("status") == "completed":
+                    status = self._settle(task_id, status, admitted.get("operation_id"), bool(body.get("export_as")))
                 status["operation_id"] = admitted.get("operation_id")
                 return status
             if time.monotonic() > deadline:
                 return {"status": "timeout", "id": task_id, "operation_id": admitted.get("operation_id")}
             time.sleep(POLL_SECONDS)
+
+    def _settle(self, task_id: str, status: dict[str, Any], operation_id: str | None,
+                export_requested: bool) -> dict[str, Any]:
+        """Wait until a completed task's later commits are visible.
+
+        ``completed`` is committed before the chained export annotates the task
+        (``export_operation_id``/``export_error``,
+        services/presentation_generation_export_chain.py) and before the
+        generation operation publishes its result (timing receipt).  Reading
+        either the instant ``completed`` appears can see neither, which would
+        be recorded as ``export_not_chained`` and a missing timing receipt.
+        """
+
+        deadline = time.monotonic() + SETTLE_SECONDS
+        while True:
+            data = status.get("data") or {}
+            # The completion commit already carries both keys as null.
+            annotated = not export_requested or bool(data.get("export_operation_id") or data.get("export_error"))
+            presentation_id = data.get("presentation_id")
+            published = not operation_id or not presentation_id or (
+                (operation_card(self.timeline(str(presentation_id)), operation_id=operation_id) or {}).get("status")
+                in TERMINAL_OPERATION_STATES
+            )
+            if (annotated and published) or time.monotonic() > deadline:
+                return status
+            time.sleep(POLL_SECONDS)
+            status = self._get(f"/api/v1/ppt/presentation/status/{task_id}")
 
     def timeline(self, presentation_id: str) -> dict[str, Any]:
         return self._get(f"/api/v1/ppt/workspace/presentations/{presentation_id}/timeline")
