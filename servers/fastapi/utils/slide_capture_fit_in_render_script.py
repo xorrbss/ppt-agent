@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 
-from services.authored_vnext.capability_registry import AUTHORED_FONT_FLOOR_PX
+from models.authored_vnext.capability_registry import AUTHORED_FONT_FLOOR_PX
 from utils.authored_dom_footer_zone import (  # the deck's footer safe lines
     _PAGE_NUMBER_MAX_DISTANCE_FROM_BOTTOM_PX, _PAGE_NUMBER_MAX_FONT_PX,
     _PAGE_NUMBER_MIN_TOP_FRACTION, NUMBERED_CONTENT_BOTTOM_PX, UNNUMBERED_CONTENT_BOTTOM_PX)

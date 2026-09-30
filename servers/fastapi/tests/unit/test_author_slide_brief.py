@@ -11,7 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from services import authored_deck_plans
-from services.authored_vnext.capability_registry import (
+from models.authored_vnext.capability_registry import (
     CAPABILITY_REGISTRY_DIGEST,
     prompt_capability_clause,
 )

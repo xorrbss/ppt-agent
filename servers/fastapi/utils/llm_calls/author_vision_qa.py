@@ -88,7 +88,7 @@ from utils.llm_calls.critique_slide import (
     critique_slide_style_comparison,
 )
 from utils.llm_provider import get_model
-from services.authored_canvas import canvas_or_default, canvas_render_kwargs
+from models.canvas_defaults import canvas_or_default, canvas_render_kwargs
 
 
 async def review_planned_source_images(

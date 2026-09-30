@@ -13,7 +13,7 @@ from models.authored_vnext.deck import (
     seal_slide_scene,
 )
 from models.authored_vnext.master.contract import Rect
-from services.authored_vnext.capability_registry import (
+from models.authored_vnext.capability_registry import (
     CAPABILITY_REGISTRY_DIGEST,
     EDITABLE_HYBRID_PROFILE_ID,
     scene_capabilities,

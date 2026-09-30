@@ -16,7 +16,7 @@ from models.authored_vnext.semantic.native_capabilities import (
     NativeCapabilityProjectionV1,
     NativeCapabilityReadinessV1,
 )
-from services.authored_vnext.capability_registry import (
+from models.authored_vnext.capability_registry import (
     EDITABLE_MVP_CAPABILITY_IDS_V1,
     NATIVE_CAPABILITY_IDS_V1,
 )

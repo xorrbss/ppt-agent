@@ -74,7 +74,7 @@ from utils.provider_idempotency import (
     provider_generate_call,
     supports_provider_idempotency,
 )
-from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX
 
 
 MAX_BATCH_SLIDES = 3

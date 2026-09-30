@@ -43,7 +43,7 @@ from services.authored_vnext.generation.ai_text_zones import (
 from services.authored_vnext.generation.effective_style import (
     materialize_authored_composition,
 )
-from services.authored_vnext.capability_registry import (
+from models.authored_vnext.capability_registry import (
     EDITABLE_HYBRID_PROFILE_ID,
     capability_metadata,
     hybrid_ooxml_capabilities,

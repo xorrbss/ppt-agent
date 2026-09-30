@@ -23,7 +23,7 @@ import re
 from typing import Any
 
 from utils.coerce import finite_float
-from services.authored_vnext.capability_registry import capability_metadata
+from models.authored_vnext.capability_registry import capability_metadata
 from services.source_content.source_runs import (
     SourceRunProjection,
     project_source_runs,

@@ -97,7 +97,7 @@ _MIGRATED_MODULES = [
     "services.authored_source_image_stage",
     "services.authored_title_recovery_contract",
     "services.authored_vnext.body_grammar",
-    "services.authored_vnext.capability_registry",
+    "models.authored_vnext.capability_registry",
     "services.authored_vnext.composition_capacity",
     "services.authored_vnext.deck_ir.integration",
     "services.authored_vnext.deck_ir.strategy",

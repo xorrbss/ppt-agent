@@ -8,7 +8,7 @@ touched.
 
 from __future__ import annotations
 
-from services.authored_vnext.capability_registry import prompt_capability_clause
+from models.authored_vnext.capability_registry import prompt_capability_clause
 from utils.authored_fragmentation_gate import fragmentation_prompt_clause
 from utils.llm_calls.author_slide import Brand, build_design_system
 from utils.llm_calls.author_slide_brief import PRE_BUNDLE_TYPE_SCALES

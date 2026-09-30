@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import replace
 from typing import Any
 
-from services.authored_vnext.capability_registry import prompt_capability_clause
+from models.authored_vnext.capability_registry import prompt_capability_clause
 from utils.authored_fragmentation_gate import fragmentation_prompt_clause
 from utils.authored_style_exemplars import exemplar_block
 from utils.llm_calls.author_canvas_shape import apply_canvas_tokens, composition_clause
@@ -18,7 +18,7 @@ from utils.llm_calls.author_slide_brief import (
     SHARED_UNIVERSALS,
     composition_intent_block,
 )
-from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 LOCAL_FONT_FALLBACKS = {
     "noto sans kr": ("Noto Sans KR", "Malgun Gothic", "sans-serif"),

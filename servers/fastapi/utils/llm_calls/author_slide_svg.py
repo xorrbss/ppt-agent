@@ -29,7 +29,7 @@ from utils.llm_config import enforce_llm_egress_policy, get_llm_config
 from utils.llm_provider import get_llm_provider, get_model
 from utils.llm_utils import extract_text, get_generate_kwargs
 from utils.provider_idempotency import provider_generate_call, supports_provider_idempotency
-from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 SVG_AUTHOR_RULES = """Author one complete self-contained SVG slide, not HTML, markdown, or explanatory prose.
 Return <svg xmlns="http://www.w3.org/2000/svg" width="W" height="H" viewBox="0 0 W H">.

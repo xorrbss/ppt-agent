@@ -87,7 +87,7 @@ from utils.llm_calls.author_call_spans import ProviderCallSpans, record_call_spa
 from utils.llm_calls.author_slide_fallback import reraise_author_call_error, text_only_fallback_applies
 from services.authored_generation_performance import authored_provider_concurrency
 from utils.llm_utils import extract_text, get_generate_kwargs
-from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 logger = logging.getLogger(__name__)
 

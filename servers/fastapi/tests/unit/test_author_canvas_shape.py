@@ -10,7 +10,7 @@ import pytest
 
 from models.authored_header_contract import default_header_contract
 from models.presentation_outline_model import PresentationOutlineModel, SlideOutlineModel
-from services.authored_vnext.capability_registry import prompt_capability_clause
+from models.authored_vnext.capability_registry import prompt_capability_clause
 from services.document_canvas_generation import generation_font_floor
 from utils.authored_fragmentation_gate import fragmentation_prompt_clause
 from utils.authored_style_exemplars import exemplar_block

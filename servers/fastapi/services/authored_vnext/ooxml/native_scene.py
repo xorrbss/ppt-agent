@@ -35,7 +35,7 @@ from services.authored_vnext.ooxml.scene_canvas import (
     validate_page_size, with_scene_canvas,
 )
 
-from services.authored_vnext.capability_registry import (
+from models.authored_vnext.capability_registry import (
     CapabilityRegistryMismatchError,
     EDITABLE_HYBRID_PROFILE_ID,
     NATIVE_CAPABILITY_IDS_V1,

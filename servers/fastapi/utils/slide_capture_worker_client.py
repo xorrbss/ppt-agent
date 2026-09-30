@@ -30,7 +30,7 @@ from utils.renderer_worker_response import (
 from utils.slide_capture import _admit_render_source, _cache_browser_metrics
 from utils.slide_capture_worker_lease import acquire_lease
 from utils.slide_capture_worker_session import RendererWorkerSession
-from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX, is_default_landscape
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX, is_default_landscape
 from constants.timeouts import CAPTURE_WORKER_TERMINATE_GRACE_SECONDS
 
 async def _render_html_in_isolated_worker(  # noqa: ASYNC109

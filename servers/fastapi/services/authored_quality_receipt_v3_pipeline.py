@@ -27,7 +27,7 @@ from services.authored_visual_review_evidence import seal_visual_review_evidence
 from utils.env_settings.authored_runtime import (
     get_authored_quality_receipt_v3_profile,
 )
-from services.authored_vnext.capability_registry import (
+from models.authored_vnext.capability_registry import (
     CAPABILITY_REGISTRY_DIGEST,
     prompt_capability_clause,
     require_capability_metadata,

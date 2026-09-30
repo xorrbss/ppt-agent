@@ -12,7 +12,7 @@ import re
 from services.svg_source_layout import SvgLayoutPlan, assemble_source_svg, page_digest, source_pages
 from services.svg_contract import source_digest
 from utils.llm_calls.author_slide_svg import SvgAuthorResult
-from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 
 @lru_cache(maxsize=2)

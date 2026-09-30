@@ -12,7 +12,7 @@ html,body{margin:0;width:1280px;height:720px}.box{position:absolute;left:12px;to
 
 
 def test_metrics_parser_rejects_missing_or_malformed_payload(monkeypatch):
-    from services.authored_vnext.capability_registry import (
+    from models.authored_vnext.capability_registry import (
         CAPABILITY_REGISTRY_DIGEST,
         require_capability_metadata,
     )

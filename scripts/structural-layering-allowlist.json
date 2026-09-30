@@ -1,7 +1,5 @@
 {
   "utils_import_services": [
-    "servers/fastapi/utils/authored_font_policy.py",
-    "servers/fastapi/utils/authored_fragmentation_gate.py",
     "servers/fastapi/utils/authored_html_normalize.py",
     "servers/fastapi/utils/authored_illustration_prompt.py",
     "servers/fastapi/utils/authored_illustrations.py",
@@ -14,7 +12,6 @@
     "servers/fastapi/utils/llm_calls/author_call_spans.py",
     "servers/fastapi/utils/llm_calls/author_deck.py",
     "servers/fastapi/utils/llm_calls/author_slide.py",
-    "servers/fastapi/utils/llm_calls/author_slide_design_system.py",
     "servers/fastapi/utils/llm_calls/author_slide_fallback.py",
     "servers/fastapi/utils/llm_calls/author_slide_images.py",
     "servers/fastapi/utils/llm_calls/author_slide_patch.py",
@@ -33,7 +30,6 @@
     "servers/fastapi/utils/provider_overload.py",
     "servers/fastapi/utils/renderer_isolation.py",
     "servers/fastapi/utils/slide_capture.py",
-    "servers/fastapi/utils/slide_capture_fit_in_render_script.py",
     "servers/fastapi/utils/slide_capture_fit_script.py",
     "servers/fastapi/utils/slide_capture_local_fit.py",
     "servers/fastapi/utils/slide_capture_worker_client.py",

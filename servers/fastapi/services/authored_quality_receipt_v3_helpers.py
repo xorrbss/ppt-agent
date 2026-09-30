@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from services.authored_vnext.capability_registry import CAPABILITY_REGISTRY_DIGEST
+from models.authored_vnext.capability_registry import CAPABILITY_REGISTRY_DIGEST
 from services.authored_vnext.master.digests import canonical_digest
 
 

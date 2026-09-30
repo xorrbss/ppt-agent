@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from services.authored_vnext.capability_registry import (
+from models.authored_vnext.capability_registry import (
     AUTHORED_FONT_FLOOR_PT,
     AUTHORED_FONT_FLOOR_PX,
     CAPABILITY_REGISTRY_DIGEST,

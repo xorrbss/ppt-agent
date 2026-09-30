@@ -27,7 +27,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from services.authored_vnext.capability_registry import AUTHORED_FONT_FLOOR_PX
+from models.authored_vnext.capability_registry import AUTHORED_FONT_FLOOR_PX
 from utils.authored_dom_footer_zone import _PAGE_NUMBER_MAX_FONT_PX, _looks_like_page_number
 from utils.authored_dom_quality import normalize_browser_metrics
 from utils.get_env_programme import (
@@ -36,7 +36,7 @@ from utils.get_env_programme import (
     is_authored_fragmentation_gate_enabled,
 )
 from utils.runtime_settings import RuntimeSettings
-from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 #: Issue category the gate reports under; routed like ``capacity`` failures.
 FRAGMENTATION_CATEGORY = "fragmentation"

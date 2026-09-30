@@ -16,7 +16,7 @@ from services.generation_core.drivers.svg.project_style import (
     project_style,
 )
 from services.generation_core.style.build import build_style_context
-from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 from utils.hashing import sha256_prefixed
 
 __all__ = ["SVG_STYLE_ADAPTER_VERSION", "adapt_svg_style"]

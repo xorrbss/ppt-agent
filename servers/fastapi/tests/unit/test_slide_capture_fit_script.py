@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from services.authored_vnext.capability_registry import AUTHORED_FONT_FLOOR_PX
+from models.authored_vnext.capability_registry import AUTHORED_FONT_FLOOR_PX
 from utils.authored_dom_footer_zone import (
     NUMBERED_CONTENT_BOTTOM_PX,
     UNNUMBERED_CONTENT_BOTTOM_PX,

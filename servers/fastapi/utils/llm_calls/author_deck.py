@@ -83,7 +83,7 @@ from services.authored_batch_policy import (
 from utils.authored_styles import reference_images_for_role
 from utils.get_env import is_authored_visual_story_plan_enabled
 from utils.renderer_worker_policy import RendererPolicyError
-from services.authored_canvas import (
+from models.canvas_defaults import (
     DEFAULT_CANVAS_HEIGHT_PX,
     DEFAULT_CANVAS_WIDTH_PX,
     canvas_or_default,

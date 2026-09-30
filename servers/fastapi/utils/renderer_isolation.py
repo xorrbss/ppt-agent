@@ -54,7 +54,7 @@ from utils.renderer_css_admission import (
     _validate_css as _validate_css,
     duplicate_attribute_counts as duplicate_attribute_counts,
 )
-from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 from utils.hashing import sha256_prefixed
 
 

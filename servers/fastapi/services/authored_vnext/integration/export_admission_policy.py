@@ -6,7 +6,7 @@ from collections.abc import Mapping
 import re
 from typing import Any
 
-from services.authored_vnext.capability_registry import EDITABLE_HYBRID_PROFILE_ID
+from models.authored_vnext.capability_registry import EDITABLE_HYBRID_PROFILE_ID
 
 
 class ExportServiceError(RuntimeError):
