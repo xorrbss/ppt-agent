@@ -36,7 +36,7 @@ def main() -> int:
         return 2
     from utils.authored_styles import AuthoredExactReconstructionUnavailableError, resolve_authored_style
     from services.generation_core.authoring.author_slide_svg import svg_design_text
-    from utils.svg_style_adapter import adapt_svg_style
+    from services.generation_core.drivers.svg.svg_style_adapter import adapt_svg_style
 
     FIXTURE_DIR.mkdir(parents=True, exist_ok=True)
     written: list[str] = []

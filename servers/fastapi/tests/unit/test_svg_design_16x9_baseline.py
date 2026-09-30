@@ -12,7 +12,7 @@ import pytest
 
 from utils.authored_styles import AuthoredExactReconstructionUnavailableError, resolve_authored_style
 from services.generation_core.authoring.author_slide_svg import svg_design_text
-from utils.svg_style_adapter import adapt_svg_style
+from services.generation_core.drivers.svg.svg_style_adapter import adapt_svg_style
 
 FASTAPI_ROOT = Path(__file__).resolve().parents[2]
 BASELINE_DIR = FASTAPI_ROOT / "tests" / "fixtures" / "svg_design_16x9_baseline"
