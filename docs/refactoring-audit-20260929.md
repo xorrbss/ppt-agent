@@ -254,3 +254,27 @@ Each phase is independently mergeable. Every deletion needs
 The six auditor reports (each ≤2,500 words with full file:line tables for every category) are
 summarised above; the coordinating session holds them in full. Re-run the same six prompts to
 regenerate if this document is used as the baseline for a follow-up audit.
+
+## 8. Execution status (2026-09-30)
+
+Executed on branch `refactor/audit-20260929` by parallel agents in isolated worktrees, merged
+wave by wave. Every phase of §5 ran except the optional phase 8 consolidation.
+
+| Phase | Result |
+|---|---|
+| 1. Bug + zero-risk deletions | Mojibake fixed (`generation_core/style/build.py`). ~10k source lines deleted (restyle chain, export-task chain, trusted-executor Chrome runtime, community feature on both servers, dead utils/llm_calls modules, 70+ dead functions, 9 Next.js files, 9 reducers, 19 unused npm deps, `nltk`). Ruff ignores and compatibility ledgers pruned; CLAUDE.md drift fixed. 10 unwired `scripts/*.test.mjs` suites wired into `test:next-ci`. |
+| Replacement gate | `scripts/check-structural-layering.mjs` (shrink-only allowlist) replaces the 500-line ratchet. Allowlist 77 → 27. |
+| 2. Fold the ratchet splits | 18 `bind_runtime` / quality-review split modules folded back; `globals()` injection 12 → 0 in services; 14 dodge-the-cycle lazy imports hoisted. |
+| 3. Product decisions | Restyle chain, `/community`, `nltk`: all deleted (owner approved). |
+| 4. Canvas literal | `services/authored_canvas.py` + `models/canvas_defaults.py` own the default canvas; 112 backend + 14 frontend class-(a) literals routed through them. Admission table 0 diffs; 16:9 fixtures byte-identical. |
+| 5. Behavioural forks | `utils/hashing.py`, `utils/coerce.py`, `utils/naming.py`, `utils/datetime_utils.as_utc`, `utils/color_contrast.py`, one `_safe_failure`; 378 inline SHA-256 expressions routed through `utils/hashing.py`. Next.js: `lib/guards.ts`, one `getFastApiBaseUrl` (rasterize-icon fallback defect fixed), `isAuthoredPresentation` (svg omission defect fixed), one ooxml digest/xml module. |
+| 6. Knob hygiene | `env_int/env_float/env_bool` in `utils/get_env.py`; typed accessors under `utils/env_settings/` for every knob cluster; `constants/internal_env_names.py` ledger (259 names) with a scanner test. |
+| 7. Layering | `api/v2/contracts.py` → `models/public_v2_contracts.py`; generation pipeline out of the endpoint (`services/presentation_generation_pipeline.py`); content-brief policy to services; 15 `utils/llm_calls/author_*` → `services/generation_core/authoring/`; owner predicates the ORM hook enforces dropped after a hook-coverage test; slidespec top-level cycles 13 → 7. Next.js `app/api` forwarders on `lib/fastapi-proxy.ts`. |
+| 9. Strings, tokens, timeouts | Backend Korean user messages → `constants/user_messages.py` keys rendered by next-intl (`backend` namespace, Hangul-literal gate); brand colour tokens; `constants/timeouts.py` + bare-literal gate. |
+
+**Left open (decisions, not defects of this programme)**
+- Digest copies with a different byte contract (listed in the hashing branch report: `default=str`, missing `separators`/`allow_nan`, NFC contract B) stay as they are; changing them changes persisted digests.
+- Timeout pairs that look like one policy but have different values (probe 5/10/20 s, worker exit 10 vs 12 s, placement 60 s inside 130 s) were named, not unified.
+- Remaining layering allowlist (27): `api.v1.auth.internal` imports (JWT strategy), `utils/get_env.py` → secret resolver, 16 renderer/provider/settings utils modules imported by other utils.
+- Phase 8 (leases, deadline modules, maintenance loops, master repositories, readiness generations) not started.
+- New Alembic revision `b8d2f4a6c9e1` (user-message key columns): upgrading an existing `app_data` needs `MIGRATE_DATABASE_ON_STARTUP=true`.
