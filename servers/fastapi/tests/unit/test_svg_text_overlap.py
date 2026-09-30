@@ -24,16 +24,30 @@ def _item(qid, line, ink="absent", parent=None):
 def test_ink_boxes_decide_when_present():
     overlaps, basis = text_overlaps([_item("a", [LINE_A], [INK_A]), _item("b", [LINE_B], [INK_B])])
     assert overlaps == []
-    assert basis["version"] == "glyph-ink/v1"
-    assert basis["fragments"] == {"ink": 2, "line_box": 0}
+    assert basis["version"] == "glyph-ink/v2"
+    assert basis["fragments"] == {"ink": 2, "ink_cell": 0, "line_box": 0}
     assert basis["pairs"] == []
 
 
 def test_missing_ink_keeps_the_line_box_verdict():
     overlaps, basis = text_overlaps([_item("a", [LINE_A]), _item("b", [LINE_B])])
     assert overlaps == [["a", "b"]]
-    assert basis["fragments"] == {"ink": 0, "line_box": 2}
+    assert basis["fragments"] == {"ink": 0, "ink_cell": 0, "line_box": 2}
     assert basis["pairs"] == [{"pair": ["a", "b"], "basis": "line_box"}]
+
+
+def test_cell_fallback_keeps_fragment_ink_geometry_and_reports_its_basis():
+    with_cell = {**INK_A, "cellClusters": 1}
+    overlaps, basis = text_overlaps([_item("a", [LINE_A], [with_cell]),
+                                     _item("b", [LINE_B], [INK_B])])
+    assert overlaps == []
+    assert comparison_fragments(_item("a", [LINE_A], [with_cell])) == [(INK_A, "ink_cell")]
+    assert basis["fragments"] == {"ink": 1, "ink_cell": 1, "line_box": 0}
+    colliding = {**_rect(81, 190, 286, 46), "cellClusters": 1}
+    overlaps, basis = text_overlaps([_item("a", [LINE_A], [with_cell]),
+                                     _item("b", [LINE_B], [colliding])])
+    assert overlaps == [["a", "b"]]
+    assert basis["pairs"] == [{"pair": ["a", "b"], "basis": "ink_cell"}]
 
 
 def test_null_ink_entry_falls_back_per_fragment():

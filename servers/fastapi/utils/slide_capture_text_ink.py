@@ -4,8 +4,9 @@
 the face's full hhea ascent+descent cell, not the painted glyphs.  This probe
 adds one ink box per owned text fragment: every grapheme cluster is measured
 with canvas ``measureText().actualBoundingBox*`` in the same computed font and
-placed at the cluster's laid-out start (``getStartPositionOfChar`` through the
-screen CTM); the fragment's ink box is the union of the cluster boxes.
+placed in the cluster's laid-out cell (``getStartPositionOfChar`` through the
+screen CTM). A cluster without a matching canvas advance keeps only its own
+full-height cell; the fragment's box is the union of those cluster boxes.
 
 An entry is ``null`` whenever the ink cannot be established soundly; the
 consumer then keeps the line box for that fragment, which is the previous
@@ -15,7 +16,7 @@ only produced for SVG text content elements, so HTML payloads are unchanged.
 Requires ``px``, ``ownedTextNodes`` and ``fontEvidence`` from the probe scope.
 """
 
-TEXT_INK_PROBE_VERSION = "glyph-ink/v1"
+TEXT_INK_PROBE_VERSION = "glyph-ink/v2"
 
 TEXT_INK_JS = r"""
     const inkCanvasContext = (() => {
@@ -100,22 +101,24 @@ TEXT_INK_JS = r"""
       } else if (spacing(style.letterSpacing) !== '0px' || spacing(style.wordSpacing) !== '0px') {
         return null;
       }
-      // Horizontal placement comes from the SVG layout itself: each grapheme
-      // cluster's ink is measured alone and placed at the cluster's laid-out
-      // start, so canvas shaping never decides where a glyph sits.
+      // Horizontal placement comes from SVG layout. Canvas measurements are
+      // witnesses for each cluster's advance and vertical ink only.
       if (typeof Intl === 'undefined' || typeof Intl.Segmenter !== 'function') return null;
       const toScreen = (point) => new DOMPoint(point.x, point.y).matrixTransform(ctm);
-      const run = context.measureText(content);
+      const run = context.measureText(' ');
       const origin = toScreen(node.getStartPositionOfChar(0));
       const fontAscent = run.fontBoundingBoxAscent * k;
+      const fontDescent = run.fontBoundingBoxDescent * k;
       if (![run.fontBoundingBoxAscent, run.fontBoundingBoxDescent, origin.x, origin.y].every(Number.isFinite))
         return null;
       // Self-checks: the canvas face must reproduce the laid-out line box.
       if (Math.abs((run.fontBoundingBoxAscent + run.fontBoundingBoxDescent) * k - rect.height) > 1) return null;
       if (Math.abs(origin.y - fontAscent - rect.y) > 1 || Math.abs(origin.x - rect.x) > 1) return null;
       let left = Infinity, right = -Infinity, top = Infinity, bottom = -Infinity;
+      let cellClusters = 0;
       const segmenter = new Intl.Segmenter(undefined, {granularity: 'grapheme'});
       const clusters = Array.from(segmenter.segment(content), ({segment, index}) => ({segment, index}));
+      const kerning = context.fontKerning;
       for (let position = 0; position < clusters.length; position += 1) {
         const {segment, index} = clusters[position];
         if (!segment.trim()) continue;
@@ -123,22 +126,34 @@ TEXT_INK_JS = r"""
         const start = toScreen(node.getStartPositionOfChar(index));
         const end = next ? toScreen(node.getStartPositionOfChar(next.index))
           : toScreen(node.getEndPositionOfChar(index + segment.length - 1));
-        const m = context.measureText(segment);
-        // In-context canvas advance, so pair kerning counts on both sides.
-        const advance = next
-          ? context.measureText(segment + next.segment).width - context.measureText(next.segment).width
-          : m.width;
-        const values = [start.x, start.y, end.x, advance, m.actualBoundingBoxLeft,
-          m.actualBoundingBoxRight, m.actualBoundingBoxAscent, m.actualBoundingBoxDescent];
-        if (!values.every(Number.isFinite)) return null;
-        // One baseline per run, and the canvas advance must equal the laid-out
-        // advance (same face, same glyphs, same kerning).
+        if (![start.x, start.y, end.x, end.y].every(Number.isFinite)) return null;
         if (Math.abs(start.y - origin.y) > 0.01) return null;
-        if (Math.abs(advance * k - (end.x - start.x)) > 1) return null;
-        left = Math.min(left, start.x - m.actualBoundingBoxLeft * k);
-        right = Math.max(right, start.x + m.actualBoundingBoxRight * k);
-        top = Math.min(top, start.y - m.actualBoundingBoxAscent * k);
-        bottom = Math.max(bottom, start.y + m.actualBoundingBoxDescent * k);
+        if ('fontKerning' in context) context.fontKerning = 'none';
+        const isolated = context.measureText(segment);
+        if ('fontKerning' in context) context.fontKerning = kerning;
+        const pair = next ? context.measureText(segment + next.segment) : null;
+        const nextWidth = next ? context.measureText(next.segment).width : 0;
+        const layoutAdvance = end.x - start.x;
+        const isolatedMatches = Number.isFinite(isolated.width) &&
+          Math.abs(isolated.width * k - layoutAdvance) <= 1;
+        const pairAdvance = pair ? pair.width - nextWidth : NaN;
+        const pairMatches = Number.isFinite(pairAdvance) &&
+          Math.abs(pairAdvance * k - layoutAdvance) <= 1;
+        const witness = isolatedMatches ? isolated : pairMatches ? pair : null;
+        const cellLeft = Math.min(start.x, end.x), cellRight = Math.max(start.x, end.x);
+        if (witness && [witness.actualBoundingBoxLeft, witness.actualBoundingBoxRight,
+                        witness.actualBoundingBoxAscent, witness.actualBoundingBoxDescent].every(Number.isFinite)) {
+          left = Math.min(left, cellLeft - Math.max(0, witness.actualBoundingBoxLeft * k));
+          right = Math.max(right, cellRight + Math.max(0, (witness.actualBoundingBoxRight - witness.width) * k));
+          top = Math.min(top, start.y - witness.actualBoundingBoxAscent * k);
+          bottom = Math.max(bottom, start.y + witness.actualBoundingBoxDescent * k);
+        } else {
+          cellClusters += 1;
+          left = Math.min(left, cellLeft);
+          right = Math.max(right, cellRight);
+          top = Math.min(top, start.y - fontAscent);
+          bottom = Math.max(bottom, start.y + fontDescent);
+        }
       }
       if (!(right > left && bottom > top)) return null;
       let pad = 0;
@@ -148,7 +163,8 @@ TEXT_INK_JS = r"""
           ? Math.max(1, Number(style.strokeMiterlimit) || 4) : 1;
         pad = px(style.strokeWidth) * k * miter / 2;
       }
-      return {x: left - pad, y: top - pad, width: right - left + 2 * pad, height: bottom - top + 2 * pad};
+      return {x: left - pad, y: top - pad, width: right - left + 2 * pad,
+        height: bottom - top + 2 * pad, cellClusters};
     };
     const ownedTextInkRects = (node) => {
       if (!(node instanceof SVGTextContentElement)) return null;

@@ -179,11 +179,39 @@ def test_unloaded_family_falls_back_and_stays_font_unresolved():
     _assert_line_box_fallback(elements, flagged=bool(_line_box_only(elements)))
 
 
-def test_advance_self_check_mismatch_falls_back():
-    # Chromium's SVG layout sets U+00B7 after Hangul narrower than canvas does.
-    quality = _measure(_two_lines(first="스마트·팩토리 단계별", second="도입·계획 수립"))
-    assert _pairs(quality) == [["svg-1", "svg-2"]]
-    _assert_line_box_fallback(quality["browser_metrics"]["elements"])
+@pytest.mark.parametrize("name", ["syn_ORD_a_then_b", "syn_ORD_b_then_a"])
+def test_middle_dot_runs_use_ink_in_both_element_orders(name):
+    signatures = []
+    for _ in range(2):
+        quality = _fixture(name)
+        text = _text(quality["browser_metrics"]["elements"])
+        assert len(text) == 2
+        assert all(item["text_ink_fragments"][0]["cellClusters"] == 0 for item in text)
+        assert quality["overlap_basis"]["fragments"] == {"ink": 2, "ink_cell": 0, "line_box": 0}
+        assert quality["overlap_basis"]["pairs"] == []
+        signatures.append(sorted((item["text_fragments"][0]["y"],
+                                  item["text_ink_fragments"][0]["x"],
+                                  item["text_ink_fragments"][0]["y"],
+                                  item["text_ink_fragments"][0]["width"],
+                                  item["text_ink_fragments"][0]["height"]) for item in text))
+    assert signatures[0] == signatures[1]
+
+
+def test_middle_dot_ink_boxes_do_not_depend_on_element_order():
+    signatures = []
+    for name in ("syn_ORD_a_then_b", "syn_ORD_b_then_a"):
+        text = _text(_fixture(name)["browser_metrics"]["elements"])
+        signatures.append(sorted((item["text_fragments"][0]["y"], item["text_ink_fragments"][0])
+                                 for item in text))
+    assert signatures[0] == signatures[1]
+
+
+def test_standalone_middle_dot_limits_fallback_to_one_cell():
+    quality = _fixture("syn_DOT_standalone")
+    text = _text(quality["browser_metrics"]["elements"])
+    assert len(text) == 1
+    assert text[0]["text_ink_fragments"][0]["cellClusters"] == 1
+    assert quality["overlap_basis"]["fragments"] == {"ink": 0, "ink_cell": 1, "line_box": 0}
 
 
 def test_html_payload_has_no_ink_field():
