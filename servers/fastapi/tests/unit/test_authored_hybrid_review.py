@@ -10,8 +10,8 @@ from PIL import Image
 
 from services import authored_quality_review_service as quality_service
 from utils.authored_dom_quality import STYLE_REFERENCE, DomQualityIssue, DomQualityReport
-from utils.llm_calls import author_vision_qa
-from utils.llm_calls.author_slide import Brand
+from services.generation_core.authoring import author_vision_qa
+from services.generation_core.authoring.author_slide import Brand
 from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
 from utils.renderer_isolation import RendererPolicyError
 
@@ -532,7 +532,7 @@ def test_structural_proposal_uses_per_slide_repair_patch_scope(monkeypatch):
         active_usage_scope_slide_index,
         provider_usage_scope,
     )
-    from utils.llm_calls import author_structural_repair_loop
+    from services.generation_core.authoring import author_structural_repair_loop
 
     double = _structural_repair_double(monkeypatch)
     seen_slide_indices = []

@@ -1,7 +1,7 @@
 """Conservative acceptance policy for authored quality-review candidates."""
 
 from utils.authored_dom_quality import DomQualityReport, has_dom_quality_regression
-from utils.llm_calls import author_vision_qa
+from services.generation_core.authoring import author_vision_qa
 from utils.llm_calls.critique_slide import SlideCritique, StyleComparisonCritique
 
 _INDETERMINATE_PREFIX = "INDETERMINATE:"

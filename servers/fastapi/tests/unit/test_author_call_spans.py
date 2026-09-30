@@ -13,8 +13,8 @@ from services.provider_usage_instrumentation import (
     provider_operation_usage_scope,
     provider_usage_scope,
 )
-from utils.llm_calls import author_call_spans
-from utils.llm_calls.author_call_spans import ProviderCallSpans, record_call_spans
+from services.generation_core.authoring import author_call_spans
+from services.generation_core.authoring.author_call_spans import ProviderCallSpans, record_call_spans
 
 
 class _Clock:
@@ -152,7 +152,7 @@ def test_record_call_spans_without_a_ledger_is_harmless() -> None:
 async def test_author_slide_generate_reports_spans_per_call(monkeypatch) -> None:
     """The authored call site wires the spans: one record per provider call,
     filed under the active stage of the operation's usage ledger."""
-    from utils.llm_calls import author_slide
+    from services.generation_core.authoring import author_slide
 
     class _Usage:
         completion_tokens = 12

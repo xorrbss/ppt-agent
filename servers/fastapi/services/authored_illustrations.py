@@ -45,7 +45,7 @@ from services.source_images.models import (
     SUPPORTED_SOURCE_IMAGE_MIME_TYPES,
     SourceImageCandidate,
 )
-from utils.authored_illustration_prompt import (
+from services.generation_core.assets.illustration_prompt import (
     MAX_SLIDE_CONTENT_CHARS,
     build_illustration_prompt,
     clean_scene_prompt,
@@ -58,7 +58,7 @@ from utils.authored_image_slots import (
     source_slot_id_for_asset,
 )
 from utils.renderer_isolation import MAX_ASSET_BYTES, MAX_HTML_BYTES
-from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 from utils.hashing import sha256_hex
 
 LOGGER = logging.getLogger(__name__)

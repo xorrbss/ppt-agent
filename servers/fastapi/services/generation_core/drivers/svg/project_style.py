@@ -1,12 +1,12 @@
 """StyleContext -> the svg author's design-system input.
 
-This is the svg-specific half of what ``utils.svg_style_adapter.adapt_svg_style``
+This is the svg-specific half of what ``services.generation_core.drivers.svg.svg_style_adapter.adapt_svg_style``
 used to do inline: reading only the preset's own fields. Admission-shaped
 validation (canvas bounds, exact-reconstruction rejection, preset
 ``svg_overrides`` shape, reference-image bytes) stays in ``svg_style_adapter``;
 this module turns an already-built, format-neutral :class:`StyleContext` into
 the flat dict the svg author prompt serializes verbatim (see
-``utils.llm_calls.author_slide_svg.author_slide_svg``: the whole dict minus
+``services.generation_core.authoring.author_slide_svg.author_slide_svg``: the whole dict minus
 ``references``/``diagnostics`` is dumped into the prompt).
 """
 from __future__ import annotations

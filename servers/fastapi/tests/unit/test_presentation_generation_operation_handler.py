@@ -374,7 +374,7 @@ def test_non_retryable_generation_failure_disables_resume(
 ):
     from fastapi import HTTPException
 
-    from api.v1.ppt.endpoints.presentation_generate import (
+    from services.presentation_generation_pipeline import (
         _authored_vnext_generation_http_exception,
     )
     from models.api_error_model import APIErrorModel
@@ -422,7 +422,7 @@ def test_non_retryable_generation_failure_disables_resume(
 
 
 def test_public_provider_control_error_keeps_terminal_retryability() -> None:
-    from api.v1.ppt.endpoints.presentation_generate import (
+    from services.presentation_generation_pipeline import (
         _durable_generation_control_http_exception,
     )
     from models.api_error_model import APIErrorModel
@@ -622,7 +622,7 @@ async def _terminal_retry_rebinds_linked_job(tmp_path: Path, monkeypatch):
         return None
 
     monkeypatch.setattr(
-        "api.v1.ppt.endpoints.presentation_generate._admit_generation_operation_v2_compatible",
+        "services.presentation_generation_pipeline._admit_generation_operation_v2_compatible",
         admitted_retry,
     )
     try:
@@ -746,7 +746,7 @@ async def _explicit_capacity_recovery_rebinds_only_supported_authored_revision(
         return None
 
     monkeypatch.setattr(
-        "api.v1.ppt.endpoints.presentation_generate._admit_generation_operation_v2_compatible",
+        "services.presentation_generation_pipeline._admit_generation_operation_v2_compatible",
         admitted_retry,
     )
     try:
@@ -924,7 +924,7 @@ class _PipelineContext:
 
 
 def test_authored_master_admission_allows_unpinned_full_canvas():
-    from api.v1.ppt.endpoints import presentation_generate as endpoint
+    from services import presentation_generation_pipeline as endpoint
 
     request = GeneratePresentationRequest(
         content="Masterless authored deck",
@@ -960,7 +960,7 @@ async def _default_pipeline_merges_publication_result(
         presentation_id, operation_id, task_id, job_id = (
             await _seed_linked_generation(maker, owner_id=OWNER_ID)
         )
-        from api.v1.ppt.endpoints import presentation_generate as endpoint
+        from services import presentation_generation_pipeline as endpoint
         from services import presentation_generation_operation_handler as adapter
         from services.authored_checkpoint_service import AuthoredStageError
         from services.authored_generation_timing_receipt import (
@@ -1166,7 +1166,7 @@ async def _default_pipeline_resolves_durable_authored_master_pin_before_generati
             job.request_payload = durable_request.model_dump(mode="json", by_alias=True)
             session.add(job)
 
-        from api.v1.ppt.endpoints import presentation_generate as endpoint
+        from services import presentation_generation_pipeline as endpoint
 
         calls: list[str] = []
         resolved_master = SimpleNamespace(master_id="master:company", revision=7)

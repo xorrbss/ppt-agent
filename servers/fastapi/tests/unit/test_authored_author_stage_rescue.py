@@ -41,12 +41,12 @@ from services.source_content.browser_readback import (
     BrowserSourceReadbackResult,
 )
 from utils.authored_header_validation import validate_header_contract
-from utils.authored_semantic_role_repair import canonicalize_authored_roles
-from utils.llm_calls.author_deck import (
+from services.authored_semantic_role_repair import canonicalize_authored_roles
+from services.generation_core.authoring.author_deck import (
     AuthoredDeckResult,
     AuthoredProviderBudgetExhausted,
 )
-from utils.llm_calls.author_slide import (
+from services.generation_core.authoring.author_slide import (
     Brand,
     is_fallback_slide_html,
     validate_authored_slide_html,

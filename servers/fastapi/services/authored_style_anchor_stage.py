@@ -30,7 +30,7 @@ from utils.get_env_programme import (
     is_authored_fragmentation_gate_enabled,
     is_authored_style_anchor_enabled,
 )
-from utils.llm_calls.author_slide import canonicalize_authored_slide_html
+from services.generation_core.authoring.author_slide import canonicalize_authored_slide_html
 from utils.llm_calls.author_style_anchor import StyleAnchor, extract_style_anchor
 from utils.runtime_settings import RuntimeSettings
 

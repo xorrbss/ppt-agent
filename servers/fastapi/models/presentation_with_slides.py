@@ -6,7 +6,7 @@ import uuid
 from pydantic import BaseModel, field_serializer, field_validator, model_validator
 
 from models.sql.slide import SlideModel
-from services.presentation_profiles import (
+from models.presentation_profiles import (
     PresentationCapabilities,
     PresentationProfile,
     resolve_presentation_driver,

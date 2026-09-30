@@ -36,11 +36,11 @@ from services.authored_composition_policy import (
 from utils import slide_capture
 from utils.authored_style_exemplars import exemplar_block
 from utils.slide_capture_result import RenderCapture
-from utils.llm_calls import author_deck as author_deck_mod
-from utils.llm_calls import author_slide as author_slide_mod
-from utils.llm_calls import author_vision_qa as author_vision_qa_mod
+from services.generation_core.authoring import author_deck as author_deck_mod
+from services.generation_core.authoring import author_slide as author_slide_mod
+from services.generation_core.authoring import author_vision_qa as author_vision_qa_mod
 from utils.llm_calls import critique_slide as critique_slide_mod
-from utils.llm_calls.author_deck import (
+from services.generation_core.authoring.author_deck import (
     AuthoredBatchFailure,
     AuthoredProviderBudgetExhausted,
     AuthoredDeckResult,
@@ -50,7 +50,7 @@ from utils.llm_calls.author_deck import (
     plan_authored_visual_story,
     plan_deck_roles,
 )
-from utils.llm_calls.author_slide import (
+from services.generation_core.authoring.author_slide import (
     Brand,
     COMPANY_STANDARD_PAGE_NUMBER_MODE,
     EXACT_RECONSTRUCTION,
@@ -1745,7 +1745,7 @@ def test_vision_qa_reuses_selected_design_system(monkeypatch):
     # work") stopped forcing reasoning_effort="high" here: the durable
     # generation preset is request-scoped and remains authoritative during
     # this optional re-author pass too (see the call site's comment in
-    # utils/llm_calls/author_vision_qa.py).
+    # services/generation_core/authoring/author_vision_qa.py).
     assert captured == [("SELECTED DESIGN SYSTEM", None, "recovery", 2, False)]
     assert htmls == [_VALID]
     assert pngs == [b"revised-png"]

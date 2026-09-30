@@ -31,8 +31,8 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 import aiohttp
 
 from constants.timeouts import PROCESS_REAP_TIMEOUT_SECONDS
-from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
-from services.authored_vnext.capability_registry import (
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
+from models.authored_vnext.capability_registry import (
     CAPABILITY_REGISTRY_DIGEST,
     capability_metadata,
 )

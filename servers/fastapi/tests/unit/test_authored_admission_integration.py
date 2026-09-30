@@ -438,7 +438,7 @@ def test_shadow_report_scopes_to_one_operation_and_names_the_predicate():
 @sync_async
 async def test_vqa_correction_reuses_captured_evidence(session, monkeypatch):
     from unittest.mock import AsyncMock
-    from utils.llm_calls import author_vision_qa as vqa
+    from services.generation_core.authoring import author_vision_qa as vqa
     from utils.slide_capture_result import RenderCapture
     from services.authored_admission_context import digest_html
 
@@ -491,7 +491,7 @@ def test_provider_output_marker_never_reinterprets_inserted_tokens(session, monk
 
 def test_batch_provider_raw_diagnostics_precede_legacy_rewrites(session, monkeypatch):
     from unittest.mock import Mock
-    from utils.llm_calls import author_batch as batch
+    from services.generation_core.authoring import author_batch as batch
 
     rewrite = Mock(side_effect=AssertionError("rewrote malformed raw HTML"))
     monkeypatch.setattr(batch, "_strip_nonvisual_pointer_events", rewrite)

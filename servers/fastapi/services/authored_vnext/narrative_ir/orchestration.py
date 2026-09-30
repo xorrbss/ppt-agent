@@ -15,7 +15,7 @@ from .checkpoint import (
     seal_checkpoint,
     validate_checkpoint,
 )
-from .contracts import (
+from models.authored_vnext.narrative_ir_contracts import (
     ContentGraphV1,
     FrameSearchReceiptV1,
     FrameSelectionReceiptV1,

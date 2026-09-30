@@ -20,8 +20,8 @@ from utils.authored_dom_quality import (
     DomQualityReport,
     inspect_authored_dom,
 )
-from utils.llm_calls import author_vision_qa
-from utils.llm_calls.author_slide import Brand
+from services.generation_core.authoring import author_vision_qa
+from services.generation_core.authoring.author_slide import Brand
 from utils.llm_calls.author_vqa_critique_routing import (
     deterministic_critique_supersedes_vqa,
     with_advisory_findings,

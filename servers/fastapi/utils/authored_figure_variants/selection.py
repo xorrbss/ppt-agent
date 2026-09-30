@@ -21,6 +21,7 @@ from typing import Any
 from utils.authored_dom_quality import DomQualityReport, has_dom_quality_regression
 from utils.authored_figure_variants.metrics import CandidateMetrics, ink_ratio_penalty
 from utils.authored_figure_variants.variants import FigureVariant
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 #: Penalty weights. Overflow/escape are hard failures the gate also reports, so
 #: they outweigh the two aesthetic terms by an order of magnitude.
@@ -80,8 +81,8 @@ class FigureSelection:
 
 def candidate_score(metrics: CandidateMetrics) -> float:
     """Lower is better. Every term is normalised against the rendered canvas."""
-    height = metrics.viewport_height or 720.0
-    area = (metrics.viewport_width or 1280.0) * height
+    height = metrics.viewport_height or float(DEFAULT_CANVAS_HEIGHT_PX)
+    area = (metrics.viewport_width or float(DEFAULT_CANVAS_WIDTH_PX)) * height
     return (
         OVERFLOW_WEIGHT * (metrics.overflow_px / height)
         + OFF_CANVAS_WEIGHT * (metrics.off_canvas_px / height)

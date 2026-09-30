@@ -23,10 +23,10 @@ from utils.authored_infographic import (
 from utils.authored_dom_quality import ensure_authored_qids
 from utils.authored_infographic.library import LIBRARY_TEMPLATE
 from utils.authored_infographic.skeleton import density_class, node_count, split_figure
-from utils.llm_calls import author_deck as author_deck_mod
+from services.generation_core.authoring import author_deck as author_deck_mod
 from utils.llm_calls.author_infographic_marker import infographic_marker
-from utils.llm_calls.author_slide import Brand, validate_authored_slide_html
-from utils.llm_calls.author_slide_prompt import author_prompt
+from services.generation_core.authoring.author_slide import Brand, validate_authored_slide_html
+from services.generation_core.authoring.author_slide_prompt import author_prompt
 
 _CONTENT = (
     "## 예지보전 순환\n- 감지: 센서 이상 패턴 포착\n- 예측: 고장 확률 72% 산출\n"
@@ -365,7 +365,7 @@ def test_the_prompt_carries_the_contract_and_the_skeleton():
 
 def test_the_batch_egress_checks_and_injects_like_the_single_path():
     """The batch path post-processes through the same contract and injection."""
-    from utils.llm_calls import author_batch as batch_mod
+    from services.generation_core.authoring import author_batch as batch_mod
 
     slide = _slide("process", 3)
     request = batch_mod.AuthoredBatchSlideRequest(

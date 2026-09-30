@@ -27,6 +27,7 @@ from utils.renderer_isolation import (
     MAX_RESPONSE_BYTES,
     RendererPolicyError,
 )
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 FRAME_HEADER_BYTES = 8
 REQUEST_SCHEMA = "authored-render-request/v1"
@@ -116,7 +117,7 @@ def encode_json_frame(value: Mapping[str, Any], *, limit: int) -> bytes:
 
 def encode_framed_request(
     html: str, timeout: int, *, max_requests: int | None = None,
-    width_px: int = 1280, height_px: int = 720,
+    width_px: int = DEFAULT_CANVAS_WIDTH_PX, height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
 ) -> bytes:
     """Encode one framed render request.
 

@@ -34,6 +34,7 @@ FROZEN_FILES = {
 }
 FROZEN_PREFIXES = (
     "utils/llm_calls/",
+    "services/generation_core/authoring/",
     "services/source_content/raster_",
     "services/slidespec_repair_",
     "services/slidespec_dom_evidence",

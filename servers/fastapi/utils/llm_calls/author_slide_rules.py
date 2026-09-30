@@ -191,7 +191,7 @@ DEFAULT_STYLE_BRIEF = """\
 # What remains here is only the part that is a CONTRACT with other components,
 # not a matter of taste:
 #   * the slot syntax — the single way a slide can request an image at all, and
-#     the only string utils/authored_illustrations.py knows how to fill;
+#     the only string services/authored_illustrations.py knows how to fill;
 #   * the slot geometry and the read-without-the-image rule — the runtime
 #     DELETES the tag on any generation failure, so a layout that depends on the
 #     image, or a slot outside the generated picture's aspect band, is a defect

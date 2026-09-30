@@ -28,7 +28,7 @@ from utils.asset_directory_utils import (
 )
 from utils.filename_utils import safe_export_basename
 from utils.get_env import is_authored_retain_checkpoint_html_enabled
-from utils.llm_calls.author_deck import build_image_pptx
+from services.generation_core.authoring.author_deck import build_image_pptx
 from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX, canvas_or_default
 from utils.hashing import sha256_hex
 

@@ -146,7 +146,7 @@ def _resolve_master_rules(request: object, canvas: object) -> tuple[dict | None,
 def pin_svg_style(request: object) -> dict:
     """Snapshot before durable admission, never reselect on job takeover."""
     from services.authored_canvas import request_canvas_contract
-    from utils.svg_style_adapter import adapt_svg_style
+    from services.generation_core.drivers.svg.svg_style_adapter import adapt_svg_style
 
     frozen = getattr(request, "_svg_style_snapshot", None)
     if frozen is None:

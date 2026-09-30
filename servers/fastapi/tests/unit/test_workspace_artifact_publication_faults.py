@@ -35,7 +35,7 @@ from models.sql.workspace import (
 )
 from services import workspace_artifact_publication_service as publication
 from services import workspace_operation_runner
-from api.v1.ppt.endpoints.presentation_generate import _publish_staged_presentation
+from services.presentation_generation_pipeline import _publish_staged_presentation
 from services.account_deletion_service import mark_account_deleting
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
 
@@ -1288,7 +1288,7 @@ def test_authored_publication_failure_reports_snapshotted_job_after_rollback(
     )
     from services import authored_presentation_publication as authored_publication
     from services.authored_checkpoint_service import AuthoredStageError
-    from utils.llm_calls.author_slide import Brand
+    from services.generation_core.authoring.author_slide import Brand
 
     async def scenario():
         engine, maker = await _database(tmp_path / "authored-rollback-report.db")

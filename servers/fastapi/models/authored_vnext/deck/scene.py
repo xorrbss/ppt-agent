@@ -646,7 +646,7 @@ class DeckSceneIR(StrictCamelModel):
     def _validate_document_canvas(cls, value):
         if value is None:
             return None
-        from services.document_canvas import DocumentCanvasMetadata
+        from models.document_canvas import DocumentCanvasMetadata
 
         return DocumentCanvasMetadata.model_validate(value).model_dump(mode="json", by_alias=True)
 
@@ -800,7 +800,7 @@ def seal_deck_scene(
         "capabilities": [item.model_dump(mode="json", by_alias=True) for item in capabilities],
     }
     if document_canvas is not None:
-        from services.document_canvas import DocumentCanvasMetadata
+        from models.document_canvas import DocumentCanvasMetadata
 
         payload["documentCanvas"] = DocumentCanvasMetadata.model_validate(document_canvas).model_dump(
             mode="json", by_alias=True

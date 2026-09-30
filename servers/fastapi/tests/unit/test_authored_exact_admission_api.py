@@ -9,6 +9,7 @@ import pytest
 from fastapi import HTTPException
 
 from api.v1.ppt.endpoints import presentation_generate as endpoint
+from services import presentation_generation_pipeline as generation_pipeline
 from models.generate_presentation_request import GeneratePresentationRequest
 from utils.authored_styles import AuthoredExactReconstructionUnavailableError
 
@@ -50,7 +51,7 @@ class _RecordingBackgroundTasks:
 )
 def test_exact_admission_returns_stable_non_private_4xx(monkeypatch, reason, status, detail):
     monkeypatch.setattr(
-        endpoint,
+        generation_pipeline,
         "resolve_authored_style",
         lambda _style_id: (_ for _ in ()).throw(
             AuthoredExactReconstructionUnavailableError(reason)
@@ -58,7 +59,7 @@ def test_exact_admission_returns_stable_non_private_4xx(monkeypatch, reason, sta
     )
 
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(endpoint.check_if_api_request_is_valid(_authored_request(), None))
+        asyncio.run(generation_pipeline.check_if_api_request_is_valid(_authored_request(), None))
 
     assert exc.value.status_code == status
     assert exc.value.detail == detail
@@ -79,7 +80,7 @@ def test_exact_admission_happens_before_async_job_or_background_task(monkeypatch
     """
 
     monkeypatch.setattr(
-        endpoint,
+        generation_pipeline,
         "resolve_authored_style",
         lambda _style_id: (_ for _ in ()).throw(
             AuthoredExactReconstructionUnavailableError(
@@ -92,7 +93,7 @@ def test_exact_admission_happens_before_async_job_or_background_task(monkeypatch
 
     with pytest.raises(HTTPException) as exc:
         asyncio.run(
-            endpoint.queue_presentation_generation(
+            generation_pipeline.queue_presentation_generation(
                 # No ``presentation_id``: nothing durable exists for this
                 # request yet, which is exactly the case that must fail first.
                 _authored_request(),
@@ -110,7 +111,7 @@ def test_exact_admission_happens_before_async_job_or_background_task(monkeypatch
 
 def test_sync_endpoint_rejects_exact_before_generation_handler(monkeypatch):
     monkeypatch.setattr(
-        endpoint,
+        generation_pipeline,
         "resolve_authored_style",
         lambda _style_id: (_ for _ in ()).throw(
             AuthoredExactReconstructionUnavailableError(
@@ -119,7 +120,7 @@ def test_sync_endpoint_rejects_exact_before_generation_handler(monkeypatch):
         ),
     )
     handler = AsyncMock()
-    monkeypatch.setattr(endpoint, "generate_presentation_handler", handler)
+    monkeypatch.setattr(generation_pipeline, "generate_presentation_handler", handler)
     request_http = SimpleNamespace(state=SimpleNamespace(request_id=None), headers={}, cookies={})
 
     with pytest.raises(HTTPException) as exc:
@@ -141,10 +142,10 @@ def test_unknown_ordinary_authored_style_keeps_default_compatibility(monkeypatch
         resolved.append(style_id)
         return SimpleNamespace(reference_mode="style_reference")
 
-    monkeypatch.setattr(endpoint, "resolve_authored_style", fake_resolve)
+    monkeypatch.setattr(generation_pipeline, "resolve_authored_style", fake_resolve)
     request = _authored_request(style="typo-or-legacy-style")
 
-    asyncio.run(endpoint.check_if_api_request_is_valid(request, None))
+    asyncio.run(generation_pipeline.check_if_api_request_is_valid(request, None))
 
     assert resolved == ["typo-or-legacy-style"]
     assert request.template == "authored"
@@ -153,7 +154,7 @@ def test_unknown_ordinary_authored_style_keeps_default_compatibility(monkeypatch
 def test_style_reference_request_does_not_expose_or_change_reference_contract(monkeypatch):
     resolved = []
     monkeypatch.setattr(
-        endpoint,
+        generation_pipeline,
         "resolve_authored_style",
         lambda style_id: resolved.append(style_id)
         or SimpleNamespace(reference_mode="style_reference"),
@@ -165,7 +166,7 @@ def test_style_reference_request_does_not_expose_or_change_reference_contract(mo
         authored_style="default",
     )
 
-    asyncio.run(endpoint.check_if_api_request_is_valid(request, None))
+    asyncio.run(generation_pipeline.check_if_api_request_is_valid(request, None))
 
     assert request.template == "authored"
     assert resolved == ["default"]
@@ -180,9 +181,9 @@ class _WorkerSession:
         self.commits = 0
 
     async def get(self, model, _id):
-        if model is endpoint.PresentationGenerationJob:
+        if model is generation_pipeline.PresentationGenerationJob:
             return self.job
-        if model is endpoint.AsyncPresentationGenerationTaskModel:
+        if model is generation_pipeline.AsyncPresentationGenerationTaskModel:
             return self.status
         raise AssertionError(f"unexpected model {model}")
 
@@ -215,12 +216,12 @@ def test_worker_revalidation_sets_safe_exact_error_status(monkeypatch):
     )
     status = SimpleNamespace(status="pending", message=None, error=None, updated_at=None)
     session = _WorkerSession(job, status)
-    monkeypatch.setattr(endpoint, "async_session_maker", lambda: _SessionFactory(session))
-    monkeypatch.setattr(endpoint, "claim_generation_job", AsyncMock(return_value=(task_id, "lease")))
-    monkeypatch.setattr(endpoint, "finalize_generation_job", AsyncMock())
-    monkeypatch.setattr(endpoint, "release_generation_job", AsyncMock())
+    monkeypatch.setattr(generation_pipeline, "async_session_maker", lambda: _SessionFactory(session))
+    monkeypatch.setattr(generation_pipeline, "claim_generation_job", AsyncMock(return_value=(task_id, "lease")))
+    monkeypatch.setattr(generation_pipeline, "finalize_generation_job", AsyncMock())
+    monkeypatch.setattr(generation_pipeline, "release_generation_job", AsyncMock())
     monkeypatch.setattr(
-        endpoint,
+        generation_pipeline,
         "resolve_authored_style",
         lambda _style_id: (_ for _ in ()).throw(
             AuthoredExactReconstructionUnavailableError(
@@ -232,11 +233,11 @@ def test_worker_revalidation_sets_safe_exact_error_status(monkeypatch):
     async def heartbeat(*_args):
         await asyncio.Event().wait()
 
-    monkeypatch.setattr(endpoint, "heartbeat_generation_job_loop", heartbeat)
+    monkeypatch.setattr(generation_pipeline, "heartbeat_generation_job_loop", heartbeat)
     handler = AsyncMock()
-    monkeypatch.setattr(endpoint, "generate_presentation_handler", handler)
+    monkeypatch.setattr(generation_pipeline, "generate_presentation_handler", handler)
 
-    asyncio.run(endpoint.run_generation_job(job_id, None))
+    asyncio.run(generation_pipeline.run_generation_job(job_id, None))
 
     handler.assert_not_awaited()
     assert status.status == "error"

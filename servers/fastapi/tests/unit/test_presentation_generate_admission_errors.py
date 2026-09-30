@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 
 from api.error_handling import install_api_error_handling
 from api.v1.ppt.endpoints import presentation_generate
+from services import presentation_generation_pipeline as generation_pipeline
 from api.v1.ppt.endpoints.presentation_generate_admission import PRESENTATION_GENERATE_ROUTER
 from services.artifact_store import ArtifactKeyBusy, ArtifactNotFound
 from services.database import get_async_session
@@ -34,7 +35,7 @@ def post_generate(monkeypatch):
             yield SimpleNamespace(get_bind=lambda: None)
 
         monkeypatch.setattr(presentation_generate, "_require_local_legacy_async_generation", lambda _bind: None)
-        monkeypatch.setattr(presentation_generate, "queue_presentation_generation", failing_queue)
+        monkeypatch.setattr(generation_pipeline, "queue_presentation_generation", failing_queue)
         app = FastAPI()
         install_api_error_handling(app)
         app.include_router(PRESENTATION_GENERATE_ROUTER, prefix="/api/v1/ppt")

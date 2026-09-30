@@ -332,7 +332,6 @@ async def register_design_pack_from_presentation(
             select(SlideModel)
             .where(
                 SlideModel.presentation == request.presentation_id,
-                SlideModel.owner_id == owner_id,
             )
             .order_by(SlideModel.index)
         )

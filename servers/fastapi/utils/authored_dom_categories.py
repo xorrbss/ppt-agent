@@ -3,7 +3,7 @@
 Bench run 36 (K/document fixture, ``f0d2b126c``, 2026-09-05) died
 ``authored_composition_safety_gate_failed`` after 28.7 minutes because the
 bounded quality-gate repair raised ``KeyError: 'text_intrudes_footer_zone'``
-for slides 3..17.  ``utils.llm_calls.author_vision_qa`` mapped a DOM category
+for slides 3..17.  ``services.generation_core.authoring.author_vision_qa`` mapped a DOM category
 to a critique type through a dict literal that predated the two detectors
 ``f0d2b126c`` registered (``text_escapes_card``,
 ``text_intrudes_footer_zone``), and an unregistered key raised instead of
@@ -106,7 +106,7 @@ BLOCKING_SAFETY_CATEGORIES = frozenset(
 )
 
 #: Categories whose presence lets the cheap deterministic critique stand in for
-#: the vision-QA model call in ``utils.llm_calls.author_vision_qa``.
+#: the vision-QA model call in ``services.generation_core.authoring.author_vision_qa``.
 #:
 #: The repair round asks the model to look at a slide only when the measured DOM
 #: has nothing actionable to say.  That cascade is sound for a measured geometry

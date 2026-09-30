@@ -149,7 +149,7 @@ class PresentationGenerationOperationHandler:
     ) -> WorkspaceOperationResult:
         # Lazy imports avoid coupling application startup to the large endpoint
         # module and prevent an import cycle through lifespan/runner services.
-        from api.v1.ppt.endpoints.presentation_generate import (
+        from services.presentation_generation_pipeline import (
             _request_from_durable_payload,
             _validate_authored_exact_admission,
             _validate_authored_master_pin_admission,
@@ -225,7 +225,7 @@ class PresentationGenerationOperationHandler:
                     generation_provider_capabilities,
                     server_generation_profile_identity,
                 )
-                from services.presentation_profiles import resolve_presentation_profile
+                from models.presentation_profiles import resolve_presentation_profile
                 from services.provider_usage_instrumentation import (
                     public_operation_scope,
                 )
@@ -384,7 +384,7 @@ class PresentationGenerationOperationHandler:
                                 generation_provider_capabilities,
                                 server_generation_profile_identity,
                             )
-                            from services.presentation_profiles import (
+                            from models.presentation_profiles import (
                                 resolve_presentation_profile,
                             )
                             from services.provider_usage_instrumentation import (

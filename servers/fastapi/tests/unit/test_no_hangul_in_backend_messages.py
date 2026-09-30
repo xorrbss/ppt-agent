@@ -46,7 +46,7 @@ _ALLOWED_HANGUL_MODULES: frozenset[str] = frozenset(
         "utils/authored_infographic/icons.py",
         "utils/authored_style_converter.py",
         "utils/llm_calls/author_chapter_plan.py",
-        "utils/llm_calls/author_deck.py",
+        "services/generation_core/authoring/author_deck.py",
         "utils/llm_calls/author_header_prompt_clauses.py",
         "utils/llm_calls/author_infographic_plan.py",
         "utils/llm_calls/author_slide_brief.py",
@@ -59,7 +59,7 @@ _ALLOWED_HANGUL_MODULES: frozenset[str] = frozenset(
         "services/generation_core/style/build.py",
         "services/source_content/raster_structure_emit.py",
         "utils/authored_font_policy.py",
-        "utils/authored_semantic_role_repair.py",
+        "services/authored_semantic_role_repair.py",
         "utils/ocr_language.py",
         # --- Catalog data records with an explicit locale field ---
         "constants/provider_registry_generated.py",

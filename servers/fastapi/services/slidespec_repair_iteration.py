@@ -9,7 +9,7 @@ import json
 from typing import Any
 
 from models.slidespec_v1 import RepairPlan
-from services.slidespec_repair_pipeline import ReasonCode, RenderedCandidate
+from services.slidespec_repair_types import ReasonCode, RenderedCandidate
 
 def _operation_payloads(plan: RepairPlan) -> tuple[dict[str, Any], ...]:
     return tuple(

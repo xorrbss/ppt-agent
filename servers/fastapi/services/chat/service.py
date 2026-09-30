@@ -39,7 +39,7 @@ from services.chat.presentation_context_store import PresentationContextStore
 from services.chat.prompts import build_system_prompt
 from services.chat.llm_tools import build_chat_llm_tools
 from services.chat.tools import ChatTools
-from services.presentation_profiles import resolve_presentation_profile
+from models.presentation_profiles import resolve_presentation_profile
 from services.workspace_operation_handler_registry import WorkspaceOperationCancelled
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_config import get_llm_config

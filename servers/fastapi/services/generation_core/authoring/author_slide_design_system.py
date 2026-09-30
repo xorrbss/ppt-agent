@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import replace
 from typing import Any
 
-from services.authored_vnext.capability_registry import prompt_capability_clause
+from models.authored_vnext.capability_registry import prompt_capability_clause
 from utils.authored_fragmentation_gate import fragmentation_prompt_clause
 from utils.authored_style_exemplars import exemplar_block
 from utils.llm_calls.author_canvas_shape import apply_canvas_tokens, composition_clause
@@ -18,29 +18,8 @@ from utils.llm_calls.author_slide_brief import (
     SHARED_UNIVERSALS,
     composition_intent_block,
 )
-from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
-
-LOCAL_FONT_FALLBACKS = {
-    "noto sans kr": ("Noto Sans KR", "Malgun Gothic", "sans-serif"),
-    "pretendard": ("Pretendard", "Malgun Gothic", "sans-serif"),
-    "noto serif kr": ("Noto Serif KR", "Batang", "serif"),
-    "inter": ("Inter", "Aptos", "sans-serif"),
-    "roboto": ("Roboto", "Aptos", "sans-serif"),
-    "dm sans": ("DM Sans", "Aptos", "sans-serif"),
-    "source serif 4": ("Source Serif 4", "Cambria", "serif"),
-    "ibm plex mono": ("IBM Plex Mono", "Consolas", "monospace"),
-}
-
-
-def css_font_stack(value: str) -> str:
-    family = (value or "Noto Sans KR").split(",", 1)[0].strip().strip("\"'")
-    logical, local, generic = LOCAL_FONT_FALLBACKS.get(
-        " ".join(family.lower().split()),
-        (family, "Aptos", "sans-serif"),
-    )
-    logical = logical.replace("\\", "\\\\").replace('"', '\\"')
-    local = local.replace("\\", "\\\\").replace('"', '\\"')
-    return f'"{logical}","{local}",{generic}'
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
+from utils.authored_font_stack import LOCAL_FONT_FALLBACKS, css_font_stack  # noqa: F401
 
 
 def apply_style_defaults(brand: Any, style: Any | None) -> Any:
@@ -82,7 +61,7 @@ def build_design_system(
     canvas_safe_area: object | None = None,
 ) -> str:
     """Build the concrete shared brief for a brand and optional authored style."""
-    from utils.llm_calls import author_slide_prompt
+    from services.generation_core.authoring import author_slide_prompt
 
     if style is None or style.id == "default":
         style_brief = default_style_brief.format(

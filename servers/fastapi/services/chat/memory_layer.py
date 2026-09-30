@@ -33,7 +33,7 @@ from utils.asset_directory_utils import (
     normalize_slide_asset_url,
 )
 from utils.icon_weights import DEFAULT_ICON_WEIGHT
-from utils.process_slides import (
+from services.process_slides import (
     process_old_and_new_slides_and_fetch_assets,
     process_slide_and_fetch_assets,
 )

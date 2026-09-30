@@ -10,7 +10,7 @@ from services.authored_composition_policy import (
     ensure_authored_qids,
     ensure_authored_semantic_roles,
 )
-from utils.authored_semantic_role_repair import (
+from services.authored_semantic_role_repair import (
     TITLE_DEMOTED_RULE_ID,
     TITLE_PROMOTED_RULE_ID,
     canonicalize_authored_roles,
@@ -202,7 +202,7 @@ def test_text_ownership_matches_the_composition_policy(html: str) -> None:
         for index, (_tag, raw_attrs, _raw) in enumerate(parser.tags)
         if parser.owns_text[index]
     }
-    from utils.authored_semantic_role_repair import _collect
+    from services.authored_semantic_role_repair import _collect
 
     assert {owner.attrs.get("data-qid", "") for owner in _collect(html)} == policy_owners
 

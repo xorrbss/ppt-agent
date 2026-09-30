@@ -29,7 +29,7 @@ import os
 import sys
 from typing import Any, Mapping
 
-from services.authored_vnext.capability_registry import capability_metadata
+from models.authored_vnext.capability_registry import capability_metadata
 from utils.env_settings.authored_runtime import is_authored_renderer_worker_process
 from utils.renderer_frame_codec import (
     DEFAULT_MAX_REQUESTS_PER_PROCESS,
@@ -48,7 +48,7 @@ from utils.renderer_isolation import (
     admit_static_output_html,
     assert_no_provider_secrets,
 )
-from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 RESPONSE_SCHEMA = "authored-render-response/v1"
 

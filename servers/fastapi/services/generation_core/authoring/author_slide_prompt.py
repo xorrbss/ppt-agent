@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from utils.llm_calls.author_slide_design_system import (
+from services.generation_core.authoring.author_slide_design_system import (
     LOCAL_FONT_FALLBACKS as LOCAL_FONT_FALLBACKS,
     apply_style_defaults as apply_style_defaults,
     build_design_system as build_design_system,
@@ -35,7 +35,7 @@ from utils.llm_calls.author_slide_brief import (
 from services.source_images.models import SourceImageCandidate
 from services.source_content.placeholder.prompt import placeholder_prompt_for_slide
 from utils.prompt_safety import format_untrusted_source_documents
-from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX
 
 
 #: Historical sample budget; retained for callers. Explicit user instructions

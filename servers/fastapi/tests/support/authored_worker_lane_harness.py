@@ -6,7 +6,7 @@ older loopback harness (``tests/integration/test_authored_checkpoint_http_flow.p
 stubs ``author_planned_slide``, which is exactly the seam that bypasses the
 batch wave loop in ``services/authored_presentation_pipeline.py``.  This
 harness therefore stubs one level deeper -- the llmai client inside
-``utils/llm_calls/author_batch.py`` -- so the wave scheduler, the batch
+``services/generation_core/authoring/author_batch.py`` -- so the wave scheduler, the batch
 policy, per-slide admission (``validate_authored_slide_html``), checkpoints,
 publication and the attempt-timing receipt all run for real.  Chromium is
 replaced the way the pipeline/terminal-fallback unit tests replace it (no
@@ -74,9 +74,9 @@ from services.authored_provider_rate_profile import (
 from services.presentation_generation_operation_handler import (
     register_presentation_generation_operation_handler,
 )
-from utils.llm_calls import author_batch as author_batch_mod
-from utils.llm_calls import author_deck as author_deck_mod
-from utils.llm_calls import author_slide as author_slide_mod
+from services.generation_core.authoring import author_batch as author_batch_mod
+from services.generation_core.authoring import author_deck as author_deck_mod
+from services.generation_core.authoring import author_slide as author_slide_mod
 from tests.support.authored_worker_lane_capture import capture_for_lane, _observe_dom
 from utils.owner_context import (
     reset_current_owner_id,
@@ -660,6 +660,7 @@ async def _run_worker_lane(
     gate_override: Callable[[pytest.MonkeyPatch], None] | None = None,
 ) -> LaneOutcome:
     from api.v1.ppt.endpoints import presentation_generate as endpoint
+    from services import presentation_generation_pipeline as generation_pipeline
 
     # Two SQLite databases, on purpose.  The lane itself (endpoint, runner,
     # generation handler, checkpoints, receipts -- every module that binds
@@ -764,13 +765,13 @@ async def _run_worker_lane(
     async def fake_header_contract(*_args, **_kwargs):
         return contract
 
-    monkeypatch.setattr(endpoint, "generate_content_brief", fake_brief)
-    monkeypatch.setattr(endpoint, "generate_ppt_outline", fake_outline)
+    monkeypatch.setattr(generation_pipeline, "generate_content_brief", fake_brief)
+    monkeypatch.setattr(generation_pipeline, "generate_ppt_outline", fake_outline)
     monkeypatch.setattr(
-        endpoint.MEM0_PRESENTATION_MEMORY_SERVICE, "store_generation_context", no_op
+        generation_pipeline.MEM0_PRESENTATION_MEMORY_SERVICE, "store_generation_context", no_op
     )
     monkeypatch.setattr(
-        endpoint.MEM0_PRESENTATION_MEMORY_SERVICE, "store_generated_outlines", no_op
+        generation_pipeline.MEM0_PRESENTATION_MEMORY_SERVICE, "store_generated_outlines", no_op
     )
     monkeypatch.setattr(authored_service, "resolve_header_contract", fake_header_contract)
     _install_chromium_and_gate_stubs(monkeypatch)

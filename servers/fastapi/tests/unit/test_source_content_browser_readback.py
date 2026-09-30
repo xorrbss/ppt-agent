@@ -5,7 +5,7 @@ import asyncio
 
 import pytest
 
-from services.authored_vnext.capability_registry import CAPABILITY_REGISTRY_DIGEST
+from models.authored_vnext.capability_registry import CAPABILITY_REGISTRY_DIGEST
 from utils.authored_dom_quality import ensure_authored_qids
 from services.source_content.source_runs import source_run_binding_id
 from services.source_content.browser_readback import (

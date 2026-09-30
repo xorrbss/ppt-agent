@@ -25,7 +25,7 @@ class FrozenRuntimeDescriptor(BaseModel):
     ``template-v2`` was the last driver id a frozen deck could carry; the
     retired ``standard``/``smart`` React-template drivers named below were
     already gone before it. Template V2 was removed from the driver registry
-    in ``services.presentation_profiles`` on 2026-09-25, so a presentation
+    in ``models.presentation_profiles`` on 2026-09-25, so a presentation
     profile can now only resolve to a live driver (``authored``, ``svg-v1``)
     or fail to resolve at all -- there is no longer a driver id that is both
     resolvable and frozen. ``services.compatibility_migration.runtime.

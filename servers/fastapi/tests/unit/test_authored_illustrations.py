@@ -3,10 +3,10 @@ import base64
 from pathlib import Path
 from types import SimpleNamespace
 
-from utils import authored_illustrations as illustrations_mod
-from utils.authored_illustrations import apply_authored_illustration
+from services import authored_illustrations as illustrations_mod
+from services.authored_illustrations import apply_authored_illustration
 from utils.authored_styles import load_authored_styles
-from utils.llm_calls.author_slide import Brand, build_design_system
+from services.generation_core.authoring.author_slide import Brand, build_design_system
 
 _PNG_BYTES = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgYAAAAAMAASsJTYQAAAAASUVORK5CYII="
@@ -97,7 +97,7 @@ def test_generated_slot_image_records_its_review_once(tmp_path, monkeypatch):
     from PIL import Image
 
     from services import authored_illustration_reviews as reviews
-    from utils.authored_illustration_prompt import NO_TEXT_SUFFIX
+    from services.generation_core.assets.illustration_prompt import NO_TEXT_SUFFIX
 
     picture = tmp_path / "slot.png"
     Image.new("RGB", (8, 8), (10, 20, 30)).save(picture)

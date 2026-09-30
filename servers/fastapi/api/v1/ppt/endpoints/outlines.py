@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.v1.ppt.endpoints.content_brief_policy import (
+from services.content_brief_policy import (
     BRIEF_STATUS_SKIPPED,
     log_content_brief_skipped,
     merge_brief_context,

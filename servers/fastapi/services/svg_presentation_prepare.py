@@ -57,7 +57,7 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
     from services.authored_source_images import collect_source_image_candidates, plan_slide_source_images
     from services.svg_generation_assets import slot_writer_enabled
     from utils.authored_styles import resolve_authored_style
-    from utils.llm_calls.author_slide_svg import preflight_svg_style_images
+    from services.generation_core.authoring.author_slide_svg import preflight_svg_style_images
 
     from services import svg_presentation_service as _facade
     require_svg_creation_admission = _facade.require_svg_creation_admission

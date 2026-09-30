@@ -37,7 +37,7 @@ from utils.get_env import (
     is_authored_quality_loop_enabled,
 )
 from utils.llm_calls.author_design_critique import critique_authored_design
-from utils.llm_calls.author_slide import STYLE_REFERENCE
+from services.generation_core.authoring.author_slide import STYLE_REFERENCE
 from services.authored_figure_best_of import (
     RenderCallable,
     default_render,

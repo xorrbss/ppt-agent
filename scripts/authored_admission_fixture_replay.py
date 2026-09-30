@@ -15,7 +15,7 @@ def replay(fixtures: Path) -> dict:
     from services.authored_admission import admit_slide_html
     from services.authored_admission_context import context_from_source
     from services.source_content.text_stamping import stamp_source_blocks
-    from utils.llm_calls.author_slide import validate_authored_slide_html
+    from services.generation_core.authoring.author_slide import validate_authored_slide_html
 
     rows = []
     counts = Counter()

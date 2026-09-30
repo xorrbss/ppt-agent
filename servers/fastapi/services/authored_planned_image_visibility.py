@@ -7,7 +7,7 @@ Strict source-content visibility deliberately does not use this module.
 from collections.abc import Mapping, Sequence
 
 from utils.coerce import finite_float
-from utils.authored_illustrations import _data_image_digest
+from services.authored_illustrations import _data_image_digest
 from utils.hashing import sha256_prefixed
 
 

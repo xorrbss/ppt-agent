@@ -21,15 +21,15 @@ from services.svg_contract import SVG_CONTRACT_VERSION, source_digest, validate_
 from utils.llm_calls.author_canvas_shape import composition_clause
 from utils.llm_calls.author_prompt_profile import authoring_model
 from utils.llm_calls.author_prompt_split import author_messages
-from utils.llm_calls.author_slide import (
+from services.generation_core.authoring.author_slide import (
     _AUTHOR_EXECUTOR, _authoring_extra_body, _authoring_output_profile, _wait_for_author_rate_slot,
 )
-from utils.llm_calls.author_slide_images import reference_parts
+from services.generation_core.authoring.author_slide_images import reference_parts
 from utils.llm_config import enforce_llm_egress_policy, get_llm_config
 from utils.llm_provider import get_llm_provider, get_model
 from utils.llm_utils import extract_text, get_generate_kwargs
 from utils.provider_idempotency import provider_generate_call, supports_provider_idempotency
-from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 SVG_AUTHOR_RULES = """Author one complete self-contained SVG slide, not HTML, markdown, or explanatory prose.
 Return <svg xmlns="http://www.w3.org/2000/svg" width="W" height="H" viewBox="0 0 W H">.

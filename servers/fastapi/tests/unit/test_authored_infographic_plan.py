@@ -42,7 +42,7 @@ from utils.llm_calls.author_infographic_plan import (
     build_infographic_plan_messages,
     generate_infographic_plan,
 )
-from utils.llm_calls.author_slide import Brand
+from services.generation_core.authoring.author_slide import Brand
 
 _CYCLE = (
     "## 예지보전 순환\n- 감지: 센서 이상 패턴 포착\n- 예측: 고장 확률 72시간 전 산출\n"

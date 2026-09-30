@@ -22,7 +22,7 @@ from services.authored_checkpoint_html import checkpoint_stage_html
 from services.authored_quality_loop import run_authored_quality_loop
 from utils.authored_figure_variants import same_figure_document
 from utils.get_env import is_authored_quality_loop_enabled
-from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION
+from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION
 
 LOGGER = logging.getLogger(__name__)
 

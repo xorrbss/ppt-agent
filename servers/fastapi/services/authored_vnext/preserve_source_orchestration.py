@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, Mapping, Sequence
 from uuid import UUID
 
-from services.authored_vnext.narrative_ir.contracts import (
+from models.authored_vnext.narrative_ir_contracts import (
     ContentUnitV1,
     PreserveSourceInputV1,
     ProviderCallBudgetV1,

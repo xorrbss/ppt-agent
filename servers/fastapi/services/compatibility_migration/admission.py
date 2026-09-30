@@ -14,7 +14,7 @@ from typing import Final
 from fastapi import HTTPException
 
 from models.sql.presentation import PresentationModel
-from services.presentation_profiles import PROFILE_SCHEMA_VERSION
+from models.presentation_profiles import PROFILE_SCHEMA_VERSION
 
 
 AUTHORED_ONLY_ADMISSION_CLOSED: Final = "legacy_generation_admission_closed"

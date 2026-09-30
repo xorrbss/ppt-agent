@@ -11,7 +11,7 @@ from services.generation_provider_admission import (
     generation_provider_capabilities,
     server_generation_profile_identity,
 )
-from services.presentation_profiles import resolve_presentation_profile
+from models.presentation_profiles import resolve_presentation_profile
 from utils import llm_provider
 from utils.generation_model import generation_model_settings
 from utils.llm_provider import (

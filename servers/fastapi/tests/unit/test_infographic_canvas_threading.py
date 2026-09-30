@@ -19,14 +19,14 @@ from models.authored_infographic_plan import (
     InfographicNode,
 )
 from models.presentation_outline_model import PresentationOutlineModel, SlideOutlineModel
-from utils.llm_calls import author_batch, author_slide
-from utils.llm_calls import author_vision_qa as vqa_mod
-from utils.llm_calls.author_deck import (
+from services.generation_core.authoring import author_batch, author_slide
+from services.generation_core.authoring import author_vision_qa as vqa_mod
+from services.generation_core.authoring.author_deck import (
     _planned_batch_request,
     author_planned_slide,
     prepare_authored_deck,
 )
-from utils.llm_calls.author_slide import Brand
+from services.generation_core.authoring.author_slide import Brand
 
 _FIGURE_INDEX = 1
 

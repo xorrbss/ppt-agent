@@ -18,7 +18,7 @@ from services.authored_visual_review_evidence import (
     visual_review_not_assessed,
     visual_review_outcome,
 )
-from services.authored_vnext.capability_registry import (
+from models.authored_vnext.capability_registry import (
     capability_metadata,
     prompt_capability_clause,
 )
@@ -31,7 +31,7 @@ from models.authored_vnext.deck import (
     seal_slide_scene,
 )
 from models.authored_vnext.master.contract import Rect
-from services.authored_vnext.capability_registry import (
+from models.authored_vnext.capability_registry import (
     EDITABLE_HYBRID_PROFILE_ID,
     scene_capabilities,
 )
@@ -783,7 +783,7 @@ def test_prompt_consumer_accepts_the_clause_the_author_actually_receives() -> No
     """
 
     from services.authored_quality_receipt_v3_pipeline import _prompt_consumer
-    from services.authored_vnext.capability_registry import (
+    from models.authored_vnext.capability_registry import (
         CAPABILITY_REGISTRY_DIGEST,
         prompt_capability_clause,
     )

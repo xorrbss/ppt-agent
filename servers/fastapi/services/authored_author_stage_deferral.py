@@ -37,11 +37,11 @@ from services.authored_checkpoint_service import (
     is_retryable_exception,
 )
 from services.authored_terminal_slide_policy import terminal_fallback_active
-from utils.llm_calls.author_deck import (
+from services.generation_core.authoring.author_deck import (
     AuthoredBatchFailure,
     AuthoredProviderBudgetExhausted,
 )
-from utils.llm_calls.author_slide_stream import (
+from services.generation_core.authoring.author_slide_stream import (
     OUTPUT_TOKEN_LIMIT_BUDGET_EXHAUSTED_CODE,
     OUTPUT_TOKEN_LIMIT_GUIDANCE,
     output_token_limit_in_cause_chain,

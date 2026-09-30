@@ -1,6 +1,6 @@
 """Structured Narrative IR and whole-operation source-native orchestration."""
 
-from .contracts import (
+from models.authored_vnext.narrative_ir_contracts import (
     ContentGraphV1,
     ContentIntegrityReceiptV2,
     ContentUnitV1,

@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from models.slidespec_v1 import RepairPlan
-from services.slidespec_repair_pipeline import EvidenceAtom, merge_evidence_atoms
+from services.slidespec_repair_types import EvidenceAtom, merge_evidence_atoms
 
 @dataclass(frozen=True, slots=True)
 class DomDefect:

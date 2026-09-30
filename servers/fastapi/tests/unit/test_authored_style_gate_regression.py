@@ -25,7 +25,7 @@ from models.sql.slide import SlideModel
 from services import authored_quality_review_service as quality_service
 from tests.unit.authored_quality_test_metrics import complete_browser_metrics
 from utils.authored_ocr_quality import OcrQualityResult
-from utils.llm_calls.author_slide import STYLE_REFERENCE, Brand
+from services.generation_core.authoring.author_slide import STYLE_REFERENCE, Brand
 from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
 
 

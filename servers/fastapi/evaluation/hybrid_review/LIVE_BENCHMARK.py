@@ -48,9 +48,9 @@ from utils.authored_dom_quality import (
 )
 from utils.authored_patch_engine import apply_authored_patch
 from utils.authored_review_routing import plan_authored_review_routing
-from utils.llm_calls import author_vision_qa
-from utils.llm_calls.author_slide import Brand, build_design_system
-from utils.llm_calls.author_slide_patch import propose_authored_slide_patch
+from services.generation_core.authoring import author_vision_qa
+from services.generation_core.authoring.author_slide import Brand, build_design_system
+from services.generation_core.authoring.author_slide_patch import propose_authored_slide_patch
 from utils.slide_capture import (
     _browser_metrics_cache,
     _render_cache,
@@ -123,7 +123,7 @@ async def bounded_provider_requests(
     """
 
     from utils import llm_utils
-    from utils.llm_calls import author_slide
+    from services.generation_core.authoring import author_slide
 
     budget = ProviderRequestBudget(maximum)
     original_structured = llm_utils._generate_structured_content

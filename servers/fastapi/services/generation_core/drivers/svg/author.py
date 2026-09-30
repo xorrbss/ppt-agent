@@ -53,7 +53,7 @@ class AuthorAttempt:
 async def attempt_author(*, ctx, request, index, content, role, count, payload, ordinal,
                          provider_ordinal, job, state, checkpoint, async_session_maker) -> AuthorAttempt:
     from services.document_canvas_generation import source_restyle_font_floor
-    from utils.llm_calls.author_slide_svg import author_slide_svg
+    from services.generation_core.authoring.author_slide_svg import author_slide_svg
     from utils.provider_overload import ProviderOutcomeError
 
     def raise_if_fatal():
@@ -128,7 +128,7 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
             if local_authored is not None:
                 authored = local_authored
             elif ctx.source_reflow:
-                from utils.llm_calls.author_source_svg_layout import author_source_svg_layout
+                from services.generation_core.authoring.author_source_svg_layout import author_source_svg_layout
                 authored = await author_source_svg_layout(
                     ctx.source_document, index, ctx.snapshot,
                     source_images=offered_images,

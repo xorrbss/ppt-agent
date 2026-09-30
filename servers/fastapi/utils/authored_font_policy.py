@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 import math
 
-from services.authored_vnext.capability_registry import (
+from models.authored_vnext.capability_registry import (
     AUTHORED_FONT_FLOOR_PT,
     AUTHORED_FONT_FLOOR_PX,
 )

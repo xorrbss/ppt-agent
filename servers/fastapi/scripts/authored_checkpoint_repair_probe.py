@@ -76,11 +76,11 @@ from services.source_content.pipeline import (
 from utils.authored_dom_quality import ensure_authored_qids, inspect_authored_dom
 from utils.authored_styles import AuthoredStyle
 from utils.generation_model import generation_model_context
-from utils.llm_calls.author_slide import Brand, build_design_system
-from utils.llm_calls.author_slide_patch import (
+from services.generation_core.authoring.author_slide import Brand, build_design_system
+from services.generation_core.authoring.author_slide_patch import (
     build_structural_repair_scopes, protected_qids_for_repair_scopes,
 )
-from utils.llm_calls.author_vision_qa import (
+from services.generation_core.authoring.author_vision_qa import (
     AuthoredVqaResidualDomIssuesError, _measured_structural_issue_qids,
     _structural_compact_dom,
 )

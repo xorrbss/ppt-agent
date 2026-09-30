@@ -49,6 +49,7 @@ from services.workspace_service import WorkspaceServiceError
 from utils.datetime_utils import get_current_utc_datetime
 from utils.asset_directory_utils import get_images_directory
 from utils.get_env import get_app_data_directory_env
+from services.database_owner_scope import ownerless_rows_predicate
 from utils.owner_context import get_current_owner_id, get_current_owner_is_admin
 from utils.hashing import sha256_hex
 
@@ -580,7 +581,7 @@ async def delete_unclaimed_reference_snapshot(
     row = await session.scalar(
         select(ReferenceSnapshot).where(
             ReferenceSnapshot.id == snapshot_id,
-            ReferenceSnapshot.owner_id == get_current_owner_id(),
+            ownerless_rows_predicate(ReferenceSnapshot),
         )
     )
     if row is None:

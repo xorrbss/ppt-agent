@@ -16,7 +16,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from services.authored_local_fit_policy import POLICY_REVISION, font_policy
-from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 _MARKER = re.compile(r"<!--codex-local-fit-v1[2345]:([A-Za-z0-9_=-]+)-->")
 

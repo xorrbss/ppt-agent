@@ -20,9 +20,9 @@ from models.sql.workspace import (
     WorkspaceOperationEvent,
     WorkspaceOutbox,
 )
-from utils.llm_calls import author_deck as author_deck_mod
-from utils.llm_calls import author_slide as author_slide_mod
-from utils.llm_calls.author_slide import Brand
+from services.generation_core.authoring import author_deck as author_deck_mod
+from services.generation_core.authoring import author_slide as author_slide_mod
+from services.generation_core.authoring.author_slide import Brand
 from services.authored_author_stage_deferral import author_stage_failure
 from services.authored_batch_policy import is_authored_provider_overload
 from services.authored_provider_attempt_ledger import (

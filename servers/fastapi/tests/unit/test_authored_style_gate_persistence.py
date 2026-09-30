@@ -26,7 +26,7 @@ from tests.unit.test_authored_quality_review import (
     _slides,
 )
 from utils.authored_ocr_quality import OcrQualityResult
-from utils.llm_calls.author_slide import STYLE_REFERENCE, Brand
+from services.generation_core.authoring.author_slide import STYLE_REFERENCE, Brand
 from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
 
 

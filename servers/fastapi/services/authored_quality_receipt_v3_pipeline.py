@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, Protocol, runtime_checkable
 
-from api.v2.contracts import QualityReceiptV3 as PublicQualityReceiptV3
+from models.public_v2_contracts import QualityReceiptV3 as PublicQualityReceiptV3
 from services.authored_quality_receipt_v2 import (
     QualityReceiptV2,
     QualityReceiptV3,
@@ -27,7 +27,7 @@ from services.authored_visual_review_evidence import seal_visual_review_evidence
 from utils.env_settings.authored_runtime import (
     get_authored_quality_receipt_v3_profile,
 )
-from services.authored_vnext.capability_registry import (
+from models.authored_vnext.capability_registry import (
     CAPABILITY_REGISTRY_DIGEST,
     prompt_capability_clause,
     require_capability_metadata,

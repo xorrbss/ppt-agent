@@ -50,8 +50,8 @@ from services import authored_presentation_service as authored
 from services.authored_deck_plan_checkpoint import AuthoredDeckPlanCheckpointError
 from services.authored_local_fit_policy import POLICY_REVISION, html_digest
 from services.compatibility_migration.admission import stamp_new_authored_presentation
-from utils.llm_calls.author_deck import AuthoredDeckResult
-from utils.authored_semantic_role_repair import canonicalize_authored_roles
+from services.generation_core.authoring.author_deck import AuthoredDeckResult
+from services.authored_semantic_role_repair import canonicalize_authored_roles
 from utils.authored_dom_quality import build_compact_dom_map
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
 

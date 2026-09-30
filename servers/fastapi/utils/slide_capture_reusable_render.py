@@ -15,9 +15,10 @@ import urllib.parse
 import aiohttp
 from utils.slide_capture_fit import fit_marker_poll_js
 from utils.slide_capture_glyph_probe import probe_glyph_clipping_async
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
-SLIDE_W = 1280
-SLIDE_H = 720
+SLIDE_W = DEFAULT_CANVAS_WIDTH_PX
+SLIDE_H = DEFAULT_CANVAS_HEIGHT_PX
 
 async def render_html_in_reusable_chrome(  # noqa: ASYNC109
     html: str, timeout: int, *, script_nonce: str | None = None,

@@ -1,9 +1,11 @@
-"""The default 1280x720 canvas is named once, in ``services.authored_canvas``.
+"""The default 1280x720 canvas is named once, in ``models.canvas_defaults``.
 
 docs/refactoring-audit-20260929.md section 4, hardcoding item 1: every canvas
 fallback and every "is this the default landscape deck" branch resolves through
-the helpers here, never through a restated literal, so a non-16:9 deck cannot
-silently take the wrong branch. The scan below is the ratchet that keeps it so.
+the helpers there (re-exported by ``services.authored_canvas``), never through a
+restated literal, so a non-16:9 deck cannot silently take the wrong branch. The
+scan below is the ratchet that keeps it so across ``models``, ``services``,
+``utils`` and ``api``.
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ import pytest
 
 from models.authored_header_metrics import SLIDE_HEIGHT_PX, SLIDE_WIDTH_PX
 from models.authored_vnext.master.contract import CanvasContract, Rect
+from models import canvas_defaults
 from services import authored_canvas
 from services.authored_canvas import (
     DEFAULT_CANVAS_ASPECT_RATIO,
@@ -47,11 +50,19 @@ def test_default_canvas_is_the_landscape_preset():
 
 
 def test_models_layer_defaults_agree_with_the_service_default():
-    """Models cannot import services, so their copies are pinned here instead."""
+    """``CanvasContract`` and the header metrics read the same leaf definition."""
 
     contract = CanvasContract(safe_area=Rect(x=0.0, y=0.0, width=1.0, height=1.0))
     assert (contract.width_px, contract.height_px) == default_canvas_size()
     assert (SLIDE_WIDTH_PX, SLIDE_HEIGHT_PX) == default_canvas_size()
+
+
+def test_service_module_re_exports_the_models_leaf():
+    """``services.authored_canvas`` re-exports ``models.canvas_defaults`` unchanged,
+    so utils modules (which may not import services) and services callers agree."""
+
+    for name in canvas_defaults.__all__:
+        assert getattr(authored_canvas, name) is getattr(canvas_defaults, name), name
 
 
 def test_canvas_or_default_reads_width_and_height_or_falls_back():
@@ -94,35 +105,19 @@ def test_canvas_render_kwargs_is_empty_only_on_the_default_canvas():
 
 _CANVAS_LITERALS = {"1280", "720", "1280.0", "720.0"}
 
-#: Whole directories scanned for restated default-canvas literals.
-_SCANNED_DIRECTORIES = ("services", "api")
-
-#: utils/ modules that may import ``services`` (scripts/structural-layering-allowlist.json)
-#: and therefore resolve the default through the helper. utils/ modules outside that
-#: allowlist still carry their own copies until the layering owner admits them.
-_SCANNED_UTILS_MODULES = (
-    "utils/authored_fragmentation_gate.py",
-    "utils/authored_illustrations.py",
-    "utils/authored_renderer_worker.py",
-    "utils/llm_calls/author_batch.py",
-    "utils/llm_calls/author_deck.py",
-    "utils/llm_calls/author_slide.py",
-    "utils/llm_calls/author_slide_design_system.py",
-    "utils/llm_calls/author_slide_prompt.py",
-    "utils/llm_calls/author_slide_svg.py",
-    "utils/llm_calls/author_source_svg_layout.py",
-    "utils/llm_calls/author_vision_qa.py",
-    "utils/renderer_isolation.py",
-    "utils/slide_capture.py",
-    "utils/slide_capture_local_fit.py",
-    "utils/slide_capture_worker_client.py",
-    "utils/svg_style_adapter.py",
-)
+#: Whole directories scanned for restated default-canvas literals. ``models``
+#: and ``utils`` cannot import ``services``; they resolve the default through
+#: the ``models.canvas_defaults`` leaf instead.
+_SCANNED_DIRECTORIES = ("models", "services", "utils", "api")
 
 #: Files whose 1280/720 mean something other than the default deck canvas.
 _ALLOWED_LITERAL_FILES = {
     # The single definition.
+    "models/canvas_defaults.py": "canonical default canvas",
+    # The other presets share the 720 short edge with the default.
     "services/authored_canvas.py": "canonical preset table",
+    # An upper bound on a style sample's canvas edge, not a canvas branch.
+    "utils/authored_style_samples.py": "sample canvas upper bound",
     # An upper bound on a decorative panel's CSS height, not a canvas branch.
     "services/authored_decoration_panel_sheen.py": "panel height upper bound",
     # An upper bound on native-object margins in points.
@@ -143,7 +138,6 @@ def _scanned_files() -> list[Path]:
     files: list[Path] = []
     for directory in _SCANNED_DIRECTORIES:
         files.extend(sorted((FASTAPI_ROOT / directory).rglob("*.py")))
-    files.extend(FASTAPI_ROOT / module for module in _SCANNED_UTILS_MODULES)
     return files
 
 

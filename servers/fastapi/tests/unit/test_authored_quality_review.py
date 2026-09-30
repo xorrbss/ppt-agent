@@ -35,9 +35,9 @@ from utils.authored_styles import (
     AuthoredStyle,
 )
 from utils.authored_ocr_quality import OcrQualityResult
-from utils.llm_calls.author_deck import AuthoredDeckResult
+from services.generation_core.authoring.author_deck import AuthoredDeckResult
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
-from utils.llm_calls.author_slide import (
+from services.generation_core.authoring.author_slide import (
     EXACT_RECONSTRUCTION,
     STYLE_REFERENCE,
     Brand,

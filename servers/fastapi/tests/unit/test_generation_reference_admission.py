@@ -9,7 +9,7 @@ import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-from api.v1.ppt.endpoints import presentation_generate
+from services import presentation_generation_pipeline as presentation_generate
 from models.generate_presentation_request import GeneratePresentationRequest
 from services.references import ReferenceSnapshotView
 

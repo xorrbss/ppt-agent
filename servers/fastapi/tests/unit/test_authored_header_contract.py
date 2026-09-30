@@ -26,13 +26,13 @@ from models.presentation_outline_model import (
 )
 from utils.authored_header_prompt import render_header_contract
 from utils.authored_header_style_map import structural_changes
-from utils.llm_calls.author_deck import prepare_authored_deck
+from services.generation_core.authoring.author_deck import prepare_authored_deck
 from utils.llm_calls.author_header_contract import (
     build_header_contract_messages,
     coerce_header_contract,
 )
-from utils.llm_calls.author_slide import Brand, build_design_system
-from utils.llm_calls.author_slide_prompt import author_prompt, requirement_marker
+from services.generation_core.authoring.author_slide import Brand, build_design_system
+from services.generation_core.authoring.author_slide_prompt import author_prompt, requirement_marker
 
 
 def _brand() -> Brand:

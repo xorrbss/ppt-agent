@@ -7,8 +7,8 @@ import hashlib
 import json
 
 from models.slidespec_v1 import RepairPlan
-from services.slidespec_pipeline_performance import deterministic_candidate_order
-from services.slidespec_repair_pipeline import RepairConflictFootprint
+from services.slidespec_pipeline_planning import deterministic_candidate_order
+from services.slidespec_repair_types import RepairConflictFootprint
 
 PlanFootprint = Callable[[RepairPlan], RepairConflictFootprint]
 

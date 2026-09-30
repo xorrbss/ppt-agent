@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from api.v2.contracts import QualityReceiptV3
+from models.public_v2_contracts import QualityReceiptV3
 from services.generation_core.quality.advisory_record import (
     advisory_flagged_pages, advisory_ran, advisory_record, record_matches,
 )
@@ -31,7 +31,7 @@ from services.svg_export_release_gate import require_release_v1_receipt
 from services.svg_export_visual_review import slide_page_digests, svg_visual_review
 from services.workspace_operation_handler_registry import NonRetryableWorkspaceOperationError
 from test_svg_export_quality import evidence_fixture
-from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION, STYLE_REFERENCE
+from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION, STYLE_REFERENCE
 
 # --------------------------------------------------------------------------
 # page_outcome.classify_page_outcomes / deck_quality_summary

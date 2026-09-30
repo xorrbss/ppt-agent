@@ -23,8 +23,8 @@ amendment C2): bench run 48 sent ~12.7k input tokens per authoring call, of
 which ~9.2k were meant to be the deck-invariant prefix, but only 5 of 25 calls
 reported a nonzero ``cached_tokens``. Everything found reading the two live
 call sites (this module's ``author_messages``, used by
-``utils.llm_calls.author_slide``, and the independent hoist in
-``utils.llm_calls.author_batch.author_slides_html`` -- which is the one the
+``services.generation_core.authoring.author_slide``, and the independent hoist in
+``services.generation_core.authoring.author_batch.author_slides_html`` -- which is the one the
 pipeline's wave scheduler actually drives, since both shipped rate profiles
 set ``slides_per_call = 1``) that can make one call's prefix differ
 byte-for-byte from another's, or make an identical prefix still miss:

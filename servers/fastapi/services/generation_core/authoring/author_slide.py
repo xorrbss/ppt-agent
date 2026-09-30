@@ -42,12 +42,13 @@ from utils.llm_calls.author_slide_admission import (
     retry_after_seconds,
     wait_for_rate_slot,
 )
-from utils.llm_calls import author_slide_effort, author_slide_prompt, author_slide_rules
+from services.generation_core.authoring import author_slide_prompt
+from utils.llm_calls import author_slide_effort, author_slide_rules
 from utils.llm_calls.author_slide_effort import EXACT_RECONSTRUCTION
 from utils.llm_calls.author_prompt_cache_key import apply_prompt_cache_key
 from utils.llm_calls.author_prompt_profile import authoring_model, current_author_prompt_profile
 from utils.llm_calls.author_prompt_split import author_messages, invariant_prefix_source
-from utils.llm_calls.author_slide_stream import (
+from services.generation_core.authoring.author_slide_stream import (
     is_authored_author_streaming_enabled,
     output_token_limit_from_provider_outcome,
     raise_if_output_token_limited,
@@ -68,7 +69,7 @@ from utils.authored_html_normalize import normalize_authored_html
 from services.authored_header_body_extent import ensure_body_root_horizontal_extent
 from utils.get_env import is_authored_html_normalize_enabled, is_authored_source_images_enabled
 from utils.llm_calls.author_slide_hidden_overflow import reject_hidden_overflow_declarations
-from utils.llm_calls.author_slide_images import illustration_slot_rules, reference_parts, source_image_parts
+from services.generation_core.authoring.author_slide_images import illustration_slot_rules, reference_parts, source_image_parts
 from utils.authored_image_slots import scan_slots, source_slot_id_for_asset
 from utils.llm_config import enforce_llm_egress_policy, get_llm_config
 from utils.llm_provider import get_llm_provider, get_model, is_codex_selected
@@ -83,11 +84,11 @@ from services.provider_usage_instrumentation import (
     record_provider_call,
 )
 from utils.provider_idempotency import provider_generate_call, supports_provider_idempotency
-from utils.llm_calls.author_call_spans import ProviderCallSpans, record_call_spans
-from utils.llm_calls.author_slide_fallback import reraise_author_call_error, text_only_fallback_applies
+from services.generation_core.authoring.author_call_spans import ProviderCallSpans, record_call_spans
+from services.generation_core.authoring.author_slide_fallback import reraise_author_call_error, text_only_fallback_applies
 from services.authored_generation_performance import authored_provider_concurrency
 from utils.llm_utils import extract_text, get_generate_kwargs
-from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +179,7 @@ def _register_author_rate_limit(error: BaseException) -> None:
 
 # Appendix A — the design-system brief (the crux IP) now lives in
 # ``author_slide_rules``. These module-level aliases keep the historical import
-# surface of ``utils.llm_calls.author_slide`` intact for every existing caller.
+# surface of ``services.generation_core.authoring.author_slide`` intact for every existing caller.
 TEMPLATE_PAGE_NUMBER_MODE = author_slide_rules.TEMPLATE_PAGE_NUMBER_MODE
 COMPANY_STANDARD_PAGE_NUMBER_MODE = author_slide_rules.COMPANY_STANDARD_PAGE_NUMBER_MODE
 NO_PAGE_NUMBER_MODE = author_slide_rules.NO_PAGE_NUMBER_MODE

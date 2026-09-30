@@ -8,7 +8,7 @@ import uuid
 
 import pytest
 
-from api.v2.contracts import PublicArtifactV2
+from models.public_v2_contracts import PublicArtifactV2
 from models.sql.public_admission import PublicOperationAdmission
 from models.sql.workspace import WorkspaceOperation
 from services.public_export_operation import (

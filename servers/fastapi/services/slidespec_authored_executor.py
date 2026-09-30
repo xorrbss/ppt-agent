@@ -81,8 +81,10 @@ from services.slidespec_pipeline_performance import (
     IncrementalInspectionCache,
     PIPELINE_CAPABILITY_VERSION,
     PIPELINE_PERFORMANCE_WINDOW,
-    adjacent_influence_digests,
     digest_parts,
+)
+from services.slidespec_pipeline_planning import (
+    adjacent_influence_digests,
     inspection_cache_digest,
 )
 from services.slidespec_repair_pipeline import (
@@ -114,7 +116,7 @@ from utils.authored_ocr_quality import (
     inspect_authored_ocr,
     normalize_ocr_text,
 )
-from utils.llm_calls.author_vision_qa import (
+from services.generation_core.authoring.author_vision_qa import (
     critique_authored_style_comparison,
     style_comparison_failure_diagnostic,
 )

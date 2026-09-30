@@ -15,7 +15,7 @@ from services import authored_quality_review_service as quality_service
 from services.authored_quality_acceptance import local_acceptance_decision
 from tests.unit.test_authored_quality_review import _make_engine, _presentation, _slides
 from utils.authored_dom_quality import DomQualityIssue, DomQualityReport
-from utils.llm_calls.author_slide import Brand
+from services.generation_core.authoring.author_slide import Brand
 from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
 
 

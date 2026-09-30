@@ -16,7 +16,7 @@ def _legacy_source_image_manifest(offered: dict) -> dict:
     """Build and validate the existing inline format without provider state."""
     from services.svg_asset_manifest import decide_preservation_policy
     from services.svg_image_derivative import build_model_preview
-    from utils.llm_calls.author_slide_svg import preflight_svg_source_images
+    from services.generation_core.authoring.author_slide_svg import preflight_svg_source_images
 
     manifest = {}
     for slot, candidate in offered.items():

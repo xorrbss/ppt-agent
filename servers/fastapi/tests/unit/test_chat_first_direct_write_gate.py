@@ -4,6 +4,7 @@ import uuid
 import pytest
 from fastapi import HTTPException
 
+from services import presentation_generation_pipeline as generation_pipeline
 from api.v1.ppt.endpoints import (
     authored_operations as presentation_endpoints,
     presentation_crud,
@@ -96,7 +97,7 @@ def test_direct_presentation_writes_fail_closed_before_side_effects(
         _legacy_quality_review,
     )
     monkeypatch.setattr(
-        presentation_generate,
+        generation_pipeline,
         "check_if_api_request_is_valid",
         _legacy_generation_path,
     )

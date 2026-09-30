@@ -15,7 +15,8 @@ from utils.get_env_programme import (
     get_authored_author_prompt_model,
     get_authored_author_prompt_profile,
 )
-from utils.llm_calls import author_slide_prompt, author_slide_rules
+from services.generation_core.authoring import author_slide_prompt
+from utils.llm_calls import author_slide_rules
 from utils.llm_calls.author_prompt_profile import (
     AUGUST,
     CURRENT,
@@ -28,7 +29,7 @@ from utils.llm_calls.author_prompt_profile import (
     resolve_author_prompt_profile,
 )
 from utils.llm_calls.author_prompt_split import split_deck_invariant
-from utils.llm_calls.author_slide import Brand, build_design_system
+from services.generation_core.authoring.author_slide import Brand, build_design_system
 from utils.llm_calls.author_slide_brief import (
     PRE_BUNDLE_TYPE_SCALES,
     SEMANTIC_ROLE_RULES,

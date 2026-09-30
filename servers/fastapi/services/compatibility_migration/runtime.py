@@ -19,7 +19,7 @@ from models.sql.presentation import (
 )
 from models.sql.slide import SlideModel
 from services.compatibility_migration.census import classify_presentation
-from services.presentation_profiles import (
+from models.presentation_profiles import (
     PresentationProfile,
     PresentationProfileError,
     resolve_presentation_profile,
@@ -99,7 +99,7 @@ async def get_frozen_runtime_descriptor(
     """Return the frozen-legacy runtime descriptor for a presentation.
 
     No presentation can resolve to a frozen/legacy driver any more: the
-    driver registry (``services.presentation_profiles``) only ever lists
+    driver registry (``models.presentation_profiles``) only ever lists
     live drivers, so a profile that resolves at all -- ``authored`` or any
     other currently-registered driver such as ``svg-v1`` -- is, by
     construction, not frozen. This always raises:

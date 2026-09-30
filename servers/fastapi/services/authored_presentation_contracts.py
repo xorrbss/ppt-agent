@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, List, Mapping
 
-from utils.llm_calls.author_deck import AuthoredDeckResult
+from services.generation_core.authoring.author_deck import AuthoredDeckResult
 from services.authored_quality_receipt_v2 import public_attempt_id
 
 if TYPE_CHECKING:  # pragma: no cover - annotation only

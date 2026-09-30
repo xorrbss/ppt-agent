@@ -11,12 +11,12 @@ import uuid
 import pytest
 from fastapi import HTTPException
 
-from api.v2.contracts import GenerationRouteReceiptV1
+from models.public_v2_contracts import GenerationRouteReceiptV1
 from api.v2.orchestration import PublicV2OrchestrationError
 from services.authored_vnext.narrative_ir.content_graph import (
     seal_content_integrity_receipt,
 )
-from services.authored_vnext.narrative_ir.contracts import model_payload
+from models.authored_vnext.narrative_ir_contracts import model_payload
 from services.presentation_generation_job_service import (
     WorkspaceLinkedGenerationProjectionPoisoned,
 )
@@ -306,7 +306,7 @@ def test_isolated_worker_executor_cannot_outlive_sealed_job_deadline():
 
 
 def test_export_gate_rejects_content_integrity_receipt_from_another_operation():
-    from services.authored_vnext.narrative_ir.contracts import ProviderCallBudgetV1
+    from models.authored_vnext.narrative_ir_contracts import ProviderCallBudgetV1
     operation_id = uuid.uuid4()
     route_unsigned = {
         "schemaVersion": "generation-route-receipt/v1",

@@ -8,7 +8,7 @@ minimal otherwise-valid slide using `-webkit-line-clamp`."""
 
 import pytest
 
-from utils.llm_calls.author_slide import validate_authored_slide_html
+from services.generation_core.authoring.author_slide import validate_authored_slide_html
 from utils.llm_calls.author_slide_hidden_overflow import (
     HIDDEN_OVERFLOW_ERROR_PREFIX,
     reject_hidden_overflow_declarations,

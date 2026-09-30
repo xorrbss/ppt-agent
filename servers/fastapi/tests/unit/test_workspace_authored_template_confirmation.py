@@ -261,7 +261,7 @@ def test_design_admission_resolves_keep_and_clear_before_enqueue(
 
 
 async def _design_admission_resolves_keep_and_clear(tmp_path: Path, monkeypatch):
-    from api.v1.ppt.endpoints import presentation_generate
+    from services import presentation_generation_pipeline as presentation_generate
 
     owner_id = uuid.uuid4()
     owner_token = set_current_owner_id(owner_id)

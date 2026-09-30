@@ -25,7 +25,7 @@ import uuid
 import pytest
 from pydantic import ValidationError
 
-from api.v2.contracts import PresentationGenerationRequestV2
+from models.public_v2_contracts import PresentationGenerationRequestV2
 from api.v2.orchestration import PublicV2OrchestrationError
 from models.generate_presentation_request import GeneratePresentationRequest
 from services import public_v2_orchestrator

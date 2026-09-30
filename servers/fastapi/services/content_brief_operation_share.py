@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING
 from utils.get_env import get_setting_env
 
 if TYPE_CHECKING:  # the brief policy imports this module; keep the edge one-way
-    from api.v1.ppt.endpoints.content_brief_policy import ContentBriefTimeoutPolicy
+    from services.content_brief_policy import ContentBriefTimeoutPolicy
 
 LOGGER = logging.getLogger(__name__)
 

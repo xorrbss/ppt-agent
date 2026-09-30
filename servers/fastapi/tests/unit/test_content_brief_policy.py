@@ -1,4 +1,4 @@
-"""Unit tests for api.v1.ppt.endpoints.content_brief_policy (QUAL-07, SPEED-10).
+"""Unit tests for services.content_brief_policy (QUAL-07, SPEED-10).
 
 Covers the input-scaled timeout formula, the stage budget and retry floor, the
 single reduced retry after a timeout, the shared physical-call budget, the
@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from api.v1.ppt.endpoints import content_brief_policy as policy
+from services import content_brief_policy as policy
 from models.content_brief_model import ContentBrief
 from utils.llm_calls import generate_content_brief as brief_module
 from utils.structured_call_budget import StructuredProviderCallBudget

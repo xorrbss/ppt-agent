@@ -34,12 +34,12 @@ from services.authored_tail_streaming import (
 )
 from utils.authored_dom_quality import ensure_authored_qids
 from utils.slide_capture_result import RenderCapture
-from utils.authored_semantic_role_repair import canonicalize_authored_roles
-from utils.llm_calls.author_deck import (
+from services.authored_semantic_role_repair import canonicalize_authored_roles
+from services.generation_core.authoring.author_deck import (
     AuthoredBatchFailure,
     AuthoredPlannedBatchResult,
 )
-from utils.llm_calls.author_slide import Brand
+from services.generation_core.authoring.author_slide import Brand
 from utils.slide_capture_deck_scope import current_render_deck_scope
 
 

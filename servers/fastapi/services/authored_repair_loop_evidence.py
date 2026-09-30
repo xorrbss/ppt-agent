@@ -139,7 +139,7 @@ async def vision_evidence_for_flagged(
     if not flagged:
         return {}
     from services.provider_usage_instrumentation import provider_usage_scope
-    from utils.llm_calls.author_vision_qa import review_slides_for_evidence
+    from services.generation_core.authoring.author_vision_qa import review_slides_for_evidence
 
     try:
         with provider_usage_scope(

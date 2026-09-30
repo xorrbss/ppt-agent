@@ -26,8 +26,8 @@ from services.authored_repair_loop_evidence import repair_correction_hint
 from services.authored_terminal_slide_fallback import replayed_plan_kwargs
 from services.provider_usage_instrumentation import provider_usage_scope
 from utils.authored_dom_quality import ensure_authored_qids
-from utils.authored_semantic_role_repair import canonicalize_authored_roles
-from utils.llm_calls.author_slide import STYLE_REFERENCE, author_slide_html
+from services.authored_semantic_role_repair import canonicalize_authored_roles
+from services.generation_core.authoring.author_slide import STYLE_REFERENCE, author_slide_html
 from utils.provider_overload import ProviderQuotaPause
 
 LOGGER = logging.getLogger(__name__)

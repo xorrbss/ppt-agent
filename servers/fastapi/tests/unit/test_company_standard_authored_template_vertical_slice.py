@@ -9,7 +9,7 @@ import uuid
 from api.v1.ppt.endpoints.authored_operations import (
     build_authored_retemplate_generation_request,
 )
-from api.v1.ppt.endpoints.presentation_generation_staging import (
+from services.presentation_generation_staging import (
     _durable_request_payload,
 )
 from models.authored_vnext.deck import (
@@ -257,7 +257,7 @@ def test_company_standard_authored_template_vertical_slice(
     style = resolve_authored_style("osb-smart-banking")
 
     with patch(
-        "utils.llm_calls.author_slide.author_slide_html",
+        "services.generation_core.authoring.author_slide.author_slide_html",
         new=AsyncMock(),
     ) as provider_call:
         composition, effective = resolve_authored_composition(

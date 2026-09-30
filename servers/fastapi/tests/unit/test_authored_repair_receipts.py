@@ -30,8 +30,8 @@ from services.provider_usage_instrumentation import (
     provider_usage_scope,
     record_provider_call,
 )
-from utils.llm_calls import author_slide_patch as patch_mod
-from utils.llm_calls.author_slide import authored_provider_semantic_slot
+from services.generation_core.authoring import author_slide_patch as patch_mod
+from services.generation_core.authoring.author_slide import authored_provider_semantic_slot
 
 _AUTHOR_MODEL = "gpt-5.6-sol"
 

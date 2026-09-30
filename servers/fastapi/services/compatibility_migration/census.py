@@ -11,7 +11,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from typing import Any, Literal, TypeAlias, cast
 
-from services.presentation_profiles import (
+from models.presentation_profiles import (
     PresentationProfileError,
     resolve_presentation_profile,
 )

@@ -21,7 +21,7 @@ changing them there silently breaks the pairing.
 from types import SimpleNamespace
 
 from utils.llm_calls import author_slide_rules
-from utils.llm_calls.author_slide import Brand, build_design_system
+from services.generation_core.authoring.author_slide import Brand, build_design_system
 
 
 def _plain_design_system() -> str:

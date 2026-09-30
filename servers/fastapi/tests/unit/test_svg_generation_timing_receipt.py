@@ -27,7 +27,7 @@ from services.presentation_generation_attempt_timing import (
     _persist_terminal_attempt_timing,
 )
 from services.svg_presentation_prepare import GenerationContext
-from utils.llm_calls.author_slide_svg import SvgAuthorResult
+from services.generation_core.authoring.author_slide_svg import SvgAuthorResult
 
 SLIDE_COUNT = 3
 # Above the ~15.6 ms resolution of time.monotonic() on Windows.
@@ -95,7 +95,7 @@ def _install_harness(monkeypatch, *, saved=None, render_error=None):
         return SvgAuthorResult(f"<svg data-index='{index}'/>", "raw", {"validation_error": None})
 
     author_mock = AsyncMock(side_effect=fake_author_slide_svg)
-    monkeypatch.setattr("utils.llm_calls.author_slide_svg.author_slide_svg", author_mock)
+    monkeypatch.setattr("services.generation_core.authoring.author_slide_svg.author_slide_svg", author_mock)
     monkeypatch.setattr("services.svg_contract.finalize_svg", lambda svg, **_kwargs: svg)
 
     async def fake_render(*_args, **_kwargs):

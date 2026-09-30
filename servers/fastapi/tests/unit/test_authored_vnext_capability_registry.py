@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from services.authored_vnext.capability_registry import (
+from models.authored_vnext.capability_registry import (
     AUTHORED_FONT_FLOOR_PT,
     AUTHORED_FONT_FLOOR_PX,
     CAPABILITY_REGISTRY_DIGEST,
@@ -20,7 +20,7 @@ from utils.authored_font_policy import (
     MIN_AUTHORED_FONT_SIZE_PT,
     MIN_AUTHORED_FONT_SIZE_PX,
 )
-from utils.llm_calls.author_slide_prompt import build_design_system
+from services.generation_core.authoring.author_slide_prompt import build_design_system
 
 
 def test_scene_and_ooxml_use_the_same_capability_registry_binding() -> None:

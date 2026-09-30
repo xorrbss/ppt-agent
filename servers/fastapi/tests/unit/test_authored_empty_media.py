@@ -14,7 +14,7 @@ from services.source_content.contracts import SourceContentManifestPin
 from services.source_content.outline import SourceDocumentOutlineBuilder
 from utils.authored_dom_quality import inspect_authored_dom
 from utils.authored_empty_media import EMPTY_MEDIA_CATEGORY, find_empty_media_panels
-from utils.llm_calls.author_vision_qa import deterministic_dom_critique
+from services.generation_core.authoring.author_vision_qa import deterministic_dom_critique
 
 FIXTURES = Path(__file__).parent / "fixtures" / "empty_media_run6"
 

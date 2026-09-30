@@ -31,7 +31,7 @@ async def _resume_database(tmp_path):
 
 
 def test_retryable_failed_job_has_exactly_one_atomic_resume_winner(tmp_path):
-    from api.v1.ppt.endpoints import presentation_generate as endpoint
+    from services import presentation_generation_pipeline as endpoint
 
     async def scenario():
         engine, maker = await _resume_database(tmp_path)
@@ -118,7 +118,7 @@ def test_retryable_failed_job_has_exactly_one_atomic_resume_winner(tmp_path):
 def test_resume_is_refused_after_resume_cap_without_flipping_state(
     tmp_path, monkeypatch
 ):
-    from api.v1.ppt.endpoints import presentation_generate as endpoint
+    from services import presentation_generation_pipeline as endpoint
 
     async def scenario():
         engine, maker = await _resume_database(tmp_path)
@@ -183,7 +183,7 @@ def test_resume_is_refused_after_resume_cap_without_flipping_state(
 
 
 def test_resume_below_resume_cap_is_still_allowed(tmp_path, monkeypatch):
-    from api.v1.ppt.endpoints import presentation_generate as endpoint
+    from services import presentation_generation_pipeline as endpoint
 
     async def scenario():
         engine, maker = await _resume_database(tmp_path)
@@ -234,7 +234,7 @@ def test_crash_recovery_reclaims_do_not_consume_the_resume_cap(
 ):
     """Regression: attempt_number inflation from worker restarts must not
     exhaust the failure-resume cap (design doc §6: restarts are free)."""
-    from api.v1.ppt.endpoints import presentation_generate as endpoint
+    from services import presentation_generation_pipeline as endpoint
     from services import presentation_generation_job_service as jobs
 
     async def scenario():
@@ -305,7 +305,7 @@ def test_crash_recovery_reclaims_do_not_consume_the_resume_cap(
 
 
 def test_non_retryable_failed_job_cannot_be_resumed(tmp_path):
-    from api.v1.ppt.endpoints import presentation_generate as endpoint
+    from services import presentation_generation_pipeline as endpoint
 
     async def scenario():
         engine, maker = await _resume_database(tmp_path)

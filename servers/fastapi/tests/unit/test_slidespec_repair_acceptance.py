@@ -15,9 +15,9 @@ from services.slidespec_repair import (
     build_deterministic_cascade,
     next_cascade_action,
     repair_cost,
-    select_candidate,
     sort_candidates,
 )
+from services.slidespec_candidate_selection import select_candidate
 from utils.llm_calls import propose_slidespec_repair as proposer
 
 

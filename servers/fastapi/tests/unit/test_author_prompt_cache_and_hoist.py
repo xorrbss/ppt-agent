@@ -7,7 +7,7 @@ giving every slide of the deck a byte-identical prefix.
 
 import pytest
 
-from utils.llm_calls import author_batch as batch_mod
+from services.generation_core.authoring import author_batch as batch_mod
 from utils.llm_calls.author_prompt_cache_key import (
     apply_prompt_cache_key,
     current_prompt_cache_key,
@@ -18,8 +18,8 @@ from utils.llm_calls.author_prompt_split import (
     author_messages,
     split_deck_invariant,
 )
-from utils.llm_calls.author_slide import Brand
-from utils.llm_calls.author_slide_prompt import author_prompt
+from services.generation_core.authoring.author_slide import Brand
+from services.generation_core.authoring.author_slide_prompt import author_prompt
 
 
 def _brand():

@@ -25,7 +25,7 @@ from models.authored_infographic_plan import coerce_infographic_plan
 from utils.authored_infographic import library_css, render_skeleton
 from utils.authored_infographic.skeleton import density_class
 from utils.authored_infographic.skeleton_flow import roadmap_bar
-from utils.llm_calls.author_slide import Brand
+from services.generation_core.authoring.author_slide import Brand
 
 #: The figure box the contract asks a hero page to reserve.
 CANVAS_W, CANVAS_H = 1152, 560

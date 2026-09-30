@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 
-from api.v2.contracts import QualityReceiptV3 as PublicQualityReceiptV3
+from models.public_v2_contracts import QualityReceiptV3 as PublicQualityReceiptV3
 from services.authored_quality_receipt_v2 import validate_current_quality_receipt_payload, validate_quality_receipt_v3_payload
 from services.authored_quality_receipt_v3_pipeline import _mapping, _capacity_checks_pass, _prefixed_sha256
 from services.authored_vnext.master.digests import canonical_digest

@@ -5,7 +5,7 @@ consumes one unit per physical provider request, across the parse, transient
 and schema-validation retry loops together.  The budget object lives in its
 own leaf module so a caller that runs the same logical call twice -- the Stage
 A content brief and its one reduced-input retry
-(``api/v1/ppt/endpoints/content_brief_policy.py``) -- can create a single
+(``services/content_brief_policy.py``) -- can create a single
 budget and share it between both runs without importing the LLM transport.
 Without a shared budget each run started from a fresh limit, so the brief could
 make four physical calls while the public admission plan reserved two.

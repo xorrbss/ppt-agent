@@ -49,12 +49,12 @@ from services.authored_wave_scheduler import AuthoredWaveSchedule
 from services.source_content.browser_readback import (
     inspect_browser_source_readback,
 )
-from utils.llm_calls.author_deck import (
+from services.generation_core.authoring.author_deck import (
     AuthoredProviderBudgetExhausted,
     author_planned_slide,
 )
-from utils.llm_calls.author_slide import _css_font_stack
-from utils.llm_calls.author_slide_stream import (
+from services.generation_core.authoring.author_slide import _css_font_stack
+from services.generation_core.authoring.author_slide_stream import (
     OUTPUT_TOKEN_LIMIT_GUIDANCE,
     output_token_limit_in_cause_chain,
 )
@@ -67,7 +67,7 @@ LOGGER = logging.getLogger(__name__)
 AUTHOR_ATTEMPTS_EXHAUSTED_REASON = "author:attempts_exhausted"
 
 #: The same flag when what exhausted the budget was the provider's own output
-#: ceiling (``utils/llm_calls/author_slide_stream.py``): the placeholder is
+#: ceiling (``services/generation_core/authoring/author_slide_stream.py``): the placeholder is
 #: the same, but the fix is a setting, not a prompt.
 AUTHOR_OUTPUT_TOKEN_LIMIT_REASON = "author:output_token_limit"
 

@@ -62,7 +62,7 @@ from services.authored_vnext.narrative_ir.checkpoint import (
     NarrativeCheckpointError,
     NarrativeCheckpointRepository,
 )
-from services.authored_vnext.narrative_ir.contracts import (
+from models.authored_vnext.narrative_ir_contracts import (
     NarrativeCheckpointV1,
     NarrativeDraftV1,
     ProviderCallReservationV1,

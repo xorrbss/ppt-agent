@@ -54,7 +54,7 @@ from models.authored_vnext.deck.visual_plan import (
 )
 from models.authored_vnext.master.contract import DeckMasterContract, Rect
 from models.authored_vnext.master.slide import SlideSpecV2
-from services.authored_vnext.capability_registry import scene_capabilities
+from models.authored_vnext.capability_registry import scene_capabilities
 from services.authored_vnext.generation.body_grammar import build_body_grammar_snapshot
 from services.authored_vnext.master.digests import canonical_digest
 from services.authored_canvas import is_default_landscape_canvas

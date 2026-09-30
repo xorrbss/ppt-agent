@@ -39,7 +39,7 @@ from services.authored_quality_receipt_v2 import (
     create_quality_receipt_v2,
     create_quality_receipt_v3_from_v2,
 )
-from services.authored_vnext.capability_registry import CAPABILITY_REGISTRY_DIGEST
+from models.authored_vnext.capability_registry import CAPABILITY_REGISTRY_DIGEST
 from services.authored_vnext.slide_quality_acceptance import (
     SCHEMA_VERSION as SLIDE_QUALITY_SCHEMA_VERSION,
     validate_slide_quality_acceptance_receipt,

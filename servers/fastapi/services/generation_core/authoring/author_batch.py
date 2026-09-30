@@ -34,7 +34,8 @@ from utils.authored_dom_quality import validate_declared_authored_qids
 from utils.authored_font_policy import enforce_authored_font_floor
 from utils.authored_fragmentation_gate import fit_font_floor_px
 from utils.authored_image_slots import scan_slots, source_slot_id_for_asset
-from utils.llm_calls import author_slide_prompt, author_slide_rules
+from services.generation_core.authoring import author_slide_prompt
+from utils.llm_calls import author_slide_rules
 from utils.llm_calls.author_prompt_cache_key import apply_prompt_cache_key
 from utils.llm_calls.author_prompt_profile import authoring_model
 from utils.llm_calls.author_prompt_split import (
@@ -47,7 +48,7 @@ from utils.llm_calls.author_slide_effort import (
     EXACT_RECONSTRUCTION,
     authoring_output_profile,
 )
-from utils.llm_calls.author_slide import (
+from services.generation_core.authoring.author_slide import (
     STYLE_REFERENCE,
     Brand,
     _AUTHOR_EXECUTOR,
@@ -63,7 +64,7 @@ from utils.llm_calls.author_slide import (
     normalize_reference_mode,
     validate_authored_slide_html,
 )
-from utils.llm_calls.author_slide_images import reference_parts, source_image_parts
+from services.generation_core.authoring.author_slide_images import reference_parts, source_image_parts
 from utils.llm_calls.author_slide_rules import TEMPLATE_PAGE_NUMBER_MODE
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_config import enforce_llm_egress_policy, get_llm_config
@@ -74,7 +75,7 @@ from utils.provider_idempotency import (
     provider_generate_call,
     supports_provider_idempotency,
 )
-from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX
 
 
 MAX_BATCH_SLIDES = 3

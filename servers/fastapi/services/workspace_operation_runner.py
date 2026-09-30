@@ -681,7 +681,7 @@ def sanitize_workspace_event_payload(
                 from services.authored_vnext.narrative_ir.content_graph import (
                     validate_content_integrity_receipt,
                 )
-                from services.authored_vnext.narrative_ir.contracts import (
+                from models.authored_vnext.narrative_ir_contracts import (
                     model_payload,
                 )
 

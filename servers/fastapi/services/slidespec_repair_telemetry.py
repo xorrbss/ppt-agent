@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import time
 
-from services.slidespec_repair_pipeline import PipelineTelemetry, RepairFunnel
+from services.slidespec_repair_types import PipelineTelemetry, RepairFunnel
 from utils.llm_calls.slidespec_repair_resilience import NoCandidateReason
 
 @dataclass(slots=True)

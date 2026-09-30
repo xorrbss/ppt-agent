@@ -25,7 +25,7 @@ from services.authored_vnext.generation.repository import (
     async_generation_repository,
 )
 from tests.support.authored_vnext_master_fixture import master_contract_payload
-from utils.llm_calls.author_deck import _constrain_structured_zone_html
+from services.generation_core.authoring.author_deck import _constrain_structured_zone_html
 
 
 MASTER_DIGEST = "sha256:" + ("a" * 64)

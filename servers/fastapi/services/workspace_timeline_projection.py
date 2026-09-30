@@ -211,7 +211,7 @@ def _is_retryable_raster_tenant_handoff(operation: WorkspaceOperation) -> bool:
 async def _verify_raster_tenant_handoff_retry(session: AsyncSession, operation: WorkspaceOperation) -> bool:
     if not _is_retryable_raster_tenant_handoff(operation):
         return False
-    from api.v1.ppt.endpoints.presentation_generate import _request_from_durable_payload
+    from services.presentation_generation_pipeline import _request_from_durable_payload
     from services.source_content.pipeline import SourceContentError, admit_source_content_request
     owner, tenant = get_current_owner_id(), get_current_tenant_id()
     if owner is None or owner != operation.owner_id or not tenant:

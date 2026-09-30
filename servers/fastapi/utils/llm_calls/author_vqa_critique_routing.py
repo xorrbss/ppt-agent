@@ -1,6 +1,6 @@
 """Which half of the authored repair loop reviews a slide, and how the two meet.
 
-The repair round in ``utils.llm_calls.author_vision_qa`` has two reviewers: a
+The repair round in ``services.generation_core.authoring.author_vision_qa`` has two reviewers: a
 deterministic critique projected from the measured DOM, and a multimodal
 vision-QA model call over the rendered image.  The model call is the expensive
 one, so it runs only when the measured DOM has nothing actionable to say.

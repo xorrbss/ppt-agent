@@ -543,7 +543,7 @@ def _optional_nonnegative_float_setting(
     return parse_float(get_setting_env(key, settings), name=key, default=None, minimum=0)
 
 
-# Content brief stage deadlines (api/v1/ppt/endpoints/content_brief_policy.py).
+# Content brief stage deadlines (services/content_brief_policy.py).
 # Each returns the explicit override or ``None`` for the policy's code default:
 # base deadline of one attempt (600), seconds per 1,000 input characters (1),
 # cap on one attempt (900), ceiling on both attempts together (1500) and the

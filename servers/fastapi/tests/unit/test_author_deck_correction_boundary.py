@@ -4,8 +4,8 @@ import asyncio
 
 import pytest
 
-from utils.llm_calls import author_deck as author_deck_mod
-from utils.llm_calls.author_slide import Brand
+from services.generation_core.authoring import author_deck as author_deck_mod
+from services.generation_core.authoring.author_slide import Brand
 
 
 _VALID_HTML = (

@@ -8,7 +8,7 @@ import uuid
 from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, status
 from fastapi.responses import RedirectResponse, StreamingResponse
 
-from api.v2.contracts import (
+from models.public_v2_contracts import (
     CancelOperationReceiptV2,
     OperationEventPageV2,
     OperationReceiptV2,

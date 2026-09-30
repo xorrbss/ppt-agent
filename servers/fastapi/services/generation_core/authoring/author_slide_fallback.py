@@ -14,7 +14,7 @@ from typing import NoReturn
 from services.provider_runtime_primitives import RuntimeControlError
 from services.provider_usage_instrumentation import ProviderSpendFenceRejected
 from services.public_operation_admission import PublicAdmissionRejected
-from utils.llm_calls.author_slide_stream import (
+from services.generation_core.authoring.author_slide_stream import (
     AuthoredStreamAborted,
     output_token_limit_in_cause_chain,
 )

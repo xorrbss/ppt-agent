@@ -30,7 +30,7 @@ from services.authored_composition_envelope_profile import (
     resolve_envelope_profile,
     role_budget as _role_budget,
 )
-from services.authored_vnext.capability_registry import AUTHORED_FONT_FLOOR_PX
+from models.authored_vnext.capability_registry import AUTHORED_FONT_FLOOR_PX
 from utils.authored_dom_categories import BLOCKING_SAFETY_CATEGORIES
 from utils.authored_dom_quality import (
     build_compact_dom_map,

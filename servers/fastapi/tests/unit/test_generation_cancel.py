@@ -194,7 +194,7 @@ def test_cancel_interrupts_registered_inflight_attempt(tmp_path, monkeypatch):
 def test_cancelled_worker_finally_does_not_requeue_terminal_job(
     tmp_path, monkeypatch
 ):
-    from api.v1.ppt.endpoints import presentation_generate as endpoint
+    from services import presentation_generation_pipeline as endpoint
 
     async def scenario():
         engine, maker = await _job_database(tmp_path, monkeypatch)

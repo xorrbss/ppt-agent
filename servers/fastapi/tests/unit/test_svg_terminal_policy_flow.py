@@ -21,7 +21,7 @@ from services.authored_checkpoint_errors import AuthoredStageError
 from services.generation_core.drivers.svg.fallback import FALLBACK_GROUP_ID
 from services.generation_core.runtime.profile import resolve_svg_runtime_profile
 from services.svg_presentation_prepare import GenerationContext
-from utils.llm_calls.author_slide_svg import SvgAuthorResult
+from services.generation_core.authoring.author_slide_svg import SvgAuthorResult
 
 FAIL_INDEX = 1
 SLIDE_COUNT = 3
@@ -81,7 +81,7 @@ def _install_harness(monkeypatch, *, runtime_profile, fail_index=FAIL_INDEX, sav
         return SvgAuthorResult(f"<svg data-index='{index}'/>", "raw", {"validation_error": None})
 
     author_mock = AsyncMock(side_effect=fake_author_slide_svg)
-    monkeypatch.setattr("utils.llm_calls.author_slide_svg.author_slide_svg", author_mock)
+    monkeypatch.setattr("services.generation_core.authoring.author_slide_svg.author_slide_svg", author_mock)
 
     def fake_finalize_svg(svg, *, index, **_kwargs):
         if index == fail_index:

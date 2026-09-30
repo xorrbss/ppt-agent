@@ -17,9 +17,9 @@ import re
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 
-from api.v2.contracts import QualityReceiptV3 as PublicQualityReceiptV3
+from models.public_v2_contracts import QualityReceiptV3 as PublicQualityReceiptV3
 from services.authored_quality_receipt_v2 import validate_current_quality_receipt_payload
-from services.authored_vnext.capability_registry import CAPABILITY_REGISTRY_DIGEST
+from models.authored_vnext.capability_registry import CAPABILITY_REGISTRY_DIGEST
 from services.public_export_operation import (
     PUBLIC_RENDER_WORKER_PROTOCOL_VERSION,
     PublicExportOperationError,

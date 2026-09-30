@@ -11,7 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from services import authored_deck_plans
-from services.authored_vnext.capability_registry import (
+from models.authored_vnext.capability_registry import (
     CAPABILITY_REGISTRY_DIGEST,
     prompt_capability_clause,
 )
@@ -23,9 +23,9 @@ from utils.authored_style_exemplars import (
     load_style_exemplar,
 )
 from utils.authored_styles import archetype_for_role, resolve_authored_style
-from utils.llm_calls import author_slide_prompt
+from services.generation_core.authoring import author_slide_prompt
 from utils.llm_calls.author_deck_tokens import deck_tokens, deck_tokens_block
-from utils.llm_calls.author_slide import Brand, build_design_system
+from services.generation_core.authoring.author_slide import Brand, build_design_system
 from utils.llm_calls.author_slide_brief import (
     CONTENT_FONT_FLOOR_PX,
     PRE_BUNDLE_TYPE_SCALES,
@@ -35,7 +35,7 @@ from utils.llm_calls.author_slide_brief import (
     type_ramp,
     type_scale_text,
 )
-from utils.llm_calls.author_slide_prompt import author_prompt
+from services.generation_core.authoring.author_slide_prompt import author_prompt
 from utils.llm_calls.author_slide_rules import DEFAULT_STYLE_BRIEF, type_scale_rules
 from utils.renderer_isolation import admit_authored_html
 

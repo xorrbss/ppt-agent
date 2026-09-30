@@ -24,6 +24,7 @@ from utils.env_settings.authored_runtime import (
 # Re-exported: the loader lives apart only because this file is past the ratchet.
 from utils.authored_style_exemplars import load_style_exemplar  # noqa: F401
 from utils.authored_style_catalogue import canonical_authored_style_id
+from models.canvas_defaults import DEFAULT_CANVAS_SIZE_PX
 from utils.hashing import sha256_hex
 
 
@@ -65,7 +66,7 @@ _EXACT_RECONSTRUCTION = "exact_reconstruction"
 _REFERENCE_MODES = frozenset({_STYLE_REFERENCE, _EXACT_RECONSTRUCTION})
 _EXACT_ENABLED_ENV = "AUTHORED_EXACT_RECONSTRUCTION_ENABLED"
 _EXACT_STYLE_IDS_ENV = "AUTHORED_EXACT_STYLE_IDS"
-_EXACT_SOURCE_SIZE = (1280, 720)
+_EXACT_SOURCE_SIZE = DEFAULT_CANVAS_SIZE_PX
 
 
 class AuthoredExactReconstructionUnavailableError(ValueError):

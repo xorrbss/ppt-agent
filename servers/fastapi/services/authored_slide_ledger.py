@@ -24,7 +24,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Mapping, MutableMapping
 
-from utils.llm_calls.author_deck import AuthoredBatchFailure
+from services.generation_core.authoring.author_deck import AuthoredBatchFailure
 
 logger = logging.getLogger(__name__)
 

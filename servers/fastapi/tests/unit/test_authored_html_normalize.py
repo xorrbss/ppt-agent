@@ -57,7 +57,7 @@ def test_non_void_unbalanced_end_tag_still_fails_renderer_admission():
 
 
 def test_author_intake_records_void_end_tag_normalization(monkeypatch):
-    from utils.llm_calls.author_slide import validate_authored_slide_html
+    from services.generation_core.authoring.author_slide import validate_authored_slide_html
 
     monkeypatch.delenv("AUTHORED_HTML_NORMALIZE_ENABLED", raising=False)
     html = "<html><head></head><body><img data-qid='hero'></img></body></html>"
@@ -75,7 +75,7 @@ def test_author_intake_stays_byte_identical_in_legacy_mode_when_nothing_fires(mo
     """Regression: adoption must not depend on the receipt count. `legacy` only
     ever rewrites bytes when a whitelisted rule fires, so a document with no
     findings comes back unchanged either way -- this pins that invariant."""
-    from utils.llm_calls.author_slide import validate_authored_slide_html
+    from services.generation_core.authoring.author_slide import validate_authored_slide_html
 
     monkeypatch.delenv("AUTHORED_HTML_NORMALIZE_ENABLED", raising=False)
     monkeypatch.setenv("AUTHORED_HTML_NORMALIZATION", "legacy")
@@ -96,7 +96,7 @@ def test_author_intake_adopts_tree_canonicalization_even_when_no_rule_fires(monk
     real document (here: single-quoted attributes canonicalize to double
     quotes) even when zero rewrite rules fire. Gating on receipt count meant
     the reserialized tree never reached the renderer in tree mode."""
-    from utils.llm_calls.author_slide import validate_authored_slide_html
+    from services.generation_core.authoring.author_slide import validate_authored_slide_html
 
     monkeypatch.delenv("AUTHORED_HTML_NORMALIZE_ENABLED", raising=False)
     monkeypatch.setenv("AUTHORED_HTML_NORMALIZATION", "tree")

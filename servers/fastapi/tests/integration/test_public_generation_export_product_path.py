@@ -28,7 +28,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 import pytest
 
-from api.v2.contracts import QualityReceiptV3
+from models.public_v2_contracts import QualityReceiptV3
 from api.v2.orchestration import PublicRequestActor
 from models.sql.presentation import PresentationModel
 from models.sql.public_admission import PublicOperationAdmission

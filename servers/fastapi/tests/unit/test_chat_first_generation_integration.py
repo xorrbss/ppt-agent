@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
 from api.v1.ppt.endpoints import presentation_crud, presentation_generate
+from services import presentation_generation_pipeline as generation_pipeline
 from enums.tone import Tone
 from enums.verbosity import Verbosity
 from models.generate_presentation_request import GeneratePresentationRequest
@@ -73,7 +74,7 @@ def test_chat_first_public_admission_derives_count_from_reviewed_slides():
         n_slides=None,
     )
 
-    admission_slide_count = presentation_generate._generation_admission_slide_count(
+    admission_slide_count = generation_pipeline._generation_admission_slide_count(
         request,
         SimpleNamespace(n_slides=30),
     )
@@ -100,7 +101,7 @@ def test_v1_async_generation_uses_strict_v2_admission_before_claim(
                 lambda: True,
             )
             monkeypatch.setattr(
-                presentation_generate,
+                generation_pipeline,
                 "_chat_first_generation_enabled",
                 lambda: True,
             )
@@ -126,12 +127,12 @@ def test_v1_async_generation_uses_strict_v2_admission_before_claim(
                 )
 
             monkeypatch.setattr(
-                presentation_generate,
+                generation_pipeline,
                 "admit_public_operation_compatible_v2",
                 strict_admit,
             )
             monkeypatch.setattr(
-                presentation_generate,
+                generation_pipeline,
                 "check_if_api_request_is_valid",
                 lambda *_args, **_kwargs: _async_return((None,)),
             )
@@ -882,12 +883,12 @@ def test_generate_activates_and_links_bootstrap_operation(tmp_path: Path, monkey
             lambda: True,
         )
         monkeypatch.setattr(
-            presentation_generate,
+            generation_pipeline,
             "_chat_first_generation_enabled",
             lambda: True,
         )
         monkeypatch.setattr(
-            presentation_generate,
+            generation_pipeline,
             "wake_workspace_operation_runner",
             lambda: None,
         )
@@ -896,7 +897,7 @@ def test_generate_activates_and_links_bootstrap_operation(tmp_path: Path, monkey
             return (uuid.uuid4(),)
 
         monkeypatch.setattr(
-            presentation_generate,
+            generation_pipeline,
             "check_if_api_request_is_valid",
             accept_request,
         )
@@ -918,7 +919,7 @@ def test_generate_activates_and_links_bootstrap_operation(tmp_path: Path, monkey
             return "durable context"
 
         monkeypatch.setattr(
-            presentation_generate,
+            generation_pipeline,
             "_load_document_context",
             load_document_context,
         )
@@ -934,7 +935,7 @@ def test_generate_activates_and_links_bootstrap_operation(tmp_path: Path, monkey
                 presentation.file_paths = ["C:/workspace-assets/durable-source.txt"]
                 await session.commit()
             async with maker() as session:
-                first_status = await presentation_generate.queue_presentation_generation(
+                first_status = await generation_pipeline.queue_presentation_generation(
                     request,
                     BackgroundTasks(),
                     session,
@@ -942,7 +943,7 @@ def test_generate_activates_and_links_bootstrap_operation(tmp_path: Path, monkey
                     idempotency_key=generate_key,
                 )
             async with maker() as session:
-                replay_status = await presentation_generate.queue_presentation_generation(
+                replay_status = await generation_pipeline.queue_presentation_generation(
                     request,
                     BackgroundTasks(),
                     session,
@@ -1003,12 +1004,12 @@ def test_bare_generate_bootstrap_persists_and_claims_reference_snapshots(
             session.add(_public_policy_profile(PUBLIC_DEFAULT_POLICY_VERSION))
         owner_token = set_current_owner_id(OWNER_A)
         monkeypatch.setattr(
-            presentation_generate,
+            generation_pipeline,
             "_chat_first_generation_enabled",
             lambda: True,
         )
         monkeypatch.setattr(
-            presentation_generate,
+            generation_pipeline,
             "wake_workspace_operation_runner",
             lambda: None,
         )
@@ -1027,17 +1028,17 @@ def test_bare_generate_bootstrap_persists_and_claims_reference_snapshots(
             return None
 
         monkeypatch.setattr(
-            presentation_generate,
+            generation_pipeline,
             "admit_reference_snapshots",
             admit,
         )
         monkeypatch.setattr(
-            presentation_generate,
+            generation_pipeline,
             "claim_reference_snapshots",
             claim,
         )
         monkeypatch.setattr(
-            presentation_generate,
+            generation_pipeline,
             "check_if_api_request_is_valid",
             accept_request,
         )
@@ -1065,7 +1066,7 @@ def test_bare_generate_bootstrap_persists_and_claims_reference_snapshots(
                 await session.commit()
 
             async with maker() as session:
-                status = await presentation_generate.queue_presentation_generation(
+                status = await generation_pipeline.queue_presentation_generation(
                     request,
                     BackgroundTasks(),
                     session,
@@ -1118,12 +1119,12 @@ def test_generate_admission_rejection_is_atomic_and_replays_failed_task(
             lambda: True,
         )
         monkeypatch.setattr(
-            presentation_generate,
+            generation_pipeline,
             "_chat_first_generation_enabled",
             lambda: True,
         )
         monkeypatch.setattr(
-            presentation_generate,
+            generation_pipeline,
             "wake_workspace_operation_runner",
             lambda: None,
         )
@@ -1138,7 +1139,7 @@ def test_generate_admission_rejection_is_atomic_and_replays_failed_task(
             )
 
         monkeypatch.setattr(
-            presentation_generate,
+            generation_pipeline,
             "check_if_api_request_is_valid",
             reject_request,
         )
@@ -1162,7 +1163,7 @@ def test_generate_admission_rejection_is_atomic_and_replays_failed_task(
 
             async with maker() as session:
                 with pytest.raises(HTTPException) as caught:
-                    await presentation_generate.queue_presentation_generation(
+                    await generation_pipeline.queue_presentation_generation(
                         request,
                         BackgroundTasks(),
                         session,
@@ -1171,7 +1172,7 @@ def test_generate_admission_rejection_is_atomic_and_replays_failed_task(
                 assert caught.value.status_code == 422
                 assert caught.value.detail == "template_v2_generation_invalid"
                 assert caught.value.headers == {
-                    presentation_generate.CHAT_FIRST_WORKSPACE_PROJECTED_HEADER: "true"
+                    generation_pipeline.CHAT_FIRST_WORKSPACE_PROJECTED_HEADER: "true"
                 }
 
             async with maker() as session:
@@ -1234,7 +1235,7 @@ def test_generate_admission_rejection_is_atomic_and_replays_failed_task(
                 assert job.current_stage == "admission"
                 assert job.resume_allowed is False
                 assert job.request_payload[
-                    presentation_generate._INTERNAL_ADMISSION_RETRY_KEY
+                    generation_pipeline._INTERNAL_ADMISSION_RETRY_KEY
                 ] is True
                 assert status is not None
                 assert status.status == "error"
@@ -1249,7 +1250,7 @@ def test_generate_admission_rejection_is_atomic_and_replays_failed_task(
             # failure. It must not repeat validation or create another turn,
             # task, job, event, or outbox record.
             async with maker() as session:
-                replay = await presentation_generate.queue_presentation_generation(
+                replay = await generation_pipeline.queue_presentation_generation(
                     request,
                     BackgroundTasks(),
                     session,
@@ -1308,12 +1309,12 @@ def test_raw_path_admission_failure_requires_reattach_without_persisting_locator
             lambda: True,
         )
         monkeypatch.setattr(
-            presentation_generate,
+            generation_pipeline,
             "_chat_first_generation_enabled",
             lambda: True,
         )
         monkeypatch.setattr(
-            presentation_generate,
+            generation_pipeline,
             "wake_workspace_operation_runner",
             lambda: None,
         )
@@ -1325,12 +1326,12 @@ def test_raw_path_admission_failure_requires_reattach_without_persisting_locator
             raise RuntimeError("private loader detail must not be persisted")
 
         monkeypatch.setattr(
-            presentation_generate,
+            generation_pipeline,
             "check_if_api_request_is_valid",
             accept_request,
         )
         monkeypatch.setattr(
-            presentation_generate,
+            generation_pipeline,
             "_load_document_context",
             unavailable_documents,
         )
@@ -1358,7 +1359,7 @@ def test_raw_path_admission_failure_requires_reattach_without_persisting_locator
 
             async with maker() as session:
                 with pytest.raises(HTTPException) as caught:
-                    await presentation_generate.queue_presentation_generation(
+                    await generation_pipeline.queue_presentation_generation(
                         request,
                         BackgroundTasks(),
                         session,
@@ -1368,7 +1369,7 @@ def test_raw_path_admission_failure_requires_reattach_without_persisting_locator
                 assert caught.value.detail == "legacy_file_reference_reattach_required"
                 assert "private loader detail" not in str(caught.value.detail)
                 assert caught.value.headers == {
-                    presentation_generate.CHAT_FIRST_WORKSPACE_PROJECTED_HEADER: "true"
+                    generation_pipeline.CHAT_FIRST_WORKSPACE_PROJECTED_HEADER: "true"
                 }
 
             async with maker() as session:
@@ -1393,7 +1394,7 @@ def test_raw_path_admission_failure_requires_reattach_without_persisting_locator
                 assert job.request_payload["files"] is None
                 assert durable_path not in str(job.request_payload)
 
-                restored = presentation_generate._request_from_durable_payload(
+                restored = generation_pipeline._request_from_durable_payload(
                     job.request_payload
                 )
                 assert restored.files is None
@@ -1405,14 +1406,14 @@ def test_raw_path_admission_failure_requires_reattach_without_persisting_locator
                     )
 
                 monkeypatch.setattr(
-                    presentation_generate,
+                    generation_pipeline,
                     "check_if_api_request_is_valid",
                     retry_rejected,
                 )
                 with pytest.raises(
-                    presentation_generate.GenerationAdmissionRetryError
+                    generation_pipeline.GenerationAdmissionRetryError
                 ) as caught:
-                    await presentation_generate.generate_presentation_handler(
+                    await generation_pipeline.generate_presentation_handler(
                         restored,
                         presentation_id,
                         async_status=status,
@@ -1448,7 +1449,7 @@ def test_admission_projection_race_does_not_mark_the_response(
             lambda: True,
         )
         monkeypatch.setattr(
-            presentation_generate,
+            generation_pipeline,
             "_chat_first_generation_enabled",
             lambda: True,
         )
@@ -1463,12 +1464,12 @@ def test_admission_projection_race_does_not_mark_the_response(
             return False
 
         monkeypatch.setattr(
-            presentation_generate,
+            generation_pipeline,
             "check_if_api_request_is_valid",
             reject_request,
         )
         monkeypatch.setattr(
-            presentation_generate,
+            generation_pipeline,
             "_record_chat_first_generation_admission_failure",
             lose_projection_race,
         )
@@ -1490,7 +1491,7 @@ def test_admission_projection_race_does_not_mark_the_response(
 
             async with maker() as session:
                 with pytest.raises(HTTPException) as caught:
-                    await presentation_generate.queue_presentation_generation(
+                    await generation_pipeline.queue_presentation_generation(
                         request,
                         BackgroundTasks(),
                         session,
@@ -1513,7 +1514,7 @@ def test_generate_async_wraps_unprojected_non_http_failure_without_marker(
         raise RuntimeError("private admission implementation detail")
 
     monkeypatch.setattr(
-        presentation_generate,
+        generation_pipeline,
         "queue_presentation_generation",
         fail_before_projection,
     )
@@ -1578,7 +1579,7 @@ def test_generate_async_preserves_unprojected_http_failure_without_marker(
         raise HTTPException(status_code=status_code, detail=detail)
 
     monkeypatch.setattr(
-        presentation_generate,
+        generation_pipeline,
         "queue_presentation_generation",
         fail_before_projection,
     )
@@ -1631,7 +1632,7 @@ def test_chat_first_generate_rejects_unlinked_legacy_idempotency_replay(
             lambda: True,
         )
         monkeypatch.setattr(
-            presentation_generate,
+            generation_pipeline,
             "_chat_first_generation_enabled",
             lambda: True,
         )
@@ -1663,13 +1664,13 @@ def test_chat_first_generate_rejects_unlinked_legacy_idempotency_replay(
                         presentation_id=presentation_id,
                         workspace_operation_id=None,
                         idempotency_key_hash=(
-                            presentation_generate.idempotency_key_hash(generate_key)
+                            generation_pipeline.idempotency_key_hash(generate_key)
                         ),
-                        request_sha256=presentation_generate.request_sha256(
-                            presentation_generate._durable_request_payload(request)
+                        request_sha256=generation_pipeline.request_sha256(
+                            generation_pipeline._durable_request_payload(request)
                         ),
                         request_payload=(
-                            presentation_generate._durable_request_payload(request)
+                            generation_pipeline._durable_request_payload(request)
                         ),
                         export_cookie_required=False,
                     )
@@ -1678,7 +1679,7 @@ def test_chat_first_generate_rejects_unlinked_legacy_idempotency_replay(
 
             async with maker() as session:
                 with pytest.raises(HTTPException) as caught:
-                    await presentation_generate.queue_presentation_generation(
+                    await generation_pipeline.queue_presentation_generation(
                         request,
                         BackgroundTasks(),
                         session,
@@ -1993,16 +1994,16 @@ async def _admit_source_content_request_plan(
         return SimpleNamespace(id=uuid.uuid4())
 
     monkeypatch.setattr(
-        presentation_generate,
+        generation_pipeline,
         "admit_public_operation_compatible_v2",
         capture_admission,
     )
     monkeypatch.setattr(
-        presentation_generate,
+        generation_pipeline,
         "current_principal_context",
         lambda: object(),
     )
-    await presentation_generate._admit_generation_operation_v2_compatible(
+    await generation_pipeline._admit_generation_operation_v2_compatible(
         object(),
         request=request,
         presentation=SimpleNamespace(n_slides=28),

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, cast
 
-from services.presentation_profiles import (
+from models.presentation_profiles import (
     GENERATION_MODE_COMPATIBILITY,
     PRESENTATION_DRIVER_REGISTRY,
     PROFILE_SCHEMA_VERSION,

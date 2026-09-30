@@ -31,7 +31,7 @@ from models.generate_presentation_request import (
     SourceContentPolicy,
     RasterApprovalPinInput,
 )
-from services.authored_vnext.narrative_ir.contracts import (
+from models.authored_vnext.narrative_ir_contracts import (
     ContentIntegrityReceiptV2,
 )
 

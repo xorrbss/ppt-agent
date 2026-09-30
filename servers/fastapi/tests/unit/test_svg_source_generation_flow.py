@@ -12,7 +12,7 @@ from test_svg_source_layout import manifest_for, plan_for
 from services import svg_presentation_service as generation
 from services.authored_checkpoint_errors import AuthoredStageError
 from services.svg_source_layout import assemble_source_svg
-from utils.llm_calls.author_slide_svg import SvgAuthorResult
+from services.generation_core.authoring.author_slide_svg import SvgAuthorResult
 from workers.public_render_worker import _admit_html
 from workers.public_worker_runtime import PublicWorkerExecutionError
 
@@ -72,7 +72,9 @@ async def test_source_generation_verifies_before_publish_and_bounds_repair(monke
     publish = AsyncMock(return_value="published")
     monkeypatch.setattr(generation, "_publish", publish)
     monkeypatch.setattr("utils.authored_styles.resolve_authored_style", lambda _: SimpleNamespace())
-    monkeypatch.setattr("utils.llm_calls.author_slide_svg.preflight_svg_style_images", lambda *_: None)
+    monkeypatch.setattr(
+        "services.generation_core.authoring.author_slide_svg.preflight_svg_style_images", lambda *_: None
+    )
     monkeypatch.setattr("services.authored_source_images.collect_source_image_candidates", AsyncMock(return_value=[]))
     monkeypatch.setattr("services.artifact_store.configured_public_artifact_service", lambda: object())
     monkeypatch.setattr("services.svg_generation_assets.publication_context", AsyncMock(return_value=(object(), 1)))
@@ -82,7 +84,9 @@ async def test_source_generation_verifies_before_publish_and_bounds_repair(monke
     monkeypatch.setattr("services.svg_generation_assets.screen_placement", AsyncMock(return_value=({}, None)))
     monkeypatch.setattr("services.authored_checkpoint_service.fail_stage", AsyncMock())
     author_mock = AsyncMock(side_effect=author)
-    monkeypatch.setattr("utils.llm_calls.author_source_svg_layout.author_source_svg_layout", author_mock)
+    monkeypatch.setattr(
+        "services.generation_core.authoring.author_source_svg_layout.author_source_svg_layout", author_mock
+    )
     def local(source, index, style, **kwargs):
         assert kwargs["min_font_size_px"] == 7
         if not local_success:

@@ -24,7 +24,7 @@ Selection is deterministic and costs no provider call:
 
 Every other title candidate that owns text is filed ``supporting`` -- but only
 when the document does not already declare a different role for it, so the body
-promotion in :mod:`utils.authored_semantic_role_repair` is a fixed point of the
+promotion in :mod:`services.authored_semantic_role_repair` is a fixed point of the
 stamper rather than something the next stamper call undoes.
 """
 
@@ -147,7 +147,7 @@ def is_supporting_candidate(
 def _rank(tag: str, font_px: float | None, index: int) -> tuple[float, int, int]:
     """Largest effective font first, then the strongest heading, then order.
 
-    Deliberately the same ordering ``utils.authored_semantic_role_repair`` uses
+    Deliberately the same ordering ``services.authored_semantic_role_repair`` uses
     to pick the title it keeps, so the stamper and the repair never disagree
     about which owner the slide's title is.
     """

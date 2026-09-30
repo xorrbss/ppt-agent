@@ -173,7 +173,7 @@ def local_fit_applies(
     ``AUTHORED_LOCAL_FIT_SOURCE_REFLOW``.
     """
     from utils.get_env_programme import is_authored_local_fit_source_reflow_enabled
-    from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION
+    from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION
 
     if reference_mode == EXACT_RECONSTRUCTION:
         return False

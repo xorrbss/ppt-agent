@@ -7,95 +7,23 @@ implementation: an unbound deployment fails closed.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Protocol
-import uuid
-
 from fastapi import HTTPException, Request, status
 
 from api.v1.auth.principal import principal_from_request
-from api.v2.contracts import (
-    AuthorizedDownloadGrant,
-    CancelOperationReceiptV2,
-    OperationEventPageV2,
-    OperationReceiptV2,
-    OperationStatusV2,
-    PresentationExportRequestV2,
-    PresentationGenerationRequestV2,
+from services.public_v2_orchestration_types import (
+    PublicRequestActor,
+    PublicV2OrchestrationError,
+    PublicV2Orchestrator,
 )
 
-
-@dataclass(frozen=True, slots=True)
-class PublicRequestActor:
-    owner_id: uuid.UUID
-    tenant_id: str
-    correlation_id: str
-    scopes: frozenset[str] = frozenset()
-
-
-class PublicV2OrchestrationError(RuntimeError):
-    def __init__(
-        self,
-        *,
-        status_code: int,
-        reason_code: str,
-        message: str | None = None,
-        retry_after_seconds: int | None = None,
-    ) -> None:
-        super().__init__(reason_code)
-        self.status_code = status_code
-        self.reason_code = reason_code
-        self.message = message
-        self.retry_after_seconds = retry_after_seconds
-
-
-class PublicV2Orchestrator(Protocol):
-    async def submit_generation(
-        self,
-        *,
-        actor: PublicRequestActor,
-        idempotency_key: str,
-        request: PresentationGenerationRequestV2,
-    ) -> OperationReceiptV2: ...
-
-    async def submit_export(
-        self,
-        *,
-        actor: PublicRequestActor,
-        presentation_id: str,
-        idempotency_key: str,
-        request: PresentationExportRequestV2,
-    ) -> OperationReceiptV2: ...
-
-    async def get_operation(
-        self,
-        *,
-        actor: PublicRequestActor,
-        operation_id: str,
-    ) -> OperationStatusV2: ...
-
-    async def list_operation_events(
-        self,
-        *,
-        actor: PublicRequestActor,
-        operation_id: str,
-        after: str | None,
-        limit: int,
-    ) -> OperationEventPageV2: ...
-
-    async def cancel_operation(
-        self,
-        *,
-        actor: PublicRequestActor,
-        operation_id: str,
-    ) -> CancelOperationReceiptV2: ...
-
-    async def authorize_download(
-        self,
-        *,
-        actor: PublicRequestActor,
-        artifact_id: str,
-    ) -> AuthorizedDownloadGrant: ...
+__all__ = [
+    "PublicRequestActor",
+    "PublicV2OrchestrationError",
+    "PublicV2Orchestrator",
+    "get_public_request_actor",
+    "get_public_v2_orchestrator",
+    "require_public_actor_scope",
+]
 
 
 def get_public_request_actor(request: Request) -> PublicRequestActor:

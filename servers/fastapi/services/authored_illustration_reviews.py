@@ -214,7 +214,7 @@ async def record_generated_illustration(
 ) -> None:
     """The single write point for a generated illustration's review.
 
-    Called by ``utils.authored_illustrations`` right after a slot's picture is
+    Called by ``services.authored_illustrations`` right after a slot's picture is
     inlined. Whether labels were requested is read off the prompt the provider
     actually received -- the no-text clause is the whole of that decision, so
     there is no second source of truth -- and the slide-content words are the
@@ -225,7 +225,7 @@ async def record_generated_illustration(
     if not data_uri:
         return
     try:
-        from utils.authored_illustration_prompt import NO_TEXT_SUFFIX
+        from services.generation_core.assets.illustration_prompt import NO_TEXT_SUFFIX
         from utils.image_provider import get_selected_image_provider
 
         try:

@@ -17,7 +17,7 @@ from services.compatibility_migration.admission import (
 from services.compatibility_migration.feature_manifest import (
     build_authored_only_capability_manifest,
 )
-from services.presentation_profiles import resolve_presentation_profile
+from models.presentation_profiles import resolve_presentation_profile
 
 
 @pytest.mark.parametrize(

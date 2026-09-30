@@ -18,7 +18,7 @@ from services.presentation_deletion_service import (
     PresentationDeletionService,
     is_retryable_sqlite_lock,
 )
-from services.presentation_profiles import PresentationProfileError, resolve_presentation_driver
+from models.presentation_profiles import PresentationProfileError, resolve_presentation_driver
 
 
 async def _get_presentation_with_slides(

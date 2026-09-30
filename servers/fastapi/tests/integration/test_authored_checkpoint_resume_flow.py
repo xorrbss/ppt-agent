@@ -57,7 +57,7 @@ async def _database(tmp_path, monkeypatch):
 def test_render_failure_resumes_same_job_without_regenerating_completed_slide(
     tmp_path, monkeypatch
 ):
-    from api.v1.ppt.endpoints import presentation_generate as endpoint
+    from services import presentation_generation_pipeline as endpoint
     from utils import llm_provider
 
     async def scenario():

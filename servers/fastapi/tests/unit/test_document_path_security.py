@@ -10,7 +10,7 @@ from fastapi import HTTPException, UploadFile
 
 from api.v1.ppt.endpoints import files as files_endpoint
 from api.v1.ppt.endpoints.presentation_crud import create_presentation
-from api.v1.ppt.endpoints.presentation_generate import (
+from services.presentation_generation_pipeline import (
     check_if_api_request_is_valid,
 )
 from constants.documents import UPLOAD_ACCEPTED_FILE_TYPES

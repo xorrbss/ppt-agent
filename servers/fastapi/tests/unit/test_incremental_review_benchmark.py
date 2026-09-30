@@ -1,5 +1,7 @@
 from services.slidespec_pipeline_performance import (
     IncrementalInspectionCache,
+)
+from services.slidespec_pipeline_planning import (
     adjacent_influence_digests,
     inspection_cache_digest,
 )

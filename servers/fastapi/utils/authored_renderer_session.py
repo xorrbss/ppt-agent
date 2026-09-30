@@ -23,6 +23,7 @@ import tempfile
 from typing import Any, Mapping, Sequence
 
 from utils.renderer_isolation import AdmittedHtml
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 
 def _pipe_bindings() -> dict[str, Any]:
@@ -46,7 +47,7 @@ def _pipe_bindings() -> dict[str, Any]:
 
 def render_admitted_html_over_pipe(
     admitted: AdmittedHtml, timeout: int, *,
-    width_px: int = 1280, height_px: int = 720,
+    width_px: int = DEFAULT_CANVAS_WIDTH_PX, height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
 ) -> tuple[bytes, Mapping[str, Any] | None]:
     """Render one admitted document in a private, single-use Chrome process."""
 
@@ -60,7 +61,7 @@ def render_admitted_html_over_pipe(
 
 def render_admitted_htmls_over_pipe(
     admitted_htmls: Sequence[AdmittedHtml], timeout: int, *,
-    width_px: int = 1280, height_px: int = 720,
+    width_px: int = DEFAULT_CANVAS_WIDTH_PX, height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
 ) -> list[tuple[bytes, Mapping[str, Any] | None]]:
     """Worker-only operation batch using one Chrome pipe and fresh targets."""
 
@@ -125,7 +126,7 @@ class RendererChromiumSession:
 
     def render(
         self, admitted: AdmittedHtml, timeout: int, *,
-        width_px: int = 1280, height_px: int = 720,
+        width_px: int = DEFAULT_CANVAS_WIDTH_PX, height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
     ) -> tuple[bytes, Mapping[str, Any] | None]:
         from utils.slide_capture_pipe_render import render_admitted_html_over_pipe as render_one
 

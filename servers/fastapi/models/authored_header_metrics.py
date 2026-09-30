@@ -12,8 +12,10 @@ from __future__ import annotations
 import math
 from typing import Any
 
-SLIDE_WIDTH_PX = 1280
-SLIDE_HEIGHT_PX = 720
+from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
+
+SLIDE_WIDTH_PX = DEFAULT_CANVAS_WIDTH_PX
+SLIDE_HEIGHT_PX = DEFAULT_CANVAS_HEIGHT_PX
 
 _CANVAS_KEYS = ("canvas_width_px", "canvas_height_px")
 

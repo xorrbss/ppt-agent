@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 from pydantic import Field, ValidationError
 
-from .contracts import (
+from models.authored_vnext.narrative_ir_contracts import (
     Digest,
     FrameSearchReceiptV1,
     FrameSelectionReceiptV1,

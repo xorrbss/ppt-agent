@@ -158,15 +158,15 @@ from utils.authored_styles import (
     resolve_authored_style,
 )
 from utils.datetime_utils import get_current_utc_datetime
-from utils.llm_calls import author_vision_qa
-from utils.llm_calls.author_deck import prepare_authored_deck
-from utils.llm_calls.author_slide import (
+from services.generation_core.authoring import author_vision_qa
+from services.generation_core.authoring.author_deck import prepare_authored_deck
+from services.generation_core.authoring.author_slide import (
     EXACT_RECONSTRUCTION,
     STYLE_REFERENCE,
     Brand,
     normalize_reference_mode,
 )
-from utils.llm_calls.author_vision_qa import (
+from services.generation_core.authoring.author_vision_qa import (
     critique_authored,
     critique_authored_style_comparison,
     revise_authored_deck,

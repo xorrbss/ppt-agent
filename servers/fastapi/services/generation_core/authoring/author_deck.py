@@ -30,8 +30,8 @@ from utils.authored_font_policy import requested_font_floor_px
 from utils.authored_header_validation import validate_header_contract
 from utils.authored_infographic import CONTRACT_ERROR_PREFIX
 from services.source_images.models import SourceImageCandidate
-from utils.authored_semantic_role_repair import ensure_title_role
-from utils.llm_calls.author_slide_stream import (
+from services.authored_semantic_role_repair import ensure_title_role
+from services.generation_core.authoring.author_slide_stream import (
     OUTPUT_TOKEN_LIMIT_CORRECTION_HINT,
     output_token_limit_in_cause_chain,
 )
@@ -54,7 +54,7 @@ from services.authored_author_capacity_recovery import (
     resolve_authored_title_capacity_html,
     title_capacity_recovery_qids,
 )
-from utils.llm_calls.author_slide import (
+from services.generation_core.authoring.author_slide import (
     EXACT_RECONSTRUCTION,
     STYLE_REFERENCE,
     TEMPLATE_PAGE_NUMBER_MODE,
@@ -70,7 +70,7 @@ from utils.llm_calls.author_slide import (
 )
 from utils.llm_calls.author_deck_header_repair import repair_header_violations
 from utils.llm_calls.author_deck_zones import _constrain_structured_zone_html
-from utils.llm_calls.author_batch import (
+from services.generation_core.authoring.author_batch import (
     AuthoredBatchSlideRequest,
     author_slides_html,
 )
@@ -83,7 +83,7 @@ from services.authored_batch_policy import (
 from utils.authored_styles import reference_images_for_role
 from utils.get_env import is_authored_visual_story_plan_enabled
 from utils.renderer_worker_policy import RendererPolicyError
-from services.authored_canvas import (
+from models.canvas_defaults import (
     DEFAULT_CANVAS_HEIGHT_PX,
     DEFAULT_CANVAS_WIDTH_PX,
     canvas_or_default,

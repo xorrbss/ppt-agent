@@ -15,9 +15,9 @@ from services.generation_core.drivers.svg.embed_assets import (
     apply_vector_icon_quality, flatten_icon_svg,
 )
 from services.svg_contract import validate_svg
-from utils.llm_calls import author_slide_svg as module
+from services.generation_core.authoring import author_slide_svg as module
 
-ICON = (Path(module.__file__).resolve().parents[4] / "assets" / "infographics" / "monochrome-v1"
+ICON = (Path(module.__file__).resolve().parents[5] / "assets" / "infographics" / "monochrome-v1"
         / "originals" / "ai-01-neural-network.svg")
 
 

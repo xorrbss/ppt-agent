@@ -26,7 +26,7 @@ def test_observed_percentile_uses_actual_nearest_rank_sample() -> None:
 
 def test_budget_counts_structured_and_raw_author_requests(monkeypatch) -> None:
     from utils import llm_utils
-    from utils.llm_calls import author_slide
+    from services.generation_core.authoring import author_slide
 
     async def fake_structured(*args, **kwargs):
         return "structured"

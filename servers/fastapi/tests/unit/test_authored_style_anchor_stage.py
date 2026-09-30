@@ -12,7 +12,7 @@ from services import authored_presentation_service as authored_service
 from services import authored_style_anchor_stage as stage
 from services import authored_tail_streaming as tail_streaming
 from tests.unit import test_authored_tail_streaming as tail_lane
-from utils.llm_calls.author_deck import (
+from services.generation_core.authoring.author_deck import (
     AuthoredBatchFailure,
     AuthoredPlannedBatchResult,
 )

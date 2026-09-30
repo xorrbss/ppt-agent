@@ -14,7 +14,7 @@ from services.generation_core.drivers.svg.native_declarations import (
     native_author_rules, native_binding_digest,
 )
 from services.svg_contract import finalize_svg, validate_svg
-from utils.llm_calls import author_slide_svg as author_module
+from services.generation_core.authoring import author_slide_svg as author_module
 
 HEAD = '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">'
 TEXT = 'font-family="Inter" font-size="18" fill="#111111"'

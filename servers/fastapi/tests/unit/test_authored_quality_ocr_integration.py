@@ -20,7 +20,7 @@ from services import authored_quality_ocr as ocr_service
 from services import authored_quality_review_service as quality_service
 from utils.authored_dom_quality import DomQualityIssue, DomQualityReport
 from utils.authored_ocr_quality import OcrQualityResult, OcrRuntime
-from utils.llm_calls.author_slide import EXACT_RECONSTRUCTION, STYLE_REFERENCE, Brand
+from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION, STYLE_REFERENCE, Brand
 from utils.llm_calls.critique_slide import CritiqueIssue, SlideCritique
 
 

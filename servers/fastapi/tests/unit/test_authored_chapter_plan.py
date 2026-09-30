@@ -43,14 +43,14 @@ from utils.llm_calls.author_chapter_plan import (
     coerce_chapter_plan_draft,
     slide_heading,
 )
-from utils.llm_calls.author_deck import plan_deck_roles, prepare_authored_deck
+from services.generation_core.authoring.author_deck import plan_deck_roles, prepare_authored_deck
 from utils.llm_calls.author_header_contract import coerce_header_contract
-from utils.llm_calls.author_slide_prompt import (
+from services.generation_core.authoring.author_slide_prompt import (
     author_prompt,
     chapter_marker,
     structure_role_brief,
 )
-from utils.llm_calls.author_slide import Brand
+from services.generation_core.authoring.author_slide import Brand
 
 
 def _outline(count: int) -> PresentationOutlineModel:

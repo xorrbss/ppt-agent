@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from fastapi import HTTPException
 
-from api.v1.ppt.endpoints import presentation_generate
+from services import presentation_generation_pipeline as presentation_generate
 from models.generate_presentation_request import GeneratePresentationRequest
 from utils.get_env_programme import is_authored_content_brief_enabled
 
