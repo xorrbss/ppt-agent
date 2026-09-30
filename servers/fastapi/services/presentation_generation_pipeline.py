@@ -123,6 +123,7 @@ from services.compatibility_migration.admission import (
     stamp_new_authored_presentation,
 )
 from services import svg_outline_spans
+from services.canvas_bench_speed import content_brief_enabled, resolve_speed_arm
 from services.mem0_presentation_memory_service import (
     MEM0_PRESENTATION_MEMORY_SERVICE,
 )
@@ -887,7 +888,7 @@ async def generate_presentation_handler(
     generated_assets: list[ImageAsset] = []
     try:
         using_slides_markdown = False
-        outline_spans = svg_outline_spans.begin()
+        outline_spans = svg_outline_spans.begin(bench_speed_arm=resolve_speed_arm(request))
         outline_post_started: float | None = None
         language_to_use = (request.language or "").strip() or None
         additional_context = _immutable_reference_context(
@@ -935,7 +936,7 @@ async def generate_presentation_handler(
             # then ground the outline in it. Falls back to documents-only on failure.
             # Deadline, single reduced retry and brief_status: content_brief_policy.
             outline_context = additional_context
-            if is_authored_content_brief_enabled():
+            if content_brief_enabled(request, is_authored_content_brief_enabled()):
                 try:
                     with outline_spans.span("content_brief"), provider_usage_scope(
                         job_id=(generation_job.id if generation_job is not None else None),

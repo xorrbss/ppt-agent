@@ -134,6 +134,7 @@ class GeneratePresentationRequest(BaseModel):
     _authored_canvas: Any = PrivateAttr(default=None)
     _document_canvas: Any = PrivateAttr(default=None)
     _svg_style_snapshot: Any = PrivateAttr(default=None)
+    _bench_speed_arm: Optional[Literal["baseline", "brief_off"]] = PrivateAttr(default=None)
     _generation_strategy_reason: Optional[str] = PrivateAttr(default=None)
     # Chat-first async generation reuses the durable presentation shell and
     # awaiting-approval operation created by /presentation/create.  Legacy
@@ -141,6 +142,19 @@ class GeneratePresentationRequest(BaseModel):
     presentation_id: Optional[uuid.UUID] = Field(default=None)
 
     content: str = Field(..., description="The content for generating the presentation")
+    bench_speed_arm: Optional[Literal["baseline", "brief_off"]] = Field(
+        default=None, alias="benchSpeedArm", exclude=True,
+    )
+
+    @field_validator("bench_speed_arm")
+    @classmethod
+    def validate_bench_speed_arm_gate(cls, value):
+        from utils.get_env_canvas_bench import is_canvas_bench_enabled
+
+        if value is not None and not is_canvas_bench_enabled():
+            raise ValueError("bench_field_disabled")
+        return value
+
     codex_generation_preset: Optional[CodexGenerationPreset] = Field(
         default=None,
         description="Request-scoped Codex model and reasoning preset.",

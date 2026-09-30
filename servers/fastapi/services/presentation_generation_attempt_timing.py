@@ -24,6 +24,7 @@ from sqlalchemy import func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.workspace import WorkspaceOperation
+from services.canvas_bench_speed import speed_receipt_kwargs
 from services.authored_provider_rate_profile import resolve_authored_rate_profile
 from services.authored_generation_timing_receipt import (
     GENERATION_ATTEMPT_TIMING_STAGES,
@@ -191,6 +192,7 @@ async def _persist_terminal_attempt_timing(
             # fit_summaries above (services/authored_deck_instruments_stage.py).
             deck_instruments=getattr(request, "_authored_deck_instruments", None),
             vision_advisory=getattr(request, "_authored_vision_advisory", None),
+            **speed_receipt_kwargs(request),
         )
         return receipt.to_dict()
     except (OSError, TypeError, ValueError):

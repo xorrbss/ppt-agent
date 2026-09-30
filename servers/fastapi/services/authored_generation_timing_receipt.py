@@ -48,6 +48,7 @@ from services.authored_quality_receipt_v2 import (
     quality_receipt_manifest_path,
 )
 from utils.hashing import canonical_json_digest
+from services.canvas_bench_speed import speed_provenance
 
 
 GENERATION_TIMING_STAGES = (
@@ -549,6 +550,7 @@ class GenerationAttemptTimingReceiptV2:
     #: authored_vision_advisory.py``); absent when the knob was off, otherwise
     #: always present -- a failed call is still recorded as its skip reason.
     vision_advisory: dict[str, object] | None = None
+    provenance: dict[str, object] | None = None
     receipt_digest: str = ""
 
     def to_dict(self) -> dict[str, object]:
@@ -581,6 +583,7 @@ class GenerationAttemptTimingReceiptV2:
                 vision_advisory=self.vision_advisory,
             ),
             "receiptDigest": self.receipt_digest,
+            **({"provenance": self.provenance} if self.provenance is not None else {}),
         }
 
 
@@ -751,6 +754,7 @@ def _attempt_receipt_v2_from_dict(
         provider_call_timing=provider_call_timing_field(value.get("providerCallTiming")),
         deck_instruments=deck_instruments_field(_nested(value.get("instruments"), "deck")),
         vision_advisory=vision_advisory_field(_nested(value.get("advisory"), "vision")),
+        provenance=speed_provenance(value.get("provenance")),
         receipt_digest=_required_sha256(value.get("receiptDigest"), "receipt_digest"),
     )
     if receipt.receipt_digest != _attempt_receipt_v2_digest(receipt):
@@ -966,6 +970,7 @@ def create_generation_attempt_timing_receipt_v2(
     authoring_cooldown_wait_seconds: float | int | None = None,
     deck_instruments: Mapping[str, object] | None = None,
     vision_advisory: Mapping[str, object] | None = None,
+    provenance: Mapping[str, object] | None = None,
 ) -> GenerationAttemptTimingReceiptV2:
     """Seal one v2 terminal receipt without prompt, content, or provider traces.
 
@@ -1111,6 +1116,7 @@ def create_generation_attempt_timing_receipt_v2(
         provider_call_timing=provider_call_timing_field(provider_call_timing),
         deck_instruments=deck_instruments_field(deck_instruments),
         vision_advisory=vision_advisory_field(vision_advisory),
+        provenance=speed_provenance(provenance),
     )
     if (outcome == "succeeded") != (receipt.terminal_error is None):
         raise ValueError("generation_attempt_timing_receipt_v2_invalid")

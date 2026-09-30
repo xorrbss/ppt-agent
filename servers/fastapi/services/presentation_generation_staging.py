@@ -10,6 +10,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.generate_presentation_request import GeneratePresentationRequest
+from services.canvas_bench_speed import INTERNAL_BENCH_SPEED_ARM_KEY, resolve_speed_arm, validate_speed_arm
 from models.authored_vnext.deck import AuthoredCompositionPin, MasterDigestPin
 from models.sql.async_presentation_generation_status import AsyncPresentationGenerationTaskModel
 from models.sql.image_asset import ImageAsset
@@ -90,6 +91,9 @@ def _durable_request_payload(
     """Persist canonical identities only, never admission-time raw paths."""
 
     payload = request.model_dump(mode="json")
+    speed_arm = resolve_speed_arm(request)
+    if speed_arm is not None:
+        payload[INTERNAL_BENCH_SPEED_ARM_KEY] = speed_arm
     resolved_strategy, strategy_reason = recorded_generation_strategy(request)
     # Persist the resolved value, never the raw (possibly omitted) field: every
     # downstream consumer that reads this durable payload's "strategy" key as a
@@ -315,6 +319,7 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
     """Restore private worker state from an internal durable-job payload."""
 
     values = dict(payload)
+    speed_arm = validate_speed_arm(values.pop(INTERNAL_BENCH_SPEED_ARM_KEY, None))
     snapshot_id = values.pop(INTERNAL_EXACT_SNAPSHOT_KEY, None)
     composition_payload = values.pop(INTERNAL_COMPOSITION_PIN_KEY, None)
     resolved_master_payload = values.pop(INTERNAL_RESOLVED_MASTER_PIN_KEY, None)
@@ -346,6 +351,7 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
 
     values.pop(LEGACY_RESTYLE_FIT_POLICY_KEY, None)
     request = GeneratePresentationRequest.model_validate(values)
+    request._bench_speed_arm = speed_arm
     request._generation_strategy_reason = strategy_reason
     request._svg_style_snapshot = svg_style_snapshot
     request._svg_source_binding = svg_source_binding

@@ -84,6 +84,7 @@ INTERNAL_ENV_NAMES: MappingProxyType[str, str] = MappingProxyType(
         "AUTHORED_CHECKPOINT_SWEEP_MAX_FILES": "Files one sweep pass may touch (capped at 100000).",
         "DECK_IR_GENERATION_ENABLED": "Enable the deck-IR generation path.",
         # --- svg driver ---------------------------------------------------------------
+        "CANVAS_BENCH_ENABLED": "Allow admission-only per-request canvas experiment fields when exactly true.",
         "SVG_AUTHOR_CONCURRENCY": "Explicit SVG author-call concurrency.",
         "SVG_AUTHOR_CONCURRENCY_SOURCE_REFLOW": "SVG author-call concurrency for source-reflow decks.",
         "SVG_RENDER_CONCURRENCY": "Explicit SVG page-render concurrency.",
