@@ -81,8 +81,10 @@ from services.slidespec_pipeline_performance import (
     IncrementalInspectionCache,
     PIPELINE_CAPABILITY_VERSION,
     PIPELINE_PERFORMANCE_WINDOW,
-    adjacent_influence_digests,
     digest_parts,
+)
+from services.slidespec_pipeline_planning import (
+    adjacent_influence_digests,
     inspection_cache_digest,
 )
 from services.slidespec_repair_pipeline import (

@@ -14,6 +14,8 @@ from services.slidespec_pipeline_performance import (
     BoundedSlideScheduler,
     NegativeProposalCache,
     ProposalCacheKey,
+)
+from services.slidespec_pipeline_planning import (
     adjacent_influence_digests,
     deterministic_candidate_order,
     inspection_cache_digest,

@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import math
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -1113,18 +1112,10 @@ def next_cascade_action(
     raise ValueError(f"unsupported outcome: {outcome!r}")
 
 
-from services.slidespec_candidate_selection import (
-    CandidateSelection,
-    _outcome,
-    _reasons,
-    select_candidate,
-)
-
 __all__ = [
     "CASCADE_POLICY_VERSION",
     "CASCADE_STEPS",
     "REPAIR_COST_VERSION",
-    "CandidateSelection",
     "RepairCascadeBuildResult",
     "RepairCost",
     "RepairProjectionRejection",
@@ -1133,7 +1124,5 @@ __all__ = [
     "next_cascade_action",
     "repair_cost",
     "realized_repair_cost",
-    "select_candidate",
     "sort_candidates",
 ]
-# ruff: noqa: E402, F401

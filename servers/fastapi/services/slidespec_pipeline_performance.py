@@ -18,8 +18,6 @@ import threading
 import time
 from typing import Generic, Literal, TypeVar
 
-from models.slidespec_v1 import RepairPlan
-from services.slidespec_repair import repair_cost
 
 
 PROPOSAL_CACHE_VERSION = "slidespec-proposal-negative/1"
@@ -407,15 +405,6 @@ class IncrementalInspectionCache(Generic[T]):
         self._entries.clear()
 
 
-from services.slidespec_pipeline_planning import (
-    adjacent_influence_digests,
-    deterministic_candidate_order,
-    inspection_cache_digest,
-    pareto_prune_plans,
-)
-
-
-
 R = TypeVar("R")
 
 
@@ -455,11 +444,6 @@ __all__ = [
     "PIPELINE_PERFORMANCE_WINDOW",
     "PROPOSAL_CACHE_VERSION",
     "ProposalCacheKey",
-    "adjacent_influence_digests",
-    "deterministic_candidate_order",
     "digest_parts",
     "dom_evidence_digest",
-    "inspection_cache_digest",
-    "pareto_prune_plans",
 ]
-# ruff: noqa: E402, F401
