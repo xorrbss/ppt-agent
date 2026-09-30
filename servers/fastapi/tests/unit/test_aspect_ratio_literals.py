@@ -17,7 +17,7 @@ LITERAL_SITES = (
     "services/authored_canvas.py",
     "models/generate_presentation_request.py",
     "api/v1/ppt/endpoints/presentation_crud.py",
-    "api/v2/contracts.py",
+    "models/public_v2_contracts.py",
     "api/v1/ppt/endpoints/authored.py",
 )
 ASPECT_LITERAL = re.compile(r"Literal\[([^\[\]]*\"16:9\"[^\[\]]*)\]")
