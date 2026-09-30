@@ -24,6 +24,7 @@ from services.generation_core.drivers.svg.native_publish import canvas_point_per
 from services.generation_core.native_objects import SLIDE_CONTENT_KEY as NATIVE_OBJECTS_KEY
 from services.generation_core.quality.page_outcome import review_page_indices
 from services.svg_presentation_checkpoint import _save_source_page_pngs
+from services.svg_page_publication import set_svg_page
 
 
 def svg_slide_content(payload: dict, *, role, source, pt_per_px: float) -> dict:
@@ -129,10 +130,11 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
     for index, (payload, _) in enumerate(pages):
         slide_content = svg_slide_content(payload, role=roles[index], source=outline.slides[index].content,
                                           pt_per_px=pt_per_px)
+        fields = {}
+        set_svg_page(fields, svg_content=payload["svg_content"], content=slide_content)
         session.add(SlideModel(presentation=presentation_id, owner_id=owner,
                               layout_group="svg", layout="svg:content", index=index,
-                              content=slide_content,
-                              svg_content=payload["svg_content"], source_format="svg",
+                              **fields, source_format="svg",
                               properties={"image": image_refs[index]}, speaker_note=outline.slides[index].content))
     session.add(presentation)
     await session.flush()

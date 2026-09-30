@@ -5,8 +5,8 @@ from models.sql.slide import SlideModel
 from services.authored_canvas import presentation_canvas_contract
 from services.authored_presentation_artifacts import _save_slide_pngs
 from services.svg_contract import finalize_svg
+from services.svg_page_publication import set_svg_page
 from services.svg_renderer import render_svg_with_metrics
-from utils.hashing import sha256_hex
 
 
 def _preserve_source_pages(presentation, slides, canvas):
@@ -161,9 +161,8 @@ async def refresh_svg_page_numbers(session, presentation, *, operation_id=None, 
         if not slide.is_svg() or not slide.svg_content:
             raise ValueError("svg_document_mixed_source")
         if _raster_redesign_pin(slide) is not None:
-            # Never the generic finalize/rebind/measure pipeline (see
-            # _raster_redesign_pin). The footer page number follows the deck
-            # position; source page, crops and offered page stay unchanged.
+            # Retain the raster footer style and source page. The relabel
+            # path remeasures its authorized derivative before publication.
             from services.svg_raster_renumber import renumber_redesign_page
 
             await renumber_redesign_page(
@@ -196,19 +195,16 @@ async def refresh_svg_page_numbers(session, presentation, *, operation_id=None, 
                 session, presentation, slide, final, assets, page_index=index,
                 operation_id=operation_id, attempt_token=attempt_token,
                 expected_revision=expected_revision)
-            slide.content = content
         slide.index = index
         if final != slide.svg_content:
-            capture = await render_svg_with_metrics(render_source, width=canvas.width_px, height=canvas.height_px,
-                                                    instructions=presentation.instructions)
+            capture = await render_svg_with_metrics(final, width=canvas.width_px, height=canvas.height_px,
+                materialized_svg=render_source if render_source != final else None,
+                instructions=presentation.instructions)
             image = _save_slide_pngs(presentation.id, [capture.png], "svg-numbering")[0]
-            slide.svg_content = final
+            set_svg_page(slide, svg_content=final, content=content, quality=capture.quality)
             slide.properties = {**(slide.properties or {}), "image": image}
-            content = deepcopy(slide.content or {})
-            content["svgReceipt"] = {**content.get("svgReceipt", {}),
-                                     "source_digest": sha256_hex(final.encode()),
-                                     "quality": capture.quality}
-            slide.content = content
+        elif content != slide.content:
+            set_svg_page(slide, svg_content=final, content=content)
         session.add(slide)
     presentation.n_slides = len(slides)
     from services.generation_core.quality.page_outcome import review_page_indices

@@ -112,8 +112,9 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
     from services.document_canvas import DocumentCanvasMetadata, parse_canvas_metadata
     metadata = parse_canvas_metadata(presentation_canvas_metadata(presentation.theme))
     physical_kwargs = {"physical_canvas": metadata} if isinstance(metadata, DocumentCanvasMetadata) else {}
-    rendered = await render_svg_with_metrics(render_source, width=canvas.width_px, height=canvas.height_px,
-                                             instructions=data.get("instruction"), **physical_kwargs)
+    rendered = await render_svg_with_metrics(svg, width=canvas.width_px, height=canvas.height_px,
+        materialized_svg=render_source if render_source != svg else None,
+        instructions=data.get("instruction"), **physical_kwargs)
     if not image.endswith(f"-{sha256_hex(rendered.png)}.png"):
         raise AuthoredPageRemakeError("svg_page_remake_capture_changed", stage="publish_validation")
     if snapshot:
@@ -123,15 +124,16 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
     content = deepcopy(target.content or {})
     if envelope is not None:
         content["svgAssetManifest"] = envelope
-    content["svgReceipt"] = {**content.get("svgReceipt", {}),
-                             "source_digest": sha256_hex(svg.encode()), "quality": rendered.quality}
+    from services.svg_page_publication import set_svg_page
+    fields = {}
+    set_svg_page(fields, svg_content=svg, content=content, quality=rendered.quality)
     properties = {**(target.properties or {}), "image": image}
     changed = await session.execute(update(SlideModel).where(
         SlideModel.id == target.id, SlideModel.presentation == presentation.id,
         SlideModel.owner_id == presentation.owner_id, SlideModel.svg_content == target.svg_content,
         _json_cas_predicate(session, SlideModel.content, target.content),
         _json_cas_predicate(session, SlideModel.properties, target.properties),
-    ).values(svg_content=svg, content=content, properties=properties).execution_options(synchronize_session=False))
+    ).values(**fields, properties=properties).execution_options(synchronize_session=False))
     if changed.rowcount != 1:
         raise AuthoredPageRemakeError("svg_page_remake_source_changed", stage="publish")
     await session.refresh(target)

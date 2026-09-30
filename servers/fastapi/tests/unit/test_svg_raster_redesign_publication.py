@@ -23,6 +23,10 @@ import pytest
 
 from services import svg_document_mutations as mutations
 from services.source_content.raster_contracts import RasterApprovalPin, seal_approval
+from services.svg_contract import source_digest
+from services.svg_export_page_evidence import svg_authoring, svg_geometry_font
+from services.svg_renderer import SVG_RENDERER_VERSION
+from services.svg_contract import SVG_CONTRACT_VERSION
 
 
 def _pin(**overrides):
@@ -44,6 +48,7 @@ def _redesign_slide(index: int, pin: RasterApprovalPin, *, page_number: int, svg
             "rasterApprovalPin": pin.model_dump(mode="json"),
             "rasterAnalysisDigest": pin.analysis_digest,
             "rasterSourcePageNumber": page_number,
+            "quality": {"source_digest": source_digest(svg)},
         }},
         properties={},
     )
@@ -90,7 +95,7 @@ def test_redesign_page_skips_finalize_and_measurement_even_when_oversized(monkey
 
 def test_redesign_page_reorder_renumbers_footer_without_generic_pipeline(monkeypatch):
     """A moved redesign page shows its new deck position; its source page
-    (provenance) is unchanged and nothing is finalized, rebound or measured."""
+    (provenance) is unchanged; the changed page is remeasured without finalize."""
     pin = _pin()
     footer = ('<svg xmlns="http://www.w3.org/2000/svg" id="svg-raster-redesign" width="1188" height="840" '
               'viewBox="0 0 1188 840"><text x="10" y="40" font-family="Noto Sans KR" font-size="20" '
@@ -101,14 +106,20 @@ def test_redesign_page_reorder_renumbers_footer_without_generic_pipeline(monkeyp
     from services import svg_raster_renumber
 
     monkeypatch.setattr(svg_raster_renumber, "_rebind_screen_placement",
-                        AsyncMock(side_effect=lambda *a, **k: {**a[4], "rebound": True}))
+                        AsyncMock(side_effect=lambda *a, **k: ({**a[4], "rebound": True}, None)))
     canvas = SimpleNamespace(width_px=1188, height_px=840)
     monkeypatch.setattr(mutations, "presentation_canvas_contract", lambda _theme: canvas)
     monkeypatch.setattr(mutations, "finalize_svg", _forbidden("finalize_svg"))
     monkeypatch.setattr(
         mutations, "read_svg_slide_assets", AsyncMock(side_effect=_forbidden("read_svg_slide_assets")))
-    monkeypatch.setattr(
-        mutations, "render_svg_with_metrics", AsyncMock(side_effect=_forbidden("render_svg_with_metrics")))
+    capture = AsyncMock(side_effect=lambda svg, **kwargs: SimpleNamespace(png=b"png", quality={
+        "source_digest": source_digest(svg), "renderer_version": SVG_RENDERER_VERSION,
+        "contract_version": SVG_CONTRACT_VERSION, "measurement_complete": True,
+        "geometry_passed": True, "passed": True,
+        "trusted_font_materialization": {"worker_materialized": True},
+    }))
+    monkeypatch.setattr("services.svg_renderer.render_svg_with_metrics", capture)
+    monkeypatch.setattr("services.authored_presentation_artifacts._save_slide_pngs", lambda *_args: ["numbered.png"])
 
     # slide.index 1 but deck position 0 in this one-slide deck; then move to position 2.
     two = _redesign_slide(0, _pin(approved_region_ids=("p2-r1",)), page_number=1, svg=footer)
@@ -122,6 +133,11 @@ def test_redesign_page_reorder_renumbers_footer_without_generic_pipeline(monkeyp
     assert two.svg_content == footer  # already at its position: untouched
     assert slide.content["svgAssetManifest"]["rebound"] is True  # new screen placement, same source page
     assert slide.content["svgAssetManifest"]["sourcePageIndex"] == 0
+    capture.assert_awaited_once()
+    assert capture.await_args.args[0] == slide.svg_content
+    assert slide.properties["image"] == "numbered.png"
+    for checker in (svg_authoring, svg_geometry_font):
+        assert checker([slide])["status"] == "passed"
 
 def test_raster_redesign_pin_helper_selects_only_redesign_pages():
     redesign_pin = _pin(automatic_redesign_pages=(1,), full_page_preserve_pages=())

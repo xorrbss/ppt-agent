@@ -9,9 +9,9 @@ A redesign page keeps two numbers:
   (element ``PAGE_NUMBER_ID``, right-aligned, zero-padded) -- follows the deck.
 
 Renumbering replaces only that footer text. Geometry, crops, the source
-manifest and the offered page are unchanged, so nothing is re-measured or
-materialized; only a new screen placement manifest (same derivatives, new
-canonical SVG digest) is published under the mutation fence.
+manifest and the offered page are unchanged. A new screen placement manifest
+retains the same derivatives, and Chromium remeasures the relabeled canonical
+SVG using its authorized materialization before the shared setter writes it.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ import re
 from copy import deepcopy
 
 from services.svg_contract import PAGE_NUMBER_ID, source_digest, validate_svg
-from utils.hashing import sha256_hex
+from services.svg_page_publication import set_svg_page
 
 _FOOTER = re.compile(rf'(<text id="{PAGE_NUMBER_ID}"[^>]*>)(\d+)(</text>)')
 
@@ -81,27 +81,37 @@ async def renumber_redesign_page(session, presentation, slide, index, *, width, 
     validate_svg(svg, width=width, height=height, source_manifest=_slot_contract(svg))
     content = deepcopy(slide.content or {})
     envelope = content.get("svgAssetManifest")
+    materialized = None
     if envelope is not None:
-        content["svgAssetManifest"] = await _rebind_screen_placement(
+        content["svgAssetManifest"], materialized = await _rebind_screen_placement(
             session, presentation, slide, svg, envelope, operation_id=operation_id,
-            attempt_token=attempt_token, expected_revision=expected_revision, service=service)
+            attempt_token=attempt_token, expected_revision=expected_revision, service=service,
+            width=width, height=height)
     receipt = dict(content.get("svgReceipt") or {})
     previous_digest = receipt.get("source_digest")
     receipt.update(
-        source_digest=sha256_hex(svg.encode()),
         rasterDisplayPageNumber=display,
-        # The measured page differs from this SVG only in the footer page-number
-        # text (excluded from the body-text floor and from required text).
         pageNumberRelabel={"from": current, "to": display, "measuredSourceDigest": previous_digest},
     )
     content["svgReceipt"] = receipt
-    slide.svg_content = svg
-    slide.content = content
+    from services.authored_presentation_artifacts import _save_slide_pngs
+    from services.document_canvas import DocumentCanvasMetadata, parse_canvas_metadata
+    from services.authored_canvas import presentation_canvas_metadata
+    from services.svg_renderer import render_svg_with_metrics
+
+    metadata = parse_canvas_metadata(presentation_canvas_metadata(getattr(presentation, "theme", None)))
+    physical_kwargs = {"physical_canvas": metadata} if isinstance(metadata, DocumentCanvasMetadata) else {}
+    capture = await render_svg_with_metrics(svg, width=width, height=height,
+        materialized_svg=materialized, allow_image_only=materialized is not None,
+        instructions=getattr(presentation, "instructions", None), **physical_kwargs)
+    set_svg_page(slide, svg_content=svg, content=content, quality=capture.quality)
+    image = _save_slide_pngs(presentation.id, [capture.png], "svg-numbering")[0]
+    slide.properties = {**(getattr(slide, "properties", None) or {}), "image": image}
     return True
 
 
 async def _rebind_screen_placement(session, presentation, slide, svg, envelope, *, operation_id,
-                                   attempt_token, expected_revision, service=None):
+                                   attempt_token, expected_revision, width, height, service=None):
     from services.svg_asset_persistence import load_placement_manifest_pointer, load_source_manifest_pointer
     from services.svg_document_mutations import rebound_placement
 
@@ -128,5 +138,12 @@ async def _rebind_screen_placement(session, presentation, slide, svg, envelope, 
     reference = await service.persist_bytes(session, owner_id=owner, tenant_id=tenant, kind="placement-manifest",
                                             payload=payload, media_type="application/json",
                                             created_by_operation_id=operation_id, retention_class="published")
-    return {**envelope, "screenPlacement": dict(ref=str(reference.artifact_id), sha256=reference.sha256),
-            "slideRevision": revision}
+    from services.svg_asset_resolver import resolve_svg_for_render
+
+    materialized = await resolve_svg_for_render(svg, manifest=source,
+        derivatives={item.slot_id: item.derivative for item in placement.placements},
+        session=session, owner_id=owner, tenant_id=tenant, width=width,
+        height=height, service=service,
+        page_index=envelope.get("sourcePageIndex", slide.index), placement_manifest=placement)
+    return ({**envelope, "screenPlacement": dict(ref=str(reference.artifact_id), sha256=reference.sha256),
+             "slideRevision": revision}, materialized)

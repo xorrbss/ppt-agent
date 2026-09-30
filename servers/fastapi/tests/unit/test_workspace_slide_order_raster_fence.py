@@ -51,6 +51,7 @@ from services.source_content.raster_contracts import RasterApprovalPin, seal_app
 from services.source_content.raster_svg_layout import render_raster_page_svg
 from services.svg_asset_manifest import PlacementManifest, SourceManifest
 from services.svg_asset_persistence import SvgPublicationContext
+from services.svg_contract import source_digest
 from services.workspace_operation_handler_registry import WorkspaceOperationHandlerRegistry
 from services.workspace_operation_runner import WorkspaceOperationRunner
 from services.workspace_service import create_workspace_command
@@ -68,6 +69,7 @@ def test_reorder_of_a_raster_redesign_deck_succeeds_without_ambient_tenant_conte
 
 
 async def _reorder_raster_redesign_deck(monkeypatch, tmp_path):
+    monkeypatch.setattr("utils.asset_directory_utils.get_app_data_directory_env", lambda: str(tmp_path))
     # -- Build one real raster-redesign page (real crops/placements), the
     # same setup test_svg_raster_renumber.py uses. --
     store = export_test.ExportArtifacts()
@@ -142,6 +144,7 @@ async def _reorder_raster_redesign_deck(monkeypatch, tmp_path):
                             "rasterSourcePageNumber": 1,
                             "rasterAnalysisDigest": pin.analysis_digest,
                             "source_digest": "old",
+                            "quality": {"source_digest": source_digest(svg)},
                         },
                     },
                     svg_content=svg, source_format="svg",
