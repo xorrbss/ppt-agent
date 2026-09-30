@@ -51,7 +51,6 @@
     "servers/fastapi/models/public_v2_contracts.py"
   ],
   "globals_injection": [
-    "servers/fastapi/utils/llm_calls/author_vision_qa_helpers.py",
     "servers/fastapi/utils/slide_capture.py"
   ],
   "nextjs_lib_store_import_app": [
