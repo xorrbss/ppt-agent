@@ -415,6 +415,9 @@ def _install_pipeline_fakes(
     label a text-capable image provider may draw — so it says nothing about the
     source-image wiring these tests pin.
     """
+    # The gate-off expectations assume no image provider is available, which is
+    # what CI sets; pin it so the assertions do not depend on the shell env.
+    monkeypatch.setenv("DISABLE_IMAGE_GENERATION", "true")
     plan = SimpleNamespace(
         contents=contents,
         design_system="DS",
