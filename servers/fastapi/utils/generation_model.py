@@ -17,19 +17,19 @@ from utils.runtime_settings import (
 
 
 CODEX_GENERATION_PRESETS: dict[str, tuple[str, str]] = {
-    "luna-medium": ("gpt-6-luna", "medium"),
-    "luna-high": ("gpt-6-luna", "high"),
-    "sol-low": ("gpt-6-sol", "low"),
-    "sol-medium": ("gpt-6-sol", "medium"),
-    "sol-high": ("gpt-6-sol", "high"),
-    # sol6-* are a legacy alias of sol-* (same gpt-6-sol target): kept so
+    "luna-medium": ("gpt-6.1-sol", "medium"),
+    "luna-high": ("gpt-6.1-sol", "high"),
+    "sol-low": ("gpt-6.1-sol", "low"),
+    "sol-medium": ("gpt-6.1-sol", "medium"),
+    "sol-high": ("gpt-6.1-sol", "high"),
+    # sol6-* are a legacy alias of sol-* (same gpt-6.1-sol target): kept so
     # stored configs/requests carrying the old sol6-* id still resolve
     # identically.
-    "sol6-low": ("gpt-6-sol", "low"),
-    "sol6-medium": ("gpt-6-sol", "medium"),
-    "sol6-high": ("gpt-6-sol", "high"),
-    "astra-low": ("gpt-6-astra", "low"),
-    "astra-medium": ("gpt-6-astra", "medium"),
+    "sol6-low": ("gpt-6.1-sol", "low"),
+    "sol6-medium": ("gpt-6.1-sol", "medium"),
+    "sol6-high": ("gpt-6.1-sol", "high"),
+    "astra-low": ("gpt-6.1-sol", "low"),
+    "astra-medium": ("gpt-6.1-sol", "medium"),
 }
 
 

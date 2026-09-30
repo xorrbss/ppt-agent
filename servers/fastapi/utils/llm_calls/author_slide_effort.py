@@ -44,6 +44,7 @@ CODEX_REASONING_CAPABILITIES = {
     # gpt-6-astra (probed 2026-09-05) rejects "minimal" and "none" alike:
     # "Supported values are: 'low', 'medium', 'high', 'xhigh', and 'max'."
     "gpt-6-astra": frozenset(("low", "medium", "high", "xhigh", "max")),
+    "gpt-6.1-sol": frozenset(("low", "medium", "high", "xhigh", "max", "ultra")),
     "gpt-6-sol": frozenset(("low", "medium", "high", "xhigh", "max", "ultra")),
     # Direct probe (2026-09-26): "minimal" is rejected; these levels are accepted.
     "gpt-6-luna": frozenset(("none", "low", "medium", "high", "xhigh", "max")),
