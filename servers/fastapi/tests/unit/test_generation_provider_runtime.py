@@ -29,16 +29,16 @@ def _settings(provider: str) -> RuntimeSettings:
 @pytest.mark.parametrize(
     ("preset", "model", "effort"),
     [
-        ("luna-medium", "gpt-6-luna", "medium"),
-        ("luna-high", "gpt-6-luna", "high"),
-        ("sol-low", "gpt-6-sol", "low"),
-        ("sol-medium", "gpt-6-sol", "medium"),
-        ("sol-high", "gpt-6-sol", "high"),
-        ("sol6-low", "gpt-6-sol", "low"),
-        ("sol6-medium", "gpt-6-sol", "medium"),
-        ("sol6-high", "gpt-6-sol", "high"),
-        ("astra-low", "gpt-6-astra", "low"),
-        ("astra-medium", "gpt-6-astra", "medium"),
+        ("luna-medium", "gpt-6.1-sol", "medium"),
+        ("luna-high", "gpt-6.1-sol", "high"),
+        ("sol-low", "gpt-6.1-sol", "low"),
+        ("sol-medium", "gpt-6.1-sol", "medium"),
+        ("sol-high", "gpt-6.1-sol", "high"),
+        ("sol6-low", "gpt-6.1-sol", "low"),
+        ("sol6-medium", "gpt-6.1-sol", "medium"),
+        ("sol6-high", "gpt-6.1-sol", "high"),
+        ("astra-low", "gpt-6.1-sol", "low"),
+        ("astra-medium", "gpt-6.1-sol", "medium"),
     ],
 )
 def test_upload_generation_preset_pins_codex_model_and_effort(
