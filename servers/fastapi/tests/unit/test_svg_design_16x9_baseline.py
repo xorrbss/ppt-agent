@@ -44,8 +44,9 @@ def _canonical_ids() -> set[str]:
 
 
 def test_the_catalogue_has_the_expected_shape():
-    assert len(YAML_IDS) == 45
-    assert EXACT_IDS <= set(YAML_IDS)
+    # 44 tracked styles; the exact-reconstruction style is a local-only file
+    # (.git/info/exclude), so it may or may not be present in a checkout.
+    assert len(set(YAML_IDS) - EXACT_IDS) == 44
 
 
 @pytest.mark.parametrize("style_id", YAML_IDS)
