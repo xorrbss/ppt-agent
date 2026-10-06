@@ -43,6 +43,12 @@ async def raster_reconstruct_svg(raster_analysis, raster_pin, request, index):
     return svg, advisories
 
 
+def free_raster_redesign(ctx, index):
+    """New snapshots compose approved redesign pages; historical replay stays local."""
+    return bool(ctx.raster_reconstruction and ctx.snapshot.get("composition_mode") == "free-svg"
+                and ctx.raster_analysis.pages[index].render_mode == "redesign")
+
+
 @dataclass
 class AuthorAttempt:
     """Result of one author attempt; ``payload`` is mutated in place."""
@@ -54,13 +60,18 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
                          provider_ordinal, job, state, checkpoint, async_session_maker) -> AuthorAttempt:
     from services.document_canvas_generation import source_restyle_font_floor
     from services.generation_core.authoring.author_slide_svg import author_slide_svg
-    from utils.provider_overload import ProviderOutcomeError
+    from utils.provider_overload import ProviderOutcomeError, safe_provider_diagnostics
 
     def raise_if_fatal():
         if state.fatal_error is not None:
             raise state.fatal_error
 
     offered_images = ctx.manifests[index]
+    source_floor = source_restyle_font_floor(request.instructions, getattr(request, "_document_canvas", None))
+    if ctx.snapshot.get("readability_policy") is not None:
+        from services.document_canvas_generation import svg_quality_font_floor
+
+        source_floor = max(source_floor, svg_quality_font_floor(ctx.snapshot["readability_policy"]))
     if ctx.canonical_assets:
         from services.svg_generation_assets import author_images
         async with async_session_maker() as asset_session:
@@ -70,7 +81,26 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
     vector_icons = offer.vector[index] if offer is not None else {}
     local_authored = None
     hint = payload.get("repair_hint")
-    if ctx.source_reflow and not payload.get("local_layout_attempted"):
+    intent_kwargs = {}
+    intents = getattr(ctx, "visual_intents", None)
+    if isinstance(intents, list) and index < len(intents):
+        from services.generation_core.drivers.svg.visual_intent import VISUAL_INTENT_VERSION
+
+        intent = intents[index]
+        if isinstance(intent, dict) and intent.get("contract_version") == VISUAL_INTENT_VERSION:
+            intent_kwargs["visual_intent"] = intent
+            payload["visual_intent"] = intent
+    if not (ctx.source_reflow or ctx.raster_reconstruction):
+        from services.generation_core.drivers.svg.native_requirements import requested_native_data
+
+        requirements = requested_native_data(content)
+        if requirements:
+            payload["nativeRequirements"] = requirements
+        else:
+            payload.pop("nativeRequirements", None)
+    whole_page_source = ctx.snapshot.get("source_authoring_contract") == {"version": "svg-source-whole-page/v1"}
+    free_source_composition = whole_page_source or (ctx.snapshot.get("source_template") or {}).get("composition_mode") == "free-svg"
+    if ctx.source_reflow and not free_source_composition and not payload.get("local_layout_attempted"):
         from services.svg_source_template_layout import try_template_source_layout
         page_task = asyncio.current_task()
 
@@ -79,7 +109,7 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
                 raise asyncio.CancelledError()
 
         image_slots = {candidate.occurrence_id: slot for slot, candidate in ctx.planned[index].items()}
-        min_font_size_px = source_restyle_font_floor(request.instructions, getattr(request, "_document_canvas", None))
+        min_font_size_px = source_floor
         try:
             local_result = await asyncio.to_thread(
                 try_template_source_layout, ctx.source_document, index, ctx.snapshot,
@@ -127,6 +157,13 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
         try:
             if local_authored is not None:
                 authored = local_authored
+            elif free_raster_redesign(ctx, index):
+                from services.generation_core.authoring.author_raster_svg_layout import author_raster_svg_layout
+
+                authored = await author_raster_svg_layout(ctx.raster_analysis, ctx.raster_pin, index, ctx.snapshot,
+                    instructions=request.instructions, correction_hint=hint,
+                    receipt_attempt_ordinal=provider_ordinal, before_dispatch=before_dispatch,
+                    **intent_kwargs)
             elif ctx.source_reflow:
                 from services.generation_core.authoring.author_source_svg_layout import author_source_svg_layout
                 authored = await author_source_svg_layout(
@@ -134,14 +171,25 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
                     source_images=offered_images,
                     image_slots={candidate.occurrence_id: slot
                                 for slot, candidate in ctx.planned[index].items()},
-                    min_font_size_px=source_restyle_font_floor(
-                        request.instructions, getattr(request, "_document_canvas", None)),
+                    min_font_size_px=source_floor,
                     width=ctx.canvas.width_px, height=ctx.canvas.height_px,
                     instructions=request.instructions, correction_hint=hint,
                     receipt_attempt_ordinal=provider_ordinal,
                     before_dispatch=before_dispatch,
+                    _validated_pages=ctx.source_units,
+                    **({"previous_svg": payload.get("last_valid_svg")} if whole_page_source and hint else {}),
+                    **intent_kwargs,
                 )
             else:
+                repair_kwargs = {}
+                if hint:
+                    from services.svg_authoring_profile import read_authoring_profile
+
+                    profile = read_authoring_profile(ctx.snapshot)
+                    if profile and profile["version"] == 8:
+                        previous_svg = payload.get("last_valid_svg") or payload.get("svg_content")
+                        if previous_svg:
+                            repair_kwargs["previous_svg"] = previous_svg
                 authored = await author_slide_svg(
                     content=content, style_snapshot=ctx.snapshot, role=role,
                     index=index, n=count, instructions=request.instructions,
@@ -151,9 +199,17 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
                     before_dispatch=before_dispatch,
                     canonical_source_images=ctx.canonical_assets,
                     **ctx.physical_kwargs,
+                    **intent_kwargs,
+                    **repair_kwargs,
                 )
         except ProviderOutcomeError as error:
+            diagnostics = safe_provider_diagnostics(error)
+            payload.setdefault("provider_diagnostics", []).append({
+                "ordinal": provider_ordinal, "code": error.code,
+                "diagnostics": diagnostics,
+            })
             if error.code != "public_provider_overload" or not error.recovery_allowed:
+                await checkpoint(job, index, payload=payload)
                 raise
             failures = payload.setdefault("provider_failures", [])
             failures.append({"ordinal": provider_ordinal, "code": error.code})
@@ -196,5 +252,9 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
         payload["source_preservation"] = authored.receipt.get("source_preservation")
         if payload["source_preservation"] is not None:
             payload["source_preservation"]["font_profile"] = ctx.source_font_profile
+    if free_raster_redesign(ctx, index):
+        payload["rasterCompositionMode"] = "free-svg"
+        payload["rasterContentLedger"] = authored.receipt.get("raster_content_ledger")
+        payload["rasterRegionBindings"] = authored.receipt.get("raster_region_bindings")
     await checkpoint(job, index, payload=payload)
     return AuthorAttempt(svg=svg, retry=False)
