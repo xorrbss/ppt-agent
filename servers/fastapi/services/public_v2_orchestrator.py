@@ -89,6 +89,10 @@ from services.compatibility_migration.admission import (
 from services.presentation_generation_staging import (
     _durable_request_payload,
 )
+from services.svg_authoring_profile import (
+    INTERNAL_SVG_AUTHORING_PROFILE_KEY, select_svg_authoring_profile,
+    validate_authoring_profile,
+)
 from services.public_operation_admission import (
     PrincipalContext,
     PublicAdmissionRejected,
@@ -129,6 +133,7 @@ from services.references.service import (
     admit_reference_snapshots,
     claim_reference_snapshots,
 )
+from services.references.contracts import ReferenceSnapshotView
 from services.workspace_operation_runner import (
     append_operation_event,
     request_workspace_operation_cancellation,
@@ -172,6 +177,38 @@ GenerationRouteResolver = Callable[
 
 PUBLIC_V2_POSTGRESQL_STRICT_PROFILE = "postgresql-strict"
 PUBLIC_V2_INTEGRATION_PROFILE_ENV = "PUBLIC_V2_INTEGRATION_PROFILE"
+class _StagedSvgProviderRequestPlan(ProviderRequestPlan):
+    """Trusted stages pay for page authoring and one advisory per stage."""
+
+    @property
+    def initial_request_limit(self) -> int:
+        return self.slide_count + self.image_budget + self.vqa_budget
+
+    @property
+    def retry_request_limit(self) -> int:
+        return self.repair_budget
+
+
+def _staged_svg_provider_request_plan(slide_count: int, stage_plan: Mapping[str, Any]) -> ProviderRequestPlan:
+    from services.svg_presentation_checkpoint import _provider_attempt_limit
+
+    return _StagedSvgProviderRequestPlan(
+        slide_count=slide_count,
+        image_budget=stage_plan.get("illustration_budget", 0),
+        repair_budget=slide_count * (_provider_attempt_limit({}) - 1),
+        vqa_budget=len(stage_plan["partitions"]),
+    )
+
+
+def _bound_staged_svg_admission(admission: PublicOperationAdmission, request_plan: ProviderRequestPlan | None) -> None:
+    if not isinstance(request_plan, _StagedSvgProviderRequestPlan):
+        return
+    if admission.initial_request_count > request_plan.initial_request_limit or admission.retry_request_count > request_plan.retry_request_limit:
+        raise _public_error(409, "svg_stage_request_budget_already_consumed")
+    admission.planned_request_limit = min(admission.planned_request_limit, request_plan.initial_request_limit)
+    admission.retry_request_limit = min(admission.retry_request_limit, request_plan.retry_request_limit)
+
+
 def _canonical_hash(payload: Mapping[str, Any]) -> str:
     encoded = json.dumps(
         payload,
@@ -185,6 +222,8 @@ def _canonical_hash(payload: Mapping[str, Any]) -> str:
 
 def _generation_request_hash_payload(
     request: PresentationGenerationRequestV2,
+    *, svg_authoring_profile: str | None = None,
+       svg_stage_plan: dict | None = None,
 ) -> dict[str, Any]:
     payload = request.model_dump(mode="json", by_alias=True)
     if "generation_mode" not in request.model_fields_set:
@@ -192,6 +231,19 @@ def _generation_request_hash_payload(
         payload.pop("designPackPin", None)
     if request.aspect_ratio == "16:9":
         payload.pop("aspectRatio", None)
+    profile = validate_authoring_profile(svg_authoring_profile)
+    if profile is not None:
+        payload[INTERNAL_SVG_AUTHORING_PROFILE_KEY] = profile
+    from services.generation_core.drivers.svg.collect import INTERNAL_SVG_STAGE_PLAN_KEY, validate_svg_stage_plan
+    plan = validate_svg_stage_plan(svg_stage_plan)
+    if plan is not None:
+        if svg_authoring_profile is None:
+            # Omission admits the fresh default snapshot; an explicit frozen
+            # selection (including current-v4) must keep its old replay hash.
+            payload["_internal_svg_admission_mode"] = "fresh-default/v1"
+        if request.strategy != "svg":
+            raise ValueError("svg_stage_plan_requires_svg")
+        payload[INTERNAL_SVG_STAGE_PLAN_KEY] = plan
     return payload
 
 
@@ -219,6 +271,7 @@ async def _generation_admission_slide_count(
             orientation=request.orientation,
             instructions=request.instructions,
             reference_snapshot_ids=[str(value) for value in reference_ids],
+            generation_request=request,
         )
         try:
             source_slide_count = await resolve_source_content_admission_slide_count(
@@ -449,6 +502,29 @@ def _public_error(
     )
 
 
+def _require_unclaimed_generation_references(
+    snapshots: tuple[ReferenceSnapshotView, ...],
+) -> None:
+    """A fresh presentation needs references still owned by no conversation."""
+
+    if any(
+        snapshot.conversation_id is not None
+        or any(binding.conversation_id is not None for binding in snapshot.asset_bindings)
+        for snapshot in snapshots
+    ):
+        raise _public_error(409, "reference_snapshot_already_claimed")
+
+
+def _generation_reference_claim_ids(
+    reference_ids: list[uuid.UUID], design_snapshot_id: uuid.UUID | None,
+) -> list[uuid.UUID]:
+    """Claim the separate design selector without changing source references."""
+
+    if design_snapshot_id is None or design_snapshot_id in reference_ids:
+        return list(reference_ids)
+    return [*reference_ids, design_snapshot_id]
+
+
 def _checkpoint_content_graph_authority(
     operation: WorkspaceOperation,
 ) -> dict[str, str | None]:
@@ -648,19 +724,30 @@ class SqlPublicV2Orchestrator:
         actor: PublicRequestActor,
         idempotency_key: str,
         request: PresentationGenerationRequestV2,
+        svg_authoring_profile: str | None = None,
+        svg_stage_plan: dict | None = None,
     ) -> OperationReceiptV2:
+        try:
+            validate_authoring_profile(svg_authoring_profile)
+        except ValueError as error:
+            raise _public_error(422, str(error)) from error
+        profile_kwargs = {"svg_authoring_profile": svg_authoring_profile} if svg_authoring_profile is not None else {}
+        if svg_stage_plan is not None:
+            profile_kwargs["svg_stage_plan"] = svg_stage_plan
         with _actor_context(actor):
             try:
                 receipt = await self._submit_generation_once(
                     actor=actor,
                     idempotency_key=idempotency_key,
                     request=request,
+                    **profile_kwargs,
                 )
             except IntegrityError:
                 receipt = await self._replay_generation(
                     actor=actor,
                     idempotency_key=idempotency_key,
                     request=request,
+                    **profile_kwargs,
                 )
             except PublicAdmissionRejected as error:
                 raise _translate_admission(error) from error
@@ -679,10 +766,12 @@ class SqlPublicV2Orchestrator:
         actor: PublicRequestActor,
         idempotency_key: str,
         request: PresentationGenerationRequestV2,
+        svg_authoring_profile: str | None = None,
+        svg_stage_plan: dict | None = None,
     ) -> OperationReceiptV2:
         kind = _GENERATION_KIND
         key_hash = _idempotency_hash(actor, kind=kind, key=idempotency_key)
-        request_payload = _generation_request_hash_payload(request)
+        request_payload = _generation_request_hash_payload(request, svg_authoring_profile=svg_authoring_profile, svg_stage_plan=svg_stage_plan)
         request_hash = _canonical_hash(request_payload)
         async with self._session_factory() as session:
             existing = await self._operation_for_key(
@@ -709,10 +798,19 @@ class SqlPublicV2Orchestrator:
                 session,
                 snapshot_ids=reference_ids,
             )
+            claim_snapshot_ids = _generation_reference_claim_ids(
+                reference_ids, request.svg_design_reference_snapshot_id,
+            )
+            design_snapshot_ids = claim_snapshot_ids[len(reference_ids):]
+            design_snapshots = await admit_reference_snapshots(
+                session,
+                snapshot_ids=design_snapshot_ids,
+            )
+            _require_unclaimed_generation_references(snapshots + design_snapshots)
             asset_ids = list(
                 dict.fromkeys(
                     binding.asset_id
-                    for snapshot in snapshots
+                    for snapshot in snapshots + design_snapshots
                     for binding in snapshot.asset_bindings
                 )
             )
@@ -760,6 +858,23 @@ class SqlPublicV2Orchestrator:
                 internal_design_pack_pin=internal_design_pack_pin,
                 effective_generation_engine=effective_generation_engine,
             )
+            if svg_authoring_profile is not None or svg_stage_plan is not None:
+                try:
+                    if validate_authoring_profile(svg_authoring_profile) is not None and resolve_generation_strategy(internal_request) != "svg":
+                        raise ValueError("svg_authoring_profile_requires_svg")
+                    from services.generation_core.drivers.svg.collect import validate_stage_authority
+                    from utils.hashing import canonical_json_digest
+                    if svg_stage_plan is not None:
+                        validate_stage_authority(svg_stage_plan, owner_id=actor.owner_id, tenant_id=actor.tenant_id,
+                                                 request_digest=canonical_json_digest(request.model_dump(mode="json", by_alias=True)))
+                    # Leave omission untouched so pin_svg_style owns the fresh
+                    # profile, whole-page contract and readability snapshot.
+                    if svg_authoring_profile is not None:
+                        select_svg_authoring_profile(internal_request, svg_authoring_profile, trusted_internal=svg_stage_plan is not None)
+                    from services.generation_core.drivers.svg.collect import select_svg_stage_plan
+                    select_svg_stage_plan(internal_request, svg_stage_plan)
+                except ValueError as error:
+                    raise _public_error(422, str(error)) from error
             try:
                 if internal_request.master_pin is not None:
                     from services.presentation_generation_pipeline import (
@@ -818,6 +933,14 @@ class SqlPublicV2Orchestrator:
                     )
                 except SourceContentError as error:
                     raise _public_error(error.status_code, error.code) from error
+            if internal_request.svg_design_reference_snapshot_id is not None:
+                from services.presentation_generation_pipeline import _admit_svg_design_reference
+                from fastapi import HTTPException
+
+                try:
+                    await _admit_svg_design_reference(internal_request, session)
+                except HTTPException as error:
+                    raise _public_error(error.status_code, str(error.detail)) from error
             generation_payload = _durable_request_payload(internal_request)
             generation_payload["generation_route_receipt"] = route_payload
             presentation_id = uuid.uuid5(
@@ -922,7 +1045,7 @@ class SqlPublicV2Orchestrator:
                 raise _public_error(422, "generation_strategy_capability_missing")
             await claim_reference_snapshots(
                 session,
-                snapshot_ids=reference_ids,
+                snapshot_ids=claim_snapshot_ids,
                 conversation_id=conversation.id,
             )
             async_status = AsyncPresentationGenerationTaskModel(
@@ -964,7 +1087,7 @@ class SqlPublicV2Orchestrator:
                 actor=actor,
                 operation=operation,
                 operation_kind="generation",
-                request_plan=plan_provider_requests(
+                request_plan=_staged_svg_provider_request_plan(slide_count, svg_stage_plan) if svg_stage_plan is not None else plan_provider_requests(
                     slide_count=slide_count,
                     image_budget=slide_count,
                     repair_budget=slide_count,
@@ -987,13 +1110,15 @@ class SqlPublicV2Orchestrator:
         actor: PublicRequestActor,
         idempotency_key: str,
         request: PresentationGenerationRequestV2,
+        svg_authoring_profile: str | None = None,
+        svg_stage_plan: dict | None = None,
     ) -> OperationReceiptV2:
         key_hash = _idempotency_hash(
             actor,
             kind=_GENERATION_KIND,
             key=idempotency_key,
         )
-        request_hash = _canonical_hash(_generation_request_hash_payload(request))
+        request_hash = _canonical_hash(_generation_request_hash_payload(request, svg_authoring_profile=svg_authoring_profile, svg_stage_plan=svg_stage_plan))
         async with self._session_factory() as session:
             operation = await self._operation_for_key(
                 session,
@@ -1089,12 +1214,12 @@ class SqlPublicV2Orchestrator:
                     WorkspaceOperation.owner_id == actor.owner_id,
                     WorkspaceOperation.kind == "presentation.generate",
                     WorkspaceOperation.state == "succeeded",
-                    WorkspaceOperation.result_revision == request.source_revision,
+                    WorkspaceOperation.result_revision <= request.source_revision,
                     PublicOperationAdmission.owner_id == actor.owner_id,
                     PublicOperationAdmission.tenant_id == actor.tenant_id,
                     PublicOperationAdmission.operation_kind == "generation",
                 )
-                .order_by(WorkspaceOperation.updated_at.desc())
+                .order_by(WorkspaceOperation.result_revision.desc(), WorkspaceOperation.updated_at.desc())
                 .limit(1)
             )
             if source_operation is None:
@@ -1115,6 +1240,50 @@ class SqlPublicV2Orchestrator:
                 raise _public_error(404, "presentation_not_found")
             if presentation.revision != request.source_revision:
                 raise _public_error(409, "stale_revision")
+            svg_source_revision_binding = None
+            if source_operation.result_revision != request.source_revision:
+                # The original generation admission remains the tenant authority.
+                # Each later revision must have an owned, tenant-bound publisher.
+                if presentation.mode != "svg":
+                    raise _public_error(404, "presentation_not_found")
+                previous_revision = source_operation.result_revision
+                publications = (await session.execute(
+                    select(WorkspaceOperation).where(
+                        WorkspaceOperation.presentation_id == target_id,
+                        WorkspaceOperation.owner_id == actor.owner_id,
+                        WorkspaceOperation.kind.in_((
+                            "slide.regenerate", "presentation.slides.reorder", "version.restore",
+                            "presentation.edit", "slide.edit", "slide.delete",
+                        )),
+                        WorkspaceOperation.state == "succeeded",
+                        WorkspaceOperation.result_revision > WorkspaceOperation.expected_revision,
+                        WorkspaceOperation.result_revision > previous_revision,
+                        WorkspaceOperation.result_revision <= request.source_revision,
+                    ).order_by(WorkspaceOperation.result_revision)
+                )).scalars().all()
+                for publication in publications:
+                    if (publication.expected_revision != previous_revision
+                            or publication.result_revision != previous_revision + 1
+                            or publication.request_payload.get(PRINCIPAL_TENANT_PAYLOAD_KEY) != actor.tenant_id):
+                        raise _public_error(409, "export_source_revision_lineage_invalid")
+                    previous_revision = publication.result_revision
+                if previous_revision != request.source_revision:
+                    raise _public_error(409, "export_source_revision_lineage_required")
+                slides = (await session.execute(
+                    select(SlideModel).where(SlideModel.presentation == target_id)
+                    .order_by(SlideModel.index, SlideModel.id)
+                )).scalars().all()
+                from services.svg_export_operation import svg_export_admission_snapshot
+                try:
+                    snapshot = svg_export_admission_snapshot(presentation, slides)
+                except ValueError as error:
+                    raise _public_error(409, str(error)) from error
+                svg_source_revision_binding = {
+                    "generationOperationId": str(source_operation.id),
+                    "generationRevision": source_operation.result_revision,
+                    "publicationOperationIds": [str(item.id) for item in publications],
+                    "sourceRevision": request.source_revision, "snapshotSha256": snapshot,
+                }
             review_runtime_binding_digest: str | None = None
             current_review_render_identity_digest: str | None = None
             review_checker_policy_digest: str | None = None
@@ -1465,6 +1634,8 @@ class SqlPublicV2Orchestrator:
                     "required_capabilities": request.output.required_capabilities,
                 },
             }
+            if svg_source_revision_binding is not None:
+                export_payload["svg_source_revision_binding"] = svg_source_revision_binding
             if review_operation is not None:
                 export_payload.update(
                     release_review_operation_id=str(review_operation.id),
@@ -1741,11 +1912,20 @@ class SqlPublicV2Orchestrator:
                     if publication_row is None:
                         raise _public_error(404, "artifact_not_found")
                     artifact, publication = publication_row
-                    operation, _admission = await self._public_operation(
-                        session,
-                        actor=actor,
-                        operation_id=str(artifact.created_by_operation_id),
-                    )
+                    try:
+                        operation, _admission = await self._public_operation(
+                            session,
+                            actor=actor,
+                            operation_id=str(artifact.created_by_operation_id),
+                        )
+                    except PublicV2OrchestrationError as error:
+                        if error.reason_code != "operation_authority_unavailable":
+                            raise
+                        from services.workspace_export_download_authority import completed_workspace_export_operation
+
+                        operation = await completed_workspace_export_operation(session, artifact=artifact)
+                        if operation is None:
+                            raise
                     if (
                         operation.state != "succeeded"
                         or operation.result_revision is None
@@ -1785,7 +1965,7 @@ class SqlPublicV2Orchestrator:
         request_plan: ProviderRequestPlan | None,
         resource_plan: WeightedResourcePlan,
     ) -> PublicOperationAdmission:
-        return await self._admission(
+        admission = await self._admission(
             session,
             principal=PrincipalContext(
                 owner_id=actor.owner_id,
@@ -1797,6 +1977,8 @@ class SqlPublicV2Orchestrator:
             request_plan=request_plan,
             resource_plan=resource_plan,
         )
+        _bound_staged_svg_admission(admission, request_plan)
+        return admission
 
     @staticmethod
     def _resource_plan(*, slide_count: int, fidelity_mode: str) -> WeightedResourcePlan:
