@@ -420,7 +420,9 @@ class DocumentsLoader:
                     dpi=300 if is_scanned else None,
                     ocr_enabled=is_scanned,
                 )
-        except DocumentConversionError as conversion_error:
+        except (DocumentConversionError, HTTPException) as conversion_error:
+            if isinstance(conversion_error, HTTPException) and conversion_error.status_code != 500:
+                raise
             if self.document_service is None:
                 raise
 
