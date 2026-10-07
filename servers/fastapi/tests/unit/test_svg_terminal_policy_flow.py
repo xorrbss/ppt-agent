@@ -23,6 +23,7 @@ from services.generation_core.runtime.profile import resolve_svg_runtime_profile
 from services.svg_presentation_prepare import GenerationContext
 from services.svg_contract import source_digest
 from services.generation_core.authoring.author_slide_svg import SvgAuthorResult
+from utils.hashing import canonical_json_digest
 
 FAIL_INDEX = 1
 SLIDE_COUNT = 3
@@ -44,14 +45,15 @@ def _ctx(runtime_profile):
 def _request():
     return SimpleNamespace(instructions=None, codex_generation_preset=None, authored_style="default",
                            include_title_slide=False, content="deck content", reference_snapshot_ids=[],
-                           strategy="svg", _source_content_svg_reflow=False)
+                           strategy="svg", aspect_ratio="16:9", _source_content_svg_reflow=False)
 
 
 def _outline():
     return SimpleNamespace(slides=[SimpleNamespace(content=f"slide {i} content") for i in range(SLIDE_COUNT)])
 
 
-def _install_harness(monkeypatch, *, runtime_profile, fail_index=FAIL_INDEX, saved=None):
+def _install_harness(monkeypatch, *, runtime_profile, fail_index=FAIL_INDEX, saved=None,
+                     authoring_version=None):
     """Wire the facade hooks collect._generate reads at call time.
 
     Every page's contract check fails for ``fail_index`` on both attempts
@@ -60,8 +62,12 @@ def _install_harness(monkeypatch, *, runtime_profile, fail_index=FAIL_INDEX, sav
     Returns ``(author_mock, publish_mock, advisory_mock, saved)``.
     """
     saved = {} if saved is None else saved
+    ctx = _ctx(runtime_profile)
+    if authoring_version is not None:
+        ctx.snapshot["authoring_profile"] = {"id": "art-direction-v1", "version": authoring_version}
+        ctx.snapshot["digest"] = canonical_json_digest(ctx.snapshot, allow_nan=True)
     monkeypatch.setattr("services.generation_core.drivers.svg.collect._prepare_generation",
-                        AsyncMock(return_value=_ctx(runtime_profile)))
+                        AsyncMock(return_value=ctx))
 
     async def checkpoint(_job, index, *, payload=None):
         if payload is not None:
@@ -132,10 +138,12 @@ def test_a_default_env_rescues_the_exhausted_page_with_a_fallback_and_publishes(
     assert len(advisory_mock.await_args.args[0]) == SLIDE_COUNT
 
 
-def test_b_knob_disabled_keeps_the_deck_fail_closed(monkeypatch):
-    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES", "false")
+@pytest.mark.parametrize("authoring_version,flagged_enabled", [(None, False), (6, True), (7, True), (8, True)])
+def test_b_knob_disabled_keeps_the_deck_fail_closed(monkeypatch, authoring_version, flagged_enabled):
+    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES", "true" if flagged_enabled else "false")
     profile = resolve_svg_runtime_profile(source_reflow=False)
-    _author_mock, publish_mock, _advisory_mock, _saved = _install_harness(monkeypatch, runtime_profile=profile)
+    _author_mock, publish_mock, _advisory_mock, _saved = _install_harness(
+        monkeypatch, runtime_profile=profile, authoring_version=authoring_version)
 
     with pytest.raises(AuthoredStageError) as failed:
         _run()

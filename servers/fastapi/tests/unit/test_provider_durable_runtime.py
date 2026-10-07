@@ -61,6 +61,85 @@ def test_direct_service_import_registers_provider_fk_targets() -> None:
     assert result.returncode == 0, result.stderr
 
 
+def test_workspace_budget_migration_preserves_legacy_and_enforces_real_fk(tmp_path):
+    import importlib.util
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    from sqlalchemy import Column, MetaData, Table, Uuid, create_engine, text
+    from sqlalchemy.exc import IntegrityError
+
+    spec = importlib.util.spec_from_file_location("review_budget_migration",
+        Path(__file__).resolve().parents[2] / "alembic/versions/f3e5a7c9b1d4_add_workspace_provider_budget_authority.py")
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    metadata = MetaData()
+    for name in ("user", "presentation_generation_jobs", "workspace_operations"):
+        Table(name, metadata, Column("id", Uuid, primary_key=True))
+    old_columns = [column._copy() for column in ProviderRuntimeBudget.__table__.columns
+                   if column.name != "workspace_operation_id"]
+    next(column for column in old_columns if column.name == "job_id").nullable = False
+    old = Table("provider_runtime_budgets", metadata, *old_columns)
+    engine = create_engine(f"sqlite:///{tmp_path / 'migration.db'}")
+    owner, generation, operation, legacy = (uuid.uuid4() for _ in range(4))
+    with engine.begin() as connection:
+        connection.execute(text("PRAGMA foreign_keys=ON"))
+        metadata.create_all(connection)
+        for name, identity in (("user", owner), ("presentation_generation_jobs", generation),
+                               ("workspace_operations", operation)):
+            connection.execute(metadata.tables[name].insert().values(id=identity))
+        connection.execute(old.insert().values(id=legacy, tenant_id="tenant-a", owner_id=owner,
+            job_id=generation, estimated_consumed=3, request_count=1))
+        before = dict(connection.execute(old.select()).mappings().one())
+        with Operations.context(MigrationContext.configure(connection)):
+            migration.upgrade()
+        assert dict(connection.execute(old.select()).mappings().one()) == before
+        after = dict(connection.execute(text("SELECT * FROM provider_runtime_budgets")).mappings().one())
+        assert after.pop("workspace_operation_id") is None
+        # Reflected UUID/datetime values are serialized; compare durable counters and keys.
+        assert after["id"] == legacy.hex and after["job_id"] == generation.hex
+        assert after["estimated_consumed"] == before["estimated_consumed"] == 3
+        assert after["request_count"] == before["request_count"] == 1
+        row = dict(id=uuid.uuid4(), owner_id=owner, tenant_id="tenant-a",
+                   workspace_operation_id=operation, job_id=None)
+        connection.execute(ProviderRuntimeBudget.__table__.insert().values(**row))
+        with pytest.raises(IntegrityError):
+            connection.execute(ProviderRuntimeBudget.__table__.insert().values(
+                **{**row, "id": uuid.uuid4(), "workspace_operation_id": uuid.uuid4()}))
+        with pytest.raises(IntegrityError):
+            connection.execute(ProviderRuntimeBudget.__table__.insert().values(
+                **{**row, "id": uuid.uuid4(), "job_id": generation}))
+        with pytest.raises(RuntimeError, match="must be retained"):
+            with Operations.context(MigrationContext.configure(connection)):
+                migration.downgrade()
+    engine.dispose()
+
+
+def test_workspace_budget_reuses_operation_and_reconciles_without_generation(tmp_path):
+    async def scenario():
+        engine, sessions = await _sessions(tmp_path / "review-budget.db")
+        try:
+            async with sessions() as session:
+                owner, operation = uuid.uuid4(), uuid.uuid4()
+                arguments = dict(tenant_id="tenant-a", owner_id=owner, job_id=None,
+                    workspace_operation_id=operation, estimated_limit=5, actual_limit=5)
+                budget = await register_durable_budget(session, **arguments)
+                assert budget.job_id is None and budget.workspace_operation_id == operation
+                assert (await register_durable_budget(session, **arguments)).id == budget.id
+                lease = await reserve_provider_call(session, budget_id=budget.id,
+                    reservation_key_hash=sha256(b"review-vqa").hexdigest(), estimated_cost=2)
+                await reconcile_provider_call(session, lease, actual_cost=None, outcome="success")
+                await reconcile_provider_call(session, lease, actual_cost=3, outcome="success")
+                assert budget.request_count == 1 and budget.actual_consumed == 3
+                with pytest.raises(ValueError, match="duplicate"):
+                    await reserve_provider_call(session, budget_id=budget.id,
+                        reservation_key_hash=lease.reservation_key_hash, estimated_cost=2)
+                with pytest.raises(ValueError, match="authority_required"):
+                    await register_durable_budget(session, **{**arguments, "job_id": uuid.uuid4()})
+        finally:
+            await engine.dispose()
+    asyncio.run(scenario())
+
+
 async def _sessions(path: Path):
     engine = create_async_engine(f"sqlite+aiosqlite:///{path}")
     async with engine.begin() as connection:

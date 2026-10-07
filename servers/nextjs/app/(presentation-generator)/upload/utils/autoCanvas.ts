@@ -5,6 +5,7 @@
  * docs/aspect-ratio-expansion-design-20260928.md (§ Picker rows).
  */
 export type CanvasRowId =
+  | "standard-4x3"
   | "wide-16x9"
   | "tall-9x16"
   | "tall-9x13"
@@ -19,6 +20,7 @@ export interface CanvasRowGeometry {
 }
 
 export const CANVAS_ROW_GEOMETRY: Readonly<Record<CanvasRowId, CanvasRowGeometry>> = {
+  "standard-4x3": { widthPx: 960, heightPx: 720 },
   "wide-16x9": { widthPx: 1280, heightPx: 720 },
   "tall-9x16": { widthPx: 720, heightPx: 1280 },
   "tall-9x13": { widthPx: 720, heightPx: 1040 },

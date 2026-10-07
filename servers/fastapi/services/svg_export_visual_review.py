@@ -40,11 +40,151 @@ from services.generation_core.quality.advisory_record import (
     ADVISORY_RECORD_SCHEMA,
     advisory_flagged_pages,
     advisory_ran,
+    advisory_record,
     content_digest,
     record_matches,
 )
 from services.generation_core.quality.page_outcome import review_page_indices
 from utils.hashing import sha256_hex
+from services.svg_contract import source_digest
+
+PAGE_ADVISORY_SCHEMA = "svg-page-vision-advisory/v1"
+
+
+def _receipt(slide):
+    return (slide.content or {}).get("svgReceipt") or {}
+
+
+def page_measurement_current(slide) -> bool:
+    """Bind the completed measurement to both the saved SVG and render."""
+    receipt = _receipt(slide)
+    quality = receipt.get("quality") or {}
+    png = receipt.get("png_sha256")
+    return (isinstance(png, str) and len(png) == 64
+            and all(c in "0123456789abcdef" for c in png)
+            and quality.get("measurement_complete") is True
+            and quality.get("measurement_status") != "unmeasured"
+            and quality.get("source_digest") == source_digest(slide.svg_content or "")
+            and quality.get("png_digest") == "sha256:" + png)
+
+
+def page_advisory_record(vision: Mapping, *, page_index: int, page_digest: str, png_digest: str) -> dict:
+    """One independently sealed advisory answer for exactly one saved render."""
+    body = dict(schemaVersion=PAGE_ADVISORY_SCHEMA, index=page_index,
+                pageDigest=page_digest, pngDigest=png_digest, vision=dict(vision))
+    return {**body, "digest": content_digest(body)}
+
+
+def split_page_advisories(vision: Mapping, slides, indices) -> list[dict]:
+    """Map contact-sheet local positions back onto durable deck indices."""
+    if not advisory_ran({"vision": vision}):
+        return []
+    records = []
+    for local, index in enumerate(indices):
+        findings = [{**entry, "index": index} for entry in vision.get("slides", [])
+                    if isinstance(entry, Mapping) and entry.get("index") == local]
+        answer = {key: value for key, value in vision.items() if key != "slides"}
+        answer.update(slideCount=1, slides=findings)
+        if "reviewedPageIndices" in vision:
+            answer["reviewedPageIndices"] = [index]
+        if "reviewedPngDigests" in vision:
+            answer["reviewedPngDigests"] = [vision["reviewedPngDigests"][local]]
+        records.append(page_advisory_record(answer, page_index=index,
+            page_digest=sha256_hex((slides[index].svg_content or "").encode()),
+            png_digest=_receipt(slides[index]).get("png_sha256") or ""))
+    return records
+
+
+def current_page_advisories(slides, records) -> dict[int, dict]:
+    """Keep only intact per-page evidence that describes the current drawing."""
+    if not isinstance(records, list):
+        return {}
+    current = {}
+    for record in records:
+        if not isinstance(record, Mapping):
+            continue
+        index = record.get("index")
+        if isinstance(index, bool) or not isinstance(index, int) or not 0 <= index < len(slides):
+            continue
+        body = {key: record.get(key) for key in ("schemaVersion", "index", "pageDigest", "pngDigest", "vision")}
+        slide, receipt = slides[index], _receipt(slides[index])
+        png_digest = receipt.get("png_sha256") or ""
+        if (record.get("schemaVersion") != PAGE_ADVISORY_SCHEMA
+                or record.get("digest") != content_digest(body)
+                or record.get("pageDigest") != sha256_hex((slide.svg_content or "").encode())
+                or record.get("pngDigest") != png_digest
+                or not isinstance(png_digest, str) or len(png_digest) != 64
+                or any(c not in "0123456789abcdef" for c in png_digest)
+                or not page_measurement_current(slide)
+                or not advisory_ran(record)):
+            continue
+        if any(not isinstance(entry, Mapping) or isinstance(entry.get("index"), bool)
+               or entry.get("index") != index for entry in record["vision"]["slides"]):
+            continue
+        # Duplicate records are ambiguous rather than evidence to be merged.
+        if index in current:
+            current[index] = None
+        else:
+            current[index] = dict(record)
+    return {index: record for index, record in current.items() if record is not None}
+
+
+def legacy_page_advisories(slides, advisory) -> list[dict]:
+    """Reuse only existing PNG-bound records; legacy SVG-only proof stays legacy."""
+    if not advisory_ran(advisory) or not record_matches(advisory, slide_page_digests(slides)):
+        return []
+    if "pageAdvisories" in advisory:
+        return list(current_page_advisories(slides, advisory["pageAdvisories"]).values())
+    return []
+
+
+def assemble_page_advisory(slides, records) -> dict | None:
+    current = current_page_advisories(slides, records)
+    if not slides or len(current) != len(slides):
+        return None
+    visions = [current[index]["vision"] for index in range(len(slides))]
+    vision = dict(promptVersion=PAGE_ADVISORY_SCHEMA, model=";".join(sorted({str(v.get("model") or "") for v in visions})),
+                  slideCount=len(slides), slides=[entry for v in visions for entry in v.get("slides", [])],
+                  pageRecordDigests=[current[index]["digest"] for index in range(len(slides))])
+    result = advisory_record(vision, slide_page_digests(slides))
+    result["pageAdvisories"] = [current[index] for index in range(len(slides))]
+    return result
+
+
+def svg_quality_status(slides, advisory, *, page_advisories=None) -> dict:
+    """Keep drawing availability, measurements and advisory findings distinct."""
+    count = len(slides)
+    measured, stale, failed = [], [], []
+    for index, slide in enumerate(slides):
+        quality = _receipt(slide).get("quality") or {}
+        if quality.get("source_digest") != source_digest(slide.svg_content or ""):
+            if quality.get("source_digest"):
+                stale.append(index)
+            continue
+        if quality.get("measurement_status") == "unmeasured" or quality.get("measurement_complete") is not True:
+            continue
+        if not page_measurement_current(slide):
+            stale.append(index)
+            continue
+        measured.append(index)
+        if quality.get("passed") is not True or quality.get("verified") is not True:
+            failed.append(index)
+    if page_advisories is None and isinstance(advisory, Mapping):
+        page_advisories = advisory.get("pageAdvisories")
+    records = page_advisories or []
+    current = current_page_advisories(slides, records)
+    # A legacy deck record proves SVG identity only. It cannot establish that
+    # today's saved PNGs were reviewed, even when every SVG still matches.
+    coverage = sorted(current)
+    flagged = sorted(index for index, record in current.items() if advisory_flagged_pages(record))
+    return dict(advisoryOnly=True,
+        artifact=dict(status="available" if count and all(s.svg_content for s in slides) else "unavailable", pageCount=count),
+        measured=dict(status="stale" if stale else "failed" if failed else "passed" if count and len(measured) == count else "unmeasured",
+                      currentPages=measured, stalePages=stale, failedPages=failed),
+        semanticCurrent=dict(status="current" if count and len(coverage) == count else "partial" if coverage else "stale" if advisory_ran(advisory) else "unavailable",
+                             currentPages=coverage),
+        designFindings=dict(status="flagged" if flagged else "clear" if coverage else "unavailable", flaggedPages=flagged),
+        reviewedPages=coverage, totalPages=count)
 
 
 def slide_page_digests(slides) -> list[str]:
@@ -58,17 +198,48 @@ def _review_pages(slides) -> list[int]:
                                 for slide in slides])
 
 
-def svg_visual_review(*, slides, advisory: Mapping | None) -> dict:
+def svg_visual_review(*, slides, advisory: Mapping | None, expected_binding: Mapping | None = None) -> dict:
     if not advisory_ran(advisory):
         return dict(required=True, status="failed", reasonCode="svg_visual_advisory_unavailable")
+    if "pageAdvisories" not in advisory:
+        return dict(required=True, status="failed", reasonCode="svg_visual_advisory_png_evidence_missing")
     digests = slide_page_digests(slides)
-    if not record_matches(advisory, digests):
+    current = current_page_advisories(slides, advisory["pageAdvisories"])
+    if (not slides or not record_matches(advisory, digests)
+            or len(current) != len(slides)):
         return dict(required=True, status="failed", reasonCode="svg_visual_advisory_stale")
     vision = advisory["vision"]
+    page_findings = [entry for index in range(len(slides)) for entry in current[index]["vision"]["slides"]]
+    models = ";".join(sorted({str(current[index]["vision"].get("model") or "") for index in range(len(slides))}))
+    page_records = [current[index]["digest"] for index in range(len(slides))]
+    if (vision.get("slides") != page_findings or str(vision.get("model") or "") != models
+            or ("pageRecordDigests" in vision and vision["pageRecordDigests"] != page_records)):
+        return dict(required=True, status="failed", reasonCode="svg_visual_advisory_stale")
+    if expected_binding is not None:
+        binding = advisory.get("operationBinding")
+        if not isinstance(binding, Mapping):
+            return dict(required=True, status="failed", reasonCode="svg_visual_advisory_operation_binding_missing")
+        unsigned = {key: value for key, value in binding.items() if key != "digest"}
+        if (binding.get("schemaVersion") != "svg-visual-review-operation-binding/v1"
+                or binding.get("digest") != content_digest(unsigned)
+                or not binding.get("operationId")
+                or any(binding.get(key) != value for key, value in expected_binding.items())
+                or binding.get("sourceDigests") != digests
+                or binding.get("pngDigests") != [_receipt(slide).get("png_sha256") for slide in slides]
+                or binding.get("pageRecordDigests") != page_records):
+            return dict(required=True, status="failed", reasonCode="svg_visual_advisory_operation_binding_invalid")
+        if any(current[index]["vision"].get("promptVersion") != "svg-required-visual-review/v1"
+               or current[index]["vision"].get("reviewedPageIndices") != [index]
+               or current[index]["vision"].get("reviewedPngDigests") != [_receipt(slides[index]).get("png_sha256")]
+               for index in range(len(slides))):
+            return dict(required=True, status="failed", reasonCode="svg_visual_advisory_review_coverage_incomplete")
     flagged, review = advisory_flagged_pages(advisory), _review_pages(slides)
     evidence = dict(
         checkerVersion=str(vision.get("promptVersion") or ADVISORY_RECORD_SCHEMA),
-        inputDigest=content_digest(digests), outputDigest=content_digest(vision),
+        inputDigest=content_digest({"svgDigests": digests,
+            "pngDigests": [_receipt(slide).get("png_sha256") for slide in slides]}),
+        outputDigest=content_digest({"vision": vision,
+            "pageRecordDigests": [current[index]["digest"] for index in range(len(slides))]}),
         measurements={"advisoryDigest": advisory["digest"], "pageCount": len(digests),
                       "advisoryFlaggedPages": len(flagged), "reviewPages": len(review),
                       "model": str(vision.get("model") or "")},
@@ -87,4 +258,6 @@ def release_readiness(domains: Iterable[Mapping]) -> str:
     ) else "blocked"
 
 
-__all__ = ["release_readiness", "slide_page_digests", "svg_visual_review"]
+__all__ = ["release_readiness", "slide_page_digests", "svg_visual_review", "svg_quality_status",
+           "page_advisory_record", "split_page_advisories", "current_page_advisories",
+           "legacy_page_advisories", "assemble_page_advisory"]

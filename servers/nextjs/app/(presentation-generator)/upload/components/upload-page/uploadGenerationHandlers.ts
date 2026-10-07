@@ -57,7 +57,7 @@ export function createUploadGenerationHandlers({
   const sourceContentCanvasForConfig = (sourceContent: SourceContentAnalysisResponseV1, config: PresentationConfig) =>
     generationStrategy === "svg" && config.pageSize === "A4" && config.orientation
       ? documentCanvasForOrientation(config.orientation)
-      : sourceContent.documentCanvas;
+      : generationStrategy !== "svg" || config.sourceCanvas ? sourceContent.documentCanvas : undefined;
 
   const stageAutoAuthoredGeneration = (
     presentationId: string,
@@ -106,11 +106,13 @@ export function createUploadGenerationHandlers({
         ...(sourceContent ? { instructions: sourceContentInstructions || null } : {}),
         visionQa: sourceContent ? false : authoredVisionQa,
         authoredStyle,
+        ...(generationStrategy === "svg" && config.svgDesignReferenceSnapshotId ? { svgDesignReferenceSnapshotId: config.svgDesignReferenceSnapshotId } : {}),
+      ...(generationStrategy === "svg" && config.svgDesignReferencePin ? { svgDesignReferencePin: config.svgDesignReferencePin } : {}),
         ...(sourceContentCanvas
           ? { documentCanvas: sourceContentCanvas }
           : {}),
-        ...(sourceContent && generationStrategy === "svg" && config.pageSize !== "A4"
-          ? {}
+        ...(config.sourceCanvas ? { sourceCanvas: true }
+          : config.svgCanvas ? { svgCanvas: config.svgCanvas }
           : config.pageSize === "A4" && config.orientation
             ? { pageSize: "A4" as const, orientation: config.orientation }
             : { aspectRatio: config.aspectRatio }),
@@ -298,9 +300,9 @@ export function createUploadGenerationHandlers({
       include_table_of_contents: sourceContentMode ? false : !!config?.includeTableOfContents,
       include_title_slide: sourceContentMode ? false : !!config?.includeTitleSlide,
       web_search: sourceContentMode ? false : !!config?.webSearch,
-      ...(sourceContentMode && generationStrategy === "svg" && config.pageSize !== "A4"
-        ? {}
-        : documentCanvasRequestForConfig(config)),
+      ...(generationStrategy === "svg" && config.svgDesignReferenceSnapshotId ? { svg_design_reference_snapshot_id: config.svgDesignReferenceSnapshotId } : {}),
+      ...(generationStrategy === "svg" && config.svgDesignReferencePin ? { svg_design_reference_pin: config.svgDesignReferencePin } : {}),
+      ...documentCanvasRequestForConfig(config),
       theme: selectedTheme,
       strategy: generationStrategy,
     } satisfies Parameters<typeof PresentationGenerationApi.createPresentation>[0];
@@ -379,6 +381,8 @@ export function createUploadGenerationHandlers({
       include_table_of_contents: !!config?.includeTableOfContents,
       include_title_slide: !!config?.includeTitleSlide,
       web_search: !!config?.webSearch,
+      ...(generationStrategy === "svg" && config.svgDesignReferenceSnapshotId ? { svg_design_reference_snapshot_id: config.svgDesignReferenceSnapshotId } : {}),
+      ...(generationStrategy === "svg" && config.svgDesignReferencePin ? { svg_design_reference_pin: config.svgDesignReferencePin } : {}),
       ...documentCanvasRequestForConfig(config),
       theme: selectedTheme,
       strategy: generationStrategy,

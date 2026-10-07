@@ -88,6 +88,55 @@ def _redesign_payload() -> dict:
     }
 
 
+@pytest.mark.parametrize("style_id", ["default", "soft-editorial"])
+def test_free_raster_composition_uses_selected_identity_and_preserves_reviewed_regions(style_id):
+    import xml.etree.ElementTree as ET
+    from services.generation_core.drivers.svg.svg_style_adapter import adapt_svg_style
+    from services.source_content.raster_free_composition import raster_composition_context, assemble_free_raster_svg
+    from services.svg_source_layout import SvgLayoutPlan
+    from services.raster_source_assets import raster_slot_id
+    from utils.authored_styles import resolve_authored_style
+
+    payload = _redesign_payload()
+    owner, operation = uuid.uuid4(), uuid.uuid4()
+    crop = ArtifactRef(artifact_id=uuid.uuid4(), owner_id=owner, tenant_id="test", kind="image-derivative",
+        sha256=SHA, size_bytes=20, media_type="image/png", created_by_operation_id=operation,
+        retention_class="checkpoint", storage_key=artifact_storage_key(owner_id=owner, tenant_id="test", digest=SHA))
+    payload["pages"][0]["regions"][2].update(crop_artifact_ref=crop.model_dump(mode="json"),
+        source_occurrence_id="source-picture", source_pixel_bbox=(2, 0, 1, 1),
+        crop_source_sha256=SHA, pixel_sha256=SHA)
+    analysis = seal_analysis(payload)
+    pin = RasterApprovalPin(operation_id=operation, analysis_id=analysis.analysis_id,
+        analysis_revision=analysis.revision, analysis_digest=analysis.digest, source_sha256=SHA,
+        approved_region_ids=tuple(region.region_id for region in analysis.pages[0].regions))
+    snapshot = adapt_svg_style(resolve_authored_style(style_id), width=1188, height=840)
+    context, items, ledger = raster_composition_context(analysis, pin, 0, snapshot)
+    template = context["source_template"]
+    placements = []
+    for item, y in zip(items, (40, 250, 500), strict=True):
+        role = "heading" if item.region.role == "title" else "table" if item.kind == "table" else "body"
+        font = template["fonts"][role]
+        placements.append(dict(block_id=item.region.region_id, x=40, y=y,
+            width=200 if item.kind == "image" else 1000, height=200,
+            font_family=font["family"], font_weight=str(font["weight"]), font_size=30 if role == "heading" else 20,
+            fill=template["tokens"].get("heading", template["tokens"]["text"]) if role == "heading" else template["tokens"]["text"]))
+    plan = SvgLayoutPlan(source_unit_id=context["source_unit_id"], page_digest=context["page_digest"],
+        width=1188, height=840, background=template["tokens"]["background"], template_digest=template["digest"],
+        layout_id="free-svg", placements=placements)
+    svg, bindings = assemble_free_raster_svg(analysis, 0, plan, context, items)
+    root = ET.fromstring(svg)
+    text = "".join(root.itertext())
+    assert "매출 현황" in text and "40,000원" in text and "항목" in text
+    assert {binding["region_id"] for binding in bindings} == set(pin.approved_region_ids)
+    assert ledger.lossless and analysis.digest == pin.analysis_digest
+    assert [node.get("href") for node in root.iter() if node.tag.endswith("}image")] == [raster_slot_id(1, "p1-r3")]
+    assert root[0].get("fill") == snapshot["tokens"]["background"]
+    assert any(node.get("fill") == snapshot["tokens"]["primary"] for node in root.iter())
+    invalid = plan.model_copy(update={"placements": plan.placements[:-1]})
+    with pytest.raises(ValueError, match="region_coverage_mismatch"):
+        assemble_free_raster_svg(analysis, 0, invalid, context, items)
+
+
 def test_redesign_page_contract_accepts_valid_payload():
     analysis = seal_analysis(_redesign_payload())
     require_analysis_digest(analysis)
@@ -303,3 +352,56 @@ def test_editable_fallback_region_carries_tokens_as_pixels():
     ledger = redesign_content_ledger(analysis, 1)
     assert ledger.lossless and ledger.entries[0].carrier == "pixels"
     assert analysis.pages[0].regions[0].text == "매출 현황"
+
+
+@pytest.mark.parametrize("selectors", [
+    {"aspect_ratio": "4:3"}, {"aspect_ratio": "9:16"}, {"aspect_ratio": "1:1"},
+    {"aspect_ratio": "21:9"}, {"svg_canvas": {"width_mm": 157.13, "height_mm": 493.27}},
+])
+def test_raster_output_canvas_bound_to_analysis_digest(selectors):
+    from services.source_content.raster_target import raster_target_from_selectors, raster_target_document_canvas
+    from services.source_content.raster_contracts_base import RasterTargetCanvas
+
+    payload = _redesign_payload()
+    baseline = seal_analysis(payload)
+    target = raster_target_from_selectors(**selectors)
+    payload["target_canvas"] = target.model_dump(mode="json")
+    analysis = seal_analysis(payload)
+    assert analysis.digest != baseline.digest
+    require_analysis_digest(analysis)
+    restored = RasterAnalysis.model_validate_json(analysis.model_dump_json())
+    assert restored.target_canvas == target
+    assert restored.source == baseline.source
+    assert raster_target_document_canvas(target) == target.document_canvas
+    corrupt = target.model_dump(mode="json")
+    corrupt["width_units"] += 1
+    with pytest.raises(ValueError, match="raster_target_canvas_mismatch"):
+        RasterTargetCanvas.model_validate(corrupt)
+
+
+def test_raster_legacy_a4_target_wire_unchanged():
+    from services.source_content.raster_target import raster_target_from_selectors
+
+    assert raster_target_from_selectors(orientation="portrait").model_dump(mode="json") == {
+        "format": "A4", "orientation": "portrait", "width_units": 840,
+        "height_units": 1188, "emu_per_unit": 9000,
+    }
+
+
+def test_raster_analysis_request_selectors_are_exclusive():
+    from api.v1.ppt.endpoints.raster_reconstruction import AnalyzeRasterRequest
+
+    ids = {"reference_snapshot_id": uuid.uuid4(), "presentation_id": uuid.uuid4()}
+    assert AnalyzeRasterRequest(**ids, aspect_ratio="4:3").aspect_ratio == "4:3"
+    with pytest.raises(ValueError, match="document_canvas_selectors_conflict"):
+        AnalyzeRasterRequest(**ids, aspect_ratio="4:3", orientation="landscape")
+
+
+
+def test_custom_physical_readability_rejects_tiny_text():
+    from services.source_content.raster_target import raster_target_from_selectors, require_raster_physical_readability
+
+    target = raster_target_from_selectors(svg_canvas={"width_mm": 50, "height_mm": 50})
+    with pytest.raises(ValueError, match="raster_text_requires_below_9_5pt"):
+        require_raster_physical_readability('<svg><text font-size="14">내용</text></svg>', target)
+    require_raster_physical_readability('<svg><text font-size="90">내용</text></svg>', target)

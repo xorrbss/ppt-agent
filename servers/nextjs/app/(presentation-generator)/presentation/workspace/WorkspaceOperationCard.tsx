@@ -4,6 +4,7 @@ import { ConversationMessageFrame } from "../conversation/ConversationPrimitives
 import { WorkspaceGenerationProgress } from "./WorkspaceGenerationProgress";
 import { operationFailureMessage, operationProgressEvidence, type WorkspaceOperationObservation } from "./WorkspaceOperationPresentation";
 import { useLocale, useTranslations } from "next-intl";
+import SvgQualityStatusSummary from "./SvgQualityStatusSummary";
 
 import { translateBackendMessage } from "@/lib/backend-messages-intl";
 import {
@@ -232,6 +233,7 @@ export function WorkspaceOperationCard({
   const isQualityReview =
     operation.operationType === "quality.review" ||
     result.kind === "quality.review";
+  const isSvgReview = isQualityReview && result.source_format === "svg" && result.mode === "analyze_only";
   const isExport =
     operation.operationType === "export.pptx" ||
     operation.operationType === "export.pdf";
@@ -853,8 +855,9 @@ export function WorkspaceOperationCard({
         >
           <p className="font-semibold">
             {stringValue(result.message) ??
-              tOperation("qualityReviewComplete")}
+              tOperation(isSvgReview ? "svgQualityReviewComplete" : "qualityReviewComplete")}
           </p>
+          {isSvgReview && <SvgQualityStatusSummary status={result.qualityStatus} />}
           <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-blue-800">
             <dt>{tOperation("reviewedPages")}</dt>
             <dd>

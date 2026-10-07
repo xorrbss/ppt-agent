@@ -1046,6 +1046,10 @@ class WorkspaceQualityReviewOperationHandler:
             raise NonRetryableWorkspaceOperationError("workspace_expected_revision_required")
         command_context = _context(claim.request_payload)
         mode = command_context.get("mode", "analyze_and_fix")
+        if mode == "analyze_only":
+            from services.svg_quality_review_service import execute_svg_quality_review
+
+            return await execute_svg_quality_review(context, self._session_factory)
         if mode != "analyze_and_fix":
             raise NonRetryableWorkspaceOperationError("quality_review_request_invalid")
         scope = command_context.get("scope", "all")

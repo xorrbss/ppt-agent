@@ -589,7 +589,9 @@ def _radar_style(payload: dict[str, Any], alias_style: str | None) -> tuple[str,
     return style
 
 
-def _category_series(payload: dict[str, Any], categories: list[Any]) -> list[dict[str, Any]]:
+def _category_series(payload: dict[str, Any], categories: list[Any], *,
+                     chart_type: str | None = None,
+                     grouping: str | None = None) -> list[dict[str, Any]]:
     raw_series = payload.get("series", [])
     if not categories or not isinstance(raw_series, list) or not raw_series:
         raise RuntimeError("Native PPTX chart requires non-empty categories and series")
@@ -622,6 +624,13 @@ def _category_series(payload: dict[str, Any], categories: list[Any]) -> list[dic
         if point_colors and len(point_colors) != len(values):
             raise RuntimeError("Native PPTX chart series point_colors must match values length")
         series_item = {"name": str(item.get("name") or f"Series {idx}"), "values": values}
+        if item.get("data_labels") is not None:
+            if (chart_type not in {"bar", "column"} or grouping != "clustered"
+                    or not isinstance(item["data_labels"], dict)):
+                raise RuntimeError("Native PPTX per-series data labels require clustered bar/column")
+            series_item["data_labels"] = _chart_data_labels(
+                item, chart_type, grouping, len(categories),
+            )
         if point_colors:
             series_item["point_colors"] = point_colors
         fill_opacity = _first_present(item.get("fill_opacity"), item.get("fillOpacity"))
@@ -653,6 +662,31 @@ def _category_chart_data(
     alias_grouping: str | None,
     alias_style: str | None,
 ) -> dict[str, Any]:
+    source_options = {}
+    if "vary_colors" in payload:
+        source_options["vary_colors"] = _chart_bool(payload["vary_colors"])
+    if "gap_width" in payload:
+        gap = _chart_number(payload["gap_width"])
+        if type(gap) is not int or not 0 <= gap <= 500:
+            raise RuntimeError("Native PPTX gap_width must be an integer from 0 to 500")
+        source_options["gap_width"] = gap
+    if "plot_layout" in payload:
+        raw_layout = payload["plot_layout"]
+        if not isinstance(raw_layout, dict) or set(raw_layout) != {"x", "y", "w", "h"}:
+            raise RuntimeError("Native PPTX plot_layout must contain x/y/w/h")
+        layout = {key: _number(raw_layout[key], f"plot_layout {key}") for key in ("x", "y", "w", "h")}
+        if (any(not 0 <= number <= 1 for number in layout.values())
+                or layout["w"] <= 0 or layout["h"] <= 0
+                or layout["x"] + layout["w"] > 1 + 1e-6
+                or layout["y"] + layout["h"] > 1 + 1e-6):
+            raise RuntimeError("Native PPTX plot_layout must be normalized within chart bounds")
+        source_options["plot_layout"] = layout
+    if "overlap" in payload:
+        overlap = payload["overlap"]
+        if (chart_type not in {"bar", "column"} or payload.get("grouping") != "clustered"
+                or type(overlap) is not int or not -100 <= overlap <= 100):
+            raise RuntimeError("Native PPTX clustered overlap must be an integer from -100 to 100")
+        source_options["overlap"] = overlap
     axes = _chart_axes(payload, {"category", "value"})
     if axes and chart_type in {"doughnut", "of_pie", "pie"}:
         raise RuntimeError(
@@ -670,7 +704,12 @@ def _category_chart_data(
     )
     style = payload.get("style") if isinstance(payload.get("style"), dict) else {}
 
-    series = _category_series(payload, categories)
+    grouping = (
+        _chart_grouping(chart_type, payload, alias_grouping)
+        if chart_type in {"bar", "column", "line", "area"}
+        else None
+    )
+    series = _category_series(payload, categories, chart_type=chart_type, grouping=grouping)
     if chart_type in {"doughnut", "of_pie", "pie"}:
         if len(series) != 1:
             raise RuntimeError("Native PPTX pie-family charts support exactly one series")
@@ -703,13 +742,9 @@ def _category_chart_data(
     if alias_style == "exploded" or payload.get("exploded"):
         raise RuntimeError("Native PPTX exploded pie/doughnut is outside current basic chart support")
 
-    grouping = (
-        _chart_grouping(chart_type, payload, alias_grouping)
-        if chart_type in {"bar", "column", "line", "area"}
-        else None
-    )
     return {
         "kind": "category",
+        **source_options,
         "type": chart_type,
         "categories": categories,
         "grouping": grouping,

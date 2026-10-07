@@ -27,15 +27,50 @@ from services.svg_presentation_checkpoint import _save_source_page_pngs
 from services.svg_page_publication import set_svg_page
 
 
-def svg_slide_content(payload: dict, *, role, source, pt_per_px: float) -> dict:
+def svg_slide_content(payload: dict, *, role, source, pt_per_px: float,
+                      source_native_objects=None, source_native_summary=None) -> dict:
     """``slide.content`` of one published page: receipt, asset manifest, native objects.
 
     The page's raw native declarations never reach the receipt; only the
     publication summary (``native_publish.page_native_objects``) does.
     """
-    native_objects, native_summary = page_native_objects(payload, pt_per_px=pt_per_px)
+    from services.svg_cached_author_render_recovery import approved_sidecars
+    sidecars = approved_sidecars(payload)
+    native_objects, native_summary = ((source_native_objects, source_native_summary)
+        if source_native_summary is not None else page_native_objects(
+            payload, pt_per_px=pt_per_px,
+            verified_fixed_axis_migrations=sidecars))
+    preservation = payload.get("source_preservation", {})
+    source_charts = (preservation.get("whole_page_native_groups") or []) + (preservation.get("source_native_charts") or [])
+    if source_charts:
+        from services.generation_core.native_objects import NativeObjects
+        from services.svg_source_charts import chart_semantics
+        from services.source_content.digests import digest_json
+
+        projected, projected_summary = page_native_objects(
+            payload, pt_per_px=pt_per_px,
+            verified_fixed_axis_migrations=sidecars)
+        required = {item["element_id"] for item in source_charts}
+        charts = tuple(item for item in NativeObjects.from_wire(projected).objects
+                       if item.kind == "chart" and item.id in required) if projected else ()
+        if {item.id for item in charts} != required:
+            raise ValueError("svg_source_native_chart_unprojectable")
+        expected_numeric = {item["element_id"]: item["numeric_digest"]
+                            for item in preservation.get("source_native_charts") or []}
+        if any(item.id in expected_numeric and digest_json(chart_semantics(item.payload)) != expected_numeric[item.id]
+               for item in charts):
+            raise ValueError("svg_source_chart_numeric_mismatch")
+        tables = NativeObjects.from_wire(source_native_objects).objects if source_native_objects else ()
+        native_objects = NativeObjects((*tables, *charts)).to_wire()
+        source_summary = source_native_summary or {"declared": 0, "accepted": 0, "dropped": []}
+        native_summary = {**source_summary,
+            "declared": source_summary["declared"] + len(required),
+            "accepted": len(tables) + len(charts),
+            "whole_page_native_charts": projected_summary}
     receipt = {key: value for key, value in payload.items()
-               if key not in {"svg_content", "attempts", "svgAssetManifest", NATIVE_DECLARATIONS_KEY}}
+               if key not in {"svg_content", "attempts", "svgAssetManifest", "deck_visual_intents",
+                              NATIVE_DECLARATIONS_KEY, "cached_author_render_archive",
+                              "cached_author_render"}}
     if native_summary:
         receipt["nativeObjects"] = native_summary
     return {"__svg__": True, "role": role, "source": source,
@@ -50,9 +85,18 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
     if getattr(request, "_source_content_svg_reflow", False):
         from services.svg_source_layout import source_pages, verify_source_receipt
         manifest = request._source_content_manifest
-        if len(source_pages(manifest)) != len(pages):
+        if len(source_pages(manifest, chart_contract=(snapshot or {}).get("source_chart_contract"))) != len(pages):
             raise ValueError("svg_source_page_count_mismatch")
         for index, (payload, _) in enumerate(pages):
+            if payload.get("cached_author_render"):
+                from services.document_canvas_generation import validate_svg_readability_publication
+                policy = payload.get("readability_policy") or {}
+                if (policy.get("version") != "svg-physical-readability/v2"
+                        or policy.get("quality_target_font_pt", 0) < 9.5):
+                    raise ValueError("svg_cached_author_render_quality_policy_invalid")
+                validate_svg_readability_publication(policy, payload.get("quality"))
+            if (payload.get("source_preservation") or {}).get("source_chart_contract") != (snapshot or {}).get("source_chart_contract"):
+                raise ValueError("svg_source_chart_snapshot_mismatch")
             verify_source_receipt(payload["svg_content"], payload.get("source_preservation"), manifest, index)
             if payload.get("terminal"):
                 continue  # flag-only: verbatim (checked above), flagged, reviewed as unverified
@@ -127,11 +171,17 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
     presentation.lifecycle_status = PRESENTATION_LIFECYCLE_PUBLISHED
     pt_per_px = canvas_point_per_px(request_canvas_metadata(request))
     await session.execute(delete(SlideModel).where(SlideModel.presentation == presentation_id))
-    for index, (payload, _) in enumerate(pages):
+    for index, (payload, png) in enumerate(pages):
+        native_kwargs = {}
+        if source_preservation and payload.get("source_preservation", {}).get("native_tables"):
+            from services.svg_source_native_tables import source_table_native_objects
+            native_objects, native_summary = source_table_native_objects(payload["svg_content"],
+                payload["source_preservation"], manifest, index, pt_per_px=pt_per_px)
+            native_kwargs = dict(source_native_objects=native_objects, source_native_summary=native_summary)
         slide_content = svg_slide_content(payload, role=roles[index], source=outline.slides[index].content,
-                                          pt_per_px=pt_per_px)
+                                          pt_per_px=pt_per_px, **native_kwargs)
         fields = {}
-        set_svg_page(fields, svg_content=payload["svg_content"], content=slide_content)
+        set_svg_page(fields, svg_content=payload["svg_content"], content=slide_content, png=png)
         session.add(SlideModel(presentation=presentation_id, owner_id=owner,
                               layout_group="svg", layout="svg:content", index=index,
                               **fields, source_format="svg",
@@ -148,9 +198,10 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
               "quality_pages": {"passed": len(pages) - len(review), "flagged": len(review)},
               "edit_path": f"/presentation?id={presentation_id}", "path": ""}
     await publish_presentation_revision(session, presentation_id=presentation_id,
-                                       expected_revision=expected_revision, operation_id=operation_id,
-                                       attempt_token=attempt_token, result=result,
-                                       operation_kind="presentation.generate")
+                                        expected_revision=expected_revision, operation_id=operation_id,
+                                        attempt_token=attempt_token, result=result,
+                                        operation_kind="presentation.generate",
+                                        source_manifest=manifest if source_preservation else None)
     await session.commit()
     return PresentationPathAndEditPath(presentation_id=presentation_id, path="",
                                        edit_path=f"/presentation?id={presentation_id}")

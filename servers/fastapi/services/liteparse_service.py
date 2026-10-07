@@ -127,6 +127,9 @@ class LiteParseService:
         candidates = [
             self.runner_dir,
             os.path.abspath(os.path.join(self.runner_dir, "..")),
+            # Source imports and automation also run from the repository root,
+            # so the installed package must not depend on the caller's cwd.
+            os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")),
             os.path.abspath(os.path.join(os.getcwd(), "..", "..", "document-extraction-liteparse")),
             os.path.abspath(os.path.join(os.getcwd(), "..", "..")),
             "/app/document-extraction-liteparse",

@@ -8,8 +8,9 @@ ancestors as in SVG; ``opacity`` multiplies down the ancestor chain.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import re
+import math
 import unicodedata
 from xml.etree import ElementTree as ET
 
@@ -17,7 +18,7 @@ from services.generation_core.drivers.svg.fallback import _text_em
 
 SVG_NS = "{http://www.w3.org/2000/svg}"
 _INHERITED = ("fill", "stroke", "fill-opacity", "stroke-opacity", "stroke-width", "font-weight",
-              "text-anchor")
+              "text-anchor", "font-size", "font-family")
 _NUMBER = re.compile(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?")
 _NAMED = {"black": "#000000", "white": "#FFFFFF"}
 
@@ -69,6 +70,15 @@ class Shape:
 
 
 @dataclass(frozen=True)
+class DrawnTextRun:
+    text: str
+    size: float
+    family: str
+    fill: str | None
+    weight: str
+
+
+@dataclass(frozen=True)
 class DrawnText:
     lines: tuple[str, ...]
     points: tuple[tuple[float, float], ...]
@@ -78,6 +88,7 @@ class DrawnText:
     weight: str
     anchor: str
     uniform: bool  # no tspan overrides a font or paint attribute
+    run_lines: tuple[tuple[DrawnTextRun, ...], ...] = ()
 
     @property
     def text(self) -> str:
@@ -137,6 +148,48 @@ def inherit(attrs: dict, node: ET.Element) -> dict:
     return merged
 
 
+def _compose_transform(parent, child):
+    dx, dy, scale = parent
+    tx, ty, factor = child
+    result = (dx + scale*tx, dy + scale*ty, scale*factor)
+    if not all(math.isfinite(value) for value in result) or result[2] <= 0:
+        raise NativeRejection("native_group_transform_unsupported")
+    return result
+
+
+def _transform_of(node):
+    value = node.get("transform")
+    if not value:
+        return (0.0, 0.0, 1.0)
+    result, end = (0.0, 0.0, 1.0), 0
+    for match in re.finditer(r"([A-Za-z]+)\s*\(([^()]*)\)", value):
+        if value[end:match.start()].strip():
+            raise NativeRejection("native_group_transform_unsupported")
+        raw = match[2].strip()
+        if raw.startswith(",") or raw.endswith(",") or re.search(r",\s*,", raw):
+            raise NativeRejection("native_group_transform_unsupported")
+        tokens = re.split(r"[\s,]+", raw) if raw else []
+        if not tokens or any(not re.fullmatch(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?", token) for token in tokens):
+            raise NativeRejection("native_group_transform_unsupported")
+        numbers = [float(token) for token in tokens]
+        if not all(math.isfinite(number) for number in numbers):
+            raise NativeRejection("native_group_transform_unsupported")
+        name = match[1]
+        if name == "translate" and len(numbers) in {1, 2}:
+            child = (numbers[0], numbers[1] if len(numbers) == 2 else 0.0, 1.0)
+        elif name == "scale" and len(numbers) in {1, 2} and (len(numbers) == 1 or numbers[0] == numbers[1]) and numbers[0] > 0:
+            child = (0.0, 0.0, numbers[0])
+        elif name == "matrix" and len(numbers) == 6 and numbers[1] == 0 and numbers[2] == 0 and numbers[0] == numbers[3] and numbers[0] > 0:
+            child = (numbers[4], numbers[5], numbers[0])
+        else:
+            raise NativeRejection("native_group_transform_unsupported")
+        result = _compose_transform(result, child)
+        end = match.end()
+    if not end or value[end:].strip():
+        raise NativeRejection("native_group_transform_unsupported")
+    return result
+
+
 def translate_of(node: ET.Element) -> tuple[float, float]:
     value = node.get("transform")
     if value is None:
@@ -152,17 +205,16 @@ def tag_of(node: ET.Element) -> str:
     return node.tag.removeprefix(SVG_NS)
 
 
-def find_group(root: ET.Element, group_id: str):
-    """``(group, (dx, dy), inherited)`` of the ``<g>`` with ``group_id``, or ``None``."""
-    stack = [(root, (0.0, 0.0), {})]
+def find_group(root, group_id):
+    stack = [(root, (0.0, 0.0, 1.0), {})]
     while stack:
-        node, (dx, dy), inherited = stack.pop()
-        tx, ty = translate_of(node)
-        offset = (dx + tx, dy + ty)
+        node, position, inherited = stack.pop()
+        position = _compose_transform(position, _transform_of(node))
         attrs = inherit(inherited, node)
         if node.get("id") == group_id:
+            offset = position[:2] if position[2] == 1.0 else position
             return (node, offset, attrs) if tag_of(node) == "g" else None
-        stack.extend((child, offset, attrs) for child in node)
+        stack.extend((child, position, attrs) for child in reversed(list(node)))
     return None
 
 
@@ -229,56 +281,109 @@ def shape_of(node: ET.Element, tag: str, dx: float, dy: float, attrs: dict) -> S
                  vertices=tuple(vertices))
 
 
+def _rich_text_runs(node: ET.Element, attrs: dict) -> list[DrawnTextRun]:
+    style = inherit(attrs, node)
+    def fragment(value):
+        return DrawnTextRun(value, float(style.get("font-size", 16.0)),
+                            style.get("font-family", ""), paint(style.get("fill")),
+                            style.get("font-weight", "normal"))
+    runs = [fragment(node.text)] if node.text else []
+    for child in node:
+        if child.get("transform") is not None:
+            raise NativeRejection("native_group_transform_unsupported")
+        runs.extend(_rich_text_runs(child, style))
+        if child.tail:
+            runs.append(fragment(child.tail))
+    return runs
+
+
+def _normalize_runs(runs: list[DrawnTextRun]) -> tuple[DrawnTextRun, ...]:
+    # Normalize the same whitespace as the V1 cell, retaining each glyph's paint.
+    result: list[DrawnTextRun] = []
+    pending_space = None
+    for run in runs:
+        for character in unicodedata.normalize("NFC", run.text):
+            if character.isspace():
+                if result:
+                    pending_space = replace(run, text=" ")
+                continue
+            if pending_space is not None:
+                if result and replace(result[-1], text="") == replace(pending_space, text=""):
+                    result[-1] = replace(result[-1], text=result[-1].text + " ")
+                else:
+                    result.append(pending_space)
+                pending_space = None
+            current = replace(run, text=character)
+            if result and replace(result[-1], text="") == replace(current, text=""):
+                result[-1] = replace(current, text=result[-1].text + character)
+            else:
+                result.append(current)
+    return tuple(result)
+
+
 def _text(node: ET.Element, dx: float, dy: float, attrs: dict) -> DrawnText:
     x, y = _num(node, "x"), _num(node, "y")
-    lines: list[list] = [[node.text or "", (x + dx, y + dy)]]
-    uniform = True
+    base = DrawnTextRun("", float(attrs.get("font-size", 16.0)),
+                        attrs.get("font-family", ""), paint(attrs.get("fill")),
+                        attrs.get("font-weight", "normal"))
+    lines: list[list] = [[[replace(base, text=node.text)] if node.text else [], (x + dx, y + dy)]]
     for tspan in node:
         if tspan.get("transform") is not None:
             raise NativeRejection("native_group_transform_unsupported")
-        for key in ("font-size", "font-family", "fill", "font-weight"):
-            if tspan.get(key) is not None and tspan.get(key) != (node.get(key) or attrs.get(key)):
-                uniform = False
-        text = "".join(tspan.itertext())
+        runs = _rich_text_runs(tspan, attrs)
         line_y = tspan.get("y")
         if line_y is not None and float(line_y) + dy != lines[-1][1][1]:
             line_x = float(tspan.get("x")) if tspan.get("x") is not None else x
-            lines.append([text, (line_x + dx, float(line_y) + dy)])
+            lines.append([runs, (line_x + dx, float(line_y) + dy)])
         else:
-            lines[-1][0] += text
-        lines[-1][0] += tspan.tail or ""
-    kept = [(normalize_text(text), point) for text, point in lines if normalize_text(text)]
-    return DrawnText(lines=tuple(t for t, _ in kept), points=tuple(p for _, p in kept),
-                     size=_num(node, "font-size", 16.0), family=node.get("font-family", ""),
-                     fill=paint(node.get("fill", attrs.get("fill"))),
-                     weight=node.get("font-weight", attrs.get("font-weight", "normal")),
-                     anchor=node.get("text-anchor", attrs.get("text-anchor", "start")), uniform=uniform)
+            lines[-1][0].extend(runs)
+        if tspan.tail:
+            lines[-1][0].append(replace(base, text=tspan.tail))
+    kept = [(normalized, point) for runs, point in lines if (normalized := _normalize_runs(runs))]
+    uniform = all(replace(run, text="") == base for runs, _ in kept for run in runs)
+    return DrawnText(lines=tuple("".join(run.text for run in runs) for runs, _ in kept),
+                     points=tuple(point for _, point in kept), size=base.size,
+                     family=base.family, fill=base.fill, weight=base.weight,
+                     anchor=attrs.get("text-anchor", "start"), uniform=uniform,
+                     run_lines=tuple(runs for runs, _ in kept))
 
 
-def collect_primitives(group: ET.Element, offset: tuple[float, float], inherited: dict,
-                       allowed: frozenset[str]) -> GroupPrimitives:
-    """Flatten ``group`` into shapes and texts; raises on an element outside ``allowed``."""
-    shapes: list[Shape] = []
-    texts: list[DrawnText] = []
-    tags: set[str] = set()
-    stack = [(child, offset, inherited) for child in reversed(list(group))]
+def transform_shape(shape, position):
+    dx, dy, scale = position
+    box = shape.box
+    transformed = replace(shape, box=Box(dx+scale*box.x0, dy+scale*box.y0, dx+scale*box.x1, dy+scale*box.y1), stroke_width=shape.stroke_width*scale, area=shape.area*scale*scale, centroid=(dx+scale*shape.centroid[0], dy+scale*shape.centroid[1]) if shape.centroid is not None else None, vertices=tuple((dx+scale*x, dy+scale*y) for x, y in shape.vertices))
+    values = (transformed.box.x0, transformed.box.y0, transformed.box.x1, transformed.box.y1, transformed.stroke_width, transformed.area, *(value for point in transformed.vertices for value in point), *(transformed.centroid or ()))
+    if not all(math.isfinite(value) for value in values):
+        raise NativeRejection("native_group_transform_unsupported")
+    return transformed
+
+
+def collect_primitives(group, offset, inherited, allowed):
+    shapes, texts, tags = [], [], set()
+    initial = (*offset, 1.0) if len(offset) == 2 else offset
+    stack = [(child, initial, inherited) for child in reversed(list(group))]
     while stack:
-        node, (dx, dy), attrs = stack.pop()
+        node, position, attrs = stack.pop()
         tag = tag_of(node)
         if tag not in allowed:
             raise NativeRejection("native_group_element_unsupported")
         tags.add(tag)
-        tx, ty = translate_of(node)
-        position = (dx + tx, dy + ty)
+        position = _compose_transform(position, _transform_of(node))
         attrs = inherit(attrs, node)
+        dx, dy, scale = position
+        if scale != 1.0 and node.get("vector-effect", "none") != "none":
+            raise NativeRejection("native_group_transform_unsupported")
         if tag == "g":
             stack.extend((child, position, attrs) for child in reversed(list(node)))
         elif tag == "text":
-            drawn = _text(node, *position, attrs)
+            drawn = _text(node, 0.0, 0.0, attrs)
             if drawn.lines:
-                texts.append(drawn)
+                transformed = replace(drawn, points=tuple((dx + scale*x, dy + scale*y) for x, y in drawn.points), size=drawn.size*scale, run_lines=tuple(tuple(replace(run, size=run.size*scale) for run in runs) for runs in drawn.run_lines))
+                if not all(math.isfinite(value) for value in (transformed.size, *(run.size for runs in transformed.run_lines for run in runs), *(value for point in transformed.points for value in point))):
+                    raise NativeRejection("native_group_transform_unsupported")
+                texts.append(transformed)
         else:
-            shapes.append(shape_of(node, tag, *position, attrs))
+            shapes.append(transform_shape(shape_of(node, tag, 0.0, 0.0, attrs), position))
     return GroupPrimitives(tuple(shapes), tuple(texts), frozenset(tags))
 
 

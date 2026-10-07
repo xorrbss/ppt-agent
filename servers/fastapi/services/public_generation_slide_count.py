@@ -39,6 +39,7 @@ def source_content_admission_carrier(
     raster_approval_pin: Any = None,
     strategy: str | None = None,
     orientation: str | None = None,
+    generation_request: Any = None,
 ) -> SimpleNamespace:
     """Build the minimal request shape ``admit_source_content_request`` reads.
 
@@ -47,7 +48,7 @@ def source_content_admission_carrier(
     The worker re-admits the durable pin itself; nothing here is persisted.
     """
 
-    return SimpleNamespace(
+    carrier = SimpleNamespace(
         source_mode=source_mode,
         source_content_manifest_pin=source_content_manifest_pin,
         raster_approval_pin=raster_approval_pin,
@@ -59,6 +60,18 @@ def source_content_admission_carrier(
         export_as="pptx",
         reference_snapshot_ids=list(reference_snapshot_ids),
     )
+    if generation_request is not None:
+        # Preserve validated admission fields and selector presence. Copying
+        # the DTO's implicit 16:9 value alone would override source geometry.
+        for name in (
+            "page_size", "orientation", "aspect_ratio", "svg_canvas",
+            "content_policy", "authored_style", "generation_mode",
+            "generation_engine", "design_pack_pin", "master_pin",
+            "svg_design_reference_pin", "svg_design_reference_snapshot_id",
+        ):
+            setattr(carrier, name, getattr(generation_request, name, None))
+        carrier.model_fields_set = set(generation_request.model_fields_set)
+    return carrier
 
 
 async def resolve_source_content_admission_slide_count(

@@ -29,6 +29,7 @@ const menuButtonClass =
 interface HeaderMoreMenuProps {
   presentationId: string;
   isAuthoredDeck: boolean;
+  isSvgDeck?: boolean;
   canRemakePage?: boolean;
   currentSlide?: number;
   isStreaming: boolean | null;
@@ -49,6 +50,7 @@ interface HeaderMoreMenuProps {
 const HeaderMoreMenu = ({
   presentationId,
   isAuthoredDeck,
+  isSvgDeck = false,
   canRemakePage = false,
   currentSlide,
   isStreaming,
@@ -113,7 +115,7 @@ const HeaderMoreMenu = ({
               />
             </div>
           ) : null}
-          {isAuthoredDeck ? (
+          {isAuthoredDeck || isSvgDeck ? (
             <Button
               type="button"
               variant="ghost"

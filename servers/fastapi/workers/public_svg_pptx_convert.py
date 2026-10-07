@@ -12,8 +12,19 @@ from services.authored_canvas import AuthoredCanvasMetadata
 from services.document_canvas import canvas_physical_size
 from workers.public_svg_pptx_readback import iter_shapes, source_preservation_readback
 
-CONVERTER_VERSION = "slide-master/166472bd2a22de9aa9fb6c8cdf8b0cdfc6b698ef+document-canvas.2+text-advance.1"
+CONVERTER_VERSION = "slide-master/166472bd2a22de9aa9fb6c8cdf8b0cdfc6b698ef+document-canvas.2+text-advance.1+chart-furniture.16"
 VENDOR_ROOT = Path(__file__).resolve().parents[1] / "vendor" / "slide_master"
+
+
+_PROJECTION_ADAPTER_FILES = tuple(
+    Path(__file__).resolve().parents[1] / name
+    for name in (
+        "services/generation_core/drivers/svg/export_projection.py",
+        "services/generation_core/drivers/svg/export_scene.py",
+        "services/generation_core/drivers/svg/export_chart_style.py",
+        "workers/public_svg_pptx_convert.py",
+    )
+)
 
 
 def converter_digest():
@@ -21,7 +32,15 @@ def converter_digest():
     for name, expected in manifest["files"].items():
         if hashlib.sha256((VENDOR_ROOT / name).read_bytes()).hexdigest() != expected:
             raise ValueError("svg_converter_integrity_failed")
-    return hashlib.sha256((VENDOR_ROOT / "MANIFEST.json").read_bytes()).hexdigest()
+    identity = {
+        "schema": "svg-export-adapter-projection/v1",
+        "vendorManifestSha256": hashlib.sha256((VENDOR_ROOT / "MANIFEST.json").read_bytes()).hexdigest(),
+        "adapterSha256": {
+            path.relative_to(Path(__file__).resolve().parents[1]).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in _PROJECTION_ADAPTER_FILES
+        },
+    }
+    return hashlib.sha256(json.dumps(identity, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
@@ -39,8 +58,10 @@ def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
     try:
         from svg_to_pptx import create_pptx_with_native_svg
         from svg_to_pptx.conversion_context import ConversionContext
-        scene = prepare_svg_pptx_inputs(paths, native_objects, width=canvas.width_px, height=canvas.height_px)
         width_emu, height_emu = canvas_physical_size(canvas)
+        source_pt_per_px = (0.75 if isinstance(canvas, AuthoredCanvasMetadata)
+                             else width_emu / 12700 / canvas.width_px)
+        scene = prepare_svg_pptx_inputs(paths, native_objects, width=canvas.width_px, height=canvas.height_px, pt_per_px=source_pt_per_px)
         # Bundled-font metrics keep single-line frames at least as wide as their text.
         context = ConversionContext(
             canvas.width_px, canvas.height_px, width_emu, height_emu,

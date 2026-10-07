@@ -26,14 +26,94 @@ def _digest(value):
 
 
 def resolve_source_template_style(style_id: str):
-    from utils.authored_styles import load_authored_styles
+    from utils.authored_styles import canonical_authored_style_id, load_authored_styles
 
-    if style_id not in SUPPORTED_TEMPLATE_IDS:
-        raise ValueError("svg_source_template_unsupported:" + str(style_id))
-    style = next((s for s in load_authored_styles() if s.id == style_id), None)
+    styles = load_authored_styles()
+    style_id = canonical_authored_style_id(style_id, {style.id: style for style in styles})
+    style = next((s for s in styles if s.id == style_id), None)
     if style is None:
         raise ValueError("svg_source_template_unavailable:" + style_id)
     return style
+
+
+def reference_template_snapshot(style_spec: dict, width: int, height: int) -> dict:
+    """Pin source-restyle identity without introducing output slot topology.
+
+    ``template_snapshot`` remains the replay contract for historical solver
+    snapshots. New model composition consumes this reference-only contract.
+    """
+    if not (0 < width <= 4096 and 0 < height <= 4096):
+        raise ValueError("svg_source_template_canvas_unsupported")
+    font_digest, _ = font_material(FONT_FAMILY)
+    scale = min(width / DEFAULT_CANVAS_WIDTH_PX, height / DEFAULT_CANVAS_HEIGHT_PX)
+    source_tokens = style_spec.get("tokens", {})
+    palette = source_tokens.get("palette") or []
+    reference_tokens = (style_spec.get("master_template") or style_spec.get("design_pack_template") or {}).get("tokens", {})
+    tokens = {
+        "background": source_tokens.get("background", "#FFFFFF"),
+        "text": reference_tokens.get("text", "#0F172A"), "heading": reference_tokens.get("text", "#0F172A"),
+        "accent": source_tokens.get("primary", "#2563EB"),
+        "surface": reference_tokens.get("surface", "#FFFFFF"), "border": reference_tokens.get("border", "#CBD5E1"), "palette": palette,
+    }
+    result = {
+        "version": "svg-source-design-reference/v1",
+        "rule_version": "svg-source-design-reference/v1",
+        "style_id": style_spec["style_id"],
+        "canvas": {"width": width, "height": height},
+        "composition_mode": "free-svg",
+        "reference_semantics": "design-identity",
+        "tokens": tokens,
+        "fonts": {
+            role: {"family": FONT_FAMILY, "weight": weight, "size": size * scale, "digest": font_digest}
+            for role, weight, size in (("heading", 800, 42), ("body", 400, 24), ("table", 400, 22))
+        },
+        "table": {"header_fill": tokens["accent"], "header_text": "#FFFFFF",
+                  "body_fill": tokens["surface"], "border": tokens["border"], "header_weight": 700,
+                  "align": "left", "numeric_align": "right", "cell_padding": 12 * scale},
+        "shape": {"fill": tokens["surface"], "border": tokens["accent"], "radius": 6 * scale},
+        "common_guidance": style_spec.get("common_guidance", {}),
+        "reference_examples": style_spec.get("reference_examples", []),
+        "provenance": {"style_digest": style_spec["digest"], "rules": "svg-source-design-reference/v1"},
+        "content_contract": "verbatim-source-content",
+        "text_wrap_policy": "latin-token/v1",
+    }
+    if style_spec.get("source_identity_policy") == "svg-source-identity/v2":
+        from services.svg_reference_identity import contrast_foreground, identity_border
+
+        identity = (style_spec.get("design_pack_template") or {}).get("identity", {})
+        typography = identity.get("typography", {})
+        foreground = source_tokens.get("foreground", reference_tokens.get("foreground", tokens["text"]))
+        foreground = contrast_foreground(tokens["background"], foreground)
+        tokens.update(text=foreground, heading=foreground,
+                      accent=source_tokens.get("accent", tokens["accent"]),
+                      surface=reference_tokens.get("surface", tokens["background"]),
+                      border=reference_tokens.get("border", identity_border(tokens["background"], foreground)))
+        result["version"] = result["rule_version"] = "svg-source-design-reference/v2"
+        result["identity_policy"] = "svg-source-identity/v2"
+        result["provenance"]["rules"] = result["version"]
+        result["fonts"]["heading"]["weight"] = 700
+        ratio = typography.get("heading", {}).get("relative_to_body")
+        if isinstance(ratio, (int, float)) and 1 <= ratio <= 4:
+            result["fonts"]["heading"]["size"] = result["fonts"]["body"]["size"] * ratio
+        result["table"].update(header_fill=tokens["accent"],
+                               header_text=contrast_foreground(tokens["accent"], foreground),
+                               body_fill=tokens["surface"], border=tokens["border"])
+        result["shape"].update(fill=tokens["surface"], border=tokens["accent"])
+        result["identity"] = {
+            "color_roles": {key: tokens[key] for key in ("background", "text", "accent")},
+            "typography": result["fonts"],
+            "font_policy": "Use the packaged source measurement font; preserve observed relative emphasis.",
+        }
+        result["composition_guidance"] = [
+            "Apply the supplied background, foreground, accent and type hierarchy consistently across text and tables.",
+            "Integrate immutable text crops with neighboring text using alignment, scale and whitespace; preserve their pixels and IDs.",
+            "Keep approved cell text and image crops exact; an uncertain bitmap reading is never permission to rewrite or omit it.",
+        ]
+    furniture = style_spec.get("master_template", {}).get("system_furniture")
+    if furniture:
+        result["system_furniture"] = furniture
+    result["digest"] = _digest(result)
+    return result
 
 
 def template_snapshot(style_spec: dict, width: int, height: int) -> dict:

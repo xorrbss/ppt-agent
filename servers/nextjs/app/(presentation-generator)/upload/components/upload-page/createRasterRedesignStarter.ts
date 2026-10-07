@@ -10,9 +10,7 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import type { Dispatch as ReduxDispatch, UnknownAction } from "redux";
 import { clearOutlines, setPresentationId } from "@/store/slices/presentationGeneration";
-import { notify } from "@/components/ui/sonner";
-import { uploadExtraTranslator } from "./uploadExtraTranslator";
-import type { PresentationConfig } from "../../type";
+import { documentCanvasRequestForConfig, type PresentationConfig } from "../../type";
 import { PresentationGenerationApi } from "../../../services/api/presentation-generation";
 import {
   RasterSourceApi,
@@ -61,12 +59,6 @@ export function createRasterRedesignStarter({
   handoffRasterGeneration, handleGenerationError, abandonRun,
 }: RasterRedesignStarterDeps) {
   return async function startRasterRedesignFlow(admitted: SourceContentAdmission) {
-    if (authoredStyle !== "screenshot-blue") {
-      const t = uploadExtraTranslator();
-      notify.warning(t("checkTemplate"), t("a4SvgReconstructionSupportedTemplate"));
-      abandonRun(t("selectScreenshotBlueTemplate"));
-      return;
-    }
     try {
       setRasterOperation(null);
       setRasterPage(null);
@@ -81,7 +73,7 @@ export function createRasterRedesignStarter({
       setLoadingState({
         isLoading: true,
         message: analysisMode === "auto_redesign"
-          ? "원본 화면을 편집 가능한 A4 슬라이드로 재구성할 준비를 하는 중…"
+          ? "원본 화면을 편집 가능한 슬라이드로 재구성할 준비를 하는 중…"
           : "원본 화면의 영역과 인식 내용을 분석하는 중…",
         showProgress: true,
       });
@@ -98,8 +90,9 @@ export function createRasterRedesignStarter({
         include_table_of_contents: false,
         include_title_slide: false,
         web_search: false,
-        page_size: "A4",
-        orientation: config.orientation ?? "landscape",
+        ...(config.svgDesignReferenceSnapshotId ? { svg_design_reference_snapshot_id: config.svgDesignReferenceSnapshotId } : {}),
+        ...(config.svgDesignReferencePin ? { svg_design_reference_pin: config.svgDesignReferencePin } : {}),
+        ...documentCanvasRequestForConfig(config),
         theme,
         strategy: "svg",
       });
@@ -109,15 +102,18 @@ export function createRasterRedesignStarter({
       const pending = await RasterSourceApi.start({
         reference_snapshot_id: admitted.documentAdmission.referenceSnapshotId,
         presentation_id: created.id,
-        orientation: config.orientation ?? "landscape",
+        ...(config.svgCanvas ? { svg_canvas: config.svgCanvas } : config.pageSize === "A4" ? { orientation: config.orientation ?? "landscape" } : { aspect_ratio: config.aspectRatio }),
         analysis_mode: analysisMode,
-        style_id: "screenshot-blue",
+        style_id: authoredStyle || "screenshot-blue",
       });
       const recovery = {
         presentationId: created.id,
         operationId: pending.operation_id,
         referenceSnapshotId: admitted.documentAdmission.referenceSnapshotId,
         analysisMode,
+        svgDesignReferenceSnapshotId: config.svgDesignReferenceSnapshotId,
+        svgDesignReferencePin: config.svgDesignReferencePin,
+        ...(config.svgCanvas ? { svgCanvas: config.svgCanvas } : config.pageSize !== "A4" ? { aspectRatio: config.aspectRatio } : {}),
         orientation: config.orientation ?? "landscape",
         authoredStyle,
         instructions: [config.prompt, config.instructions].map((part) => part?.trim()).filter(Boolean).join("\n") || null,
@@ -129,7 +125,7 @@ export function createRasterRedesignStarter({
         setLoadingState({
           isLoading: true,
           message: analysisMode === "auto_preserve"
-            ? rasterWaitMessage(progress, "원본 화면 보존을 기다리는 중…", "원본 화면을 A4로 보존하는 중…")
+            ? rasterWaitMessage(progress, "원본 화면 보존을 기다리는 중…", "원본 화면을 선택한 크기로 보존하는 중…")
             : analysisMode === "auto_redesign"
             ? rasterWaitMessage(progress, "원본 화면 재구성을 기다리는 중…", "원본 화면을 편집 가능한 텍스트와 표로 재구성하는 중…")
             : rasterWaitMessage(progress, "원본 화면 분석을 기다리는 중…", "원본 화면의 영역과 인식 내용을 분석하는 중…"),

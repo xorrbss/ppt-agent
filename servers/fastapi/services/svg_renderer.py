@@ -136,7 +136,8 @@ def _materialize_authorized_raster_font(canonical: ET.Element, admitted):
         asset_digests=tuple(dict.fromkeys((*admitted.asset_digests, digest))), node_count=admitted.node_count + 1)
 
 
-def admit_preserved_raster_preview(svg: str, materialized_svg: str, *, width: int, height: int):
+def admit_preserved_raster_preview(svg: str, materialized_svg: str, *, width: int, height: int,
+                                   system_furniture: dict | None = None):
     """Recheck the bounded raster derivative in both parent and isolated worker.
 
     One embedded crop for a full_page_preserve page, N for a redesign page
@@ -148,14 +149,21 @@ def admit_preserved_raster_preview(svg: str, materialized_svg: str, *, width: in
     from utils.renderer_isolation import admit_authorized_svg_materialized
 
     canonical = ET.fromstring(svg)
+    furniture = {}
+    if system_furniture:
+        from services.svg_master_furniture import attested_svg_furniture
+        offered = {node.get("href"): {"required": True, "allowOmit": False} for node in canonical.iter()
+                   if node.tag.rsplit("}", 1)[-1] == "image" and node.get("href", "").startswith("source-slot-")}
+        furniture = attested_svg_furniture(svg, system_furniture, source_manifest=offered, width=width, height=height)
     slots = [node.get("href") for node in canonical.iter()
-             if node.tag.rsplit("}", 1)[-1] == "image"]
-    if not slots or any(not slot for slot in slots):
+             if node.tag.rsplit("}", 1)[-1] == "image" and node.get("id") not in furniture]
+    if (not slots and not system_furniture) or any(not slot for slot in slots):
         raise ValueError("raster_preview_image_slots_invalid")
     admitted = admit_authorized_svg_materialized(
         svg, materialized_svg,
         source_manifest={slot: {"required": True, "allowOmit": False} for slot in slots},
         width_px=width, height_px=height, allow_image_only=True,
+        **({"system_furniture": system_furniture} if system_furniture else {}),
     )
     admitted = _materialize_authorized_raster_font(canonical, admitted)
     root = ET.fromstring(materialized_svg)
@@ -172,9 +180,10 @@ def admit_preserved_raster_preview(svg: str, materialized_svg: str, *, width: in
 def svg_preview_html(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH_PX, height: int = DEFAULT_CANVAS_HEIGHT_PX,
                      materialized_svg: str | None = None,
                      source_font_profile: str | None = None,
-                     allow_image_only: bool = False) -> str:
+                     allow_image_only: bool = False, system_furniture: dict | None = None) -> str:
     if allow_image_only and materialized_svg is not None:
-        return admit_preserved_raster_preview(svg, materialized_svg, width=width, height=height)[1]
+        return admit_preserved_raster_preview(svg, materialized_svg, width=width, height=height,
+            **({"system_furniture": system_furniture} if system_furniture else {}))[1]
     rendered_source = materialized_svg if materialized_svg is not None else svg
     validate_svg(rendered_source, width=width, height=height, allow_image_only=allow_image_only)
     if materialized_svg is not None:
@@ -234,13 +243,27 @@ async def render_svg_with_metrics(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH
                                   required_text: list[str] | None = None,
                                   materialized_svg: str | None = None,
                                   physical_canvas: object | None = None,
+                                  readability_policy: dict | None = None,
                                   source_font_profile: str | None = None,
-                                  allow_image_only: bool = False) -> SvgRenderResult:
+                                  allow_image_only: bool = False,
+                                  system_furniture: dict | None = None,
+                                  timeline_ink_probe: bool | None = None) -> SvgRenderResult:
     from utils.authored_font_policy import requested_font_floor_px
     from utils.slide_capture import render_html_to_png_with_metrics
+    if readability_policy is not None and physical_canvas is not None:
+        from services.document_canvas import canvas_physical_size
+        from services.document_canvas_generation import validate_svg_readability_policy
+
+        policy = validate_svg_readability_policy(readability_policy)
+        if canvas_physical_size(physical_canvas) != (policy["width_emu"], policy["height_emu"]):
+            raise ValueError("svg_readability_canvas_mismatch")
     wrapper = svg_preview_html(svg, width=width, height=height,
                                materialized_svg=materialized_svg, source_font_profile=source_font_profile,
-                               allow_image_only=allow_image_only)
+                               allow_image_only=allow_image_only,
+                               **({"system_furniture": system_furniture} if system_furniture else {}))
+    if timeline_ink_probe is True:
+        # Internal measurement option belongs to the derivative HTML, never SVG.
+        wrapper = wrapper.replace("<body>", '<body class="codex-timeline-ink-v1">', 1)
     if allow_image_only and materialized_svg is not None:
         from utils.slide_capture_worker_client import _render_html_in_isolated_worker
         from utils.slide_capture_result import RenderCapture
@@ -251,6 +274,7 @@ async def render_svg_with_metrics(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH
             png, browser_metrics = await _render_html_in_isolated_worker(
                 svg, timeout, width_px=width, height_px=height,
                 preserved_raster_svg=materialized_svg,
+                **({"system_furniture": system_furniture} if system_furniture else {}),
             )
         capture = RenderCapture.from_payload(
             html_digest=source_digest(wrapper), png=png, browser_metrics=browser_metrics,
@@ -273,8 +297,20 @@ async def render_svg_with_metrics(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH
     )
     if requested_floor is not None:
         floor = requested_floor
+    if readability_policy is not None:
+        from services.document_canvas_generation import svg_readability_font_floor
+
+        floor = max(floor, svg_readability_font_floor(readability_policy))
     root = ET.fromstring(svg)
     footer_qid = next((f"svg-{i}" for i, node in enumerate(root.iter()) if node.get("id") == PAGE_NUMBER_ID), None)
+    furniture_qids = set()
+    if system_furniture:
+        from services.svg_master_furniture import attested_svg_furniture
+        source_contract = {node.get("href"): {"required": True} for node in root.iter()
+                           if node.tag.rsplit("}", 1)[-1] == "image" and node.get("href", "").startswith("source-slot-")}
+        furniture_nodes = attested_svg_furniture(svg, system_furniture,
+            source_manifest=source_contract if materialized_svg is not None else None, width=width, height=height)
+        furniture_qids = {f"svg-{i}" for i, node in enumerate(root.iter()) if node.get("id") in furniture_nodes}
     images = [item for item in elements if item.get("tag") == "image"]
     # Approved raster pages have already passed digest, decoding and source
     # geometry checks at materialization. Measure their visible image surface.
@@ -300,7 +336,7 @@ async def render_svg_with_metrics(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH
             failures.append({"kind": "text_clipped", "qid": qid})
         if not item.get("css_visible", True) or item.get("effective_opacity", 1) < 0.9:
             failures.append({"kind": "text_hidden", "qid": qid})
-        if qid != footer_qid and item.get("font_size", 0) < floor:
+        if qid != footer_qid and qid not in furniture_qids and item.get("font_size", 0) < floor:
             failures.append({"kind": "small_body_text", "qid": qid, "minimum_px": floor})
         if item.get("font_loaded") is False:
             failures.append({"kind": "font_unresolved", "qid": qid})
@@ -340,4 +376,14 @@ async def render_svg_with_metrics(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH
                "body_font_floor_px": floor, "browser_metrics": metrics,
                "overlap_basis": overlap_basis,
                "trusted_font_materialization": font_profile}
+    if readability_policy is not None:
+        from services.document_canvas_generation import measure_svg_readability
+
+        content_text = [item for item in text if item.get("qid") != footer_qid
+                        and item.get("qid") not in furniture_qids]
+        physical, physical_failures = measure_svg_readability(readability_policy, width=width,
+            height=height, text=content_text, measurement_complete=measurement_complete)
+        quality["physical_readability"] = physical
+        quality["failures"].extend(physical_failures)
+        quality["geometry_passed"] = quality["passed"] = not quality["failures"]
     return SvgRenderResult(capture.png, quality, wrapper, source_digest(svg))

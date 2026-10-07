@@ -89,9 +89,13 @@ def _artifact_reference(
     "public-svg-export-bundle/v2",
     "public-svg-export-bundle/v3",
 ])
+@pytest.mark.parametrize("system_furniture", [False, True])
+@pytest.mark.parametrize("source_lineage", [False, True])
 def test_svg_bundle_shared_assets_have_one_physical_staging_entry(
     tmp_path: Path,
     schema_version: str,
+    system_furniture: bool,
+    source_lineage: bool,
 ) -> None:
     owner_id = uuid.uuid4()
     operation_id = uuid.uuid4()
@@ -134,6 +138,10 @@ def test_svg_bundle_shared_assets_have_one_physical_staging_entry(
         media_type="image/png",
         payload=b"shared-png",
     )
+    lineage = _artifact_reference(
+        owner_id=owner_id, operation_id=operation_id, tenant_id=tenant_id,
+        kind="svg-export-source-lineage", media_type="application/json", payload=b'{"lineage":"shared"}',
+    )
     bundle = {
         "schemaVersion": schema_version,
         "slides": [
@@ -154,6 +162,16 @@ def test_svg_bundle_shared_assets_have_one_physical_staging_entry(
             )
         ],
     }
+    if system_furniture:
+        for entry in bundle["slides"]:
+            entry["assets"]["systemFurniture"] = {
+                "version": "svg-system-furniture/v1", "svg_digest": "sha256:" + "a" * 64,
+                "digest": "sha256:" + "b" * 64, "canvas": {"width": 1280, "height": 720},
+                "element_ids": ["svg-system-master-furniture"], "images": {},
+            }
+    if source_lineage:
+        for entry in bundle["slides"]:
+            entry["assets"].update(sourceLineageRef=lineage.to_wire(), sourceLineageDigest=lineage.sha256)
     bundle_payload = json.dumps(bundle, separators=(",", ":")).encode()
     bundle_reference = _artifact_reference(
         owner_id=owner_id,
@@ -182,10 +200,10 @@ def test_svg_bundle_shared_assets_have_one_physical_staging_entry(
         references=(bundle_reference, *logical_references),
     )
 
-    assert len(logical_references) == 8
+    assert len(logical_references) == 8 + 2 * source_lineage
     assert sum(reference == source_manifest for reference in logical_references) == 2
     assert sum(reference == derivative for reference in logical_references) == 2
-    assert len(plan) == 7
+    assert len(plan) == 7 + source_lineage
     assert len({item.destination for item in plan}) == len(plan)
     assert sum(item.reference.size_bytes for item in plan) == sum(
         reference.size_bytes
@@ -195,8 +213,29 @@ def test_svg_bundle_shared_assets_have_one_physical_staging_entry(
             source_manifest,
             *placement_manifests,
             derivative,
+            *([lineage] if source_lineage else []),
         )
     )
+    if source_lineage:
+        from dataclasses import replace
+        foreign_refs = (
+            replace(lineage, owner_id=uuid.uuid4()),
+            replace(lineage, tenant_id="foreign-tenant"),
+            replace(lineage, created_by_operation_id=uuid.uuid4()),
+            replace(lineage, kind="source-manifest"),
+            replace(lineage, media_type="image/png"),
+        )
+        valid_assets = dict(bundle["slides"][0]["assets"])
+        invalid_assets = [dict(valid_assets, sourceLineageRef=ref.to_wire()) for ref in foreign_refs]
+        invalid_assets.extend(dict(valid_assets, sourceLineageDigest=digest) for digest in ("c" * 64, [], None))
+        invalid_assets.extend({key: value for key, value in valid_assets.items() if key != removed}
+                              for removed in ("sourceLineageRef", "sourceLineageDigest"))
+        invalid_assets.append(dict(valid_assets, unknownLineage=True))
+        for assets in invalid_assets:
+            bundle["slides"][0]["assets"] = assets
+            bundle_path.write_text(json.dumps(bundle), encoding="utf-8")
+            with pytest.raises(TrustedWorkerWireError):
+                _input_bundle_references(job, bundle_path)
 
 
 def test_physical_staging_plan_rejects_conflicting_bytes_for_one_destination(

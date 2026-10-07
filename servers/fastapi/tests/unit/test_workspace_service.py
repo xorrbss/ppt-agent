@@ -84,6 +84,804 @@ def test_event_page_contract_serializes_safe_retryable_flag():
     assert wire["events"][0]["retryable"] is False
 
 
+def test_svg_timeout_repurchase_counter_preserves_consumed_purchase():
+    from services.svg_presentation_checkpoint import _provider_attempt_count
+
+    legacy = {"attempts": [{"kind": "local"}, {"kind": "provider"}],
+              "retained_provider_attempt_fence": {"consumed_attempt_count": True}}
+    assert _provider_attempt_count(legacy) == 1
+    payload = {"recovery_revision": "svg-provider-timeout-repurchase/v1", "attempts": [],
+               "retained_provider_attempt_fence": {"consumed_attempt_count": 1, "previous_ordinal": 1}}
+    assert _provider_attempt_count(payload) == 1
+    assert _provider_attempt_count(payload) + 1 == 2  # next provider ordinal
+    payload["attempts"] = [{"kind": "provider"}]
+    assert _provider_attempt_count(payload) == 2  # no automatic third purchase
+    payload["attempts"] = []
+    payload["provider_failures"] = [{"code": "public_provider_overload"}]
+    assert _provider_attempt_count(payload) == 2
+    for malformed in ({"consumed_attempt_count": True, "previous_ordinal": 1},
+                      {"consumed_attempt_count": -1, "previous_ordinal": -1},
+                      {"consumed_attempt_count": 1, "previous_ordinal": 2}):
+        payload["retained_provider_attempt_fence"] = malformed
+        with pytest.raises(ValueError, match="attempt_fence_invalid"):
+            _provider_attempt_count(payload)
+
+
+def test_generation_action_principal_binds_exact_owner_and_verified_local_tenant(tmp_path, monkeypatch):
+    asyncio.run(_generation_action_principal_bridge(tmp_path, monkeypatch))
+
+
+@pytest.mark.parametrize("kind",["slide.regenerate.preview","slide.regenerate"])
+def test_preview_principal_bridge_keeps_owner_and_refuses_normal_tenant_switch(tmp_path,monkeypatch,kind):
+    asyncio.run(_preview_principal_bridge(tmp_path,monkeypatch,kind))
+
+
+async def _preview_principal_bridge(tmp_path,monkeypatch,kind):
+    from types import SimpleNamespace
+    from models.sql.public_admission import PublicPolicyProfile,PublicOperationAdmission
+    import services.workspace_service as service
+    from utils.owner_context import get_current_owner_id,get_current_tenant_id
+    from services.workspace_operation_principal import operation_principal
+    monkeypatch.setattr("utils.env_settings.public_service.get_public_process_identity_settings",
+        lambda:SimpleNamespace(service_tenant_id="service-default"))
+    monkeypatch.setattr("api.v1.auth.principal.local_development_tenant_id",lambda:"local-development")
+    engine,maker=await _database(tmp_path/"preview-principal.db")
+    try:
+        async with engine.begin() as c:
+            await c.run_sync(lambda s:SQLModel.metadata.create_all(s,tables=[PublicPolicyProfile.__table__,PublicOperationAdmission.__table__]))
+        async with maker() as session:
+            owner=User(username="preview-owner",hashed_password="unused")
+            session.add(owner)
+            await session.commit()
+        with operation_principal(owner.id,"service-default"):
+            presentation=await _create_presentation(maker)
+            async with maker() as session:
+                _,_,source,_=await bootstrap_workspace(session,presentation_id=presentation.id,request=_bootstrap_request(key="preview-source"))
+                source.kind,source.state="presentation.generate","succeeded"
+                source.request_payload={"principal_tenant_id":"local-development"}
+                values={c.name:100 for c in PublicPolicyProfile.__table__.columns if not c.nullable and c.default is None and c.server_default is None}
+                values["version"]="preview-principal-policy"
+                policy=PublicPolicyProfile(**values)
+                session.add(policy)
+                await session.flush()
+                session.add(PublicOperationAdmission(operation_id=source.id,policy_version=policy.version,
+                    owner_id=owner.id,tenant_id="local-development",trace_id_hash="a"*64,
+                    operation_kind="generation",resource_units=1,policy_digest="b"*64,
+                    deadline_at=get_current_utc_datetime(),state="succeeded",planned_request_limit=1,retry_request_limit=0,
+                    estimated_cost_limit_microunits=100,actual_cost_limit_microunits=100))
+                with operation_principal(owner.id,"local-development"):
+                    await session.commit()
+            observed=[]
+            async def created(*args,**kwargs):
+                observed.append((get_current_owner_id(),get_current_tenant_id()))
+                return "preview-created"
+            monkeypatch.setattr(service,"_create_workspace_command",created)
+            request=WorkspaceCommandRequest(command="Preview",command_type=kind,idempotency_key="preview-bridge",expected_revision=0)
+            async with maker() as session:
+                with pytest.raises(WorkspaceServiceError,match="workspace_operation_principal_conflict"):
+                    await service.create_workspace_command(session,presentation_id=presentation.id,request=request)
+            async with maker() as session:
+                assert await service.create_workspace_command(session,presentation_id=presentation.id,request=request,allow_local_development=True)=="preview-created"
+            assert observed==[(owner.id,"local-development")]
+            assert get_current_owner_id()==owner.id and get_current_tenant_id()=="service-default"
+    finally:
+        await engine.dispose()
+
+
+async def _generation_action_principal_bridge(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from models.sql.public_admission import PublicPolicyProfile, PublicOperationAdmission
+    from services.workspace_operation_principal import (
+        generation_action_principal, operation_principal, _export_admission_principal,
+    )
+    from services.workspace_operation_handler_registry import NonRetryableWorkspaceOperationError
+    from utils.owner_context import get_current_tenant_id, get_current_owner_id
+    import services.workspace_service as workspace_service
+
+    monkeypatch.setattr("utils.env_settings.public_service.get_public_process_identity_settings",
+                        lambda: SimpleNamespace(service_tenant_id="service-default"))
+    monkeypatch.setattr("api.v1.auth.principal.local_development_tenant_id", lambda: "local-development")
+    engine, maker = await _database(tmp_path / "generation-action-principal.db")
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(lambda conn: SQLModel.metadata.create_all(conn,
+                tables=[PublicPolicyProfile.__table__, PublicOperationAdmission.__table__]))
+        async with maker() as session:
+            owner = User(username="generation-action-owner", hashed_password="unused")
+            session.add(owner)
+            await session.commit()
+            owner_id = owner.id
+        with operation_principal(owner_id, "service-default"):
+            presentation = await _create_presentation(maker)
+            async with maker() as session:
+                _, _, source, _ = await bootstrap_workspace(session, presentation_id=presentation.id,
+                    request=_bootstrap_request(key="generation-action-source"))
+                source.kind = "presentation.generate"
+                source.execution_profile_version = "public-generation-export/v2"
+                source.contract_version = "public-operation/v2"
+                source.phase = "rendering"
+                source.deadline_at = get_current_utc_datetime() + timedelta(minutes=10)
+                source.state, source.version, source.fencing_token = "running", 4, 1
+                source.request_payload = {"principal_tenant_id": "local-development"}
+                policy_values = {column.name: 100 for column in PublicPolicyProfile.__table__.columns
+                    if not column.nullable and column.default is None and column.server_default is None}
+                policy_values["version"] = "generation-action-policy"
+                policy = PublicPolicyProfile(**policy_values)
+                session.add(policy)
+                await session.flush()
+                admission = PublicOperationAdmission(operation_id=source.id, policy_version=policy.version,
+                    owner_id=owner_id, tenant_id="local-development", trace_id_hash="a" * 64,
+                    operation_kind="generation", resource_units=1, policy_digest="b" * 64,
+                    deadline_at=source.deadline_at, fence=1,
+                    state="active", planned_request_limit=1, retry_request_limit=1,
+                    estimated_cost_limit_microunits=100, actual_cost_limit_microunits=100)
+                source.deadline_at = admission.deadline_at
+                # The fixture models v2 submission in its declared tenant;
+                # subsequent workspace actions arrive in the service tenant.
+                with operation_principal(owner_id, "local-development"):
+                    session.add(admission)
+                    await session.commit()
+                source_id = source.id
+            request = WorkspaceOperationActionRequest(action="cancel", idempotency_key="generation-cancel",
+                                                     expected_operation_version=4)
+            async with maker() as session:
+                with pytest.raises(WorkspaceServiceError) as forbidden:
+                    await apply_workspace_action(session, operation_id=source_id, request=request)
+                assert forbidden.value.code == "workspace_operation_principal_conflict"
+                assert get_current_tenant_id() == "service-default"
+            async with maker() as session:
+                source = await session.get(WorkspaceOperation, source_id)
+                for changes in ({"owner_id": uuid.uuid4()}, {"kind": "export.pptx"},
+                                {"id": uuid.uuid4()}, {"request_payload": {"principal_tenant_id": "another-tenant"}},
+                                {"request_payload": {}},
+                                {"request_payload": {"principal_tenant_id": "local-development", "tenant_id": "another-tenant"}}):
+                    candidate = source.model_copy(update=changes)
+                    with pytest.raises(NonRetryableWorkspaceOperationError):
+                        async with generation_action_principal(session, source=candidate, action="cancel",
+                                                               allow_local_development=True):
+                            pytest.fail("must not grant unrelated generation authority")
+                    assert get_current_tenant_id() == "service-default"
+                    assert get_current_owner_id() == owner_id
+                with pytest.raises(NonRetryableWorkspaceOperationError):
+                    async with generation_action_principal(session, source=source, action="approve",
+                                                           allow_local_development=True):
+                        pytest.fail("only cancel/retry may use this scope")
+                with pytest.raises(NonRetryableWorkspaceOperationError):
+                    async with _export_admission_principal(session, sources=[source], operation_kind="generation",
+                        allow_local_development=True, legacy_ok=False):
+                        pytest.fail("export default must still require succeeded admission")
+            actual_apply = workspace_service._apply_workspace_action
+            observed_tenants = []
+
+            async def observe_apply(*args, **kwargs):
+                observed_tenants.append(get_current_tenant_id())
+                return await actual_apply(*args, **kwargs)
+
+            monkeypatch.setattr(workspace_service, "_apply_workspace_action", observe_apply)
+            async with maker() as session:
+                with pytest.raises(WorkspaceServiceError) as stale:
+                    await apply_workspace_action(session, operation_id=source_id,
+                        request=request.model_copy(update={"expected_operation_version": 3}), allow_local_development=True)
+                assert stale.value.code == "operation_state_conflict"
+                assert get_current_tenant_id() == "service-default"
+            async with maker() as session:
+                receipt, cancelled, duplicate = await apply_workspace_action(session, operation_id=source_id,
+                    request=request, allow_local_development=True)
+                assert not duplicate and cancelled.state == "cancelling" and cancelled.version == 5
+                assert cancelled.cancel_requested_at is not None and receipt.operation_id == source_id
+                assert get_current_tenant_id() == "service-default" and get_current_owner_id() == owner_id
+            assert observed_tenants == ["local-development", "local-development"]
+            async with maker() as session:
+                with operation_principal(owner_id, "local-development"):
+                    source = await session.get(WorkspaceOperation, source_id)
+                    admission = await session.scalar(select(PublicOperationAdmission).where(
+                        PublicOperationAdmission.operation_id == source_id))
+                    source.state, admission.state = "cancelled", "cancelled"
+                    await session.commit()
+            async with maker() as session:
+                replay_receipt, replay, duplicate = await apply_workspace_action(session, operation_id=source_id,
+                    request=request, allow_local_development=True)
+                assert duplicate and replay_receipt.id == receipt.id and replay.state == "cancelled"
+                with pytest.raises(WorkspaceServiceError) as terminal_cancel:
+                    await apply_workspace_action(session, operation_id=source_id,
+                        request=request.model_copy(update={"idempotency_key": "new-terminal-cancel", "expected_operation_version": 5}),
+                        allow_local_development=True)
+                assert terminal_cancel.value.code == "operation_state_conflict"
+                assert await session.scalar(select(func.count()).select_from(WorkspaceActionReceipt)) == 1
+                assert get_current_tenant_id() == "service-default"
+            async with maker() as session:
+                with operation_principal(owner_id, "local-development"):
+                    source = await session.get(WorkspaceOperation, source_id)
+                    admission = await session.scalar(select(PublicOperationAdmission).where(
+                        PublicOperationAdmission.operation_id == source_id))
+                    source.state, admission.state = "failed", "failed"
+                async with generation_action_principal(session, source=source, action="retry",
+                                                       allow_local_development=True):
+                    assert get_current_tenant_id() == "local-development"
+                assert get_current_tenant_id() == "service-default"
+                with operation_principal(owner_id, "local-development"):
+                    source.state, admission.state = "blocked", "queued"
+                async with generation_action_principal(session, source=source, action="retry",
+                                                       allow_local_development=True):
+                    assert get_current_tenant_id() == "local-development"
+                assert get_current_tenant_id() == "service-default"
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.parametrize("mixed", [False, True, 'append_only'])
+def test_svg_timeout_repurchase_requires_bound_consent_and_preserves_completed_sources(tmp_path, monkeypatch, mixed):
+    if mixed == "append_only":
+        asyncio.run(_svg_append_only_recovery_contract(tmp_path, monkeypatch))
+        return
+    asyncio.run(_svg_timeout_repurchase_bound_consent(tmp_path, monkeypatch, mixed=mixed))
+
+
+@pytest.mark.parametrize("page_count", [4, 2])
+def test_svg_classification_remeasurement_archives_failure_and_protects_cached_bytes(tmp_path, monkeypatch, page_count):
+    asyncio.run(_svg_classification_remeasurement_contract(tmp_path, monkeypatch, page_count))
+
+
+async def _svg_classification_remeasurement_contract(tmp_path, monkeypatch, page_count):
+    from copy import deepcopy
+    from models.sql.async_presentation_generation_status import AsyncPresentationGenerationTaskModel
+    from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
+    from models.sql.presentation_generation_job import PresentationGenerationJob
+    from models.sql.public_admission import PublicPolicyProfile, PublicOperationAdmission, PublicProviderLogicalCall, PublicResourceLease
+    from models.sql.provider_runtime_reservation import ProviderRuntimeBudget, ProviderRuntimeReservation
+    from services.svg_classification_remeasurement import (
+        SVG_CLASSIFICATION_REMEASUREMENT, CLASSIFICATION_APPROVAL_PREFIX,
+        SVG_SOURCE_REMEASUREMENT_DISPATCH, DISPATCH_APPROVAL_PREFIX,
+        build_classification_remeasurement_manifest, remeasurement_digest, author_witness_digest,
+    )
+    from services.authored_vnext.deck_ir.strategy import (
+        seal_generation_strategy_decision, validate_sealed_generation_strategy,
+        rebind_sealed_generation_strategy, GenerationStrategyCapabilityError,
+    )
+    from utils.hashing import sha256_hex
+
+    monkeypatch.setattr("services.svg_presentation_checkpoint._read_png", lambda p: b"cached" if p.get("png_sha256") else None)
+    admissions = []
+
+    async def admit_generation(session, **kwargs):
+        admissions.append(kwargs["operation"].id)
+
+    monkeypatch.setattr("services.presentation_generation_pipeline._admit_generation_operation_v2_compatible", admit_generation)
+    engine, maker = await _database(tmp_path / "classification-remeasurement.db")
+    extra_tables = [AsyncPresentationGenerationTaskModel.__table__, PresentationGenerationJob.__table__,
+        AuthoredSlideCheckpoint.__table__, PublicPolicyProfile.__table__, PublicOperationAdmission.__table__,
+        PublicProviderLogicalCall.__table__, PublicResourceLease.__table__, ProviderRuntimeBudget.__table__,
+        ProviderRuntimeReservation.__table__]
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(lambda conn: SQLModel.metadata.create_all(conn, tables=extra_tables))
+        presentation = await _create_presentation(maker)
+        now = get_current_utc_datetime()
+        async with maker() as session:
+            user = User(username="classification-owner", hashed_password="unused")
+            session.add(user)
+            await session.flush()
+            _, _, source, _ = await bootstrap_workspace(session, presentation_id=presentation.id,
+                request=_bootstrap_request(key="classification-source"))
+            source.owner_id, source.kind, source.state = user.id, "presentation.generate", "failed"
+            source.version, source.fencing_token = 4, 2
+            error_code = "svg_source_classification_missing" if page_count == 4 else "svg_source_quality_failed"
+            source.error_code, source.error_detail = error_code, {"retryable": False}
+            task = AsyncPresentationGenerationTaskModel(status="failed")
+            session.add(task)
+            await session.flush()
+            job = PresentationGenerationJob(task_id=task.id, presentation_id=presentation.id,
+                workspace_operation_id=source.id, request_sha256="a" * 64,
+                request_payload={"strategy": "svg", "content": "classification fixture", "n_slides": page_count,
+                    "_internal_svg_authoring_profile": {"id": "art-direction-v1", "version": 7}},
+                svg_style_snapshot={"authoring_profile": {"id": "art-direction-v1", "version": 7}, "references": []},
+                state="failed", total_slides=page_count, attempt_number=1, attempt_token="old-author-fence")
+            session.add(job)
+            await session.flush()
+            source.request_payload = {**source.request_payload, "job_id": str(job.id)}
+            original_strategy = seal_generation_strategy_decision(operation_id=str(source.id),
+                requirement_graph_digest="retained-graph", requested_profile="balanced-quality-v1",
+                preflight={"missingCapabilities": ["source-binding"], "preflightDigest": "retained-preflight"},
+                force_strategy="legacy-authored")
+            source.request_payload = {**source.request_payload, "generation_strategy": original_strategy}
+            policy_values = {column.name: 100 for column in PublicPolicyProfile.__table__.columns
+                if not column.nullable and column.default is None and column.server_default is None}
+            policy_values["version"] = "classification-policy"
+            session.add(PublicPolicyProfile(**policy_values))
+            await session.flush()
+            admission = PublicOperationAdmission(operation_id=source.id, policy_version="classification-policy",
+                owner_id=user.id, tenant_id="test", trace_id_hash="b" * 64,
+                operation_kind="generation", resource_units=1, policy_digest="c" * 64,
+                deadline_at=now, state="failed", terminal_at=now, slide_count=page_count,
+                planned_request_limit=4, retry_request_limit=4, estimated_cost_limit_microunits=100,
+                actual_cost_limit_microunits=100)
+            session.add(admission)
+            await session.flush()
+            rows = []
+            for index in range(page_count):
+                source_bytes = f"<svg>retained-{index}</svg>"
+                png_digest = sha256_hex(f"png-{index}".encode())
+                attempts = [{"kind": "provider", "raw_response": f"raw-{index}-{ordinal}",
+                             "receipt": {"model": "gpt-6.1-sol", "author_prompt_digest": f"prompt-{index}",
+                                "reference_image_digests": ["ref-hash"]}, "quality": {"passed": index != 1}}
+                            for ordinal in range(2 if index in {1, 3} else 1)]
+                payload = {"input_digest": f"input-{index}", "inflight": None, "attempts": attempts,
+                    "svg_content": source_bytes, "png_sha256": png_digest,
+                    "quality": {"source_digest": "sha256:" + sha256_hex(source_bytes.encode()),
+                        "png_digest": "sha256:" + png_digest, "measurement_complete": True,
+                        "geometry_passed": True, "browser_metrics": {"elements": [{"qid": f"q-{index}"}]},
+                        "passed": index != 1,
+                        "source_classification_association": {"status": "unproven" if index == 1 else "proven"},
+                        "failures": [{"kind": "source_classification_unproven"}] if index == 1 else []}}
+                if page_count == 2 and index == 1:
+                    payload["quality"]["source_classification_association"] = {"status": "proven"}
+                    payload["quality"]["failures"] = [{"kind": "native_requested_chart_missing", "id": "chart-1"}]
+                    payload["quality"]["requestedNativeObjects"] = {"passed": False, "requiredCharts": 1,
+                        "projection": {"dropped": [{"id": "native-chart-chart-1", "kind": "chart",
+                                                  "reason": "native_chart_label_not_drawn"}]}}
+                rows.append(AuthoredSlideCheckpoint(job_id=job.id, slide_index=index, svg_checkpoint=payload,
+                    author_status="failed" if index == 1 else "completed", render_status="completed",
+                    failed_stage="author" if index == 1 else None,
+                    error={"code": error_code} if index == 1 else None,
+                    attempt_token="original-checkpoint-fence"))
+                for ordinal in range(len(attempts)):
+                    session.add(PublicProviderLogicalCall(admission_id=admission.id,
+                        stage="author" if ordinal == 0 else "repair", slide_index=index,
+                        logical_call_ordinal=ordinal + 1, retry_class="initial" if ordinal == 0 else "retry",
+                        idempotency_key_hash=f"{index}-{ordinal}".ljust(64, "0"), state="reported",
+                        estimated_cost_microunits=0, outcome="succeeded", reconciled_at=now))
+            session.add_all(rows)
+            await session.commit()
+            source_id, job_id = source.id, job.id
+        async with maker() as session:
+            source = await session.get(WorkspaceOperation, source_id)
+            recovery = await build_classification_remeasurement_manifest(session, source, presentation_revision=0)
+            assert len(recovery.rows) == 1 and recovery.rows[0].slide_index == 1
+            assert recovery.manifest["max_additional_author_calls"] == 0
+            assert recovery.manifest["mandatory_render_count"] == 1
+            assert recovery.manifest["expected_page_count"] == page_count
+            assert recovery.manifest["recovery_reason"] == ("classification_legend_paint" if page_count == 4
+                                                           else "native_single_series_title_unit")
+            action_id = CLASSIFICATION_APPROVAL_PREFIX + recovery.manifest_hash
+            originals = {row.slide_index: deepcopy(row.model_dump(mode="json")) for row in await session.scalars(
+                select(AuthoredSlideCheckpoint).where(AuthoredSlideCheckpoint.job_id == job_id))}
+            original_calls = [row.model_dump(mode="json") for row in await session.scalars(select(
+                PublicProviderLogicalCall).order_by(PublicProviderLogicalCall.slide_index, PublicProviderLogicalCall.stage))]
+        base = dict(action="retry", recovery_revision=SVG_CLASSIFICATION_REMEASUREMENT,
+                    expected_operation_version=4, expected_revision=0, action_id=action_id)
+        async with maker() as session:
+            target = await session.scalar(select(AuthoredSlideCheckpoint).where(AuthoredSlideCheckpoint.slide_index == 1))
+            changed = deepcopy(target.svg_checkpoint)
+            changed["quality"]["failures"].append({"kind": "overlap"})
+            target.svg_checkpoint = changed
+            with pytest.raises(WorkspaceServiceError) as arbitrary_failure:
+                await apply_workspace_action(session, operation_id=source_id,
+                    request=WorkspaceOperationActionRequest(idempotency_key="unapproved-quality-failure", **base))
+            assert arbitrary_failure.value.code == "svg_classification_remeasurement_not_safe"
+            await session.rollback()
+        if page_count == 2:
+            async with maker() as session:
+                target = await session.scalar(select(AuthoredSlideCheckpoint).where(AuthoredSlideCheckpoint.slide_index == 1))
+                changed = deepcopy(target.svg_checkpoint)
+                changed["quality"]["requestedNativeObjects"]["projection"]["dropped"][0]["reason"] = "other-rejection"
+                target.svg_checkpoint = changed
+                with pytest.raises(WorkspaceServiceError) as other_native_failure:
+                    await apply_workspace_action(session, operation_id=source_id,
+                        request=WorkspaceOperationActionRequest(idempotency_key="unapproved-native-failure", **base))
+                assert other_native_failure.value.code == "svg_classification_remeasurement_not_safe"
+                await session.rollback()
+        for i, (changes, code) in enumerate([
+            ({"action_id": None}, "svg_classification_remeasurement_approval_required"),
+            ({"expected_operation_version": None}, "svg_classification_remeasurement_approval_required"),
+            ({"expected_revision": None}, "svg_classification_remeasurement_approval_required"),
+            ({"expected_operation_version": 3}, "operation_state_conflict"),
+            ({"expected_revision": 1}, "revision_conflict"),
+            ({"action_id": CLASSIFICATION_APPROVAL_PREFIX + "0" * 64}, "svg_classification_remeasurement_manifest_conflict"),
+        ]):
+            async with maker() as session:
+                with pytest.raises(WorkspaceServiceError) as rejected:
+                    await apply_workspace_action(session, operation_id=source_id,
+                        request=WorkspaceOperationActionRequest(idempotency_key=f"classification-rejected-{i}", **{**base, **changes}))
+                assert rejected.value.code == code
+        async with maker() as session:
+            call = await session.scalar(select(PublicProviderLogicalCall).where(PublicProviderLogicalCall.slide_index == 0))
+            call.state, call.outcome = "unavailable", "failed"
+            with pytest.raises(WorkspaceServiceError) as unknown:
+                await apply_workspace_action(session, operation_id=source_id,
+                    request=WorkspaceOperationActionRequest(idempotency_key="classification-unknown-denied", **base))
+            assert unknown.value.code == "svg_classification_remeasurement_provider_unresolved"
+            await session.rollback()
+        assert not admissions
+        request = WorkspaceOperationActionRequest(idempotency_key="classification-approved", **base)
+        async with maker() as session:
+            receipt, retry, duplicate = await apply_workspace_action(session, operation_id=source_id, request=request)
+            assert not duplicate
+            receipt_id, retry_id = receipt.id, retry.id
+        async with maker() as session:
+            receipt, retry, duplicate = await apply_workspace_action(session, operation_id=source_id, request=request)
+            assert duplicate and receipt.id == receipt_id and retry.id == retry_id and len(admissions) == 1
+            assert (await session.get(PresentationGenerationJob, job_id)).workspace_operation_id == retry_id
+            retry_strategy = retry.request_payload["generation_strategy"]
+            assert validate_sealed_generation_strategy(retry_strategy, operation_id=str(retry_id)) == "legacy-authored"
+            assert {k:v for k,v in retry_strategy.items() if k not in {"operationId", "receiptDigest"}} == {
+                k:v for k,v in original_strategy.items() if k not in {"operationId", "receiptDigest"}}
+            with pytest.raises(GenerationStrategyCapabilityError):
+                rebind_sealed_generation_strategy({**original_strategy, "selectedStrategy": "deck-ir"},
+                    source_operation_id=str(source_id), operation_id=str(retry_id))
+            assert [row.model_dump(mode="json") for row in await session.scalars(select(
+                PublicProviderLogicalCall).order_by(PublicProviderLogicalCall.slide_index, PublicProviderLogicalCall.stage))] == original_calls
+            for row in await session.scalars(select(AuthoredSlideCheckpoint)):
+                old = originals[row.slide_index]
+                if row.slide_index != 1:
+                    assert row.model_dump(mode="json") == old
+                    continue
+                payload = row.svg_checkpoint
+                marker = payload["cache_only_remeasurement"]
+                assert marker["status"] == "pending" and marker["operation_id"] == str(retry_id)
+                assert marker["source_operation_id"] == str(source_id) and marker["slide_index"] == 1
+                assert marker["expected_page_count"] == page_count
+                assert marker["approval_manifest_hash"] == action_id[len(CLASSIFICATION_APPROVAL_PREFIX):]
+                archive = payload["classification_remeasurement_archive"]
+                assert archive["checkpoint_row"] == old
+                assert remeasurement_digest(archive["approval_manifest"]) == marker["approval_manifest_hash"]
+                assert author_witness_digest(payload) == marker["author_receipt_digest"]
+                for key in ("svg_content", "png_sha256", "input_digest", "attempts", "quality", "inflight"):
+                    assert payload[key] == old["svg_checkpoint"][key]
+                assert payload["quality"]["passed"] is False  # renderer must produce the new pass
+            # Reproduce the old pre-dispatch operation-ID mismatch without a
+            # provider call. A distinct consent revision may retarget pending
+            # consumption, while the original source approval stays archived.
+            retry.state, retry.error_code = "failed", "generation_strategy_capability_missing"
+            retry.error_detail = {"retryable": False}
+            retry.request_payload = {**retry.request_payload, "generation_strategy": original_strategy}
+            rebound_job = await session.get(PresentationGenerationJob, job_id)
+            rebound_job.state = "failed"
+            pending_before = deepcopy((await session.scalar(select(AuthoredSlideCheckpoint).where(
+                AuthoredSlideCheckpoint.slide_index == 1))).svg_checkpoint)
+            second_admission = PublicOperationAdmission(operation_id=retry_id, policy_version="classification-policy",
+                owner_id=retry.owner_id, tenant_id="test", trace_id_hash="e" * 64,
+                operation_kind="generation", resource_units=1, policy_digest="f" * 64,
+                deadline_at=now, state="failed", terminal_at=now, slide_count=page_count,
+                planned_request_limit=4, retry_request_limit=4, estimated_cost_limit_microunits=100,
+                actual_cost_limit_microunits=100)
+            session.add(second_admission)
+            await session.commit()
+        async with maker() as session:
+            failed_retry = await session.get(WorkspaceOperation, retry_id)
+            dispatch = await build_classification_remeasurement_manifest(session, failed_retry,
+                presentation_revision=0, dispatch_only=True)
+            dispatch_version = failed_retry.version
+            assert dispatch.manifest["strategy_source_operation_id"] == str(source_id)
+            dispatch_request = dict(action="retry", recovery_revision=SVG_SOURCE_REMEASUREMENT_DISPATCH,
+                expected_operation_version=dispatch_version, expected_revision=0,
+                action_id=DISPATCH_APPROVAL_PREFIX + dispatch.manifest_hash)
+        async with maker() as session:
+            with pytest.raises(WorkspaceServiceError) as missing_dispatch_consent:
+                await apply_workspace_action(session, operation_id=retry_id,
+                    request=WorkspaceOperationActionRequest(idempotency_key="dispatch-no-consent", **{
+                        **dispatch_request, "action_id": None}))
+            assert missing_dispatch_consent.value.code == "svg_classification_remeasurement_approval_required"
+        async with maker() as session:
+            with pytest.raises(WorkspaceServiceError) as stale_dispatch:
+                await apply_workspace_action(session, operation_id=retry_id,
+                    request=WorkspaceOperationActionRequest(idempotency_key="dispatch-stale-version", **{
+                        **dispatch_request, "expected_operation_version": dispatch_version + 1}))
+            assert stale_dispatch.value.code == "operation_state_conflict"
+        async with maker() as session:
+            target = await session.scalar(select(AuthoredSlideCheckpoint).where(AuthoredSlideCheckpoint.slide_index == 1))
+            changed = deepcopy(target.svg_checkpoint)
+            changed["cache_only_remeasurement"]["status"] = "completed"
+            target.svg_checkpoint = changed
+            with pytest.raises(WorkspaceServiceError) as dispatch_consumed:
+                await apply_workspace_action(session, operation_id=retry_id,
+                    request=WorkspaceOperationActionRequest(idempotency_key="dispatch-already-consumed", **dispatch_request))
+            assert dispatch_consumed.value.code == "svg_source_remeasure_dispatch_not_safe"
+            await session.rollback()
+        async with maker() as session:
+            session.add(PublicProviderLogicalCall(admission_id=second_admission.id,
+                stage="author", slide_index=1, logical_call_ordinal=1, retry_class="initial",
+                idempotency_key_hash="new-call-denied".ljust(64, "0"), state="reported",
+                estimated_cost_microunits=0, outcome="succeeded", reconciled_at=now))
+            with pytest.raises(WorkspaceServiceError) as dispatch_provider_call:
+                await apply_workspace_action(session, operation_id=retry_id,
+                    request=WorkspaceOperationActionRequest(idempotency_key="dispatch-provider-denied", **dispatch_request))
+            assert dispatch_provider_call.value.code == "svg_classification_remeasurement_provider_unresolved"
+            await session.rollback()
+        request = WorkspaceOperationActionRequest(idempotency_key="dispatch-approved", **dispatch_request)
+        async with maker() as session:
+            receipt, next_retry, duplicate = await apply_workspace_action(session, operation_id=retry_id, request=request)
+            assert not duplicate
+            next_id, dispatch_receipt_id = next_retry.id, receipt.id
+        async with maker() as session:
+            receipt, next_retry, duplicate = await apply_workspace_action(session, operation_id=retry_id, request=request)
+            assert duplicate and receipt.id == dispatch_receipt_id and next_retry.id == next_id and len(admissions) == 2
+            assert validate_sealed_generation_strategy(next_retry.request_payload["generation_strategy"],
+                operation_id=str(next_id)) == "legacy-authored"
+            target = (await session.scalar(select(AuthoredSlideCheckpoint).where(
+                AuthoredSlideCheckpoint.slide_index == 1))).svg_checkpoint
+            assert target["classification_remeasurement_archive"] == pending_before["classification_remeasurement_archive"]
+            assert target["cache_only_remeasurement"]["source_operation_id"] == str(source_id)
+            assert target["cache_only_remeasurement"]["operation_id"] == str(next_id)
+            assert target["source_remeasurement_dispatch_archive"]["checkpoint_row"]["svg_checkpoint"] == pending_before
+            for key in ("svg_content", "png_sha256", "input_digest", "attempts", "quality", "inflight"):
+                assert target[key] == pending_before[key]
+            assert target["quality"]["passed"] is False
+            assert [row.model_dump(mode="json") for row in await session.scalars(select(
+                PublicProviderLogicalCall).order_by(PublicProviderLogicalCall.slide_index, PublicProviderLogicalCall.stage))] == original_calls
+    finally:
+        await engine.dispose()
+
+
+async def _svg_timeout_repurchase_bound_consent(tmp_path, monkeypatch, *, mixed=False):
+    from copy import deepcopy
+    from fastapi import HTTPException
+    from enums.llm_provider import LLMProvider
+    from models.sql.async_presentation_generation_status import AsyncPresentationGenerationTaskModel
+    from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
+    from models.sql.presentation_generation_job import PresentationGenerationJob
+    from models.sql.public_admission import (
+        PublicPolicyProfile, PublicOperationAdmission, PublicProviderLogicalCall, PublicResourceLease,
+    )
+    from models.sql.provider_runtime_reservation import ProviderRuntimeBudget, ProviderRuntimeReservation
+    from services.svg_timeout_repurchase import (
+        APPROVAL_ACTION_PREFIX, SVG_TIMEOUT_REPURCHASE, SVG_TIMEOUT_REPURCHASE_V2,
+        build_timeout_repurchase_manifest, verify_repurchase_provider_target, TimeoutRepurchaseRejected,
+    )
+    from services.provider_usage_idempotency import _provider_idempotency_key
+    from services.provider_usage_instrumentation import PublicOperationFence, ProviderUsageScope
+    from utils.hashing import canonical_json_sha256
+    revision = SVG_TIMEOUT_REPURCHASE_V2 if mixed else SVG_TIMEOUT_REPURCHASE
+
+    monkeypatch.setattr("utils.llm_provider.get_llm_provider", lambda: LLMProvider.CODEX)
+    monkeypatch.setattr("utils.llm_provider.get_model", lambda: "gpt-6-sol")
+    monkeypatch.setattr("utils.llm_calls.author_prompt_profile.authoring_model", lambda model: model)
+    monkeypatch.setattr("services.svg_presentation_checkpoint._read_png",
+                        lambda payload: b"cached PNG" if payload.get("png_sha256") else None)
+    admissions = []
+    deny_admission = True
+
+    async def admit_generation(session, **kwargs):
+        admissions.append(kwargs["operation"].id)
+        if deny_admission:
+            raise HTTPException(status_code=429, detail="public_owner_queue_full")
+
+    monkeypatch.setattr("services.presentation_generation_pipeline._admit_generation_operation_v2_compatible",
+                        admit_generation)
+    engine, maker = await _database(tmp_path / "svg-timeout-repurchase.db")
+    extra_tables = [AsyncPresentationGenerationTaskModel.__table__, PresentationGenerationJob.__table__,
+                    AuthoredSlideCheckpoint.__table__, PublicPolicyProfile.__table__,
+                    PublicOperationAdmission.__table__, PublicProviderLogicalCall.__table__,
+                    PublicResourceLease.__table__, ProviderRuntimeBudget.__table__, ProviderRuntimeReservation.__table__]
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(lambda conn: SQLModel.metadata.create_all(conn, tables=extra_tables))
+        presentation = await _create_presentation(maker)
+        now = get_current_utc_datetime()
+        async with maker() as session:
+            user = User(username="svg-timeout-owner", hashed_password="unused")
+            session.add(user)
+            await session.flush()
+            _, _, source, _ = await bootstrap_workspace(session, presentation_id=presentation.id,
+                request=_bootstrap_request(key="svg-timeout-source"))
+            source.owner_id = user.id
+            source.kind = "presentation.generate"
+            source.state = "failed"
+            source.error_code = "svg_source_classification_missing" if mixed else "public_provider_call_timeout"
+            source.error_detail = {"retryable": False}
+            source.version = 4
+            source.fencing_token = 2
+            task = AsyncPresentationGenerationTaskModel(status="failed")
+            session.add(task)
+            await session.flush()
+            job = PresentationGenerationJob(task_id=task.id, presentation_id=presentation.id,
+                workspace_operation_id=source.id, request_sha256="a" * 64,
+                request_payload={"strategy": "svg", "content": "SVG timeout recovery", "n_slides": 12},
+                svg_style_snapshot={"authoring_profile": {"id": "art-direction-v1", "version": 7}},
+                state="failed", total_slides=12, attempt_number=1, attempt_token="original-job-fence")
+            session.add(job)
+            await session.flush()
+            source.request_payload = {**source.request_payload, "job_id": str(job.id)}
+            policy_values = {column.name: 100 for column in PublicPolicyProfile.__table__.columns
+                             if not column.nullable and column.default is None and column.server_default is None}
+            policy_values["version"] = "timeout-test-policy"
+            policy = PublicPolicyProfile(**policy_values)
+            session.add(policy)
+            await session.flush()
+            admission = PublicOperationAdmission(operation_id=source.id, policy_version=policy.version,
+                owner_id=user.id, tenant_id="test", trace_id_hash="b" * 64,
+                operation_kind="generation", resource_units=1, policy_digest="c" * 64,
+                deadline_at=now, state="failed", terminal_at=now, slide_count=12,
+                planned_request_limit=12, retry_request_limit=12,
+                estimated_cost_limit_microunits=100, actual_cost_limit_microunits=100)
+            session.add(admission)
+            await session.flush()
+            leases = [PublicResourceLease(admission_id=admission.id, operation_id=source.id,
+                policy_version=policy.version, scope_type=scope, scope_key="global" if scope == "global" else "test",
+                operation_kind="generation", resource_units=1, deadline_at=now,
+                state="released", released_at=now) for scope in ("global", "tenant", "owner")]
+            session.add_all(leases)
+            rows = []
+            for index in range(12):
+                unknown = index in {0, 10, 11}
+                payload = {"schema_version": "svg-slide-checkpoint/v2", "input_digest": f"input-{index}",
+                           "attempts": [], "inflight": 1 if unknown else None}
+                if mixed and unknown:
+                    payload.update(inflight=None, provider_failures=[{"ordinal": 2 if index == 0 else 1,
+                        "code": "public_provider_overload"}])
+                    if index == 0:
+                        payload.update(svg_content="<svg>unproven source</svg>", png_sha256="failed-png",
+                            repair_unavailable=True,
+                            quality={"passed": False,"failures":[{"kind":"source_classification_unproven"},
+                                {"kind":"provider_repair_unavailable"}]},
+                            attempts=[{"kind":"provider","raw_response":"<svg>unproven source</svg>","receipt":{}}])
+                        session.add(PublicProviderLogicalCall(admission_id=admission.id, stage="author",slide_index=0,
+                            logical_call_ordinal=1,retry_class="initial",idempotency_key_hash="8"*64,
+                            state="reported",estimated_cost_microunits=0,outcome="succeeded",reconciled_at=now))
+                if not unknown:
+                    payload.update(svg_content=f"<svg>source-{index}</svg>", png_sha256=f"png-{index}",
+                                   quality={"passed": True}, attempts=[{"kind": "provider", "receipt": {"index": index}}])
+                rows.append(AuthoredSlideCheckpoint(job_id=job.id, slide_index=index, svg_checkpoint=payload,
+                    author_status="failed" if unknown else "completed", render_status="pending" if unknown else "completed",
+                    error={"code": "public_provider_call_timeout"} if unknown else None,
+                    attempt_token="original-checkpoint-fence"))
+                session.add(PublicProviderLogicalCall(admission_id=admission.id,
+                    stage="repair" if mixed and index == 0 else "author", slide_index=index,
+                    logical_call_ordinal=2 if mixed and index == 0 else 1,
+                    retry_class="initial", idempotency_key_hash=str(index).zfill(64),
+                    state="unavailable" if unknown else "reported", estimated_cost_microunits=0,
+                    outcome="failed" if index == 0 else "cancelled" if unknown else "succeeded", reconciled_at=now))
+            session.add_all(rows)
+            await session.commit()
+            source_id, job_id, lease_id = source.id, job.id, leases[0].id
+
+        async with maker() as session:
+            source = await session.get(WorkspaceOperation, source_id)
+            recovery = await build_timeout_repurchase_manifest(session, source, presentation_revision=0,
+                recovery_revision=revision)
+            assert len(recovery.rows) == 3
+            assert len(recovery.manifest["completed_checkpoints"]) == 9
+            assert recovery.manifest["max_additional_author_calls"] == 3
+            assert recovery.manifest["duplicate_billing_possible"] is True
+            assert recovery.manifest["remote_termination_confirmed"] is False
+            action_id = APPROVAL_ACTION_PREFIX + recovery.manifest_hash
+            original_rows = {row.slide_index: deepcopy(row.model_dump(mode="json")) for row in
+                await session.scalars(select(AuthoredSlideCheckpoint).where(AuthoredSlideCheckpoint.job_id == job_id))}
+            old_calls = [row.model_dump(mode="json") for row in await session.scalars(
+                select(PublicProviderLogicalCall).order_by(PublicProviderLogicalCall.slide_index))]
+            original_job = await session.get(PresentationGenerationJob, job_id)
+            original_request = deepcopy(original_job.request_payload)
+            original_style = deepcopy(original_job.svg_style_snapshot)
+
+        base = dict(action="retry", recovery_revision=revision,
+                    expected_operation_version=4, expected_revision=0, action_id=action_id)
+        for index, (changes, code) in enumerate([
+            ({"action_id": None}, "svg_timeout_repurchase_approval_required"),
+            ({"expected_operation_version": None}, "svg_timeout_repurchase_approval_required"),
+            ({"expected_revision": None}, "svg_timeout_repurchase_approval_required"),
+            ({"expected_operation_version": 3}, "operation_state_conflict"),
+            ({"expected_revision": 1}, "revision_conflict"),
+            ({"action_id": APPROVAL_ACTION_PREFIX + "0" * 64}, "svg_timeout_repurchase_manifest_conflict"),
+        ]):
+            async with maker() as session:
+                with pytest.raises(WorkspaceServiceError) as rejected:
+                    await apply_workspace_action(session, operation_id=source_id,
+                        request=WorkspaceOperationActionRequest(idempotency_key=f"rejected-{index}", **{**base, **changes}))
+                assert rejected.value.code == code
+        assert admissions == []
+        async with maker() as session:
+            lease = await session.get(PublicResourceLease, lease_id)
+            lease.state = "leased"
+            await session.commit()
+        async with maker() as session:
+            with pytest.raises(WorkspaceServiceError) as rejected:
+                await apply_workspace_action(session, operation_id=source_id,
+                    request=WorkspaceOperationActionRequest(idempotency_key="active-lease-rejected", **base))
+            assert rejected.value.code == "svg_timeout_repurchase_active_lease"
+        async with maker() as session:
+            lease = await session.get(PublicResourceLease, lease_id)
+            lease.state = "released"
+            await session.commit()
+        async with maker() as session:
+            call = await session.scalar(select(PublicProviderLogicalCall).where(
+                PublicProviderLogicalCall.slide_index == 0))
+            call.state = "reserved"
+            call.reconciled_at = None
+            with pytest.raises(WorkspaceServiceError) as active_call:
+                await apply_workspace_action(session, operation_id=source_id,
+                    request=WorkspaceOperationActionRequest(idempotency_key="active-call-rejected", **base))
+            assert active_call.value.code == "svg_timeout_repurchase_active_call"
+            await session.rollback()
+        async with maker() as session:
+            budget = ProviderRuntimeBudget(tenant_id="test", owner_id=user.id, job_id=job_id)
+            session.add(budget)
+            await session.flush()
+            session.add(ProviderRuntimeReservation(budget_id=budget.id,
+                reservation_key_hash="e" * 64, state="uncertain", estimated_cost=0,
+                lease_token_hash="f" * 64, lease_expires_at=now))
+            with pytest.raises(WorkspaceServiceError) as active_call:
+                await apply_workspace_action(session, operation_id=source_id,
+                    request=WorkspaceOperationActionRequest(idempotency_key="uncertain-runtime-rejected", **base))
+            assert active_call.value.code == "svg_timeout_repurchase_active_call"
+            await session.rollback()
+        async with maker() as session:
+            row = await session.scalar(select(AuthoredSlideCheckpoint).where(
+                AuthoredSlideCheckpoint.slide_index == 0))
+            row.svg_checkpoint = {**row.svg_checkpoint, "inflight": 2}
+            with pytest.raises(WorkspaceServiceError) as exhausted:
+                await apply_workspace_action(session, operation_id=source_id,
+                    request=WorkspaceOperationActionRequest(idempotency_key="exhausted-page-rejected", **base))
+            assert exhausted.value.code == "svg_timeout_repurchase_attempt_budget_exhausted"
+            await session.rollback()
+        request = WorkspaceOperationActionRequest(idempotency_key="timeout-explicit-consent", **base)
+        async with maker() as session:
+            with pytest.raises(WorkspaceServiceError) as denied:
+                await apply_workspace_action(session, operation_id=source_id, request=request)
+            assert denied.value.code == "public_owner_queue_full"
+        async with maker() as session:
+            assert (await session.get(PresentationGenerationJob, job_id)).workspace_operation_id == source_id
+            assert await session.scalar(select(func.count()).select_from(WorkspaceOperation)) == 1
+            for row in await session.scalars(select(AuthoredSlideCheckpoint)):
+                assert row.model_dump(mode="json") == original_rows[row.slide_index]
+        deny_admission = False
+        async with maker() as session:
+            receipt, retry, duplicate = await apply_workspace_action(session, operation_id=source_id, request=request)
+            assert duplicate is False
+            assert retry.retry_of_operation_id == source_id
+            assert retry.max_attempts == source.max_attempts
+            assert retry.request_payload["svg_timeout_repurchase_manifest_hash"] == action_id[len(APPROVAL_ACTION_PREFIX):]
+            retry_id, receipt_id = retry.id, receipt.id
+        admission_count = len(admissions)
+        async with maker() as session:
+            receipt, retry, duplicate = await apply_workspace_action(session, operation_id=source_id, request=request)
+            assert duplicate is True and receipt.id == receipt_id and retry.id == retry_id
+            assert len(admissions) == admission_count
+            job = await session.get(PresentationGenerationJob, job_id)
+            assert job.workspace_operation_id == retry_id and job.request_payload == original_request
+            assert job.svg_style_snapshot == original_style
+            assert (await session.get(WorkspaceOperation, source_id)).state == "failed"
+            assert [row.model_dump(mode="json") for row in await session.scalars(select(
+                PublicProviderLogicalCall).order_by(PublicProviderLogicalCall.slide_index))] == old_calls
+            for row in await session.scalars(select(AuthoredSlideCheckpoint)):
+                if row.slide_index not in {0, 10, 11}:
+                    assert row.model_dump(mode="json") == original_rows[row.slide_index]
+                else:
+                    payload = row.svg_checkpoint
+                    assert payload["previous_checkpoint_row"] == original_rows[row.slide_index]
+                    assert payload["previous_checkpoint"] == original_rows[row.slide_index]["svg_checkpoint"]
+                    assert payload["inflight"] is None
+                    assert payload["retained_provider_attempt_fence"]["previous_ordinal"] == (2 if mixed and row.slide_index == 0 else 1)
+                    assert payload["retained_provider_attempt_fence"]["approval_manifest_hash"] == action_id[len(APPROVAL_ACTION_PREFIX):]
+                    assert canonical_json_sha256(payload["timeout_repurchase_approval_manifest"]) == action_id[len(APPROVAL_ACTION_PREFIX):]
+                    if mixed:
+                        from services.svg_presentation_checkpoint import _provider_attempt_limit, _provider_attempt_count
+                        assert _provider_attempt_limit(payload,index=row.slide_index,job=job) == (3 if row.slide_index == 0 else 2)
+                        assert _provider_attempt_count(payload) == (2 if row.slide_index == 0 else 1)
+                        paid = deepcopy(payload)
+                        paid["provider_failures"] = [{"ordinal":3 if row.slide_index == 0 else 2,"code":"public_provider_overload"}]
+                        assert _provider_attempt_count(paid) == _provider_attempt_limit(paid,index=row.slide_index,job=job)
+                        with pytest.raises(ValueError,match="attempt_fence_invalid"):
+                            _provider_attempt_limit(payload,index=1,job=job)
+            if mixed:
+                from types import SimpleNamespace
+                preview_admission=SimpleNamespace(id=uuid.uuid4(),owner_id=user.id,tenant_id="test")
+                suffix=f".resume-{job.attempt_number}" if job.attempt_number>1 else ""
+                args=dict(stage="repair",slide_index=0,logical_call_key="svg-author-0-3"+suffix,
+                    provider_id="codex",model_id="gpt-6-sol")
+                await verify_repurchase_provider_target(session,retry,preview_admission,**args)
+                for changes in ({"slide_index":1},{"logical_call_key":"svg-author-0-2"+suffix},
+                                {"model_id":"unapproved-model"}):
+                    with pytest.raises(TimeoutRepurchaseRejected,match="not_approved"):
+                        await verify_repurchase_provider_target(session,retry,preview_admission,**{**args,**changes})
+                preview_admission.tenant_id="different-tenant"
+                with pytest.raises(TimeoutRepurchaseRejected,match="not_approved"):
+                    await verify_repurchase_provider_target(session,retry,preview_admission,**args)
+            scope = ProviderUsageScope(job_id=job_id, operation="authored_generation", stage="repair", attempt_number=1, slide_index=0)
+            assert _provider_idempotency_key(PublicOperationFence(source_id, None, 2), scope, "svg-author-0-2") != _provider_idempotency_key(
+                PublicOperationFence(retry_id, None, 0), scope, "svg-author-0-2")
+    finally:
+        await engine.dispose()
+
+
 async def _database(path: Path):
     engine = create_async_engine(f"sqlite+aiosqlite:///{path}")
 
@@ -2024,3 +2822,225 @@ async def _blocked_retry_resumes_same_operation_after_assets_are_ready(
             ) == 1
     finally:
         await engine.dispose()
+
+
+async def _svg_append_only_recovery_contract(tmp_path, monkeypatch):
+    from copy import deepcopy
+    from types import SimpleNamespace
+    from enums.llm_provider import LLMProvider
+    from models.sql.async_presentation_generation_status import AsyncPresentationGenerationTaskModel
+    from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
+    from models.sql.presentation_generation_job import PresentationGenerationJob
+    from models.sql.public_admission import PublicPolicyProfile, PublicOperationAdmission, PublicProviderLogicalCall, PublicResourceLease
+    from models.sql.provider_runtime_reservation import ProviderRuntimeBudget, ProviderRuntimeReservation
+    from services.svg_timeout_repurchase import build_timeout_repurchase_manifest, SVG_TIMEOUT_REPURCHASE_V3, APPROVAL_ACTION_PREFIX, verify_repurchase_provider_target, TimeoutRepurchaseRejected, reset_timeout_repurchase_checkpoints
+    from services.generation_core.drivers.svg.collect import _provider_attempt_count, _provider_attempt_limit
+    from utils.hashing import canonical_json_sha256, canonical_json_digest
+    engine, maker = await _database(tmp_path / "svg-append-only.db")
+    tables = [m.__table__ for m in [AsyncPresentationGenerationTaskModel, PresentationGenerationJob, AuthoredSlideCheckpoint,
+        PublicPolicyProfile, PublicOperationAdmission, PublicProviderLogicalCall, PublicResourceLease, ProviderRuntimeBudget, ProviderRuntimeReservation]]
+    try:
+        async with engine.begin() as c:
+            await c.run_sync(lambda c: SQLModel.metadata.create_all(c, tables=tables))
+        presentation = await _create_presentation(maker)
+        now = get_current_utc_datetime()
+        async with maker() as s:
+            user = User(username="append-only-owner", hashed_password="unused")
+            s.add(user); await s.flush()
+            _, _, source, _ = await bootstrap_workspace(s, presentation_id=presentation.id, request=_bootstrap_request(key="append-only-source"))
+            (await s.get(PresentationModel,presentation.id)).owner_id=user.id
+            source.owner_id=user.id;source.kind="presentation.generate";source.state="failed"
+            source.error_code="svg_source_quality_failed";source.error_detail={"retryable":False};source.version=4;source.fencing_token=2
+            source.request_payload={**source.request_payload,"principal_tenant_id":"test"}
+            task=AsyncPresentationGenerationTaskModel(status="failed");s.add(task);await s.flush()
+            frozen_style={"authoring_profile":{"id":"art-direction-v1","version":8}}
+            frozen_style["digest"]=canonical_json_digest(frozen_style,allow_nan=True)
+            job=PresentationGenerationJob(task_id=task.id,presentation_id=presentation.id,workspace_operation_id=source.id,
+                request_sha256="a"*64,request_payload={"strategy":"svg","content":"append-only","n_slides":12,
+                "_internal_svg_stage_plan":{"schema":"svg-stage-plan/v1","partitions":[[0,5,8,11],[1,2,3,4,6,7,9,10]]}},
+                svg_style_snapshot=frozen_style,
+                authored_outline={"slides":[{"content":str(i)} for i in range(12)]},state="failed",total_slides=12)
+            s.add(job);await s.flush();source.request_payload={**source.request_payload,"job_id":str(job.id)}
+            values={c.name:100 for c in PublicPolicyProfile.__table__.columns if not c.nullable and c.default is None and c.server_default is None}
+            values['version']='append-only-policy';policy=PublicPolicyProfile(**values);s.add(policy);await s.flush()
+            adm=PublicOperationAdmission(operation_id=source.id,policy_version=policy.version,owner_id=user.id,tenant_id="test",trace_id_hash="b"*64,
+                operation_kind="generation",resource_units=1,policy_digest="c"*64,deadline_at=now,state="failed",terminal_at=now,slide_count=12,
+                planned_request_limit=14,retry_request_limit=12,initial_request_count=4,retry_request_count=1,
+                estimated_cost_limit_microunits=100,actual_cost_limit_microunits=100)
+            s.add(adm);await s.flush()
+            for i in range(12):
+                payload={"input_digest":f"input-{i}","attempts":[],"inflight":1 if i==8 else None}
+                cached=i in {0,5,11};n=2 if i==5 else 1
+                if cached:
+                    payload.update(svg_content=f"<svg>cache-{i}</svg>",attempts=[{"kind":"provider","receipt":{"attempt":j}} for j in range(n)],
+                        quality={"passed":False,"failures":[{"kind":"required_text_missing"}]} if i==5 else {"passed":True})
+                if i==0:payload.update(source_manifest_ref={"digest":"frozen-pointer"},source_manifest_digest="frozen-manifest")
+                s.add(AuthoredSlideCheckpoint(job_id=job.id,slide_index=i,author_status="completed" if cached else "pending",svg_checkpoint=payload))
+                if cached or i==8:
+                    for j in range(n if cached else 1):
+                        s.add(PublicProviderLogicalCall(admission_id=adm.id,stage="repair" if j else "author",slide_index=i,
+                            logical_call_ordinal=j+1,retry_class="retry" if j else "initial",idempotency_key_hash=str(i*10+j).zfill(64),
+                            state="reported" if cached else "unavailable",outcome="succeeded" if cached else "cancelled",
+                            reconciled_at=now,estimated_cost_microunits=0,provider_id="codex",model_id="gpt-6.1-sol"))
+            await s.commit();source_id=source.id;job_id=job.id;owner=user.id;scope=source.owner_scope;policy_version=policy.version
+        monkeypatch.setattr("utils.owner_context.get_current_owner_id",lambda:owner)
+        monkeypatch.setattr("utils.owner_context.get_current_tenant_id",lambda:"test")
+        monkeypatch.setattr("services.workspace_service.get_workspace_owner_scope",lambda:scope)
+        monkeypatch.setattr("utils.llm_provider.get_llm_provider",lambda:LLMProvider.CODEX)
+        monkeypatch.setattr("utils.llm_provider.get_model",lambda:"gpt-6.1-sol")
+        async def lock(s,presentation_id):return await s.get(PresentationModel,presentation_id),0
+        monkeypatch.setattr("services.workspace_service._lock_workspace_mutation_admission",lock)
+        deny=True
+        async def admit(s,**kw):
+            if deny:raise HTTPException(status_code=429,detail="public_owner_queue_full")
+            s.add(PublicOperationAdmission(operation_id=kw['operation'].id,policy_version=policy_version,owner_id=owner,tenant_id="test",
+                trace_id_hash="d"*64,operation_kind="generation",resource_units=1,policy_digest="e"*64,deadline_at=now+timedelta(minutes=10),
+                state="active",slide_count=12,planned_request_limit=14,retry_request_limit=12,
+                estimated_cost_limit_microunits=100,actual_cost_limit_microunits=100))
+            await s.flush()
+        from fastapi import HTTPException
+        monkeypatch.setattr("services.presentation_generation_pipeline._admit_generation_operation_v2_compatible",admit)
+        async with maker() as s:
+            source=await s.get(WorkspaceOperation,source_id)
+            recovery=await build_timeout_repurchase_manifest(s,source,presentation_revision=0,recovery_revision=SVG_TIMEOUT_REPURCHASE_V3)
+            assert recovery.manifest['remaining_logical_call_limit']==21
+            assert len(recovery.manifest['unknown_checkpoints'])==1 and len(recovery.manifest['completed_checkpoints'])==3
+            before={m.__tablename__:[r.model_dump(mode='json') for r in await s.scalars(select(m))] for m in [WorkspaceOperation,PresentationGenerationJob,AuthoredSlideCheckpoint,PublicOperationAdmission,PublicProviderLogicalCall]}
+            with pytest.raises(TimeoutRepurchaseRejected,match='original_checkpoint_immutable'):
+                reset_timeout_repurchase_checkpoints(s,recovery,operation_id=source_id,now=now)
+        request=WorkspaceOperationActionRequest(action="retry",idempotency_key="append-only-retry",expected_operation_version=4,
+            expected_revision=0,recovery_revision=SVG_TIMEOUT_REPURCHASE_V3,action_id=APPROVAL_ACTION_PREFIX+recovery.manifest_hash)
+        async with maker() as s:
+            with pytest.raises(WorkspaceServiceError) as e:await apply_workspace_action(s,operation_id=source_id,request=request)
+            assert e.value.code=='public_owner_queue_full'
+        deny=False
+        async with maker() as s:
+            receipt,child,_=await apply_workspace_action(s,operation_id=source_id,request=request)
+            assert child.retry_of_operation_id==source_id and child.presentation_id!=presentation.id
+            child_id=child.id
+            child_job=await s.scalar(select(PresentationGenerationJob).where(PresentationGenerationJob.workspace_operation_id==child.id))
+            assert child_job.id!=job_id and child_job.request_payload['_svg_recovery_lineage']['parent_job_id']==str(job_id)
+            child_adm=await s.scalar(select(PublicOperationAdmission).where(PublicOperationAdmission.operation_id==child.id))
+            assert child_adm.planned_request_limit==10 and child_adm.retry_request_limit==11
+            rows=list(await s.scalars(select(AuthoredSlideCheckpoint).where(AuthoredSlideCheckpoint.job_id==child_job.id)))
+            replacement=next(r.svg_checkpoint for r in rows if r.slide_index==8)
+            assert _provider_attempt_count(replacement)==1 and _provider_attempt_limit(replacement,index=8,job=child_job)==2
+            assert next(r.svg_checkpoint for r in rows if r.slide_index==5)['quality']['passed'] is False
+            await verify_repurchase_provider_target(s,child,child_adm,stage="repair",slide_index=8,
+                logical_call_key="svg-author-8-2",provider_id="codex",model_id="gpt-6.1-sol")
+            with pytest.raises(TimeoutRepurchaseRejected):await verify_repurchase_provider_target(s,child,child_adm,stage="repair",slide_index=5,
+                logical_call_key="svg-author-5-3",provider_id="codex",model_id="gpt-6.1-sol")
+            from services.svg_generation_assets import _verify_inherited_source_manifest
+            context=SimpleNamespace(owner_id=owner,tenant_id="test")
+            inherited=SimpleNamespace(presentation_id=presentation.id,source_revision=1,digest="frozen-manifest")
+            await _verify_inherited_source_manifest(s,inherited,{"digest":"frozen-pointer"},context=context,
+                presentation_id=child.presentation_id,operation_id=child.id)
+            with pytest.raises(ValueError):await _verify_inherited_source_manifest(s,inherited,{"digest":"frozen-pointer"},
+                context=SimpleNamespace(owner_id=owner,tenant_id="foreign"),presentation_id=child.presentation_id,operation_id=child.id)
+            with pytest.raises(ValueError):await _verify_inherited_source_manifest(s,inherited,{"digest":"changed-pointer"},
+                context=context,presentation_id=child.presentation_id,operation_id=child.id)
+            from services.generation_core.drivers.svg import collect
+            cached=next(r.svg_checkpoint for r in rows if r.slide_index==5)
+            written=[]
+            async def checkpoint(job,index,*,payload=None):
+                if payload is not None:written.append(deepcopy(payload))
+                return payload
+            async def failed_render(**kw):
+                kw["payload"]["attempts"][-1]["quality"] = {"passed":False,"remeasurement":True}
+                kw["payload"]["quality"]={"passed":False,"failures":[{"kind":"required_text_missing"}]}
+                return collect.render.RETRY
+            monkeypatch.setattr(collect.render,"attempt_render",failed_render)
+            hooks=SimpleNamespace(checkpoint=checkpoint,async_session_maker=None,write_png=None,read_png=lambda _:None)
+            with pytest.raises(ValueError,match="svg_source_quality_failed"):
+                await collect._remeasure_append_only_cache(SimpleNamespace(source_reflow=False),None,child.presentation_id,
+                    5,"source",cached,"input-5",child_job,hooks)
+            assert written[-1]['quality']['passed'] is False and written[-1]['svg_content']==cached['svg_content']
+            s.add(PublicProviderLogicalCall(admission_id=child_adm.id,stage='repair',slide_index=8,logical_call_ordinal=2,retry_class='retry',
+                idempotency_key_hash='f'*64,estimated_cost_microunits=0,state='unavailable',outcome='cancelled',reconciled_at=now));await s.flush()
+            with pytest.raises(TimeoutRepurchaseRejected):await verify_repurchase_provider_target(s,child,child_adm,stage="repair",slide_index=8,
+                logical_call_key="svg-author-8-2",provider_id="codex",model_id="gpt-6.1-sol")
+            await s.rollback()
+        async with maker() as s:
+            _,replay,replayed=await apply_workspace_action(s,operation_id=source_id,request=request)
+            assert replay.id==child_id and replayed is True
+            for model in [WorkspaceOperation,PresentationGenerationJob,AuthoredSlideCheckpoint,PublicOperationAdmission,PublicProviderLogicalCall]:
+                ids={r['id'] for r in before[model.__tablename__]}
+                after=[r.model_dump(mode='json') for r in await s.scalars(select(model)) if str(r.id) in ids]
+                assert canonical_json_sha256(after)==canonical_json_sha256(before[model.__tablename__])
+        async with maker() as s:
+            failed=await s.get(WorkspaceOperation,child_id)
+            failed.state="dead_letter";failed.error_code="http_error_500";failed.version+=1
+            failed_job=await s.scalar(select(PresentationGenerationJob).where(PresentationGenerationJob.workspace_operation_id==child_id))
+            failed_job.state="failed"
+            failed_adm=await s.scalar(select(PublicOperationAdmission).where(PublicOperationAdmission.operation_id==child_id))
+            failed_adm.state="failed";failed_adm.terminal_at=now
+            await s.commit()
+        async with maker() as s:
+            failed=await s.get(WorkspaceOperation,child_id)
+            replay_manifest=await build_timeout_repurchase_manifest(s,failed,presentation_revision=0,recovery_revision=SVG_TIMEOUT_REPURCHASE_V3)
+            assert replay_manifest.manifest['total_logical_call_limit']==26
+            assert replay_manifest.manifest['remaining_logical_call_limit']==21
+            assert replay_manifest.manifest['origin_operation_id']==str(source_id)
+            assert replay_manifest.manifest['source_manifest_revision']==1
+            assert replay_manifest.manifest['unknown_checkpoints'][0]['original_logical_call_id']==recovery.manifest['unknown_checkpoints'][0]['original_logical_call_id']
+            from services.svg_timeout_repurchase import verified_append_only_consumption_baseline
+            baseline = await verified_append_only_consumption_baseline(s, failed)
+            assert baseline == (4, 1, 26, 12)
+            from services.provider_runtime_control import ProviderRuntimeControl, JobKillConditions
+            control = ProviderRuntimeControl()
+            await control.register_job("append-only-free-contract", estimated_budget_microunits=None, actual_budget_microunits=None, lineage_initial_requests=baseline[0], lineage_retry_requests=baseline[1], kill_conditions=JobKillConditions(max_total_requests=baseline[2], max_retry_requests=baseline[3]))
+            async with await control.admit("append-only-free-contract", "source38-replacement", estimated_cost_microunits=1, is_retry=True):
+                pass
+            status = await control.job_status("append-only-free-contract")
+            assert status["initial_requests"] == 0 and status["retry_requests"] == 1
+
+            import hashlib
+            known_row = await s.scalar(select(AuthoredSlideCheckpoint).join(PresentationGenerationJob,AuthoredSlideCheckpoint.job_id==PresentationGenerationJob.id).where(PresentationGenerationJob.workspace_operation_id==failed.id,AuthoredSlideCheckpoint.slide_index==8))
+            known_payload = deepcopy(known_row.svg_checkpoint)
+            known_payload["input_digest"] = "confirmed-author-input"
+            known_payload['svg_content'] = '<svg xmlns="http://www.w3.org/2000/svg"><text x="10" y="20">known</text></svg>'
+            known_payload['attempts'] = [{'ordinal':2,'outcome':'succeeded'}]
+            known_payload['quality'] = {'passed':False,'failures':[{'kind':'native_requested_table_missing'}]}
+            known_row.svg_checkpoint = known_payload
+            failed.error_code = 'svg_source_quality_failed'
+            child_admission = await s.scalar(select(PublicOperationAdmission).where(PublicOperationAdmission.operation_id==failed.id))
+            child_admission.retry_request_count = 1
+            s.add(PublicProviderLogicalCall(admission_id=child_admission.id,stage='repair',slide_index=8,logical_call_ordinal=2,retry_class='retry',idempotency_key_hash=hashlib.sha256(f"public-provider-call/v2:{failed.id}:repair:8:2:{hashlib.sha256(b'svg-author-8-2').hexdigest()}".encode()).hexdigest(),state='reported',outcome='succeeded',reconciled_at=now,estimated_cost_microunits=0,provider_id='codex',model_id='gpt-6.1-sol'))
+            s.add(known_row);s.add(failed);s.add(child_admission);await s.commit()
+            known_manifest = await build_timeout_repurchase_manifest(s,failed,presentation_revision=0,recovery_revision=SVG_TIMEOUT_REPURCHASE_V3)
+            assert known_manifest.manifest['previous_consumed_logical_calls'] == 6
+            assert known_manifest.manifest['remaining_logical_call_limit'] == 20
+            assert len(known_manifest.manifest['completed_checkpoints']) == 4
+            assert known_manifest.manifest['unknown_checkpoints'] == []
+            assert next(w for w in known_manifest.manifest['completed_checkpoints'] if w['slide_index']==8)['max_additional_author_calls'] == 0
+            assert next(w for w in known_manifest.manifest['completed_checkpoints'] if w['slide_index']==5)['known_quality_repair_approved'] is True
+    finally:await engine.dispose()
+    # A confirmed author result becomes an immutable cache, retaining its old marker only as audit evidence.
+    from services.svg_checkpoint_recovery import append_only_svg_checkpoint_payload
+    from utils.hashing import canonical_json_sha256
+    from types import SimpleNamespace
+    import json
+    author_original = json.loads(json.dumps(known_payload))
+    author_original["append_only_unstarted"] = {"witness": {"slide_index": 8}, "lineage": {"child_job_id": "ancestor"}}
+    author_lineage = {"child_job_id": str(failed_job.id), "child_operation_id": str(failed.id)}
+    author_row = SimpleNamespace(svg_checkpoint=author_original, model_dump=lambda **kwargs: {"svg_checkpoint": author_original})
+    author_witness = {"slide_index": 8, "consumed_attempt_count": 2, "max_additional_author_calls": 0, "row_digest": canonical_json_sha256(author_row.model_dump(mode="json"))}
+    author_cache = append_only_svg_checkpoint_payload(author_row, author_witness, author_lineage, cached=True, replacement=False)
+    assert "append_only_unstarted" not in author_cache
+    assert author_cache["consumed_author_lineage"] == author_original["append_only_unstarted"]
+    cached_job = SimpleNamespace(id=failed_job.id, workspace_operation_id=failed.id, request_payload={"_svg_recovery_lineage": author_lineage})
+    assert _provider_attempt_limit(author_cache, index=8, job=cached_job) == 0
+    assert next(entry for entry in known_manifest.manifest["completed_checkpoints"] if entry["slide_index"] == 8)["input_digest"] == "confirmed-author-input"
+    from services.svg_timeout_repurchase import _validated_stage_review_input
+    subjective_review = {"schema": "svg-stage-review-decision/v1", "reviewerKind": "agent", "reviewerRole": "authenticated_owner_agent", "model": "gpt-6.1-sol", "effort": "high", "userVisualReviewConfirmed": False, "vqaFlagsRemoved": False, "hardGatesRelaxed": False, "operationId": str(failed.id), "presentationId": str(failed.presentation_id), "vqaLogicalCallId": "00000000-0000-0000-0000-000000000001", "stageOrdinal": 1, "evidenceDigest": "a" * 64, "pages": [{"index": 8, "svgSha256": "b" * 64, "pngSha256": "c" * 64, "issues": ["illegible"], "decision": "accepted", "observedReadable": True, "majorClippingOrOverlapObserved": False}]}
+    assert _validated_stage_review_input(subjective_review) == subjective_review
+    assert WorkspaceOperationActionRequest(action="retry", idempotency_key="review-bound", stage_review_decision=subjective_review).stage_review_decision == subjective_review
+    for key in ("userVisualReviewConfirmed", "vqaFlagsRemoved", "hardGatesRelaxed"):
+        invalid_review = json.loads(json.dumps(subjective_review))
+        invalid_review[key] = True
+        with pytest.raises(TimeoutRepurchaseRejected):
+            _validated_stage_review_input(invalid_review)
+    invalid_review = json.loads(json.dumps(subjective_review))
+    invalid_review["pages"][0]["issues"] = ["required_text_missing"]
+    with pytest.raises(TimeoutRepurchaseRejected):
+        _validated_stage_review_input(invalid_review)

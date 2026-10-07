@@ -65,6 +65,7 @@ def _validate_request(value: Any) -> Mapping[str, Any]:
         "width_px",
         "height_px",
         "preserved_raster_svg",
+        "system_furniture",
     }:
         raise RendererPolicyError("renderer request has an invalid shape")
     if value.get("schema_version") != "authored-render-request/v1":
@@ -72,6 +73,8 @@ def _validate_request(value: Any) -> Mapping[str, Any]:
     html = value.get("html")
     if not isinstance(html, str) or len(html.encode("utf-8")) > MAX_HTML_BYTES:
         raise RendererPolicyError("renderer HTML limit exceeded")
+    if "system_furniture" in fields and ("preserved_raster_svg" not in fields or not isinstance(value["system_furniture"], dict)):
+        raise RendererPolicyError("renderer furniture attestation requires a raster derivative")
     if "preserved_raster_svg" in fields:
         raster = value["preserved_raster_svg"]
         if not isinstance(raster, str) or len(raster.encode("utf-8")) > MAX_REQUEST_BYTES:
@@ -124,7 +127,8 @@ async def _render(
     if request.get("preserved_raster_svg") is not None:
         from services.svg_renderer import admit_preserved_raster_preview
         admitted, _ = admit_preserved_raster_preview(
-            source, request["preserved_raster_svg"], width=width_px, height=height_px)
+            source, request["preserved_raster_svg"], width=width_px, height=height_px,
+            **({"system_furniture": request["system_furniture"]} if request.get("system_furniture") is not None else {}))
     else:
         try:
             admitted = admit_authored_html(source)

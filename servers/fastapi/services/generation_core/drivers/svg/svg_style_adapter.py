@@ -10,6 +10,9 @@ from __future__ import annotations
 
 import base64
 import json
+from functools import lru_cache
+from pathlib import Path
+from dataclasses import replace
 
 from services.generation_core.drivers.svg.project_style import (
     SVG_STYLE_ADAPTER_VERSION,
@@ -38,6 +41,22 @@ _MAPPINGS = {
 }
 
 
+@lru_cache(maxsize=128)
+def _reference_image(path: str, modified_ns: int, size: int) -> dict:
+    """Reuse immutable image material while detecting edited catalogue assets."""
+    data = Path(path).read_bytes()
+    if len(data) > 1536 * 1024:
+        raise ValueError("svg_style_reference_size_limit")
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        mime = "image/png"
+    elif data.startswith(b"\xff\xd8"):
+        mime = "image/jpeg"
+    else:
+        raise ValueError("svg_style_reference_format_unsupported")
+    encoded = base64.b64encode(data).decode("ascii")
+    return {"digest": sha256_prefixed(data), "data_url": f"data:{mime};base64,{encoded}"}
+
+
 def adapt_svg_style(
     style,
     *,
@@ -51,53 +70,39 @@ def adapt_svg_style(
 ) -> dict:
     if width <= 0 or height <= 0 or max(width, height) > 4096:
         raise ValueError("svg_style_canvas_unsupported")
-    if getattr(style, "reference_mode", "style_reference") == "exact_reconstruction":
-        raise ValueError("svg_exact_reconstruction_unsupported")
     overrides = dict(getattr(style, "svg_overrides", None) or {})
     allowed_overrides = {"layout_hints", "common_guidance", "resolved_sections"}
     if set(overrides) - allowed_overrides:
         raise ValueError("svg_style_override_unsupported")
     style_id = getattr(style, "id", "blueprint")
     references = {}
-    for role, paths in (getattr(style, "reference_images", None) or {}).items():
+    role_images = dict(getattr(style, "reference_images", None) or {})
+    if not role_images and getattr(style, "slide_reference_images", None):
+        role_images["content"] = tuple(style.slide_reference_images[:2])
+    for role, paths in role_images.items():
         refs = []
         for path in paths:
-            data = path.read_bytes()
-            if len(data) > 1536 * 1024:
-                raise ValueError("svg_style_reference_size_limit")
-            if data.startswith(b"\x89PNG\r\n\x1a\n"):
-                mime = "image/png"
-            elif data.startswith(b"\xff\xd8"):
-                mime = "image/jpeg"
-            else:
-                mime = None
-            if not mime:
-                raise ValueError("svg_style_reference_format_unsupported")
-            encoded = base64.b64encode(data).decode("ascii")
-            refs.append({
-                "digest": sha256_prefixed(data),
-                "data_url": f"data:{mime};base64,{encoded}",
-            })
+            stat = path.stat()
+            refs.append(dict(_reference_image(str(path.resolve()), stat.st_mtime_ns, stat.st_size)))
         references[role] = refs
     context = build_style_context(
         request if request is not None else _NullRequest(),
         style=style,
         mapped_guidance=_MAPPINGS.get(style_id, ""),
         reference_images=references,
-        master_rules=master_rules,
+        master_rules=master_rules or design_pack_rules,
         master_pin=master_pin,
         design_pack_rules=design_pack_rules,
     )
+    if master_rules is None and design_pack_rules is not None:
+        context = replace(context, master_rules=None)
     diagnostics = [
         {"section": line.section, "reason": "format_specific_instruction", "text": line.text}
         for line in context.brief_lines
         if "svg" not in line.applies_to
     ]
-    # The two reviewed reference styles have explicit brand mappings. Other
-    # ambiguous briefs require an explicit same-YAML mapping before admission.
-    unresolved = [item for item in diagnostics if item["section"] not in overrides.get("resolved_sections", [])]
-    if unresolved and style_id not in _MAPPINGS:
-        raise ValueError("svg_style_mapping_required:" + style_id)
+    # Format-specific instructions remain diagnostics. Every validated style
+    # can provide identity and examples without executable HTML-to-SVG mapping.
     result = project_style(
         context, width=width, height=height,
         overrides=overrides, diagnostics=diagnostics, references=references,
@@ -107,8 +112,8 @@ def adapt_svg_style(
         result["provenance"]["registry_authority"] = "packaged-authored-catalogue"
     result["digest"] = sha256_prefixed(json.dumps(result, ensure_ascii=False, sort_keys=True).encode())
     if source_template:
-        from utils.svg_template_rules import template_snapshot
-        result["source_template"] = template_snapshot(result, width, height)
+        from utils.svg_template_rules import reference_template_snapshot
+        result["source_template"] = reference_template_snapshot(result, width, height)
     return result
 
 

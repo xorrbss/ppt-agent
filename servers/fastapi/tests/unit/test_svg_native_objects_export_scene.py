@@ -211,7 +211,7 @@ def test_native_objects_bind_pptx_bundle_identity_and_semantic_digest_only():
     assert with_native.semantic_digest != without.semantic_digest
 
 
-def test_raster_grid_projects_to_the_converter_payload_the_grid_draws():
+def test_raster_grid_projects_to_the_converter_payload_the_grid_draws(monkeypatch):
     import xml.etree.ElementTree as ET
 
     from services.generation_core.drivers.svg.export_projection import converter_payload
@@ -244,3 +244,67 @@ def test_raster_grid_projects_to_the_converter_payload_the_grid_draws():
         spans = [span.text for span in node]
         cell = payload["rows"][r][c]
         assert cell.get("paragraphs", [cell.get("text")]) == spans
+
+    # Legacy projection is unchanged; explicit custom physical points invert exactly.
+    assert converter_payload(item) == converter_payload(item, pt_per_px=0.75)
+    from copy import deepcopy
+    from services.generation_core.drivers.svg.export_scene import _source_table_vertical_padding
+    from services.generation_core.drivers.svg.native_publish import _entry
+    from workers.public_svg_pptx_convert import VENDOR_ROOT
+    monkeypatch.syspath_prepend(str(VENDOR_ROOT))
+    from svg_to_pptx.conversion_context import ConversionContext, scoped_conversion_context
+    from svg_to_pptx.native_objects.table import _table_padding_attrs
+
+    factor = 400 * 72 / 25.4 / 1280
+    source_rows = [["월", "주문 수(건)", "정시 배송률(%)", "평균 배송 시간(분)"],
+                   ["1월", "240", "88", "62"], ["2월", "360", "91", "56"],
+                   ["3월", "520", "93", "50"], ["4월", "740", "95", "45"]]
+    xs, ys = [32, 112, 272, 442, 632], [95, 127, 154, 181, 208, 235]
+    body = ['<g id="table-font-custom"><rect x="32" y="95" width="600" height="140" fill="#FFFFFF"/>']
+    body += [f'<line x1="{x}" y1="95" x2="{x}" y2="235" stroke="#DFE8EA"/>' for x in xs]
+    body += [f'<line x1="32" y1="{y}" x2="632" y2="{y}" stroke="#DFE8EA"/>' for y in ys]
+    for r, row in enumerate(source_rows):
+        for c, text in enumerate(row):
+            size, baseline = (16, 118) if r == 0 else (18, ys[r] + 19)
+            body.append(f'<text x="{(xs[c] + xs[c + 1]) / 2}" y="{baseline}" '
+                        f'font-family="Noto Sans KR" font-size="{size}" text-anchor="middle">{text}</text>')
+    body.append('</g>')
+    custom_root = ET.fromstring('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 320">' + ''.join(body) + '</svg>')
+    custom_item = _entry(custom_root, {"id": "table-font-custom", "kind": "table",
+                         "raw": {"rows": source_rows, "headerRows": 1}},
+                         width=1280, height=320, pt_per_px=factor)
+    frozen_payload = deepcopy(custom_item.payload)
+    projected = converter_payload(custom_item, pt_per_px=factor)
+    assert projected["rows"][0][0]["font_size"] == 16
+    assert projected["rows"][1][0]["font_size"] == 18
+    _source_table_vertical_padding(custom_root, custom_item, projected, pt_per_px=factor)
+    padding = projected["rows"][1][0]["padding"]
+    assert padding["top"] == 1
+    assert padding["bottom"] == 3.5
+    assert padding["left"] == pytest.approx(7.2 / factor)
+    assert padding["right"] == pytest.approx(7.2 / factor)
+    @scoped_conversion_context
+    def padding_attrs(*, conversion_context, pptx_structure="flat"):
+        return _table_padding_attrs(projected['rows'][1][0], {})
+
+    attrs = padding_attrs(conversion_context=ConversionContext(1280, 320, 14400000, 3600000, legacy=False), pptx_structure="flat")
+    assert custom_item.payload == frozen_payload
+
+    from workers import public_svg_pptx_convert as runtime
+    import hashlib
+
+    unchanged_manifest = (runtime.VENDOR_ROOT / "MANIFEST.json").read_bytes()
+    original_digest = runtime.converter_digest()
+    original_read_bytes = type(runtime.VENDOR_ROOT).read_bytes
+    target_adapter = runtime._PROJECTION_ADAPTER_FILES[0]
+
+    def changed_adapter_bytes(path):
+        data = original_read_bytes(path)
+        return data + b"\n# adapter identity witness\n" if path == target_adapter else data
+
+    with monkeypatch.context() as digest_patch:
+        digest_patch.setattr(type(runtime.VENDOR_ROOT), "read_bytes", changed_adapter_bytes)
+        assert runtime.converter_digest() != original_digest
+    assert runtime.converter_digest() == original_digest
+    assert (runtime.VENDOR_ROOT / "MANIFEST.json").read_bytes() == unchanged_manifest
+    assert hashlib.sha256(unchanged_manifest).hexdigest() != original_digest

@@ -20,13 +20,15 @@ from typing import Any
 
 TABLE_SCHEMA = "authored-native-table/v1"
 CHART_SCHEMA = "authored-native-chart/v1"
+FIXED_CHART_SCHEMA = "authored-native-chart/v2"
+FIXED_AXIS_CONTRACT = "native-chart-fixed-value-axis/v1"
 CHART_TYPES = ("bar", "column", "line", "area", "pie", "donut")
 
 _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 _EDGES = ("top", "right", "bottom", "left")
 _MAX_TABLE_ROWS, _MAX_TABLE_COLUMNS, _MAX_CELL_CHARS = 100, 20, 10_000
 _MAX_CATEGORIES, _MAX_SERIES, _MAX_LABEL = 500, 50, 256
-_TABLE_MAX_FONT_PT = 72
+_TABLE_MAX_FONT_PT = 4000
 
 
 class NativePayloadError(ValueError):
@@ -37,7 +39,7 @@ def _fail(code: str):
     raise NativePayloadError(code)
 
 
-def _only(value: dict, allowed: tuple[str, ...], code: str) -> None:
+def _only(value: dict, allowed: tuple[str, ...], code: str, *, minimum: float = 6.0) -> None:
     if not isinstance(value, dict) or not set(value) <= set(allowed):
         _fail(code)
 
@@ -62,11 +64,11 @@ def _font_family(value: Any, maximum: int, code: str) -> str | None:
     return value.strip()
 
 
-def _font_size(value: Any, maximum: float, code: str) -> float | None:
+def _font_size(value: Any, maximum: float, code: str, *, minimum: float = 6.0) -> float | None:
     """Table sizes (max 72) are canonicalized to 0.001 pt like the authored parser."""
     if value is None:
         return None
-    if not _number(value) or not 6 <= value <= maximum:
+    if not _number(value) or not minimum <= value <= maximum:
         _fail(code)
     return round(round(value / 0.001) * 0.001, 3) if maximum == _TABLE_MAX_FONT_PT else value
 
@@ -93,7 +95,7 @@ def _cell(value: Any) -> dict:
         ("textColor", _color(value.get("textColor"), "table_cell_color_invalid")),
         ("bold", value.get("bold")),
         ("fontFamily", _font_family(value.get("fontFamily"), 128, "table_cell_font_invalid")),
-        ("fontSizePt", _font_size(value.get("fontSizePt"), _TABLE_MAX_FONT_PT, "table_cell_font_size_invalid")),
+        ("fontSizePt", _font_size(value.get("fontSizePt"), _TABLE_MAX_FONT_PT, "table_cell_font_size_invalid", minimum=1.0)),
     ):
         if parsed is not None:
             cell[key] = parsed
@@ -157,7 +159,7 @@ def parse_table_payload(value: Any) -> dict:
             parsed["headerRows"] = header_rows
     if (family := _font_family(value.get("fontFamily"), 128, "table_font_invalid")) is not None:
         parsed["fontFamily"] = family
-    if (size := _font_size(value.get("fontSizePt"), _TABLE_MAX_FONT_PT, "table_font_size_invalid")) is not None:
+    if (size := _font_size(value.get("fontSizePt"), _TABLE_MAX_FONT_PT, "table_font_size_invalid", minimum=1.0)) is not None:
         parsed["fontSizePt"] = size
     if value.get("cellStyles") is not None:
         styles = value["cellStyles"]
@@ -221,10 +223,14 @@ def _text_style(value: Any, *, title: bool, code: str) -> dict | None:
 
 def parse_chart_payload(value: Any) -> dict:
     _only(value, ("schemaVersion", "chartType", "categories", "series", "chartStyleVersion", "chartStyle",
-                  "title", "fontFamily", "fontSizePt", "textColor", "palette", "legend", "categoryAxis",
-                  "valueAxis"), "chart_payload_invalid")
-    if value.get("schemaVersion", CHART_SCHEMA) != CHART_SCHEMA:
+                   "title", "fontFamily", "fontSizePt", "textColor", "palette", "legend", "categoryAxis",
+                  "valueAxis", "axisContract", "retainedAxisTitle", "grouping", "plot_layout", "overlap", "gap_width"), "chart_payload_invalid")
+    schema = value.get("schemaVersion", CHART_SCHEMA)
+    if schema not in (CHART_SCHEMA, FIXED_CHART_SCHEMA):
         _fail("chart_schema_unsupported")
+    fixed_axis = schema == FIXED_CHART_SCHEMA
+    if (value.get("axisContract") != FIXED_AXIS_CONTRACT if fixed_axis else "axisContract" in value):
+        _fail("chart_fixed_axis_contract_invalid")
     if value.get("chartType") not in CHART_TYPES:
         _fail("chart_type_unsupported")
     categories, series = value.get("categories"), value.get("series")
@@ -232,9 +238,71 @@ def parse_chart_payload(value: Any) -> dict:
         _fail("chart_categories_invalid")
     if not isinstance(series, list) or not 1 <= len(series) <= _MAX_SERIES:
         _fail("chart_series_invalid")
-    parsed: dict = {"schemaVersion": CHART_SCHEMA, "chartType": value["chartType"],
+    parsed: dict = {"schemaVersion": schema, "chartType": value["chartType"],
                     "categories": [_label(item, "chart_categories_invalid") for item in categories],
                     "series": [_series(item, len(categories)) for item in series]}
+    if fixed_axis:
+        axis = value.get("valueAxis")
+        if (value["chartType"] not in ("bar", "column") or value.get("grouping") != "clustered"
+                or len(categories) < 2 or len(series) < 2 or not isinstance(axis, dict)
+                or not {"minimum", "maximum", "majorUnit"} <= set(axis)
+                or not set(axis) <= {"title", "fontFamily", "fontSizePt", "color",
+                                    "minimum", "maximum", "majorUnit"}):
+            _fail("chart_fixed_axis_invalid")
+        bounds = [axis[key] for key in ("minimum", "maximum", "majorUnit")]
+        if (not all(_number(item) for item in bounds) or bounds[0] != 0
+                or bounds[1] <= bounds[0] or bounds[2] <= 0
+                or not all(0 < point <= bounds[1] for item in parsed["series"] for point in item["values"])):
+            _fail("chart_fixed_axis_invalid")
+        intervals = (bounds[1] - bounds[0]) / bounds[2]
+        if not math.isfinite(intervals) or not 2 <= intervals <= 32 or abs(intervals - round(intervals)) > 1e-9:
+            _fail("chart_fixed_axis_invalid")
+        parsed["axisContract"] = FIXED_AXIS_CONTRACT
+    if value.get("retainedAxisTitle") is not None:
+        retained = value["retainedAxisTitle"]
+        if (not fixed_axis or not isinstance(retained, dict)
+                or set(retained) != {"axis", "source", "text", "svgDigest", "nativeGroupIds"}
+                or retained["axis"] != "value" or retained["source"] != "svg-sibling/v1"
+                or type(retained["text"]) is not str or not retained["text"].strip()
+                or not isinstance(retained["svgDigest"], str)
+                or not re.fullmatch(r"sha256:[0-9a-f]{64}", retained["svgDigest"])
+                or not isinstance(retained["nativeGroupIds"], list)
+                or not 1 <= len(retained["nativeGroupIds"]) <= 1000
+                or any(not isinstance(item, str) or not 1 <= len(item) <= 512
+                       for item in retained["nativeGroupIds"])
+                or retained["nativeGroupIds"] != sorted(set(retained["nativeGroupIds"]))
+                or value["valueAxis"].get("title") is not None):
+            _fail("chart_retained_axis_title_invalid")
+        parsed["retainedAxisTitle"] = {
+            "axis": "value", "source": "svg-sibling/v1",
+            "text": _label(retained["text"], "chart_retained_axis_title_invalid", 512),
+            "svgDigest": retained["svgDigest"],
+            "nativeGroupIds": list(retained["nativeGroupIds"]),
+        }
+    if value.get("grouping") is not None:
+        if value["chartType"] not in ("bar", "column") or value["grouping"] != "clustered":
+            _fail("chart_grouping_invalid")
+        parsed["grouping"] = "clustered"
+    if value.get("plot_layout") is not None:
+        layout = value["plot_layout"]
+        if (not isinstance(layout, dict) or set(layout) != {"x", "y", "w", "h"}
+                or not all(_number(layout.get(key)) for key in ("x", "y", "w", "h"))
+                or any(not 0 <= layout[key] <= 1 for key in ("x", "y", "w", "h"))
+                or layout["w"] <= 0 or layout["h"] <= 0
+                or layout["x"] + layout["w"] > 1 + 1e-6
+                or layout["y"] + layout["h"] > 1 + 1e-6):
+            _fail("chart_plot_layout_invalid")
+        parsed["plot_layout"] = {key: layout[key] for key in ("x", "y", "w", "h")}
+    if value.get("overlap") is not None:
+        if (value.get("grouping") != "clustered" or value["chartType"] not in ("bar", "column")
+                or type(value["overlap"]) is not int or not -100 <= value["overlap"] <= 100):
+            _fail("chart_overlap_invalid")
+        parsed["overlap"] = value["overlap"]
+    if value.get("gap_width") is not None:
+        if (value.get("grouping") != "clustered" or value["chartType"] not in ("bar", "column")
+                or type(value["gap_width"]) is not int or not 0 <= value["gap_width"] <= 500):
+            _fail("chart_gap_width_invalid")
+        parsed["gap_width"] = value["gap_width"]
     style_version, style = value.get("chartStyleVersion"), value.get("chartStyle")
     if style_version is not None or style is not None:
         if (style_version != "bounded-native-chart-style/v1" or type(style) is not int
@@ -255,8 +323,13 @@ def parse_chart_payload(value: Any) -> dict:
         parsed["palette"] = [_color(item, "chart_palette_invalid") or _fail("chart_palette_invalid")
                              for item in value["palette"]]
     for key in ("categoryAxis", "valueAxis"):
-        if (axis := _text_style(value.get(key), title=True, code=f"chart_{key}_invalid")) is not None:
-            parsed[key] = axis
+        raw_axis = value.get(key)
+        text_axis = ({field: raw_axis[field] for field in ("title", "fontFamily", "fontSizePt", "color")
+                      if field in raw_axis} if key == "valueAxis" and fixed_axis else raw_axis)
+        if (axis := _text_style(text_axis, title=True, code=f"chart_{key}_invalid")) is not None:
+            parsed[key] = ({**axis, **{field: raw_axis[field] for field in
+                                      ("minimum", "maximum", "majorUnit")}}
+                           if key == "valueAxis" and fixed_axis else axis)
     if value.get("legend") is not None:
         legend = value["legend"]
         style = _text_style(legend, title=False, code="chart_legend_invalid")

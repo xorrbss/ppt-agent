@@ -21,16 +21,39 @@ from services.svg_contract import validate_svg
 from services.svg_export_bundle import build_svg_export_bundle, digest as _digest
 from services.svg_export_source_preservation import (
     source_preservation_receipts as _source_preservation_receipts,
+    sealed_whole_page_manifest as _sealed_whole_page_manifest,
 )
 from workers.public_svg_export_worker import (
     SVG_EXPORT_SCHEMA,
     SVG_EXPORT_SCHEMA_V2,
     SVG_EXPORT_SCHEMA_V3,
+    SVG_EXPORT_SCHEMA_V4,
     CONVERTER_VERSION,
 )
 from utils.hashing import sha256_hex
 
 LOGGER = logging.getLogger(__name__)
+
+
+def svg_export_admission_snapshot(presentation, slides):
+    """Bind an edited SVG revision to its published canonical page evidence."""
+    from services.svg_contract import source_digest
+    if (not slides or len(slides) != presentation.n_slides
+            or [slide.index for slide in slides] != list(range(len(slides)))):
+        raise ValueError("svg_export_source_snapshot_invalid")
+    pages = []
+    for slide in slides:
+        content = slide.content or {}
+        quality = (content.get("svgReceipt") or {}).get("quality") or {}
+        if (slide.owner_id != presentation.owner_id or slide.source_format != "svg"
+                or not slide.svg_content or quality.get("passed") is not True
+                or quality.get("verified") is not True
+                or quality.get("source_digest") != source_digest(slide.svg_content)):
+            raise ValueError("svg_export_published_source_required")
+        pages.append({"id": str(slide.id), "index": slide.index, "svg": slide.svg_content,
+                      "content": content, "notes": slide.speaker_note or ""})
+    return _digest({"presentationId": str(presentation.id), "ownerId": str(presentation.owner_id),
+                    "revision": presentation.revision, "theme": presentation.theme, "pages": pages})
 
 
 def _require_deadline_budget(grant):
@@ -59,7 +82,8 @@ def _native_object_entries(slides):
 
 async def render_and_export_svgs(claim, *, tenant_id, svgs, notes, export_format, canvas, session_factory,
                                  asset_bindings=None, source_preservation=None, deadline_grant=None,
-                                 font_embedding=False, native_objects=None, slide_refs=None):
+                                 font_embedding=False, native_objects=None, slide_refs=None,
+                                 source_manifest=None):
     """Run the svg worker; ``slide_refs`` are pre-persisted slide svg checkpoints
     (``services.svg_export_identity``), otherwise the sources persist ephemeral."""
     if (claim.owner_id is None or claim.kind != f"export.{export_format}"
@@ -77,6 +101,7 @@ async def render_and_export_svgs(claim, *, tenant_id, svgs, notes, export_format
         raise PublicExportOperationError("svg_export_native_objects_count_invalid")
     if slide_refs is not None and (len(slide_refs) != len(svgs) or any(
             ref.kind != "slide-svg" or ref.sha256 != sha256_hex(source.encode())
+            or ref.owner_id != claim.owner_id or ref.tenant_id != tenant_id
             for ref, source in zip(slide_refs, svgs, strict=True))):
         raise PublicExportOperationError("svg_export_slide_checkpoint_binding_invalid")
     resolved_canvas = parse_canvas_metadata(canvas)
@@ -97,9 +122,11 @@ async def render_and_export_svgs(claim, *, tenant_id, svgs, notes, export_format
             binding = asset_bindings[index] if asset_bindings is not None else None
             if binding is not None:
                 from services.svg_export_assets import prepare_export_assets
+                receipt_args = ({"source_preservation": source_preservation[index]}
+                                if source_preservation is not None else {})
                 wire, bound = await prepare_export_assets(binding, svg=source, service=service,
                     session=session, claim=claim, tenant_id=tenant_id, export_format=export_format,
-                    width=resolved_canvas.width_px, height=resolved_canvas.height_px)
+                    width=resolved_canvas.width_px, height=resolved_canvas.height_px, **receipt_args)
                 assets.append(wire)
                 asset_refs.extend(bound)
             else:
@@ -112,7 +139,8 @@ async def render_and_export_svgs(claim, *, tenant_id, svgs, notes, export_format
             claim=claim, slide_refs=[_worker_ref(ref).to_wire() for ref in refs],
             source_digests=[ref.sha256 for ref in refs], notes=notes, canvas=canvas,
             export_format=export_format, font_embedding=font_embedding, assets=assets,
-            source_preservation=source_preservation, native_objects=native_objects)
+            source_preservation=source_preservation, native_objects=native_objects,
+            source_manifest=source_manifest)
         bundle = await service.persist_bytes(
             session, owner_id=claim.owner_id, tenant_id=tenant_id, kind="export-bundle",
             payload=json.dumps(payload).encode(), media_type="application/vnd.presenton.export-bundle+json",
@@ -168,7 +196,7 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
         raise NonRetryableWorkspaceOperationError("stale_presentation_revision")
     command_context = claim.request_payload.get("context") or {}
     quality_policy = command_context.get("quality_policy") or claim.request_payload.get("quality_policy")
-    if quality_policy not in (None, "release-v1"):
+    if quality_policy not in (None, "interactive-v1", "release-v1"):
         raise NonRetryableWorkspaceOperationError("svg_quality_policy_invalid")
     font_embedding = bool(
         command_context.get("font_embedding") is True
@@ -182,21 +210,54 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
             .order_by(SlideModel.index, SlideModel.id))).scalars().all()
     if not slides or any(slide.source_format != "svg" or not slide.svg_content for slide in slides):
         raise NonRetryableWorkspaceOperationError("svg_export_source_required")
+    if any(slide.owner_id != claim.owner_id for slide in slides):
+        raise NonRetryableWorkspaceOperationError("presentation_not_found")
     if (len(slides) != presentation.n_slides
             or [slide.index for slide in slides] != list(range(len(slides)))):
         raise NonRetryableWorkspaceOperationError("svg_export_incomplete_presentation")
+    canvas = presentation_canvas_metadata(presentation.theme)
+    revision_binding = claim.request_payload.get("svg_source_revision_binding")
+    if revision_binding is not None:
+        try:
+            snapshot = svg_export_admission_snapshot(presentation, slides)
+        except ValueError as error:
+            raise NonRetryableWorkspaceOperationError(str(error)) from error
+        if (not isinstance(revision_binding, dict)
+                or revision_binding.get("sourceRevision") != claim.expected_revision
+                or revision_binding.get("snapshotSha256") != snapshot):
+            raise NonRetryableWorkspaceOperationError("svg_export_source_snapshot_changed")
+    measured_slides = slides
+    try:
+        measured_source_preservation = _source_preservation_receipts(
+            presentation, slides, parse_canvas_metadata(canvas))
+        source_manifest = None
+        if measured_source_preservation is not None:
+            async with session_factory() as session:
+                source_manifest = await _sealed_whole_page_manifest(
+                    session, claim=claim, presentation=presentation, slides=slides,
+                    receipts=measured_source_preservation)
+    except PublicExportOperationError as error:
+        raise NonRetryableWorkspaceOperationError(str(error)) from error
+    if fmt == "pptx" and measured_source_preservation is not None:
+        from services.svg_source_export_projection import project_cached_source_tables
+        async with session_factory() as session:
+            slides = await project_cached_source_tables(session, presentation=presentation, slides=slides,
+                receipts=measured_source_preservation, canvas=parse_canvas_metadata(canvas), owner_id=claim.owner_id)
     svgs = [slide.svg_content for slide in slides]
     notes = [slide.speaker_note or "" for slide in slides]
     source_digest = _digest({"svgs": svgs, "notes": notes})
-    canvas = presentation_canvas_metadata(presentation.theme)
     source_assets = [(slide.content or {}).get("svgAssetManifest") for slide in slides]
-    source_preservation = _source_preservation_receipts(presentation, slides, parse_canvas_metadata(canvas))
+    source_preservation = ([(slide.content or {})["svgReceipt"]["source_preservation"] for slide in slides]
+                           if measured_source_preservation is not None else None)
     if any(asset is not None for asset in source_assets):
         source_digest = _digest({"svgs": svgs, "notes": notes, "assets": source_assets})
     if source_preservation is not None:
         source_digest = _digest({"svgSourceSnapshot": source_digest,
             "sourcePreservation": source_preservation})
-    native_objects = _native_object_entries(slides)
+    if source_manifest is not None:
+        source_digest = _digest({"svgSourceSnapshot": source_digest,
+            "sealedSourceManifest": source_manifest})
+    native_objects = _native_object_entries(slides) if fmt == "pptx" else None
     if native_objects is not None:
         source_digest = _digest({"svgSourceSnapshot": source_digest, "nativeObjects": native_objects})
     provenance = {
@@ -214,7 +275,8 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
     if any(asset is not None for asset in source_assets):
         provenance["compiler_runtime"]["runtime_version"] = SVG_EXPORT_SCHEMA_V2
     if source_preservation is not None:
-        provenance["compiler_runtime"]["runtime_version"] = SVG_EXPORT_SCHEMA_V3
+        provenance["compiler_runtime"]["runtime_version"] = (
+            SVG_EXPORT_SCHEMA_V4 if source_manifest is not None else SVG_EXPORT_SCHEMA_V3)
         provenance["capability_evidence"]["source_preservation"] = True
     async with session_factory() as session:
         from models.sql.workspace import WorkspaceOperation
@@ -251,7 +313,8 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
                 claim, tenant_id=admission.tenant_id, svgs=svgs, notes=notes, export_format=fmt, canvas=canvas,
                 session_factory=session_factory, asset_bindings=asset_bindings,
                 source_preservation=source_preservation, deadline_grant=grant, font_embedding=font_embedding,
-                native_objects=native_objects, slide_refs=slide_refs)
+                native_objects=native_objects, slide_refs=slide_refs,
+                source_manifest=source_manifest)
 
         # One export per identity: a completed identity is reused without the
         # worker or asset derivation; only a claimed one runs ``run_worker``.
@@ -262,17 +325,26 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
                 canvas=parse_canvas_metadata(canvas).model_dump(mode="json", by_alias=True), slides=slides,
                 source_assets=source_assets if any(asset is not None for asset in source_assets) else None,
                 source_preservation=source_preservation, native_objects=native_objects,
+                source_manifest=source_manifest,
                 font_embedding=font_embedding, advisory=advisory, quality_policy=quality_policy),
             session_factory=session_factory, grant=grant, execute=run_worker)
         ref = result.artifact
+        final_reviews = ((presentation.theme or {}).get("svg") or {}).get("finalPptxReviews") or {}
+        if isinstance(final_reviews, dict) and isinstance(final_reviews.get(ref.sha256), dict):
+            result.resource_metrics["final_pptx_visual_review"] = final_reviews[ref.sha256]
         receipt_args = dict(
             quality_receipt_id=f"quality:{claim.operation_id}:{ref.artifact_id}",
             operation_id=str(claim.operation_id), presentation_id=str(claim.presentation_id),
             artifact_digest=f"sha256:{ref.sha256}", source_revision=claim.expected_revision,
             scene_digest=f"sha256:{source_digest}", evaluated_at=datetime.now(timezone.utc))
         from services.svg_export_quality import svg_public_quality_receipt
-        receipt = svg_public_quality_receipt(slides=slides, advisory=advisory, source_preservation=source_preservation,
-            worker_metrics=result.resource_metrics, exporter_version=CONVERTER_VERSION, **receipt_args)
+        receipt = svg_public_quality_receipt(slides=measured_slides, advisory=advisory, source_preservation=source_preservation,
+            source_preservation_parents=measured_source_preservation,
+            worker_metrics=result.resource_metrics, exporter_version=CONVERTER_VERSION,
+            require_native_coverage=fmt == "pptx",
+            review_binding=dict(presentationId=str(claim.presentation_id), ownerId=str(claim.owner_id),
+                                ownerScope=str(claim.owner_scope), sourceRevision=claim.expected_revision),
+            **receipt_args)
         # release-v1 stays a receipt-content gate; the identity join decides
         # only whether bytes are produced or reused, not whether they release.
         if quality_policy == "release-v1":
@@ -281,7 +353,9 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
         # Post-export: the receipt's own digest is the publication quality
         # digest. ``evidenceDigests`` are the pre-export identity inputs.
         quality_digest = _digest(receipt)
-        receipt["evidenceDigests"] = identity.evidence.to_wire()
+        # Pre-export evidence stays in the immutable identity checkpoint. The
+        # public receipt is a strict QualityReceiptV3; adding identity fields
+        # here makes status projection discard the artifact-bound receipt.
         provenance["freshness"].update({"package_sha256": ref.sha256, "package_digest_match": True})
         await context.raise_if_cancelled()
         async with session_factory() as session:

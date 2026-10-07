@@ -176,6 +176,7 @@ def chart_appearance(raw: dict, payload: dict, prims: GroupPrimitives) -> dict |
             raise NativeRejection("native_chart_value_labels_mismatch")
         remaining = list(values)
         drawn_positions = []
+        inside_end_proofs = []
         for series_index, series in enumerate(payload["series"]):
             for index, number in enumerate(series["values"]):
                 matches = [text for text in remaining if parse_label_number(" ".join(text.lines)) == number]
@@ -186,6 +187,15 @@ def chart_appearance(raw: dict, payload: dict, prims: GroupPrimitives) -> dict |
                         if shape else matches[0])
                 remaining.remove(text)
                 if shape:
+                    label_box = text.box()
+                    inside_end_proofs.append(
+                        chart_type == "column" and number > 0
+                        and shape.box.x0 <= label_box.x0 <= label_box.x1 <= shape.box.x1
+                        and shape.box.y0 <= label_box.y0 <= label_box.y1 <= shape.box.y1
+                        # Reuse the existing positive-end third; full containment disambiguates short bars.
+                        and label_box.y0 <= shape.box.y0 + (shape.box.y1 - shape.box.y0) * 0.34
+                        and label_box.y0 - shape.box.y0 <= (label_box.y1 - label_box.y0) * 0.34
+                    )
                     drawn_positions.append(_label_position(chart_type, text.box(), shape.box))
                 if chart_type in {"pie", "donut"}:
                     slices = [item for item in prims.shapes if item.tag in {"path", "polygon"} and item.fill]
@@ -202,6 +212,11 @@ def chart_appearance(raw: dict, payload: dict, prims: GroupPrimitives) -> dict |
                     drawn_positions.append("above" if text.box().y1 < py else "center")
         if remaining:
             raise NativeRejection("native_chart_value_labels_mismatch")
+        if (labels_decl.get("position") == "insideEnd"
+                and set(drawn_positions) == {"center", "insideEnd"}
+                and len(inside_end_proofs) == len(drawn_positions)
+                and all(inside_end_proofs)):
+            drawn_positions = ["insideEnd"] * len(drawn_positions)
         if drawn_positions:
             if len(set(drawn_positions)) != 1:
                 raise NativeRejection("native_chart_value_label_position_mismatch")

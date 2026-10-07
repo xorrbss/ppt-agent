@@ -100,18 +100,19 @@ async def _seed_deck_with_one_blank(maker) -> uuid.UUID:
     return presentation_id
 
 
+@pytest.mark.parametrize("bridge", [None, True])
 def test_an_authored_page_is_remakeable_beside_a_blank_sibling(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch, bridge
 ):
     asyncio.run(
         _an_authored_page_is_remakeable_beside_a_blank_sibling(
-            tmp_path, monkeypatch
+            tmp_path, monkeypatch, bridge
         )
     )
 
 
 async def _an_authored_page_is_remakeable_beside_a_blank_sibling(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch, bridge
 ):
     engine, maker = await _database(tmp_path / "remake-scope.db")
     try:
@@ -121,6 +122,7 @@ async def _an_authored_page_is_remakeable_beside_a_blank_sibling(
 
             async def admit(target_session, **values):
                 assert values["operation_kind"] == "slide.regenerate.preview"
+                assert values["allow_local_development"] is (bridge is True)
                 task = AsyncPresentationGenerationTaskModel(
                     id=f"workspace-page-preview-{uuid.uuid4()}",
                     status="pending",
@@ -139,6 +141,7 @@ async def _an_authored_page_is_remakeable_beside_a_blank_sibling(
                 AuthoredPageRemakePreviewRequest(),
                 background_tasks,
                 session,
+                **({"allow_local_development": True} if bridge else {}),
             )
 
         assert task.status == "pending"

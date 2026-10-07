@@ -40,6 +40,7 @@ from services.trusted_executor.wire_bundle_references import (
     _input_bundle_references as _input_bundle_references,
     _staged_bundle_slides as _staged_bundle_slides,
     _render_output_bundle_references as _render_output_bundle_references,
+    _final_pptx_render_references,
     _validated_success_output as _validated_success_output,
 )
 from services.trusted_executor.worker_dispatcher import (
@@ -449,6 +450,8 @@ class SupervisedStdioWireTransport:
                 output_reference=output_reference,
                 path=output_path,
             )
+            render_outputs = (*render_outputs, *_final_pptx_render_references(job,
+                output_reference=output_reference, stdout=captured.stdout))
             # Validate every child before publishing any part of a render bundle.
             # The child is untrusted and may bypass its own store/runtime checks.
             for render_output in render_outputs:

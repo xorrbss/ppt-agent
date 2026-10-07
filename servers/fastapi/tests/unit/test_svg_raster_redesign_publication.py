@@ -93,7 +93,8 @@ def test_redesign_page_skips_finalize_and_measurement_even_when_oversized(monkey
     assert slide.svg_content == original_svg
 
 
-def test_redesign_page_reorder_renumbers_footer_without_generic_pipeline(monkeypatch):
+@pytest.mark.parametrize("terminal", [False, True])
+def test_redesign_page_reorder_renumbers_footer_without_generic_pipeline(monkeypatch, terminal):
     """A moved redesign page shows its new deck position; its source page
     (provenance) is unchanged; the changed page is remeasured without finalize."""
     pin = _pin()
@@ -102,6 +103,11 @@ def test_redesign_page_reorder_renumbers_footer_without_generic_pipeline(monkeyp
               'fill="#000000">본문</text><text id="svg-system-page-number" x="1140" y="815" '
               'font-family="Noto Sans KR" font-size="14.00" fill="#536785" text-anchor="end">01</text></svg>')
     slide = _redesign_slide(1, pin, page_number=1, svg=footer)
+    if terminal:
+        from services.generation_core.drivers.svg.terminal import FALLBACK_OUTCOME, FALLBACK_REASON
+        from services.generation_core.quality.terminal_slide_flag_only import flagged_entry
+        slide.content["svgReceipt"]["terminal"] = flagged_entry(index=0, reason=FALLBACK_REASON,
+            attempted=False, outcome=FALLBACK_OUTCOME)
     slide.content["svgAssetManifest"] = {"sourcePageIndex": 0}
     from services import svg_raster_renumber
 
@@ -136,8 +142,13 @@ def test_redesign_page_reorder_renumbers_footer_without_generic_pipeline(monkeyp
     capture.assert_awaited_once()
     assert capture.await_args.args[0] == slide.svg_content
     assert slide.properties["image"] == "numbered.png"
+    assert slide.content["svgReceipt"]["quality"]["verified"] is (not terminal)
+    assert slide.content["svgReceipt"]["quality"]["classification"] == ("review_required" if terminal else "passed")
+    from utils.hashing import sha256_hex
+    assert slide.content["svgReceipt"]["png_sha256"] == sha256_hex(b"png")
+    assert "png_path" not in slide.content["svgReceipt"]
     for checker in (svg_authoring, svg_geometry_font):
-        assert checker([slide])["status"] == "passed"
+        assert checker([slide])["status"] == ("failed" if terminal and checker is svg_authoring else "passed")
 
 def test_raster_redesign_pin_helper_selects_only_redesign_pages():
     redesign_pin = _pin(automatic_redesign_pages=(1,), full_page_preserve_pages=())

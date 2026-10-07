@@ -28,7 +28,15 @@ from dataclasses import dataclass
 from xml.etree import ElementTree as ET
 
 from services.generation_core.drivers.svg.native_geometry import (
-    Box, NativeRejection, Shape, inherit, shape_of, tag_of, translate_of,
+    Box,
+    NativeRejection,
+    Shape,
+    inherit,
+    shape_of,
+    tag_of,
+    _compose_transform,
+    _transform_of,
+    transform_shape,
 )
 
 _WHITE = (255, 255, 255)
@@ -53,8 +61,7 @@ def background_layers(root: ET.Element, group: ET.Element) -> list[Shape]:
 
     def visit(node, offset, attrs, inside) -> bool:
         tag = tag_of(node)
-        tx, ty = translate_of(node)
-        position = (offset[0] + tx, offset[1] + ty)
+        position = _compose_transform(offset, _transform_of(node))
         attrs = inherit(attrs, node)
         if tag in ("svg", "g"):
             entering = inside or node is group
@@ -64,12 +71,14 @@ def background_layers(root: ET.Element, group: ET.Element) -> list[Shape]:
             return node is group  # stop once the table group has been painted
         if tag in ("text", "line") or (inside and tag != "rect"):
             return False
-        shape = shape_of(node, tag, *position, attrs)
+        if position[2] != 1.0 and node.get("vector-effect", "none") != "none":
+            raise NativeRejection("native_group_transform_unsupported")
+        shape = transform_shape(shape_of(node, tag, 0.0, 0.0, attrs), position)
         if tag == "image" or (shape.fill is not None and shape.fill_alpha > 0):
             layers.append(shape)
         return False
 
-    visit(root, (0.0, 0.0), {}, False)
+    visit(root, (0.0, 0.0, 1.0), {}, False)
     return layers
 
 

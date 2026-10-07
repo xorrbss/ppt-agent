@@ -24,6 +24,7 @@ from services.workspace_requeue_guard import (
 )
 from services.workspace_post_publication_tail import finish_after_publication
 from services.workspace_quality_review_payload import (
+    sanitize_svg_quality_status,
     _normalize_quality_review_payload,
     _quality_review_count,
     _quality_review_issue_message,
@@ -350,6 +351,9 @@ _SAFE_RESULT_PAYLOAD_KEYS_BY_KIND: dict[str, frozenset[str]] = {
     "quality.review": frozenset(
         {
             "kind",
+            "source_format",
+            "qualityStatus",
+            "advisory_only",
             "message",
             "mode",
             "scope",
@@ -605,6 +609,11 @@ def sanitize_workspace_event_payload(
         elif operation_kind == "quality.review" and normalized == "stage_timings_ms":
             # This was normalized from approved aggregate telemetry above.
             safe[normalized] = _sanitize_quality_review_stage_timings(value)
+        elif operation_kind == "quality.review" and normalized == "qualityStatus":
+            safe[normalized] = sanitize_svg_quality_status(value)
+        elif operation_kind == "quality.review" and normalized == "source_format":
+            if value == "svg":
+                safe[normalized] = value
         elif (
             operation_kind == "quality.review"
             and normalized == "release_review_receipt"
@@ -1097,6 +1106,48 @@ def _public_retry_budget_error(admission: PublicOperationAdmission) -> str | Non
     ):
         return "public_provider_actual_cost_limit_exceeded"
     return None
+
+
+_ZERO_PROVIDER_CACHED_SOURCE_ERRORS = frozenset({
+    "svg_source_publication_binding_invalid",
+    "svg_cached_author_render_lineage_invalid",
+    "svg_cached_author_render_source_mismatch",
+    "svg_cached_author_render_invalid",
+    "svg_cached_author_render_marker_missing",
+    "svg_cached_author_render_operation_missing",
+    "svg_cached_author_render_stage_plan_forbidden",
+    "svg_cached_author_render_quality_policy_invalid",
+    "svg_cached_author_render_sidecar_untrusted",
+    "svg_cached_author_render_projection_unproven",
+})
+
+
+def _preserve_zero_provider_cached_error(operation: WorkspaceOperation,
+                                         admission: PublicOperationAdmission,
+                                         code: str) -> bool:
+    """Keep a known source error after a zero-call child has already failed."""
+    return bool(
+        operation.kind == "presentation.generate"
+        and operation.request_payload.get("recovery_revision")
+        in {"svg-cached-author-render/v1", "svg-cached-author-render/v2",
+            "svg-cached-author-render/v3"}
+        and operation.request_payload.get("svg_cached_author_render_manifest_hash")
+        and operation.retry_of_operation_id is not None
+        and admission.operation_kind == "generation"
+        and admission.state == "active"
+        and admission.planned_request_limit == 0
+        and admission.retry_request_limit == 0
+        and admission.estimated_cost_limit_microunits == 0
+        and admission.actual_cost_limit_microunits == 0
+        and admission.initial_request_count == 0
+        and admission.retry_request_count == 0
+        and admission.estimated_consumed_microunits == 0
+        and admission.actual_consumed_microunits == 0
+        and admission.estimated_reserved_microunits == 0
+        and admission.actual_reserved_microunits == 0
+        and (code in _ZERO_PROVIDER_CACHED_SOURCE_ERRORS
+             or code.startswith("public_provider_"))
+    )
 
 
 def _public_retry_budget_available(admission: PublicOperationAdmission) -> bool:
@@ -1981,7 +2032,8 @@ async def _transition_claim_failure(
             public_v2
             and (
                 code in _PUBLIC_BUDGET_ERROR_CODES
-                or public_budget_error is not None
+                or (public_budget_error is not None
+                    and not _preserve_zero_provider_cached_error(operation, admission, code))
             )
         )
         public_deadline_exceeded = bool(

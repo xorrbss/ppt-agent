@@ -33,13 +33,8 @@ def source_svg_capability(*, strategy: str | None, source_content: bool | None,
             resolve_source_template_style(style_id)
         except ValueError as error:
             template_reason = str(error).split(":", 1)[0]
-    reason = (
-        "svg_source_selection_required" if not selected
-        else "svg_company_standard_not_supported" if has_company_standard
-        else "svg_exact_reconstruction_not_supported" if reference_mode == "exact_reconstruction"
-        else template_reason
-    )
-    return {"enabled": reason is None, "reason": reason, "canvasSource": "selected-a4",
+    reason = "svg_source_selection_required" if not selected else template_reason
+    return {"enabled": reason is None, "reason": reason, "canvasSource": "selected-svg",
             "inputFormats": ["pptx"], "productVerified": False}
 
 
@@ -61,6 +56,13 @@ def svg_creation_admission_violation(request: object) -> str | None:
     for condition, code in blocked:
         if condition:
             return code() if callable(code) else code
+    references = (
+        getattr(request, "svg_design_reference_pin", None),
+        getattr(request, "svg_design_reference_snapshot_id", None),
+        getattr(request, "master_pin", None),
+    )
+    if sum(value is not None for value in references) > 1:
+        return "svg_design_reference_conflict"
     if getattr(request, "source_mode", None) == "source_content_restyle":
         page_size = getattr(request, "page_size", None)
         orientation = getattr(request, "orientation", None)
@@ -87,8 +89,6 @@ def svg_creation_admission_violation(request: object) -> str | None:
         from utils.authored_styles import resolve_authored_style
 
         style = resolve_authored_style(getattr(request, "authored_style", None))
-    if getattr(style, "reference_mode", "") == "exact_reconstruction":
-        return "svg_exact_reconstruction_not_supported"
     return None
 
 
@@ -133,27 +133,65 @@ def _resolve_master_rules(request: object, canvas: object) -> tuple[dict | None,
         raise HTTPException(status_code=status_code, detail=error.code) from error
     from services.generation_core.style.master_projection import (
         MasterProjectionError,
-        project_master_contract,
+        enrich_master_reference,
+        project_master_reference,
     )
 
     try:
-        rules = project_master_contract(resolved.contract, canvas.width_px, canvas.height_px)
+        rules = project_master_reference(resolved.contract, canvas.width_px, canvas.height_px)
+        rules = enrich_master_reference(
+            rules, resolved.contract, owner_id=resolved.owner_id,
+            width=canvas.width_px, height=canvas.height_px,
+        )
     except MasterProjectionError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     return rules, resolved.pin.model_dump(mode="json", by_alias=True)
+
+
+def _resolve_design_reference(request: object, canvas: object) -> dict | None:
+    """Resolve a new SVG design reference once under the request's owner."""
+    pin = getattr(request, "svg_design_reference_pin", None)
+    if pin is None:
+        if getattr(request, "svg_design_reference_snapshot_id", None) is not None:
+            uploaded = getattr(request, "_svg_uploaded_design_reference", None)
+            if not isinstance(uploaded, dict):
+                raise HTTPException(status_code=422, detail="svg_uploaded_design_reference_admission_required")
+            return uploaded
+        return None
+    from services.generation_core.style.design_pack_projection import resolve_design_pack_reference
+    from utils.owner_context import get_current_owner_id
+
+    owner_id = get_current_owner_id()
+    if owner_id is None:
+        raise HTTPException(status_code=401, detail="svg_design_reference_owner_required")
+    try:
+        return resolve_design_pack_reference(
+            owner_id=owner_id, pin=pin, width=canvas.width_px, height=canvas.height_px,
+        )
+    except DesignPackProjectionError as error:
+        code = str(error)
+        status = 404 if code == "design_pack_pin_not_found" else 409 if "digest" in code else 422
+        raise HTTPException(status_code=status, detail=code) from error
 
 
 def pin_svg_style(request: object) -> dict:
     """Snapshot before durable admission, never reselect on job takeover."""
     from services.authored_canvas import request_canvas_contract
     from services.generation_core.drivers.svg.svg_style_adapter import adapt_svg_style
+    from services.svg_authoring_profile import new_svg_admission_profile, request_authoring_profile, validate_profile_agreement
 
     frozen = getattr(request, "_svg_style_snapshot", None)
     if frozen is None:
+        fresh_readability = not getattr(request, "_svg_authoring_profile_selected", False)
+        try:
+            authoring_profile = new_svg_admission_profile(request)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
         require_svg_creation_admission(request)
         canvas = request_canvas_contract(request)
         source_restyle = getattr(request, "source_mode", None) in {"source_content_restyle", "raster_reconstruction"}
         master_rules, master_pin = _resolve_master_rules(request, canvas)
+        design_pack_rules = _resolve_design_reference(request, canvas)
         try:
             if source_restyle:
                 from services.document_canvas import canvas_digest
@@ -171,6 +209,7 @@ def pin_svg_style(request: object) -> dict:
                 width=canvas.width_px, height=canvas.height_px,
                 source_template=source_restyle,
                 request=request, master_rules=master_rules, master_pin=master_pin,
+                design_pack_rules=design_pack_rules,
             )
             if source_restyle:
 
@@ -182,14 +221,56 @@ def pin_svg_style(request: object) -> dict:
                 frozen["selected_template_id"] = style.id
                 digest_payload = {key: value for key, value in frozen.items() if key != "digest"}
                 frozen["digest"] = canonical_json_digest(digest_payload, allow_nan=True)
+            if authoring_profile is not None:
+                frozen["authoring_profile"] = authoring_profile
+                frozen["digest"] = canonical_json_digest(
+                    {key: value for key, value in frozen.items() if key != "digest"}, allow_nan=True,
+                )
+            if fresh_readability:
+                from services.authored_canvas import request_canvas_metadata
+                from services.document_canvas_generation import svg_readability_policy
+
+                frozen["readability_policy"] = svg_readability_policy(
+                    request_canvas_metadata(request), source_restyle=source_restyle,
+                    instructions=getattr(request, "instructions", None),
+                )
+                if getattr(request, "source_mode", None) == "source_content_restyle":
+                    frozen["source_authoring_contract"] = {"version": "svg-source-whole-page/v1"}
+                    from services.svg_source_charts import admitted_source_chart_contract
+                    from copy import deepcopy
+                    chart_contract = admitted_source_chart_contract(request)
+                    if chart_contract is not None:
+                        frozen["source_chart_contract"] = deepcopy(chart_contract)
+                    # The existing source measurement embeds this frozen font
+                    # material; whole-page authors must receive the same family.
+                    fonts = frozen["source_template"]["fonts"]
+                    frozen["tokens"]["heading_font"] = fonts["heading"]["family"]
+                    frozen["tokens"]["body_font"] = fonts["body"]["family"]
+                frozen["digest"] = canonical_json_digest(
+                    {key: value for key, value in frozen.items() if key != "digest"}, allow_nan=True,
+                )
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
         request._svg_style_snapshot = frozen
+    try:
+        validate_profile_agreement(request, frozen)
+        from services.document_canvas_generation import validate_svg_readability_policy
+
+        validate_svg_readability_policy(frozen.get("readability_policy"))
+        if frozen.get("source_authoring_contract") not in (None, {"version": "svg-source-whole-page/v1"}):
+            raise ValueError("svg_source_authoring_contract_invalid")
+        from services.svg_source_charts import validate_source_chart_contract
+        validate_source_chart_contract(frozen.get("source_chart_contract"))
+        if frozen.get("source_chart_contract") and frozen.get("source_authoring_contract") != {"version": "svg-source-whole-page/v1"}:
+            raise ValueError("svg_source_chart_contract_invalid")
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
     if getattr(request, "source_mode", None) in {"source_content_restyle", "raster_reconstruction"}:
         from services.document_canvas import canvas_digest
 
         canvas = getattr(request, "_document_canvas", None)
-        expected_style_id = getattr(request, "authored_style", None)
+        from utils.svg_template_rules import resolve_source_template_style
+        expected_style_id = resolve_source_template_style(getattr(request, "authored_style", None)).id
         template = frozen.get("source_template") if isinstance(frozen, dict) else None
         if (
             canvas is None
@@ -200,4 +281,7 @@ def pin_svg_style(request: object) -> dict:
             != canvas_digest(canvas.model_dump(mode="json", by_alias=True))
         ):
             raise HTTPException(status_code=409, detail="svg_source_style_binding_mismatch")
+        binding = getattr(request, "_svg_source_binding", None)
+        if binding is not None and binding.get("sourceChartContract") != frozen.get("source_chart_contract"):
+            raise HTTPException(status_code=409, detail="svg_source_chart_snapshot_mismatch")
     return frozen

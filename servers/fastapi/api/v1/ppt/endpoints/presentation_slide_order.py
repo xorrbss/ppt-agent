@@ -19,7 +19,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,6 +28,7 @@ from models.workspace import WorkspaceCommandRequest
 from services.database import get_async_session
 from services.workspace_error_registry import WorkspaceAPIException
 from services.workspace_operation_runner import wake_workspace_operation_runner
+from services.workspace_operation_principal import local_development_export_bridge
 from services.workspace_service import WorkspaceServiceError, create_workspace_command
 from services.workspace_slide_order_operation_handler import (
     OPERATION_KIND as SLIDE_ORDER_OPERATION_KIND,
@@ -84,11 +85,13 @@ def _raise_service_error(error: WorkspaceServiceError) -> None:
 async def reorder_presentation_slides(
     presentation_id: uuid.UUID,
     request: SlideOrderRequest,
+    http_request: Request,
     session: AsyncSession = Depends(get_async_session),
 ) -> SlideOrderResponse:
     owner_id = get_current_owner_id()
     if owner_id is None:
         raise HTTPException(401, detail={"code": "slide_order_authenticated_scope_required"})
+    allow_local_development = local_development_export_bridge(http_request)
     # Deterministic per (presentation, revision, requested order): a retried
     # submit of the same order at the same revision collapses onto the same
     # operation instead of racing a second one. Hashed so the key stays within
@@ -115,6 +118,7 @@ async def reorder_presentation_slides(
         # create_workspace_command commits (or rolls back) on its own session.
         operation, duplicate = await create_workspace_command(
             session, presentation_id=presentation_id, request=command,
+            allow_local_development=allow_local_development,
         )
         # An idempotency key stays permanently bound to whichever operation
         # first claimed it -- create_workspace_command never lets a fresh
@@ -147,6 +151,7 @@ async def reorder_presentation_slides(
             )
             operation, duplicate = await create_workspace_command(
                 session, presentation_id=presentation_id, request=command,
+                allow_local_development=allow_local_development,
             )
     except WorkspaceServiceError as error:
         _raise_service_error(error)
@@ -196,4 +201,10 @@ async def reorder_presentation_slides(
     # failure, just slower than the synchronous-feeling common case. A 2xx
     # status would make simple ok-based frontend clients treat this as the
     # success response shape, so this stays a (retryable) error status.
-    raise WorkspaceAPIException("slide_order_still_running", status_code=503)
+    raise WorkspaceAPIException(
+        "slide_order_still_running", status_code=503,
+        # The public error handler normalizes detail to the registered code,
+        # but preserves these headers. This is the already-admitted operation,
+        # not an invitation to submit another PATCH.
+        headers={"X-Workspace-Operation-ID": str(operation.id)},
+    )

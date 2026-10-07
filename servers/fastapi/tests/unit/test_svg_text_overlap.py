@@ -24,7 +24,7 @@ def _item(qid, line, ink="absent", parent=None):
 def test_ink_boxes_decide_when_present():
     overlaps, basis = text_overlaps([_item("a", [LINE_A], [INK_A]), _item("b", [LINE_B], [INK_B])])
     assert overlaps == []
-    assert basis["version"] == "glyph-ink/v2"
+    assert basis["version"] == "glyph-ink/v3"
     assert basis["fragments"] == {"ink": 2, "ink_cell": 0, "line_box": 0}
     assert basis["pairs"] == []
 

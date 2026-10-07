@@ -14,6 +14,7 @@ import asyncio
 from copy import deepcopy
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
+from xml.etree import ElementTree as ET
 import time
 import uuid
 
@@ -51,6 +52,7 @@ def _ctx():
 def _request():
     request = SimpleNamespace(
         template="authored", strategy="svg", instructions=None, codex_generation_preset=None,
+        aspect_ratio="16:9",
         authored_style="default", include_title_slide=False, content="deck content",
         reference_snapshot_ids=[], _source_content_svg_reflow=False,
         # What the handler pins before the upstream outline call and installs
@@ -63,7 +65,7 @@ def _request():
     return request
 
 
-def _install_harness(monkeypatch, *, saved=None, render_error=None):
+def _install_harness(monkeypatch, *, saved=None, render_error=None, repair_page=None):
     saved = {} if saved is None else saved
 
     async def prepare(*_args, **_kwargs):
@@ -98,10 +100,18 @@ def _install_harness(monkeypatch, *, saved=None, render_error=None):
     monkeypatch.setattr("services.generation_core.authoring.author_slide_svg.author_slide_svg", author_mock)
     monkeypatch.setattr("services.svg_contract.finalize_svg", lambda svg, **_kwargs: svg)
 
+    rejected_once = set()
+
     async def fake_render(*_args, **_kwargs):
         await asyncio.sleep(_TICK)
         if render_error is not None:
             raise render_error
+        if repair_page is not None:
+            index = int(ET.fromstring(_args[0]).get("data-index"))
+            if index == repair_page and index not in rejected_once:
+                rejected_once.add(index)
+                return SimpleNamespace(png=b"png", quality={"passed": False, "verified": True,
+                    "failures": [{"kind": "text_overflow", "text": "repair this page"}]})
         return SimpleNamespace(png=b"png", quality={"passed": True, "verified": True, "failures": []})
 
     monkeypatch.setattr("services.svg_renderer.render_svg_with_metrics", fake_render)
@@ -183,11 +193,56 @@ def test_a_fully_resumed_svg_deck_records_zero_page_work_and_seals_valid(monkeyp
     observations = resumed._authored_generation_timing_recorder.stage_observations()
     assert observations["author"]["durationMillis"] == 0
     assert observations["render"]["durationMillis"] == 0
+    assert "repair" not in observations
     receipt = _seal_success(resumed, logical_calls=0)
     assert receipt["validity"] == "valid"
     assert receipt["stages"]["provider"] == {"state": "not_started"}
+    assert receipt["stages"]["repair"] == {"state": "not_started"}
     for name in _PUBLIC_STAGES:
         assert receipt["stages"][name]["state"] == "observed", name
+
+
+def test_model_correction_has_its_own_timing_and_completed_replay_does_not_repeat_it(monkeypatch):
+    author_mock, _, saved = _install_harness(monkeypatch, repair_page=1)
+    request = _request()
+    recorder = request._authored_generation_timing_recorder
+    stage_windows = []
+    original_stage = GenerationTimingRecorder.stage
+
+    def stage(current, name):
+        if current is recorder:
+            stage_windows.append(name)
+        return original_stage(current, name)
+
+    monkeypatch.setattr(GenerationTimingRecorder, "stage", stage)
+    assert _run(request) == "published"
+    assert author_mock.await_count == SLIDE_COUNT + 1
+    page_calls = [call.kwargs for call in author_mock.await_args_list if call.kwargs["index"] == 1]
+    assert len(page_calls) == 2
+    assert page_calls[0]["correction_hint"] is None
+    assert "text_overflow" in page_calls[1]["correction_hint"]
+    assert len(saved[1]["attempts"]) == 2
+    # Exactly one measured window per provider attempt, never author + repair together.
+    assert stage_windows.count("author") == SLIDE_COUNT
+    assert stage_windows.count("repair") == 1
+    observations = recorder.stage_observations()
+    assert observations["repair"]["durationMillis"] >= 1
+    receipt = _seal_success(request, logical_calls=SLIDE_COUNT + 1)
+    assert receipt["validity"] == "valid"
+    assert receipt["stages"]["repair"]["state"] == "observed"
+    assert receipt["stages"]["repair"]["durationMillis"] == observations["repair"]["durationMillis"]
+
+    replay_author, _, _ = _install_harness(monkeypatch, saved=saved, repair_page=1)
+    replay = _request()
+    assert _run(replay) == "published"
+    replay_author.assert_not_awaited()
+    replay_observations = replay._authored_generation_timing_recorder.stage_observations()
+    assert replay_observations["author"]["durationMillis"] == 0
+    assert replay_observations["render"]["durationMillis"] == 0
+    assert "repair" not in replay_observations
+    replay_receipt = _seal_success(replay, logical_calls=0)
+    assert replay_receipt["validity"] == "valid"
+    assert replay_receipt["stages"]["repair"] == {"state": "not_started"}
 
 
 def test_a_failed_svg_attempt_is_charged_to_the_stage_that_was_running(monkeypatch):

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 from zipfile import ZipFile
 
@@ -95,6 +96,16 @@ def _chart_values(element: etree._Element | None) -> list[str]:
         return []
     points = element.findall(".//c:pt", namespaces=NS)
     if points:
+        count = element.find(".//c:ptCount", namespaces=NS)
+        try:
+            indexes = sorted(int(point.get("idx", "-1")) for point in points)
+            declared_count = int(count.get("val", "-1")) if count is not None else len(points)
+        except ValueError as error:
+            raise SourceContentError(UNSUPPORTED_OBJECT, detail={"reason": "chart_cache_incomplete"}) from error
+        if (indexes != list(range(len(points))) or
+                declared_count != len(points) or
+                any(point.find("c:v", namespaces=NS) is None for point in points)):
+            raise SourceContentError(UNSUPPORTED_OBJECT, detail={"reason": "chart_cache_incomplete"})
         return [
             (point.find("c:v", namespaces=NS).text or "")
             for point in sorted(points, key=lambda value: int(value.get("idx", "0")))
@@ -108,6 +119,8 @@ def _numeric_chart_values(values: list[str], *, chart_part: str) -> list[int | f
     for value in values:
         try:
             number = float(value)
+            if not math.isfinite(number):
+                raise ValueError("chart_value_nonfinite")
         except ValueError as error:
             raise SourceContentError(
                 UNSUPPORTED_OBJECT,
@@ -169,9 +182,12 @@ def _extract_chart(package: ZipFile, chart_part: str) -> tuple[dict[str, Any], i
     categories: list[str] = []
     series: list[dict[str, Any]] = []
     chart_value_count = 0
-    for series_index, series_element in enumerate(
-        chart_element.findall("c:ser", namespaces=NS)
-    ):
+    source_series = chart_element.findall("c:ser", namespaces=NS)
+    try:
+        source_series.sort(key=lambda element: int(element.find("c:order", namespaces=NS).get("val")))
+    except (AttributeError, ValueError, TypeError) as error:
+        raise SourceContentError(UNSUPPORTED_OBJECT, detail={"reason": "chart_series_order_invalid"}) from error
+    for series_index, series_element in enumerate(source_series):
         name_values = _chart_values(series_element.find("c:tx", namespaces=NS))
         category_values = _chart_values(series_element.find("c:cat", namespaces=NS))
         if not category_values:
@@ -180,6 +196,9 @@ def _extract_chart(package: ZipFile, chart_part: str) -> tuple[dict[str, Any], i
         if not raw_values:
             raw_values = _chart_values(series_element.find("c:yVal", namespaces=NS))
         numeric_values = _numeric_chart_values(raw_values, chart_part=chart_part)
+        if not category_values or len(category_values) != len(numeric_values):
+            raise SourceContentError(UNSUPPORTED_OBJECT,
+                detail={"reason": "chart_category_mismatch", "part": chart_part})
         if not numeric_values:
             raise SourceContentError(
                 UNSUPPORTED_OBJECT,
@@ -204,6 +223,8 @@ def _extract_chart(package: ZipFile, chart_part: str) -> tuple[dict[str, Any], i
             UNSUPPORTED_OBJECT,
             detail={"reason": "chart_series_missing", "part": chart_part},
         )
+    from services.source_content.pptx_chart_provenance import native_chart_provenance
+    original_series = [{**item, "categories": categories} for item in series]
     return {
         "values": values,
         "formulas": formulas,
@@ -211,4 +232,5 @@ def _extract_chart(package: ZipFile, chart_part: str) -> tuple[dict[str, Any], i
         "categories": categories,
         "series": series,
         "chartType": chart_type,
+        "nativeSource": native_chart_provenance(package, chart_part, root, chart_element, original_series),
     }, chart_value_count

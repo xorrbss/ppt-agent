@@ -36,6 +36,7 @@ class PageNativeObjects:
     sidecar: NativeObjects | None = None
     invalid_reason: str | None = None
     invalid_objects: tuple[tuple[str | None, str | None], ...] = ()
+    source_chart_policy: dict | None = None
 
 
 def _label(value: Any) -> str | None:
@@ -47,12 +48,19 @@ def bundle_entry(content: Any) -> dict | None:
     try:
         sidecar = slide_native_objects(content)
     except NativeObjectsError as error:
+        if ((content.get("svgReceipt") or {}).get("source_preservation") or {}).get("source_native_charts"):
+            raise ValueError("svg_source_chart_export_numeric_mismatch") from error
         raw = content[SLIDE_CONTENT_KEY]
         objects = raw.get("objects") if isinstance(raw, dict) else None
         named = [{"id": _label(item.get("id")), "kind": _label(item.get("kind"))}
                  for item in (objects if isinstance(objects, list) else []) if isinstance(item, dict)]
         return {"status": "invalid", "reason": str(error)[:_MAX_REASON], "objects": named[:_MAX_INVALID_OBJECTS]}
-    return None if sidecar is None else {"status": "valid", "sidecar": sidecar.to_wire()}
+    if sidecar is None:
+        return None
+    from services.svg_source_charts import source_chart_export_policy
+    policy = source_chart_export_policy(content, sidecar)
+    return {"status": "valid", "sidecar": sidecar.to_wire(),
+            **({"sourceChartPolicy": policy} if policy is not None else {})}
 
 
 def _parse_entry(entry: Any) -> PageNativeObjects:
@@ -60,9 +68,16 @@ def _parse_entry(entry: Any) -> PageNativeObjects:
         return PageNativeObjects()
     if not isinstance(entry, dict):
         raise ValueError(_BUNDLE_INVALID)
-    if entry.get("status") == "valid" and set(entry) == {"status", "sidecar"}:
+    if entry.get("status") == "valid" and set(entry) in ({"status", "sidecar"}, {"status", "sidecar", "sourceChartPolicy"}):
         try:
-            return PageNativeObjects(sidecar=NativeObjects.from_wire(entry["sidecar"]))
+            sidecar = NativeObjects.from_wire(entry["sidecar"])
+            policy = entry.get("sourceChartPolicy")
+            if "sourceChartPolicy" in entry:
+                from services.svg_source_charts import validate_source_chart_export_policy
+                if policy is None:
+                    raise ValueError("svg_source_chart_export_policy_invalid")
+                validate_source_chart_export_policy(policy, sidecar)
+            return PageNativeObjects(sidecar=sidecar, source_chart_policy=policy)
         except NativeObjectsError as error:
             raise ValueError(_BUNDLE_INVALID) from error
     if entry.get("status") != "invalid" or set(entry) != {"status", "reason", "objects"}:

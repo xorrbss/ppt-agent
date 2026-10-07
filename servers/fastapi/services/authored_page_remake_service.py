@@ -103,10 +103,12 @@ PREVIEW_KIND = "authored_page_remake_preview"
 class AuthoredPageRemakeError(RuntimeError):
     """Stable fail-closed error suitable for a task or operation result."""
 
-    def __init__(self, code: str, *, stage: str, retryable: bool = False) -> None:
+    def __init__(self, code: str, *, stage: str, retryable: bool = False,
+                 preview_evidence: dict[str, Any] | None = None) -> None:
         self.code = code
         self.stage = stage
         self.retryable = retryable
+        self.preview_evidence = preview_evidence
         super().__init__(code)
 
 
@@ -713,7 +715,8 @@ async def _run_preview_background(
                 task,
                 status="error",
                 message=user_message(UserMessageKey.REMAKE_PAGE_FAILED),
-                data=_failed_preview_breadcrumb(presentation_id, slide_index),
+                data={**(error.preview_evidence or {}),
+                      **_failed_preview_breadcrumb(presentation_id, slide_index)},
                 error={
                     "detail": error.code,
                     "stage": error.stage,
@@ -746,6 +749,8 @@ async def queue_authored_page_remake_preview(
     request: AuthoredPageRemakePreviewRequest,
     background_tasks: BackgroundTasks,
     session: AsyncSession,
+    *,
+    allow_local_development: bool = False,
 ) -> AsyncPresentationGenerationTaskModel:
     presentation, slides = await _load_deck(session, presentation_id, slide_index)
     if slide_index < 0 or slide_index >= len(slides):
@@ -765,11 +770,15 @@ async def queue_authored_page_remake_preview(
         context={
             "slide_index": slide_index,
             "instruction": request.instruction,
+            **({"mode": request.mode, "source_digest": request.source_digest,
+                **({"svg_content": request.svg_content} if request.mode == "local_svg" else {})}
+               if request.mode != "author" else {}),
         },
         task_id_prefix="workspace-page-preview",
         pending_message=user_message(
             UserMessageKey.REMAKE_PAGE_QUEUED, page=slide_index + 1
         ),
+        allow_local_development=allow_local_development,
     )
 
 

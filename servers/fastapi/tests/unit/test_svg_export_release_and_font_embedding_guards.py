@@ -141,6 +141,26 @@ def test_unknown_quality_policy_is_rejected_before_any_db_access(monkeypatch):
         ))
 
 
+@pytest.mark.parametrize("policy", [None, "interactive-v1", "release-v1"])
+def test_supported_quality_policies_reach_svg_source_validation(policy):
+    presentation, admission = _presentation_and_admission()
+    claim = _claim(request_payload={"quality_policy": policy})
+    context = SimpleNamespace(claim=claim)
+
+    @asynccontextmanager
+    async def empty_slides():
+        class Session:
+            async def execute(self, _statement):
+                return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: []))
+        yield Session()
+
+    # Unknown policies fail at admission; supported policies continue to the
+    # actual source gate. Existing release receipt tests retain stricter release QA.
+    with pytest.raises(NonRetryableWorkspaceOperationError, match="svg_export_source_required"):
+        asyncio.run(svg_export_operation.execute_svg_workspace_export(
+            context, presentation=presentation, admission=admission, session_factory=empty_slides))
+
+
 def test_font_embedding_on_a_pdf_export_is_rejected_before_any_db_access(monkeypatch):
     presentation, admission = _presentation_and_admission()
     claim = _claim(kind="export.pdf", request_payload={"font_embedding": True})

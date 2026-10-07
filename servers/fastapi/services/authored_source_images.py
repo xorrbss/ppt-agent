@@ -28,7 +28,7 @@ from services.source_images.registry import (
     register_manifest_image_occurrences,
     register_source_images,
 )
-from services.source_images.selection import select_source_images
+from services.source_images.selection import assign_source_image_groups, select_source_images
 from utils.authored_image_slots import source_slot_id_for_asset
 from utils.get_env import is_authored_source_images_enabled
 from services.generation_core.authoring.author_slide import (
@@ -94,6 +94,7 @@ async def _uploaded_source_paths(
                 # Image reference text is an availability descriptor, NOT OCR.
                 upload_metadata[str(private_path)] = {
                     "original_name": names.get(str(binding.asset_id), ""),
+                    "workspace_asset_id": str(binding.asset_id),
                 }
     return paths
 
@@ -270,6 +271,9 @@ def plan_slide_source_images(
     candidates: Sequence[SourceImageCandidate],
     *,
     source_slide_locked: bool = False,
+    candidate_limit: int | None = None,
+    content_group_assignment: bool = False,
+    assignment_report: list[dict] | None = None,
 ) -> list[dict[str, SourceImageCandidate]] | None:
     """Decide up front, in slide order, which pictures each slide is offered.
 
@@ -277,7 +281,11 @@ def plan_slide_source_images(
     worker would depend on completion order and the same deck would not
     reproduce. Deciding here gives every slide deterministic opaque source-slot
     ids. Candidates may be offered to multiple slides and may fill multiple
-    slots on one slide.
+    slots on one slide. ``candidate_limit`` bounds legacy ranked offers;
+    source-slide-locked preservation always retains every image on that page.
+    Fresh SVG optional offers use ``content_group_assignment`` to connect
+    complete local explanation groups, without a count cap. The additive
+    receipt records resolved and unresolved groups for that mode.
 
     ``None`` -- not an empty list -- means source images are not in play for
     this deck, which is the value the substitution step reads as
@@ -290,6 +298,34 @@ def plan_slide_source_images(
     eligible = [
         candidate for candidate in candidates if _candidate_bytes_match_digest(candidate)
     ]
+    if content_group_assignment and not source_slide_locked:
+        eligible_ids = {candidate.asset_id for candidate in eligible}
+        blocked_groups: set[str] = set()
+        for candidate in candidates:
+            if candidate.asset_id not in eligible_ids:
+                group = (candidate.source_locator or {}).get("contentGroup") or {}
+                if isinstance(group, dict) and group.get("groupId"):
+                    blocked_groups.add(str(group["groupId"]))
+        blocked: dict[str, list[SourceImageCandidate]] = {}
+        complete = []
+        for candidate in candidates:
+            group = (candidate.source_locator or {}).get("contentGroup") or {}
+            group_id = str(group.get("groupId") or "") if isinstance(group, dict) else ""
+            if group_id in blocked_groups or candidate.asset_id not in eligible_ids:
+                blocked.setdefault(group_id or f"asset:{candidate.asset_id}", []).append(candidate)
+            else:
+                complete.append(candidate)
+        eligible = complete
+        if assignment_report is not None:
+            for group_id, members in blocked.items():
+                assignment_report.append({
+                    "version": "source-content-group/v1",
+                    "groupId": group_id,
+                    "status": "group_bytes_unavailable",
+                    "assetIds": [candidate.asset_id for candidate in members],
+                    "targetIndexes": [],
+                    "matchBasis": "none",
+                })
     if not eligible:
         LOGGER.warning(
             "[authored] source image bytes missing or changed; continuing without source images"
@@ -299,6 +335,17 @@ def plan_slide_source_images(
         {} for _content in contents
     ]
     try:
+        if content_group_assignment and not source_slide_locked:
+            assigned = assign_source_image_groups(
+                contents, eligible, assignment_report=assignment_report,
+            )
+            return [
+                {
+                    source_slot_id_for_asset(candidate.asset_id): candidate
+                    for candidate in chosen
+                }
+                for chosen in assigned
+            ]
         for index, content in enumerate(contents):
             content = contents[index]
             if source_slide_locked:
@@ -314,7 +361,7 @@ def plan_slide_source_images(
                     slide_heading=heading.strip().lstrip("#*- ").strip(),
                     slide_content=body,
                     slide_index=index,
-                    limit=None,
+                    limit=candidate_limit,
                 )
             offered = {
                 source_slot_id_for_asset(candidate.asset_id): candidate

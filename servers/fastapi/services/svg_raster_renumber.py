@@ -21,7 +21,7 @@ import re
 from copy import deepcopy
 
 from services.svg_contract import PAGE_NUMBER_ID, source_digest, validate_svg
-from services.svg_page_publication import set_svg_page
+from services.svg_page_publication import classify_svg_page_quality, set_svg_page
 
 _FOOTER = re.compile(rf'(<text id="{PAGE_NUMBER_ID}"[^>]*>)(\d+)(</text>)')
 
@@ -104,8 +104,10 @@ async def renumber_redesign_page(session, presentation, slide, index, *, width, 
     capture = await render_svg_with_metrics(svg, width=width, height=height,
         materialized_svg=materialized, allow_image_only=materialized is not None,
         instructions=getattr(presentation, "instructions", None), **physical_kwargs)
-    set_svg_page(slide, svg_content=svg, content=content, quality=capture.quality)
     image = _save_slide_pngs(presentation.id, [capture.png], "svg-numbering")[0]
+    quality = classify_svg_page_quality(svg_content=svg, quality=capture.quality,
+        index=index, png_path=image, receipt=receipt)
+    set_svg_page(slide, svg_content=svg, content=content, quality=quality, png=capture.png)
     slide.properties = {**(getattr(slide, "properties", None) or {}), "image": image}
     return True
 

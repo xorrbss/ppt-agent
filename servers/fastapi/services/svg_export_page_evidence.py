@@ -32,6 +32,7 @@ import json
 
 from services.svg_contract import SVG_CONTRACT_VERSION, source_digest
 from services.svg_renderer import SVG_RENDERER_VERSION
+from services.svg_export_visual_review import page_measurement_current
 from utils.hashing import sha256_prefixed
 
 AUTHORING_CHECKER = f"svg-author-loop/{SVG_CONTRACT_VERSION}"
@@ -82,6 +83,9 @@ def _page_domain(slides: Sequence, *, name: str, checker: str, page_ok, fields) 
         return dict(required=True, status="failed", reasonCode=f"svg_{name}_evidence_missing")
     page_digests = [source_digest(slide.svg_content or "") for slide in slides]
     if any(quality["source_digest"] != digest for quality, digest in zip(qualities, page_digests, strict=True)):
+        return dict(required=True, status="failed", reasonCode=f"svg_{name}_evidence_stale")
+    if any(quality.get("measurement_complete") is True and not page_measurement_current(slide)
+           for slide, quality in zip(slides, qualities, strict=True)):
         return dict(required=True, status="failed", reasonCode=f"svg_{name}_evidence_stale")
     failed = [index for index, (slide, quality) in enumerate(zip(slides, qualities, strict=True))
               if not page_ok(slide, quality)]

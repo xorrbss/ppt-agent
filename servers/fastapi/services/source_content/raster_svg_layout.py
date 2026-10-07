@@ -8,6 +8,7 @@ from collections.abc import Iterable
 from xml.sax.saxutils import escape
 
 from services.source_content.raster_contracts import RasterAnalysis, require_analysis_digest
+from services.source_content.raster_target import raster_target_font_floor, require_raster_physical_readability
 
 
 MIN_FONT_UNITS = 9.5 * 12700 / 9000 + 0.005
@@ -19,30 +20,31 @@ def _visual_width(value: str) -> float:
     return sum(1.0 if unicodedata.east_asian_width(char) in {"F", "W"} else 0.55 for char in value)
 
 
-def _font_for_line(value: str, available_width: float, preferred: float) -> float:
+def _font_for_line(value: str, available_width: float, preferred: float, minimum: float = MIN_FONT_UNITS) -> float:
+    preferred = max(preferred, minimum)
     needed = _visual_width(value) * preferred
     chosen = preferred if needed <= available_width else preferred * available_width / needed
-    if chosen < MIN_FONT_UNITS:
+    if chosen < minimum:
         raise ValueError("raster_text_requires_below_9_5pt")
     return chosen
 
 
-def _text_lines(value: str, available_width: float, preferred: float) -> list[tuple[str, float]]:
+def _text_lines(value: str, available_width: float, preferred: float, minimum: float = MIN_FONT_UNITS) -> list[tuple[str, float]]:
     result: list[tuple[str, float]] = []
     for original in value.splitlines() or [""]:
-        if _visual_width(original) * MIN_FONT_UNITS <= available_width:
-            result.append((original, _font_for_line(original, available_width, preferred)))
+        if _visual_width(original) * minimum <= available_width:
+            result.append((original, _font_for_line(original, available_width, preferred, minimum)))
             continue
         # Preserve every reviewed character while wrapping at the 9.5 pt floor.
         chunk = ""
         for char in original:
-            if chunk and _visual_width(chunk + char) * MIN_FONT_UNITS > available_width:
-                result.append((chunk, MIN_FONT_UNITS))
+            if chunk and _visual_width(chunk + char) * minimum > available_width:
+                result.append((chunk, minimum))
                 chunk = char
             else:
                 chunk += char
         if chunk:
-            result.append((chunk, MIN_FONT_UNITS))
+            result.append((chunk, minimum))
     return result
 
 
@@ -215,7 +217,8 @@ def candidate_layout_issue(analysis: RasterAnalysis, page_number: int) -> str | 
                     lines = []
                     for index, source_line in enumerate((region.text or "").splitlines() or [""]):
                         preferred = 25.0 if region.role == "title" or (lead and index == 0) else 16.5
-                        lines.extend(_text_lines(source_line, column_width - padding * 2, preferred))
+                        lines.extend(_text_lines(source_line, column_width - padding * 2, preferred,
+                                              raster_target_font_floor(analysis.target_canvas)))
                     row_heights.append(sum(font * 1.35 for _, font in lines) + padding * 2)
                 else:
                     row_heights.append(column_width * region.bbox.height / region.bbox.width * 0.25)
@@ -317,7 +320,8 @@ def render_raster_page_svg(
                     preferred = 25.0 if lead_line else 16.5
                     lines.extend(
                         (line, font, lead_line)
-                        for line, font in _text_lines(source_line, column_width - padding * 2, preferred)
+                        for line, font in _text_lines(source_line, column_width - padding * 2, preferred,
+                                              raster_target_font_floor(analysis.target_canvas))
                     )
             blocks.append({
                 "region": region,
@@ -400,6 +404,7 @@ def render_raster_page_svg(
         raise ValueError("raster_page_content_overflow")
     xml.append("</svg>")
     result = "".join(xml)
+    require_raster_physical_readability(result, analysis.target_canvas)
     if len(result.encode("utf-8")) >= 2 * 1024 * 1024:
         raise ValueError("raster_svg_size_limit")
     return result

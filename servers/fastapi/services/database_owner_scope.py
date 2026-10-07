@@ -47,6 +47,7 @@ from models.sql.presentation_export_attempt import PresentationExportAttempt
 from models.sql.public_admission import PublicOperationAdmission
 from models.sql.public_artifact import PublicArtifact, PublicExportIdentity
 from services.presentation_profile_persistence import stamp_presentation_profile
+from services.presentation_dashboard_metadata import presentation_dashboard_metadata
 from utils.owner_context import (
     get_current_owner_id,
     get_current_tenant_id,
@@ -260,6 +261,7 @@ def _stamp_new_owned_rows(session, _flush_context, _instances) -> None:
     for instance in session.new:
         if isinstance(instance, PresentationModel):
             stamp_presentation_profile(instance)
+            instance.dashboard_metadata = presentation_dashboard_metadata(instance.theme)
     for instance in session.dirty:
         if not isinstance(instance, PresentationModel):
             continue
@@ -269,8 +271,11 @@ def _stamp_new_owned_rows(session, _flush_context, _instances) -> None:
             # so re-deriving a profile here asked the resolver to describe a
             # row that has just been emptied on purpose -- and it refused,
             # which made deleting an authored presentation raise.
+            instance.dashboard_metadata = None
             continue
         state = inspect(instance)
+        if state.attrs.theme.history.has_changes():
+            instance.dashboard_metadata = presentation_dashboard_metadata(instance.theme)
         if any(
             state.attrs[field].history.has_changes()
             for field in profile_identity_fields

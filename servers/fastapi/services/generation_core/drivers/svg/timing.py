@@ -17,8 +17,10 @@ Stage mapping, each observed where the SVG driver runs it (``collect.py``):
 * ``outline`` -- from the operation boundary (``_authored_outline_started_at``,
   pinned before the upstream outline LLM call, the same clock the authored
   driver uses) to the end of the per-deck setup (``_prepare_generation``).
-* ``author`` -- every page's author attempt (provider SVG authoring or the
+* ``author`` -- every page's initial author attempt (provider SVG authoring or the
   raster reconstruction), summed across concurrent pages.
+* ``repair`` -- model correction attempts after an initial provider attempt;
+  observed only when this attempt executes a correction, never on checkpoint replay.
 * ``render`` -- every page's Chromium render/measure attempt, and a terminal
   fallback page's render.
 * ``quality`` -- the deck quality pass: page classification and the vision
@@ -37,6 +39,7 @@ import time
 _RECORDER_ATTRIBUTE = "_authored_generation_timing_recorder"
 #: Recorder stages the page loop owns. A page resumed from a verified
 #: checkpoint neither authors nor renders in this attempt.
+#: Repair is optional and must remain unobserved when no correction ran.
 _PAGE_LOOP_STAGES = ("author", "render")
 
 
@@ -92,6 +95,7 @@ def settle_page_loop(request: object) -> None:
     every page resumed from a verified checkpoint -- did zero work in this
     attempt, and is recorded as exactly that; the authored driver records its
     per-slide work sums the same way, zero included.
+    Optional repair observations are never synthesized from saved attempt history.
     """
 
     recorder = _recorder(request)

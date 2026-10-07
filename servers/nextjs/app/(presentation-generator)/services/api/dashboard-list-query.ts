@@ -5,6 +5,7 @@ export interface PresentationListOptions {
   page?: number;
   pageSize?: number;
   sort?: PresentationSortDirection;
+  view?: "dashboard";
 }
 
 export interface PresentationListEnvelope<T> {
@@ -38,6 +39,7 @@ export function buildPresentationListPath(
     params.set("page_size", String(options.pageSize));
   }
   if (options.sort !== undefined) params.set("sort", options.sort);
+  if (options.view !== undefined) params.set("view", options.view);
   const suffix = params.toString();
   return `/api/v1/ppt/presentation/all${suffix ? `?${suffix}` : ""}`;
 }

@@ -101,7 +101,9 @@ def _cells(block):
     return rows, result
 
 
-def source_pages(manifest: SourceContentManifest):
+def source_pages(manifest: SourceContentManifest, *, chart_contract=None):
+    from services.svg_source_charts import validate_source_chart_contract, source_chart_payload
+    validate_source_chart_contract(chart_contract)
     sealed = manifest.model_dump(mode="json", by_alias=True)
     sealed.pop("manifestDigest", None)
     if digest_json(sealed) != manifest.manifest_digest:
@@ -122,7 +124,8 @@ def source_pages(manifest: SourceContentManifest):
         pages.add(page.source_unit_id)
         if not any((b.kind == "text" and str(b.payload.get("text", "")).strip()) or
                    (b.kind == "table" and any(str(c.get("text", "")).strip()
-                       for row in b.payload.get("rows", []) for c in row)) for b in page.blocks):
+                       for row in b.payload.get("rows", []) for c in row)) or
+                   (b.kind == "chart" and chart_contract is not None) for b in page.blocks):
             raise ValueError(f"svg_source_image_only_page_not_supported:page={index + 1}")
         for block in page.blocks:
             if block.source_block_id in ids:
@@ -133,7 +136,7 @@ def source_pages(manifest: SourceContentManifest):
             if block.kind == "source_note":
                 continue
             if block.kind == "chart":
-                raise ValueError("svg_source_chart_unsupported")
+                source_chart_payload(block, chart_contract)
             if block.kind == "text" and not isinstance(block.payload.get("text"), str):
                 raise ValueError("svg_source_text_invalid")
             if block.kind == "table":
@@ -229,7 +232,7 @@ def assemble_source_svg(manifest, page_index, plan, *, source_images, image_slot
     _node(root, "rect", x=0, y=0, width=plan.width, height=plan.height, fill=plan.background)
     for decoration in (template_snapshot or {}).get("decorations", []):
         attrs = {k: v for k, v in decoration.items() if k not in {"id", "kind"}}
-        active_layout = next(x for x in template_snapshot["layouts"] if x["id"] == plan.layout_id)
+        active_layout = next((x for x in template_snapshot.get("layouts", []) if x["id"] == plan.layout_id), {})
         signature_y = active_layout.get("allowed_variations",{}).get("signature_rule_y")
         if decoration.get("id") == "template-editorial-rule" and signature_y is not None:
             attrs["y"] = signature_y
@@ -237,16 +240,28 @@ def assemble_source_svg(manifest, page_index, plan, *, source_images, image_slot
             raise ValueError("svg_source_template_decoration_unsupported")
         _node(root, decoration["kind"], **attrs)
     bindings = []
+    native_tables = []
     placements = {p.block_id: p for p in plan.placements}
     content_boxes = [p for p in plan.placements if blocks[p.block_id].kind != "shape"]
     if template_snapshot is not None:
         from services.svg_source_template_layout import occupied_boxes, source_group_membership, required_content_gap
         content_boxes = occupied_boxes(plan, manifest, page_index)
-        layout_rule = next(x for x in template_snapshot["layouts"] if x["id"] == plan.layout_id)
+        layout_rule = (dict(min_gap=0) if template_snapshot.get("composition_mode") == "free-svg"
+                       else next(x for x in template_snapshot["layouts"] if x["id"] == plan.layout_id))
         group_membership = source_group_membership(
     manifest,page_index,parallel_only=layout_rule.get(
         "allowed_variations",{}).get(
             "requires_same_source_parallel_group",False))
+    for reservation in (template_snapshot or {}).get("system_furniture", {}).get("reservations", []):
+        visibility = reservation.get("visibility")
+        if (visibility == "hidden" or (visibility == "exceptCover" and page_index == 0)
+                or (visibility == "coverOnly" and page_index != 0)):
+            continue
+        x, y, width, height = (reservation[key] for key in ("x", "y", "width", "height"))
+        for content in content_boxes:
+            if (min(content.x + content.width, x + width) > max(content.x, x)
+                    and min(content.y + content.height, y + height) > max(content.y, y)):
+                raise ValueError("svg_source_master_furniture_collision")
     for i, a in enumerate(content_boxes):
         for b in content_boxes[i + 1:]:
             if template_snapshot is not None and a.block_id == b.block_id:
@@ -262,7 +277,7 @@ def assemble_source_svg(manifest, page_index, plan, *, source_images, image_slot
                 if distance + .001 < required_content_gap(a.block_id,b.block_id,layout_rule,group_membership):
                     raise ValueError("svg_source_content_boxes_overlap:template_min_gap")
 
-    def text_nodes(text, placement, source_id, kind, *, x, y, width, height, ends=(), metadata=None):
+    def text_nodes(text, placement, source_id, kind, *, x, y, width, height, ends=(), metadata=None, parent=None):
         ranges = _ranges(text, ends)
         ascent, advance = 1, 1.2
         required_height = placement.font_size * (1.2 * len(ranges) + .2)
@@ -275,7 +290,7 @@ def assemble_source_svg(manifest, page_index, plan, *, source_images, image_slot
             raise ValueError("svg_source_text_box_unfit")
         for line_index, (start, end) in enumerate(ranges):
             element_id = f"source-element-{len(bindings)}"
-            node = _node(root, "text", id=element_id, x=x, y=y + placement.font_size * (ascent + advance * line_index),
+            node = _node(parent if parent is not None else root, "text", id=element_id, x=x, y=y + placement.font_size * (ascent + advance * line_index),
                          font_family=placement.font_family, font_size=placement.font_size,
                          font_weight=placement.font_weight, fill=placement.fill)
             node.text = text[start:end]
@@ -299,6 +314,13 @@ def assemble_source_svg(manifest, page_index, plan, *, source_images, image_slot
                 width=p.width, height=p.height, ends=p.line_ends)
         elif block.kind == "table":
             rows, cells = _cells(block)
+            table_parent = root
+            if (template_snapshot or {}).get("composition_mode") == "free-svg":
+                from services.svg_source_native_tables import source_table_group_id
+                group_id = source_table_group_id(block.source_block_id)
+                table_parent = _node(root, "g", id=group_id)
+                native_tables.append(dict(block_id=block.source_block_id, element_id=group_id,
+                    frame=dict(x=p.x, y=p.y, width=p.width, height=p.height)))
             known_cells = {cell.get("sourceCellId", f"{block.source_block_id}:row:{r}:column:{c}")
                                     for r, c, rs, cs, cell in cells}
             if set(p.cell_line_ends) - known_cells:
@@ -316,7 +338,7 @@ def assemble_source_svg(manifest, page_index, plan, *, source_images, image_slot
             cell_style["header_weight"])}) if header else p
                 inset_x, inset_y = cell_style.get("cell_padding", 3), cell_style.get("cell_padding", 2)
                 _node(
-    root,
+    table_parent,
     "rect",
     x=x,
     y=y,
@@ -328,7 +350,7 @@ def assemble_source_svg(manifest, page_index, plan, *, source_images, image_slot
                 text_nodes(cell["text"], cell_p, cell_id, "table_cell", x=x + inset_x,
                     y=y + inset_y, width=w - 2*inset_x, height=h - 2*inset_y,
                     ends=p.cell_line_ends.get(cell_id, ()), metadata=dict(block_id=
-                        block.source_block_id, row=r, column=c, row_span=rs, column_span=cs))
+                        block.source_block_id, row=r, column=c, row_span=rs, column_span=cs), parent=table_parent)
         elif block.kind == "image":
             if not p.width.is_integer() or not p.height.is_integer():
                 raise ValueError("svg_source_image_integer_size_required")
@@ -387,12 +409,28 @@ def assemble_source_svg(manifest, page_index, plan, *, source_images, image_slot
             bindings.append(dict(source_id=block.source_block_id, kind="shape", element_id=element_id,
                 **({"geometry_digest": digest_json(custom)} if custom else {})))
     svg = ET.tostring(root, encoding="unicode")
+    furniture_receipt = None
+    furniture_images = None
+    if (template_snapshot or {}).get("system_furniture"):
+        from services.svg_master_furniture import stamp_master_furniture, furniture_image_manifest
+
+        furniture_snapshot = template_snapshot
+        svg = stamp_master_furniture(svg, furniture_snapshot, index=page_index, n=len(pages))
+        stamped = ET.fromstring(svg)
+        group = next((node for node in stamped if node.get("id") == "svg-system-master-furniture"), None)
+        if group is not None:
+            visible_images = {node.get("id") for node in group.iter() if node.tag == f"{{{SVG_NS}}}image"}
+            furniture_images = {key: value for key, value in furniture_image_manifest(furniture_snapshot).items()
+                                if key in visible_images}
+            furniture_receipt = dict(digest=template_snapshot["system_furniture"]["digest"],
+                element_ids=[node.get("id") for node in group.iter() if node.get("id")],
+                images=furniture_images)
     validate_svg(
     svg,
     width=plan.width,
     height=plan.height,
     source_manifest=source_images,
-     allow_system_page_number=False)
+     allow_system_page_number=False, trusted_furniture_images=furniture_images)
     receipt = dict(contract_version="svg-source-preservation/v1", manifest_digest=manifest.manifest_digest,
         source_digest=manifest.source_digest, source_page_id=page.source_unit_id, source_page_index=page_index,
         page_count=len(pages), page_digest=plan.page_digest, plan_digest=digest_json(plan.model_dump(mode="json")),
@@ -401,6 +439,10 @@ def assemble_source_svg(manifest, page_index, plan, *, source_images, image_slot
         bindings=bindings, checks=dict(source_ids_exact=True, text_exact=True,
                                        table_structure_exact=True, image_occurrences_exact=True),
         rendering_verified=False)
+    if furniture_receipt is not None:
+        receipt["system_furniture"] = furniture_receipt
+    if native_tables:
+        receipt["native_tables"] = native_tables
     if template_evidence is not None:
         template_evidence["checks"]["measured_ink_collision"] = True
         template_evidence["checks"]["minimum_gap"] = True
@@ -411,8 +453,117 @@ def assemble_source_svg(manifest, page_index, plan, *, source_images, image_slot
     return SvgSourceAssembly(svg, receipt, plan)
 
 
+def bind_whole_page_source_svg(svg, manifest, page_index, *, facts, width, height,
+                               style_snapshot, minimum_font_px, _validated_pages=None,
+                               native_declarations=None):
+    """Bind a freely authored page to the existing exact source verifier."""
+    chart_contract = style_snapshot.get("source_chart_contract")
+    pages = source_pages(manifest, chart_contract=chart_contract) if _validated_pages is None else _validated_pages
+    page = pages[page_index]
+    root = ET.fromstring(svg)
+    elements = {node.get("id"): node for node in root.iter() if node.get("id")}
+    bindings, native_tables, source_native_charts, required_ids = [], [], [], set()
+    source_chart_ids = {fact["element_id"] for fact in facts if fact["kind"] == "chart"}
+    native_groups = [{"element_id": item["id"], "kind": "chart"}
+                     for item in (native_declarations or {}).get("objects", [])
+                     if item.get("kind") == "chart" and item["id"] not in source_chart_ids]
+    required_ids.update(item["element_id"] for item in native_groups)
+    by_source = {fact["source_id"]: fact for fact in facts}
+    for block in page.blocks:
+        if block.kind == "source_note":
+            continue
+        fact = by_source[block.source_block_id]
+        if block.kind == "chart":
+            from services.svg_source_charts import source_chart_record
+            declarations = [item for item in (native_declarations or {}).get("objects", [])
+                            if item.get("id") == fact["element_id"]]
+            if len(declarations) != 1:
+                raise ValueError("svg_source_chart_declaration_missing")
+            source_native_charts.append(source_chart_record(svg, block, fact["element_id"], declarations[0], chart_contract))
+            group = elements.get(fact["element_id"])
+            for ordinal, node in enumerate(group.iter()):
+                if node is not group:
+                    node.set("id", f"{fact['element_id']}-part-{ordinal}")
+                required_ids.add(node.get("id"))
+        if block.kind == "table":
+            group_id = fact["element_id"]
+            group = elements.get(group_id)
+            if group is None or group not in list(root):
+                raise ValueError("svg_source_native_table_group_invalid")
+            rects = [node for node in group if node.tag == f"{{{SVG_NS}}}rect"]
+            try:
+                bounds = [(float(node.get("x")), float(node.get("y")),
+                           float(node.get("width")), float(node.get("height"))) for node in rects]
+                x, y = min(item[0] for item in bounds), min(item[1] for item in bounds)
+                frame = dict(x=x, y=y, width=max(a + c for a, b, c, d in bounds) - x,
+                             height=max(b + d for a, b, c, d in bounds) - y)
+            except (ValueError, TypeError) as error:
+                raise ValueError("svg_source_native_table_frame_invalid") from error
+            native_tables.append(dict(block_id=block.source_block_id, element_id=group_id, frame=frame))
+            required_ids.add(group_id)
+            for (r, c, rs, cs, cell), cell_fact in zip(_cells(block)[1], fact["cells"], strict=True):
+                cell_id = cell.get("sourceCellId", f"{block.source_block_id}:row:{r}:column:{c}")
+                bindings.append(dict(source_id=cell_id, kind="table_cell", element_id=cell_fact["element_id"],
+                    text=cell["text"], start=0, end=len(cell["text"]), block_id=block.source_block_id,
+                    row=r, column=c, row_span=rs, column_span=cs))
+        else:
+            binding = dict(source_id=block.source_block_id, kind=block.kind, element_id=fact["element_id"])
+            if block.kind == "text":
+                text = block.payload["text"]
+                binding.update(text=text, start=0, end=len(text))
+            elif block.kind == "image":
+                binding.update(slot_id=fact["slot_id"], asset_digest=block.payload.get("contentDigest"))
+            elif block.kind == "shape" and block.payload.get("customGeometry"):
+                binding["geometry_digest"] = digest_json(block.payload["customGeometry"])
+            bindings.append(binding)
+    required_ids.update(binding["element_id"] for binding in bindings)
+    parents = {child: parent for parent in root.iter() for child in parent}
+    for node in root.iter():
+        # Non-content IDs and formatting whitespace are not source facts. Text
+        # and tspan characters, including whitespace, remain byte-for-byte.
+        if node.get("id") and node.get("id") not in required_ids:
+            node.attrib.pop("id")
+        if node.tag not in {f"{{{SVG_NS}}}text", f"{{{SVG_NS}}}tspan"} and node.text and not node.text.strip():
+            node.text = None
+        parent = parents.get(node)
+        if (parent is None or parent.tag not in {f"{{{SVG_NS}}}text", f"{{{SVG_NS}}}tspan"}) and node.tail and not node.tail.strip():
+            node.tail = None
+    svg = ET.tostring(root, encoding="unicode")
+    template = style_snapshot.get("source_template") or {}
+    furniture_receipt = None
+    if template.get("system_furniture"):
+        from services.svg_master_furniture import stamp_master_furniture, furniture_image_manifest
+
+        svg = stamp_master_furniture(svg, template, index=page_index, n=len(pages))
+        group = next((node for node in ET.fromstring(svg) if node.get("id") == "svg-system-master-furniture"), None)
+        if group is not None:
+            image_ids = {node.get("id") for node in group.iter() if node.tag == f"{{{SVG_NS}}}image"}
+            furniture_receipt = dict(digest=template["system_furniture"]["digest"],
+                element_ids=[node.get("id") for node in group.iter() if node.get("id")],
+                images={key: value for key, value in furniture_image_manifest(template).items() if key in image_ids})
+    receipt = dict(contract_version="svg-source-preservation/v1", manifest_digest=manifest.manifest_digest,
+        source_digest=manifest.source_digest, source_page_id=page.source_unit_id, source_page_index=page_index,
+        page_count=len(pages), page_digest=page_digest(manifest, page_index), svg_digest=source_digest(svg),
+        style_digest=style_snapshot["digest"], canvas=dict(width=width, height=height), bindings=bindings,
+        native_tables=native_tables, source_authoring_contract=style_snapshot["source_authoring_contract"],
+        whole_page_native_groups=native_groups,
+        **({"source_chart_contract": chart_contract, "source_native_charts": source_native_charts}
+           if chart_contract is not None else {}),
+        rendering_verified=False,
+        font_policy=dict(minimum_px=minimum_font_px, policy="svg-physical-readability/v1", unit="SVG units"),
+        **({"system_furniture": furniture_receipt} if furniture_receipt else {}))
+    # Child identity stamping is paint-neutral but is part of the exact proof.
+    if source_native_charts:
+        from services.svg_source_charts import source_chart_record
+        receipt["source_native_charts"] = [source_chart_record(svg,
+            next(b for b in page.blocks if b.source_block_id == record["source_id"]),
+            record["element_id"], record["declaration"], chart_contract) for record in source_native_charts]
+    verify_source_receipt(svg, receipt, manifest, page_index, _validated_pages=pages)
+    return svg, receipt
+
+
 def verify_source_receipt(svg, receipt, manifest, page_index, *, _validated_pages=None):
-    pages = source_pages(manifest) if _validated_pages is None else _validated_pages
+    pages = source_pages(manifest, chart_contract=(receipt or {}).get("source_chart_contract")) if _validated_pages is None else _validated_pages
     if type(page_index) is not int or not 0 <= page_index < len(pages):
         raise ValueError("svg_source_page_index_invalid")
     page = pages[page_index]
@@ -424,16 +575,47 @@ def verify_source_receipt(svg, receipt, manifest, page_index, *, _validated_page
     bindings = receipt.get("bindings", [])
     slots = {b["slot_id"]: {"required": True} for b in bindings if b.get("kind") == "image"}
     canvas = receipt["canvas"]
+    furniture = receipt.get("system_furniture") or {}
     validate_svg(
     svg,
     width=canvas["width"],
     height=canvas["height"],
     source_manifest=slots,
-     allow_system_page_number=False)
+     allow_system_page_number=False, trusted_furniture_images=furniture.get("images"))
     root = ET.fromstring(svg)
     elements = {e.get("id"): e for e in root.iter() if e.get("id")}
     bound_ids = [b["element_id"] for b in bindings]
-    if len(set(bound_ids)) != len(bound_ids) or set(elements) != set(bound_ids):
+    from services.svg_source_native_tables import verify_source_table_groups
+    table_group_ids = verify_source_table_groups(root, receipt, page)
+    from services.svg_source_charts import verify_source_charts
+    chart_owned_ids, chart_visible_ids = verify_source_charts(svg, receipt, page)
+    extra_groups = receipt.get("whole_page_native_groups") or []
+    extra_ids = set()
+    if extra_groups:
+        if (receipt.get("source_authoring_contract") != {"version": "svg-source-whole-page/v1"}
+                or not isinstance(extra_groups, list) or len(extra_groups) > 32):
+            raise ValueError("svg_source_native_group_invalid")
+        text_ids = {binding["element_id"] for binding in bindings if binding["kind"] in {"text", "table_cell"}}
+        for record in extra_groups:
+            if not isinstance(record, dict) or set(record) != {"element_id", "kind"} or record["kind"] != "chart":
+                raise ValueError("svg_source_native_group_invalid")
+            group_id = record["element_id"]
+            group = elements.get(group_id)
+            if (group_id in extra_ids or group_id in bound_ids or group_id in table_group_ids
+                    or group is None or group.tag != f"{{{SVG_NS}}}g"
+                    or not {node.get("id") for node in group.iter()}.intersection(text_ids)):
+                raise ValueError("svg_source_native_group_invalid")
+            extra_ids.add(group_id)
+    furniture_ids = furniture.get("element_ids", [])
+    if furniture_ids:
+        group = elements.get("svg-system-master-furniture")
+        if (group is None or not furniture.get("digest")
+                or len(furniture_ids) != len(set(furniture_ids))
+                or set(furniture_ids) != {node.get("id") for node in group.iter() if node.get("id")}
+                or any(not node_id.startswith("svg-system-") for node_id in furniture_ids)
+                or set(furniture_ids).intersection(bound_ids)):
+            raise ValueError("svg_source_furniture_receipt_mismatch")
+    if len(set(bound_ids)) != len(bound_ids) or set(elements) != set(bound_ids) | set(furniture_ids) | table_group_ids | extra_ids | chart_owned_ids:
         raise ValueError("svg_source_receipt_binding_mismatch")
     expected_sources = {}
     for block in page.blocks:
@@ -481,6 +663,6 @@ def verify_source_receipt(svg, receipt, manifest, page_index, *, _validated_page
             raise ValueError("svg_source_receipt_range_mismatch")
     visible_ids = {node.get("id") for node in root.iter() if node.tag in {f"{{{SVG_NS}}}text", f"{{{SVG_NS}}}image"}}
     expected_visible = {b["element_id"] for b in bindings if b["kind"] in {"text", "table_cell", "image"}}
-    if visible_ids != expected_visible:
+    if visible_ids - set(furniture_ids) - chart_visible_ids != expected_visible - chart_visible_ids:
         raise ValueError("svg_source_receipt_unbound_content")
     return True

@@ -652,6 +652,9 @@ def _table_padding_attrs(cell_data: dict[str, Any], style: dict[str, Any]) -> st
         ("marB", "bottom"),
     ):
         value = _table_padding_value(cell_data, style, side)
+        if value is None and side in {"top", "bottom"}:
+            # Match the authored row geometry instead of Office cell insets.
+            value = 0
         if value is not None:
             attrs.append(f'{attr}="{value}"')
     return (" " + " ".join(attrs)) if attrs else ""
@@ -887,10 +890,8 @@ def _build_native_table(elem: ET.Element, ctx: ConvertContext, payload: dict[str
                 row_idx != merge_region.row or col_idx != merge_region.col
             ):
                 cells_xml.append(
-                    f'<a:tc{merge_attrs}>'
-                    '<a:txBody><a:bodyPr/><a:lstStyle/><a:p/></a:txBody>'
-                    '<a:tcPr/>'
-                    '</a:tc>'
+                    f'<a:tc{merge_attrs}><a:txBody><a:bodyPr/><a:lstStyle/><a:p/></a:txBody>'
+                    f'<a:tcPr{_table_padding_attrs({}, style)}/></a:tc>'
                 )
                 continue
 

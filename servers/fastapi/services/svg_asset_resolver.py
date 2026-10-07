@@ -72,6 +72,7 @@ async def resolve_slide_svg_preview(
         service=service,
         placement_manifest=placement,
         page_index=slide.index,
+        system_furniture=(slide.content or {}).get("svgReceipt", {}).get("system_furniture"),
     )
 
 
@@ -97,6 +98,7 @@ def materialize_svg(
     placement_manifest: PlacementManifest | None = None,
     page_index: int | None = None,
     allow_image_only: bool = False,
+    trusted_furniture_images: dict[str, str] | None = None,
 ) -> str:
     contract = _contract_manifest(manifest)
     if placement_manifest is not None:
@@ -110,10 +112,13 @@ def materialize_svg(
         expected = {p.slot_id: p.derivative for p in placement_manifest.placements}
         if {k: RasterDerivative.model_validate(v) for k, v in derivatives.items()} != expected:
             raise ValueError("svg_asset_placement_derivative_mismatch")
-    validate_svg(svg, width=width, height=height, source_manifest=contract, allow_image_only=allow_image_only)
+    validate_svg(svg, width=width, height=height, source_manifest=contract, allow_image_only=allow_image_only,
+                 trusted_furniture_images=trusted_furniture_images)
     root = ET.fromstring(svg)
     for node in root.iter():
         if node.tag.rsplit("}", 1)[-1] != "image":
+            continue
+        if node.get("id") in (trusted_furniture_images or {}):
             continue
         slot_id = node.get("href", "")
         if slot_id not in derivatives or slot_id not in payloads:
@@ -147,6 +152,7 @@ async def resolve_svg_for_render(
     placement_manifest: PlacementManifest | None = None,
     page_index: int | None = None,
     allow_image_only: bool = False,
+    system_furniture: dict | None = None,
 ) -> str:
     """Resolve opaque derivative refs under the current authenticated principal."""
     if service is None:
@@ -162,8 +168,14 @@ async def resolve_svg_for_render(
         if page is None:
             raise ValueError("svg_asset_placement_page_not_offered")
         contract = {key: value for key, value in contract.items() if key in page.slot_ids}
-    validate_svg(svg, width=width, height=height, source_manifest=contract, allow_image_only=allow_image_only)
-    used = {node.get("href") for node in ET.fromstring(svg).iter() if node.tag.rsplit("}", 1)[-1] == "image"}
+    from services.svg_master_furniture import attested_svg_furniture
+    furniture = attested_svg_furniture(svg, system_furniture, source_manifest=contract,
+                                       width=width, height=height) if system_furniture else {}
+    trusted_images = system_furniture.get("images", {}) if furniture else {}
+    validate_svg(svg, width=width, height=height, source_manifest=contract, allow_image_only=allow_image_only,
+                 trusted_furniture_images=trusted_images)
+    used = {node.get("href") for node in ET.fromstring(svg).iter()
+            if node.tag.rsplit("}", 1)[-1] == "image" and node.get("id") not in furniture}
     if set(derivatives) != used:
         raise ValueError("svg_asset_derivative_slot_set_mismatch")
     payloads = {}
@@ -189,6 +201,7 @@ async def resolve_svg_for_render(
         placement_manifest=placement_manifest,
         page_index=page_index,
         allow_image_only=allow_image_only,
+        trusted_furniture_images=trusted_images,
     )
 
 

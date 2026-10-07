@@ -62,6 +62,19 @@ class AuthoredPageRemakePreviewRequest(BaseModel):
     # Reserved for a future user-authored note. Keeping the request explicit
     # prevents clients from smuggling an all/subset scope into this one-page API.
     instruction: str | None = Field(default=None, max_length=500)
+    mode: Literal["author", "remeasure_source", "local_svg"] = "author"
+    source_digest: str | None = Field(default=None, pattern=r"^sha256:[a-f0-9]{64}$")
+    svg_content: str | None = Field(default=None, min_length=1, max_length=2 * 1024 * 1024)
+
+    @model_validator(mode="after")
+    def validate_remeasurement_binding(self):
+        if self.mode in {"remeasure_source", "local_svg"} and (not self.source_digest or self.instruction is not None):
+            raise ValueError("Local SVG measurement requires its exact source digest and no author instruction")
+        if self.mode == "author" and self.source_digest is not None:
+            raise ValueError("Author preview does not accept a source remeasurement digest")
+        if (self.mode == "local_svg") != (self.svg_content is not None):
+            raise ValueError("Only local_svg preview requires candidate SVG content")
+        return self
 
     model_config = ConfigDict(extra="forbid", strict=True)
 

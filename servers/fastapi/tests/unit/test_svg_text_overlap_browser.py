@@ -206,12 +206,12 @@ def test_middle_dot_ink_boxes_do_not_depend_on_element_order():
     assert signatures[0] == signatures[1]
 
 
-def test_standalone_middle_dot_limits_fallback_to_one_cell():
+def test_spaced_middle_dot_keeps_its_source_shaping_ink():
     quality = _fixture("syn_DOT_standalone")
     text = _text(quality["browser_metrics"]["elements"])
     assert len(text) == 1
-    assert text[0]["text_ink_fragments"][0]["cellClusters"] == 1
-    assert quality["overlap_basis"]["fragments"] == {"ink": 0, "ink_cell": 1, "line_box": 0}
+    assert text[0]["text_ink_fragments"][0]["cellClusters"] == 0
+    assert quality["overlap_basis"]["fragments"] == {"ink": 1, "ink_cell": 0, "line_box": 0}
 
 
 def test_html_payload_has_no_ink_field():

@@ -114,10 +114,12 @@ class JobKillConditions:
             "max_consecutive_failures",
         ):
             value = getattr(self, name)
+            minimum = 0 if name == "max_retry_requests" else 1
             if value is not None and (
-                isinstance(value, bool) or not isinstance(value, int) or value <= 0
+                isinstance(value, bool) or not isinstance(value, int) or value < minimum
             ):
-                raise ValueError(f"{name} must be a positive integer")
+                qualifier = "non-negative" if minimum == 0 else "positive"
+                raise ValueError(f"{name} must be a {qualifier} integer")
 
 
 class CancellationToken:

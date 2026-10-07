@@ -213,6 +213,72 @@ def _v2_style():
     return dict(digest="sha256:style", source_template=template)
 
 
+def test_source_native_table_preserves_merged_wrapped_and_blank_cells_and_rejects_paint_tamper():
+    from services.svg_source_template_layout import resolve_source_plan
+    from services.svg_source_native_tables import source_table_native_objects, unwrap_source_table_groups
+    rows = [[{"text": "병합 제목", "gridSpan": 2, "sourceCellId": "header"},
+             {"text": "", "hMerge": True, "mergeCovered": True}],
+            [{"text": "첫 줄 & 원문\n둘째 줄", "sourceCellId": "wrapped"},
+             {"text": "", "sourceCellId": "blank"}],
+            [{"text": "매출", "sourceCellId": "label"}, {"text": "138", "sourceCellId": "value"}]]
+    manifest = manifest_for([("table", {"rows": rows})])
+    template = _v2_style()["source_template"]
+    template.pop("layouts")
+    template["composition_mode"] = "free-svg"
+    raw = plan_for(manifest)
+    raw.update(width=1280, height=720, template_digest=template["digest"], layout_id="free-svg")
+    raw["placements"][0].update(x=64, y=120, width=1152, height=360,
+        font_family="Noto Sans KR", font_weight="400", font_size=24,
+        background=template["table"]["body_fill"], stroke=template["table"]["border"], fill=template["tokens"]["text"])
+    plan, _ = resolve_source_plan(SvgLayoutPlan.model_validate(raw), manifest, 0, 12, template)
+    result = assemble_source_svg(manifest, 0, plan, source_images={}, image_slots={},
+        min_font_size_px=12, style_digest="sha256:style", template_snapshot=template)
+    wire, summary = source_table_native_objects(result.svg_content, result.receipt, manifest, 0, pt_per_px=.75)
+    assert summary["accepted"] == 1 and summary["source_cells_verified"]
+    table = wire["objects"][0]
+    assert [[cell["text"] for cell in row] for row in table["payload"]["rows"]] == [[cell["text"] for cell in row] for row in rows]
+    assert table["payload"]["mergedCells"] == [dict(row=0, column=0, rowSpan=1, columnSpan=2)]
+    assert len([binding for binding in result.receipt["bindings"] if binding["source_id"] == "wrapped"]) == 2
+    unwrapped = ET.fromstring(unwrap_source_table_groups(result.svg_content, result.receipt))
+    assert not any(node.get("id", "").startswith("source-native-table-") for node in unwrapped)
+    root = ET.fromstring(result.svg_content)
+    group = next(node for node in root if node.tag.endswith("}g"))
+    group.set("transform", "translate(1 0)")
+    tampered = ET.tostring(root, encoding="unicode")
+    receipt = deepcopy(result.receipt)
+    receipt["svg_digest"] = source_digest(tampered)
+    with pytest.raises(ValueError, match="svg_source_native_table_group_invalid"):
+        source_table_native_objects(tampered, receipt, manifest, 0, pt_per_px=.75)
+
+
+def test_source_token_wrap_preserves_numeric_latin_runs_and_legacy_snapshot_replay():
+    import re
+    from services.svg_source_template_layout import wrap_source_text
+    from utils.svg_template_rules import reference_template_snapshot, _digest
+    class Font:
+        def getbbox(self, text):
+            return (0, 0, len(text), 20)
+        def getlength(self, text):
+            return len(text)
+    text = "Region North reached 120 units. Revenue 123,456.78% grows."
+    old = wrap_source_text(text, 24, 20, Font())
+    assert old[0] == 23 and text[:old[0]].endswith("12")
+    snapshot = reference_template_snapshot({"style_id": "default", "digest": "sha256:style"}, 1280, 720)
+    assert snapshot["text_wrap_policy"] == "latin-token/v1"
+    snapshot_body = {key: value for key, value in snapshot.items() if key != "digest"}
+    assert snapshot["digest"] == _digest(snapshot_body)
+    assert snapshot["digest"] != _digest({key: value for key, value in snapshot_body.items() if key != "text_wrap_policy"})
+    ends = wrap_source_text(text, 24, 20, Font(), policy=snapshot["text_wrap_policy"])
+    assert ends[0] == 21
+    tokens = list(re.finditer(r"[A-Za-z0-9]+(?:[.,:/+_-][A-Za-z0-9]+)*%?", text))
+    assert all(not (token.start() < end < token.end()) for token in tokens for end in ends)
+    starts = (0,) + ends[:-1]
+    assert "".join(text[start:end] for start, end in zip(starts, ends, strict=True)) == text
+    assert wrap_source_text(text, 24, 20, Font()) == old
+    with pytest.raises(ValueError, match="svg_source_text_box_unfit"):
+        wrap_source_text("123,456.78%", 4, 20, Font(), policy=snapshot["text_wrap_policy"])
+
+
 def test_v2_public_model_schema_has_no_character_ranges_and_rejects_old_response():
     import json
     schema = json.dumps(SvgLayoutPlan.model_json_schema())

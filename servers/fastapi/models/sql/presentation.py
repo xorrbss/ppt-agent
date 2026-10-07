@@ -85,6 +85,11 @@ class PresentationModel(SQLModel, table=True):
     include_title_slide: bool = Field(sa_column=Column(Boolean), default=True)
     web_search: bool = Field(sa_column=Column(Boolean), default=False)
     theme: Optional[dict] = Field(sa_column=Column(JSON), default=None)
+    # Server-owned card projection; PostgreSQL also refreshes it for Core and
+    # rolling-version writes. It is not part of the presentation wire payload.
+    dashboard_metadata: Optional[dict] = Field(
+        sa_column=Column(JSON), default=None, exclude=True,
+    )
     fonts: Optional[dict] = Field(sa_column=Column(JSON), default=None)
     generation_mode: Literal["standard"] = Field(
         sa_column=Column(String, nullable=False, default="standard"),

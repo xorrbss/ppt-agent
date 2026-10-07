@@ -254,6 +254,8 @@ def _authored_exact_admission_exception(
 
 def _validate_authored_exact_admission(request: GeneratePresentationRequest) -> None:
     """Reject unavailable exact presets before sync work or durable queueing."""
+    if resolve_generation_strategy(request) == "svg":
+        return
     template = (request.template or "").strip().lower()
     authored_requested = template == AUTHORED_TEMPLATE or request.strategy == "authored"
     if not authored_requested:
@@ -266,6 +268,8 @@ def _validate_authored_exact_admission(request: GeneratePresentationRequest) -> 
 
 async def _validate_authored_master_pin_admission(request: GeneratePresentationRequest) -> None:
     """Resolve a company-standard pin only when authored generation requests one."""
+    if resolve_generation_strategy(request) == "svg":
+        return
     if request.template != AUTHORED_TEMPLATE:
         if request.master_pin is not None:
             raise HTTPException(status_code=400, detail="generation_strategy_conflict")
@@ -375,6 +379,17 @@ async def _admit_source_content_generation(
 ) -> None:
     if request.source_mode not in {SOURCE_CONTENT_RESTYLE_MODE, "raster_reconstruction"}:
         return
+    if resolve_generation_strategy(request) == "svg":
+        from utils.svg_template_rules import resolve_source_template_style
+
+        try:
+            request.authored_style = resolve_source_template_style(
+                (request.authored_style or "").strip()
+            ).id
+        except ValueError as error:
+            raise _source_content_http_exception(
+                SourceContentError("source_content_template_required", status_code=422)
+            ) from error
     if request._authored_style_snapshot is None:
         request._authored_style_snapshot = resolve_authored_style(request.authored_style)
     if request._authored_style_snapshot.id != (request.authored_style or "").strip():
@@ -505,6 +520,7 @@ async def check_if_api_request_is_valid(
         require_svg_creation_admission(request)
     if (
         request.aspect_ratio != "16:9"
+        and resolve_generation_strategy(request) != "svg"
         and str(request.template or "").strip().lower() != AUTHORED_TEMPLATE
     ):
         raise HTTPException(
@@ -538,6 +554,8 @@ async def check_if_api_request_is_valid(
     if request.source_mode == SOURCE_CONTENT_RESTYLE_MODE:
         await _admit_source_content_reference_snapshot(request, sql_session)
 
+    await _admit_svg_design_reference(request, sql_session)
+
     return (presentation_id,)
 
 
@@ -556,6 +574,30 @@ async def _load_document_context(
         file_paths,
         overflow_strategy="truncate",
     )
+
+
+async def _admit_svg_design_reference(
+    request: GeneratePresentationRequest, sql_session: AsyncSession,
+) -> None:
+    if getattr(request, "svg_design_reference_snapshot_id", None) is None:
+        return
+    from services.svg_uploaded_design_reference import prepare_svg_uploaded_design_reference
+
+    frozen = getattr(request, "_svg_style_snapshot", None)
+    try:
+        projected = await prepare_svg_uploaded_design_reference(
+            request, sql_session,
+            frozen_profile=frozen.get("design_pack_template") if isinstance(frozen, dict) else None,
+        )
+    except ReferenceProviderError as error:
+        exception = HTTPException(status_code=error.status_code, detail=error.code)
+        exception.code = error.code
+        exception.retryable = error.retryable
+        raise exception from error
+    if isinstance(frozen, dict):
+        expected = frozen.get("design_pack_template")
+        if not isinstance(expected, dict) or expected.get("digest") != projected.get("digest"):
+            raise HTTPException(status_code=409, detail="svg_uploaded_design_reference_snapshot_conflict")
 
 
 async def _admit_generation_references(
@@ -858,6 +900,7 @@ async def generate_presentation_handler(
             prepare_source_content_authored_reflow(request)
     elif request.reference_snapshot_ids and not request._reference_snapshots:
         await _admit_generation_references(request, sql_session)
+    await _admit_svg_design_reference(request, sql_session)
     # Bootstrap admission failures have a linked failed job so a terminal
     # operation retry can safely rebind it. Re-check validation, template
     # policy and immutable document readability before doing any generation
@@ -1667,15 +1710,130 @@ async def _source_content_admission_slide_count(
         return None
 
 
+async def _unused_terminal_generation_retry_budget(
+    sql_session: AsyncSession,
+    *,
+    source_operation: WorkspaceOperation,
+    operation: WorkspaceOperation,
+) -> tuple[int, int, int, int] | None:
+    """Read trusted unused lineage bounds without changing terminal history."""
+    from models.sql.public_admission import (
+        PublicOperationAdmission,
+        PublicProviderLogicalCall,
+    )
+
+    principal = current_principal_context()
+    if operation.retry_of_operation_id != source_operation.id:
+        raise HTTPException(status_code=409, detail="generation_retry_lineage_conflict")
+    bounds = None
+    seen = {operation.id}
+    ancestor_id = source_operation.id
+    while ancestor_id is not None:
+        if ancestor_id in seen:
+            raise HTTPException(status_code=409, detail="generation_retry_lineage_conflict")
+        seen.add(ancestor_id)
+        ancestor = await sql_session.scalar(
+            select(WorkspaceOperation)
+            .where(WorkspaceOperation.id == ancestor_id)
+            .with_for_update()
+        )
+        if (
+            ancestor is None
+            or ancestor.owner_id != principal.owner_id
+            or operation.owner_id != principal.owner_id
+            or ancestor.owner_scope != operation.owner_scope
+            or ancestor.presentation_id != operation.presentation_id
+            or ancestor.conversation_id != operation.conversation_id
+            or ancestor.kind != "presentation.generate"
+            or ancestor.state not in {"failed", "cancelled", "dead_letter"}
+        ):
+            raise HTTPException(status_code=409, detail="generation_retry_lineage_conflict")
+        admission = await sql_session.scalar(
+            select(PublicOperationAdmission)
+            .where(PublicOperationAdmission.operation_id == ancestor_id)
+            .with_for_update()
+        )
+        if admission is None:
+            # Preserve the pre-public-admission legacy retry path. A v2
+            # lineage may never silently fall back to an unbounded admission.
+            if bounds is None and ancestor.contract_version is None:
+                return None
+            raise HTTPException(status_code=409, detail="generation_retry_admission_missing")
+        if (
+            admission.owner_id != principal.owner_id
+            or admission.tenant_id != principal.tenant_id
+            or admission.operation_kind != "generation"
+            or admission.state not in {"failed", "cancelled", "budget_exhausted", "deadline_exceeded"}
+            or ancestor.contract_version != "public-operation/v2"
+            or ancestor.execution_profile_version != "public-generation-export/v2"
+            or admission.fence < 1
+            or ancestor.fencing_token != admission.fence
+            or ancestor.deadline_at != admission.deadline_at
+        ):
+            raise HTTPException(status_code=409, detail="generation_retry_admission_conflict")
+        call_id = await sql_session.scalar(
+            select(PublicProviderLogicalCall.id)
+            .where(PublicProviderLogicalCall.admission_id == admission.id)
+            .limit(1)
+        )
+        if call_id is not None or any(
+            getattr(admission, field) != 0
+            for field in (
+                "initial_request_count", "retry_request_count",
+                "estimated_reserved_microunits", "estimated_consumed_microunits",
+                "actual_reserved_microunits", "actual_consumed_microunits",
+                "actual_cost_unavailable_count",
+            )
+        ):
+            raise HTTPException(status_code=409, detail="generation_retry_provider_history_present")
+        remaining = (
+            admission.planned_request_limit, admission.retry_request_limit,
+            admission.estimated_cost_limit_microunits, admission.actual_cost_limit_microunits,
+        )
+        bounds = remaining if bounds is None else tuple(
+            min(current, inherited) for current, inherited in zip(bounds, remaining)
+        )
+        ancestor_id = ancestor.retry_of_operation_id
+    return bounds
+
+
 async def _admit_generation_operation_v2_compatible(
     sql_session: AsyncSession,
     *,
     request: GeneratePresentationRequest,
     presentation: PresentationModel,
     operation: WorkspaceOperation,
+    retry_source_operation: WorkspaceOperation | None = None,
+    zero_provider_cached_author_recovery: bool = False,
 ) -> uuid.UUID:
     """Bind the browser-compatible request to one complete v2 admission."""
 
+    retry_bounds = None
+    if zero_provider_cached_author_recovery:
+        from services.svg_cached_author_render_recovery import REVISIONS
+
+        if (
+            operation.retry_of_operation_id is None
+            or operation.request_payload.get("recovery_revision") not in REVISIONS
+            or request.strategy != "svg"
+            or request.vision_qa
+            or request.web_search
+        ):
+            raise HTTPException(status_code=409, detail="svg_cached_author_render_admission_invalid")
+    if retry_source_operation is not None:
+        from models.sql.public_admission import PublicOperationAdmission
+
+        existing = await sql_session.scalar(
+            select(PublicOperationAdmission)
+            .where(PublicOperationAdmission.operation_id == operation.id)
+            .with_for_update()
+        )
+        # Existing admission replay belongs to the standard admission helper;
+        # never recalculate or shrink a previously admitted budget.
+        if existing is None:
+            retry_bounds = await _unused_terminal_generation_retry_budget(
+                sql_session, source_operation=retry_source_operation, operation=operation,
+            )
     slide_count = _generation_admission_slide_count(
         request,
         presentation,
@@ -1716,6 +1874,40 @@ async def _admit_generation_operation_v2_compatible(
                 "Retry-After": str(error.retry_after_seconds or 15),
             },
         ) from error
+    if zero_provider_cached_author_recovery:
+        if (
+            admission.operation_id != operation.id
+            or admission.state != "queued"
+            or admission.initial_request_count != 0
+            or admission.retry_request_count != 0
+            or admission.estimated_reserved_microunits != 0
+            or admission.actual_reserved_microunits != 0
+        ):
+            raise HTTPException(status_code=409, detail="svg_cached_author_render_admission_conflict")
+        admission.planned_request_limit = 0
+        admission.retry_request_limit = 0
+        admission.estimated_cost_limit_microunits = 0
+        admission.actual_cost_limit_microunits = 0
+        sql_session.add(admission)
+        await sql_session.flush()
+    if retry_bounds is not None:
+        if (
+            admission.operation_id != operation.id
+            or admission.state != "queued"
+            or admission.initial_request_count != 0
+            or admission.retry_request_count != 0
+        ):
+            raise HTTPException(status_code=409, detail="generation_retry_admission_conflict")
+        for field, bound in zip(
+            ("planned_request_limit", "retry_request_limit",
+             "estimated_cost_limit_microunits", "actual_cost_limit_microunits"),
+            retry_bounds,
+        ):
+            setattr(admission, field, min(getattr(admission, field), bound))
+        sql_session.add(admission)
+        # The caller commits the operation/job/receipt and bounded admission
+        # together. No scheduler can observe the intermediate default budget.
+        await sql_session.flush()
     return admission.id
 
 
@@ -1768,6 +1960,7 @@ async def queue_presentation_generation(
         await _admit_source_content_generation(request, sql_session)
         if request.source_mode == SOURCE_CONTENT_RESTYLE_MODE:
             await _admit_source_content_reference_snapshot(request, sql_session)
+    await _admit_svg_design_reference(request, sql_session)
     # The fingerprint is taken before any deck is minted, so a replay under the
     # same idempotency key matches the stored job instead of bootstrapping a
     # second deck. It now includes the resolved pins/rule/style snapshots.

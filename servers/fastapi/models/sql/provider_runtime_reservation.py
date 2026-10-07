@@ -32,6 +32,15 @@ class ProviderRuntimeBudget(SQLModel, table=True):
         UniqueConstraint(
             "tenant_id", "owner_id", "job_id", name="uq_provider_runtime_budget_job"
         ),
+        UniqueConstraint(
+            "tenant_id", "owner_id", "workspace_operation_id",
+            name="uq_provider_runtime_budget_operation",
+        ),
+        CheckConstraint(
+            "(job_id IS NOT NULL AND workspace_operation_id IS NULL) OR "
+            "(job_id IS NULL AND workspace_operation_id IS NOT NULL)",
+            name="ck_provider_runtime_budget_authority",
+        ),
         CheckConstraint(
             "state IN ('active', 'cancelled', 'completed')",
             name="ck_provider_runtime_budget_state",
@@ -61,11 +70,20 @@ class ProviderRuntimeBudget(SQLModel, table=True):
             nullable=False,
         )
     )
-    job_id: uuid.UUID = Field(
+    job_id: uuid.UUID | None = Field(
+        default=None,
         sa_column=Column(
             Uuid,
             ForeignKey("presentation_generation_jobs.id", ondelete="CASCADE"),
-            nullable=False,
+            nullable=True,
+        )
+    )
+    workspace_operation_id: uuid.UUID | None = Field(
+        default=None,
+        sa_column=Column(
+            Uuid,
+            ForeignKey("workspace_operations.id", ondelete="CASCADE"),
+            nullable=True,
         )
     )
     state: str = Field(

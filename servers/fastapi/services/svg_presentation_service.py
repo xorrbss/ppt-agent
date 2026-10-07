@@ -21,13 +21,13 @@ from __future__ import annotations
 from services import svg_outline_spans
 from services.authored_canvas import request_canvas_contract
 from services.authored_checkpoint_fence import owned_job
-from services.authored_checkpoint_service import initialize_checkpoints
 from services.database import async_session_maker
 from services.generation_core.quality.vision_advisory import run_vision_advisory
 from services.svg_generation_admission import require_svg_creation_admission, pin_svg_style
 from services.svg_presentation_checkpoint import (
     _checkpoint, _collect_pages_or_fail, _digest, _NUMERIC_CLAIM, _provider_attempt_count,
     _read_png, _required_numeric_claims, _save_source_page_pngs, _write_png,
+    initialize_svg_checkpoints as initialize_checkpoints,
 )
 from services.svg_presentation_generate import _generate
 from services.svg_presentation_legacy_assets import _legacy_source_image_manifest

@@ -122,7 +122,7 @@ def _decode_advisory_text(text: str) -> object:
         return None
 
 
-async def _request_advisory(sheet: bytes, *, slide_count: int) -> tuple[str, object]:
+async def _request_advisory(sheet: bytes, *, slide_count: int, required: bool = False, pngs=None) -> tuple[str, object]:
     """One multimodal call, through the same admission/idempotency wrappers
     every other authored provider call uses."""
 
@@ -134,6 +134,7 @@ async def _request_advisory(sheet: bytes, *, slide_count: int) -> tuple[str, obj
         current_provider_idempotency_key,
         provider_call_admission,
         record_provider_call,
+        record_provider_terminal_result,
     )
     from utils.llm_config import enforce_llm_egress_policy, get_llm_config
     from utils.llm_provider import get_llm_provider, get_model
@@ -146,8 +147,9 @@ async def _request_advisory(sheet: bytes, *, slide_count: int) -> tuple[str, obj
 
     client = get_client(config=get_llm_config())
     model = str(get_model() or "")
-    schema = advisory_json_schema()
-    messages = build_advisory_messages(sheet, slide_count=slide_count)
+    schema = advisory_json_schema(slide_count=slide_count) if required else advisory_json_schema()
+    messages = (build_advisory_messages(sheet, slide_count=slide_count, required=True, pngs=pngs)
+                if required else build_advisory_messages(sheet, slide_count=slide_count))
     kwargs = get_generate_kwargs(
         model=model,
         messages=messages,
@@ -166,6 +168,8 @@ async def _request_advisory(sheet: bytes, *, slide_count: int) -> tuple[str, obj
 
     timer = ProviderCallTimer()
     response = None
+    generate_call = None
+    terminal_result = "unmeasured"
     try:
         async with provider_call_admission(
             is_retry=False,
@@ -190,20 +194,47 @@ async def _request_advisory(sheet: bytes, *, slide_count: int) -> tuple[str, obj
             response = await asyncio.get_running_loop().run_in_executor(
                 None, generate_call
             )
+    except ProviderOutcomeError as error:
+        if error.code == "public_provider_result_unknown":
+            terminal_result = "unknown"
+        terminal_event = (error.diagnostics or {}).get("terminalEvent")
+        if terminal_event in {"response.failed", "error"}:
+            terminal_result = "failed"
+        elif terminal_event == "response.cancelled":
+            terminal_result = "cancelled"
+        raise
+    except asyncio.CancelledError:
+        # Local cancellation is not proof the remote provider cancelled.
+        terminal_result = "unknown"
+        raise
     finally:
-        await record_provider_call(
-            provider=provider,
-            model=model,
-            response=response,
-            latency_ms=timer.elapsed_ms,
-            retry_class="initial",
-        )
+        observed = getattr(generate_call, "terminal_outcome", None)
+        finish = getattr(observed, "finish_reason", None)
+        if terminal_result != "unknown" and finish is not None:
+            terminal_result = ("completed" if finish == "stop" else
+                               "failed" if finish in {"failed", "error"} else
+                               "cancelled" if finish == "cancelled" else "incomplete")
+        if generate_call is not None:
+            receipt = getattr(generate_call, "receipt", {})
+            record_provider_terminal_result(terminal_result,
+                receipt.get("physicalCallCount") if isinstance(receipt, Mapping) else None)
+        # The usage-receipt schema has no unknown outcome. Preserve that gap
+        # explicitly instead of fabricating a successful/failed terminal row.
+        if terminal_result != "unknown":
+            await record_provider_call(
+                provider=provider,
+                model=model,
+                response=response,
+                latency_ms=timer.elapsed_ms,
+                retry_class="initial",
+                outcome="succeeded" if response is not None else "failed",
+            )
     payload = extract_structured_content(response.content)
     return model, payload if payload is not None else _decode_advisory_text(extract_text(response.content) or "")
 
 
 async def run_vision_advisory(
-    pngs: Sequence[bytes], *, slide_count: int
+    pngs: Sequence[bytes], *, slide_count: int, required: bool = False
 ) -> dict[str, Any]:
     """Ask one vision model, once, what a reader would notice about this deck.
 
@@ -218,6 +249,8 @@ async def run_vision_advisory(
         if not renders:
             return {"skipped": "no_renders"}
         if len(renders) != int(slide_count or 0):
+            if required:
+                return {"skipped": "render_coverage_invalid"}
             # The sheet is the authority for numbering: a slide with no render
             # cannot be reviewed, so the advisory speaks about what it saw.
             LOGGER.info(
@@ -226,22 +259,23 @@ async def run_vision_advisory(
                 int(slide_count or 0),
             )
         try:
-            sheet = await compose_contact_sheet(renders)
+            sheet = b"" if required else await compose_contact_sheet(renders)
         except Exception:
             LOGGER.warning("[authored] vision advisory sheet failed", exc_info=True)
             return {"skipped": "contact_sheet_failed"}
-        if not sheet:
+        if not sheet and not required:
             return {"skipped": "contact_sheet_unavailable"}
         # What the provider was actually handed, so an empty answer next time
         # can be read against the image that produced it.
         LOGGER.info(
             "[authored] vision advisory request sheet_bytes=%d slides=%d prompt=%s",
-            len(sheet),
+            sum(len(png) for png in renders) if required else len(sheet),
             len(renders),
             ADVISORY_PROMPT_VERSION,
         )
         try:
-            model, payload = await _request_advisory(sheet, slide_count=len(renders))
+            model, payload = await _request_advisory(sheet, slide_count=len(renders),
+                **({"required": True, "pngs": renders} if required else {}))
         except ProviderOutcomeError as error:
             # A model that answered with no text at all is a distinct outcome
             # from a transport failure, and the one bench run 30 hit; keep them
@@ -250,7 +284,24 @@ async def run_vision_advisory(
             return {"skipped": f"provider_outcome:{error.code}"}
         if payload is None:
             return {"skipped": "unparseable_response"}
+        if required:
+            findings = payload.get("slides") if isinstance(payload, Mapping) else None
+            seen = set()
+            if not isinstance(findings, list):
+                return {"skipped": "review_schema_invalid"}
+            for finding in findings:
+                if (not isinstance(finding, Mapping) or type(finding.get("index")) is not int
+                        or not 1 <= finding["index"] <= len(renders) or finding["index"] in seen
+                        or not isinstance(finding.get("issues"), list)
+                        or len(finding["issues"]) > _MAX_ISSUES_PER_SLIDE
+                        or any(not isinstance(issue, str) or _normalize_issue(issue) is None
+                               for issue in finding["issues"])):
+                    return {"skipped": "review_schema_invalid"}
+                seen.add(finding["index"])
+            if seen != set(range(1, len(renders) + 1)):
+                return {"skipped": "review_coverage_incomplete"}
         slides = parse_advisory_payload(payload, slide_count=len(renders))
+        from utils.hashing import sha256_hex
         latency_ms = int((time.monotonic() - started) * 1000)
         LOGGER.info(
             "[authored] vision advisory model=%s slides=%d flagged=%d latency_ms=%d",
@@ -260,11 +311,14 @@ async def run_vision_advisory(
             latency_ms,
         )
         return {
-            "promptVersion": ADVISORY_PROMPT_VERSION,
+            "promptVersion": "svg-required-visual-review/v1" if required else ADVISORY_PROMPT_VERSION,
+            **({"reviewedPageIndices": list(range(len(renders)))} if required else {}),
+            **({"reviewedPngDigests": [sha256_hex(png) for png in renders],
+                "reviewInputKind": "individual-page-pngs/v1"} if required else {}),
             "model": model,
             "latencyMs": latency_ms,
             "slideCount": len(renders),
-            "sheetBytes": len(sheet),
+            **({"inputImageBytes": sum(len(png) for png in renders)} if required else {"sheetBytes": len(sheet)}),
             "slides": slides,
         }
     except Exception:

@@ -90,21 +90,31 @@ async def ensure_runtime_job(
     # attempt.  Re-registering an attempt-suffixed runtime job resets the hard
     # cap after recovery and permits retry amplification.
     job_id = durable_job_id
+    public_baseline = (await public_review_request_baseline(scope.job_id)
+                       if getattr(scope, "public_only", False) else None)
     if job_id in runtime.registered_jobs:
         runtime.latest_job_keys[durable_job_id] = job_id
         return job_id
     async with runtime.registration_lock:
+        if getattr(scope, "public_only", False):
+            public_baseline = await public_review_request_baseline(scope.job_id)
         if job_id in runtime.registered_jobs:
             return job_id
-        initial_requests = 0
-        retry_requests = 0
-        if scope.attempt_number > 1:
-            # This process has never seen the job, but earlier attempts have
-            # already spent requests. Continue their accounting instead of
-            # starting from zero.
-            initial_requests, retry_requests = await persisted_request_counts(
-                scope.job_id
-            )
+        # An explicitly retried operation can start at scope attempt one while
+        # retaining the same durable job and its earlier provider receipts.
+        # Seed every new process registration from that job's real receipts;
+        # a genuinely fresh job has no receipts and therefore seeds zero.
+        if getattr(scope, "public_only", False):
+            initial_requests, retry_requests, lineage_total_limit, lineage_retry_limit = public_baseline
+            lineage_initial = lineage_retry = 0
+        else:
+            initial_requests, retry_requests = await persisted_request_counts(scope.job_id)
+            lineage_initial, lineage_retry, lineage_total_limit, lineage_retry_limit = await verified_lineage_request_baseline(scope.job_id)
+        total_limit = optional_env_int("PROVIDER_JOB_MAX_TOTAL_REQUESTS")
+        retry_limit = optional_env_int("PROVIDER_JOB_MAX_RETRY_REQUESTS")
+        if lineage_total_limit is not None:
+            total_limit = min(total_limit, lineage_total_limit) if total_limit is not None else lineage_total_limit
+            retry_limit = min(retry_limit, lineage_retry_limit) if retry_limit is not None else lineage_retry_limit
         deadline = optional_env_int("PROVIDER_JOB_DEADLINE_SECONDS")
         await runtime.control.register_job(
             job_id,
@@ -116,19 +126,77 @@ async def ensure_runtime_job(
             ),
             kill_conditions=JobKillConditions(
                 deadline_seconds=float(deadline) if deadline is not None else None,
-                max_total_requests=optional_env_int(
-                    "PROVIDER_JOB_MAX_TOTAL_REQUESTS"
-                ),
-                max_retry_requests=optional_env_int(
-                    "PROVIDER_JOB_MAX_RETRY_REQUESTS"
-                ),
+                max_total_requests=total_limit,
+                max_retry_requests=retry_limit,
                 max_consecutive_failures=optional_env_int(
                     "PROVIDER_JOB_MAX_CONSECUTIVE_FAILURES"
                 ),
             ),
             initial_requests=initial_requests,
             retry_requests=retry_requests,
+            lineage_initial_requests=lineage_initial,
+            lineage_retry_requests=lineage_retry,
         )
         runtime.registered_jobs.add(job_id)
         runtime.latest_job_keys[durable_job_id] = job_id
     return job_id
+
+
+async def public_review_request_baseline(operation_id):
+    """Seed a review from its real workspace job and immutable public ledger."""
+    from services.database import async_session_maker
+    async with async_session_maker() as session:
+        row = await require_public_review_job(session, operation_id=operation_id)
+        return row.initial_request_count, row.retry_request_count, 1, 0
+
+
+async def require_public_review_job(session, *, operation_id,
+                                    expected_attempt_token=None, expected_fencing_token=None):
+    """Validate durable review authority before registering or reserving spend."""
+    from sqlalchemy import select
+    from models.sql.public_admission import PublicOperationAdmission
+    from models.sql.workspace import WorkspaceOperation, get_workspace_owner_scope
+    from models.svg_quality_review import SvgQualityReviewRequest
+    from services.public_operation_admission import _require_phase2_provider_contract
+    from utils.datetime_utils import as_utc, get_current_utc_datetime
+    from utils.owner_context import get_current_owner_id, get_current_tenant_id
+    row = await session.scalar(select(PublicOperationAdmission).where(
+        PublicOperationAdmission.operation_id == operation_id,
+        PublicOperationAdmission.owner_id == get_current_owner_id(),
+        PublicOperationAdmission.tenant_id == get_current_tenant_id(),
+        PublicOperationAdmission.state == "active"))
+    operation = await session.scalar(select(WorkspaceOperation).where(
+        WorkspaceOperation.id == operation_id).with_for_update())
+    if (row is None or operation is None or operation.kind != "quality.review"
+            or operation.owner_id != row.owner_id or operation.state != "running"
+            or operation.owner_scope != get_workspace_owner_scope()
+            or operation.max_attempts != 1 or operation.attempt_number != 1
+            or operation.cancel_requested_at is not None
+            or operation.lease_expires_at is None
+            or as_utc(operation.lease_expires_at) <= get_current_utc_datetime()
+            or operation.expected_revision is None
+            or row.planned_request_limit != 1 or row.retry_request_limit != 0):
+        raise RuntimeError("public_review_admission_scope_invalid")
+    SvgQualityReviewRequest.model_validate(operation.request_payload.get("context") or {})
+    await _require_phase2_provider_contract(session, row,
+        expected_attempt_token=expected_attempt_token,
+        expected_fencing_token=expected_fencing_token)
+    return row
+
+
+async def verified_lineage_request_baseline(job_id):
+    from uuid import UUID
+    from services.database import async_session_maker
+    from models.sql.presentation_generation_job import PresentationGenerationJob
+    from models.sql.workspace import WorkspaceOperation
+    from services.svg_timeout_repurchase import verified_append_only_consumption_baseline
+    async with async_session_maker() as session:
+        try:
+            identity = UUID(str(job_id))
+        except (ValueError, TypeError):
+            return 0, 0, None, None
+        job = await session.get(PresentationGenerationJob, identity)
+        if job is None or not (job.request_payload or {}).get("_svg_recovery_lineage"):
+            return 0, 0, None, None
+        operation = await session.get(WorkspaceOperation, job.workspace_operation_id)
+        return await verified_append_only_consumption_baseline(session, operation)

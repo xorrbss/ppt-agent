@@ -160,6 +160,7 @@ export const useUploadPageState = ({
 
   useEffect(() => {
     if (
+      generationStrategy === "authored" &&
       !sourceContentMode &&
       config.pageSize !== "A4" && (
         (config.aspectRatio === "9:16" && authoredStyle !== DEFAULT_AUTHORED_STYLE.id) ||
@@ -171,7 +172,7 @@ export const useUploadPageState = ({
         setPptGenUploadState({ authoredStyle: DEFAULT_AUTHORED_STYLE.id }),
       );
     }
-  }, [authoredStyle, config.aspectRatio, config.pageSize, dispatch, sourceContentMode]);
+  }, [authoredStyle, config.aspectRatio, config.pageSize, dispatch, sourceContentMode, generationStrategy]);
 
   const [loadingState, setLoadingState] = useState<LoadingState>({
     isLoading: false,
@@ -391,7 +392,14 @@ export const useUploadPageState = ({
    * @returns boolean indicating if the configuration is valid
    */
   const validateConfiguration = (selectedFiles: File[]): boolean => {
+    if (generationStrategy === "svg" && config.svgDesignReferencePending) {
+      notify.warning("디자인 참고 등록 필요", "선택한 디자인 참고 파일을 등록하거나 선택을 해제해 주세요."); return false;
+    }
+    if (generationStrategy === "svg" && config.svgDesignReferenceSnapshotId && (config.svgDesignReferencePin || companyStandard)) {
+      notify.warning("디자인 참고 선택 확인", "디자인 참고 파일, 등록 디자인, 회사 표준 중 하나만 선택해 주세요."); return false;
+    }
         if (
+            generationStrategy === "authored" &&
             !sourceContentMode &&
             config.pageSize !== "A4" &&
             config.aspectRatio !== "16:9" &&
@@ -549,7 +557,7 @@ export const useUploadPageState = ({
       admitted.analysis.summary.tables === 0 &&
       admitted.analysis.summary.charts === 0 &&
       admitted.analysis.summary.imageOccurrences >= admitted.analysis.summary.sourceUnits);
-    if (sourceContentMode && generationStrategy === "svg" && config.pageSize === "A4" && imageOnlySource && admitted) {
+    if (sourceContentMode && generationStrategy === "svg" && !config.sourceCanvas && imageOnlySource && admitted) {
       await createRasterRedesignStarter({
         config,
         authoredStyle,
@@ -623,7 +631,7 @@ export const useUploadPageState = ({
         abandonRun("서버의 용지 지원 정보를 확인하지 못해 생성을 시작하지 않았습니다. 잠시 후 다시 시도해 주세요.");
         return;
       }
-      if (capability.a4.enabled && runConfig.pageSize !== "A4") {
+      if (generationStrategy === "authored" && capability.a4.enabled && runConfig.pageSize !== "A4") {
         runConfig = { ...runConfig, pageSize: "A4", orientation: runConfig.orientation ?? "landscape" };
         setConfig(runConfig);
       }

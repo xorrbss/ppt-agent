@@ -24,7 +24,7 @@ FINISH_STOP = "stop"
 FINISH_LENGTH = "length"
 FINISH_CONTENT_FILTER = "content_filter"
 
-_TERMINAL_EVENT_TYPES = frozenset({"response.completed", "response.incomplete"})
+_TERMINAL_EVENT_TYPES = frozenset({"response.completed", "response.incomplete", "response.failed", "response.cancelled", "error"})
 _INCOMPLETE_REASONS = {
     "max_output_tokens": FINISH_LENGTH,
     "content_filter": FINISH_CONTENT_FILTER,
@@ -66,23 +66,51 @@ class ProviderTerminalOutcome:
 class ProviderTerminalOutcomeRecorder:
     """Keeps the last terminal outcome seen on one bounded provider call."""
 
-    __slots__ = ("outcome",)
+    __slots__ = ("outcome", "diagnostics")
 
     def __init__(self) -> None:
         self.outcome: ProviderTerminalOutcome | None = None
+        self.diagnostics: Mapping[str, object] = {}
 
     def observe_event(self, event: Any) -> None:
         """Record a raw stream event when it is the call's terminal event."""
 
-        if getattr(event, "type", None) not in _TERMINAL_EVENT_TYPES:
+        event_type = _get(event, "type")
+        if event_type not in _TERMINAL_EVENT_TYPES:
             return
-        self.outcome = terminal_outcome_from_response(getattr(event, "response", None))
+        response = _get(event, "response")
+        self._record_diagnostics(response, event_type, event)
+        if event_type in {"response.completed", "response.incomplete"}:
+            self.outcome = terminal_outcome_from_response(response)
 
     def observe_response(self, response: Any) -> None:
         """Record a non-streamed ``Response`` from its ``status``."""
 
-        if getattr(response, "status", None) in {"completed", "incomplete"}:
+        status = _get(response, "status")
+        if status in {"completed", "incomplete", "failed", "cancelled"}:
+            self._record_diagnostics(response, f"response.{status}")
+        if status in {"completed", "incomplete"}:
             self.outcome = terminal_outcome_from_response(response)
+
+    def _record_diagnostics(self, response: Any, event_type: str, event: Any = None) -> None:
+        from utils.provider_overload import safe_provider_diagnostics
+
+        usage = _get(response, "usage")
+        error = _get(response, "error") or _get(event, "error") or event
+        kind = {"response.failed": "terminal_failed", "response.cancelled": "terminal_cancelled", "response.incomplete": "incomplete", "error": "terminal_error"}.get(event_type)
+        self.diagnostics = safe_provider_diagnostics(diagnostics={
+            "terminalEvent": event_type,
+            "statusOrigin": "local_stream",
+            "failureKind": kind,
+            "errorCode": _get(error, "code"),
+            "requestId": _get(response, "request_id") or _get(event, "request_id"),
+            "incompleteReason": _get(_get(response, "incomplete_details"), "reason"),
+            "usage": {
+                **{name: _get(usage, name) for name in _COUNTED_FIELDS},
+                "reasoning_tokens": _get(_get(usage, "output_tokens_details"), "reasoning_tokens"),
+                "cached_tokens": _get(_get(usage, "input_tokens_details"), "cached_tokens"),
+            },
+        })
 
 
 def terminal_outcome_from_response(response: Any) -> ProviderTerminalOutcome:

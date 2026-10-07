@@ -241,6 +241,38 @@ def test_presentation_list_withholds_slide_html_and_never_selects_it(tmp_path: P
                     assert "html_content" in slide
                     assert slide["html_content"] is None
 
+            statements.clear()
+            event.listen(engine.sync_engine, "before_cursor_execute", _record)
+            async with maker() as session:
+                summary = await presentation_crud.get_all_presentations(
+                    session, page=1, page_size=24, view="dashboard"
+                )
+                assert not session.dirty
+            event.remove(engine.sync_engine, "before_cursor_execute", _record)
+            cards = {card.id: card for card in summary.items}
+            assert set(cards) == {authored_id, svg_id}
+            assert summary.total == 2
+            assert cards[authored_id].thumbnail_url == "/static/cover.png"
+            assert cards[authored_id].profile["driver_id"] == "authored"
+            assert cards[svg_id].profile["driver_id"] == "svg-v1"
+            assert cards[authored_id].theme["authored_vnext"]["canvas"] == LIST_THEME["authored_vnext"]["canvas"]
+            assert "slides" not in jsonable_encoder(cards[authored_id])
+            assert "content" not in jsonable_encoder(cards[authored_id])
+            assert "authoredQualityGate" not in cards[authored_id].theme
+            assert not any("html_content" in sql or "svg_content" in sql for sql in statements)
+            assert not any("json_remove" in sql for sql in statements)
+
+            async with maker() as session:
+                cover = await presentation_crud.get_presentation_cover(svg_id, session)
+                assert cover.slide.svg_content == "<svg><text>SVG cover</text></svg>"
+                authored_cover = await presentation_crud.get_presentation_cover(authored_id, session)
+                assert authored_cover.slide.html_content == AUTHORED_COVER_HTML
+                assert "svgReceipt" not in authored_cover.slide.content
+                with pytest.raises(HTTPException) as hidden_cover:
+                    await presentation_crud.get_presentation_cover(staging_id, session)
+                assert hidden_cover.value.status_code == 404
+                assert not session.dirty
+
             # Nothing was blanked in storage.
             async with maker() as session:
                 stored = (
@@ -341,6 +373,8 @@ def test_server_search_pagination_total_and_owner_scope_match(tmp_path: Path):
                     ),
                 )
                 session.add(presentation)
+                if deck_owner == other_owner_id:
+                    other_deck_id = presentation.id
                 if has_cover:
                     session.add(
                         SlideModel(
@@ -377,6 +411,18 @@ def test_server_search_pagination_total_and_owner_scope_match(tmp_path: Path):
                     page_size=10,
                     sort="desc",
                 )
+                summary_first = await presentation_crud.get_all_presentations(
+                    session, q="  PLAN  ", page=1, page_size=2, sort="asc", view="dashboard"
+                )
+                summary_second = await presentation_crud.get_all_presentations(
+                    session, q="plan", page=2, page_size=2, sort="asc", view="dashboard"
+                )
+                summary_literal = await presentation_crud.get_all_presentations(
+                    session, q="%_", page=1, page_size=10, sort="desc", view="dashboard"
+                )
+                with pytest.raises(HTTPException) as forbidden_cover:
+                    await presentation_crud.get_presentation_cover(other_deck_id, session)
+                assert forbidden_cover.value.status_code == 404
         finally:
             reset_current_owner_id(owner_token)
             await engine.dispose()
@@ -394,6 +440,14 @@ def test_server_search_pagination_total_and_owner_scope_match(tmp_path: Path):
         assert [item.title for item in literal_wildcards.items] == [
             "Budget 100%_Plan"
         ]
+        for legacy_page, summary_page in (
+            (first_page, summary_first),
+            (second_page, summary_second),
+            (literal_wildcards, summary_literal),
+        ):
+            assert summary_page.total == legacy_page.total
+            assert [item.id for item in summary_page.items] == [item.id for item in legacy_page.items]
+        assert summary_second.items[0].thumbnail_url is None
 
     asyncio.run(scenario())
 

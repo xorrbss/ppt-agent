@@ -304,6 +304,16 @@ def validate_sealed_generation_strategy(
     return strategy
 
 
+def rebind_sealed_generation_strategy(receipt: Mapping[str, object], *,
+                                      source_operation_id: str, operation_id: str) -> dict[str, object]:
+    """Preserve an admitted decision while binding a verified retry identity."""
+    validate_sealed_generation_strategy(receipt, operation_id=source_operation_id)
+    rebound = {**receipt, "operationId": operation_id}
+    rebound["receiptDigest"] = _digest({key: value for key, value in rebound.items() if key != "receiptDigest"})
+    validate_sealed_generation_strategy(rebound, operation_id=operation_id)
+    return rebound
+
+
 __all__ = [
     "GenerationStrategyCapabilityError",
     "capability_preflight",
@@ -311,4 +321,5 @@ __all__ = [
     "seal_generation_strategy_decision",
     "server_owned_requirement_graph",
     "validate_sealed_generation_strategy",
+    "rebind_sealed_generation_strategy",
 ]

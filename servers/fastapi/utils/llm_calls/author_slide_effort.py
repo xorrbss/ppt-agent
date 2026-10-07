@@ -44,7 +44,7 @@ CODEX_REASONING_CAPABILITIES = {
     # gpt-6-astra (probed 2026-09-05) rejects "minimal" and "none" alike:
     # "Supported values are: 'low', 'medium', 'high', 'xhigh', and 'max'."
     "gpt-6-astra": frozenset(("low", "medium", "high", "xhigh", "max")),
-    "gpt-6.1-sol": frozenset(("low", "medium", "high", "xhigh", "max", "ultra")),
+    "gpt-6.1-sol": frozenset(("low", "medium", "high", "xhigh", "max")),
     "gpt-6-sol": frozenset(("low", "medium", "high", "xhigh", "max", "ultra")),
     # Direct probe (2026-09-26): "minimal" is rejected; these levels are accepted.
     "gpt-6-luna": frozenset(("none", "low", "medium", "high", "xhigh", "max")),
@@ -75,6 +75,8 @@ def normalized_authoring_reasoning_effort(model: object, effort: str) -> str:
     """Map a recognized Codex effort to the selected model's capability set."""
 
     model_id = str(model or "").strip().lower()
+    if (model_id == "gpt-6.1-sol" or model_id.startswith("gpt-6.1-sol-")) and effort == "ultra":
+        return "max"
     capabilities = next(
         (
             supported
@@ -132,7 +134,9 @@ def resolve_authoring_reasoning_level(
         level = DEFAULT_REASONING_EFFORT  # unset / blank -> authored default
     if level in REASONING_DISABLE:
         return None
-    if level in REASONING_EFFORTS:
+    model_id = str(model or "").strip().lower()
+    sol_61 = model_id == "gpt-6.1-sol" or model_id.startswith("gpt-6.1-sol-")
+    if level in REASONING_EFFORTS or (sol_61 and level in ("max", "ultra")):
         return normalized_authoring_reasoning_effort(model, level)
     logger.warning(
         "%s=%r is not a recognized reasoning effort %s or a disable word %s; "

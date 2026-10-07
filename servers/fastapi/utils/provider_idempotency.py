@@ -21,6 +21,8 @@ from utils.provider_overload import (
     ProviderQuotaPause,
     ProviderRetryReservation,
     is_provider_overload,
+    provider_status_code,
+    safe_provider_diagnostics,
     usage_limit_reset_epoch,
 )
 from utils.provider_stream_guard import (
@@ -277,7 +279,10 @@ def provider_generate_call(
         selected_retry_reserver = _authored_retry_reserver()
     if streamed_response:
         selected_retry_reserver = None
-    is_chatgpt = type(client).__module__.startswith(_LLMAI_CHATGPT_MODULE_PREFIX)
+    is_chatgpt = any(
+        cls.__module__.startswith(_LLMAI_CHATGPT_MODULE_PREFIX)
+        for cls in type(client).__mro__
+    )
     can_clone_raw_client = callable(
         getattr(getattr(client, "_client", None), "with_options", None)
     )
@@ -378,14 +383,23 @@ def provider_generate_call(
         except Exception as error:
             provider_outcome = _provider_outcome_cause(error)
             if provider_outcome is not None:
+                observed = getattr(provider_outcome, "terminal_outcome", None)
+                if observed is not None:
+                    terminal.outcome = observed
+                provider_outcome.diagnostics = safe_provider_diagnostics(
+                    error,
+                    diagnostics={**terminal.diagnostics, **provider_outcome.diagnostics},
+                )
                 if provider_outcome is error:
                     raise
-                raise provider_outcome from error
+                # The bridge already points at this outcome. Pointing it back
+                # at the bridge would create a cause cycle and hide the source.
+                raise provider_outcome from provider_outcome.__cause__
             if not authored_request:
                 raise
             reset_at = usage_limit_reset_epoch(error)
             if reset_at is not None:
-                raise ProviderQuotaPause(reset_at=reset_at) from error
+                raise ProviderQuotaPause(reset_at=reset_at, diagnostics=safe_provider_diagnostics(error)) from error
             if _is_call_timeout(error):
                 # Distinct from the generic bridge failure so the batch policy
                 # can treat a stuck call as overload and the failed slides
@@ -394,6 +408,22 @@ def provider_generate_call(
                     "public_provider_call_timeout",
                     recovery_allowed=True,
                     overload=True,
+                    diagnostics=safe_provider_diagnostics(error, diagnostics={"failureKind": "timeout"}),
+                ) from error
+            # llmai's local stream wrapper assigns a synthetic HTTP 500 to an
+            # exception with no HTTP evidence. It is not an overload receipt.
+            nested = getattr(error, "cause", None) or getattr(error, "__cause__", None)
+            synthetic_stream_status = (
+                type(error).__module__.startswith("llmai.")
+                and provider_status_code(error) == 500
+                and isinstance(nested, BaseException)
+                and provider_status_code(nested) is None
+            )
+            if synthetic_stream_status or safe_provider_diagnostics(error).get("statusOrigin") in {"local_stream", "stream_event"}:
+                raise ProviderOutcomeError(
+                    "public_provider_result_unknown",
+                    recovery_allowed=False,
+                    diagnostics=safe_provider_diagnostics(nested if synthetic_stream_status else error, diagnostics={"statusOrigin": "local_stream", "failureKind": "result_unknown"}),
                 ) from error
             if is_provider_overload(error):
                 raise ProviderOutcomeError(
@@ -401,10 +431,12 @@ def provider_generate_call(
                     recovery_allowed=True,
                     overload=True,
                     cooldown_seconds=OVERLOAD_COOLDOWN_BASE_SECONDS,
+                    diagnostics=safe_provider_diagnostics(error, diagnostics={"failureKind": "overload"}),
                 ) from error
             raise ProviderOutcomeError(
                 "public_provider_bridge_exception",
                 recovery_allowed=False,
+                diagnostics=safe_provider_diagnostics(error, diagnostics={"failureKind": "bridge_exception"}),
             ) from error
         content = getattr(response, "content", None)
         # llmai returns parsed JSON objects for structured responses. An empty
@@ -416,6 +448,7 @@ def provider_generate_call(
             raise ProviderOutcomeError(
                 "public_provider_empty_output",
                 recovery_allowed=True,
+                diagnostics=safe_provider_diagnostics(diagnostics={**terminal.diagnostics, "failureKind": "empty_output"}),
             )
         return response
 

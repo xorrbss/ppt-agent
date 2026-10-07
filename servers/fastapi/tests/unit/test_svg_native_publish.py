@@ -1,6 +1,7 @@
 """Publication of model-declared native tables/charts on hand-written SVG pages."""
 from __future__ import annotations
 
+
 import json
 from xml.etree import ElementTree as ET
 
@@ -95,6 +96,88 @@ def test_korean_table_is_accepted_with_exact_anchor_and_payload():
     assert table["rows"][3][2] == {"text": "", "fill": CARD_TINT}
     assert [style.get("horizontalAlign") for style in table["cellStyles"][1]] == ["left", "right", "left"]
     assert "horizontalAlign" not in table["cellStyles"][3][2]
+
+    # A bounded visible merge must preserve every source cell, including blanks.
+    grid = '<rect x="0" y="0" width="600" height="60" fill="#1F4E79"/>'
+    grid += '<rect x="0" y="0" width="600" height="240" fill="none" stroke="#333333"/>'
+    grid += '<line x1="200" y1="0" x2="200" y2="240" stroke="#CCCCCC"/>'
+    grid += '<line x1="400" y1="0" x2="400" y2="180" stroke="#CCCCCC"/>'
+    grid += ''.join(f'<line x1="0" y1="{y}" x2="600" y2="{y}" stroke="#CCCCCC"/>' for y in (60,120,180))
+    import xml.etree.ElementTree as ElementTree
+    merged_group = ElementTree.fromstring("<g>" + _table_group(grid=grid) + "</g>")
+    for drawn in merged_group.iter():
+        if drawn.tag.endswith('text') and drawn.text == '430':
+            drawn.set('x', '400'); drawn.set('text-anchor', 'middle')
+    merged_table = _accepted_table(ElementTree.tostring(merged_group, encoding='unicode'))
+    assert merged_table['mergedCells'] == [{'row':3,'column':1,'rowSpan':1,'columnSpan':2}]
+    assert [[cell['text'] for cell in row] for row in merged_table['rows']] == ROWS
+    # Mixed tspan styles retain the drawn text base style after exact cell matching.
+    multiline_rows = [list(row) for row in ROWS]
+    multiline_group = ElementTree.fromstring(_table_group(before=""))
+    text_nodes = [node for node in multiline_group.iter() if node.tag.endswith("text")]
+    cell_text = text_nodes[-1]
+    original_cell_text = "".join(cell_text.itertext())
+    target_cells = [(r, c) for r, row in enumerate(multiline_rows) for c, value in enumerate(row) if value == original_cell_text]
+    assert len(target_cells) == 1
+    target_row, target_column = target_cells[0]
+    multiline_rows[target_row][target_column] = "본문\n보조"
+    cell_text.text = None
+    cell_text.set("font-size", "18")
+    cell_text.set("font-family", "Malgun Gothic")
+    main_span = ElementTree.SubElement(cell_text, "tspan", {"x": cell_text.get("x"), "y": cell_text.get("y")})
+    main_span.text = "본문"
+    secondary_span = ElementTree.SubElement(cell_text, "tspan", {"x": cell_text.get("x"), "y": str(float(cell_text.get("y")) + 10), "font-size": "16"})
+    secondary_span.text = "보조"
+    multiline_cells = "".join(ElementTree.tostring(node, encoding="unicode") for node in text_nodes)
+    multiline_table = _accepted_table(_table_group(rows=multiline_rows, cells=multiline_cells, before=""))
+    assert [[cell["text"] for cell in row] for row in multiline_table["rows"]] == multiline_rows
+    assert multiline_table["rows"][target_row][target_column]["fontSizePt"] == 13.5
+    assert multiline_table["rows"][target_row][target_column]["fontFamily"] == "Malgun Gothic"
+
+    from services.generation_core.drivers.svg.native_geometry import NativeRejection, collect_primitives, find_group
+    import pytest
+    body = _table_group(before="")
+    original_group = ET.fromstring(body)
+    identifier = next(node.get("id") for node in original_group.iter() if node.get("id"))
+    allowed = {"g", "rect", "line", "text", "path", "polyline"}
+    original_geometry = collect_primitives(*find_group(original_group, identifier), allowed)
+    fitted_root = ET.fromstring('<svg><g transform="translate(40 30) scale(0.5)">' + body + '</g></svg>')
+    fitted_geometry = collect_primitives(*find_group(fitted_root, identifier), allowed)
+    from dataclasses import replace
+    from services.generation_core.drivers.svg.native_table import _text_style
+    large_text = replace(original_geometry.texts[0], size=144.0)
+    assert _text_style(large_text, 0.75)["fontSizePt"] == 108.0
+    from copy import deepcopy
+    from services.generation_core.native_objects.payload import NativePayloadError, parse_table_payload
+    for font_size in (1.0, 3.375, 108.0, 4000.0):
+        scaled_payload = deepcopy(table)
+        scaled_payload["rows"][0][0]["fontSizePt"] = font_size
+        assert parse_table_payload(scaled_payload)["rows"][0][0]["fontSizePt"] == font_size
+    for invalid_font_size in (0.0, -1.0, 0.999, 4000.001, float("nan"), float("inf"), True):
+        invalid_payload = deepcopy(table)
+        invalid_payload["rows"][0][0]["fontSizePt"] = invalid_font_size
+        with pytest.raises(NativePayloadError, match="table_cell_font_size_invalid"):
+            parse_table_payload(invalid_payload)
+    assert "fontSizePt" not in _text_style(replace(large_text, size=float("nan")), 0.75)
+    for before_shape, after_shape in zip(original_geometry.shapes, fitted_geometry.shapes):
+        assert after_shape.box.x0 == pytest.approx(40 + before_shape.box.x0 * 0.5)
+        assert after_shape.box.y0 == pytest.approx(30 + before_shape.box.y0 * 0.5)
+        assert after_shape.stroke_width == pytest.approx(before_shape.stroke_width * 0.5)
+    for before_text, after_text in zip(original_geometry.texts, fitted_geometry.texts):
+        assert after_text.size == pytest.approx(before_text.size * 0.5)
+        assert after_text.points == tuple((40 + x * 0.5, 30 + y * 0.5) for x, y in before_text.points)
+    from services.generation_core.drivers.svg.native_paint import background_layers, effective_fill
+    background_body = '<rect x="10" y="20" width="200" height="100" fill="#00ffaa"/><g id="paint-target"/>'
+    plain_background = ET.fromstring('<svg>' + background_body + '</svg>')
+    fitted_background = ET.fromstring('<svg><g transform="matrix(0.5 0 0 0.5 40 30)">' + background_body + '</g></svg>')
+    plain_layers = background_layers(plain_background, next(node for node in plain_background.iter() if node.get("id") == "paint-target"))
+    fitted_layers = background_layers(fitted_background, next(node for node in fitted_background.iter() if node.get("id") == "paint-target"))
+    assert effective_fill(plain_layers, 100, 60) == effective_fill(fitted_layers, 90, 60)
+    assert effective_fill(plain_layers, 500, 500) == effective_fill(fitted_layers, 290, 280)
+    for transform in ["rotate(5)", "skewX(5)", "scale(1 2)", "scale(-1)", "matrix(1 0.2 0 1 0 0)", "matrix(nan 0 0 nan 0 0)", "translate(4 garbage)", "translate(1,,2)", "scale(1e309)"]:
+        rejected_root = ET.fromstring('<svg><g transform="' + transform + '">' + body + '</g></svg>')
+        with pytest.raises(NativeRejection):
+            find_group(rejected_root, identifier)
 
 
 def test_cell_borders_carry_the_drawn_stroke_colours_and_widths():
@@ -194,6 +277,202 @@ def test_declarations_bound_to_another_drawing_are_ignored():
 def test_pages_without_declarations_publish_nothing():
     payload = {"svg_content": finalize_svg(HEAD + TITLE + "</svg>", index=0, n=1)}
     assert page_native_objects(payload, pt_per_px=0.75) == (None, None)
+
+
+@pytest.mark.parametrize("declared", [True, False])
+def test_explicit_requested_table_requires_validated_exact_native_rows(declared):
+    from services.generation_core.drivers.svg.native_requirements import apply_requested_native_quality
+    source = "정확한 표: 지역 | 매출(억원) | 비고\n서울 | 1,200 | 본사\n부산 | 850 | 지점 신규\n대구 | 430 |"
+    payload, svg = _page(_table_group())
+    if not declared:
+        payload.pop("nativeDeclarations")
+    quality = {"passed": True}
+    apply_requested_native_quality(quality, payload, svg, source, pt_per_px=.75)
+    assert quality["passed"] is declared
+    assert quality["requestedNativeObjects"]["passed"] is declared
+    if not declared:
+        assert quality["failures"][0]["kind"] == "native_requested_table_missing"
+
+
+def test_requested_chart_does_not_accept_unrelated_native_series_or_plain_bars():
+    from services.generation_core.drivers.svg.native_requirements import apply_requested_native_quality, requested_native_data
+    spec = {"chartType": "bar", "categories": ["A", "B"], "series": [{"name": "S", "values": [30, 60]}]}
+    text = 'font-family="Inter" font-size="16" fill="#333333"'
+    body = (f'<g id="native-chart-two" data-native-chart=\'{_attr(spec)}\'>'
+            f'<rect x="100" y="200" width="100" height="40" fill="#2563EB"/>'
+            f'<rect x="100" y="300" width="200" height="40" fill="#2563EB"/>'
+            f'<text x="60" y="225" {text}>A</text><text x="60" y="325" {text}>B</text>'
+            f'<text x="400" y="180" {text}>S</text></g>')
+    payload, svg = _page(body)
+    accepted, _ = page_native_objects(payload, pt_per_px=.75)
+    assert accepted is not None
+    for source, passed in [("막대 차트: A 30, B 60.", True), ("막대 차트: A 45, B 60.", False),
+                           ("관계도: A에서 B로 이동하고 30에서 60으로 개선", True)]:
+        quality = {"passed": True}
+        apply_requested_native_quality(quality, payload, svg, source, pt_per_px=.75)
+        assert quality["passed"] is passed
+    assert requested_native_data("막대 차트: 1분기 30, 2분기 45, 3분기 60. 단위 억원.")["charts"][0]["values"] == ["30", "45", "60"]
+    payload.pop("nativeDeclarations")
+    quality = {"passed": True}
+    apply_requested_native_quality(quality, payload, svg, "막대 차트: A 30, B 60.", pt_per_px=.75)
+    assert quality["failures"][0]["kind"] == "native_requested_chart_missing"
+
+
+def _requested_quality(monkeypatch, source, entries):
+    from services.generation_core.drivers.svg import native_requirements
+
+    monkeypatch.setattr(native_requirements, "page_native_objects",
+                        lambda *_args, **_kwargs: ({"objects": entries}, {"accepted": len(entries)}))
+    quality = {"passed": True}
+    native_requirements.apply_requested_native_quality(quality, {}, "unused", source, pt_per_px=.75)
+    return quality
+
+
+def _requested_table_entry(rows, identifier):
+    return {"id": identifier, "kind": "table",
+            "payload": {"rows": [[{"text": cell} for cell in row] for row in rows]}}
+
+
+@pytest.mark.parametrize("second", [
+    [["분기", "금액"], ["2분기", "250"]],
+    [["분기", "금액", "비고"], ["2분기", "250", "확정"]],
+])
+def test_independent_tables_require_separate_objects_without_merging(monkeypatch, second):
+    from services.generation_core.drivers.svg.native_requirements import requested_native_data
+
+    first = [["지역", "매출"], ["서울", "1,200"]]
+    source = "\n\n".join("\n".join(" | ".join(row) for row in rows) for rows in [first, second])
+    requirements = requested_native_data(source)
+    assert [table["rows"] for table in requirements["tables"]] == [first, second]
+    entries = [_requested_table_entry(first, "one"), _requested_table_entry(second, "two")]
+    quality = _requested_quality(monkeypatch, source, entries)
+    assert quality["passed"]
+    assert quality["requestedNativeObjects"]["requiredTables"] == 2
+    merged = _requested_quality(monkeypatch, source, [_requested_table_entry(first + second, "merged")])
+    assert not merged["passed"]
+    assert len(merged["failures"]) == 2
+
+
+def test_unlabelled_markdown_preserves_empty_cells_colons_and_escaped_pipes(monkeypatch):
+    from services.generation_core.drivers.svg.native_requirements import requested_native_data
+
+    source = "| 항목 | 시간 | 비고 |\n| --- | :---: | ---: |\n| A \\| B | 12:30 | |"
+    rows = [["항목", "시간", "비고"], ["A | B", "12:30", ""]]
+    assert requested_native_data(source)["tables"][0]["rows"] == rows
+    assert _requested_quality(monkeypatch, source, [_requested_table_entry(rows, "unlabelled")])["passed"]
+
+
+@pytest.mark.parametrize("kind", ["table", "chart"])
+def test_repeated_literal_requests_require_distinct_native_objects(monkeypatch, kind):
+    if kind == "table":
+        source = "항목 | 값\nA | 10"
+        entry = _requested_table_entry([["항목", "값"], ["A", "10"]], "one")
+    else:
+        source = "차트: A 10, B 20"
+        entry = {"id": "one", "kind": "chart", "payload": {
+            "categories": ["A", "B"], "series": [{"name": "S", "values": [10, 20]}]}}
+    source = source + "\n\n" + source
+    missing = _requested_quality(monkeypatch, source, [entry])
+    assert not missing["passed"]
+    assert len(missing["failures"]) == 1
+    complete = _requested_quality(monkeypatch, source, [entry, {**entry, "id": "two"}])
+    assert complete["passed"]
+
+
+@pytest.mark.parametrize("mutation", [None, "scaled_percent", "missing_series", "wrong_name",
+                                       "reversed_series", "reversed_categories", "missing_unit",
+                                       "swapped_units", "unpaired_units"])
+def test_explicit_named_series_preserve_amounts_percent_scale_and_currency(monkeypatch, mutation):
+    from services.generation_core.drivers.svg.native_requirements import requested_native_data
+
+    source = "차트: 전환율: A 12.5%, B 30%; 매출: A $1,200, B $1,800"
+    expected = requested_native_data(source)["charts"][0]
+    assert expected["categories"] == ["A", "B"]
+    assert [(series["name"], series["values"], series["units"]) for series in expected["series"]] == [
+        ("전환율", ["12.5", "30"], ["%", "%"]), ("매출", ["1200", "1800"], ["$", "$"])]
+    chart = {"categories": ["A", "B"], "title": "전환율 (%), 매출 ($)", "series": [
+        {"name": "전환율", "values": [12.5, 30.0]}, {"name": "매출", "values": [1200, 1800]}]}
+    if mutation == "scaled_percent":
+        chart["series"][0]["values"] = [.125, .3]
+    elif mutation == "missing_series":
+        chart["series"].pop()
+    elif mutation == "wrong_name":
+        chart["series"][0]["name"] = "유입률"
+    elif mutation == "reversed_series":
+        chart["series"].reverse()
+    elif mutation == "reversed_categories":
+        chart["categories"].reverse()
+    elif mutation == "missing_unit":
+        chart["title"] = "전환율 (%), 매출"
+    elif mutation == "swapped_units":
+        chart["title"] = "전환율 ($), 매출 (%)"
+    elif mutation == "unpaired_units":
+        chart["title"] = "전환율과 매출 비교 (%, $)"
+    quality = _requested_quality(monkeypatch, source, [{"id": "chart", "kind": "chart", "payload": chart}])
+    assert quality["passed"] is (mutation is None)
+
+
+@pytest.mark.parametrize("source,title,passed", [
+    ("차트: A 30, B 60. 단위 억원.", "매출 (억원)", True),
+    ("차트: A 30, B 60. 단위 억원.", "매출 (억 원)", True),
+    ("차트: A 30, B 60. 단위 억원.", "매출 (백억원)", False),
+    ("차트: A 30, B 60. 단위 억원.", "매출", False),
+    ("차트: A 30％, B 60％", "비율 (%)", True),
+    ("차트: A 30%, B 60%", "비율 (‰)", False),
+])
+def test_chart_units_survive_native_payload_with_formatting_tolerance(monkeypatch, source, title, passed):
+    chart = {"categories": ["A", "B"], "title": title, "series": [{"name": "S", "values": [30, 60]}]}
+    quality = _requested_quality(monkeypatch, source, [{"id": "chart", "kind": "chart", "payload": chart}])
+    assert quality["passed"] is passed
+
+
+def test_first_attempt_grounding_contains_independent_exact_data_without_prose_inference():
+    from services.generation_core.drivers.svg.native_requirements import format_requested_native_data
+
+    source = "| 지역 | 매출 |\n| --- | --- |\n| 서울 | 1,200 |\n\n차트: A 30%, B 60%"
+    grounding = format_requested_native_data(source)
+    data = json.loads(next(line for line in grounding.splitlines() if line.startswith("{")))
+    assert data["tables"][0]["rows"] == [["지역", "매출"], ["서울", "1,200"]]
+    assert data["charts"][0]["categories"] == ["A", "B"]
+    assert data["charts"][0]["values"] == ["30", "60"]
+    assert data["charts"][0]["units"] == ["%", "%"]
+    assert data["charts"][0]["requiredUnitLabels"] == [{"text": "%", "unit": "%"}]
+    assert format_requested_native_data("서울 매출은 1,200이며 전환율은 30%에서 60%로 개선됐다.") == ""
+
+
+def test_unit_bearing_source_series_names_keep_their_exact_attribution(monkeypatch):
+    from services.generation_core.drivers.svg.native_requirements import format_requested_native_data
+
+    source = "차트: 전환율(%): A 10, B 20; 매출(억원): A 30, B 40"
+    grounding = format_requested_native_data(source)
+    data = json.loads(next(line for line in grounding.splitlines() if line.startswith("{")))
+    assert data["charts"][0]["requiredUnitLabels"] == [
+        {"seriesName": "전환율(%)", "unit": "%", "text": "전환율(%)"},
+        {"seriesName": "매출(억원)", "unit": "억원", "text": "매출(억원)"}]
+    chart = {"categories": ["A", "B"], "title": "전환율(%) 및 매출(억 원)", "series": [
+        {"name": "전환율(%)", "values": [10, 20]}, {"name": "매출(억원)", "values": [30, 40]}]}
+    entry = {"id": "chart", "kind": "chart", "payload": chart}
+    assert _requested_quality(monkeypatch, source, [entry])["passed"]
+    chart["title"] = "전환율(억원) 및 매출(%)"
+    assert not _requested_quality(monkeypatch, source, [entry])["passed"]
+
+
+@pytest.mark.parametrize("source,reason", [
+    ("차트: A 30%, B 60억원", "mixed_point_units"),
+    ("차트: 실적: A 30%, B 60억원; 예산: A 40, B 80", "mixed_point_units"),
+    ("차트: 매출(억원): A $30, B $60", "conflicting_series_units"),
+])
+def test_unrepresentable_units_are_reported_as_unsupported_instead_of_attested(monkeypatch, source, reason):
+    from services.generation_core.drivers.svg.native_requirements import format_requested_native_data
+
+    grounding = format_requested_native_data(source)
+    data = json.loads(next(line for line in grounding.splitlines() if line.startswith("{")))
+    assert data["charts"][0]["unsupportedReason"] == reason
+    chart = {"categories": ["A", "B"], "title": "실적 (%, 억원, $)", "series": [{"name": "실적", "values": [30, 60]}]}
+    quality = _requested_quality(monkeypatch, source, [{"id": "chart", "kind": "chart", "payload": chart}])
+    assert not quality["passed"]
+    assert quality["failures"][0]["kind"] == "native_requested_chart_unsupported"
+    assert quality["failures"][0]["unsupportedReason"] == reason
 
 
 def test_non_table_elements_in_the_group_drop_the_declaration():

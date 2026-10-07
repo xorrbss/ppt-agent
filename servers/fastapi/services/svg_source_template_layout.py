@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from contextvars import ContextVar
 import math
+import re
 import time
 
 from services.svg_source_layout import (SvgLayoutPlan, SvgResolvedLayoutPlan,
@@ -43,7 +44,8 @@ def _check_local_budget():
 
 def selected_template(style_snapshot):
     template = style_snapshot.get("source_template")
-    if not isinstance(template, dict) or not template.get("digest") or not template.get("layouts"):
+    if (not isinstance(template, dict) or not template.get("digest")
+            or (template.get("composition_mode") != "free-svg" and not template.get("layouts"))):
         raise ValueError("svg_source_template_layout_required")
     return template
 
@@ -64,10 +66,11 @@ def measured_text_height(lines, size, font):
     return size * advance * lines
 
 
-def wrap_source_text(text, width, size, font):
+def wrap_source_text(text, width, size, font, *, policy=None):
     """Keep every character, including newline/space, in an exclusive range."""
     if width <= 0:
         raise ValueError("svg_source_text_box_unfit")
+    tokens = tuple(re.finditer(r"[A-Za-z0-9]+(?:[.,:/+_-][A-Za-z0-9]+)*%?", text)) if policy == "latin-token/v1" else ()
     ends, start = [], 0
     while start < len(text):
         _check_local_budget()
@@ -86,6 +89,12 @@ def wrap_source_text(text, width, size, font):
                 high = middle - 1
         if best == start:
             raise ValueError("svg_source_text_box_unfit")
+        for token in tokens:
+            if token.start() < best < token.end():
+                if token.start() <= start or not text[start:token.start()].strip():
+                    raise ValueError("svg_source_text_box_unfit")
+                best = token.start()
+                break
         ends.append(best)
         start = best
     return tuple(ends or [0])
@@ -125,7 +134,8 @@ def resolve_source_plan(plan, manifest, page_index, minimum_px, template=None):
             {"font_weight": str(template["table"]["header_weight"])})) if header_cells else font
         def fit(size, header_font=header_font, header_cells=header_cells, font=font, boxes=boxes):
             ranges = {sid: wrap_source_text(text, width, size,
-                header_font if sid in header_cells else font) for sid, text, width, height in boxes}
+                header_font if sid in header_cells else font, policy=(template or {}).get("text_wrap_policy"))
+                for sid, text, width, height in boxes}
             return ranges, all(measured_text_height(len(ranges[sid]),size,
                 header_font if sid in header_cells else font) <= height + .000001
                 for sid, text, width, height in boxes)
@@ -166,6 +176,10 @@ def resolve_source_plan(plan, manifest, page_index, minimum_px, template=None):
 
 def repair_template_coordinates(plan, manifest, page_index, template):
     """Move only colliding later content, at most two passes within its slot."""
+    if template.get("composition_mode") == "free-svg":
+        # Assembly measures collisions; the existing page correction budget
+        # preserves author intent instead of moving freely composed content.
+        return plan, 0
     blocks = {b.source_block_id: b for b in manifest.units[page_index].blocks}
     roles = page_roles(manifest, page_index)
     layout = next(x for x in template["layouts"] if x["id"] == plan.layout_id)
@@ -205,7 +219,14 @@ def repair_template_coordinates(plan, manifest, page_index, template):
 def validate_template_plan(plan, manifest, page_index, template):
     if plan.schema_version != "svg-source-layout/v2" or plan.template_digest != template["digest"]:
         raise ValueError("svg_source_template_identity_mismatch")
-    layout = next((x for x in applicable_layouts(template,manifest,page_index) if x["id"] == plan.layout_id), None)
+    free_composition = template.get("composition_mode") == "free-svg"
+    if free_composition:
+        if plan.layout_id != "free-svg":
+            raise ValueError("svg_source_template_layout_unknown")
+        box = dict(x=0, y=0, width=plan.width, height=plan.height)
+        layout = dict(id="free-svg", title_box=box, body_box=box)
+    else:
+        layout = next((x for x in applicable_layouts(template,manifest,page_index) if x["id"] == plan.layout_id), None)
     if layout is None:
         raise ValueError("svg_source_template_layout_unknown")
     tokens = template["tokens"]
@@ -229,7 +250,7 @@ def validate_template_plan(plan, manifest, page_index, template):
             spec = template["fonts"][role]
             expected_fill = tokens.get("heading", tokens["text"]) if role == "heading" else tokens["text"]
             if (p.font_family != spec["family"] or str(p.font_weight) != str(spec["weight"])
-                    or p.fill != expected_fill or p.font_size > spec["size"] + .001):
+                    or p.fill != expected_fill or (not free_composition and p.font_size > spec["size"] + .001)):
                 raise ValueError(f"svg_source_template_typography_violation:{p.block_id}")
             if block.kind == "table" and (p.background != template["table"]["body_fill"]
                 or p.stroke != template["table"]["border"]):
@@ -245,10 +266,12 @@ def validate_template_plan(plan, manifest, page_index, template):
     if headings and bodies and min(headings) < max(bodies):
         raise ValueError("svg_source_template_title_hierarchy_violation")
     return dict(template_digest=template["digest"], layout_id=plan.layout_id,
-        rule_version=template["rule_version"], solver_version=SOLVER_VERSION,
+        rule_version=template["rule_version"],
+        solver_version="svg-source-free-composition/v1" if free_composition else SOLVER_VERSION,
+        composition_mode="free-svg" if free_composition else "template-layout",
         typography=evidence, decoration_count=len(template.get("decorations", [])),
-        source_parallel_groups=parallel_source_groups(manifest,page_index) if layout.get("applicability",
-            {}).get("requires_source_parallel_groups") else [],
+        source_parallel_groups=parallel_source_groups(manifest,page_index) if (free_composition
+            or layout.get("applicability", {}).get("requires_source_parallel_groups")) else [],
         role_classification=[dict(block_id=b.source_block_id, source_role=b.semantic_role,
             layout_role=roles[b.source_block_id], basis=
                 "source_typography_prominence" if roles[b.source_block_id] != _role(b) else "source_role")
@@ -282,10 +305,11 @@ def _needed_height(block, p, size, template):
         inset = template["table"]["cell_padding"]
         header_font = _font(p.model_copy(update={"font_weight": str(template["table"]["header_weight"])}))
         row_height = max((measured_text_height(len(wrap_source_text(cell["text"], p.width * cs / len(rows[0]) -
-            2 * inset, size, header_font if r == 0 else font)),size,header_font if r == 0 else font) + 2 * inset) / rs
+            2 * inset, size, header_font if r == 0 else font, policy=template.get("text_wrap_policy"))),size,header_font if r == 0 else font) + 2 * inset) / rs
             for r, c, rs, cs, cell in cells)
         return row_height * len(rows)
-    return measured_text_height(len(wrap_source_text(block.payload["text"], p.width, size, font)),size,font)
+    return measured_text_height(len(wrap_source_text(block.payload["text"], p.width, size, font,
+        policy=template.get("text_wrap_policy"))),size,font)
 def _candidate(manifest, page_index, template, layout, width, height, minimum_px, pass_index):
     blocks = [b for b in manifest.units[page_index].blocks if b.kind != "source_note"]
     membership = source_group_membership(manifest,page_index,parallel_only=
@@ -485,6 +509,9 @@ def _try_template_source_layout(manifest, page_index, style_snapshot, *, source_
             {}).get("model_layout", False) for x in template["layouts"]))
 def try_template_source_layout(manifest, page_index, style_snapshot, **kwargs):
     """Isolate cancellation/deadline context, including when a candidate fails."""
+    if (style_snapshot.get("source_template") or {}).get("composition_mode") == "free-svg":
+        return dict(escalation_reason="layout_candidate_unavailable", model_layout_allowed=True,
+                    model_calls=0, composition_mode="free-svg", attempted_layout_ids=[])
     limit_token = _LOCAL_LIMIT.set(None)
     cancel_token = _LOCAL_CANCEL.set(None)
     try:

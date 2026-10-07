@@ -69,7 +69,7 @@ export const PresentationCard = ({
       pathname,
       presentation_id: id,
       title_length: (title || "").length,
-      slide_count: presentation?.slides?.length || 0,
+      slide_count: presentation?.n_slides ?? presentation?.slides?.length ?? 0,
       presentation_driver_id: presentationDriverId,
     });
     router.push(`/presentation?id=${id}&driver=${presentationDriverId}`);
@@ -135,7 +135,7 @@ export const PresentationCard = ({
       trackEvent(MixpanelEvent.Dashboard_Presentation_Deleted, {
         pathname,
         presentation_id: id,
-        slide_count: presentation?.slides?.length || 0,
+        slide_count: presentation?.n_slides ?? presentation?.slides?.length ?? 0,
       });
       notify.success("발표자료 삭제됨", "발표자료가 대시보드에서 삭제되었습니다.");
       setShowDeleteDialog(false);
@@ -175,7 +175,14 @@ export const PresentationCard = ({
         
         <div className="scale-[0.85] my-3 border border-zinc-200 rounded-md overflow-hidden shadow-sm">
 
-          <DeferredSlideThumbnail slide={firstSlide} theme={presentation?.theme} />
+          <DeferredSlideThumbnail
+            slide={firstSlide}
+            theme={presentation?.theme}
+            presentationId={id}
+            thumbnailUrl={presentation?.thumbnail_url}
+            coverVersion={presentation?.updated_at}
+            loadCover={!Array.isArray(presentation?.slides)}
+          />
         </div>
 
         <div className="w-full px-4 py-4 mt-auto z-40 relative bg-white border-t border-zinc-200/70">

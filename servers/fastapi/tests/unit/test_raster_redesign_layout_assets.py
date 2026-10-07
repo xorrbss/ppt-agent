@@ -191,12 +191,28 @@ def _install_fakes(monkeypatch, store, analysis):
     monkeypatch.setattr(assets, "load_source_manifest_pointer", load_manifest)
 
 
-def test_dense_group_fallback_publishes_and_exports_through_the_real_asset_path(monkeypatch):
+@pytest.mark.parametrize("with_master", [False, True])
+def test_dense_group_fallback_publishes_and_exports_through_the_real_asset_path(monkeypatch, with_master):
     store = MemoryArtifacts()
     analysis = _dense_page_analysis(store)
     _install_fakes(monkeypatch, store, analysis)
     approved = tuple(r.region_id for r in analysis.pages[0].regions)
     svg = render_raster_page_svg(analysis, 1, approved_region_ids=approved)
+    furniture = None
+    if with_master:
+        import base64
+        import xml.etree.ElementTree as ET
+        from services.svg_master_furniture import stamp_master_furniture, master_furniture_receipt
+        png = io.BytesIO()
+        Image.new("RGB", (8, 4), "blue").save(png, format="PNG")
+        snapshot = {"system_furniture": {"digest": "sha256:" + "b" * 64, "elements": [dict(
+            id="svg-system-master-logo", kind="logo", x=1120, y=800, width=64, height=32,
+            data_url="data:image/png;base64," + base64.b64encode(png.getvalue()).decode(),
+            asset_digest="sha256:" + hashlib.sha256(png.getvalue()).hexdigest())]}}
+        svg = stamp_master_furniture(svg, snapshot, 0, 1)
+        contract = {node.get("href"): {"required": True, "allowOmit": False} for node in ET.fromstring(svg).iter()
+                    if node.tag.rsplit("}", 1)[-1] == "image" and node.get("href", "").startswith("source-slot-")}
+        furniture = master_furniture_receipt(svg, snapshot, index=0, n=1, width=1188, height=840, source_manifest=contract)
     advisories = raster_page_render_advisories(analysis, 1, svg)
     assert advisories and all(a["code"] == "dense_group_pixel_fallback" for a in advisories)
     pin = RasterApprovalPin(
@@ -211,6 +227,7 @@ def test_dense_group_fallback_publishes_and_exports_through_the_real_asset_path(
         None, store, approval_pin=pin, owner_id=OWNER, tenant_id=TENANT, publication_context=context,
         presentation_id=presentation, source_revision=1, slide_revision=1, page_number=1, output_page_index=0,
         canonical_svg=svg, width=1188, height=840,
+        **({"system_furniture": furniture} if furniture else {}),
     ))
     slots = {slot.slot_id: slot for slot in prepared.source_manifest.slots}
     assert len(slots) == len(advisories)
@@ -226,8 +243,29 @@ def test_dense_group_fallback_publishes_and_exports_through_the_real_asset_path(
         None, store, approval_pin=pin, owner_id=OWNER, tenant_id=TENANT, publication_context=context,
         presentation_id=presentation, source_pointer=prepared.source_pointer, slide_revision=1, page_number=1,
         output_page_index=0, canonical_svg=svg, width=1188, height=840, export_format="pptx",
+        **({"system_furniture": furniture} if furniture else {}),
     ))
     assert exported["pageIndex"] == 0 and exported["fullPagePreserve"] is False
+    if with_master:
+        from services.svg_asset_manifest import PlacementManifest
+        from services.svg_export_assets import validate_export_placement
+        from services.svg_renderer import admit_preserved_raster_preview
+        from utils.renderer_isolation import RendererPolicyError
+        assert exported["systemFurniture"] == furniture
+        placement = PlacementManifest.model_validate_json(store.blobs[uuid.UUID(exported["placementManifest"]["ref"])])
+        derivatives = validate_export_placement(svg, prepared.source_manifest, placement, page_index=0,
+            slide_revision=1, presentation_id=presentation, export_format="pptx", width=1188, height=840,
+            system_furniture=furniture)
+        assert len(derivatives) == len(advisories)
+        admitted, _ = admit_preserved_raster_preview(svg, prepared.materialized_svg,
+            width=1188, height=840, system_furniture=furniture)
+        assert "svg-system-master-logo" in admitted.html
+        old_logo = snapshot["system_furniture"]["elements"][0]["data_url"]
+        other = io.BytesIO()
+        Image.new("RGB", (8, 4), "red").save(other, format="PNG")
+        changed = prepared.materialized_svg.replace(old_logo, "data:image/png;base64," + base64.b64encode(other.getvalue()).decode())
+        with pytest.raises(RendererPolicyError, match="system furniture bytes changed"):
+            admit_preserved_raster_preview(svg, changed, width=1188, height=840, system_furniture=furniture)
 
 
 def test_fallback_without_reference_crop_fails_loudly(monkeypatch):

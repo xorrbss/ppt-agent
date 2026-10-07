@@ -119,8 +119,40 @@ def _texts(slide) -> list[str]:
 
 
 def test_declared_table_and_chart_export_as_native_objects(tmp_path):
-    svg1, content1 = _published_content(_response(_table_group(ROWS)), 0)
-    svg2, content2 = _published_content(_response(_chart_group()), 1)
+    rich_rows = [row[:] for row in ROWS]
+    rich_rows[1][0] = "매출\n보조 안내"
+    table_root = ET.fromstring(_table_group(rich_rows))
+    body_text = next(node for node in table_root.iter("text") if node.text == rich_rows[1][0])
+    body_text.text = None
+    body_text.set("y", "244")
+    main = ET.SubElement(body_text, "tspan", {"x": body_text.get("x"), "y": "244", "font-weight": "bold"})
+    main.text = "매출"
+    secondary = ET.SubElement(body_text, "tspan", {"x": body_text.get("x"), "y": "266", "font-size": "16", "fill": "#19A974"})
+    secondary.text = "보조 "
+    inline = ET.SubElement(body_text, "tspan", {"y": "266", "font-size": "16", "fill": "#19A974", "font-weight": "700", "font-family": "Arial"})
+    inline.text = "안내"
+    # Matrix fitting is an export-stage transform, never an authored SVG input.
+    from services.generation_core.drivers.svg.native_geometry import collect_primitives, find_group
+    fitted = ET.fromstring('<svg><g transform="matrix(0.5 0 0 0.5 40 30)">' + ET.tostring(table_root, encoding="unicode") + '</g></svg>')
+    rich_geometry = collect_primitives(*find_group(fitted, "native-table-sales"), allowed={"g", "text", "tspan", "rect", "line"})
+    rich_text = next(text for text in rich_geometry.texts if text.text == rich_rows[1][0])
+    assert [run.size for line in rich_text.run_lines for run in line] == [10.0, 8.0, 8.0]
+    svg1, content1 = _published_content(_response(ET.tostring(table_root, encoding="unicode")), 0)
+    chart_root = ET.fromstring(_chart_group())
+    declaration = json.loads(chart_root.get("data-native-chart"))
+    declaration.update(categoryOrder="leftToRight", valueLabels={"shown": True, "position": "outsideEnd"}, markers=False)
+    chart_root.set("data-native-chart", json.dumps(declaration, ensure_ascii=False))
+    for index in reversed(range(len(VALUES))):
+        value = VALUES[index]
+        label = ET.SubElement(chart_root, "text", {
+            "x": str(260 + index * 220), "y": str(550 - value * 2),
+            "font-family": "Noto Sans KR", "text-anchor": "middle",
+            "font-size": str(18 + index * 2),
+            "font-weight": "bold" if index == 1 else "normal",
+            "fill": "#19A974" if index == 1 else "#111827",
+        })
+        label.text = str(value)
+    svg2, content2 = _published_content(_response(ET.tostring(chart_root, encoding="unicode")), 1)
     assert "data-native" not in svg1 + svg2
     assert content1["svgReceipt"]["nativeObjects"] == {"declared": 1, "accepted": 1, "dropped": []}
     assert content2["svgReceipt"]["nativeObjects"] == {"declared": 1, "accepted": 1, "dropped": []}
@@ -130,7 +162,15 @@ def test_declared_table_and_chart_export_as_native_objects(tmp_path):
     tables = [shape for shape in _frames(deck.slides[0]) if shape.has_table]
     assert len(tables) == 1
     table = tables[0].table
-    assert [[cell.text for cell in row.cells] for row in table.rows] == ROWS
+    assert [[cell.text for cell in row.cells] for row in table.rows] == rich_rows
+    paragraphs = table.cell(1, 0).text_frame.paragraphs
+    assert paragraphs[0].runs[0].font.bold is True
+    assert paragraphs[0].runs[0].font.size.pt == 15.0
+    assert paragraphs[1].runs[0].font.bold is False
+    assert paragraphs[1].runs[0].font.size.pt == 12.0
+    assert all(str(run.font.color.rgb) == "19A974" for run in paragraphs[1].runs)
+    assert paragraphs[1].runs[-1].font.bold is True
+    assert paragraphs[1].runs[-1].font.name == "Arial"
     drawn = _texts(deck.slides[0])
     assert "매출" not in drawn and "실적 요약" in drawn  # cells live only in the table
     charts = [shape for shape in _frames(deck.slides[1]) if shape.has_chart]
@@ -138,6 +178,15 @@ def test_declared_table_and_chart_export_as_native_objects(tmp_path):
     plot = charts[0].chart.plots[0]
     assert list(plot.categories) == CATEGORIES
     assert [list(series.values) for series in plot.series] == [[float(v) for v in VALUES]]
+    from pptx.oxml.ns import qn
+    labels = charts[0].chart._chartSpace.findall(".//" + qn("c:dLbl"))
+    assert len(labels) == len(VALUES)
+    by_index = {int(label.find(qn("c:idx")).get("val")): label for label in labels}
+    for index in range(len(VALUES)):
+        properties = by_index[index].find(".//" + qn("a:defRPr"))
+        assert properties.find(qn("a:solidFill") + "/" + qn("a:srgbClr")).get("val") == ("19A974" if index == 1 else "111827")
+        assert (properties.get("b") == "1") is (index == 1)
+        assert properties.get("sz") == str((18 + index * 2) * 75)
     readback = evidence["structuralReadback"]["nativeObjects"]
     assert readback == {"offered": 2, "native": 2, "fellBack": 0, "reasons": []}
 

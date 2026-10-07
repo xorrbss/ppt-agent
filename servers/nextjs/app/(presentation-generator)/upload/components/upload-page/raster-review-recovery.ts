@@ -23,6 +23,10 @@ export type RasterReviewRecovery = {
   operationId: string;
   referenceSnapshotId?: string;
   analysisMode?: RasterAnalysisMode;
+  svgDesignReferenceSnapshotId?: string;
+  svgDesignReferencePin?: import("../../type").PresentationConfig["svgDesignReferencePin"];
+  aspectRatio?: import("../../type").PresentationConfig["aspectRatio"];
+  svgCanvas?: { width_mm: number; height_mm: number };
   orientation: "landscape" | "portrait";
   authoredStyle: string;
   instructions: string | null;

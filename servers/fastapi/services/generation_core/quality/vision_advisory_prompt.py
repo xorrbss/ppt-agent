@@ -86,10 +86,10 @@ SYSTEM_PROMPT = (
 )
 
 
-def advisory_json_schema() -> dict[str, Any]:
+def advisory_json_schema(*, slide_count: int | None = None) -> dict[str, Any]:
     """The closed-vocabulary response schema, as the provider receives it."""
 
-    return {
+    schema = {
         "type": "object",
         "additionalProperties": False,
         "required": ["slides"],
@@ -111,9 +111,14 @@ def advisory_json_schema() -> dict[str, Any]:
             }
         },
     }
+    if slide_count is not None:
+        array = schema["properties"]["slides"]
+        array.update(minItems=slide_count, maxItems=slide_count)
+        array["items"]["properties"]["index"].update(minimum=1, maximum=slide_count)
+    return schema
 
 
-def build_advisory_messages(sheet: bytes, *, slide_count: int) -> list[Any]:
+def build_advisory_messages(sheet: bytes, *, slide_count: int, required: bool = False, pngs=None) -> list[Any]:
     """One system message and one user message of [text, image], as critique does."""
 
     from llmai.shared import (
@@ -123,20 +128,24 @@ def build_advisory_messages(sheet: bytes, *, slide_count: int) -> list[Any]:
         UserMessage,
     )
 
+    if required and pngs is not None:
+        parts = []
+        for index, png in enumerate(pngs):
+            parts.extend([TextContentPart(text=f"Slide {index + 1} of {slide_count}."),
+                          ImageContentPart(data=png, mime_type="image/png")])
+    else:
+        parts = [TextContentPart(text=(f"Review this deck contact sheet. It has {slide_count} "
+            f"slides, numbered 1 to {slide_count} in reading order across the sheet.")),
+            ImageContentPart(data=sheet, mime_type="image/jpeg")]
     return [
-        SystemMessage(content=SYSTEM_PROMPT),
-        UserMessage(
-            content=[
-                TextContentPart(
-                    text=(
-                        f"Review this deck contact sheet. It has {slide_count} "
-                        f"slides, numbered 1 to {slide_count} in reading order "
-                        "across the sheet."
-                    )
-                ),
-                ImageContentPart(data=sheet, mime_type="image/jpeg"),
-            ]
-        ),
+        SystemMessage(content=(
+            "Review every numbered slide for layout balance, readable text, intact charts, tables and images, "
+            "and consistent design. Use only these issue words: " + ", ".join(ISSUE_VOCABULARY) + ". "
+            f"Return JSON with a slides array containing exactly one entry for every index 1 through {slide_count}. "
+            "Each entry must have index and issues; return an empty issues array for a slide only after inspecting it. "
+            "Never omit a clean page or return an empty slides array."
+            if required else SYSTEM_PROMPT)),
+        UserMessage(content=parts),
     ]
 
 

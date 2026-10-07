@@ -8,6 +8,8 @@ from models.public_v2_contracts import QualityReceiptV3
 from services.authored_canvas import canvas_metadata_for_aspect_ratio
 from services.public_export_errors import PublicExportOperationError
 from services.svg_contract import source_digest
+from services.svg_contract import SVG_CONTRACT_VERSION
+from services.svg_renderer import SVG_RENDERER_VERSION
 from services.svg_export_operation import _source_preservation_receipts
 from services.svg_export_quality import SOURCE_CHECKS, TEMPLATE_CHECKS, source_svg_public_quality_receipt
 
@@ -43,13 +45,17 @@ def evidence_fixture():
         visual_review_verified=False,
     )
     quality = dict(
+        contract_version=SVG_CONTRACT_VERSION,
+        renderer_version=SVG_RENDERER_VERSION,
         passed=True,
         geometry_passed=True,
         measurement_complete=True,
         source_digest=receipt["svg_digest"],
+        png_digest="sha256:" + "a" * 64,
         trusted_font_materialization=dict(worker_materialized=True),
     )
-    slide = SimpleNamespace(svg_content=svg, content={"svgReceipt": dict(source_preservation=receipt, quality=quality)})
+    slide = SimpleNamespace(svg_content=svg, content={"svgReceipt": dict(source_preservation=receipt,
+        quality=quality, png_sha256="a" * 64)})
     presentation = SimpleNamespace(
         theme={
             "svg": dict(

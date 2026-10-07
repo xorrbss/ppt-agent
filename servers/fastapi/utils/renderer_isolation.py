@@ -111,7 +111,8 @@ class AdmittedHtml:
 
 def admit_authorized_svg_materialized(canonical_svg: str, materialized_svg: str, *,
                                       source_manifest: dict, width_px: int, height_px: int,
-                                      allow_image_only: bool = False) -> AdmittedHtml:
+                                      allow_image_only: bool = False, source_preservation: dict | None = None,
+                                      system_furniture: dict | None = None) -> AdmittedHtml:
     """Worker-only derivative admission after authenticated artifact resolution.
 
     Canonical SVG keeps the normal source/structure limits. Only exact image
@@ -123,8 +124,19 @@ def admit_authorized_svg_materialized(canonical_svg: str, materialized_svg: str,
     import xml.etree.ElementTree as ET
     from PIL import Image
     from services.svg_contract import validate_svg
+    from services.svg_master_furniture import attested_source_furniture, attested_svg_furniture
+    if source_preservation:
+        furniture = attested_source_furniture(canonical_svg, source_preservation)
+        furniture_receipt = source_preservation.get("system_furniture", {})
+    elif system_furniture:
+        furniture = attested_svg_furniture(canonical_svg, system_furniture,
+            source_manifest=source_manifest, width=width_px, height=height_px)
+        furniture_receipt = system_furniture
+    else:
+        furniture, furniture_receipt = {}, {}
+    trusted_images = furniture_receipt.get("images", {}) if furniture else {}
     validate_svg(canonical_svg, width=width_px, height=height_px, source_manifest=source_manifest,
-                 allow_image_only=allow_image_only)
+                 allow_image_only=allow_image_only, trusted_furniture_images=trusted_images)
     if not isinstance(materialized_svg, str) or len(materialized_svg.encode("utf-8")) > 96 * 1024 * 1024:
         raise RendererPolicyError("authorized SVG page wire budget exceeded")
     if re.search(r"<!|<\?", materialized_svg):
@@ -139,6 +151,8 @@ def admit_authorized_svg_materialized(canonical_svg: str, materialized_svg: str,
     total_bytes = total_pixels = 0
     for original, image_node in zip(canonical_images, resolved_images, strict=True):
         href = image_node.get("href", "")
+        if original.get("id") in furniture and href != original.get("href"):
+            raise RendererPolicyError("authorized SVG system furniture bytes changed")
         match = re.fullmatch(r"data:image/(png|jpeg);base64,([A-Za-z0-9+/=]+)", href)
         if match is None:
             raise RendererPolicyError("authorized SVG requires embedded raster bytes")
@@ -447,6 +461,7 @@ def admit_internal_instrumented_html(source: str, capability: str) -> AdmittedHt
 def encode_request(
     html: str, timeout: int, *, width_px: int = DEFAULT_CANVAS_WIDTH_PX, height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
     preserved_raster_svg: str | None = None,
+    system_furniture: dict | None = None,
 ) -> bytes:
     wire = json.dumps(
         {
@@ -456,6 +471,7 @@ def encode_request(
             "width_px": int(width_px),
             "height_px": int(height_px),
             **({"preserved_raster_svg": preserved_raster_svg} if preserved_raster_svg is not None else {}),
+            **({"system_furniture": system_furniture} if system_furniture is not None else {}),
         },
         ensure_ascii=True,
         separators=(",", ":"),

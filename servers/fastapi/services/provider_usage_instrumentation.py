@@ -79,6 +79,13 @@ def provider_receipt_observability_snapshot() -> dict[str, int]:
     return dict(_RECEIPT_OBSERVABILITY)
 
 
+def record_provider_terminal_result(outcome: str, physical_requests: int | None = None) -> None:
+    """Keep observed terminal results separate from best-effort usage receipts."""
+    usage = _ACTIVE_OPERATION_USAGE.get()
+    if usage is not None:
+        usage.record_terminal_result(outcome, physical_requests)
+
+
 @dataclass
 class ProviderUsageScope:
     """Per-task non-sensitive identity for billable or local stage work."""
@@ -89,6 +96,7 @@ class ProviderUsageScope:
     attempt_number: int
     slide_index: int | None = None
     round_ordinal: int | None = None
+    public_only: bool = False
     _sequence: int = field(default=0, init=False, repr=False)
     _physical_sequences: dict[str, int] = field(
         default_factory=dict, init=False, repr=False
@@ -253,6 +261,7 @@ async def _assert_current_public_operation_fence(
         raise ProviderSpendFenceRejected("provider_workspace_operation_fence_required")
 
     from sqlmodel import select
+    from sqlalchemy import or_
 
     from models.sql.workspace import WorkspaceOperation
     from services.database import async_session_maker
@@ -269,6 +278,7 @@ async def _assert_current_public_operation_fence(
             .where(WorkspaceOperation.cancel_requested_at.is_(None))
             .where(WorkspaceOperation.lease_expires_at.is_not(None))
             .where(WorkspaceOperation.lease_expires_at > now)
+            .where(or_(WorkspaceOperation.deadline_at.is_(None), WorkspaceOperation.deadline_at > now))
             .execution_options(skip_owner_scope=True)
         )
         await session.rollback()
@@ -285,6 +295,7 @@ def provider_usage_scope(
     attempt_number: int = 0,
     slide_index: int | None = None,
     round_ordinal: int | None = None,
+    public_only: bool = False,
 ) -> Iterator[None]:
     """Set receipt context for one bounded pipeline segment.
 
@@ -294,6 +305,8 @@ def provider_usage_scope(
     """
 
     token: Token[ProviderUsageScope | None] | None = None
+    if public_only and job_id is None:
+        raise ValueError("provider_public_review_scope_required")
     if job_id is not None:
         token = _ACTIVE_SCOPE.set(
             ProviderUsageScope(
@@ -303,6 +316,7 @@ def provider_usage_scope(
                 attempt_number=attempt_number,
                 slide_index=slide_index,
                 round_ordinal=round_ordinal,
+                public_only=public_only,
             )
         )
     try:
@@ -379,6 +393,9 @@ async def provider_call_admission(
     if scope is None:
         yield None
         return
+    public_fence = _PUBLIC_OPERATION_FENCE.get()
+    if scope.public_only and (public_fence is None or scope.job_id != public_fence.operation_id):
+        raise ProviderSpendFenceRejected("provider_public_review_scope_required")
     active_lease = _ACTIVE_PROVIDER_ADMISSION.get()
     if active_lease is not None:
         yield active_lease
@@ -428,6 +445,10 @@ async def provider_call_admission(
                 stage=scope.stage,
                 request_id=request_id,
                 estimated_cost=estimated,
+                **(dict(workspace_operation_id=public_fence.operation_id,
+                        expected_attempt_token=public_fence.attempt_token,
+                        expected_fencing_token=public_fence.fencing_token)
+                   if scope.public_only else {}),
             )
         if public_fence is not None:
             from services.public_operation_admission import (
@@ -702,6 +723,15 @@ async def record_provider_call(
                         else pricing_version
                     ),
                 )
+        if scope.public_only:
+            # Tokens/cost have already been attached to this review's public
+            # logical-call ledger. No legacy generation job is rewritten.
+            if scope._durable_leases:
+                durable_lease = scope._durable_leases.pop(0)
+                await reconcile_provider_call_detached(durable_lease,
+                    actual_cost=reported_cost,
+                    outcome="success" if outcome in {"success", "succeeded"} else "failure")
+            return
         receipt = ProviderUsageReceiptInput(
             job_id=scope.job_id,
             operation=scope.operation,
@@ -871,5 +901,6 @@ __all__ = [
     "record_local_stage",
     "record_provider_call",
     "record_provider_call_timing",
+    "record_provider_terminal_result",
     "response_usage",
 ]

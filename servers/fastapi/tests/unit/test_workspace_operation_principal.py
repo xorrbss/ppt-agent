@@ -7,6 +7,8 @@ from datetime import timedelta
 from pathlib import Path
 import uuid
 
+import pytest
+from starlette.requests import Request
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
@@ -35,9 +37,258 @@ from utils.owner_context import (
     get_current_tenant_id,
     reset_current_tenant_id,
     set_current_tenant_id,
+    reset_current_owner_id,
+    set_current_owner_id,
 )
 
 OWNER = runner_test.OWNER_ID
+
+
+@pytest.mark.parametrize("kind", ["generation", "export"])
+@pytest.mark.parametrize("current,captured,admitted,bridge,other_owner,allowed", [
+    ("tenant-a", "tenant-a", "tenant-a", False, False, True),
+    ("tenant-a", "tenant-b", "tenant-b", False, False, False),
+    ("default", "local-development", "local-development", True, False, True),
+    ("default", None, "local-development", True, False, True),
+    ("default", "local-development", "local-development", False, False, False),
+    ("default", "tenant-b", "tenant-b", True, False, False),
+    ("default", "local-development", "tenant-b", True, False, False),
+    ("default", "local-development", "local-development", True, True, False),
+])
+def test_export_tenant_handoff_requires_bound_owner_and_exact_admission(
+    tmp_path, monkeypatch, kind, current, captured, admitted, bridge, other_owner, allowed,
+):
+    from types import SimpleNamespace
+    from services.workspace_operation_principal import (
+        bound_export_operation_principal, presentation_export_principal,
+    )
+    from services.workspace_operation_handler_registry import NonRetryableWorkspaceOperationError
+
+    monkeypatch.setattr("utils.env_settings.public_service.get_public_process_identity_settings",
+                        lambda: SimpleNamespace(service_tenant_id="default"))
+
+    async def scenario():
+        engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'export-principal.db'}")
+        async with engine.begin() as connection:
+            await connection.run_sync(lambda sync: SQLModel.metadata.create_all(sync, tables=runner_test.RUNNER_TABLES))
+        maker = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            presentation_id, (operation_id,) = await runner_test._seed_operations(
+                maker, owner_id=OWNER, kind="presentation.generate" if kind == "generation" else "export.pptx")
+            async with maker() as session, session.begin():
+                await session.execute(update(WorkspaceOperation).where(WorkspaceOperation.id == operation_id).values(
+                    state="succeeded", request_payload={PRINCIPAL_TENANT_PAYLOAD_KEY: captured} if captured else {}))
+                session.add(PublicOperationAdmission(
+                    operation_id=operation_id, policy_version="public-test/v1", owner_id=OWNER,
+                    tenant_id=admitted, trace_id_hash="3" * 64, operation_kind=kind, state="succeeded",
+                    resource_units=5, policy_digest="4" * 64,
+                    deadline_at=get_current_utc_datetime() + timedelta(minutes=5),
+                    planned_request_limit=0, retry_request_limit=0,
+                    estimated_cost_limit_microunits=0, actual_cost_limit_microunits=0))
+            owner_token = set_current_owner_id(uuid.uuid4() if other_owner else OWNER)
+            tenant_token = set_current_tenant_id(current)
+            try:
+                async with maker() as session:
+                    scope = (presentation_export_principal(session, presentation_id=presentation_id,
+                                                           allow_local_development=bridge)
+                             if kind == "generation" else bound_export_operation_principal(
+                                 session, operation_id=operation_id, allow_local_development=bridge))
+                    if allowed:
+                        with pytest.raises(RuntimeError, match="scoped body failure"):
+                            async with scope:
+                                assert get_current_tenant_id() == admitted
+                                assert get_current_owner_id() == OWNER
+                                raise RuntimeError("scoped body failure")
+                    else:
+                        with pytest.raises(NonRetryableWorkspaceOperationError, match=PRINCIPAL_CONFLICT_CODE):
+                            async with scope:
+                                raise AssertionError("unbound export principal was allowed")
+                assert get_current_tenant_id() == current
+            finally:
+                reset_current_tenant_id(tenant_token)
+                reset_current_owner_id(owner_token)
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("issuer,method,admin,peer,host,environment,other_owner,allowed", [
+    ("presenton-loopback-development", "jwt", True, "127.0.0.1", "localhost", "development", False, True),
+    ("presenton-local-session", "jwt", True, "127.0.0.1", "localhost", "development", False, False),
+    ("presenton-loopback-development", "oidc", True, "127.0.0.1", "localhost", "development", False, False),
+    ("presenton-loopback-development", "jwt", False, "127.0.0.1", "localhost", "development", False, False),
+    ("presenton-loopback-development", "jwt", True, "203.0.113.1", "localhost", "development", False, False),
+    ("presenton-loopback-development", "jwt", True, "127.0.0.1", "example.com", "development", False, False),
+    ("presenton-loopback-development", "jwt", True, "127.0.0.1", "localhost", "production", False, False),
+    ("presenton-loopback-development", "jwt", True, "127.0.0.1", "localhost", "development", True, False),
+])
+def test_local_export_bridge_uses_selected_authentication_not_forwarded_headers(
+    monkeypatch, issuer, method, admin, peer, host, environment, other_owner, allowed,
+):
+    from api.v1.auth.principal import PrincipalEnvelope
+    from services.workspace_operation_principal import local_development_export_bridge
+
+    monkeypatch.setattr("api.v1.auth.principal.get_environment_name", lambda *_: environment)
+    request = Request({"type": "http", "scheme": "http", "method": "GET", "path": "/api/v1/ppt/workspace",
+                       "client": (peer, 1234), "server": (host, 8000),
+                       "headers": [(b"host", host.encode()), (b"x-forwarded-for", b"127.0.0.1")]})
+    request.state.auth_principal = PrincipalEnvelope(
+        user_id=OWNER, username="test", is_admin=admin, method=method, tenant_id="default",
+        trace_id="test", subject=str(OWNER), issuer=issuer, audience="presenton-api")
+    token = set_current_owner_id(uuid.uuid4() if other_owner else OWNER)
+    try:
+        assert local_development_export_bridge(request) is allowed
+    finally:
+        reset_current_owner_id(token)
+
+
+@pytest.mark.parametrize("command_type", [
+    "export.pptx", "presentation.slides.reorder", "version.restore",
+    "presentation.edit", "slide.edit", "slide.delete",
+])
+@pytest.mark.parametrize("current,captured,admitted,bridge,other_owner,mode,allowed", [
+    ("local-development", "local-development", "local-development", "default", False, "svg", True),
+    ("default", "local-development", "local-development", "loopback", False, "svg", True),
+    ("default", None, "local-development", "loopback", False, "svg", True),
+    ("default", "local-development", "local-development", "default", False, "svg", False),
+    ("default", "local-development", "local-development", "session", False, "svg", False),
+    ("default", "local-development", "local-development", "remote", False, "svg", False),
+    ("default", "local-development", "local-development", "production", False, "svg", False),
+    ("default", "local-development", "local-development", "nonadmin", False, "svg", False),
+    ("default", "tenant-b", "tenant-b", "loopback", False, "svg", False),
+    ("default", "local-development", "tenant-b", "loopback", False, "svg", False),
+    ("default", "local-development", "local-development", "loopback", True, "svg", False),
+    ("tenant-a", "local-development", "local-development", "loopback", False, "svg", False),
+    ("tenant-a", "tenant-a", None, "default", False, "svg", True),
+    ("tenant-a", None, None, "default", False, "svg", True),
+    ("default", "local-development", "local-development", "default", False, "authored", False),
+    ("default", "local-development", "local-development", "loopback", False, "authored", True),
+    ("default", "local-development", "local-development", "default", False, "theme-svg", False),
+    ("default", "local-development", "local-development", "loopback", False, "theme-svg", True),
+])
+def test_ui_export_admission_and_worker_payload_share_generation_tenant(
+    tmp_path, monkeypatch, command_type, current, captured, admitted, bridge, other_owner, mode, allowed,
+):
+    from types import SimpleNamespace
+    from sqlalchemy import select
+    from api.v1.auth.principal import PrincipalEnvelope
+    from models.sql.presentation import PresentationModel
+    from models.sql.user import User
+    from models.workspace import WorkspaceOperationActionRequest
+    from services.workspace_operation_principal import local_development_export_bridge
+    from services.workspace_service import WorkspaceServiceError, apply_workspace_action
+
+    monkeypatch.setattr("utils.env_settings.public_service.get_public_process_identity_settings",
+                        lambda: SimpleNamespace(service_tenant_id="default"))
+    monkeypatch.setattr("api.v1.auth.principal.get_environment_name",
+                        lambda *_: "production" if bridge == "production" else "development")
+    seen = []
+
+    async def admit(_session, **kwargs):
+        seen.append((kwargs["principal"].tenant_id, get_current_tenant_id(), kwargs["operation_id"]))
+        return object()
+
+    monkeypatch.setattr("services.workspace_service.admit_public_operation", admit)
+
+    async def scenario():
+        engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'ui-export-principal.db'}")
+        tables = list(dict.fromkeys([*runner_test.RUNNER_TABLES, *service_test.WORKSPACE_SERVICE_TABLES]))
+        async with engine.begin() as connection:
+            await connection.run_sync(lambda sync: SQLModel.metadata.create_all(sync, tables=tables))
+        maker = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            presentation_id, (source_id, failed_id) = await runner_test._seed_operations(
+                maker, count=2, owner_id=OWNER, kind="presentation.generate")
+            active_owner = uuid.uuid4() if other_owner else OWNER
+            failed_payload = {PRINCIPAL_TENANT_PAYLOAD_KEY: (
+                captured if mode == "authored" and captured else "default"), "command_type": command_type}
+            failed_payload["context"] = {"tenant_id": failed_payload[PRINCIPAL_TENANT_PAYLOAD_KEY]}
+            async with maker() as session, session.begin():
+                if other_owner:
+                    session.add(User(id=active_owner, username=f"other-{active_owner}", hashed_password="test-only"))
+                await session.execute(update(PresentationModel).where(PresentationModel.id == presentation_id).values(
+                    mode=None if mode == "theme-svg" else mode,
+                    theme={"mode": "svg" if mode == "theme-svg" else mode}))
+                await session.execute(update(WorkspaceOperation).where(WorkspaceOperation.id == source_id).values(
+                    state="succeeded", request_payload={PRINCIPAL_TENANT_PAYLOAD_KEY: captured} if captured else {}))
+                await session.execute(update(WorkspaceOperation).where(WorkspaceOperation.id == failed_id).values(
+                    kind=command_type, state="failed", request_payload=failed_payload, expected_revision=0,
+                    error_detail={"retryable": True}))
+                if admitted is not None:
+                    session.add(PublicOperationAdmission(
+                        operation_id=source_id, policy_version="public-test/v1", owner_id=OWNER,
+                        tenant_id=admitted, trace_id_hash="3" * 64, operation_kind="generation", state="succeeded",
+                        resource_units=5, policy_digest="4" * 64,
+                        deadline_at=get_current_utc_datetime() + timedelta(minutes=5),
+                        planned_request_limit=0, retry_request_limit=0,
+                        estimated_cost_limit_microunits=0, actual_cost_limit_microunits=0))
+            owner_token = set_current_owner_id(active_owner)
+            tenant_token = set_current_tenant_id(current)
+            try:
+                bridge_kwargs = {}
+                if bridge != "default":
+                    request = Request({"type": "http", "scheme": "http", "method": "POST", "path": "/api/v1/ppt/workspace",
+                                       "client": ("203.0.113.1" if bridge == "remote" else "127.0.0.1", 1234),
+                                       "server": ("localhost", 8000),
+                                       "headers": [(b"host", b"localhost"), (b"x-forwarded-for", b"127.0.0.1")]})
+                    request.state.auth_principal = PrincipalEnvelope(
+                        user_id=OWNER, username="test", is_admin=bridge != "nonadmin", method="jwt", tenant_id=current,
+                        trace_id="test", subject=str(OWNER), audience="presenton-api",
+                        issuer="presenton-local-session" if bridge == "session" else "presenton-loopback-development")
+                    bridge_kwargs["allow_local_development"] = local_development_export_bridge(request)
+                protected = command_type == "export.pptx" or mode != "authored"
+                permitted = allowed if protected else not other_owner
+                expected_tenant = (admitted or captured or current) if protected else current
+                command = WorkspaceCommandRequest(command="Update", command_type=command_type,
+                                                   idempotency_key="ui-source-tenant", expected_revision=0,
+                                                   context={"tenant_id": current})
+                action = WorkspaceOperationActionRequest(action="retry", idempotency_key="ui-source-retry",
+                                                          expected_operation_version=0, expected_revision=0)
+                if permitted:
+                    async with maker() as session:
+                        operation, duplicate = await create_workspace_command(
+                            session, presentation_id=presentation_id, request=command, **bridge_kwargs)
+                    assert not duplicate
+                    assert operation.request_payload[PRINCIPAL_TENANT_PAYLOAD_KEY] == expected_tenant
+                    assert operation.request_payload["context"]["tenant_id"] == expected_tenant
+                    async with maker() as session:
+                        _, retried, replayed = await apply_workspace_action(
+                            session, operation_id=failed_id, request=action, **bridge_kwargs)
+                    assert not replayed and retried.retry_of_operation_id == failed_id
+                    assert retried.request_payload[PRINCIPAL_TENANT_PAYLOAD_KEY] == (
+                        expected_tenant if protected else failed_payload[PRINCIPAL_TENANT_PAYLOAD_KEY])
+                    assert retried.request_payload["context"]["tenant_id"] == (
+                        expected_tenant if protected else failed_payload["context"]["tenant_id"])
+                    expected_seen = ([(expected_tenant, expected_tenant, operation.id),
+                                      (expected_tenant, expected_tenant, retried.id)]
+                                     if command_type == "export.pptx" else [])
+                    assert seen == expected_seen
+                else:
+                    for invoke in (
+                        lambda session: create_workspace_command(
+                            session, presentation_id=presentation_id, request=command, **bridge_kwargs),
+                        lambda session: apply_workspace_action(
+                            session, operation_id=failed_id, request=action, **bridge_kwargs),
+                    ):
+                        async with maker() as session:
+                            with pytest.raises(WorkspaceServiceError) as denied:
+                                await invoke(session)
+                            assert denied.value.status_code in {403, 404}
+                    assert not seen
+                assert get_current_tenant_id() == current
+                assert get_current_owner_id() == active_owner
+                async with maker() as session:
+                    original = await session.scalar(select(WorkspaceOperation).where(
+                        WorkspaceOperation.id == failed_id).execution_options(skip_owner_scope=True))
+                    assert original.request_payload == failed_payload
+            finally:
+                reset_current_tenant_id(tenant_token)
+                reset_current_owner_id(owner_token)
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
 
 
 async def _set_payload(maker, operation_id: uuid.UUID, payload: dict) -> None:

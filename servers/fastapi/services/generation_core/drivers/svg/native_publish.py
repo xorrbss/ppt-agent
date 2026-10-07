@@ -23,18 +23,54 @@ shape (``native_object_*`` from ``NativeObject.build``).
 from __future__ import annotations
 
 import re
+import math
 from xml.etree import ElementTree as ET
 
 from services.generation_core.drivers.svg.native_chart import CHART_ELEMENTS, chart_object
 from services.generation_core.drivers.svg.native_declarations import bound_declarations
+from services.generation_core.drivers.svg.fixed_axis_migration import (
+    migrate_verified_generated_fixed_axis,
+)
 from services.generation_core.drivers.svg.native_geometry import (
-    NativeRejection, collect_primitives, find_group,
+    NativeRejection, collect_primitives, find_group, paint,
 )
 from services.generation_core.drivers.svg.native_paint import background_layers
 from services.generation_core.drivers.svg.native_table import TABLE_ELEMENTS, table_object
 from services.generation_core.native_objects import NativeObject, NativeObjects, NativeObjectsError
 
 _EMU_PER_POINT = 12700
+
+
+def _sibling_canvas_texts(root: ET.Element, native_group_ids: frozenset[str]) -> tuple:
+    """Collect visible sibling text, excluding all bound native groups."""
+    canvas = ET.fromstring(ET.tostring(root))
+    def visible(node: ET.Element) -> bool:
+        if any(key in node.attrib for key in ("style", "class", "clip-path", "mask", "filter")):
+            return False
+        if (node.get("display") not in (None, "inline")
+                or node.get("visibility") not in (None, "visible")):
+            return False
+        if paint(node.get("fill", "black")) is None:
+            return False
+        try:
+            return all(math.isfinite(float(node.get(key, "1"))) and float(node.get(key, "1")) > 0
+                       for key in ("opacity", "fill-opacity"))
+        except ValueError:
+            return False
+    def prune(parent: ET.Element) -> None:
+        for child in list(parent):
+            if (child.get("id") in native_group_ids
+                    or child.get("data-native-chart") is not None
+                    or child.get("data-native-table") is not None
+                    or child.tag.rsplit("}", 1)[-1] not in {"g", "text", "tspan"}
+                    or not visible(child)):
+                parent.remove(child)
+            else:
+                prune(child)
+    if not visible(canvas):
+        return ()
+    prune(canvas)
+    return collect_primitives(canvas, (0, 0), {}, CHART_ELEMENTS).texts
 
 
 def canvas_point_per_px(canvas_metadata: object) -> float:
@@ -46,7 +82,10 @@ def canvas_point_per_px(canvas_metadata: object) -> float:
 
 
 def _entry(root: ET.Element, declaration: dict, *, width: float, height: float,
-           pt_per_px: float) -> NativeObject:
+           pt_per_px: float, svg: str,
+           source_preservation: dict | None, native_group_ids: frozenset[str],
+           native_group_ids_complete: bool, binding_digest: str,
+           verified_fixed_axis_migration: dict | None = None) -> NativeObject:
     kind, group_id = declaration.get("kind"), declaration.get("id")
     if kind not in ("table", "chart") or not isinstance(group_id, str):
         raise NativeRejection("native_declaration_invalid")
@@ -59,11 +98,29 @@ def _entry(root: ET.Element, declaration: dict, *, width: float, height: float,
     raw = declaration.get("raw")
     if not isinstance(raw, dict):
         raise NativeRejection("native_declaration_json_invalid")
+    if kind == "chart" and verified_fixed_axis_migration is not None:
+        raw = migrate_verified_generated_fixed_axis(
+            raw, svg, verified_fixed_axis_migration, source_preservation,
+        )
     if kind == "table":
         anchor, payload = table_object(raw, prims, pt_per_px=pt_per_px,
                                        layers=background_layers(root, group))
     else:
-        anchor, payload, appearance = chart_object(raw, prims)
+        canvas_texts = ()
+        if raw.get("axisContract") == "native-chart-fixed-value-axis/v1":
+            if (source_preservation is not None
+                    and (not isinstance(source_preservation, dict)
+                         or source_preservation.get("source_native_charts") != [])):
+                raise NativeRejection("native_chart_fixed_axis_source_conflict")
+            if not native_group_ids_complete:
+                raise NativeRejection("native_chart_sibling_ownership_unproven")
+            canvas_texts = _sibling_canvas_texts(root, native_group_ids)
+        anchor, payload, appearance = chart_object(raw, prims, canvas_texts=canvas_texts)
+        if payload.get("retainedAxisTitle"):
+            payload["retainedAxisTitle"].update(
+                svgDigest=binding_digest,
+                nativeGroupIds=sorted(native_group_ids),
+            )
     entry = NativeObject.build(id=group_id, kind=kind, anchor=anchor, payload=payload,
                                svgAppearance=appearance if kind == "chart" else None)
     if not entry.anchor.within(width, height):
@@ -78,7 +135,9 @@ def _canvas_size(root: ET.Element) -> tuple[float, float]:
     return float(root.get("width", 0)), float(root.get("height", 0))
 
 
-def page_native_objects(payload: dict, *, pt_per_px: float) -> tuple[dict | None, dict | None]:
+def page_native_objects(payload: dict, *, pt_per_px: float,
+                        verified_fixed_axis_migrations: dict[str, dict] | None = None
+                        ) -> tuple[dict | None, dict | None]:
     """``(nativeObjects wire or None, receipt summary or None)`` for one page payload."""
     svg = payload.get("svg_content")
     record, current = bound_declarations(payload, svg)
@@ -93,10 +152,23 @@ def page_native_objects(payload: dict, *, pt_per_px: float) -> tuple[dict | None
         return None, {"declared": declared, "accepted": 0, "dropped": dropped}
     root = ET.fromstring(svg)
     width, height = _canvas_size(root)
+    bound_items = [*objects, *dropped]
+    native_group_ids = frozenset(
+        item["id"] for item in bound_items
+        if isinstance(item.get("id"), str) and item["id"]
+    )
+    native_group_ids_complete = len(native_group_ids) == len(bound_items)
     accepted: list[NativeObject] = []
     for item in objects:
         try:
-            entry = _entry(root, item, width=width, height=height, pt_per_px=pt_per_px)
+            verified = ((verified_fixed_axis_migrations or {}).get(item.get("id"))
+                        if item.get("kind") == "chart" else None)
+            entry = _entry(root, item, width=width, height=height, pt_per_px=pt_per_px,
+                           svg=svg, source_preservation=payload.get("source_preservation"),
+                           native_group_ids=native_group_ids,
+                           native_group_ids_complete=native_group_ids_complete,
+                           binding_digest=record["svgDigest"],
+                           verified_fixed_axis_migration=verified)
         except (NativeRejection, NativeObjectsError) as error:
             dropped.append({"id": item.get("id"), "kind": item.get("kind"), "reason": str(error)})
             continue

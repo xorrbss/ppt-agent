@@ -13,6 +13,26 @@ from utils.hashing import sha256_hex
 MAX_EXPORT_BUNDLE_BYTES = 8 * 1024 * 1024
 
 
+def _furniture_metadata_valid(value: object) -> bool:
+    """Admit bounded proof metadata; the SVG worker verifies its exact bytes."""
+    if not isinstance(value, Mapping) or set(value) != {
+        "version", "svg_digest", "canvas", "digest", "element_ids", "images",
+    }:
+        return False
+    canvas, ids, images = value["canvas"], value["element_ids"], value["images"]
+    return (
+        value["version"] == "svg-system-furniture/v1"
+        and all(isinstance(value[key], str) and 1 <= len(value[key]) <= 128 for key in ("svg_digest", "digest"))
+        and isinstance(canvas, Mapping) and set(canvas) == {"width", "height"}
+        and all(type(canvas[key]) is int and canvas[key] > 0 for key in canvas)
+        and isinstance(ids, list) and 1 <= len(ids) <= 10000
+        and all(isinstance(node_id, str) and node_id.startswith("svg-system-") for node_id in ids)
+        and len(set(ids)) == len(ids)
+        and isinstance(images, Mapping) and len(images) <= 4096
+        and all(key in ids and isinstance(digest, str) and 1 <= len(digest) <= 128 for key, digest in images.items())
+    )
+
+
 def _input_bundle_references(job: IsolatedWorkerJob, path: Path) -> tuple[ArtifactRef, ...]:
     if job.role == "render" and job.input_artifact.kind != "export-bundle":
         return ()
@@ -36,6 +56,7 @@ def _input_bundle_references(job: IsolatedWorkerJob, path: Path) -> tuple[Artifa
         "public-svg-export-bundle/v1",
         "public-svg-export-bundle/v2",
         "public-svg-export-bundle/v3",
+        "public-svg-export-bundle/v4",
     }
     expected_kind = "slide-svg" if svg_export else ("slide-html" if job.role == "render" else "slide-png")
     expected_media_type = "image/svg+xml" if svg_export else ("text/html" if job.role == "render" else "image/png")
@@ -45,6 +66,7 @@ def _input_bundle_references(job: IsolatedWorkerJob, path: Path) -> tuple[Artifa
     if svg_export and value.get("schemaVersion") in {
         "public-svg-export-bundle/v2",
         "public-svg-export-bundle/v3",
+        "public-svg-export-bundle/v4",
     }:
         asset_refs = []
         for entry in value["slides"]:
@@ -62,8 +84,11 @@ def _input_bundle_references(job: IsolatedWorkerJob, path: Path) -> tuple[Artifa
             }
             if (
                 not isinstance(assets, Mapping)
-                or set(assets) not in (required_asset_keys, required_asset_keys | {"fullPagePreserve"})
+                or not required_asset_keys <= set(assets)
+                or set(assets) - required_asset_keys - {"fullPagePreserve", "systemFurniture", "sourceLineageRef", "sourceLineageDigest"}
+                or ("sourceLineageRef" in assets) != ("sourceLineageDigest" in assets)
                 or ("fullPagePreserve" in assets and type(assets["fullPagePreserve"]) is not bool)
+                or ("systemFurniture" in assets and not _furniture_metadata_valid(assets["systemFurniture"]))
                 or not isinstance(assets["derivatives"], Mapping)
                 or len(assets["derivatives"]) > 4096
             ):
@@ -73,6 +98,15 @@ def _input_bundle_references(job: IsolatedWorkerJob, path: Path) -> tuple[Artifa
                 ("placementManifestRef", "placement-manifest"),
             ):
                 asset_refs.extend(_staged_bundle_slides(job, [assets[name]], kind=kind, media_type="application/json"))
+            if "sourceLineageRef" in assets:
+                lineage_refs = _staged_bundle_slides(
+                    job, [assets["sourceLineageRef"]], kind="svg-export-source-lineage", media_type="application/json"
+                )
+                if not isinstance(assets["sourceLineageDigest"], str) or assets["sourceLineageDigest"] not in {
+                    lineage_refs[0].sha256, "sha256:" + lineage_refs[0].sha256,
+                }:
+                    raise TrustedWorkerWireError("trusted_worker_svg_asset_bundle_invalid")
+                asset_refs.extend(lineage_refs)
             for wire in assets["derivatives"].values():
                 if not isinstance(wire, Mapping) or wire.get("mediaType") not in {"image/png", "image/jpeg"}:
                     raise TrustedWorkerWireError("trusted_worker_svg_derivative_type_invalid")
@@ -123,6 +157,49 @@ def _staged_bundle_slides(
             raise TrustedWorkerWireError("trusted_worker_bundle_slide_binding_mismatch")
         result.append(reference)
     return tuple(result)
+
+
+def _final_pptx_render_references(job, *, output_reference, stdout):
+    """Validate Office render children before the authority publishes any output."""
+    if job.role != "export" or output_reference.kind != "presentation-pptx":
+        return ()
+    from utils.hashing import canonical_json_sha256
+    result = json.loads(stdout)
+    proof = (result.get("executionEvidence", {}).get("structuralReadback", {})
+             .get("finalPptxRender", {}))
+    if not isinstance(proof, Mapping) or proof.get("status") != "measured":
+        return ()
+    unsigned = {key: value for key, value in proof.items() if key != "evidenceDigest"}
+    pages = proof.get("pages")
+    if (proof.get("schemaVersion") != "svg-final-pptx-office-render/v1"
+            or proof.get("artifactDigest") != "sha256:" + output_reference.sha256
+            or proof.get("artifactDigestAfter") != proof.get("artifactDigest")
+            or proof.get("hashInvariant") is not True or proof.get("openReadOnly") is not True
+            or proof.get("openWithWindow") is not False
+            or proof.get("operationId") != str(job.operation_id)
+            or proof.get("ownerId") != str(job.input_artifact.owner_id)
+            or proof.get("tenantId") != job.input_artifact.tenant_id
+            or proof.get("evidenceDigest") != "sha256:" + canonical_json_sha256(unsigned)
+            or not isinstance(pages, list) or not 1 <= len(pages) <= 100
+            or proof.get("pageCount") != len(pages)):
+        raise TrustedWorkerWireError("trusted_worker_final_pptx_render_binding_invalid")
+    references = []
+    for index, page in enumerate(pages):
+        if not isinstance(page, Mapping) or type(page.get("index")) is not int or page["index"] != index:
+            raise TrustedWorkerWireError("trusted_worker_final_pptx_render_page_invalid")
+        try:
+            reference = ArtifactRef.from_wire(page["artifactRef"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise TrustedWorkerWireError("trusted_worker_final_pptx_render_page_invalid") from error
+        if (reference.owner_id != job.input_artifact.owner_id
+                or reference.tenant_id != job.input_artifact.tenant_id
+                or reference.created_by_operation_id != job.operation_id
+                or reference.kind != "slide-png" or reference.media_type != "image/png"
+                or reference.sha256 != page.get("pngSha256")
+                or reference.retention_class != "ephemeral"):
+            raise TrustedWorkerWireError("trusted_worker_final_pptx_render_page_binding_invalid")
+        references.append(reference)
+    return tuple(references)
 
 
 def _render_output_bundle_references(

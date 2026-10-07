@@ -11,6 +11,7 @@ sentinel by continuing its own loop.
 from __future__ import annotations
 
 import json
+import math
 
 from services.authored_checkpoint_errors import AuthoredStageError
 from services.svg_presentation_checkpoint import _required_numeric_claims
@@ -20,10 +21,31 @@ RETRY = object()
 
 
 async def attempt_render(*, ctx, request, presentation_id, index, content, payload, svg, ordinal,
-                         job, checkpoint, async_session_maker, write_png):
+                         job, checkpoint, async_session_maker, write_png,
+                         recovery_readability_policy=None):
     from services.svg_contract import finalize_svg
     from services.svg_renderer import render_svg_with_metrics
     from services.svg_source_layout import verify_source_receipt
+    from services.svg_authoring_profile import read_authoring_profile
+    from services.generation_core.drivers.svg.timeline_ink_guard import (
+        apply_timeline_ink_quality, source_timeline_rows,
+    )
+
+    profile = read_authoring_profile(ctx.snapshot)
+    readability_policy = recovery_readability_policy or ctx.snapshot.get("readability_policy")
+    if payload.get("cached_author_render"):
+        from services.document_canvas_generation import validate_svg_readability_policy
+        if (recovery_readability_policy is None
+                or validate_svg_readability_policy(recovery_readability_policy).get("version")
+                != "svg-physical-readability/v2"
+                or recovery_readability_policy.get("quality_target_font_pt", 0) < 9.5):
+            raise AuthoredStageError(slide_index=index, stage="render",
+                                     code="svg_cached_author_render_quality_policy_invalid",
+                                     retryable=False)
+    if readability_policy is not None:
+        payload["readability_policy"] = readability_policy
+    cache_remeasurement = payload.get("cache_only_remeasurement")
+    timeline_source = content if profile and profile["version"] in (5, 6, 7, 8) and source_timeline_rows(content) else None
 
     try:
         if payload["attempts"][-1]["receipt"].get("validation_error"):
@@ -43,8 +65,27 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
                                  height=ctx.canvas.height_px, style_snapshot=ctx.snapshot,
                                  source_manifest=finalize_source_manifest,
                                  allow_image_only=allow_image_only)
+        if cache_remeasurement and sha256_hex(final.encode()) != cache_remeasurement.get("source_sha256"):
+            raise AuthoredStageError(slide_index=index, stage="render", code="svg_cache_remeasurement_changed", retryable=False)
         if ctx.source_reflow:
             verify_source_receipt(final, payload.get("source_preservation"), ctx.source_document, index)
+        from services.svg_master_furniture import master_furniture_receipt
+        furniture_contract = ({slot: {"required": item["policy"]["required"], "allowOmit": item["policy"]["allowOmit"]}
+                               for slot, item in ctx.manifests[index].items()} if ctx.canonical_assets else None)
+        preserved_raster = bool(ctx.raster_reconstruction and index + 1 in ctx.raster_pin.full_page_preserve_pages)
+        if ctx.raster_reconstruction and not preserved_raster:
+            import xml.etree.ElementTree as ET
+            furniture_contract = {node.get("href"): {"required": True, "allowOmit": False}
+                                  for node in ET.fromstring(final).iter()
+                                  if node.tag.rsplit("}", 1)[-1] == "image" and node.get("href", "").startswith("source-slot-")}
+        if ctx.source_reflow:
+            furniture_contract = {binding["slot_id"]: {"required": True} for binding in payload["source_preservation"]["bindings"]
+                                  if binding.get("kind") == "image"}
+        furniture_receipt = (None if preserved_raster else master_furniture_receipt(final, ctx.snapshot,
+            index=index, n=ctx.count, width=ctx.canvas.width_px, height=ctx.canvas.height_px,
+            source_manifest=furniture_contract))
+        if furniture_receipt is not None:
+            payload["system_furniture"] = furniture_receipt
         materialized = None
         if ctx.raster_reconstruction:
             from services.artifact_store import configured_public_artifact_service
@@ -67,6 +108,7 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
                     canonical_svg=final,
                     width=ctx.canvas.width_px,
                     height=ctx.canvas.height_px,
+                    **({"system_furniture": furniture_receipt} if furniture_receipt is not None else {}),
                 )
                 await asset_session.commit()
             payload["svgAssetManifest"] = raster_assets.screen_envelope
@@ -87,7 +129,8 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
                         context=ctx.asset_context, revision=ctx.asset_revision, manifest=ctx.source_manifest,
                         source_pointer=ctx.source_pointer, svg=final, page_index=index,
                         candidates=ctx.planned[index], width=ctx.canvas.width_px, height=ctx.canvas.height_px,
-                        saved_envelope=payload.get("svgAssetManifest"))
+                        saved_envelope=payload.get("svgAssetManifest"),
+                        **({"system_furniture": furniture_receipt} if furniture_receipt is not None else {}))
                     await asset_session.commit()
                 payload["svgAssetManifest"] = envelope
                 await checkpoint(job, index, payload=payload)
@@ -114,17 +157,25 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
                     source_font_kwargs["minimum_font_px"] = source_restyle_font_floor(
                         request.instructions, getattr(request, "_document_canvas", None)
                     )
+                    if readability_policy is not None:
+                        from services.document_canvas_generation import svg_quality_font_floor
+
+                        source_font_kwargs["minimum_font_px"] = max(source_font_kwargs["minimum_font_px"],
+                            svg_quality_font_floor(readability_policy))
                 rendered = await render_svg_with_metrics(final, width=ctx.canvas.width_px,
                                                      height=ctx.canvas.height_px,
                                                      # Source instructions are resolved into the hard
                                                      # minimum above, including the 7px lower bound.
                                                      instructions=None if ctx.source_reflow else request.instructions,
                                                      **source_font_kwargs,
+                                                     **({"readability_policy": readability_policy} if readability_policy is not None else {}),
                                                      required_text=required_text,
                                                      **({"allow_image_only": True}
                                                         if raster_authorized_measurement else {}),
                                                      **({"source_font_profile": font_profile}
                                                         if font_profile else {}),
+                                                     **({"system_furniture": furniture_receipt} if furniture_receipt is not None else {}),
+                                                      **({"timeline_ink_probe": True} if timeline_source or profile and profile["version"] in (7, 8) else {}),
                                                      materialized_svg=materialized, **ctx.physical_kwargs)
         except ValueError as error:
             if ctx.canonical_assets:
@@ -142,24 +193,128 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
             }
         payload["svg_content"] = None
         await checkpoint(job, index, payload=payload)
-        if ordinal == 1 or ctx.raster_reconstruction:
+        if ordinal == 1 or (ctx.raster_reconstruction and payload.get("rasterCompositionMode") != "free-svg"):
             code = str(error).split(":", 1)[0]
-            source_plan_failure = ctx.source_reflow and code.startswith("svg_source_")
+            source_plan_failure = (code == "svg_source_classification_missing"
+                                   or ctx.source_reflow and code.startswith("svg_source_"))
             raise AuthoredStageError(slide_index=index,
                 stage="author" if source_plan_failure else "render",
                 code=code if source_plan_failure else "svg_validation_failed",
                 retryable=False) from error
         return RETRY
+    if cache_remeasurement and (
+            sha256_hex(rendered.png) != cache_remeasurement.get("png_sha256")
+            or str(rendered.quality.get("source_digest", "")).removeprefix("sha256:") != cache_remeasurement.get("source_sha256")
+            or str(rendered.quality.get("png_digest", "")).removeprefix("sha256:") != cache_remeasurement.get("png_sha256")
+            or rendered.quality.get("measurement_complete") is not True):
+        raise AuthoredStageError(slide_index=index, stage="render", code="svg_cache_remeasurement_changed", retryable=False)
+    if not (ctx.source_reflow or ctx.raster_reconstruction):
+        from services.authored_canvas import request_canvas_metadata
+        from services.generation_core.drivers.svg.native_publish import canvas_point_per_px
+        from services.generation_core.drivers.svg.native_requirements import apply_requested_native_quality
+        source_pages = getattr(request, "slides_markdown", None)
+        native_source = source_pages[index] if source_pages and len(source_pages) == ctx.count else content
+        apply_requested_native_quality(rendered.quality, payload, final, native_source,
+            pt_per_px=canvas_point_per_px(request_canvas_metadata(request)))
+    elif ctx.source_reflow and payload.get("source_preservation", {}).get("whole_page_native_groups"):
+        from services.authored_canvas import request_canvas_metadata
+        from services.generation_core.drivers.svg.native_publish import canvas_point_per_px, page_native_objects
+
+        from services.svg_cached_author_render_recovery import approved_sidecars
+        objects, summary = page_native_objects(
+            payload, pt_per_px=canvas_point_per_px(request_canvas_metadata(request)),
+            verified_fixed_axis_migrations=approved_sidecars(payload))
+        required = {item["element_id"] for item in payload["source_preservation"]["whole_page_native_groups"]}
+        actual = {item["id"] for item in (objects or {}).get("objects", [])}
+        if not required.issubset(actual):
+            rendered.quality["passed"] = False
+            rendered.quality.setdefault("failures", []).append({"kind": "source_native_chart_unprojectable",
+                "missing_count": len(required - actual), "native_summary": summary})
+    if timeline_source:
+        apply_timeline_ink_quality(rendered.quality, final, timeline_source,
+                                  **({"allow_unlabeled": True} if profile["version"] in (6, 7, 8) else {}))
+    if profile and profile["version"] in (7, 8):
+        from services.generation_core.drivers.svg.source_classification_association import (
+            apply_source_classification_association,
+        )
+        apply_source_classification_association(rendered.quality, final, content)
+        from services.generation_core.drivers.svg.source_paint_occlusion import apply_source_paint_occlusion
+        apply_source_paint_occlusion(rendered.quality, final)
     payload["attempts"][-1]["quality"] = rendered.quality
     if payload.get("fontAdvisories"):
         rendered.quality.setdefault("advisories", []).extend(payload["fontAdvisories"])
-    if ordinal == 0:
+    if ordinal == 0 and (readability_policy is None or "initial_quality" not in payload):
         payload["initial_quality"] = {
             **rendered.quality, "stage": "first_response",
         }
     payload["last_valid_svg"] = final
+    if readability_policy is not None and rendered.quality.get("passed") is False and not payload.get("local_readability_repair"):
+        from services.document_canvas_generation import minimal_svg_readability_repair
+        from services.generation_core.drivers.svg.native_declarations import PAYLOAD_KEY
+
+        native = payload.get(PAYLOAD_KEY) or {}
+        if native.get("objects"):
+            local = {"status": "page_recomposition_required", "reason": "native_data_requires_recomposition",
+                     "provider_call_authorized": False}
+        else:
+            local = minimal_svg_readability_repair(final, rendered.quality)
+        candidate = local.pop("svg", None)
+        payload["local_readability_repair"] = local
+        if candidate is not None:
+            if ctx.source_reflow:
+                from services.svg_contract import source_digest
+
+                # Existing exact text/image/native-table verification remains
+                # authoritative after a local typography-only candidate.
+                payload["source_preservation"] = {**payload["source_preservation"],
+                    "svg_digest": source_digest(candidate)}
+            payload["svg_content"] = candidate
+            await checkpoint(job, index, payload=payload)
+            result = await attempt_render(ctx=ctx, request=request, presentation_id=presentation_id,
+                index=index, content=content, payload=payload, svg=candidate, ordinal=ordinal,
+                job=job, checkpoint=checkpoint, async_session_maker=async_session_maker, write_png=write_png)
+            local["remeasured"] = True
+            local["remeasurement_passed"] = bool(payload.get("quality", {}).get("passed")) if result is not RETRY else False
+            await checkpoint(job, index, payload=payload)
+            return result
     if rendered.quality.get("passed") is False and ordinal == 0 and not payload.get("repair_unavailable"):
-        hint = json.dumps(rendered.quality, ensure_ascii=False)[:3000]
+        timeline_collisions = rendered.quality.get("timeline_caption_ink", {}).get("collisions")
+        classification = rendered.quality.get("source_classification_association", {})
+        paint_occlusion = rendered.quality.get("source_paint_occlusion", {})
+        if paint_occlusion.get("status") in {"occluded", "unproven"}:
+            from services.generation_core.drivers.svg.source_paint_occlusion import source_paint_repair_hint
+
+            hint = source_paint_repair_hint(rendered.quality, content)
+        elif classification.get("status") == "unproven":
+            from services.generation_core.drivers.svg.source_classification_association import source_classifications
+
+            geometry_failures = [failure for failure in rendered.quality.get("failures", [])
+                                 if failure.get("kind") != "source_classification_unproven"]
+            floor = rendered.quality.get("body_font_floor_px", 0)
+            floor = floor if isinstance(floor, (int, float)) and math.isfinite(floor) and floor > 0 else 0
+            hint = json.dumps({"kind": "svg_source_classification_missing",
+                "instruction": "Preserve every original entity, relation and sentence. Preserve each required class label literally, including every word, and every member; do not shorten or alias labels. Make membership visible with complete lists, dedicated enclosures, or a solid-color legend matching each member. Keep all required text visible without clipping or shrinking.",
+                "classes": classification.get("unproven_labels", []),
+                "required_classes": source_classifications(content),
+                "geometry": {"failure_counts": {kind: sum(failure.get("kind") == kind for failure in geometry_failures)
+                    for kind in sorted({str(failure.get("kind")) for failure in geometry_failures})},
+                    "minimum_body_px": floor, "safe_body_px": math.ceil(floor),
+                    "sample_qids": list(dict.fromkeys(failure["qid"] for failure in geometry_failures
+                        if failure.get("qid")))[:4]},
+                "geometry_instruction": "Resolve all geometry failures; keep body text at least safe_body_px."}, ensure_ascii=False, separators=(",", ":"))
+        elif timeline_collisions:
+            hint = json.dumps({"kind": "timeline_caption_bar_ink_overlap",
+                "instruction": "Preserve every source date, duration and dependency. Wrap the task caption in its explanation area and adjust the explanation and bars together until all caption glyphs are clear of the bars. Do not hide, clip or shrink required text.",
+                "witnesses": timeline_collisions[:3]}, ensure_ascii=False)[:3000]
+        elif readability_policy is not None:
+            hint = json.dumps({"kind": "svg_readability_repair", "failures": rendered.quality.get("failures", []),
+                "physical_page": {key: readability_policy[key] for key in ("purpose", "width_emu", "height_emu", "minimum_font_pt")},
+                **({"quality_target_font_pt": readability_policy["quality_target_font_pt"]}
+                   if "quality_target_font_pt" in readability_policy else {}),
+                "local_repair": payload.get("local_readability_repair"),
+                "instruction": "Repair only the smallest failing region, preserving every word, number, unit, relation and page count. Enlarge space or reflow related objects together. Never shrink fonts, hide or delete content. If local repair cannot fit, freely recompose this same page on the exact canvas; if still impossible, fail with physical_space_insufficient."}, ensure_ascii=False)[:3000]
+        else:
+            hint = json.dumps(rendered.quality, ensure_ascii=False)[:3000]
         payload["repair_hint"] = hint
         payload["svg_content"] = None
         await checkpoint(job, index, payload=payload)
@@ -170,20 +325,52 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
     if ctx.canonical_assets:
         import xml.etree.ElementTree as ET
         used = {node.get("href") for node in ET.fromstring(final).iter()
-                if node.tag.rsplit("}", 1)[-1] == "image"}
+                if node.tag.rsplit("}", 1)[-1] == "image" and node.get("href") in ctx.manifests[index]}
         omitted = sorted(set(ctx.manifests[index]) - used)
         rendered.quality["sourceImages"] = {
             "offered": sorted(ctx.manifests[index]), "used": sorted(used), "omitted": omitted,
         }
-        if omitted:
+        required_omitted = []
+        for slot in omitted:
+            item = ctx.manifests[index][slot]
+            policy = item.get("policy") if isinstance(item, dict) else None
+            # Only an explicit optional policy permits omission. Missing or
+            # malformed flags retain the source-preservation failure boundary.
+            if (not isinstance(policy, dict) or policy.get("required") is not False
+                    or policy.get("allowOmit") is not True):
+                required_omitted.append(slot)
+        if required_omitted:
             rendered.quality["passed"] = False
             rendered.quality.setdefault("failures", []).append({
-                "kind": "source_image_omitted", "slotIds": omitted,
+                "kind": "source_image_omitted", "slotIds": required_omitted,
             })
     from services.generation_core.drivers.svg.embed_assets import apply_vector_icon_quality
     apply_vector_icon_quality(rendered.quality, payload)
     payload.update(svg_content=final, source_digest=sha256_hex(final.encode()),
                    quality=rendered.quality, **write_png(rendered.png))
+    if cache_remeasurement:
+        from services.svg_classification_remeasurement import remeasurement_digest
+        cache_remeasurement.update(status="completed" if rendered.quality.get("passed") is True else "failed",
+            remeasured_metrics_digest=remeasurement_digest(rendered.quality.get("browser_metrics")))
+    if rendered.quality.get("source_paint_occlusion", {}).get("status") in {"occluded", "unproven"}:
+        status = rendered.quality["source_paint_occlusion"]["status"]
+        await checkpoint(job, index, payload=payload)
+        raise AuthoredStageError(slide_index=index, stage="render",
+            code="svg_source_paint_occluded" if status == "occluded" else "svg_source_paint_unproven", retryable=False)
+    if rendered.quality.get("source_classification_association", {}).get("status") == "unproven":
+        await checkpoint(job, index, payload=payload)
+        raise AuthoredStageError(slide_index=index, stage="author",
+            code="svg_source_classification_missing", retryable=False)
+    if timeline_source and rendered.quality.get("timeline_caption_ink", {}).get("collisions"):
+        # The first failure already took the bounded repair path above. Persist
+        # the second measured witness, then reject this candidate page.
+        await checkpoint(job, index, payload=payload)
+        raise AuthoredStageError(slide_index=index, stage="render",
+            code="svg_timeline_caption_ink_failed", retryable=False)
+    if profile and profile["version"] in (7, 8) and rendered.quality.get("passed") is not True:
+        await checkpoint(job, index, payload=payload)
+        raise AuthoredStageError(slide_index=index, stage="render",
+            code="svg_source_quality_failed", retryable=False)
     if ctx.source_reflow:
         if rendered.quality.get("passed") is not True:
             raise AuthoredStageError(slide_index=index, stage="render",

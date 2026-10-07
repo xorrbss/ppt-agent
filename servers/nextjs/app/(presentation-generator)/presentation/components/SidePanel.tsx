@@ -1,8 +1,8 @@
 "use client";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Plus } from "lucide-react";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch, useSelector, useStore } from "react-redux";
 import { v4 as uuidv4 } from "uuid";
 import { RootState } from "@/store/store";
 import {
@@ -63,6 +63,12 @@ const SidePanel = ({
   const t = useTranslations("slideNavigation");
   const pathname = usePathname();
   const thumbnailScrollRef = useRef<HTMLDivElement | null>(null);
+  const store = useStore<RootState>();
+  const orderSaveBusy = useRef(false);
+  const orderOperation = useRef<{
+    presentationId: string; operationId: string; slide_ids: string[]; expected_revision: number;
+  } | null>(null);
+  const [orderSaveState, setOrderSaveState] = useState<"idle" | "saving" | "unconfirmed">("idle");
 
   const { presentationData, isStreaming, flaggedSlides } = useSelector(
     (state: RootState) => state.presentationGeneration,
@@ -76,7 +82,7 @@ const SidePanel = ({
     ? presentationData.slides.length - 1
     : 0;
   const isTemplateFree = isTemplateFreePresentation(presentationData);
-  const canManageSlides = mutationsEnabled;
+  const canManageSlides = mutationsEnabled && orderSaveState === "idle";
   const previewScale = displayMode === "drawer" ? 0.18 : undefined;
 
   useEffect(() => {
@@ -103,7 +109,7 @@ const SidePanel = ({
 
 
   const handleAddSlideClick = () => {
-    if (!mutationsEnabled || !presentationData?.slides?.length || isStreaming) {
+    if (!canManageSlides || orderSaveBusy.current || !presentationData?.slides?.length || isStreaming) {
       return;
     }
 
@@ -156,57 +162,65 @@ const SidePanel = ({
     }),
   );
 
-  // Fire-and-forget: the Redux state update above already reflects the new
-  // order for the UI. This persists it through the narrow slide-order
-  // endpoint (see presentation-generation.ts). A stale expected_revision
-  // (someone else changed the deck since this view last loaded it) comes
-  // back as 409; reload so the editor picks up the current state rather
-  // than silently diverging from what the server actually saved.
+  const completeOrderSave = (result: { revision: number; presentation_id: string }) => {
+    // Read at completion: text edits and other UI updates made while waiting
+    // must not be replaced with the snapshot from before the reorder.
+    const latest = store.getState().presentationGeneration.presentationData;
+    if (latest?.id === result.presentation_id) {
+      dispatch(setPresentationData({
+        ...latest, revision: Math.max(latest.revision ?? 0, result.revision),
+      }));
+    }
+    orderOperation.current = null;
+    orderSaveBusy.current = false;
+    setOrderSaveState("idle");
+  };
+
+  const handleOrderSaveError = (error: unknown) => {
+    orderSaveBusy.current = false;
+    if (orderOperation.current && !(error instanceof ApiError && [409, 422].includes(error.status))) {
+      setOrderSaveState("unconfirmed");
+      return;
+    }
+    orderOperation.current = null;
+    setOrderSaveState("idle");
+    if (error instanceof ApiError && error.status === 409) {
+      notify.error(t("reorderSaveFailed"), t("reorderConflictReload"));
+      window.location.reload();
+      return;
+    }
+    notify.error(t("reorderSaveFailed"), t("reorderNetworkRetry"));
+  };
+
+  const confirmPendingOrder = () => {
+    const operation = orderOperation.current;
+    if (!operation || orderSaveBusy.current) return;
+    orderSaveBusy.current = true;
+    setOrderSaveState("saving");
+    void PresentationGenerationApi.waitForSlideOrderOperation(
+      operation.presentationId, operation, operation.operationId,
+    ).then(completeOrderSave).catch(handleOrderSaveError);
+  };
+
   const persistSlideOrder = (updatedSlides: Slide[], expectedRevision?: number) => {
-    if (typeof expectedRevision !== "number") return;
-    // Captured here (rather than read again inside the .then below) so
-    // TypeScript's null-narrowing holds across the async boundary: the
-    // component-scope `presentationData` is still `PresentationData | null`
-    // at the point the promise resolves.
-    const basePresentationData = presentationData;
-    if (!basePresentationData) return;
+    if (typeof expectedRevision !== "number" || orderSaveBusy.current || orderOperation.current) return;
     const slideIds: string[] = [];
     for (const slide of updatedSlides) {
       if (slide.id === null) return;
       slideIds.push(slide.id);
     }
+    orderSaveBusy.current = true;
+    setOrderSaveState("saving");
     void PresentationGenerationApi.reorderSlides(presentationId, {
       slide_ids: slideIds,
       expected_revision: expectedRevision,
-    })
-      .then((result) => {
-        dispatch(
-          setPresentationData({
-            ...basePresentationData,
-            slides: updatedSlides,
-            revision: result.revision,
-          }),
-        );
-      })
-      .catch((error) => {
-        if (error instanceof ApiError && error.status === 409) {
-          notify.error(
-            t("reorderSaveFailed"),
-            t("reorderConflictReload"),
-          );
-          window.location.reload();
-          return;
-        }
-        console.error("Failed to save slide order", error);
-        notify.error(
-          t("reorderSaveFailed"),
-          t("reorderNetworkRetry"),
-        );
-      });
+    }, { onPending: (operationId) => {
+      orderOperation.current = { presentationId, operationId, slide_ids: slideIds, expected_revision: expectedRevision };
+    } }).then(completeOrderSave).catch(handleOrderSaveError);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
-    if (!canManageSlides) return;
+    if (!canManageSlides || orderSaveBusy.current || orderOperation.current) return;
     const { active, over } = event;
 
     if (!active || !over || !presentationData?.slides) return;
@@ -279,6 +293,16 @@ const SidePanel = ({
         `}
       >
         <div className="w-full h-full hide-scrollbar overflow-hidden slide-theme flex flex-col">
+          {orderSaveState !== "idle" && (
+            <div role="status" className="text-[11px] py-2 text-center">
+              {orderSaveState === "saving" ? t("reorderSaving") : t("reorderUnconfirmed")}
+              {orderSaveState === "unconfirmed" && (
+                <button type="button" onClick={confirmPendingOrder} className="block mx-auto underline">
+                  {t("reorderCheckAgain")}
+                </button>
+              )}
+            </div>
+          )}
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -340,6 +364,7 @@ const SidePanel = ({
               type="button"
               data-testid="side-panel-add-slide"
               onClick={handleAddSlideClick}
+              disabled={!canManageSlides}
               className="py-4 gap-2 flex flex-col duration-300 items-center justify-center rounded-lg cursor-pointer mx-auto"
             >
               <Plus className="w-3.5 h-3.5" />

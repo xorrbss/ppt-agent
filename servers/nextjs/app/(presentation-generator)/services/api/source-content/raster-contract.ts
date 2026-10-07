@@ -17,7 +17,7 @@ export type RasterAnalysisWire = {
   revision: number;
   digest: string;
   source: { source_sha256: string; page_count: number; canvas_width_emu: number; canvas_height_emu: number };
-  target_canvas: { format: "A4"; orientation: "landscape" | "portrait"; width_units: number; height_units: number; emu_per_unit: 9000 };
+  target_canvas: { format: "A4" | "SVG"; document_canvas?: import("@/lib/document-canvas").DocumentCanvas; aspect_ratio?: import("../../../upload/type").PresentationConfig["aspectRatio"]; svg_canvas?: { width_mm: number | string; height_mm: number | string }; orientation: "landscape" | "portrait"; width_units: number; height_units: number; emu_per_unit: number };
   pages: Array<{
     page_number: number;
     render_mode: RasterPageMode;
@@ -99,7 +99,7 @@ export type RasterPageWire = {
 };
 
 export class RasterSourceApi {
-  static async start(request: { reference_snapshot_id: string; presentation_id: string; orientation: "landscape" | "portrait"; analysis_mode: RasterAnalysisMode; style_id: "screenshot-blue" }): Promise<RasterOperationResponse> {
+  static async start(request: { reference_snapshot_id: string; presentation_id: string; orientation?: "landscape" | "portrait"; aspect_ratio?: import("../../../upload/type").PresentationConfig["aspectRatio"]; svg_canvas?: { width_mm: number; height_mm: number }; analysis_mode: RasterAnalysisMode; style_id: string }): Promise<RasterOperationResponse> {
     return RasterSourceApi.request<RasterOperationResponse>(ROOT, "POST", request);
   }
 
@@ -233,7 +233,9 @@ export type RasterAnalysisReview = {
   pin: RasterAnalysisPin;
   status: "analyzing" | "awaiting_review" | "ready" | "approved" | "generating" | "complete";
   sourcePageCount: number;
-  targetCanvas: "a4-landscape" | "a4-portrait";
+  targetCanvas: "a4-landscape" | "a4-portrait" | "svg";
+  targetWidth?: number;
+  targetHeight?: number;
   pages: RasterReviewPageSummary[];
   canApprove: boolean;
   blockingIssueCount: number;
@@ -313,7 +315,9 @@ export function rasterReviewSummary(value: RasterOperationWire): RasterAnalysisR
     pin: rasterReviewPin(value),
     status,
     sourcePageCount: value.analysis.source.page_count,
-    targetCanvas: value.analysis.target_canvas.orientation === "portrait" ? "a4-portrait" : "a4-landscape",
+    targetWidth: value.analysis.target_canvas.width_units,
+    targetHeight: value.analysis.target_canvas.height_units,
+    targetCanvas: value.analysis.target_canvas.format === "SVG" ? "svg" : value.analysis.target_canvas.orientation === "portrait" ? "a4-portrait" : "a4-landscape",
     pages: value.analysis.pages.map((page, index) => {
       const count = pageBlocks[index];
       return {

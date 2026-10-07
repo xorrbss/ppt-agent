@@ -8,7 +8,7 @@ import React, {
 } from "react";
 
 import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
-import type { PresentationResponse } from "@/app/(presentation-generator)/services/api/dashboard";
+import type { DashboardPresentation } from "@/app/(presentation-generator)/services/api/dashboard";
 import { PresentationGrid } from "@/app/(presentation-generator)/(dashboard)/dashboard/components/PresentationGrid";
 import { PresentationGenerationApi } from "@/app/(presentation-generator)/services/api/presentation-generation";
 import Link from "next/link";
@@ -38,7 +38,7 @@ const DashboardPage: React.FC<{ publicV2CanaryEnabled?: boolean }> = ({
   const pathname = usePathname();
   const router = useRouter();
   const [presentations, setPresentations] = useState<
-    PresentationResponse[] | null
+    DashboardPresentation[] | null
   >(null);
   const [presentationTotal, setPresentationTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -80,6 +80,7 @@ const DashboardPage: React.FC<{ publicV2CanaryEnabled?: boolean }> = ({
           page,
           pageSize: PRESENTATIONS_PER_PAGE,
           sort: deckSortDirection,
+          view: "dashboard",
         },
         controller.signal,
       );

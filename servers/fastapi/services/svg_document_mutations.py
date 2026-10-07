@@ -5,11 +5,19 @@ from models.sql.slide import SlideModel
 from services.authored_canvas import presentation_canvas_contract
 from services.authored_presentation_artifacts import _save_slide_pngs
 from services.svg_contract import finalize_svg
-from services.svg_page_publication import set_svg_page
+from services.svg_page_publication import classify_svg_page_quality, set_svg_page
 from services.svg_renderer import render_svg_with_metrics
 
 
-def _preserve_source_pages(presentation, slides, canvas):
+class SourcePublicationBindingRejected(ValueError):
+    code = "svg_source_publication_binding_invalid"
+    retryable = False
+
+    def __init__(self):
+        super().__init__(self.code)
+
+
+def _preserve_source_pages(presentation, slides, canvas, *, source_manifest=None):
     """A preservation receipt forbids implicit numbering and page mutations."""
     marker = presentation.theme.get("svg", {}).get("sourcePreservation")
     receipts = [(slide.content or {}).get("svgReceipt", {}).get("source_preservation")
@@ -19,8 +27,11 @@ def _preserve_source_pages(presentation, slides, canvas):
     if (not isinstance(marker, dict)
             or marker.get("schemaVersion") != "svg-source-preservation/v1"
             or marker.get("pageCount") != len(slides)):
-        raise ValueError("svg_source_publication_binding_invalid")
+        raise SourcePublicationBindingRejected()
     from services.svg_contract import source_digest
+    if (source_manifest is not None
+            and getattr(source_manifest, "manifest_digest", None) != marker.get("manifestDigest")):
+        raise SourcePublicationBindingRejected()
 
     page_ids = set()
     for index, (slide, receipt) in enumerate(zip(slides, receipts, strict=True)):
@@ -35,14 +46,22 @@ def _preserve_source_pages(presentation, slides, canvas):
         }
         if (not slide.is_svg() or slide.index != index or not isinstance(receipt, dict)
                 or any(receipt.get(key) != value for key, value in expected.items())):
-            raise ValueError("svg_source_publication_binding_invalid")
+            raise SourcePublicationBindingRejected()
         page_id = receipt.get("source_page_id")
         checks = receipt.get("checks")
         if (not isinstance(page_id, str) or not page_id or page_id in page_ids
-                or not isinstance(checks, dict)
-                or any(checks.get(key) is not True for key in (
-                    "source_ids_exact", "text_exact", "table_structure_exact", "image_occurrences_exact"))):
-            raise ValueError("svg_source_publication_binding_invalid")
+                or (checks is not None and (not isinstance(checks, dict)
+                    or any(checks.get(key) is not True for key in (
+                        "source_ids_exact", "text_exact", "table_structure_exact", "image_occurrences_exact"))))
+                or (checks is None and source_manifest is None)):
+            raise SourcePublicationBindingRejected()
+        if source_manifest is not None:
+            from services.svg_source_layout import verify_source_receipt
+
+            try:
+                verify_source_receipt(slide.svg_content or "", receipt, source_manifest, index)
+            except (ValueError, TypeError, KeyError) as error:
+                raise SourcePublicationBindingRejected() from error
         page_ids.add(page_id)
     return True
 
@@ -112,7 +131,7 @@ async def read_svg_slide_assets(session, presentation, slide):
                                                 owner_id=owner, tenant_id=tenant)
     placement = await load_placement_manifest_pointer(session, service, pointer=metadata.get("screenPlacement"),
                                                       owner_id=owner, tenant_id=tenant)
-    if (source.presentation_id != presentation.id or placement.purpose != "screen"
+    if ((source.presentation_id != presentation.id and not await _verified_inherited_slide_source(session, presentation, source, metadata.get("sourceManifest"), owner, tenant)) or placement.purpose != "screen"
             or placement.slide_revision != metadata.get("slideRevision")
             or placement.canonical_svg_digest != source_digest(slide.svg_content)):
         raise ValueError("svg_asset_revision_binding_invalid")
@@ -143,7 +162,7 @@ async def read_svg_slide_assets(session, presentation, slide):
 
 
 async def refresh_svg_page_numbers(session, presentation, *, operation_id=None, attempt_token=None,
-                                   expected_revision=None):
+                                   expected_revision=None, source_manifest=None):
     if not presentation.is_svg():
         return
     await session.flush()
@@ -152,7 +171,8 @@ async def refresh_svg_page_numbers(session, presentation, *, operation_id=None, 
     if not slides:
         raise ValueError("svg_document_requires_slide")
     canvas = presentation_canvas_contract(presentation.theme)
-    if _preserve_source_pages(presentation, slides, canvas):
+    if _preserve_source_pages(presentation, slides, canvas,
+                              source_manifest=source_manifest):
         return
     snapshot = presentation.theme.get("svg", {}).get("styleSnapshot")
     if not snapshot:
@@ -201,7 +221,9 @@ async def refresh_svg_page_numbers(session, presentation, *, operation_id=None, 
                 materialized_svg=render_source if render_source != final else None,
                 instructions=presentation.instructions)
             image = _save_slide_pngs(presentation.id, [capture.png], "svg-numbering")[0]
-            set_svg_page(slide, svg_content=final, content=content, quality=capture.quality)
+            quality = classify_svg_page_quality(svg_content=final, quality=capture.quality,
+                index=index, png_path=image, receipt=content.get("svgReceipt") or {})
+            set_svg_page(slide, svg_content=final, content=content, quality=quality, png=capture.png)
             slide.properties = {**(slide.properties or {}), "image": image}
         elif content != slide.content:
             set_svg_page(slide, svg_content=final, content=content)
@@ -302,3 +324,54 @@ async def rebind_svg_assets(session, presentation, slide, svg, assets, *, page_i
     return dict(schemaVersion="svg-slide-assets/v1", canonicalVersion="svg-static/v2",
         sourceManifest=pointers[0], screenPlacement=pointers[1], sourcePageIndex=page_index,
         slideRevision=revision), materialized
+
+
+async def _verified_inherited_slide_source(session, presentation, source, pointer, owner, tenant):
+    """Only a fenced durable recovery job may read its exact immutable ancestor source."""
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+    from sqlalchemy import select
+    from models.sql.presentation_generation_job import PresentationGenerationJob
+    from models.sql.workspace import WorkspaceOperation
+    from services.svg_generation_assets import _verify_inherited_source_manifest
+    from services.svg_timeout_repurchase import TimeoutRepurchaseRejected
+    job = await session.scalar(select(PresentationGenerationJob).where(
+        PresentationGenerationJob.presentation_id == presentation.id,
+    ).order_by(PresentationGenerationJob.created_at.desc()).limit(1))
+    if job is None or not job.workspace_operation_id or job.request_payload.get("strategy") != "svg" or not job.request_payload.get("_svg_recovery_lineage"):
+        return False
+    operation = await session.get(WorkspaceOperation, job.workspace_operation_id)
+    if (operation is None or operation.presentation_id != presentation.id or operation.owner_id != presentation.owner_id
+        or str(operation.owner_id) != str(owner) or operation.fencing_token < 1
+        or operation.attempt_number != job.attempt_number
+        or job.state not in {"running", "publishing", "published", "completed", "succeeded"}):
+        return False
+    if job.state == "published":
+        if job.attempt_token is not None or job.lease_expires_at is not None or not job.published_at or not job.last_started_at or not operation.started_at:
+            return False
+        published_at = job.published_at.replace(tzinfo=timezone.utc) if job.published_at.tzinfo is None else job.published_at
+        job_started_at = job.last_started_at.replace(tzinfo=timezone.utc) if job.last_started_at.tzinfo is None else job.last_started_at
+        operation_started_at = operation.started_at.replace(tzinfo=timezone.utc) if operation.started_at.tzinfo is None else operation.started_at
+        if published_at < job_started_at or published_at < operation_started_at:
+            return False
+    elif not job.attempt_token or operation.attempt_token != job.attempt_token:
+        return False
+    if operation.state == "running":
+        lease = operation.lease_expires_at
+        if lease is None or not operation.attempt_token:
+            return False
+        if lease.tzinfo is None:
+            lease = lease.replace(tzinfo=timezone.utc)
+        if type(operation.expected_revision) is not int or lease <= datetime.now(timezone.utc) or presentation.revision not in {operation.expected_revision, operation.expected_revision + 1}:
+            return False
+    elif operation.state in {"completed", "succeeded"}:
+        if operation.result_revision is None or presentation.revision < operation.result_revision or job.state not in {"published", "completed", "succeeded"}:
+            return False
+    else:
+        return False
+    try:
+        await _verify_inherited_source_manifest(session, source, pointer, context=SimpleNamespace(owner_id=owner, tenant_id=tenant),
+                                                presentation_id=presentation.id, operation_id=operation.id)
+    except (ValueError, TimeoutRepurchaseRejected):
+        return False
+    return True

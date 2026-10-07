@@ -8,6 +8,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from models.sql.public_artifact import ArtifactRef
+from models.document_canvas import DocumentCanvasMetadata
+from models.svg_canvas import SvgCanvasInput
 
 
 class RasterContract(BaseModel):
@@ -30,16 +32,34 @@ class RasterBox(RasterContract):
 
 
 class RasterTargetCanvas(RasterContract):
-    format: Literal["A4"] = "A4"
+    format: Literal["A4", "SVG"] = "A4"
     orientation: Literal["portrait", "landscape"] = "portrait"
     width_units: int = 840
     height_units: int = 1188
-    emu_per_unit: Literal[9000] = 9000
+    emu_per_unit: int | float = Field(default=9000, gt=0)
+    document_canvas: DocumentCanvasMetadata | None = Field(default=None, exclude_if=lambda value: value is None)
+    aspect_ratio: Literal["16:9", "4:3", "9:16", "9:13", "1:1", "21:9"] | None = Field(default=None, exclude_if=lambda value: value is None)
+    svg_canvas: SvgCanvasInput | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @model_validator(mode="after")
     def require_a4(self):
+        if self.format == "SVG":
+            from types import SimpleNamespace
+            from services.svg_canvas import selected_svg_canvas
+
+            if (self.aspect_ratio is None) == (self.svg_canvas is None):
+                raise ValueError("raster_target_selectors_invalid")
+            expected_canvas = selected_svg_canvas(SimpleNamespace(
+                aspect_ratio=self.aspect_ratio, svg_canvas=self.svg_canvas, page_size=None))
+            if (self.document_canvas != expected_canvas
+                    or (self.width_units, self.height_units) != (expected_canvas.width_px, expected_canvas.height_px)
+                    or self.orientation != expected_canvas.orientation
+                    or self.emu_per_unit != expected_canvas.emu_per_unit):
+                raise ValueError("raster_target_canvas_mismatch")
+            return self
         expected = (840, 1188) if self.orientation == "portrait" else (1188, 840)
-        if (self.width_units, self.height_units) != expected:
+        if ((self.width_units, self.height_units) != expected or self.emu_per_unit != 9000
+                or self.document_canvas is not None or self.aspect_ratio is not None or self.svg_canvas is not None):
             raise ValueError("raster_target_canvas_must_be_a4")
         return self
 

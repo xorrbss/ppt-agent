@@ -25,6 +25,33 @@ from services.authored_checkpoint_errors import AuthoredStageError
 from services.svg_presentation_legacy_assets import _legacy_source_image_manifest
 
 
+def _restore_pinned_source_image_plan(manifest, candidates, planned):
+    """Replay frozen page offers from the currently admitted image bindings."""
+    from utils.authored_image_slots import source_slot_id_for_asset
+
+    available = {
+        source_slot_id_for_asset(candidate.asset_id): candidate
+        for candidate in candidates
+    }
+    available.update({slot: candidate for page in planned for slot, candidate in page.items()})
+    pages = {page.page_index: page.slot_ids for page in manifest.offered_pages}
+    if set(pages) != set(range(len(planned))):
+        raise ValueError("svg_asset_source_plan_conflict")
+    try:
+        restored = [
+            {slot: available[slot] for slot in pages[index]}
+            for index in range(len(planned))
+        ]
+    except KeyError:
+        raise ValueError("svg_asset_source_plan_conflict") from None
+    bound = {slot: candidate for page in restored for slot, candidate in page.items()}
+    if {slot.slot_id: slot.source_sha256 for slot in manifest.slots} != {
+        slot: candidate.digest.removeprefix("sha256:") for slot, candidate in bound.items()
+    }:
+        raise ValueError("svg_asset_source_plan_conflict")
+    return restored
+
+
 @dataclass
 class GenerationContext:
     source_reflow: bool
@@ -51,6 +78,40 @@ class GenerationContext:
     render_semaphore: "asyncio.Semaphore"
     runtime_profile: object = None
     asset_offer: object = None
+    visual_intents: list | None = None
+    recovery_cached_first: list[int] | None = None
+
+
+async def _pin_owned_svg_style(request, job, *, pin_style, session_maker, owned_job):
+    from services.svg_authoring_profile import validate_profile_agreement
+
+    if job is None:
+        return pin_style(request)
+    async with session_maker() as checkpoint_session:
+        current = await owned_job(checkpoint_session, job.id, job.attempt_token,
+                                  fencing_token=getattr(job, "_workspace_fencing_token", None))
+        admitted = current.request_payload or {}
+        for key, value in (
+            ("_internal_svg_source_binding", getattr(request, "_svg_source_binding", None)),
+            ("_internal_svg_style_snapshot", getattr(request, "_svg_style_snapshot", None)),
+        ):
+            if key in admitted and admitted[key] != value:
+                raise RuntimeError("svg_initial_checkpoint_input_conflict")
+        frozen = current.svg_style_snapshot
+        if frozen is not None:
+            validate_profile_agreement(request, frozen)
+            staged = getattr(request, "_svg_style_snapshot", None)
+            if staged is not None and staged != frozen:
+                raise RuntimeError("svg_style_snapshot_conflict")
+            request._svg_style_snapshot = frozen
+        snapshot = pin_style(request)
+        validate_profile_agreement(request, snapshot)
+        if frozen is not None and frozen != snapshot:
+            raise RuntimeError("svg_style_snapshot_conflict")
+        current.svg_style_snapshot = snapshot
+        checkpoint_session.add(current)
+        await checkpoint_session.commit()
+        return snapshot
 
 
 async def _prepare_generation(request, presentation_id, outline, session, job) -> GenerationContext:
@@ -69,7 +130,15 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
     _checkpoint = _facade._checkpoint
 
     require_svg_creation_admission(request)
+    if job is not None and getattr(job, "presentation_id", presentation_id) != presentation_id:
+        raise RuntimeError("svg_initial_checkpoint_input_conflict")
     source_reflow = bool(getattr(request, "_source_content_svg_reflow", False))
+    source_preservation_required = source_reflow or bool(request._source_content_authored_reflow) or bool(re.search(
+        r"(?:이미지|사진|도표|그림).{0,40}(?:모두|전부|필수|반드시|보존|빠짐없이)"
+        r"|(?:모든|전체|필수|반드시).{0,20}(?:이미지|사진|도표|그림)"
+        r"|(?:preserve|retain|keep|must include).{0,40}(?:image|picture|chart)"
+        r"|(?:all|every)\s+(?:source\s+)?(?:image|picture|chart)",
+        request.instructions or "", re.IGNORECASE))
     raster_reconstruction = bool(getattr(request, "_raster_reconstruction", False))
     raster_analysis = getattr(request, "_raster_analysis", None)
     raster_pin = getattr(request, "_raster_approval_pin", None)
@@ -87,11 +156,6 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
             raise ValueError("raster_generation_durable_job_required")
     source_document = getattr(request, "_source_content_manifest", None)
     source_units = None
-    if source_reflow:
-        from services.svg_source_layout import source_pages
-        source_units = source_pages(source_document)
-        if len(source_units) != len(outline.slides):
-            raise ValueError("svg_source_page_count_mismatch")
     from services.generation_core.admission.strategy import resolve_generation_strategy
 
     canonical_assets = not raster_reconstruction and slot_writer_enabled(
@@ -100,25 +164,27 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
     canvas = request_canvas_contract(request)
     physical_kwargs = ({"physical_canvas": request._document_canvas}
                        if getattr(request, "_document_canvas", None) is not None else {})
-    snapshot = pin_svg_style(request)
+    snapshot = await _pin_owned_svg_style(
+        request, job, pin_style=pin_svg_style, session_maker=async_session_maker, owned_job=owned_job,
+    )
+    if source_reflow:
+        from services.svg_source_layout import source_pages
+        source_units = source_pages(source_document, chart_contract=snapshot.get("source_chart_contract"))
+        if len(source_units) != len(outline.slides):
+            raise ValueError("svg_source_page_count_mismatch")
+    from services.svg_authoring_profile import validate_profile_agreement
+
+    validate_profile_agreement(request, snapshot)
     source_font_profile = None
     if source_reflow:
         from utils.svg_template_fonts import source_font_profile as resolved_font_profile
         source_font_profile = resolved_font_profile(snapshot)
-    if job is not None:
-        async with async_session_maker() as checkpoint_session:
-            current = await owned_job(checkpoint_session, job.id, job.attempt_token,
-                                      fencing_token=getattr(job, "_workspace_fencing_token", None))
-            if current.svg_style_snapshot is not None and current.svg_style_snapshot != snapshot:
-                raise RuntimeError("svg_style_snapshot_conflict")
-            current.svg_style_snapshot = snapshot
-            checkpoint_session.add(current)
-            await checkpoint_session.commit()
     count = len(outline.slides)
     if raster_reconstruction and raster_analysis.source.page_count != count:
         raise ValueError("raster_generation_page_count_mismatch")
     if not count:
         raise ValueError("svg_outline_empty")
+    existing = None
     if job is not None:
         # Existing inline checkpoints must finish with their original contract.
         # A takeover must never mix inline pages and canonical asset pages.
@@ -126,18 +192,28 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
             existing = await checkpoint_session.scalar(select(AuthoredSlideCheckpoint.svg_checkpoint).where(
                 AuthoredSlideCheckpoint.job_id == job.id,
                 AuthoredSlideCheckpoint.svg_checkpoint.is_not(None)).limit(1))
-        if existing:
+        if existing and existing.get("trusted_stage_execution") and getattr(request, "_svg_stage_plan", None) is None:
+            raise AuthoredStageError(slide_index=None, stage="author",
+                                    code="svg_stage_plan_missing", retryable=False)
+        if existing and any(key in existing for key in (
+            "schema_version", "source_manifest_ref", "svg_content", "input_digest", "attempts"
+        )):
             canonical_assets = not raster_reconstruction and (
                 existing.get("schema_version") == "svg-slide-checkpoint/v2"
                 or bool(existing.get("source_manifest_ref")))
     if source_reflow and not canonical_assets:
         raise ValueError("svg_source_durable_assets_required")
+    source_image_registration = []
     candidates = await collect_source_image_candidates(
         request, resolve_authored_style(request.authored_style), presentation_id, session,
-        include_document_images=True)
+        include_document_images=True, registration_report=source_image_registration)
+    use_content_group_assignment = not source_preservation_required and not existing
+    source_image_assignment = []
     planned = plan_slide_source_images(
         [item.content for item in outline.slides], candidates,
         source_slide_locked=source_reflow,
+        content_group_assignment=use_content_group_assignment,
+        assignment_report=source_image_assignment,
     )
     if candidates and planned is None:
         raise RuntimeError("svg_source_image_plan_failed")
@@ -160,10 +236,19 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
     if job is not None:
         await initialize_checkpoints(job_id=job.id, attempt_token=job.attempt_token, roles=roles,
                                      fencing_token=getattr(job, "_workspace_fencing_token", None))
+    from services.svg_visual_intent_checkpoint import freeze_visual_intents, intent_contents
+
+    visual_intents = await freeze_visual_intents(
+        contents=intent_contents(outline, source_units=source_units,
+                                raster_analysis=raster_analysis, raster_pin=raster_pin),
+        roles=roles, job=job, historical_payload=existing, checkpoint=_checkpoint,
+            trusted_plan=getattr(request, "_svg_stage_plan", None),
+    )
     asset_offer = None
     if not source_reflow and not raster_reconstruction:
         asset_offer = await _offer_assets(request, presentation_id, outline, roles, job, planned,
-                                          manifests, canonical_assets=canonical_assets)
+            manifests, canonical_assets=canonical_assets, style_snapshot=snapshot,
+            **({"source_assets_present": bool(candidates)} if use_content_group_assignment else {}))
     source_manifest = source_pointer = asset_context = asset_revision = None
     service = None
     if canonical_assets:
@@ -171,22 +256,43 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
         from services.svg_generation_assets import publication_context, prepare_source_manifest
         service = configured_public_artifact_service()
         seed = await _checkpoint(job, 0) or {}
+        if use_content_group_assignment:
+            seed["source_image_assignment"] = {
+                "version": "source-image-assignment/v1", "groups": source_image_assignment,
+                "registration": [
+                    {
+                        **{key: item[key] for key in (
+                            "code", "status", "coverage", "digest", "asset_count", "occurrence_count",
+                            "block_index",
+                        ) if key in item},
+                        **({"diagnostics": [{"code": value["code"]}
+                            for value in item["diagnostics"]
+                            if isinstance(value, dict) and isinstance(value.get("code"), str)]}
+                           if isinstance(item.get("diagnostics"), list) else {}),
+                    }
+                    for item in source_image_registration if isinstance(item, dict)
+                ],
+            }
         if source_reflow:
             if seed.get("source_font_profile", source_font_profile) != source_font_profile:
                 raise ValueError("svg_source_font_binding_mismatch")
             seed["source_font_profile"] = source_font_profile
         async with async_session_maker() as asset_session:
             asset_context, asset_revision = await publication_context(asset_session, job)
+            if seed.get("source_manifest_ref") is not None:
+                from services.svg_asset_persistence import load_source_manifest_pointer
+
+                pinned_manifest = await load_source_manifest_pointer(
+                    asset_session, service, pointer=seed["source_manifest_ref"],
+                    owner_id=asset_context.owner_id, tenant_id=asset_context.tenant_id)
+                planned = _restore_pinned_source_image_plan(pinned_manifest, candidates, planned)
             source_manifest, source_pointer = await prepare_source_manifest(asset_session, service,
                 context=asset_context, revision=asset_revision, presentation_id=presentation_id,
                 planned=planned, saved_pointer=seed.get("source_manifest_ref"),
-                source_preservation_required=source_reflow or bool(request._source_content_authored_reflow)
-                    or bool(re.search(
-                        r"(?:이미지|사진|도표|그림).{0,40}(?:모두|전부|필수|반드시|보존|빠짐없이)"
-                        r"|(?:모든|전체|필수|반드시).{0,20}(?:이미지|사진|도표|그림)"
-                        r"|(?:preserve|retain|keep|must include).{0,40}(?:image|picture|chart)"
-                        r"|(?:all|every)\s+(?:source\s+)?(?:image|picture|chart)",
-                        request.instructions or "", re.IGNORECASE)))
+                source_preservation_required=source_preservation_required,
+                inherited_operation_id=(job.workspace_operation_id if job is not None
+                        and (getattr(job, "request_payload", None) or {}).get("_svg_recovery_lineage") else None),
+                )
             await asset_session.commit()
         seed["source_manifest_ref"] = source_pointer
         await _checkpoint(job, 0, payload=seed)
@@ -197,6 +303,9 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
     from services.generation_core.runtime.profile import resolve_svg_runtime_profile
     runtime_profile = resolve_svg_runtime_profile(source_reflow=source_reflow,
                                                   raster_reconstruction=raster_reconstruction)
+    from services.svg_timeout_repurchase import sample_completion_runtime_profile
+    runtime_profile, recovery_cached_first = await sample_completion_runtime_profile(
+        session, job, runtime_profile)
     semaphore = asyncio.Semaphore(runtime_profile.author_concurrency)
     render_semaphore = asyncio.Semaphore(runtime_profile.render_concurrency)
     return GenerationContext(
@@ -208,12 +317,14 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
         source_pointer=source_pointer, asset_context=asset_context, asset_revision=asset_revision,
         service=service, semaphore=semaphore, render_semaphore=render_semaphore,
         runtime_profile=runtime_profile,
+        recovery_cached_first=recovery_cached_first,
         asset_offer=asset_offer,
+        visual_intents=visual_intents,
     )
 
 
 async def _offer_assets(request, presentation_id, outline, roles, job, planned, manifests, *,
-                        canonical_assets):
+                        canonical_assets, style_snapshot=None, source_assets_present=None):
     """Add the deck's planned illustrations/icons to every page's image offer.
 
     Raster slots join ``planned`` (and the inline manifests on the
@@ -225,10 +336,14 @@ async def _offer_assets(request, presentation_id, outline, roles, job, planned, 
         SvgAssetOffer, legacy_manifest, project_offer, resolve_offer,
     )
     from services.generation_core.runtime.profile import resolve_svg_runtime_profile
+    from services.generation_core.drivers.svg.collect import stage_runtime_profile
 
     offer = await resolve_offer(request, outline, roles, job,
-                                profile=resolve_svg_runtime_profile(source_reflow=False),
-                                checkpoint=_facade._checkpoint, durable=canonical_assets)
+                                profile=stage_runtime_profile(request, resolve_svg_runtime_profile(source_reflow=False)),
+                                checkpoint=_facade._checkpoint, durable=canonical_assets,
+                                style_snapshot=style_snapshot,
+                                has_source_assets=(any(planned) if source_assets_present is None
+                                                   else source_assets_present))
     if not offer.slots:
         return SvgAssetOffer(raster=[{} for _ in planned], vector=[{} for _ in planned],
                              slots=[{} for _ in planned], receipt=dict(offer.receipt))

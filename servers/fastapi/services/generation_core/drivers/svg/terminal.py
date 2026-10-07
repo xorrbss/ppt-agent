@@ -62,6 +62,14 @@ async def rescue_terminal_page(*, ctx, request, index, content, payload, error, 
     policy = terminal_policy_of(ctx)
     if policy is TerminalPolicy.FAIL or not is_exhausted_page(error, index):
         return None
+    if policy is TerminalPolicy.FALLBACK:
+        from services.svg_authoring_profile import read_authoring_profile
+
+        profile = read_authoring_profile(getattr(ctx, "snapshot", {}) or {})
+        if profile and profile["version"] in (6, 7, 8):
+            # This candidate's source completeness is mandatory. The generic
+            # outline placeholder truncates it and cannot rescue the page.
+            return None
     if policy is TerminalPolicy.FLAG_ONLY:
         return await _flag_only(ctx=ctx, index=index, payload=payload, error=error, job=job,
                                 checkpoint=checkpoint)

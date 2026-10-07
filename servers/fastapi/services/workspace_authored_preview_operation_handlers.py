@@ -5,6 +5,9 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Mapping, Sequence
 from typing import Any
+import uuid
+
+from sqlalchemy import select
 
 from constants.user_messages import UserMessageKey, UserMessageLike, message_fields, user_message
 from models.authored_batch_remake import AuthoredBatchRemakePreviewRequest
@@ -101,7 +104,98 @@ async def _ensure_task(
             )
             session.add(task)
             await session.commit()
+        elif task.owner_id != owner_id:
+            raise NonRetryableWorkspaceOperationError(
+                "workspace_operation_principal_conflict"
+            )
         return task
+
+
+async def _svg_preview_binding(context):
+    """Read the exact owned preview admission and its existing accounting job."""
+    from models.sql.presentation import PresentationModel
+    from models.sql.presentation_generation_job import PresentationGenerationJob
+    from models.sql.public_admission import PublicOperationAdmission
+    from models.sql.slide import SlideModel
+    from services.workspace_operation_principal import PRINCIPAL_TENANT_PAYLOAD_KEY
+    from utils.owner_context import get_current_owner_id, get_current_tenant_id
+
+    claim = context.claim
+    index = _context(claim.request_payload).get("slide_index")
+    async with async_session_maker() as session:
+        presentation = await session.scalar(select(PresentationModel).where(
+            PresentationModel.id == claim.presentation_id,
+            PresentationModel.owner_id == claim.owner_id,
+        ))
+        slide = await session.scalar(select(SlideModel).where(
+            SlideModel.presentation == claim.presentation_id, SlideModel.index == index,
+            SlideModel.owner_id == claim.owner_id,
+        ))
+        if presentation is None or slide is None:
+            raise NonRetryableWorkspaceOperationError("workspace_operation_principal_conflict")
+        if not slide.is_svg():
+            return None
+        remeasure = _context(claim.request_payload).get("mode", "author") != "author"
+        if remeasure:
+            from services.svg_contract import source_digest
+            if (int(presentation.revision) != claim.expected_revision
+                    or _context(claim.request_payload).get("source_digest") != source_digest(slide.svg_content)):
+                raise NonRetryableWorkspaceOperationError("svg_page_remake_source_changed")
+        admission = await session.scalar(select(PublicOperationAdmission).where(
+            PublicOperationAdmission.operation_id == claim.operation_id,
+            PublicOperationAdmission.owner_id == claim.owner_id,
+            PublicOperationAdmission.operation_kind == "generation",
+        ))
+        tenant = claim.request_payload.get(PRINCIPAL_TENANT_PAYLOAD_KEY)
+        if (claim.owner_id is None or get_current_owner_id() != claim.owner_id
+                or not tenant or get_current_tenant_id() != tenant
+                or admission is None or admission.tenant_id != tenant
+                or admission.state != "active" or admission.slide_count != 1
+                or admission.planned_request_limit != (0 if remeasure else 1) or admission.retry_request_limit != 0):
+            raise NonRetryableWorkspaceOperationError("workspace_operation_principal_conflict")
+        try:
+            job_id = uuid.UUID(str(claim.request_payload.get("provider_usage_job_id")))
+        except (ValueError, TypeError) as error:
+            raise NonRetryableWorkspaceOperationError("svg_preview_generation_job_required") from error
+        job = await session.scalar(select(PresentationGenerationJob).where(
+            PresentationGenerationJob.id == job_id,
+            PresentationGenerationJob.presentation_id == claim.presentation_id,
+        ))
+        if job is None:
+            raise NonRetryableWorkspaceOperationError("svg_preview_generation_job_required")
+        return admission.id, job.id
+
+
+async def _assert_preview_not_dispatched(admission_id):
+    from models.sql.public_admission import PublicProviderLogicalCall
+
+    async with async_session_maker() as session:
+        witness = await session.scalar(select(PublicProviderLogicalCall.id).where(
+            PublicProviderLogicalCall.admission_id == admission_id,
+        ).limit(1))
+    if witness is not None:
+        raise NonRetryableWorkspaceOperationError("svg_preview_provider_recovery_required")
+
+
+async def _run_fenced_svg_preview(context, binding, slide_index, request, task_id):
+    from services.provider_usage_instrumentation import (
+        provider_usage_scope, public_operation_scope,
+    )
+
+    claim = context.claim
+    await _assert_preview_not_dispatched(binding[0])
+    if request.mode != "author":
+        await _run_preview_background(claim.presentation_id, slide_index, request, task_id)
+        return
+    with public_operation_scope(claim.operation_id, attempt_token=claim.attempt_token,
+                                fencing_token=claim.fencing_token):
+        # The real attempt is fenced separately. Keep this logical author slot
+        # fixed so takeover cannot create another reservation or SDK purchase.
+        with provider_usage_scope(job_id=binding[1],
+                                  operation=f"svg_page_preview_{claim.operation_id.hex}",
+                                  stage="author", attempt_number=1,
+                                  slide_index=slide_index):
+            await _run_preview_background(claim.presentation_id, slide_index, request, task_id)
 
 
 class WorkspacePageRemakePreviewOperationHandler:
@@ -122,11 +216,15 @@ class WorkspacePageRemakePreviewOperationHandler:
                 "page_remake_preview_request_invalid"
             )
         try:
-            request = AuthoredPageRemakePreviewRequest(instruction=instruction)
+            request = AuthoredPageRemakePreviewRequest(instruction=instruction,
+                mode=command_context.get("mode", "author"), source_digest=command_context.get("source_digest"),
+                svg_content=command_context.get("svg_content"))
         except ValueError as error:
             raise NonRetryableWorkspaceOperationError(
                 "page_remake_preview_request_invalid"
             ) from error
+
+        svg_binding = await _svg_preview_binding(context)
 
         task_id = _page_task_id(claim.operation_id)
         task = await _ensure_task(
@@ -150,7 +248,8 @@ class WorkspacePageRemakePreviewOperationHandler:
                 raise WorkspaceOperationLeaseLost("operation_lease_lost")
             await _await_with_progress(
                 context,
-                _run_preview_background(
+                _run_fenced_svg_preview(context, svg_binding, slide_index, request, task_id)
+                if svg_binding is not None else _run_preview_background(
                     claim.presentation_id,
                     slide_index,
                     request,
@@ -181,6 +280,8 @@ class WorkspacePageRemakePreviewOperationHandler:
             code = error.get("detail")
             if not isinstance(code, str) or not code:
                 code = "authored_page_remake_failed"
+            if svg_binding is not None:
+                raise NonRetryableWorkspaceOperationError(code)
             if bool(error.get("retryable")):
                 raise RetryableWorkspaceOperationError(code)
             raise NonRetryableWorkspaceOperationError(code)

@@ -151,7 +151,7 @@ def native_binding_digest(svg: str | None) -> str | None:
         return None
     for parent in root.iter():
         for child in list(parent):
-            if child.get("id") == PAGE_NUMBER_ID:
+            if child.get("id") == PAGE_NUMBER_ID or child.get("id", "").startswith("svg-system-master-"):
                 parent.remove(child)
     return source_digest(ET.tostring(root, encoding="unicode"))
 

@@ -11,6 +11,7 @@ from datetime import datetime
 from hashlib import sha256
 import json
 import re
+from uuid import UUID
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
@@ -24,6 +25,8 @@ from pydantic import (
     model_serializer,
 )
 from pydantic.alias_generators import to_camel
+
+from models.svg_canvas import SvgCanvasInput
 
 from models.generate_presentation_request import (
     AuthoredMasterPinInput,
@@ -129,7 +132,10 @@ class PresentationGenerationRequestV2(PublicWireModel):
     slide_count: int | None = Field(default=None, ge=1, le=100)
     language: str | None = Field(default=None, min_length=1, max_length=64)
     authored_style: str | None = Field(default=None, min_length=1, max_length=160)
-    aspect_ratio: Literal["16:9", "9:16", "1:1", "21:9"] = "16:9"
+    aspect_ratio: Literal["16:9", "4:3", "9:16", "9:13", "1:1", "21:9"] = "16:9"
+    svg_canvas: SvgCanvasInput | None = Field(default=None, exclude_if=lambda value: value is None)
+    svg_design_reference_snapshot_id: UUID | None = Field(default=None, exclude_if=lambda value: value is None)
+    svg_design_reference_pin: DesignPackPinV1 | None = Field(default=None, exclude_if=lambda value: value is None)
     page_size: Literal["A4"] | None = None
     orientation: Literal["landscape", "portrait"] | None = None
 
@@ -140,7 +146,7 @@ class PresentationGenerationRequestV2(PublicWireModel):
 
         if isinstance(value, dict):
             selectors = dict(value)
-            for alias, name in (("pageSize", "page_size"), ("aspectRatio", "aspect_ratio")):
+            for alias, name in (("pageSize", "page_size"), ("aspectRatio", "aspect_ratio"), ("svgCanvas", "svg_canvas")):
                 if alias in selectors:
                     selectors[name] = selectors[alias]
             GeneratePresentationRequest.validate_canvas_selectors(selectors)
@@ -153,6 +159,12 @@ class PresentationGenerationRequestV2(PublicWireModel):
             ("aspectRatio", "aspect_ratio") if self.page_size is not None else ("pageSize", "page_size", "orientation")
         ):
             payload.pop(key, None)
+        if self.svg_canvas is not None:
+            for key in ("aspectRatio", "aspect_ratio", "pageSize", "page_size", "orientation"):
+                payload.pop(key, None)
+        if self.source_mode == "source_content_restyle" and "aspect_ratio" not in self.model_fields_set:
+            payload.pop("aspect_ratio", None)
+            payload.pop("aspectRatio", None)
         return payload
 
     master_pin: AuthoredMasterPinInput | None = None
@@ -175,6 +187,13 @@ class PresentationGenerationRequestV2(PublicWireModel):
 
     @model_validator(mode="after")
     def validate_generation_mode(self) -> "PresentationGenerationRequestV2":
+        references = (self.master_pin, self.svg_design_reference_pin, self.svg_design_reference_snapshot_id)
+        if (self.svg_design_reference_pin is not None or self.svg_design_reference_snapshot_id is not None) and sum(value is not None for value in references) > 1:
+            raise ValueError("svg_design_reference_conflict")
+        if (self.svg_design_reference_pin is not None or self.svg_design_reference_snapshot_id is not None) and (self.strategy != "svg" or self.design_pack_pin is not None or self.generation_mode not in {None, "auto", "free-design"}):
+            raise ValueError("svg_design_reference_strategy_required")
+        if self.strategy == "authored" and (self.svg_canvas is not None or self.aspect_ratio == "4:3"):
+            raise ValueError("svg_canvas_strategy_required")
         if self.generation_mode == "editable-first":
             raise ValueError("capability_not_supported: editable-first")
         if self.generation_mode == "registered-template" and self.design_pack_pin is None and self.source_mode is None:
@@ -198,9 +217,12 @@ class PresentationGenerationRequestV2(PublicWireModel):
                 resolve_generation_strategy,
             )
 
-            if resolve_generation_strategy(self) != "svg" or self.page_size != "A4" or self.orientation is None:
+            if resolve_generation_strategy(self) != "svg":
                 raise ValueError("raster_a4_svg_required")
-            if not self.authored_style or self.slides_markdown is not None or self.quality_policy == "release-v1":
+            from utils.svg_template_rules import resolve_source_template_style
+
+            self.authored_style = resolve_source_template_style(self.authored_style or "screenshot-blue").id
+            if self.slides_markdown is not None or self.quality_policy == "release-v1":
                 raise ValueError("source_content_generation_option_conflict")
             return self
         if self.raster_approval_pin is not None:

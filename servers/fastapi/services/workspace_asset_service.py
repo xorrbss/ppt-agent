@@ -191,7 +191,11 @@ def _validate_declared_mime(extension: str, content_type: str | None) -> str | N
     media_type = (content_type or "").split(";", 1)[0].strip().lower()
     if media_type in _GENERIC_UPLOAD_MIME_TYPES:
         guessed = mimetypes.guess_type(f"upload{extension}")[0]
-        return guessed or None
+        allowed = _MIME_BY_EXTENSION.get(extension, set())
+        accepted = allowed.intersection(UPLOAD_ACCEPTED_MIME_TYPES)
+        if guessed in accepted:
+            return guessed
+        return sorted(accepted)[0] if accepted else None
     if media_type not in set(UPLOAD_ACCEPTED_MIME_TYPES):
         raise WorkspaceServiceError(
             "workspace_asset_media_type_invalid", status_code=400

@@ -503,17 +503,29 @@ async def test_retry_chain_exhaustion_surfaces_an_explicit_error(tmp_path, monke
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("request_tenant", [None, "tenant-order"])
-async def test_endpoint_records_only_the_request_tenant(tmp_path, monkeypatch, request_tenant):
+@pytest.mark.parametrize("bridge", [False, True])
+async def test_endpoint_records_only_the_request_tenant(tmp_path, monkeypatch, request_tenant, bridge):
     """No ``PPT_SERVICE_TENANT_ID``/``"default"`` fallback: a request without a
     tenant (DISABLE_AUTH) records none; one with a tenant records exactly it."""
     import api.v1.ppt.endpoints.presentation_slide_order as endpoint
     from utils.owner_context import reset_current_tenant_id, set_current_tenant_id
 
+    submitted_bridges = []
+    real_create = endpoint.create_workspace_command
+
+    async def capture_create(*args, **kwargs):
+        submitted_bridges.append(kwargs.get("allow_local_development"))
+        return await real_create(*args, **kwargs)
+
+    monkeypatch.setattr(endpoint, "create_workspace_command", capture_create)
+    monkeypatch.setattr(endpoint, "local_development_export_bridge", lambda request: bridge)
     monkeypatch.setattr(endpoint, "_POLL_BUDGET_SECONDS", 0.2)  # no runner: only the command is under test
     engine, maker = await _database(tmp_path / "slide-order-tenant.db")
     try:
         presentation_id, slide_ids = await _seed_presentation(maker, n_slides=2)
         app = FastAPI()
+        from api.error_handling import install_api_error_handling
+        install_api_error_handling(app)
         app.include_router(PRESENTATION_SLIDE_ORDER_ROUTER, prefix="/api/v1/ppt")
 
         async def session_dependency():
@@ -529,7 +541,7 @@ async def test_endpoint_records_only_the_request_tenant(tmp_path, monkeypatch, r
         app.dependency_overrides[get_async_session] = session_dependency
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url=BASE_URL) as client:
-            await client.patch(
+            response = await client.patch(
                 f"/api/v1/ppt/presentation/{presentation_id}/slides/order",
                 json={"slide_ids": [str(s) for s in reversed(slide_ids)], "expected_revision": 1},
             )
@@ -538,6 +550,11 @@ async def test_endpoint_records_only_the_request_tenant(tmp_path, monkeypatch, r
                 select(WorkspaceOperation).where(WorkspaceOperation.presentation_id == presentation_id)
             )).one()
         payload = operation.request_payload
+        assert response.status_code == 503
+        assert response.json()["detail"] == "slide_order_still_running"
+        assert response.json()["error"]["code"] == "slide_order_still_running"
+        assert response.headers["X-Workspace-Operation-ID"] == str(operation.id)
+        assert submitted_bridges == [bridge]
         if request_tenant is None:
             assert "tenant_id" not in payload["context"]
             assert "principal_tenant_id" not in payload
