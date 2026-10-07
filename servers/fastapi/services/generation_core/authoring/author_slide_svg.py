@@ -384,6 +384,19 @@ def free_composition_canvas_clause(width: int, height: int) -> str:
             "choose the arrangement from this page's content.\n")
 
 
+def free_composition_canvas_clause(width: int, height: int) -> str:
+    """Canvas constraints for SVG composition without prescribing arrangements."""
+    proportion = ("tall" if height > width else "wide" if width > height else "square")
+    return (f"Compose natively for the {width}x{height}px {proportion} canvas. "
+            "Use its available space deliberately; adapt grouping, line lengths and image proportions "
+            "to this shape. Do not rotate or scale a landscape composition to fit. "
+            "Choose positions freely, keep readable type and margins, and preserve a clear reading order. "
+            "For free-svg design references, this composition policy takes priority over reference "
+            "archetype wording: card or column counts, positions and proportions are advisory, even "
+            "when a reference says must or exactly. Preserve its colors, fonts and signature imagery; "
+            "choose the arrangement from this page's content.\n")
+
+
 def svg_design_text(style_snapshot: dict) -> str:
     """The design-system string the svg author prepends to every slide prompt.
 
