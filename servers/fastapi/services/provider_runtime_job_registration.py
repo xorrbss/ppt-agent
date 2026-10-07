@@ -141,24 +141,44 @@ async def ensure_runtime_job(
 
 
 async def public_review_request_baseline(operation_id):
-    """Seed a jobless review from its own immutable public admission and ledger."""
-    from sqlalchemy import select
+    """Seed a review from its real workspace job and immutable public ledger."""
     from services.database import async_session_maker
-    from models.sql.public_admission import PublicOperationAdmission
-    from models.sql.workspace import WorkspaceOperation
-    from utils.owner_context import get_current_owner_id, get_current_tenant_id
     async with async_session_maker() as session:
-        row = await session.scalar(select(PublicOperationAdmission).where(
-            PublicOperationAdmission.operation_id == operation_id,
-            PublicOperationAdmission.owner_id == get_current_owner_id(),
-            PublicOperationAdmission.tenant_id == get_current_tenant_id(),
-            PublicOperationAdmission.state == "active"))
-        operation = await session.get(WorkspaceOperation, operation_id)
-        if (row is None or operation is None or operation.kind != "quality.review"
-                or operation.owner_id != row.owner_id or operation.state != "running"
-                or operation.max_attempts != 1
-                or (operation.request_payload.get("context") or {}).get("mode") != "analyze_only"
-                or row.planned_request_limit != 1 or row.retry_request_limit != 0):
-            raise RuntimeError("public_review_admission_scope_invalid")
+        row = await require_public_review_job(session, operation_id=operation_id)
         return row.initial_request_count, row.retry_request_count, 1, 0
+
+
+async def require_public_review_job(session, *, operation_id,
+                                    expected_attempt_token=None, expected_fencing_token=None):
+    """Validate durable review authority before registering or reserving spend."""
+    from sqlalchemy import select
+    from models.sql.public_admission import PublicOperationAdmission
+    from models.sql.workspace import WorkspaceOperation, get_workspace_owner_scope
+    from models.svg_quality_review import SvgQualityReviewRequest
+    from services.public_operation_admission import _require_phase2_provider_contract
+    from utils.datetime_utils import as_utc, get_current_utc_datetime
+    from utils.owner_context import get_current_owner_id, get_current_tenant_id
+    row = await session.scalar(select(PublicOperationAdmission).where(
+        PublicOperationAdmission.operation_id == operation_id,
+        PublicOperationAdmission.owner_id == get_current_owner_id(),
+        PublicOperationAdmission.tenant_id == get_current_tenant_id(),
+        PublicOperationAdmission.state == "active"))
+    operation = await session.scalar(select(WorkspaceOperation).where(
+        WorkspaceOperation.id == operation_id).with_for_update())
+    if (row is None or operation is None or operation.kind != "quality.review"
+            or operation.owner_id != row.owner_id or operation.state != "running"
+            or operation.owner_scope != get_workspace_owner_scope()
+            or operation.max_attempts != 1 or operation.attempt_number != 1
+            or operation.cancel_requested_at is not None
+            or operation.lease_expires_at is None
+            or as_utc(operation.lease_expires_at) <= get_current_utc_datetime()
+            or operation.expected_revision is None
+            or row.planned_request_limit != 1 or row.retry_request_limit != 0):
+        raise RuntimeError("public_review_admission_scope_invalid")
+    SvgQualityReviewRequest.model_validate(operation.request_payload.get("context") or {})
+    await _require_phase2_provider_contract(session, row,
+        expected_attempt_token=expected_attempt_token,
+        expected_fencing_token=expected_fencing_token)
+    return row
+
 

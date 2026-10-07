@@ -70,6 +70,9 @@ async def reserve_provider_call_detached(
     stage: str,
     request_id: str,
     estimated_cost: int,
+    workspace_operation_id: uuid.UUID | None = None,
+    expected_attempt_token: str | None = None,
+    expected_fencing_token: int | None = None,
 ) -> DetachedDurableLease:
     owner_id = get_current_owner_id()
     if owner_id is None:
@@ -77,11 +80,23 @@ async def reserve_provider_call_detached(
     service_key = _service_key(operation, stage)
     reservation_key = sha256_hex(f"provider-reservation-v1:{job_id}:{request_id}".encode())
     async with async_session_maker() as session:
+        tenant_id = get_vnext_tenant_id()
+        if workspace_operation_id is not None:
+            if (workspace_operation_id != job_id or operation != "quality_review" or stage != "vqa"
+                    or not expected_attempt_token or expected_fencing_token is None):
+                raise CancellationRequested("provider_workspace_job_scope_invalid")
+            from services.provider_runtime_job_registration import require_public_review_job
+            admission = await require_public_review_job(session,
+                operation_id=workspace_operation_id,
+                expected_attempt_token=expected_attempt_token,
+                expected_fencing_token=expected_fencing_token)
+            tenant_id = admission.tenant_id
         budget = await register_durable_budget(
             session,
-            tenant_id=get_vnext_tenant_id(),
+            tenant_id=tenant_id,
             owner_id=owner_id,
-            job_id=job_id,
+            job_id=None if workspace_operation_id is not None else job_id,
+            workspace_operation_id=workspace_operation_id,
             estimated_limit=_optional_limit(
                 "PROVIDER_JOB_ESTIMATED_BUDGET_MICROUNITS"
             ),

@@ -23,6 +23,16 @@ from services.public_operation_admission import PublicAdmissionRejected
 from services.provider_pricing import ProviderModelPricing
 
 
+@pytest.fixture(autouse=True)
+def isolated_runtime_accounting_baseline(monkeypatch):
+    """Wrapper unit checks never read a workstation's job/receipt database."""
+    from unittest.mock import AsyncMock
+    monkeypatch.setattr("services.provider_runtime_job_registration.persisted_request_counts",
+                        AsyncMock(return_value=(0, 0)))
+    monkeypatch.setattr("services.provider_runtime_job_registration.verified_lineage_request_baseline",
+                        AsyncMock(return_value=(0, 0, None, None)), raising=False)
+
+
 def _unavailable_pricing() -> ProviderModelPricing:
     return ProviderModelPricing(
         revision="test-pricing-v1",
@@ -782,3 +792,91 @@ def test_public_review_cached_runtime_key_still_revalidates_durable_scope(monkey
         asyncio.run(registration.ensure_runtime_job(runtime, scope))
     baseline.assert_awaited_once_with(identity)
     assert runtime.registered_jobs == {str(identity)} and runtime.latest_job_keys == {}
+
+
+def test_managed_review_reserves_real_operation_before_sdk_and_enriches_cost(monkeypatch):
+    from unittest.mock import AsyncMock
+    from services import provider_runtime_job_registration as registration
+    from services import provider_usage_instrumentation as module
+    async def scenario():
+        identity = uuid.uuid4()
+        calls = []
+        durable = object()
+        public = SimpleNamespace(is_terminal_reuse=False, provider_idempotency_key="stable-review-key")
+        monkeypatch.setattr(registration, "public_review_request_baseline", AsyncMock(return_value=(0, 0, 1, 0)))
+        monkeypatch.setattr(module, "durable_provider_runtime_required", lambda: True)
+        async def reserve(**kwargs):
+            calls.append(("durable", kwargs))
+            return durable
+        monkeypatch.setattr(module, "reserve_provider_call_detached", reserve)
+        settlement = AsyncMock()
+        monkeypatch.setattr(module, "reconcile_provider_call_detached", settlement)
+        monkeypatch.setattr("services.public_operation_admission.reserve_public_provider_call_detached",
+                            AsyncMock(return_value=public))
+        monkeypatch.setattr("services.public_operation_admission.reconcile_public_provider_call_detached", AsyncMock())
+        monkeypatch.setattr("services.public_operation_admission.enrich_public_provider_call_detached", AsyncMock())
+        monkeypatch.setattr(module, "_assert_current_public_operation_fence", AsyncMock())
+        legacy_receipt = AsyncMock()
+        monkeypatch.setattr("services.provider_usage_receipt_service.record_provider_usage_receipt_detached", legacy_receipt)
+        with public_operation_scope(identity, attempt_token="claimed-review", fencing_token=4), provider_usage_scope(
+                job_id=identity, operation="quality_review", stage="vqa", attempt_number=1, public_only=True):
+            async with provider_call_admission(pricing=_unavailable_pricing()):
+                calls.append(("sdk",))
+            await record_provider_call(provider="unavailable", model="unavailable",
+                                       response=SimpleNamespace(usage=SimpleNamespace(input_tokens=1000000, output_tokens=1000000)),
+                                       latency_ms=1, pricing=_unavailable_pricing())
+            with pytest.raises(CancellationRequested, match="max_total_requests"):
+                async with provider_call_admission(pricing=_unavailable_pricing()):
+                    pytest.fail("a review must not spend twice")
+        assert calls[0][0] == "durable" and calls[1] == ("sdk",)
+        assert calls[0][1]["workspace_operation_id"] == identity
+        assert calls[0][1]["job_id"] == identity
+        assert calls[0][1]["expected_attempt_token"] == "claimed-review"
+        assert calls[0][1]["expected_fencing_token"] == 4
+        assert settlement.await_count == 2
+        assert all(call.args == (durable,) for call in settlement.await_args_list)
+        assert settlement.await_args.kwargs == {"actual_cost": 2, "outcome": "success"}
+        legacy_receipt.assert_not_awaited()
+    asyncio.run(scenario())
+
+
+def test_zero_retry_limit_is_supported_without_loosening_other_kill_conditions():
+    from services.provider_runtime_primitives import JobKillConditions
+    assert JobKillConditions(max_retry_requests=0).max_retry_requests == 0
+    for values in ({"max_retry_requests": -1}, {"max_retry_requests": True},
+                   {"max_total_requests": 0}, {"max_consecutive_failures": 0}):
+        with pytest.raises(ValueError):
+            JobKillConditions(**values)
+
+
+@pytest.mark.parametrize("violation", ["cancel", "owner", "lease", "attempt", "mode", "retry", "tenant"])
+def test_durable_review_job_rejects_invalid_claim(monkeypatch, violation):
+    from datetime import timedelta
+    from unittest.mock import AsyncMock
+    from services.provider_runtime_job_registration import require_public_review_job
+    from utils.datetime_utils import get_current_utc_datetime
+    from utils.owner_context import set_current_owner_id, reset_current_owner_id, set_current_tenant_id, reset_current_tenant_id
+    async def scenario():
+        owner, identity = uuid.uuid4(), uuid.uuid4()
+        row = SimpleNamespace(owner_id=owner, tenant_id="tenant-a", planned_request_limit=1, retry_request_limit=0)
+        operation = SimpleNamespace(kind="quality.review", owner_id=owner, owner_scope=str(owner), state="running",
+            max_attempts=1, attempt_number=1, cancel_requested_at=None, expected_revision=1,
+            lease_expires_at=get_current_utc_datetime() + timedelta(seconds=60), request_payload={"context": {}})
+        if violation == "cancel": operation.cancel_requested_at = get_current_utc_datetime()
+        if violation == "owner": operation.owner_scope = str(uuid.uuid4())
+        if violation == "lease": operation.lease_expires_at = get_current_utc_datetime() - timedelta(seconds=1)
+        if violation == "attempt": operation.attempt_number = 2
+        if violation == "mode": operation.request_payload = {"context": {"mode": "analyze_and_fix"}}
+        if violation == "retry": row.retry_request_limit = 1
+        session = SimpleNamespace(scalar=AsyncMock(side_effect=[None if violation == "tenant" else row, operation]))
+        authority = AsyncMock()
+        monkeypatch.setattr("services.public_operation_admission._require_phase2_provider_contract", authority)
+        owner_token, tenant_token = set_current_owner_id(owner), set_current_tenant_id("tenant-a")
+        try:
+            with pytest.raises((RuntimeError, ValueError)):
+                await require_public_review_job(session, operation_id=identity)
+            authority.assert_not_awaited()
+        finally:
+            reset_current_owner_id(owner_token)
+            reset_current_tenant_id(tenant_token)
+    asyncio.run(scenario())

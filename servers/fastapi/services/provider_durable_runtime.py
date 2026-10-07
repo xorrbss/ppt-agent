@@ -15,6 +15,7 @@ from sqlmodel import select
 
 from utils.datetime_utils import as_utc
 from models.sql.presentation_generation_job import PresentationGenerationJob  # noqa: F401
+from models.sql.workspace import WorkspaceOperation  # noqa: F401
 from models.sql.provider_runtime_reservation import (
     ProviderRuntimeBudget,
     ProviderRuntimeCircuit,
@@ -62,19 +63,23 @@ async def register_durable_budget(
     *,
     tenant_id: str,
     owner_id: uuid.UUID,
-    job_id: uuid.UUID,
+    job_id: uuid.UUID | None,
     estimated_limit: int | None,
     actual_limit: int | None,
+    workspace_operation_id: uuid.UUID | None = None,
 ) -> ProviderRuntimeBudget:
     """Create a job budget idempotently without accepting provider payloads."""
 
     _require_nonnegative(estimated_limit, "estimated_limit")
     _require_nonnegative(actual_limit, "actual_limit")
+    if (job_id is None) == (workspace_operation_id is None):
+        raise ValueError("provider_budget_authority_required")
     row = await session.scalar(
         select(ProviderRuntimeBudget).where(
             ProviderRuntimeBudget.tenant_id == tenant_id,
             ProviderRuntimeBudget.owner_id == owner_id,
             ProviderRuntimeBudget.job_id == job_id,
+            ProviderRuntimeBudget.workspace_operation_id == workspace_operation_id,
         )
     )
     if row is not None:
@@ -85,6 +90,7 @@ async def register_durable_budget(
         tenant_id=tenant_id,
         owner_id=owner_id,
         job_id=job_id,
+        workspace_operation_id=workspace_operation_id,
         estimated_limit=estimated_limit,
         actual_limit=actual_limit,
     )
@@ -98,6 +104,7 @@ async def register_durable_budget(
                 ProviderRuntimeBudget.tenant_id == tenant_id,
                 ProviderRuntimeBudget.owner_id == owner_id,
                 ProviderRuntimeBudget.job_id == job_id,
+                ProviderRuntimeBudget.workspace_operation_id == workspace_operation_id,
             )
         )
         if row is None:
