@@ -96,6 +96,7 @@ class ProviderUsageScope:
     attempt_number: int
     slide_index: int | None = None
     round_ordinal: int | None = None
+    public_only: bool = False
     _sequence: int = field(default=0, init=False, repr=False)
     _physical_sequences: dict[str, int] = field(
         default_factory=dict, init=False, repr=False
@@ -292,6 +293,7 @@ def provider_usage_scope(
     attempt_number: int = 0,
     slide_index: int | None = None,
     round_ordinal: int | None = None,
+    public_only: bool = False,
 ) -> Iterator[None]:
     """Set receipt context for one bounded pipeline segment.
 
@@ -301,6 +303,8 @@ def provider_usage_scope(
     """
 
     token: Token[ProviderUsageScope | None] | None = None
+    if public_only and job_id is None:
+        raise ValueError("provider_public_review_scope_required")
     if job_id is not None:
         token = _ACTIVE_SCOPE.set(
             ProviderUsageScope(
@@ -310,6 +314,7 @@ def provider_usage_scope(
                 attempt_number=attempt_number,
                 slide_index=slide_index,
                 round_ordinal=round_ordinal,
+                public_only=public_only,
             )
         )
     try:
@@ -386,6 +391,13 @@ async def provider_call_admission(
     if scope is None:
         yield None
         return
+    public_fence = _PUBLIC_OPERATION_FENCE.get()
+    if scope.public_only and (public_fence is None or scope.job_id != public_fence.operation_id):
+        raise ProviderSpendFenceRejected("provider_public_review_scope_required")
+    if scope.public_only and durable_provider_runtime_required():
+        # A public review has its own durable public ledger, but it must never
+        # impersonate a generation job in the legacy job-budget foreign key.
+        raise ProviderSpendFenceRejected("provider_public_review_durable_job_required")
     active_lease = _ACTIVE_PROVIDER_ADMISSION.get()
     if active_lease is not None:
         yield active_lease
@@ -709,6 +721,10 @@ async def record_provider_call(
                         else pricing_version
                     ),
                 )
+        if scope.public_only:
+            # Tokens/cost have already been attached to this review's public
+            # logical-call ledger. No legacy generation job is rewritten.
+            return
         receipt = ProviderUsageReceiptInput(
             job_id=scope.job_id,
             operation=scope.operation,

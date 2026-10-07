@@ -90,15 +90,23 @@ async def ensure_runtime_job(
     # attempt.  Re-registering an attempt-suffixed runtime job resets the hard
     # cap after recovery and permits retry amplification.
     job_id = durable_job_id
+    public_baseline = (await public_review_request_baseline(scope.job_id)
+                       if getattr(scope, "public_only", False) else None)
     if job_id in runtime.registered_jobs:
         runtime.latest_job_keys[durable_job_id] = job_id
         return job_id
     async with runtime.registration_lock:
+        if getattr(scope, "public_only", False):
+            public_baseline = await public_review_request_baseline(scope.job_id)
         if job_id in runtime.registered_jobs:
             return job_id
         initial_requests = 0
         retry_requests = 0
-        if scope.attempt_number > 1:
+        public_limits = None
+        if getattr(scope, "public_only", False):
+            initial_requests, retry_requests, total_limit, retry_limit = public_baseline
+            public_limits = total_limit, retry_limit
+        elif scope.attempt_number > 1:
             # This process has never seen the job, but earlier attempts have
             # already spent requests. Continue their accounting instead of
             # starting from zero.
@@ -116,12 +124,10 @@ async def ensure_runtime_job(
             ),
             kill_conditions=JobKillConditions(
                 deadline_seconds=float(deadline) if deadline is not None else None,
-                max_total_requests=optional_env_int(
-                    "PROVIDER_JOB_MAX_TOTAL_REQUESTS"
-                ),
-                max_retry_requests=optional_env_int(
-                    "PROVIDER_JOB_MAX_RETRY_REQUESTS"
-                ),
+                max_total_requests=(min(public_limits[0], optional_env_int("PROVIDER_JOB_MAX_TOTAL_REQUESTS")
+                    if optional_env_int("PROVIDER_JOB_MAX_TOTAL_REQUESTS") is not None else public_limits[0])
+                    if public_limits is not None else optional_env_int("PROVIDER_JOB_MAX_TOTAL_REQUESTS")),
+                max_retry_requests=public_limits[1] if public_limits is not None else optional_env_int("PROVIDER_JOB_MAX_RETRY_REQUESTS"),
                 max_consecutive_failures=optional_env_int(
                     "PROVIDER_JOB_MAX_CONSECUTIVE_FAILURES"
                 ),
@@ -132,3 +138,27 @@ async def ensure_runtime_job(
         runtime.registered_jobs.add(job_id)
         runtime.latest_job_keys[durable_job_id] = job_id
     return job_id
+
+
+async def public_review_request_baseline(operation_id):
+    """Seed a jobless review from its own immutable public admission and ledger."""
+    from sqlalchemy import select
+    from services.database import async_session_maker
+    from models.sql.public_admission import PublicOperationAdmission
+    from models.sql.workspace import WorkspaceOperation
+    from utils.owner_context import get_current_owner_id, get_current_tenant_id
+    async with async_session_maker() as session:
+        row = await session.scalar(select(PublicOperationAdmission).where(
+            PublicOperationAdmission.operation_id == operation_id,
+            PublicOperationAdmission.owner_id == get_current_owner_id(),
+            PublicOperationAdmission.tenant_id == get_current_tenant_id(),
+            PublicOperationAdmission.state == "active"))
+        operation = await session.get(WorkspaceOperation, operation_id)
+        if (row is None or operation is None or operation.kind != "quality.review"
+                or operation.owner_id != row.owner_id or operation.state != "running"
+                or operation.max_attempts != 1
+                or (operation.request_payload.get("context") or {}).get("mode") != "analyze_only"
+                or row.planned_request_limit != 1 or row.retry_request_limit != 0):
+            raise RuntimeError("public_review_admission_scope_invalid")
+        return row.initial_request_count, row.retry_request_count, 1, 0
+

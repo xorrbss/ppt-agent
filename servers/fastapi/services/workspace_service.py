@@ -1592,6 +1592,11 @@ async def create_workspace_command(
     bind_presentation_principal = request.command_type in {
         "export.pptx", "export.pdf", "slide.regenerate.preview", "slide.regenerate",
     }
+    svg_review = request.command_type == "quality.review" and request.context.get("mode") == "analyze_only"
+    if svg_review:
+        presentation = await session.scalar(select(PresentationModel).where(
+            PresentationModel.id == presentation_id, PresentationModel.owner_id == get_current_owner_id()))
+        bind_presentation_principal = presentation is not None and presentation.is_svg()
     if request.command_type in {
         "presentation.slides.reorder", "version.restore", "presentation.edit",
         "slide.edit", "slide.delete",
@@ -1731,6 +1736,17 @@ async def _create_workspace_command(
             from services.workspace_authored_async_admission import admit_svg_page_preview_operation
             try:
                 await admit_svg_page_preview_operation(session, operation=operation, presentation=presentation)
+            except PublicAdmissionRejected as error:
+                raise WorkspaceServiceError(error.code, status_code=429, retryable=True,
+                    retry_after_seconds=error.retry_after_seconds or 15) from error
+        if (request.command_type == "quality.review" and request.context.get("mode") == "analyze_only"
+                and presentation.is_svg()):
+            from services.svg_quality_review_service import admit_svg_quality_review_operation
+            from services.workspace_operation_handler_registry import NonRetryableWorkspaceOperationError
+            try:
+                await admit_svg_quality_review_operation(session, operation=operation, presentation=presentation)
+            except (ValueError, NonRetryableWorkspaceOperationError) as error:
+                raise WorkspaceServiceError("svg_quality_review_input_invalid", status_code=400, retryable=False) from error
             except PublicAdmissionRejected as error:
                 raise WorkspaceServiceError(error.code, status_code=429, retryable=True,
                     retry_after_seconds=error.retry_after_seconds or 15) from error

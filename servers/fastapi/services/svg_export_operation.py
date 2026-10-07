@@ -329,18 +329,9 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
                 font_embedding=font_embedding, advisory=advisory, quality_policy=quality_policy),
             session_factory=session_factory, grant=grant, execute=run_worker)
         ref = result.artifact
-        if quality_policy == "release-v1" and fmt == "pptx":
-            from services.svg_export_visual_review import svg_visual_review
-            source_review = svg_visual_review(slides=measured_slides, advisory=advisory,
-                expected_binding=dict(presentationId=str(claim.presentation_id), ownerId=str(claim.owner_id),
-                                      ownerScope=str(claim.owner_scope), sourceRevision=claim.expected_revision))
-            if source_review.get("status") != "passed":
-                raise NonRetryableWorkspaceOperationError(source_review.get("reasonCode")
-                    or "svg_visual_advisory_unavailable")
-            from services.svg_final_pptx_review import review_final_render
-            await review_final_render(claim=claim, tenant_id=admission.tenant_id,
-                artifact=ref, worker_metrics=result.resource_metrics, slides=measured_slides,
-                session_factory=session_factory, context=context)
+        final_reviews = ((presentation.theme or {}).get("svg") or {}).get("finalPptxReviews") or {}
+        if isinstance(final_reviews, dict) and isinstance(final_reviews.get(ref.sha256), dict):
+            result.resource_metrics["final_pptx_visual_review"] = final_reviews[ref.sha256]
         receipt_args = dict(
             quality_receipt_id=f"quality:{claim.operation_id}:{ref.artifact_id}",
             operation_id=str(claim.operation_id), presentation_id=str(claim.presentation_id),

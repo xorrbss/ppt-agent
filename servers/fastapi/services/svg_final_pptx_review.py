@@ -34,61 +34,71 @@ def final_render_current(proof, *, artifact_digest, operation_id, presentation_i
         and proof["availablePhysicalMemoryBytes"] >= public_svg_pptx_render.MINIMUM_AVAILABLE_MEMORY
         and isinstance(pages, list) and len(pages) == len(source_digests) > 0
         and proof.get("pageCount") == len(pages)
-        and all(type(page.get("index")) is int and page["index"] == index
+        and all(isinstance(page, dict) and type(page.get("index")) is int and page["index"] == index
                 and isinstance(page.get("pngSha256"), str) and len(page["pngSha256"]) == 64
                 for index, page in enumerate(pages)))
 
 
-async def review_final_render(*, claim, tenant_id, artifact, worker_metrics, slides,
-                            session_factory, context):
+async def load_final_review_inputs(session, *, request, presentation, slides):
+    from sqlalchemy import select
+    from models.sql.public_artifact import PublicArtifact
+    from models.sql.workspace import WorkspaceArtifact, WorkspaceOperation
     from services.artifact_store import configured_public_artifact_service
-    from services.generation_core.quality.vision_advisory import run_vision_advisory
     from services.public_export_operation import _public_worker_output
-    from services.provider_usage_instrumentation import public_operation_scope, provider_usage_scope
     from services.workspace_operation_handler_registry import NonRetryableWorkspaceOperationError
-
-    structural = worker_metrics.get("public_export_worker_evidence", {}).get("structuralReadback", {})
-    proof = structural.get("finalPptxRender")
+    from utils.owner_context import get_current_tenant_id
+    public = await session.get(PublicArtifact, request.artifact_id)
+    binding = await session.scalar(select(WorkspaceArtifact).where(
+        WorkspaceArtifact.public_artifact_id == request.artifact_id,
+        WorkspaceArtifact.presentation_id == presentation.id,
+        WorkspaceArtifact.owner_id == presentation.owner_id,
+        WorkspaceArtifact.source_revision == presentation.revision,
+        WorkspaceArtifact.kind == "export.pptx"))
+    if (public is None or binding is None or public.owner_id != presentation.owner_id
+            or public.kind != "presentation-pptx" or public.tenant_id != get_current_tenant_id()):
+        raise NonRetryableWorkspaceOperationError("svg_final_pptx_artifact_binding_invalid")
+    export = await session.get(WorkspaceOperation, binding.operation_id)
+    if (export is None or export.state != "succeeded" or export.owner_id != presentation.owner_id
+            or export.presentation_id != presentation.id or export.expected_revision != presentation.revision):
+        raise NonRetryableWorkspaceOperationError("svg_final_pptx_export_not_succeeded")
+    metrics = export.result or {}
+    proof = metrics.get("public_export_worker_evidence", {}).get("structuralReadback", {}).get("finalPptxRender")
     sources = [sha256_hex((slide.svg_content or "").encode()) for slide in slides]
-    if not final_render_current(proof, artifact_digest="sha256:" + artifact.sha256,
-            operation_id=proof.get("operationId") if isinstance(proof, dict) else claim.operation_id,
-            presentation_id=claim.presentation_id, source_revision=claim.expected_revision,
-            source_digests=sources, owner_id=claim.owner_id, tenant_id=tenant_id):
+    if not final_render_current(proof, artifact_digest="sha256:" + public.sha256,
+            operation_id=proof.get("operationId") if isinstance(proof, dict) else export.id,
+            presentation_id=presentation.id, source_revision=presentation.revision,
+            source_digests=sources, owner_id=presentation.owner_id, tenant_id=public.tenant_id):
         raise NonRetryableWorkspaceOperationError("svg_final_pptx_render_unavailable")
     service = configured_public_artifact_service()
     pngs = []
-    async with session_factory() as session:
-        for page in proof["pages"]:
-            ref = _public_worker_output(page["artifactRef"], retention_class="ephemeral")
-            if (str(ref.owner_id) != proof["ownerId"] or ref.tenant_id != tenant_id
-                    or str(ref.created_by_operation_id) != proof["operationId"]
-                    or ref.kind != "slide-png" or ref.media_type != "image/png"
-                    or ref.sha256 != page["pngSha256"]):
-                raise NonRetryableWorkspaceOperationError("svg_final_pptx_render_binding_invalid")
-            await service.register_ref(session, ref)
-            pngs.append(await service.read_ref_bytes(ref))
-        await session.commit()
-    await context.raise_if_cancelled()
-    with public_operation_scope(claim.operation_id, attempt_token=claim.attempt_token,
-            fencing_token=claim.fencing_token), provider_usage_scope(job_id=None,
-            operation="quality_review", stage="final_pptx_vqa", attempt_number=claim.attempt_number):
-        vision = await run_vision_advisory(pngs, slide_count=len(pngs), required=True)
-    await context.raise_if_cancelled()
-    if not advisory_ran({"vision": vision}):
-        code = ("public_provider_result_unknown"
-                if vision.get("skipped") == "provider_outcome:public_provider_result_unknown"
-                else "svg_final_pptx_visual_review_unavailable")
-        raise NonRetryableWorkspaceOperationError(code)
+    for page in proof["pages"]:
+        ref = _public_worker_output(page["artifactRef"], retention_class="ephemeral")
+        if (ref.owner_id != presentation.owner_id or ref.tenant_id != public.tenant_id
+                or str(ref.created_by_operation_id) != proof["operationId"]
+                or ref.kind != "slide-png" or ref.media_type != "image/png"
+                or ref.sha256 != page["pngSha256"]):
+            raise NonRetryableWorkspaceOperationError("svg_final_pptx_render_binding_invalid")
+        pngs.append(await service.read_ref_bytes(ref))
+    # The authoritative final bytes must still exist and match their immutable ref.
+    await service.read_ref_bytes(public.to_ref())
+    return dict(artifactId=str(public.id), artifactDigest="sha256:" + public.sha256,
+                parentExportOperationId=str(export.id), proof=proof, pngs=pngs)
+
+
+def seal_final_review(claim, inputs, vision):
+    proof = inputs["proof"]
     review = dict(schemaVersion="svg-final-pptx-visual-review/v1", operationId=str(claim.operation_id),
-        ownerId=str(claim.owner_id), ownerScope=str(claim.owner_scope), tenantId=tenant_id,
+        ownerId=str(claim.owner_id), ownerScope=str(claim.owner_scope), tenantId=proof["tenantId"],
         presentationId=str(claim.presentation_id), sourceRevision=claim.expected_revision,
-        artifactDigest="sha256:" + artifact.sha256, renderEvidenceDigest=proof["evidenceDigest"],
+        artifactId=inputs["artifactId"], artifactDigest=inputs["artifactDigest"],
+        parentExportOperationId=inputs["parentExportOperationId"], renderOperationId=proof["operationId"],
+        renderEvidenceDigest=proof["evidenceDigest"], sourceDigests=proof["sourceDigests"],
         pngDigests=[page["pngSha256"] for page in proof["pages"]], vision=vision)
-    worker_metrics["final_pptx_visual_review"] = {**review, "digest": content_digest(review)}
+    return {**review, "digest": content_digest(review)}
 
 
 def final_pptx_visual_domain(source_domain, *, worker_metrics, artifact_digest,
-                             operation_id, presentation_id, source_revision, source_digests):
+                             operation_id, presentation_id, source_revision, source_digests, expected_binding=None):
     """Keep source review and final artifact review independently required."""
     if source_domain.get("status") != "passed":
         return source_domain
@@ -103,15 +113,20 @@ def final_pptx_visual_domain(source_domain, *, worker_metrics, artifact_digest,
     unsigned = {key: value for key, value in review.items() if key != "digest"}
     if (review.get("digest") != content_digest(unsigned)
             or review.get("artifactDigest") != artifact_digest
-            or review.get("operationId") != str(operation_id)
+            or not review.get("operationId") or not review.get("parentExportOperationId")
+            or review.get("renderOperationId") != proof["operationId"]
             or review.get("presentationId") != str(presentation_id)
             or review.get("sourceRevision") != source_revision
+            or review.get("sourceDigests") != source_digests
             or review.get("ownerId") != proof["ownerId"] or review.get("tenantId") != proof["tenantId"]
             or review.get("renderEvidenceDigest") != proof["evidenceDigest"]
             or review.get("pngDigests") != [page["pngSha256"] for page in proof["pages"]]):
         return dict(required=True, status="failed", reasonCode="svg_final_pptx_visual_review_stale")
+    if expected_binding is not None and any(review.get(key) != value for key, value in expected_binding.items()):
+        return dict(required=True, status="failed", reasonCode="svg_final_pptx_visual_review_owner_stale")
     if (review["vision"].get("promptVersion") != "svg-required-visual-review/v1"
             or review["vision"].get("slideCount") != len(proof["pages"])
+            or review["vision"].get("reviewedPngDigests") != [page["pngSha256"] for page in proof["pages"]]
             or review["vision"].get("reviewedPageIndices") != list(range(len(proof["pages"])) )):
         return dict(required=True, status="failed", reasonCode="svg_final_pptx_visual_review_coverage_incomplete")
     if any(entry.get("issues") for entry in review["vision"]["slides"]):

@@ -122,7 +122,7 @@ def _decode_advisory_text(text: str) -> object:
         return None
 
 
-async def _request_advisory(sheet: bytes, *, slide_count: int, required: bool = False) -> tuple[str, object]:
+async def _request_advisory(sheet: bytes, *, slide_count: int, required: bool = False, pngs=None) -> tuple[str, object]:
     """One multimodal call, through the same admission/idempotency wrappers
     every other authored provider call uses."""
 
@@ -148,7 +148,7 @@ async def _request_advisory(sheet: bytes, *, slide_count: int, required: bool = 
     client = get_client(config=get_llm_config())
     model = str(get_model() or "")
     schema = advisory_json_schema(slide_count=slide_count) if required else advisory_json_schema()
-    messages = (build_advisory_messages(sheet, slide_count=slide_count, required=True)
+    messages = (build_advisory_messages(sheet, slide_count=slide_count, required=True, pngs=pngs)
                 if required else build_advisory_messages(sheet, slide_count=slide_count))
     kwargs = get_generate_kwargs(
         model=model,
@@ -259,23 +259,23 @@ async def run_vision_advisory(
                 int(slide_count or 0),
             )
         try:
-            sheet = await compose_contact_sheet(renders)
+            sheet = b"" if required else await compose_contact_sheet(renders)
         except Exception:
             LOGGER.warning("[authored] vision advisory sheet failed", exc_info=True)
             return {"skipped": "contact_sheet_failed"}
-        if not sheet:
+        if not sheet and not required:
             return {"skipped": "contact_sheet_unavailable"}
         # What the provider was actually handed, so an empty answer next time
         # can be read against the image that produced it.
         LOGGER.info(
             "[authored] vision advisory request sheet_bytes=%d slides=%d prompt=%s",
-            len(sheet),
+            sum(len(png) for png in renders) if required else len(sheet),
             len(renders),
             ADVISORY_PROMPT_VERSION,
         )
         try:
             model, payload = await _request_advisory(sheet, slide_count=len(renders),
-                **({"required": True} if required else {}))
+                **({"required": True, "pngs": renders} if required else {}))
         except ProviderOutcomeError as error:
             # A model that answered with no text at all is a distinct outcome
             # from a transport failure, and the one bench run 30 hit; keep them
@@ -301,6 +301,7 @@ async def run_vision_advisory(
             if seen != set(range(1, len(renders) + 1)):
                 return {"skipped": "review_coverage_incomplete"}
         slides = parse_advisory_payload(payload, slide_count=len(renders))
+        from utils.hashing import sha256_hex
         latency_ms = int((time.monotonic() - started) * 1000)
         LOGGER.info(
             "[authored] vision advisory model=%s slides=%d flagged=%d latency_ms=%d",
@@ -312,10 +313,12 @@ async def run_vision_advisory(
         return {
             "promptVersion": "svg-required-visual-review/v1" if required else ADVISORY_PROMPT_VERSION,
             **({"reviewedPageIndices": list(range(len(renders)))} if required else {}),
+            **({"reviewedPngDigests": [sha256_hex(png) for png in renders],
+                "reviewInputKind": "individual-page-pngs/v1"} if required else {}),
             "model": model,
             "latencyMs": latency_ms,
             "slideCount": len(renders),
-            "sheetBytes": len(sheet),
+            **({"inputImageBytes": sum(len(png) for png in renders)} if required else {"sheetBytes": len(sheet)}),
             "slides": slides,
         }
     except Exception:

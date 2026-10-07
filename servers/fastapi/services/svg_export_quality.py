@@ -160,7 +160,8 @@ def source_svg_public_quality_receipt(*, slides, source_preservation, worker_met
         domains["visual_review"] = final_pptx_visual_domain(domains["visual_review"],
             worker_metrics=worker_metrics, artifact_digest=artifact_digest, operation_id=operation_id,
             presentation_id=presentation_id, source_revision=source_revision,
-            source_digests=[sha256_prefixed((slide.svg_content or "").encode())[7:] for slide in slides])
+            source_digests=[sha256_prefixed((slide.svg_content or "").encode())[7:] for slide in slides],
+            expected_binding=review_binding)
     return QualityReceiptV3(quality_receipt_id=quality_receipt_id, operation_id=operation_id,
         presentation_id=presentation_id, artifact_digest=artifact_digest, source_revision=source_revision,
         scene_digest=scene_digest, capability_registry_digest=CAPABILITY_REGISTRY_DIGEST,
@@ -204,7 +205,8 @@ def svg_public_quality_receipt(*, slides, advisory, source_preservation, worker_
             worker_metrics=worker_metrics, artifact_digest=receipt_args["artifact_digest"],
             operation_id=receipt_args["operation_id"], presentation_id=receipt_args["presentation_id"],
             source_revision=receipt_args["source_revision"],
-            source_digests=[sha256_prefixed((slide.svg_content or "").encode())[7:] for slide in slides])
+            source_digests=[sha256_prefixed((slide.svg_content or "").encode())[7:] for slide in slides],
+            expected_binding=review_binding)
     return QualityReceiptV3(**receipt_args, capability_registry_digest=CAPABILITY_REGISTRY_DIGEST,
         exporter_version=exporter_version, **domains,
         release_readiness=release_readiness(domains.values())).model_dump(mode="json", by_alias=True)

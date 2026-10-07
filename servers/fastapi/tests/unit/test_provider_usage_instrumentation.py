@@ -756,3 +756,29 @@ def test_pre_sdk_retry_admission_rejection_does_not_trip_provider_circuit(
         assert status["consecutive_failures"] == 1
 
     asyncio.run(scenario())
+
+
+def test_public_only_scope_requires_an_operation_identity():
+    import pytest
+    from services.provider_usage_instrumentation import provider_usage_scope
+    with pytest.raises(ValueError, match='provider_public_review_scope_required'):
+        with provider_usage_scope(job_id=None, operation='quality_review', stage='vqa', public_only=True):
+            pytest.fail('missing scope must not reach provider code')
+
+
+def test_public_review_cached_runtime_key_still_revalidates_durable_scope(monkeypatch):
+    import asyncio
+    import uuid
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    import services.provider_runtime_job_registration as registration
+    identity = uuid.uuid4()
+    runtime = SimpleNamespace(registered_jobs={str(identity)}, latest_job_keys={})
+    scope = SimpleNamespace(job_id=identity, public_only=True)
+    baseline = AsyncMock(side_effect=RuntimeError('public_review_admission_scope_invalid'))
+    monkeypatch.setattr(registration, 'public_review_request_baseline', baseline)
+    import pytest
+    with pytest.raises(RuntimeError, match='public_review_admission_scope_invalid'):
+        asyncio.run(registration.ensure_runtime_job(runtime, scope))
+    baseline.assert_awaited_once_with(identity)
+    assert runtime.registered_jobs == {str(identity)} and runtime.latest_job_keys == {}

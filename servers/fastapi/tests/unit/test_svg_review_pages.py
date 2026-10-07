@@ -270,3 +270,47 @@ def test_measurement_becoming_incomplete_during_review_blocks_publication(monkey
     module.run_vision_advisory.assert_awaited_once()
     module.publish_presentation_revision.assert_not_awaited()
     session.commit.assert_not_awaited()
+
+
+def test_final_review_selection_rejects_client_evidence_and_partial_artifact_scope():
+    import uuid
+    import pytest
+    from pydantic import ValidationError
+    from models.svg_quality_review import SvgQualityReviewRequest
+    artifact = uuid.uuid4()
+    assert SvgQualityReviewRequest().target == "source_svg"
+    assert SvgQualityReviewRequest(target="final_pptx", artifact_id=artifact).artifact_id == artifact
+    for payload in ({"target": "final_pptx"},
+                    {"target": "source_svg", "artifact_id": artifact},
+                    {"target": "final_pptx", "artifact_id": artifact, "scope": "subset", "slide_indices": [0]},
+                    {"target": "final_pptx", "artifact_id": artifact, "status": "passed"},
+                    {"target": "final_pptx", "artifact_id": artifact, "evidence": {}}):
+        with pytest.raises(ValidationError):
+            SvgQualityReviewRequest.model_validate(payload)
+
+
+def test_svg_review_admission_owns_one_call_and_zero_retry_without_source_change(monkeypatch):
+    import asyncio
+    import uuid
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    import services.svg_quality_review_service as review
+    import services.public_operation_admission as admission
+    owner = uuid.uuid4()
+    slide = _review_slide()
+    before = slide.svg_content, slide.content.copy()
+    presentation = SimpleNamespace(id=uuid.uuid4(), owner_id=owner, theme={})
+    operation = SimpleNamespace(id=uuid.uuid4(), owner_id=owner, max_attempts=3,
+        request_payload={"context": {"mode": "analyze_only", "scope": "all"}})
+    row = SimpleNamespace(retry_request_limit=9)
+    admitted = AsyncMock(return_value=row)
+    monkeypatch.setattr(admission, "admit_public_operation_compatible_v2", admitted)
+    monkeypatch.setattr(admission, "current_principal_context", lambda: SimpleNamespace(owner_id=owner))
+    monkeypatch.setattr(review, "_slides", AsyncMock(return_value=[slide]))
+    monkeypatch.setattr(review, "_read_png", lambda receipt: b"saved-render")
+    session = SimpleNamespace(flush=AsyncMock())
+    asyncio.run(review.admit_svg_quality_review_operation(session, operation=operation, presentation=presentation))
+    plan = admitted.await_args.kwargs["request_plan"]
+    assert plan.initial_request_limit == 1 and plan.retry_request_limit == 0
+    assert row.retry_request_limit == 0 and operation.max_attempts == 1
+    assert (slide.svg_content, slide.content) == before

@@ -57,9 +57,12 @@ _AUTHORED_CANONICAL_SERVICE = AuthoredCanonicalService()
 @AUTHORED_OPERATIONS_ROUTER.post("/{id}/svg-quality-review", response_model=AsyncPresentationGenerationTaskModel)
 async def svg_quality_review(
     id: uuid.UUID, request: SvgQualityReviewRequest,
+    request_http: Request,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
-    return await queue_svg_quality_review(id, request, sql_session)
+    from services.workspace_operation_principal import local_development_export_bridge
+    return await queue_svg_quality_review(id, request, sql_session,
+        allow_local_development=local_development_export_bridge(request_http))
 
 
 def _to_camel(value: str) -> str:

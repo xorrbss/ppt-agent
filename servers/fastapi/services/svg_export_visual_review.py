@@ -87,6 +87,8 @@ def split_page_advisories(vision: Mapping, slides, indices) -> list[dict]:
         answer.update(slideCount=1, slides=findings)
         if "reviewedPageIndices" in vision:
             answer["reviewedPageIndices"] = [index]
+        if "reviewedPngDigests" in vision:
+            answer["reviewedPngDigests"] = [vision["reviewedPngDigests"][local]]
         records.append(page_advisory_record(answer, page_index=index,
             page_digest=sha256_hex((slides[index].svg_content or "").encode()),
             png_digest=_receipt(slides[index]).get("png_sha256") or ""))
@@ -228,6 +230,7 @@ def svg_visual_review(*, slides, advisory: Mapping | None, expected_binding: Map
             return dict(required=True, status="failed", reasonCode="svg_visual_advisory_operation_binding_invalid")
         if any(current[index]["vision"].get("promptVersion") != "svg-required-visual-review/v1"
                or current[index]["vision"].get("reviewedPageIndices") != [index]
+               or current[index]["vision"].get("reviewedPngDigests") != [_receipt(slides[index]).get("png_sha256")]
                for index in range(len(slides))):
             return dict(required=True, status="failed", reasonCode="svg_visual_advisory_review_coverage_incomplete")
     flagged, review = advisory_flagged_pages(advisory), _review_pages(slides)
