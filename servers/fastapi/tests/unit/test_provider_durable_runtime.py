@@ -231,6 +231,116 @@ def test_budget_and_duplicate_reservation_fail_closed(tmp_path: Path) -> None:
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize("usage_arrives_later", [False, True])
+@pytest.mark.parametrize("public_only", [False, True])
+def test_detached_actual_overrun_persists_and_propagates(
+    tmp_path: Path, monkeypatch, usage_arrives_later: bool, public_only: bool
+) -> None:
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from services import provider_durable_admission as admission
+    from services.provider_pricing import ProviderModelPricing
+    from services.provider_runtime_primitives import CancellationRequested
+    from services.provider_usage_instrumentation import (
+        _ACTIVE_SCOPE,
+        provider_usage_scope,
+        record_provider_call,
+    )
+
+    async def scenario() -> None:
+        engine, sessions = await _sessions(tmp_path / "actual-overrun.db")
+        monkeypatch.setattr(admission, "async_session_maker", sessions)
+        legacy_receipt = AsyncMock()
+        monkeypatch.setattr(
+            "services.provider_usage_receipt_service.record_provider_usage_receipt_detached",
+            legacy_receipt,
+        )
+        pricing = ProviderModelPricing(
+            revision="test-pricing-v1", provider_id="test", model_id="test",
+            input_microunits_per_million_tokens=1,
+            output_microunits_per_million_tokens=1,
+        )
+        job_id = uuid.uuid4()
+        try:
+            async with sessions() as session:
+                budget = await register_durable_budget(
+                    session, tenant_id="tenant-test", owner_id=uuid.uuid4(),
+                    job_id=None if public_only else job_id,
+                    workspace_operation_id=job_id if public_only else None,
+                    estimated_limit=10, actual_limit=1,
+                )
+                await admit_provider_rpm_and_circuit(
+                    session, service_key="quality_review.vqa", requests_per_minute=60,
+                    failure_threshold=5, reset_seconds=30,
+                )
+                lease = await reserve_provider_call(
+                    session, budget_id=budget.id,
+                    reservation_key_hash=sha256(b"actual-overrun").hexdigest(),
+                    estimated_cost=1,
+                )
+                await session.commit()
+            detached = admission.DetachedDurableLease(lease, "quality_review.vqa")
+            if usage_arrives_later:
+                await admission.reconcile_provider_call_detached(
+                    detached, actual_cost=None, outcome="success",
+                )
+            with provider_usage_scope(
+                job_id=job_id, operation="quality_review", stage="vqa",
+                attempt_number=1, public_only=public_only,
+            ):
+                scope = _ACTIVE_SCOPE.get()
+                scope._durable_leases.append(detached)
+                async def record_usage():
+                    await record_provider_call(
+                        provider="test", model="test", latency_ms=1, pricing=pricing,
+                        response=SimpleNamespace(usage=SimpleNamespace(
+                            input_tokens=1000000, output_tokens=1000000,
+                        )),
+                    )
+                if public_only:
+                    with pytest.raises(BudgetExceededError) as caught:
+                        await record_usage()
+                    assert (caught.value.kind, caught.value.limit, caught.value.observed) == (
+                        "actual", 1, 2,
+                    )
+                else:
+                    # Existing optional generation telemetry stays best-effort.
+                    await record_usage()
+            # Read committed state in a fresh session, outside the exception scope.
+            async with sessions() as session:
+                persisted = await session.get(ProviderRuntimeBudget, lease.budget_id)
+                receipt = await session.get(ProviderRuntimeReservation, lease.reservation_id)
+                assert persisted.actual_consumed == 2 and persisted.actual_limit == 1
+                assert persisted.request_count == 1 and persisted.state == "cancelled"
+                assert persisted.cancellation_reason == "actual_budget_exceeded"
+                assert persisted.estimated_reserved == 0 and persisted.estimated_consumed == 1
+                assert receipt.actual_cost == 2 and receipt.state == "reconciled"
+                assert receipt.outcome == "success"
+                version = persisted.version
+            await admission.reconcile_provider_call_detached(
+                detached, actual_cost=2, outcome="success",
+            )
+            # Replaying the same lease neither charges again nor reactivates it.
+            async with sessions() as session:
+                persisted = await session.get(ProviderRuntimeBudget, lease.budget_id)
+                assert persisted.actual_consumed == 2 and persisted.request_count == 1
+                assert persisted.state == "cancelled" and persisted.version == version
+                with pytest.raises(CancellationRequested, match="budget_inactive"):
+                    await reserve_provider_call(
+                        session, budget_id=lease.budget_id,
+                        reservation_key_hash=sha256(b"after-overrun").hexdigest(),
+                        estimated_cost=1,
+                    )
+                assert persisted.request_count == 1 and persisted.actual_consumed == 2
+            if public_only:
+                legacy_receipt.assert_not_awaited()
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
 def test_unknown_cost_can_be_reconciled_once_when_usage_arrives(tmp_path: Path) -> None:
     async def scenario() -> None:
         engine, sessions = await _sessions(tmp_path / "late-usage.db")

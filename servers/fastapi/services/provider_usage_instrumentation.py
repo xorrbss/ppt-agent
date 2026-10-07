@@ -23,6 +23,7 @@ from services.provider_runtime_control import (
     ProviderRuntimeControl,
     RuntimeLimits,
 )
+from services.provider_runtime_primitives import BudgetExceededError
 from services.provider_durable_admission import (
     durable_provider_runtime_required,
     reconcile_provider_call_detached,
@@ -769,6 +770,13 @@ async def record_provider_call(
                 ),
             )
         _RECEIPT_OBSERVABILITY["persisted"] += 1
+    except BudgetExceededError:
+        # Public review budgets are enforcement; legacy generation receipts
+        # retain their best-effort telemetry contract.
+        if scope.public_only:
+            raise
+        _RECEIPT_OBSERVABILITY["failed"] += 1
+        return
     except Exception:
         # Receipt recording must never change an existing generation outcome.
         # Do not log exceptions here: they may contain upstream response content.

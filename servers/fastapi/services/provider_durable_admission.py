@@ -15,7 +15,7 @@ from services.provider_durable_runtime import (
     register_durable_budget,
     reserve_provider_call,
 )
-from services.provider_runtime_primitives import CancellationRequested
+from services.provider_runtime_primitives import BudgetExceededError, CancellationRequested
 from utils.env_settings.provider_credentials import (
     provider_optional_limit,
     provider_required_int,
@@ -127,12 +127,20 @@ async def reconcile_provider_call_detached(
     outcome: str,
 ) -> None:
     async with async_session_maker() as session:
-        await reconcile_provider_call(
-            session,
-            lease.reservation,
-            actual_cost=actual_cost,
-            outcome=outcome,
-        )
+        try:
+            await reconcile_provider_call(
+                session,
+                lease.reservation,
+                actual_cost=actual_cost,
+                outcome=outcome,
+            )
+        except BudgetExceededError as error:
+            if error.kind != "actual":
+                raise
+            # The provider already spent this cost. Preserve the reconciled
+            # receipt and cancellation before propagating the enforcement error.
+            await session.commit()
+            raise
         await record_provider_circuit_outcome(
             session,
             service_key=lease.service_key,
