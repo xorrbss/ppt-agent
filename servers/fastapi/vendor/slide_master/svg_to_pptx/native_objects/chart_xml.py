@@ -40,6 +40,7 @@ from .marker_common import (
     _first_present,
     _font_size_hpt,
     _hex_or_none,
+    _number,
     _powerpoint_line_width_emu,
 )
 
@@ -378,9 +379,10 @@ def _series_xml(
                 )
             marker_xml = _marker_xml(radar_marker_style)
         invert_xml = '<c:invertIfNegative val="0"/>' if chart_type in {"bar", "column"} else ""
+        series_labels = item.get("data_labels") if item.get("data_labels") is not None else data_labels
         data_labels_xml = (
             _data_labels_xml(
-                data_labels,
+                series_labels,
                 chart_type=chart_type,
                 grouping=grouping,
                 point_count=len(item["values"]),
@@ -388,7 +390,8 @@ def _series_xml(
                 default_color=data_label_color,
                 default_font_face=data_label_font_face,
             )
-            if (_series_scoped_data_labels(data_labels) or data_labels is not None and chart_type in {"pie","doughnut"})
+            if (item.get("data_labels") is not None or _series_scoped_data_labels(data_labels)
+                or data_labels is not None and chart_type in {"pie","doughnut"})
             and chart_type in {"area", "bar", "column", "line", "pie", "doughnut"}
             else ""
         )
@@ -409,20 +412,41 @@ def _series_xml(
     return "".join(parts)
 
 
+def _chart_manual_layout_xml(value: Any, *, inner: bool = False) -> str:
+    if value is None:
+        return "<c:layout/>"
+    if not isinstance(value, dict) or set(value) != {"x", "y", "w", "h"}:
+        raise RuntimeError("Native PPTX chart manual layout requires x/y/w/h")
+    bounds = {key: _number(raw, f"manual layout {key}") for key, raw in value.items()}
+    if (any(not 0 <= number <= 1 for number in bounds.values()) or bounds["w"] <= 0 or bounds["h"] <= 0
+            or bounds["x"] + bounds["w"] > 1 + 1e-6 or bounds["y"] + bounds["h"] > 1 + 1e-6):
+        raise RuntimeError("Native PPTX chart manual layout must be within chart bounds")
+    target = '<c:layoutTarget val="inner"/>' if inner else ""
+    modes = ''.join(f'<c:{key}Mode val="{"edge" if key in {"x", "y"} else "factor"}"/>' for key in ("x", "y", "w", "h"))
+    coords = ''.join(f'<c:{key} val="{bounds[key]:.12g}"/>' for key in ("x", "y", "w", "h"))
+    return f"<c:layout><c:manualLayout>{target}{modes}{coords}</c:manualLayout></c:layout>"
+
+
 def _chart_title_paragraph_xml(
     text: str,
     *,
     font_size: int,
     color: str | None = None,
     font_face: str | None = None,
+    bold: Any = None,
+    align: str | None = None,
 ) -> str:
     fill_xml = (
         f'<a:solidFill><a:srgbClr val="{color}"/></a:solidFill>'
         if color else ""
     )
     lang = detect_text_lang(text)
+    bold_xml = f' b="{_bool_attr(_chart_bool(bold))}"' if bold is not None else ""
+    if align is not None and align not in {"l", "ctr", "r"}:
+        raise RuntimeError("Native PPTX chart title alignment is unsupported")
+    align_xml = f'<a:pPr algn="{align}"/>' if align is not None else ""
     return (
-        f'<a:p><a:r><a:rPr lang="{lang}" sz="{font_size}">{fill_xml}{_font_face_xml(font_face)}</a:rPr>'
+        f'<a:p>{align_xml}<a:r><a:rPr lang="{lang}" sz="{font_size}"{bold_xml}>{fill_xml}{_font_face_xml(font_face)}</a:rPr>'
         f"<a:t>{_xml_escape(text)}</a:t></a:r></a:p>"
     )
 
@@ -441,13 +465,16 @@ def _chart_title_xml(
     if title_entry is None and subtitle_entry is None:
         return '<c:autoTitleDeleted val="1"/>'
     paragraphs = []
+    layout = None
     if title_entry is not None:
         text, item = title_entry
+        layout = item.get("layout")
         paragraphs.append(_chart_title_paragraph_xml(
             text,
             font_size=_chart_text_entry_font_size(item, font_size),
             color=_chart_text_entry_color(item, color),
             font_face=_chart_text_entry_font_face(item, font_face),
+            bold=item.get("bold"), align=item.get("align"),
         ))
     if subtitle_entry is not None:
         text, item = subtitle_entry
@@ -457,10 +484,10 @@ def _chart_title_xml(
             color=_chart_text_entry_color(item, color),
             font_face=_chart_text_entry_font_face(item, font_face),
         ))
-    overlay_xml = '<c:overlay val="0"/>' if reserve_space else ""
+    overlay_xml = '<c:overlay val="1"/>' if layout is not None else '<c:overlay val="0"/>' if reserve_space else ""
     return (
         f"<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/>{''.join(paragraphs)}"
-        f"</c:rich></c:tx><c:layout/>{overlay_xml}</c:title>"
+        f"</c:rich></c:tx>{_chart_manual_layout_xml(layout)}{overlay_xml}</c:title>"
         '<c:autoTitleDeleted val="0"/>'
     )
 
@@ -488,9 +515,11 @@ def _chart_legend_xml(
         "t": "t",
     }
     position = positions.get(position_key, "b")
+    layout_xml = _chart_manual_layout_xml(style.get("legend_layout"))
+    overlay = _chart_bool(style.get("legend_overlay"), False)
     return (
-        f'<c:legend><c:legendPos val="{position}"/><c:layout/>'
-        '<c:overlay val="0"/>'
+        f'<c:legend><c:legendPos val="{position}"/>{layout_xml}'
+        f'<c:overlay val="{_bool_attr(overlay)}"/>'
         f'{_chart_tx_pr_xml(font_size, color, font_face=font_face)}'
         '</c:legend>'
     )
@@ -875,6 +904,7 @@ def _combo_plot_xml(
                 default_font_face=chart_style.get("font_face"),
             )
             if not _series_scoped_data_labels(data_labels)
+            and not any(item.get("data_labels") is not None for item in plot["series"])
             else ""
         )
         if chart_type == "column":
@@ -1068,6 +1098,7 @@ def _chart_plot_xml(
         )
         if chart_type in {"area", "bar", "column", "line"}
         and not _series_scoped_data_labels(chart_data.get("data_labels"))
+        and not any(item.get("data_labels") is not None for item in series)
         else ""
     )
 
@@ -1086,14 +1117,15 @@ def _chart_plot_xml(
             show_value_axis_labels=chart_data.get("show_value_axis_labels", True),
             axes=chart_data.get("axes") or {},
         )
+        overlap = chart_data.get("overlap")
         overlap_xml = (
-            '<c:overlap val="100"/>'
-            if grouping in {"stacked", "percentStacked"}
+            '<c:overlap val="100"/>' if grouping in {"stacked", "percentStacked"}
+            else f'<c:overlap val="{overlap}"/>' if grouping == "clustered" and overlap is not None
             else ""
         )
         vary_colors_xml = (
             '<c:varyColors val="1"/>'
-            if any(item.get("point_colors") for item in series)
+            if chart_data.get("vary_colors", any(item.get("point_colors") for item in series))
             else '<c:varyColors val="0"/>'
         )
         return (
@@ -1102,7 +1134,7 @@ def _chart_plot_xml(
             f"{vary_colors_xml}"
             f"{ser_xml}"
             f"{data_labels_xml}"
-            '<c:gapWidth val="150"/>'
+            f'<c:gapWidth val="{chart_data.get("gap_width", 150)}"/>'
             f"{overlap_xml}"
             f'<c:axId val="{cat_ax_id}"/><c:axId val="{val_ax_id}"/>'
             "</c:barChart>"
@@ -1392,7 +1424,7 @@ def _chart_xml(
 <c:lang val="en-US"/>
 <c:chart>
 {title_xml}
-<c:plotArea><c:layout/>{plot_xml}{_chart_area_sp_pr_xml(chart_style.get("plot_fill"))}</c:plotArea>
+<c:plotArea>{_chart_manual_layout_xml(chart_data.get("plot_layout"), inner=True)}{plot_xml}{_chart_area_sp_pr_xml(chart_style.get("plot_fill"))}</c:plotArea>
 {legend_xml}
 <c:plotVisOnly val="1"/>
 <c:dispBlanksAs val="gap"/>

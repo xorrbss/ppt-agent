@@ -109,6 +109,7 @@ def validate_svg(
     allow_system_page_number: bool = True,
     source_manifest: dict | None = None,
     allow_image_only: bool = False,
+    trusted_furniture_images: dict[str, str] | None = None,
 ) -> dict:
     if not isinstance(svg, str) or len(svg.encode("utf-8")) > 2 * 1024 * 1024:
         raise ValueError("svg_contract_size_limit")
@@ -199,9 +200,17 @@ def validate_svg(
                 ids.add(value)
             elif key == "href":
                 if source_manifest is not None:
-                    if not re.fullmatch(r"source-slot-[A-Za-z0-9_-]+", value) or value not in source_manifest:
-                        raise ValueError("svg_source_image_unknown_slot")
-                    used_slots.add(value)
+                    trusted_digest = (trusted_furniture_images or {}).get(node.get("id", ""))
+                    if trusted_digest is not None:
+                        asset_bytes += validate_raster_data_url(value)
+                        if asset_bytes > 2 * 1024 * 1024:
+                            raise ValueError("svg_image_total_size_limit")
+                        if sha256_prefixed(base64.b64decode(value.split(",", 1)[1], validate=True)) != trusted_digest:
+                            raise ValueError("svg_master_furniture_image_digest_mismatch")
+                    else:
+                        if not re.fullmatch(r"source-slot-[A-Za-z0-9_-]+", value) or value not in source_manifest:
+                            raise ValueError("svg_source_image_unknown_slot")
+                        used_slots.add(value)
                 else:
                     asset_bytes += validate_raster_data_url(value)
                     if asset_bytes > 2 * 1024 * 1024:
@@ -257,7 +266,9 @@ def finalize_svg(
     source_manifest: dict | None = None,
     allow_image_only: bool = False,
 ) -> str:
-    validate_svg(svg, width=width, height=height, source_manifest=source_manifest, allow_image_only=allow_image_only)
+    from services.svg_master_furniture import furniture_image_manifest, master_furniture, stamp_master_furniture
+    validate_svg(svg, width=width, height=height, source_manifest=source_manifest, allow_image_only=allow_image_only,
+                 trusted_furniture_images=furniture_image_manifest(style_snapshot))
     if not 0 <= index < n:
         raise ValueError("svg_page_index_invalid")
     root = ET.fromstring(svg)
@@ -265,7 +276,8 @@ def finalize_svg(
         for child in list(parent):
             if child.get("id") == PAGE_NUMBER_ID:
                 parent.remove(child)
-    if page_number_mode not in {"none", "hidden", "off"}:
+    furniture = master_furniture(style_snapshot)
+    if page_number_mode not in {"none", "hidden", "off"} and not furniture:
         tokens = (style_snapshot or {}).get("tokens", {})
         node = ET.SubElement(
             root,
@@ -282,5 +294,7 @@ def finalize_svg(
         )
         node.text = str(index + 1).zfill(2)
     result = ET.tostring(root, encoding="unicode")
-    validate_svg(result, width=width, height=height, source_manifest=source_manifest, allow_image_only=allow_image_only)
+    result = stamp_master_furniture(result, style_snapshot, index, n)
+    validate_svg(result, width=width, height=height, source_manifest=source_manifest, allow_image_only=allow_image_only,
+                 trusted_furniture_images=furniture_image_manifest(style_snapshot))
     return result

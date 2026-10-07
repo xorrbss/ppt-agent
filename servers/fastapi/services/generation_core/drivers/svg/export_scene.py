@@ -30,6 +30,8 @@ from services.source_content.raster_redesign_pptx import (
     table_cell_overlays,
 )
 from services.svg_contract import SVG_NS
+import math
+import re
 
 _MAX_REASON = 200
 _READBACK_MISMATCH = "svg_native_objects_readback_mismatch"
@@ -53,6 +55,7 @@ class SvgPptxInputs:
     raster_cell_overlays: dict[tuple[int, str], int] = field(default_factory=dict)
     offers: list[NativeOffer] = field(default_factory=list)
     original_sources: dict[Path, str] = field(default_factory=dict)
+    required_source_charts: set[tuple[int, str]] = field(default_factory=set)
 
     @property
     def native_requested(self) -> bool:
@@ -60,6 +63,8 @@ class SvgPptxInputs:
 
     def fall_back_all(self, reason: str) -> None:
         """Rewrite every annotated page to its source; every native offer falls back."""
+        if self.required_source_charts:
+            raise ValueError("svg_source_native_chart_unprojectable")
         for path, source in self.original_sources.items():
             path.write_text(source, encoding="utf-8")
         for offer in self.offers:
@@ -116,10 +121,87 @@ def _page_entries(index: int, page: PageNativeObjects, inputs: SvgPptxInputs) ->
     return list(page.sidecar.objects) if page.sidecar else []
 
 
-def _annotate(root: ET.Element, entries: list[tuple[NativeObject, bool]], index: int,
-              inputs: SvgPptxInputs, *, width: float, height: float) -> int:
-    from svg_to_pptx.native_objects import validate_native_object_marker
+def _source_table_vertical_padding(root, item, projected, *, pt_per_px):
+    """Reserve only the exact vertical cell insets proved by the source grid."""
+    from services.generation_core.drivers.svg.native_geometry import Box, NativeRejection, collect_primitives, find_group
+    from services.generation_core.drivers.svg.native_table import TABLE_ELEMENTS, _grid, _place
 
+    try:
+        found = find_group(root, item.id)
+        if found is None:
+            return
+        prims = collect_primitives(*found, allowed=TABLE_ELEMENTS)
+        anchor = item.anchor
+        frame = Box(anchor.x, anchor.y, anchor.x + anchor.width, anchor.y + anchor.height)
+        rows = [[cell.get("text", "") if isinstance(cell, dict) else cell for cell in row]
+                for row in item.payload["rows"]]
+        xs, ys = _grid(prims, frame, len(rows), len(rows[0]))
+        placed = _place(prims.texts, xs, ys, rows)
+        updates = []
+        for (row, column), text in placed.items():
+            box = text.box()
+            if not text.uniform or not (xs[column] <= box.x0 <= box.x1 <= xs[column + 1]
+                    and ys[row] <= box.y0 <= box.y1 <= ys[row + 1]):
+                return
+            cell = projected["rows"][row][column]
+            existing = cell.get("padding", {})
+            # Unspecified OOXML horizontal cell margins are 0.1 inch.
+            padding = {"left": existing.get("left", 7.2 / pt_per_px),
+                       "right": existing.get("right", 7.2 / pt_per_px),
+                       "top": box.y0 - ys[row], "bottom": ys[row + 1] - box.y1}
+            updates.append((cell, padding))
+        for cell, padding in updates:
+            cell["padding"] = padding
+    except (NativeRejection, KeyError, TypeError, ValueError):
+        return
+
+
+def _retained_value_axis_title_proven(root: ET.Element, item: NativeObject,
+                                     entry_ids: frozenset[str], svg_digest: str | None) -> bool:
+    """Recheck a retained sibling title against the actual export SVG."""
+    from services.generation_core.drivers.svg.native_chart import (
+        CHART_ELEMENTS, _prove_external_value_axis_title,
+    )
+    from services.generation_core.drivers.svg.native_geometry import (
+        NativeRejection, collect_primitives, find_group,
+    )
+    from services.generation_core.drivers.svg.native_publish import _sibling_canvas_texts
+
+    retained = item.payload.get("retainedAxisTitle")
+    if retained is None:
+        return True
+    native_ids = frozenset(retained["nativeGroupIds"])
+    if (item.kind != "chart" or item.payload.get("axisContract") != "native-chart-fixed-value-axis/v1"
+            or item.payload.get("valueAxis", {}).get("title") is not None
+            or retained["svgDigest"] != svg_digest or item.id not in native_ids
+            or not entry_ids <= native_ids):
+        return False
+    if any(node.tag == f"{{{SVG_NS}}}g" and node.get("id", "").startswith(
+            ("native-chart-", "native-table-")) and node.get("id") not in native_ids
+           for node in root.iter()):
+        return False
+    try:
+        found = find_group(root, item.id)
+        if found is None:
+            return False
+        prims = collect_primitives(*found, allowed=CHART_ELEMENTS)
+        canvas_texts = _sibling_canvas_texts(root, native_ids)
+        value_axis = {**item.payload["valueAxis"], "title": retained["text"]}
+        payload = {**item.payload, "valueAxis": value_axis}
+        _prove_external_value_axis_title(payload, prims, canvas_texts)
+    except (NativeRejection, KeyError, TypeError, ValueError):
+        return False
+    return True
+
+
+def _annotate(root: ET.Element, entries: list[tuple[NativeObject, bool]], index: int,
+              inputs: SvgPptxInputs, *, width: float, height: float, pt_per_px: float = 0.75,
+              source_svg_digest: str | None = None) -> int:
+    from svg_to_pptx.native_objects import validate_native_object_marker
+    from services.generation_core.drivers.svg.native_declarations import native_binding_digest
+
+    svg_digest = source_svg_digest or native_binding_digest(ET.tostring(root, encoding="unicode"))
+    entry_ids = frozenset(item.id for item, _ in entries)
     parents = {child: parent for parent in root.iter() for child in parent}
     elements = {element.get("id"): element for element in root.iter() if element.get("id")}
     seen: set[str] = set()
@@ -139,8 +221,35 @@ def _annotate(root: ET.Element, entries: list[tuple[NativeObject, bool]], index:
         seen.add(item.id)
         if offer.reason is not None:
             continue
+        if (item.kind == "chart" and (index, item.id) in inputs.required_source_charts
+                and item.payload.get("axisContract") == "native-chart-fixed-value-axis/v1"):
+            offer.reason = "source_native_chart_fixed_axis_conflict"
+            continue
+        if not _retained_value_axis_title_proven(root, item, entry_ids, svg_digest):
+            offer.reason = "retained_axis_title_unproven"
+            continue
         element.set("data-pptx-native", item.kind)
-        element.set("data-pptx-json", json.dumps(converter_payload(item), ensure_ascii=False, separators=(",", ":")))
+        projected = converter_payload(item, pt_per_px=pt_per_px)
+        if item.kind == "table":
+            from services.generation_core.drivers.svg.native_table import apply_drawn_table_style
+
+            apply_drawn_table_style(projected, item, root)
+            _source_table_vertical_padding(root, item, projected, pt_per_px=pt_per_px)
+        source_legend = None
+        if item.kind == "chart":
+            from services.generation_core.drivers.svg.export_chart_style import apply_drawn_chart_style
+            from services.generation_core.drivers.svg.native_geometry import NativeRejection
+
+            try:
+                source_legend = apply_drawn_chart_style(projected, item, root)
+            except NativeRejection as error:
+                del element.attrib["data-pptx-native"]
+                offer.reason = str(error)[:_MAX_REASON]
+                continue
+            if (index, item.id) in inputs.required_source_charts:
+                from services.svg_source_charts import apply_original_chart_axes
+                apply_original_chart_axes(projected)
+        element.set("data-pptx-json", json.dumps(projected, ensure_ascii=False, separators=(",", ":")))
         ancestors, node = [], parents.get(element)
         while node is not None:
             ancestors.insert(0, node)
@@ -153,12 +262,62 @@ def _annotate(root: ET.Element, entries: list[tuple[NativeObject, bool]], index:
             offer.reason = f"converter_rejected:{error}"[:_MAX_REASON]
             continue
         offer.native = True
+        if source_legend is not None:
+            root.append(source_legend)
         marked += 1
     return marked
 
 
+
+_NATIVE_MATRIX_NUMBER = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
+_NATIVE_MATRIX_ARGS = re.compile(
+    r"\s*(" + _NATIVE_MATRIX_NUMBER + r")"
+    + (r"(?:\s*,\s*|\s+)(" + _NATIVE_MATRIX_NUMBER + r")") * 5
+    + r"\s*"
+)
+_NATIVE_MATRIX_OPERATION = re.compile(r"([A-Za-z]+)\s*\(([^()]*)\)")
+
+
+def _canonicalize_native_uniform_matrix_transforms(
+    root: ET.Element, entries: list[tuple[NativeObject, bool]],
+) -> None:
+    native_ids = {item.id for item, _ in entries}
+    parents = {child: parent for parent in root.iter() for child in parent}
+    targets = set()
+    for element in root.iter():
+        if (element.get("id") not in native_ids
+                and element.get("data-pptx-native") is None
+                and element.get("data-native-table") is None
+                and element.get("data-native-chart") is None):
+            continue
+        node = element
+        while node is not None:
+            targets.add(node)
+            node = parents.get(node)
+
+    def equivalent(match: re.Match[str]) -> str:
+        if match.group(1).lower() != "matrix":
+            return match.group(0)
+        arguments = _NATIVE_MATRIX_ARGS.fullmatch(match.group(2))
+        if arguments is None:
+            return match.group(0)
+        a, b, c, d, e, f = (float(value) for value in arguments.groups())
+        if not all(math.isfinite(value) for value in (a, b, c, d, e, f)):
+            return match.group(0)
+        if b != 0 or c != 0 or a != d or a <= 0:
+            return match.group(0)
+        return f"translate({e:.17g},{f:.17g}) scale({a:.17g})"
+
+    for element in targets:
+        transform = element.get("transform")
+        if transform:
+            canonical = _NATIVE_MATRIX_OPERATION.sub(equivalent, transform)
+            if canonical != transform:
+                element.set("transform", canonical)
+
+
 def prepare_svg_pptx_inputs(paths: list[Path], pages: list[PageNativeObjects] | None, *,
-                            width: float, height: float) -> SvgPptxInputs:
+                            width: float, height: float, pt_per_px: float = 0.75) -> SvgPptxInputs:
     """Annotate native objects on the page files in place (converter on sys.path).
 
     ``pages`` is one entry per path (``None``: no sidecars); ``width``/
@@ -170,6 +329,10 @@ def prepare_svg_pptx_inputs(paths: list[Path], pages: list[PageNativeObjects] | 
     for index, path in enumerate(paths):
         source = path.read_text(encoding="utf-8")
         root = ET.fromstring(source)
+        page = pages[index] if pages else PageNativeObjects()
+        from services.svg_source_charts import validate_source_chart_export_policy
+        required = validate_source_chart_export_policy(page.source_chart_policy, page.sidecar, source)
+        inputs.required_source_charts.update((index, chart_id) for chart_id in required)
         entries = [(item, False) for item in _page_entries(index, pages[index] if pages else PageNativeObjects(),
                                                             inputs)]
         if is_redesign_svg(root):
@@ -179,9 +342,15 @@ def prepare_svg_pptx_inputs(paths: list[Path], pages: list[PageNativeObjects] | 
             for table_id, count in table_cell_overlays(root).items():
                 inputs.raster_cell_overlays[(index, table_id)] = count
             entries.extend((item, True) for item in raster)
-        if entries and _annotate(root, entries, index, inputs, width=width, height=height):
+        from services.generation_core.drivers.svg.native_declarations import native_binding_digest
+        source_svg_digest = native_binding_digest(source)
+        _canonicalize_native_uniform_matrix_transforms(root, entries)
+        if entries and _annotate(root, entries, index, inputs, width=width, height=height,
+                                 pt_per_px=pt_per_px, source_svg_digest=source_svg_digest):
             inputs.original_sources[path] = source
             path.write_text(ET.tostring(root, encoding="unicode"), encoding="utf-8")
+        if not required.issubset({offer.id for offer in inputs.offers if offer.page == index and offer.native}):
+            raise ValueError("svg_source_native_chart_unprojectable")
     return inputs
 
 

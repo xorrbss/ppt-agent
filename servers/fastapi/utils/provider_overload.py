@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import math
 import threading
 import time
 from typing import Any, Callable, Mapping, Protocol
@@ -26,6 +27,192 @@ _USAGE_LIMIT_CODE = "usage_limit_reached"
 _RESET_AT_PATTERN = re.compile(r'''["']resets_at["']\s*:\s*(\d+)''')
 _RESET_IN_PATTERN = re.compile(r'''["']resets_in_seconds["']\s*:\s*(\d+)''')
 
+_SAFE_ERROR_CODES = frozenset({
+    "server_error", "rate_limit_exceeded", "usage_limit_reached", "insufficient_quota",
+    "invalid_request_error", "authentication_error", "permission_denied", "model_not_found",
+    "model_not_supported",
+    "unsupported_model",
+    "invalid_model",
+    "invalid_api_key",
+    "context_length_exceeded", "overloaded", "timeout", "request_timeout", "internal_error",
+    "internal_server_error", "service_unavailable", "content_filter", "max_output_tokens",
+})
+_SAFE_EXCEPTION_TYPES = frozenset({
+    "ProviderError", "ProviderOutcomeError", "ProviderQuotaPause", "RuntimeError", "ValueError",
+    "TimeoutError", "ConnectionError", "OSError", "APIError", "APIStatusError", "APIConnectionError",
+    "APITimeoutError", "RateLimitError", "InternalServerError", "BadRequestError",
+    "AuthenticationError", "PermissionDeniedError", "NotFoundError", "UnprocessableEntityError",
+    "ReadTimeout", "ConnectTimeout", "WriteTimeout", "PoolTimeout", "RemoteProtocolError",
+    "LLMAPIError", "LLMError", "LLMResponseError",
+})
+_SAFE_ERROR_TYPES = frozenset({
+    "invalid_request_error", "authentication_error", "permission_error",
+    "not_found_error", "rate_limit_error", "server_error", "timeout_error",
+})
+_SAFE_REQUEST_PARAMETERS = frozenset({
+    "model", "reasoning", "reasoning.effort", "reasoning.summary", "temperature",
+    "top_p", "max_tokens", "max_output_tokens", "stream", "store", "instructions",
+    "input", "input.role", "input.content", "input.content.type", "input.content.text",
+    "input.content.image_url", "input.content.file_id", "input.content.file_data",
+    "tools", "tool_choice", "parallel_tool_calls", "text", "text.format",
+    "text.verbosity", "response_format", "include", "metadata", "service_tier",
+    "prompt_cache_key", "prompt_cache_retention",
+})
+_DIAGNOSTIC_ENUMS = {
+    "exceptionType": _SAFE_EXCEPTION_TYPES,
+    "errorCode": _SAFE_ERROR_CODES,
+    "causeExceptionType": _SAFE_EXCEPTION_TYPES,
+    "providerErrorCode": _SAFE_ERROR_CODES,
+    "providerErrorType": _SAFE_ERROR_TYPES,
+    "rejectedParameter": _SAFE_REQUEST_PARAMETERS,
+    "requestRejectionReason": frozenset({
+        "unsupported_parameter", "unsupported_value", "model_not_supported",
+        "instructions_required", "store_false_required", "stream_true_required",
+    }),
+    "streamTermination": frozenset(
+        {"raised_exception", "stream_exhausted_without_completion"}
+    ),
+    "terminalEvent": frozenset({"response.completed", "response.incomplete", "response.failed", "response.cancelled", "error"}),
+    "failureKind": frozenset({"stream_interrupted", "result_unknown", "terminal_failed", "terminal_cancelled", "terminal_error", "incomplete", "overload", "timeout", "bridge_exception", "empty_output"}),
+    "statusOrigin": frozenset({"http_response", "local_stream", "transport", "stream_event"}),
+    "incompleteReason": frozenset({"max_output_tokens", "content_filter", "incomplete"}),
+}
+_SAFE_REQUEST_ID = re.compile(r"(?:req[_-])?(?:[0-9a-fA-F]{16,64}|[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})\Z")
+_USAGE_FIELDS = frozenset({"input_tokens", "output_tokens", "total_tokens", "reasoning_tokens", "cached_tokens"})
+
+
+def _structured_provider_error_fields(error: BaseException) -> dict[str, object]:
+    """Select SDK error fields without retaining its message or response body."""
+    body = getattr(error, "body", None)
+    details: Mapping[str, Any] = body if isinstance(body, Mapping) else {}
+    inner = details.get("error")
+    if isinstance(inner, Mapping):
+        details = inner
+    fields = {
+        key: getattr(error, key, None) or details.get(key)
+        for key in ("code", "param", "type")
+    }
+    # Some Codex rejections have no code/param fields. Classify only known
+    # protocol messages; do not copy their text, quoted values, or model ID.
+    message = details.get("message") or details.get("detail")
+    if message is None:
+        message = inner if isinstance(inner, str) else body if isinstance(body, str) else None
+    if isinstance(message, str) and len(message) <= 4096:
+        rejected = re.match(r"\AUnsupported parameter:\s*['\"]([a-zA-Z_][a-zA-Z0-9_.]{0,79})['\"](?:[.\s:]|$)", message)
+        if rejected:
+            fields["requestRejectionReason"] = "unsupported_parameter"
+            if not fields["param"] and rejected[1] in _SAFE_REQUEST_PARAMETERS:
+                fields["param"] = rejected[1]
+        elif re.match(r"\AUnsupported value:\s", message):
+            fields["requestRejectionReason"] = "unsupported_value"
+        elif re.match(r"\A(?:(?:The )?['\"]gpt-[a-zA-Z0-9_.-]{1,128}['\"] model|Model ['\"]gpt-[a-zA-Z0-9_.-]{1,128}['\"]) is not supported\b", message):
+            fields["requestRejectionReason"] = "model_not_supported"
+        else:
+            for prefix, reason in (
+                ("Instructions are required", "instructions_required"),
+                ("Store must be set to false", "store_false_required"),
+                ("Stream must be set to true", "stream_true_required"),
+            ):
+                if re.match(re.escape(prefix) + r"(?:[.\s:]|$)", message, re.IGNORECASE):
+                    fields["requestRejectionReason"] = reason
+                    break
+    return fields
+
+
+def safe_provider_diagnostics(
+    error: BaseException | None = None,
+    *,
+    diagnostics: Mapping[str, Any] | None = None,
+) -> dict[str, object]:
+    """Keep only closed-vocabulary metadata and bounded numeric measurements.
+
+    No message, body, header, dynamic class name or arbitrary SDK field is
+    persisted. SDK error code, type and parameter are selected only when their
+    values are in the closed vocabularies. Unknown values are never retained.
+    """
+    candidates: dict[str, Any] = {}
+    nested = getattr(error, "cause", None) or getattr(error, "__cause__", None)
+    synthetic_stream_status = (
+        error is not None
+        and type(error).__module__.startswith("llmai.")
+        and provider_status_code(error) == 500
+        and isinstance(nested, BaseException)
+        and provider_status_code(nested) is None
+    )
+    current = error
+    visited: set[int] = set()
+    for depth in range(6):
+        if current is None or id(current) in visited:
+            break
+        visited.add(id(current))
+        fields = _structured_provider_error_fields(current)
+        rejection_reason = fields.get("requestRejectionReason")
+        if rejection_reason is not None:
+            candidates.setdefault("requestRejectionReason", rejection_reason)
+        raw_error_code = fields["code"]
+        if isinstance(raw_error_code, str) and raw_error_code in _SAFE_ERROR_CODES:
+            candidates.setdefault("errorCode", raw_error_code)
+        elif isinstance(raw_error_code, str) and raw_error_code:
+            candidates["unrecognizedErrorCode"] = True
+        error_type = fields["type"]
+        if isinstance(error_type, str) and error_type in _SAFE_ERROR_TYPES:
+            candidates.setdefault("providerErrorType", error_type)
+        parameter = fields["param"]
+        if isinstance(parameter, str) and parameter:
+            normalized = re.sub(r"\[\d{1,4}\]", "", parameter) if len(parameter) <= 128 else ""
+            if normalized in _SAFE_REQUEST_PARAMETERS:
+                candidates.setdefault("rejectedParameter", normalized)
+            else:
+                candidates["unrecognizedParameter"] = True
+        name = type(current).__name__
+        if "exceptionType" not in candidates:
+            candidates["exceptionType"] = name if name in _SAFE_EXCEPTION_TYPES else "ProviderError"
+        if depth and name in _SAFE_EXCEPTION_TYPES:
+            candidates.setdefault("causeExceptionType", name)
+        if depth and isinstance(raw_error_code, str) and raw_error_code in _SAFE_ERROR_CODES:
+            candidates.setdefault("providerErrorCode", raw_error_code)
+        status = provider_status_code(current)
+        if status is not None and "httpStatus" not in candidates:
+            candidates["httpStatus"] = status
+            candidates["statusOrigin"] = "http_response"
+        for attribute, key in (("code", "errorCode"), ("request_id", "requestId"), ("retry_after_seconds", "retryAfterSeconds")):
+            value = getattr(current, attribute, None)
+            if value is not None:
+                candidates.setdefault(key, value)
+        existing = getattr(current, "diagnostics", None)
+        if isinstance(existing, Mapping):
+            candidates.update(existing)
+        nested = getattr(current, "cause", None) or getattr(current, "__cause__", None)
+        current = nested if isinstance(nested, BaseException) else None
+    if isinstance(diagnostics, Mapping):
+        candidates.update(diagnostics)
+    if synthetic_stream_status:
+        candidates["statusOrigin"] = "local_stream"
+        candidates.setdefault("failureKind", "result_unknown")
+    safe: dict[str, object] = {}
+    for key, allowed in _DIAGNOSTIC_ENUMS.items():
+        value = candidates.get(key)
+        if isinstance(value, str) and value in allowed:
+            safe[key] = value
+    for key in ("unrecognizedErrorCode", "unrecognizedParameter"):
+        if candidates.get(key) is True:
+            safe[key] = True
+    request_id = candidates.get("requestId")
+    if isinstance(request_id, str) and _SAFE_REQUEST_ID.fullmatch(request_id):
+        safe["requestId"] = request_id
+    status = candidates.get("httpStatus")
+    if isinstance(status, int) and not isinstance(status, bool) and 100 <= status <= 599 and safe.get("statusOrigin") not in {"local_stream", "stream_event"}:
+        safe["httpStatus"] = status
+    retry = candidates.get("retryAfterSeconds")
+    if isinstance(retry, (int, float)) and not isinstance(retry, bool) and 0 <= retry <= 604800 and math.isfinite(retry):
+        safe["retryAfterSeconds"] = retry
+    usage = candidates.get("usage")
+    if isinstance(usage, Mapping):
+        counts = {key: usage[key] for key in _USAGE_FIELDS if isinstance(usage.get(key), int) and not isinstance(usage[key], bool) and 0 <= usage[key] <= 10**12}
+        if counts:
+            safe["usage"] = counts
+    return safe
+
 
 class ProviderOutcomeError(RuntimeError):
     """Content-free provider outcome that survives the authored job boundary."""
@@ -37,25 +224,28 @@ class ProviderOutcomeError(RuntimeError):
         recovery_allowed: bool,
         overload: bool = False,
         cooldown_seconds: float | None = None,
+        diagnostics: Mapping[str, Any] | None = None,
     ) -> None:
         self.code = code
         self.retryable = False
         self.recovery_allowed = recovery_allowed
         self.overload = overload
         self.cooldown_seconds = cooldown_seconds
+        self.diagnostics = safe_provider_diagnostics(diagnostics=diagnostics)
         super().__init__(code)
 
 
 class ProviderQuotaPause(ProviderOutcomeError, WorkspaceOperationDeferred):
     """Whole-account usage exhaustion returned to the durable operation queue."""
 
-    def __init__(self, *, reset_at: int, observed_at: int | None = None) -> None:
+    def __init__(self, *, reset_at: int, observed_at: int | None = None, diagnostics: Mapping[str, Any] | None = None) -> None:
         now = int(time.time()) if observed_at is None else int(observed_at)
         self.code = "public_provider_usage_limit_paused"
         self.retryable = False
         self.recovery_allowed = False
         self.overload = True
         self.cooldown_seconds = None
+        self.diagnostics = safe_provider_diagnostics(diagnostics=diagnostics)
         self.reset_at = int(reset_at)
         self.retry_after_seconds = max(0.05, float(self.reset_at - now))
         self.detail = {
@@ -127,6 +317,8 @@ def is_provider_overload(error: BaseException | None) -> bool:
     """
 
     if error is None:
+        return False
+    if safe_provider_diagnostics(error).get("statusOrigin") in {"local_stream", "stream_event"}:
         return False
     if isinstance(error, ProviderOutcomeError):
         return bool(error.overload)
@@ -260,8 +452,10 @@ class BoundedProviderCall:
                 return self._run(remaining)
             except ProviderQuotaPause as pause:
                 self._receipt["quotaPauseResetAt"] = pause.reset_at
+                self._receipt.setdefault("failureDiagnostics", []).append(safe_provider_diagnostics(pause))
                 raise
             except Exception as error:
+                self._receipt.setdefault("failureDiagnostics", []).append(safe_provider_diagnostics(error))
                 if not is_provider_overload(error):
                     raise
                 declined = self._replay_declined_reason()

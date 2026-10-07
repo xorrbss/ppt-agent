@@ -26,6 +26,7 @@ async def publish_presentation_revision(
     result: dict | None = None,
     operation_kind: str | None = None,
     advance_revision: bool = True,
+    source_manifest=None,
 ) -> int:
     """Increment the publication token exactly once using a fenced CAS.
 
@@ -54,7 +55,8 @@ async def publish_presentation_revision(
             from services.svg_document_mutations import refresh_svg_page_numbers
 
             await refresh_svg_page_numbers(session, svg_presentation, operation_id=operation_id,
-                attempt_token=attempt_token, expected_revision=expected_revision)
+                attempt_token=attempt_token, expected_revision=expected_revision,
+                source_manifest=source_manifest)
         # Validate the attempt fence first. The savepoint guarantees that a
         # caller cannot accidentally commit half of this publication after
         # catching a conflict exception.

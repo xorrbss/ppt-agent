@@ -33,28 +33,29 @@ _CHART_TYPES = {"bar": "bar", "column": "column", "line": "line", "area": "area"
                 "pie": "pie", "donut": "doughnut"}
 
 
-def pt_to_px(value: float) -> float:
+def pt_to_px(value: float, *, pt_per_px: float = _PT_PER_PX) -> float:
     """Geometry (row heights, borders, insets): 0.001 px precision."""
-    return round(value / _PT_PER_PX, 3)
+    return round(value / pt_per_px, 3)
 
 
-def font_pt_to_px(value: float) -> float:
+def font_pt_to_px(value: float, *, pt_per_px: float = _PT_PER_PX) -> float:
     """Font sizes: V1 canonicalizes to 0.001 pt, finer than the 0.01 px grid,
     so rounding to 0.01 px recovers a size authored on that grid exactly."""
-    return round(value / _PT_PER_PX, 2)
+    return round(value / pt_per_px, 2)
 
 
-def converter_payload(item: NativeObject) -> dict:
+def converter_payload(item: NativeObject, *, pt_per_px: float = _PT_PER_PX) -> dict:
     project = _table if item.kind == "table" else _chart
-    payload = project(item.payload) if item.kind == "table" else project(item.payload, item.svg_appearance)
+    payload = project(item.payload, pt_per_px=pt_per_px) if item.kind == "table" else project(item.payload, item.svg_appearance, pt_per_px=pt_per_px)
     anchor = item.anchor
     return {"x": anchor.x, "y": anchor.y, "width": anchor.width, "height": anchor.height, **payload}
 
 
-def _table(table: dict) -> dict:
+def _table(table: dict, *, pt_per_px: float = _PT_PER_PX) -> dict:
     header_rows = table.get("headerRows", 0)
     family = table.get("fontFamily", _AUTHORED_FONT_FAMILY)
-    size_px = font_pt_to_px(table.get("fontSizePt", _AUTHORED_FONT_SIZE_PT))
+    size_px = font_pt_to_px(table.get("fontSizePt", _AUTHORED_FONT_SIZE_PT),
+                              pt_per_px=pt_per_px if "fontSizePt" in table else _PT_PER_PX)
     merges = {(m["row"], m["column"]): m for m in table.get("mergedCells", [])}
     covered = {(r, c) for m in merges.values()
                for r in range(m["row"], m["row"] + m["rowSpan"])
@@ -68,7 +69,7 @@ def _table(table: dict) -> dict:
                 # The converter requires merge-covered cells to be bare blanks.
                 cells.append({"text": ""})
                 continue
-            entry = _cell(cell, styles[r][c] if styles else {}, header=r < header_rows, family=family)
+            entry = _cell(cell, styles[r][c] if styles else {}, header=r < header_rows, family=family, pt_per_px=pt_per_px)
             if (r, c) in merges:
                 entry["row_span"] = merges[(r, c)]["rowSpan"]
                 entry["col_span"] = merges[(r, c)]["columnSpan"]
@@ -81,11 +82,11 @@ def _table(table: dict) -> dict:
     if table.get("columnWidths"):
         projected["column_widths"] = list(table["columnWidths"])
     if table.get("rowHeightsPt"):
-        projected["row_heights"] = [pt_to_px(value) for value in table["rowHeightsPt"]]
+        projected["row_heights"] = [pt_to_px(value, pt_per_px=pt_per_px) for value in table["rowHeightsPt"]]
     return projected
 
 
-def _cell(cell: dict, style: dict, *, header: bool, family: str) -> dict:
+def _cell(cell: dict, style: dict, *, header: bool, family: str, pt_per_px: float = _PT_PER_PX) -> dict:
     lines = cell["text"].split("\n")
     entry: dict[str, Any] = {}
     cell_family = cell.get("fontFamily")
@@ -103,26 +104,28 @@ def _cell(cell: dict, style: dict, *, header: bool, family: str) -> dict:
         "bold": cell["bold"] if "bold" in cell else header,
         "align": _ALIGN[style.get("horizontalAlign", "left")],
         "valign": style.get("verticalAlign", "middle"),
-        "borders": _borders(style.get("borders", {})),
+        "borders": _borders(style.get("borders", {}), pt_per_px=pt_per_px),
     })
     if cell.get("fontSizePt") is not None:
-        entry["font_size"] = font_pt_to_px(cell["fontSizePt"])
+        entry["font_size"] = font_pt_to_px(cell["fontSizePt"], pt_per_px=pt_per_px)
     if style.get("marginsPt"):
-        entry["padding"] = {edge: pt_to_px(style["marginsPt"][edge]) for edge in _EDGES}
+        entry["padding"] = {edge: pt_to_px(style["marginsPt"][edge], pt_per_px=pt_per_px) for edge in _EDGES}
     return entry
 
 
-def _borders(borders: dict) -> dict:
+def _borders(borders: dict, *, pt_per_px: float = _PT_PER_PX) -> dict:
     """Every edge explicit: an absent V1 border is none, never a table-style line."""
     return {
-        edge: ({"style": "solid", "color": borders[edge]["color"], "width": pt_to_px(borders[edge]["widthPt"])}
+        edge: ({"style": "solid", "color": borders[edge]["color"], "width": pt_to_px(borders[edge]["widthPt"], pt_per_px=pt_per_px)}
                if edge in borders else {"style": "none"})
         for edge in _EDGES
     }
 
 
-def _chart(chart: dict, appearance: dict | None = None) -> dict:
+def _chart(chart: dict, appearance: dict | None = None, *, pt_per_px: float = _PT_PER_PX) -> dict:
     """Small, separate chart projection (category charts only; V1 has no other)."""
+    if chart.get("retainedAxisTitle") and chart.get("valueAxis", {}).get("title"):
+        raise ValueError("chart_retained_axis_title_conflict")
     chart_type = _CHART_TYPES[chart["chartType"]]
     palette = chart.get("palette") or _AUTHORED_PALETTE
     series = []
@@ -141,6 +144,9 @@ def _chart(chart: dict, appearance: dict | None = None) -> dict:
                                         for index, item in enumerate(chart["series"])]}
     projected: dict[str, Any] = {"type": chart_type, "categories": list(chart["categories"]), "series": series,
                                  "style": style}
+    for key in ("grouping", "plot_layout", "overlap", "gap_width"):
+        if key in chart:
+            projected[key] = chart[key]
     if chart.get("title") is not None:
         projected["title"] = chart["title"]
     if appearance is not None:
@@ -160,7 +166,7 @@ def _chart(chart: dict, appearance: dict | None = None) -> dict:
     if chart.get("fontFamily") is not None:
         style["font_family"] = chart["fontFamily"]
     if chart.get("fontSizePt") is not None:
-        style["font_size"] = font_pt_to_px(chart["fontSizePt"])
+        style["font_size"] = font_pt_to_px(chart["fontSizePt"], pt_per_px=pt_per_px)
     if chart.get("textColor") is not None:
         style["text_color"] = chart["textColor"]
     legend = chart.get("legend")
@@ -169,12 +175,20 @@ def _chart(chart: dict, appearance: dict | None = None) -> dict:
         if legend.get("position"):
             style["legend_position"] = legend["position"]
         if legend.get("fontSizePt") is not None:
-            style["legend_font_size"] = font_pt_to_px(legend["fontSizePt"])
+            style["legend_font_size"] = font_pt_to_px(legend["fontSizePt"], pt_per_px=pt_per_px)
     if chart_type not in {"pie", "doughnut"}:
         titles = {axis: chart[key]["title"] for axis, key in (("category", "categoryAxis"), ("value", "valueAxis"))
                   if chart.get(key, {}).get("title") is not None}
         if titles:
             projected["axis_titles"] = titles
+    if chart.get("axisContract") == "native-chart-fixed-value-axis/v1":
+        value_axis = chart["valueAxis"]
+        projected.setdefault("axes", {})["value"] = {
+            "minimum": value_axis["minimum"],
+            "maximum": value_axis["maximum"],
+            "major_unit": value_axis["majorUnit"],
+            "number_format": "General",
+        }
     return projected
 
 

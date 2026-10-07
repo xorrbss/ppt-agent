@@ -19,3 +19,16 @@ compatibility/slide-master/patches/*.patch -text
 servers/fastapi/tests/fixtures/infographic_16x9_baseline/** -text
 servers/fastapi/tests/fixtures/prompt_16x9_baseline/** -text
 servers/fastapi/tests/fixtures/header_16x9_baseline/** -text
+# Preserve bytes used by the approved source recovery converter digest.
+servers/fastapi/services/generation_core/drivers/svg/native_chart.py -text
+servers/fastapi/services/generation_core/drivers/svg/native_declarations.py -text
+servers/fastapi/services/generation_core/drivers/svg/native_publish.py -text
+servers/fastapi/services/generation_core/drivers/svg/fixed_axis_migration.py -text
+servers/fastapi/services/generation_core/drivers/svg/export_projection.py -text
+servers/fastapi/services/generation_core/drivers/svg/export_scene.py -text
+servers/fastapi/services/generation_core/native_objects/payload.py -text
+servers/fastapi/services/generation_core/drivers/svg/export_chart_style.py -text
+servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_data.py -text
+servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_xml.py -text
+servers/fastapi/vendor/slide_master/MANIFEST.json -text
+servers/fastapi/workers/public_svg_pptx_convert.py -text

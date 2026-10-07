@@ -10,9 +10,33 @@ SVG_IMAGE_POLICY_RECOVERY = "svg-reference-image-policy/v2"
 SVG_COMMENT_RECOVERY = "svg-comment-normalization/v1"
 SVG_PROVIDER_RECOVERY = "svg-provider-overload-recovery/v1"
 RASTER_CAPTURE_RECOVERY = "raster-approved-capture/v1"
+SVG_TIMEOUT_REPURCHASE = "svg-provider-timeout-repurchase/v1"
+SVG_TIMEOUT_REPURCHASE_V2 = "svg-provider-timeout-repurchase/v2"
+SVG_TIMEOUT_REPURCHASE_V3 = "svg-provider-timeout-repurchase/v3"
+SVG_CLASSIFICATION_REMEASUREMENT = "svg-source-remeasure/v1"
+SVG_SOURCE_REMEASUREMENT_DISPATCH = "svg-source-remeasure-dispatch/v1"
+SVG_CACHED_AUTHOR_RENDER = "svg-cached-author-render/v1"
+SVG_CACHED_AUTHOR_RENDER_V2 = "svg-cached-author-render/v2"
+SVG_CACHED_AUTHOR_RENDER_V3 = "svg-cached-author-render/v3"
 
 
-async def verified_svg_recovery_checkpoints(session, operation, request):
+async def verified_svg_recovery_checkpoints(session, operation, request, *, presentation_revision=None):
+    if request.recovery_revision in {SVG_CACHED_AUTHOR_RENDER, SVG_CACHED_AUTHOR_RENDER_V2,
+                                     SVG_CACHED_AUTHOR_RENDER_V3}:
+        from services.svg_cached_author_render_recovery import verify_action
+
+        return await verify_action(session, operation, request,
+                                   presentation_revision=presentation_revision)
+    if request.recovery_revision in {SVG_CLASSIFICATION_REMEASUREMENT, SVG_SOURCE_REMEASUREMENT_DISPATCH}:
+        from services.svg_classification_remeasurement import verify_classification_remeasurement
+
+        return await verify_classification_remeasurement(session, operation, request,
+                                                         presentation_revision=presentation_revision)
+    if request.recovery_revision in {SVG_TIMEOUT_REPURCHASE, SVG_TIMEOUT_REPURCHASE_V2, SVG_TIMEOUT_REPURCHASE_V3}:
+        from services.svg_timeout_repurchase import verify_timeout_repurchase
+
+        return await verify_timeout_repurchase(session, operation, request,
+                                                presentation_revision=presentation_revision)
     if (
         request.action != "retry"
         or request.recovery_revision
@@ -89,6 +113,19 @@ async def verified_svg_recovery_checkpoints(session, operation, request):
 
 
 def reset_svg_recovery_checkpoints(session, rows, *, operation_id, now, recovery_revision):
+    if recovery_revision in {SVG_CACHED_AUTHOR_RENDER, SVG_CACHED_AUTHOR_RENDER_V2,
+                             SVG_CACHED_AUTHOR_RENDER_V3}:
+        raise ValueError("svg_cached_author_render_requires_append_only_child")
+    if recovery_revision in {SVG_CLASSIFICATION_REMEASUREMENT, SVG_SOURCE_REMEASUREMENT_DISPATCH}:
+        from services.svg_classification_remeasurement import reset_classification_remeasurement_checkpoints
+
+        reset_classification_remeasurement_checkpoints(session, rows, operation_id=operation_id, now=now)
+        return
+    if recovery_revision in {SVG_TIMEOUT_REPURCHASE, SVG_TIMEOUT_REPURCHASE_V2, SVG_TIMEOUT_REPURCHASE_V3}:
+        from services.svg_timeout_repurchase import reset_timeout_repurchase_checkpoints
+
+        reset_timeout_repurchase_checkpoints(session, rows, operation_id=operation_id, now=now)
+        return
     for row in rows:
         previous = row.svg_checkpoint
         payload = {
@@ -129,3 +166,41 @@ def reset_svg_recovery_checkpoints(session, rows, *, operation_id, now, recovery
         row.render_completed_at = None
         row.updated_at = now
         session.add(row)
+
+
+def append_only_svg_checkpoint_payload(original, witness, lineage, *, cached=False, replacement=False, stage_binding=None):
+    from copy import deepcopy
+    from utils.hashing import canonical_json_sha256
+    from services.svg_timeout_repurchase import TimeoutRepurchaseRejected
+    if canonical_json_sha256(original.model_dump(mode="json")) != witness["row_digest"]:
+        raise TimeoutRepurchaseRejected("svg_timeout_repurchase_manifest_conflict")
+    if cached:
+        saved = deepcopy(original.svg_checkpoint or {})
+        previous_author = saved.pop("append_only_unstarted", None)
+        if previous_author is not None:
+            saved["consumed_author_lineage"] = previous_author
+        previous_replacement = saved.pop("append_only_replacement", None)
+        if previous_replacement is not None:
+            saved["consumed_replacement_lineage"] = previous_replacement
+        saved["append_only_cache"] = {"witness": deepcopy(witness), "lineage": deepcopy(lineage)}
+    elif replacement:
+        saved = {"schema_version": "svg-slide-checkpoint/v2", "source_format": "svg",
+            "input_digest": witness["input_digest"],
+            **{k: deepcopy(v) for k, v in (original.svg_checkpoint or {}).items()
+               if k in {"source_manifest_ref", "source_manifest_digest", "visual_intent", "nativeRequirements"}},
+            "attempts": [], "inflight": None,
+            "append_only_replacement": {"witness": deepcopy(witness), "lineage": deepcopy(lineage)}}
+    else:
+        saved = deepcopy(original.svg_checkpoint or {})
+        saved["append_only_unstarted"] = {"witness": deepcopy(witness), "lineage": deepcopy(lineage)}
+    if stage_binding and original.slide_index == 0:
+        progress = saved.get("trusted_stage_execution") or {}
+        if canonical_json_sha256(progress) != stage_binding["source_progress_digest"]:
+            raise TimeoutRepurchaseRejected("svg_timeout_repurchase_manifest_conflict")
+        accepted = stage_binding["accepted"]
+        if [entry["ordinal"] for entry in accepted] != list(range(len(accepted))):
+            raise TimeoutRepurchaseRejected("svg_timeout_repurchase_manifest_conflict")
+        saved["inherited_stage_execution"] = {"binding": deepcopy(stage_binding), "original_progress": deepcopy(progress)}
+        saved["trusted_stage_execution"] = {**deepcopy(progress), "operation_id": lineage["child_operation_id"],
+            "stages": [deepcopy(entry["stage"]) for entry in accepted]}
+    return saved

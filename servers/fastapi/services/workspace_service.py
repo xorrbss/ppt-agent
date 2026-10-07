@@ -1587,6 +1587,49 @@ async def create_workspace_command(
     presentation_id: uuid.UUID,
     request: WorkspaceCommandRequest,
     content_message: UserMessage | None = None,
+    allow_local_development: bool = False,
+) -> tuple[WorkspaceOperation, bool]:
+    bind_presentation_principal = request.command_type in {
+        "export.pptx", "export.pdf", "slide.regenerate.preview", "slide.regenerate",
+    }
+    if request.command_type in {
+        "presentation.slides.reorder", "version.restore", "presentation.edit",
+        "slide.edit", "slide.delete",
+    } and get_current_owner_id() is not None:
+        presentation = await session.scalar(select(PresentationModel).where(
+            PresentationModel.id == presentation_id,
+            PresentationModel.owner_id == get_current_owner_id(),
+        ))
+        bind_presentation_principal = presentation is not None and presentation.is_svg()
+    if not bind_presentation_principal:
+        return await _create_workspace_command(session, presentation_id=presentation_id,
+            request=request, content_message=content_message)
+    from services.workspace_operation_principal import presentation_export_principal
+    from services.workspace_operation_handler_registry import NonRetryableWorkspaceOperationError
+
+    submitting_tenant = get_current_tenant_id()
+    try:
+        async with presentation_export_principal(session, presentation_id=presentation_id,
+                                                allow_local_development=allow_local_development):
+            # Legacy adapters capture the authenticated tenant before this
+            # scope binds the generation principal. Rebind only that known
+            # value; a conflicting client-supplied tenant stays conflicting.
+            if submitting_tenant is not None and request.context.get("tenant_id") == submitting_tenant:
+                request = request.model_copy(update={"context": {
+                    **request.context, "tenant_id": get_current_tenant_id(),
+                }})
+            return await _create_workspace_command(session, presentation_id=presentation_id,
+                request=request, content_message=content_message)
+    except NonRetryableWorkspaceOperationError as error:
+        raise WorkspaceServiceError(error.code, status_code=403, retryable=False) from error
+
+
+async def _create_workspace_command(
+    session: AsyncSession,
+    *,
+    presentation_id: uuid.UUID,
+    request: WorkspaceCommandRequest,
+    content_message: UserMessage | None = None,
 ) -> tuple[WorkspaceOperation, bool]:
     """Persist a command; ``content_message`` keys a server-written command.
 
@@ -1684,6 +1727,13 @@ async def create_workspace_command(
     session.add_all((message, operation))
     try:
         await session.flush()
+        if request.command_type == "slide.regenerate.preview":
+            from services.workspace_authored_async_admission import admit_svg_page_preview_operation
+            try:
+                await admit_svg_page_preview_operation(session, operation=operation, presentation=presentation)
+            except PublicAdmissionRejected as error:
+                raise WorkspaceServiceError(error.code, status_code=429, retryable=True,
+                    retry_after_seconds=error.retry_after_seconds or 15) from error
         if request.command_type in {"export.pptx", "export.pdf"}:
             try:
                 await admit_public_operation(
@@ -1843,6 +1893,153 @@ async def apply_workspace_action(
     *,
     operation_id: uuid.UUID,
     request: WorkspaceOperationActionRequest,
+    allow_local_development: bool = False,
+) -> tuple[WorkspaceActionReceipt, WorkspaceOperation, bool]:
+    if request.action in {"cancel", "retry"} and get_current_owner_id() is not None:
+        source = await session.scalar(select(WorkspaceOperation).where(
+            WorkspaceOperation.id == operation_id,
+            WorkspaceOperation.owner_id == get_current_owner_id(),
+        ))
+        if (source is not None and source.kind == "presentation.generate"
+                and source.execution_profile_version == "public-generation-export/v2"):
+            from services.workspace_operation_principal import generation_action_principal
+            from services.workspace_operation_handler_registry import NonRetryableWorkspaceOperationError
+
+            try:
+                async with generation_action_principal(session, source=source, action=request.action,
+                                                        allow_local_development=allow_local_development):
+                    return await _apply_workspace_action(session, operation_id=operation_id, request=request)
+            except NonRetryableWorkspaceOperationError as error:
+                raise WorkspaceServiceError(error.code, status_code=403, retryable=False) from error
+        bind_presentation_principal = source is not None and source.kind in {
+            "export.pptx", "export.pdf",
+        }
+        if request.action == "retry" and source is not None and source.kind in {
+            "presentation.slides.reorder", "version.restore", "presentation.edit",
+            "slide.edit", "slide.delete",
+        }:
+            presentation = await session.scalar(select(PresentationModel).where(
+                PresentationModel.id == source.presentation_id,
+                PresentationModel.owner_id == get_current_owner_id(),
+            ))
+            bind_presentation_principal = presentation is not None and presentation.is_svg()
+        if request.action == "retry" and bind_presentation_principal:
+            from services.workspace_operation_principal import presentation_export_principal
+            from services.workspace_operation_handler_registry import NonRetryableWorkspaceOperationError
+
+            try:
+                async with presentation_export_principal(session, presentation_id=source.presentation_id,
+                                                        allow_local_development=allow_local_development):
+                    return await _apply_workspace_action(session, operation_id=operation_id, request=request)
+            except NonRetryableWorkspaceOperationError as error:
+                raise WorkspaceServiceError(error.code, status_code=403, retryable=False) from error
+    return await _apply_workspace_action(session, operation_id=operation_id, request=request)
+
+
+EXPORT_V2_AUTHORITY_RECOVERY_REVISION = "export-v2-authority-recovery/v1"
+
+
+async def _verified_export_retry_v2_authority(session, operation, request, presentation, *, lock_rows=True):
+    """Bind saved retry authority without modifying any ancestor."""
+    from models.sql.public_admission import PublicOperationAdmission, PublicProviderLogicalCall
+    from models.sql.public_artifact import PublicArtifact, PublicArtifactPublication, PublicExportIdentity
+    from models.sql.workspace import WorkspaceArtifact
+    from models.sql.presentation_export_attempt import PresentationExportAttempt
+    explicit = request.recovery_revision == EXPORT_V2_AUTHORITY_RECOVERY_REVISION
+    eligible = operation.kind in {"export.pptx", "export.pdf"} and request.action == "retry"
+    public_payload = isinstance(operation.request_payload, dict) and operation.request_payload.get("schema_version") == "public-export-operation/v2"
+    def reject():
+        raise WorkspaceServiceError("operation_not_retryable", status_code=409, retryable=False)
+    if not eligible or not public_payload:
+        if explicit:
+            reject()
+        return None
+    def locked(statement):
+        return statement.with_for_update() if lock_rows else statement
+    principal = current_principal_context()
+    operation = await session.scalar(locked(select(WorkspaceOperation).where(
+        WorkspaceOperation.id == operation.id, WorkspaceOperation.owner_scope == get_workspace_owner_scope()
+    ).execution_options(populate_existing=True)))
+    if operation is None:
+        reject()
+    if (request.expected_revision is None or request.expected_operation_version is None
+            or request.expected_revision != presentation.revision
+            or request.expected_operation_version != operation.version):
+        reject()
+    ignored = {"retry_of_operation_id", "account_deletion_generation", "recovery_revision"}
+    body = {k: v for k, v in operation.request_payload.items() if k not in ignored}
+    malformed = operation.contract_version is None and operation.execution_profile_version is None
+    if explicit != malformed:
+        reject()
+    row, seen = operation, set()
+    for _ in range(16):
+        if row.id in seen:
+            reject()
+        seen.add(row.id)
+        if (row.owner_id != principal.owner_id or row.owner_scope != get_workspace_owner_scope()
+                or row.presentation_id != presentation.id or row.conversation_id != operation.conversation_id
+                or row.expected_revision != presentation.revision
+                or row.state not in {"failed", "cancelled", "dead_letter"}
+                or row.completed_at is None or row.lease_expires_at is not None
+                or not isinstance(row.request_payload, dict)
+                or row.request_payload.get("principal_tenant_id") != principal.tenant_id
+                or row.request_payload.get("source_revision") != presentation.revision
+                or {k: v for k, v in row.request_payload.items() if k not in ignored} != body):
+            reject()
+        admission = await session.scalar(locked(select(PublicOperationAdmission).where(PublicOperationAdmission.operation_id == row.id)))
+        if (admission is None or admission.owner_id != principal.owner_id or admission.tenant_id != principal.tenant_id
+                or admission.operation_kind != "export" or admission.terminal_at is None
+                or admission.state not in {"failed", "cancelled", "deadline_exceeded", "budget_exhausted"}
+                or (admission.slide_count != presentation.n_slides
+                    and not (row.contract_version == "public-operation/v2"
+                             and row.execution_profile_version == "public-generation-export/v2"
+                             and admission.slide_count == 0))):
+            reject()
+        if row.contract_version == "public-operation/v2" and row.execution_profile_version == "public-generation-export/v2":
+            if (row.deadline_at is None or admission.deadline_at is None
+                    or as_utc(row.deadline_at) != as_utc(admission.deadline_at)
+                    or row.fencing_token != admission.fence or admission.fence < 1
+                    or not admission.policy_digest or len(admission.policy_digest) != 64 or not admission.policy_version):
+                reject()
+            return admission
+        if (not explicit or row.contract_version is not None or row.execution_profile_version is not None
+                or row.state != "failed" or admission.state != "failed" or admission.fence != 0
+                or row.cancel_requested_at is not None or row.cancelled_at is not None
+                or row.deadline_at is not None or row.phase is not None
+                or row.attempt_number != 1 or row.retry_count != 1 or row.fencing_token != 1
+                or row.attempt_token is not None or row.retry_of_operation_id is None):
+            reject()
+        for name in ("planned_request_limit", "retry_request_limit", "estimated_cost_limit_microunits", "actual_cost_limit_microunits",
+                     "initial_request_count", "retry_request_count", "estimated_reserved_microunits", "estimated_consumed_microunits",
+                     "actual_reserved_microunits", "actual_consumed_microunits", "actual_cost_unavailable_count"):
+            if getattr(admission, name) != 0:
+                reject()
+        for model, condition in (
+            (PublicProviderLogicalCall, PublicProviderLogicalCall.admission_id == admission.id),
+            (PresentationExportAttempt, PresentationExportAttempt.workspace_operation_id == row.id),
+            (WorkspaceArtifact, WorkspaceArtifact.operation_id == row.id),
+            (PublicArtifact, PublicArtifact.created_by_operation_id == row.id),
+            (PublicArtifactPublication, PublicArtifactPublication.operation_id == row.id),
+            (PublicExportIdentity, PublicExportIdentity.claimed_by_operation_id == row.id),
+        ):
+            if await session.scalar(select(func.count()).select_from(model).where(condition)):
+                reject()
+        if (row.request_payload.get("retry_of_operation_id") != str(row.retry_of_operation_id)
+                or row.request_hash != canonical_payload_hash({"retry_of_operation_id": str(row.retry_of_operation_id),
+                    "presentation_revision": row.expected_revision, "request_payload": row.request_payload})):
+            reject()
+        row = await session.scalar(locked(select(WorkspaceOperation).where(WorkspaceOperation.id == row.retry_of_operation_id,
+                                                                         WorkspaceOperation.owner_scope == get_workspace_owner_scope())))
+        if row is None:
+            reject()
+    reject()
+
+
+async def _apply_workspace_action(
+    session: AsyncSession,
+    *,
+    operation_id: uuid.UUID,
+    request: WorkspaceOperationActionRequest,
 ) -> tuple[WorkspaceActionReceipt, WorkspaceOperation, bool]:
     idempotency_hash = workspace_idempotency_hash(request.idempotency_key)
     action_id = request.action_id or idempotency_hash[:32]
@@ -1870,12 +2067,15 @@ async def apply_workspace_action(
             raise WorkspaceServiceError("idempotency_record_incomplete", status_code=409)
         return existing_receipt, operation, True
 
+    operation_statement = select(WorkspaceOperation).where(
+        WorkspaceOperation.id == operation_id,
+        WorkspaceOperation.owner_scope == get_workspace_owner_scope(),
+    )
+    if request.recovery_revision in {EXPORT_V2_AUTHORITY_RECOVERY_REVISION, "svg-provider-timeout-repurchase/v1", "svg-provider-timeout-repurchase/v2", "svg-provider-timeout-repurchase/v3", "svg-source-remeasure/v1", "svg-source-remeasure-dispatch/v1", "svg-cached-author-render/v1", "svg-cached-author-render/v2", "svg-cached-author-render/v3"}:
+        operation_statement = operation_statement.with_for_update()
     operation = (
         await session.execute(
-            select(WorkspaceOperation).where(
-                WorkspaceOperation.id == operation_id,
-                WorkspaceOperation.owner_scope == get_workspace_owner_scope(),
-            )
+            operation_statement
         )
     ).scalar_one_or_none()
     if operation is None:
@@ -1903,6 +2103,10 @@ async def apply_workspace_action(
         "cancelled",
         "dead_letter",
     }
+    export_v2_authority = (
+        await _verified_export_retry_v2_authority(session, operation, request, presentation)
+        if terminal_retry else None
+    )
     raster_tenant_recovery = (
         await _verify_raster_tenant_handoff_retry(session, operation)
         if terminal_retry and _is_retryable_raster_tenant_handoff(operation)
@@ -1919,12 +2123,27 @@ async def apply_workspace_action(
     )
     explicit_checkpoint_recovery = checkpoint_recovery is not None
     from services.svg_checkpoint_recovery import verified_svg_recovery_checkpoints
-    svg_recovery = await verified_svg_recovery_checkpoints(session, operation, request)
+    from services.svg_timeout_repurchase import TimeoutRepurchaseRejected, SVG_TIMEOUT_REPURCHASE, SVG_TIMEOUT_REPURCHASE_V2, SVG_TIMEOUT_REPURCHASE_V3, _bounded_completion_shape
+    from services.svg_classification_remeasurement import (
+        ClassificationRemeasurementRejected, SVG_CLASSIFICATION_REMEASUREMENT, SVG_SOURCE_REMEASUREMENT_DISPATCH,
+    )
+    from services.svg_cached_author_render_recovery import (
+        CachedAuthorRenderRejected, REVISION as SVG_CACHED_AUTHOR_RENDER,
+        REVISION_V2 as SVG_CACHED_AUTHOR_RENDER_V2,
+        REVISION_V3 as SVG_CACHED_AUTHOR_RENDER_V3,
+    )
+    try:
+        svg_recovery = await verified_svg_recovery_checkpoints(
+            session, operation, request, presentation_revision=presentation.revision)
+    except (TimeoutRepurchaseRejected, ClassificationRemeasurementRejected, CachedAuthorRenderRejected) as error:
+        raise WorkspaceServiceError(str(error), status_code=409, retryable=False) from error
+    append_only_recovery = bool(getattr(svg_recovery, "manifest", {}).get("append_only_recovery"))
     if (
         request.recovery_revision is not None
         and not explicit_capacity_recovery
         and not explicit_checkpoint_recovery
         and svg_recovery is None
+        and export_v2_authority is None
     ):
         raise WorkspaceServiceError("operation_not_retryable", status_code=409)
     if terminal_retry:
@@ -1941,6 +2160,8 @@ async def apply_workspace_action(
             and not explicit_capacity_recovery
             and not explicit_checkpoint_recovery
             and svg_recovery is None
+            and not (export_v2_authority is not None
+                     and request.recovery_revision == EXPORT_V2_AUTHORITY_RECOVERY_REVISION)
         ):
             raise WorkspaceServiceError("operation_not_retryable", status_code=409)
         retry_of_operation_id = operation.id
@@ -1961,9 +2182,13 @@ async def apply_workspace_action(
                 idempotency_hash=idempotency_hash,
                 request_hash=request_hash,
             )
+        recovery_child_presentation = None
+        recovery_child_conversation = None
+        if append_only_recovery:
+            recovery_child_presentation, recovery_child_conversation = await _fork_append_only_svg_recovery_workspace(
+                session, operation, presentation, svg_recovery)
         reservation = await reserve_conversation_positions(
-            session, operation.conversation_id, 1
-        )
+            session, recovery_child_conversation.id if append_only_recovery else operation.conversation_id, 1)
         source_operation = operation
         retry_payload = {
             **source_operation.request_payload,
@@ -1972,6 +2197,16 @@ async def apply_workspace_action(
         }
         if explicit_capacity_recovery or explicit_checkpoint_recovery or svg_recovery is not None:
             retry_payload["recovery_revision"] = request.recovery_revision
+        if request.recovery_revision in {SVG_TIMEOUT_REPURCHASE, SVG_TIMEOUT_REPURCHASE_V2, SVG_TIMEOUT_REPURCHASE_V3}:
+            retry_payload["svg_timeout_repurchase_manifest_hash"] = svg_recovery.manifest_hash
+            if request.recovery_revision in {SVG_TIMEOUT_REPURCHASE_V2, SVG_TIMEOUT_REPURCHASE_V3}:
+                retry_payload["svg_timeout_repurchase_manifest"] = deepcopy(svg_recovery.manifest)
+        if request.recovery_revision in {SVG_CLASSIFICATION_REMEASUREMENT, SVG_SOURCE_REMEASUREMENT_DISPATCH}:
+            retry_payload["svg_classification_remeasurement_manifest_hash"] = svg_recovery.manifest_hash
+        if request.recovery_revision in {SVG_CACHED_AUTHOR_RENDER, SVG_CACHED_AUTHOR_RENDER_V2,
+                                         SVG_CACHED_AUTHOR_RENDER_V3}:
+            retry_payload["svg_cached_author_render_manifest_hash"] = svg_recovery.manifest_hash
+            retry_payload["svg_cached_author_render_manifest"] = deepcopy(svg_recovery.manifest)
         retry_request_hash = canonical_payload_hash(
             {
                 "retry_of_operation_id": str(source_operation.id),
@@ -1980,6 +2215,22 @@ async def apply_workspace_action(
             }
         )
         retry_payload = {**submitting_principal_tenant(), **retry_payload}  # the source's wins
+        if source_operation.kind in {"export.pptx", "export.pdf"} or (
+            presentation.is_svg() and source_operation.kind in {
+                "presentation.slides.reorder", "version.restore", "presentation.edit",
+                "slide.edit", "slide.delete",
+            }
+        ):
+            # The verified source-presentation admission also repairs old UI
+            # export and SVG publisher attempts captured under the default tenant.
+            retry_payload.update(submitting_principal_tenant())
+            previous_tenant = source_operation.request_payload.get("principal_tenant_id")
+            previous_context = retry_payload.get("context")
+            if (previous_tenant is not None and isinstance(previous_context, dict)
+                    and previous_context.get("tenant_id") == previous_tenant):
+                retry_payload["context"] = {
+                    **previous_context, "tenant_id": get_current_tenant_id(),
+                }
         retry_operation_key_hash = sha256_hex(
             f"presenton.workspace.retry/v1:{idempotency_hash}:{source_operation.id}".encode("utf-8")
         )
@@ -1992,8 +2243,8 @@ async def apply_workspace_action(
         operation = WorkspaceOperation(
             owner_id=source_operation.owner_id,
             owner_scope=source_operation.owner_scope,
-            conversation_id=source_operation.conversation_id,
-            presentation_id=source_operation.presentation_id,
+            conversation_id=recovery_child_conversation.id if append_only_recovery else source_operation.conversation_id,
+            presentation_id=recovery_child_presentation.id if append_only_recovery else source_operation.presentation_id,
             retry_of_operation_id=source_operation.id,
             anchor_position=reservation.start,
             kind=source_operation.kind,
@@ -2001,11 +2252,32 @@ async def apply_workspace_action(
             idempotency_key_hash=retry_operation_key_hash,
             request_hash=retry_request_hash,
             request_payload=retry_payload,
-            expected_revision=presentation.revision,
+            expected_revision=recovery_child_presentation.revision if append_only_recovery else presentation.revision,
             approval_expires_at=retry_approval_expires_at,
             next_attempt_at=None if retry_requires_approval else now,
-            max_attempts=source_operation.max_attempts,
+            max_attempts=(1 if export_v2_authority is not None and request.recovery_revision == EXPORT_V2_AUTHORITY_RECOVERY_REVISION else 1 if append_only_recovery else 1 if svg_recovery is not None and _bounded_completion_shape(getattr(svg_recovery, 'manifest', {})) else source_operation.max_attempts),
         )
+        strategy_receipt = operation.request_payload.get("generation_strategy")
+        if source_operation.kind == "presentation.generate" and strategy_receipt is not None:
+            from services.authored_vnext.deck_ir.strategy import (
+                GenerationStrategyCapabilityError, rebind_sealed_generation_strategy,
+            )
+            strategy_source_id = (svg_recovery.manifest["strategy_source_operation_id"]
+                                  if request.recovery_revision == SVG_SOURCE_REMEASUREMENT_DISPATCH
+                                  else str(source_operation.id))
+            try:
+                rebound_strategy = rebind_sealed_generation_strategy(strategy_receipt,
+                    source_operation_id=strategy_source_id, operation_id=str(operation.id))
+            except (GenerationStrategyCapabilityError, AttributeError, TypeError) as error:
+                await session.rollback()
+                raise WorkspaceServiceError("generation_strategy_capability_missing", status_code=409,
+                                            retryable=False) from error
+            operation.request_payload = {**operation.request_payload, "generation_strategy": rebound_strategy}
+            operation.request_hash = canonical_payload_hash({
+                "retry_of_operation_id": str(source_operation.id),
+                "presentation_revision": presentation.revision,
+                "request_payload": operation.request_payload,
+            })
         session.add(operation)
         try:
             # Flush the self-referencing operation before its action receipt.
@@ -2014,14 +2286,27 @@ async def apply_workspace_action(
             await session.flush()
             if operation.kind in {"export.pptx", "export.pdf"}:
                 try:
-                    await admit_public_operation(
-                        session,
-                        principal=current_principal_context(),
-                        operation_id=operation.id,
-                        operation_kind="export",
-                        request_plan=None,
-                        planned_slide_count=presentation.n_slides,
-                    )
+                    if export_v2_authority is not None:
+                        from services.public_operation_admission import admit_public_operation_v2
+                        from services.public_v2_orchestrator import SqlPublicV2Orchestrator
+                        retry_admission = await admit_public_operation_v2(
+                            session, principal=current_principal_context(), operation_id=operation.id,
+                            operation_kind="export", request_plan=None,
+                            resource_plan=SqlPublicV2Orchestrator._resource_plan(
+                                slide_count=presentation.n_slides,
+                                fidelity_mode=operation.request_payload["context"]["pptx_mode"],
+                            ),
+                            policy_version=export_v2_authority.policy_version,
+                            planned_slide_count=presentation.n_slides,
+                        )
+                        if (retry_admission.policy_digest != export_v2_authority.policy_digest
+                                or retry_admission.resource_units != export_v2_authority.resource_units):
+                            raise PublicAdmissionRejected("public_operation_identity_conflict")
+                    else:
+                        await admit_public_operation(
+                            session, principal=current_principal_context(), operation_id=operation.id,
+                            operation_kind="export", request_plan=None, planned_slide_count=presentation.n_slides,
+                        )
                 except PublicAdmissionRejected as error:
                     await session.rollback()
                     raise WorkspaceServiceError(
@@ -2039,18 +2324,29 @@ async def apply_workspace_action(
                     rebind_workspace_linked_generation_job_for_retry,
                 )
 
-                rebound = await rebind_workspace_linked_generation_job_for_retry(
-                    session,
-                    source_operation.id,
-                    operation.id,
-                    expected_job_id=linked_job_id,
-                    expected_presentation_id=source_operation.presentation_id,
-                )
-                if not rebound:
-                    await session.rollback()
-                    raise WorkspaceServiceError(
-                        "operation_state_conflict", status_code=409
+                if append_only_recovery:
+                    if request.recovery_revision in {SVG_CACHED_AUTHOR_RENDER, SVG_CACHED_AUTHOR_RENDER_V2,
+                                                     SVG_CACHED_AUTHOR_RENDER_V3}:
+                        retry_job = await _fork_cached_author_render_job(
+                            session, source_operation, operation, svg_recovery,
+                            key_hash=retry_operation_key_hash)
+                    else:
+                        retry_job = await _fork_append_only_svg_recovery_job(
+                            session, source_operation, operation, svg_recovery,
+                            key_hash=retry_operation_key_hash)
+                else:
+                    rebound = await rebind_workspace_linked_generation_job_for_retry(
+                        session,
+                        source_operation.id,
+                        operation.id,
+                        expected_job_id=linked_job_id,
+                        expected_presentation_id=source_operation.presentation_id,
                     )
+                    if not rebound:
+                        await session.rollback()
+                        raise WorkspaceServiceError(
+                            "operation_state_conflict", status_code=409
+                        )
                 if source_operation.kind == "presentation.generate":
                     from fastapi import HTTPException
                     from services.presentation_generation_pipeline import (
@@ -2061,15 +2357,21 @@ async def apply_workspace_action(
                     retry_job = (await session.execute(
                         select(PresentationGenerationJob).where(
                             PresentationGenerationJob.workspace_operation_id == operation.id,
-                            PresentationGenerationJob.presentation_id == presentation.id,
+                            PresentationGenerationJob.presentation_id == operation.presentation_id,
                         )
                     )).scalar_one()
                     try:
                         await _admit_generation_operation_v2_compatible(
                             session,
                             request=_request_from_durable_payload(retry_job.request_payload),
-                            presentation=presentation,
+                            presentation=recovery_child_presentation if append_only_recovery else presentation,
                             operation=operation,
+                            **({"retry_source_operation": source_operation}
+                               if svg_recovery is None and checkpoint_recovery is None
+                               and not explicit_capacity_recovery else {}),
+                            zero_provider_cached_author_recovery=request.recovery_revision in {
+                                SVG_CACHED_AUTHOR_RENDER, SVG_CACHED_AUTHOR_RENDER_V2,
+                                SVG_CACHED_AUTHOR_RENDER_V3},
                         )
                     except HTTPException as error:
                         await session.rollback()
@@ -2077,6 +2379,12 @@ async def apply_workspace_action(
                             str(error.detail), status_code=error.status_code,
                             retryable=error.status_code == 429,
                         ) from error
+                if append_only_recovery:
+                    if request.recovery_revision in {SVG_CACHED_AUTHOR_RENDER, SVG_CACHED_AUTHOR_RENDER_V2,
+                                                     SVG_CACHED_AUTHOR_RENDER_V3}:
+                        await _verify_zero_provider_cached_admission(session, operation)
+                    else:
+                        await _bind_append_only_svg_recovery_admission(session, operation, svg_recovery)
                 if checkpoint_recovery is not None:
                     checkpoint_recovery.render_status = "completed"
                     checkpoint_recovery.failed_stage = None
@@ -2084,10 +2392,15 @@ async def apply_workspace_action(
                     checkpoint_recovery.failed_at = None
                     checkpoint_recovery.updated_at = now
                     session.add(checkpoint_recovery)
-                if svg_recovery is not None:
+                if svg_recovery is not None and not append_only_recovery:
                     from services.svg_checkpoint_recovery import reset_svg_recovery_checkpoints
                     reset_svg_recovery_checkpoints(session, svg_recovery,
-                        operation_id=source_operation.id, now=now, recovery_revision=request.recovery_revision)
+                        operation_id=operation.id if request.recovery_revision in {
+                            SVG_CLASSIFICATION_REMEASUREMENT, SVG_SOURCE_REMEASUREMENT_DISPATCH,
+                            SVG_CACHED_AUTHOR_RENDER, SVG_CACHED_AUTHOR_RENDER_V2,
+                            SVG_CACHED_AUTHOR_RENDER_V3,
+                            SVG_TIMEOUT_REPURCHASE_V2, SVG_TIMEOUT_REPURCHASE_V3} else source_operation.id,
+                        now=now, recovery_revision=request.recovery_revision)
         except IntegrityError:
             await session.rollback()
             return await _replay_action_receipt_after_conflict(
@@ -2282,3 +2595,180 @@ async def apply_workspace_action(
                 else "idempotency_key_payload_conflict"
             ),
         )
+
+
+async def _fork_append_only_svg_recovery_workspace(session, source, presentation, recovery):
+    from models.sql.presentation import PRESENTATION_LIFECYCLE_STAGING
+    child = PresentationModel(**{**deepcopy(presentation.model_dump()),
+        "id": uuid.uuid4(), "owner_id": source.owner_id, "revision": 0,
+        "lifecycle_status": PRESENTATION_LIFECYCLE_STAGING, "deleted_at": None,
+        "deletion_operation_id": None, "share_token": None, "expires_at": None,
+        "view_count": 0, "created_at": get_current_utc_datetime(),
+        "updated_at": get_current_utc_datetime()})
+    session.add(child)
+    await session.flush()
+    conversation = WorkspaceConversation(presentation_id=child.id,
+        owner_id=source.owner_id, owner_scope=source.owner_scope)
+    session.add(conversation)
+    await session.flush()
+    return child, conversation
+
+
+async def _fork_cached_author_render_job(session, source, child, recovery, *, key_hash):
+    """Fork a provider-free child; leave the failed job and all rows untouched."""
+    from models.sql.async_presentation_generation_status import AsyncPresentationGenerationTaskModel
+    from services.svg_cached_author_render_recovery import child_checkpoint_payload, digest
+    from services.presentation_generation_job_service import request_sha256
+
+    parent = await session.scalar(select(PresentationGenerationJob).where(
+        PresentationGenerationJob.id == uuid.UUID(recovery.manifest["job_id"]),
+    ).with_for_update())
+    if parent is None or digest(parent.model_dump(mode="json")) != recovery.manifest["job_digest"]:
+        raise WorkspaceServiceError("operation_state_conflict", status_code=409)
+    status = AsyncPresentationGenerationTaskModel(status="pending", owner_id=source.owner_id)
+    session.add(status)
+    await session.flush()
+    revision = recovery.manifest["recovery_revision"]
+    lineage = {
+        "schema": ("svg-cached-author-render-lineage/v3"
+                   if revision == "svg-cached-author-render/v3"
+                   else "svg-cached-author-render-lineage/v2"
+                   if revision == "svg-cached-author-render/v2"
+                   else "svg-cached-author-render-lineage/v1"),
+        "parent_operation_id": recovery.manifest["operation_id"],
+        "parent_job_id": str(parent.id),
+        "parent_presentation_id": str(parent.presentation_id),
+        "child_operation_id": str(child.id),
+        "child_presentation_id": str(child.presentation_id),
+        "approval_manifest_hash": recovery.manifest_hash,
+    }
+    if revision in {"svg-cached-author-render/v2", "svg-cached-author-render/v3"}:
+        if recovery.manifest.get("action_operation_id") != str(source.id):
+            raise WorkspaceServiceError("svg_cached_author_render_prior_child_unproven",
+                                        status_code=409)
+        lineage["action_operation_id"] = str(source.id)
+    payload = deepcopy(parent.request_payload)
+    payload["presentation_id"] = str(child.presentation_id)
+    payload["_svg_recovery_lineage"] = lineage
+    job = PresentationGenerationJob(
+        task_id=status.id, presentation_id=child.presentation_id,
+        workspace_operation_id=child.id, idempotency_key_hash=key_hash,
+        request_sha256=request_sha256(payload), request_payload=payload,
+        svg_style_snapshot=deepcopy(parent.svg_style_snapshot),
+        authored_outline=deepcopy(parent.authored_outline),
+        total_slides=parent.total_slides, state="queued", export_cookie_required=False,
+    )
+    lineage["child_job_id"] = str(job.id)
+    payload["_svg_recovery_lineage"] = lineage
+    job.request_payload = payload
+    job.request_sha256 = request_sha256(payload)
+    session.add(job)
+    await session.flush()
+    if [row.slide_index for row in recovery.rows] != list(range(parent.total_slides)):
+        raise WorkspaceServiceError("operation_state_conflict", status_code=409)
+    for original in recovery.rows:
+        child_payload = child_checkpoint_payload(
+            original, recovery, child_operation_id=child.id)
+        session.add(AuthoredSlideCheckpoint(
+            job_id=job.id, slide_index=original.slide_index, role=original.role,
+            svg_checkpoint=child_payload, author_status="completed",
+            render_status="pending", persist_status="pending",
+        ))
+    child.request_payload = {
+        **child.request_payload, "job_id": str(job.id), "task_id": status.id,
+        "generation_request": deepcopy(payload),
+        "svg_recovery_lineage": deepcopy(lineage),
+    }
+    child.request_hash = canonical_payload_hash(child.request_payload)
+    session.add(child)
+    return job
+
+
+async def _verify_zero_provider_cached_admission(session, operation):
+    from models.sql.public_admission import PublicOperationAdmission
+
+    admission = await session.scalar(select(PublicOperationAdmission).where(
+        PublicOperationAdmission.operation_id == operation.id,
+    ).with_for_update())
+    if (admission is None or admission.planned_request_limit != 0
+            or admission.retry_request_limit != 0
+            or admission.estimated_cost_limit_microunits != 0
+            or admission.actual_cost_limit_microunits != 0
+            or admission.initial_request_count != 0
+            or admission.retry_request_count != 0):
+        raise WorkspaceServiceError("svg_cached_author_render_provider_budget_nonzero",
+                                    status_code=409)
+
+
+async def _fork_append_only_svg_recovery_job(session, source, child, recovery, *, key_hash):
+    from models.sql.async_presentation_generation_status import AsyncPresentationGenerationTaskModel
+    from services.svg_timeout_repurchase import _digest, TimeoutRepurchaseRejected
+    parent = await session.get(PresentationGenerationJob, uuid.UUID(recovery.manifest["job_id"]))
+    if parent is None or _digest(parent.model_dump(mode="json")) != recovery.manifest["job_digest"]:
+        raise WorkspaceServiceError("operation_state_conflict", status_code=409)
+    status = AsyncPresentationGenerationTaskModel(status="pending", owner_id=source.owner_id)
+    session.add(status)
+    await session.flush()
+    payload = deepcopy(parent.request_payload)
+    payload["presentation_id"] = str(child.presentation_id)
+    lineage = {"schema": "svg-replacement-lineage/v1", "parent_operation_id": str(source.id),
+        "parent_job_id": str(parent.id), "parent_presentation_id": str(parent.presentation_id),
+        "child_operation_id": str(child.id), "child_presentation_id": str(child.presentation_id),
+        "approval_manifest_hash": recovery.manifest_hash,
+        "original_unknown_logical_call_ids": [p["original_logical_call_id"] for p in recovery.manifest["unknown_checkpoints"]],
+        "replacement_page_indexes": [p["slide_index"] for p in recovery.manifest["unknown_checkpoints"]]}
+    payload["_svg_recovery_lineage"] = lineage
+    job = PresentationGenerationJob(task_id=status.id, presentation_id=child.presentation_id,
+        workspace_operation_id=child.id, idempotency_key_hash=key_hash,
+        request_sha256=canonical_payload_hash(payload), request_payload=payload,
+        svg_style_snapshot=deepcopy(parent.svg_style_snapshot),
+        authored_outline=deepcopy(parent.authored_outline), total_slides=parent.total_slides,
+        state="queued", export_cookie_required=False)
+    lineage["child_job_id"] = str(job.id)
+    payload["_svg_recovery_lineage"] = lineage
+    job.request_payload = payload
+    job.request_sha256 = canonical_payload_hash(payload)
+    session.add(job)
+    await session.flush()
+    cached = {p["slide_index"]: p for p in recovery.manifest["completed_checkpoints"]}
+    unknown = {p["slide_index"]: p for p in recovery.manifest["unknown_checkpoints"]}
+    for original in recovery.rows:
+        witness = next(p for p in recovery.manifest["completed_checkpoints"] +
+            recovery.manifest["unknown_checkpoints"] + recovery.manifest["unstarted_checkpoints"]
+            if p["slide_index"] == original.slide_index)
+        if _digest(original.model_dump(mode="json")) != witness["row_digest"]:
+            raise TimeoutRepurchaseRejected("svg_timeout_repurchase_manifest_conflict")
+        from services.svg_checkpoint_recovery import append_only_svg_checkpoint_payload
+        saved = append_only_svg_checkpoint_payload(original, witness, lineage,
+            cached=original.slide_index in cached, replacement=original.slide_index in unknown, stage_binding=recovery.manifest.get("inherited_stage_execution"))
+        checkpoint = AuthoredSlideCheckpoint(job_id=job.id,
+            slide_index=original.slide_index, role=original.role, svg_checkpoint=saved,
+            author_status="completed" if original.slide_index in cached else "pending")
+        session.add(checkpoint)
+    child.request_payload = {**child.request_payload, "job_id": str(job.id), "task_id": status.id,
+        "generation_request": deepcopy(payload), "svg_recovery_lineage": deepcopy(lineage)}
+    child.request_hash = canonical_payload_hash(child.request_payload)
+    session.add(child)
+    return job
+
+
+async def _bind_append_only_svg_recovery_admission(session, operation, recovery):
+    from models.sql.public_admission import PublicOperationAdmission
+    admission = await session.scalar(select(PublicOperationAdmission).where(
+        PublicOperationAdmission.operation_id == operation.id).with_for_update())
+    if admission is None:
+        raise WorkspaceServiceError("public_admission_missing", status_code=409)
+    if admission.initial_request_count or admission.retry_request_count:
+        raise WorkspaceServiceError("operation_state_conflict", status_code=409)
+    admission.planned_request_limit = min(admission.planned_request_limit, recovery.manifest["initial_remaining"])
+    admission.retry_request_limit = min(admission.retry_request_limit, recovery.manifest["retry_remaining"])
+    old = recovery.manifest["old_admission"]
+    calls = recovery.manifest["old_logical_calls"]
+    estimated_consumed = sum(c.get("estimated_cost_microunits", 0) for c in calls)
+    actual_exposure = sum(c.get("actual_cost_microunits")
+        if c.get("actual_cost_microunits") is not None else c.get("estimated_cost_microunits", 0) for c in calls)
+    for limit, exposure in [("estimated_cost_limit_microunits", estimated_consumed),
+                            ("actual_cost_limit_microunits", actual_exposure)]:
+        remaining = max(0, old[limit] - exposure)
+        setattr(admission, limit, min(getattr(admission, limit), remaining))
+    session.add(admission)

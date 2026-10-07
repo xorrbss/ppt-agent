@@ -9,6 +9,7 @@ from workers.public_svg_export_worker import (
     SVG_EXPORT_SCHEMA,
     SVG_EXPORT_SCHEMA_V2,
     SVG_EXPORT_SCHEMA_V3,
+    SVG_EXPORT_SCHEMA_V4,
     converter_digest,
 )
 from utils.hashing import sha256_hex
@@ -24,7 +25,8 @@ def _manifest_digests(assets):
 
 
 def build_svg_export_bundle(*, claim, slide_refs, source_digests, notes, canvas, export_format, font_embedding,
-                            assets, source_preservation=None, native_objects=None) -> dict:
+                            assets, source_preservation=None, native_objects=None,
+                            source_manifest=None) -> dict:
     """Assemble the bundle payload plus its ``canonicalExportIdentity``.
 
     ``slide_refs`` are the per-slide worker artifact-ref wires, ``source_digests``
@@ -49,7 +51,8 @@ def build_svg_export_bundle(*, claim, slide_refs, source_digests, notes, canvas,
         "contract": SVG_CONTRACT_VERSION, "fontEmbedding": payload["fontEmbedding"],
     })
     if source_preservation is not None:
-        payload.update(schemaVersion=SVG_EXPORT_SCHEMA_V3, contractVersion="svg-static/v2",
+        payload.update(schemaVersion=(SVG_EXPORT_SCHEMA_V4 if source_manifest is not None else SVG_EXPORT_SCHEMA_V3),
+                       contractVersion="svg-static/v2",
                        presentationId=str(claim.presentation_id), sourceRevision=claim.expected_revision)
         for entry, asset, receipt in zip(payload["slides"], assets, source_preservation, strict=True):
             entry["assets"] = asset
@@ -59,6 +62,16 @@ def build_svg_export_bundle(*, claim, slide_refs, source_digests, notes, canvas,
             "sourcePreservation": [digest(receipt) for receipt in source_preservation],
             "manifestDigests": _manifest_digests(assets),
         })
+        if source_manifest is not None:
+            from services.svg_export_whole_page_verifier import whole_page_verifier_digest
+            payload["sourceManifest"] = source_manifest
+            payload["wholePageVerifierDigest"] = whole_page_verifier_digest()
+            payload["canonicalExportIdentity"] = digest({
+                "legacyIdentity": payload["canonicalExportIdentity"],
+                "sourceManifest": source_manifest,
+                "wholePageVerifierDigest": payload["wholePageVerifierDigest"]})
+    elif source_manifest is not None:
+        raise ValueError("svg_source_export_manifest_without_receipts")
     elif any(asset is not None for asset in assets):
         payload.update(schemaVersion=SVG_EXPORT_SCHEMA_V2, contractVersion="svg-static/v2",
                        presentationId=str(claim.presentation_id), sourceRevision=claim.expected_revision)

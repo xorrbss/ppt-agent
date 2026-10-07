@@ -1132,3 +1132,189 @@ def test_provider_outcome_gets_only_the_explicit_single_recovery(monkeypatch):
     assert terminal.value.code == "public_provider_response_failed"
     assert terminal.value.retryable is False
     assert [call["receipt_attempt_ordinal"] for call in calls] == [1, 2]
+
+@pytest.mark.parametrize("field", ["exceptionType", "errorCode", "requestId", "terminalEvent", "failureKind", "statusOrigin", "incompleteReason", "providerErrorType", "rejectedParameter", "requestRejectionReason", "unrecognizedErrorCode", "unrecognizedParameter"])
+def test_provider_diagnostics_refuse_dynamic_strings_and_message_fields(field):
+    unsafe = "private.person@example.test prompt token Bearer secret"
+    diagnostics = safe_provider_diagnostics(diagnostics={
+        field: unsafe, "message": unsafe, "body": unsafe, "header": unsafe,
+        "httpStatus": 500, "retryAfterSeconds": float("nan"),
+        "usage": {"input_tokens": 12, "output_tokens": True, "total_tokens": -1, "secret": unsafe},
+    })
+    assert field not in diagnostics
+    assert diagnostics["usage"] == {"input_tokens": 12}
+    assert "retryAfterSeconds" not in diagnostics
+    assert unsafe not in str(diagnostics)
+    assert not {"message", "body", "header"}.intersection(diagnostics)
+    assert safe_provider_diagnostics(diagnostics={"errorCode": "private_person", "exceptionType": "PrivatePerson"}) == {}
+
+def test_provider_diagnostics_keep_only_validated_metadata_and_numeric_usage():
+    diagnostics = {
+        "exceptionType": "APIStatusError", "errorCode": "server_error",
+        "httpStatus": 503, "requestId": "req_0123456789abcdef0123456789abcdef",
+        "retryAfterSeconds": 4.5, "statusOrigin": "http_response",
+        "usage": {"input_tokens": 10, "output_tokens": 20, "total_tokens": 30},
+    }
+    outcome = ProviderOutcomeError("public_provider_overload", recovery_allowed=True, overload=True, diagnostics=diagnostics)
+    assert outcome.diagnostics == diagnostics
+    diagnostics["usage"]["input_tokens"] = "private"
+    assert outcome.diagnostics["usage"]["input_tokens"] == 10
+    assert safe_provider_diagnostics(diagnostics={"statusOrigin": "local_stream", "httpStatus": 500}) == {"statusOrigin": "local_stream"}
+
+    # A nested SDK error may keep fields in its JSON error envelope instead of
+    # its attributes. Preserve useful protocol metadata without its private body.
+    private = "private.person@example.test prompt Bearer secret"
+    leaf = RuntimeError(private)
+    leaf.body = {"error": {"code": "model_not_found", "type": "invalid_request_error", "param": "input[0].content[1].text", "message": private}}
+    wrapper = RuntimeError(private)
+    wrapper.cause = leaf
+    selected = safe_provider_diagnostics(wrapper)
+    assert selected["providerErrorCode"] == "model_not_found"
+    assert selected["providerErrorType"] == "invalid_request_error"
+    assert selected["rejectedParameter"] == "input.content.text"
+    assert private not in str(selected)
+    assert not {"body", "message", "header"}.intersection(selected)
+
+    leaf.body = {"code": private, "type": private, "param": private, "message": private}
+    refused = safe_provider_diagnostics(wrapper)
+    assert refused["unrecognizedErrorCode"] is True
+    assert refused["unrecognizedParameter"] is True
+    assert "providerErrorCode" not in refused
+    assert "providerErrorType" not in refused
+    assert "rejectedParameter" not in refused
+    assert private not in str(refused)
+
+    leaf.body = {"detail": f"Unsupported parameter: 'reasoning.effort'. {private}"}
+    classified = safe_provider_diagnostics(wrapper)
+    assert classified["requestRejectionReason"] == "unsupported_parameter"
+    assert classified["rejectedParameter"] == "reasoning.effort"
+    assert private not in str(classified)
+    leaf.body = {"message": f"{private} Unsupported parameter: 'model'."}
+    assert "requestRejectionReason" not in safe_provider_diagnostics(wrapper)
+    leaf.body = "The 'gpt-6.1-sol' model is not supported when using Codex with a ChatGPT account."
+    assert safe_provider_diagnostics(wrapper)["requestRejectionReason"] == "model_not_supported"
+    leaf.body = {"error": "Store must be set to false."}
+    assert safe_provider_diagnostics(wrapper)["requestRejectionReason"] == "store_false_required"
+
+@pytest.mark.parametrize("status", [429, 500, 502, 503, 504])
+def test_structured_http_overload_keeps_original_cause_and_safe_receipt(status):
+    class HTTPFailure(RuntimeError):
+        status_code = status
+        request_id = "req_0123456789abcdef0123456789abcdef"
+        code = "server_error"
+        retry_after_seconds = 5
+
+    original = HTTPFailure("private body")
+    call = _call(_ChatGPTClient([], error=original))
+    with pytest.raises(ProviderOutcomeError) as raised:
+        call()
+    assert raised.value.code == "public_provider_overload"
+    assert raised.value.__cause__ is original
+    assert raised.value.diagnostics["httpStatus"] == status
+    assert raised.value.diagnostics["statusOrigin"] == "http_response"
+    assert raised.value.diagnostics["requestId"] == original.request_id
+    assert raised.value.diagnostics["retryAfterSeconds"] == 5
+    assert call.receipt["physicalCallCount"] == 1
+    assert call.receipt["overloadRetryCount"] == 0
+    assert call.receipt["failureDiagnostics"] == [raised.value.diagnostics]
+    assert "private" not in str(call.receipt)
+
+def test_synthetic_llmai_stream_500_is_unknown_without_replay():
+    class SyntheticStreamError(RuntimeError):
+        status_code = 500
+
+    SyntheticStreamError.__module__ = "llmai.exceptions"
+    original = RuntimeError("private stream body with server error 500")
+    wrapper = SyntheticStreamError("private wrapper")
+    wrapper.cause = original
+    assert is_provider_overload(wrapper) is False
+    assert "httpStatus" not in safe_provider_diagnostics(wrapper)
+    call = _call(_ChatGPTClient([], error=wrapper))
+    with pytest.raises(ProviderOutcomeError) as raised:
+        call()
+    outcome = raised.value
+    assert outcome.code == "public_provider_result_unknown"
+    assert outcome.__cause__ is wrapper
+    assert wrapper.cause is original
+    assert outcome.recovery_allowed is False
+    assert outcome.overload is False
+    assert outcome.diagnostics["failureKind"] == "result_unknown"
+    assert outcome.diagnostics["statusOrigin"] == "local_stream"
+    assert "httpStatus" not in outcome.diagnostics
+    assert call.receipt["physicalCallCount"] == 1
+    assert call.receipt["overloadRetryCount"] == 0
+    assert "private" not in str(call.receipt)
+
+def test_explicit_local_stream_signal_cannot_be_misclassified_from_synthetic_status():
+    error = RuntimeError("request timeout 429 500 rate limit")
+    error.status_code = 500
+    error.diagnostics = {"statusOrigin": "local_stream", "failureKind": "stream_interrupted"}
+    assert is_provider_overload(error) is False
+    assert "httpStatus" not in safe_provider_diagnostics(error)
+
+def test_terminal_event_diagnostics_retain_only_safe_provider_metadata():
+    from utils.provider_terminal_outcome import ProviderTerminalOutcomeRecorder
+
+    recorder = ProviderTerminalOutcomeRecorder()
+    recorder.observe_event(SimpleNamespace(type="response.failed", response=SimpleNamespace(
+        error=SimpleNamespace(code="server_error", message="private body"),
+        request_id="req_0123456789abcdef0123456789abcdef",
+        usage={"input_tokens": 10, "output_tokens": 0, "total_tokens": 10, "secret": "private"},
+    )))
+    assert recorder.outcome is None
+    assert recorder.diagnostics["terminalEvent"] == "response.failed"
+    assert recorder.diagnostics["failureKind"] == "terminal_failed"
+    assert recorder.diagnostics["errorCode"] == "server_error"
+    assert recorder.diagnostics["usage"] == {"input_tokens": 10, "output_tokens": 0, "total_tokens": 10}
+    assert "private" not in str(recorder.diagnostics)
+    client = _ChatGPTClient([SimpleNamespace(type="response.failed", response=SimpleNamespace(error=SimpleNamespace(code="server_error", message="private")))])
+    with pytest.raises(ProviderOutcomeError) as raised:
+        _call(client)()
+    assert raised.value.diagnostics["terminalEvent"] == "response.failed"
+    assert raised.value.diagnostics["errorCode"] == "server_error"
+
+@pytest.mark.parametrize("code,recovery_allowed,overload", [
+    ("public_provider_result_unknown", False, False),
+    ("public_provider_response_failed", True, False),
+    ("public_provider_response_incomplete", False, False),
+    ("public_provider_response_cancelled", False, False),
+    ("public_provider_overload", True, True),
+])
+def test_svg_author_checkpoints_safe_diagnostics_without_changing_recovery_counters(monkeypatch, code, recovery_allowed, overload):
+    from copy import deepcopy
+    from services.generation_core.drivers.svg.author import attempt_author
+    from services.generation_core.authoring import author_slide_svg as svg_author_mod
+
+    outcome = ProviderOutcomeError(code, recovery_allowed=recovery_allowed, overload=overload,
+        diagnostics={"failureKind": "result_unknown" if code.endswith("unknown") else "terminal_failed", "message": "private"})
+
+    async def failed_author(**kwargs):
+        await kwargs["before_dispatch"]()
+        raise outcome
+
+    snapshots = []
+    async def checkpoint(_job, _index, *, payload):
+        snapshots.append(deepcopy(payload))
+
+    monkeypatch.setattr(svg_author_mod, "author_slide_svg", failed_author)
+    ctx = SimpleNamespace(manifests=[{}], canonical_assets=False, asset_offer=None, visual_intents=None,
+        source_reflow=False, raster_reconstruction=False, snapshot={}, physical_kwargs={})
+    payload = {"attempts": [], "provider_failures": [{"ordinal": 1, "code": "public_provider_overload"}],
+        "inflight": None, "model_attempt_count": 2, "recovery_revision": "unchanged"}
+    async def scenario():
+        await attempt_author(ctx=ctx, request=SimpleNamespace(instructions=""), index=0, content="one page",
+            role="content", count=1, payload=payload, ordinal=0, provider_ordinal=3, job=None,
+            state=SimpleNamespace(fatal_error=None), checkpoint=checkpoint, async_session_maker=None)
+
+    with pytest.raises(ProviderOutcomeError) as raised:
+        asyncio.run(scenario())
+    assert raised.value is outcome
+    assert len(snapshots) == 2
+    saved = snapshots[-1]
+    assert saved["provider_diagnostics"][-1] == {"ordinal": 3, "code": code, "diagnostics": safe_provider_diagnostics(outcome)}
+    assert saved["model_attempt_count"] == 2
+    assert saved["recovery_revision"] == "unchanged"
+    assert saved["attempts"] == []
+    assert saved["inflight"] == (None if overload else 3)
+    assert len(saved["provider_failures"]) == (2 if overload else 1)
+    assert "private" not in str(saved)

@@ -59,13 +59,14 @@ def _source_bytes(candidate):
 
 
 async def prepare_source_manifest(session, service, *, context, revision, presentation_id,
-                                  planned, saved_pointer=None, source_preservation_required=False):
+                                  planned, saved_pointer=None, source_preservation_required=False, inherited_operation_id=None):
     """Pin one metadata-only document input; retries reuse its artifact refs."""
     if saved_pointer is not None:
         manifest = await load_source_manifest_pointer(session, service, pointer=saved_pointer,
             owner_id=context.owner_id, tenant_id=context.tenant_id)
         if manifest.presentation_id != presentation_id or manifest.source_revision != revision:
-            raise ValueError("svg_asset_source_revision_conflict")
+            await _verify_inherited_source_manifest(session, manifest, saved_pointer,
+                context=context, presentation_id=presentation_id, operation_id=inherited_operation_id)
         candidates = {slot: candidate for page in planned for slot, candidate in page.items()}
         if {slot.slot_id: slot.source_sha256 for slot in manifest.slots} != {
             slot: candidate.digest.removeprefix("sha256:") for slot, candidate in candidates.items()
@@ -145,9 +146,15 @@ async def author_images(session, service, *, context, manifest, page_index):
 
 
 async def screen_placement(session, service, *, context, revision, manifest, source_pointer,
-                            svg, page_index, candidates, width, height, saved_envelope=None):
+                            svg, page_index, candidates, width, height, saved_envelope=None,
+                            system_furniture=None):
     from services.svg_image_derivative import build_purpose_derivative
     from services.svg_asset_resolver import resolve_svg_for_render
+    from services.svg_master_furniture import attested_svg_furniture
+    contract = {slot.slot_id: {"required": slot.policy.required, "allowOmit": slot.policy.allow_omit}
+                for slot in manifest.slots if slot.slot_id in next(page.slot_ids for page in manifest.offered_pages if page.page_index == page_index)}
+    furniture = attested_svg_furniture(svg, system_furniture, source_manifest=contract,
+                                       width=width, height=height) if system_furniture else {}
     if saved_envelope is not None:
         from services.svg_asset_persistence import load_placement_manifest_pointer
         if (saved_envelope.get("sourceManifest") != source_pointer
@@ -159,7 +166,7 @@ async def screen_placement(session, service, *, context, revision, manifest, sou
             materialized = await resolve_svg_for_render(svg, manifest=manifest,
                 derivatives={item.slot_id: item.derivative for item in placement.placements}, session=session,
                 owner_id=context.owner_id, tenant_id=context.tenant_id, width=width, height=height,
-                service=service, placement_manifest=placement, page_index=page_index)
+                service=service, placement_manifest=placement, page_index=page_index, system_furniture=system_furniture)
             return saved_envelope, materialized
     slots = {slot.slot_id: slot for slot in manifest.slots}
     placements = []
@@ -172,7 +179,7 @@ async def screen_placement(session, service, *, context, revision, manifest, sou
             values = _numbers(transform.removeprefix("translate(").removesuffix(")"))
             tx += values[0]
             ty += values[1] if len(values) > 1 else 0
-        if node.tag.rsplit("}", 1)[-1] == "image":
+        if node.tag.rsplit("}", 1)[-1] == "image" and node.get("id") not in furniture:
             yield node, tx, ty
         for child in node:
             yield from visit(child, tx, ty)
@@ -202,8 +209,45 @@ async def screen_placement(session, service, *, context, revision, manifest, sou
     materialized = await resolve_svg_for_render(svg, manifest=manifest,
         derivatives={item.slot_id: item.derivative for item in placement.placements},
         session=session, owner_id=context.owner_id, tenant_id=context.tenant_id,
-        width=width, height=height, service=service, page_index=page_index, placement_manifest=placement)
+        width=width, height=height, service=service, page_index=page_index, placement_manifest=placement,
+        system_furniture=system_furniture)
     envelope = dict(schemaVersion="svg-slide-assets/v1", canonicalVersion="svg-static/v2",
         sourceManifest=source_pointer, screenPlacement=pointer.model_dump(mode="json", by_alias=True),
         sourcePageIndex=page_index, slideRevision=revision)
     return envelope, materialized
+
+
+async def _verify_inherited_source_manifest(session, manifest, pointer, *, context, presentation_id, operation_id):
+    from models.sql.workspace import WorkspaceOperation
+    from models.sql.presentation import PresentationModel
+    from services.svg_timeout_repurchase import verify_append_only_child_lineage
+    from services.svg_cached_author_render_recovery import (
+        REVISIONS as CACHED_AUTHOR_RENDER_REVISIONS, verify_child_lineage,
+    )
+    from utils.hashing import canonical_json_sha256
+    if operation_id is None:
+        raise ValueError("svg_asset_source_revision_conflict")
+    operation = await session.get(WorkspaceOperation, operation_id)
+    if operation is None or operation.presentation_id != presentation_id:
+        raise ValueError("svg_asset_source_revision_conflict")
+    if operation.request_payload.get("recovery_revision") in CACHED_AUTHOR_RENDER_REVISIONS:
+        cached_manifest, _ = await verify_child_lineage(session, operation)
+        binding = {
+            **cached_manifest["source_manifest_asset_binding"],
+            "presentation_id": cached_manifest["presentation_id"],
+            "presentation_revision": cached_manifest["presentation_revision"],
+            "owner_id": cached_manifest["owner_id"],
+            "tenant_id": cached_manifest["tenant_id"],
+            "source_manifest_parent_revision": cached_manifest["presentation_revision"],
+        }
+    else:
+        binding, _ = await verify_append_only_child_lineage(session, operation)
+    parent = await session.get(PresentationModel, manifest.presentation_id)
+    if (parent is None or str(manifest.presentation_id) != binding.get("source_manifest_presentation_id", binding["presentation_id"])
+        or manifest.source_revision != binding["source_manifest_revision"]
+        or parent.revision != binding.get("source_manifest_parent_revision", binding["presentation_revision"])
+        or parent.owner_id != context.owner_id or str(context.owner_id) != binding["owner_id"]
+        or str(context.tenant_id) != binding["tenant_id"]
+        or manifest.digest != binding["source_manifest_digest"]
+        or canonical_json_sha256(pointer) != binding["source_manifest_pointer_digest"]):
+        raise ValueError("svg_asset_source_revision_conflict")
