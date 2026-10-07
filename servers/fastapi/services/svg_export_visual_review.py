@@ -85,6 +85,8 @@ def split_page_advisories(vision: Mapping, slides, indices) -> list[dict]:
                     if isinstance(entry, Mapping) and entry.get("index") == local]
         answer = {key: value for key, value in vision.items() if key != "slides"}
         answer.update(slideCount=1, slides=findings)
+        if "reviewedPageIndices" in vision:
+            answer["reviewedPageIndices"] = [index]
         records.append(page_advisory_record(answer, page_index=index,
             page_digest=sha256_hex((slides[index].svg_content or "").encode()),
             png_digest=_receipt(slides[index]).get("png_sha256") or ""))
@@ -194,7 +196,7 @@ def _review_pages(slides) -> list[int]:
                                 for slide in slides])
 
 
-def svg_visual_review(*, slides, advisory: Mapping | None) -> dict:
+def svg_visual_review(*, slides, advisory: Mapping | None, expected_binding: Mapping | None = None) -> dict:
     if not advisory_ran(advisory):
         return dict(required=True, status="failed", reasonCode="svg_visual_advisory_unavailable")
     if "pageAdvisories" not in advisory:
@@ -211,6 +213,23 @@ def svg_visual_review(*, slides, advisory: Mapping | None) -> dict:
     if (vision.get("slides") != page_findings or str(vision.get("model") or "") != models
             or ("pageRecordDigests" in vision and vision["pageRecordDigests"] != page_records)):
         return dict(required=True, status="failed", reasonCode="svg_visual_advisory_stale")
+    if expected_binding is not None:
+        binding = advisory.get("operationBinding")
+        if not isinstance(binding, Mapping):
+            return dict(required=True, status="failed", reasonCode="svg_visual_advisory_operation_binding_missing")
+        unsigned = {key: value for key, value in binding.items() if key != "digest"}
+        if (binding.get("schemaVersion") != "svg-visual-review-operation-binding/v1"
+                or binding.get("digest") != content_digest(unsigned)
+                or not binding.get("operationId")
+                or any(binding.get(key) != value for key, value in expected_binding.items())
+                or binding.get("sourceDigests") != digests
+                or binding.get("pngDigests") != [_receipt(slide).get("png_sha256") for slide in slides]
+                or binding.get("pageRecordDigests") != page_records):
+            return dict(required=True, status="failed", reasonCode="svg_visual_advisory_operation_binding_invalid")
+        if any(current[index]["vision"].get("promptVersion") != "svg-required-visual-review/v1"
+               or current[index]["vision"].get("reviewedPageIndices") != [index]
+               for index in range(len(slides))):
+            return dict(required=True, status="failed", reasonCode="svg_visual_advisory_review_coverage_incomplete")
     flagged, review = advisory_flagged_pages(advisory), _review_pages(slides)
     evidence = dict(
         checkerVersion=str(vision.get("promptVersion") or ADVISORY_RECORD_SCHEMA),

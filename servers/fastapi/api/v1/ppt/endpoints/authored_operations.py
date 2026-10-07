@@ -34,6 +34,8 @@ from services.authored_page_remake_service import (
 )
 from services.authored_quality_ocr import get_ocr_readiness
 from services.authored_quality_review_service import queue_authored_quality_review
+from models.svg_quality_review import SvgQualityReviewRequest
+from services.svg_quality_review_service import queue_svg_quality_review
 from services.database import get_async_session
 from services.presentation_access_service import require_live_presentation
 from services.workspace_legacy_write_gate import require_legacy_presentation_write_path
@@ -50,6 +52,14 @@ from services.authored_retemplate_request import build_authored_retemplate_gener
 
 AUTHORED_OPERATIONS_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
 _AUTHORED_CANONICAL_SERVICE = AuthoredCanonicalService()
+
+
+@AUTHORED_OPERATIONS_ROUTER.post("/{id}/svg-quality-review", response_model=AsyncPresentationGenerationTaskModel)
+async def svg_quality_review(
+    id: uuid.UUID, request: SvgQualityReviewRequest,
+    sql_session: AsyncSession = Depends(get_async_session),
+):
+    return await queue_svg_quality_review(id, request, sql_session)
 
 
 def _to_camel(value: str) -> str:

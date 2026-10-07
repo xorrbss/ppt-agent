@@ -339,6 +339,24 @@ async def execute_svg_export(job, store):
                                 sourceReadbackDigest="sha256:" + canonical_json_sha256(source_readback),
                                 officeRenderMeasured=False)
                 coverage["coverageDigest"] = "sha256:" + canonical_json_sha256(coverage)
+            from workers.public_svg_pptx_render import render_final_pptx
+            final_render = render_final_pptx(target, scratch / "office-render", page_count=len(sources),
+                width_px=canvas.width_px, height_px=canvas.height_px,
+                timeout=max(0, min(120, job.deadline_epoch_seconds - time.time() - 5)))
+            if final_render.get("status") == "measured":
+                import hashlib
+                from utils.hashing import canonical_json_sha256
+                final_render.update(operationId=str(job.operation_id),
+                    ownerId=str(job.input_artifact.owner_id), tenantId=job.input_artifact.tenant_id,
+                    presentationId=value.get("presentationId"), sourceRevision=value.get("sourceRevision"),
+                    sourceDigests=digests, converterDigest=converter_digest())
+                for page in final_render["pages"]:
+                    page["artifactRef"] = store.put_path(
+                        scratch / "office-render" / f"page-{page['index']:03d}.png",
+                        source=job.input_artifact, operation_id=job.operation_id,
+                        kind="slide-png", media_type="image/png").to_wire()
+                final_render["evidenceDigest"] = "sha256:" + canonical_json_sha256(final_render)
+            readback["finalPptxRender"] = final_render
             mode = "editable-svg"
         else:
             # Vector PDF: native objects are a PPTX concept; drawn groups print as-is.

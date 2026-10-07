@@ -72,7 +72,7 @@ def _native_ooxml_domain(*, required, worker_metrics, artifact_digest, operation
 def source_svg_public_quality_receipt(*, slides, source_preservation, worker_metrics,
         quality_receipt_id, operation_id, presentation_id, artifact_digest,
         source_revision, scene_digest, evaluated_at, exporter_version, advisory=None, source_preservation_parents=None,
-        require_native_coverage=False):
+        require_native_coverage=False, review_binding=None):
     qualities = [(slide.content or {}).get("svgReceipt", {}).get("quality", {}) for slide in slides]
     templates = [r.get("template_application", {}) for r in source_preservation]
     whole_page = bool(source_preservation) and all(
@@ -149,12 +149,18 @@ def source_svg_public_quality_receipt(*, slides, source_preservation, worker_met
             source_preservation, {"artifactDigest": artifact_digest, "readback": readback},
             {"verifiedPages": len(pages), "textAndCellValuesMatched": True, "imageOccurrencesMatched": True},
             "svg_source_export_readback_evidence_incomplete"),
-        visual_review=svg_visual_review(slides=slides, advisory=advisory),
+        visual_review=svg_visual_review(slides=slides, advisory=advisory, expected_binding=review_binding),
         performance=dict(required=False, status="not_assessed", reasonCode="svg_performance_not_measured"),
         native_coverage_ooxml=_native_ooxml_domain(required=require_native_coverage,
             worker_metrics=worker_metrics, artifact_digest=artifact_digest, operation_id=operation_id,
             presentation_id=presentation_id, source_revision=source_revision,
             source_preservation=source_preservation))
+    if require_native_coverage:
+        from services.svg_final_pptx_review import final_pptx_visual_domain
+        domains["visual_review"] = final_pptx_visual_domain(domains["visual_review"],
+            worker_metrics=worker_metrics, artifact_digest=artifact_digest, operation_id=operation_id,
+            presentation_id=presentation_id, source_revision=source_revision,
+            source_digests=[sha256_prefixed((slide.svg_content or "").encode())[7:] for slide in slides])
     return QualityReceiptV3(quality_receipt_id=quality_receipt_id, operation_id=operation_id,
         presentation_id=presentation_id, artifact_digest=artifact_digest, source_revision=source_revision,
         scene_digest=scene_digest, capability_registry_digest=CAPABILITY_REGISTRY_DIGEST,
@@ -163,7 +169,8 @@ def source_svg_public_quality_receipt(*, slides, source_preservation, worker_met
 
 
 def svg_public_quality_receipt(*, slides, advisory, source_preservation, worker_metrics,
-                               exporter_version, source_preservation_parents=None, require_native_coverage=False, **receipt_args):
+                               exporter_version, source_preservation_parents=None, require_native_coverage=False,
+                               review_binding=None, **receipt_args):
     """The export quality receipt for any SVG deck, source-preserving or not.
 
     A generated deck's ``authoring`` and ``geometry_font`` come from the page
@@ -178,18 +185,26 @@ def svg_public_quality_receipt(*, slides, advisory, source_preservation, worker_
             source_preservation_parents=source_preservation_parents,
             worker_metrics=worker_metrics, exporter_version=exporter_version, advisory=advisory,
             require_native_coverage=require_native_coverage,
+            review_binding=review_binding,
             **receipt_args)
     domains = dict(
         content_brief=dict(required=False, status="not_required"),
         authoring=svg_authoring(slides),
         geometry_font=svg_geometry_font(slides),
         image_content_integrity=dict(required=False, status="not_required"),
-        visual_review=svg_visual_review(slides=slides, advisory=advisory),
+        visual_review=svg_visual_review(slides=slides, advisory=advisory, expected_binding=review_binding),
         performance=dict(required=False, status="not_assessed", reasonCode="svg_performance_evidence_missing"),
         native_coverage_ooxml=_native_ooxml_domain(required=require_native_coverage,
             worker_metrics=worker_metrics, artifact_digest=receipt_args["artifact_digest"],
             operation_id=receipt_args["operation_id"], presentation_id=receipt_args["presentation_id"],
             source_revision=receipt_args["source_revision"], source_preservation=source_preservation))
+    if require_native_coverage:
+        from services.svg_final_pptx_review import final_pptx_visual_domain
+        domains["visual_review"] = final_pptx_visual_domain(domains["visual_review"],
+            worker_metrics=worker_metrics, artifact_digest=receipt_args["artifact_digest"],
+            operation_id=receipt_args["operation_id"], presentation_id=receipt_args["presentation_id"],
+            source_revision=receipt_args["source_revision"],
+            source_digests=[sha256_prefixed((slide.svg_content or "").encode())[7:] for slide in slides])
     return QualityReceiptV3(**receipt_args, capability_registry_digest=CAPABILITY_REGISTRY_DIGEST,
         exporter_version=exporter_version, **domains,
         release_readiness=release_readiness(domains.values())).model_dump(mode="json", by_alias=True)

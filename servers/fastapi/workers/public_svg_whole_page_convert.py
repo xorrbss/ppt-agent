@@ -70,6 +70,25 @@ def _bind_chart_sources(chart, claim):
             _extension(by_index[record["categoryIndex"]], [record], "valuePoint")
 
 
+def _apply_source_grid_width(chart, claim, *, slide_width_emu, canvas_width_px):
+    expected = claim.get("gridStyle")
+    if expected is None:
+        return
+    widths = expected.get("sourceWidthsPx")
+    if (expected.get("nativeWidthPolicy") != "source-scale/v1"
+            or not isinstance(widths, list) or len(widths) != 1):
+        raise ValueError("svg_source_export_grid_width_unsupported")
+    width_emu = round(widths[0] * slide_width_emu / canvas_width_px)
+    if not 1 <= width_emu <= 20116800:
+        raise ValueError("svg_source_export_grid_width_invalid")
+    lines = chart._chartSpace.xpath(".//c:majorGridlines/c:spPr/a:ln")
+    if not lines:
+        raise ValueError("svg_source_export_grid_style_missing")
+    for line in lines:
+        line.set("w", str(width_emu))
+    expected.update(expectedNativeWidthEmu=width_emu, expectedNativeWidthPt=width_emu / 12700)
+
+
 def _embed_verified_whole_page_fonts(target):
     """Embed licensed trusted faces after the last save and bind final package bytes."""
     import zipfile
@@ -347,11 +366,13 @@ def _source_style_readback(target, table_alignment_claims, chart_claims):
                 raise ValueError("svg_source_export_grid_style_missing")
             for line in lines:
                 colors = line.xpath("./a:solidFill/a:srgbClr")
-                if len(colors) != 1 or colors[0].get("val") != expected["sourceColor"] or line.get("w") != "6350":
+                if (len(colors) != 1 or colors[0].get("val") != expected["sourceColor"]
+                        or line.get("w") != str(expected["expectedNativeWidthEmu"])):
                     raise ValueError("svg_source_export_grid_style_mismatch")
             grids.append({"pageIndex": page_index, "chartId": claim["chartId"], **expected,
-                          "actualNativeColor": expected["sourceColor"], "actualNativeWidthsPt": [.5] * len(lines),
-                          "widthPreserved": False, "colorPreserved": True})
+                          "actualNativeColor": expected["sourceColor"],
+                          "actualNativeWidthsPt": [int(line.get("w")) / 12700 for line in lines],
+                          "widthPreserved": True, "colorPreserved": True})
     result = {"schemaVersion": "svg-source-export-style-readback/v1", "passed": True,
               "rightAlignedCells": tables, "uniformGridCharts": grids}
     result["digest"] = "sha256:" + canonical_json_sha256(result)
@@ -605,6 +626,8 @@ def convert_whole_page_pptx(paths, target, notes, canvas, *, receipts,
                 for labels in chart._chartSpace.xpath(".//c:dLbls"):
                     labels.get_or_add_showVal().val = True
                 _bind_chart_sources(chart, claim)
+                _apply_source_grid_width(chart, claim, slide_width_emu=deck.slide_width,
+                                         canvas_width_px=canvas.width_px)
         deck.save(str(target))
         if font_embedding:
             readback["fontEmbedding"] = _embed_verified_whole_page_fonts(target)

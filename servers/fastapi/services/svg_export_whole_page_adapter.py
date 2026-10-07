@@ -126,9 +126,12 @@ def _uniform_source_grid_style(object_, primitives, chart_payload):
     color = grids[0].stroke.upper().lstrip("#")
     if len(color) != 6 or any(value not in "0123456789ABCDEF" for value in color):
         return None
+    widths = sorted({shape.stroke_width for shape in grids})
+    if len(widths) != 1 or not math.isfinite(widths[0]) or widths[0] <= 0:
+        raise ValueError("svg_source_export_grid_width_unsupported")
     chart_payload.setdefault("style", {})["grid_color"] = "#" + color
-    return {"sourceColor": color, "sourceWidthsPx": sorted({shape.stroke_width for shape in grids}),
-            "sourceGridLineCount": len(grids), "nativeWidthPolicy": "vendor-fixed", "expectedNativeWidthPt": .5}
+    return {"sourceColor": color, "sourceWidthsPx": widths,
+            "sourceGridLineCount": len(grids), "nativeWidthPolicy": "source-scale/v1"}
 
 
 def bind_chart_text_projection(path, *, canonical_svg, receipt, native_page, page_index):

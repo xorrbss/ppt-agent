@@ -67,6 +67,46 @@ def _quality_review_count(value: Any) -> int | None:
     return min(value, _MAX_QUALITY_REVIEW_METRIC_VALUE)
 
 
+def sanitize_svg_quality_status(value: Any) -> dict:
+    """Expose closed statuses and bounded indices, never raw review evidence."""
+    if not isinstance(value, Mapping):
+        return {}
+    safe = {}
+    allowed = {
+        "artifact": {"available", "unavailable"},
+        "measured": {"passed", "failed", "stale", "unmeasured"},
+        "semanticCurrent": {"current", "partial", "stale", "unavailable"},
+        "designFindings": {"flagged", "clear", "unavailable"},
+    }
+
+    def indices(items):
+        if not isinstance(items, list):
+            return []
+        return [item for item in items if type(item) is int and 0 <= item < 1_000_000][:500]
+
+    for key, statuses in allowed.items():
+        domain = value.get(key)
+        if (not isinstance(domain, Mapping) or not isinstance(domain.get("status"), str)
+                or domain["status"] not in statuses):
+            continue
+        projected = {"status": domain["status"]}
+        for index_key in ("currentPages", "stalePages", "failedPages", "flaggedPages"):
+            if index_key in domain:
+                projected[index_key] = indices(domain[index_key])
+        count = _quality_review_count(domain.get("pageCount"))
+        if count is not None:
+            projected["pageCount"] = count
+        safe[key] = projected
+    count = _quality_review_count(value.get("totalPages"))
+    if count is not None:
+        safe["totalPages"] = count
+    if "reviewedPages" in value:
+        safe["reviewedPages"] = indices(value["reviewedPages"])
+    if isinstance(value.get("advisoryOnly"), bool):
+        safe["advisoryOnly"] = value["advisoryOnly"]
+    return safe
+
+
 def _sanitize_quality_review_stage_timings(value: Any) -> dict[str, float]:
     if not isinstance(value, Mapping):
         return {}

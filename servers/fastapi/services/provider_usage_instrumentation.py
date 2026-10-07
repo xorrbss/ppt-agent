@@ -79,6 +79,13 @@ def provider_receipt_observability_snapshot() -> dict[str, int]:
     return dict(_RECEIPT_OBSERVABILITY)
 
 
+def record_provider_terminal_result(outcome: str, physical_requests: int | None = None) -> None:
+    """Keep observed terminal results separate from best-effort usage receipts."""
+    usage = _ACTIVE_OPERATION_USAGE.get()
+    if usage is not None:
+        usage.record_terminal_result(outcome, physical_requests)
+
+
 @dataclass
 class ProviderUsageScope:
     """Per-task non-sensitive identity for billable or local stage work."""
@@ -871,5 +878,6 @@ __all__ = [
     "record_local_stage",
     "record_provider_call",
     "record_provider_call_timing",
+    "record_provider_terminal_result",
     "response_usage",
 ]

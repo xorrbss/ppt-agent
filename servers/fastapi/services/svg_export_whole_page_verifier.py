@@ -19,6 +19,7 @@ _FILES = (
     "services/svg_export_bundle.py",
     "services/svg_export_identity.py",
     "services/svg_export_quality.py",
+    "services/svg_final_pptx_review.py",
     "services/svg_source_layout.py",
     "services/svg_source_charts.py",
     "services/svg_source_native_tables.py",
@@ -37,6 +38,7 @@ _FILES = (
     "workers/public_svg_export_worker.py",
     "workers/public_svg_whole_page_convert.py",
     "workers/public_svg_pptx_readback.py",
+    "workers/public_svg_pptx_render.py",
 )
 
 

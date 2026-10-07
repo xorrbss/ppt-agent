@@ -80,6 +80,10 @@ class ProviderOperationUsage:
     """Content-free logical/physical provider usage for one operation attempt."""
 
     _stages: dict[str, _ProviderStageUsage] = field(default_factory=dict)
+    _terminal_results: dict[str, int] = field(default_factory=dict)
+    _bounded_physical_requests: int = 0
+    _bounded_receipts: int = 0
+    _cached_usage_reports: int = 0
     #: SPEED-12: per-call admission/executor/provider spans, keyed by stage.
     call_timing: ProviderCallTimingLedger = field(
         default_factory=ProviderCallTimingLedger
@@ -132,6 +136,7 @@ class ProviderOperationUsage:
         stage.input_tokens += input_tokens or 0
         stage.output_tokens += output_tokens or 0
         stage.cached_tokens += cached_tokens or 0
+        self._cached_usage_reports += int(cached_tokens is not None)
         stage.actual_cost_microunits += actual_cost_microunits or 0
 
     def snapshot(self) -> dict[str, object]:
@@ -145,6 +150,29 @@ class ProviderOperationUsage:
             for key in STAGE_COUNTER_KEYS
         }
         return {"totals": totals, "stages": stages}
+
+    def record_terminal_result(self, outcome: str, physical_requests: int | None = None) -> None:
+        if outcome not in {"completed", "incomplete", "failed", "cancelled", "unknown", "unmeasured"}:
+            return
+        self._terminal_results[outcome] = self._terminal_results.get(outcome, 0) + 1
+        if isinstance(physical_requests, int) and not isinstance(physical_requests, bool) and physical_requests >= 0:
+            self._bounded_physical_requests += physical_requests
+            self._bounded_receipts += 1
+
+    def terminal_snapshot(self) -> dict[str, object]:
+        known = any(self._terminal_results.get(key) for key in ("completed", "incomplete", "failed", "cancelled"))
+        incomplete = self._terminal_results.get("unknown", 0) + self._terminal_results.get("unmeasured", 0)
+        return {"status": "partial" if known and incomplete else "measured" if known else "unmeasured",
+                "counts": dict(sorted(self._terminal_results.items())),
+                "boundedPhysicalRequests": self._bounded_physical_requests if self._bounded_receipts else None,
+                "boundedReceiptCount": self._bounded_receipts}
+
+    def cached_input_snapshot(self) -> dict[str, object]:
+        reported = sum(stage.reported_usage_calls for stage in self._stages.values())
+        return {"status": "measured" if self._cached_usage_reports and self._cached_usage_reports == reported else
+                          "partial" if self._cached_usage_reports else "unmeasured",
+                "reportingRequests": self._cached_usage_reports,
+                "tokens": sum(stage.cached_tokens for stage in self._stages.values()) if self._cached_usage_reports else None}
 
 
 __all__ = [
