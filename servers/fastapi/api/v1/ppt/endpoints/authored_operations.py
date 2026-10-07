@@ -217,10 +217,12 @@ async def quality_review_authored_presentation(id: uuid.UUID, request: AuthoredQ
 
 
 @AUTHORED_OPERATIONS_ROUTER.post("/{id}/slides/{slide_index}/remake/preview", response_model=AsyncPresentationGenerationTaskModel)
-async def preview_authored_page_remake(id: uuid.UUID, slide_index: int, request: AuthoredPageRemakePreviewRequest, background_tasks: BackgroundTasks, sql_session: AsyncSession = Depends(get_async_session)):
+async def preview_authored_page_remake(id: uuid.UUID, slide_index: int, request: AuthoredPageRemakePreviewRequest, background_tasks: BackgroundTasks, request_http: Request, sql_session: AsyncSession = Depends(get_async_session)):
     await require_live_presentation(sql_session, id)
+    from services.workspace_operation_principal import local_development_export_bridge
     try:
-        return await queue_authored_page_remake_preview(id, slide_index, request, background_tasks, sql_session)
+        return await queue_authored_page_remake_preview(id, slide_index, request, background_tasks, sql_session,
+            allow_local_development=local_development_export_bridge(request_http))
     except AuthoredPageRemakeError as error:
         raise remake_http_error(error) from error
 

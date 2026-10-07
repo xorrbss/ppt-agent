@@ -49,6 +49,13 @@ export type PublicV2GenerationRequest = {
   schemaVersion?: "presentation-generation-request/v2";
   generationMode?: PublicV2GenerationMode;
   designPackPin?: PublicV2DesignPackPin;
+  strategy?: "authored" | "svg";
+  svgDesignReferenceSnapshotId?: string;
+  svgDesignReferencePin?: PublicV2DesignPackPin;
+  aspectRatio?: "16:9" | "9:16" | "9:13" | "4:3" | "1:1" | "21:9";
+  pageSize?: "A4";
+  orientation?: "landscape" | "portrait";
+  svgCanvas?: { widthMm: number; heightMm: number };
   content: string;
   slidesMarkdown?: string[];
   instructions?: string;

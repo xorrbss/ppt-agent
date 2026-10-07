@@ -28,7 +28,8 @@ from services.generation_core.quality.terminal_slide_policy import (
 from services.generation_core.runtime.profile import resolve_svg_runtime_profile
 from services.svg_export_quality import source_svg_public_quality_receipt, svg_public_quality_receipt
 from services.svg_export_release_gate import require_release_v1_receipt
-from services.svg_export_visual_review import slide_page_digests, svg_visual_review
+from services.svg_export_visual_review import slide_page_digests, split_page_advisories, svg_visual_review
+from services.svg_contract import source_digest
 from services.workspace_operation_handler_registry import NonRetryableWorkspaceOperationError
 from test_svg_export_quality import evidence_fixture
 from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION, STYLE_REFERENCE
@@ -217,7 +218,16 @@ def test_record_matches_rejects_a_changed_page_digest():
 
 def _slide(svg, *, verified=True, passed=True):
     return SimpleNamespace(svg_content=svg,
-                           content={"svgReceipt": {"quality": {"verified": verified, "passed": passed}}})
+                           content={"svgReceipt": {"png_sha256": "a" * 64,
+                               "quality": {"verified": verified, "passed": passed,
+                                   "measurement_complete": True, "source_digest": source_digest(svg),
+                                   "png_digest": "sha256:" + "a" * 64}}})
+
+
+def _bound_advisory(vision, slides):
+    record = advisory_record(vision, slide_page_digests(slides))
+    record["pageAdvisories"] = split_page_advisories(vision, slides, range(len(slides)))
+    return record
 
 
 def test_visual_review_unavailable_without_an_advisory():
@@ -230,7 +240,7 @@ def test_visual_review_passes_with_a_matching_clean_advisory():
     digests = slide_page_digests(slides)
     vision = {"slides": [{"index": 0, "issues": []}, {"index": 1, "issues": []}],
               "promptVersion": "v1", "model": "m"}
-    advisory = advisory_record(vision, digests)
+    advisory = _bound_advisory(vision, slides)
 
     review = svg_visual_review(slides=slides, advisory=advisory)
 
@@ -244,7 +254,7 @@ def test_visual_review_records_but_does_not_flag_on_an_advisory_issue():
     slides = [_slide("<svg>a</svg>")]
     digests = slide_page_digests(slides)
     vision = {"slides": [{"index": 0, "issues": ["off-brand color"]}], "promptVersion": "v1", "model": "m"}
-    advisory = advisory_record(vision, digests)
+    advisory = _bound_advisory(vision, slides)
 
     review = svg_visual_review(slides=slides, advisory=advisory)
 
@@ -257,7 +267,7 @@ def test_visual_review_records_but_does_not_flag_on_an_advisory_issue():
 def test_visual_review_stale_when_a_page_svg_changed_after_the_advisory():
     slides = [_slide("<svg>a</svg>")]
     digests = slide_page_digests(slides)
-    advisory = advisory_record({"slides": [], "promptVersion": "v1", "model": "m"}, digests)
+    advisory = _bound_advisory({"slides": [], "promptVersion": "v1", "model": "m"}, slides)
     slides[0].svg_content = "<svg>changed</svg>"
 
     review = svg_visual_review(slides=slides, advisory=advisory)
@@ -270,7 +280,7 @@ def test_visual_review_flags_a_page_whose_quality_is_not_verified():
     slides = [_slide("<svg>a</svg>", verified=False)]
     digests = slide_page_digests(slides)
     vision = {"slides": [{"index": 0, "issues": []}], "promptVersion": "v1", "model": "m"}
-    advisory = advisory_record(vision, digests)
+    advisory = _bound_advisory(vision, slides)
 
     review = svg_visual_review(slides=slides, advisory=advisory)
 
@@ -287,7 +297,7 @@ def _clean_advisory(slides):
     digests = slide_page_digests(slides)
     vision = {"slides": [{"index": i, "issues": []} for i in range(len(slides))],
               "promptVersion": "v1", "model": "test-model"}
-    return advisory_record(vision, digests)
+    return _bound_advisory(vision, slides)
 
 
 def _ordinary_slides():
@@ -340,6 +350,8 @@ def test_source_preservation_receipt_is_release_ready_with_a_clean_advisory():
     # page; the shared fixture omits it because its own tests never reach
     # ``svg_visual_review``'s per-page review check.
     slide.content["svgReceipt"]["quality"]["verified"] = True
+    slide.content["svgReceipt"]["quality"]["png_digest"] = "sha256:" + "a" * 64
+    slide.content["svgReceipt"]["png_sha256"] = "a" * 64
     advisory = _clean_advisory([slide])
 
     result = source_svg_public_quality_receipt(

@@ -1,0 +1,57 @@
+{
+  "taskId": "task_4b384e1e5338",
+  "dispatchId": "ctx_e6126aec6b6c",
+  "status": "succeeded",
+  "summary": "Repository Codex terminal stream adapter and scoped factory migration implemented; final narrow check passed.",
+  "changedFiles": [
+    "servers/fastapi/utils/codex_stream_adapter.py",
+    "servers/fastapi/utils/llm_config.py",
+    "servers/fastapi/services/generation_core/authoring/author_slide_svg.py",
+    "servers/fastapi/services/generation_core/authoring/author_source_svg_layout.py",
+    "servers/fastapi/services/generation_core/authoring/author_raster_svg_layout.py",
+    "servers/fastapi/utils/llm_calls/author_chapter_plan.py",
+    "servers/fastapi/utils/llm_calls/author_header_contract.py",
+    "servers/fastapi/utils/llm_calls/author_design_critique.py",
+    "servers/fastapi/utils/llm_calls/author_infographic_plan.py",
+    "servers/fastapi/tests/unit/test_llm_config_snapshots.py"
+  ],
+  "implementation": [
+    "utils.llm_config.get_client creates RepositoryChatGPTClient for ChatGPTClientConfig and delegates all other configs to llmai.get_client.",
+    "Per-client Responses observer remains installed through SDK with_options clones; no global monkeypatch or dependency edits.",
+    "Uses existing ProviderTerminalOutcomeRecorder and Task B canonical diagnostics sanitizer, without a parallel terminal abstraction.",
+    "response.failed, response.incomplete, response.cancelled and error produce typed ProviderOutcomeError with safe terminal data and usage.",
+    "Only response.completed permits normal completion; missing terminal or midstream exception retains public_provider_result_unknown with overload/retryable/recovery_allowed false.",
+    "HTTP admission exceptions remain SDK exceptions for existing remote classification, including actual HTTP 429/503.",
+    "Fresh typed exception restoration preserves original causes without cyclic cause/context chains or synthetic HTTP 500 classification.",
+    "Migrated three direct SVG author factory imports and four linked authored helper imports; preserved pre-existing dirty edits."
+  ],
+  "check": {
+    "command": ".\\.venv\\Scripts\\python.exe -m pytest tests/unit/test_llm_config_snapshots.py -q --tb=no --disable-warnings",
+    "cwd": "C:/project/PPT-agent/ppt-agent/servers/fastapi",
+    "final": {
+      "exitCode": 0,
+      "passed": 42,
+      "durationSeconds": 3.75
+    },
+    "initial": {
+      "passed": 40,
+      "failed": 2,
+      "durationSeconds": 5.2
+    },
+    "correction": "Positive-control test expected a string but llmai content_from_text returns a list of TextContentPart; corrected assertion only, with no production output normalization change.",
+    "scope": "One existing file; 17 additional offline cases cover sync/stream completion, terminal failures, missing/drop unknown fences, actual HTTP errors and provider delegation."
+  },
+  "coordination": {
+    "taskB": "Diagnostics interface, repository subclass detection through MRO and typed terminal_outcome projection implemented by Task B in its owned files.",
+    "reportFile": "stream-implementation-report.json",
+    "specMemory": "compiled-spec-memory skill unavailable; coordinator confirmed continue without fabricated auto-record."
+  },
+  "limits": [
+    "No model-provider HTTP calls, actual presentation generation, original job recovery, runtime reload, commits, push or deployment performed.",
+    "Runtime purchase fences, budgets, owners, request hashes, model settings and SDK timeout unchanged by Task A.",
+    "Original fa76be39-9ce6-41b9-92a8-7a9c4ee23821/sample9274cc32-445e-53c4-9a8b-0def0f82f04c state not accessed or modified.",
+    "No async factory added because scoped actual callers use synchronous llmai clients/generators under async orchestration.",
+    "No raw original HTTP/SSE was retained, so stream failure cannot be proven as the cause of the three historical failures; the SDK default is 120 seconds, not a fixed 30-second timeout.",
+    "Task A ran no unrelated suites or live checks; coordinator owns runtime reload and independent integrated review."
+  ]
+}

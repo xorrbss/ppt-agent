@@ -53,6 +53,7 @@ import {
 import { useWorkspaceScrollContinuity } from "./useWorkspaceScrollContinuity";
 import { useWorkspaceGenerationState } from "./useWorkspaceGenerationState";
 import { TERMINAL } from "./WorkspaceOperationLabels";
+import { isSvgPresentation } from "../utils/presentationSource";
 
 export { parseQualityReviewSlideRange } from "./workspaceChatPanelUtils";
 const SLIDESPEC_WORKSPACE_REPAIR_ENABLED =
@@ -76,6 +77,7 @@ export default function WorkspaceChatPanel({
   onGenerationStateChange, onEditCurrentSlideReady,
 }: WorkspaceChatPanelProps) {
   const t = useTranslations("presentationChatPanel");
+  const svgReviewOnly = isSvgPresentation(presentation);
   const reviewRequiredIndices = useMemo(() => reviewRequiredIndicesFor(presentation), [presentation]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { restore: restoreScroll, remember: rememberScroll } = useWorkspaceScrollContinuity(presentationId);
@@ -283,7 +285,7 @@ export default function WorkspaceChatPanel({
         : "전체 슬라이드를";
 
     await commandDispatcher(
-      `${subject} 고품질 검수하고 문제를 자동 수정해 줘`,
+      svgReviewOnly ? `${subject} 현재 화면의 품질을 검토해 줘` : `${subject} 고품질 검수하고 문제를 자동 수정해 줘`,
       {
         commandType: "quality.review",
         context: {
@@ -293,11 +295,11 @@ export default function WorkspaceChatPanel({
               ? "current"
               : "all",
           slide_indices: slideIndices,
-          mode: "analyze_and_fix",
-          ...(SLIDESPEC_WORKSPACE_REPAIR_ENABLED
+          mode: svgReviewOnly ? "analyze_only" : "analyze_and_fix",
+          ...(!svgReviewOnly && SLIDESPEC_WORKSPACE_REPAIR_ENABLED
             ? { slidespec_opt_in: true }
             : {}),
-          ...(selectedSlide === undefined
+          ...(svgReviewOnly || selectedSlide === undefined
             ? {}
             : { current_slide: selectedSlide }),
         },
@@ -310,6 +312,7 @@ export default function WorkspaceChatPanel({
     qualityReviewRange,
     qualityReviewScope,
     reviewRequiredIndices,
+    svgReviewOnly,
   ]);
 
   const handleQualityReviewRangeInput = useCallback(
@@ -632,7 +635,7 @@ export default function WorkspaceChatPanel({
                     {t("qualityReviewScope")}
                   </h3>
                   <p className="mt-1 text-xs leading-5 text-slate-500">
-                    {t("qualityReviewDescription")}
+                    {t(svgReviewOnly ? "svgQualityReviewDescription" : "qualityReviewDescription")}
                   </p>
                 </div>
               </div>
@@ -797,7 +800,7 @@ export default function WorkspaceChatPanel({
                   data-testid="quality-review-options-submit"
                   className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {t("startReview")}
+                  {t(svgReviewOnly ? "startSvgReview" : "startReview")}
                 </button>
               </div>
             </article>

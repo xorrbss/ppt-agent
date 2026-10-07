@@ -211,6 +211,36 @@
       "id": "tall-9x13",
       "shape": "portrait",
       "sortOrder": 7
+    },
+    {
+      "aliases": {
+        "aspect_ratio": "4:3"
+      },
+      "badge": null,
+      "budget": {
+        "charsFactor": "0.72"
+      },
+      "canvas": {
+        "contractVersion": "document-canvas/v1",
+        "logicalSize": {
+          "height": 720,
+          "width": 960
+        },
+        "physicalSize": {
+          "heightEmu": 6858000,
+          "widthEmu": 9144000
+        },
+        "safeArea": {
+          "height": 592.0,
+          "width": 832.0,
+          "x": 64.0,
+          "y": 64.0
+        }
+      },
+      "hidden": false,
+      "id": "standard-4x3",
+      "shape": "wide-landscape",
+      "sortOrder": 8
     }
   ],
   "schemaVersion": "canvas-registry/v1"

@@ -162,6 +162,36 @@ def test_public_database_urls_are_role_scoped_and_production_is_explicit() -> No
             }
         )
 
+    # The migration entrypoint must reject fallback before executing Alembic.
+    import os
+    import sys
+    from unittest.mock import Mock, patch
+    from scripts.run_public_v2_rc_migrations import main as migrate_public_rc
+
+    migration = Mock()
+    migration_environment = {
+        "ENVIRONMENT": "production",
+        "PUBLIC_DATABASE_PROCESS_ROLE": "migration",
+        "PUBLIC_MIGRATION_DATABASE_URL": "postgresql://migration:fixture@localhost/fixture",
+        "MIGRATE_DATABASE_ON_STARTUP": "false",
+    }
+    with patch.dict(sys.modules, {"migrations": SimpleNamespace(_run_migrations=migration)}):
+        with patch.dict(os.environ, migration_environment, clear=True):
+            migrate_public_rc()
+        migration.assert_called_once_with()
+        for invalid in (
+            {},
+            {**migration_environment, "PUBLIC_DATABASE_PROCESS_ROLE": "api"},
+            {**migration_environment, "PUBLIC_MIGRATION_DATABASE_URL": ""},
+            {**migration_environment, "PUBLIC_MIGRATION_DATABASE_URL": "sqlite:///fallback.db"},
+            {**migration_environment, "DATABASE_URL": migration_environment["PUBLIC_MIGRATION_DATABASE_URL"]},
+            {**migration_environment, "PUBLIC_API_DATABASE_URL": "postgresql://api:fixture@localhost/fixture"},
+            {**migration_environment, "ENVIRONMENT": "development"},
+        ):
+            with patch.dict(os.environ, invalid, clear=True), pytest.raises(RuntimeError):
+                migrate_public_rc()
+            migration.assert_called_once_with()
+
 
 def test_api_role_never_reports_force_rls_partial_rows_as_global_metrics(
     monkeypatch,

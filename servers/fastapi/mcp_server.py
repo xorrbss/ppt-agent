@@ -7,13 +7,18 @@ import traceback
 import httpx
 from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_http_headers
+from models.document_canvas import (
+    DOCUMENT_CANVAS_CONTRACT_VERSION,
+    DOCUMENT_CANVAS_CONTRACTS_HEADER,
+)
 
 with open("openai_spec.json", "r") as f:
     openapi_spec = json.load(f)
 
 
 async def attach_request_auth_headers(request: httpx.Request) -> None:
-    """Forward the nginx-verified MCP caller identity to FastAPI tools."""
+    """Forward caller identity and advertise the MCP reader's canvas contract."""
+    request.headers[DOCUMENT_CANVAS_CONTRACTS_HEADER] = DOCUMENT_CANVAS_CONTRACT_VERSION
     incoming_headers = get_http_headers(include={"authorization", "cookie"})
     for name in ("authorization", "cookie"):
         value = incoming_headers.get(name)

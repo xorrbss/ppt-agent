@@ -6,8 +6,9 @@ canvases in seeded random order so time drift is shared between arms.  One deck
 runs at a time.  A deck whose receipt already exists in the out dir is skipped,
 so a killed or rebooted run is resumed by re-issuing the same command.  A deck
 lost to the environment (backend unreachable) is recorded as
-``invalid: infra_lost`` and stops the run (exit 3); the next invocation reruns
-it and keeps the record under ``previousInvalid``.
+``invalid: infra_lost`` and stops on transport loss (exit 3). Clock losses
+continue after a health probe and requeue once at the end; reruns retain the
+invalid marker under ``previousInvalid``.
 """
 
 from __future__ import annotations
@@ -106,11 +107,13 @@ def infra_lost_receipt(deck: Deck, base: Mapping[str, Any], error: BaseException
 def run_matrix(
     plan: Sequence[Deck], out_dir: Path, run_deck: Callable[[Deck], dict[str, Any]], base_receipt: Mapping[str, Any],
     write: Callable[[Path, Any], None], log: Callable[[str], None] = print,
+    health_probe: Callable[[], None] | None = None,
 ) -> int:
     """Run the pending decks serially; 0 when all are done, 3 after an infra loss."""
 
     todo = pending(plan, out_dir)
     log(f"matrix: {len(plan)} decks planned, {len(plan) - len(todo)} already done, {len(todo)} to run")
+    requeued: set[Deck] = set()
     for number, deck in enumerate(todo, 1):
         path = receipt_path(out_dir, deck)
         previous = _read(path)
@@ -125,4 +128,19 @@ def run_matrix(
             receipt["previousInvalid"] = [*(previous.get("previousInvalid") or []), previous["invalid"]]
         write(path, receipt)
         log(f"  -> {path.name} generation={receipt['generation']['ok']} export={receipt['export']['ok']}")
+        if (receipt.get("invalid") or {}).get("reason") == "infra_lost":
+            try:
+                if health_probe is None:
+                    raise ConnectionError("no backend health probe supplied")
+                health_probe()
+            except INFRA_ERRORS + (httpx.HTTPStatusError,) as error:
+                log(f"  recovery probe failed: {error}; stopping")
+                return EXIT_INFRA_LOST
+            # One automatic retry per invocation bounds repeated environment loss.
+            if deck in requeued:
+                log("  repeated infra_lost; recorded, rerun to resume")
+                return EXIT_INFRA_LOST
+            requeued.add(deck)
+            todo.append(deck)
+            log("  infra_lost: backend healthy, requeued at end of plan")
     return 0

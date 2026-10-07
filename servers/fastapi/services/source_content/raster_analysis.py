@@ -289,6 +289,7 @@ def analyze_raster_pptx(
     source_path: Path,
     *,
     orientation: str = "portrait",
+    target_canvas=None,
     tesseract_path: Path = DEFAULT_TESSERACT,
     tessdata_path: Path = DEFAULT_TESSDATA,
 ) -> RasterDraft:
@@ -308,7 +309,9 @@ def analyze_raster_pptx(
         pages.append(page_result)
         crops.update(page_crops)
         issues.extend(page_issues)
-    target_size = (840, 1188) if orientation == "portrait" else (1188, 840)
+    from services.source_content.raster_target import raster_target_from_selectors
+
+    target = target_canvas or raster_target_from_selectors(orientation=orientation)
     analysis = seal_analysis({
         "analysis_id": uuid.uuid5(uuid.NAMESPACE_URL, f"raster-analysis:{source_sha}:{orientation}:v1"),
         "source": {
@@ -317,11 +320,7 @@ def analyze_raster_pptx(
             "canvas_width_emu": width_emu,
             "canvas_height_emu": height_emu,
         },
-        "target_canvas": {
-            "orientation": orientation,
-            "width_units": target_size[0],
-            "height_units": target_size[1],
-        },
+        "target_canvas": target.model_dump(mode="json"),
         "pages": pages,
         "unresolved": tuple(sorted(set(issues))),
     })
@@ -339,7 +338,7 @@ def analyze_raster_pptx(
 
 
 def analyze_auto_preserve_pptx(
-    source_path: Path, *, orientation: str = "portrait",
+    source_path: Path, *, orientation: str = "portrait", target_canvas=None,
 ) -> RasterDraft:
     """Admit image-only pages and retain each complete source image without OCR."""
 
@@ -383,7 +382,9 @@ def analyze_auto_preserve_pptx(
             "recommended_render_mode": "full_page_preserve",
             "recommendation_reason": "strict_image_only_source_preservation",
         })
-    target_size = (840, 1188) if orientation == "portrait" else (1188, 840)
+    from services.source_content.raster_target import raster_target_from_selectors
+
+    target = target_canvas or raster_target_from_selectors(orientation=orientation)
     analysis = seal_analysis({
         "analysis_id": uuid.uuid5(uuid.NAMESPACE_URL, f"raster-auto-preserve:{source_sha}:{orientation}:v1"),
         "source": {
@@ -392,11 +393,7 @@ def analyze_auto_preserve_pptx(
             "canvas_width_emu": width_emu,
             "canvas_height_emu": height_emu,
         },
-        "target_canvas": {
-            "orientation": orientation,
-            "width_units": target_size[0],
-            "height_units": target_size[1],
-        },
+        "target_canvas": target.model_dump(mode="json"),
         "pages": pages,
     })
     return RasterDraft(analysis=analysis, crop_png_by_region=crops)
@@ -406,6 +403,7 @@ def analyze_redesign_pptx(
     source_path: Path,
     *,
     orientation: str = "landscape",
+    target_canvas=None,
     tesseract_path: Path = DEFAULT_TESSERACT,
     tessdata_path: Path = DEFAULT_TESSDATA,
     structurer: object = "auto",
@@ -431,7 +429,7 @@ def analyze_redesign_pptx(
     with activate() as run:
         draft = analyze_redesign(
             source_path, orientation=orientation, tesseract_path=tesseract_path, tessdata_path=tessdata_path,
-            structurer=structurer,
+            structurer=structurer, target_canvas=target_canvas,
         )
     timings = RasterStageTimings.model_validate(run.payload())
     return RasterDraft(

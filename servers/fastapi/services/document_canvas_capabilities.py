@@ -158,7 +158,6 @@ def select_a4_route(
         not template_authored
         or not generation_engine_supported
         or not generation_mode_supported
-        or (source_content and strategy == "svg")
     ):
         route_id = (
             "source-content-authored-restyle"
@@ -173,7 +172,7 @@ def select_a4_route(
     if exact_source:
         return DocumentCanvasRouteSelection("fixed-source-exact-reconstruction")
     if source_content:
-        return DocumentCanvasRouteSelection("source-content-authored-restyle")
+        return DocumentCanvasRouteSelection("authored-reflow-svg" if strategy == "svg" else "source-content-authored-restyle")
     if strategy == "svg":
         return DocumentCanvasRouteSelection("authored-reflow-svg")
     return DocumentCanvasRouteSelection("authored-reflow-html")

@@ -86,6 +86,8 @@ class ExtractedSourceImage:
     #: both the slide size and the picture's extent. ``None`` means the deck
     #: did not say (a shape fill, or a picture without an explicit extent).
     slide_coverage: Optional[float] = None
+    #: Local content relation, separate from slide-wide provenance text.
+    content_group: Optional[dict] = None
 
 
 def extract_pptx_images(pptx_path: Path) -> list[ExtractedSourceImage]:
@@ -99,6 +101,10 @@ def extract_pptx_images(pptx_path: Path) -> list[ExtractedSourceImage]:
         return []
 
     measured: dict[str, Optional[tuple[str, int, int, str]]] = {}
+    try:
+        document_digest = sha256_hex(pptx_path.read_bytes())
+    except OSError:
+        return []
     slide_area = _slide_area(package)
     extracted: list[ExtractedSourceImage] = []
     for slide_index, slide_part in enumerate(_slide_parts(package)):
@@ -110,7 +116,8 @@ def extract_pptx_images(pptx_path: Path) -> list[ExtractedSourceImage]:
         heading = _slide_heading(root)
         slide_text = _slide_text(root)
         relationships = _relationships(package, slide_part)
-        for media_part, coverage in _referenced_media_parts(
+        content_groups = _pptx_content_groups(root, document_digest, slide_index)
+        for blip, media_part, coverage in _referenced_media_occurrences(
             root, relationships, package, slide_area
         ):
             if media_part not in measured:
@@ -130,9 +137,146 @@ def extract_pptx_images(pptx_path: Path) -> list[ExtractedSourceImage]:
                     source_heading=heading,
                     source_text=slide_text,
                     slide_coverage=coverage,
+                    content_group=content_groups.get(id(blip)),
                 )
             )
     return extracted
+
+
+def _content_group(
+    document_digest: str,
+    anchor: str,
+    kind: str,
+    text: Optional[str],
+    caption: Optional[str] = None,
+    order: int = 0,
+) -> dict:
+    """A deterministic relation to local source content, never a page-wide score."""
+
+    return {
+        "version": "source-content-group/v1",
+        "groupId": sha256_hex(f"{document_digest}:{anchor}".encode()),
+        "groupKind": kind,
+        "groupText": " ".join((text or "").split())[:MAX_SOURCE_TEXT_CHARS],
+        "captionText": " ".join((caption or "").split())[:MAX_SOURCE_TEXT_CHARS],
+        "groupOrder": order,
+    }
+
+
+def _pptx_content_groups(root: ET.Element, digest: str, slide_index: int) -> dict[int, dict]:
+    parents = {child: parent for parent in root.iter() for child in parent}
+    shapes = list(root.iter(f"{{{NS['p']}}}sp"))
+    nonempty_shapes = [shape for shape in shapes if _shape_text(shape)]
+    plain_heading = (
+        nonempty_shapes[0]
+        if len(nonempty_shapes) > 1 and not any(_is_title_placeholder(shape) for shape in nonempty_shapes)
+        else None
+    )
+    texts = [
+        (index, shape, _shape_text(shape), _shape_bounds(shape, parents))
+        for index, shape in enumerate(shapes)
+        if _shape_text(shape) and not _is_title_placeholder(shape)
+        and shape is not plain_heading
+    ]
+    groups = list(root.iter(f"{{{NS['p']}}}grpSp"))
+    result = {}
+    for order, blip in enumerate(root.iter(f"{{{NS['a']}}}blip")):
+        ancestors = []
+        node = blip
+        while node in parents:
+            node = parents[node]
+            ancestors.append(node)
+        shape = next((node for node in ancestors if node.tag in {f"{{{NS['p']}}}pic", f"{{{NS['p']}}}sp"}), None)
+        group = next((node for node in ancestors if node.tag == f"{{{NS['p']}}}grpSp"), None)
+        caption = ""
+        if shape is not None:
+            properties = shape.find(".//p:cNvPr", NS)
+            if properties is not None:
+                caption = properties.get("descr", "")
+        group_members = set(group.iter()) if group is not None else set()
+        grouped_texts = [item for item in texts if item[1] in group_members]
+        if grouped_texts:
+            anchor = f"slide/{slide_index}/group/{groups.index(group)}"
+            text = " ".join(item[2] for item in grouped_texts)
+            kind = "object_group"
+        else:
+            bounds = _shape_bounds(group if group is not None else shape, parents)
+            nearest = _nearest_text(bounds, texts)
+            if nearest is None:
+                anchor, text, kind = f"slide/{slide_index}/image/{order}", "", "unresolved"
+            else:
+                anchor, text, kind = f"slide/{slide_index}/text/{nearest[0]}", nearest[2], "local_explanation"
+        result[id(blip)] = _content_group(digest, anchor, kind, text, caption, order)
+    return result
+
+
+def _shape_bounds(shape: Optional[ET.Element], parents: dict) -> Optional[tuple[float, float, float, float]]:
+    if shape is None:
+        return None
+    transform = shape.find("./p:spPr/a:xfrm", NS)
+    if transform is None:
+        transform = shape.find("./p:grpSpPr/a:xfrm", NS)
+    if transform is None:
+        return None
+    if _unsupported_transform(transform):
+        return None
+    offset, extent = transform.find("a:off", NS), transform.find("a:ext", NS)
+    if offset is None or extent is None:
+        return None
+    try:
+        x, y = float(offset.attrib["x"]), float(offset.attrib["y"])
+        width, height = float(extent.attrib["cx"]), float(extent.attrib["cy"])
+        node = shape
+        while node in parents:
+            node = parents[node]
+            if node.tag != f"{{{NS['p']}}}grpSp":
+                continue
+            group_transform = node.find("./p:grpSpPr/a:xfrm", NS)
+            if group_transform is None:
+                return None
+            if _unsupported_transform(group_transform):
+                return None
+            off, ext = group_transform.find("a:off", NS), group_transform.find("a:ext", NS)
+            child_off, child_ext = group_transform.find("a:chOff", NS), group_transform.find("a:chExt", NS)
+            if off is None or ext is None or child_off is None or child_ext is None:
+                return None
+            scale_x = float(ext.attrib["cx"]) / float(child_ext.attrib["cx"])
+            scale_y = float(ext.attrib["cy"]) / float(child_ext.attrib["cy"])
+            x = float(off.attrib["x"]) + (x - float(child_off.attrib["x"])) * scale_x
+            y = float(off.attrib["y"]) + (y - float(child_off.attrib["y"])) * scale_y
+            width, height = width * scale_x, height * scale_y
+        return x, y, x + width, y + height
+    except (KeyError, ValueError, ZeroDivisionError):
+        return None
+
+
+def _unsupported_transform(transform: ET.Element) -> bool:
+    try:
+        if float(transform.get("rot", "0")) != 0:
+            return True
+    except ValueError:
+        return True
+    return any(transform.get(key, "false").lower() not in {"false", "0", "off"}
+               for key in ("flipH", "flipV"))
+
+
+def _nearest_text(bounds: Optional[tuple], texts: list) -> Optional[tuple]:
+    if bounds is None:
+        return None
+    available = [item for item in texts if item[3] is not None]
+    if not available:
+        return None
+    def distance(item: tuple) -> tuple:
+        other = item[3]
+        dx = max(other[0] - bounds[2], bounds[0] - other[2], 0)
+        dy = max(other[1] - bounds[3], bounds[1] - other[3], 0)
+        centers = abs(other[0] + other[2] - bounds[0] - bounds[2]) + abs(other[1] + other[3] - bounds[1] - bounds[3])
+        return dx * dx + dy * dy, centers
+    closest_distance = min(distance(item) for item in available)
+    closest = [item for item in available if distance(item) == closest_distance]
+    if len({item[2] for item in closest}) > 1:
+        return None
+    return closest[0]
 
 
 def _read_package(pptx_path: Path) -> Optional[dict[str, bytes]]:
@@ -228,8 +372,20 @@ def _referenced_media_parts(
     extent, so a blip found anywhere else reports ``None`` rather than a guess.
     """
 
+    return [(part, coverage) for _, part, coverage in
+            _referenced_media_occurrences(root, relationships, package, slide_area)]
+
+
+def _referenced_media_occurrences(
+    root: ET.Element,
+    relationships: dict[str, tuple[str, str]],
+    package: dict[str, bytes],
+    slide_area: Optional[int] = None,
+) -> list[tuple[ET.Element, str, Optional[float]]]:
+    """Carry the original drawing with its media, preserving every occurrence."""
+
     coverage_by_blip = _picture_coverage(root, slide_area)
-    parts: list[tuple[str, Optional[float]]] = []
+    parts: list[tuple[ET.Element, str, Optional[float]]] = []
     for blip in root.iter(f"{{{NS['a']}}}blip"):
         relation = relationships.get(blip.attrib.get(f"{{{NS['r']}}}embed") or "")
         if not relation or relation[1] not in package:
@@ -237,7 +393,7 @@ def _referenced_media_parts(
         # Keep one entry per drawing occurrence.  The ordinary authored registry
         # still deduplicates by digest, while source-content reflow needs two
         # shapes that reference the same media part to remain two placements.
-        parts.append((relation[1], coverage_by_blip.get(id(blip))))
+        parts.append((blip, relation[1], coverage_by_blip.get(id(blip))))
     return parts
 
 

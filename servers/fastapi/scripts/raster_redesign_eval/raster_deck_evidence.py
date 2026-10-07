@@ -12,6 +12,10 @@ import json
 from pathlib import Path
 
 from raster_deck_http import request as _request
+from models.document_canvas import (
+    DOCUMENT_CANVAS_CONTRACT_VERSION,
+    DOCUMENT_CANVAS_CONTRACTS_HEADER,
+)
 
 
 def fetch_slide_evidence(base: str, presentation_id: str, out_dir: Path) -> dict:
@@ -22,7 +26,7 @@ def fetch_slide_evidence(base: str, presentation_id: str, out_dir: Path) -> dict
     # document_canvas_client_upgrade_required.
     presentation = _request(
         base, "GET", f"/api/v1/ppt/presentation/{presentation_id}",
-        headers={"X-Document-Canvas-Contracts": "document-canvas/v1"},
+        headers={DOCUMENT_CANVAS_CONTRACTS_HEADER: DOCUMENT_CANVAS_CONTRACT_VERSION},
     )
     slides = presentation.get("slides", [])
     per_slide = []

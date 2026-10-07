@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Awaitable, TypeVar
 import uuid
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, Request, status
 from fastapi.responses import RedirectResponse, StreamingResponse
 
 from models.public_v2_contracts import (
@@ -52,6 +52,30 @@ IdempotencyKeyHeader = Annotated[
     ),
 ]
 PublicIdPath = Annotated[str, Path(pattern=PUBLIC_ID_PATTERN)]
+
+
+def _internal_svg_authoring_profile(request: Request) -> str | None:
+    value = request.headers.get("X-Presenton-Internal-Svg-Authoring-Profile")
+    if value is None:
+        return None
+    from api.v1.auth.principal import (
+        PrincipalEnvelope, is_loopback_development_request, principal_from_request,
+    )
+    from utils.get_env_canvas_bench import is_canvas_bench_enabled
+
+    principal = principal_from_request(request)
+    if not (
+        is_canvas_bench_enabled()
+        and isinstance(principal, PrincipalEnvelope)
+        and principal.is_admin
+        and principal.method == "jwt"
+        and principal.issuer == "presenton-loopback-development"
+        and is_loopback_development_request(request)
+    ):
+        raise HTTPException(status_code=403, detail={"reasonCode": "svg_authoring_profile_forbidden"})
+    if value not in {"current-v4", "art-direction-v1", "art-direction-v1@2", "art-direction-v1@3", "art-direction-v1@4", "art-direction-v1@5", "art-direction-v1@6", "art-direction-v1@7"}:
+        raise HTTPException(status_code=422, detail={"reasonCode": "svg_authoring_profile_invalid"})
+    return value
 
 
 def _idempotency_key(value: str) -> str:
@@ -120,16 +144,20 @@ def _single_byte_range(value: str | None) -> ArtifactByteRange | None:
 )
 async def submit_presentation_generation(
     request: PresentationGenerationRequestV2,
+    http_request: Request,
     idempotency_key: IdempotencyKeyHeader,
     actor: ActorDependency,
     orchestrator: OrchestratorDependency,
 ) -> OperationReceiptV2:
     require_public_actor_scope(actor, "presentations:write")
+    profile = _internal_svg_authoring_profile(http_request)
+    profile_kwargs = {"svg_authoring_profile": profile} if profile is not None else {}
     receipt = await _delegate(
         orchestrator.submit_generation(
             actor=actor,
             idempotency_key=_idempotency_key(idempotency_key),
             request=request,
+            **profile_kwargs,
         )
     )
     _observe_api_operation(

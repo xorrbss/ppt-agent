@@ -154,7 +154,7 @@ export default function RasterSourceReview({
       <header className="space-y-1">
         <h2 id="raster-review-title" className="text-lg font-semibold text-slate-900">{t("reviewOriginalScreensAndReconstructedContent")}</h2>
         <p className="text-sm text-slate-600">
-          {t("source")} {analysis.sourcePageCount}{t("slidesOutput")} {analysis.targetCanvas === "a4-portrait" ? t("a4Portrait") : t("a4Landscape")}
+          {t("source")} {analysis.sourcePageCount}{t("slidesOutput")} {analysis.targetCanvas === "svg" ? `${analysis.targetWidth} × ${analysis.targetHeight}` : analysis.targetCanvas === "a4-portrait" ? t("a4Portrait") : t("a4Landscape")}
         </p>
         <p className="text-sm text-slate-700" role="status">
           {approved ? t("approvedYouCanGenerateFromThisAnalysis") :

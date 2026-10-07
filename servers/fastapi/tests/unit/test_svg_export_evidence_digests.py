@@ -83,11 +83,11 @@ def test_quality_inputs_read_the_stored_slide_quality_and_advisory():
     assert inputs == {"policy": "release-v1", "advisory": {"digest": "x"}, "slides": [{"passed": True}, None]}
 
 
-def test_evidence_digests_are_identity_inputs_recorded_on_the_receipt():
+def test_evidence_digests_are_identity_inputs_not_public_receipt_extras():
     import inspect
 
     import services.svg_export_identity as identity
     import services.svg_export_operation as operation
     assert "build_svg_export_evidence_digests" in inspect.getsource(identity.build_svg_export_identity)
     source = inspect.getsource(operation.execute_svg_workspace_export)
-    assert 'receipt["evidenceDigests"] = identity.evidence.to_wire()' in source
+    assert 'receipt["evidenceDigests"]' not in source

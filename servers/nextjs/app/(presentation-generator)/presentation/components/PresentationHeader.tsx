@@ -27,6 +27,7 @@ import HybridCoverageDialog, {
 import HybridExportHistoryDialog from "./header/HybridExportHistoryDialog";
 import HeaderToolbar from "./header/HeaderToolbar";
 import HeaderMoreMenu from "./header/HeaderMoreMenu";
+import { isSvgPresentation } from "../utils/presentationSource";
 import DashboardNavigationButton from "./header/DashboardNavigationButton";
 import PresentationTitleEditor from "./header/PresentationTitleEditor";
 import RegenerateConfirmDialog from "./header/RegenerateConfirmDialog";
@@ -456,6 +457,7 @@ const PresentationHeader = ({
               presentationId={presentation_id}
               isAuthoredDeck={isAuthoredDeck}
               canRemakePage={presentationData?.capabilities?.editor?.slide_image_regenerate === true}
+              isSvgDeck={isSvgPresentation(presentationData)}
               currentSlide={currentSlide}
               isStreaming={isStreaming}
               isPresentationSaving={isPresentationSaving}

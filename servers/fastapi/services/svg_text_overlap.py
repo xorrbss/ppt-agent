@@ -16,6 +16,7 @@ from utils.slide_capture_text_ink import TEXT_INK_PROBE_VERSION
 
 OVERLAP_THRESHOLD_PX = 0.5
 INK = "ink"
+INK_CELL = "ink_cell"
 LINE_BOX = "line_box"
 
 
@@ -40,7 +41,11 @@ def comparison_fragments(item: dict) -> list[tuple[dict, str]]:
     result = []
     for line_box, candidate in zip(line_boxes, ink, strict=True):
         rect = _ink_rect(candidate)
-        result.append((rect, INK) if rect is not None else (line_box, LINE_BOX))
+        if rect is None:
+            result.append((line_box, LINE_BOX))
+        else:
+            cells = candidate.get("cellClusters", 0)
+            result.append((rect, INK_CELL if isinstance(cells, int) and cells > 0 else INK))
     return result
 
 
@@ -76,7 +81,7 @@ def text_overlaps(text: list[dict]) -> tuple[list[list], dict]:
                 pair = [a.get("qid"), b.get("qid")]
                 overlaps.append(pair)
                 pair_basis.append({"pair": pair, "basis": basis})
-    counts = {INK: 0, LINE_BOX: 0}
+    counts = {INK: 0, INK_CELL: 0, LINE_BOX: 0}
     for element in fragments:
         for _rect, basis in element:
             counts[basis] += 1

@@ -24,6 +24,7 @@ import logging
 from services.authored_checkpoint_errors import AuthoredStageError
 from services.generation_core.quality.terminal_policy import TerminalPolicy
 from services.generation_core.quality.terminal_slide_flag_only import flagged_entry
+from services.svg_page_publication import set_svg_page
 from utils.hashing import sha256_hex
 
 LOGGER = logging.getLogger(__name__)
@@ -61,6 +62,14 @@ async def rescue_terminal_page(*, ctx, request, index, content, payload, error, 
     policy = terminal_policy_of(ctx)
     if policy is TerminalPolicy.FAIL or not is_exhausted_page(error, index):
         return None
+    if policy is TerminalPolicy.FALLBACK:
+        from services.svg_authoring_profile import read_authoring_profile
+
+        profile = read_authoring_profile(getattr(ctx, "snapshot", {}) or {})
+        if profile and profile["version"] in (6, 7, 8):
+            # This candidate's source completeness is mandatory. The generic
+            # outline placeholder truncates it and cannot rescue the page.
+            return None
     if policy is TerminalPolicy.FLAG_ONLY:
         return await _flag_only(ctx=ctx, index=index, payload=payload, error=error, job=job,
                                 checkpoint=checkpoint)
@@ -104,8 +113,10 @@ async def _fallback(*, ctx, request, index, content, payload, error, job, checkp
         LOGGER.warning("[svg] fallback page render failed slide=%d", index + 1, exc_info=True)
         return None
     rescued = {key: payload[key] for key in _IDENTITY_KEYS if key in payload}
-    rescued.update(svg_content=svg, source_digest=sha256_hex(svg.encode()),
-                   quality=rendered.quality, **write_png(rendered.png),
+    fields = {}
+    set_svg_page(fields, svg_content=svg, content={"svgReceipt": rescued}, quality=rendered.quality)
+    rescued = fields["content"]["svgReceipt"]
+    rescued.update(svg_content=fields["svg_content"], **write_png(rendered.png),
                    terminal=flagged_entry(index=index, reason=FALLBACK_REASON, attempted=False,
                                           outcome=FALLBACK_OUTCOME),
                    terminal_error=error.code)

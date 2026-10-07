@@ -57,6 +57,8 @@ class _JobState:
     queued_retry: int = 0
     consecutive_failures: int = 0
     uncertain_inflight_requests: int = 0
+    lineage_initial_requests: int = 0
+    lineage_retry_requests: int = 0
 
 
 @dataclass(slots=True)
@@ -97,6 +99,8 @@ class ProviderRuntimeControl:
         kill_conditions: JobKillConditions | None = None,
         initial_requests: int = 0,
         retry_requests: int = 0,
+        lineage_initial_requests: int = 0,
+        lineage_retry_requests: int = 0,
     ) -> CancellationToken:
         """Register one job and return its cooperative cancellation token.
 
@@ -112,6 +116,8 @@ class ProviderRuntimeControl:
         _validate_optional_nonnegative(actual_budget_microunits, "actual_budget_microunits")
         _validate_nonnegative(initial_requests, "initial_requests")
         _validate_nonnegative(retry_requests, "retry_requests")
+        _validate_nonnegative(lineage_initial_requests, "lineage_initial_requests")
+        _validate_nonnegative(lineage_retry_requests, "lineage_retry_requests")
         conditions = kill_conditions or JobKillConditions()
         async with self._condition:
             if job_id in self._jobs:
@@ -128,6 +134,8 @@ class ProviderRuntimeControl:
                 total_requests=initial_requests + retry_requests,
                 initial_requests=initial_requests,
                 retry_requests=retry_requests,
+                lineage_initial_requests=lineage_initial_requests,
+                lineage_retry_requests=lineage_retry_requests,
             )
             self._jobs[job_id] = state
             return state.token
@@ -258,8 +266,8 @@ class ProviderRuntimeControl:
             job.token.cancel("estimated_budget_exceeded")
             raise BudgetExceededError(kind="estimated", limit=job.estimated_limit, observed=projected_cost)
 
-        projected_initial = job.initial_requests + job.queued_initial + (not is_retry)
-        projected_retry = job.retry_requests + job.queued_retry + is_retry
+        projected_initial = job.initial_requests + job.lineage_initial_requests + job.queued_initial + (not is_retry)
+        projected_retry = job.retry_requests + job.lineage_retry_requests + job.queued_retry + is_retry
         if is_retry and projected_initial == 0:
             job.token.cancel("retry_amplification_exceeded")
             raise RetryAmplificationError("retry_requires_an_initial_request")

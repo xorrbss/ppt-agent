@@ -248,9 +248,17 @@ def validate_full_page_preserve_svg_structure(svg: str, slot_id: str) -> None:
 
 def _canonical_boxes(
     svg: str, *, width: int, height: int, expected_slots: set[str], preserve_only: bool = False,
+    system_furniture: dict | None = None,
 ) -> dict[str, tuple[float, float, float, float]]:
     contract = {slot: {"required": True, "allowOmit": False} for slot in expected_slots}
-    validate_svg(svg, width=width, height=height, source_manifest=contract, allow_image_only=preserve_only)
+    furniture = {}
+    if system_furniture:
+        if preserve_only:
+            raise ValueError("raster_full_page_furniture_not_permitted")
+        from services.svg_master_furniture import attested_svg_furniture
+        furniture = attested_svg_furniture(svg, system_furniture, source_manifest=contract, width=width, height=height)
+    validate_svg(svg, width=width, height=height, source_manifest=contract, allow_image_only=preserve_only,
+                 trusted_furniture_images=(system_furniture or {}).get("images"))
     root = ET.fromstring(svg)
     if preserve_only:
         if len(expected_slots) != 1:
@@ -258,6 +266,8 @@ def _canonical_boxes(
         validate_full_page_preserve_svg_structure(svg, next(iter(expected_slots)))
     boxes = {}
     for node in root.iter(_SVG_IMAGE):
+        if node.get("id") in furniture:
+            continue
         slot = node.attrib.get("href")
         if slot not in expected_slots or slot in boxes:
             raise ValueError("raster_canonical_slot_mismatch")
@@ -294,7 +304,7 @@ async def prepare_raster_page_assets(
     tenant_id: str, publication_context: SvgPublicationContext,
     presentation_id: uuid.UUID, source_revision: int, slide_revision: int,
     page_number: int, output_page_index: int, canonical_svg: str,
-    width: int, height: int,
+    width: int, height: int, system_furniture: dict | None = None,
 ) -> RasterPageAssets:
     """Publish a page's source and screen manifests under the generation fence."""
     if (publication_context.owner_id, publication_context.tenant_id) != (owner_id, tenant_id):
@@ -312,6 +322,7 @@ async def prepare_raster_page_assets(
     boxes = _canonical_boxes(
         canonical_svg, width=width, height=height, expected_slots=set(slot_ids),
         preserve_only=page_number in getattr(approval_pin, "full_page_preserve_pages", ()),
+        system_furniture=system_furniture,
     )
     slots = []
     derivatives = {}
@@ -387,11 +398,12 @@ async def prepare_raster_page_assets(
         session=session, owner_id=owner_id, tenant_id=tenant_id,
         width=width, height=height, service=service,
         placement_manifest=placement, page_index=output_page_index,
+        system_furniture=system_furniture,
      allow_image_only=page_number in getattr(approval_pin, "full_page_preserve_pages", ()))
     contract = {slot.slot_id: {"required": True, "allowOmit": False} for slot in slots}
     admit_authorized_svg_materialized(
         canonical_svg, materialized, source_manifest=contract,
-        width_px=width, height_px=height,
+        width_px=width, height_px=height, system_furniture=system_furniture,
      allow_image_only=page_number in getattr(approval_pin, "full_page_preserve_pages", ()))
     source_wire = source_pointer.model_dump(mode="json", by_alias=True)
     envelope = dict(
@@ -412,7 +424,7 @@ async def build_raster_page_export_assets(
     tenant_id: str, publication_context: SvgPublicationContext,
     presentation_id: uuid.UUID, source_pointer: dict, slide_revision: int,
     page_number: int, output_page_index: int, canonical_svg: str,
-    width: int, height: int, export_format: str,
+    width: int, height: int, export_format: str, system_furniture: dict | None = None,
 ) -> dict:
     """Return the standard export envelope using committed, approved crops."""
     if export_format not in {"pptx", "pdf"}:
@@ -435,6 +447,7 @@ async def build_raster_page_export_assets(
     boxes = _canonical_boxes(
         canonical_svg, width=width, height=height, expected_slots=expected_slots,
         preserve_only=page_number in getattr(approval_pin, "full_page_preserve_pages", ()),
+        system_furniture=system_furniture,
     )
     derivatives = {}
     for region in regions:
@@ -480,4 +493,5 @@ async def build_raster_page_export_assets(
         placementManifest=pointer.model_dump(mode="json", by_alias=True),
         pageIndex=output_page_index, slideRevision=slide_revision,
         fullPagePreserve=page_number in getattr(approval_pin, "full_page_preserve_pages", ()),
+        **({"systemFurniture": system_furniture} if system_furniture else {}),
     )

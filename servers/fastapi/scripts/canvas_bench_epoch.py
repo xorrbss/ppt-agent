@@ -12,21 +12,17 @@ Epochs, oldest first:
   ``overlap_basis`` in the svg measurements and does not bump
   ``SVG_RENDERER_VERSION``, so the renderer version cannot tell the epochs apart.
 
-A run resolves its epoch with this precedence, and refuses to start when none
-applies (a silently mislabelled deck would poison a pool):
-
-1. ``--metric-epoch`` (explicit operator decision, e.g. for a dirty worktree);
-2. per deck, an ``overlap_basis`` value found in the generation operation's
-   published result (``observed_epoch``), which overrides 1 for that deck's
-   label and is stored beside it as ``overlapBasis``;
-3. ancestry: ``--ink-fix-commit <sha>`` is an ancestor of ``--backend-commit``
-   (``git merge-base --is-ancestor``) means ``INK_EPOCH``, otherwise
-   ``LEGACY_EPOCH``.
+Per-deck precedence: explicit --metric-epoch, operation result / persisted
+page overlap_basis.version, then git ancestry (with a warning). Every page
+version must agree; mixed or partial evidence leaves the primary metric
+unmeasured. A run without a fallback starts unmeasured until page evidence
+resolves its epoch, so dirty/detached backends need no ancestry guess.
 """
 
 from __future__ import annotations
 
 import subprocess
+import warnings
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -47,6 +43,8 @@ def find_overlap_basis(payload: Any, _depth: int = 0) -> str | None:
         return None
     if isinstance(payload, Mapping):
         value = payload.get("overlap_basis", payload.get("overlapBasis"))
+        if isinstance(value, Mapping):
+            value = value.get("version")
         if isinstance(value, str) and value:
             return value
         children: Any = payload.values()
@@ -61,7 +59,9 @@ def find_overlap_basis(payload: Any, _depth: int = 0) -> str | None:
     return None
 
 
-def observed_epoch(overlap_basis: str | None) -> str | None:
+def observed_epoch(overlap_basis: str | Mapping[str, Any] | None) -> str | None:
+    if isinstance(overlap_basis, Mapping):
+        overlap_basis = overlap_basis.get("version")
     if not overlap_basis:
         return None
     return INK_EPOCH if "ink" in overlap_basis.lower() else LEGACY_EPOCH
@@ -86,8 +86,25 @@ def resolve_run_epoch(explicit: str | None, backend_commit: str | None, ink_fix_
     if backend_commit and ink_fix_commit:
         verdict = is_ancestor(ink_fix_commit, backend_commit)
         if verdict is not None:
+            warnings.warn("metric epoch uses git ancestry fallback; prefer per-page overlap_basis evidence",
+                          RuntimeWarning, stacklevel=2)
             return INK_EPOCH if verdict else LEGACY_EPOCH
     raise ValueError(
         "cannot determine the metric epoch: pass --metric-epoch, or both --backend-commit and "
         "--ink-fix-commit (a commit both known to git)"
     )
+
+
+def deck_overlap_basis(result: Any, presentation: Mapping[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+    """Check every persisted page, even when an operation also advertises a basis."""
+    pages = ((presentation.get("theme") or {}).get("svg") or {}).get("quality") or []
+    versions = [find_overlap_basis(page) for page in pages]
+    measured = {version for version in versions if version}
+    if len(measured) > 1:
+        return {"version": None, "pages": len(pages), "versions": sorted(measured)}, "mixed_overlap_basis"
+    if pages and len(measured) == 1 and any(version is None for version in versions):
+        return {"version": None, "pages": len(pages)}, "missing_overlap_basis"
+    version = find_overlap_basis(result) or next(iter(measured), None)
+    if version and measured and version not in measured:
+        return {"version": None, "pages": len(pages)}, "mixed_overlap_basis"
+    return ({"version": version, "pages": len(pages)} if version else None), None

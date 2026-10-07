@@ -1,10 +1,10 @@
 import React from "react";
 import { PresentationCard } from "./PresentationCard";
-import { PresentationResponse } from "@/app/(presentation-generator)/services/api/dashboard";
+import type { DashboardPresentation } from "@/app/(presentation-generator)/services/api/dashboard";
 import { EmptyState } from "./EmptyState";
 
 interface PresentationGridProps {
-  presentations: PresentationResponse[];
+  presentations: DashboardPresentation[];
   isLoading?: boolean;
   error?: string | null;
   onPresentationDeleted?: (presentationId: string) => void;

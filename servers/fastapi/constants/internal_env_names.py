@@ -39,6 +39,7 @@ INTERNAL_ENV_NAMES: MappingProxyType[str, str] = MappingProxyType(
         # --- process / deployment identity -----------------------------------
         "APP_DATA_DIRECTORY": "Root for generated files, uploads, fonts, exports, userConfig.json (required).",
         "DATABASE_URL": "Async SQLAlchemy URL; falls back to SQLite under the app data directory.",
+        "CANVAS_STAGES_PATH": "Alternate stage file for an isolated canvas bench backend.",
         "TEMP_DIRECTORY": "Scratch directory override for temporary generation files.",
         "USER_CONFIG_PATH": "Path of the per-instance userConfig.json written by start.js.",
         "DISABLE_AUTH": "Bypass the session auth middleware for single-user local runs.",
@@ -84,6 +85,7 @@ INTERNAL_ENV_NAMES: MappingProxyType[str, str] = MappingProxyType(
         "AUTHORED_CHECKPOINT_SWEEP_MAX_FILES": "Files one sweep pass may touch (capped at 100000).",
         "DECK_IR_GENERATION_ENABLED": "Enable the deck-IR generation path.",
         # --- svg driver ---------------------------------------------------------------
+        "CANVAS_BENCH_ENABLED": "Allow admission-only per-request canvas experiment fields when exactly true.",
         "SVG_AUTHOR_CONCURRENCY": "Explicit SVG author-call concurrency.",
         "SVG_AUTHOR_CONCURRENCY_SOURCE_REFLOW": "SVG author-call concurrency for source-reflow decks.",
         "SVG_RENDER_CONCURRENCY": "Explicit SVG page-render concurrency.",

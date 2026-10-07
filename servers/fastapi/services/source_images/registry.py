@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import re
 import shutil
 import uuid
 from collections import defaultdict
@@ -19,12 +20,13 @@ from dataclasses import dataclass, replace
 from io import BytesIO
 from pathlib import Path
 from typing import Optional
+from urllib.parse import unquote
 
 from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.image_asset import ImageAsset
-from services.source_images.extract import extract_pptx_images
+from services.source_images.extract import MAX_PPTX_BYTES, _content_group, extract_pptx_images
 from services.source_images.extract_documents import extract_document_images
 from services.source_images.models import (
     FULL_SLIDE_COVERAGE_THRESHOLD,
@@ -114,17 +116,18 @@ async def register_source_images(
         upload_paths, include_document_images=include_document_images, registration_report=registration_report
     )
     collected = [
-        replace(
-            raw,
-            original_name=str(
-                (upload_metadata or {}).get(str(raw.source_path), {}).get("original_name") or raw.source_path.name
-            ),
-            ocr_text=str((upload_metadata or {}).get(str(raw.source_path), {}).get("ocr_text") or "")[:20000] or None,
-        )
-        if raw.source_path is not None
-        else raw
+        _with_upload_context(raw, upload_metadata or {}, include_document_images=include_document_images)
         for raw in collected
     ]
+    if include_document_images:
+        collected = await asyncio.to_thread(
+            _attach_text_image_contexts,
+            collected,
+            upload_paths,
+            upload_metadata or {},
+            presentation_id,
+            registration_report,
+        )
     kept = (
         [raw for raw in collected if raw.mime_type in SUPPORTED_SOURCE_IMAGE_MIME_TYPES]
         if include_document_images
@@ -177,6 +180,207 @@ async def register_source_images(
     # One flush for the whole set: the caller owns the surrounding transaction.
     await session.flush()
     return registered
+
+
+def _with_upload_context(
+    raw: _RawImage, upload_metadata: Mapping[str, dict], *, include_document_images: bool
+) -> _RawImage:
+    if raw.source_path is None:
+        return raw
+    metadata = upload_metadata.get(str(raw.source_path), {})
+    original_name = str(metadata.get("original_name") or raw.source_path.name)
+    ocr_text = str(metadata.get("ocr_text") or "")[:20000] or None
+    locator = raw.source_locator
+    if include_document_images and locator is None and raw.source_path.suffix.lower() not in _SOURCE_DECK_SUFFIXES:
+        locator = {
+            "sourceDocumentSha256": raw.digest,
+            "sourceFormat": "image",
+            "pageIndex": None,
+            "objectLocator": "direct-upload",
+            "extractionKind": "uploaded_raster",
+            "contentGroup": _content_group(raw.digest, "direct-upload", "direct_upload", ocr_text, original_name),
+        }
+    if locator is not None and locator.get("sourceFormat") == "image" and metadata.get("workspace_asset_id"):
+        try:
+            workspace_asset_id = str(uuid.UUID(str(metadata["workspace_asset_id"])))
+        except (ValueError, TypeError, AttributeError):
+            pass
+        else:
+            locator = {"workspaceAssetId": workspace_asset_id, **locator}
+    return replace(raw, original_name=original_name, ocr_text=ocr_text, source_locator=locator)
+
+
+_TEXT_SOURCE_SUFFIXES = frozenset({".md", ".markdown", ".txt"})
+_MARKDOWN_IMAGE = re.compile(
+    r'!\[(?P<caption>(?:\\.|[^\]\\])*)\](?:'
+    r'\(\s*(?:<(?P<angle>[^>]+)>|(?P<inline>[^\s()]+(?:\([^\s()]*\)[^\s()]*)*))(?:\s+["\'][^"\']*["\'])?\s*\)'
+    r'|\[(?P<reference>[^\]]*)\])?(?![\[(])'
+)
+_MARKDOWN_DEFINITION = re.compile(
+    r'^[ \t]{0,3}\[([^\]]+)\]:[ \t]*(?:<([^>]+)>|([^\s]+))(?:[ \t]+.*)?$', re.MULTILINE
+)
+
+
+def _image_reference_keys(value: str) -> tuple[str, ...]:
+    """Lexical upload aliases only; never open or fetch an image target."""
+
+    value = unquote(value.strip()).replace("\\", "/")
+    if value.startswith("//") or re.match(r"^[a-z][a-z0-9+.-]*://", value, re.I) and not value.lower().startswith(("asset://", "workspace-asset://")):
+        return ()
+    if re.match(r"^(?:https?|file|data|ftp):", value, re.I):
+        return ()
+    value = re.sub(r"^(?:asset|workspace-asset):(?:/{2})?", "", value, flags=re.I)
+    basename = value.rsplit("/", 1)[-1]
+    keys = [value.casefold(), basename.casefold()]
+    if Path(basename).suffix:
+        keys.append(Path(basename).stem.casefold())
+    return tuple(dict.fromkeys(key for key in keys if key))
+
+
+def _attach_text_image_contexts(
+    images: list[_RawImage],
+    upload_paths: Sequence[Path],
+    upload_metadata: Mapping[str, dict],
+    presentation_id: uuid.UUID,
+    report: list[dict] | None,
+) -> list[_RawImage]:
+    aliases: dict[str, set[int]] = defaultdict(set)
+    for index, image in enumerate(images):
+        if not image.source_locator or image.source_locator.get("sourceFormat") != "image":
+            continue
+        metadata = upload_metadata.get(str(image.source_path), {})
+        identifiers = [image.original_name or "", image.source_path.name if image.source_path else "",
+                       image.digest, f"sha256:{image.digest}", str(source_image_asset_id(presentation_id, image.digest))]
+        identifiers.extend(str(metadata.get(key) or "") for key in ("asset_id", "workspace_asset_id"))
+        for identifier in identifiers:
+            for key in _image_reference_keys(identifier):
+                aliases[key].add(index)
+    contexts: dict[int, list[dict]] = defaultdict(list)
+
+    def diagnose(path: Path, block_index: int | None, status: str) -> None:
+        if report is not None:
+            report.append({"original_name": upload_metadata.get(str(path), {}).get("original_name") or path.name,
+                           "block_index": block_index, "status": status})
+
+    for upload_path in upload_paths:
+        path = Path(upload_path)
+        if path.suffix.lower() not in _TEXT_SOURCE_SUFFIXES:
+            continue
+        try:
+            if path.stat().st_size > MAX_PPTX_BYTES:
+                raise ValueError("document_byte_budget_exceeded")
+            with path.open("rb") as source:
+                payload = source.read(MAX_PPTX_BYTES + 1)
+            if len(payload) > MAX_PPTX_BYTES:
+                raise ValueError("document_byte_budget_exceeded")
+            try:
+                text = payload.decode("utf-8-sig")
+            except UnicodeDecodeError:
+                text = payload.decode("cp949")
+        except (OSError, UnicodeDecodeError, ValueError) as error:
+            diagnose(path, None, str(error) if isinstance(error, ValueError) and not isinstance(error, UnicodeDecodeError)
+                     else "text_source_read_failed")
+            continue
+        digest = sha256_hex(payload)
+        definitions: dict[str, set[str]] = defaultdict(set)
+        definition_lines = []
+        in_fence = False
+        for line in text.splitlines():
+            if re.match(r"^\s*(?:```|~~~)", line):
+                in_fence = not in_fence
+            elif not in_fence:
+                definition_lines.append(line)
+        for definition in _MARKDOWN_DEFINITION.finditer("\n".join(definition_lines)):
+            label = " ".join(definition.group(1).split()).casefold()
+            definitions[label].add(definition.group(2) or definition.group(3))
+        local_text = ""
+        local_anchor = 0
+        reference_order = 0
+        in_fence = False
+        for block_index, block in enumerate(re.split(r"\n\s*\n", text)):
+            visible_lines = []
+            for line in block.splitlines():
+                if re.match(r"^\s*(?:```|~~~)", line):
+                    in_fence = not in_fence
+                elif not in_fence:
+                    visible_lines.append(line)
+            block = "\n".join(visible_lines)
+            block = _MARKDOWN_DEFINITION.sub("", block).strip()
+            if not block:
+                continue
+            references = []
+            matches = list(_MARKDOWN_IMAGE.finditer(block))
+            for match in matches:
+                target = match.group("angle") or match.group("inline")
+                if target is None:
+                    label = " ".join((match.group("reference") or match.group("caption")).split()).casefold()
+                    targets = definitions.get(label, set())
+                    if len(targets) != 1:
+                        diagnose(path, block_index, "image_reference_ambiguous" if targets else "image_reference_not_uploaded")
+                        continue
+                    target = next(iter(targets))
+                references.append((target, re.sub(r"\\(.)", r"\1", match.group("caption"))))
+            remainder = _MARKDOWN_IMAGE.sub("", block)
+            if path.suffix.lower() == ".txt" and not references:
+                remaining_lines = []
+                for line in remainder.splitlines():
+                    literal = re.sub(r"^\s*(?:[-*+]\s+|\d+[.)]\s+)", "", line).strip().strip("`")
+                    if re.fullmatch(r"[^\n]+\.(?:png|jpe?g|webp)", literal, re.I):
+                        references.append((literal, ""))
+                    else:
+                        remaining_lines.append(line)
+                remainder = "\n".join(remaining_lines)
+            explanation = " ".join(
+                re.sub(r"^\s*(?:[-*+]\s+|\d+[.)]\s+)", "", line).strip()
+                for line in remainder.splitlines()
+            ).strip()
+            if explanation:
+                local_anchor = block_index
+                local_text = "" if re.match(r"^\s*#{1,6}\s", explanation) else explanation
+            for image_order, (target, caption) in enumerate(references):
+                reference_order += 1
+                matched = set()
+                for key in _image_reference_keys(target):
+                    if key in aliases:
+                        matched = aliases[key]
+                        break
+                if len(matched) != 1:
+                    diagnose(path, block_index, "image_reference_ambiguous" if matched else "image_reference_not_uploaded")
+                    continue
+                index = next(iter(matched))
+                group = _content_group(
+                    digest,
+                    f"block/{local_anchor}" if local_text else f"block/{block_index}/image/{image_order}",
+                    "local_explanation" if local_text else "caption" if caption else "unresolved",
+                    local_text,
+                    caption,
+                    reference_order,
+                )
+                group.update(contextDocumentSha256=digest, contextSourceFormat=path.suffix.lower().lstrip("."),
+                             contextBlockPath=f"block/{local_anchor if local_text else block_index}")
+                contexts[index].append(group)
+    affected_group_ids = {
+        group["groupId"]
+        for groups in contexts.values()
+        if len({item["groupId"] for item in groups}) > 1
+        for group in groups
+    }
+    result = list(images)
+    for index, groups in contexts.items():
+        affected = sorted({group["groupId"] for group in groups} & affected_group_ids)
+        if affected:
+            if report is not None:
+                report.append({"original_name": images[index].original_name, "status": "text_image_context_ambiguous",
+                               "affected_group_ids": affected})
+            locator = {**images[index].source_locator, "contentGroup": {
+                **images[index].source_locator["contentGroup"], "referenceStatus": "ambiguous",
+                "affectedGroupIds": affected,
+            }}
+        else:
+            group = {**groups[0], "captionText": " ".join(dict.fromkeys(item["captionText"] for item in groups))[:600]}
+            locator = {**images[index].source_locator, "contentGroup": group}
+        result[index] = replace(images[index], source_locator=locator)
+    return result
 
 
 async def register_manifest_image_occurrences(
@@ -313,6 +517,7 @@ async def _collect_raw_images(
                             "pageIndex": image.source_slide_index,
                             "objectLocator": f"slide/{image.source_slide_index}/image/{index}",
                             "extractionKind": "embedded_raster",
+                            "contentGroup": image.content_group,
                         }
                         if include_document_images
                         else None

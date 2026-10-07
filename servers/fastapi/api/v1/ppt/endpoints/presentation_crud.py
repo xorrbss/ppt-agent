@@ -13,6 +13,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 from sqlmodel import select
+from models.generate_presentation_request import DesignPackPinInput
+from models.svg_canvas import SvgCanvasInput
 
 from api.v1.ppt.endpoints.presentation_helpers import resolve_presentation_fonts
 from api.v1.ppt.endpoints.presentation_crud_helpers import (
@@ -38,6 +40,7 @@ from models.presentation_generation_info import (
     PresentationGenerationSettings,
 )
 from models.presentation_with_slides import PresentationWithSlides
+from models.document_canvas import DOCUMENT_CANVAS_CONTRACTS_HEADER
 from models.sql.presentation import (
     PRESENTATION_LIFECYCLE_PUBLISHED,
     PRESENTATION_LIFECYCLE_STAGING,
@@ -91,8 +94,12 @@ from api.v1.ppt.endpoints.presentation_export_attempts import (
 )
 from api.v1.ppt.endpoints.presentation_list_projection import (
     PresentationListItem, PresentationListPage, UnsupportedPresentationListItem,
+    DashboardPresentationListPage, DashboardPresentationCover,
     _escaped_like_fragment, _list_slide_without_html,
     _list_theme_projection, _list_content_projection,
+)
+from api.v1.ppt.endpoints.presentation_dashboard_projection import (
+    dashboard_presentation_page, dashboard_presentation_cover,
 )
 
 PRESENTATION_CRUD_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
@@ -111,7 +118,7 @@ def _chat_first_create_enabled() -> bool:
 
 @PRESENTATION_CRUD_ROUTER.get(
     "/all",
-    response_model=List[PresentationListItem] | PresentationListPage,
+    response_model=List[PresentationListItem] | PresentationListPage | DashboardPresentationListPage,
 )
 async def get_all_presentations(
     sql_session: AsyncSession = Depends(get_async_session),
@@ -119,6 +126,7 @@ async def get_all_presentations(
     page: Annotated[Optional[int], Query(ge=1)] = None,
     page_size: Annotated[Optional[int], Query(ge=1, le=100)] = None,
     sort: Annotated[Optional[Literal["asc", "desc"]], Query()] = None,
+    view: Annotated[Optional[Literal["dashboard"]], Query()] = None,
 ):
     """List published decks with optional server search and pagination.
 
@@ -129,7 +137,7 @@ async def get_all_presentations(
     cannot skew ``total``.
     """
 
-    legacy_response = q is None and page is None and page_size is None and sort is None
+    legacy_response = q is None and page is None and page_size is None and sort is None and view is None
     normalized_q = (q or "").strip()
     resolved_page = page or 1
     resolved_page_size = page_size or 24
@@ -153,6 +161,11 @@ async def get_all_presentations(
         else (PresentationModel.updated_at.desc(), PresentationModel.id.desc())
     )
     dialect = sql_session.get_bind().dialect.name
+    if view == "dashboard":
+        return await dashboard_presentation_page(
+            sql_session, filters=filters, order_columns=order_columns,
+            page=resolved_page, page_size=resolved_page_size,
+        )
     presentation_query = (
         select(PresentationModel, _list_theme_projection(dialect))
         .where(*filters)
@@ -233,10 +246,19 @@ async def get_all_presentations(
     )
 
 
+@PRESENTATION_CRUD_ROUTER.get("/{id}/cover", response_model=DashboardPresentationCover)
+async def get_presentation_cover(
+    id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session),
+    canvas_contracts: Annotated[Optional[str], Header(alias=DOCUMENT_CANVAS_CONTRACTS_HEADER)] = None,
+):
+    """Fetch one cover only when a dashboard card has no usable saved image."""
+    return await dashboard_presentation_cover(sql_session, id, canvas_contracts)
+
+
 @PRESENTATION_CRUD_ROUTER.get("/{id}", response_model=PresentationWithSlides)
 async def get_presentation(
     id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session),
-    canvas_contracts: Annotated[Optional[str], Header(alias="X-Document-Canvas-Contracts")] = None,
+    canvas_contracts: Annotated[Optional[str], Header(alias=DOCUMENT_CANVAS_CONTRACTS_HEADER)] = None,
 ):
     from services.document_canvas import require_canvas_capability
 
@@ -253,7 +275,7 @@ async def get_presentation_export_projection(
     id: uuid.UUID,
     response: Response,
     sql_session: AsyncSession = Depends(get_async_session),
-    canvas_contracts: Annotated[Optional[str], Header(alias="X-Document-Canvas-Contracts")] = None,
+    canvas_contracts: Annotated[Optional[str], Header(alias=DOCUMENT_CANVAS_CONTRACTS_HEADER)] = None,
 ):
     from services.document_canvas import require_canvas_capability
 
@@ -375,9 +397,12 @@ async def create_presentation(
     web_search: Annotated[bool, Body()] = False,
     strategy: Annotated[Literal["authored", "svg"], Body()] = "svg",
     theme: Annotated[Optional[dict], Body()] = None,
-    aspect_ratio: Annotated[Literal["16:9", "9:16", "9:13", "1:1", "21:9"], Body()] = "16:9",
+    aspect_ratio: Annotated[Literal["16:9", "4:3", "9:16", "9:13", "1:1", "21:9"], Body()] = "16:9",
     page_size: Annotated[Optional[Literal["A4"]], Body()] = None,
     orientation: Annotated[Optional[Literal["landscape", "portrait"]], Body()] = None,
+    svg_canvas: Annotated[Optional[SvgCanvasInput], Body()] = None,
+    svg_design_reference_pin: Annotated[Optional[DesignPackPinInput], Body()] = None,
+    svg_design_reference_snapshot_id: Annotated[Optional[uuid.UUID], Body()] = None,
     http_request: Request = None,
     idempotency_key: Annotated[
         Optional[str], Header(alias="Idempotency-Key")
@@ -386,7 +411,25 @@ async def create_presentation(
 ):
     from api.v1.ppt.endpoints.presentation_create_canvas import admitted_create_canvas
 
-    create_canvas = await admitted_create_canvas(http_request, page_size, orientation, aspect_ratio)
+    create_canvas = await admitted_create_canvas(
+        http_request, page_size, orientation, aspect_ratio,
+        strategy=strategy, svg_canvas=svg_canvas,
+    )
+    if (svg_design_reference_pin is not None or svg_design_reference_snapshot_id is not None) and strategy != "svg":
+        raise HTTPException(status_code=422, detail="svg_design_reference_strategy_required")
+    if svg_design_reference_pin is not None and svg_design_reference_snapshot_id is not None:
+        raise HTTPException(status_code=422, detail="svg_design_reference_conflict")
+    if svg_design_reference_snapshot_id is not None:
+        from services.references.service import admit_reference_snapshot
+
+        try:
+            design_reference = await admit_reference_snapshot(
+                sql_session, snapshot_id=svg_design_reference_snapshot_id,
+            )
+        except ReferenceProviderError as error:
+            raise HTTPException(status_code=error.status_code, detail=error.code) from error
+        if design_reference.provider_id != "uploaded_document" or len(design_reference.asset_bindings) != 1:
+            raise HTTPException(status_code=422, detail="svg_uploaded_design_reference_single_asset_required")
     proposed_presentation_id = presentation_id or uuid.uuid4()
     chat_first_enabled = _chat_first_create_enabled()
     if previous_presentation_id is not None and not chat_first_enabled:
@@ -501,6 +544,12 @@ async def create_presentation(
         presentation.theme,
         create_canvas,
     )
+    if svg_design_reference_pin is not None:
+        presentation.theme = {**(presentation.theme or {}), "svgDesignReferencePin":
+                              svg_design_reference_pin.model_dump(mode="json", by_alias=True)}
+    if svg_design_reference_snapshot_id is not None:
+        presentation.theme = {**(presentation.theme or {}),
+                              "svgDesignReferenceSnapshotId": str(svg_design_reference_snapshot_id)}
     # Idempotency comparisons and workspace settings must use the same
     # server-issued theme identity that will be persisted.
     resolved_theme = presentation.theme
@@ -520,6 +569,13 @@ async def create_presentation(
         if page_size == "A4":
             settings.pop("aspect_ratio")
             settings.update({"page_size": page_size, "orientation": orientation})
+        if svg_canvas is not None:
+            settings.pop("aspect_ratio", None)
+            settings["svg_canvas"] = svg_canvas.model_dump(mode="json", by_alias=True)
+        if svg_design_reference_pin is not None:
+            settings["svg_design_reference_pin"] = svg_design_reference_pin.model_dump(mode="json", by_alias=True)
+        if svg_design_reference_snapshot_id is not None:
+            settings["svg_design_reference_snapshot_id"] = str(svg_design_reference_snapshot_id)
         # Authored-only admission stamps a theme-less presentation with the
         # internal {"mode": "authored"} marker. That marker is not a catalog
         # theme and therefore has no public id/name/user metadata.

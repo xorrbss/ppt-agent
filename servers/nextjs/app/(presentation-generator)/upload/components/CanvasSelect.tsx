@@ -40,11 +40,11 @@ interface CanvasSelectProps {
     sourceDocumentCanvas?: DocumentCanvas | null;
 }
 
-// Row order per the approved mockup: auto, 16:9, 9:16, A4 landscape, A4
-// portrait, 1:1, 21:9. tall-9x13 is never listed here — it is appended only
-// when it is the presentation's current value (see `showLegacyRow` below).
+// Authored keeps its existing picker rows; SVG includes every preset.
 const PRESET_ROW_ORDER: PresetRowId[] = ["wide-16x9", "tall-9x16", "square-1x1", "ultrawide-21x9"];
+const SVG_PRESET_ROW_ORDER: PresetRowId[] = [...PRESET_ROW_ORDER, "tall-9x13", "standard-4x3"];
 const PRESET_ROW_RATIO: Record<PresetRowId, PresentationConfig["aspectRatio"]> = {
+    "standard-4x3": "4:3",
     "wide-16x9": "16:9",
     "tall-9x16": "9:16",
     "tall-9x13": "9:13",
@@ -55,6 +55,7 @@ const PRESET_ROW_RATIO: Record<PresetRowId, PresentationConfig["aspectRatio"]> =
 function rowIdFromConfig(config: PresentationConfig): CanvasRowId {
     if (config.pageSize === "A4") return config.orientation === "portrait" ? "a4-portrait" : "a4-landscape";
     switch (config.aspectRatio) {
+        case "4:3": return "standard-4x3";
         case "9:16": return "tall-9x16";
         case "9:13": return "tall-9x13";
         case "1:1": return "square-1x1";
@@ -74,6 +75,11 @@ export function CanvasSelect({
 }: CanvasSelectProps) {
     const tA2b = useA2bTranslations("uploadExtras");
     const [open, setOpen] = useState(false);
+    const [customWidth, setCustomWidth] = useState(String(config.svgCanvas?.width_mm ?? 320));
+    const [customHeight, setCustomHeight] = useState(String(config.svgCanvas?.height_mm ?? 180));
+    const [customError, setCustomError] = useState(false);
+    const svgMode = generationStrategy === "svg";
+    const presetOrder = svgMode ? SVG_PRESET_ROW_ORDER : PRESET_ROW_ORDER;
     const [isAutoCanvas, setIsAutoCanvas] = useState(false);
     const [supportedAspectRatios, setSupportedAspectRatios] = useState<PresentationConfig["aspectRatio"][]>(["16:9"]);
     const [supportedCanvases, setSupportedCanvases] = useState<AuthoredStyleSupportedCanvas[] | null>(null);
@@ -84,6 +90,12 @@ export function CanvasSelect({
     const sourceCanvasLabel = sourceDocumentCanvas
         ? `${Math.round(sourceDocumentCanvas.physicalSize.widthEmu / 36000)} × ${Math.round(sourceDocumentCanvas.physicalSize.heightEmu / 36000)} mm · 원본`
         : "원본 크기 · 분석 후 유지";
+
+    useEffect(() => {
+        if (svgMode) return;
+        if (config.svgCanvas) onConfigChange("svgCanvas", undefined);
+        if (config.sourceCanvas) onConfigChange("sourceCanvas", undefined);
+    }, [svgMode, config.svgCanvas, config.sourceCanvas, onConfigChange]);
 
     useEffect(() => {
         let cancelled = false;
@@ -121,10 +133,10 @@ export function CanvasSelect({
     // Ported verbatim from the previous ConfigurationSelects effect: the
     // product default is A4 landscape once the capability is confirmed.
     useEffect(() => {
-        if (sourceSvgLandscape || !a4Enabled || config.pageSize === "A4") return;
+        if (svgMode || sourceSvgLandscape || !a4Enabled || config.pageSize === "A4") return;
         onConfigChange("pageSize", "A4");
         onConfigChange("orientation", config.orientation ?? "landscape");
-    }, [a4Enabled, config.orientation, config.pageSize, onConfigChange, sourceSvgLandscape]);
+    }, [a4Enabled, config.orientation, config.pageSize, onConfigChange, sourceSvgLandscape, svgMode]);
 
     const reasonText = (reason: string | null): string =>
         reason === "canvas_stage_disabled" ? tA2b("canvasReasonStageDisabled") : tA2b("canvasReasonStyleNotSupported");
@@ -133,6 +145,7 @@ export function CanvasSelect({
         switch (id) {
             case "a4-landscape": return { title: tA2b("landscape"), description: tA2b("canvasA4LandscapeDescription") };
             case "a4-portrait": return { title: tA2b("portrait"), description: tA2b("canvasA4PortraitDescription") };
+            case "standard-4x3": return { title: "4:3", description: "표준 프레젠테이션" };
             case "tall-9x16": return { title: "9:16", description: tA2b("canvasTallDescription") };
             case "tall-9x13": return { title: "9:13", description: tA2b("canvasLegacyRowDescription") };
             case "square-1x1": return { title: "1:1", description: tA2b("canvasSquareDescription") };
@@ -144,6 +157,7 @@ export function CanvasSelect({
     const canvasEntry = (id: PresetRowId) => supportedCanvases?.find((entry) => entry.id === id) ?? null;
 
     function presetSupport(id: PresetRowId): { enabled: boolean; reason: string | null } {
+        if (svgMode) return { enabled: true, reason: null };
         if (id === "wide-16x9") return { enabled: true, reason: null };
         // Fact 6 / admission spec §3 item 4: the source-content shortcut applies
         // to 9:16 only, never to the gated 1:1 / 21:9 rows.
@@ -156,16 +170,16 @@ export function CanvasSelect({
         return { enabled, reason: enabled ? null : reasonText(null) };
     }
 
-    const a4RowEnabled = a4Enabled === true || (a4Enabled === null && rasterSourceCandidate);
-    const a4RowBusy = a4Enabled === null && !rasterSourceCandidate;
+    const a4RowEnabled = svgMode || a4Enabled === true || (a4Enabled === null && rasterSourceCandidate);
+    const a4RowBusy = !svgMode && a4Enabled === null && !rasterSourceCandidate;
     const a4Reason = a4RowEnabled || a4RowBusy ? null : tA2b("canvasReasonStyleNotSupported");
 
     const presetSupportById = Object.fromEntries(
-        PRESET_ROW_ORDER.map((id) => [id, presetSupport(id)]),
+        presetOrder.map((id) => [id, presetSupport(id)]),
     ) as Record<PresetRowId, { enabled: boolean; reason: string | null }>;
 
     const enabledRowIds: CanvasRowId[] = [
-        ...PRESET_ROW_ORDER.filter((id) => presetSupportById[id].enabled),
+        ...presetOrder.filter((id) => presetSupportById[id].enabled),
         ...(a4RowEnabled ? (["a4-landscape", "a4-portrait"] as CanvasRowId[]) : []),
     ];
     const defaultRowId: CanvasRowId = a4Enabled === true ? "a4-landscape" : "wide-16x9";
@@ -186,6 +200,8 @@ export function CanvasSelect({
     }, [isAutoCanvas, enabledRowIds.join(","), sourceCanvasProportions?.width, sourceCanvasProportions?.height, defaultRowId, appliedRowId]);
 
     function applyRow(id: CanvasRowId) {
+        onConfigChange("sourceCanvas", undefined);
+        onConfigChange("svgCanvas", undefined);
         if (id === "a4-landscape" || id === "a4-portrait") {
             onConfigChange("pageSize", "A4");
             onConfigChange("orientation", id === "a4-portrait" ? "portrait" : "landscape");
@@ -210,17 +226,8 @@ export function CanvasSelect({
         setOpen(false);
     }
 
-    if (sourceSvgLandscape) {
-        return (
-            <div className="flex h-9 items-center gap-2 rounded-xl bg-slate-50 px-3 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-200/80" data-testid="source-svg-landscape-canvas">
-                <span>{tA2b("canvas")}</span>
-                <span className="text-slate-900">{sourceCanvasLabel}</span>
-            </div>
-        );
-    }
-
-    const displayRowId: CanvasRowId | "auto" = isAutoCanvas ? "auto" : appliedRowId;
-    const triggerTitle = isAutoCanvas
+    const displayRowId = config.svgCanvas ? "custom" : config.sourceCanvas ? "source" : isAutoCanvas ? "auto" : appliedRowId;
+    const triggerTitle = config.sourceCanvas ? sourceCanvasLabel : config.svgCanvas ? `${config.svgCanvas.width_mm} × ${config.svgCanvas.height_mm} mm` : isAutoCanvas
         ? tA2b("canvasAutoTitle")
         : describeRow(appliedRowId).title;
 
@@ -233,7 +240,7 @@ export function CanvasSelect({
         { id: "square-1x1", enabled: presetSupportById["square-1x1"].enabled, reason: presetSupportById["square-1x1"].reason },
         { id: "ultrawide-21x9", enabled: presetSupportById["ultrawide-21x9"].enabled, reason: presetSupportById["ultrawide-21x9"].reason },
     ];
-    const showLegacyRow = config.aspectRatio === "9:13" && config.pageSize !== "A4" && !isAutoCanvas;
+    const showLegacyRow = !svgMode && config.aspectRatio === "9:13" && config.pageSize !== "A4" && !isAutoCanvas;
 
     return (
         <div className="flex flex-col gap-1">
@@ -250,7 +257,7 @@ export function CanvasSelect({
                         className="shrink-0 min-w-[160px] max-w-full whitespace-nowrap font-syne font-medium text-slate-600 focus-visible:ring-violet-300 flex justify-between items-center gap-2 h-9 rounded-xl bg-slate-50 px-3 ring-1 ring-inset ring-slate-200/80 shadow-none hover:bg-slate-100"
                     >
                         <span className="flex flex-1 items-center gap-2">
-                            {isAutoCanvas ? <Sparkles className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> : <ShapeIcon {...CANVAS_ROW_GEOMETRY[appliedRowId]} />}
+                            {config.svgCanvas ? <ShapeIcon widthPx={config.svgCanvas.width_mm} heightPx={config.svgCanvas.height_mm} /> : isAutoCanvas ? <Sparkles className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> : <ShapeIcon {...CANVAS_ROW_GEOMETRY[appliedRowId]} />}
                             <span className="text-xs font-medium whitespace-nowrap">{triggerTitle}</span>
                         </span>
                         <ChevronUp className="ml-2 h-4 w-4 shrink-0" />
@@ -279,18 +286,40 @@ export function CanvasSelect({
                                 {tailRows.map((row) => (
                                     <CanvasRow key={row.id} id={row.id} displayRowId={displayRowId} enabled={row.enabled} reason={row.reason} onSelect={selectRow} {...describeRow(row.id)} />
                                 ))}
+                                {svgMode ? ["tall-9x13", "standard-4x3"].map((id) => (
+                                    <CanvasRow key={id} id={id as PresetRowId} displayRowId={displayRowId} enabled reason={null} onSelect={selectRow} {...describeRow(id as PresetRowId)} />
+                                )) : null}
+                                {svgMode && sourceContentMode ? (
+                                    <CommandItem value="source" onSelect={() => { setIsAutoCanvas(false); onConfigChange("svgCanvas", undefined); onConfigChange("sourceCanvas", true); setOpen(false); }} data-testid="canvas-option-source">{sourceCanvasLabel}</CommandItem>
+                                ) : null}
                                 {showLegacyRow ? (
                                     <CanvasRow id="tall-9x13" displayRowId={displayRowId} enabled reason={null} onSelect={selectRow} {...describeRow("tall-9x13")} />
                                 ) : null}
                             </CommandGroup>
                         </CommandList>
                     </Command>
+                    {svgMode ? (
+                        <div className="border-t p-3 space-y-2">
+                            <p className="text-xs text-slate-600">사용자 지정 크기 (mm)</p>
+                            <div className="flex gap-2">
+                                <input aria-label="캔버스 너비 (mm)" data-testid="canvas-custom-width" type="number" min="50" max="1000" step="0.01" value={customWidth} onChange={(event) => setCustomWidth(event.target.value)} className="w-1/2 rounded border p-2 text-sm" />
+                                <input aria-label="캔버스 높이 (mm)" data-testid="canvas-custom-height" type="number" min="50" max="1000" step="0.01" value={customHeight} onChange={(event) => setCustomHeight(event.target.value)} className="w-1/2 rounded border p-2 text-sm" />
+                            </div>
+                            <button type="button" data-testid="canvas-custom-apply" className="rounded bg-violet-100 px-3 py-1 text-xs" onClick={() => {
+                                const width_mm = Number(customWidth); const height_mm = Number(customHeight);
+                                const valid = [width_mm, height_mm].every((value) => Number.isFinite(value) && value >= 50 && value <= 1000 && Math.abs(value * 100 - Math.round(value * 100)) < 1e-7) && width_mm / height_mm >= 0.25 && width_mm / height_mm <= 4;
+                                setCustomError(!valid); if (!valid) return;
+                                setIsAutoCanvas(false); onConfigChange("sourceCanvas", undefined); onConfigChange("pageSize", undefined); onConfigChange("orientation", undefined); onConfigChange("svgCanvas", { width_mm, height_mm }); setOpen(false);
+                            }}>크기 적용</button>
+                            {customError ? <p role="alert" className="text-xs text-amber-700">각 변은 50–1000 mm, 소수 둘째 자리까지 입력하고 비율은 1:4–4:1로 설정해 주세요.</p> : null}
+                        </div>
+                    ) : null}
                 </PopoverContent>
             </Popover>
-            {a4Enabled === true && appliedRowId.startsWith("a4-") && !a4SelectionAllowed ? (
+            {!svgMode && a4Enabled === true && appliedRowId.startsWith("a4-") && !a4SelectionAllowed ? (
                 <p className="w-full text-xs text-amber-700" role="status">{tA2b("a4SupportForTheSelectedGenerationMode")}</p>
             ) : null}
-            {!a4Enabled && hasCompanyStandard && config.aspectRatio !== "16:9" ? (
+            {!svgMode && !a4Enabled && hasCompanyStandard && config.aspectRatio !== "16:9" ? (
                 <p className="w-full text-xs text-amber-700" role="note" data-testid="portrait-master-unavailable">
                     {tA2b("portraitAuthoredGenerationCannotBeUsedWith")}
                 </p>

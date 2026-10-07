@@ -134,5 +134,38 @@ class PresentationListPage(BaseModel):
     page_size: int
 
 
+class DashboardPresentationListItem(BaseModel):
+    """Card metadata without generation state or an inline slide source."""
+
+    id: uuid.UUID
+    title: Optional[str] = None
+    n_slides: int
+    language: str
+    created_at: datetime
+    updated_at: datetime
+    mode: Optional[str] = None
+    version: str
+    revision: int
+    lifecycle_status: str
+    generation_mode: str
+    theme: Optional[dict] = None
+    profile: Optional[dict] = None
+    capabilities: Optional[dict] = None
+    thumbnail_url: Optional[str] = None
+    unsupported_template_format: bool = False
+
+
+class DashboardPresentationListPage(BaseModel):
+    items: List[DashboardPresentationListItem]
+    total: int
+    page: int
+    page_size: int
+
+
+class DashboardPresentationCover(BaseModel):
+    slide: Optional[SlideModel] = None
+    theme: Optional[dict] = None
+
+
 def _escaped_like_fragment(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")

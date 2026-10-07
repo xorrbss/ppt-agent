@@ -68,6 +68,7 @@ from utils.get_env_programme import get_openai_reasoning_effort_env
 from utils.llm_provider import get_llm_provider, get_model
 from utils.parsers import parse_bool_or_none
 from utils.runtime_settings import RuntimeSettings, resolve_runtime_settings
+from utils.codex_stream_adapter import RepositoryChatGPTClient
 from services.provider_egress_policy import (
     EgressCategory,
     EgressPolicyError,
@@ -142,6 +143,15 @@ def _get_codex_access_token(settings: RuntimeSettings) -> str:
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+def get_client(*, config: ClientConfig, logger: logging.Logger | None = None):
+    """Build a repository-observed Codex client, delegating other providers."""
+    if isinstance(config, ChatGPTClientConfig):
+        return RepositoryChatGPTClient(config=config, logger=logger)
+    from llmai import get_client as sdk_get_client
+
+    return sdk_get_client(config=config, logger=logger)
 
 #: OpenAI model families that accept a reasoning-effort parameter. Used only
 #: to decide whether to log a configuration warning below; never gates
@@ -461,6 +471,12 @@ def get_extra_body(settings: RuntimeSettings | None = None) -> Optional[dict]:
             # latency-sensitive structured tasks. Keep the configurable escape
             # hatch, but do not inherit a potentially long provider default.
             effort = "low"
+        model_id = str(get_model(snapshot) or "").strip().lower()
+        if model_id == "gpt-6.1-sol" or model_id.startswith("gpt-6.1-sol-"):
+            if effort in ("minimal", "none", "low", "medium", "high", "xhigh", "max", "ultra"):
+                from utils.llm_calls.author_slide_effort import normalized_authoring_reasoning_effort
+
+                return {"reasoning": {"effort": normalized_authoring_reasoning_effort(model_id, effort)}}
         # codex (gpt-5.x) reasoning-effort levels; other providers 400 on this param.
         if effort in ("minimal", "none", "low", "medium", "high", "xhigh"):
             return {"reasoning": {"effort": effort}}

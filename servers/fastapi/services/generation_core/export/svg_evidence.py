@@ -49,7 +49,12 @@ def svg_slide_quality(slide):
 def svg_quality_inputs(*, slides, advisory, quality_policy) -> dict:
     """The quality evidence an svg export is judged from, as known pre-export."""
 
-    return {"policy": quality_policy, "advisory": advisory, "slides": [svg_slide_quality(slide) for slide in slides]}
+    result = {"policy": quality_policy, "advisory": advisory, "slides": [svg_slide_quality(slide) for slide in slides]}
+    receipts = [((slide.content or {}).get("svgReceipt") or {}) for slide in slides]
+    if any("png_sha256" in receipt or "terminal" in receipt for receipt in receipts):
+        result["pageBindings"] = [{"pngDigest": receipt.get("png_sha256"),
+                                  "terminal": receipt.get("terminal")} for receipt in receipts]
+    return result
 
 
 def svg_slide_checkpoint_digests(*, index, svg_sha256, note, asset_manifest, native_object,

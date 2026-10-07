@@ -21,7 +21,8 @@ RETRY = object()
 
 
 async def attempt_render(*, ctx, request, presentation_id, index, content, payload, svg, ordinal,
-                         job, checkpoint, async_session_maker, write_png):
+                         job, checkpoint, async_session_maker, write_png,
+                         recovery_readability_policy=None):
     from services.svg_contract import finalize_svg
     from services.svg_renderer import render_svg_with_metrics
     from services.svg_source_layout import verify_source_receipt
@@ -31,7 +32,16 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
     )
 
     profile = read_authoring_profile(ctx.snapshot)
-    readability_policy = ctx.snapshot.get("readability_policy")
+    readability_policy = recovery_readability_policy or ctx.snapshot.get("readability_policy")
+    if payload.get("cached_author_render"):
+        from services.document_canvas_generation import validate_svg_readability_policy
+        if (recovery_readability_policy is None
+                or validate_svg_readability_policy(recovery_readability_policy).get("version")
+                != "svg-physical-readability/v2"
+                or recovery_readability_policy.get("quality_target_font_pt", 0) < 9.5):
+            raise AuthoredStageError(slide_index=index, stage="render",
+                                     code="svg_cached_author_render_quality_policy_invalid",
+                                     retryable=False)
     if readability_policy is not None:
         payload["readability_policy"] = readability_policy
     cache_remeasurement = payload.get("cache_only_remeasurement")
@@ -210,7 +220,10 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
         from services.authored_canvas import request_canvas_metadata
         from services.generation_core.drivers.svg.native_publish import canvas_point_per_px, page_native_objects
 
-        objects, summary = page_native_objects(payload, pt_per_px=canvas_point_per_px(request_canvas_metadata(request)))
+        from services.svg_cached_author_render_recovery import approved_sidecars
+        objects, summary = page_native_objects(
+            payload, pt_per_px=canvas_point_per_px(request_canvas_metadata(request)),
+            verified_fixed_axis_migrations=approved_sidecars(payload))
         required = {item["element_id"] for item in payload["source_preservation"]["whole_page_native_groups"]}
         actual = {item["id"] for item in (objects or {}).get("objects", [])}
         if not required.issubset(actual):
@@ -317,10 +330,19 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
         rendered.quality["sourceImages"] = {
             "offered": sorted(ctx.manifests[index]), "used": sorted(used), "omitted": omitted,
         }
-        if omitted:
+        required_omitted = []
+        for slot in omitted:
+            item = ctx.manifests[index][slot]
+            policy = item.get("policy") if isinstance(item, dict) else None
+            # Only an explicit optional policy permits omission. Missing or
+            # malformed flags retain the source-preservation failure boundary.
+            if (not isinstance(policy, dict) or policy.get("required") is not False
+                    or policy.get("allowOmit") is not True):
+                required_omitted.append(slot)
+        if required_omitted:
             rendered.quality["passed"] = False
             rendered.quality.setdefault("failures", []).append({
-                "kind": "source_image_omitted", "slotIds": omitted,
+                "kind": "source_image_omitted", "slotIds": required_omitted,
             })
     from services.generation_core.drivers.svg.embed_assets import apply_vector_icon_quality
     apply_vector_icon_quality(rendered.quality, payload)

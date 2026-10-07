@@ -79,6 +79,6 @@ def test_picker_order_and_hidden_rows(registry) -> None:
     order = [entry["id"] for entry in registry["canvases"]]
 
     assert order == ["wide-16x9", "tall-9x16", "a4-landscape", "a4-portrait", "square-1x1",
-                     "ultrawide-21x9", "tall-9x13"]
-    assert [entry["sortOrder"] for entry in registry["canvases"]] == list(range(1, 8))
+                     "ultrawide-21x9", "tall-9x13", "standard-4x3"]
+    assert [entry["sortOrder"] for entry in registry["canvases"]] == list(range(1, 9))
     assert [entry["id"] for entry in registry["canvases"] if entry["hidden"]] == ["tall-9x13"]

@@ -38,6 +38,7 @@ from models.sql.public_artifact import (
     artifact_storage_key,
 )
 from models.sql.presentation import PresentationModel
+from models.sql.slide import SlideModel
 from models.sql.user import User
 from models.sql.workspace import WorkspaceConversation, WorkspaceOperation, WorkspaceOperationEvent
 from models.sql.async_presentation_generation_status import AsyncPresentationGenerationTaskModel
@@ -541,8 +542,9 @@ def test_api_submit_sql_adapter_persists_operation_job_and_admission(
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize("authority", ["public-v2", "workspace-legacy"])
 def test_sql_adapter_requires_current_publication_and_rejects_unwired_export_capabilities(
-    tmp_path: Path,
+    tmp_path: Path, authority: str,
 ) -> None:
     async def scenario() -> None:
         engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'publication.db'}")
@@ -690,13 +692,13 @@ def test_sql_adapter_requires_current_publication_and_rejects_unwired_export_cap
                     state="succeeded",
                     idempotency_key_hash="a" * 64,
                     request_hash="b" * 64,
-                    request_payload={},
+                    request_payload={"principal_tenant_id": "tenant-publication"},
                     expected_revision=3,
                     result_revision=3,
-                    contract_version="public-operation/v2",
-                    execution_profile_version="public-generation-export/v2",
-                    phase="publishing",
-                    deadline_at=deadline,
+                    contract_version="public-operation/v2" if authority == "public-v2" else None,
+                    execution_profile_version="public-generation-export/v2" if authority == "public-v2" else None,
+                    phase="publishing" if authority == "public-v2" else None,
+                    deadline_at=deadline if authority == "public-v2" else None,
                     fencing_token=2,
                 )
             )
@@ -711,7 +713,7 @@ def test_sql_adapter_requires_current_publication_and_rejects_unwired_export_cap
                     resource_units=1,
                     policy_digest="d" * 64,
                     deadline_at=deadline,
-                    fence=2,
+                    fence=2 if authority == "public-v2" else 0,
                     state="succeeded",
                     slide_count=1,
                     planned_request_limit=0,
@@ -769,14 +771,14 @@ def test_sql_adapter_requires_current_publication_and_rejects_unwired_export_cap
                 )
             )
 
-        status = await adapter.get_operation(
-            actor=actor,
-            operation_id=str(operation_id),
-        )
-        assert [item.artifact_id for item in status.artifacts] == [
-            str(current_artifact_id)
-        ]
-        assert status.source_revision == 3
+        if authority == "public-v2":
+            status = await adapter.get_operation(actor=actor, operation_id=str(operation_id))
+            assert [item.artifact_id for item in status.artifacts] == [str(current_artifact_id)]
+            assert status.source_revision == 3
+        else:
+            with pytest.raises(PublicV2OrchestrationError) as legacy_status:
+                await adapter.get_operation(actor=actor, operation_id=str(operation_id))
+            assert legacy_status.value.reason_code == "operation_authority_unavailable"
         grant = await adapter.authorize_download(
             actor=actor,
             artifact_id=str(current_artifact_id),
@@ -789,13 +791,48 @@ def test_sql_adapter_requires_current_publication_and_rejects_unwired_export_cap
             )
         assert stale.value.status_code == 404
         assert stale.value.reason_code == "artifact_not_found"
+        from dataclasses import replace
+        for other_actor in (replace(actor, owner_id=uuid.uuid4()), replace(actor, tenant_id="other-tenant")):
+            with pytest.raises(PublicV2OrchestrationError) as unauthorized:
+                await adapter.authorize_download(actor=other_actor, artifact_id=str(current_artifact_id))
+            assert unauthorized.value.status_code == 404
+        if authority == "workspace-legacy":
+            # A legacy download must never become a bypass for malformed v2,
+            # conflicting tenant capture, or nonterminal admission authority.
+            for mutation in ({"contract_version": "public-operation/v2",
+                              "execution_profile_version": "public-generation-export/v2",
+                              "phase": "publishing", "deadline_at": deadline},
+                             {"request_payload": {"principal_tenant_id": "other-tenant"}},
+                             {"state": "running"}):
+                async with maker() as session:
+                    row = await session.get(WorkspaceOperation, operation_id)
+                    original = {field: getattr(row, field) for field in mutation}
+                    for field, value in mutation.items():
+                        setattr(row, field, value)
+                    await session.commit()
+                with pytest.raises(PublicV2OrchestrationError) as invalid:
+                    await adapter.authorize_download(actor=actor, artifact_id=str(current_artifact_id))
+                assert invalid.value.reason_code == "operation_authority_unavailable"
+                async with maker() as session:
+                    row = await session.get(WorkspaceOperation, operation_id)
+                    for field, value in original.items():
+                        setattr(row, field, value)
+                    await session.commit()
+            async with maker() as session:
+                admitted = await session.scalar(select(PublicOperationAdmission).where(
+                    PublicOperationAdmission.operation_id == operation_id))
+                admitted.state = "failed"
+                await session.commit()
+            with pytest.raises(PublicV2OrchestrationError) as invalid:
+                await adapter.authorize_download(actor=actor, artifact_id=str(current_artifact_id))
+            assert invalid.value.reason_code == "operation_authority_unavailable"
         await engine.dispose()
 
     asyncio.run(scenario())
 
 
 def test_public_export_requires_generation_authority_in_the_actor_tenant(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch,
 ) -> None:
     async def scenario() -> None:
         engine = create_async_engine(
@@ -807,6 +844,7 @@ def test_public_export_requires_generation_authority_in_the_actor_tenant(
             WorkspaceConversation.__table__,
             WorkspaceOperation.__table__,
             PublicOperationAdmission.__table__,
+            SlideModel.__table__,
         ]
         async with engine.begin() as connection:
             await connection.run_sync(
@@ -894,6 +932,114 @@ def test_public_export_requires_generation_authority_in_the_actor_tenant(
             )
         assert rejected.value.status_code == 404
         assert rejected.value.reason_code == "presentation_not_found"
+        from services.svg_contract import source_digest
+        from services.svg_export_operation import svg_export_admission_snapshot
+        from services.workspace_operation_principal import PRINCIPAL_TENANT_PAYLOAD_KEY
+        from unittest.mock import AsyncMock
+        import services.public_v2_orchestrator as orchestrator
+        svg='<svg xmlns="http://www.w3.org/2000/svg"><text>owned</text></svg>'
+        publisher_id = uuid.uuid4()
+        async with maker() as session,session.begin():
+            presentation=await session.get(PresentationModel,presentation_id)
+            presentation.mode='svg'; presentation.revision=2
+            generation=await session.get(WorkspaceOperation,generation_id)
+            generation.result_revision=1
+            session.add(SlideModel(presentation=presentation_id,owner_id=owner,index=0,
+                layout_group='svg',layout='svg:content',source_format='svg',svg_content=svg,
+                content={'source':'owned','nativeObjects':{'objects':[]},'svgReceipt':{'quality':{
+                    'passed':True,'verified':True,'source_digest':source_digest(svg)}}}))
+            session.add(WorkspaceOperation(id=publisher_id,owner_id=owner,owner_scope=str(owner),
+                conversation_id=generation.conversation_id,presentation_id=presentation_id,
+                anchor_position=2,kind='slide.regenerate',state='succeeded',expected_revision=1,
+                result_revision=2,idempotency_key_hash='e'*64,request_hash='f'*64,
+                request_payload={PRINCIPAL_TENANT_PAYLOAD_KEY:'tenant-a'}))
+        request=request.model_copy(update={'source_revision':2})
+        monkeypatch.setattr(orchestrator,'reserve_conversation_positions',AsyncMock(
+            side_effect=[SimpleNamespace(start=index) for index in range(3, 20)]))
+        monkeypatch.setattr(orchestrator,'append_operation_event',AsyncMock())
+        monkeypatch.setattr(adapter,'_admit',AsyncMock(return_value=SimpleNamespace(deadline_at=deadline)))
+        for tenant,foreign_owner in [('tenant-b',owner),('tenant-a',uuid.uuid4())]:
+            with pytest.raises(PublicV2OrchestrationError) as denied:
+                await adapter.submit_export(actor=PublicRequestActor(foreign_owner,tenant,'trace'),
+                    presentation_id=str(presentation_id),idempotency_key=f'deny-{tenant}-{foreign_owner}',request=request)
+            assert denied.value.reason_code=='presentation_not_found'
+        with pytest.raises(PublicV2OrchestrationError) as stale:
+            await adapter.submit_export(actor=PublicRequestActor(owner,'tenant-a','trace'),
+                presentation_id=str(presentation_id),idempotency_key='stale',request=request.model_copy(update={'source_revision':1}))
+        assert stale.value.reason_code=='stale_revision'
+        async def change_publisher(**changes):
+            async with maker() as session, session.begin():
+                publisher = await session.get(WorkspaceOperation, publisher_id)
+                for key, value in changes.items():
+                    setattr(publisher, key, value)
+
+        # Real mutation publishers share the same owner/tenant/CAS lineage proof.
+        for kind in ('slide.regenerate', 'presentation.slides.reorder', 'version.restore',
+                     'presentation.edit', 'slide.edit', 'slide.delete'):
+            await change_publisher(kind=kind)
+            receipt = await adapter.submit_export(
+                actor=PublicRequestActor(owner, 'tenant-a', 'trace'),
+                presentation_id=str(presentation_id), idempotency_key='publisher-' + kind, request=request,
+            )
+            async with maker() as session:
+                export = await session.get(WorkspaceOperation, uuid.UUID(receipt.operation_id))
+                assert export.request_payload['svg_source_revision_binding']['publicationOperationIds'] == [str(publisher_id)]
+
+        # Advisory/no-op results cannot stand in for a missing source publication.
+        for kind in ('quality.review', 'slide.regenerate.preview', 'slide.regenerate.batch.preview',
+                     'export.pptx', 'export.pdf', 'raster.analysis', 'presentation.delete'):
+            await change_publisher(kind=kind)
+            with pytest.raises(PublicV2OrchestrationError) as denied:
+                await adapter.submit_export(
+                    actor=PublicRequestActor(owner, 'tenant-a', 'trace'),
+                    presentation_id=str(presentation_id), idempotency_key='nonpublisher-' + kind, request=request,
+                )
+            assert denied.value.reason_code == 'export_source_revision_lineage_required'
+
+        await change_publisher(kind='slide.regenerate')
+        for label, changes, reason in (
+            ('failed', {'state': 'failed'}, 'export_source_revision_lineage_required'),
+            ('foreign-owner', {'owner_id': uuid.uuid4()}, 'export_source_revision_lineage_required'),
+            ('foreign-tenant', {'request_payload': {PRINCIPAL_TENANT_PAYLOAD_KEY: 'tenant-b'}}, 'export_source_revision_lineage_invalid'),
+            ('missing-tenant', {'request_payload': {}}, 'export_source_revision_lineage_invalid'),
+            ('gap', {'expected_revision': 0}, 'export_source_revision_lineage_invalid'),
+            ('no-op', {'expected_revision': 2}, 'export_source_revision_lineage_required'),
+        ):
+            await change_publisher(**changes)
+            with pytest.raises(PublicV2OrchestrationError) as denied:
+                await adapter.submit_export(
+                    actor=PublicRequestActor(owner, 'tenant-a', 'trace'), presentation_id=str(presentation_id),
+                    idempotency_key='lineage-' + label, request=request,
+                )
+            assert denied.value.reason_code == reason
+            await change_publisher(state='succeeded', owner_id=owner, expected_revision=1,
+                                   request_payload={PRINCIPAL_TENANT_PAYLOAD_KEY: 'tenant-a'})
+
+        async with maker() as session, session.begin():
+            slide = await session.scalar(select(SlideModel).where(SlideModel.presentation == presentation_id))
+            clean_content = dict(slide.content)
+            slide.content = {**clean_content, 'svgReceipt': {'quality': {'passed': True, 'verified': True,
+                                                                       'source_digest': 'sha256:' + '0' * 64}}}
+        with pytest.raises(PublicV2OrchestrationError) as invalid_source:
+            await adapter.submit_export(
+                actor=PublicRequestActor(owner, 'tenant-a', 'trace'), presentation_id=str(presentation_id),
+                idempotency_key='lineage-stale-source-measurement', request=request,
+            )
+        assert invalid_source.value.reason_code == 'svg_export_published_source_required'
+        async with maker() as session, session.begin():
+            slide = await session.scalar(select(SlideModel).where(SlideModel.presentation == presentation_id))
+            slide.content = clean_content
+        admitted=await adapter.submit_export(actor=PublicRequestActor(owner,'tenant-a','trace'),
+            presentation_id=str(presentation_id),idempotency_key='owned-revision2',request=request)
+        async with maker() as session:
+            operation=await session.get(WorkspaceOperation,uuid.UUID(admitted.operation_id))
+            presentation=await session.get(PresentationModel,presentation_id)
+            slides=(await session.execute(select(SlideModel).where(SlideModel.presentation==presentation_id))).scalars().all()
+            binding=operation.request_payload['svg_source_revision_binding']
+            assert binding['sourceRevision']==2 and binding['generationRevision']==1
+            assert binding['snapshotSha256']==svg_export_admission_snapshot(presentation,slides)
+            slides[0].content={**slides[0].content,'nativeObjects':{'objects':[{'id':'changed'}]}}
+            assert binding['snapshotSha256']!=svg_export_admission_snapshot(presentation,slides)
         await engine.dispose()
 
     asyncio.run(scenario())

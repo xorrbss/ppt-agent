@@ -352,6 +352,7 @@ class WorkspaceOperationActionRequest(BaseModel):
         min_length=1,
         max_length=128,
     )
+    stage_review_decision: Optional[dict[str, Any]] = None
 
     @field_validator("idempotency_key")
     @classmethod

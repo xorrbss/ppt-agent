@@ -58,6 +58,9 @@ class AuthorAttempt:
 
 async def attempt_author(*, ctx, request, index, content, role, count, payload, ordinal,
                          provider_ordinal, job, state, checkpoint, async_session_maker) -> AuthorAttempt:
+    if payload.get("cached_author_render"):
+        raise AuthoredStageError(slide_index=index, stage="author",
+                                 code="svg_cached_author_render_provider_forbidden", retryable=False)
     from services.document_canvas_generation import source_restyle_font_floor
     from services.generation_core.authoring.author_slide_svg import author_slide_svg
     from utils.provider_overload import ProviderOutcomeError, safe_provider_diagnostics

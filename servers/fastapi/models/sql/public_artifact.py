@@ -67,6 +67,7 @@ _MEDIA_TYPE_BY_KIND = {
     "slide-svg": "image/svg+xml",
     "image-derivative": ("image/png", "image/jpeg"),
     "source-manifest": "application/json",
+    "svg-export-source-lineage": "application/json",
     "placement-manifest": "application/json",
     "slide-png": "image/png",
     "export-bundle": "application/vnd.presenton.export-bundle+json",
@@ -95,6 +96,7 @@ class ArtifactRef(BaseModel):
         "slide-svg",
         "image-derivative",
         "source-manifest",
+        "svg-export-source-lineage",
         "placement-manifest",
         "slide-png",
         "export-bundle",
@@ -155,7 +157,7 @@ class PublicArtifact(SQLModel, table=True):
         CheckConstraint(
             "kind IN ('checkpoint', 'slide-html', 'slide-svg', 'slide-png', 'export-bundle', "
             "'presentation-pptx', 'presentation-pdf', 'image-derivative', "
-            "'source-manifest', 'placement-manifest')",
+            "'source-manifest', 'placement-manifest', 'svg-export-source-lineage')",
             name="ck_public_artifact_kind",
         ),
         CheckConstraint(

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from types import SimpleNamespace
+import pytest
 
 from models.public_v2_contracts import QualityReceiptV3
 from services.generation_core.drivers.svg.publish import svg_slide_content
@@ -21,14 +22,14 @@ from services.svg_contract import SVG_CONTRACT_VERSION, source_digest
 from services.svg_export_page_evidence import svg_authoring, svg_geometry_font
 from services.svg_export_quality import svg_public_quality_receipt
 from services.svg_export_release_gate import require_release_v1_receipt
-from services.svg_export_visual_review import slide_page_digests
+from services.svg_export_visual_review import slide_page_digests, split_page_advisories
 from services.svg_renderer import SVG_RENDERER_VERSION
 
 
 def _measured_quality(svg: str, *, failures=(), font_loaded=True) -> dict:
     failures = [dict(item) for item in failures]
     return {"contract_version": SVG_CONTRACT_VERSION, "renderer_version": SVG_RENDERER_VERSION,
-            "source_digest": source_digest(svg), "png_digest": "p", "wrapper_digest": "w",
+            "source_digest": source_digest(svg), "png_digest": "sha256:" + "a" * 64, "wrapper_digest": "w",
             "metrics_digest": "m", "measurement_complete": True,
             "geometry_passed": not failures, "passed": not failures, "verified": False,
             "semantic_review": "required", "failures": failures, "body_font_floor_px": 12,
@@ -50,13 +51,15 @@ def _publish(pages: list[dict]) -> list[SimpleNamespace]:
 
 
 def _page(svg: str, **quality_args) -> dict:
-    return {"svg_content": svg, "quality": _measured_quality(svg, **quality_args)}
+    return {"svg_content": svg, "quality": _measured_quality(svg, **quality_args), "png_sha256": "a" * 64}
 
 
 def _advisory(slides, issues_on=()):
     vision = {"slides": [{"index": i, "issues": ["dead_band"] if i in issues_on else []}
                          for i in range(len(slides))], "promptVersion": "v1", "model": "vision-test"}
-    return advisory_record(vision, slide_page_digests(slides))
+    record = advisory_record(vision, slide_page_digests(slides))
+    record["pageAdvisories"] = split_page_advisories(vision, slides, range(len(slides)))
+    return record
 
 
 def _receipt(slides, advisory):
@@ -73,6 +76,8 @@ def test_clean_generated_deck_passes_every_required_domain_and_is_release_ready(
     receipt = _receipt(slides, _advisory(slides))
 
     QualityReceiptV3.model_validate(receipt)
+    with pytest.raises(ValueError):
+        QualityReceiptV3.model_validate({**receipt, "evidenceDigests": {}})
     assert receipt["authoring"]["status"] == "passed"
     assert receipt["geometryFont"]["status"] == "passed"
     assert receipt["geometryFont"]["evidence"]["checkerVersion"] == SVG_RENDERER_VERSION
@@ -80,6 +85,11 @@ def test_clean_generated_deck_passes_every_required_domain_and_is_release_ready(
     assert receipt["visualReview"]["status"] == "passed"
     assert receipt["releaseReadiness"] == "ready"
     require_release_v1_receipt(receipt)  # must not raise
+    legacy = _advisory(slides)
+    legacy.pop("pageAdvisories")
+    legacy_receipt = _receipt(slides, legacy)
+    assert legacy_receipt["visualReview"]["reasonCode"] == "svg_visual_advisory_png_evidence_missing"
+    assert legacy_receipt["releaseReadiness"] == "blocked"
 
 
 def test_deck_with_zero_flagged_pages_is_not_visual_review_flagged_despite_advisory_issues():

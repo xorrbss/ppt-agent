@@ -1,6 +1,11 @@
 import { isRecord } from "@/lib/guards";
 
 export interface DocumentCanvasCapabilities {
+  svgCanvases?: {
+    enabled: boolean;
+    presets: Array<{ id: string; enabled: boolean; reason: string | null }>;
+    custom: { enabled: boolean; minMm: number; maxMm: number; maxDecimalPlaces: number; minAspectRatio: number; maxAspectRatio: number };
+  };
   a4: {
     enabled: boolean;
     stage?: "disabled" | "candidate" | "verified";
@@ -43,6 +48,13 @@ export function normalizeDocumentCanvasCapabilities(
       }
     : unavailableDocumentCanvasCapabilities().sourceContentSvg;
   return {
+    ...(isRecord(payload.svgCanvases) && Array.isArray(payload.svgCanvases.presets) && isRecord(payload.svgCanvases.custom) ? {
+      svgCanvases: {
+        enabled: payload.svgCanvases.enabled === true,
+        presets: payload.svgCanvases.presets.filter(isRecord).map((preset) => ({ id: String(preset.id), enabled: preset.enabled === true, reason: typeof preset.reason === "string" ? preset.reason : null })),
+        custom: { enabled: payload.svgCanvases.custom.enabled === true, minMm: 50, maxMm: 1000, maxDecimalPlaces: 2, minAspectRatio: 0.25, maxAspectRatio: 4 },
+      },
+    } : {}),
     a4: {
       enabled: payload.a4.enabled === true,
       stage: payload.a4.stage === "candidate" || payload.a4.stage === "verified" ? payload.a4.stage : "disabled",

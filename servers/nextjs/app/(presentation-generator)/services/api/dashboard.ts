@@ -12,8 +12,28 @@ import type {
   PresentationListEnvelope,
   PresentationListOptions,
 } from "./dashboard-list-query";
+import type {
+  PresentationCapabilities,
+  PresentationProfile,
+} from "@/lib/presentation-profile";
 
 export type PresentationListPage = PresentationListEnvelope<PresentationResponse>;
+
+export interface PresentationSummary {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  n_slides: number;
+  theme: Record<string, unknown> | null;
+  profile: PresentationProfile | null;
+  capabilities: PresentationCapabilities | null;
+  thumbnail_url: string | null;
+  lifecycle_status?: string | null;
+  unsupported_template_format?: boolean;
+}
+
+export type DashboardPresentation = PresentationSummary | PresentationResponse;
 
 export interface PresentationResponse {
   id: string;
@@ -31,6 +51,7 @@ export interface PresentationResponse {
   vector_store: unknown;
 
   thumbnail: string;
+  thumbnail_url?: string | null;
   slides: unknown[];
 }
 
@@ -69,10 +90,34 @@ export interface ShareInfo {
 
 export class DashboardApi {
 
+  static async getPresentationCover(id: string, signal?: AbortSignal): Promise<{
+    slide: unknown | null;
+    theme: Record<string, unknown> | null;
+  }> {
+    const response = await fetch(
+      getApiUrl(`/api/v1/ppt/presentation/${encodeURIComponent(id)}/cover`),
+      {
+        method: "GET",
+        credentials: "include",
+        headers: getHeader(),
+        signal,
+      },
+    );
+    return ApiResponseHandler.handleResponse(response, "Presentation cover not found");
+  }
+
+  static getPresentations(
+    options: PresentationListOptions & { view: "dashboard" },
+    signal?: AbortSignal,
+  ): Promise<PresentationListEnvelope<DashboardPresentation>>;
+  static getPresentations(
+    options?: Omit<PresentationListOptions, "view"> & { view?: undefined },
+    signal?: AbortSignal,
+  ): Promise<PresentationListPage>;
   static async getPresentations(
     options: PresentationListOptions = {},
     signal?: AbortSignal,
-  ): Promise<PresentationListPage> {
+  ): Promise<PresentationListEnvelope<DashboardPresentation>> {
     try {
       const response = await fetch(
         getApiUrl(buildPresentationListPath(options)),
@@ -111,10 +156,7 @@ export class DashboardApi {
       {
         method: "GET",
         credentials: "include",
-        headers: {
-          ...getHeader(),
-          "X-Document-Canvas-Contracts": "document-canvas/v1",
-        },
+        headers: getHeader(),
         signal,
       }
     );

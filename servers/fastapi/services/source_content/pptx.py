@@ -513,7 +513,7 @@ def extract_pptx_source_content(
     source_bytes = path.read_bytes()
     source_digest = digest_bytes(source_bytes)
     # Revision is part of the seed so an extractor upgrade seals a new manifest_id.
-    seed = f"{MANIFEST_ID_EXTRACTOR_REVISION}\n{owner_id}\n{reference_snapshot_id}\n{source_digest}"
+    seed = f"{MANIFEST_ID_EXTRACTOR_REVISION}+native-chart-facts-v1\n{owner_id}\n{reference_snapshot_id}\n{source_digest}"
     manifest_id = f"scm_{sha256_hex(seed.encode('utf-8'))}"
 
     with ZipFile(path, "r") as package:

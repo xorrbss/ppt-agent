@@ -45,7 +45,7 @@ from utils.provider_idempotency import (
     ProviderQuotaPause,
     provider_generate_call,
 )
-from utils.provider_overload import is_provider_overload
+from utils.provider_overload import is_provider_overload, safe_provider_diagnostics
 
 
 _VALID_HTML = (
@@ -340,6 +340,10 @@ def test_idempotent_overload_retry_reserves_and_stays_inside_deadline():
         "quotaPauseResetAt": None,
         "idempotencyCapable": True,
         "replayUnavailable": None,
+        "failureDiagnostics": [{
+            "exceptionType": "ProviderError", "httpStatus": 503,
+            "statusOrigin": "http_response", "failureKind": "overload",
+        }],
     }
 
 
@@ -1133,6 +1137,7 @@ def test_provider_outcome_gets_only_the_explicit_single_recovery(monkeypatch):
     assert terminal.value.retryable is False
     assert [call["receipt_attempt_ordinal"] for call in calls] == [1, 2]
 
+
 @pytest.mark.parametrize("field", ["exceptionType", "errorCode", "requestId", "terminalEvent", "failureKind", "statusOrigin", "incompleteReason", "providerErrorType", "rejectedParameter", "requestRejectionReason", "unrecognizedErrorCode", "unrecognizedParameter"])
 def test_provider_diagnostics_refuse_dynamic_strings_and_message_fields(field):
     unsafe = "private.person@example.test prompt token Bearer secret"
@@ -1147,6 +1152,7 @@ def test_provider_diagnostics_refuse_dynamic_strings_and_message_fields(field):
     assert unsafe not in str(diagnostics)
     assert not {"message", "body", "header"}.intersection(diagnostics)
     assert safe_provider_diagnostics(diagnostics={"errorCode": "private_person", "exceptionType": "PrivatePerson"}) == {}
+
 
 def test_provider_diagnostics_keep_only_validated_metadata_and_numeric_usage():
     diagnostics = {
@@ -1196,6 +1202,7 @@ def test_provider_diagnostics_keep_only_validated_metadata_and_numeric_usage():
     leaf.body = {"error": "Store must be set to false."}
     assert safe_provider_diagnostics(wrapper)["requestRejectionReason"] == "store_false_required"
 
+
 @pytest.mark.parametrize("status", [429, 500, 502, 503, 504])
 def test_structured_http_overload_keeps_original_cause_and_safe_receipt(status):
     class HTTPFailure(RuntimeError):
@@ -1218,6 +1225,7 @@ def test_structured_http_overload_keeps_original_cause_and_safe_receipt(status):
     assert call.receipt["overloadRetryCount"] == 0
     assert call.receipt["failureDiagnostics"] == [raised.value.diagnostics]
     assert "private" not in str(call.receipt)
+
 
 def test_synthetic_llmai_stream_500_is_unknown_without_replay():
     class SyntheticStreamError(RuntimeError):
@@ -1245,12 +1253,14 @@ def test_synthetic_llmai_stream_500_is_unknown_without_replay():
     assert call.receipt["overloadRetryCount"] == 0
     assert "private" not in str(call.receipt)
 
+
 def test_explicit_local_stream_signal_cannot_be_misclassified_from_synthetic_status():
     error = RuntimeError("request timeout 429 500 rate limit")
     error.status_code = 500
     error.diagnostics = {"statusOrigin": "local_stream", "failureKind": "stream_interrupted"}
     assert is_provider_overload(error) is False
     assert "httpStatus" not in safe_provider_diagnostics(error)
+
 
 def test_terminal_event_diagnostics_retain_only_safe_provider_metadata():
     from utils.provider_terminal_outcome import ProviderTerminalOutcomeRecorder
@@ -1272,6 +1282,7 @@ def test_terminal_event_diagnostics_retain_only_safe_provider_metadata():
         _call(client)()
     assert raised.value.diagnostics["terminalEvent"] == "response.failed"
     assert raised.value.diagnostics["errorCode"] == "server_error"
+
 
 @pytest.mark.parametrize("code,recovery_allowed,overload", [
     ("public_provider_result_unknown", False, False),

@@ -11,6 +11,8 @@ diff. No LLM call belongs in this file.
 from __future__ import annotations
 
 import re
+import math
+from collections import Counter
 from collections.abc import Sequence
 
 from services.source_images.models import (
@@ -111,6 +113,265 @@ _IDEOGRAPHIC_RE = re.compile(
 )
 _WORD_RE = re.compile(r"[^\W_]+")
 
+_GROUP_VERSION = "source-content-group/v1"
+# Conservative deterministic overlap/ambiguity heuristics, not a measured
+# semantic accuracy guarantee or a limit on group or image counts.
+_GROUP_MATCH_FLOOR = 0.2
+_GROUP_AMBIGUITY_MARGIN = 0.05
+
+
+def assign_source_image_groups(
+    contents: Sequence[str],
+    candidates: Sequence[SourceImageCandidate],
+    *,
+    assignment_report: list[dict] | None = None,
+) -> list[list[SourceImageCandidate]]:
+    """Connect local explanation groups to targets without a picture count cap.
+
+    Source page titles and transcripts cannot establish an image connection.
+    They repeat across unrelated pictures, so this path uses only extracted
+    local explanations, captions and existing image analysis. A textual match
+    assigns a group to one clear target; explicit references can intentionally
+    assign the same group to several targets. Unresolved groups remain visible
+    in the optional receipt rather than becoming a deck-wide offer.
+    """
+    result: list[list[SourceImageCandidate]] = [[] for _ in contents]
+    groups: dict[str, list[SourceImageCandidate]] = {}
+    metadata: dict[str, dict] = {}
+    for candidate in candidates:
+        locator = candidate.source_locator or {}
+        supplied = locator.get("contentGroup")
+        group = supplied if isinstance(supplied, dict) else {}
+        valid = group.get("version") == _GROUP_VERSION and bool(group.get("groupId"))
+        group_id = str(group["groupId"]) if valid else f"asset:{candidate.asset_id}"
+        groups.setdefault(group_id, []).append(candidate)
+        metadata.setdefault(group_id, group if valid else {})
+    for members in groups.values():
+        # Stable ties preserve original extraction order for several images in
+        # one Word paragraph; opaque asset UUIDs must not scramble a procedure.
+        members.sort(key=_group_member_order)
+
+    group_fragments = {
+        group_id: tuple(_grams(text) for text in _group_local_texts(members))
+        for group_id, members in groups.items()
+    }
+    group_grams = {
+        group_id: frozenset().union(*fragments)
+        for group_id, fragments in group_fragments.items()
+    }
+    frequency = Counter(gram for grams in group_grams.values() for gram in grams)
+    informative_groups = sum(bool(grams) for grams in group_grams.values())
+    # Ubiquitous words carry no evidence about which local explanation applies.
+    # A lone explanation still needs a useful target match, so it uses ordinary
+    # weights instead of an all-zero one-document IDF vector.
+    weights = {
+        gram: math.log((informative_groups + 1) / (count + 1))
+        if informative_groups > 1 else 1.0
+        for gram, count in frequency.items()
+    }
+    if weights and not any(weight > 0 for weight in weights.values()):
+        # Several source pages/documents may contain separate screenshot groups
+        # for the same proven local explanation. When every local term is
+        # shared, corpus frequency cannot discriminate between those groups;
+        # retain ordinary local overlap and let target ambiguity decide.
+        weights = dict.fromkeys(weights, 1.0)
+    targets = []
+    for content in contents:
+        heading, _, body = (content or "").partition("\n")
+        targets.append((_grams(heading.strip().lstrip("#*- ")), _grams(body)))
+
+    references = {
+        group_id: _group_reference_identifiers(group_id, members)
+        for group_id, members in groups.items()
+    }
+    reference_frequency = Counter(
+        identifier for identifiers in references.values() for identifier in identifiers
+    )
+
+    for group_id in sorted(groups):
+        members = groups[group_id]
+        receipt = {
+            "version": _GROUP_VERSION,
+            "groupId": group_id,
+            "groupKind": metadata[group_id].get("groupKind", "unknown"),
+            "assetIds": [candidate.asset_id for candidate in members],
+            "targetIndexes": [],
+            "matchBasis": "none",
+        }
+        roles = {
+            str(value)
+            for member in members
+            for value in (
+                (member.source_locator or {}).get("sourceRole"),
+                (member.source_locator or {}).get("referenceRole"),
+                metadata[group_id].get("sourceRole"),
+                metadata[group_id].get("referenceRole"),
+            )
+            if isinstance(value, str) and value
+        }
+        if roles:
+            receipt["sourceRoles"] = sorted(roles)
+        if any(member.mime_type not in SUPPORTED_SOURCE_IMAGE_MIME_TYPES for member in members):
+            receipt["status"] = "unsupported_group_member"
+            _append_assignment_receipt(assignment_report, receipt)
+            continue
+
+        identifiers = {
+            identifier for identifier in references[group_id]
+            if reference_frequency[identifier] == 1
+        }
+        ambiguous_context = any(
+            isinstance((member.source_locator or {}).get("contentGroup"), dict)
+            and (member.source_locator or {})["contentGroup"].get("referenceStatus") == "ambiguous"
+            for member in members
+        )
+        if ambiguous_context:
+            # Conflicting Markdown explanations cannot be resolved through
+            # OCR or filename similarity. Only a literal asset/group identity
+            # in the requested target provides a new, explicit connection.
+            identities = {group_id} | {member.asset_id for member in members}
+            for member in members:
+                bound_asset_id = (member.source_locator or {}).get("workspaceAssetId")
+                if isinstance(bound_asset_id, str) and bound_asset_id:
+                    identities.add(bound_asset_id)
+            identifiers &= identities
+        explicit = [
+            index for index, content in enumerate(contents)
+            if any(_contains_reference(content or "", identifier) for identifier in identifiers)
+        ]
+        if explicit:
+            assigned = explicit
+            receipt.update(status="assigned", matchBasis="explicit_reference")
+        else:
+            if ambiguous_context:
+                receipt["status"] = "ambiguous_source_context"
+                _append_assignment_receipt(assignment_report, receipt)
+                continue
+            matches = [
+                (
+                    max(
+                        (_group_match_score(fragment, heading, body, weights)
+                         for fragment in group_fragments[group_id]),
+                        default=0.0,
+                    ),
+                    index,
+                )
+                for index, (heading, body) in enumerate(targets)
+            ]
+            matches.sort(key=lambda item: (-item[0], item[1]))
+            strongest = matches[0][0] if matches else 0.0
+            receipt["score"] = round(strongest, _SCORE_PRECISION)
+            if strongest < _GROUP_MATCH_FLOOR:
+                receipt["status"] = "unresolved_local_evidence"
+                _append_assignment_receipt(assignment_report, receipt)
+                continue
+            competing = [
+                index for score, index in matches
+                if score >= _GROUP_MATCH_FLOOR
+                and strongest - score <= _GROUP_AMBIGUITY_MARGIN
+            ]
+            if len(competing) != 1:
+                receipt.update(status="ambiguous_target", competingTargetIndexes=competing)
+                _append_assignment_receipt(assignment_report, receipt)
+                continue
+            assigned = competing
+            receipt.update(status="assigned", matchBasis="local_explanation")
+        for index in assigned:
+            result[index].extend(members)
+        receipt["targetIndexes"] = assigned
+        _append_assignment_receipt(assignment_report, receipt)
+    return result
+
+
+def _append_assignment_receipt(report: list[dict] | None, receipt: dict) -> None:
+    if report is not None:
+        report.append(receipt)
+
+
+def _group_member_order(candidate: SourceImageCandidate) -> float:
+    group = (candidate.source_locator or {}).get("contentGroup") or {}
+    order = group.get("groupOrder") if isinstance(group, dict) else None
+    return float(order) if isinstance(order, (int, float)) and math.isfinite(order) else math.inf
+
+
+def _group_local_texts(members: Sequence[SourceImageCandidate]) -> tuple[str, ...]:
+    values: dict[str, None] = {}
+    for member in members:
+        group = (member.source_locator or {}).get("contentGroup") or {}
+        if not isinstance(group, dict) or group.get("version") != _GROUP_VERSION:
+            group = {}
+        caption = group.get("captionText")
+        if caption == member.original_name:
+            # Original upload names describe availability, not image contents.
+            caption = None
+        for value in (
+            group.get("groupText"), caption,
+            member.ocr_text, member.semantic_description,
+        ):
+            if isinstance(value, str) and value.strip():
+                values[value.strip()] = None
+    # Keep each explanation/caption as its own matching anchor: a verbose OCR
+    # transcript must not dilute a short, source-proven explanatory caption.
+    return tuple(values)
+
+
+def _group_reference_identifiers(
+    group_id: str, members: Sequence[SourceImageCandidate]
+) -> set[str]:
+    identifiers = {group_id}
+    for member in members:
+        identifiers.add(member.asset_id)
+        if member.occurrence_id:
+            identifiers.add(member.occurrence_id)
+        if member.original_name:
+            identifiers.add(member.original_name)
+        locator = member.source_locator or {}
+        for key in ("sourceUnitId", "sourceBlockId", "objectLocator", "workspaceAssetId"):
+            value = locator.get(key)
+            if isinstance(value, str) and value:
+                identifiers.add(value)
+    return identifiers
+
+
+def _contains_reference(content: str, identifier: str) -> bool:
+    # Identifiers must be literal standalone references. Plain common words
+    # (including short synthetic IDs) need a labelled attribute or quotation.
+    escaped = re.escape(identifier)
+    if len(identifier) < 4 or not re.search(r"[\d./:_-]", identifier):
+        return bool(re.search(rf"[\"']{escaped}[\"']", content, re.IGNORECASE))
+    return bool(re.search(rf"(?<![\w.-]){escaped}(?![\w.-])", content, re.IGNORECASE))
+
+
+def _group_match_score(
+    local: frozenset[str],
+    heading: frozenset[str],
+    body: frozenset[str],
+    weights: dict[str, float],
+) -> float:
+    evidence = frozenset(gram for gram in local if weights.get(gram, 0) > 0)
+    if not evidence:
+        return 0.0
+    scores = []
+    for target in (heading, heading | body):
+        shared = evidence & target
+        # A lone syllable pair or English function-like word is insufficient
+        # to connect a whole screenshot sequence to a new page.
+        if len(shared) < 2:
+            continue
+        shared_weight = sum(weights[gram] for gram in shared)
+        local_weight = sum(weights[gram] for gram in evidence)
+        target_weight = sum(weights.get(gram, 1.0) for gram in target)
+        if not local_weight or not target_weight:
+            continue
+        target_coverage = shared_weight / target_weight
+        local_coverage = shared_weight / local_weight
+        # Both sides need positive explanatory overlap; a long transcript
+        # containing one target term cannot qualify through target brevity.
+        if target_coverage < _GROUP_MATCH_FLOOR or local_coverage < _GROUP_MATCH_FLOOR:
+            continue
+        scores.append(0.6 * target_coverage + 0.4 * local_coverage)
+    return max(scores, default=0.0)
+
 
 def select_source_images(
     candidates: Sequence[SourceImageCandidate],
@@ -122,9 +383,8 @@ def select_source_images(
 ) -> list[SourceImageCandidate]:
     """Return candidates for this slide, best first.
 
-    ``limit=None`` means no semantic count limit. Callers may still use a finite
-    limit for provider/resource budgets, but the authored source-image path uses
-    the unbounded mode so a slide can place every relevant source slot.
+    ``limit=None`` means no semantic count limit. Optional reference offers use
+    a finite limit; preservation callers may request every relevant source slot.
 
     Returns an empty list when nothing clears the relevance floor. The caller is
     expected to fall back to a generated illustration in that case rather than

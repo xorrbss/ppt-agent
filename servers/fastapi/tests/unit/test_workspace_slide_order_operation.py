@@ -25,6 +25,8 @@ from services.workspace_operation_handler_registry import WorkspaceOperationHand
 from services.workspace_operation_lease import TERMINAL_OPERATION_STATES
 from services.workspace_operation_runner import WorkspaceOperationRunner
 from services.workspace_service import WorkspaceServiceError, create_workspace_command
+from services.svg_page_publication import set_svg_page
+from services.svg_contract import source_digest
 from services.workspace_slide_order_operation_handler import (
     OPERATION_KIND,
     register_workspace_slide_order_operation_handler,
@@ -210,7 +212,7 @@ async def test_reorder_rejects_stale_expected_revision(harness):
 
 
 @pytest.mark.anyio
-async def test_reorder_of_an_svg_deck_renumbers_page_footers(harness):
+async def test_reorder_of_an_svg_deck_renumbers_page_footers(harness, monkeypatch, tmp_path):
     """Confirms the endpoint's integration point (publish_presentation_revision)
     still triggers refresh_svg_page_numbers for svg-mode decks -- the same path
     B's raster-redesign renumbering (services/svg_raster_renumber.py) hangs off
@@ -219,6 +221,7 @@ async def test_reorder_of_an_svg_deck_renumbers_page_footers(harness):
     generic (non-raster) svg page-number stamp updates through this endpoint's
     own call path."""
     maker, registry, runner = harness
+    monkeypatch.setattr("utils.asset_directory_utils.get_app_data_directory_env", lambda: str(tmp_path))
     style_snapshot = {"tokens": {"body_font": "Noto Sans KR", "primary": "#2563EB"}}
     presentation_id, slide_ids = await _seed_presentation(
         maker, n_slides=2, mode="svg",
@@ -233,7 +236,8 @@ async def test_reorder_of_an_svg_deck_renumbers_page_footers(harness):
             select(SlideModel).where(SlideModel.presentation == presentation_id).order_by(SlideModel.index)
         )).all()
         for slide in slides:
-            slide.svg_content = canonical
+            set_svg_page(slide, svg_content=canonical, content=slide.content,
+                         quality={"source_digest": source_digest(canonical)})
             slide.source_format = "svg"
             session.add(slide)
 

@@ -724,6 +724,18 @@ async def _admit_public_operation_v2(
         auth_expires_at=auth_expires_at,
         server_hard_deadline_at=server_hard_deadline_at,
     )
+    if (operation_kind == 'generation' and
+            (operation.request_payload.get('svg_timeout_repurchase_manifest') or {}).get('bounded_completion_recovery')):
+        from services.svg_timeout_repurchase import (
+            sample_completion_admission_deadline, TimeoutRepurchaseRejected,
+        )
+        try:
+            deadline = await sample_completion_admission_deadline(
+                session, operation, owner_id=principal.owner_id, tenant_id=principal.tenant_id,
+                policy=policy, now=now, deadline=deadline,
+                auth_expires_at=auth_expires_at, server_hard_deadline_at=server_hard_deadline_at)
+        except TimeoutRepurchaseRejected as error:
+            raise PublicAdmissionRejected(str(error)) from error
     existing_deadline = getattr(operation, "deadline_at", None)
     if existing_deadline is not None and _utc(existing_deadline, "operation_deadline_at") != deadline:
         raise PublicAdmissionRejected("public_operation_deadline_conflict")
@@ -1652,6 +1664,17 @@ async def reserve_public_provider_call(
         raise PublicAdmissionRejected("public_provider_actual_cost_limit_exceeded")
     if admission is None or admission.state != "active":
         raise PublicAdmissionRejected("public_provider_operation_not_active")
+    operation = await session.get(WorkspaceOperation, admission.operation_id)
+    if operation is not None and operation.request_payload.get("recovery_revision") in {
+        "svg-provider-timeout-repurchase/v2", "svg-provider-timeout-repurchase/v3",
+    }:
+        from services.svg_timeout_repurchase import verify_repurchase_provider_target, TimeoutRepurchaseRejected
+        try:
+            await verify_repurchase_provider_target(session, operation, admission, stage=stage,
+                slide_index=slide_index, logical_call_key=logical_call_key,
+                provider_id=provider_id, model_id=model_id)
+        except TimeoutRepurchaseRejected as error:
+            raise PublicAdmissionRejected(str(error)) from error
     deadline_at = getattr(admission, "deadline_at", None)
     if deadline_at is not None:
         _assert_deadline_remaining(deadline_at, now=get_current_utc_datetime())

@@ -333,3 +333,28 @@ def test_manifest_parent_is_flushed_before_assets(
     asset_add = session.events.index(("add", SourceContentManifestAsset))
     commit = session.events.index(("commit", None))
     assert parent_add < parent_flush < asset_add < commit
+@pytest.mark.parametrize("style_id, accepted", [("soft-editorial", True), ("unknown-svg-style-acceptance", False)])
+def test_svg_source_alias_admission_preserves_unknown_rejection(monkeypatch, style_id, accepted):
+    import asyncio
+    from unittest.mock import AsyncMock
+    from fastapi import HTTPException
+    from models.generate_presentation_request import GeneratePresentationRequest
+    from services import presentation_generation_pipeline as pipeline
+
+    request = GeneratePresentationRequest.model_construct(
+        content="Source", template="authored", strategy="svg",
+        source_mode="source_content_restyle", authored_style=style_id,
+    )
+    admit = AsyncMock()
+    monkeypatch.setattr(pipeline, "admit_source_content_request", admit)
+    if accepted:
+        asyncio.run(pipeline._admit_source_content_generation(request, None))
+        assert request.authored_style == "minimal-vellum"
+        assert request._authored_style_snapshot.id == "minimal-vellum"
+        admit.assert_awaited_once()
+    else:
+        with pytest.raises(HTTPException) as error:
+            asyncio.run(pipeline._admit_source_content_generation(request, None))
+        assert error.value.status_code == 422
+        assert "source_content_template_required" in str(error.value.detail)
+        admit.assert_not_awaited()

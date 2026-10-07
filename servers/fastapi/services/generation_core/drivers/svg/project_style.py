@@ -19,7 +19,7 @@ from ...style.context import StyleContext
 from .canvas_brief import SVG_CANVAS_BRIEF_VERSION, adapt_brief_line, svg_brief_replacements
 from utils.hashing import sha256_prefixed
 
-SVG_STYLE_ADAPTER_VERSION = "svg-style/v2"
+SVG_STYLE_ADAPTER_VERSION = "svg-style/v4"
 
 
 def _digest(value: object) -> str:
@@ -57,20 +57,32 @@ def project_style(
     # (the preset's own svg text) are deliberately left alone.
     common_guidance: dict[str, list[str]] = {}
     for line in context.brief_lines:
-        if "svg" in line.applies_to:
+        if "svg" in line.applies_to and line.section not in {"LAYOUT SYSTEM", "SLIDE ARCHETYPES"}:
             common_guidance.setdefault(line.section, []).append(adapt_brief_line(line.text, width, height))
     result = {
         "adapter_version": SVG_STYLE_ADAPTER_VERSION,
         "contract_version": SVG_CONTRACT_VERSION,
         "style_id": context.preset_id,
+        "composition_mode": "free-svg",
+        "reference_semantics": "design-identity",
+        "source_identity_policy": "svg-source-identity/v2",
+        "composition_guidance": [
+            "Compose the complete SVG freely for this canvas and this slide's evidence.",
+            "Reference examples convey palette, typography, imagery and component treatment.",
+            "Choose geometry, grouping and reading order from the content; reference column counts and positions are not constraints.",
+        ],
         "canvas": {"width": width, "height": height},
         "tokens": tokens,
         "common_guidance": common_guidance,
         "mapped_guidance": context.mapped_guidance,
-        "overrides": overrides,
+        "overrides": {key: value for key, value in overrides.items() if key == "common_guidance"},
         "diagnostics": diagnostics,
         "unresolved": [],
         "references": references,
+        "reference_examples": [
+            {"role": role, "digest": item["digest"], "semantics": "art-direction"}
+            for role, items in references.items() for item in items
+        ],
         "provenance": {
             "tokens": "authored_style_fields",
             "brief_digest": _digest([line.text for line in context.brief_lines]),
@@ -85,7 +97,31 @@ def project_style(
         result["master_template"] = context.master_rules
         result["master_pin"] = context.master_pin
     if context.design_pack_rules is not None:
-        result["design_pack_template"] = context.design_pack_rules
+        result["design_pack_template"] = {
+            key: value for key, value in context.design_pack_rules.items()
+            if key not in {"references", "diagnostics"}
+        }
+        if context.master_rules is None:
+            result["tokens"]["palette"] = context.design_pack_rules.get("tokens", {}).get("palette", [])
+            if context.design_pack_rules.get("version") == "svg-uploaded-design-reference/v1":
+                identity_tokens = context.design_pack_rules.get("tokens", {})
+                for key in ("background", "foreground", "accent"):
+                    if key in identity_tokens:
+                        result["tokens"][key] = identity_tokens[key]
+                if "accent" in identity_tokens:
+                    result["tokens"]["primary"] = identity_tokens["accent"]
+                for role in ("heading", "body"):
+                    family = context.design_pack_rules.get("fonts", {}).get(role, {}).get("family")
+                    if family:
+                        result["tokens"][f"{role}_font"] = family
+        if context.design_pack_rules.get("version") == "svg-uploaded-design-reference/v1":
+            # A role without its own uploaded sample uses uploaded content art
+            # direction rather than an unrelated catalogue cover or ending.
+            result["references"] = context.design_pack_rules.get("references", {})
+            result["reference_examples"] = context.design_pack_rules.get("reference_examples", [])
+        else:
+            result["references"] = {**references, **context.design_pack_rules.get("references", {})}
+            result["reference_examples"] += context.design_pack_rules.get("reference_examples", [])
     return result
 
 

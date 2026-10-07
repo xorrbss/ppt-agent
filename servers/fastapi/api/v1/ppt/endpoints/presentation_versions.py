@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from models.presentation_with_slides import PresentationWithSlides
+from models.document_canvas import DOCUMENT_CANVAS_CONTRACTS_HEADER
 from services import presentation_version_service as version_service
 from services.database import get_async_session
 from services.presentation_access_service import require_live_presentation
@@ -58,7 +59,7 @@ async def restore_presentation_version(
     id: uuid.UUID,
     version_id: uuid.UUID,
     sql_session: AsyncSession = Depends(get_async_session),
-    canvas_contracts: Optional[str] = Header(default=None, alias="X-Document-Canvas-Contracts"),
+    canvas_contracts: Optional[str] = Header(default=None, alias=DOCUMENT_CANVAS_CONTRACTS_HEADER),
 ):
     require_legacy_presentation_write_path(id)
     presentation = await require_live_presentation(sql_session, id)

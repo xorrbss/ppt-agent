@@ -852,8 +852,8 @@ def test_quality_review_emits_live_progress_during_long_analysis(monkeypatch):
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize("mode", ["analyze_only", "unsupported"])
-def test_quality_review_rejects_any_mode_except_auto_fix_before_execution(mode):
+@pytest.mark.parametrize("mode", ["unsupported"])
+def test_quality_review_rejects_unknown_mode_before_execution(mode):
     claim = WorkspaceOperationClaim(
         operation_id=uuid.uuid4(),
         owner_id=None,

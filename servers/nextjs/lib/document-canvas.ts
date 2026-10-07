@@ -1,5 +1,7 @@
 /** Mode-neutral, physical document geometry. Legacy geometry stays in its adapter. */
-export const DOCUMENT_CANVAS_VERSION = "document-canvas/v1" as const;
+import { DOCUMENT_CANVAS_CONTRACTS } from "../app/(presentation-generator)/services/api/header.ts";
+
+export const DOCUMENT_CANVAS_VERSION = DOCUMENT_CANVAS_CONTRACTS;
 
 export interface DocumentCanvas {
   contractVersion: typeof DOCUMENT_CANVAS_VERSION;

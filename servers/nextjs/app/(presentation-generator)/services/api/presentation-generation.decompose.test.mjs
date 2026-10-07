@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { transform } from "esbuild";
+import { build, transform } from "esbuild";
 
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const sourcePath = path.join(testDirectory, "presentation-generation.ts");
@@ -24,9 +24,11 @@ const headerUrl = dataModule(`
 const paramsUrl = dataModule("export {};\n");
 const errorHandlerUrl = dataModule(`
   export class ApiError extends Error {
-    constructor(message, status = 0) {
+    constructor(message, options = {}) {
       super(message);
-      this.status = status;
+      this.status = typeof options === "number" ? options : options.status ?? 0;
+      this.code = options.code;
+      this.detail = options.detail;
     }
   }
   export const apiErrorFromPayload = (payload, fallback, _status, requestId) => {
@@ -37,15 +39,18 @@ const errorHandlerUrl = dataModule(`
   };
   export const ApiResponseHandler = {
     async handleResponse(response, fallback) {
-      if (!response.ok) throw new ApiError(fallback, response.status);
+      if (!response.ok) {
+        const payload = await response.json();
+        throw new ApiError(fallback, { status: response.status, code: payload.error?.code || payload.detail?.code || payload.detail });
+      }
       return response.json();
     },
   };
 `);
-const apiUrl = dataModule("export const getApiUrl = (path) => path; export const resolveBackendAssetUrl = (value) => value;\n");
+const apiUrl = dataModule("export const getApiUrl = (path) => path; export const buildAbsoluteApiRequestUrl = (path) => 'http://slide-order.test' + path; export const resolveBackendAssetUrl = (value) => value;\n");
 const retryUrl = dataModule("export const fetchWithNetworkRetry = (...args) => fetch(...args);\n");
 
-async function loadApi() {
+async function loadApi({ realErrors = false } = {}) {
   const source = await readFile(sourcePath, "utf8");
   const admissionSource = await readFile(admissionSourcePath, "utf8");
   const admissionCompiled = await transform(
@@ -60,10 +65,39 @@ async function loadApi() {
     },
   );
   const admissionUrl = dataModule(admissionCompiled.code);
+  // Bundle the existing HTTP timeline client and its real projection so these
+  // cases exercise the snake_case wire contract, pagination, and error parser.
+  const workspace = await build({
+    entryPoints: [path.join(testDirectory, "workspace-commands.ts")],
+    bundle: true, write: false, format: "esm", platform: "browser",
+    plugins: [{ name: "test-aliases", setup(builder) {
+      builder.onResolve({ filter: /^@\// }, ({ path: modulePath }) => {
+        if (modulePath === "@/utils/api") return { path: "api", namespace: "fixture" };
+        return { path: path.join(testDirectory, "../../../..", modulePath.slice(2) + ".ts") };
+      });
+      builder.onResolve({ filter: /^\.\/header$/ }, () => ({ path: "header", namespace: "fixture" }));
+      builder.onLoad({ filter: /.*/, namespace: "fixture" }, ({ path: modulePath }) => ({
+        contents: modulePath === "header"
+          ? 'export const getHeader = () => ({"Content-Type":"application/json"});'
+          : 'export const getApiUrl = path => path; export const buildAbsoluteApiRequestUrl = path => "http://slide-order.test" + path;',
+      }));
+    } }],
+  });
+  const workspaceUrl = dataModule(workspace.outputFiles[0].text);
+  let selectedErrorHandlerUrl = errorHandlerUrl;
+  if (realErrors) {
+    const messageUrl = dataModule('export const pickBackendMessage = value => value; export const translateBackendMessage = value => typeof value === "string" ? value : value?.message;');
+    const errorSource = await readFile(path.join(testDirectory, "api-error-handler.ts"), "utf8");
+    const errorCompiled = await transform(errorSource
+      .replace('from "@/lib/backend-messages";', `from "${messageUrl}";`)
+      .replace('from "@/lib/backend-messages-intl";', `from "${messageUrl}";`), { loader: "ts", format: "esm" });
+    selectedErrorHandlerUrl = dataModule(errorCompiled.code);
+  }
   const executableSource = source
     .replace('from "./header";', `from "${headerUrl}";`)
     .replace('from "./params";', `from "${paramsUrl}";`)
-    .replace('from "./api-error-handler";', `from "${errorHandlerUrl}";`)
+    .replace('from "./api-error-handler";', `from "${selectedErrorHandlerUrl}";`)
+    .replace('from "./workspace-commands";', `from "${workspaceUrl}";`)
     .replace('from "@/utils/api";', `from "${apiUrl}";`)
     .replace('from "@/utils/fetchWithNetworkRetry";', `from "${retryUrl}";`)
     .replace(
@@ -95,6 +129,205 @@ async function withFetch(fakeFetch, callback, { onConsoleError = () => {} } = {}
     console.error = originalConsoleError;
   }
 }
+
+const orderOperationId = "22222222-2222-4222-8222-222222222222";
+const orderBody = { slide_ids: ["slide-b", "slide-a"], expected_revision: 3 };
+const orderPollOptions = { pollIntervalMs: 0, timeoutMs: 500 };
+const orderJson = (data, status = 200, headers = {}) =>
+  new Response(JSON.stringify(data), { status, headers });
+const orderPending = () => orderJson({ detail: "slide_order_still_running", error: { code: "slide_order_still_running" } }, 503, {
+  "X-Workspace-Operation-ID": orderOperationId,
+});
+const orderAnchor = (status = "running", overrides = {}) => ({
+  schema_version: 1, anchor_type: "operation", id: orderOperationId,
+  operation_id: orderOperationId, position: 10, operation_type: "presentation.slides.reorder",
+  title: "Reorder slides", status, version: 1, operation_version: 1,
+  expected_revision: 3, result_revision: status === "succeeded" ? 4 : null,
+  target: { presentation_id: "deck-a", summary: "Slides", context: {} },
+  result: status === "succeeded" ? { order: orderBody.slide_ids } : null,
+  events: [], allowed_actions: [], ...overrides,
+});
+const orderPage = (items, extra = {}) => orderJson({ schema_version: 1, items, has_more: false, revision: 4, ...extra });
+
+test("reorder: pending follows the admitted operation through owner-scoped GET without resubmitting", async () => {
+  const { PresentationGenerationApi } = await loadApi({ realErrors: true });
+  const calls = [];
+  let reads = 0;
+  let pendingId;
+  await withFetch(async (url, init) => {
+    const method = init?.method ?? "GET";
+    calls.push(method);
+    if (method === "PATCH") return orderPending();
+    assert.equal(new URL(url).pathname, "/api/v1/ppt/workspace/presentations/deck-a/timeline");
+    reads++;
+    return orderPage([orderAnchor("succeeded", { id: "foreign", operation_id: "foreign" }),
+      orderAnchor(reads === 1 ? "running" : "succeeded")]);
+  }, async () => {
+    const result = await PresentationGenerationApi.reorderSlides("deck-a", orderBody, {
+      ...orderPollOptions, onPending: id => { pendingId = id; },
+    });
+    assert.equal(pendingId, orderOperationId);
+    assert.deepEqual(result, { presentation_id: "deck-a", revision: 4, order: orderBody.slide_ids, operation_id: orderOperationId });
+  });
+  assert.deepEqual(calls, ["PATCH", "GET", "GET"]);
+});
+
+test("reorder: fast 200 and existing 409 retain their original paths", async () => {
+  const { PresentationGenerationApi } = await loadApi({ realErrors: true });
+  for (const status of [200, 409, 503]) {
+    let calls = 0;
+    await withFetch(async (_url, init) => {
+      calls++;
+      assert.equal(init.method, "PATCH");
+      return orderJson(status === 200 ? { revision: 4 } : { detail: status === 409 ? "revision_conflict" : "slide_order_still_running" }, status);
+    }, async () => {
+      if (status === 200) assert.equal((await PresentationGenerationApi.reorderSlides("deck-a", orderBody)).revision, 4);
+      else await assert.rejects(PresentationGenerationApi.reorderSlides("deck-a", orderBody), { status });
+    });
+    assert.equal(calls, 1);
+  }
+});
+
+test("reorder: terminal failure, cancellation, deadline and dead letter never become success", async () => {
+  const { PresentationGenerationApi } = await loadApi({ realErrors: true });
+  for (const state of ["failed", "cancelled", "deadline_exceeded", "dead_letter"]) {
+    let patches = 0;
+    await withFetch(async (_url, init) => {
+      if (init?.method === "PATCH") { patches++; return orderPending(); }
+      return orderPage([orderAnchor(state)]);
+    }, async () => {
+      await assert.rejects(PresentationGenerationApi.reorderSlides("deck-a", orderBody, orderPollOptions), error => {
+        assert.equal(error.status, 422);
+        assert.equal(error.detail.state, state);
+        return true;
+      });
+    });
+    assert.equal(patches, 1);
+  }
+});
+
+test("reorder: foreign scope, revision and order are rejected before constructing a result", async () => {
+  const { PresentationGenerationApi } = await loadApi({ realErrors: true });
+  for (const overrides of [
+    { target: { presentation_id: "foreign" } }, { expected_revision: 99 },
+    { result: { order: [...orderBody.slide_ids].reverse() } }, { result_revision: null },
+  ]) {
+    await withFetch(async (_url, init) => init?.method === "PATCH" ? orderPending() : orderPage([orderAnchor("succeeded", overrides)]), async () => {
+      await assert.rejects(PresentationGenerationApi.reorderSlides("deck-a", orderBody, orderPollOptions), error => {
+        assert.match(error.code, /^slide_order_(operation|result)_mismatch$/);
+        return true;
+      });
+    });
+  }
+});
+
+test("reorder: bounded wait and GET failure remain unconfirmed; checking again uses GET only", async () => {
+  const { PresentationGenerationApi } = await loadApi({ realErrors: true });
+  let patches = 0;
+  await withFetch(async (_url, init) => {
+    if (init?.method === "PATCH") { patches++; return orderPending(); }
+    return orderPage([orderAnchor()]);
+  }, async () => {
+    await assert.rejects(PresentationGenerationApi.reorderSlides("deck-a", orderBody, { timeoutMs: 5, pollIntervalMs: 1 }), { code: "slide_order_poll_timeout" });
+  });
+  await withFetch(async () => orderJson({ detail: "presentation_not_found" }, 404), async () => {
+    await assert.rejects(PresentationGenerationApi.waitForSlideOrderOperation("deck-a", orderBody, orderOperationId, orderPollOptions), { code: "slide_order_status_unavailable" });
+  });
+  await withFetch(async (_url, init) => {
+    assert.notEqual(init?.method, "PATCH");
+    return orderPage([orderAnchor("succeeded")]);
+  }, async () => {
+    assert.equal((await PresentationGenerationApi.waitForSlideOrderOperation("deck-a", orderBody, orderOperationId, orderPollOptions)).revision, 4);
+  });
+  assert.equal(patches, 1);
+});
+
+test("reorder: an older admitted operation is found through timeline pagination", async () => {
+  const { PresentationGenerationApi } = await loadApi({ realErrors: true });
+  const positions = [];
+  await withFetch(async (url, init) => {
+    if (init?.method === "PATCH") return orderPending();
+    const before = new URL(url).searchParams.get("before_position");
+    positions.push(before);
+    return before === null
+      ? orderPage([], { has_more: true, next_before_position: 10 })
+      : orderPage([orderAnchor("succeeded")]);
+  }, async () => {
+    assert.equal((await PresentationGenerationApi.reorderSlides("deck-a", orderBody, orderPollOptions)).revision, 4);
+  });
+  assert.deepEqual(positions, [null, "10"]);
+});
+
+test("reorder: SidePanel blocks duplicate drags and keeps edits made while the save is pending", async () => {
+  const sidePanelPath = path.join(testDirectory, "../../presentation/components/SidePanel.tsx");
+  const source = await readFile(sidePanelPath, "utf8");
+  const bindings = new Set();
+  for (const match of source.matchAll(/import\s+([\s\S]*?)\s+from\s+["'][^"']+["'];/g)) {
+    const named = match[1].match(/\{([\s\S]*?)\}/)?.[1] ?? "";
+    for (const binding of named.split(",")) {
+      const name = binding.trim().replace(/^type\s+/, "").split(/\s+as\s+/)[0];
+      if (/^\w+$/.test(name)) bindings.add(name);
+    }
+  }
+  const compiled = await build({
+    entryPoints: [sidePanelPath], bundle: true, write: false, format: "esm", jsx: "transform",
+    plugins: [{ name: "component-fixtures", setup(builder) {
+      builder.onResolve({ filter: /.*/ }, args => args.kind === "entry-point" ? undefined : { path: args.path, namespace: "fixture" });
+      builder.onLoad({ filter: /.*/, namespace: "fixture" }, () => ({ contents:
+        'const fixture = globalThis.__orderSidePanel; export default fixture.React; export const jsx = (type, props) => fixture.React.createElement(type, props, props.children); export const jsxs = jsx;\n' +
+        [...bindings].map(name => `export const ${name} = fixture.${name} ?? "${name}";`).join("\n"),
+      }));
+    } }],
+  });
+  let resolveSave;
+  let patchCalls = 0;
+  let current = { id: "deck-a", revision: 3, theme: { color: "original" },
+    slides: [{ id: "slide-a", index: 0, content: "before" }, { id: "slide-b", index: 1, content: "before" }] };
+  const previous = globalThis.__orderSidePanel;
+  const previousAnimationFrame = globalThis.requestAnimationFrame;
+  globalThis.requestAnimationFrame = callback => { callback(); return 0; };
+  globalThis.__orderSidePanel = {
+    React: { createElement: (type, props, ...children) => ({ type, props, children }) },
+    useEffect: () => {}, useRef: value => ({ current: value }), useState: value => [value, () => {}],
+    useTranslations: () => key => key, usePathname: () => "/presentation",
+    useSelector: () => ({ presentationData: current, isStreaming: false, flaggedSlides: {} }),
+    useStore: () => ({ getState: () => ({ presentationGeneration: { presentationData: current } }) }),
+    useDispatch: () => action => { current = action.payload; },
+    setPresentationData: payload => ({ payload }), isTemplateFreePresentation: () => false,
+    useSensors: () => [], useSensor: () => null, trackEvent: () => {}, MixpanelEvent: {},
+    arrayMove: (items, from, to) => { const result = [...items]; result.splice(to, 0, result.splice(from, 1)[0]); return result; },
+    flaggedSlideKey: () => "", notify: { error: () => assert.fail("pending save must not show failure") },
+    PresentationGenerationApi: { reorderSlides: (_id, _body, options) => {
+      patchCalls++;
+      options.onPending(orderOperationId);
+      return new Promise(resolve => { resolveSave = resolve; });
+    } },
+  };
+  try {
+    const { default: SidePanel } = await import(dataModule(compiled.outputFiles[0].text));
+    const tree = SidePanel({ selectedSlide: 0, onSlideClick: () => {}, presentationId: "deck-a", loading: false });
+    const find = node => {
+      if (node?.type === "DndContext") return node;
+      for (const child of node?.children?.flat(Infinity) ?? []) {
+        const result = find(child); if (result) return result;
+      }
+    };
+    const drag = find(tree).props.onDragEnd;
+    drag({ active: { id: "slide-b" }, over: { id: "slide-a" } });
+    drag({ active: { id: "slide-a" }, over: { id: "slide-b" } });
+    assert.equal(patchCalls, 1);
+    current = { ...current, theme: { color: "edited" }, slides: current.slides.map(slide => ({ ...slide, content: "edited" })) };
+    resolveSave({ presentation_id: "deck-a", revision: 4 });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(current.revision, 4);
+    assert.equal(current.theme.color, "edited");
+    assert.deepEqual(current.slides.map(slide => slide.content), ["edited", "edited"]);
+    assert.deepEqual(current.slides.map(slide => slide.id), orderBody.slide_ids);
+  } finally {
+    globalThis.__orderSidePanel = previous;
+    globalThis.requestAnimationFrame = previousAnimationFrame;
+  }
+});
 
 test("uploadDoc isolates idempotency keys between presentation workspaces", async () => {
   const { PresentationGenerationApi } = await loadApi();

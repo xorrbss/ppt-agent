@@ -10,6 +10,8 @@ from typing import Any, Literal
 
 from pydantic import Field, model_validator
 
+from utils.get_env import get_canvas_stages_path_env
+
 from models.authored_vnext.master.base import StrictCamelModel
 from models.authored_vnext.master.contract import CanvasContract, Rect
 from models.canvas_defaults import (
@@ -33,9 +35,6 @@ ULTRAWIDE_ASPECT_RATIO = "21:9"
 AuthoredAspectRatio = Literal["16:9", "9:16", "9:13", "1:1", "21:9"]
 CanvasStage = Literal["disabled", "candidate", "verified"]
 
-# Product exposure is enabled only after the lead completes provider and file
-# readback acceptance. Backend admission remains available for that acceptance run.
-PORTRAIT_RELEASE_VERIFIED = True
 _CANVAS_SIZE_BY_ASPECT_RATIO: dict[AuthoredAspectRatio, tuple[int, int]] = {
     LANDSCAPE_ASPECT_RATIO: DEFAULT_CANVAS_SIZE_PX,
     PORTRAIT_ASPECT_RATIO: (DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX),
@@ -58,8 +57,11 @@ PRESET_CANVAS_IDS: dict[AuthoredAspectRatio, str] = {
 }
 # Exposure of these presets is per style and written by the bench promotion
 # (docs/canvas-expansion-admission-spec-20260929.md §5); a missing style is disabled.
-GATED_ASPECT_RATIOS: tuple[AuthoredAspectRatio, ...] = (SQUARE_ASPECT_RATIO, ULTRAWIDE_ASPECT_RATIO)
+GATED_ASPECT_RATIOS: tuple[AuthoredAspectRatio, ...] = (
+    PORTRAIT_ASPECT_RATIO, PROPOSAL_ASPECT_RATIO, SQUARE_ASPECT_RATIO, ULTRAWIDE_ASPECT_RATIO,
+)
 CANVAS_STAGES_PATH = Path(__file__).resolve().parents[1] / "constants" / "canvas_stages.json"
+RESTYLE_UNGATED_RATIOS = (PORTRAIT_ASPECT_RATIO, PROPOSAL_ASPECT_RATIO)
 _CANVAS_STAGES: tuple[CanvasStage, ...] = ("disabled", "candidate", "verified")
 
 
@@ -140,11 +142,23 @@ def _canvas_metadata_from_contract(aspect_ratio: AuthoredAspectRatio, canvas: ob
 
 
 def request_canvas_contract(request: Any) -> CanvasContract:
+    from services.generation_core.admission.strategy import resolve_generation_strategy
+    from services.svg_canvas import selected_svg_canvas
+
+    svg = resolve_generation_strategy(request) == "svg"
+    if svg and (getattr(request, "svg_canvas", None) is not None or request.aspect_ratio == "4:3"):
+        metadata = selected_svg_canvas(request)
+        frozen = getattr(request, "_document_canvas", None)
+        if frozen is not None and frozen != metadata:
+            raise ValueError("document_canvas_request_mismatch")
+        request._document_canvas = metadata
+        request._authored_canvas = metadata.canvas_contract()
+        return request._authored_canvas
     source_document_canvas = getattr(request, "_document_canvas", None)
     if (
         source_document_canvas is not None
-        and getattr(request, "strategy", None) == "svg"
-        and getattr(request, "source_mode", None) == "source_content_restyle"
+        and svg
+        and getattr(request, "source_mode", None) in {"source_content_restyle", "raster_reconstruction"}
         and getattr(request, "page_size", None) is None
     ):
         from services.document_canvas import DocumentCanvasMetadata
@@ -197,7 +211,7 @@ def request_canvas_metadata(request: Any) -> dict[str, object]:
 
 def restore_request_canvas_metadata(request: Any, payload: object, *, present: bool = True) -> None:
     if not present:
-        if getattr(request, "page_size", None) is not None:
+        if getattr(request, "page_size", None) is not None or getattr(request, "svg_canvas", None) is not None:
             raise ValueError("document_canvas_contract_missing")
         if request.aspect_ratio != LANDSCAPE_ASPECT_RATIO:
             raise ValueError("authored_canvas_contract_missing")
@@ -211,12 +225,18 @@ def restore_request_canvas_metadata(request: Any, payload: object, *, present: b
 
         metadata = parse_canvas_metadata(payload)
         if isinstance(metadata, DocumentCanvasMetadata):
+            from services.svg_canvas import has_explicit_svg_canvas, selected_svg_canvas
             source_manifest_canvas = (
                 getattr(request, "strategy", None) == "svg"
-                and getattr(request, "source_mode", None) == "source_content_restyle"
+                and getattr(request, "source_mode", None) in {"source_content_restyle", "raster_reconstruction"}
                 and getattr(request, "page_size", None) is None
             )
-            if source_manifest_canvas:
+            if getattr(request, "svg_canvas", None) is not None or request.aspect_ratio == "4:3":
+                if metadata != selected_svg_canvas(request):
+                    raise ValueError("document_canvas_request_mismatch")
+            elif source_manifest_canvas:
+                if has_explicit_svg_canvas(request) and metadata != selected_svg_canvas(request):
+                    raise ValueError("document_canvas_request_mismatch")
                 if getattr(request, "orientation", None) is not None:
                     raise ValueError("document_canvas_request_mismatch")
             elif getattr(request, "page_size", None) != "A4" or metadata != document_canvas_for_orientation(
@@ -307,7 +327,8 @@ def merge_authored_vnext_projection(theme: object, projection_updates: Mapping[s
 
 @lru_cache(maxsize=1)
 def _canvas_stages() -> dict[str, dict[str, CanvasStage]]:
-    document = json.loads(CANVAS_STAGES_PATH.read_text(encoding="utf-8"))
+    path = Path(get_canvas_stages_path_env() or CANVAS_STAGES_PATH)
+    document = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(document, dict) or set(document) != set(GATED_ASPECT_RATIOS):
         raise ValueError("canvas_stages_ratios_invalid")
     for stages in document.values():
@@ -322,21 +343,25 @@ def canvas_stage(aspect_ratio: str, style_id: str) -> CanvasStage:
     return _canvas_stages()[aspect_ratio].get(style_id, "disabled")
 
 
-def _base_aspect_ratios_for_style(style_id: str) -> list[AuthoredAspectRatio]:
-    if style_id == "default" and PORTRAIT_RELEASE_VERIFIED:
-        return [LANDSCAPE_ASPECT_RATIO, PORTRAIT_ASPECT_RATIO, PROPOSAL_ASPECT_RATIO]
-    if style_id == "kbs-company-proposal":
-        return [LANDSCAPE_ASPECT_RATIO, PROPOSAL_ASPECT_RATIO]
-    return [LANDSCAPE_ASPECT_RATIO]
-
-
 def supported_aspect_ratios_for_style(style_id: str) -> list[AuthoredAspectRatio]:
-    return _base_aspect_ratios_for_style(style_id) + [
+    return [LANDSCAPE_ASPECT_RATIO] + [
         ratio for ratio in GATED_ASPECT_RATIOS if canvas_stage(ratio, style_id) != "disabled"
     ]
 
 
 def validate_authored_canvas_admission(request: Any, *, style_id: str) -> None:
+    from services.generation_core.admission.strategy import resolve_generation_strategy
+
+    if resolve_generation_strategy(request) == "svg":
+        from services.svg_generation_admission import svg_creation_admission_violation
+
+        violation = svg_creation_admission_violation(request)
+        if violation is not None:
+            raise ValueError(violation)
+        request_canvas_contract(request)
+        return
+    if getattr(request, "svg_canvas", None) is not None or request.aspect_ratio == "4:3":
+        raise ValueError("svg_canvas_strategy_required")
     # Design packs compile from a 1280x720 source only, so a pack pin is
     # admitted on that canvas and on no other. This runs before the A4 branch
     # and the stage gate so the code is stable across styles and stages.
@@ -357,11 +382,9 @@ def validate_authored_canvas_admission(request: Any, *, style_id: str) -> None:
         return
     if request.aspect_ratio == LANDSCAPE_ASPECT_RATIO:
         return
-    if request.aspect_ratio in GATED_ASPECT_RATIOS and canvas_stage(request.aspect_ratio, style_id) == "disabled":
-        raise ValueError("authored_canvas_stage_disabled")
     # The authored source reflow restyles on the requested canvas. Retained
     # masters/design packs still have their own fixed geometry contracts.
-    if (
+    restyle = (
         request.source_mode == "source_content_restyle"
         and str(request.template or "").strip().lower() == "authored"
         and request.master_pin is None
@@ -369,7 +392,16 @@ def validate_authored_canvas_admission(request: Any, *, style_id: str) -> None:
         and request.design_pack_pin is None
         and request.generation_mode in {"auto", "free-design"}
         and request.generation_engine in {None, "authored"}
-    ):
+    )
+    stage_exempt = restyle and request.aspect_ratio in RESTYLE_UNGATED_RATIOS
+    if not stage_exempt and request.aspect_ratio in GATED_ASPECT_RATIOS:
+        if canvas_stage(request.aspect_ratio, style_id) == "disabled":
+            # Preserve the public portrait admission error while the catalogue
+            # reports the more specific canvas_stage_disabled reason.
+            code = ("authored_portrait_combination_not_supported"
+                    if request.aspect_ratio in RESTYLE_UNGATED_RATIOS else "authored_canvas_stage_disabled")
+            raise ValueError(code)
+    if restyle:
         request_canvas_contract(request)
         return
     if (
@@ -400,7 +432,7 @@ __all__ = [
     "LANDSCAPE_ASPECT_RATIO",
     "PORTRAIT_ASPECT_RATIO",
     "PROPOSAL_ASPECT_RATIO",
-    "PORTRAIT_RELEASE_VERIFIED",
+    "RESTYLE_UNGATED_RATIOS",
     "PRESET_CANVAS_IDS",
     "SQUARE_ASPECT_RATIO",
     "ULTRAWIDE_ASPECT_RATIO",

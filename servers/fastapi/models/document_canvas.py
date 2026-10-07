@@ -17,6 +17,7 @@ from models.authored_vnext.master.base import StrictCamelModel
 from models.authored_vnext.master.contract import CanvasContract, Rect
 
 DOCUMENT_CANVAS_CONTRACT_VERSION = "document-canvas/v1"
+DOCUMENT_CANVAS_CONTRACTS_HEADER = "X-Document-Canvas-Contracts"
 # Enable only after all reader/capability and product readback gates pass.
 DOCUMENT_CANVAS_A4_RELEASE_VERIFIED = False
 # Local managed candidate stage; never set by a request or advertised as verified.

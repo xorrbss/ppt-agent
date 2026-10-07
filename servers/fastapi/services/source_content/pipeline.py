@@ -34,6 +34,18 @@ def _validate_design_instruction(instructions: str | None) -> None:
         raise _source_error("source_content_instruction_conflict")
 
 
+def _validate_raster_design_mode(request: Any, analysis: Any) -> None:
+    """Preserved pixels cannot receive an explicitly selected replacement design."""
+    explicit_reference = any(getattr(request, name, None) is not None for name in (
+        "master_pin", "svg_design_reference_pin", "svg_design_reference_snapshot_id"))
+    selected_style = getattr(request, "authored_style", None)
+    replacement_design = explicit_reference or selected_style not in {None, "default", "screenshot-blue"}
+    if replacement_design and any(page.render_mode != "redesign" for page in analysis.pages):
+        raise SourceContentError("raster_preservation_design_requires_redesign", status_code=422,
+            detail={"message": "Preserved raster pages cannot apply a replacement style or master. "
+                               "Select redesign explicitly for each page to apply the selected design."})
+
+
 async def _admit_raster_reconstruction_request(
     request: Any,
     *,
@@ -43,7 +55,9 @@ async def _admit_raster_reconstruction_request(
 ) -> None:
     """Bind the approved analysis to one owner-admitted immutable PPTX snapshot."""
 
-    from services.document_canvas import canvas_digest, document_canvas_for_orientation
+    from services.document_canvas import canvas_digest
+    from services.svg_canvas import selected_svg_canvas
+    from services.source_content.raster_target import raster_target_document_canvas
     from services.references.contracts import ReferenceProviderError
     from services.references.service import admit_reference_snapshots
     from services.source_content.raster_contracts import RasterApprovalPin
@@ -89,12 +103,13 @@ async def _admit_raster_reconstruction_request(
         or len(snapshot.asset_bindings) != 1
         or snapshot.asset_bindings[0].sha256 != analysis.source.source_sha256
         or pin.source_sha256 != analysis.source.source_sha256
-        or analysis.target_canvas.orientation != getattr(request, "orientation", None)
+        or raster_target_document_canvas(analysis.target_canvas) != selected_svg_canvas(request)
     ):
         raise _source_error("raster_source_binding_mismatch", status_code=409)
     if raster_review_blockers(analysis):
         raise _source_error("raster_review_unresolved", status_code=409)
-    document_canvas = document_canvas_for_orientation(request.orientation)
+    _validate_raster_design_mode(request, analysis)
+    document_canvas = raster_target_document_canvas(analysis.target_canvas)
     canvas_payload = document_canvas.model_dump(mode="json", by_alias=True)
     binding = {
         "version": "raster-reconstruction-input/v1",

@@ -53,6 +53,7 @@ class PublicV2Orchestrator(Protocol):
         actor: PublicRequestActor,
         idempotency_key: str,
         request: PresentationGenerationRequestV2,
+        svg_authoring_profile: str | None = None,
     ) -> OperationReceiptV2: ...
 
     async def submit_export(

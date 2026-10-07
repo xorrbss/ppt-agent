@@ -100,19 +100,21 @@ async def ensure_runtime_job(
             public_baseline = await public_review_request_baseline(scope.job_id)
         if job_id in runtime.registered_jobs:
             return job_id
-        initial_requests = 0
-        retry_requests = 0
-        public_limits = None
+        # An explicitly retried operation can start at scope attempt one while
+        # retaining the same durable job and its earlier provider receipts.
+        # Seed every new process registration from that job's real receipts;
+        # a genuinely fresh job has no receipts and therefore seeds zero.
         if getattr(scope, "public_only", False):
-            initial_requests, retry_requests, total_limit, retry_limit = public_baseline
-            public_limits = total_limit, retry_limit
-        elif scope.attempt_number > 1:
-            # This process has never seen the job, but earlier attempts have
-            # already spent requests. Continue their accounting instead of
-            # starting from zero.
-            initial_requests, retry_requests = await persisted_request_counts(
-                scope.job_id
-            )
+            initial_requests, retry_requests, lineage_total_limit, lineage_retry_limit = public_baseline
+            lineage_initial = lineage_retry = 0
+        else:
+            initial_requests, retry_requests = await persisted_request_counts(scope.job_id)
+            lineage_initial, lineage_retry, lineage_total_limit, lineage_retry_limit = await verified_lineage_request_baseline(scope.job_id)
+        total_limit = optional_env_int("PROVIDER_JOB_MAX_TOTAL_REQUESTS")
+        retry_limit = optional_env_int("PROVIDER_JOB_MAX_RETRY_REQUESTS")
+        if lineage_total_limit is not None:
+            total_limit = min(total_limit, lineage_total_limit) if total_limit is not None else lineage_total_limit
+            retry_limit = min(retry_limit, lineage_retry_limit) if retry_limit is not None else lineage_retry_limit
         deadline = optional_env_int("PROVIDER_JOB_DEADLINE_SECONDS")
         await runtime.control.register_job(
             job_id,
@@ -124,16 +126,16 @@ async def ensure_runtime_job(
             ),
             kill_conditions=JobKillConditions(
                 deadline_seconds=float(deadline) if deadline is not None else None,
-                max_total_requests=(min(public_limits[0], optional_env_int("PROVIDER_JOB_MAX_TOTAL_REQUESTS")
-                    if optional_env_int("PROVIDER_JOB_MAX_TOTAL_REQUESTS") is not None else public_limits[0])
-                    if public_limits is not None else optional_env_int("PROVIDER_JOB_MAX_TOTAL_REQUESTS")),
-                max_retry_requests=public_limits[1] if public_limits is not None else optional_env_int("PROVIDER_JOB_MAX_RETRY_REQUESTS"),
+                max_total_requests=total_limit,
+                max_retry_requests=retry_limit,
                 max_consecutive_failures=optional_env_int(
                     "PROVIDER_JOB_MAX_CONSECUTIVE_FAILURES"
                 ),
             ),
             initial_requests=initial_requests,
             retry_requests=retry_requests,
+            lineage_initial_requests=lineage_initial,
+            lineage_retry_requests=lineage_retry,
         )
         runtime.registered_jobs.add(job_id)
         runtime.latest_job_keys[durable_job_id] = job_id
@@ -182,3 +184,19 @@ async def require_public_review_job(session, *, operation_id,
     return row
 
 
+async def verified_lineage_request_baseline(job_id):
+    from uuid import UUID
+    from services.database import async_session_maker
+    from models.sql.presentation_generation_job import PresentationGenerationJob
+    from models.sql.workspace import WorkspaceOperation
+    from services.svg_timeout_repurchase import verified_append_only_consumption_baseline
+    async with async_session_maker() as session:
+        try:
+            identity = UUID(str(job_id))
+        except (ValueError, TypeError):
+            return 0, 0, None, None
+        job = await session.get(PresentationGenerationJob, identity)
+        if job is None or not (job.request_payload or {}).get("_svg_recovery_lineage"):
+            return 0, 0, None, None
+        operation = await session.get(WorkspaceOperation, job.workspace_operation_id)
+        return await verified_append_only_consumption_baseline(session, operation)

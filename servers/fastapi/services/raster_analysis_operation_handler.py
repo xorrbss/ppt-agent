@@ -72,6 +72,7 @@ async def _run_analyzer_with_progress(
     *,
     orientation: str,
     analysis_mode: str,
+    target_canvas=None,
 ):
     loop = asyncio.get_running_loop()
     started = loop.time()
@@ -101,7 +102,10 @@ async def _run_analyzer_with_progress(
         # Runs entirely in a worker thread (analyze_redesign_pptx issues its
         # own vision-LLM/OCR calls synchronously), so the event loop -- and
         # both this ticker and the runner's heartbeat task -- stay responsive.
-        return await asyncio.to_thread(analyzer, source_path, orientation=orientation)
+        kwargs = {"orientation": orientation}
+        if target_canvas is not None:
+            kwargs["target_canvas"] = target_canvas
+        return await asyncio.to_thread(analyzer, source_path, **kwargs)
     finally:
         stop.set()
         await ticker
@@ -231,10 +235,18 @@ class RasterAnalysisOperationHandler:
             source_path = Path(directory) / "source.pptx"
             await asyncio.to_thread(source_path.write_bytes, source_bytes)
             analyzer = raster_analyzer_for_mode(analysis_mode)
+            from services.source_content.raster_target import raster_target_from_selectors
+
+            target = raster_target_from_selectors(
+                orientation=claim.request_payload.get("orientation", "portrait"),
+                aspect_ratio=claim.request_payload.get("aspect_ratio"),
+                svg_canvas=claim.request_payload.get("svg_canvas"),
+            )
             draft = await _run_analyzer_with_progress(
                 context, analyzer, source_path,
                 orientation=claim.request_payload.get("orientation", "portrait"),
                 analysis_mode=analysis_mode,
+                target_canvas=target if target.format == "SVG" else None,
             )
         await context.raise_if_cancelled()
         if draft.analysis.source.source_sha256 != reference.sha256:

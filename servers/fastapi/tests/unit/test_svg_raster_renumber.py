@@ -2,8 +2,7 @@
 
 Real publication (prepare_raster_page_assets) with an oversized (>2 MB when
 materialized) page, then renumber_redesign_page with the real placement
-rebind, then the real export asset path. Materialization and browser
-measurement are forbidden during the renumber.
+rebind and Chromium remeasurement, then the real export asset path.
 """
 
 from __future__ import annotations
@@ -23,13 +22,8 @@ from services.source_content.raster_contracts import RasterApprovalPin
 from services.source_content.raster_svg_layout import render_raster_page_svg
 from services.svg_asset_manifest import PlacementManifest, SourceManifest
 from services.svg_asset_persistence import SvgPublicationContext
-from services.svg_contract import PAGE_NUMBER_ID, validate_svg
-
-
-def _forbid(name):
-    def fail(*_args, **_kwargs):
-        raise AssertionError(f"{name} must not run during a page-number relabel")
-    return fail
+from services.svg_contract import PAGE_NUMBER_ID, source_digest, validate_svg
+from services.svg_export_page_evidence import svg_authoring, svg_geometry_font
 
 
 def test_reorder_of_oversized_redesign_page_renumbers_and_still_exports(monkeypatch, tmp_path):
@@ -58,7 +52,8 @@ def test_reorder_of_oversized_redesign_page_renumbers_and_still_exports(monkeypa
     slide = SimpleNamespace(index=0, svg_content=svg, content={
         "svgAssetManifest": prepared.screen_envelope,
         "svgReceipt": {"rasterApprovalPin": pin.model_dump(mode="json"), "rasterSourcePageNumber": 1,
-                       "rasterAnalysisDigest": pin.analysis_digest, "source_digest": "old"},
+                       "rasterAnalysisDigest": pin.analysis_digest, "source_digest": "old",
+                       "quality": {"source_digest": source_digest(svg)}},
     })
     presentation = SimpleNamespace(id=presentation_id, owner_id=assets_test.OWNER, revision=4)
 
@@ -71,11 +66,8 @@ def test_reorder_of_oversized_redesign_page_renumbers_and_still_exports(monkeypa
                         lambda *a, **k: load(PlacementManifest, *a, **k))
     monkeypatch.setattr(svg_raster_renumber, "_fenced_operation",
                         AsyncMock(return_value=(assets_test.OWNER, assets_test.TENANT)))
-    import services.svg_asset_resolver as resolver
-    import services.svg_renderer as renderer
-    monkeypatch.setattr(resolver, "resolve_svg_for_render", _forbid("resolve_svg_for_render"))
-    monkeypatch.setattr(renderer, "render_svg_with_metrics", _forbid("render_svg_with_metrics"))
-    monkeypatch.setattr(renderer, "svg_preview_html", _forbid("svg_preview_html"))
+    monkeypatch.setattr("services.authored_presentation_artifacts._save_slide_pngs",
+                        lambda *_args: [str(tmp_path / "numbered.png")])
 
     changed = asyncio.run(svg_raster_renumber.renumber_redesign_page(
         None, presentation, slide, 11, width=1188, height=840, operation_id=uuid.uuid4(),
@@ -92,6 +84,11 @@ def test_reorder_of_oversized_redesign_page_renumbers_and_still_exports(monkeypa
     assert envelope["sourcePageIndex"] == 0 and envelope["slideRevision"] == 5
     receipt = slide.content["svgReceipt"]
     assert receipt["rasterSourcePageNumber"] == 1 and receipt["rasterDisplayPageNumber"] == 12
+    assert receipt["quality"]["source_digest"] == source_digest(slide.svg_content)
+    assert receipt["quality"]["measurement_complete"] is True
+    for checker in (svg_authoring, svg_geometry_font):
+        assert "stale" not in checker([slide]).get("reasonCode", "")
+        assert "missing" not in checker([slide]).get("reasonCode", "")
 
     monkeypatch.undo()  # export uses the real resolver/renderer paths again
     assets_test._install_fakes(monkeypatch, store, analysis)

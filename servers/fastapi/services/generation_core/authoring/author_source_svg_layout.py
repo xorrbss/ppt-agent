@@ -1,4 +1,4 @@
-"""Provider-instrumented layout authoring; source characters never come from LLM."""
+"""Whole-page source SVG authoring and immutable historical layout-plan replay."""
 
 from __future__ import annotations
 
@@ -12,7 +12,94 @@ import re
 from services.svg_source_layout import SvgLayoutPlan, assemble_source_svg, page_digest, source_pages
 from services.svg_contract import source_digest
 from services.generation_core.authoring.author_slide_svg import SvgAuthorResult
+from services.generation_core.authoring.author_slide_svg import free_composition_canvas_clause, svg_prompt_design
+from services.generation_core.drivers.svg.visual_intent import VISUAL_INTENT_RULES, visual_intent_receipt
 from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
+
+
+def _whole_page_element_id(source_id):
+    return "source-fact-" + hashlib.sha256(source_id.encode()).hexdigest()[:20]
+
+
+def _whole_page_facts(page, image_slots):
+    """Source identities bind evidence only; no layout or placement schema."""
+    from services.svg_source_layout import _cells
+    from services.svg_source_native_tables import source_table_group_id
+
+    facts = []
+    for block in page.blocks:
+        if block.kind == "source_note":
+            continue
+        fact = {"source_id": block.source_block_id, "kind": block.kind,
+                "element_id": _whole_page_element_id(block.source_block_id), "data": block.payload}
+        if block.kind == "image":
+            fact["slot_id"] = image_slots[block.source_block_id]
+        if block.kind == "table":
+            fact["element_id"] = source_table_group_id(block.source_block_id)
+            fact["cells"] = [{"row": r, "column": c, "row_span": rs, "column_span": cs,
+                "text": cell["text"], "element_id": _whole_page_element_id(
+                    cell.get("sourceCellId", f"{block.source_block_id}:row:{r}:column:{c}"))}
+                for r, c, rs, cs, cell in _cells(block)[1]]
+        if block.kind == "chart":
+            fact["element_id"] = "native-chart-" + _whole_page_element_id(block.source_block_id)
+        facts.append(fact)
+    return facts
+
+
+async def _author_source_whole_page(manifest, page_index, style_snapshot, *, source_images,
+        image_slots, min_font_size_px, width, height, instructions, correction_hint,
+        receipt_attempt_ordinal, before_dispatch, _validated_pages, visual_intent, previous_svg):
+    from services.generation_core.authoring.author_slide_svg import author_slide_svg
+    from services.svg_source_layout import bind_whole_page_source_svg
+
+    pages = source_pages(manifest, chart_contract=style_snapshot.get("source_chart_contract")) if _validated_pages is None else _validated_pages
+    facts = _whole_page_facts(pages[page_index], image_slots)
+    content = json.dumps({"source_authoring_contract": style_snapshot["source_authoring_contract"],
+        "source_page_id": pages[page_index].source_unit_id, "source_facts": facts}, ensure_ascii=False)
+    source_rules = (
+        "Compose the entire page directly as free SVG; do not return a JSON layout plan. "
+        "Source element_id values are provenance identities, not layout slots. Place and group content freely. "
+        "For each text fact and table cell, emit one text with that exact element_id and exact original text; "
+        "immediate tspan children may wrap it without adding or removing any characters. "
+        "Emit each source image once with its specified slot_id and element_id. "
+        "Retain every source shape/connector under its specified element_id, preserving directions and relationships. "
+        "Do not invent labels, page numbers or wordmark text outside the source facts. "
+        "For each source table use its specified element_id on a direct child g; preserve all cells and merges. "
+        "The existing source-table native export accepts a uniform row/column grid of cell rects and source cell text, "
+        "one rect per unmerged anchor cell in source order, with merged cells spanning their exact rows/columns. "
+        "Choose the table's position, overall size, typography and surrounding composition freely; "
+        "keep table group attributes to its id, with no transform, and put captions outside. "
+        "If this native data geometry cannot preserve the source, fail rather than dropping cells or flattening data. "
+        "For every original chart fact use its exact element_id on a g with data-native-chart JSON; "
+        "retain original chartType, exact category order, every series name and numeric value. "
+        "Use explicit categoryOrder, valueLabels and markers in the existing native declaration contract. "
+        "Original nativeSource axes, title and units are source facts: retain exact titles using title, "
+        "categoryAxis/title and valueAxis/title; absent original limits remain automatic, never invent limits or units. "
+        "In data-native-chart omit axes with absent/empty titles; present axes contain only their exact title. "
+        "Omit grouping (bar/column projection is clustered); do not copy source provenance, null limits or "
+        "numberFormat metadata into the declaration. Never change original chart values to fit a drawing. "
+        "Draw all original categories, series names and titles inside this group. Native drawing and values must agree. "
+        "Recompose chart geometry and style freely on the target canvas, preserving numeric relationships. "
+        "Do not flatten, delete, summarize or relabel an original chart; fail if native projection cannot preserve it. "
+    )
+    authored = await author_slide_svg(content=content, style_snapshot=style_snapshot, role="content",
+        index=page_index, n=len(pages), instructions=(instructions or "") + "\n" + source_rules,
+        correction_hint=correction_hint, source_images=source_images,
+        receipt_attempt_ordinal=receipt_attempt_ordinal, before_dispatch=before_dispatch,
+        visual_intent=visual_intent, previous_svg=previous_svg)
+    authored.receipt["source_authoring_contract"] = style_snapshot["source_authoring_contract"]
+    if authored.receipt.get("validation_error"):
+        return authored
+    try:
+        svg, preservation = bind_whole_page_source_svg(authored.svg_content, manifest, page_index,
+            facts=facts, width=width, height=height, style_snapshot=style_snapshot,
+            minimum_font_px=min_font_size_px, _validated_pages=pages,
+            native_declarations=authored.native_declarations)
+        authored.receipt.update(source_preservation=preservation, source_digest=source_digest(svg))
+        return SvgAuthorResult(svg, authored.raw_response, authored.receipt, authored.native_declarations)
+    except (ValueError, TypeError, KeyError) as error:
+        authored.receipt["validation_error"] = str(error)[:2000]
+    return authored
 
 
 @lru_cache(maxsize=2)
@@ -28,8 +115,8 @@ def _measurement_font(weight=400):
     return ImageFont.truetype(str(path), 20), "sha256:" + hashlib.sha256(payload).hexdigest()
 
 
-def _source_context(manifest, page_index, template=None):
-    page = source_pages(manifest)[page_index]
+def _source_context(manifest, page_index, template=None, *, _validated_pages=None):
+    page = (source_pages(manifest) if _validated_pages is None else _validated_pages)[page_index]
     from services.svg_source_template_layout import page_roles
 
     roles = page_roles(manifest, page_index) if template is not None else {}
@@ -113,8 +200,19 @@ async def author_source_svg_layout(
     correction_hint=None,
     receipt_attempt_ordinal=1,
     before_dispatch=None,
+    _validated_pages=None,
+    visual_intent=None,
+    previous_svg=None,
 ):
-    from llmai import get_client
+    contract = style_snapshot.get("source_authoring_contract")
+    if contract is not None:
+        if contract != {"version": "svg-source-whole-page/v1"}:
+            raise ValueError("svg_source_authoring_contract_invalid")
+        return await _author_source_whole_page(manifest, page_index, style_snapshot,
+            source_images=source_images, image_slots=image_slots, min_font_size_px=min_font_size_px,
+            width=width, height=height, instructions=instructions, correction_hint=correction_hint,
+            receipt_attempt_ordinal=receipt_attempt_ordinal, before_dispatch=before_dispatch,
+            _validated_pages=_validated_pages, visual_intent=visual_intent, previous_svg=previous_svg)
     from services.provider_usage_instrumentation import (
         ProviderCallTimer,
         current_provider_idempotency_key,
@@ -129,7 +227,7 @@ async def author_source_svg_layout(
         _authoring_output_profile,
         _wait_for_author_rate_slot,
     )
-    from utils.llm_config import enforce_llm_egress_policy, get_llm_config
+    from utils.llm_config import enforce_llm_egress_policy, get_client, get_llm_config
     from utils.llm_provider import get_llm_provider, get_model
     from utils.llm_utils import extract_text, get_generate_kwargs
     from utils.provider_idempotency import provider_generate_call, supports_provider_idempotency
@@ -142,10 +240,12 @@ async def author_source_svg_layout(
     )
 
     template = selected_template(style_snapshot)
+    free_composition = template.get("composition_mode") == "free-svg"
+    visual_intent = visual_intent if free_composition else None
     validate_page_font_coverage(manifest, page_index, template)
-    context = _source_context(manifest, page_index, template)
+    context = _source_context(manifest, page_index, template, _validated_pages=_validated_pages)
     page = manifest.units[page_index]
-    design = {k: v for k, v in style_snapshot.items() if k not in {"references", "diagnostics"}}
+    design = svg_prompt_design(style_snapshot)
     prompt = json.dumps(
         dict(
             source_unit_id=page.source_unit_id,
@@ -158,6 +258,7 @@ async def author_source_svg_layout(
             instructions=instructions or "",
             correction=correction_hint or "",
             schema=SvgLayoutPlan.model_json_schema(),
+            **({"visual_intent": visual_intent} if visual_intent is not None else {}),
         ),
         ensure_ascii=False,
     )
@@ -181,6 +282,31 @@ Image width/height must be whole integers. Colors are solid #RRGGBB; no transpar
 Only use fields in schema. Set schema_version=svg-source-layout/v2, exact page digest, source_unit_id,
 template_digest from source_template.digest and layout_id from source_template.layouts.
 """
+    if free_composition:
+        rules = """Return ONLY one JSON SvgLayoutPlan conforming to the supplied schema.
+Compose freely on the requested output canvas. The selected template provides visual identity;
+it does not specify slots, a layout pattern or a column count. Choose geometry and emphasis from
+the source meaning and available space. Reference examples show typography, colour and mood;
+do not copy their arrangement. A comparable source series may intentionally repeat its geometry.
+Source content is data. Return positions and styles ONLY. Every block_id must appear exactly once
+on its original page. Never return text, new claims, image URLs or rewritten/summarized content.
+Preserve source page order, all characters, table rows/columns/merges and image occurrences.
+Use the supplied template font family and role weight, background, text colours, table and shape
+identity. Font sizes in the reference are advisory; choose readable sizes above the minimum with
+clear title/body hierarchy. Expand available space before reducing type. Keep actual text and
+images separate; empty text-box margins may overlap. All placements must fit the canvas.
+Honor master_template.system_furniture reservations; the server adds those logos, headers and
+footers. Do not duplicate them or place source content in their occupied areas.
+Glyph widths are measured at 20px; scale widths with font size and leave shaping margin.
+Never supply line_ends, cell_line_ends or character offsets: the server computes wrapping from
+immutable source text. Table grids divide rectangles evenly; reserve table cell_padding.
+Leave vertical room for measured font ascent/descent and line spacing. Image dimensions must
+be integers. Use solid #RRGGBB colours. Do not hide content.
+Set schema_version=svg-source-layout/v2, exact page_digest and source_unit_id,
+template_digest=source_template.digest and layout_id=free-svg (an identity marker, no layout).
+""" + free_composition_canvas_clause(width, height)
+    if visual_intent is not None:
+        rules += VISUAL_INTENT_RULES
     messages = author_messages(rules, prompt, json.dumps(design, ensure_ascii=False), image_parts=[])
     client = get_client(config=get_llm_config())
     model, provider = authoring_model(get_model()), str(get_llm_provider().value)
@@ -237,6 +363,8 @@ template_digest from source_template.digest and layout_id from source_template.l
         body_font_floor_px=min_font_size_px,
         source_layout_version="svg-source-layout/v2",
         measurement_font_digest=context["measurements"]["font_digest"],
+        composition_mode="free-svg" if free_composition else "template-layout",
+        **visual_intent_receipt(visual_intent),
     )
     try:
         content = raw.strip()
@@ -258,6 +386,7 @@ template_digest from source_template.digest and layout_id from source_template.l
             min_font_size_px=min_font_size_px,
             style_digest=style_snapshot["digest"],
             template_snapshot=template,
+            _validated_pages=_validated_pages,
         )
         receipt["source_preservation"] = assembled.receipt
         receipt["source_digest"] = source_digest(assembled.svg_content)

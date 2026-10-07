@@ -12,6 +12,8 @@ from pydantic import (
 )
 from pydantic.alias_generators import to_camel
 
+from models.svg_canvas import SvgCanvasInput
+
 from enums.tone import Tone
 from enums.verbosity import Verbosity
 from models.authored_vnext.master.base import Digest, MasterId, StrictCamelModel
@@ -134,6 +136,8 @@ class GeneratePresentationRequest(BaseModel):
     _authored_canvas: Any = PrivateAttr(default=None)
     _document_canvas: Any = PrivateAttr(default=None)
     _svg_style_snapshot: Any = PrivateAttr(default=None)
+    _svg_uploaded_design_reference: Any = PrivateAttr(default=None)
+    _bench_speed_arm: Optional[Literal["baseline", "brief_off"]] = PrivateAttr(default=None)
     _generation_strategy_reason: Optional[str] = PrivateAttr(default=None)
     # Chat-first async generation reuses the durable presentation shell and
     # awaiting-approval operation created by /presentation/create.  Legacy
@@ -141,6 +145,19 @@ class GeneratePresentationRequest(BaseModel):
     presentation_id: Optional[uuid.UUID] = Field(default=None)
 
     content: str = Field(..., description="The content for generating the presentation")
+    bench_speed_arm: Optional[Literal["baseline", "brief_off"]] = Field(
+        default=None, alias="benchSpeedArm", exclude=True,
+    )
+
+    @field_validator("bench_speed_arm")
+    @classmethod
+    def validate_bench_speed_arm_gate(cls, value):
+        from utils.get_env_canvas_bench import is_canvas_bench_enabled
+
+        if value is not None and not is_canvas_bench_enabled():
+            raise ValueError("bench_field_disabled")
+        return value
+
     codex_generation_preset: Optional[CodexGenerationPreset] = Field(
         default=None,
         description="Request-scoped Codex model and reasoning preset.",
@@ -159,10 +176,13 @@ class GeneratePresentationRequest(BaseModel):
         description="Language for the presentation. If omitted, model auto-detects language.",
     )
     template: str = Field(default="authored", description="Presentation source to use for generation")
-    aspect_ratio: Literal["16:9", "9:16", "9:13", "1:1", "21:9"] = Field(
+    aspect_ratio: Literal["16:9", "4:3", "9:16", "9:13", "1:1", "21:9"] = Field(
         default="16:9",
         description="Authored presentation canvas aspect ratio.",
     )
+    svg_canvas: Optional[SvgCanvasInput] = Field(default=None, alias="svgCanvas", exclude_if=lambda value: value is None)
+    svg_design_reference_snapshot_id: Optional[uuid.UUID] = Field(default=None, alias="svgDesignReferenceSnapshotId", exclude_if=lambda value: value is None)
+    svg_design_reference_pin: Optional[DesignPackPinInput] = Field(default=None, alias="svgDesignReferencePin", exclude_if=lambda value: value is None)
     page_size: Optional[Literal["A4"]] = None
     orientation: Optional[Literal["landscape", "portrait"]] = None
 
@@ -170,6 +190,9 @@ class GeneratePresentationRequest(BaseModel):
     @classmethod
     def validate_canvas_selectors(cls, value: Any) -> Any:
         if isinstance(value, dict):
+            custom = value.get("svg_canvas", value.get("svgCanvas"))
+            if custom is not None and any(key in value for key in ("aspect_ratio", "page_size", "orientation")):
+                raise ValueError("document_canvas_selectors_conflict")
             present = {key for key in ("page_size", "orientation") if key in value}
             if present:
                 if present != {"page_size", "orientation"}:
@@ -187,11 +210,17 @@ class GeneratePresentationRequest(BaseModel):
     @model_serializer(mode="wrap")
     def serialize_canvas_selectors(self, handler):
         payload = handler(self)
-        if self.page_size is not None:
+        if self.svg_canvas is not None:
+            for key in ("aspect_ratio", "page_size", "orientation"):
+                payload.pop(key, None)
+        elif self.page_size is not None:
             payload.pop("aspect_ratio", None)
         else:
             payload.pop("page_size", None)
             payload.pop("orientation", None)
+        if self.source_mode == "source_content_restyle" and "aspect_ratio" not in self.model_fields_set:
+            payload.pop("aspect_ratio", None)
+            payload.pop("aspectRatio", None)
         return payload
 
     quality_profile: Literal["development", "release"] = Field(
@@ -314,6 +343,13 @@ class GeneratePresentationRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_generation_mode(self) -> "GeneratePresentationRequest":
+        references = (self.master_pin, self.svg_design_reference_pin, self.svg_design_reference_snapshot_id)
+        if (self.svg_design_reference_pin is not None or self.svg_design_reference_snapshot_id is not None) and sum(value is not None for value in references) > 1:
+            raise ValueError("svg_design_reference_conflict")
+        if (self.svg_design_reference_pin is not None or self.svg_design_reference_snapshot_id is not None) and (self.strategy != "svg" or self.design_pack_pin is not None or self.generation_mode not in {"auto", "free-design"}):
+            raise ValueError("svg_design_reference_strategy_required")
+        if self.strategy == "authored" and (self.svg_canvas is not None or self.aspect_ratio == "4:3"):
+            raise ValueError("svg_canvas_strategy_required")
         if self.generation_mode == "editable-first":
             raise ValueError("capability_not_supported: editable-first")
         if self.generation_mode == "registered-template" and self.design_pack_pin is None:
@@ -343,10 +379,13 @@ class GeneratePresentationRequest(BaseModel):
                 resolve_generation_strategy,
             )
 
-            if resolve_generation_strategy(self) != "svg" or self.page_size != "A4" or self.orientation is None:
+            if resolve_generation_strategy(self) != "svg":
                 raise ValueError("raster_a4_svg_required")
-            if self.template.strip().lower() != "authored" or self.authored_style != "screenshot-blue":
+            if self.template.strip().lower() != "authored":
                 raise ValueError("source_content_template_required")
+            from utils.svg_template_rules import resolve_source_template_style
+
+            self.authored_style = resolve_source_template_style(self.authored_style or "screenshot-blue").id
             # Both formats are supported: the isolated export worker routes any
             # svg-mode presentation (raster-reconstructed decks included)
             # through execute_svg_workspace_export for export.pptx/export.pdf

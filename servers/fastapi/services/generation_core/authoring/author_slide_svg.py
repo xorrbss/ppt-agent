@@ -145,11 +145,21 @@ grid lines, draw the grid's category-axis span as the outer edges of N equal cat
 Place category center i at start + (i + 0.5) * (end - start) / N for i = 0..N-1.
 Use the x axis for columns and the y axis for horizontal bars. Keep the category centers,
 bar groups and grid in one coherent plot area. Preserve every category, series value, label,
-color and automatic value-axis setting; do not change data to make the geometry fit.
+color and value-axis intent; do not change data to make the geometry fit. Original source-native
+charts retain their automatic value-axis setting.
 For a clustered bar or column chart with two or more series, include
-"grouping":"clustered" and "geometryContract":"native-chart-coherent-grid/v1" in that
-chart's data-native-chart JSON declaration. These fields bind the coherent grid drawing
-to the editable native chart; do not use the geometry contract for other chart types.
+"grouping":"clustered" in that chart's data-native-chart JSON declaration. Use
+"geometryContract":"native-chart-coherent-grid/v1" for an automatic value axis. For an
+explicitly fixed value axis on a generated chart with no original source-native chart
+requirement, use "geometryContract":"native-chart-coherent-grid/v2" together with
+"axisContract":"native-chart-fixed-value-axis/v1" and the complete valueAxis trio
+minimum, maximum and majorUnit. Use finite numeric minimum=0, maximum>0 and majorUnit>0;
+the range must contain a whole number of 2..32 intervals and every series value must be
+positive and at most maximum. Draw each bar to that scale and draw the full equally spaced
+value grid with every numeric tick label at its matching coordinate outside the native group.
+Omit the fixed-axis opt-in unless all these parts can be drawn consistently. These fields
+bind the coherent grid drawing to the editable native chart; do not use the geometry
+contract for other chart types.
 """
 
 

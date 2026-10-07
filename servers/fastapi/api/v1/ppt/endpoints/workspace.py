@@ -413,10 +413,38 @@ async def download_workspace_asset(
 async def download_workspace_export_artifact(
     artifact_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
+    request: Request = None,
 ) -> Response:
     """Reauthorize and stream one live export without exposing storage paths."""
 
     _require_supported_runtime()
+    from services.workspace_operation_principal import (
+        bound_export_operation_principal, local_development_export_bridge,
+    )
+
+    if request is not None and local_development_export_bridge(request):
+        from sqlalchemy import select
+        from models.sql.workspace import WorkspaceArtifact
+        from services.workspace_operation_handler_registry import NonRetryableWorkspaceOperationError
+        from utils.owner_context import get_current_owner_id
+
+        operation_id = await session.scalar(select(WorkspaceArtifact.operation_id).where(
+            WorkspaceArtifact.id == artifact_id,
+            WorkspaceArtifact.owner_id == get_current_owner_id(),
+        ))
+        if operation_id is None:
+            raise WorkspaceAPIException("workspace_export_not_found", status_code=404)
+        try:
+            async with bound_export_operation_principal(
+                session, operation_id=operation_id, allow_local_development=True,
+            ):
+                return await _workspace_export_download_response(artifact_id, session)
+        except NonRetryableWorkspaceOperationError as error:
+            raise WorkspaceAPIException("workspace_export_not_found", status_code=404) from error
+    return await _workspace_export_download_response(artifact_id, session)
+
+
+async def _workspace_export_download_response(artifact_id: uuid.UUID, session: AsyncSession) -> Response:
     try:
         artifact = await resolve_workspace_export_artifact(
             session,
@@ -756,14 +784,18 @@ async def get_presentation_workspace_events(
 async def post_presentation_workspace_command(
     presentation_id: uuid.UUID,
     request: WorkspaceCommandRequest,
+    http_request: Request = None,
     session: AsyncSession = Depends(get_async_session),
 ) -> WorkspaceActionResponse:
     _require_workspace_writes(presentation_id)
+    from services.workspace_operation_principal import local_development_export_bridge
+
     try:
         operation, duplicate = await create_workspace_command(
             session,
             presentation_id=presentation_id,
             request=request,
+            allow_local_development=local_development_export_bridge(http_request),
         )
         _record_operation_admission(
             request.command_type,
@@ -795,8 +827,11 @@ async def post_presentation_workspace_command(
 async def post_workspace_operation_action(
     operation_id: uuid.UUID,
     request: WorkspaceOperationActionRequest,
+    http_request: Request = None,
     session: AsyncSession = Depends(get_async_session),
 ) -> WorkspaceActionResponse:
+    from services.workspace_operation_principal import local_development_export_bridge
+
     try:
         presentation_id = await resolve_workspace_operation_presentation_id(
             session,
@@ -812,6 +847,7 @@ async def post_workspace_operation_action(
             session,
             operation_id=operation_id,
             request=request,
+            allow_local_development=local_development_export_bridge(http_request),
         )
         _record_operation_action_admission(
             operation_id,

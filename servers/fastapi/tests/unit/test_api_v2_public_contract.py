@@ -444,3 +444,98 @@ def test_public_v2_contract_delegates_async_surfaces_and_fails_closed_quality() 
         expires_at=now + timedelta(minutes=3),
     )
     assert loopback_grant.url.startswith("http://127.0.0.1:")
+
+
+def test_svg_authoring_bench_header_requires_verified_local_admin(monkeypatch) -> None:
+    from dataclasses import replace
+    from api.v1.auth import principal as principal_module
+    from api.v2.router import API_V2_PUBLIC_ROUTER
+
+    owner = uuid.uuid4()
+    actor = PublicRequestActor(owner_id=owner, tenant_id="local-development",
+        correlation_id="svg-profile-probe", scopes=frozenset({"presentations:write"}))
+    verified = principal_module.PrincipalEnvelope(user_id=owner, username="local-admin",
+        is_admin=True, method="jwt", tenant_id="local-development",
+        trace_id="svg-profile-probe", subject=str(owner),
+        issuer="presenton-loopback-development", audience="presenton",
+        scopes=("presentations:write",))
+    now = datetime.now(timezone.utc)
+
+    class Probe:
+        def __init__(self):
+            self.calls = []
+
+        async def submit_generation(self, **kwargs):
+            self.calls.append(kwargs)
+            return OperationReceiptV2(operation_id="op_profile", receipt_id="rcpt_profile",
+                presentation_id="prs_profile", status="queued", accepted_at=now,
+                absolute_deadline_at=now + timedelta(minutes=5),
+                links=OperationLinksV2(self="/api/v2/operations/op_profile",
+                    events="/api/v2/operations/op_profile/events",
+                    cancel="/api/v2/operations/op_profile/cancel"))
+
+    probe = Probe()
+    app = FastAPI()
+    app.state.public_v2_orchestrator = probe
+    app.dependency_overrides[get_public_request_actor] = lambda: actor
+    app.include_router(API_V2_PUBLIC_ROUTER)
+    principal = verified
+    environment = "development"
+    monkeypatch.setattr(principal_module, "principal_from_request", lambda request: principal)
+    monkeypatch.setattr(principal_module, "get_environment_name", lambda default: environment)
+    monkeypatch.setenv("CANVAS_BENCH_ENABLED", "true")
+    body = {"content": "A bounded profile comparison", "slideCount": 2, "strategy": "svg"}
+    header = {"Idempotency-Key": "profile-contract",
+        "X-Presenton-Internal-Svg-Authoring-Profile": "art-direction-v1"}
+    with TestClient(app, base_url="http://127.0.0.1", client=("127.0.0.1", 50001)) as client:
+        assert client.post("/api/v2/presentations/generations", json=body, headers=header).status_code == 202
+        assert probe.calls[-1]["svg_authoring_profile"] == "art-direction-v1"
+        header_v2 = dict(header)
+        header_v2["X-Presenton-Internal-Svg-Authoring-Profile"] = "art-direction-v1@2"
+        assert client.post("/api/v2/presentations/generations", json=body, headers=header_v2).status_code == 202
+        assert probe.calls[-1]["svg_authoring_profile"] == "art-direction-v1@2"
+        header_v3 = dict(header)
+        header_v3["X-Presenton-Internal-Svg-Authoring-Profile"] = "art-direction-v1@3"
+        assert client.post("/api/v2/presentations/generations", json=body, headers=header_v3).status_code == 202
+        assert probe.calls[-1]["svg_authoring_profile"] == "art-direction-v1@3"
+        header_v4 = dict(header)
+        header_v4["X-Presenton-Internal-Svg-Authoring-Profile"] = "art-direction-v1@4"
+        assert client.post("/api/v2/presentations/generations", json=body, headers=header_v4).status_code == 202
+        assert probe.calls[-1]["svg_authoring_profile"] == "art-direction-v1@4"
+        header_v5 = dict(header)
+        header_v5["X-Presenton-Internal-Svg-Authoring-Profile"] = "art-direction-v1@5"
+        assert client.post("/api/v2/presentations/generations", json=body, headers=header_v5).status_code == 202
+        assert probe.calls[-1]["svg_authoring_profile"] == "art-direction-v1@5"
+        header_v6 = dict(header)
+        header_v6["X-Presenton-Internal-Svg-Authoring-Profile"] = "art-direction-v1@6"
+        assert client.post("/api/v2/presentations/generations", json=body, headers=header_v6).status_code == 202
+        assert probe.calls[-1]["svg_authoring_profile"] == "art-direction-v1@6"
+        header_v7 = dict(header)
+        header_v7["X-Presenton-Internal-Svg-Authoring-Profile"] = "art-direction-v1@7"
+        assert client.post("/api/v2/presentations/generations", json=body, headers=header_v7).status_code == 202
+        assert probe.calls[-1]["svg_authoring_profile"] == "art-direction-v1@7"
+        count = len(probe.calls)
+        for env_value, identity, env_name in (
+            ("false", verified, "development"),
+            ("True", verified, "development"),
+            ("true", replace(verified, is_admin=False), "development"),
+            ("true", replace(verified, issuer="presenton-local-session"), "development"),
+            ("true", replace(verified, method="api_key"), "development"),
+            ("true", verified, "production"),
+        ):
+            monkeypatch.setenv("CANVAS_BENCH_ENABLED", env_value)
+            principal, environment = identity, env_name
+            assert client.post("/api/v2/presentations/generations", json=body, headers=header).status_code == 403
+            assert len(probe.calls) == count
+        monkeypatch.setenv("CANVAS_BENCH_ENABLED", "true")
+        principal, environment = verified, "development"
+        bad_header = dict(header, **{"X-Presenton-Internal-Svg-Authoring-Profile": "unknown"})
+        assert client.post("/api/v2/presentations/generations", json=body, headers=bad_header).status_code == 422
+        assert len(probe.calls) == count
+        monkeypatch.setenv("CANVAS_BENCH_ENABLED", "false")
+        assert client.post("/api/v2/presentations/generations", json=body,
+            headers={"Idempotency-Key": "legacy-contract"}).status_code == 202
+        assert "svg_authoring_profile" not in probe.calls[-1]
+    monkeypatch.setenv("CANVAS_BENCH_ENABLED", "true")
+    with TestClient(app, base_url="http://example.test", client=("203.0.113.10", 50001)) as client:
+        assert client.post("/api/v2/presentations/generations", json=body, headers=header).status_code == 403

@@ -18,7 +18,6 @@ import logging
 from collections.abc import Sequence
 from typing import Any, Optional
 
-from llmai import get_client
 from llmai.shared import JSONSchemaResponse, SystemMessage, UserMessage
 from pydantic import ValidationError
 
@@ -27,7 +26,7 @@ from models.authored_chapter_plan import (
     MIN_CHAPTERS,
     AuthoredChapterPlanDraft,
 )
-from utils.llm_config import get_llm_config
+from utils.llm_config import get_client, get_llm_config
 from utils.llm_provider import get_model
 from utils.llm_utils import generate_structured_with_schema_retries
 from utils.prompt_safety import format_untrusted_source_documents

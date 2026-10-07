@@ -36,11 +36,13 @@ from constants.timeouts import CAPTURE_WORKER_TERMINATE_GRACE_SECONDS
 async def _render_html_in_isolated_worker(  # noqa: ASYNC109
     html: str, timeout: int, *, width_px: int = DEFAULT_CANVAS_WIDTH_PX, height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
     preserved_raster_svg: str | None = None,
+    system_furniture: dict | None = None,
 ) -> tuple[bytes, Mapping[str, Any] | None]:
     if preserved_raster_svg is not None:
         from services.svg_renderer import admit_preserved_raster_preview
         admitted, measured_html = admit_preserved_raster_preview(
-            html, preserved_raster_svg, width=width_px, height=height_px)
+            html, preserved_raster_svg, width=width_px, height=height_px,
+            **({"system_furniture": system_furniture} if system_furniture is not None else {}))
     else:
         admitted = _admit_render_source(html)
         measured_html = html
@@ -48,6 +50,7 @@ async def _render_html_in_isolated_worker(  # noqa: ASYNC109
     request = encode_request(
         html, timeout, width_px=width_px, height_px=height_px,
         **({"preserved_raster_svg": preserved_raster_svg} if preserved_raster_svg is not None else {}),
+        **({"system_furniture": system_furniture} if system_furniture is not None else {}),
     )
     environment = build_worker_environment()
     kwargs: dict[str, Any] = {

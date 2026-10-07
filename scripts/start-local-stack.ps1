@@ -361,6 +361,29 @@ function Invoke-Stop {
     Write-Host "local stack stopped."
 }
 
+function Assert-ExitedControllerOwner([string]$Component, [int]$Recorded) {
+  $currentState = Read-State
+  if (-not $currentState.ContainsKey($Component) -or [int]$currentState[$Component] -ne $Recorded) {
+    throw "local stack: component owner changed before recovery"
+  }
+  if ($null -ne (Get-CimInstance Win32_Process -Filter "ProcessId=$Recorded" -ErrorAction SilentlyContinue)) {
+    throw "local stack: recorded controller PID is no longer absent"
+  }
+  $otherControllerPids = [System.Collections.Generic.HashSet[int]]::new()
+  foreach ($other in @("worker-generation", "worker-export")) {
+    if ($other -eq $Component -or -not $currentState.ContainsKey($other)) { continue }
+    $otherPid = [int]$currentState[$other]
+    if ($otherPid -le 0) { continue }
+    $null = $otherControllerPids.Add($otherPid)
+    foreach ($childPid in (Get-DescendantPids $otherPid)) { $null = $otherControllerPids.Add([int]$childPid) }
+  }
+  foreach ($controllerPid in (Find-ControllerPids)) {
+    if (-not $otherControllerPids.Contains([int]$controllerPid)) {
+      throw "local stack: unrecorded controller blocks recovery"
+    }
+  }
+}
+
 function Invoke-RestartComponents {
     $environments = Read-StackEnvironment $environmentStore
     Assert-PostgreSqlRuntime $environments
@@ -373,7 +396,13 @@ function Invoke-RestartComponents {
         $recorded = [int]$state[$component]
         if ($recorded -le 0) { throw "local stack: invalid component owner" }
         $process = Get-CimInstance Win32_Process -Filter "ProcessId=$recorded" -ErrorAction Stop
-        if ($component -eq "api" -and $null -eq $process -and $null -eq (Get-PortOwner $ApiPort)) {
+        if ($component -in @("worker-generation", "worker-export") -and $null -eq $process) {
+      Assert-ExitedControllerOwner $component $recorded
+      $owned[$component] = 0
+      $creationTimes[$component] = $null
+      continue
+    }
+    if ($component -eq "api" -and $null -eq $process -and $null -eq (Get-PortOwner $ApiPort)) {
             $owned[$component] = 0
             $creationTimes[$component] = $null
             continue
@@ -399,7 +428,11 @@ function Invoke-RestartComponents {
             if ($null -eq $process -or $process.CreationDate -ne $creationTimes[$component]) { throw "local stack: component ownership changed before restart" }
             Stop-ProcessTree @([int]$owned[$component])
         }
-        $arguments = if ($component -eq "api") { @("server.py", "--port", "$ApiPort", "--reload", "false") } else { @("-m", "services.workspace_operation_worker") }
+        if ($owned[$component] -eq 0 -and $component -in @("worker-generation", "worker-export")) {
+      Assert-ExitedControllerOwner $component ([int]$state[$component])
+      $state = Read-State
+    }
+    $arguments = if ($component -eq "api") { @("server.py", "--port", "$ApiPort", "--reload", "false") } else { @("-m", "services.workspace_operation_worker") }
         $restarted = Start-LoggedProcess -FilePath $python -ArgumentList $arguments -WorkingDirectory $fastApi -Environment $environments[$component] -StdoutPath (Join-Path $logs "$component-$stamp.stdout.log") -StderrPath (Join-Path $logs "$component-$stamp.stderr.log")
         $state[$component] = $restarted.Id
         Write-State $state

@@ -217,6 +217,9 @@ def render_redesign_page(analysis, page_number: int, *, instruction: str | None 
         *header_xml, *body, *_footer(page_number, width, height, geo, members), "</svg>",
     ]
     result = "".join(xml)
+    from services.source_content.raster_target import require_raster_physical_readability
+
+    require_raster_physical_readability(result, analysis.target_canvas)
     hrefs = re.findall(r'href="(source-slot-[^"]+)"', result)
     if len(hrefs) != len(set(hrefs)):
         raise ValueError("raster_redesign_region_drawn_twice")  # every region is drawn at most once

@@ -163,12 +163,17 @@ export const useRasterReviewActions = ({
       presentationId: pendingPresentationId,
       operationId: approved.operation_id,
       analysisMode: "reconstruct",
+      referenceSnapshotId: approved.reference_snapshot_id ?? undefined,
+      svgDesignReferenceSnapshotId: config.svgDesignReferenceSnapshotId,
+      svgDesignReferencePin: config.svgDesignReferencePin,
+      ...(approved.analysis.target_canvas.svg_canvas ? { svgCanvas: { width_mm: Number(approved.analysis.target_canvas.svg_canvas.width_mm), height_mm: Number(approved.analysis.target_canvas.svg_canvas.height_mm) } }
+        : approved.analysis.target_canvas.aspect_ratio ? { aspectRatio: approved.analysis.target_canvas.aspect_ratio } : {}),
       orientation: approved.analysis.target_canvas.orientation,
       authoredStyle,
       instructions: [config.prompt, config.instructions].map((part) => part?.trim()).filter(Boolean).join("\n") || null,
     });
     return rasterApprovalForUi(approved);
-  }, [rasterOperation, rasterRecovery, pendingPresentationId, config.prompt, config.instructions, authoredStyle, handoffRasterGeneration]);
+  }, [rasterOperation, rasterRecovery, pendingPresentationId, config.prompt, config.instructions, config.svgDesignReferenceSnapshotId, config.svgDesignReferencePin, authoredStyle, handoffRasterGeneration]);
 
   const autoPreserveExistingRaster = async () => {
     const operation = rasterOperation;
@@ -176,15 +181,19 @@ export const useRasterReviewActions = ({
     const snapshotId = recovery?.referenceSnapshotId ?? operation?.reference_snapshot_id;
     if (!operation || !recovery || !snapshotId || recovery.analysisMode === "auto_preserve" ||
         startInFlightRef.current) return;
+    if ((recovery.authoredStyle && recovery.authoredStyle !== "screenshot-blue") || recovery.svgDesignReferenceSnapshotId || recovery.svgDesignReferencePin) {
+      notify.warning("선택한 디자인으로 재구성 필요", "선택한 스타일이나 디자인 참고를 적용하려면 원본 화면을 재구성해 주세요. 현재 선택과 검토 내용은 유지됩니다.");
+      return;
+    }
     startInFlightRef.current = true;
-    setLoadingState({ isLoading: true, message: "원본 화면 그대로 A4 생성을 준비하는 중…", showProgress: true });
+    setLoadingState({ isLoading: true, message: "원본 화면을 선택한 크기로 보존할 준비를 하는 중…", showProgress: true });
     try {
       const pending = await RasterSourceApi.start({
         reference_snapshot_id: snapshotId,
         presentation_id: recovery.presentationId,
-        orientation: recovery.orientation,
+        ...(recovery.svgCanvas ? { svg_canvas: recovery.svgCanvas } : recovery.aspectRatio ? { aspect_ratio: recovery.aspectRatio } : { orientation: recovery.orientation }),
         analysis_mode: "auto_preserve",
-        style_id: "screenshot-blue",
+        style_id: recovery.authoredStyle || "screenshot-blue",
       });
       const autoRecovery = { ...recovery, referenceSnapshotId: snapshotId,
         analysisMode: "auto_preserve" as const, operationId: pending.operation_id };
@@ -194,7 +203,7 @@ export const useRasterReviewActions = ({
       setRasterRetryAvailable(false);
       const approved = await RasterSourceApi.waitForReady(pending, (progress) => {
         if (aliveRef.current) setLoadingState({ isLoading: true,
-          message: rasterWaitMessage(progress, "원본 화면 보존을 기다리는 중…", "원본 화면을 A4로 보존하는 중…"),
+          message: rasterWaitMessage(progress, "원본 화면 보존을 기다리는 중…", "원본 화면을 선택한 크기로 보존하는 중…"),
           showProgress: true });
       });
       if (!aliveRef.current) return;

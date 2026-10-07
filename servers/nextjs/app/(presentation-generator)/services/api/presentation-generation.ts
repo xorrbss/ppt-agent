@@ -8,6 +8,7 @@ import type { SourceContentPolicy } from "./source-content/contract";
 import { ApiError, apiErrorFromPayload, ApiResponseHandler } from "./api-error-handler";
 import { getApiUrl, resolveBackendAssetUrl } from "@/utils/api";
 import { fetchWithNetworkRetry } from "@/utils/fetchWithNetworkRetry";
+import { getWorkspaceTimeline } from "./workspace-commands";
 import {
   canonicalUploadAdmissionKey,
   cleanupCanonicalDocumentAdmission,
@@ -49,6 +50,10 @@ export type {
 } from "./presentation-generation-types";
 
 const DOCUMENT_DECOMPOSE_POLL_INTERVAL_MS = 1_000;
+
+type SlideOrderBody = { slide_ids: string[]; expected_revision: number };
+type SlideOrderResult = { presentation_id: string; revision: number; order: string[]; operation_id: string };
+type SlideOrderPollOptions = { signal?: AbortSignal; pollIntervalMs?: number; timeoutMs?: number };
 
 function abortError() {
   return new DOMException("Document processing was cancelled", "AbortError");
@@ -361,6 +366,9 @@ export class PresentationGenerationApi {
     aspect_ratio,
     page_size,
     orientation,
+    svg_canvas,
+    svg_design_reference_pin,
+    svg_design_reference_snapshot_id,
     theme,
     strategy = "svg",
   }: {
@@ -378,7 +386,10 @@ export class PresentationGenerationApi {
     include_table_of_contents?: boolean;
     include_title_slide?: boolean;
     web_search?: boolean;
-    aspect_ratio?: "16:9" | "9:16" | "9:13" | "1:1" | "21:9";
+    aspect_ratio?: "16:9" | "9:16" | "9:13" | "1:1" | "21:9" | "4:3";
+    svg_canvas?: { width_mm: number; height_mm: number };
+    svg_design_reference_snapshot_id?: string;
+    svg_design_reference_pin?: { design_pack_id: string; version: number; digest: string };
     page_size?: "A4";
     orientation?: "landscape" | "portrait";
     theme?: PresentationThemePayload | null;
@@ -408,9 +419,11 @@ export class PresentationGenerationApi {
             include_table_of_contents,
             include_title_slide,
             web_search,
-            ...(page_size && orientation
+            ...(svg_canvas ? { svg_canvas } : page_size && orientation
               ? { page_size, orientation }
               : { aspect_ratio }),
+            ...(svg_design_reference_snapshot_id ? { svg_design_reference_snapshot_id } : {}),
+            ...(svg_design_reference_pin ? { svg_design_reference_pin } : {}),
             theme,
             strategy,
           }),
@@ -520,8 +533,9 @@ export class PresentationGenerationApi {
   // endpoint instead; other autosave behavior is unchanged.
   static async reorderSlides(
     presentationId: string,
-    body: { slide_ids: string[]; expected_revision: number },
-  ): Promise<{ presentation_id: string; revision: number; order: string[]; operation_id: string }> {
+    body: SlideOrderBody,
+    options: SlideOrderPollOptions & { onPending?: (operationId: string) => void } = {},
+  ): Promise<SlideOrderResult> {
     const response = await fetch(
       getApiUrl(`/api/v1/ppt/presentation/${presentationId}/slides/order`),
       {
@@ -529,13 +543,94 @@ export class PresentationGenerationApi {
         headers: getHeader(),
         body: JSON.stringify(body),
         cache: "no-cache",
+        signal: options.signal,
       },
     );
 
-    return await ApiResponseHandler.handleResponse(
-      response,
-      "Failed to save the new slide order",
-    );
+    try {
+      return await ApiResponseHandler.handleResponse(response, "Failed to save the new slide order");
+    } catch (error) {
+      const operationId = response.headers.get("X-Workspace-Operation-ID");
+      if (!(error instanceof ApiError) || error.status !== 503 ||
+          error.code !== "slide_order_still_running" ||
+          !operationId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(operationId)) {
+        throw error;
+      }
+      options.onPending?.(operationId);
+      return this.waitForSlideOrderOperation(presentationId, body, operationId, options);
+    }
+  }
+
+  // Only read the admitted operation through the owner-scoped timeline.
+  // A bounded wait ending without a terminal result is still unconfirmed.
+  static async waitForSlideOrderOperation(
+    presentationId: string,
+    body: SlideOrderBody,
+    operationId: string,
+    options: SlideOrderPollOptions = {},
+  ): Promise<SlideOrderResult> {
+    const deadline = Date.now() + (options.timeoutMs ?? 60_000);
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    options.signal?.addEventListener("abort", abort, { once: true });
+    if (options.signal?.aborted) abort();
+    const timeout = window.setTimeout(abort, Math.max(0, deadline - Date.now()));
+    const unconfirmed = (code: string) => new ApiError("Slide order status is unconfirmed", {
+      code, detail: { operation_id: operationId },
+    });
+    try {
+      while (Date.now() < deadline) {
+        let beforePosition: number | undefined;
+        do {
+          const page = await getWorkspaceTimeline(presentationId, {
+            limit: 200, beforePosition, signal: controller.signal,
+          });
+          const operation = page.items.find(item =>
+            item.anchorType === "operation" && item.operationId === operationId);
+          if (operation?.anchorType === "operation") {
+            if (operation.operationType !== "presentation.slides.reorder" ||
+                operation.target?.presentation_id !== presentationId ||
+                operation.expectedRevision !== body.expected_revision) {
+              throw unconfirmed("slide_order_operation_mismatch");
+            }
+            if (operation.status === "succeeded") {
+              const order = operation.result?.order;
+              const revision = operation.resultRevision;
+              if (!Array.isArray(order) || order.length !== body.slide_ids.length ||
+                  !order.every((id, index) => id === body.slide_ids[index]) ||
+                  !Number.isInteger(revision) || (revision as number) < body.expected_revision) {
+                throw unconfirmed("slide_order_result_mismatch");
+              }
+              return { presentation_id: presentationId, revision: revision as number,
+                order: order as string[], operation_id: operationId };
+            }
+            if (["failed", "cancelled", "deadline_exceeded", "dead_letter"].includes(operation.status)) {
+              throw new ApiError("Slide order operation did not succeed", {
+                status: operation.error?.startsWith("stale_") ? 409 : 422,
+                code: operation.error || `slide_order_${operation.status}`,
+                detail: { operation_id: operationId, state: operation.status },
+              });
+            }
+            break;
+          }
+          if (!page.hasMore) break;
+          if (page.nextBeforePosition === undefined ||
+              (beforePosition !== undefined && page.nextBeforePosition >= beforePosition)) {
+            throw unconfirmed("slide_order_status_unavailable");
+          }
+          beforePosition = page.nextBeforePosition;
+        } while (Date.now() < deadline);
+        await waitForDecomposePoll(options.pollIntervalMs ?? 1_000, controller.signal);
+      }
+      throw unconfirmed("slide_order_poll_timeout");
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      throw unconfirmed(controller.signal.aborted
+        ? "slide_order_poll_timeout" : "slide_order_status_unavailable");
+    } finally {
+      window.clearTimeout(timeout);
+      options.signal?.removeEventListener("abort", abort);
+    }
   }
 
   static async getPresentationVersions(presentationId: string) {
@@ -544,10 +639,7 @@ export class PresentationGenerationApi {
         getApiUrl(`/api/v1/ppt/presentation/${presentationId}/versions`),
         {
           method: "GET",
-          headers: {
-            ...getHeader(),
-            "X-Document-Canvas-Contracts": "document-canvas/v1",
-          },
+          headers: getHeader(),
           cache: "no-cache",
         },
       );
@@ -573,10 +665,7 @@ export class PresentationGenerationApi {
         ),
         {
           method: "POST",
-          headers: {
-            ...getHeader(),
-            "X-Document-Canvas-Contracts": "document-canvas/v1",
-          },
+          headers: getHeader(),
           cache: "no-cache",
         },
       );
@@ -653,8 +742,11 @@ export class PresentationGenerationApi {
       vision_qa?: boolean;
       strategy?: "authored" | "svg";
       authored_style?: string;
-      aspect_ratio?: "16:9" | "9:16" | "9:13" | "1:1" | "21:9";
-      page_size?: "A4";
+      aspect_ratio?: "16:9" | "9:16" | "9:13" | "1:1" | "21:9" | "4:3";
+      svg_canvas?: { width_mm: number; height_mm: number };
+    svg_design_reference_snapshot_id?: string;
+    svg_design_reference_pin?: { design_pack_id: string; version: number; digest: string };
+    page_size?: "A4";
       orientation?: "landscape" | "portrait";
       masterPin?: {
         masterId: string;
@@ -701,11 +793,14 @@ export class PresentationGenerationApi {
             // a max-quality, slower pass.
             vision_qa: resolvedStrategy === "svg" ? false : (body.vision_qa ?? false),
             authored_style: body.authored_style ?? "default",
-            ...(body.sourceMode === "source_content_restyle" && resolvedStrategy === "svg" && body.page_size !== "A4"
-              ? {}
+            ...(body.svg_design_reference_snapshot_id ? { svg_design_reference_snapshot_id: body.svg_design_reference_snapshot_id } : {}),
+            ...(body.svg_design_reference_pin ? { svg_design_reference_pin: body.svg_design_reference_pin } : {}),
+            ...(body.svg_canvas ? { svg_canvas: body.svg_canvas }
               : body.page_size && body.orientation
                 ? { page_size: body.page_size, orientation: body.orientation }
-                : { aspect_ratio: body.aspect_ratio ?? "16:9" }),
+                : body.aspect_ratio ? { aspect_ratio: body.aspect_ratio }
+                : body.sourceMode === "source_content_restyle" && resolvedStrategy === "svg" ? {}
+                : { aspect_ratio: "16:9" }),
             ...(body.masterPin ? { masterPin: body.masterPin } : {}),
             ...(body.sourceMode ? { sourceMode: body.sourceMode } : {}),
             ...(body.rasterApprovalPin ? { rasterApprovalPin: body.rasterApprovalPin } : {}),

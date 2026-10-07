@@ -162,6 +162,7 @@ def analyze_redesign(
     source_path: Path,
     *,
     orientation: str,
+    target_canvas=None,
     tesseract_path: Path,
     tessdata_path: Path,
     max_workers: int | None = None,
@@ -184,7 +185,9 @@ def analyze_redesign(
         pages.append(page_result)
         crops.update(page_crops)
         issues.extend(page_issues)
-    target_size = (840, 1188) if orientation == "portrait" else (1188, 840)
+    from services.source_content.raster_target import raster_target_from_selectors
+
+    target = target_canvas or raster_target_from_selectors(orientation=orientation)
     analysis = seal_analysis(
         {
             "analysis_id": uuid.uuid5(uuid.NAMESPACE_URL, f"raster-redesign:{source_sha}:{orientation}:v1"),
@@ -194,11 +197,7 @@ def analyze_redesign(
                 "canvas_width_emu": width_emu,
                 "canvas_height_emu": height_emu,
             },
-            "target_canvas": {
-                "orientation": orientation,
-                "width_units": target_size[0],
-                "height_units": target_size[1],
-            },
+            "target_canvas": target.model_dump(mode="json"),
             "pages": pages,
             "unresolved": tuple(issues),
         }

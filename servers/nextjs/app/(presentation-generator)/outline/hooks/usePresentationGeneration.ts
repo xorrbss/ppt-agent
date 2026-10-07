@@ -292,17 +292,19 @@ export const usePresentationGeneration = (
       // The immutable source-content path must never enter vision re-authoring,
       // including outline reload/resume paths reconstructed from Redux.
       visionQa: isSourceContentGeneration || generationStrategy === "svg" ? false : authoredVisionQa,
+      ...(generationStrategy === "svg" && generationConfig?.svgDesignReferenceSnapshotId ? { svgDesignReferenceSnapshotId: generationConfig.svgDesignReferenceSnapshotId } : {}),
+      ...(generationStrategy === "svg" && generationConfig?.svgDesignReferencePin ? { svgDesignReferencePin: generationConfig.svgDesignReferencePin } : {}),
       authoredStyle:
-        generationConfig?.pageSize !== "A4" && generationConfig?.aspectRatio === "9:16"
+        generationStrategy === "authored" && generationConfig?.pageSize !== "A4" && generationConfig?.aspectRatio === "9:16"
           ? DEFAULT_AUTHORED_STYLE.id
           : authoredStyle,
       ...(isSourceContentGeneration && generationStrategy === "svg" && generationConfig?.pageSize === "A4" && generationConfig.orientation
         ? { documentCanvas: documentCanvasForOrientation(generationConfig.orientation) }
-        : sourceContentAdmission?.documentCanvas
+        : (generationStrategy !== "svg" || generationConfig?.sourceCanvas) && sourceContentAdmission?.documentCanvas
           ? { documentCanvas: sourceContentAdmission.documentCanvas }
         : {}),
-      ...(isSourceContentGeneration && generationStrategy === "svg" && generationConfig?.pageSize !== "A4"
-        ? {}
+      ...(generationConfig?.sourceCanvas ? { sourceCanvas: true }
+        : generationConfig?.svgCanvas ? { svgCanvas: generationConfig.svgCanvas }
         : generationConfig?.pageSize === "A4" && generationConfig.orientation
           ? { pageSize: "A4" as const, orientation: generationConfig.orientation }
           : { aspectRatio: generationConfig?.aspectRatio ?? "16:9" }),
@@ -340,6 +342,8 @@ export const usePresentationGeneration = (
     // A resume must resend the captured settings verbatim: a reload wipes the
     // Redux copies, and the server 409s a same-key re-POST whose payload drifts.
     const authoredRequest = durableTask.authoredRequest ?? reduxAuthoredRequest;
+    const requestSvgCanvas = "svgCanvas" in authoredRequest ? authoredRequest.svgCanvas : undefined;
+    const requestSourceCanvas = "sourceCanvas" in authoredRequest && authoredRequest.sourceCanvas;
     const requestPageSize = "pageSize" in authoredRequest ? authoredRequest.pageSize : undefined;
     const requestOrientation = "orientation" in authoredRequest ? authoredRequest.orientation : undefined;
     const requestAspectRatio = "aspectRatio" in authoredRequest ? authoredRequest.aspectRatio : undefined;
@@ -362,11 +366,15 @@ export const usePresentationGeneration = (
         vision_qa: authoredRequest.visionQa,
         strategy: authoredRequest.strategy ?? "svg",
         authored_style: authoredRequest.authoredStyle,
-        ...(authoredRequest.sourceMode === "source_content_restyle" && authoredRequest.strategy === "svg" && requestPageSize !== "A4"
-          ? {}
+        svg_design_reference_snapshot_id: "svgDesignReferenceSnapshotId" in authoredRequest ? authoredRequest.svgDesignReferenceSnapshotId : undefined,
+        svg_design_reference_pin: "svgDesignReferencePin" in authoredRequest ? authoredRequest.svgDesignReferencePin : undefined,
+        ...(requestSourceCanvas ? {}
+          : requestSvgCanvas ? { svg_canvas: requestSvgCanvas }
           : requestPageSize === "A4" && requestOrientation
             ? { page_size: "A4" as const, orientation: requestOrientation }
-            : { aspect_ratio: requestAspectRatio ?? "16:9" }),
+            : requestAspectRatio ? { aspect_ratio: requestAspectRatio }
+            : authoredRequest.sourceMode === "source_content_restyle" && authoredRequest.strategy === "svg" ? {}
+            : { aspect_ratio: "16:9" }),
         codex_generation_preset: authoredRequest.codexGenerationPreset,
         masterPin: authoredRequest.masterPin,
         sourceMode: authoredRequest.sourceMode,

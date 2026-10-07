@@ -225,6 +225,67 @@ def test_export_download_maps_expiry_to_gone(monkeypatch: pytest.MonkeyPatch):
     assert error.value.detail == "workspace_export_expired"
 
 
+@pytest.mark.parametrize("boundary", ["local-bypass", "regular-session", "remote-peer", "wrong-owner"])
+def test_export_download_local_bridge_wraps_resolution_and_readback(monkeypatch, boundary):
+    from contextlib import asynccontextmanager
+    from starlette.requests import Request
+    from fastapi.responses import Response
+    from api.v1.auth.principal import PrincipalEnvelope
+    from services import workspace_operation_principal as principal_service
+    from utils.owner_context import (get_current_tenant_id, reset_current_owner_id,
+        reset_current_tenant_id, set_current_owner_id, set_current_tenant_id)
+
+    monkeypatch.setenv("ENVIRONMENT", "local")
+    owner, operation_id, artifact_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    owner_token, tenant_token = set_current_owner_id(owner), set_current_tenant_id("default")
+    opened = []
+    principal = PrincipalEnvelope(user_id=uuid.uuid4() if boundary == "wrong-owner" else owner,
+        username="fixture", is_admin=True, method="jwt", tenant_id="default", trace_id="test",
+        subject=str(owner), issuer="presenton-local-session" if boundary == "regular-session" else "presenton-loopback-development",
+        audience="presenton-public-api", scopes=("artifacts:read",))
+    request = Request({"type": "http", "method": "GET", "scheme": "http",
+        "path": f"/api/v1/ppt/workspace/artifacts/{artifact_id}/download", "query_string": b"",
+        "headers": [(b"host", b"localhost")],
+        "client": ("203.0.113.10" if boundary == "remote-peer" else "127.0.0.1", 50000)})
+    request.state.auth_principal = principal
+
+    class Session:
+        async def scalar(self, _statement):
+            return operation_id
+
+    @asynccontextmanager
+    async def bound(_session, *, operation_id: uuid.UUID, allow_local_development: bool):
+        assert allow_local_development
+        opened.append(operation_id)
+        token = set_current_tenant_id("local-development")
+        try:
+            yield
+        finally:
+            reset_current_tenant_id(token)
+
+    async def resolve_and_read(received_artifact_id, _session):
+        assert received_artifact_id == artifact_id
+        if get_current_tenant_id() != "local-development":
+            raise HTTPException(status_code=404)
+        return Response(content=b"owned-export")
+
+    monkeypatch.setattr(workspace_endpoint, "_require_supported_runtime", lambda: None)
+    monkeypatch.setattr(principal_service, "bound_export_operation_principal", bound)
+    monkeypatch.setattr(workspace_endpoint, "_workspace_export_download_response", resolve_and_read)
+    try:
+        if boundary == "local-bypass":
+            response = asyncio.run(workspace_endpoint.download_workspace_export_artifact(
+                artifact_id=artifact_id, session=Session(), request=request))
+            assert response.body == b"owned-export" and opened == [operation_id]
+        else:
+            with pytest.raises(HTTPException) as denied:
+                asyncio.run(workspace_endpoint.download_workspace_export_artifact(
+                    artifact_id=artifact_id, session=Session(), request=request))
+            assert denied.value.status_code == 404 and opened == []
+        assert get_current_tenant_id() == "default"
+    finally:
+        reset_current_tenant_id(tenant_token)
+        reset_current_owner_id(owner_token)
 def test_workspace_admission_and_revision_conflict_metrics_are_exactly_once(
     monkeypatch: pytest.MonkeyPatch,
 ):

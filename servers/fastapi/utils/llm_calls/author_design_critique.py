@@ -18,7 +18,6 @@ import logging
 from collections.abc import Sequence
 from typing import Any, List, Literal, Optional
 
-from llmai import get_client
 from llmai.shared import (
     ImageContentPart,
     JSONSchemaResponse,
@@ -31,7 +30,7 @@ from pydantic import BaseModel, Field
 from utils.authored_figure_variants.markup import DENSITY_CLASSES
 from utils.authored_figure_variants.operations import FigureOperation
 from utils.llm_calls.critique_slide import _image_mime_type
-from utils.llm_config import enforce_llm_egress_policy, get_llm_config
+from utils.llm_config import enforce_llm_egress_policy, get_client, get_llm_config
 from utils.llm_provider import get_model
 from utils.llm_utils import generate_structured_with_schema_retries
 from utils.schema_utils import prepare_schema_for_validation

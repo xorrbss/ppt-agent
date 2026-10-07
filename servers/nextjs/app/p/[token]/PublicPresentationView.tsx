@@ -8,6 +8,7 @@ import { setPresentationData } from "@/store/slices/presentationGeneration";
 import { getApiUrl, normalizeBackendAssetUrls } from "@/utils/api";
 import { applyPresentationThemeToElement } from "@/app/(presentation-generator)/presentation/utils/applyPresentationThemeDom";
 import SlideScale from "@/app/(presentation-generator)/components/PresentationRender";
+import { getPublicHeader } from "@/app/(presentation-generator)/services/api/header";
 
 type Status = "loading" | "ready" | "notfound" | "error";
 
@@ -26,7 +27,7 @@ const PublicPresentationView = ({ token }: { token: string }) => {
           getApiUrl(`/api/v1/ppt/presentation/public/${token}`),
           {
             method: "GET",
-            headers: { "X-Document-Canvas-Contracts": "document-canvas/v1" },
+            headers: getPublicHeader(),
             cache: "no-store",
           }
         );

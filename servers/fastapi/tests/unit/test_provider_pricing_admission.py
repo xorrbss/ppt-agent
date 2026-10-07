@@ -187,8 +187,7 @@ def test_the_2026_09_07_codex_incident_is_caught_before_generation() -> None:
     gaps = find_pricing_gaps(incident)
     assert {(gap.provider_id, gap.model_id) for gap in gaps} == {
         ("codex", "gpt-6-astra"),
-        ("codex", "gpt-6-luna"),
-        ("codex", "gpt-6-sol"),
+        ("codex", "gpt-6.1-sol"),
     }
     assert "gpt-5.6-sol" in gaps[0].message()
 

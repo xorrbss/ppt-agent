@@ -80,6 +80,17 @@ async def _check(database_path: Path) -> None:
 
 
 def test_a_database_at_the_code_revision_starts(tmp_path) -> None:
+    import runpy
+    from pathlib import Path
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    backend_root = Path(__file__).resolve().parents[2]
+    contract = runpy.run_path(str(backend_root / "services" / "migration_revision_contract.py"))
+    config = Config(str(backend_root / "alembic.ini"))
+    config.set_main_option("script_location", str(backend_root / "alembic"))
+    assert ScriptDirectory.from_config(config).get_heads() == [contract["HEAD_REVISION"]]
+
     database_path = tmp_path / "at-head.db"
     _upgrade(database_path, "head")
 
