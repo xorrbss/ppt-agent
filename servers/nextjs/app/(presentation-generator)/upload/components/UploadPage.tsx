@@ -30,6 +30,7 @@ import MasterCatalogDialog from "../../authored-vnext/master-setup/MasterCatalog
 import { ConfigurationSelects } from "./ConfigurationSelects";
 import { PromptInput } from "./PromptInput";
 import SupportingDoc from "./SupportingDoc";
+import SvgDesignReferenceInput from "./SvgDesignReferenceInput";
 import { abortDocumentProcessing } from "./upload-page/abortDocumentProcessing";
 import { useSupportingFiles } from "./upload-page/useSupportingFiles";
 import SourceContentLossDialog from "./upload-page/SourceContentLossDialog";
@@ -381,6 +382,8 @@ const UploadPage = ({
                 generating={loadingState.isLoading}
               />
             </div>
+
+            {generationStrategy === "svg" ? <SvgDesignReferenceInput config={config} onConfigChange={handleConfigChange} disabled={Boolean(config.svgDesignReferencePin || companyStandard)} /> : null}
 
             {generationStrategy === "authored" && masterAdmissionError ? (
               <div

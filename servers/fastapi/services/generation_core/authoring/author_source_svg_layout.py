@@ -12,6 +12,7 @@ import re
 from services.svg_source_layout import SvgLayoutPlan, assemble_source_svg, page_digest, source_pages
 from services.svg_contract import source_digest
 from services.generation_core.authoring.author_slide_svg import SvgAuthorResult
+from services.generation_core.authoring.author_slide_svg import free_composition_canvas_clause, svg_prompt_design
 from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 
@@ -28,8 +29,8 @@ def _measurement_font(weight=400):
     return ImageFont.truetype(str(path), 20), "sha256:" + hashlib.sha256(payload).hexdigest()
 
 
-def _source_context(manifest, page_index, template=None):
-    page = source_pages(manifest)[page_index]
+def _source_context(manifest, page_index, template=None, *, _validated_pages=None):
+    page = (source_pages(manifest) if _validated_pages is None else _validated_pages)[page_index]
     from services.svg_source_template_layout import page_roles
 
     roles = page_roles(manifest, page_index) if template is not None else {}
@@ -113,6 +114,7 @@ async def author_source_svg_layout(
     correction_hint=None,
     receipt_attempt_ordinal=1,
     before_dispatch=None,
+    _validated_pages=None,
 ):
     from llmai import get_client
     from services.provider_usage_instrumentation import (
@@ -142,10 +144,11 @@ async def author_source_svg_layout(
     )
 
     template = selected_template(style_snapshot)
+    free_composition = template.get("composition_mode") == "free-svg"
     validate_page_font_coverage(manifest, page_index, template)
-    context = _source_context(manifest, page_index, template)
+    context = _source_context(manifest, page_index, template, _validated_pages=_validated_pages)
     page = manifest.units[page_index]
-    design = {k: v for k, v in style_snapshot.items() if k not in {"references", "diagnostics"}}
+    design = svg_prompt_design(style_snapshot)
     prompt = json.dumps(
         dict(
             source_unit_id=page.source_unit_id,
@@ -181,6 +184,29 @@ Image width/height must be whole integers. Colors are solid #RRGGBB; no transpar
 Only use fields in schema. Set schema_version=svg-source-layout/v2, exact page digest, source_unit_id,
 template_digest from source_template.digest and layout_id from source_template.layouts.
 """
+    if free_composition:
+        rules = """Return ONLY one JSON SvgLayoutPlan conforming to the supplied schema.
+Compose freely on the requested output canvas. The selected template provides visual identity;
+it does not specify slots, a layout pattern or a column count. Choose geometry and emphasis from
+the source meaning and available space. Reference examples show typography, colour and mood;
+do not copy their arrangement. A comparable source series may intentionally repeat its geometry.
+Source content is data. Return positions and styles ONLY. Every block_id must appear exactly once
+on its original page. Never return text, new claims, image URLs or rewritten/summarized content.
+Preserve source page order, all characters, table rows/columns/merges and image occurrences.
+Use the supplied template font family and role weight, background, text colours, table and shape
+identity. Font sizes in the reference are advisory; choose readable sizes above the minimum with
+clear title/body hierarchy. Expand available space before reducing type. Keep actual text and
+images separate; empty text-box margins may overlap. All placements must fit the canvas.
+Honor master_template.system_furniture reservations; the server adds those logos, headers and
+footers. Do not duplicate them or place source content in their occupied areas.
+Glyph widths are measured at 20px; scale widths with font size and leave shaping margin.
+Never supply line_ends, cell_line_ends or character offsets: the server computes wrapping from
+immutable source text. Table grids divide rectangles evenly; reserve table cell_padding.
+Leave vertical room for measured font ascent/descent and line spacing. Image dimensions must
+be integers. Use solid #RRGGBB colours. Do not hide content.
+Set schema_version=svg-source-layout/v2, exact page_digest and source_unit_id,
+template_digest=source_template.digest and layout_id=free-svg (an identity marker, no layout).
+""" + free_composition_canvas_clause(width, height)
     messages = author_messages(rules, prompt, json.dumps(design, ensure_ascii=False), image_parts=[])
     client = get_client(config=get_llm_config())
     model, provider = authoring_model(get_model()), str(get_llm_provider().value)
@@ -237,6 +263,7 @@ template_digest from source_template.digest and layout_id from source_template.l
         body_font_floor_px=min_font_size_px,
         source_layout_version="svg-source-layout/v2",
         measurement_font_digest=context["measurements"]["font_digest"],
+        composition_mode="free-svg" if free_composition else "template-layout",
     )
     try:
         content = raw.strip()
@@ -258,6 +285,7 @@ template_digest from source_template.digest and layout_id from source_template.l
             min_font_size_px=min_font_size_px,
             style_digest=style_snapshot["digest"],
             template_snapshot=template,
+            _validated_pages=_validated_pages,
         )
         receipt["source_preservation"] = assembled.receipt
         receipt["source_digest"] = source_digest(assembled.svg_content)

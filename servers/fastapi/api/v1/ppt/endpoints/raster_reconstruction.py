@@ -9,10 +9,11 @@ from zipfile import ZipFile
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from PIL import Image
-from pydantic import BaseModel, ConfigDict, Field, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from models.svg_canvas import SvgCanvasInput
 from models.sql.presentation import PresentationModel
 from models.sql.workspace import WorkspaceConversation, WorkspaceOperation
 from services.artifact_store import configured_public_artifact_service
@@ -43,6 +44,17 @@ class AnalyzeRasterRequest(RasterRequest):
     reference_snapshot_id: uuid.UUID
     presentation_id: uuid.UUID
     orientation: Literal["portrait", "landscape"] = "portrait"
+    aspect_ratio: Literal["16:9", "4:3", "9:16", "9:13", "1:1", "21:9"] | None = Field(default=None, exclude_if=lambda value: value is None)
+    svg_canvas: SvgCanvasInput | None = Field(default=None, exclude_if=lambda value: value is None)
+
+    @model_validator(mode="after")
+    def validate_target(self):
+        if (self.aspect_ratio is not None and self.svg_canvas is not None
+                or (self.aspect_ratio is not None or self.svg_canvas is not None)
+                and "orientation" in self.model_fields_set):
+            raise ValueError("document_canvas_selectors_conflict")
+        return self
+
     # ``auto_redesign`` is the product default for image-only sources: it
     # reflows the deck into editable text/tables and only auto-approves when
     # every page cleared analysis with no low-confidence regions. Callers
@@ -50,7 +62,14 @@ class AnalyzeRasterRequest(RasterRequest):
     # ``auto_preserve`` explicitly; ``reconstruct`` remains the manual,
     # fully-reviewed path.
     analysis_mode: Literal["auto_preserve", "reconstruct", "auto_redesign"] = "auto_redesign"
-    style_id: Literal["screenshot-blue"] = "screenshot-blue"
+    style_id: str = Field(default="screenshot-blue", min_length=1, max_length=160)
+
+    @model_validator(mode="after")
+    def validate_style(self):
+        from utils.svg_template_rules import resolve_source_template_style
+
+        self.style_id = resolve_source_template_style(self.style_id).id
+        return self
 
 
 class RasterReviewVersion(RasterRequest):

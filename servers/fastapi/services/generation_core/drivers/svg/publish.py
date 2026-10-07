@@ -27,13 +27,15 @@ from services.svg_presentation_checkpoint import _save_source_page_pngs
 from services.svg_page_publication import set_svg_page
 
 
-def svg_slide_content(payload: dict, *, role, source, pt_per_px: float) -> dict:
+def svg_slide_content(payload: dict, *, role, source, pt_per_px: float,
+                      source_native_objects=None, source_native_summary=None) -> dict:
     """``slide.content`` of one published page: receipt, asset manifest, native objects.
 
     The page's raw native declarations never reach the receipt; only the
     publication summary (``native_publish.page_native_objects``) does.
     """
-    native_objects, native_summary = page_native_objects(payload, pt_per_px=pt_per_px)
+    native_objects, native_summary = ((source_native_objects, source_native_summary)
+        if source_native_summary is not None else page_native_objects(payload, pt_per_px=pt_per_px))
     receipt = {key: value for key, value in payload.items()
                if key not in {"svg_content", "attempts", "svgAssetManifest", NATIVE_DECLARATIONS_KEY}}
     if native_summary:
@@ -128,8 +130,14 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
     pt_per_px = canvas_point_per_px(request_canvas_metadata(request))
     await session.execute(delete(SlideModel).where(SlideModel.presentation == presentation_id))
     for index, (payload, _) in enumerate(pages):
+        native_kwargs = {}
+        if source_preservation and payload.get("source_preservation", {}).get("native_tables"):
+            from services.svg_source_native_tables import source_table_native_objects
+            native_objects, native_summary = source_table_native_objects(payload["svg_content"],
+                payload["source_preservation"], manifest, index, pt_per_px=pt_per_px)
+            native_kwargs = dict(source_native_objects=native_objects, source_native_summary=native_summary)
         slide_content = svg_slide_content(payload, role=roles[index], source=outline.slides[index].content,
-                                          pt_per_px=pt_per_px)
+                                          pt_per_px=pt_per_px, **native_kwargs)
         fields = {}
         set_svg_page(fields, svg_content=payload["svg_content"], content=slide_content)
         session.add(SlideModel(presentation=presentation_id, owner_id=owner,

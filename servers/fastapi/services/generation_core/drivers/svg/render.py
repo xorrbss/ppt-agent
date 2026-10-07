@@ -45,6 +45,23 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
                                  allow_image_only=allow_image_only)
         if ctx.source_reflow:
             verify_source_receipt(final, payload.get("source_preservation"), ctx.source_document, index)
+        from services.svg_master_furniture import master_furniture_receipt
+        furniture_contract = ({slot: {"required": item["policy"]["required"], "allowOmit": item["policy"]["allowOmit"]}
+                               for slot, item in ctx.manifests[index].items()} if ctx.canonical_assets else None)
+        preserved_raster = bool(ctx.raster_reconstruction and index + 1 in ctx.raster_pin.full_page_preserve_pages)
+        if ctx.raster_reconstruction and not preserved_raster:
+            import xml.etree.ElementTree as ET
+            furniture_contract = {node.get("href"): {"required": True, "allowOmit": False}
+                                  for node in ET.fromstring(final).iter()
+                                  if node.tag.rsplit("}", 1)[-1] == "image" and node.get("href", "").startswith("source-slot-")}
+        if ctx.source_reflow:
+            furniture_contract = {binding["slot_id"]: {"required": True} for binding in payload["source_preservation"]["bindings"]
+                                  if binding.get("kind") == "image"}
+        furniture_receipt = (None if preserved_raster else master_furniture_receipt(final, ctx.snapshot,
+            index=index, n=ctx.count, width=ctx.canvas.width_px, height=ctx.canvas.height_px,
+            source_manifest=furniture_contract))
+        if furniture_receipt is not None:
+            payload["system_furniture"] = furniture_receipt
         materialized = None
         if ctx.raster_reconstruction:
             from services.artifact_store import configured_public_artifact_service
@@ -67,6 +84,7 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
                     canonical_svg=final,
                     width=ctx.canvas.width_px,
                     height=ctx.canvas.height_px,
+                    **({"system_furniture": furniture_receipt} if furniture_receipt is not None else {}),
                 )
                 await asset_session.commit()
             payload["svgAssetManifest"] = raster_assets.screen_envelope
@@ -87,7 +105,8 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
                         context=ctx.asset_context, revision=ctx.asset_revision, manifest=ctx.source_manifest,
                         source_pointer=ctx.source_pointer, svg=final, page_index=index,
                         candidates=ctx.planned[index], width=ctx.canvas.width_px, height=ctx.canvas.height_px,
-                        saved_envelope=payload.get("svgAssetManifest"))
+                        saved_envelope=payload.get("svgAssetManifest"),
+                        **({"system_furniture": furniture_receipt} if furniture_receipt is not None else {}))
                     await asset_session.commit()
                 payload["svgAssetManifest"] = envelope
                 await checkpoint(job, index, payload=payload)
@@ -125,6 +144,7 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
                                                         if raster_authorized_measurement else {}),
                                                      **({"source_font_profile": font_profile}
                                                         if font_profile else {}),
+                                                     **({"system_furniture": furniture_receipt} if furniture_receipt is not None else {}),
                                                      materialized_svg=materialized, **ctx.physical_kwargs)
         except ValueError as error:
             if ctx.canonical_assets:
@@ -142,7 +162,7 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
             }
         payload["svg_content"] = None
         await checkpoint(job, index, payload=payload)
-        if ordinal == 1 or ctx.raster_reconstruction:
+        if ordinal == 1 or (ctx.raster_reconstruction and payload.get("rasterCompositionMode") != "free-svg"):
             code = str(error).split(":", 1)[0]
             source_plan_failure = ctx.source_reflow and code.startswith("svg_source_")
             raise AuthoredStageError(slide_index=index,
@@ -150,6 +170,14 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
                 code=code if source_plan_failure else "svg_validation_failed",
                 retryable=False) from error
         return RETRY
+    if not (ctx.source_reflow or ctx.raster_reconstruction):
+        from services.authored_canvas import request_canvas_metadata
+        from services.generation_core.drivers.svg.native_publish import canvas_point_per_px
+        from services.generation_core.drivers.svg.native_requirements import apply_requested_native_quality
+        source_pages = getattr(request, "slides_markdown", None)
+        native_source = source_pages[index] if source_pages and len(source_pages) == ctx.count else content
+        apply_requested_native_quality(rendered.quality, payload, final, native_source,
+            pt_per_px=canvas_point_per_px(request_canvas_metadata(request)))
     payload["attempts"][-1]["quality"] = rendered.quality
     if payload.get("fontAdvisories"):
         rendered.quality.setdefault("advisories", []).extend(payload["fontAdvisories"])
@@ -170,7 +198,7 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
     if ctx.canonical_assets:
         import xml.etree.ElementTree as ET
         used = {node.get("href") for node in ET.fromstring(final).iter()
-                if node.tag.rsplit("}", 1)[-1] == "image"}
+                if node.tag.rsplit("}", 1)[-1] == "image" and node.get("href") in ctx.manifests[index]}
         omitted = sorted(set(ctx.manifests[index]) - used)
         rendered.quality["sourceImages"] = {
             "offered": sorted(ctx.manifests[index]), "used": sorted(used), "omitted": omitted,

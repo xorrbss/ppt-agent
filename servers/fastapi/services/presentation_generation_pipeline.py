@@ -254,6 +254,8 @@ def _authored_exact_admission_exception(
 
 def _validate_authored_exact_admission(request: GeneratePresentationRequest) -> None:
     """Reject unavailable exact presets before sync work or durable queueing."""
+    if resolve_generation_strategy(request) == "svg":
+        return
     template = (request.template or "").strip().lower()
     authored_requested = template == AUTHORED_TEMPLATE or request.strategy == "authored"
     if not authored_requested:
@@ -266,6 +268,8 @@ def _validate_authored_exact_admission(request: GeneratePresentationRequest) -> 
 
 async def _validate_authored_master_pin_admission(request: GeneratePresentationRequest) -> None:
     """Resolve a company-standard pin only when authored generation requests one."""
+    if resolve_generation_strategy(request) == "svg":
+        return
     if request.template != AUTHORED_TEMPLATE:
         if request.master_pin is not None:
             raise HTTPException(status_code=400, detail="generation_strategy_conflict")
@@ -375,6 +379,17 @@ async def _admit_source_content_generation(
 ) -> None:
     if request.source_mode not in {SOURCE_CONTENT_RESTYLE_MODE, "raster_reconstruction"}:
         return
+    if resolve_generation_strategy(request) == "svg":
+        from utils.svg_template_rules import resolve_source_template_style
+
+        try:
+            request.authored_style = resolve_source_template_style(
+                (request.authored_style or "").strip()
+            ).id
+        except ValueError as error:
+            raise _source_content_http_exception(
+                SourceContentError("source_content_template_required", status_code=422)
+            ) from error
     if request._authored_style_snapshot is None:
         request._authored_style_snapshot = resolve_authored_style(request.authored_style)
     if request._authored_style_snapshot.id != (request.authored_style or "").strip():
@@ -505,6 +520,7 @@ async def check_if_api_request_is_valid(
         require_svg_creation_admission(request)
     if (
         request.aspect_ratio != "16:9"
+        and resolve_generation_strategy(request) != "svg"
         and str(request.template or "").strip().lower() != AUTHORED_TEMPLATE
     ):
         raise HTTPException(
@@ -538,6 +554,8 @@ async def check_if_api_request_is_valid(
     if request.source_mode == SOURCE_CONTENT_RESTYLE_MODE:
         await _admit_source_content_reference_snapshot(request, sql_session)
 
+    await _admit_svg_design_reference(request, sql_session)
+
     return (presentation_id,)
 
 
@@ -556,6 +574,27 @@ async def _load_document_context(
         file_paths,
         overflow_strategy="truncate",
     )
+
+
+async def _admit_svg_design_reference(
+    request: GeneratePresentationRequest, sql_session: AsyncSession,
+) -> None:
+    if getattr(request, "svg_design_reference_snapshot_id", None) is None:
+        return
+    from services.svg_uploaded_design_reference import prepare_svg_uploaded_design_reference
+
+    try:
+        projected = await prepare_svg_uploaded_design_reference(request, sql_session)
+    except ReferenceProviderError as error:
+        exception = HTTPException(status_code=error.status_code, detail=error.code)
+        exception.code = error.code
+        exception.retryable = error.retryable
+        raise exception from error
+    frozen = getattr(request, "_svg_style_snapshot", None)
+    if isinstance(frozen, dict):
+        expected = frozen.get("design_pack_template")
+        if not isinstance(expected, dict) or expected.get("digest") != projected.get("digest"):
+            raise HTTPException(status_code=409, detail="svg_uploaded_design_reference_snapshot_conflict")
 
 
 async def _admit_generation_references(
@@ -858,6 +897,7 @@ async def generate_presentation_handler(
             prepare_source_content_authored_reflow(request)
     elif request.reference_snapshot_ids and not request._reference_snapshots:
         await _admit_generation_references(request, sql_session)
+    await _admit_svg_design_reference(request, sql_session)
     # Bootstrap admission failures have a linked failed job so a terminal
     # operation retry can safely rebind it. Re-check validation, template
     # policy and immutable document readability before doing any generation
@@ -1768,6 +1808,7 @@ async def queue_presentation_generation(
         await _admit_source_content_generation(request, sql_session)
         if request.source_mode == SOURCE_CONTENT_RESTYLE_MODE:
             await _admit_source_content_reference_snapshot(request, sql_session)
+    await _admit_svg_design_reference(request, sql_session)
     # The fingerprint is taken before any deck is minted, so a replay under the
     # same idempotency key matches the stored job instead of bootstrapping a
     # second deck. It now includes the resolved pins/rule/style snapshots.

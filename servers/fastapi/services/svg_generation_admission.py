@@ -33,13 +33,8 @@ def source_svg_capability(*, strategy: str | None, source_content: bool | None,
             resolve_source_template_style(style_id)
         except ValueError as error:
             template_reason = str(error).split(":", 1)[0]
-    reason = (
-        "svg_source_selection_required" if not selected
-        else "svg_company_standard_not_supported" if has_company_standard
-        else "svg_exact_reconstruction_not_supported" if reference_mode == "exact_reconstruction"
-        else template_reason
-    )
-    return {"enabled": reason is None, "reason": reason, "canvasSource": "selected-a4",
+    reason = "svg_source_selection_required" if not selected else template_reason
+    return {"enabled": reason is None, "reason": reason, "canvasSource": "selected-svg",
             "inputFormats": ["pptx"], "productVerified": False}
 
 
@@ -61,6 +56,13 @@ def svg_creation_admission_violation(request: object) -> str | None:
     for condition, code in blocked:
         if condition:
             return code() if callable(code) else code
+    references = (
+        getattr(request, "svg_design_reference_pin", None),
+        getattr(request, "svg_design_reference_snapshot_id", None),
+        getattr(request, "master_pin", None),
+    )
+    if sum(value is not None for value in references) > 1:
+        return "svg_design_reference_conflict"
     if getattr(request, "source_mode", None) == "source_content_restyle":
         page_size = getattr(request, "page_size", None)
         orientation = getattr(request, "orientation", None)
@@ -87,8 +89,6 @@ def svg_creation_admission_violation(request: object) -> str | None:
         from utils.authored_styles import resolve_authored_style
 
         style = resolve_authored_style(getattr(request, "authored_style", None))
-    if getattr(style, "reference_mode", "") == "exact_reconstruction":
-        return "svg_exact_reconstruction_not_supported"
     return None
 
 
@@ -133,14 +133,45 @@ def _resolve_master_rules(request: object, canvas: object) -> tuple[dict | None,
         raise HTTPException(status_code=status_code, detail=error.code) from error
     from services.generation_core.style.master_projection import (
         MasterProjectionError,
-        project_master_contract,
+        enrich_master_reference,
+        project_master_reference,
     )
 
     try:
-        rules = project_master_contract(resolved.contract, canvas.width_px, canvas.height_px)
+        rules = project_master_reference(resolved.contract, canvas.width_px, canvas.height_px)
+        rules = enrich_master_reference(
+            rules, resolved.contract, owner_id=resolved.owner_id,
+            width=canvas.width_px, height=canvas.height_px,
+        )
     except MasterProjectionError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     return rules, resolved.pin.model_dump(mode="json", by_alias=True)
+
+
+def _resolve_design_reference(request: object, canvas: object) -> dict | None:
+    """Resolve a new SVG design reference once under the request's owner."""
+    pin = getattr(request, "svg_design_reference_pin", None)
+    if pin is None:
+        if getattr(request, "svg_design_reference_snapshot_id", None) is not None:
+            uploaded = getattr(request, "_svg_uploaded_design_reference", None)
+            if not isinstance(uploaded, dict):
+                raise HTTPException(status_code=422, detail="svg_uploaded_design_reference_admission_required")
+            return uploaded
+        return None
+    from services.generation_core.style.design_pack_projection import resolve_design_pack_reference
+    from utils.owner_context import get_current_owner_id
+
+    owner_id = get_current_owner_id()
+    if owner_id is None:
+        raise HTTPException(status_code=401, detail="svg_design_reference_owner_required")
+    try:
+        return resolve_design_pack_reference(
+            owner_id=owner_id, pin=pin, width=canvas.width_px, height=canvas.height_px,
+        )
+    except DesignPackProjectionError as error:
+        code = str(error)
+        status = 404 if code == "design_pack_pin_not_found" else 409 if "digest" in code else 422
+        raise HTTPException(status_code=status, detail=code) from error
 
 
 def pin_svg_style(request: object) -> dict:
@@ -154,6 +185,7 @@ def pin_svg_style(request: object) -> dict:
         canvas = request_canvas_contract(request)
         source_restyle = getattr(request, "source_mode", None) in {"source_content_restyle", "raster_reconstruction"}
         master_rules, master_pin = _resolve_master_rules(request, canvas)
+        design_pack_rules = _resolve_design_reference(request, canvas)
         try:
             if source_restyle:
                 from services.document_canvas import canvas_digest
@@ -171,6 +203,7 @@ def pin_svg_style(request: object) -> dict:
                 width=canvas.width_px, height=canvas.height_px,
                 source_template=source_restyle,
                 request=request, master_rules=master_rules, master_pin=master_pin,
+                design_pack_rules=design_pack_rules,
             )
             if source_restyle:
 

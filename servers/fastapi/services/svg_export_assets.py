@@ -13,8 +13,22 @@ SOURCE_MIME = "application/json"
 PLACEMENT_MIME = "application/json"
 
 
+def _attest_furniture(svg, *, source_preservation, system_furniture, source_manifest, width, height):
+    from services.svg_master_furniture import attested_source_furniture, attested_svg_furniture
+    if source_preservation:
+        nodes = attested_source_furniture(svg, source_preservation)
+        receipt = source_preservation.get("system_furniture", {})
+    elif system_furniture:
+        nodes = attested_svg_furniture(svg, system_furniture, source_manifest=source_manifest, width=width, height=height)
+        receipt = system_furniture
+    else:
+        nodes, receipt = {}, {}
+    return nodes, receipt.get("images", {}) if nodes else {}
+
+
 def validate_export_placement(svg, source, placement, *, page_index, slide_revision,
-                              presentation_id, export_format, width, height, allow_image_only=False):
+                              presentation_id, export_format, width, height, allow_image_only=False,
+                              source_preservation=None, system_furniture=None):
     if str(source.presentation_id) != str(presentation_id):
         raise ValueError("svg_export_manifest_presentation_mismatch")
     if placement.purpose not in {"export", f"export-{export_format}"}:
@@ -24,6 +38,10 @@ def validate_export_placement(svg, source, placement, *, page_index, slide_revis
     placement.validate_source(source, page_index=page_index)
     page = next(p for p in source.offered_pages if p.page_index == page_index)
     slots = {s.slot_id: s for s in source.slots}
+    contract = {slot: {"required": slots[slot].policy.required, "allowOmit": slots[slot].policy.allow_omit}
+                for slot in page.slot_ids}
+    furniture, trusted_images = _attest_furniture(svg, source_preservation=source_preservation,
+        system_furniture=system_furniture, source_manifest=contract, width=width, height=height)
     if allow_image_only:
         verified_full_page_preserve_export(
             {"fullPagePreserve": True}, canonical_svg=svg, source_contract={
@@ -34,8 +52,8 @@ def validate_export_placement(svg, source, placement, *, page_index, slide_revis
     validate_svg(svg, width=width, height=height, source_manifest={
         slot: {"required": slots[slot].policy.required, "allowOmit": slots[slot].policy.allow_omit}
         for slot in page.slot_ids
-    }, allow_image_only=allow_image_only)
-    images = _positioned_images(svg)
+    }, allow_image_only=allow_image_only, trusted_furniture_images=trusted_images)
+    images = _positioned_images(svg, excluded_ids=furniture)
     if len(images) != len(placement.placements):
         raise ValueError("svg_export_placement_count_mismatch")
     used = set()
@@ -58,7 +76,7 @@ def validate_export_placement(svg, source, placement, *, page_index, slide_revis
     return {item.slot_id: item.derivative for item in placement.placements}
 
 
-def _positioned_images(svg):
+def _positioned_images(svg, *, excluded_ids=()):
     """Measure the contract's nested translations without changing SVG pixels."""
     import re
     from services.svg_contract import _numbers
@@ -74,7 +92,7 @@ def _positioned_images(svg):
                 raise ValueError("svg_export_placement_transform_unsupported")
             tx += values[0]
             ty += values[1] if len(values) == 2 else 0.
-        if node.tag.rsplit("}", 1)[-1] == "image":
+        if node.tag.rsplit("}", 1)[-1] == "image" and node.get("id") not in excluded_ids:
             images.append((node, tx, ty))
         for child in node:
             visit(child, tx, ty)
@@ -282,18 +300,24 @@ async def build_slide_export_assets(slide, *, service, session, claim, tenant_id
             canonical_svg=slide.svg_content,
             width=resolved_canvas.width_px, height=resolved_canvas.height_px,
             export_format=export_format,
+            **({"system_furniture": raster_receipt["system_furniture"]} if raster_receipt.get("system_furniture") else {}),
         )
-    validate_svg(slide.svg_content, width=resolved_canvas.width_px, height=resolved_canvas.height_px,
-        source_manifest={s: {"required": slots[s].policy.required, "allowOmit": slots[s].policy.allow_omit}
-                         for s in page.slot_ids})
-    placements = []
     svg_receipt = (slide.content or {}).get("svgReceipt")
     source_preservation = (
         svg_receipt.get("source_preservation")
         if isinstance(svg_receipt, dict)
         else None
     )
-    for index, (node, tx, ty) in enumerate(_positioned_images(slide.svg_content)):
+    system_furniture = svg_receipt.get("system_furniture") if isinstance(svg_receipt, dict) else None
+    furniture, trusted_images = _attest_furniture(slide.svg_content, source_preservation=source_preservation,
+        system_furniture=system_furniture, source_manifest={s: {"required": slots[s].policy.required,
+            "allowOmit": slots[s].policy.allow_omit} for s in page.slot_ids},
+        width=resolved_canvas.width_px, height=resolved_canvas.height_px)
+    validate_svg(slide.svg_content, width=resolved_canvas.width_px, height=resolved_canvas.height_px,
+        source_manifest={s: {"required": slots[s].policy.required, "allowOmit": slots[s].policy.allow_omit}
+                         for s in page.slot_ids}, trusted_furniture_images=trusted_images)
+    placements = []
+    for index, (node, tx, ty) in enumerate(_positioned_images(slide.svg_content, excluded_ids=furniture)):
         slot_id = node.get("href", "")
         if slot_id not in page.slot_ids:
             raise ValueError("svg_export_slot_not_offered")
@@ -336,20 +360,22 @@ async def build_slide_export_assets(slide, *, service, session, claim, tenant_id
     manifest.validate_source(source, page_index=page_index)
     validate_export_placement(slide.svg_content, source, manifest, page_index=page_index,
         slide_revision=revision, presentation_id=claim.presentation_id, export_format=export_format,
-        width=resolved_canvas.width_px, height=resolved_canvas.height_px)
+        width=resolved_canvas.width_px, height=resolved_canvas.height_px, source_preservation=source_preservation,
+        system_furniture=system_furniture)
     pointer = await persist_manifest_if_current(session, service, context=context, manifest=manifest,
         publication_name=f"svg-exp-{slide.id.hex[:16]}-manifest", revision=revision)
     if pointer is None:
         raise ValueError("svg_export_asset_fence_lost")
     return {"sourceManifest": envelope["sourceManifest"],
             "placementManifest": pointer.model_dump(mode="json", by_alias=True),
-            "pageIndex": page_index, "slideRevision": revision}
+            "pageIndex": page_index, "slideRevision": revision,
+            **({"systemFurniture": system_furniture} if system_furniture else {})}
 
 
 async def prepare_export_assets(binding, *, svg, service, session, claim, tenant_id,
-                                export_format, width, height):
+                                export_format, width, height, source_preservation=None):
     base_keys = {"sourceManifest", "placementManifest", "pageIndex", "slideRevision"}
-    if set(binding) not in (base_keys, base_keys | {"fullPagePreserve"}) or (
+    if not base_keys <= set(binding) or set(binding) - base_keys - {"fullPagePreserve", "systemFurniture"} or (
         "fullPagePreserve" in binding and type(binding["fullPagePreserve"]) is not bool
     ):
         raise ValueError("svg_export_asset_binding_invalid")
@@ -379,7 +405,8 @@ async def prepare_export_assets(binding, *, svg, service, session, claim, tenant
     export_format=export_format,
     width=width,
     height=height,
-     allow_image_only=binding.get("fullPagePreserve") is True)
+     allow_image_only=binding.get("fullPagePreserve") is True, source_preservation=source_preservation,
+     system_furniture=binding.get("systemFurniture"))
     from services.svg_asset_resolver import bind_export_derivatives
     from services.public_export_operation import _worker_ref
     derivative_refs = await bind_export_derivatives(derivatives=derivatives, session=session,
@@ -391,16 +418,18 @@ async def prepare_export_assets(binding, *, svg, service, session, claim, tenant
             "derivatives": {slot: _worker_ref(ref).to_wire() for slot, ref in derivative_refs.items()}}
     if binding.get("fullPagePreserve") is True:
         wire["fullPagePreserve"] = True
+    if binding.get("systemFurniture"):
+        wire["systemFurniture"] = binding["systemFurniture"]
     return wire, [*refs, *derivative_refs.values()]
 
 
 def materialize_export_assets(binding, *, svg, job, store, presentation_id,
-                              export_format, width, height):
+                              export_format, width, height, source_preservation=None):
     from services.isolated_worker_contracts import ArtifactRef
     from services.svg_asset_resolver import materialize_svg
     binding_keys = {"sourceManifestRef", "placementManifestRef", "sourceManifestDigest",
                     "placementManifestDigest", "pageIndex", "slideRevision", "derivatives"}
-    if set(binding) not in (binding_keys, binding_keys | {"fullPagePreserve"}) or (
+    if not binding_keys <= set(binding) or set(binding) - binding_keys - {"fullPagePreserve", "systemFurniture"} or (
         "fullPagePreserve" in binding and type(binding["fullPagePreserve"]) is not bool
     ):
         raise ValueError("svg_export_asset_transport_invalid")
@@ -428,7 +457,8 @@ def materialize_export_assets(binding, *, svg, job, store, presentation_id,
     export_format=export_format,
     width=width,
     height=height,
-     allow_image_only=binding.get("fullPagePreserve") is True)
+     allow_image_only=binding.get("fullPagePreserve") is True, source_preservation=source_preservation,
+     system_furniture=binding.get("systemFurniture"))
     if set(binding["derivatives"]) != set(derivatives):
         raise ValueError("svg_export_derivative_slot_mismatch")
     if (sum(d.byte_size for d in derivatives.values()) > 64 * 1024 * 1024
@@ -457,7 +487,8 @@ def materialize_export_assets(binding, *, svg, job, store, presentation_id,
     allow_image_only=verified_full_page_preserve_export(
         binding,
         canonical_svg=svg,
-         source_contract=contract))
+         source_contract=contract),
+    trusted_furniture_images=((source_preservation or {}).get("system_furniture") or binding.get("systemFurniture") or {}).get("images", {}))
     return resolved, contract
 
 def verified_full_page_preserve_export(binding, *, canonical_svg: str, source_contract: dict) -> bool:

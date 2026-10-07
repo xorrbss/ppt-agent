@@ -361,6 +361,9 @@ export class PresentationGenerationApi {
     aspect_ratio,
     page_size,
     orientation,
+    svg_canvas,
+    svg_design_reference_pin,
+    svg_design_reference_snapshot_id,
     theme,
     strategy = "svg",
   }: {
@@ -378,7 +381,10 @@ export class PresentationGenerationApi {
     include_table_of_contents?: boolean;
     include_title_slide?: boolean;
     web_search?: boolean;
-    aspect_ratio?: "16:9" | "9:16" | "9:13" | "1:1" | "21:9";
+    aspect_ratio?: "16:9" | "9:16" | "9:13" | "1:1" | "21:9" | "4:3";
+    svg_canvas?: { width_mm: number; height_mm: number };
+    svg_design_reference_snapshot_id?: string;
+    svg_design_reference_pin?: { design_pack_id: string; version: number; digest: string };
     page_size?: "A4";
     orientation?: "landscape" | "portrait";
     theme?: PresentationThemePayload | null;
@@ -408,9 +414,11 @@ export class PresentationGenerationApi {
             include_table_of_contents,
             include_title_slide,
             web_search,
-            ...(page_size && orientation
+            ...(svg_canvas ? { svg_canvas } : page_size && orientation
               ? { page_size, orientation }
               : { aspect_ratio }),
+            ...(svg_design_reference_snapshot_id ? { svg_design_reference_snapshot_id } : {}),
+            ...(svg_design_reference_pin ? { svg_design_reference_pin } : {}),
             theme,
             strategy,
           }),
@@ -647,8 +655,11 @@ export class PresentationGenerationApi {
       vision_qa?: boolean;
       strategy?: "authored" | "svg";
       authored_style?: string;
-      aspect_ratio?: "16:9" | "9:16" | "9:13" | "1:1" | "21:9";
-      page_size?: "A4";
+      aspect_ratio?: "16:9" | "9:16" | "9:13" | "1:1" | "21:9" | "4:3";
+      svg_canvas?: { width_mm: number; height_mm: number };
+    svg_design_reference_snapshot_id?: string;
+    svg_design_reference_pin?: { design_pack_id: string; version: number; digest: string };
+    page_size?: "A4";
       orientation?: "landscape" | "portrait";
       masterPin?: {
         masterId: string;
@@ -695,11 +706,14 @@ export class PresentationGenerationApi {
             // a max-quality, slower pass.
             vision_qa: resolvedStrategy === "svg" ? false : (body.vision_qa ?? false),
             authored_style: body.authored_style ?? "default",
-            ...(body.sourceMode === "source_content_restyle" && resolvedStrategy === "svg" && body.page_size !== "A4"
-              ? {}
+            ...(body.svg_design_reference_snapshot_id ? { svg_design_reference_snapshot_id: body.svg_design_reference_snapshot_id } : {}),
+            ...(body.svg_design_reference_pin ? { svg_design_reference_pin: body.svg_design_reference_pin } : {}),
+            ...(body.svg_canvas ? { svg_canvas: body.svg_canvas }
               : body.page_size && body.orientation
                 ? { page_size: body.page_size, orientation: body.orientation }
-                : { aspect_ratio: body.aspect_ratio ?? "16:9" }),
+                : body.aspect_ratio ? { aspect_ratio: body.aspect_ratio }
+                : body.sourceMode === "source_content_restyle" && resolvedStrategy === "svg" ? {}
+                : { aspect_ratio: "16:9" }),
             ...(body.masterPin ? { masterPin: body.masterPin } : {}),
             ...(body.sourceMode ? { sourceMode: body.sourceMode } : {}),
             ...(body.rasterApprovalPin ? { rasterApprovalPin: body.rasterApprovalPin } : {}),

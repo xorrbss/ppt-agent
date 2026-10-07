@@ -17,11 +17,11 @@ from services.svg_renderer import materialize_trusted_svg_fonts, svg_preview_htm
 
 @pytest.mark.parametrize("style_id", ["default", "osb-smart-banking", "screenshot-blue"])
 @pytest.mark.parametrize("canvas", [(1280, 905), (1188, 840), (840, 1188)])
-def test_actual_selected_catalogue_snapshot_has_layout_rules_and_font_bytes(style_id, canvas):
+def test_legacy_selected_catalogue_snapshot_keeps_replay_rules_and_font_bytes(style_id, canvas):
     style = resolve_source_template_style(style_id)
     width, height = canvas
     spec = adapt_svg_style(style, width=width, height=height, source_template=True)
-    snapshot = spec["source_template"]
+    snapshot = template_snapshot(spec, width, height)
     assert spec["canvas"] == snapshot["canvas"] == {"width": width, "height": height}
     assert spec["unresolved"] == []
     assert snapshot["style_id"] == style_id
@@ -44,7 +44,7 @@ def test_actual_selected_catalogue_snapshot_has_layout_rules_and_font_bytes(styl
         assert snapshot["tokens"]["heading"] == "#081D49"
         assert snapshot["tokens"]["background"] == "#FFFFFF"
         assert spec["overrides"]["common_guidance"]
-        assert spec["overrides"]["layout_hints"]
+        assert "layout_hints" not in spec["overrides"]
         for layout in snapshot["layouts"]:
             for box_name in ("title_box", "body_box"):
                 box = layout[box_name]
@@ -64,7 +64,7 @@ def test_actual_selected_catalogue_snapshot_has_layout_rules_and_font_bytes(styl
 
 
 def test_unsupported_selection_and_private_same_id_do_not_use_default():
-    with pytest.raises(ValueError, match="template_unsupported"):
+    with pytest.raises(ValueError, match="template_unavailable"):
         resolve_source_template_style("unknown-style")
     spec = adapt_svg_style(resolve_source_template_style("default"))
     spec["provenance"]["registry_authority"] = "private"

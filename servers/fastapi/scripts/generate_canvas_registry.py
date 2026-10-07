@@ -37,7 +37,7 @@ A4_CANVAS_IDS = {"landscape": "a4-landscape", "portrait": "a4-portrait"}
 # Picker order from the decisions doc; 9:13 stays registered but hidden.
 SORT_ORDER = {
     "wide-16x9": 1, "tall-9x16": 2, "a4-landscape": 3, "a4-portrait": 4,
-    "square-1x1": 5, "ultrawide-21x9": 6, "tall-9x13": 7,
+    "square-1x1": 5, "ultrawide-21x9": 6, "tall-9x13": 7, "standard-4x3": 8,
 }
 HIDDEN_CANVAS_IDS = frozenset({"tall-9x13"})
 
@@ -79,6 +79,10 @@ def build_registry() -> dict[str, Any]:
         _entry(canvas_id, _preset_canvas(aspect_ratio), badge=None, aliases={"aspect_ratio": aspect_ratio})
         for aspect_ratio, canvas_id in PRESET_CANVAS_IDS.items()
     ]
+    from services.svg_canvas import svg_canvas_for_aspect_ratio
+
+    entries.append(_entry("standard-4x3", svg_canvas_for_aspect_ratio("4:3"),
+                          badge=None, aliases={"aspect_ratio": "4:3"}))
     if {entry["id"] for entry in entries} != set(SORT_ORDER):
         raise ValueError("canvas_registry_ids_mismatch")
     return {"schemaVersion": SCHEMA_VERSION, "canvases": sorted(entries, key=lambda entry: entry["sortOrder"])}

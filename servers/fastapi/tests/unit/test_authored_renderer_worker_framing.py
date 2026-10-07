@@ -212,3 +212,17 @@ def test_a_frame_header_is_never_confused_with_a_legacy_payload():
     legacy_prefix = b'{"schema'
     assert not header_is_frame(legacy_prefix)
     assert header_is_frame(encode_framed_request(SAFE_HTML, 10)[:FRAME_HEADER_BYTES])
+
+
+
+def test_raster_furniture_proof_crosses_request_boundary_without_enabling_plain_html():
+    from utils.renderer_isolation import encode_request
+    from utils.renderer_worker_policy import RendererPolicyError
+
+    proof = {"version":"svg-system-furniture/v1", "digest":"proof"}
+    payload = json.loads(encode_request("<main>preview</main>", 30,
+                                       preserved_raster_svg="<svg/>", system_furniture=proof))
+    assert worker._validate_request(payload)["system_furniture"] == proof
+    payload.pop("preserved_raster_svg")
+    with pytest.raises(RendererPolicyError, match="furniture attestation"):
+        worker._validate_request(payload)

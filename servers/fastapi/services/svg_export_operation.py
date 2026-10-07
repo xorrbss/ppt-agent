@@ -97,9 +97,11 @@ async def render_and_export_svgs(claim, *, tenant_id, svgs, notes, export_format
             binding = asset_bindings[index] if asset_bindings is not None else None
             if binding is not None:
                 from services.svg_export_assets import prepare_export_assets
+                receipt_args = ({"source_preservation": source_preservation[index]}
+                                if source_preservation is not None else {})
                 wire, bound = await prepare_export_assets(binding, svg=source, service=service,
                     session=session, claim=claim, tenant_id=tenant_id, export_format=export_format,
-                    width=resolved_canvas.width_px, height=resolved_canvas.height_px)
+                    width=resolved_canvas.width_px, height=resolved_canvas.height_px, **receipt_args)
                 assets.append(wire)
                 asset_refs.extend(bound)
             else:
@@ -185,18 +187,26 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
     if (len(slides) != presentation.n_slides
             or [slide.index for slide in slides] != list(range(len(slides)))):
         raise NonRetryableWorkspaceOperationError("svg_export_incomplete_presentation")
+    canvas = presentation_canvas_metadata(presentation.theme)
+    measured_slides = slides
+    measured_source_preservation = _source_preservation_receipts(presentation, slides, parse_canvas_metadata(canvas))
+    if fmt == "pptx" and measured_source_preservation is not None:
+        from services.svg_source_export_projection import project_cached_source_tables
+        async with session_factory() as session:
+            slides = await project_cached_source_tables(session, presentation=presentation, slides=slides,
+                receipts=measured_source_preservation, canvas=parse_canvas_metadata(canvas), owner_id=claim.owner_id)
     svgs = [slide.svg_content for slide in slides]
     notes = [slide.speaker_note or "" for slide in slides]
     source_digest = _digest({"svgs": svgs, "notes": notes})
-    canvas = presentation_canvas_metadata(presentation.theme)
     source_assets = [(slide.content or {}).get("svgAssetManifest") for slide in slides]
-    source_preservation = _source_preservation_receipts(presentation, slides, parse_canvas_metadata(canvas))
+    source_preservation = ([(slide.content or {})["svgReceipt"]["source_preservation"] for slide in slides]
+                           if measured_source_preservation is not None else None)
     if any(asset is not None for asset in source_assets):
         source_digest = _digest({"svgs": svgs, "notes": notes, "assets": source_assets})
     if source_preservation is not None:
         source_digest = _digest({"svgSourceSnapshot": source_digest,
             "sourcePreservation": source_preservation})
-    native_objects = _native_object_entries(slides)
+    native_objects = _native_object_entries(slides) if fmt == "pptx" else None
     if native_objects is not None:
         source_digest = _digest({"svgSourceSnapshot": source_digest, "nativeObjects": native_objects})
     provenance = {
@@ -271,7 +281,8 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
             artifact_digest=f"sha256:{ref.sha256}", source_revision=claim.expected_revision,
             scene_digest=f"sha256:{source_digest}", evaluated_at=datetime.now(timezone.utc))
         from services.svg_export_quality import svg_public_quality_receipt
-        receipt = svg_public_quality_receipt(slides=slides, advisory=advisory, source_preservation=source_preservation,
+        receipt = svg_public_quality_receipt(slides=measured_slides, advisory=advisory, source_preservation=source_preservation,
+            source_preservation_parents=measured_source_preservation,
             worker_metrics=result.resource_metrics, exporter_version=CONVERTER_VERSION, **receipt_args)
         # release-v1 stays a receipt-content gate; the identity join decides
         # only whether bytes are produced or reused, not whether they release.

@@ -16,6 +16,7 @@ from services.generation_core.quality.page_outcome import (
     PageOutcome, classify_page_outcomes, deck_quality_summary,
 )
 from utils.hashing import sha256_hex
+from services.generation_core.drivers.svg.composition_observation import observe_svg_deck_composition
 
 
 def page_outcome(index: int, payload: dict) -> PageOutcome:
@@ -32,13 +33,15 @@ async def classify_pages(pages, *, job, checkpoint) -> dict[str, object]:
     """Classify every page in place and persist it; return the deck summary."""
 
     outcomes = classify_page_outcomes([page_outcome(i, payload) for i, (payload, _) in enumerate(pages)])
+    composition = observe_svg_deck_composition(pages)
     for outcome, (payload, _) in zip(outcomes, pages, strict=True):
         payload["quality"] = {**payload["quality"], "classification": outcome.classification,
-                              "verified": outcome.verified}
+                              "verified": outcome.verified,
+                              "compositionObservation": composition["pages"][outcome.index]}
         if outcome.flag is not None:
             payload["flag"] = dict(outcome.flag)
         await checkpoint(job, outcome.index, payload=payload)
-    return deck_quality_summary(outcomes)
+    return {**deck_quality_summary(outcomes), "compositionObservation": composition}
 
 
 async def deck_advisory(ctx, pages, *, job, read_png, run_advisory):

@@ -247,3 +247,70 @@ def test_an_unusable_picture_drops_its_slot_instead_of_failing_the_deck(fakes, m
     assert not [slot for slot in offer.slots if slot.kind == "illustration"]
     assert {"page": 1, "reason": "ValueError"} in offer.receipt["failures"]
     assert offer.receipt["icons"] == 3
+
+
+def _literal_request():
+    slides = ["# 원문 표\n| 항목 | 수집 |\n| --- | --- |\n| 실적 | 10 |",
+              "# 원문 차트\n차트: 수집 10, 분석 20"]
+    request = SimpleNamespace(strategy="svg", generation_mode="auto", authored_style="default",
+        slides_markdown=slides, instructions="표와 차트를 편집 가능한 네이티브 개체로 보존한다.",
+        primary_color=None)
+    outline = SimpleNamespace(slides=[SimpleNamespace(content=content) for content in slides])
+    snapshot = {"composition_mode": "free-svg", "style_id": "default"}
+    return request, outline, snapshot
+
+
+def test_native_literal_offer_never_dispatches_planner_or_image_provider_and_replays(fakes, monkeypatch, tmp_path):
+    request, outline, snapshot = _literal_request()
+    stored = {}
+    async def checkpoint(_job, _index, *, payload=None):
+        if payload is not None:
+            stored.update(payload)
+        return dict(stored)
+    async def forbidden(*_args, **_kwargs):
+        raise AssertionError("native literal fastpath must not dispatch a provider")
+    monkeypatch.setattr(asset_slots, "_build", forbidden)
+    monkeypatch.setattr(asset_slots, "get_app_data_directory_env", lambda: str(tmp_path))
+    job = SimpleNamespace(id=uuid.uuid4(), attempt_number=1)
+    args = dict(profile=SimpleNamespace(illustration_budget=4, illustration_timeout_seconds=30),
+        checkpoint=checkpoint, durable=True, style_snapshot=snapshot, has_source_assets=False)
+    result = asyncio.run(asset_slots.resolve_offer(request, outline, ["content", "content"], job, **args))
+    assert result.receipt["providerCalls"] == 0
+    assert result.receipt["status"] == "native_literal_library_only"
+    assert result.slots and all(slot.is_vector and slot.origin == "library" for slot in result.slots)
+    assert all(generate is False for _labels, generate in fakes["generate"])
+    assert len(result.slots) <= 8 and all(len(labels) <= 8 for labels, _generate in fakes["generate"])
+    assert asset_slots.SEED_KEY in stored
+    async def no_reselect(*_args, **_kwargs):
+        raise AssertionError("checkpoint priority must precede fastpath selection")
+    monkeypatch.setattr(asset_slots, "_native_literal_offer", no_reselect)
+    replay = asyncio.run(asset_slots.resolve_offer(request, outline, [], job, **args))
+    assert replay == result
+    stored.clear()
+    stored["source_manifest_ref"] = {"already": "sealed"}
+    sealed = asyncio.run(asset_slots.resolve_offer(request, outline, [], job, **args))
+    assert sealed.receipt["status"] == "sealed_without_offer"
+
+
+@pytest.mark.parametrize("change", ["prose", "partial_chart", "imagery", "relation", "master", "reference",
+    "style", "source", "source_unknown", "outline_changed", "implicit_svg", "registered", "not_free", "frozen_ref"])
+def test_native_literal_offer_requires_complete_data_and_explicit_source_absence(change):
+    request, outline, snapshot = _literal_request()
+    has_source_assets = False
+    if change in {"prose", "partial_chart"}:
+        request.slides_markdown[0] += "\n독립된 사실은 별도로 보존해야 한다." if change == "prose" else "\n차트: A 10, B 20. 추가 내용"
+        outline.slides[0].content = request.slides_markdown[0]
+    elif change == "imagery": request.instructions += " 사진을 추가한다."
+    elif change == "relation": request.instructions += " 관계도를 추가한다."
+    elif change == "master": request.master_pin = {"id": "master"}
+    elif change == "reference": request.reference_snapshot_ids = [uuid.uuid4()]
+    elif change == "style": request.authored_style = "iso-blueprint"
+    elif change == "source": has_source_assets = True
+    elif change == "source_unknown": has_source_assets = None
+    elif change == "outline_changed": outline.slides[0].content += "\n새 항목"
+    elif change == "implicit_svg": request.strategy = None
+    elif change == "registered": request.generation_mode = "registered-template"
+    elif change == "not_free": snapshot["composition_mode"] = "template-layout"
+    elif change == "frozen_ref": snapshot["design_pack_template"] = {"version": "v1"}
+    assert asset_slots._native_literal_pages(request, outline, style_snapshot=snapshot,
+                                             has_source_assets=has_source_assets) is None

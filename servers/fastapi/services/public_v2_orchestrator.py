@@ -818,6 +818,14 @@ class SqlPublicV2Orchestrator:
                     )
                 except SourceContentError as error:
                     raise _public_error(error.status_code, error.code) from error
+            if internal_request.svg_design_reference_snapshot_id is not None:
+                from services.presentation_generation_pipeline import _admit_svg_design_reference
+                from fastapi import HTTPException
+
+                try:
+                    await _admit_svg_design_reference(internal_request, session)
+                except HTTPException as error:
+                    raise _public_error(error.status_code, str(error.detail)) from error
             generation_payload = _durable_request_payload(internal_request)
             generation_payload["generation_route_receipt"] = route_payload
             presentation_id = uuid.uuid5(

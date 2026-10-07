@@ -72,8 +72,14 @@ def build_internal_generation_request(
         visionQa=request.quality_policy == "release-v1",
         reference_snapshot_ids=reference_ids,
         authored_style=request.authored_style,
-        **({"page_size": request.page_size, "orientation": request.orientation}
-           if request.page_size is not None else {"aspect_ratio": request.aspect_ratio}),
+        **({"svg_canvas": request.svg_canvas} if request.svg_canvas is not None
+           else {"page_size": request.page_size, "orientation": request.orientation}
+           if request.page_size is not None
+           else {"aspect_ratio": request.aspect_ratio} if "aspect_ratio" in request.model_fields_set
+           else {}),
+        svg_design_reference_snapshot_id=request.svg_design_reference_snapshot_id,
+        svg_design_reference_pin=(request.svg_design_reference_pin.model_dump(mode="json", by_alias=True)
+                                  if request.svg_design_reference_pin is not None else None),
         masterPin=(
             request.master_pin.model_dump(mode="json", by_alias=True)
             if request.master_pin is not None

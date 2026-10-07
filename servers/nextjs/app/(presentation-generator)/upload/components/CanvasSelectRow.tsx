@@ -3,7 +3,7 @@ import { CommandItem } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { CANVAS_ROW_GEOMETRY, type CanvasRowId } from "../utils/autoCanvas";
 
-export type PresetRowId = "wide-16x9" | "tall-9x16" | "tall-9x13" | "square-1x1" | "ultrawide-21x9";
+export type PresetRowId = "standard-4x3" | "wide-16x9" | "tall-9x16" | "tall-9x13" | "square-1x1" | "ultrawide-21x9";
 
 export function ShapeIcon({ widthPx, heightPx }: { widthPx: number; heightPx: number }) {
     const maxW = 22;
@@ -31,7 +31,7 @@ export function CanvasRow({
     id, displayRowId, enabled, reason, badge, title, description, onSelect,
 }: {
     id: CanvasRowId;
-    displayRowId: CanvasRowId | "auto";
+    displayRowId: CanvasRowId | "auto" | "custom" | "source";
     enabled: boolean;
     reason: string | null;
     badge?: string;

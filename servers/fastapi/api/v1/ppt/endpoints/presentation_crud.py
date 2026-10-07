@@ -13,6 +13,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 from sqlmodel import select
+from models.generate_presentation_request import DesignPackPinInput
+from models.svg_canvas import SvgCanvasInput
 
 from api.v1.ppt.endpoints.presentation_helpers import resolve_presentation_fonts
 from api.v1.ppt.endpoints.presentation_crud_helpers import (
@@ -376,9 +378,12 @@ async def create_presentation(
     web_search: Annotated[bool, Body()] = False,
     strategy: Annotated[Literal["authored", "svg"], Body()] = "svg",
     theme: Annotated[Optional[dict], Body()] = None,
-    aspect_ratio: Annotated[Literal["16:9", "9:16", "9:13", "1:1", "21:9"], Body()] = "16:9",
+    aspect_ratio: Annotated[Literal["16:9", "4:3", "9:16", "9:13", "1:1", "21:9"], Body()] = "16:9",
     page_size: Annotated[Optional[Literal["A4"]], Body()] = None,
     orientation: Annotated[Optional[Literal["landscape", "portrait"]], Body()] = None,
+    svg_canvas: Annotated[Optional[SvgCanvasInput], Body()] = None,
+    svg_design_reference_pin: Annotated[Optional[DesignPackPinInput], Body()] = None,
+    svg_design_reference_snapshot_id: Annotated[Optional[uuid.UUID], Body()] = None,
     http_request: Request = None,
     idempotency_key: Annotated[
         Optional[str], Header(alias="Idempotency-Key")
@@ -387,7 +392,25 @@ async def create_presentation(
 ):
     from api.v1.ppt.endpoints.presentation_create_canvas import admitted_create_canvas
 
-    create_canvas = await admitted_create_canvas(http_request, page_size, orientation, aspect_ratio)
+    create_canvas = await admitted_create_canvas(
+        http_request, page_size, orientation, aspect_ratio,
+        strategy=strategy, svg_canvas=svg_canvas,
+    )
+    if (svg_design_reference_pin is not None or svg_design_reference_snapshot_id is not None) and strategy != "svg":
+        raise HTTPException(status_code=422, detail="svg_design_reference_strategy_required")
+    if svg_design_reference_pin is not None and svg_design_reference_snapshot_id is not None:
+        raise HTTPException(status_code=422, detail="svg_design_reference_conflict")
+    if svg_design_reference_snapshot_id is not None:
+        from services.references.service import admit_reference_snapshot
+
+        try:
+            design_reference = await admit_reference_snapshot(
+                sql_session, snapshot_id=svg_design_reference_snapshot_id,
+            )
+        except ReferenceProviderError as error:
+            raise HTTPException(status_code=error.status_code, detail=error.code) from error
+        if design_reference.provider_id != "uploaded_document" or len(design_reference.asset_bindings) != 1:
+            raise HTTPException(status_code=422, detail="svg_uploaded_design_reference_single_asset_required")
     proposed_presentation_id = presentation_id or uuid.uuid4()
     chat_first_enabled = _chat_first_create_enabled()
     if previous_presentation_id is not None and not chat_first_enabled:
@@ -502,6 +525,12 @@ async def create_presentation(
         presentation.theme,
         create_canvas,
     )
+    if svg_design_reference_pin is not None:
+        presentation.theme = {**(presentation.theme or {}), "svgDesignReferencePin":
+                              svg_design_reference_pin.model_dump(mode="json", by_alias=True)}
+    if svg_design_reference_snapshot_id is not None:
+        presentation.theme = {**(presentation.theme or {}),
+                              "svgDesignReferenceSnapshotId": str(svg_design_reference_snapshot_id)}
     # Idempotency comparisons and workspace settings must use the same
     # server-issued theme identity that will be persisted.
     resolved_theme = presentation.theme
@@ -521,6 +550,13 @@ async def create_presentation(
         if page_size == "A4":
             settings.pop("aspect_ratio")
             settings.update({"page_size": page_size, "orientation": orientation})
+        if svg_canvas is not None:
+            settings.pop("aspect_ratio", None)
+            settings["svg_canvas"] = svg_canvas.model_dump(mode="json", by_alias=True)
+        if svg_design_reference_pin is not None:
+            settings["svg_design_reference_pin"] = svg_design_reference_pin.model_dump(mode="json", by_alias=True)
+        if svg_design_reference_snapshot_id is not None:
+            settings["svg_design_reference_snapshot_id"] = str(svg_design_reference_snapshot_id)
         # Authored-only admission stamps a theme-less presentation with the
         # internal {"mode": "authored"} marker. That marker is not a catalog
         # theme and therefore has no public id/name/user metadata.

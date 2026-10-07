@@ -57,6 +57,11 @@ def _validate_source_preservation_entry(source, receipt, *, index, page_count, c
     if not isinstance(bindings, list) or not bindings:
         raise PublicWorkerExecutionError("svg_source_export_bindings_invalid")
     root = ET.fromstring(source)
+    from services.svg_master_furniture import attested_source_furniture
+    try:
+        furniture = attested_source_furniture(source, receipt)
+    except ValueError as error:
+        raise PublicWorkerExecutionError(str(error)) from error
     elements = {element.get("id"): element for element in root.iter() if element.get("id")}
     element_ids = [binding.get("element_id") for binding in bindings if isinstance(binding, dict)]
     if len(element_ids) != len(bindings) or len(set(element_ids)) != len(element_ids):
@@ -84,9 +89,23 @@ def _validate_source_preservation_entry(source, receipt, *, index, page_count, c
                if element.tag in {f"{{{SVG_NS}}}text", f"{{{SVG_NS}}}image"}}
     expected_visible = {binding["element_id"] for binding in bindings
                         if binding["kind"] in {"text", "table_cell", "image"}}
-    if visible != expected_visible:
+    if visible - set(furniture) != expected_visible:
         raise PublicWorkerExecutionError("svg_source_export_unbound_content")
-    return receipt
+    if not furniture:
+        return receipt
+    import base64
+    from utils.hashing import sha256_hex
+
+    # Derived only after receipt, SVG and furniture-image attestation. The
+    # body still has its complete original set of exact source bindings.
+    export_furniture = {
+        "texts": ["".join(node.itertext()) for node in furniture.values()
+                  if node.tag == f"{{{SVG_NS}}}text"],
+        "image_digests": [sha256_hex(base64.b64decode(node.get("href").split(",", 1)[1], validate=True))
+                          for node in furniture.values() if node.tag == f"{{{SVG_NS}}}image"],
+        "digest": receipt["system_furniture"]["digest"],
+    }
+    return {**receipt, "_export_furniture": export_furniture}
 
 
 _BUNDLE_KEYS = {"schemaVersion", "contractVersion", "converterVersion", "converterDigest",
@@ -176,11 +195,14 @@ async def execute_svg_export(job, store):
             canonical_source = source
             source, source_contract = materialize_export_assets(
                 assets, svg=source, job=job, store=store, presentation_id=value["presentationId"],
-                export_format=fmt, width=canvas.width_px, height=canvas.height_px)
+                export_format=fmt, width=canvas.width_px, height=canvas.height_px,
+                **({"source_preservation": entry["sourcePreservation"]} if v3 else {}))
             admitted_assets.append(admit_authorized_svg_materialized(
                 canonical_source, source, source_manifest=source_contract, width_px=canvas.width_px,
                 height_px=canvas.height_px, allow_image_only=verified_full_page_preserve_export(
-                    assets, canonical_svg=canonical_source, source_contract=source_contract)))
+                    assets, canonical_svg=canonical_source, source_contract=source_contract),
+                **({"source_preservation": entry["sourcePreservation"]} if v3 else
+                   {"system_furniture": assets["systemFurniture"]} if assets.get("systemFurniture") else {})))
         else:
             validate_svg(source, width=canvas.width_px, height=canvas.height_px)
             admitted_assets.append(None)

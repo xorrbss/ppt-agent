@@ -303,7 +303,7 @@ export function useRasterSourceReviewState({
   };
   const a4PreviewUrl = rasterReviewImageUrl(currentPage?.fullPageRegion?.cropPreviewUrl ?? null) ?? previewUrl;
   const a4Preview = a4PreviewUrl ? <div className="mx-auto w-full max-w-52 rounded border border-slate-300 bg-white p-1 shadow-sm"
-    style={{ aspectRatio: analysis.targetCanvas === "a4-portrait" ? "840 / 1188" : "1188 / 840" }}>
+    style={{ aspectRatio: analysis.targetWidth && analysis.targetHeight ? `${analysis.targetWidth} / ${analysis.targetHeight}` : analysis.targetCanvas === "a4-portrait" ? "840 / 1188" : "1188 / 840" }}>
     {/* eslint-disable-next-line @next/next/no-img-element */}
     <img src={a4PreviewUrl} alt={tA2b("a4LayoutProportionPreviewForSlideValue", { value0: pageIndex + 1 })} className="h-full w-full object-contain" />
   </div> : null;

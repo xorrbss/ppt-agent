@@ -151,7 +151,8 @@ async def _page(ctx, request, presentation_id, outline, language, job, index, st
         if ctx.raster_reconstruction:
             if payload.get("raster_approval_digest") not in {None, ctx.raster_pin.approval_digest}:
                 raise ValueError("raster_checkpoint_approval_mismatch")
-            if svg is None:
+            free_redesign = author.free_raster_redesign(ctx, index)
+            if svg is None and not free_redesign:
                 with timing.observe_stage(request, "author"):
                     svg, advisories = await author.raster_reconstruct_svg(
                         ctx.raster_analysis, ctx.raster_pin, request, index)
@@ -160,8 +161,12 @@ async def _page(ctx, request, presentation_id, outline, language, job, index, st
                 # regions the dense-page fallback substituted for a group.
                 payload["rasterRenderAdvisories"] = advisories
             payload["raster_approval_digest"] = ctx.raster_pin.approval_digest
-            payload["repair_unavailable"] = True
-            if not payload.get("attempts"):
+            if not free_redesign:
+                payload["repair_unavailable"] = True
+            else:
+                payload.pop("repair_unavailable", None)
+                payload["rasterCompositionMode"] = "free-svg"
+            if not payload.get("attempts") and not free_redesign:
                 payload["attempts"] = [{"kind": "local", "receipt": {}}]
         # At most one model correction. Persist the ordinal before purchase;
         # an uncertain provider attempt is not silently bought again on resume.

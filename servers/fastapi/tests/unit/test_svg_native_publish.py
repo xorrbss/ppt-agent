@@ -196,6 +196,45 @@ def test_pages_without_declarations_publish_nothing():
     assert page_native_objects(payload, pt_per_px=0.75) == (None, None)
 
 
+@pytest.mark.parametrize("declared", [True, False])
+def test_explicit_requested_table_requires_validated_exact_native_rows(declared):
+    from services.generation_core.drivers.svg.native_requirements import apply_requested_native_quality
+    source = "정확한 표: 지역 | 매출(억원) | 비고\n서울 | 1,200 | 본사\n부산 | 850 | 지점 신규\n대구 | 430 |"
+    payload, svg = _page(_table_group())
+    if not declared:
+        payload.pop("nativeDeclarations")
+    quality = {"passed": True}
+    apply_requested_native_quality(quality, payload, svg, source, pt_per_px=.75)
+    assert quality["passed"] is declared
+    assert quality["requestedNativeObjects"]["passed"] is declared
+    if not declared:
+        assert quality["failures"][0]["kind"] == "native_requested_table_missing"
+
+
+def test_requested_chart_does_not_accept_unrelated_native_series_or_plain_bars():
+    from services.generation_core.drivers.svg.native_requirements import apply_requested_native_quality, requested_native_data
+    spec = {"chartType": "bar", "categories": ["A", "B"], "series": [{"name": "S", "values": [30, 60]}]}
+    text = 'font-family="Inter" font-size="16" fill="#333333"'
+    body = (f'<g id="native-chart-two" data-native-chart=\'{_attr(spec)}\'>'
+            f'<rect x="100" y="200" width="100" height="40" fill="#2563EB"/>'
+            f'<rect x="100" y="300" width="200" height="40" fill="#2563EB"/>'
+            f'<text x="60" y="225" {text}>A</text><text x="60" y="325" {text}>B</text>'
+            f'<text x="400" y="180" {text}>S</text></g>')
+    payload, svg = _page(body)
+    accepted, _ = page_native_objects(payload, pt_per_px=.75)
+    assert accepted is not None
+    for source, passed in [("막대 차트: A 30, B 60.", True), ("막대 차트: A 45, B 60.", False),
+                           ("관계도: A에서 B로 이동하고 30에서 60으로 개선", True)]:
+        quality = {"passed": True}
+        apply_requested_native_quality(quality, payload, svg, source, pt_per_px=.75)
+        assert quality["passed"] is passed
+    assert requested_native_data("막대 차트: 1분기 30, 2분기 45, 3분기 60. 단위 억원.")["charts"][0]["values"] == ["30", "45", "60"]
+    payload.pop("nativeDeclarations")
+    quality = {"passed": True}
+    apply_requested_native_quality(quality, payload, svg, "막대 차트: A 30, B 60.", pt_per_px=.75)
+    assert quality["failures"][0]["kind"] == "native_requested_chart_missing"
+
+
 def test_non_table_elements_in_the_group_drop_the_declaration():
     wire, summary, _ = _dropped(_table_group(extra='<circle cx="10" cy="10" r="4" fill="#FF0000"/>'))
     assert wire is None and summary["dropped"][0]["reason"] == "native_group_element_unsupported"

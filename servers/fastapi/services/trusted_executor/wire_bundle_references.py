@@ -13,6 +13,26 @@ from utils.hashing import sha256_hex
 MAX_EXPORT_BUNDLE_BYTES = 8 * 1024 * 1024
 
 
+def _furniture_metadata_valid(value: object) -> bool:
+    """Admit bounded proof metadata; the SVG worker verifies its exact bytes."""
+    if not isinstance(value, Mapping) or set(value) != {
+        "version", "svg_digest", "canvas", "digest", "element_ids", "images",
+    }:
+        return False
+    canvas, ids, images = value["canvas"], value["element_ids"], value["images"]
+    return (
+        value["version"] == "svg-system-furniture/v1"
+        and all(isinstance(value[key], str) and 1 <= len(value[key]) <= 128 for key in ("svg_digest", "digest"))
+        and isinstance(canvas, Mapping) and set(canvas) == {"width", "height"}
+        and all(type(canvas[key]) is int and canvas[key] > 0 for key in canvas)
+        and isinstance(ids, list) and 1 <= len(ids) <= 10000
+        and all(isinstance(node_id, str) and node_id.startswith("svg-system-") for node_id in ids)
+        and len(set(ids)) == len(ids)
+        and isinstance(images, Mapping) and len(images) <= 4096
+        and all(key in ids and isinstance(digest, str) and 1 <= len(digest) <= 128 for key, digest in images.items())
+    )
+
+
 def _input_bundle_references(job: IsolatedWorkerJob, path: Path) -> tuple[ArtifactRef, ...]:
     if job.role == "render" and job.input_artifact.kind != "export-bundle":
         return ()
@@ -62,8 +82,10 @@ def _input_bundle_references(job: IsolatedWorkerJob, path: Path) -> tuple[Artifa
             }
             if (
                 not isinstance(assets, Mapping)
-                or set(assets) not in (required_asset_keys, required_asset_keys | {"fullPagePreserve"})
+                or not required_asset_keys <= set(assets)
+                or set(assets) - required_asset_keys - {"fullPagePreserve", "systemFurniture"}
                 or ("fullPagePreserve" in assets and type(assets["fullPagePreserve"]) is not bool)
+                or ("systemFurniture" in assets and not _furniture_metadata_valid(assets["systemFurniture"]))
                 or not isinstance(assets["derivatives"], Mapping)
                 or len(assets["derivatives"]) > 4096
             ):

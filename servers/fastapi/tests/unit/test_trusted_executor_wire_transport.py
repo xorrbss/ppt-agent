@@ -89,9 +89,11 @@ def _artifact_reference(
     "public-svg-export-bundle/v2",
     "public-svg-export-bundle/v3",
 ])
+@pytest.mark.parametrize("system_furniture", [False, True])
 def test_svg_bundle_shared_assets_have_one_physical_staging_entry(
     tmp_path: Path,
     schema_version: str,
+    system_furniture: bool,
 ) -> None:
     owner_id = uuid.uuid4()
     operation_id = uuid.uuid4()
@@ -154,6 +156,13 @@ def test_svg_bundle_shared_assets_have_one_physical_staging_entry(
             )
         ],
     }
+    if system_furniture:
+        for entry in bundle["slides"]:
+            entry["assets"]["systemFurniture"] = {
+                "version": "svg-system-furniture/v1", "svg_digest": "sha256:" + "a" * 64,
+                "digest": "sha256:" + "b" * 64, "canvas": {"width": 1280, "height": 720},
+                "element_ids": ["svg-system-master-furniture"], "images": {},
+            }
     bundle_payload = json.dumps(bundle, separators=(",", ":")).encode()
     bundle_reference = _artifact_reference(
         owner_id=owner_id,

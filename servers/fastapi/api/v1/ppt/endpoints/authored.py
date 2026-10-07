@@ -121,7 +121,10 @@ def get_canvas_capabilities(
             if authored_style else None
         ),
     )
+    from services.svg_canvas import svg_canvas_capabilities
+
     return {
+        "svgCanvases": svg_canvas_capabilities(generation_strategy),
         "contractVersions": ["authored-canvas/v1", "document-canvas/v1"],
         "a4": a4,
         "sourceContentSvg": source_svg,

@@ -145,9 +145,15 @@ async def author_images(session, service, *, context, manifest, page_index):
 
 
 async def screen_placement(session, service, *, context, revision, manifest, source_pointer,
-                            svg, page_index, candidates, width, height, saved_envelope=None):
+                            svg, page_index, candidates, width, height, saved_envelope=None,
+                            system_furniture=None):
     from services.svg_image_derivative import build_purpose_derivative
     from services.svg_asset_resolver import resolve_svg_for_render
+    from services.svg_master_furniture import attested_svg_furniture
+    contract = {slot.slot_id: {"required": slot.policy.required, "allowOmit": slot.policy.allow_omit}
+                for slot in manifest.slots if slot.slot_id in next(page.slot_ids for page in manifest.offered_pages if page.page_index == page_index)}
+    furniture = attested_svg_furniture(svg, system_furniture, source_manifest=contract,
+                                       width=width, height=height) if system_furniture else {}
     if saved_envelope is not None:
         from services.svg_asset_persistence import load_placement_manifest_pointer
         if (saved_envelope.get("sourceManifest") != source_pointer
@@ -159,7 +165,7 @@ async def screen_placement(session, service, *, context, revision, manifest, sou
             materialized = await resolve_svg_for_render(svg, manifest=manifest,
                 derivatives={item.slot_id: item.derivative for item in placement.placements}, session=session,
                 owner_id=context.owner_id, tenant_id=context.tenant_id, width=width, height=height,
-                service=service, placement_manifest=placement, page_index=page_index)
+                service=service, placement_manifest=placement, page_index=page_index, system_furniture=system_furniture)
             return saved_envelope, materialized
     slots = {slot.slot_id: slot for slot in manifest.slots}
     placements = []
@@ -172,7 +178,7 @@ async def screen_placement(session, service, *, context, revision, manifest, sou
             values = _numbers(transform.removeprefix("translate(").removesuffix(")"))
             tx += values[0]
             ty += values[1] if len(values) > 1 else 0
-        if node.tag.rsplit("}", 1)[-1] == "image":
+        if node.tag.rsplit("}", 1)[-1] == "image" and node.get("id") not in furniture:
             yield node, tx, ty
         for child in node:
             yield from visit(child, tx, ty)
@@ -202,7 +208,8 @@ async def screen_placement(session, service, *, context, revision, manifest, sou
     materialized = await resolve_svg_for_render(svg, manifest=manifest,
         derivatives={item.slot_id: item.derivative for item in placement.placements},
         session=session, owner_id=context.owner_id, tenant_id=context.tenant_id,
-        width=width, height=height, service=service, page_index=page_index, placement_manifest=placement)
+        width=width, height=height, service=service, page_index=page_index, placement_manifest=placement,
+        system_furniture=system_furniture)
     envelope = dict(schemaVersion="svg-slide-assets/v1", canonicalVersion="svg-static/v2",
         sourceManifest=source_pointer, screenPlacement=pointer.model_dump(mode="json", by_alias=True),
         sourcePageIndex=page_index, slideRevision=revision)

@@ -39,24 +39,24 @@ def document_canvas_from_source_slide_size(
 
     if width_emu <= 0 or height_emu <= 0:
         raise ValueError("document_canvas_source_size_invalid")
-    if width_emu < height_emu:
-        raise ValueError("svg_source_canvas_not_supported")
-    # The current SVG source-restyle capability is the user's A4-landscape
-    # path.  Classification is deliberately tolerant of the sub-millimetre
-    # producer rounding found in valid PPTX files; the stored EMU remain exact.
+    # Preserve the historical A4 landscape raster for immutable v1 bindings.
     width_mm = Decimal(width_emu) / Decimal(36000)
     height_mm = Decimal(height_emu) / Decimal(36000)
-    if not (
-        Decimal("296") <= width_mm <= Decimal("298")
-        and Decimal("209") <= height_mm <= Decimal("211")
-    ):
-        raise ValueError("svg_source_canvas_not_supported")
-    logical_width = 1188
-    logical_height = int(
-        (Decimal(logical_width) * Decimal(height_emu) / Decimal(width_emu))
-        .to_integral_value(rounding="ROUND_HALF_UP")
-    )
-    margin = 60.0
+    legacy_a4 = (Decimal("296") <= width_mm <= Decimal("298")
+                 and Decimal("209") <= height_mm <= Decimal("211"))
+    if legacy_a4:
+        logical_width, margin = 1188, 60.0
+    else:
+        # Source EMU may have sub-hundredth-mm producer rounding; validate
+        # physical bounds directly without quantizing the stored dimensions.
+        if not (50 <= width_mm <= 1000 and 50 <= height_mm <= 1000
+                and Decimal("0.25") <= width_mm / height_mm <= 4):
+            raise ValueError("svg_source_canvas_not_supported")
+        logical_width = int((Decimal(1280) * width_mm / max(width_mm, height_mm))
+                            .to_integral_value(rounding="ROUND_HALF_UP"))
+        margin = 64.0
+    logical_height = int((Decimal(logical_width) * Decimal(height_emu) / Decimal(width_emu))
+                         .to_integral_value(rounding="ROUND_HALF_UP"))
     return DocumentCanvasMetadata(
         contract_version=DOCUMENT_CANVAS_CONTRACT_VERSION,
         logical_size=LogicalSize(width=logical_width, height=logical_height),

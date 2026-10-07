@@ -43,6 +43,12 @@ async def raster_reconstruct_svg(raster_analysis, raster_pin, request, index):
     return svg, advisories
 
 
+def free_raster_redesign(ctx, index):
+    """New snapshots compose approved redesign pages; historical replay stays local."""
+    return bool(ctx.raster_reconstruction and ctx.snapshot.get("composition_mode") == "free-svg"
+                and ctx.raster_analysis.pages[index].render_mode == "redesign")
+
+
 @dataclass
 class AuthorAttempt:
     """Result of one author attempt; ``payload`` is mutated in place."""
@@ -70,7 +76,8 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
     vector_icons = offer.vector[index] if offer is not None else {}
     local_authored = None
     hint = payload.get("repair_hint")
-    if ctx.source_reflow and not payload.get("local_layout_attempted"):
+    free_source_composition = (ctx.snapshot.get("source_template") or {}).get("composition_mode") == "free-svg"
+    if ctx.source_reflow and not free_source_composition and not payload.get("local_layout_attempted"):
         from services.svg_source_template_layout import try_template_source_layout
         page_task = asyncio.current_task()
 
@@ -127,6 +134,12 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
         try:
             if local_authored is not None:
                 authored = local_authored
+            elif free_raster_redesign(ctx, index):
+                from services.generation_core.authoring.author_raster_svg_layout import author_raster_svg_layout
+
+                authored = await author_raster_svg_layout(ctx.raster_analysis, ctx.raster_pin, index, ctx.snapshot,
+                    instructions=request.instructions, correction_hint=hint,
+                    receipt_attempt_ordinal=provider_ordinal, before_dispatch=before_dispatch)
             elif ctx.source_reflow:
                 from services.generation_core.authoring.author_source_svg_layout import author_source_svg_layout
                 authored = await author_source_svg_layout(
@@ -140,6 +153,7 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
                     instructions=request.instructions, correction_hint=hint,
                     receipt_attempt_ordinal=provider_ordinal,
                     before_dispatch=before_dispatch,
+                    _validated_pages=ctx.source_units,
                 )
             else:
                 authored = await author_slide_svg(
@@ -196,5 +210,9 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
         payload["source_preservation"] = authored.receipt.get("source_preservation")
         if payload["source_preservation"] is not None:
             payload["source_preservation"]["font_profile"] = ctx.source_font_profile
+    if free_raster_redesign(ctx, index):
+        payload["rasterCompositionMode"] = "free-svg"
+        payload["rasterContentLedger"] = authored.receipt.get("raster_content_ledger")
+        payload["rasterRegionBindings"] = authored.receipt.get("raster_region_bindings")
     await checkpoint(job, index, payload=payload)
     return AuthorAttempt(svg=svg, retry=False)

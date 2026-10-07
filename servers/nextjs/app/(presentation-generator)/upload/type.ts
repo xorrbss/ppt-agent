@@ -129,7 +129,12 @@ export interface PresentationConfig {
   includeTableOfContents: boolean;
   includeTitleSlide: boolean;
   webSearch: boolean;
-  aspectRatio: "16:9" | "9:16" | "9:13" | "1:1" | "21:9";
+  aspectRatio: "16:9" | "9:16" | "9:13" | "1:1" | "21:9" | "4:3";
+  svgDesignReferenceSnapshotId?: string;
+  svgDesignReferencePending?: boolean;
+  svgDesignReferencePin?: { design_pack_id: string; version: number; digest: string };
+  svgCanvas?: { width_mm: number; height_mm: number };
+  sourceCanvas?: boolean;
   /** Present only for newly created documents using the common physical canvas. */
   pageSize?: "A4";
   orientation?: "landscape" | "portrait";
@@ -138,7 +143,9 @@ export interface PresentationConfig {
 
 export type DocumentCanvasRequest =
   | { page_size: "A4"; orientation: "landscape" | "portrait" }
-  | { aspect_ratio: PresentationConfig["aspectRatio"] };
+  | { aspect_ratio: PresentationConfig["aspectRatio"] }
+  | { svg_canvas: NonNullable<PresentationConfig["svgCanvas"]> }
+  | Record<string, never>;
 
 /**
  * Keep the legacy selector out of every new A4 payload. The backend rejects a
@@ -147,6 +154,8 @@ export type DocumentCanvasRequest =
 export function documentCanvasRequestForConfig(
   config: PresentationConfig,
 ): DocumentCanvasRequest {
+  if (config.sourceCanvas) return {};
+  if (config.svgCanvas) return { svg_canvas: config.svgCanvas };
   if (config.pageSize === "A4" && config.orientation) {
     return { page_size: "A4", orientation: config.orientation };
   }

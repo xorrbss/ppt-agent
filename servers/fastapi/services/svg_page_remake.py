@@ -4,20 +4,52 @@ from __future__ import annotations
 from copy import deepcopy
 import xml.etree.ElementTree as ET
 
-from sqlalchemy import update
+from sqlalchemy import select, update
 from constants.user_messages import UserMessageKey, user_message
 from models.sql.slide import SlideModel
 from services.authored_canvas import presentation_canvas_contract, presentation_canvas_metadata
 from services.authored_presentation_artifacts import _save_slide_pngs
-from services.svg_contract import finalize_svg
+from services.svg_contract import finalize_svg, source_digest
 from services.svg_renderer import render_svg_with_metrics
 from services.generation_core.authoring.author_slide_svg import author_slide_svg
 from utils.hashing import sha256_hex
 
 
+def _native_candidate(svg, authored_svg, declarations):
+    from services.generation_core.drivers.svg.native_declarations import bind_native_declarations, native_binding_digest
+    payload = {"svgDigest": source_digest(svg), "nativeBindingDigest": native_binding_digest(svg)}
+    bind_native_declarations(payload, authored_svg, declarations)
+    return payload
+
+
+def _candidate_digest(svg, image, native=None):
+    from services.authored_page_remake_service import _canonical_digest
+    return _canonical_digest({"svg": svg, "image": image, **({"native": native} if native is not None else {})})
+
+
+def _native_projection(svg, native, metadata, source):
+    from services.generation_core.drivers.svg.native_declarations import bound_declarations, native_binding_digest
+    from services.generation_core.drivers.svg.native_publish import canvas_point_per_px, page_native_objects
+    from services.generation_core.drivers.svg.native_requirements import apply_requested_native_quality
+    if native is not None and (not isinstance(native, dict) or native.get("svgDigest") != source_digest(svg)
+            or native.get("nativeBindingDigest") != native_binding_digest(svg)):
+        raise ValueError("svg_page_remake_native_binding_invalid")
+    payload = {**(native or {}), "svg_content": svg}
+    record, current = bound_declarations(payload, svg)
+    if record is not None and not current:
+        raise ValueError("svg_page_remake_native_binding_invalid")
+    scale = canvas_point_per_px(metadata)
+    quality = {"passed": True, "failures": []}
+    if native is not None:
+        apply_requested_native_quality(quality, payload, svg, source, pt_per_px=scale)
+        if quality.get("passed") is False:
+            raise ValueError("svg_page_remake_requested_native_missing")
+    return page_native_objects(payload, pt_per_px=scale)
+
+
 async def preview_svg(presentation, slides, index, request, task, session):
     from services.authored_page_remake_service import (
-        PREVIEW_KIND, _set_task, _canonical_digest, authored_page_source_digest,
+        PREVIEW_KIND, _set_task, authored_page_source_digest,
     )
     target = slides[index]
     from services.svg_document_mutations import read_svg_slide_assets, rebound_placement, materialize_rebound_svg
@@ -58,6 +90,8 @@ async def preview_svg(presentation, slides, index, request, task, session):
         raise ValueError(result.receipt["validation_error"])
     final = finalize_svg(result.svg_content, index=index, n=len(slides), width=canvas.width_px,
                          height=canvas.height_px, style_snapshot=snapshot, source_manifest=contract)
+    native = _native_candidate(final, result.svg_content, result.native_declarations)
+    _native_projection(final, native, presentation_canvas_metadata(presentation.theme), source)
     render_source = final
     if assets is not None:
         placement = rebound_placement(final, assets[0], assets[1], revision=presentation.revision + 1)
@@ -65,7 +99,7 @@ async def preview_svg(presentation, slides, index, request, task, session):
     render = await render_svg_with_metrics(render_source, width=canvas.width_px, height=canvas.height_px,
                                            instructions=instruction, **physical_kwargs)
     image = _save_slide_pngs(presentation.id, [render.png], str(task.id))[0]
-    digest = _canonical_digest({"svg": final, "image": image})
+    digest = _candidate_digest(final, image, native)
     ready_message = user_message(UserMessageKey.REMAKE_SVG_READY, page=index + 1)
     await _set_task(session, task, status="completed", message=ready_message, data={
         "kind": PREVIEW_KIND, "phase": "preview_ready", "source_format": "svg",
@@ -73,6 +107,7 @@ async def preview_svg(presentation, slides, index, request, task, session):
         "source_digest": baseline_digest, "candidate_digest": digest,
         "source_revision": presentation.revision,
         "candidate_svg": final, "candidate_image": image, "svg_quality": render.quality,
+        "candidate_native": native,
         "raw_response": result.raw_response, "provider_receipt": result.receipt,
         "instruction": instruction,
         "validation": {"candidate_render": "passed", "candidate_dom": "warning", "candidate_change": "changed",
@@ -84,7 +119,7 @@ async def preview_svg(presentation, slides, index, request, task, session):
 async def publish_svg_candidate(session, presentation, slides, index, task, *, snapshot=True,
                                 operation_id=None, attempt_token=None, expected_revision=None):
     from services.authored_page_remake_service import (
-        AuthoredPageRemakeError, PREVIEW_KIND, _canonical_digest, authored_page_source_digest,
+        AuthoredPageRemakeError, PREVIEW_KIND, authored_page_source_digest,
         _json_cas_predicate, version_service,
     )
     target = slides[index]
@@ -92,23 +127,41 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
     from services.svg_document_mutations import read_svg_slide_assets, rebind_svg_assets
     assets = await read_svg_slide_assets(session, presentation, target)
     if (task.status != "completed" or task.owner_id != presentation.owner_id
-            or data.get("kind") != PREVIEW_KIND or data.get("phase") != "preview_ready"
+            or target.owner_id != presentation.owner_id or data.get("kind") != PREVIEW_KIND
             or data.get("presentation_id") != str(presentation.id) or data.get("slide_id") != str(target.id)
-            or data.get("slide_index") != index or data.get("source_format") != "svg"
+            or data.get("slide_index") != index or data.get("source_format") != "svg"):
+        raise AuthoredPageRemakeError("svg_page_remake_source_changed", stage="publish_validation")
+    current_candidate = (data.get("phase") == "published" and data.get("publish", {}).get("status") == "published"
+        and operation_id is not None and attempt_token is not None and expected_revision is not None
+        and expected_revision == presentation.revision and target.svg_content == data.get("candidate_svg")
+        and (target.properties or {}).get("image") == data.get("candidate_image"))
+    if not current_candidate and (data.get("phase") != "preview_ready"
             or data.get("source_revision") != presentation.revision
             or data.get("source_digest") != authored_page_source_digest(target)):
         raise AuthoredPageRemakeError("svg_page_remake_source_changed", stage="publish_validation")
     svg, image = data.get("candidate_svg"), data.get("candidate_image")
+    native = data.get("candidate_native")
     if not isinstance(svg, str) or not isinstance(image, str) or (
-            data.get("candidate_digest") != _canonical_digest({"svg": svg, "image": image})):
+            data.get("candidate_digest") != _candidate_digest(svg, image, native)):
         raise AuthoredPageRemakeError("svg_page_remake_candidate_invalid", stage="publish_validation")
+    native_objects, native_summary = _native_projection(svg, native,
+        presentation_canvas_metadata(presentation.theme), (target.content or {}).get("source", ""))
+    if current_candidate:
+        from services.generation_core.native_objects import SLIDE_CONTENT_KEY as NATIVE_OBJECTS_KEY
+        if not isinstance(native, dict) or (target.content or {}).get(NATIVE_OBJECTS_KEY) != native_objects:
+            raise AuthoredPageRemakeError("svg_page_remake_candidate_invalid", stage="publish_validation")
     canvas = presentation_canvas_contract(presentation.theme)
     envelope = None
     render_source = svg
     if assets is not None:
-        envelope, render_source = await rebind_svg_assets(session, presentation, target, svg, assets,
-            page_index=index, operation_id=operation_id, attempt_token=attempt_token,
-            expected_revision=expected_revision)
+        if current_candidate:
+            from services.svg_document_mutations import materialize_rebound_svg
+            source_index = target.content["svgAssetManifest"].get("sourcePageIndex", index)
+            render_source = await materialize_rebound_svg(session, presentation, svg, assets[0], assets[1], source_index)
+        else:
+            envelope, render_source = await rebind_svg_assets(session, presentation, target, svg, assets,
+                page_index=index, operation_id=operation_id, attempt_token=attempt_token,
+                expected_revision=expected_revision)
     from services.document_canvas import DocumentCanvasMetadata, parse_canvas_metadata
     metadata = parse_canvas_metadata(presentation_canvas_metadata(presentation.theme))
     physical_kwargs = {"physical_canvas": metadata} if isinstance(metadata, DocumentCanvasMetadata) else {}
@@ -117,23 +170,55 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
         instructions=data.get("instruction"), **physical_kwargs)
     if not image.endswith(f"-{sha256_hex(rendered.png)}.png"):
         raise AuthoredPageRemakeError("svg_page_remake_capture_changed", stage="publish_validation")
-    if snapshot:
+    if snapshot and not current_candidate:
         await version_service.snapshot_slides(session, presentation.id,
             [item.model_dump(mode="json") for item in slides],
             label=user_message(UserMessageKey.VERSION_LABEL_PAGE_REMAKE, page=index + 1), force=True)
+    from services.generation_core.quality.page_outcome import PageOutcome, classify_page_outcomes
+    measured_quality = deepcopy(rendered.quality)
+    outcome = classify_page_outcomes([PageOutcome(index=index, source_format="svg", source=svg,
+        png_path=image, quality=measured_quality, attempts=1,
+        failures=tuple(item for item in measured_quality.get("failures", []) if isinstance(item, dict)))])[0]
+    measured_quality.update(verified=outcome.verified, classification=outcome.classification)
     content = deepcopy(target.content or {})
+    from services.generation_core.native_objects import SLIDE_CONTENT_KEY as NATIVE_OBJECTS_KEY
+    content.pop(NATIVE_OBJECTS_KEY, None)
+    receipt = dict(content.get("svgReceipt") or {})
+    receipt.pop("nativeObjects", None)
+    for key in ("raw_response", "raw_response_sha256", "attempts", "model_attempt_count", "provider_failures",
+                "inflight", "initial_quality", "last_valid_svg", "last_valid_quality", "terminal",
+                "repair_hint", "repair_unavailable"):
+        receipt.pop(key, None)
+    from services.svg_presentation_checkpoint import _write_png
+    if isinstance(data.get("raw_response"), str):
+        receipt["raw_response_sha256"] = sha256_hex(data["raw_response"].encode("utf-8"))
+    receipt["remake"] = {"preview_task_id": str(task.id), "source_revision": data["source_revision"],
+                         "provider_receipt": deepcopy(data.get("provider_receipt") or {})}
+    if native_objects is not None:
+        content[NATIVE_OBJECTS_KEY] = native_objects
+    if native_summary is not None:
+        receipt["nativeObjects"] = native_summary
+    content["svgReceipt"] = receipt
     if envelope is not None:
         content["svgAssetManifest"] = envelope
     from services.svg_page_publication import set_svg_page
     fields = {}
-    set_svg_page(fields, svg_content=svg, content=content, quality=rendered.quality)
+    set_svg_page(fields, svg_content=svg, content=content, quality=measured_quality)
+    fields["content"]["svgReceipt"].update(_write_png(rendered.png))
     properties = {**(target.properties or {}), "image": image}
-    changed = await session.execute(update(SlideModel).where(
+    statement = update(SlideModel).where(
         SlideModel.id == target.id, SlideModel.presentation == presentation.id,
         SlideModel.owner_id == presentation.owner_id, SlideModel.svg_content == target.svg_content,
         _json_cas_predicate(session, SlideModel.content, target.content),
         _json_cas_predicate(session, SlideModel.properties, target.properties),
-    ).values(**fields, properties=properties).execution_options(synchronize_session=False))
+    )
+    if current_candidate:
+        from models.sql.presentation import PresentationModel
+        statement = statement.where(SlideModel.presentation.in_(select(PresentationModel.id).where(
+            PresentationModel.id == presentation.id, PresentationModel.owner_id == presentation.owner_id,
+            PresentationModel.revision == expected_revision)))
+    changed = await session.execute(statement.values(**fields, properties=properties)
+                                    .execution_options(synchronize_session=False))
     if changed.rowcount != 1:
         raise AuthoredPageRemakeError("svg_page_remake_source_changed", stage="publish")
     await session.refresh(target)
@@ -141,7 +226,7 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
     svg_meta = dict(theme["svg"])
     qualities = list(svg_meta.get("quality", []))
     if index < len(qualities):
-        qualities[index] = rendered.quality
+        qualities[index] = measured_quality
     from services.generation_core.quality.page_outcome import review_page_indices
     review = review_page_indices(qualities)
     quality_status = "review_required" if review else "passed"

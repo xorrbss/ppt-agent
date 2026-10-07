@@ -136,7 +136,101 @@ async def project_offer(session, offer: AssetOffer, *, presentation_id, count: i
     return result
 
 
-async def resolve_offer(request, outline, roles, job, *, profile, checkpoint, durable: bool) -> AssetOffer:
+_NATIVE_LITERAL_VISUAL_REQUEST = re.compile(
+    r"image|photo|picture|illustrat|artwork|diagram|flowchart|hierarch|roadmap|timeline|"
+    r"process|workflow|isometric|icon|이미지|사진|삽화|일러스트|그림|관계도|흐름도|조직도|"
+    r"프로세스|아이콘|도식|관계|절차|단계|→|->", re.I,
+)
+
+
+def _native_literal_pages(request, outline, *, style_snapshot, has_source_assets):
+    """Require complete literal coverage, rather than finding a chart inside prose."""
+    from services.generation_core.drivers.svg.native_requirements import requested_native_data
+
+    if (has_source_assets is not False or getattr(request, "strategy", None) != "svg"
+            or getattr(request, "generation_mode", None) not in {"auto", "free-design"}
+            or getattr(request, "authored_style", None) != "default"
+            or not isinstance(style_snapshot, dict) or style_snapshot.get("composition_mode") != "free-svg"
+            or style_snapshot.get("style_id") != "default"):
+        return None
+    if any(getattr(request, key, None) for key in (
+        "files", "reference_snapshot_ids", "_reference_snapshots", "master_pin", "design_pack_pin",
+        "svg_design_reference_pin", "svg_design_reference_snapshot_id", "_svg_uploaded_design_reference",
+        "_source_content_svg_reflow", "_raster_reconstruction")):
+        return None
+    if any(style_snapshot.get(key) for key in ("master_template", "design_pack_template")):
+        return None
+    supplied = getattr(request, "slides_markdown", None)
+    contents = [slide.content for slide in outline.slides]
+    if not supplied or supplied != contents:
+        return None
+    if _NATIVE_LITERAL_VISUAL_REQUEST.search("\n".join([getattr(request, "instructions", None) or "", *contents])):
+        return None
+    pages = []
+    for content in contents:
+        wanted = requested_native_data(content)
+        if not wanted:
+            return None
+        rows, charts = [], []
+        for line in content.splitlines():
+            line = line.strip()
+            if not line or re.fullmatch(r"#{1,6}\s+\S.*", line):
+                continue
+            if "|" in line:
+                cells = [cell.strip() for cell in line.strip("|").split("|")]
+                if len(cells) < 2 or len(cells) > 8 or not all(cells):
+                    return None
+                if all(re.fullmatch(r"[:\-\s]+", cell) for cell in cells):
+                    continue
+                rows.append(cells)
+            elif re.fullmatch(r"(?:chart|차트)\s*[:：]\s*.+", line, re.I):
+                literal = requested_native_data(line).get("charts", [])
+                if len(literal) != 1:
+                    return None
+                parts = re.split(r"[,;]\s*(?!\d{3}(?:\D|$))", re.split(r"[:：]", line, maxsplit=1)[1])
+                if not all(re.fullmatch(r"\s*(.+?)\s+([-+]?\d+(?:,\d{3})*(?:\.\d+)?)\s*", part) for part in parts):
+                    return None
+                charts.extend(literal)
+            else:
+                return None
+        if (rows != wanted.get("tableRows", []) or charts != wanted.get("charts", [])
+                or len(rows) > 64 or any(len(chart["categories"]) > 32 for chart in charts)):
+            return None
+        labels = (rows[0] if rows else []) + [label for chart in charts for label in chart["categories"]]
+        pages.append(list(dict.fromkeys(label for label in labels if len(label) <= 80))[:4])
+    return pages
+
+
+async def _native_literal_offer(pages, request):
+    """Offer bounded catalogue vectors; no planner or image provider is dispatched."""
+    from services.generation_core.assets.icon_pack import concept_key, resolve_icons
+    from services.generation_core.assets.offer import _file_slot, ICON_EDGE_HINT
+
+    labels = list(dict.fromkeys(label for page in pages for label in page))[:8]
+    slots = []
+    failures = []
+    try:
+        resolution = await resolve_icons(labels, generate=False, pack_key="default",
+                                         color=getattr(request, "primary_color", None) or "#1E5EFF")
+        for index, page in enumerate(pages):
+            for label in page:
+                if label not in labels or len(slots) >= 8:
+                    continue
+                icon = resolution.icons.get(concept_key(label))
+                if icon is None or icon.source != "library" or Path(icon.path).suffix.lower() != ".svg":
+                    continue
+                slots.append(_file_slot(icon.path, page_index=index, role="figure-icon", kind="icon",
+                                        alt=f"icon: {label}", concept=label,
+                                        bbox_hint=(0.0, 0.0, ICON_EDGE_HINT, ICON_EDGE_HINT), origin="library"))
+    except (ValueError, OSError) as error:
+        failures.append(type(error).__name__)
+    return AssetOffer(slots=tuple(slots), receipt={"status": "native_literal_library_only", "providerCalls": 0,
+        "illustrations": 0, "icons": len(slots), "failures": failures,
+        "eligibilityVersion": "svg-native-literal-offer/v1"})
+
+
+async def resolve_offer(request, outline, roles, job, *, profile, checkpoint, durable: bool,
+                        style_snapshot: dict | None = None, has_source_assets: bool | None = None) -> AssetOffer:
     """Replay the persisted offer on resume, or build and persist a new one."""
 
     if job is not None and not durable:
@@ -152,8 +246,12 @@ async def resolve_offer(request, outline, roles, job, *, profile, checkpoint, du
     from services.image_generation_service import ImageGenerationService
     from utils.asset_directory_utils import get_images_directory
 
-    image_service = ImageGenerationService(get_images_directory())
-    if image_service.is_image_generation_disabled or image_service.image_gen_func is None:
+    literal_pages = _native_literal_pages(request, outline, style_snapshot=style_snapshot,
+                                          has_source_assets=has_source_assets)
+    image_service = ImageGenerationService(get_images_directory()) if literal_pages is None else None
+    if literal_pages is not None:
+        offer = await _native_literal_offer(literal_pages, request)
+    elif image_service.is_image_generation_disabled or image_service.image_gen_func is None:
         # No picture can be made, so the plan call that would place them is
         # not bought either. Persisted like any offer, so a resume after the
         # setting changes still matches the sealed source manifest.

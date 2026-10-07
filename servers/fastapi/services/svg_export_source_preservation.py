@@ -47,11 +47,17 @@ def source_preservation_receipts(presentation, slides, canvas):
             template = snapshot.get("source_template", {})
             application = receipt.get("template_application", {})
             quality = (slide.content or {}).get("svgReceipt", {}).get("quality", {})
+            free_composition = template.get("composition_mode") == "free-svg"
+            layout_valid = (
+                receipt.get("layout_id") == "free-svg" and application.get("composition_mode") == "free-svg"
+                if free_composition else
+                receipt.get("layout_id") in {layout["id"] for layout in template.get("layouts", [])}
+            )
             if (not template.get("digest") or receipt.get("template_digest") != template["digest"]
                     or receipt.get("style_digest") != snapshot.get("digest")
                     or application.get("template_digest") != template["digest"]
                     or application.get("layout_id") != receipt.get("layout_id")
-                    or receipt.get("layout_id") not in {layout["id"] for layout in template.get("layouts", [])}
+                    or not layout_valid
                     or application.get("passed") is not True
                     or any(application.get("checks", {}).get(c) is not True for c in TEMPLATE_CHECKS)):
                 raise PublicExportOperationError("svg_source_export_template_evidence_invalid")

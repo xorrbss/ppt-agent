@@ -64,13 +64,21 @@ export const useRasterSessionRecovery = ({
       const raw = window.sessionStorage.getItem(RASTER_REVIEW_RECOVERY_KEY);
       if (raw) saved = JSON.parse(raw) as RasterReviewRecovery;
     } catch { forgetRasterReview(); }
-    if (!saved?.operationId || !saved.presentationId || saved.authoredStyle !== "screenshot-blue") return;
+    if (!saved?.operationId || !saved.presentationId || !saved.authoredStyle) return;
     const recovery = saved;
     const controller = new AbortController();
     setRasterAdvancedReview(recovery.analysisMode === "reconstruct");
     setPendingPresentationId(recovery.presentationId);
     setRasterRecovery(recovery);
-    setConfig((previous) => ({ ...previous, pageSize: "A4", orientation: recovery.orientation }));
+    setConfig((previous) => ({
+      ...previous, sourceCanvas: undefined, svgDesignReferencePending: false,
+      svgDesignReferenceSnapshotId: recovery.svgDesignReferenceSnapshotId,
+      svgDesignReferencePin: recovery.svgDesignReferencePin,
+      svgCanvas: recovery.svgCanvas,
+      ...(recovery.svgCanvas ? { pageSize: undefined, orientation: undefined }
+        : recovery.aspectRatio ? { pageSize: undefined, orientation: undefined, aspectRatio: recovery.aspectRatio }
+        : { pageSize: "A4", orientation: recovery.orientation }),
+    }));
     dispatch(setPptGenUploadState({ authoredStyle: recovery.authoredStyle, generationStrategy: "svg", sourceContentMode: true }));
     setGenerationAttemptActive(true);
     setLoadingState({ isLoading: true, message: "이전 원본 분석을 다시 불러오는 중…", showProgress: true });

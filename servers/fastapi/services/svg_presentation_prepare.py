@@ -163,7 +163,7 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
     asset_offer = None
     if not source_reflow and not raster_reconstruction:
         asset_offer = await _offer_assets(request, presentation_id, outline, roles, job, planned,
-                                          manifests, canonical_assets=canonical_assets)
+                                          manifests, canonical_assets=canonical_assets, style_snapshot=snapshot)
     source_manifest = source_pointer = asset_context = asset_revision = None
     service = None
     if canonical_assets:
@@ -213,7 +213,7 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
 
 
 async def _offer_assets(request, presentation_id, outline, roles, job, planned, manifests, *,
-                        canonical_assets):
+                        canonical_assets, style_snapshot=None):
     """Add the deck's planned illustrations/icons to every page's image offer.
 
     Raster slots join ``planned`` (and the inline manifests on the
@@ -228,7 +228,8 @@ async def _offer_assets(request, presentation_id, outline, roles, job, planned, 
 
     offer = await resolve_offer(request, outline, roles, job,
                                 profile=resolve_svg_runtime_profile(source_reflow=False),
-                                checkpoint=_facade._checkpoint, durable=canonical_assets)
+                                checkpoint=_facade._checkpoint, durable=canonical_assets,
+                                style_snapshot=style_snapshot, has_source_assets=any(planned))
     if not offer.slots:
         return SvgAssetOffer(raster=[{} for _ in planned], vector=[{} for _ in planned],
                              slots=[{} for _ in planned], receipt=dict(offer.receipt))

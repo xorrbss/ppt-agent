@@ -142,11 +142,23 @@ def _canvas_metadata_from_contract(aspect_ratio: AuthoredAspectRatio, canvas: ob
 
 
 def request_canvas_contract(request: Any) -> CanvasContract:
+    from services.generation_core.admission.strategy import resolve_generation_strategy
+    from services.svg_canvas import selected_svg_canvas
+
+    svg = resolve_generation_strategy(request) == "svg"
+    if svg and (getattr(request, "svg_canvas", None) is not None or request.aspect_ratio == "4:3"):
+        metadata = selected_svg_canvas(request)
+        frozen = getattr(request, "_document_canvas", None)
+        if frozen is not None and frozen != metadata:
+            raise ValueError("document_canvas_request_mismatch")
+        request._document_canvas = metadata
+        request._authored_canvas = metadata.canvas_contract()
+        return request._authored_canvas
     source_document_canvas = getattr(request, "_document_canvas", None)
     if (
         source_document_canvas is not None
-        and getattr(request, "strategy", None) == "svg"
-        and getattr(request, "source_mode", None) == "source_content_restyle"
+        and svg
+        and getattr(request, "source_mode", None) in {"source_content_restyle", "raster_reconstruction"}
         and getattr(request, "page_size", None) is None
     ):
         from services.document_canvas import DocumentCanvasMetadata
@@ -199,7 +211,7 @@ def request_canvas_metadata(request: Any) -> dict[str, object]:
 
 def restore_request_canvas_metadata(request: Any, payload: object, *, present: bool = True) -> None:
     if not present:
-        if getattr(request, "page_size", None) is not None:
+        if getattr(request, "page_size", None) is not None or getattr(request, "svg_canvas", None) is not None:
             raise ValueError("document_canvas_contract_missing")
         if request.aspect_ratio != LANDSCAPE_ASPECT_RATIO:
             raise ValueError("authored_canvas_contract_missing")
@@ -213,12 +225,18 @@ def restore_request_canvas_metadata(request: Any, payload: object, *, present: b
 
         metadata = parse_canvas_metadata(payload)
         if isinstance(metadata, DocumentCanvasMetadata):
+            from services.svg_canvas import has_explicit_svg_canvas, selected_svg_canvas
             source_manifest_canvas = (
                 getattr(request, "strategy", None) == "svg"
-                and getattr(request, "source_mode", None) == "source_content_restyle"
+                and getattr(request, "source_mode", None) in {"source_content_restyle", "raster_reconstruction"}
                 and getattr(request, "page_size", None) is None
             )
-            if source_manifest_canvas:
+            if getattr(request, "svg_canvas", None) is not None or request.aspect_ratio == "4:3":
+                if metadata != selected_svg_canvas(request):
+                    raise ValueError("document_canvas_request_mismatch")
+            elif source_manifest_canvas:
+                if has_explicit_svg_canvas(request) and metadata != selected_svg_canvas(request):
+                    raise ValueError("document_canvas_request_mismatch")
                 if getattr(request, "orientation", None) is not None:
                     raise ValueError("document_canvas_request_mismatch")
             elif getattr(request, "page_size", None) != "A4" or metadata != document_canvas_for_orientation(
@@ -332,6 +350,18 @@ def supported_aspect_ratios_for_style(style_id: str) -> list[AuthoredAspectRatio
 
 
 def validate_authored_canvas_admission(request: Any, *, style_id: str) -> None:
+    from services.generation_core.admission.strategy import resolve_generation_strategy
+
+    if resolve_generation_strategy(request) == "svg":
+        from services.svg_generation_admission import svg_creation_admission_violation
+
+        violation = svg_creation_admission_violation(request)
+        if violation is not None:
+            raise ValueError(violation)
+        request_canvas_contract(request)
+        return
+    if getattr(request, "svg_canvas", None) is not None or request.aspect_ratio == "4:3":
+        raise ValueError("svg_canvas_strategy_required")
     # Design packs compile from a 1280x720 source only, so a pack pin is
     # admitted on that canvas and on no other. This runs before the A4 branch
     # and the stage gate so the code is stable across styles and stages.
