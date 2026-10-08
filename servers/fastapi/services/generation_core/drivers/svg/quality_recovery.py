@@ -51,7 +51,8 @@ def recovery_pool(ctx, index, content):
     if source is None:
         return []
     return validated_recovery_candidates(ctx.snapshot, source, ctx.canvas,
-        current_validation_context=ctx.quality_recovery_validation_context)
+        current_validation_context=ctx.quality_recovery_validation_context,
+        allowed_source_evidence=getattr(ctx, "quality_recovery_source_evidence", None))
 
 
 def reserved_recovery_candidate(ctx, index, content, payload):
@@ -83,9 +84,11 @@ async def recover_screen_pages(ctx, request, presentation_id, outline, job, page
         if not isinstance(page, ScreenRecoveryPending):
             continue
         await ensure_recovery_authority(job, hooks)
+        await refresh_recovery_source_authority(ctx, hooks)
         payload = page.payload
         candidate = select_validated_recovery_candidate(recovery_pool(ctx, index, outline.slides[index].content),
-            recent_pages=recent, recent_candidate_ids=recent_ids)
+            recent_pages=recent, recent_candidate_ids=recent_ids,
+            allowed_source_evidence=ctx.quality_recovery_source_evidence)
         if candidate is None:
             payload["quality_recovery_fallback"] = {"status": "blocked", "reason": "validated_candidate_unavailable"}
             await hooks.checkpoint(job, index, payload=payload)
@@ -124,6 +127,18 @@ async def recover_screen_pages(ctx, request, presentation_id, outline, job, page
     for index, result in results:
         pages[index] = result
     return pages
+
+
+async def refresh_recovery_source_authority(ctx, hooks):
+    """Revalidate private source references after the caller checks its own fence."""
+    from utils.authored_style_svg_recovery import verified_recovery_source_evidence
+
+    candidates = ctx.snapshot.get("validated_recovery_candidates") or []
+    if not candidates:
+        ctx.quality_recovery_source_evidence = []
+        return
+    async with hooks.async_session_maker() as session:
+        ctx.quality_recovery_source_evidence = await verified_recovery_source_evidence(candidates, session)
 
 
 async def ensure_recovery_authority(job, hooks):

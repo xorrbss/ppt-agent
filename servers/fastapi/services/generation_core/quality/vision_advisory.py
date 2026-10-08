@@ -43,6 +43,7 @@ from services.authored_vision_advisory_prompt import (
     DESIGN_REVIEW_PROMPT_VERSION,
     design_review_json_schema,
     design_global_json_schema,
+    design_edited_json_schema,
     advisory_json_schema,
     build_advisory_messages,
 )
@@ -248,7 +249,10 @@ async def _request_advisory(sheet: bytes, *, slide_count: int, required: bool = 
     if design_context is not None:
         if design_context.get("reviewScope") == "global":
             design_context = _prepare_global_input(sheet, pngs, design_context)
-        schema = (design_global_json_schema(slide_count=slide_count,
+        schema = (design_edited_json_schema(slide_count=slide_count,
+            changed_indices=design_context["changedPageIndices"])
+            if design_context.get("reviewScope") == "edited" else
+            design_global_json_schema(slide_count=slide_count,
             comparison_indices=sorted(design_context.get("priorCandidates", {})))
             if design_context.get("reviewScope") == "global" else
             design_review_json_schema(slide_count=slide_count,
@@ -565,6 +569,26 @@ def _parse_global_review(payload, *, slide_count, context):
     return result
 
 
+def _parse_edited_review(payload, *, slide_count, context):
+    global_review = _parse_global_review(payload, slide_count=slide_count, context=context)
+    if global_review is None or not isinstance(payload.get("localReview"), Mapping):
+        return None
+    changed = context["changedPageIndices"]
+    if changed:
+        local_review = _parse_design_review(payload["localReview"], slide_count=len(changed),
+            context={**context, "reviewScope": "local", "deckComplete": False, "composition": {}})
+        if local_review is None:
+            return None
+        if any(len(page["issues"]) > _MAX_ISSUES_PER_SLIDE for page in local_review["pages"]):
+            return None
+        local_pages = [{**page, "index": changed[page["index"]]} for page in local_review["pages"]]
+    elif payload["localReview"].get("slides") == []:
+        local_pages = []
+    else:
+        return None
+    return {**global_review, "localPages": local_pages}
+
+
 async def run_vision_advisory(
     pngs: Sequence[bytes], *, slide_count: int, required: bool = False, design_context=None
 ) -> dict[str, Any]:
@@ -595,13 +619,13 @@ async def run_vision_advisory(
             )
         try:
             sheet = (await compose_contact_sheet(renders)
-                     if not required or design_context is not None and design_context.get("reviewScope") == "global" else b"")
+                     if not required or design_context is not None and design_context.get("reviewScope") in {"global", "edited"} else b"")
         except Exception:
             LOGGER.warning("[authored] vision advisory sheet failed", exc_info=True)
             return {"skipped": "contact_sheet_failed"}
         if not sheet and not required:
             return {"skipped": "contact_sheet_unavailable"}
-        if design_context is not None and design_context.get("reviewScope") == "global" and not sheet:
+        if design_context is not None and design_context.get("reviewScope") in {"global", "edited"} and not sheet:
             return {"skipped": "contact_sheet_unavailable"}
         if design_context is not None and design_context.get("reviewScope") == "global" and design_context.get("priorCandidates"):
             prior_sheet = await compose_contact_sheet([prior["png"] for _, prior in sorted(design_context["priorCandidates"].items())])
@@ -632,12 +656,14 @@ async def run_vision_advisory(
             return {"skipped": "unparseable_response"}
         design_review = None
         if design_context is not None:
-            design_review = (_parse_global_review(payload, slide_count=len(renders), context=design_context)
+            design_review = (_parse_edited_review(payload, slide_count=len(renders), context=design_context)
+                if design_context.get("reviewScope") == "edited" else
+                _parse_global_review(payload, slide_count=len(renders), context=design_context)
                 if design_context.get("reviewScope") == "global" else
                 _parse_design_review(payload, slide_count=len(renders), context=design_context))
             if design_review is None:
                 return {"skipped": "design_review_schema_or_coverage_invalid"}
-        global_review = design_context is not None and design_context.get("reviewScope") == "global"
+        global_review = design_context is not None and design_context.get("reviewScope") in {"global", "edited"}
         if required and not global_review:
             findings = payload.get("slides") if isinstance(payload, Mapping) else None
             seen = set()
@@ -685,7 +711,12 @@ async def run_vision_advisory(
                       for example in design_context.get("examples", []))} if design_context is not None else {}),
             **({"reviewInputKind": "deck-contact-sheet-and-representatives/v1",
                 "inputImageBytes": len(sheet)
-                    + sum(len(renders[index]) for index in payload.get("_serverRepresentativeIndices", []))
+                    + sum(len(renders[index]) for index in (
+                        design_context["changedPageIndices"] if design_context.get("reviewScope") == "edited"
+                        else payload.get("_serverRepresentativeIndices", [])))
+                    + (sum(len(base64.b64decode(example["data_url"].split(",", 1)[1], validate=True))
+                           for example in design_context.get("examples", []))
+                       if design_context.get("reviewScope") == "edited" and design_context["changedPageIndices"] else 0)
                     + len(design_context.get("priorSheet") or b"")}
                if global_review else {}),
             "slides": slides,

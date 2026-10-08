@@ -84,6 +84,10 @@ def split_page_advisories(vision: Mapping, slides, indices) -> list[dict]:
         findings = [{**entry, "index": index} for entry in vision.get("slides", [])
                     if isinstance(entry, Mapping) and entry.get("index") == local]
         answer = {key: value for key, value in vision.items() if key != "slides"}
+        if "designGate" in answer:
+            answer["designGateDigest"] = answer["designGate"]["digest"]
+            for key in ("designGate", "designReview", "reviewGroups"):
+                answer.pop(key, None)
         answer.update(slideCount=1, slides=findings)
         if "reviewedPageIndices" in vision:
             answer["reviewedPageIndices"] = [index]
@@ -201,14 +205,29 @@ def _review_pages(slides) -> list[int]:
 def svg_visual_review(*, slides, advisory: Mapping | None, expected_binding: Mapping | None = None) -> dict:
     if not advisory_ran(advisory):
         return dict(required=True, status="failed", reasonCode="svg_visual_advisory_unavailable")
+    digests = slide_page_digests(slides)
+    # Changed SVG bytes invalidate even a legacy answer before PNG coverage
+    # is considered; missing PNG proof describes only otherwise-current SVGs.
+    if not record_matches(advisory, digests):
+        return dict(required=True, status="failed", reasonCode="svg_visual_advisory_stale")
     if "pageAdvisories" not in advisory:
         return dict(required=True, status="failed", reasonCode="svg_visual_advisory_png_evidence_missing")
-    digests = slide_page_digests(slides)
     current = current_page_advisories(slides, advisory["pageAdvisories"])
-    if (not slides or not record_matches(advisory, digests)
-            or len(current) != len(slides)):
+    if not slides or len(current) != len(slides):
         return dict(required=True, status="failed", reasonCode="svg_visual_advisory_stale")
     vision = advisory["vision"]
+    from services.generation_core.quality.vision_advisory_prompt import DESIGN_REVIEW_PROMPT_VERSION
+    design_review = vision.get("promptVersion") == DESIGN_REVIEW_PROMPT_VERSION
+    if design_review:
+        from services.generation_core.drivers.svg.quality import _current_gate
+        from services.svg_authoring_profile import QUALITY_RECOVERY_POLICY
+        payloads = [({**_receipt(slide), "svg_content": slide.svg_content}, None) for slide in slides]
+        gate = _current_gate(advisory, payloads)
+        if (gate is None or gate.get("status") != "passed" or gate.get("policy") != QUALITY_RECOVERY_POLICY
+                or gate.get("pageCoverageComplete") is not True
+                or (gate.get("binding") or {}).get("presentationId") != (expected_binding or {}).get("presentationId", (gate.get("binding") or {}).get("presentationId"))
+                or any(current[index]["vision"].get("designGateDigest") != gate["digest"] for index in range(len(slides)))):
+            return dict(required=True, status="failed", reasonCode="svg_quality_recovery_review_required")
     page_findings = [entry for index in range(len(slides)) for entry in current[index]["vision"]["slides"]]
     models = ";".join(sorted({str(current[index]["vision"].get("model") or "") for index in range(len(slides))}))
     page_records = [current[index]["digest"] for index in range(len(slides))]
@@ -228,7 +247,10 @@ def svg_visual_review(*, slides, advisory: Mapping | None, expected_binding: Map
                 or binding.get("pngDigests") != [_receipt(slide).get("png_sha256") for slide in slides]
                 or binding.get("pageRecordDigests") != page_records):
             return dict(required=True, status="failed", reasonCode="svg_visual_advisory_operation_binding_invalid")
-        if any(current[index]["vision"].get("promptVersion") != "svg-required-visual-review/v1"
+        if design_review and (gate.get("binding") or {}).get("operationId") != binding.get("operationId"):
+            return dict(required=True, status="failed", reasonCode="svg_visual_advisory_operation_binding_invalid")
+        if any(current[index]["vision"].get("promptVersion") != (
+                    DESIGN_REVIEW_PROMPT_VERSION if design_review else "svg-required-visual-review/v1")
                or current[index]["vision"].get("reviewedPageIndices") != [index]
                or current[index]["vision"].get("reviewedPngDigests") != [_receipt(slides[index]).get("png_sha256")]
                for index in range(len(slides))):
@@ -244,6 +266,8 @@ def svg_visual_review(*, slides, advisory: Mapping | None, expected_binding: Map
                       "advisoryFlaggedPages": len(flagged), "reviewPages": len(review),
                       "model": str(vision.get("model") or "")},
         thresholds={"maxReviewPages": 0})
+    if design_review:
+        evidence["measurements"].update(reviewScope="source-svg-png-design/v1", designGateDigest=gate["digest"])
     if review:
         return dict(required=True, status="failed", reasonCode="svg_visual_review_flagged",
                     evidence=evidence)

@@ -177,6 +177,7 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
         gate = advisory["vision"]["designGate"]
         publication = {"schema": "svg-quality-recovery-publication/v1", "gateDigest": gate["digest"],
             "parentOperationId": str(operation_id), "parentJobId": str(job_id),
+            "sourceGenerationRevision": expected_revision + 1,
             "sourceRevision": expected_revision + 1, "snapshotDigest": content_digest(snapshot),
             "sourceContentDigests": [content_digest(item.content) for item in outline.slides],
             "inputDigests": [payload.get("input_digest") for payload, _ in pages]}
@@ -185,6 +186,7 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
     presentation.lifecycle_status = PRESENTATION_LIFECYCLE_PUBLISHED
     pt_per_px = canvas_point_per_px(request_canvas_metadata(request))
     await session.execute(delete(SlideModel).where(SlideModel.presentation == presentation_id))
+    published_slides = []
     for index, (payload, png) in enumerate(pages):
         native_kwargs = {}
         if source_preservation and payload.get("source_preservation", {}).get("native_tables"):
@@ -196,10 +198,31 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
                                           pt_per_px=pt_per_px, **native_kwargs)
         fields = {}
         set_svg_page(fields, svg_content=payload["svg_content"], content=slide_content, png=png)
-        session.add(SlideModel(presentation=presentation_id, owner_id=owner,
+        saved_slide = SlideModel(presentation=presentation_id, owner_id=owner,
                               layout_group="svg", layout="svg:content", index=index,
                               **fields, source_format="svg",
-                              properties={"image": image_refs[index]}, speaker_note=outline.slides[index].content))
+                              properties={"image": image_refs[index]}, speaker_note=outline.slides[index].content)
+        published_slides.append(saved_slide)
+        session.add(saved_slide)
+    if read_quality_recovery_policy(snapshot):
+        from services.svg_quality_recovery_review import seal_saved_page_evidence
+        from services.svg_export_visual_review import split_page_advisories, slide_page_digests
+        from models.sql.workspace import WorkspaceOperation
+        parent = await session.get(WorkspaceOperation, operation_id)
+        if parent is None or parent.owner_id != owner or parent.presentation_id != presentation_id:
+            raise ValueError("svg_quality_recovery_review_binding_missing")
+        records = split_page_advisories(advisory["vision"], published_slides, range(len(published_slides)))
+        presentation.theme["svg"]["pageAdvisories"] = records
+        presentation.theme["svg"]["advisory"]["pageAdvisories"] = records
+        binding = dict(schemaVersion="svg-visual-review-operation-binding/v1",
+            presentationId=str(presentation_id), ownerId=str(owner), ownerScope=str(parent.owner_scope),
+            sourceRevision=expected_revision + 1, operationId=str(operation_id),
+            reviewedPageIndices=list(range(len(published_slides))), sourceDigests=slide_page_digests(published_slides),
+            pngDigests=[(slide.content["svgReceipt"]).get("png_sha256") for slide in published_slides],
+            pageRecordDigests=[record["digest"] for record in records])
+        presentation.theme["svg"]["advisory"]["operationBinding"] = {**binding, "digest": content_digest(binding)}
+        presentation.theme["svg"]["advisory"]["savedPageReviewEvidence"] = seal_saved_page_evidence(
+            published_slides, snapshot, advisory["vision"]["designGate"])
     session.add(presentation)
     await session.flush()
     # complete_publish still requires the running operation; terminalize the

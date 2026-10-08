@@ -77,12 +77,14 @@ def _quality_recovery_export_gate(presentation, slides):
     try:
         UUID(publication.get("parentOperationId", ""))
         UUID(publication.get("parentJobId", ""))
+        if publication.get("schema") == "svg-quality-recovery-publication/v2":
+            UUID(publication.get("reviewOperationId", ""))
     except (ValueError, TypeError, AttributeError) as error:
         raise ValueError("svg_quality_recovery_export_parent_invalid") from error
     if (gate is None or gate.get("status") != "passed" or gate.get("policy") != policy
             or gate.get("pageCoverageComplete") is not True
             or gate.get("snapshotDigest") != content_digest(snapshot)
-            or publication.get("schema") != "svg-quality-recovery-publication/v1"
+            or publication.get("schema") not in {"svg-quality-recovery-publication/v1", "svg-quality-recovery-publication/v2"}
             or publication.get("digest") != content_digest(body)
             or publication.get("gateDigest") != gate.get("digest")
             or publication.get("sourceRevision") != presentation.revision
@@ -91,7 +93,7 @@ def _quality_recovery_export_gate(presentation, slides):
             or publication.get("inputDigests") != [payload.get("input_digest") for payload, _ in payloads]
             or (gate.get("binding") or {}).get("presentationId") != str(presentation.id)
             or (gate.get("binding") or {}).get("ownerId") != str(presentation.owner_id)
-            or (gate.get("binding") or {}).get("operationId") != publication["parentOperationId"]
+            or (gate.get("binding") or {}).get("operationId") != publication.get("reviewOperationId", publication["parentOperationId"])
             or (gate.get("binding") or {}).get("jobId") != publication["parentJobId"]):
         raise ValueError("svg_quality_recovery_export_review_required")
     return publication
@@ -102,6 +104,30 @@ async def require_quality_recovery_export_parent(session, presentation, slides):
     publication = _quality_recovery_export_gate(presentation, slides)
     if publication is None:
         return
+    await require_quality_recovery_source_parent(session, presentation, publication)
+    if publication.get("schema") == "svg-quality-recovery-publication/v2":
+        from uuid import UUID
+        from models.sql.workspace import WorkspaceOperation
+        from models.sql.public_admission import PublicOperationAdmission
+        from utils.owner_context import get_current_tenant_id
+        review = await session.get(WorkspaceOperation, UUID(publication["reviewOperationId"]))
+        admission = await session.scalar(select(PublicOperationAdmission).where(
+            PublicOperationAdmission.operation_id == UUID(publication["reviewOperationId"])))
+        context = ((review.request_payload or {}).get("context") or {}) if review is not None else {}
+        if (review is None or admission is None or review.state != "succeeded"
+                or review.kind != "quality.review" or review.owner_id != presentation.owner_id
+                or review.presentation_id != presentation.id or review.owner_scope != publication.get("ownerScope")
+                or review.expected_revision != publication["sourceRevision"]
+                or review.result_revision != publication["sourceRevision"] or review.max_attempts != 1
+                or admission.owner_id != presentation.owner_id or admission.tenant_id != str(get_current_tenant_id())
+                or admission.planned_request_limit != 1 or admission.retry_request_limit != 0
+                or context.get("mode", "analyze_only") != "analyze_only"
+                or context.get("target", "source_svg") != "source_svg"):
+            raise ValueError("svg_quality_recovery_export_review_operation_invalid")
+
+
+async def require_quality_recovery_source_parent(session, presentation, publication):
+    """Validate immutable generation lineage even when an authorized edit advanced the deck."""
     from uuid import UUID
     from models.sql.workspace import WorkspaceOperation
     from models.sql.presentation_generation_job import PresentationGenerationJob
@@ -116,7 +142,9 @@ async def require_quality_recovery_export_parent(session, presentation, slides):
             or parent.owner_id != presentation.owner_id or admission.owner_id != presentation.owner_id
             or admission.tenant_id != str(get_current_tenant_id())
             or parent.presentation_id != presentation.id or job.presentation_id != presentation.id
-            or job.workspace_operation_id != parent.id or parent.result_revision != publication["sourceRevision"]
+            or job.workspace_operation_id != parent.id
+            or parent.result_revision != publication.get("sourceGenerationRevision", publication["sourceRevision"])
+            or type(parent.result_revision) is not int or parent.result_revision > presentation.revision
             or job.svg_style_snapshot != presentation.theme["svg"]["styleSnapshot"]
             or (job.request_payload or {}).get("_internal_svg_style_snapshot") != job.svg_style_snapshot):
         raise ValueError("svg_quality_recovery_export_parent_invalid")

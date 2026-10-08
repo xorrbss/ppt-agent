@@ -447,7 +447,7 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
     if recovery_policy:
         fields["content"]["svgReceipt"]["qualityRecoveryReview"] = {"status": "unreviewed",
             "source_revision": presentation.revision, "prior_source_digest": source_digest(target.svg_content),
-            "candidate_source_digest": source_digest(svg)}
+            "candidate_source_digest": source_digest(svg), "global_review_required": True}
     properties = {**(target.properties or {}), "image": image}
     statement = update(SlideModel).where(
         SlideModel.id == target.id, SlideModel.presentation == presentation.id,

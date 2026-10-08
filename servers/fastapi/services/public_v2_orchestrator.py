@@ -944,6 +944,10 @@ class SqlPublicV2Orchestrator:
                     await _admit_svg_design_reference(internal_request, session)
                 except HTTPException as error:
                     raise _public_error(error.status_code, str(error.detail)) from error
+            if resolve_generation_strategy(internal_request) == "svg":
+                from services.svg_generation_admission import prepare_private_svg_recovery_authority
+
+                await prepare_private_svg_recovery_authority(internal_request, session)
             generation_payload = _durable_request_payload(internal_request)
             generation_payload["generation_route_receipt"] = route_payload
             presentation_id = uuid.uuid5(

@@ -47,6 +47,29 @@ async def _slides(session, presentation_id):
         SlideModel.presentation == presentation_id).order_by(SlideModel.index, SlideModel.id))).scalars().all())
 
 
+async def _prepare_quality_recovery_review(session, presentation, slides, request, operation_id, owner_scope):
+    from services.svg_authoring_profile import read_quality_recovery_policy
+    if request.target != "source_svg" or not read_quality_recovery_policy(
+            ((presentation.theme or {}).get("svg") or {}).get("styleSnapshot") or {}):
+        return None
+    from services.svg_quality_recovery_review import prepare_saved_review
+    from services.svg_export_operation import require_quality_recovery_source_parent
+    prepared = prepare_saved_review(presentation, slides,
+        _positions(request, len(slides)) if request.scope != "all" else [],
+        [_review_png(slide) for slide in slides], operation_id=operation_id, owner_scope=owner_scope)
+    await require_quality_recovery_source_parent(session, presentation, prepared["publication"])
+    from services.authored_canvas import presentation_canvas_contract
+    from services.svg_export_source_preservation import source_preservation_receipts, sealed_whole_page_manifest
+    from services.public_export_errors import PublicExportOperationError
+    try:
+        receipts = source_preservation_receipts(presentation, slides, presentation_canvas_contract(presentation.theme))
+        await sealed_whole_page_manifest(session, claim=SimpleNamespace(owner_id=presentation.owner_id,
+            owner_scope=owner_scope), presentation=presentation, slides=slides, receipts=receipts)
+    except PublicExportOperationError as error:
+        raise ValueError(str(error)) from error
+    return prepared
+
+
 async def queue_svg_quality_review(presentation_id: uuid.UUID, request: SvgQualityReviewRequest, session,
                                    *, allow_local_development=False):
     presentation = await require_live_presentation(session, presentation_id)
@@ -75,6 +98,11 @@ async def admit_svg_quality_review_operation(session, *, operation, presentation
     indices = _positions(request, len(rows))
     for index in indices:
         _review_png(rows[index])
+    try:
+        recovery_review = await _prepare_quality_recovery_review(session, presentation, rows, request,
+            operation.id, operation.owner_scope)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail={"code": str(error)}) from error
     if request.target == "final_pptx":
         from services.svg_final_pptx_review import load_final_review_inputs
         await load_final_review_inputs(session, request=request, presentation=presentation, slides=rows)
@@ -93,7 +121,8 @@ async def admit_svg_quality_review_operation(session, *, operation, presentation
     admission = await admit_public_operation_compatible_v2(session, principal=principal,
         operation_id=operation.id, operation_kind="generation",
         request_plan=ReviewPlan(slide_count=1, image_budget=0, repair_budget=0, vqa_budget=1),
-        resource_plan=plan_weighted_resources(pixel_count=canvas.width_px * canvas.height_px * len(indices),
+        resource_plan=plan_weighted_resources(pixel_count=canvas.width_px * canvas.height_px * (
+            len(rows) if recovery_review is not None else len(indices)),
             device_pixel_ratio_milli=1000, dom_node_count=0, font_count=0,
             svg_complexity=0, estimated_memory_mib=128, fidelity_mode="standard"))
     admission.retry_request_limit = 0
@@ -171,6 +200,15 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
             pngs = final_inputs["pngs"]
         else:
             pngs = [_review_png(slides[index]) for index in indices]
+        recovery_review = None
+        try:
+            recovery_review = await _prepare_quality_recovery_review(session, presentation, rows, request,
+                claim.operation_id, claim.owner_scope)
+        except ValueError as error:
+            raise NonRetryableWorkspaceOperationError(str(error)) from error
+        if recovery_review is not None:
+            pngs = recovery_review["pngs"]
+            indices = recovery_review["changed"]
         digests = slide_page_digests(slides)
         png_digests = [(slide.content or {}).get("svgReceipt", {}).get("png_sha256") for slide in slides]
     await context.raise_if_cancelled()
@@ -181,19 +219,27 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
             public_operation_scope(claim.operation_id, attempt_token=claim.attempt_token, fencing_token=claim.fencing_token), \
             provider_usage_scope(job_id=claim.operation_id, operation="quality_review", stage="vqa",
                                  attempt_number=claim.attempt_number, public_only=True):
-        vision = await run_vision_advisory(pngs, slide_count=len(indices), required=True)
+        from utils.provider_idempotency import ProviderOutcomeError
+        try:
+            vision = await run_vision_advisory(pngs, slide_count=len(pngs), required=True,
+                **({"design_context": recovery_review["context"]} if recovery_review is not None else {}))
+        except ProviderOutcomeError as error:
+            raise NonRetryableWorkspaceOperationError(error.code) from error
     vqa_finished_at = monotonic()
     await context.raise_if_cancelled()
-    subset = advisory_record(vision, [digests[index] for index in indices])
+    subset = advisory_record(vision, digests if recovery_review is not None else [digests[index] for index in indices])
     if not advisory_ran(subset):
         code = ("public_provider_result_unknown"
                 if vision.get("skipped") == "provider_outcome:public_provider_result_unknown"
+                else "svg_quality_review_input_capacity_unavailable"
+                if vision.get("skipped") == "review_input_capacity_unavailable"
                 else "svg_quality_review_advisory_unavailable")
         raise NonRetryableWorkspaceOperationError(code, detail={"stage_timings_ms": {
             "preflight": (vqa_started_at - started_at) * 1000,
             "vqa": (vqa_finished_at - vqa_started_at) * 1000,
         }})
-    new_records = split_page_advisories(vision, slides, indices) if request.target == "source_svg" else []
+    new_records = (split_page_advisories(vision, slides, indices)
+                   if request.target == "source_svg" and recovery_review is None else [])
     async with session_factory() as session:
         await _assert_fence(session, claim, lock=True)
         presentation = await session.scalar(select(PresentationModel).where(
@@ -207,7 +253,7 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
             raise NonRetryableWorkspaceOperationError("presentation_not_found")
         if slide_page_digests(current_slides) != digests:
             raise NonRetryableWorkspaceOperationError("svg_quality_review_source_changed")
-        for index in indices:
+        for index in range(len(current_slides)) if recovery_review is not None else indices:
             _review_png(current_slides[index])
             receipt = (current_slides[index].content or {}).get("svgReceipt") or {}
             if (receipt.get("png_sha256") != png_digests[index]
@@ -216,6 +262,23 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
                 raise NonRetryableWorkspaceOperationError("svg_quality_review_measurement_stale")
         theme = deepcopy(presentation.theme or {})
         svg_theme = dict(theme.get("svg") or {})
+        if recovery_review is not None:
+            try:
+                current_prepared = await _prepare_quality_recovery_review(session, presentation, current_slides,
+                    request, claim.operation_id, claim.owner_scope)
+            except ValueError as error:
+                raise NonRetryableWorkspaceOperationError(str(error)) from error
+            if (current_prepared["context"] != recovery_review["context"]
+                    or current_prepared["currentInputDigests"] != recovery_review["currentInputDigests"]
+                    or current_prepared["runtime"] != recovery_review["runtime"]
+                    or current_prepared["reusable"] != recovery_review["reusable"]
+                    or current_prepared["pages"] != recovery_review["pages"]):
+                raise NonRetryableWorkspaceOperationError("svg_quality_review_source_changed")
+            from services.svg_quality_recovery_review import seal_saved_review
+            recovery_advisory, publication = seal_saved_review(recovery_review, current_slides, vision, claim)
+            vision = recovery_advisory["vision"]
+            new_records = split_page_advisories(vision, current_slides, range(len(current_slides)))
+            svg_theme["qualityRecoveryPublication"] = publication
         if final_inputs is not None:
             from services.svg_final_pptx_review import load_final_review_inputs, seal_final_review
             current_inputs = await load_final_review_inputs(session, request=request,
@@ -237,12 +300,16 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
         records = [prior[index] for index in sorted(prior)]
         svg_theme["pageAdvisories"] = records
         assembled = assemble_page_advisory(current_slides, records)
+        if recovery_review is not None:
+            assembled = recovery_advisory
+            assembled["pageAdvisories"] = records
         if assembled is not None and request.target == "source_svg":
             binding = dict(schemaVersion="svg-visual-review-operation-binding/v1",
                 presentationId=str(claim.presentation_id), ownerId=str(claim.owner_id),
                 ownerScope=str(getattr(claim, "owner_scope", "")),
                 sourceRevision=claim.expected_revision, operationId=str(claim.operation_id),
-                reviewedPageIndices=indices, sourceDigests=digests, pngDigests=png_digests,
+                reviewedPageIndices=list(range(len(current_slides))) if recovery_review is not None else indices,
+                sourceDigests=digests, pngDigests=png_digests,
                 pageRecordDigests=[record["digest"] for record in records])
             assembled["operationBinding"] = {**binding, "digest": content_digest(binding)}
             svg_theme["advisory"] = assembled
@@ -251,6 +318,11 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
             sourceRevision=claim.expected_revision, operationId=str(claim.operation_id), advisory=subset,
             reviewedAt=get_current_utc_datetime().isoformat())
         svg_theme["qualityStatus"] = svg_quality_status(current_slides, svg_theme.get("advisory"), page_advisories=records)
+        if recovery_review is not None:
+            gate = recovery_advisory["vision"]["designGate"]
+            svg_theme["qualityStatus"]["qualityRecovery"] = dict(status=gate["status"],
+                blockingPages=gate["blockingPages"], unreviewedPages=gate["unreviewedPages"])
+            svg_theme["reviewPages"] = sorted(set(gate["blockingPages"]) | set(gate["unreviewedPages"]))
         theme["svg"] = svg_theme
         presentation.theme = theme
         session.add(presentation)
@@ -258,9 +330,12 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
                     if request.target == "source_svg" else vision.get("slides", []))
         issue_indices = sorted({entry["index"] for entry in findings if entry.get("issues")})
         detailed = sum(len(entry.get("issues") or []) for entry in findings)
+        if recovery_review is not None:
+            issue_indices = sorted(set(issue_indices) | set(gate["blockingPages"]) | set(gate["unreviewedPages"]))
+            detailed += sum(len(page["failedAxes"]) + (page["status"] == "unreviewed") for page in gate["pages"])
         result = dict(kind="quality.review", mode="analyze_only", source_format="svg", scope=request.scope,
             slide_indices=indices, inspected_revision=claim.expected_revision,
-            reviewed_count=len(indices),
+            reviewed_count=len(current_slides) if recovery_review is not None else len(indices),
             issue_slide_count=len(issue_indices), detailed_issue_count=detailed,
             fixed_count=0, fixed_slide_indices=[], remaining_slide_count=len(issue_indices),
             remaining_slide_indices=issue_indices, remaining_issue_count=detailed, version_saved=False,

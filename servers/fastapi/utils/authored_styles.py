@@ -23,7 +23,7 @@ from utils.env_settings.authored_runtime import (
 
 # Re-exported: the loader lives apart only because this file is past the ratchet.
 from utils.authored_style_exemplars import load_style_exemplar  # noqa: F401
-from utils.authored_style_svg_recovery import load_style_recovery_candidates
+from utils.authored_style_svg_recovery import load_style_recovery_candidates, is_private_recovery_asset
 from utils.authored_style_catalogue import canonical_authored_style_id
 from models.canvas_defaults import DEFAULT_CANVAS_SIZE_PX
 from utils.hashing import sha256_hex
@@ -235,6 +235,8 @@ def _asset_path(value: Any, source: Path, assets_directory: Path) -> Optional[Pa
         raise ValueError(f"{source.name}: reference asset path must be a non-empty string")
     candidate = (assets_directory / value.strip()).resolve()
     root = assets_directory.resolve()
+    if is_private_recovery_asset(assets_directory / value.strip(), assets_directory):
+        raise ValueError(f"{source.name}: private recovery assets cannot be public style references")
     try:
         candidate.relative_to(root)
     except ValueError as exc:

@@ -273,6 +273,41 @@ def design_global_json_schema(*, slide_count, comparison_indices=None):
     return schema
 
 
+def design_edited_json_schema(*, slide_count, changed_indices):
+    schema = design_global_json_schema(slide_count=slide_count)
+    local = design_review_json_schema(slide_count=max(1, len(changed_indices)), review_scope="local")
+    local["properties"]["slides"].update(minItems=len(changed_indices), maxItems=len(changed_indices))
+    schema["required"].append("localReview")
+    schema["properties"]["localReview"] = local
+    return schema
+
+
+def _edited_review_messages(sheet, *, pngs, design_context):
+    import json
+    from llmai.shared import SystemMessage, UserMessage
+    changed = design_context["changedPageIndices"]
+    global_messages = _global_review_messages(sheet, pngs=pngs, design_context=design_context)
+    parts = list(global_messages[1].content)
+    system = global_messages[0].content
+    if changed:
+        local_context = {**design_context, "reviewScope": "local", "deckComplete": False,
+            "globalPageIndices": changed,
+            "pages": [{**design_context["pages"][index], "index": local, "deckIndex": index}
+                      for local, index in enumerate(changed)], "composition": {}}
+        local_messages = _design_review_messages(slide_count=len(changed),
+            pngs=[pngs[index] for index in changed], design_context=local_context)
+        system += " " + local_messages[0].content
+        parts.extend(local_messages[1].content)
+    system += (" This is ONE combined edited-deck review. Return deckReview and findings for EVERY durable "
+        "deck page. Return the four LOCAL axes only for the full-resolution changed pages under localReview; "
+        "localReview indices are numbered within changedPageIndices, not durable deck indices. Unchanged "
+        "local evidence has been checked by the server; never certify local detail from the contact sheet. "
+        "When no changed images are supplied return localReview.slides as an empty array. The following "
+        "combined schema replaces the earlier separate schemas: " + json.dumps(design_edited_json_schema(
+            slide_count=len(pngs), changed_indices=changed), separators=(",", ":")))
+    return [SystemMessage(content=system), UserMessage(content=parts)]
+
+
 def _global_review_messages(sheet, *, pngs, design_context):
     import json
     from llmai.shared import ImageContentPart, SystemMessage, TextContentPart, UserMessage
@@ -325,6 +360,8 @@ def build_advisory_messages(sheet: bytes, *, slide_count: int, required: bool = 
     """One system message and one user message of [text, image], as critique does."""
 
     if design_context is not None:
+        if design_context.get("reviewScope") == "edited":
+            return _edited_review_messages(sheet, pngs=pngs, design_context=design_context)
         if design_context.get("reviewScope") == "global":
             return _global_review_messages(sheet, pngs=pngs, design_context=design_context)
         return _design_review_messages(slide_count=slide_count, pngs=pngs, design_context=design_context)

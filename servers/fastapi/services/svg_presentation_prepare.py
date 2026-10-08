@@ -80,12 +80,17 @@ class GenerationContext:
     asset_offer: object = None
     visual_intents: list | None = None
     recovery_cached_first: list[int] | None = None
+    quality_recovery_source_evidence: list | None = None
 
 
 async def _pin_owned_svg_style(request, job, *, pin_style, session_maker, owned_job):
     from services.svg_authoring_profile import validate_profile_agreement, validate_quality_recovery_agreement
 
     if job is None:
+        async with session_maker() as authority_session:
+            from services.svg_generation_admission import prepare_private_svg_recovery_authority
+
+            await prepare_private_svg_recovery_authority(request, authority_session)
         return pin_style(request)
     async with session_maker() as checkpoint_session:
         current = await owned_job(checkpoint_session, job.id, job.attempt_token,
@@ -105,6 +110,9 @@ async def _pin_owned_svg_style(request, job, *, pin_style, session_maker, owned_
             if staged is not None and staged != frozen:
                 raise RuntimeError("svg_style_snapshot_conflict")
             request._svg_style_snapshot = frozen
+        from services.svg_generation_admission import prepare_private_svg_recovery_authority
+
+        await prepare_private_svg_recovery_authority(request, checkpoint_session)
         snapshot = pin_style(request)
         validate_profile_agreement(request, snapshot)
         validate_quality_recovery_agreement(request, snapshot)
@@ -336,6 +344,7 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
         recovery_cached_first=recovery_cached_first,
         asset_offer=asset_offer,
         visual_intents=visual_intents,
+        quality_recovery_source_evidence=getattr(request, "_svg_recovery_source_evidence", None),
     )
 
 

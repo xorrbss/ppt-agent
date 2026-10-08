@@ -92,14 +92,19 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
         recovery_kwargs["correction_mode"] = correction_mode
         previous_render = getattr(ctx, "quality_recovery_previous_renders", {}).get(index)
         if correction_mode == "validated_svg_adaptation":
-            from services.generation_core.drivers.svg.quality_recovery import reserved_recovery_candidate, ensure_recovery_authority
+            from services.generation_core.drivers.svg.quality_recovery import (
+                reserved_recovery_candidate, ensure_recovery_authority, refresh_recovery_source_authority,
+            )
             from utils.authored_style_svg_recovery import read_validated_recovery_png
             from types import SimpleNamespace
             from utils.hashing import sha256_hex
+            authority_hooks = SimpleNamespace(checkpoint=checkpoint,
+                async_session_maker=async_session_maker, recovery_snapshot=ctx.snapshot)
+            await ensure_recovery_authority(job, authority_hooks)
+            await refresh_recovery_source_authority(ctx, authority_hooks)
             candidate = reserved_recovery_candidate(ctx, index, content, payload)
-            await ensure_recovery_authority(job, SimpleNamespace(checkpoint=checkpoint,
-                async_session_maker=async_session_maker, recovery_snapshot=ctx.snapshot))
-            png = read_validated_recovery_png(candidate)
+            png = read_validated_recovery_png(candidate,
+                allowed_source_evidence=ctx.quality_recovery_source_evidence)
             if (not png or len(png) > 8 * 1024 * 1024 or not png.startswith(b"\x89PNG\r\n\x1a\n")
                     or "sha256:" + sha256_hex(png) != candidate["png_digest"]
                     or payload.get("last_valid_svg") != candidate["svg_content"]):

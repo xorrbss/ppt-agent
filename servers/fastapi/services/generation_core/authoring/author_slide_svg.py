@@ -456,10 +456,22 @@ def svg_design_text(style_snapshot: dict) -> str:
 
 def svg_prompt_design(style_snapshot: dict) -> dict:
     """Expose frozen design identity while retaining master assets server-side."""
+    # This is the same projection used by the whole-page author and both
+    # source wrappers. Recovery pools and live permission witnesses stay
+    # server-side at every nesting depth; a selected candidate is supplied
+    # separately as the explicit previous SVG/PNG correction input.
+    private_recovery_fields = {
+        "validated_recovery_candidates", "validatedRecoveryCandidates",
+        "private_provenance", "privateProvenance",
+        "allowed_source_evidence", "allowedSourceEvidence",
+        "recovery_source_evidence", "recoverySourceEvidence",
+        "_svg_recovery_source_evidence", "_svgRecoverySourceEvidence",
+    }
+
     def public(value):
         if isinstance(value, dict):
             return {key: public(item) for key, item in value.items()
-                    if key not in {"data_url", "dataUrl"}
+                    if key not in {"data_url", "dataUrl"} | private_recovery_fields
                     and key.replace("_", "").lower() not in {"owner", "ownerid", "owneruuid"}}
         if isinstance(value, (list, tuple)):
             return [public(item) for item in value]

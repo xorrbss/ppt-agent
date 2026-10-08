@@ -1975,6 +1975,10 @@ async def queue_presentation_generation(
     # The fingerprint is taken before any deck is minted, so a replay under the
     # same idempotency key matches the stored job instead of bootstrapping a
     # second deck. It now includes the resolved pins/rule/style snapshots.
+    if resolve_generation_strategy(request) == "svg":
+        from services.svg_generation_admission import prepare_private_svg_recovery_authority
+
+        await prepare_private_svg_recovery_authority(request, sql_session)
     submitted_payload = _durable_request_payload(request)
     fingerprint = request_sha256(submitted_payload)
     key_error: HTTPException | None = None
@@ -2256,6 +2260,10 @@ async def queue_presentation_generation(
     from services.public_generation_route import pin_source_restyle_authoring
 
     generation_route_receipt = pin_source_restyle_authoring(request)
+    if resolve_generation_strategy(request) == "svg":
+        from services.svg_generation_admission import prepare_private_svg_recovery_authority
+
+        await prepare_private_svg_recovery_authority(request, sql_session)
     payload = _durable_request_payload(request)
     if generation_route_receipt is not None:
         payload["generation_route_receipt"] = generation_route_receipt

@@ -257,7 +257,8 @@ def _recovery_content_profile(content: str | Mapping) -> dict | None:
 
 
 def validated_recovery_candidates(snapshot: Mapping | None, content: str | Mapping, canvas: object, *,
-                                  current_validation_context: Mapping | None = None) -> list[dict]:
+                                  current_validation_context: Mapping | None = None,
+                                  allowed_source_evidence=None) -> list[dict]:
     """Return only current-condition, content-compatible, quality-qualified SVGs.
 
     The snapshot is the server's trusted request pin, not a public payload. Missing
@@ -265,7 +266,8 @@ def validated_recovery_candidates(snapshot: Mapping | None, content: str | Mappi
     The adapted result still needs all normal source, render and quality checks.
     """
     from services.svg_authoring_profile import validate_quality_recovery_policy
-    from utils.authored_style_svg_recovery import recovery_candidate_valid, recovery_style_identity
+    from utils.authored_style_svg_recovery import (recovery_candidate_valid, recovery_style_identity,
+        recovery_source_authorized, recovery_digest)
 
     if not isinstance(snapshot, Mapping):
         return []
@@ -294,7 +296,7 @@ def validated_recovery_candidates(snapshot: Mapping | None, content: str | Mappi
         return []
     identity, candidates = recovery_style_identity(snapshot), []
     for candidate in raw:
-        if not recovery_candidate_valid(candidate):
+        if not recovery_source_authorized(candidate, allowed_source_evidence) or not recovery_candidate_valid(candidate):
             continue
         if (candidate["style_id"] != snapshot.get("style_id")
                 or candidate["style_identity_digest"] != identity
@@ -310,6 +312,13 @@ def validated_recovery_candidates(snapshot: Mapping | None, content: str | Mappi
             continue
         if any(profile[key] != fit[key] for key in ("table_shapes", "chart_shapes", "image_group_shapes")):
             continue
+        from services.generation_core.drivers.svg.native_requirements import requested_native_data
+        from services.svg_contract import source_digest
+        scope = {"content_digest": source_digest(content["text"]), "profile_digest": recovery_digest(profile),
+            "native_requirements_digest": recovery_digest(requested_native_data(content["text"])),
+            "image_groups_digest": recovery_digest(sorted(sorted(group) for group in content["image_groups"]))}
+        if scope not in candidate["tested_content_scopes"]:
+            continue
         value = copy.deepcopy(candidate)
         value["current_content_profile"] = profile
         candidates.append(value)
@@ -317,14 +326,14 @@ def validated_recovery_candidates(snapshot: Mapping | None, content: str | Mappi
 
 
 def select_validated_recovery_candidate(candidates: Sequence[Mapping], *, recent_pages: Sequence = (),
-                                      recent_candidate_ids: Sequence = ()) -> dict | None:
+                                      recent_candidate_ids: Sequence = (), allowed_source_evidence=None) -> dict | None:
     """Prefer less repeated actual geometry inside the already qualified pool.
 
     Reservations are made by the caller in page-index order before provider I/O.
     Geometry similarity is an observation, never a design-quality pass score.
     """
     from services.generation_core.drivers.svg.composition_observation import _geometry
-    from utils.authored_style_svg_recovery import recovery_candidate_valid
+    from utils.authored_style_svg_recovery import recovery_candidate_valid, recovery_source_authorized
 
     geometries = []
     for page in recent_pages:
@@ -338,7 +347,7 @@ def select_validated_recovery_candidate(candidates: Sequence[Mapping], *, recent
     uses = Counter(item for item in recent_candidate_ids if isinstance(item, str))
     ranked = []
     for candidate in candidates:
-        if not recovery_candidate_valid(candidate):
+        if not recovery_source_authorized(candidate, allowed_source_evidence) or not recovery_candidate_valid(candidate):
             continue
         geometry = _geometry(candidate["svg_content"])
         if geometry is None:

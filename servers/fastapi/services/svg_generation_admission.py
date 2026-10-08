@@ -174,6 +174,28 @@ def _resolve_design_reference(request: object, canvas: object) -> dict | None:
         raise HTTPException(status_code=status, detail=code) from error
 
 
+async def prepare_private_svg_recovery_authority(request: object, session) -> list[dict]:
+    """Keep live owner-bound source permission outside immutable style snapshots."""
+    from services.svg_authoring_profile import request_quality_recovery_policy, read_quality_recovery_policy
+    from utils.authored_style_svg_recovery import verified_recovery_source_evidence
+
+    request._svg_recovery_source_evidence = []
+    frozen = getattr(request, "_svg_style_snapshot", None)
+    policy = read_quality_recovery_policy(frozen) if frozen is not None else request_quality_recovery_policy(request)
+    if policy is None or getattr(request, "source_mode", None) in {"source_content_restyle", "raster_reconstruction"}:
+        return []
+    if frozen is not None:
+        candidates = frozen.get("validated_recovery_candidates") or []
+    else:
+        from utils.authored_styles import resolve_authored_style
+
+        candidates = getattr(resolve_authored_style(getattr(request, "authored_style", None)),
+                             "validated_recovery_candidates", ())
+    evidence = await verified_recovery_source_evidence(candidates, session)
+    request._svg_recovery_source_evidence = evidence
+    return evidence
+
+
 def pin_svg_style(request: object) -> dict:
     """Snapshot before durable admission, never reselect on job takeover."""
     from services.authored_canvas import request_canvas_contract

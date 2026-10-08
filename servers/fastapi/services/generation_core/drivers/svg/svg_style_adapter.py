@@ -113,7 +113,8 @@ def adapt_svg_style(
     if result.get("quality_recovery_policy") is not None:
         from utils.authored_style_svg_recovery import validated_style_recovery_snapshot
 
-        result["validated_recovery_candidates"] = validated_style_recovery_snapshot(style, result)
+        result["validated_recovery_candidates"] = validated_style_recovery_snapshot(style, result,
+            allowed_source_evidence=getattr(request, "_svg_recovery_source_evidence", None))
     from utils.authored_styles import AUTHORED_STYLE_ASSETS_DIRECTORY
     if getattr(style, "assets_root", None) == AUTHORED_STYLE_ASSETS_DIRECTORY.resolve():
         result["provenance"]["registry_authority"] = "packaged-authored-catalogue"
