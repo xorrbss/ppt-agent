@@ -90,6 +90,20 @@ native table/chart and export constraints take priority over every reference and
 
 def project_art_direction(design: dict) -> dict:
     """Use one identity/evidence boundary for new work; never reinterpret old profiles."""
+    from services.svg_authoring_profile import validate_quality_recovery_policy
+
+    if validate_quality_recovery_policy(design.get("quality_recovery_policy")) is not None:
+        result = _project_generic_art_direction(design)
+        result["art_direction"]["design_priorities"] = (
+            "Retain the selected identity's full design intent, including layout-system and "
+            "archetype advice. Translate reference implementation techniques into supported "
+            "SVG visual treatment. Choose an evidence-led focal point, deliberate type hierarchy, "
+            "meaningful grouping and whitespace; let comparisons, sequences and image explanations "
+            "remain traceable. Reference box counts, copy limits and page-splitting advice never "
+            "override exact source content, image groups, page count or readable font floors. "
+            "Geometry remains model-authored; examples are inspiration, never prescribed templates."
+        )
+        return result
     if design.get("authoring_profile") == {"id": "art-direction-v1", "version": 8}:
         return _project_generic_art_direction(design)
     return _project_frozen_art_direction(design)

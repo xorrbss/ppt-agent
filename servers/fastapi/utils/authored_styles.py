@@ -23,6 +23,7 @@ from utils.env_settings.authored_runtime import (
 
 # Re-exported: the loader lives apart only because this file is past the ratchet.
 from utils.authored_style_exemplars import load_style_exemplar  # noqa: F401
+from utils.authored_style_svg_recovery import load_style_recovery_candidates
 from utils.authored_style_catalogue import canonical_authored_style_id
 from models.canvas_defaults import DEFAULT_CANVAS_SIZE_PX
 from utils.hashing import sha256_hex
@@ -122,6 +123,8 @@ class AuthoredStyle:
     slide_reference_indices: tuple[int, ...] = ()
     composer_profile: Mapping[str, Any] | None = None
     svg_overrides: Mapping[str, Any] | None = None
+    # Private, byte-bound full-page SVG material; never a role bitmap reference.
+    validated_recovery_candidates: tuple[Mapping[str, Any], ...] = ()
 
     def public_dict(self) -> dict[str, Any]:
         """Return only the fields safe and useful for style selection clients."""
@@ -507,6 +510,9 @@ def _parse_style(
         slide_reference_indices=slide_reference_indices,
         composer_profile=composer_profile,
         svg_overrides=svg_overrides,
+        validated_recovery_candidates=load_style_recovery_candidates(
+            data, source, assets_directory, _required_string(data, "id", source),
+        ),
     )
 
 

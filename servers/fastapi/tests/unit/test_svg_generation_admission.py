@@ -247,7 +247,7 @@ def test_frozen_v1_authoring_cannot_be_replayed_as_v2(monkeypatch, target_profil
         _request_from_durable_payload(payload)
 
 
-@pytest.mark.parametrize("profile", ["future-v2", "art-direction-v1@8", {"id": "art-direction-v1", "version": 8}, {"id": "art-direction-v1", "version": True}])
+@pytest.mark.parametrize("profile", ["future-v2", "art-direction-v1@9", {"id": "art-direction-v1", "version": 9}, {"id": "art-direction-v1", "version": True}])
 def test_unknown_durable_authoring_profile_fails_closed(profile):
     from services.presentation_generation_staging import _request_from_durable_payload
     from services.svg_authoring_profile import INTERNAL_SVG_AUTHORING_PROFILE_KEY

@@ -22,6 +22,9 @@ text, truncated the same way the authored placeholder truncates it.
 
 from __future__ import annotations
 
+import copy
+from collections import Counter
+from collections.abc import Mapping, Sequence
 import xml.etree.ElementTree as ET
 
 from services.authored_author_stage_placeholder import (
@@ -29,7 +32,7 @@ from services.authored_author_stage_placeholder import (
     MAX_BULLET_CHARS,
     _split_content,
 )
-from services.svg_contract import SVG_NS, finalize_svg
+from services.svg_contract import SVG_NS, SVG_CONTRACT_VERSION, finalize_svg
 
 FALLBACK_GROUP_ID = "svg-fallback-page"
 
@@ -217,9 +220,156 @@ def fallback_page_svg(*, content: str, role: str, index: int, count: int,
                         style_snapshot=style_snapshot)
 
 
+def _recovery_content_profile(content: str | Mapping) -> dict | None:
+    """Describe existing content only; this is not a layout or page classifier."""
+    from services.generation_core.drivers.svg.native_requirements import requested_native_data
+
+    # Source members are not explanatory groups. A plain outline cannot prove
+    # whether its asset offer has images, so unknown membership is excluded.
+    if not isinstance(content, Mapping):
+        return None
+    text = content.get("text")
+    image_members, groups = content.get("image_member_count"), content.get("image_groups")
+    if (type(image_members) is not int or image_members < 0 or not isinstance(groups, list)
+            or any(not isinstance(group, list) or not group
+                   or any(not isinstance(member, str) or not member for member in group) for group in groups)):
+        return None
+    membership = [member for group in groups for member in group]
+    if len(membership) != image_members or len(set(membership)) != image_members:
+        return None
+    image_groups = len(groups)
+    if "image_group_count" in content and content["image_group_count"] != image_groups:
+        return None
+    if not isinstance(text, str):
+        return None
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    requirements = requested_native_data(text)
+    tables, charts = requirements.get("tables", []), requirements.get("charts", [])
+    if any(chart.get("unsupportedReason") for chart in charts):
+        return None
+    return {
+        "content_chars": len(text), "nonempty_lines": len(lines),
+        "title_chars": len(lines[0]) if lines else 0, "image_group_count": image_groups,
+        "image_member_count": image_members, "image_group_shapes": sorted(len(group) for group in groups),
+        "table_shapes": [[len(table["rows"]), len(table["rows"][0])] for table in tables],
+        "chart_shapes": [[len(chart["categories"]), len(chart.get("series", [chart]))] for chart in charts],
+    }
+
+
+def validated_recovery_candidates(snapshot: Mapping | None, content: str | Mapping, canvas: object, *,
+                                  current_validation_context: Mapping | None = None) -> list[dict]:
+    """Return only current-condition, content-compatible, quality-qualified SVGs.
+
+    The snapshot is the server's trusted request pin, not a public payload. Missing
+    real material or independently captured runtime conditions means no recovery.
+    The adapted result still needs all normal source, render and quality checks.
+    """
+    from services.svg_authoring_profile import validate_quality_recovery_policy
+    from utils.authored_style_svg_recovery import recovery_candidate_valid, recovery_style_identity
+
+    if not isinstance(snapshot, Mapping):
+        return []
+    try:
+        policy = validate_quality_recovery_policy(snapshot.get("quality_recovery_policy"))
+    except ValueError:
+        return []
+    if policy is None:
+        return []
+    # The server captures these current fingerprints independently of candidates.
+    # An enrolled receipt cannot supply its own runtime compatibility witness.
+    conditions = current_validation_context
+    if not isinstance(conditions, Mapping) or conditions.get("contract_version") != SVG_CONTRACT_VERSION:
+        return []
+    if isinstance(canvas, Mapping):
+        width, height = canvas.get("width_px", canvas.get("width")), canvas.get("height_px", canvas.get("height"))
+    else:
+        width, height = getattr(canvas, "width_px", None), getattr(canvas, "height_px", None)
+    if type(width) is not int or type(height) is not int:
+        return []
+    profile = _recovery_content_profile(content)
+    if profile is None:
+        return []
+    raw = snapshot.get("validated_recovery_candidates", [])
+    if not isinstance(raw, Sequence) or isinstance(raw, (str, bytes)):
+        return []
+    identity, candidates = recovery_style_identity(snapshot), []
+    for candidate in raw:
+        if not recovery_candidate_valid(candidate):
+            continue
+        if (candidate["style_id"] != snapshot.get("style_id")
+                or candidate["style_identity_digest"] != identity
+                or candidate["canvas"] != {"width": width, "height": height}):
+            continue
+        evidence = candidate["verification"]
+        if any(not conditions.get(key) or evidence.get(key) != conditions[key]
+               for key in ("renderer_digest", "fonts_digest", "runtime_digest")):
+            continue
+        fit = candidate["content_fit"]
+        if any(not fit[key][0] <= profile[key] <= fit[key][1]
+               for key in ("content_chars", "nonempty_lines", "title_chars", "image_group_count", "image_member_count")):
+            continue
+        if any(profile[key] != fit[key] for key in ("table_shapes", "chart_shapes", "image_group_shapes")):
+            continue
+        value = copy.deepcopy(candidate)
+        value["current_content_profile"] = profile
+        candidates.append(value)
+    return sorted(candidates, key=lambda candidate: (candidate["id"], candidate["revision"]))
+
+
+def select_validated_recovery_candidate(candidates: Sequence[Mapping], *, recent_pages: Sequence = (),
+                                      recent_candidate_ids: Sequence = ()) -> dict | None:
+    """Prefer less repeated actual geometry inside the already qualified pool.
+
+    Reservations are made by the caller in page-index order before provider I/O.
+    Geometry similarity is an observation, never a design-quality pass score.
+    """
+    from services.generation_core.drivers.svg.composition_observation import _geometry
+    from utils.authored_style_svg_recovery import recovery_candidate_valid
+
+    geometries = []
+    for page in recent_pages:
+        if isinstance(page, tuple) and page:
+            page = page[0]
+        svg = page.get("svg_content", "") if isinstance(page, Mapping) else page
+        if isinstance(svg, str):
+            geometry = _geometry(svg)
+            if geometry is not None and geometry[1] >= 3:
+                geometries.append(geometry[0])
+    uses = Counter(item for item in recent_candidate_ids if isinstance(item, str))
+    ranked = []
+    for candidate in candidates:
+        if not recovery_candidate_valid(candidate):
+            continue
+        geometry = _geometry(candidate["svg_content"])
+        if geometry is None:
+            continue
+        features, similarities = geometry[0], []
+        for other in geometries:
+            keys = features.keys() | other.keys()
+            denominator = sum(max(features[key], other[key]) for key in keys)
+            similarities.append(sum(min(features[key], other[key]) for key in keys) / max(1, denominator))
+        similarity = max(similarities, default=0.0)
+        count = uses[candidate["id"]]
+        ranked.append(((similarity, count, candidate["id"], candidate["revision"]), candidate, geometry[2]))
+    if not ranked:
+        return None
+    rank, selected, geometry_digest = min(ranked, key=lambda item: item[0])
+    result = copy.deepcopy(selected)
+    result["selection_evidence"] = {
+        "candidate_id": result["id"], "candidate_revision": result["revision"],
+        "qualified_pool_size": len(ranked), "single_qualified_candidate": len(ranked) == 1,
+        "geometry_digest": geometry_digest, "maximum_observed_similarity": rank[0],
+        "recent_use_count": rank[1], "compared_page_count": len(geometries),
+        "selection_order": "page-index-reservation",
+    }
+    return result
+
+
 __all__ = [
     "FALLBACK_GROUP_ID",
     "MAX_BODY_BULLETS",
     "MAX_BULLET_CHARS",
     "fallback_page_svg",
+    "validated_recovery_candidates",
+    "select_validated_recovery_candidate",
 ]

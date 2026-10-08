@@ -1841,6 +1841,9 @@ async def _admit_generation_operation_v2_compatible(
             request, sql_session
         ),
     )
+    if resolve_generation_strategy(request) == "svg":
+        from services.svg_authoring_profile import seal_new_quality_recovery_plan
+        seal_new_quality_recovery_plan(request, slide_count)
     try:
         admission = await admit_public_operation_compatible_v2(
             sql_session,
@@ -1948,6 +1951,14 @@ async def queue_presentation_generation(
     # than trying to bootstrap a second workspace operation for a deck that does
     # not exist yet.
     chat_first_enabled = _chat_first_generation_enabled()
+    if resolve_generation_strategy(request) == "svg":
+        from services.svg_authoring_profile import seal_new_quality_recovery_plan
+        source_count = (await _source_content_admission_slide_count(request, sql_session)
+                        if request.source_mode in {SOURCE_CONTENT_RESTYLE_MODE, "raster_reconstruction"}
+                        else None)
+        planned_count = source_count if source_count is not None else (
+            len(request.slides_markdown) if request.slides_markdown else request.n_slides)
+        seal_new_quality_recovery_plan(request, planned_count)
     # Freeze the effective company standard, hidden rule snapshot, authored
     # template and style digest before the idempotency signature is computed.
     # This is read-only admission and mints no deck/operation identity.

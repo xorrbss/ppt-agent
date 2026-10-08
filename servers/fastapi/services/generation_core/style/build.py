@@ -79,7 +79,7 @@ def resolve_brand(
     )
 
 
-def tag_brief_lines(brief: str) -> tuple[BriefLine, ...]:
+def tag_brief_lines(brief: str, *, svg_quality_first: bool = False) -> tuple[BriefLine, ...]:
     """Split a style preset's free-text brief into sections and tag each line
     with the formats it applies to. An HTML/CSS-specific instruction is kept
     (not dropped) but tagged html-only, so a driver can filter for its own
@@ -88,6 +88,13 @@ def tag_brief_lines(brief: str) -> tuple[BriefLine, ...]:
     lines: list[BriefLine] = []
     for raw in brief.splitlines():
         line = raw.strip()
+        if svg_quality_first:
+            heading, separator, remainder = line.partition(":")
+            if separator and heading.strip() in _COMMON_SECTIONS:
+                section = heading.strip()
+                line = remainder.strip()
+                if not line:
+                    continue
         if line in _COMMON_SECTIONS:
             section = line
             continue
@@ -130,6 +137,9 @@ def build_style_context(
     already-projected rule sets (see the sibling ``*_projection`` modules),
     never markup.
     """
+    from services.svg_authoring_profile import request_quality_recovery_policy
+
+    quality_policy = request_quality_recovery_policy(request)
     explicit_primary, explicit_fonts, wordmark = _request_brand_overrides(request)
     # Precedence, high to low: an explicit request override; a published
     # company-standard master's own tokens (it is the org's actual brand, so
@@ -172,7 +182,7 @@ def build_style_context(
         palette=palette,
         fonts=fonts,
         wordmark=wordmark,
-        brief_lines=tag_brief_lines(getattr(style, "brief", "") or ""),
+        brief_lines=tag_brief_lines(getattr(style, "brief", "") or "", svg_quality_first=quality_policy is not None),
         mapped_guidance=mapped_guidance,
         reference_images={role: tuple(refs) for role, refs in (reference_images or {}).items()},
         master_rules=master_rules,

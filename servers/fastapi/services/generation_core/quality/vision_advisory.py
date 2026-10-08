@@ -23,6 +23,7 @@ Cost: one provider call, roughly 5-15 s per deck, behind
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 import re
@@ -36,15 +37,111 @@ from services.authored_vision_advisory_prompt import (
     ADVISORY_REASONING_EFFORT,
     ISSUE_ALIASES,
     ISSUE_VOCABULARY,
+    DESIGN_AXES,
+    DESIGN_LOCAL_AXES,
+    DESIGN_GLOBAL_FINDING_LIMIT,
+    DESIGN_REVIEW_PROMPT_VERSION,
+    design_review_json_schema,
+    design_global_json_schema,
     advisory_json_schema,
     build_advisory_messages,
 )
 from services.authored_vision_contact_sheet import compose_contact_sheet
+from services.provider_runtime_primitives import BudgetExceededError
 from utils.provider_idempotency import ProviderOutcomeError
 
 LOGGER = logging.getLogger(__name__)
 
 _MAX_ISSUES_PER_SLIDE = 4
+
+
+class DesignReviewInputCapacityError(ValueError):
+    """A local input envelope is unavailable before any provider request."""
+
+
+def _design_input_sizes(messages, schema):
+    images, text_bytes = [], len(json.dumps(schema, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+    for message in messages:
+        content = message.content
+        if isinstance(content, str):
+            text_bytes += len(content.encode("utf-8"))
+            continue
+        for part in content:
+            data = getattr(part, "data", None)
+            if isinstance(data, (bytes, bytearray)):
+                images.append(len(data))
+            else:
+                value = part if isinstance(part, str) else getattr(part, "text", None)
+                if not isinstance(value, str):
+                    raise DesignReviewInputCapacityError("review_input_shape_unavailable")
+                text_bytes += len(value.encode("utf-8"))
+    # Count base64 bytes, MIME/data-url overhead, response schema and the
+    # serialized message envelopes, rather than raw PNG bytes alone.
+    encoded_images = sum(4 * ((size + 2) // 3) + 64 for size in images)
+    request_bytes = text_bytes + encoded_images + 512 + 256 * len(messages) + 128 * len(images)
+    return dict(imageBytes=images, imageCount=len(images), encodedImageBytes=encoded_images,
+                serializedContextBytes=text_bytes, serializedRequestBytes=request_bytes)
+
+
+def _design_input_limits(client=None):
+    from services.generation_core.authoring.author_slide_images import (
+        REFERENCE_IMAGE_MAX_BYTES, SOURCE_IMAGE_PREVIEW_TOTAL_MAX_BYTES)
+    limits = dict(maxImageBytes=REFERENCE_IMAGE_MAX_BYTES,
+        maxEncodedImageBytes=SOURCE_IMAGE_PREVIEW_TOTAL_MAX_BYTES,
+        maxSerializedContextBytes=REFERENCE_IMAGE_MAX_BYTES,
+        maxSerializedRequestBytes=SOURCE_IMAGE_PREVIEW_TOTAL_MAX_BYTES)
+    explicit = False
+    names = dict(maxImageBytes=("max_image_bytes",),
+        maxEncodedImageBytes=("max_encoded_image_bytes", "max_total_image_bytes"),
+        maxSerializedContextBytes=("max_context_bytes", "max_text_input_bytes"),
+        maxSerializedRequestBytes=("max_request_bytes", "max_input_bytes", "max_request_body_bytes"))
+    for capabilities in (getattr(client, "capabilities", None), getattr(client, "config", None)):
+        if capabilities is None:
+            continue
+        for flag in ("supports_images", "supports_vision"):
+            supported = capabilities.get(flag) if isinstance(capabilities, Mapping) else getattr(capabilities, flag, None)
+            if supported is False:
+                raise DesignReviewInputCapacityError("review_vision_capability_unavailable")
+        for key, aliases in names.items():
+            for alias in aliases:
+                value = capabilities.get(alias) if isinstance(capabilities, Mapping) else getattr(capabilities, alias, None)
+                if type(value) is int and value > 0:
+                    limits[key] = min(limits[key], value)
+                    explicit = True
+    return {**limits, "limitSource": "local-envelope-with-client-byte-limits" if explicit else "local-envelope",
+            "providerCapacityVerified": False}
+
+
+def _check_design_input(messages, schema, *, client=None):
+    sizes, limits = _design_input_sizes(messages, schema), _design_input_limits(client)
+    if (any(size > limits["maxImageBytes"] for size in sizes["imageBytes"])
+            or sizes["encodedImageBytes"] > limits["maxEncodedImageBytes"]
+            or sizes["serializedContextBytes"] > limits["maxSerializedContextBytes"]
+            or sizes["serializedRequestBytes"] > limits["maxSerializedRequestBytes"]):
+        raise DesignReviewInputCapacityError("review_input_capacity_unavailable")
+    return {**{key: value for key, value in sizes.items() if key != "imageBytes"}, **limits}
+
+
+def _prepare_global_input(sheet, renders, context, *, client=None):
+    """Keep complete required evidence and pack supplemental family examples."""
+    schema = design_global_json_schema(slide_count=len(renders),
+        comparison_indices=sorted(context.get("priorCandidates", {})))
+    candidates = list(context.get("representativeIndices", []))
+    selected = []
+    working = {**context, "representativeIndices": [], "omittedSupplementalRepresentativeIndices": candidates}
+    _check_design_input(build_advisory_messages(sheet, slide_count=len(renders), required=True,
+        pngs=renders, design_context=working), schema, client=client)
+    for index in candidates:
+        trial = {**context, "representativeIndices": selected + [index],
+                 "omittedSupplementalRepresentativeIndices": [item for item in candidates if item not in selected + [index]]}
+        try:
+            _check_design_input(build_advisory_messages(sheet, slide_count=len(renders), required=True,
+                pngs=renders, design_context=trial), schema, client=client)
+        except DesignReviewInputCapacityError:
+            continue
+        selected.append(index)
+    return {**context, "representativeIndices": selected,
+            "omittedSupplementalRepresentativeIndices": [index for index in candidates if index not in selected]}
 
 
 def _normalize_issue(value: object) -> str | None:
@@ -122,7 +219,8 @@ def _decode_advisory_text(text: str) -> object:
         return None
 
 
-async def _request_advisory(sheet: bytes, *, slide_count: int, required: bool = False, pngs=None) -> tuple[str, object]:
+async def _request_advisory(sheet: bytes, *, slide_count: int, required: bool = False, pngs=None,
+                            design_context=None) -> tuple[str, object]:
     """One multimodal call, through the same admission/idempotency wrappers
     every other authored provider call uses."""
 
@@ -145,11 +243,32 @@ async def _request_advisory(sheet: bytes, *, slide_count: int, required: bool = 
         supports_provider_idempotency,
     )
 
-    client = get_client(config=get_llm_config())
+    client = None if design_context is not None else get_client(config=get_llm_config())
     model = str(get_model() or "")
-    schema = advisory_json_schema(slide_count=slide_count) if required else advisory_json_schema()
-    messages = (build_advisory_messages(sheet, slide_count=slide_count, required=True, pngs=pngs)
-                if required else build_advisory_messages(sheet, slide_count=slide_count))
+    if design_context is not None:
+        if design_context.get("reviewScope") == "global":
+            design_context = _prepare_global_input(sheet, pngs, design_context)
+        schema = (design_global_json_schema(slide_count=slide_count,
+            comparison_indices=sorted(design_context.get("priorCandidates", {})))
+            if design_context.get("reviewScope") == "global" else
+            design_review_json_schema(slide_count=slide_count,
+                comparison_indices=sorted(design_context.get("priorCandidates", {})),
+                review_scope=design_context.get("reviewScope", "full")))
+        messages = build_advisory_messages(sheet, slide_count=slide_count, required=True,
+                                          pngs=pngs, design_context=design_context)
+    else:
+        schema = advisory_json_schema(slide_count=slide_count) if required else advisory_json_schema()
+        messages = (build_advisory_messages(sheet, slide_count=slide_count, required=True, pngs=pngs)
+                    if required else build_advisory_messages(sheet, slide_count=slide_count))
+    input_envelope = None
+    if design_context is not None:
+        _check_design_input(messages, schema)
+        client = get_client(config=get_llm_config())
+        if design_context.get("reviewScope") == "global":
+            design_context = _prepare_global_input(sheet, pngs, design_context, client=client)
+            messages = build_advisory_messages(sheet, slide_count=slide_count, required=True,
+                pngs=pngs, design_context=design_context)
+        input_envelope = _check_design_input(messages, schema, client=client)
     kwargs = get_generate_kwargs(
         model=model,
         messages=messages,
@@ -230,20 +349,236 @@ async def _request_advisory(sheet: bytes, *, slide_count: int, required: bool = 
                 outcome="succeeded" if response is not None else "failed",
             )
     payload = extract_structured_content(response.content)
-    return model, payload if payload is not None else _decode_advisory_text(extract_text(response.content) or "")
+    payload = payload if payload is not None else _decode_advisory_text(extract_text(response.content) or "")
+    if input_envelope is not None and isinstance(payload, Mapping):
+        payload = {**payload, "_serverInputEnvelope": input_envelope,
+            "_serverRepresentativeIndices": design_context.get("representativeIndices", []),
+            "_serverOmittedRepresentativeIndices": design_context.get("omittedSupplementalRepresentativeIndices", [])}
+    return model, payload
+
+
+def _parse_design_axes(value, axis_names=DESIGN_AXES):
+    if not isinstance(value, Mapping) or set(value) != set(axis_names):
+        return None
+    severity_for = {"passed": {"none"}, "advisory": {"minor"},
+                    "failed": {"major", "critical"}, "unreviewed": {"none"}}
+    axes = {}
+    for name in axis_names:
+        axis = value[name]
+        if (not isinstance(axis, Mapping) or axis.get("verdict") not in severity_for
+                or axis.get("severity") not in severity_for[axis["verdict"]]
+                or not isinstance(axis.get("visibleEvidence"), str) or not axis["visibleEvidence"].strip()
+                or len(axis["visibleEvidence"]) > 160 or len(axis["visibleEvidence"].split()) > 14
+                or axis.get("repairScope") not in {"none", "local_repair", "design_rewrite"}
+                or (axis["verdict"] != "failed" and axis["repairScope"] != "none")
+                or (axis["verdict"] == "failed" and axis["repairScope"] == "none")):
+            return None
+        axes[name] = {key: axis[key] for key in ("verdict", "severity", "visibleEvidence", "repairScope")}
+    return axes
+
+
+def _parse_design_review(payload, *, slide_count, context):
+    """Reject ambiguous coverage and invented review authority; retain visible reasons."""
+    if not isinstance(payload, Mapping) or not isinstance(payload.get("slides"), list):
+        return None
+    local = context.get("reviewScope") == "local"
+    axis_names = DESIGN_LOCAL_AXES if local else DESIGN_AXES
+    pages, seen = [], set()
+    for page in payload["slides"]:
+        if (not isinstance(page, Mapping) or type(page.get("index")) is not int
+                or not 1 <= page["index"] <= slide_count or page["index"] in seen
+                or type(page.get("evaluated")) is not bool or not isinstance(page.get("axes"), Mapping)
+                or set(page["axes"]) != set(axis_names)
+                or not isinstance(page.get("issues"), list)
+                or any(not isinstance(issue, str) or _normalize_issue(issue) is None for issue in page["issues"])):
+            return None
+        axes = _parse_design_axes(page["axes"], axis_names)
+        if axes is None:
+            return None
+        issues = [_normalize_issue(issue) for issue in page["issues"]]
+        if ("illegible" in issues and not any(axes[name]["verdict"] == "failed"
+                for name in ("hierarchy_emphasis", "density_balance"))
+                or "broken_figure" in issues and axes["information_structure"]["verdict"] != "failed"):
+            return None
+        if page["evaluated"] and any(a["verdict"] == "unreviewed" for a in axes.values()):
+            return None
+        if not local and not context.get("deckComplete") and axes["repetition_deck_flow"]["verdict"] != "unreviewed":
+            return None
+        seen.add(page["index"])
+        pages.append(dict(index=page["index"] - 1, evaluated=page["evaluated"], axes=axes,
+                          issues=issues))
+    if seen != set(range(1, slide_count + 1)):
+        return None
+    flow = (dict(evaluated=False, visibleEvidence="Global flow is reviewed separately.", repetitionGroups=[])
+            if local else payload.get("deckFlow"))
+    if (not isinstance(flow, Mapping) or type(flow.get("evaluated")) is not bool
+            or not isinstance(flow.get("visibleEvidence"), str) or not flow["visibleEvidence"].strip()
+            or len(flow["visibleEvidence"]) > 160 or len(flow["visibleEvidence"].split()) > 14
+            or not isinstance(flow.get("repetitionGroups"), list)
+            or flow["evaluated"] and not context.get("deckComplete")):
+        return None
+    groups = []
+    observations = (context.get("composition") or {}).get("pages") or []
+    for group in flow["repetitionGroups"]:
+        if (not isinstance(group, Mapping) or not isinstance(group.get("pages"), list)
+                or not group["pages"]
+                or any(type(index) is not int or not 1 <= index <= slide_count for index in group["pages"])
+                or len(set(group["pages"])) != len(group["pages"])
+                or type(group.get("intentional")) is not bool
+                or not isinstance(group.get("sourceEvidence"), str)
+                or len(group["sourceEvidence"]) > 160
+                or not isinstance(group.get("visibleEvidence"), str) or not group["visibleEvidence"].strip()
+                or len(group["visibleEvidence"]) > 160 or len(group["visibleEvidence"].split()) > 14):
+            return None
+        indices = sorted(index - 1 for index in group["pages"])
+        if group["intentional"] and (not group["sourceEvidence"].strip()
+                or any(index >= len(observations) or not observations[index].get("comparisonBasis") for index in indices)):
+            return None
+        groups.append(dict(pages=indices, intentional=group["intentional"],
+                           sourceEvidence=group["sourceEvidence"], visibleEvidence=group["visibleEvidence"]))
+    if flow["evaluated"]:
+        # Every observed distant/adjacent cluster needs an explicit semantic
+        # explanation, even when geometry repetition is judged harmless.
+        for observed in (context.get("composition") or {}).get("groups", []):
+            if not any(set(observed["pages"]) <= set(group["pages"]) for group in groups):
+                return None
+    comparisons = []
+    prior_candidates = context.get("priorCandidates") or {}
+    if prior_candidates:
+        raw_comparisons = payload.get("candidateComparisons")
+        if not isinstance(raw_comparisons, list) or len(raw_comparisons) != len(prior_candidates):
+            return None
+        seen = set()
+        for comparison in raw_comparisons:
+            if (not isinstance(comparison, Mapping) or type(comparison.get("index")) is not int
+                    or comparison["index"] - 1 not in prior_candidates or comparison["index"] in seen
+                    or type(comparison.get("evaluated")) is not bool
+                    or not isinstance(comparison.get("visibleEvidence"), str) or not comparison["visibleEvidence"].strip()
+                    or len(comparison["visibleEvidence"]) > 160 or len(comparison["visibleEvidence"].split()) > 14):
+                return None
+            axes = _parse_design_axes(comparison.get("priorAxes"), axis_names)
+            if axes is None or comparison["evaluated"] and any(axis["verdict"] == "unreviewed" for axis in axes.values()):
+                return None
+            seen.add(comparison["index"])
+            comparisons.append(dict(index=comparison["index"] - 1, evaluated=comparison["evaluated"],
+                                    priorAxes=axes, visibleEvidence=comparison["visibleEvidence"]))
+    return dict(pages=sorted(pages, key=lambda page: page["index"]), candidateComparisons=comparisons,
+                deckFlow=dict(evaluated=flow["evaluated"], visibleEvidence=flow["visibleEvidence"],
+                              repetitionGroups=groups))
+
+
+def _parse_global_review(payload, *, slide_count, context):
+    if (not isinstance(payload, Mapping) or not isinstance(payload.get("findings"), list)
+            or len(payload["findings"]) > DESIGN_GLOBAL_FINDING_LIMIT):
+        return None
+    findings = {}
+    for finding in payload["findings"]:
+        if (not isinstance(finding, Mapping) or type(finding.get("id")) is not int
+                or not 1 <= finding["id"] <= DESIGN_GLOBAL_FINDING_LIMIT
+                or finding["id"] in findings or type(finding.get("intentional")) is not bool
+                or not isinstance(finding.get("sourceEvidence"), str) or len(finding["sourceEvidence"]) > 160):
+            return None
+        axes = _parse_design_axes({"repetition_deck_flow": finding.get("axis")}, ("repetition_deck_flow",))
+        if axes is None:
+            return None
+        findings[finding["id"]] = {**finding, "axis": axes["repetition_deck_flow"]}
+    def project(review, expected, *, prior=False):
+        if (not isinstance(review, Mapping) or not isinstance(review.get("cleanPages"), list)
+                or not isinstance(review.get("unreviewedPages"), list) or not isinstance(review.get("groups"), list)
+                or len(review["groups"]) > DESIGN_GLOBAL_FINDING_LIMIT
+                or not isinstance(review.get("cleanEvidence"), str) or not review["cleanEvidence"].strip()
+                or len(review["cleanEvidence"]) > 160 or len(review["cleanEvidence"].split()) > 14):
+            return None
+        assignments, groups, used_findings = {}, [], set()
+        def assign(indices, axis):
+            if not isinstance(indices, list):
+                return False
+            for index in indices:
+                if type(index) is not int or index - 1 not in expected or index - 1 in assignments:
+                    return False
+                assignments[index - 1] = axis
+            return True
+        if not assign(review["cleanPages"], dict(verdict="passed", severity="none",
+                visibleEvidence=review["cleanEvidence"], repairScope="none")):
+            return None
+        if not assign(review["unreviewedPages"], dict(verdict="unreviewed", severity="none",
+                visibleEvidence="Global composition evidence remains insufficient.", repairScope="none")):
+            return None
+        for group in review["groups"]:
+            if (not isinstance(group, Mapping) or not isinstance(group.get("pages"), list)
+                    or not group["pages"] or type(group.get("findingId")) is not int
+                    or group["findingId"] not in findings or not isinstance(group.get("retainedPages"), list)
+                    or group["findingId"] in used_findings
+                    or any(type(index) is not int or index not in group["pages"] for index in group["retainedPages"])
+                    or len(set(group["retainedPages"])) != len(group["retainedPages"])):
+                return None
+            finding = findings[group["findingId"]]
+            used_findings.add(group["findingId"])
+            axis = finding["axis"]
+            if not assign(group["pages"], axis):
+                return None
+            indices = sorted(index - 1 for index in group["pages"])
+            retained = [index - 1 for index in group["retainedPages"]]
+            observed_repetition = any(set(observation["pages"]) & set(indices)
+                                      for observation in context["composition"].get("groups", []))
+            if axis["verdict"] == "failed" and observed_repetition and not retained and not prior:
+                return None
+            if axis["verdict"] == "failed" and not prior:
+                for observation in context["composition"].get("groups", []):
+                    if set(observation["pages"]) <= set(indices) and not set(observation["pages"]) & set(retained):
+                        return None
+            if axis["verdict"] == "failed" and len(retained) == len(indices):
+                return None
+            for index in retained:
+                assignments[index] = dict(verdict="passed", severity="none",
+                    visibleEvidence=axis["visibleEvidence"], repairScope="none")
+            observations = context["composition"]["pages"]
+            if finding["intentional"] and (not finding["sourceEvidence"].strip()
+                    or any(not observations[index].get("comparisonBasis") for index in indices)):
+                return None
+            groups.append(dict(pages=indices, intentional=finding["intentional"],
+                retainedPages=retained, sourceEvidence=finding["sourceEvidence"], visibleEvidence=axis["visibleEvidence"]))
+        if set(assignments) != expected:
+            return None
+        for observation in context["composition"].get("groups", []):
+            unreviewed = {index - 1 for index in review["unreviewedPages"]}
+            affected = (set(observation["pages"]) & expected) - unreviewed
+            if affected and not any(affected <= set(group["pages"]) for group in groups):
+                return None
+        return dict(pages=[dict(index=index, evaluated=axis["verdict"] != "unreviewed",
+                    axes={"repetition_deck_flow": axis}, issues=[]) for index, axis in sorted(assignments.items())],
+            deckFlow=dict(evaluated=all(axis["verdict"] != "unreviewed" for axis in assignments.values()),
+                visibleEvidence=review["cleanEvidence"], repetitionGroups=groups))
+    if not isinstance(payload, Mapping):
+        return None
+    result = project(payload.get("deckReview"), set(range(slide_count)))
+    if result is None:
+        return None
+    prior_indices = set(context.get("priorCandidates", {}))
+    if prior_indices:
+        prior = project(payload.get("priorReview"), prior_indices, prior=True)
+        if prior is None:
+            return None
+        result["candidateComparisons"] = [dict(index=page["index"], evaluated=page["evaluated"],
+            priorAxes=page["axes"], visibleEvidence=page["axes"]["repetition_deck_flow"]["visibleEvidence"])
+            for page in prior["pages"]]
+    return result
 
 
 async def run_vision_advisory(
-    pngs: Sequence[bytes], *, slide_count: int, required: bool = False
+    pngs: Sequence[bytes], *, slide_count: int, required: bool = False, design_context=None
 ) -> dict[str, Any]:
     """Ask one vision model, once, what a reader would notice about this deck.
 
     Returns ``{"model", "latencyMs", "slideCount", "slides"}`` on success and
-    ``{"skipped": <reason>}`` on every other outcome. Never raises: an advisory
-    that could fail a deck would stop being advisory.
+    ``{"skipped": <reason>}`` on unavailable evidence. Legacy reviews remain
+    optional; the fresh design policy propagates provider outcomes and budget
+    failures so callers preserve UNKNOWN and durable accounting history.
     """
 
     started = time.monotonic()
+    if design_context is not None:
+        required = True
     try:
         renders = [png for png in pngs if isinstance(png, (bytes, bytearray)) and png]
         if not renders:
@@ -259,12 +594,20 @@ async def run_vision_advisory(
                 int(slide_count or 0),
             )
         try:
-            sheet = b"" if required else await compose_contact_sheet(renders)
+            sheet = (await compose_contact_sheet(renders)
+                     if not required or design_context is not None and design_context.get("reviewScope") == "global" else b"")
         except Exception:
             LOGGER.warning("[authored] vision advisory sheet failed", exc_info=True)
             return {"skipped": "contact_sheet_failed"}
         if not sheet and not required:
             return {"skipped": "contact_sheet_unavailable"}
+        if design_context is not None and design_context.get("reviewScope") == "global" and not sheet:
+            return {"skipped": "contact_sheet_unavailable"}
+        if design_context is not None and design_context.get("reviewScope") == "global" and design_context.get("priorCandidates"):
+            prior_sheet = await compose_contact_sheet([prior["png"] for _, prior in sorted(design_context["priorCandidates"].items())])
+            if not prior_sheet:
+                return {"skipped": "prior_contact_sheet_unavailable"}
+            design_context = {**design_context, "priorSheet": prior_sheet}
         # What the provider was actually handed, so an empty answer next time
         # can be read against the image that produced it.
         LOGGER.info(
@@ -275,16 +618,27 @@ async def run_vision_advisory(
         )
         try:
             model, payload = await _request_advisory(sheet, slide_count=len(renders),
-                **({"required": True, "pngs": renders} if required else {}))
+                **({"required": True, "pngs": renders} if required else {}),
+                **({"design_context": design_context} if design_context is not None else {}))
         except ProviderOutcomeError as error:
             # A model that answered with no text at all is a distinct outcome
             # from a transport failure, and the one bench run 30 hit; keep them
             # apart in the receipt so the next run can tell them apart.
             LOGGER.warning("[authored] vision advisory outcome=%s", error.code)
+            if design_context is not None:
+                raise
             return {"skipped": f"provider_outcome:{error.code}"}
         if payload is None:
             return {"skipped": "unparseable_response"}
-        if required:
+        design_review = None
+        if design_context is not None:
+            design_review = (_parse_global_review(payload, slide_count=len(renders), context=design_context)
+                if design_context.get("reviewScope") == "global" else
+                _parse_design_review(payload, slide_count=len(renders), context=design_context))
+            if design_review is None:
+                return {"skipped": "design_review_schema_or_coverage_invalid"}
+        global_review = design_context is not None and design_context.get("reviewScope") == "global"
+        if required and not global_review:
             findings = payload.get("slides") if isinstance(payload, Mapping) else None
             seen = set()
             if not isinstance(findings, list):
@@ -300,7 +654,7 @@ async def run_vision_advisory(
                 seen.add(finding["index"])
             if seen != set(range(1, len(renders) + 1)):
                 return {"skipped": "review_coverage_incomplete"}
-        slides = parse_advisory_payload(payload, slide_count=len(renders))
+        slides = [] if global_review else parse_advisory_payload(payload, slide_count=len(renders))
         from utils.hashing import sha256_hex
         latency_ms = int((time.monotonic() - started) * 1000)
         LOGGER.info(
@@ -311,7 +665,13 @@ async def run_vision_advisory(
             latency_ms,
         )
         return {
-            "promptVersion": "svg-required-visual-review/v1" if required else ADVISORY_PROMPT_VERSION,
+            "promptVersion": (DESIGN_REVIEW_PROMPT_VERSION if design_context is not None else
+                              "svg-required-visual-review/v1" if required else ADVISORY_PROMPT_VERSION),
+            **({"designReview": design_review} if design_review is not None else {}),
+            **({"inputEnvelope": payload.get("_serverInputEnvelope"),
+                "representativeIndices": payload.get("_serverRepresentativeIndices", []),
+                "omittedSupplementalRepresentativeIndices": payload.get("_serverOmittedRepresentativeIndices", [])}
+               if design_context is not None else {}),
             **({"reviewedPageIndices": list(range(len(renders)))} if required else {}),
             **({"reviewedPngDigests": [sha256_hex(png) for png in renders],
                 "reviewInputKind": "individual-page-pngs/v1"} if required else {}),
@@ -319,8 +679,24 @@ async def run_vision_advisory(
             "latencyMs": latency_ms,
             "slideCount": len(renders),
             **({"inputImageBytes": sum(len(png) for png in renders)} if required else {"sheetBytes": len(sheet)}),
+            **({"inputImageBytes": sum(len(png) for png in renders)
+                + sum(len(prior["png"]) for prior in design_context.get("priorCandidates", {}).values())
+                + sum(len(base64.b64decode(example["data_url"].split(",", 1)[1], validate=True))
+                      for example in design_context.get("examples", []))} if design_context is not None else {}),
+            **({"reviewInputKind": "deck-contact-sheet-and-representatives/v1",
+                "inputImageBytes": len(sheet)
+                    + sum(len(renders[index]) for index in payload.get("_serverRepresentativeIndices", []))
+                    + len(design_context.get("priorSheet") or b"")}
+               if global_review else {}),
             "slides": slides,
         }
+    except DesignReviewInputCapacityError as error:
+        return {"skipped": "review_input_capacity_unavailable", "reasonCode": str(error)}
+    except (ProviderOutcomeError, BudgetExceededError):
+        if design_context is not None:
+            raise
+        LOGGER.warning("[authored] vision advisory failed", exc_info=True)
+        return {"skipped": "provider_failed"}
     except Exception:
         LOGGER.warning("[authored] vision advisory failed", exc_info=True)
         return {"skipped": "provider_failed"}

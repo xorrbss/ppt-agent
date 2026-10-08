@@ -50,6 +50,7 @@ async def test_source_generation_verifies_before_publish_and_bounds_repair(monke
         async def __aenter__(self): return self
         async def __aexit__(self, *_): pass
         async def scalar(self, *_): return deepcopy(seed)
+        async def get(self, *_): return None
         async def commit(self): pass
         def add(self, *_): pass
 
@@ -121,12 +122,12 @@ async def test_source_generation_verifies_before_publish_and_bounds_repair(monke
 
     if not geometry_passed:
         with pytest.raises(AuthoredStageError) as failed:
-            await generation._generate(request, uuid.uuid4(), outline, "ko", None, job)
+            await generation._generate(request, uuid.uuid4(), outline, "ko", Session(), job)
         assert failed.value.code == "svg_source_quality_failed"
         assert author_mock.await_count == 2
         publish.assert_not_awaited()
         return
-    assert await generation._generate(request, uuid.uuid4(), outline, "ko", None, job) == "published"
+    assert await generation._generate(request, uuid.uuid4(), outline, "ko", Session(), job) == "published"
     assert author_mock.await_count == (0 if local_success and not free_composition else 1)
     pages = publish.await_args.args[-1]
     payload, png = pages[0]

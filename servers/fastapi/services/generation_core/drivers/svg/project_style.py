@@ -12,6 +12,7 @@ the flat dict the svg author prompt serializes verbatim (see
 from __future__ import annotations
 
 import json
+import re
 
 from services.svg_contract import SVG_CONTRACT_VERSION
 
@@ -34,6 +35,7 @@ def project_style(
     overrides: dict,
     diagnostics: list[dict],
     references: dict,
+    quality_recovery_policy: dict | None = None,
 ) -> dict:
     """Build the svg author's flat design-system dict from a ``StyleContext``.
 
@@ -42,6 +44,9 @@ def project_style(
     them through to the output shape, unchanged from before this session.
     """
 
+    from services.svg_authoring_profile import validate_quality_recovery_policy
+
+    quality_policy = validate_quality_recovery_policy(quality_recovery_policy)
     tokens = {
         "primary": context.palette.primary,
         "background": context.palette.background,
@@ -57,7 +62,11 @@ def project_style(
     # (the preset's own svg text) are deliberately left alone.
     common_guidance: dict[str, list[str]] = {}
     for line in context.brief_lines:
-        if "svg" in line.applies_to and line.section not in {"LAYOUT SYSTEM", "SLIDE ARCHETYPES"}:
+        if quality_policy is not None:
+            advice = _svg_reference_design_advice(line.text)
+            if advice:
+                common_guidance.setdefault(line.section, []).append(adapt_brief_line(advice, width, height))
+        elif "svg" in line.applies_to and line.section not in {"LAYOUT SYSTEM", "SLIDE ARCHETYPES"}:
             common_guidance.setdefault(line.section, []).append(adapt_brief_line(line.text, width, height))
     result = {
         "adapter_version": SVG_STYLE_ADAPTER_VERSION,
@@ -89,6 +98,9 @@ def project_style(
             "references": "authored_style_role_images",
         },
     }
+    if quality_policy is not None:
+        result["quality_recovery_policy"] = quality_policy
+        result["provenance"]["design_guidance_projection"] = "svg-quality-first-guidance/v1"
     if svg_brief_replacements(width, height):
         # Absent at 16:9 so that dict (and its digest) stays byte-identical;
         # off-16:9 it lets a receipt reader tell a pre-rewrite snapshot apart.
@@ -123,6 +135,19 @@ def project_style(
             result["references"] = {**references, **context.design_pack_rules.get("references", {})}
             result["reference_examples"] += context.design_pack_rules.get("reference_examples", [])
     return result
+
+
+def _svg_reference_design_advice(text: str) -> str:
+    """Retain visual intent from mixed-format prose, never executable mechanics."""
+    # Inline markup/code examples are not design prose. Other clauses retain
+    # identity, emphasis and composition advice, with HTML-only mechanics
+    # explicitly neutralized as reference implementation details.
+    if re.search(r"<[/a-zA-Z]|```", text):
+        return ""
+    text = re.sub(r"\b(?:HTML\s*/\s*CSS|HTML|CSS|DOM)\b", "reference implementation", text, flags=re.I)
+    text = re.sub(r"\b(?:flexbox|flex|grid-template(?:-[a-z]+)?)\b|position\s*:\s*absolute",
+                  "reference arrangement", text, flags=re.I)
+    return text
 
 
 __all__ = ["SVG_STYLE_ADAPTER_VERSION", "project_style"]

@@ -62,6 +62,17 @@ async def rescue_terminal_page(*, ctx, request, index, content, payload, error, 
     policy = terminal_policy_of(ctx)
     if policy is TerminalPolicy.FAIL or not is_exhausted_page(error, index):
         return None
+    from services.svg_authoring_profile import read_quality_recovery_policy
+    if read_quality_recovery_policy(getattr(ctx, "snapshot", {}) or {}):
+        # Validated adaptation is reserved by collect in page order and uses its
+        # normal author/render callbacks. A terminal placeholder cannot pass it.
+        from services.generation_core.drivers.svg.quality_recovery import actual_provider_attempt_count
+        prior = payload.get("quality_recovery_fallback") or {}
+        payload["quality_recovery_fallback"] = {"status": "blocked",
+            "reason": "validated_adaptation_exhausted" if actual_provider_attempt_count(payload) >= 3
+                else "validated_candidate_unavailable", "prior_reservation": prior or None}
+        await checkpoint(job, index, payload=payload)
+        return None
     if policy is TerminalPolicy.FALLBACK:
         from services.svg_authoring_profile import read_authoring_profile
 

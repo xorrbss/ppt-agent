@@ -153,6 +153,8 @@ async def preview_svg(presentation, slides, index, request, task, session):
     metadata = parse_canvas_metadata(presentation_canvas_metadata(presentation.theme))
     physical_kwargs = {"physical_canvas": metadata} if isinstance(metadata, DocumentCanvasMetadata) else {}
     snapshot = presentation.theme["svg"]["styleSnapshot"]
+    from services.svg_authoring_profile import read_quality_recovery_policy
+    recovery_policy = read_quality_recovery_policy(snapshot)
     v7_source = _v7_source_profile(snapshot)
     manifest = {}
     for number, node in enumerate(ET.fromstring(target.svg_content).iter()):
@@ -234,6 +236,7 @@ async def preview_svg(presentation, slides, index, request, task, session):
             with generation_model_context(presentation.theme["svg"].get("codexGenerationPreset")):
                 result = await author_slide_svg(source, snapshot, target.content.get("role", "content"), index, len(slides),
                                                 instructions=instruction, source_images=manifest,
+                                                **({"previous_svg": target.svg_content} if recovery_policy else {}),
                                                 canonical_source_images=assets is not None, **physical_kwargs)
         except Exception as error:
             reject(error, "generation")
@@ -439,6 +442,12 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
     fields = {}
     set_svg_page(fields, svg_content=svg, content=content, quality=measured_quality, png=rendered.png)
     fields["content"]["svgReceipt"].update(_write_png(rendered.png))
+    from services.svg_authoring_profile import read_quality_recovery_policy
+    recovery_policy = read_quality_recovery_policy(presentation.theme["svg"].get("styleSnapshot", {}))
+    if recovery_policy:
+        fields["content"]["svgReceipt"]["qualityRecoveryReview"] = {"status": "unreviewed",
+            "source_revision": presentation.revision, "prior_source_digest": source_digest(target.svg_content),
+            "candidate_source_digest": source_digest(svg)}
     properties = {**(target.properties or {}), "image": image}
     statement = update(SlideModel).where(
         SlideModel.id == target.id, SlideModel.presentation == presentation.id,
@@ -464,6 +473,10 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
     from services.generation_core.quality.page_outcome import review_page_indices
     review = review_page_indices(qualities)
     quality_status = "review_required" if review else "passed"
+    if recovery_policy:
+        # The old deck review cannot certify a newly changed page or its flow.
+        quality_status = "review_required"
+        review = sorted(set(review) | {index})
     svg_meta.update(quality=qualities, reviewPages=review, qualityStatus=quality_status)
     theme["svg"] = svg_meta
     presentation.theme = theme

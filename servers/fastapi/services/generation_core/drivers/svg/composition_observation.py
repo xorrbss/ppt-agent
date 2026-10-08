@@ -84,13 +84,19 @@ def _comparison_basis(payload):
     return basis
 
 
-def observe_svg_deck_composition(pages):
+def observe_svg_deck_composition(pages, *, quality_policy: bool = False):
     """Report comparable geometry clusters with at most 32 comparisons per page.
 
     Output binds each observation to its SVG bytes. The caller persists page
     observations through existing checkpoints; no model or redraw is requested.
     """
     measured, observations = [], []
+    # The new policy adds distant representatives, while frozen observations
+    # keep their original 32-neighbour comparison and result shape.
+    representative_indices = set()
+    if quality_policy and pages:
+        representative_indices = {round(i * (len(pages) - 1) / 31) for i in range(32)}
+    first_geometry = {}
     for index, (payload, _) in enumerate(pages):
         svg = payload.get("svg_content") or ""
         geometry = _geometry(svg)
@@ -112,7 +118,12 @@ def observe_svg_deck_composition(pages):
         evidence.update(status="observed", geometryDigest=digest, contentUnits=units,
                         similarPages=[])
         if units >= 3:
-            for previous in range(max(0, index - 32), index):
+            comparisons = set(range(max(0, index - 32), index))
+            if quality_policy:
+                comparisons.update(i for i in representative_indices if i < index)
+                if digest in first_geometry:
+                    comparisons.add(first_geometry[digest])
+            for previous in sorted(comparisons):
                 prior = measured[previous]
                 if prior is None or prior[1] < 3:
                     continue
@@ -125,6 +136,8 @@ def observe_svg_deck_composition(pages):
                     observations[previous]["similarPages"].append(index)
         measured.append(geometry)
         observations.append(evidence)
+        if units >= 3:
+            first_geometry.setdefault(digest, index)
     # A pair is normal reuse; describe clusters of at least three pages.
     groups = []
     visited = set()
@@ -144,11 +157,23 @@ def observe_svg_deck_composition(pages):
             # Preserve historical source parallel-group observations. New
             # advice supports intentional reuse only when every cluster page
             # has source evidence; one comparison page cannot bless a cluster.
-            comparable = ("source_parallel_groups" in basis
+            comparable = (all(observations[i]["comparisonBasis"] for i in members)
+                          if quality_policy else "source_parallel_groups" in basis
                           or all(observations[i]["comparisonBasis"] for i in members))
-            groups.append(dict(pages=sorted(members), comparisonBasis=basis,
-                observation="comparison_structure_repetition" if comparable else "similar_geometry_repetition"))
-    return dict(schemaVersion="svg-composition-observation/v1", advisoryOnly=True,
+            group = dict(pages=sorted(members), comparisonBasis=basis,
+                observation="comparison_structure_repetition" if comparable else "similar_geometry_repetition")
+            if quality_policy:
+                group.update(deckShare=len(members) / max(1, len(pages)),
+                             representative=min(members), sourceBasisOnEveryPage=comparable,
+                             intentionalRepetitionVerified=False,
+                             requiresSemanticReview=True)
+            groups.append(group)
+    result = dict(schemaVersion="svg-composition-observation/v2" if quality_policy else "svg-composition-observation/v1", advisoryOnly=True,
                 aestheticsVerified=False, basis="canvas_normalized_approximate_geometry",
                 pageCount=len(pages), observedPages=sum(g is not None for g in measured),
                 groups=groups, pages=observations)
+    if quality_policy:
+        result.update(comparisonScope="neighbours_and_deck_representatives",
+                      similarityIsAestheticThreshold=False,
+                      brandChromeExcluded=True)
+    return result

@@ -178,7 +178,10 @@ def pin_svg_style(request: object) -> dict:
     """Snapshot before durable admission, never reselect on job takeover."""
     from services.authored_canvas import request_canvas_contract
     from services.generation_core.drivers.svg.svg_style_adapter import adapt_svg_style
-    from services.svg_authoring_profile import new_svg_admission_profile, request_authoring_profile, validate_profile_agreement
+    from services.svg_authoring_profile import (
+        new_svg_admission_profile, request_authoring_profile,
+        validate_profile_agreement, validate_quality_recovery_agreement,
+    )
 
     frozen = getattr(request, "_svg_style_snapshot", None)
     if frozen is None:
@@ -226,6 +229,12 @@ def pin_svg_style(request: object) -> dict:
                 frozen["digest"] = canonical_json_digest(
                     {key: value for key, value in frozen.items() if key != "digest"}, allow_nan=True,
                 )
+            recovery_plan = getattr(request, "_svg_quality_recovery_plan", None)
+            if recovery_plan is not None:
+                frozen["quality_recovery_plan"] = dict(recovery_plan)
+                frozen["digest"] = canonical_json_digest(
+                    {key: value for key, value in frozen.items() if key != "digest"}, allow_nan=True,
+                )
             if fresh_readability:
                 from services.authored_canvas import request_canvas_metadata
                 from services.document_canvas_generation import svg_readability_policy
@@ -254,6 +263,7 @@ def pin_svg_style(request: object) -> dict:
         request._svg_style_snapshot = frozen
     try:
         validate_profile_agreement(request, frozen)
+        validate_quality_recovery_agreement(request, frozen)
         from services.document_canvas_generation import validate_svg_readability_policy
 
         validate_svg_readability_policy(frozen.get("readability_policy"))

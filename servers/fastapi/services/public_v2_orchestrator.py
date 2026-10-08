@@ -875,6 +875,9 @@ class SqlPublicV2Orchestrator:
                     select_svg_stage_plan(internal_request, svg_stage_plan)
                 except ValueError as error:
                     raise _public_error(422, str(error)) from error
+            if resolve_generation_strategy(internal_request) == "svg":
+                from services.svg_authoring_profile import seal_new_quality_recovery_plan
+                seal_new_quality_recovery_plan(internal_request, slide_count)
             try:
                 if internal_request.master_pin is not None:
                     from services.presentation_generation_pipeline import (
@@ -1273,8 +1276,9 @@ class SqlPublicV2Orchestrator:
                     select(SlideModel).where(SlideModel.presentation == target_id)
                     .order_by(SlideModel.index, SlideModel.id)
                 )).scalars().all()
-                from services.svg_export_operation import svg_export_admission_snapshot
+                from services.svg_export_operation import svg_export_admission_snapshot, require_quality_recovery_export_parent
                 try:
+                    await require_quality_recovery_export_parent(session, presentation, slides)
                     snapshot = svg_export_admission_snapshot(presentation, slides)
                 except ValueError as error:
                     raise _public_error(409, str(error)) from error

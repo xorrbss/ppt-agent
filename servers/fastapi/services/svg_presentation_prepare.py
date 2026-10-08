@@ -83,14 +83,14 @@ class GenerationContext:
 
 
 async def _pin_owned_svg_style(request, job, *, pin_style, session_maker, owned_job):
-    from services.svg_authoring_profile import validate_profile_agreement
+    from services.svg_authoring_profile import validate_profile_agreement, validate_quality_recovery_agreement
 
     if job is None:
         return pin_style(request)
     async with session_maker() as checkpoint_session:
         current = await owned_job(checkpoint_session, job.id, job.attempt_token,
                                   fencing_token=getattr(job, "_workspace_fencing_token", None))
-        admitted = current.request_payload or {}
+        admitted = getattr(current, "request_payload", None) or {}
         for key, value in (
             ("_internal_svg_source_binding", getattr(request, "_svg_source_binding", None)),
             ("_internal_svg_style_snapshot", getattr(request, "_svg_style_snapshot", None)),
@@ -100,12 +100,14 @@ async def _pin_owned_svg_style(request, job, *, pin_style, session_maker, owned_
         frozen = current.svg_style_snapshot
         if frozen is not None:
             validate_profile_agreement(request, frozen)
+            validate_quality_recovery_agreement(request, frozen)
             staged = getattr(request, "_svg_style_snapshot", None)
             if staged is not None and staged != frozen:
                 raise RuntimeError("svg_style_snapshot_conflict")
             request._svg_style_snapshot = frozen
         snapshot = pin_style(request)
         validate_profile_agreement(request, snapshot)
+        validate_quality_recovery_agreement(request, snapshot)
         if frozen is not None and frozen != snapshot:
             raise RuntimeError("svg_style_snapshot_conflict")
         current.svg_style_snapshot = snapshot
@@ -192,6 +194,20 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
             existing = await checkpoint_session.scalar(select(AuthoredSlideCheckpoint.svg_checkpoint).where(
                 AuthoredSlideCheckpoint.job_id == job.id,
                 AuthoredSlideCheckpoint.svg_checkpoint.is_not(None)).limit(1))
+            from services.svg_authoring_profile import read_quality_recovery_policy
+            if read_quality_recovery_policy(snapshot):
+                saved_pages = list(await checkpoint_session.scalars(select(AuthoredSlideCheckpoint.svg_checkpoint).where(
+                    AuthoredSlideCheckpoint.job_id == job.id,
+                    AuthoredSlideCheckpoint.svg_checkpoint.is_not(None))))
+                from services.generation_core.drivers.svg.collect import _unknown_provider_checkpoint
+                def review_unknown(value):
+                    if isinstance(value, dict):
+                        return (value.get("status") in {"review_inflight", "review_unknown"}
+                                or any(review_unknown(item) for item in value.values()))
+                    return any(review_unknown(item) for item in value) if isinstance(value, list) else False
+                if any(_unknown_provider_checkpoint(saved) or review_unknown(saved) for saved in saved_pages):
+                    raise AuthoredStageError(slide_index=None, stage="author",
+                        code="public_provider_result_unknown", retryable=False)
         if existing and existing.get("trusted_stage_execution") and getattr(request, "_svg_stage_plan", None) is None:
             raise AuthoredStageError(slide_index=None, stage="author",
                                     code="svg_stage_plan_missing", retryable=False)

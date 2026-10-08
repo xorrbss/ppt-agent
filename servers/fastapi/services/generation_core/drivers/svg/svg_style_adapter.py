@@ -103,10 +103,17 @@ def adapt_svg_style(
     ]
     # Format-specific instructions remain diagnostics. Every validated style
     # can provide identity and examples without executable HTML-to-SVG mapping.
+    from services.svg_authoring_profile import request_quality_recovery_policy
+
     result = project_style(
         context, width=width, height=height,
         overrides=overrides, diagnostics=diagnostics, references=references,
+        quality_recovery_policy=request_quality_recovery_policy(request),
     )
+    if result.get("quality_recovery_policy") is not None:
+        from utils.authored_style_svg_recovery import validated_style_recovery_snapshot
+
+        result["validated_recovery_candidates"] = validated_style_recovery_snapshot(style, result)
     from utils.authored_styles import AUTHORED_STYLE_ASSETS_DIRECTORY
     if getattr(style, "assets_root", None) == AUTHORED_STYLE_ASSETS_DIRECTORY.resolve():
         result["provenance"]["registry_authority"] = "packaged-authored-catalogue"

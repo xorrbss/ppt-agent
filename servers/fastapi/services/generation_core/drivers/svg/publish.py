@@ -81,6 +81,10 @@ def svg_slide_content(payload: dict, *, role, source, pt_per_px: float,
 
 async def _publish(request, presentation_id, outline, language, session, job, snapshot, roles, pages,
                    *, quality_summary=None, advisory=None):
+    from services.svg_authoring_profile import read_quality_recovery_policy
+    if read_quality_recovery_policy(snapshot):
+        from services.generation_core.drivers.svg.quality import enforce_quality_recovery_publication
+        enforce_quality_recovery_publication(snapshot, pages, advisory, job=job)
     source_preservation = None
     if getattr(request, "_source_content_svg_reflow", False):
         from services.svg_source_layout import source_pages, verify_source_receipt
@@ -168,6 +172,16 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
                 **({"renderAdvisoryCount": render_advisory_count} if render_advisory_count else {}),
                 "codexGenerationPreset": request.codex_generation_preset},
     }, request_canvas_metadata(request))
+    if read_quality_recovery_policy(snapshot):
+        from services.generation_core.quality.advisory_record import content_digest
+        gate = advisory["vision"]["designGate"]
+        publication = {"schema": "svg-quality-recovery-publication/v1", "gateDigest": gate["digest"],
+            "parentOperationId": str(operation_id), "parentJobId": str(job_id),
+            "sourceRevision": expected_revision + 1, "snapshotDigest": content_digest(snapshot),
+            "sourceContentDigests": [content_digest(item.content) for item in outline.slides],
+            "inputDigests": [payload.get("input_digest") for payload, _ in pages]}
+        presentation.theme["svg"]["qualityRecoveryPublication"] = {**publication,
+            "digest": content_digest(publication)}
     presentation.lifecycle_status = PRESENTATION_LIFECYCLE_PUBLISHED
     pt_per_px = canvas_point_per_px(request_canvas_metadata(request))
     await session.execute(delete(SlideModel).where(SlideModel.presentation == presentation_id))

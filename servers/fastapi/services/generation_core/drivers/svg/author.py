@@ -84,6 +84,45 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
     vector_icons = offer.vector[index] if offer is not None else {}
     local_authored = None
     hint = payload.get("repair_hint")
+    from services.svg_authoring_profile import read_quality_recovery_policy
+    recovery_policy = read_quality_recovery_policy(ctx.snapshot)
+    correction_mode = payload.get("correction_mode") if recovery_policy else None
+    recovery_kwargs = {}
+    if correction_mode:
+        recovery_kwargs["correction_mode"] = correction_mode
+        previous_render = getattr(ctx, "quality_recovery_previous_renders", {}).get(index)
+        if correction_mode == "validated_svg_adaptation":
+            from services.generation_core.drivers.svg.quality_recovery import reserved_recovery_candidate, ensure_recovery_authority
+            from utils.authored_style_svg_recovery import read_validated_recovery_png
+            from types import SimpleNamespace
+            from utils.hashing import sha256_hex
+            candidate = reserved_recovery_candidate(ctx, index, content, payload)
+            await ensure_recovery_authority(job, SimpleNamespace(checkpoint=checkpoint,
+                async_session_maker=async_session_maker, recovery_snapshot=ctx.snapshot))
+            png = read_validated_recovery_png(candidate)
+            if (not png or len(png) > 8 * 1024 * 1024 or not png.startswith(b"\x89PNG\r\n\x1a\n")
+                    or "sha256:" + sha256_hex(png) != candidate["png_digest"]
+                    or payload.get("last_valid_svg") != candidate["svg_content"]):
+                raise ValueError("svg_validated_recovery_render_binding_invalid")
+            previous_render = (png, candidate["png_digest"].removeprefix("sha256:"),
+                candidate["svg_digest"].removeprefix("sha256:"))
+        if previous_render is None and payload.get("quality_recovery", {}).get("prior_candidate"):
+            from services.svg_presentation_checkpoint import _read_png
+            from services.generation_core.drivers.svg.quality_recovery import ensure_recovery_authority
+            from types import SimpleNamespace
+            prior = payload["quality_recovery"]["prior_candidate"]
+            await ensure_recovery_authority(job, SimpleNamespace(checkpoint=checkpoint,
+                async_session_maker=async_session_maker, recovery_snapshot=ctx.snapshot))
+            previous_render = (_read_png(prior["evidence"]),
+                prior["evidence"].get("png_sha256"), prior.get("svg_digest"))
+        if previous_render:
+            png, png_digest, svg_digest = previous_render
+            from utils.hashing import sha256_hex
+            previous_svg = payload.get("last_valid_svg")
+            if (not png or sha256_hex(png) != png_digest or not previous_svg
+                    or sha256_hex(previous_svg.encode()) != svg_digest):
+                raise ValueError("svg_correction_previous_render_binding_invalid")
+            recovery_kwargs.update(previous_render_png=png, previous_render_png_digest=png_digest)
     intent_kwargs = {}
     intents = getattr(ctx, "visual_intents", None)
     if isinstance(intents, list) and index < len(intents):
@@ -181,10 +220,12 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
                     before_dispatch=before_dispatch,
                     _validated_pages=ctx.source_units,
                     **({"previous_svg": payload.get("last_valid_svg")} if whole_page_source and hint else {}),
+                    **recovery_kwargs,
                     **intent_kwargs,
                 )
             else:
                 repair_kwargs = {}
+                repair_kwargs.update(recovery_kwargs)
                 if hint:
                     from services.svg_authoring_profile import read_authoring_profile
 

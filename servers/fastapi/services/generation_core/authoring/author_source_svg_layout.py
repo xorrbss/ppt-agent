@@ -48,7 +48,8 @@ def _whole_page_facts(page, image_slots):
 
 async def _author_source_whole_page(manifest, page_index, style_snapshot, *, source_images,
         image_slots, min_font_size_px, width, height, instructions, correction_hint,
-        receipt_attempt_ordinal, before_dispatch, _validated_pages, visual_intent, previous_svg):
+        receipt_attempt_ordinal, before_dispatch, _validated_pages, visual_intent, previous_svg,
+        correction_mode=None, previous_render_png=None, previous_render_png_digest=None):
     from services.generation_core.authoring.author_slide_svg import author_slide_svg
     from services.svg_source_layout import bind_whole_page_source_svg
 
@@ -82,11 +83,23 @@ async def _author_source_whole_page(manifest, page_index, style_snapshot, *, sou
         "Recompose chart geometry and style freely on the target canvas, preserving numeric relationships. "
         "Do not flatten, delete, summarize or relabel an original chart; fail if native projection cannot preserve it. "
     )
+    from services.svg_authoring_profile import read_quality_recovery_policy
+
+    correction_kwargs = {}
+    if read_quality_recovery_policy(style_snapshot) is not None:
+        if correction_mode == "validated_svg_adaptation":
+            raise ValueError("svg_source_recovery_candidate_forbidden")
+        if correction_mode is not None:
+            correction_kwargs["correction_mode"] = correction_mode
+        if previous_render_png is not None:
+            correction_kwargs["previous_render_png"] = previous_render_png
+        if previous_render_png_digest is not None:
+            correction_kwargs["previous_render_png_digest"] = previous_render_png_digest
     authored = await author_slide_svg(content=content, style_snapshot=style_snapshot, role="content",
         index=page_index, n=len(pages), instructions=(instructions or "") + "\n" + source_rules,
         correction_hint=correction_hint, source_images=source_images,
         receipt_attempt_ordinal=receipt_attempt_ordinal, before_dispatch=before_dispatch,
-        visual_intent=visual_intent, previous_svg=previous_svg)
+        visual_intent=visual_intent, previous_svg=previous_svg, **correction_kwargs)
     authored.receipt["source_authoring_contract"] = style_snapshot["source_authoring_contract"]
     if authored.receipt.get("validation_error"):
         return authored
@@ -203,6 +216,9 @@ async def author_source_svg_layout(
     _validated_pages=None,
     visual_intent=None,
     previous_svg=None,
+    correction_mode=None,
+    previous_render_png=None,
+    previous_render_png_digest=None,
 ):
     contract = style_snapshot.get("source_authoring_contract")
     if contract is not None:
@@ -212,7 +228,9 @@ async def author_source_svg_layout(
             source_images=source_images, image_slots=image_slots, min_font_size_px=min_font_size_px,
             width=width, height=height, instructions=instructions, correction_hint=correction_hint,
             receipt_attempt_ordinal=receipt_attempt_ordinal, before_dispatch=before_dispatch,
-            _validated_pages=_validated_pages, visual_intent=visual_intent, previous_svg=previous_svg)
+            _validated_pages=_validated_pages, visual_intent=visual_intent, previous_svg=previous_svg,
+            correction_mode=correction_mode, previous_render_png=previous_render_png,
+            previous_render_png_digest=previous_render_png_digest)
     from services.provider_usage_instrumentation import (
         ProviderCallTimer,
         current_provider_idempotency_key,

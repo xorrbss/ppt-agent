@@ -22,6 +22,88 @@ ART_DIRECTION_PROFILE_V6: SvgAuthoringProfile = {"id": "art-direction-v1", "vers
 ART_DIRECTION_PROFILE_V7: SvgAuthoringProfile = {"id": "art-direction-v1", "version": 7}
 ART_DIRECTION_PROFILE_V8: SvgAuthoringProfile = {"id": "art-direction-v1", "version": 8}
 
+QUALITY_RECOVERY_POLICY = {"id": "svg-quality-first", "version": 1}
+
+
+def validate_quality_recovery_policy(value: object) -> dict | None:
+    if value is None:
+        return None
+    if (not isinstance(value, Mapping) or set(value) != {"id", "version"}
+            or value.get("id") != QUALITY_RECOVERY_POLICY["id"]
+            or type(value.get("version")) is not int or value["version"] != 1):
+        raise ValueError("svg_quality_recovery_policy_invalid")
+    return dict(QUALITY_RECOVERY_POLICY)
+
+
+def request_quality_recovery_policy(request: object) -> dict | None:
+    return validate_quality_recovery_policy(getattr(request, "_svg_quality_recovery_policy", None))
+
+
+def read_quality_recovery_policy(snapshot: Mapping | None) -> dict | None:
+    if snapshot is None:
+        return None
+    policy = validate_quality_recovery_policy(snapshot.get("quality_recovery_policy"))
+    if policy is not None and read_authoring_profile(snapshot) != ART_DIRECTION_PROFILE_V8:
+        raise ValueError("svg_quality_recovery_profile_invalid")
+    return policy
+
+
+def validate_quality_recovery_agreement(request: object, snapshot: Mapping) -> dict | None:
+    frozen = read_quality_recovery_policy(snapshot)
+    selected = request_quality_recovery_policy(request)
+    if selected is not None and selected != frozen:
+        raise ValueError("svg_quality_recovery_policy_conflict")
+    request._svg_quality_recovery_policy = frozen
+    plan = read_quality_recovery_plan(snapshot) if frozen else None
+    selected_plan = getattr(request, "_svg_quality_recovery_plan", None)
+    if selected_plan is not None and selected_plan != plan:
+        raise ValueError("svg_quality_recovery_plan_conflict")
+    request._svg_quality_recovery_plan = plan
+    return frozen
+
+
+def seal_new_quality_recovery_plan(request: object, slide_count: int) -> dict | None:
+    """Seal only fresh supported requests; never alter an existing admission."""
+    frozen = getattr(request, "_svg_style_snapshot", None)
+    if frozen is not None:
+        plan = read_quality_recovery_plan(frozen)
+        if plan and plan["slide_count"] != slide_count:
+            raise ValueError("svg_quality_recovery_plan_conflict")
+        return plan
+    if (getattr(request, "_svg_authoring_profile_selected", False)
+            or request_authoring_profile(request) is not None
+            or getattr(request, "_svg_stage_plan", None) is not None
+            or getattr(request, "source_mode", None) == "raster_reconstruction"
+            or not getattr(request, "vision_qa", False)
+            or type(slide_count) is not int or slide_count < 2):
+        return None
+    plan = {"schema": "svg-quality-recovery-plan/v1", "review_round_limit": 2,
+            "page_attempt_limit": 3, "slide_count": slide_count, "review_group_size": 5,
+            "review_call_limit": 2 * (((slide_count + 4) // 5) + 1) if slide_count > 5 else 2}
+    request._svg_quality_recovery_plan = plan
+    request._svg_quality_recovery_policy = dict(QUALITY_RECOVERY_POLICY)
+    return plan
+
+
+def read_quality_recovery_plan(snapshot: Mapping) -> dict | None:
+    if read_quality_recovery_policy(snapshot) is None:
+        return None
+    plan = snapshot.get("quality_recovery_plan")
+    if (not isinstance(plan, Mapping)
+            or set(plan) != {"schema", "review_round_limit", "page_attempt_limit", "slide_count",
+                            "review_group_size", "review_call_limit"}
+            or plan.get("schema") != "svg-quality-recovery-plan/v1"
+            or type(plan.get("slide_count")) is not int or plan["slide_count"] < 2
+            or type(plan.get("review_round_limit")) is not int or plan["review_round_limit"] != 2
+            or type(plan.get("page_attempt_limit")) is not int or plan["page_attempt_limit"] not in (2, 3)
+            or type(plan.get("review_group_size")) is not int or plan["review_group_size"] != 5
+            or type(plan.get("review_call_limit")) is not int
+            or plan["review_call_limit"] != (2 * (((plan["slide_count"] + 4) // 5) + 1)
+                                           if plan["slide_count"] > 5 else 2)
+            or plan["review_call_limit"] > plan["slide_count"]):
+        raise ValueError("svg_quality_recovery_plan_invalid")
+    return dict(plan)
+
 
 def validate_authoring_profile(value: object) -> SvgAuthoringProfile | None:
     if value is None or value == "current-v4":
