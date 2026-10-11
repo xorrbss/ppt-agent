@@ -202,6 +202,7 @@ def pin_svg_style(request: object) -> dict:
     from services.generation_core.drivers.svg.svg_style_adapter import adapt_svg_style
     from services.svg_authoring_profile import (
         new_svg_admission_profile, request_authoring_profile,
+        seal_new_quality_recovery_plan,
         validate_profile_agreement, validate_quality_recovery_agreement,
     )
 
@@ -209,6 +210,19 @@ def pin_svg_style(request: object) -> dict:
     if frozen is None:
         fresh_readability = not getattr(request, "_svg_authoring_profile_selected", False)
         try:
+            # Direct durable-payload callers also seal a known fresh count
+            # before authoring-profile selection makes this a replay choice.
+            count = getattr(request, "n_slides", None)
+            markdown = getattr(request, "slides_markdown", None)
+            if markdown:
+                count = len(markdown)
+            if getattr(request, "source_mode", None) == "source_content_restyle":
+                outline = getattr(request, "_source_document_outline", None)
+                count = getattr(outline, "source_slide_count", None)
+            selected_plan = getattr(request, "_svg_quality_recovery_plan", None)
+            if selected_plan is not None:
+                count = selected_plan["slide_count"]
+            seal_new_quality_recovery_plan(request, count)
             authoring_profile = new_svg_admission_profile(request)
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error

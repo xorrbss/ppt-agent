@@ -348,6 +348,10 @@ async def recover_deck(ctx, request, presentation_id, outline, job, pages, state
             payload = pages[index][0]
             if payload.get("quality_recovery", {}).get("status") == "retained":
                 continue
+            if plan["review_round_limit"] <= 1:
+                payload["quality_recovery"] = {"status": "unresolved", "reason": "review_attempt_budget_exhausted"}
+                await hooks.checkpoint(job, index, payload=payload)
+                continue
             limit = min(2, plan["page_attempt_limit"], _provider_attempt_limit(payload, index=index, job=job))
             if actual_provider_attempt_count(payload) >= limit:
                 payload["quality_recovery"] = {"status": "unresolved", "reason": "page_attempt_budget_exhausted"}

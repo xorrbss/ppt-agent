@@ -594,6 +594,8 @@ def compare_quality_recovery_candidates(ctx, prior, new, prior_advisory, new_adv
     new_page = next((page for page in new_gate.get("pages", []) if page.get("index") == index), None)
     if not old_page or not new_page or not old_page.get("evaluated") or not new_page.get("evaluated"):
         return reject("comparison_review_incomplete")
+    if new_page.get("mandatoryEvidenceValid") is not True:
+        return reject("candidate_design_evidence_invalid")
     if (not 0 <= index < len(old_gate["pageDigests"]) or not index < len(new_gate["pageDigests"])
             or old_gate.get("pageDigests", [])[index] != sha256_hex((prior.get("svg_content") or "").encode())
             or new_gate.get("pageDigests", [])[index] != sha256_hex((new.get("svg_content") or "").encode())):

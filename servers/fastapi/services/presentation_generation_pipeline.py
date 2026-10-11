@@ -1842,8 +1842,13 @@ async def _admit_generation_operation_v2_compatible(
         ),
     )
     if resolve_generation_strategy(request) == "svg":
-        from services.svg_authoring_profile import seal_new_quality_recovery_plan
+        from services.svg_authoring_profile import (
+            seal_new_quality_recovery_plan, svg_quality_review_admission_budget,
+        )
         seal_new_quality_recovery_plan(request, slide_count)
+        review_budget = svg_quality_review_admission_budget(request, slide_count)
+    else:
+        review_budget = slide_count if request.vision_qa else 0
     try:
         admission = await admit_public_operation_compatible_v2(
             sql_session,
@@ -1857,7 +1862,7 @@ async def _admit_generation_operation_v2_compatible(
                 source_image_budget=source_image_admission_budget(
                     request._reference_snapshots, request.files
                 ),
-                vqa_budget=slide_count if request.vision_qa else 0,
+                vqa_budget=review_budget,
             ),
             resource_plan=plan_weighted_resources(
                 pixel_count=slide_count * 1_920 * 1_080,
