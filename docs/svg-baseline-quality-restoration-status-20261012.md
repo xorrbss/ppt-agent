@@ -37,11 +37,13 @@
 
 ## 준비한 실제 시험
 
-`C:\project\PPT-agent\delivery-backups\svg-quality-baseline-20261012`에 새 요청과 준비 매니페스트를 저장했다. 기준1·6·9·11·12의 source 순서, native 바인딩, 신규 저장 키, 정상 `/api/v1/ppt/presentation/generate/async` 경로, 같은 스타일·16:9·한국어·표지 true·목차 false를 사용한다. 과거 presentation/operation을 재시도하지 않는다. 현재 상태는 **prepared_not_executed**, 제공자 호출0이다.
+`C:\project\PPT-agent\delivery-backups\svg-quality-baseline-20261012`에 요청과 실제 실행 근거를 저장했다. 기준1·6·9·11·12의 source 순서와 같은 스타일·16:9·한국어·표지 true·목차 false를 사용했다. 정상 API로 신규 5페이지를 생성했고 실제 author 5회, PNG 5개, native 표 1개와 차트 1개를 확인했다. 원문 5개는 기준의 저장 source와 동일하지만, 기준의 별도 native 병합 정보와 개념도 표현까지 같은 입력으로 제공한 것은 아니다.
 
 현재 관리 설정은 Codex / gpt-6.1-sol / medium이고 author model override는 없다. 활성 가격 revision은 `subscription-local-20260930-gpt61`, 해당 catalog input/output 요율은0이다. 이는 관리 카탈로그의 계상 값이며 구독 사용량이나 실제 외부 청구의 무료 증거로 확대하지 않는다. 신규 N5 admission의 initial24+retry6=최대30은 논리적 허용 상한이며 실제 예상 호출 수·새 권한·기존80페이지의 승인 예산을 뜻하지 않는다.
 
-신규 실제 시험의 원문 전송과 모델 호출에 대한 사용자 확인을 요청했다. 확인 전에는 POST·제공자·DB 쓰기·기존 작업 변경·서버 재시작을 실행하지 않는다. 새 코드도 실행 서버에 적용하지 않았다.
+사용자의 완료까지 진행하라는 지시에 따라 실행 서버의 API와 관련 워커에 새 코드를 적용했다. 첫 초안의 실제 PNG 비교는 **D3 미채택**이다. 구성도 제작 지침 노출, 화면 개념도 축소, 표의 공통 적용 범위 표현 문제가 남았다. 표의 병합 의미는 재사용 markdown에 명시되지 않았으며 기준의 별도 native payload에는 존재한다. 수치·셀 값 보존을 의미·시각 보존 성공으로 판단하지 않는다.
+
+생성 후 검토 진입에서 fresh/partial operation binding과 v2 partial 최종 검토 슬롯 중복 계산을 발견해 각각 `4c7debbfe`, `9970778df`로 수정했다. 기존 좁은 검증은 각각 3건, 6건 통과했다. 기존 실패 작업은 유지하고 정상 recovery API로 author 5개를 재사용했다. 실제 VQA 1회는 ledger succeeded와 usage로 확인했으나 schema/coverage 판독 실패로 선택·저장이 완료되지 않았다. 원 review terminal event를 별도 보존한 근거는 없으며, 작성 5회의 terminal 증거와 구분한다. 현재 schema/prompt 계약 정합성과 작성 입력 품질을 수정 중이다. 전체 12페이지 생성과 PPTX 검증은 아직 진행하지 않았다.
 
 ## 남은 작업
 

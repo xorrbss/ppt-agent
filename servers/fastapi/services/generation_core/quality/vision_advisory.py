@@ -65,6 +65,9 @@ _DESIGN_SCHEMA_REJECTION_REASONS = frozenset({
     "global_retained_coverage",
     "global_intentional_evidence",
     "global_composition_coverage",
+    "full_composition_coverage",
+    "design_target_fields",
+    "comparison_change_fields",
 })
 
 
@@ -467,7 +470,9 @@ def _parse_baseline_review(payload, *, slide_count, context, rejection_reasons=N
                                      rejection_reasons=rejection_reasons)
         targets_by_index = {entry["index"] - 1: _parse_design_targets(entry.get("designTargets"), names)
             for entry in payload.get("slides", []) if isinstance(entry, Mapping) and type(entry.get("index")) is int}
-    if result is None or any(value is None for value in targets_by_index.values()):
+    if result is None:
+        return None
+    if any(value is None for value in targets_by_index.values()):
         return _reject_design_review(rejection_reasons, "design_target_fields")
     for page in result["pages"]:
         targets = targets_by_index.get(page["index"], [] if global_review else None)
@@ -575,7 +580,8 @@ def _parse_design_review(payload, *, slide_count, context, rejection_reasons=Non
         # explanation, even when geometry repetition is judged harmless.
         for observed in (context.get("composition") or {}).get("groups", []):
             if not any(set(observed["pages"]) <= set(group["pages"]) for group in groups):
-                return _reject_design_review(rejection_reasons, "index_coverage")
+                return _reject_design_review(rejection_reasons,
+                    "full_composition_coverage" if baseline_review_active(context) else "index_coverage")
     comparisons = []
     prior_candidates = context.get("priorCandidates") or {}
     if prior_candidates:
@@ -872,7 +878,8 @@ async def run_vision_advisory(
             return {"skipped": "unparseable_response"}
         design_review = None
         if design_context is not None:
-            rejection_reasons = [] if design_context.get("reviewScope") in {"local", "global"} else None
+            rejection_reasons = [] if (baseline_review_active(design_context)
+                or design_context.get("reviewScope") in {"local", "global"}) else None
             rejection_fields = {} if design_context.get("reviewScope") == "global" else None
             design_review = (_parse_baseline_review(payload, slide_count=len(renders), context=design_context,
                 rejection_reasons=rejection_reasons, rejection_fields=rejection_fields)
@@ -883,6 +890,19 @@ async def run_vision_advisory(
                 _parse_design_review(payload, slide_count=len(renders), context=design_context,
                                      rejection_reasons=rejection_reasons))
             if design_review is None:
+                if baseline_review_active(design_context) and design_context.get("reviewScope") == "full":
+                    reason = rejection_reasons[0] if rejection_reasons else "page_fields"
+                    field_names = {
+                        "axis_keys": ["axes"], "axis_semantics": ["evaluated", "verdict", "severity", "repairScope"],
+                        "evidence_bounds": ["visibleEvidence"], "index_coverage": ["index"],
+                        "full_composition_coverage": ["deckFlow", "repetitionGroups", "pages"],
+                        "issue_axis_consistency": ["issues", "axes", "intentional", "sourceEvidence"],
+                        "design_target_fields": ["designTargets", "axis", "evidenceRegion", "visibleEvidence", "sourceEvidence", "improvementGoal"],
+                        "comparison_change_fields": ["pairComparisons", "axisChanges", "preferred", "visibleEvidence"],
+                        "prior_coverage": ["pairComparisons", "index"],
+                        "page_fields": ["slides", "index", "evaluated", "issues", "deckFlow"],
+                    }.get(reason, ["slides"])
+                    rejection_fields = {"fieldNames": field_names}
                 return {"skipped": "design_review_schema_or_coverage_invalid",
                         **({"schemaRejectionReason": rejection_reasons[0]} if rejection_reasons else {}), **({"schemaRejectionFields": rejection_fields} if rejection_fields else {})}
         global_review = design_context is not None and design_context.get("reviewScope") in {"global", "edited"}

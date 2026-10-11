@@ -76,12 +76,34 @@ def baseline_review_json_schema(*, slide_count, context):
         schema = design_review_json_schema(slide_count=slide_count, comparison_indices=comparisons,
                                           review_scope=context.get("reviewScope", "full"))
         page = schema["properties"]["slides"]["items"]
+        if context.get("reviewScope", "full") == "full":
+            page = {"anyOf": [{**deepcopy(page), "properties": {**deepcopy(page["properties"]),
+                "evaluated": {"type": "boolean", "enum": [evaluated]},
+                "axes": {"type": "object", "additionalProperties": False, "required": list(names),
+                    "properties": {name: _local_design_axis_schema(evaluated=evaluated) for name in names}}}}
+                for evaluated in (True, False)]}
+            schema["properties"]["slides"]["items"] = page
+            schema["properties"]["slides"].update(minItems=slide_count, maxItems=slide_count)
+            flow = schema["properties"]["deckFlow"]
+            flow["properties"]["visibleEvidence"] = _local_design_evidence_schema()
+            flow["properties"]["repetitionGroups"]["items"]["properties"]["visibleEvidence"] = _local_design_evidence_schema()
+            flow["properties"]["repetitionGroups"]["items"]["properties"]["pages"].update(minItems=1, uniqueItems=True)
         for branch in page.get("anyOf", [page]):
             branch["required"].append("designTargets")
             branch["properties"]["designTargets"] = targets
+            if (context.get("reviewScope", "full") == "full"
+                    and branch["properties"]["evaluated"].get("enum") == [False]):
+                branch["properties"]["designTargets"] = {**targets, "maxItems": 0}
         if comparisons:
             comparison = deepcopy(schema["properties"].pop("candidateComparisons")["items"])
             schema["required"].remove("candidateComparisons")
+            if context.get("reviewScope", "full") == "full":
+                comparison = {"anyOf": [{**deepcopy(comparison), "properties": {
+                    **deepcopy(comparison["properties"]), "evaluated": {"type": "boolean", "enum": [evaluated]},
+                    "visibleEvidence": _local_design_evidence_schema(),
+                    "priorAxes": {"type": "object", "additionalProperties": False, "required": list(names),
+                        "properties": {name: _local_design_axis_schema(evaluated=evaluated) for name in names}}}}
+                    for evaluated in (True, False)]}
             for branch in comparison.get("anyOf", [comparison]):
                 branch["properties"]["alternativeAxes"] = branch["properties"].pop("priorAxes")
                 branch["required"][branch["required"].index("priorAxes")] = "alternativeAxes"
@@ -136,7 +158,13 @@ def _baseline_review_messages(sheet, *, slide_count, pngs, context):
            "describes its paired alternative. issues uses only " + ", ".join(ISSUE_VOCABULARY) + ". "
            "illegible requires failed hierarchy_emphasis or density_balance; broken_figure requires failed "
            "information_structure. Local review uses four local axes only; full review also covers deckFlow "
-           "and repetitionGroups with intentional/sourceEvidence/visibleEvidence. Intentional repetition "
+           "and repetitionGroups with intentional/sourceEvidence/visibleEvidence. In a FULL review, return exactly "
+           "one slides entry for every supplied main page with a unique 1-based index, including clean pages. "
+           "An omitted page is unreviewed, never clean. In a FULL review, an evaluated "
+           "deckFlow must explicitly cover every supplied composition.groups.pages cluster in repetitionGroups, "
+           "including harmless clusters and well-designed diverse pages. Explain their visible grouping accurately; "
+           "a geometry cluster does not require failed verdicts, a design target or invented repetition problems. "
+           "Good diversity and harmless brand consistency may pass. Intentional repetition "
            "requires concrete server comparisonBasis on every member. ")
         + "Return strict JSON matching this schema: " + json.dumps(schema, separators=(",", ":")))
 

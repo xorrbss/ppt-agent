@@ -284,6 +284,51 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
                     assert fence.attempt_token == "current-attempt" and fence.fencing_token == 1
                 else:
                     assert fence is None
+        from copy import deepcopy
+        from jsonschema import ValidationError, validate
+        full_context = {**context, "reviewScope": "full", "deckComplete": True, "priorCandidates": {},
+            "composition": {"pages": [{}], "groups": [{"pages": [0]}]}}
+        full_axes = {name: dict(verdict="passed", severity="none", repairScope="none",
+            visibleEvidence="Distinct grouping preserves readable source meaning.") for name in prompt_mod.DESIGN_AXES}
+        harmless_group = dict(pages=[1], intentional=False, sourceEvidence="",
+                              visibleEvidence="Distinct composition is harmless and readable.")
+        full_payload = dict(slides=[dict(index=1, evaluated=True, issues=[], axes=full_axes, designTargets=[])],
+            deckFlow=dict(evaluated=True, visibleEvidence="The observed composition is well designed.",
+                          repetitionGroups=[harmless_group]))
+        full_schema = prompt_mod.baseline_review_json_schema(slide_count=1, context=full_context)
+        validate(full_payload, full_schema)
+        full_messages = prompt_mod.build_advisory_messages(b"", slide_count=1, required=True,
+            pngs=[png], design_context=full_context)
+        assert "every supplied composition.groups.pages cluster" in full_messages[0].content
+        assert "including harmless clusters and well-designed diverse pages" in full_messages[0].content
+        async def completed_review(*args, **kwargs):
+            return "fixture-model", deepcopy(full_payload)
+        monkeypatch.setattr(shared_advisory, "_request_advisory", completed_review)
+        full_result = _run(shared_advisory.run_vision_advisory([png], slide_count=1,
+            required=True, design_context=full_context))
+        assert "skipped" not in full_result
+        assert all(axis["verdict"] == "passed" for axis in full_result["designReview"]["pages"][0]["axes"].values())
+        assert full_result["designReview"]["pages"][0]["designTargets"] == []
+        full_payload["slides"][0]["axes"][names[0]]["severity"] = "minor"
+        with pytest.raises(ValidationError):
+            validate(full_payload, full_schema)
+        invalid_axes = _run(shared_advisory.run_vision_advisory([png], slide_count=1,
+            required=True, design_context=full_context))
+        assert invalid_axes["schemaRejectionReason"] == "axis_semantics"
+        assert invalid_axes["schemaRejectionFields"] == {"fieldNames": ["evaluated", "verdict", "severity", "repairScope"]}
+        full_payload["slides"][0]["axes"][names[0]]["severity"] = "none"
+        full_payload["deckFlow"]["repetitionGroups"] = []
+        missing_group = _run(shared_advisory.run_vision_advisory([png], slide_count=1,
+            required=True, design_context=full_context))
+        assert missing_group["schemaRejectionReason"] == "full_composition_coverage"
+        assert missing_group["schemaRejectionFields"] == {"fieldNames": ["deckFlow", "repetitionGroups", "pages"]}
+        assert set(missing_group) == {"skipped", "schemaRejectionReason", "schemaRejectionFields"}
+        full_payload["deckFlow"]["repetitionGroups"] = [harmless_group]
+        del full_payload["slides"][0]["designTargets"]
+        missing_targets = _run(shared_advisory.run_vision_advisory([png], slide_count=1,
+            required=True, design_context=full_context))
+        assert missing_targets["schemaRejectionReason"] == "design_target_fields"
+        assert set(missing_targets) == {"skipped", "schemaRejectionReason", "schemaRejectionFields"}
 
 
 def test_the_system_prompt_shows_the_model_the_json_it_must_answer_with():
