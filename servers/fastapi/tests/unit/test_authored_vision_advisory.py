@@ -236,10 +236,13 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
         from services.generation_core.drivers.svg import quality as deck_quality
         from utils.hashing import sha256_hex
         captured = []
+        original_scope = provider_usage_instrumentation.provider_usage_scope
         @contextmanager
         def capture_scope(**kwargs):
-            captured.append(kwargs)
-            yield
+            with original_scope(**kwargs):
+                captured.append((kwargs, provider_usage_instrumentation._PUBLIC_OPERATION_FENCE.get(),
+                                 provider_usage_instrumentation._ACTIVE_SCOPE.get()))
+                yield
         monkeypatch.setattr(provider_usage_instrumentation, "provider_usage_scope", capture_scope)
         plan = dict(slide_count=1, review_round_limit=1, phase_group_limit=1,
                     review_group_size=5, global_format_retry_limit=0)
@@ -253,7 +256,8 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
         monkeypatch.setattr(deck_quality, "_seal_design_gate", lambda *args: {})
         operation = UUID("c32d38df-40d7-48f1-8706-9b46bde5f085")
         for version in (1, 2):
-            for operation_id in (operation, None):
+            for operation_id, partial in ((identity, partial)
+                    for identity in (operation, None) for partial in (False, True)):
                 review_context = dict(policy={"id": "svg-quality-first", "version": version},
                     style=dict(canvas=dict(width=1280, height=720)), priorCandidates={},
                     mandatoryEvidence=[True], runtimeBinding="current-runtime",
@@ -263,15 +267,23 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
                 monkeypatch.setattr(deck_quality, "_design_context", lambda *args, **kwargs: review_context)
                 ctx = SimpleNamespace(snapshot={}, quality_recovery_review_group_checkpoint=checkpoint)
                 job = SimpleNamespace(id="current-job", workspace_operation_id=operation_id,
-                                      attempt_number=1, request_payload={})
-                _run(deck_quality._quality_first_deck_advisory(ctx, [(page, png)], job=job,
-                    read_png=lambda _: png, run_advisory=review, phase=0))
-                scope = captured[-1]
+                                      attempt_number=1, request_payload={"_svg_partial_recovery": partial})
+                with provider_usage_instrumentation.public_operation_scope(operation_id,
+                        attempt_token="current-attempt", fencing_token=1):
+                    _run(deck_quality._quality_first_deck_advisory(ctx, [(page, png)], job=job,
+                        read_png=lambda _: png, run_advisory=review, phase=0))
+                scope, fence, active = captured[-1]
                 assert scope["job_id"] == job.id
-                if version == 2 and operation_id is not None:
-                    assert scope["workspace_operation_id"] is operation
+                if partial:
+                    assert scope["workspace_operation_id"] is operation_id
                 else:
                     assert "workspace_operation_id" not in scope
+                    assert active.workspace_operation_id is None
+                if operation_id is not None:
+                    assert fence.operation_id is operation
+                    assert fence.attempt_token == "current-attempt" and fence.fencing_token == 1
+                else:
+                    assert fence is None
 
 
 def test_the_system_prompt_shows_the_model_the_json_it_must_answer_with():

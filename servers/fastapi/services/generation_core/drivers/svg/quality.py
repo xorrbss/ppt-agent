@@ -332,13 +332,13 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
         await checkpoint(ordinal, marker)
         local_reserved(ordinal)
         async def dispatch():
+            # Fresh generation inherits the public fence. Explicit workspace IDs
+            # select the existing typed partial-recovery admission path.
             with provider_usage_scope(job_id=job.id, operation="authored_generation", stage="vqa",
                     attempt_number=job.attempt_number, round_ordinal=marker["physical_ordinal"],
                     **({"workspace_operation_id": job.workspace_operation_id}
                        if (isinstance(getattr(job, "request_payload", None), dict)
-                           and job.request_payload.get("_svg_partial_recovery"))
-                       or (baseline_review_active(context)
-                           and getattr(job, "workspace_operation_id", None) is not None) else {})):
+                           and job.request_payload.get("_svg_partial_recovery")) else {})):
                 return await run_advisory(group_renders, slide_count=len(group_renders),
                                           required=True, design_context=group_context)
         try:
