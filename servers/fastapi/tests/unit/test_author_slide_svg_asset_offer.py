@@ -198,6 +198,34 @@ def test_author_prompt_uses_content_grounded_neighbor_intent_without_fixed_layou
     assert "source_evidence" not in legacy_text and "SOURCE IMAGE EVIDENCE" not in legacy_text
     assert legacy.receipt["visual_intent_digest"] == visual_intent_receipt(legacy_intent)["visual_intent_digest"]
 
+    prepared_source = (
+        "# 원본 21페이지\n\n## 원문 전체 텍스트 (읽기 순서, 모든 수치와 정책 조건 보존)\n"
+        "- 목표 인프라 설계\n- Route 53 → CloudFront 순으로 요청을 통제합니다.\n\n"
+        "## 구성도 원본 증거 및 재구성 범위\n원본 중앙 영역은 공백이며 원문 관계만 재구성합니다.\n\n"
+        "## 원본 시각 구성 근거\n원본에 입력 폼과 모바일 기기의 개념 표현이 있으며 실제 캡처가 아닙니다.\n\n"
+        "## 원본 표 적용 범위\n정책 문구는 각 역할 행의 조회·생성·승인·반출 전체에 공통 적용됩니다.\n\n"
+        "## 근거 출처\n선택한 기준 PNG와 native binding에서 확인한 범위입니다."
+    )
+    prepared_intent = build_deck_visual_intents([prepared_source], quality_policy=policy)[0]
+    evidence = prepared_intent["source_evidence"]
+    assert prepared_intent["emphasis"]["focal_text"] == "목표 인프라 설계"
+    assert len(evidence["blocks"]) == 2
+    assert any("원본 중앙 영역" in block["text"] for block in evidence["authoring_context"])
+    assert any("모바일 기기" in block["text"] for block in evidence["visual_semantic_context"])
+    assert any("공통 적용" in block["text"] for block in evidence["visual_semantic_context"])
+    assert "source visual evidence explicitly establish" in module.svg_author_rules(style, 18)
+    assert "omit internal vertical separators" in module.svg_author_rules(style, 18)
+    assert "source visual evidence explicitly establish" not in module.svg_author_rules(legacy_style, 18)
+    repaired = asyncio.run(module.author_slide_svg(prepared_source, style, "content", 0, 1,
+                visual_intent=prepared_intent, correction_mode="local_repair", correction_hint="measured overlap",
+                previous_svg=_svg("")))
+    text = "\n".join(message.content if isinstance(message.content, str) else "\n".join(
+        part.text for part in message.content if hasattr(part, "text")) for message in seen["messages"])
+    assert json.dumps(prepared_source, ensure_ascii=False) in text
+    assert "reconstruction instructions and evidence citations stay non-visible, including during repair" in text
+    assert "Preserve source-supported visual components as visual components" in text
+    assert repaired.receipt["visual_intent_digest"] == visual_intent_receipt(prepared_intent)["visual_intent_digest"]
+
 
 def test_new_intent_seed_replays_exactly_and_historical_checkpoint_keeps_context(monkeypatch):
     from services.svg_visual_intent_checkpoint import freeze_visual_intents

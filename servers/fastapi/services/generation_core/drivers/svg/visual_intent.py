@@ -34,6 +34,16 @@ type hierarchy and image treatment while choosing composition freely. Keep sourc
 and their complete explanations together; make the described detail readable and crop only
 when the original contract permits it. Neighbor page roles and messages supply deck context,
 never new current-page facts or a requirement to alternate layouts.
+When prepared source marks original text separately from authoring or provenance context,
+only reader content is literal slide wording. Source-page markers, section wrappers,
+reconstruction instructions and evidence citations stay non-visible, including during repair;
+preserving source does not mean printing those preparation notes or adding them as footers.
+Sections headed 원본 시각 구성 근거 or 원본 표 적용 범위 provide source visual/semantic
+evidence: express their supported meaning, never their preparation headings or explanation
+as slide captions. Keep all actual reader labels, source facts, quantities and bindings.
+Preserve source-supported visual components as visual components rather than replacing a
+conceptual UI, diagram or mechanism with explanation cards. Geometry and arrangement remain
+free; a conceptual depiction is not an actual screenshot or permission to invent an asset.
 """
 
 _COMPARISON = re.compile(r"\b(?:versus|vs\.?|comparison|compare[ds]?|before\s+and\s+after)\b|비교|대비|전후", re.I)
@@ -43,6 +53,10 @@ _NUMBER = re.compile(r"\d+(?:[.,]\d+)*(?:\s*%|\s*(?:억원|만원|원|명|건|�
 _ORDERED = re.compile(r"^\s*\d+[.)]\s+")
 _TABLE_DIVIDER = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$")
 _MESSAGE = re.compile(r"^(?:#{1,6}\s+|[-*+]\s+)?(?:핵심(?:\s*메시지|\s*주장)?|결론|요점|key\s+message|conclusion|takeaway)\s*[:：]\s*\S", re.I)
+_SOURCE_PAGE = re.compile(r"^#\s+원본\s+\d+페이지\s*$")
+_SOURCE_WRAPPER = re.compile(r"^##\s+(?:원문 전체 텍스트(?:\s*\(.*\))?|원본 (?:표|차트)\s+\d+(?:\s*\(.*\))?)\s*$")
+_AUTHORING_SECTIONS = {"구성도 원본 증거 및 재구성 범위", "원본 처리 및 재구성 지침", "근거 출처"}
+_EVIDENCE_SECTIONS = {"원본 시각 구성 근거", "원본 표 적용 범위"}
 
 
 def source_content_evidence(content: str) -> dict:
@@ -55,6 +69,8 @@ def source_content_evidence(content: str) -> dict:
                   and source.get("source_authoring_contract") == {"version": "svg-source-whole-page/v1"}
                   and isinstance(source.get("source_facts"), list))
     blocks = []
+    authoring_context = []
+    evidence_context = []
     kinds = set()
     if whole_page:
         def original_text(value, path):
@@ -77,10 +93,29 @@ def source_content_evidence(content: str) -> dict:
             blocks.extend({**block, "source_kind": kind}
                           for block in original_text(fact.get("data", {}), f"source_facts[{index}].data"))
     elif not isinstance(source, (dict, list)):
-        blocks = [{"source_path": f"source_content.line[{index}]", "text": line}
-                  for index, line in enumerate(content.splitlines()) if line.strip()]
+        lines = content.splitlines()
+        prepared_source = any(_SOURCE_PAGE.match(line.strip()) for line in lines)
+        context = None
+        for index, line in enumerate(lines):
+            if not line.strip():
+                continue
+            block = {"source_path": f"source_content.line[{index}]", "text": line}
+            heading = re.match(r"^#{1,2}\s+(.+)$", line.strip())
+            if prepared_source and heading:
+                name = heading[1]
+                context = "authoring" if name in _AUTHORING_SECTIONS else "evidence" if name in _EVIDENCE_SECTIONS else None
+                if context or _SOURCE_PAGE.match(line.strip()) or _SOURCE_WRAPPER.match(line.strip()):
+                    authoring_context.append(block)
+                    continue
+            if context == "authoring":
+                authoring_context.append(block)
+            elif context == "evidence":
+                evidence_context.append(block)
+            else:
+                blocks.append(block)
     return {"text": "\n".join(block["text"] for block in blocks), "blocks": blocks,
             "source_kinds": sorted(kinds),
+            "authoring_context": authoring_context, "evidence_context": evidence_context,
             "basis": "original_source_facts" if whole_page else "unclassified_json" if isinstance(source, (dict, list)) else "source_lines"}
 
 
@@ -100,6 +135,8 @@ def enrich_visual_intent(content: str, role: str, index: int, intent: dict | Non
                                    and not _TABLE_DIVIDER.match(block["text"])][:3]
     grounded["source_evidence"] = {"basis": evidence["basis"], "message_candidates": messages,
                                    "blocks": blocks, "source_kinds": evidence["source_kinds"],
+                                   **({"authoring_context": evidence["authoring_context"]} if evidence["authoring_context"] else {}),
+                                   **({"visual_semantic_context": evidence["evidence_context"]} if evidence["evidence_context"] else {}),
                                    "semantics": "Exact source evidence, not a summary, a claim ranking or a layout plan. Choose the focal message and relative importance from these facts and user instructions; preserve required original titles and wording. Relationship keywords are advisory cues, never proof of a connection or permission to add one."}
     if intent and intent.get("source_digest") == source_digest(content):
         for key in ("neighboring_intents", "repetition"):

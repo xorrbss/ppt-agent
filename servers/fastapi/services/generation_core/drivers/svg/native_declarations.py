@@ -64,9 +64,23 @@ NATIVE_CHART_RULE = (
 )
 
 
-def native_author_rules() -> str:
+def native_author_rules(*, source_grounded: bool = False) -> str:
     """The native-object rule text appended to the SVG author rules."""
-    return NATIVE_TABLE_RULE + (NATIVE_CHART_RULE if NATIVE_CHARTS_OFFERED else "")
+    table_rule = NATIVE_TABLE_RULE
+    if source_grounded:
+        table_rule = table_rule.replace("draw every row and column boundary", "draw every original row and column boundary")
+        table_rule += (
+            "When current source-native bindings or source visual evidence explicitly establish a "
+            "horizontal merged cell, preserve its common application across those columns. "
+            "Keep the exact rectangular rows and original empty covered cells in JSON; never repeat "
+            "the value into the covered cells or add mergedCells to this declaration. Draw full "
+            "column boundaries in the header and unmerged rows, but omit internal vertical "
+            "separators within each evidenced merged cell and place its original text within "
+            "the merged area. This source-supported merge is an exception to drawing every cell "
+            "boundary; all other grid and text requirements remain. Do not infer merging from "
+            "empty cells or visual convenience alone.\n"
+        )
+    return table_rule + (NATIVE_CHART_RULE if NATIVE_CHARTS_OFFERED else "")
 
 
 def _drop(dropped: list, node, kind: str, reason: str) -> None:

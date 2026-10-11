@@ -414,7 +414,10 @@ def svg_author_rules(style_snapshot: dict, body_floor: float) -> str:
     native_grid_rules = (SVG_NATIVE_GRID_GEOMETRY_RULES_V2
                          if isinstance(readability_policy, dict)
                          and readability_policy.get("version") == "svg-physical-readability/v2" else "")
-    return (SVG_AUTHOR_RULES + native_author_rules() + f"\nBody text minimum: {body_floor:g} CSS px. "
+    quality_policy = read_quality_recovery_policy(style_snapshot)
+    native_rules = (native_author_rules(source_grounded=True)
+                    if quality_policy is not None and quality_policy["version"] == 2 else native_author_rules())
+    return (SVG_AUTHOR_RULES + native_rules + f"\nBody text minimum: {body_floor:g} CSS px. "
             "Honor explicit user typography constraints.\n" + free_composition_canvas_clause(width, height)
             + reference_caveat(width, height) + spatial_rules + native_grid_rules)
 
