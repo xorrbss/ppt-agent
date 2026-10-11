@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mergeConversationTimeline } from "./timeline";
 import type { Conversation, ConversationContext, ConversationRunAction, ConversationTimeline, ConversationTransport } from "./types";
+import type { WorkspaceOperationActionOptions } from "../workspace/types";
 
 const EMPTY_TIMELINE: ConversationTimeline = { items: [], hasMore: false };
 
@@ -87,16 +88,18 @@ export function useConversationTimeline(options: {
     }
   }, [conversation, transport]);
 
-  const performAction = useCallback(async (runId: string, action: ConversationRunAction) => {
+  const performAction = useCallback(async (runId: string, action: ConversationRunAction, options: WorkspaceOperationActionOptions = {}) => {
     if (!conversation) throw new Error("Conversation is not ready");
     const run = timelineRef.current.items.find((item) => item.kind === "run" && item.run.id === runId);
     setSubmitting(true);
     setError(null);
     try {
       const incoming = await transport.performRunAction(conversation.id, runId, action, {
-        idempotencyKey: idempotencyKey(),
-        expectedRevision: timelineRef.current.revision,
-        expectedRunVersion: run?.kind === "run" ? run.run.version : undefined,
+        idempotencyKey: options.idempotencyKey ?? idempotencyKey(),
+        expectedRevision: options.expectedRevision ?? timelineRef.current.revision,
+        expectedRunVersion: options.expectedOperationVersion ?? (run?.kind === "run" ? run.run.version : undefined),
+        recoveryRevision: options.recoveryRevision,
+        recoveryDecision: options.recoveryDecision,
       });
       setTimeline((current) => mergeConversationTimeline(current, incoming));
     } catch (reason) {

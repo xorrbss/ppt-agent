@@ -986,6 +986,8 @@ async def generate_presentation_handler(
                         operation="authored_generation",
                         stage="content_brief",
                         attempt_number=(generation_job.attempt_number if generation_job else 0),
+                        workspace_operation_id=(generation_job.workspace_operation_id
+                            if generation_job is not None and generation_job.request_payload.get("_svg_partial_recovery") else None),
                     ):
                         brief_outcome = await run_content_brief_with_checkpoint(
                             generate_content_brief, content=request.content,
@@ -1074,6 +1076,8 @@ async def generate_presentation_handler(
                 operation="authored_generation",
                 stage="outline",
                 attempt_number=(generation_job.attempt_number if generation_job else 0),
+                workspace_operation_id=(generation_job.workspace_operation_id
+                    if generation_job is not None and generation_job.request_payload.get("_svg_partial_recovery") else None),
             ):
                 async for chunk in generate_ppt_outline(
                     request.content,
@@ -1721,11 +1725,13 @@ async def _unused_terminal_generation_retry_budget(
         PublicOperationAdmission,
         PublicProviderLogicalCall,
     )
+    from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 
     principal = current_principal_context()
     if operation.retry_of_operation_id != source_operation.id:
         raise HTTPException(status_code=409, detail="generation_retry_lineage_conflict")
     bounds = None
+    consumed = (0, 0, 0, 0)
     seen = {operation.id}
     ancestor_id = source_operation.id
     while ancestor_id is not None:
@@ -1771,25 +1777,127 @@ async def _unused_terminal_generation_retry_budget(
             or ancestor.deadline_at != admission.deadline_at
         ):
             raise HTTPException(status_code=409, detail="generation_retry_admission_conflict")
-        call_id = await sql_session.scalar(
-            select(PublicProviderLogicalCall.id)
+        calls = list(await sql_session.scalars(
+            select(PublicProviderLogicalCall)
             .where(PublicProviderLogicalCall.admission_id == admission.id)
-            .limit(1)
-        )
-        if call_id is not None or any(
+            .with_for_update()
+        ))
+        if any(
             getattr(admission, field) != 0
             for field in (
-                "initial_request_count", "retry_request_count",
-                "estimated_reserved_microunits", "estimated_consumed_microunits",
-                "actual_reserved_microunits", "actual_consumed_microunits",
-                "actual_cost_unavailable_count",
+                "estimated_reserved_microunits", "actual_reserved_microunits",
+                "actual_consumed_microunits", "actual_cost_unavailable_count",
             )
+        ) or any(
+            call.stage != "illustration" or call.slide_index != -1
+            or call.retry_class != "initial" or call.state != "reported"
+            or call.outcome != "succeeded" or call.reconciled_at is None
+            or call.actual_cost_microunits != 0
+            or not call.provider_id or not call.model_id
+            for call in calls
+        ) or (
+            admission.initial_request_count != len(calls)
+            or admission.retry_request_count != 0
+            or admission.estimated_consumed_microunits
+                != sum(call.estimated_cost_microunits for call in calls)
+            or admission.actual_consumed_microunits
+                != sum(call.actual_cost_microunits for call in calls)
         ):
             raise HTTPException(status_code=409, detail="generation_retry_provider_history_present")
-        remaining = (
+        if calls:
+            # A deck-level illustration pass can finish without paid output
+            # before the SVG driver's binding is built. Its reconciled ledger
+            # stays consumed; only an untouched author stage may retry.
+            try:
+                job_id = uuid.UUID(str((ancestor.request_payload or {}).get("job_id")))
+            except (ValueError, TypeError, AttributeError):
+                raise HTTPException(status_code=409, detail="generation_retry_provider_history_present") from None
+            job = await sql_session.scalar(select(PresentationGenerationJob).where(
+                PresentationGenerationJob.id == job_id,
+                PresentationGenerationJob.presentation_id == ancestor.presentation_id,
+            ).with_for_update())
+            if (job is None
+                    or job.completed_slides != 0
+                    or job.request_payload != (ancestor.request_payload or {}).get("generation_request")):
+                raise HTTPException(status_code=409, detail="generation_retry_provider_history_present")
+            rows = list(await sql_session.scalars(select(AuthoredSlideCheckpoint).where(
+                AuthoredSlideCheckpoint.job_id == job_id,
+            ).with_for_update()))
+            if rows:
+                from services.generation_core.drivers.svg.collect import _unknown_provider_checkpoint
+                from services.generation_core.drivers.svg.visual_intent import VISUAL_INTENT_VERSION
+                from services.generation_core.assets.offer import OFFER_SCHEMA_VERSION
+                from services.svg_asset_manifest import ArtifactPointer
+
+                if (job.completed_slides != 0 or job.total_slides != admission.slide_count
+                        or len(rows) != job.total_slides
+                        or {row.slide_index for row in rows} != set(range(job.total_slides))):
+                    raise HTTPException(status_code=409, detail="generation_retry_provider_history_present")
+                prep_keys = {"deck_visual_intents", "assetOfferPlan", "source_image_assignment",
+                             "source_manifest_ref", "source_font_profile"}
+                empty_fields = ("author_html", "illustrated_html", "render_path", "render_sha256",
+                    "artifact_refs", "failed_stage", "error", "failed_at",
+                    *[f"{stage}_{suffix}_at" for stage in ("author", "illustrate", "render", "persist")
+                      for suffix in ("started", "completed")])
+                roles = ["cover" if index == 0 and job.request_payload.get("include_title_slide")
+                         else "content" for index in range(job.total_slides)]
+                for row in rows:
+                    payload = row.svg_checkpoint
+                    if (row.role != roles[row.slide_index] or row.render_status != "pending"
+                            or row.persist_status != "pending"
+                            or any(getattr(row, key) is not None for key in empty_fields)):
+                        raise HTTPException(status_code=409, detail="generation_retry_provider_history_present")
+                    if payload is None:
+                        if (row.author_status != "pending" or row.illustrate_status != "pending"
+                                or row.attempt_token is not None):
+                            raise HTTPException(status_code=409, detail="generation_retry_provider_history_present")
+                        continue
+                    # Preparation writes page 0 through _checkpoint, which marks
+                    # it running even though no author attempt has started.
+                    if (row.slide_index != 0 or row.author_status != "running"
+                            or row.illustrate_status != "skipped" or not row.attempt_token
+                            or not isinstance(payload, dict) or not payload
+                            or set(payload) - prep_keys or _unknown_provider_checkpoint(payload)):
+                        raise HTTPException(status_code=409, detail="generation_retry_provider_history_present")
+                    intents = payload.get("deck_visual_intents")
+                    offer = payload.get("assetOfferPlan")
+                    assignment = payload.get("source_image_assignment")
+                    if (("deck_visual_intents" in payload and (
+                            not isinstance(intents, list) or len(intents) != job.total_slides
+                            or any(not isinstance(intent, dict)
+                                   or intent.get("contract_version") != VISUAL_INTENT_VERSION
+                                   or intent.get("page_index") != index
+                                   or intent.get("page_role") != roles[index]
+                                   for index, intent in enumerate(intents))))
+                            or ("assetOfferPlan" in payload and (
+                                not isinstance(offer, dict) or offer.get("schemaVersion") != OFFER_SCHEMA_VERSION
+                                or not isinstance(offer.get("slots"), list)
+                                or not isinstance(offer.get("receipt"), dict)))
+                            or ("source_image_assignment" in payload and (
+                                not isinstance(assignment, dict)
+                                or assignment.get("version") != "source-image-assignment/v1"
+                                or not isinstance(assignment.get("groups"), list)
+                                or not isinstance(assignment.get("registration"), list)))
+                            or ("source_font_profile" in payload
+                                and not isinstance(payload["source_font_profile"], (str, type(None))))):
+                        raise HTTPException(status_code=409, detail="generation_retry_provider_history_present")
+                    if "source_manifest_ref" in payload:
+                        try:
+                            ArtifactPointer.model_validate(payload["source_manifest_ref"])
+                        except ValueError:
+                            raise HTTPException(status_code=409, detail="generation_retry_provider_history_present") from None
+        # Walk source to root: every ancestor must cover all later consumption
+        # as well as its own, even if a historical child had unclamped caps.
+        consumed = tuple(total + current for total, current in zip(consumed, (
+            admission.initial_request_count, admission.retry_request_count,
+            admission.estimated_consumed_microunits, admission.actual_consumed_microunits,
+        )))
+        remaining = tuple(limit - used for limit, used in zip((
             admission.planned_request_limit, admission.retry_request_limit,
             admission.estimated_cost_limit_microunits, admission.actual_cost_limit_microunits,
-        )
+        ), consumed))
+        if min(remaining) < 0 or any(remaining[index] == 0 for index in (0, 2, 3)):
+            raise HTTPException(status_code=409, detail="generation_retry_provider_history_present")
         bounds = remaining if bounds is None else tuple(
             min(current, inherited) for current, inherited in zip(bounds, remaining)
         )
@@ -1805,10 +1913,22 @@ async def _admit_generation_operation_v2_compatible(
     operation: WorkspaceOperation,
     retry_source_operation: WorkspaceOperation | None = None,
     zero_provider_cached_author_recovery: bool = False,
+    partial_svg_recovery: bool = False,
 ) -> uuid.UUID:
     """Bind the browser-compatible request to one complete v2 admission."""
 
     retry_bounds = None
+    partial_manifest = None
+    if partial_svg_recovery:
+        from services.svg_partial_recovery import REVISION, verify_episode
+
+        partial_job = await sql_session.scalar(select(PresentationGenerationJob).where(
+            PresentationGenerationJob.workspace_operation_id == operation.id,
+            PresentationGenerationJob.presentation_id == operation.presentation_id))
+        if (operation.request_payload.get("recovery_revision") != REVISION
+                or partial_job is None or request.strategy != "svg"):
+            raise HTTPException(status_code=409, detail="svg_partial_recovery_admission_invalid")
+        partial_manifest = await verify_episode(sql_session, operation, partial_job)
     if zero_provider_cached_author_recovery:
         from services.svg_cached_author_render_recovery import REVISIONS
 
@@ -1842,8 +1962,14 @@ async def _admit_generation_operation_v2_compatible(
         ),
     )
     if resolve_generation_strategy(request) == "svg":
-        from services.svg_authoring_profile import seal_new_quality_recovery_plan
-        seal_new_quality_recovery_plan(request, slide_count)
+        from services.svg_authoring_profile import (
+            seal_new_quality_recovery_plan, svg_quality_review_admission_budget,
+        )
+        if partial_manifest is None:
+            seal_new_quality_recovery_plan(request, slide_count)
+        review_budget = svg_quality_review_admission_budget(request, slide_count)
+    else:
+        review_budget = slide_count if request.vision_qa else 0
     try:
         admission = await admit_public_operation_compatible_v2(
             sql_session,
@@ -1852,12 +1978,12 @@ async def _admit_generation_operation_v2_compatible(
             operation_kind="generation",
             request_plan=plan_provider_requests(
                 slide_count=slide_count,
-                image_budget=slide_count,
+                image_budget=0 if partial_manifest is not None else slide_count,
                 repair_budget=slide_count,
-                source_image_budget=source_image_admission_budget(
+                source_image_budget=0 if partial_manifest is not None else source_image_admission_budget(
                     request._reference_snapshots, request.files
                 ),
-                vqa_budget=slide_count if request.vision_qa else 0,
+                vqa_budget=review_budget,
             ),
             resource_plan=plan_weighted_resources(
                 pixel_count=slide_count * 1_920 * 1_080,

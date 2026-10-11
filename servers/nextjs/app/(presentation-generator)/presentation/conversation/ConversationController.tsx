@@ -67,5 +67,5 @@ export function ConversationController(props: {
     const uploaded = await Promise.all(files.map((file) => transport.uploadAsset!(conversation.id, file)));
     setPendingAssets((current) => [...current, ...uploaded.filter((asset) => asset.status === "ready" || asset.status === "scanned")]);
   }, [conversation, transport]);
-  return <ChatSurface timeline={timeline} loading={loading} submitting={submitting} error={error} connection={connection} pendingAssets={pendingAssets} context={safeContext} onUpload={transport.uploadAsset ? upload : undefined} onRemoveAsset={(assetId) => setPendingAssets((current) => current.filter((asset) => asset.id !== assetId))} onSend={send} onAction={performAction} />;
+  return <ChatSurface timeline={timeline} loading={loading} submitting={submitting} partialRecoveryEnabled={transport.supportsPartialRecovery === true} error={error} connection={connection} pendingAssets={pendingAssets} context={safeContext} onUpload={transport.uploadAsset ? upload : undefined} onRemoveAsset={(assetId) => setPendingAssets((current) => current.filter((asset) => asset.id !== assetId))} onSend={send} onAction={performAction} />;
 }

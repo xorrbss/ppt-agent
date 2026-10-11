@@ -21,6 +21,11 @@ SVG_CACHED_AUTHOR_RENDER_V3 = "svg-cached-author-render/v3"
 
 
 async def verified_svg_recovery_checkpoints(session, operation, request, *, presentation_revision=None):
+    if request.recovery_revision == "svg-partial-recovery/v1":
+        from services.svg_partial_recovery import verify_action
+
+        return await verify_action(session, operation, request,
+                                   presentation_revision=presentation_revision)
     if request.recovery_revision in {SVG_CACHED_AUTHOR_RENDER, SVG_CACHED_AUTHOR_RENDER_V2,
                                      SVG_CACHED_AUTHOR_RENDER_V3}:
         from services.svg_cached_author_render_recovery import verify_action
@@ -113,6 +118,8 @@ async def verified_svg_recovery_checkpoints(session, operation, request, *, pres
 
 
 def reset_svg_recovery_checkpoints(session, rows, *, operation_id, now, recovery_revision):
+    if recovery_revision == "svg-partial-recovery/v1":
+        raise ValueError("svg_partial_recovery_requires_archived_episode")
     if recovery_revision in {SVG_CACHED_AUTHOR_RENDER, SVG_CACHED_AUTHOR_RENDER_V2,
                              SVG_CACHED_AUTHOR_RENDER_V3}:
         raise ValueError("svg_cached_author_render_requires_append_only_child")

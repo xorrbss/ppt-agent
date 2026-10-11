@@ -264,11 +264,66 @@ async def reconcile_provider_call(
 
 
 async def recover_expired_reservations(
-    session: AsyncSession, *, now=None
+    session: AsyncSession, *, now=None, terminal_operations_only: bool = False,
+    operation_kinds: tuple[str, ...] | None = None,
 ) -> int:
     """Convert crash-abandoned reservations to charged/unknown receipts."""
 
     observed_at = now or get_current_utc_datetime()
+    if terminal_operations_only:
+        candidates = select(
+            WorkspaceOperation.id,
+            WorkspaceOperation.owner_id,
+            WorkspaceOperation.request_payload["principal_tenant_id"].as_string().label("tenant_id"),
+            ProviderRuntimeBudget.id.label("budget_id"),
+        ).join(ProviderRuntimeBudget, ProviderRuntimeBudget.workspace_operation_id == WorkspaceOperation.id
+        ).join(ProviderRuntimeReservation, ProviderRuntimeReservation.budget_id == ProviderRuntimeBudget.id
+        ).where(
+            WorkspaceOperation.state.in_(("succeeded", "failed", "cancelled", "dead_letter")),
+            WorkspaceOperation.attempt_token.is_(None),
+            or_(WorkspaceOperation.lease_expires_at.is_(None), WorkspaceOperation.lease_expires_at <= observed_at),
+            ProviderRuntimeBudget.owner_id == WorkspaceOperation.owner_id,
+            ProviderRuntimeBudget.tenant_id == WorkspaceOperation.request_payload["principal_tenant_id"].as_string(),
+            ProviderRuntimeReservation.state == "reserved",
+            ProviderRuntimeReservation.lease_expires_at <= observed_at,
+        ).order_by(WorkspaceOperation.id, ProviderRuntimeBudget.id)
+        if operation_kinds is not None:
+            if not operation_kinds:
+                return 0
+            candidates = candidates.where(WorkspaceOperation.kind.in_(operation_kinds))
+        candidates = candidates.with_for_update(of=WorkspaceOperation, skip_locked=True)
+        sources = (await session.execute(candidates)).mappings().all()
+        recovered = 0
+        seen = set()
+        for source in sources:
+            if source["budget_id"] in seen:
+                continue
+            seen.add(source["budget_id"])
+            budget = await session.scalar(select(ProviderRuntimeBudget).where(
+                ProviderRuntimeBudget.id == source["budget_id"],
+                ProviderRuntimeBudget.workspace_operation_id == source["id"],
+                ProviderRuntimeBudget.owner_id == source["owner_id"],
+                ProviderRuntimeBudget.tenant_id == source["tenant_id"],
+            ).with_for_update().execution_options(populate_existing=True))
+            if budget is None:
+                continue
+            abandoned = list(await session.scalars(select(ProviderRuntimeReservation).where(
+                ProviderRuntimeReservation.budget_id == budget.id,
+                ProviderRuntimeReservation.state == "reserved",
+                ProviderRuntimeReservation.lease_expires_at <= observed_at,
+            ).with_for_update().execution_options(populate_existing=True)))
+            estimate = sum(row.estimated_cost for row in abandoned)
+            if budget.estimated_reserved < estimate:
+                raise RuntimeError("provider_reservation_recovery_budget_mismatch")
+            budget.estimated_reserved -= estimate
+            budget.estimated_consumed += estimate
+            budget.version += len(abandoned)
+            for row in abandoned:
+                # This is local accounting recovery, not a provider terminal result.
+                row.state = "uncertain"
+            recovered += len(abandoned)
+        await session.flush()
+        return recovered
     rows = list(
         (
             await session.execute(

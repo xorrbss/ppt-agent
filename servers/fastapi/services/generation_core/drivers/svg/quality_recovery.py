@@ -2,14 +2,29 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass
 import json
 
+from pydantic import BaseModel
+
 from services.authored_checkpoint_errors import AuthoredStageError
 from services.svg_authoring_profile import read_quality_recovery_plan
+from services.svg_authoring_profile import read_quality_recovery_execution_plan
 from services.svg_presentation_checkpoint import _digest, _provider_attempt_count, _provider_attempt_limit
 from utils.hashing import sha256_hex
+
+
+def _quality_json_value(value):
+    """Copy typed quality inputs into JSON values without changing render inputs."""
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode="json")
+    if isinstance(value, Mapping):
+        return {key: _quality_json_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_quality_json_value(item) for item in value]
+    return value
 
 
 def actual_provider_attempt_count(payload):
@@ -197,13 +212,15 @@ def recovery_binding(ctx, request, job):
     }
     ctx.quality_recovery_checkpoint_reuse_eligible = (
         runtime_evidence["worker_binding"].get("checkpointReuseEligible") is True)
-    return _digest({"style": ctx.snapshot, "contents": ctx.quality_review_contents,
+    runtime = (ctx.runtime_profile if isinstance(ctx.runtime_profile, BaseModel)
+        else asdict(ctx.runtime_profile) if is_dataclass(ctx.runtime_profile)
+        else vars(ctx.runtime_profile))
+    return _digest(_quality_json_value({"style": ctx.snapshot, "contents": ctx.quality_review_contents,
         "roles": ctx.roles, "assets": ctx.manifests, "physical": ctx.physical_kwargs,
         "instructions": request.instructions, "font_profile": ctx.source_font_profile,
         "owner": str(get_current_owner_id()), "tenant": str(get_current_tenant_id()),
         "operation": str(getattr(job, "workspace_operation_id", None)),
-        "renderer": runtime_evidence, "runtime": asdict(ctx.runtime_profile)
-            if is_dataclass(ctx.runtime_profile) else vars(ctx.runtime_profile)})
+        "renderer": runtime_evidence, "runtime": runtime}))
 
 
 def _candidate_namespace(job):
@@ -265,7 +282,7 @@ def _restore_candidate(archive, current, job):
 async def recover_deck(ctx, request, presentation_id, outline, job, pages, state, hooks,
                        run_advisory, attempt_loop, quality):
     """Two sealed reviews at most, one existing repair attempt per affected page."""
-    plan = read_quality_recovery_plan(ctx.snapshot)
+    plan = read_quality_recovery_execution_plan(ctx.snapshot, manifest=getattr(ctx, "partial_recovery_manifest", None))
     if plan is None:
         raise ValueError("svg_quality_recovery_plan_missing")
     if plan["slide_count"] != len(pages) or job is None:
@@ -275,6 +292,7 @@ async def recover_deck(ctx, request, presentation_id, outline, job, pages, state
     if getattr(ctx, "quality_recovery_input_binding", binding) != binding:
         raise ValueError("svg_quality_recovery_runtime_changed")
     ctx.quality_recovery_runtime_binding = binding
+    await _prepare_final_selected_source(ctx, job, hooks)
     seed = pages[0][0]
     execution = deepcopy(seed.get("quality_recovery_execution") or {})
     if execution and execution.get("binding") != binding:
@@ -304,12 +322,24 @@ async def recover_deck(ctx, request, presentation_id, outline, job, pages, state
         if round_ordinal >= plan["review_round_limit"] or len(rounds) != round_ordinal:
             raise ValueError("svg_quality_recovery_review_limit")
         marker = {"status": "review_inflight", "page_digests": digests}
+        continuation_initial = round_ordinal == 0 and getattr(ctx, "quality_final_selected_source", None) is not None
+        final_marker = None
+        if continuation_initial:
+            from services.svg_final_selected_continuation import INITIAL_NAMESPACE
+            final_marker = execution.setdefault("initial_continuation_review", {
+                "namespace": INITIAL_NAMESPACE, "status": "review_inflight", "groups": {},
+                "source_proof_digest": ctx.quality_final_selected_source["proof"]["digest"],
+                "producer_proof": deepcopy(ctx.quality_final_selected_source["proof"]),
+                "initial_continuation": True,
+            })
+            marker["namespace"] = INITIAL_NAMESPACE
+            marker["physical_purpose"] = "initial-continuation"
         rounds.append(marker)
         await persist()
         async def group_checkpoint(group_ordinal, group_marker=None):
             async with group_checkpoint_lock:
                 await ensure_recovery_authority(job, hooks)
-                group_limit = plan["review_call_limit"] // plan["review_round_limit"]
+                group_limit = plan["phase_group_limit"]
                 if type(group_ordinal) is not int or not 0 <= group_ordinal < group_limit:
                     raise ValueError("svg_quality_recovery_review_limit")
                 groups = marker.setdefault("groups", {})
@@ -321,13 +351,17 @@ async def recover_deck(ctx, request, presentation_id, outline, job, pages, state
         ctx.quality_recovery_review_group_checkpoint = group_checkpoint
         try:
             advisory = await quality.deck_advisory(ctx, pages, job=job, read_png=hooks.read_png,
-                run_advisory=run_advisory, round_ordinal=round_ordinal)
+                run_advisory=run_advisory, round_ordinal=round_ordinal,
+                source_evidence=getattr(ctx, "quality_final_selected_source", None))
         except BaseException:
             marker["status"] = "review_unknown"
             await persist()
             raise
         marker.update(status="completed", advisory=advisory)
         await persist()
+        if final_marker is not None:
+            final_marker.update(status="completed", advisory=deepcopy(advisory))
+            await persist()
         return advisory
 
     # A resumed second review must recover the saved baselines, never buy repairs again.
@@ -348,8 +382,13 @@ async def recover_deck(ctx, request, presentation_id, outline, job, pages, state
             payload = pages[index][0]
             if payload.get("quality_recovery", {}).get("status") == "retained":
                 continue
+            if plan["review_round_limit"] <= 1:
+                payload["quality_recovery"] = {"status": "unresolved", "reason": "review_attempt_budget_exhausted"}
+                await hooks.checkpoint(job, index, payload=payload)
+                continue
             limit = min(2, plan["page_attempt_limit"], _provider_attempt_limit(payload, index=index, job=job))
-            if actual_provider_attempt_count(payload) >= limit:
+            from services.generation_core.drivers.svg.partial_quality_recovery import current_episode_attempt_count
+            if current_episode_attempt_count(ctx, payload, index) >= limit:
                 payload["quality_recovery"] = {"status": "unresolved", "reason": "page_attempt_budget_exhausted"}
                 await hooks.checkpoint(job, index, payload=payload)
                 continue
@@ -432,7 +471,106 @@ async def recover_deck(ctx, request, presentation_id, outline, job, pages, state
         await hooks.checkpoint(job, index, payload=pages[index][0])
     # A mixed deck invalidates global evidence; publication must fail closed.
     if any(p.get("quality_recovery", {}).get("status") == "retained" for p, _ in pages):
-        return pages, first_advisory if all(selection.get("selected") != "candidate"
-            for selection in [p.get("quality_recovery", {}).get("selection", {}) for p, _ in pages]
-            if selection) else None
+        if all((selection.get('selected') != 'candidate' for selection in [p.get('quality_recovery', {}).get('selection', {}) for p, _ in pages] if selection)):
+            return pages, first_advisory
+        if plan.get("final_selected_review") is not None:
+            return pages, await _review_final_selected(ctx, request, pages, job, hooks, run_advisory, execution, seed, persist)
+        return pages, None
     return pages, candidate_advisory
+
+
+async def _prepare_final_selected_source(ctx, job, hooks):
+    manifest = getattr(ctx, "partial_recovery_manifest", None)
+    if not isinstance(manifest, dict) or manifest.get("final_selected_continuation") is None:
+        return None
+    from models.sql.workspace import WorkspaceOperation
+    from services.svg_partial_recovery import ARCHIVE_KEY, verify_episode, _frozen_payload
+    from services.svg_final_selected_continuation import archived_producer_payloads
+    await ensure_recovery_authority(job, hooks)
+    async with hooks.async_session_maker() as session:
+        operation = await session.get(WorkspaceOperation, job.workspace_operation_id)
+        current = await verify_episode(session, operation, job)
+        if _digest(current) != _digest(manifest):
+            raise ValueError("svg_final_selected_evidence_unproven")
+        producer_job, payloads = archived_producer_payloads(
+            operation.request_payload[ARCHIVE_KEY], current["final_selected_continuation"],
+        )
+        await session.rollback()
+    equivalent = (
+        bool(getattr(ctx, "quality_recovery_checkpoint_reuse_eligible", False))
+        and _digest(_frozen_payload(job.request_payload)) == _digest(_frozen_payload(producer_job["request_payload"]))
+        and _digest(job.svg_style_snapshot) == _digest(producer_job["svg_style_snapshot"])
+    )
+    from services.svg_final_selected_continuation import INITIAL_NAMESPACE
+    evidence = dict(proof=current["final_selected_continuation"], consumer_namespace=INITIAL_NAMESPACE,
+                    execution=payloads[0]["quality_recovery_execution"],
+                    producer_job=producer_job, producer_payloads=payloads,
+                    consumer_runtime_equivalent=equivalent)
+    ctx.quality_final_selected_source = evidence
+    return evidence
+
+
+async def _review_final_selected(ctx, request, pages, job, hooks, run_advisory, execution, seed, persist):
+    from services.generation_core.drivers.svg import quality as deck_quality
+    from services.svg_final_selected_continuation import build_selected_proof, NAMESPACE
+    from utils.owner_context import get_current_owner_id, get_current_tenant_id
+    manifest = getattr(ctx, "partial_recovery_manifest", None)
+    if not isinstance(manifest, dict) or manifest.get("final_selected_review_control") is None:
+        raise ValueError("svg_final_selected_review_not_admitted")
+    await ensure_recovery_authority(job, hooks)
+    proof = build_selected_proof(
+        operation_id=str(job.workspace_operation_id), job_id=str(job.id),
+        owner_id=str(get_current_owner_id()), tenant_id=get_current_tenant_id(),
+        archive_digest=manifest["archive_digest"], parent_manifest_hash=_digest(manifest),
+        payloads=[p for p, _ in pages], execution=execution,
+        source_snapshot=job.svg_style_snapshot,
+    )
+    if proof is None:
+        raise ValueError("svg_final_selected_evidence_unproven")
+    for index, (_, png) in enumerate(pages):
+        if sha256_hex(png) != proof["source_pages"][index]["png_digest"]:
+            raise ValueError("svg_final_selected_evidence_unproven")
+    marker = execution.get("final_selected_review")
+    if marker is not None:
+        if marker.get("namespace") != NAMESPACE or marker.get("source_proof_digest") != proof["digest"]:
+            raise ValueError("svg_final_selected_review_source_changed")
+        if marker.get("status") == "completed":
+            return marker["advisory"]
+        if marker.get("status") != "review_inflight":
+            raise ValueError("svg_final_selected_review_unavailable")
+    else:
+        marker = dict(namespace=NAMESPACE, status="review_inflight",
+                      source_proof_digest=proof["digest"], producer_proof=proof, groups={})
+        execution["final_selected_review"] = marker
+        await persist()
+    checkpoint_lock = asyncio.Lock()
+    async def final_checkpoint(key, value=None):
+        async with checkpoint_lock:
+            await ensure_recovery_authority(job, hooks)
+            key = str(key)
+            if value is None:
+                return deepcopy(marker["groups"].get(key))
+            marker["groups"][key] = deepcopy(value)
+            await persist()
+            return value
+    original_producer = getattr(ctx, "quality_final_selected_source", None)
+    evidence = dict(proof=proof, execution=execution, consumer_namespace=NAMESPACE,
+                    additional_producers=[original_producer] if original_producer else [],
+                    consumer_runtime_equivalent=bool(getattr(ctx, "quality_recovery_checkpoint_reuse_eligible", False)))
+    original_checkpoint = getattr(ctx, "quality_recovery_review_group_checkpoint", None)
+    ctx.quality_recovery_review_group_checkpoint = final_checkpoint
+    try:
+        advisory = await deck_quality.deck_advisory(
+            ctx, pages, job=job, read_png=hooks.read_png, run_advisory=run_advisory,
+            round_ordinal=0, final_selected=True, source_evidence=evidence,
+        )
+    except BaseException:
+        marker["status"] = "review_unknown"
+        await persist()
+        raise
+    finally:
+        ctx.quality_recovery_review_group_checkpoint = original_checkpoint
+    await ensure_recovery_authority(job, hooks)
+    marker.update(status="completed", advisory=advisory)
+    await persist()
+    return advisory

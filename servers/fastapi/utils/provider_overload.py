@@ -39,6 +39,7 @@ _SAFE_ERROR_CODES = frozenset({
 })
 _SAFE_EXCEPTION_TYPES = frozenset({
     "ProviderError", "ProviderOutcomeError", "ProviderQuotaPause", "RuntimeError", "ValueError",
+    "TypeError", "KeyError", "AttributeError", "UnicodeDecodeError",
     "TimeoutError", "ConnectionError", "OSError", "APIError", "APIStatusError", "APIConnectionError",
     "APITimeoutError", "RateLimitError", "InternalServerError", "BadRequestError",
     "AuthenticationError", "PermissionDeniedError", "NotFoundError", "UnprocessableEntityError",
@@ -73,11 +74,13 @@ _DIAGNOSTIC_ENUMS = {
         {"raised_exception", "stream_exhausted_without_completion"}
     ),
     "terminalEvent": frozenset({"response.completed", "response.incomplete", "response.failed", "response.cancelled", "error"}),
-    "failureKind": frozenset({"stream_interrupted", "result_unknown", "terminal_failed", "terminal_cancelled", "terminal_error", "incomplete", "overload", "timeout", "bridge_exception", "empty_output"}),
+    "failureKind": frozenset({"stream_interrupted", "result_unknown", "terminal_failed", "terminal_cancelled", "terminal_error", "incomplete", "overload", "timeout", "bridge_exception", "empty_output", "local_postresponse", "dispatch_stopped"}),
+    "streamStage": frozenset({"before_stream", "stream_opened", "response_created", "output_delta", "terminal_event", "post_response"}),
     "statusOrigin": frozenset({"http_response", "local_stream", "transport", "stream_event"}),
     "incompleteReason": frozenset({"max_output_tokens", "content_filter", "incomplete"}),
 }
 _SAFE_REQUEST_ID = re.compile(r"(?:req[_-])?(?:[0-9a-fA-F]{16,64}|[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})\Z")
+_SAFE_RESPONSE_ID = re.compile(r"resp_[A-Za-z0-9_-]{1,128}\Z")
 _USAGE_FIELDS = frozenset({"input_tokens", "output_tokens", "total_tokens", "reasoning_tokens", "cached_tokens"})
 
 
@@ -200,6 +203,12 @@ def safe_provider_diagnostics(
     request_id = candidates.get("requestId")
     if isinstance(request_id, str) and _SAFE_REQUEST_ID.fullmatch(request_id):
         safe["requestId"] = request_id
+    response_id = candidates.get("responseId")
+    if isinstance(response_id, str) and _SAFE_RESPONSE_ID.fullmatch(response_id):
+        safe["responseId"] = response_id
+    stream_status = candidates.get("streamHttpStatus")
+    if isinstance(stream_status, int) and not isinstance(stream_status, bool) and 100 <= stream_status <= 599:
+        safe["streamHttpStatus"] = stream_status
     status = candidates.get("httpStatus")
     if isinstance(status, int) and not isinstance(status, bool) and 100 <= status <= 599 and safe.get("statusOrigin") not in {"local_stream", "stream_event"}:
         safe["httpStatus"] = status

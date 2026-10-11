@@ -81,26 +81,39 @@ async def reserve_provider_call_detached(
     reservation_key = sha256_hex(f"provider-reservation-v1:{job_id}:{request_id}".encode())
     async with async_session_maker() as session:
         tenant_id = get_vnext_tenant_id()
+        episode = None
         if workspace_operation_id is not None:
-            if (workspace_operation_id != job_id or operation != "quality_review" or stage != "vqa"
-                    or not expected_attempt_token or expected_fencing_token is None):
+            if not expected_attempt_token or expected_fencing_token is None:
                 raise CancellationRequested("provider_workspace_job_scope_invalid")
-            from services.provider_runtime_job_registration import require_public_review_job
-            admission = await require_public_review_job(session,
-                operation_id=workspace_operation_id,
-                expected_attempt_token=expected_attempt_token,
-                expected_fencing_token=expected_fencing_token)
+            if workspace_operation_id == job_id and operation == "quality_review" and stage == "vqa":
+                from services.provider_runtime_job_registration import require_public_review_job
+                admission = await require_public_review_job(session,
+                    operation_id=workspace_operation_id,
+                    expected_attempt_token=expected_attempt_token,
+                    expected_fencing_token=expected_fencing_token)
+            else:
+                from services.svg_partial_recovery import runtime_admission
+                episode = await runtime_admission(session, job_id=job_id,
+                    operation_id=workspace_operation_id,
+                    expected_attempt_token=expected_attempt_token,
+                    expected_fencing_token=expected_fencing_token)
+                if episode is None:
+                    raise CancellationRequested("provider_workspace_job_scope_invalid")
+                admission = episode
             tenant_id = admission.tenant_id
+        estimated_limit = _optional_limit("PROVIDER_JOB_ESTIMATED_BUDGET_MICROUNITS")
+        actual_limit = _optional_limit("PROVIDER_JOB_ACTUAL_BUDGET_MICROUNITS")
+        if episode is not None:
+            estimated_limit = min(estimated_limit, episode.estimated_cost_limit_microunits) if estimated_limit is not None else episode.estimated_cost_limit_microunits
+            actual_limit = min(actual_limit, episode.actual_cost_limit_microunits) if actual_limit is not None else episode.actual_cost_limit_microunits
         budget = await register_durable_budget(
             session,
             tenant_id=tenant_id,
             owner_id=owner_id,
             job_id=None if workspace_operation_id is not None else job_id,
             workspace_operation_id=workspace_operation_id,
-            estimated_limit=_optional_limit(
-                "PROVIDER_JOB_ESTIMATED_BUDGET_MICROUNITS"
-            ),
-            actual_limit=_optional_limit("PROVIDER_JOB_ACTUAL_BUDGET_MICROUNITS"),
+            estimated_limit=estimated_limit,
+            actual_limit=actual_limit,
         )
         await admit_provider_rpm_and_circuit(
             session,

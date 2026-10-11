@@ -16,6 +16,7 @@ import uuid
 from sqlalchemy import func, literal, or_, union_all, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 from sqlmodel import select
 
 from utils.datetime_utils import as_utc
@@ -1264,12 +1265,19 @@ async def workspace_timeline(
             operation.id: operation
             for operation in (
                 await session.scalars(
-                    select(WorkspaceOperation).where(
-                        WorkspaceOperation.id.in_(operation_ids)
-                    )
+                    select(WorkspaceOperation)
+                    .options(defer(WorkspaceOperation.request_payload, raiseload=True))
+                    .where(WorkspaceOperation.id.in_(operation_ids))
                 )
             ).all()
         }
+    for operation in operations_by_id.values():
+        if (
+            operation.state in {"failed", "dead_letter"}
+            and operation.kind == "presentation.generate"
+            and operation.error_code == "raster_tenant_required"
+        ):
+            await session.refresh(operation, attribute_names=["request_payload"])
     selected: list[tuple[int, str, Any]] = []
     for anchor in anchor_rows:
         anchor_id = uuid.UUID(str(anchor.anchor_id))
@@ -2068,6 +2076,8 @@ async def _apply_workspace_action(
     }
     if request.recovery_revision is not None:
         request_payload["recovery_revision"] = request.recovery_revision
+    if request.recovery_decision is not None:
+        request_payload["recovery_decision"] = request.recovery_decision.model_dump(mode="json")
     request_hash = canonical_payload_hash(request_payload)
     existing_receipt = await _existing_action_receipt(
         session,
@@ -2087,7 +2097,7 @@ async def _apply_workspace_action(
         WorkspaceOperation.id == operation_id,
         WorkspaceOperation.owner_scope == get_workspace_owner_scope(),
     )
-    if request.recovery_revision in {EXPORT_V2_AUTHORITY_RECOVERY_REVISION, "svg-provider-timeout-repurchase/v1", "svg-provider-timeout-repurchase/v2", "svg-provider-timeout-repurchase/v3", "svg-source-remeasure/v1", "svg-source-remeasure-dispatch/v1", "svg-cached-author-render/v1", "svg-cached-author-render/v2", "svg-cached-author-render/v3"}:
+    if request.recovery_revision in {EXPORT_V2_AUTHORITY_RECOVERY_REVISION, "svg-provider-timeout-repurchase/v1", "svg-provider-timeout-repurchase/v2", "svg-provider-timeout-repurchase/v3", "svg-source-remeasure/v1", "svg-source-remeasure-dispatch/v1", "svg-cached-author-render/v1", "svg-cached-author-render/v2", "svg-cached-author-render/v3", "svg-partial-recovery/v1"}:
         operation_statement = operation_statement.with_for_update()
     operation = (
         await session.execute(
@@ -2148,12 +2158,14 @@ async def _apply_workspace_action(
         REVISION_V2 as SVG_CACHED_AUTHOR_RENDER_V2,
         REVISION_V3 as SVG_CACHED_AUTHOR_RENDER_V3,
     )
+    from services.svg_partial_recovery import PartialRecoveryRejected, REVISION as SVG_PARTIAL_RECOVERY
     try:
         svg_recovery = await verified_svg_recovery_checkpoints(
             session, operation, request, presentation_revision=presentation.revision)
-    except (TimeoutRepurchaseRejected, ClassificationRemeasurementRejected, CachedAuthorRenderRejected) as error:
+    except (TimeoutRepurchaseRejected, ClassificationRemeasurementRejected, CachedAuthorRenderRejected, PartialRecoveryRejected) as error:
         raise WorkspaceServiceError(str(error), status_code=409, retryable=False) from error
     append_only_recovery = bool(getattr(svg_recovery, "manifest", {}).get("append_only_recovery"))
+    partial_recovery = request.recovery_revision == SVG_PARTIAL_RECOVERY and svg_recovery is not None
     if (
         request.recovery_revision is not None
         and not explicit_capacity_recovery
@@ -2206,13 +2218,24 @@ async def _apply_workspace_action(
         reservation = await reserve_conversation_positions(
             session, recovery_child_conversation.id if append_only_recovery else operation.conversation_id, 1)
         source_operation = operation
+        # New partial episodes reference immutable ancestor archives; never
+        # INSERT their recursive bodies into the new child as a temporary copy.
+        inherited_payload = source_operation.request_payload
+        if partial_recovery:
+            from services.svg_partial_recovery import ARCHIVE_KEY
+
+            inherited_payload = {key: value for key, value in inherited_payload.items() if key != ARCHIVE_KEY}
         retry_payload = {
-            **source_operation.request_payload,
+            **inherited_payload,
             "retry_of_operation_id": str(source_operation.id),
             "account_deletion_generation": account_generation,
         }
         if explicit_capacity_recovery or explicit_checkpoint_recovery or svg_recovery is not None:
             retry_payload["recovery_revision"] = request.recovery_revision
+        if partial_recovery:
+            retry_payload["recovery_decision"] = request.recovery_decision.model_dump(mode="json")
+            retry_payload["svg_partial_recovery_manifest"] = deepcopy(svg_recovery.manifest)
+            retry_payload["svg_partial_recovery_manifest_hash"] = svg_recovery.manifest_hash
         if request.recovery_revision in {SVG_TIMEOUT_REPURCHASE, SVG_TIMEOUT_REPURCHASE_V2, SVG_TIMEOUT_REPURCHASE_V3}:
             retry_payload["svg_timeout_repurchase_manifest_hash"] = svg_recovery.manifest_hash
             if request.recovery_revision in {SVG_TIMEOUT_REPURCHASE_V2, SVG_TIMEOUT_REPURCHASE_V3}:
@@ -2271,7 +2294,7 @@ async def _apply_workspace_action(
             expected_revision=recovery_child_presentation.revision if append_only_recovery else presentation.revision,
             approval_expires_at=retry_approval_expires_at,
             next_attempt_at=None if retry_requires_approval else now,
-            max_attempts=(1 if export_v2_authority is not None and request.recovery_revision == EXPORT_V2_AUTHORITY_RECOVERY_REVISION else 1 if append_only_recovery else 1 if svg_recovery is not None and _bounded_completion_shape(getattr(svg_recovery, 'manifest', {})) else source_operation.max_attempts),
+            max_attempts=(1 if export_v2_authority is not None and request.recovery_revision == EXPORT_V2_AUTHORITY_RECOVERY_REVISION else 1 if append_only_recovery or partial_recovery else 1 if svg_recovery is not None and _bounded_completion_shape(getattr(svg_recovery, 'manifest', {})) else source_operation.max_attempts),
         )
         strategy_receipt = operation.request_payload.get("generation_strategy")
         if source_operation.kind == "presentation.generate" and strategy_receipt is not None:
@@ -2340,7 +2363,14 @@ async def _apply_workspace_action(
                     rebind_workspace_linked_generation_job_for_retry,
                 )
 
-                if append_only_recovery:
+                if partial_recovery:
+                    from services.svg_partial_recovery import rebind_episode
+
+                    retry_job = await rebind_episode(session, source_operation, operation,
+                        svg_recovery, key_hash=retry_operation_key_hash)
+                    operation.request_hash = canonical_payload_hash(operation.request_payload)
+                    session.add(operation)
+                elif append_only_recovery:
                     if request.recovery_revision in {SVG_CACHED_AUTHOR_RENDER, SVG_CACHED_AUTHOR_RENDER_V2,
                                                      SVG_CACHED_AUTHOR_RENDER_V3}:
                         retry_job = await _fork_cached_author_render_job(
@@ -2388,6 +2418,7 @@ async def _apply_workspace_action(
                             zero_provider_cached_author_recovery=request.recovery_revision in {
                                 SVG_CACHED_AUTHOR_RENDER, SVG_CACHED_AUTHOR_RENDER_V2,
                                 SVG_CACHED_AUTHOR_RENDER_V3},
+                            partial_svg_recovery=partial_recovery,
                         )
                     except HTTPException as error:
                         await session.rollback()
@@ -2395,7 +2426,11 @@ async def _apply_workspace_action(
                             str(error.detail), status_code=error.status_code,
                             retryable=error.status_code == 429,
                         ) from error
-                if append_only_recovery:
+                if partial_recovery:
+                    from services.svg_partial_recovery import bind_admission
+
+                    await bind_admission(session, operation, svg_recovery)
+                elif append_only_recovery:
                     if request.recovery_revision in {SVG_CACHED_AUTHOR_RENDER, SVG_CACHED_AUTHOR_RENDER_V2,
                                                      SVG_CACHED_AUTHOR_RENDER_V3}:
                         await _verify_zero_provider_cached_admission(session, operation)
@@ -2408,7 +2443,7 @@ async def _apply_workspace_action(
                     checkpoint_recovery.failed_at = None
                     checkpoint_recovery.updated_at = now
                     session.add(checkpoint_recovery)
-                if svg_recovery is not None and not append_only_recovery:
+                if svg_recovery is not None and not append_only_recovery and not partial_recovery:
                     from services.svg_checkpoint_recovery import reset_svg_recovery_checkpoints
                     reset_svg_recovery_checkpoints(session, svg_recovery,
                         operation_id=operation.id if request.recovery_revision in {
@@ -2417,6 +2452,9 @@ async def _apply_workspace_action(
                             SVG_CACHED_AUTHOR_RENDER_V3,
                             SVG_TIMEOUT_REPURCHASE_V2, SVG_TIMEOUT_REPURCHASE_V3} else source_operation.id,
                         now=now, recovery_revision=request.recovery_revision)
+        except PartialRecoveryRejected as error:
+            await session.rollback()
+            raise WorkspaceServiceError(str(error), status_code=409, retryable=False) from error
         except IntegrityError:
             await session.rollback()
             return await _replay_action_receipt_after_conflict(

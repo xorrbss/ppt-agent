@@ -20,6 +20,31 @@ from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDT
 SLIDE_W = DEFAULT_CANVAS_WIDTH_PX
 SLIDE_H = DEFAULT_CANVAS_HEIGHT_PX
 
+async def _close_owned_target_with_verification(session, close_url: str, target_id: str) -> bool:
+    import aiohttp
+    if not isinstance(target_id, str) or not target_id or not close_url.endswith("/json/close/" + target_id):
+        return False
+    request_timeout = aiohttp.ClientTimeout(total=1.5)
+    for _ in range(2):
+        try:
+            async with session.get(close_url, timeout=request_timeout, allow_redirects=False) as response:
+                if response.status in (200, 404):
+                    return True
+        except (aiohttp.ClientError, TimeoutError):
+            continue
+    list_url = close_url.rsplit("/json/close/", 1)[0] + "/json/list"
+    try:
+        async with session.get(list_url, timeout=request_timeout, allow_redirects=False) as response:
+            if response.status != 200:
+                return False
+            targets = await response.json(content_type=None)
+    except (aiohttp.ClientError, TimeoutError, ValueError, TypeError):
+        return False
+    if not isinstance(targets, list) or any(not isinstance(item, dict) or not isinstance(item.get("id"), str) or not item["id"] for item in targets):
+        return False
+    return all(item["id"] != target_id for item in targets)
+
+
 async def render_html_in_reusable_chrome(  # noqa: ASYNC109
     html: str, timeout: int, *, script_nonce: str | None = None,
     cache_html: str | None = None, blocked_urls: Sequence[str],
@@ -239,12 +264,8 @@ async def render_html_in_reusable_chrome(  # noqa: ASYNC109
                         async with asyncio.timeout(5), aiohttp.ClientSession(
                             timeout=aiohttp.ClientTimeout(total=5)
                         ) as cleanup_session:
-                            close_url = f"{owned_runtime.base_url}/json/close/{target_id}"
-                            for _attempt in range(2):
-                                async with cleanup_session.get(close_url) as response:
-                                    if response.status in (200, 404):
-                                        page_closed = True
-                                        break
+                                close_url = f"{owned_runtime.base_url}/json/close/{target_id}"
+                                page_closed = await _close_owned_target_with_verification(cleanup_session, close_url, target_id)
                     except (aiohttp.ClientError, TimeoutError):
                         pass
                     cleanup_failed = not page_closed

@@ -5,6 +5,7 @@ import { pickBackendMessage } from "@/lib/backend-messages";
 import { translateBackendMessage } from "@/lib/backend-messages-intl";
 import type {
   WorkspaceOperationAnchor,
+  WorkspaceOperationActionOptions,
   WorkspacePageRemakeRequester,
   WorkspacePresentationRefreshState,
 } from "./types";
@@ -25,6 +26,7 @@ interface Props {
   onAction: (
     operationId: string,
     action: "retry" | "cancel" | "approve" | "reject" | "undo",
+    options?: WorkspaceOperationActionOptions,
   ) => void | Promise<void>;
   onReExport?: (
     operationType: "export.pptx" | "export.pdf",

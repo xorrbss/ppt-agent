@@ -89,7 +89,11 @@ async def ensure_runtime_job(
     # A durable generation job has one provider budget across every operation
     # attempt.  Re-registering an attempt-suffixed runtime job resets the hard
     # cap after recovery and permits retry amplification.
-    job_id = durable_job_id
+    episode_limits = getattr(scope, "episode_limits", None)
+    episode_operation = getattr(scope, "workspace_operation_id", None)
+    if episode_operation is not None and episode_limits is None:
+        raise RuntimeError("svg_partial_recovery_runtime_unbound")
+    job_id = str(episode_operation) if episode_operation is not None else durable_job_id
     public_baseline = (await public_review_request_baseline(scope.job_id)
                        if getattr(scope, "public_only", False) else None)
     if job_id in runtime.registered_jobs:
@@ -104,7 +108,11 @@ async def ensure_runtime_job(
         # retaining the same durable job and its earlier provider receipts.
         # Seed every new process registration from that job's real receipts;
         # a genuinely fresh job has no receipts and therefore seeds zero.
-        if getattr(scope, "public_only", False):
+        if episode_limits is not None:
+            initial_requests, retry_requests, lineage_total_limit, lineage_retry_limit, _, _ = episode_limits
+            lineage_total_limit += lineage_retry_limit
+            lineage_initial = lineage_retry = 0
+        elif getattr(scope, "public_only", False):
             initial_requests, retry_requests, lineage_total_limit, lineage_retry_limit = public_baseline
             lineage_initial = lineage_retry = 0
         else:
@@ -116,14 +124,15 @@ async def ensure_runtime_job(
             total_limit = min(total_limit, lineage_total_limit) if total_limit is not None else lineage_total_limit
             retry_limit = min(retry_limit, lineage_retry_limit) if retry_limit is not None else lineage_retry_limit
         deadline = optional_env_int("PROVIDER_JOB_DEADLINE_SECONDS")
+        estimated_limit = optional_env_int("PROVIDER_JOB_ESTIMATED_BUDGET_MICROUNITS")
+        actual_limit = optional_env_int("PROVIDER_JOB_ACTUAL_BUDGET_MICROUNITS")
+        if episode_limits is not None:
+            estimated_limit = min(estimated_limit, episode_limits[4]) if estimated_limit is not None else episode_limits[4]
+            actual_limit = min(actual_limit, episode_limits[5]) if actual_limit is not None else episode_limits[5]
         await runtime.control.register_job(
             job_id,
-            estimated_budget_microunits=optional_env_int(
-                "PROVIDER_JOB_ESTIMATED_BUDGET_MICROUNITS"
-            ),
-            actual_budget_microunits=optional_env_int(
-                "PROVIDER_JOB_ACTUAL_BUDGET_MICROUNITS"
-            ),
+            estimated_budget_microunits=estimated_limit,
+            actual_budget_microunits=actual_limit,
             kill_conditions=JobKillConditions(
                 deadline_seconds=float(deadline) if deadline is not None else None,
                 max_total_requests=total_limit,

@@ -442,6 +442,7 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
             source_preservation_parents=measured_source_preservation,
             worker_metrics=result.resource_metrics, exporter_version=CONVERTER_VERSION,
             require_native_coverage=fmt == "pptx",
+            export_identity_digest=identity.canonical_digest, export_tenant_id=admission.tenant_id,
             review_binding=dict(presentationId=str(claim.presentation_id), ownerId=str(claim.owner_id),
                                 ownerScope=str(claim.owner_scope), sourceRevision=claim.expected_revision),
             **receipt_args)

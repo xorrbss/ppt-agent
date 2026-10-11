@@ -13,6 +13,7 @@ import type {
   SendConversationMessageRequest,
 } from "../../presentation/conversation/types";
 import { isRecord } from "@/lib/guards";
+import { postWorkspaceOperationAction } from "../../services/api/workspace";
 
 const ROOT = "/api/v1/ppt/conversations";
 type RecordValue = Record<string, unknown>;
@@ -73,7 +74,10 @@ function run(value: unknown): AgentRun {
     const candidate = record(action);
     return candidate.enabled === false ? [] : [text(candidate.id)];
   }).filter((action): action is ConversationRunAction => ["retry", "cancel", "approve", "reject", "undo"].includes(action));
-  return { id: text(raw.id, text(raw.run_id)), status: text(raw.status, "queued") as AgentRun["status"], title: typeof raw.title === "string" ? raw.title : typeof raw.run_type === "string" ? raw.run_type : undefined, version: number(raw.version), error: typeof raw.safe_error_message === "string" ? raw.safe_error_message : typeof raw.error === "string" ? raw.error : undefined, expectedRevision: number(raw.expected_revision) ?? number(revision.source_revision), resultRevision: number(raw.result_revision) ?? number(revision.result_revision), actions };
+  return { id: text(raw.id, text(raw.run_id)), operationId: text(raw.operation_id, text(raw.id, text(raw.run_id))),
+    ...(typeof raw.operation_type === "string" || typeof raw.run_type === "string"
+      ? { operationType: text(raw.operation_type, text(raw.run_type)) } : {}),
+    status: text(raw.status, "queued") as AgentRun["status"], title: typeof raw.title === "string" ? raw.title : typeof raw.run_type === "string" ? raw.run_type : undefined, version: number(raw.version), error: typeof raw.safe_error_message === "string" ? raw.safe_error_message : typeof raw.error === "string" ? raw.error : undefined, expectedRevision: number(raw.expected_revision) ?? number(revision.source_revision), resultRevision: number(raw.result_revision) ?? number(revision.result_revision), actions };
 }
 function item(value: unknown, fallbackPosition: number): ConversationTimelineItem | null {
   const raw = record(value); const kind = text(raw.kind, text(raw.item_type, text(raw.anchor_type))); const position = number(raw.position) ?? fallbackPosition;
@@ -172,6 +176,7 @@ async function consumeSse(body: ReadableStream<Uint8Array>, onEvent: (next: Conv
 
 /** Anti-corruption layer: only this file knows the canonical HTTP wire shape. */
 export const canonicalConversationTransport: ConversationTransport = {
+  supportsPartialRecovery: true,
   async getOrCreate(presentationId, signal) {
     const response = await fetch(getApiUrl(ROOT), { method: "POST", headers: { ...getHeader(), "Content-Type": "application/json" }, body: JSON.stringify({ presentation_id: presentationId }), signal });
     return conversation(await payload(response));
@@ -187,6 +192,13 @@ export const canonicalConversationTransport: ConversationTransport = {
     return this.getTimeline(conversationId, { signal });
   },
   async performRunAction(conversationId, runId, action, request, signal) {
+    if (request.recoveryRevision) {
+      if (action !== "retry" || !request.recoveryDecision) throw new CanonicalConversationTransportError("이어 만들기 승인을 확인할 수 없습니다.", 400);
+      await postWorkspaceOperationAction(runId, { action, idempotencyKey: request.idempotencyKey,
+        expectedRevision: request.expectedRevision, expectedOperationVersion: request.expectedRunVersion,
+        recoveryRevision: request.recoveryRevision, recoveryDecision: request.recoveryDecision }, signal);
+      return this.getTimeline(conversationId, { signal });
+    }
     const response = await fetch(getApiUrl(`${ROOT}/${encodeURIComponent(conversationId)}/runs/${encodeURIComponent(runId)}/actions`), { method: "POST", headers: { ...getHeader(), "Content-Type": "application/json" }, body: JSON.stringify({ action, idempotency_key: request.idempotencyKey, expected_revision: request.expectedRevision, expected_run_version: request.expectedRunVersion }), signal });
     await payload(response);
     return this.getTimeline(conversationId, { signal });

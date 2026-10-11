@@ -98,6 +98,8 @@ class ProviderUsageScope:
     slide_index: int | None = None
     round_ordinal: int | None = None
     public_only: bool = False
+    workspace_operation_id: UUID | None = None
+    episode_limits: tuple[int, int, int, int, int, int] | None = None
     _sequence: int = field(default=0, init=False, repr=False)
     _physical_sequences: dict[str, int] = field(
         default_factory=dict, init=False, repr=False
@@ -114,6 +116,8 @@ class ProviderUsageScope:
         if self._receipt_request_ids:
             request_id = self._receipt_request_ids.pop(0)
             key = f"receipt-v2:{self.job_id}:{request_id}:{outcome}"
+            if self.workspace_operation_id is not None:
+                key += f":episode:{self.workspace_operation_id}"
             return sha256_hex(key.encode("utf-8"))
         self._sequence += 1
         key = (
@@ -121,6 +125,8 @@ class ProviderUsageScope:
             f"{self.attempt_number}:{self.slide_index}:{self._sequence}:{outcome}"
             f"{self._round_suffix(':')}"
         )
+        if self.workspace_operation_id is not None:
+            key += f":episode:{self.workspace_operation_id}"
         return sha256_hex(key.encode("utf-8"))
 
     def _round_suffix(self, separator: str) -> str:
@@ -132,10 +138,12 @@ class ProviderUsageScope:
         self._physical_sequences[semantic_slot] = sequence
         slot = "deck" if self.slide_index is None else f"slide-{self.slide_index}"
         logical_ordinal = self.public_logical_call_ordinal(semantic_slot)
-        return (
+        request_id = (
             f"call:{self.operation}:{self.stage}:{self.attempt_number}:{slot}:"
             f"{logical_ordinal}:{sequence}{self._round_suffix(':')}"
         )
+        return (f"episode:{self.workspace_operation_id}:{request_id}"
+                if self.workspace_operation_id is not None else request_id)
 
     def public_logical_call_ordinal(self, semantic_slot: str) -> int:
         """Map a semantic slot to a stable PostgreSQL ``INTEGER`` identity.
@@ -297,6 +305,7 @@ def provider_usage_scope(
     slide_index: int | None = None,
     round_ordinal: int | None = None,
     public_only: bool = False,
+    workspace_operation_id: UUID | None = None,
 ) -> Iterator[None]:
     """Set receipt context for one bounded pipeline segment.
 
@@ -318,6 +327,7 @@ def provider_usage_scope(
                 slide_index=slide_index,
                 round_ordinal=round_ordinal,
                 public_only=public_only,
+                workspace_operation_id=workspace_operation_id,
             )
         )
     try:
@@ -397,6 +407,24 @@ async def provider_call_admission(
     public_fence = _PUBLIC_OPERATION_FENCE.get()
     if scope.public_only and (public_fence is None or scope.job_id != public_fence.operation_id):
         raise ProviderSpendFenceRejected("provider_public_review_scope_required")
+    if not scope.public_only and scope.workspace_operation_id is not None:
+        if public_fence is None or public_fence.operation_id != scope.workspace_operation_id:
+            raise ProviderSpendFenceRejected("svg_partial_recovery_runtime_unbound")
+        from services.database import async_session_maker
+        from services.svg_partial_recovery import runtime_admission
+
+        async with async_session_maker() as episode_session:
+            episode = await runtime_admission(episode_session, job_id=scope.job_id,
+                operation_id=public_fence.operation_id,
+                expected_attempt_token=public_fence.attempt_token,
+                expected_fencing_token=public_fence.fencing_token)
+            if episode is None:
+                raise ProviderSpendFenceRejected("svg_partial_recovery_runtime_unbound")
+            if episode is not None:
+                scope.workspace_operation_id = episode.operation_id
+                scope.episode_limits = (episode.initial_request_count, episode.retry_request_count,
+                    episode.planned_request_limit, episode.retry_request_limit,
+                    episode.estimated_cost_limit_microunits, episode.actual_cost_limit_microunits)
     active_lease = _ACTIVE_PROVIDER_ADMISSION.get()
     if active_lease is not None:
         yield active_lease
@@ -439,7 +467,7 @@ async def provider_call_admission(
     active_token = _ACTIVE_PROVIDER_ADMISSION.set(lease)
     idempotency_token: Token[str | None] | None = None
     try:
-        if durable_provider_runtime_required():
+        if durable_provider_runtime_required() or scope.workspace_operation_id is not None:
             durable_lease = await reserve_provider_call_detached(
                 job_id=scope.job_id,
                 operation=scope.operation,
@@ -449,7 +477,7 @@ async def provider_call_admission(
                 **(dict(workspace_operation_id=public_fence.operation_id,
                         expected_attempt_token=public_fence.attempt_token,
                         expected_fencing_token=public_fence.fencing_token)
-                   if scope.public_only else {}),
+                   if scope.public_only or scope.workspace_operation_id is not None else {}),
             )
         if public_fence is not None:
             from services.public_operation_admission import (
@@ -575,10 +603,11 @@ async def provider_call_admission(
 async def cancel_provider_job(job_id: UUID, reason: str = "operator_cancelled") -> None:
     normalized = str(job_id)
     runtime = _runtime_state()
+    latest_key = runtime.latest_job_keys.get(normalized, normalized)
     matching = tuple(
         key
         for key in runtime.registered_jobs
-        if key == normalized or key.startswith(f"{normalized}:attempt:")
+        if key in {normalized, latest_key} or key.startswith(f"{normalized}:attempt:")
     )
     for key in matching:
         await runtime.control.cancel_job(key, reason)
@@ -773,11 +802,13 @@ async def record_provider_call(
     except BudgetExceededError:
         # Public review budgets are enforcement; legacy generation receipts
         # retain their best-effort telemetry contract.
-        if scope.public_only:
+        if scope.public_only or scope.workspace_operation_id is not None:
             raise
         _RECEIPT_OBSERVABILITY["failed"] += 1
         return
     except Exception:
+        if scope.workspace_operation_id is not None:
+            raise
         # Receipt recording must never change an existing generation outcome.
         # Do not log exceptions here: they may contain upstream response content.
         _RECEIPT_OBSERVABILITY["failed"] += 1

@@ -91,7 +91,7 @@ from services.presentation_generation_staging import (
 )
 from services.svg_authoring_profile import (
     INTERNAL_SVG_AUTHORING_PROFILE_KEY, select_svg_authoring_profile,
-    validate_authoring_profile,
+    validate_authoring_profile, svg_quality_review_admission_budget,
 )
 from services.public_operation_admission import (
     PrincipalContext,
@@ -1099,9 +1099,7 @@ class SqlPublicV2Orchestrator:
                     image_budget=slide_count,
                     repair_budget=slide_count,
                     source_image_budget=source_image_admission_budget(snapshots),
-                    vqa_budget=(
-                        slide_count if request.quality_policy == "release-v1" else 0
-                    ),
+                    vqa_budget=svg_quality_review_admission_budget(internal_request, slide_count),
                 ),
                 resource_plan=self._resource_plan(
                     slide_count=slide_count,

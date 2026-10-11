@@ -44,7 +44,8 @@ def converter_digest():
 
 
 def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
-                 expected_image_digests=None, font_embedding=False, native_objects=None):
+                 expected_image_digests=None, font_embedding=False, native_objects=None,
+                 native_coverage_sources=None):
     """Convert page files to an editable PPTX and read the result back.
 
     ``native_objects`` is one ``PageNativeObjects`` per page (``None``: no
@@ -52,6 +53,15 @@ def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
     tables of raster-redesign pages -- go through the one export scene.
     """
     converter_digest()
+    capture = None
+    if native_coverage_sources is not None:
+        if (source_preservation is not None or len(native_coverage_sources) != len(paths)
+                or not paths or any(not isinstance(source, str) for source in native_coverage_sources)):
+            raise ValueError("svg_generic_native_coverage_input_invalid")
+        # Retain canonical and materialized bytes before the existing scene annotates
+        # native table/chart groups. Both inputs are bound into the final proof.
+        conversion_sources = [path.read_text(encoding="utf-8") for path in paths]
+        trace_path = target.with_suffix(".native-ooxml-trace.json")
     from services.generation_core.drivers.svg.export_scene import prepare_svg_pptx_inputs
     from services.svg_text_advance import text_advance
     sys.path.insert(0, str(VENDOR_ROOT))
@@ -67,6 +77,11 @@ def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
             canvas.width_px, canvas.height_px, width_emu, height_emu,
             legacy=isinstance(canvas, AuthoredCanvasMetadata), text_advance=text_advance,
         )
+        if native_coverage_sources is not None:
+            from workers.public_svg_whole_page_convert import NativeOoxmlCapture
+            from svg_to_pptx.drawingml import converter as drawing_converter
+            capture = NativeOoxmlCapture(drawing_converter)
+            capture.install()
 
         def run(native):
             # Raster-redesign pages only: one text frame per paragraph block.
@@ -76,6 +91,7 @@ def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
                 workers=1, merge_paragraphs=scene.redesign_active, image_optimize=False,
                 pptx_structure="flat", use_compat_mode=False,
                 conversion_context=context, native_objects=native,
+                **({"conversion_trace_path": trace_path} if capture is not None else {}),
             )
 
         fallback_reason = None
@@ -92,6 +108,8 @@ def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
             scene.fall_back_all(fallback_reason or "native_object_conversion_failed")
             success = run(False)
     finally:
+        if capture is not None:
+            capture.restore()
         sys.path.remove(str(VENDOR_ROOT))
     if not success or not target.is_file():
         raise ValueError("svg_native_conversion_failed")
@@ -117,6 +135,21 @@ def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
         from services.svg_trusted_fonts import FONT_FAMILY
         digests = embed_trusted_fonts(target)
         readback["fontEmbedding"] = {"embedded": True, "family": FONT_FAMILY, "faceDigests": list(digests)}
+    if capture is not None:
+        from services.svg_contract import source_digest
+        from utils.hashing import canonical_json_sha256
+        if readback["nativeObjects"]["fellBack"] != 0:
+            raise ValueError("svg_generic_native_coverage_fallback")
+        receipts = [{"source_page_id": f"slide-{index + 1}", "svg_digest": source_digest(source)}
+                    for index, source in enumerate(native_coverage_sources)]
+        coverage = capture.verify(target, trace_path, native_coverage_sources, receipts)
+        coverage["measurements"]["unboundRelationships"] = 0
+        coverage.update(schemaVersion="svg-generic-native-ooxml-coverage/v1",
+            conversionSourceDigests=[source_digest(source) for source in conversion_sources],
+            projectedSourceDigests=[source_digest(path.read_text(encoding="utf-8")) for path in paths],
+            nativeObjectsDigest="sha256:" + canonical_json_sha256(readback["nativeObjects"]),
+            officeRenderMeasured=False)
+        readback["genericNativeCoverageOoxml"] = coverage
     return readback
 
 

@@ -10,6 +10,7 @@ asks for it. Frozen requests retain that optional behaviour; the fresh quality
 policy requires complete, source-bound design evidence before publication.
 """
 from __future__ import annotations
+from copy import deepcopy
 
 import base64
 import asyncio
@@ -55,7 +56,7 @@ async def classify_pages(pages, *, job, checkpoint, snapshot=None) -> dict[str, 
     return {**deck_quality_summary(outcomes), "compositionObservation": composition}
 
 
-async def deck_advisory(ctx, pages, *, job, read_png, run_advisory, round_ordinal: int | None = None):
+async def deck_advisory(ctx, pages, *, job, read_png, run_advisory, round_ordinal: int | None = None, final_selected=False, source_evidence=None):
     """One vision advisory over the deck's renders, bound to their digests."""
 
     profile = getattr(ctx, "runtime_profile", None)
@@ -72,7 +73,7 @@ async def deck_advisory(ctx, pages, *, job, read_png, run_advisory, round_ordina
         return None
     if policy:
         return await _quality_first_deck_advisory(ctx, pages, job=job, read_png=read_png,
-            run_advisory=run_advisory, phase=round_ordinal or 0)
+            run_advisory=run_advisory, phase=round_ordinal or 0, final_selected=final_selected, source_evidence=source_evidence)
     from services.provider_usage_instrumentation import provider_usage_scope
 
     renders = [png if png is not None else read_png(payload) for payload, png in pages]
@@ -84,7 +85,10 @@ async def deck_advisory(ctx, pages, *, job, read_png, run_advisory, round_ordina
         return advisory_record({"skipped": "render_missing"}, digests)
     with provider_usage_scope(job_id=job.id if job else None, operation="authored_generation",
                               stage="vqa",
-                              attempt_number=job.attempt_number if job else 0, round_ordinal=round_ordinal):
+                              attempt_number=job.attempt_number if job else 0, round_ordinal=round_ordinal,
+                              **({"workspace_operation_id": job.workspace_operation_id}
+                                 if isinstance(getattr(job, "request_payload", None), dict)
+                                 and job.request_payload.get("_svg_partial_recovery") else {})):
         vision = await run_advisory(renders, slide_count=len(pages))
     record = advisory_record(vision, digests)
     # Each independently sealed page remains reusable when a later review
@@ -102,7 +106,8 @@ async def deck_advisory(ctx, pages, *, job, read_png, run_advisory, round_ordina
 def _design_context(ctx, pages, *, job, read_png):
     """Actual selected style/source evidence, without copying unrelated deck SVGs."""
     from utils.owner_context import get_current_owner_id, get_current_tenant_id
-    snapshot = ctx.snapshot
+    from services.generation_core.drivers.svg.quality_recovery import _quality_json_value
+    snapshot = _quality_json_value(ctx.snapshot)
     references = snapshot.get("references") or {}
     roles = getattr(ctx, "roles", [])
     examples, seen, examples_by_digest = [], set(), {}
@@ -174,7 +179,7 @@ def _design_context(ctx, pages, *, job, read_png):
         prior_candidates[index] = dict(png=png, pageDigest=sha256_hex((payload.get("svg_content") or "").encode()),
             pngDigest=sha256_hex(png), inputDigest=payload.get("input_digest"), targetAxes=targets,
             mandatoryEvidenceValid=bool(_candidate_local_valid(payload, ctx=ctx, index=index)))
-    return dict(policy=_quality_policy(snapshot), style=style, priorCandidates=prior_candidates,
+    return _quality_json_value(dict(policy=_quality_policy(snapshot), style=style, priorCandidates=prior_candidates,
         styleDigest=content_digest(style), snapshotDigest=content_digest(snapshot), examples=examples,
         runtimeBinding=getattr(ctx, "quality_recovery_runtime_binding", None),
         mandatoryEvidence=[bool(_candidate_local_valid(payload, ctx=ctx, index=index))
@@ -186,7 +191,7 @@ def _design_context(ctx, pages, *, job, read_png):
             operationId=str(job.workspace_operation_id) if job and getattr(job, "workspace_operation_id", None) else None,
             presentationId=str(job.presentation_id) if job and getattr(job, "presentation_id", None) else None,
             ownerId=str(get_current_owner_id()) if get_current_owner_id() else None,
-            tenantId=str(get_current_tenant_id()) if get_current_tenant_id() else None))
+            tenantId=str(get_current_tenant_id()) if get_current_tenant_id() else None)))
 
 
 def _local_review_digest(context, payload, png, index):
@@ -207,12 +212,12 @@ def _render_resolution(png, canvas):
         sufficient=width >= (canvas.get("width") or 1) and height >= (canvas.get("height") or 1))
 
 
-async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisory, phase):
+async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisory, phase, final_selected=False, source_evidence=None):
     """Bound physical review calls to the pre-admitted plan, keeping legacy calls intact."""
-    from services.svg_authoring_profile import read_quality_recovery_plan
+    from services.svg_authoring_profile import read_quality_recovery_execution_plan
     from services.authored_checkpoint_errors import AuthoredStageError
     from services.provider_usage_instrumentation import provider_usage_scope
-    plan = read_quality_recovery_plan(ctx.snapshot)
+    plan = read_quality_recovery_execution_plan(ctx.snapshot, manifest=getattr(ctx, "partial_recovery_manifest", None))
     if (plan is None or plan["slide_count"] != len(pages) or type(phase) is not int
             or not 0 <= phase < plan["review_round_limit"]):
         raise ValueError("svg_quality_recovery_review_plan_invalid")
@@ -224,6 +229,18 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
         return advisory_record({"skipped": "render_missing"},
             [sha256_hex((payload.get("svg_content") or "").encode()) for payload, _ in pages])
     context = _design_context(ctx, pages, job=job, read_png=read_png)
+    final_control = plan.get("final_selected_review") if final_selected else None
+    if final_selected and final_control is None:
+        raise ValueError("svg_final_selected_review_not_admitted")
+    physical_offset = final_control["physical_offset"] if final_control else 0
+    evidence = source_evidence or getattr(ctx, "quality_final_selected_source", None)
+    from services.svg_final_selected_continuation import INITIAL_NAMESPACE, NAMESPACE
+    review_namespace = NAMESPACE if final_selected else INITIAL_NAMESPACE if evidence and phase == 0 else None
+    reused_groups, evidence_consumers = ({}, [])
+    if evidence is not None and phase == 0:
+        from services.svg_final_selected_continuation import reusable_local_groups
+        context["priorCandidates"] = {}
+        reused_groups, evidence_consumers = reusable_local_groups(context, pages, renders, evidence)
     page_digests = [sha256_hex((payload.get("svg_content") or "").encode()) for payload, _ in pages]
     png_digests = [sha256_hex(png) for png in renders]
     if (not all(context["mandatoryEvidence"])
@@ -239,12 +256,12 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
     if not context["runtimeBinding"] or not all(context["binding"].get(key)
             for key in ("jobId", "presentationId", "ownerId", "tenantId")):
         raise ValueError("svg_quality_recovery_review_binding_missing")
-    per_phase = plan["review_call_limit"] // plan["review_round_limit"]
+    per_phase = plan["phase_group_limit"]
     group_size = plan["review_group_size"]
     full_review = len(pages) <= group_size
     groups = [list(range(start, min(start + group_size, len(pages))))
               for start in range(0, len(pages), group_size)]
-    if len(groups) + (not full_review) != per_phase:
+    if len(groups) + (not full_review) + plan["global_format_retry_limit"] != per_phase:
         raise ValueError("svg_quality_recovery_review_allocation_invalid")
     local_pages, local_comparisons, records = {}, {}, []
     reservations_ready = asyncio.Event()
@@ -266,13 +283,7 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
                                          localEvidenceReused=True)
 
     async def request_group(ordinal, indices, group_context, group_renders):
-        public_context = {key: value for key, value in group_context.items()
-                          if key not in {"examples", "priorCandidates"}}
-        input_digest = content_digest(dict(context=public_context, examples=group_context["exampleDigests"],
-            pngDigests=[sha256_hex(png) for png in group_renders],
-            priorCandidates={index: {key: value for key, value in prior.items() if key != "png"}
-                             for index, prior in group_context["priorCandidates"].items()},
-            groupId=f"phase-{phase}/group-{ordinal}", indices=indices))
+        input_digest = _group_review_input_digest(group_context, group_renders, phase, ordinal, indices)
         saved = await checkpoint(ordinal)
         if saved:
             if saved.get("input_digest") != input_digest:
@@ -287,12 +298,18 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
             return saved["advisory"]
         marker = dict(status="review_inflight", input_digest=input_digest,
             group_id=f"phase-{phase}/group-{ordinal}", indices=indices, review_scope=group_context["reviewScope"],
-            physical_ordinal=phase * per_phase + ordinal)
+            physical_ordinal=physical_offset + phase * per_phase + ordinal)
+        if review_namespace:
+            marker.update(namespace=review_namespace,
+                          physical_purpose="final-selected" if final_selected else "initial-continuation")
         await checkpoint(ordinal, marker)
         local_reserved(ordinal)
         async def dispatch():
             with provider_usage_scope(job_id=job.id, operation="authored_generation", stage="vqa",
-                    attempt_number=job.attempt_number, round_ordinal=marker["physical_ordinal"]):
+                    attempt_number=job.attempt_number, round_ordinal=marker["physical_ordinal"],
+                    **({"workspace_operation_id": job.workspace_operation_id}
+                       if isinstance(getattr(job, "request_payload", None), dict)
+                       and job.request_payload.get("_svg_partial_recovery") else {})):
                 return await run_advisory(group_renders, slide_count=len(group_renders),
                                           required=True, design_context=group_context)
         try:
@@ -304,8 +321,9 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
                     vision = await dispatch()
             else:
                 vision = await dispatch()
-        except BaseException:
-            await checkpoint(ordinal, {**marker, "status": "review_unknown"})
+        except BaseException as exc:
+            from utils.provider_overload import safe_provider_diagnostics
+            await checkpoint(ordinal, {"status": "review_unknown", "failureDiagnostics": safe_provider_diagnostics(exc)})
             raise
         sealed = dict(groupId=marker["group_id"], globalPageIndices=indices,
                       inputDigest=input_digest, reviewScope=group_context["reviewScope"], vision=vision)
@@ -314,25 +332,14 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
         return sealed
 
     async def local_group(ordinal, indices):
+        if ordinal in reused_groups:
+            local_reserved(ordinal)
+            return deepcopy(reused_groups[ordinal])
         to_review = [index for index in indices if index not in local_pages] if not full_review else indices
         if not to_review:
             local_reserved(ordinal)
             return None
-        group_context = {**context, "reviewScope": "full" if full_review else "local",
-            "globalPageIndices": to_review, "deckComplete": full_review,
-            "pages": [{**context["pages"][index], "index": local, "deckIndex": index}
-                      for local, index in enumerate(to_review)],
-            "roles": [context["roles"][index] if index < len(context["roles"]) else "content" for index in to_review],
-            "composition": context["composition"] if full_review else {},
-            "priorCandidates": {local: context["priorCandidates"][index]
-                                for local, index in enumerate(to_review) if index in context["priorCandidates"]}}
-        relevant_roles = {role for page in group_context["pages"] for role in page["referenceRoles"]}
-        actual_example_digests = {digest for page in group_context["pages"]
-                                 for digest in page.get("authorExampleDigests") or []}
-        group_context["examples"] = [example for example in context["examples"]
-            if (example["digest"] in actual_example_digests if actual_example_digests else
-                bool(set(example.get("roles") or [example["role"]]) & relevant_roles))]
-        group_context["exampleDigests"] = sorted(example["digest"] for example in group_context["examples"])
+        group_context = _local_group_context(context, to_review, full_review)
         return await request_group(ordinal, to_review, group_context, [renders[index] for index in to_review])
 
     tasks = [asyncio.create_task(local_group(ordinal, indices)) for ordinal, indices in enumerate(groups)]
@@ -372,8 +379,22 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
         representatives = sorted({group["representative"] for group in context["composition"]["groups"]})
         global_context = {**context, "reviewScope": "global", "representativeIndices": representatives,
                           "examples": [], "exampleDigests": []}
-        global_result = await request_group(len(groups), list(range(len(pages))), global_context, renders)
-        records.append(global_result)
+        for format_attempt in range(plan["global_format_retry_limit"] + 1):
+            global_result = await request_group(len(groups) + format_attempt, list(range(len(pages))), global_context, renders)
+            records.append(global_result)
+            rejected = global_result["vision"]
+            if (rejected.get("skipped") != "design_review_schema_or_coverage_invalid"
+                    or rejected.get("schemaRejectionReason") not in {
+                        "global_review_fields", "global_finding_fields", "global_group_fields",
+                        "axis_keys", "axis_semantics", "evidence_bounds",
+                    }):
+                break
+            if format_attempt < plan["global_format_retry_limit"]:
+                global_context = {**global_context, "formatRetry": {
+                    "attempt": format_attempt + 1,
+                    "reason": rejected.get("schemaRejectionReason"),
+                    "fields": rejected.get("schemaRejectionFields"),
+                }}
         global_review = global_result["vision"].get("designReview") or {}
         global_pages = {page["index"]: page for page in global_review.get("pages", [])}
         combined = []
@@ -399,6 +420,10 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
             designReview=dict(pages=combined, candidateComparisons=comparisons,
                               deckFlow=global_review.get("deckFlow") or {"evaluated": False}))
     vision = {**vision, "reviewGroups": records}
+    if evidence_consumers:
+        vision["localEvidenceConsumers"] = evidence_consumers
+    if review_namespace:
+        vision["reviewNamespace"] = review_namespace
     vision["designGate"] = _seal_design_gate(context, pages, renders, vision)
     record = advisory_record(vision, page_digests)
     return record
@@ -480,6 +505,10 @@ def _seal_design_gate(context, pages, renders, vision):
         unreviewedPages=incomplete, advisoryPages=advisories, deckFlow=review.get("deckFlow"),
         reason=vision.get("skipped"), candidateComparisons=comparisons,
         reviewGroups=vision.get("reviewGroups", []))
+    if vision.get("localEvidenceConsumers"):
+        base["localEvidenceConsumers"] = deepcopy(vision["localEvidenceConsumers"])
+    if vision.get("reviewNamespace"):
+        base["reviewNamespace"] = vision["reviewNamespace"]
     return {**base, "digest": content_digest(base)}
 
 
@@ -594,6 +623,8 @@ def compare_quality_recovery_candidates(ctx, prior, new, prior_advisory, new_adv
     new_page = next((page for page in new_gate.get("pages", []) if page.get("index") == index), None)
     if not old_page or not new_page or not old_page.get("evaluated") or not new_page.get("evaluated"):
         return reject("comparison_review_incomplete")
+    if new_page.get("mandatoryEvidenceValid") is not True:
+        return reject("candidate_design_evidence_invalid")
     if (not 0 <= index < len(old_gate["pageDigests"]) or not index < len(new_gate["pageDigests"])
             or old_gate.get("pageDigests", [])[index] != sha256_hex((prior.get("svg_content") or "").encode())
             or new_gate.get("pageDigests", [])[index] != sha256_hex((new.get("svg_content") or "").encode())):
@@ -653,3 +684,18 @@ def enforce_quality_recovery_publication(snapshot, pages, advisory, *, job=None)
 
 __all__ = ["classify_pages", "deck_advisory", "page_outcome", "quality_recovery_decisions",
            "compare_quality_recovery_candidates", "enforce_quality_recovery_publication"]
+
+
+def _group_review_input_digest(group_context, group_renders, phase, ordinal, indices):
+    public_context = {key: value for key, value in group_context.items() if key not in {'examples', 'priorCandidates'}}
+    input_digest = content_digest(dict(context=public_context, examples=group_context['exampleDigests'], pngDigests=[sha256_hex(png) for png in group_renders], priorCandidates={index: {key: value for key, value in prior.items() if key != 'png'} for index, prior in group_context['priorCandidates'].items()}, groupId=f'phase-{phase}/group-{ordinal}', indices=indices))
+    return input_digest
+
+def _local_group_context(context, to_review, full_review=False):
+    group_context = {**context, 'reviewScope': 'full' if full_review else 'local', 'globalPageIndices': to_review, 'deckComplete': full_review, 'pages': [{**context['pages'][index], 'index': local, 'deckIndex': index} for local, index in enumerate(to_review)], 'roles': [context['roles'][index] if index < len(context['roles']) else 'content' for index in to_review], 'composition': context['composition'] if full_review else {}, 'priorCandidates': {local: context['priorCandidates'][index] for local, index in enumerate(to_review) if index in context['priorCandidates']}}
+    relevant_roles = {role for page in group_context['pages'] for role in page['referenceRoles']}
+    actual_example_digests = {digest for page in group_context['pages'] for digest in page.get('authorExampleDigests') or []}
+    group_context['examples'] = [example for example in context['examples'] if (example['digest'] in actual_example_digests if actual_example_digests else bool(set(example.get('roles') or [example['role']]) & relevant_roles))]
+    group_context['exampleDigests'] = sorted((example['digest'] for example in group_context['examples']))
+    return group_context
+

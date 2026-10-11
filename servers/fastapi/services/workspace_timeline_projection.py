@@ -19,6 +19,8 @@ from utils.owner_context import get_current_owner_id, get_current_tenant_id
 
 
 _PRIVATE_PAYLOAD_KEYS = {
+    "svg_partial_recovery_archive",
+    "svg_partial_recovery_manifest",
     "attachment_file_name",
     "attachment_url",
     "cookie",

@@ -71,7 +71,7 @@ class AuthoredStageError(RuntimeError):
     def __init__(
         self,
         *,
-        slide_index: int,
+        slide_index: int | None,
         stage: str,
         code: str,
         cause: BaseException | None = None,
@@ -118,7 +118,7 @@ class AuthoredStageError(RuntimeError):
             "message": safe_message,
             "stage": self.stage,
             "slide_index": self.slide_index,
-            "slide_number": self.slide_index + 1,
+            "slide_number": self.slide_index + 1 if self.slide_index is not None else None,
             "exception_type": exception_type,
             "cause": safe_cause,
             "fingerprint": fingerprint,

@@ -331,4 +331,34 @@ export interface WorkspaceOperationActionRequest {
   idempotencyKey: string;
   expectedRevision?: number;
   expectedOperationVersion?: number;
+  recoveryRevision?: "svg-partial-recovery/v1";
+  recoveryDecision?: WorkspacePartialRecoveryDecision;
 }
+
+export interface WorkspacePartialRecoveryDecision {
+  manifestHash: string;
+  nonce: string;
+  acknowledgedUnknownIndices: number[];
+  additionalBudgetMicrounits: number;
+}
+
+export interface WorkspacePartialRecoveryPlan {
+  recoveryRevision: "svg-partial-recovery/v1";
+  manifestHash: string;
+  nonce: string;
+  operationId: string;
+  operationVersion: number;
+  presentationId: string;
+  presentationRevision: number;
+  expectedPageCount: number;
+  knownIndices: number[];
+  newIndices: number[];
+  unknownIndices: number[];
+  historicalActualCostUnbounded: boolean;
+  provenRemainingBudgetMicrounits: number | null;
+  additionalBudgetLimitMicrounits: number;
+  prospectiveAuthorRequestCount: number;
+  prospectiveRetryRequestLimit: number;
+}
+
+export type WorkspaceOperationActionOptions = Partial<Omit<WorkspaceOperationActionRequest, "action">>;

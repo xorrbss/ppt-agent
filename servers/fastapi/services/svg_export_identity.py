@@ -23,11 +23,12 @@ same split as authored.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from copy import deepcopy
 from typing import Any, Awaitable, Callable, Sequence
 from time import monotonic
 from sqlalchemy import select
 
-from models.sql.public_artifact import ArtifactRef
+from models.sql.public_artifact import ArtifactRef, PublicArtifact, PublicExportIdentity
 from models.sql.workspace import WorkspaceOperation
 from models.sql.public_admission import PublicOperationAdmission
 from services.artifact_store import configured_public_artifact_service
@@ -131,7 +132,8 @@ def build_svg_export_identity(claim, *, tenant_id, request: SvgExportRequest,
         exporter_version=CONVERTER_VERSION, evidence=evidence, slides=tuple(checkpoints))
 
 
-async def _producer_readback(session_factory, *, producer_id, claim, tenant_id, artifact, required: bool) -> dict | None:
+async def _producer_readback(session_factory, *, producer_id, claim, tenant_id, artifact, required: bool,
+                             identity=None, include_worker_evidence=False) -> dict | None:
     """The leading export's worker readback, which the reused bytes still carry.
 
     A reuse runs no worker, but the source-preserving receipt judges content
@@ -152,6 +154,18 @@ async def _producer_readback(session_factory, *, producer_id, claim, tenant_id, 
             PublicOperationAdmission.operation_id == producer_id,
             PublicOperationAdmission.owner_id == claim.owner_id,
             PublicOperationAdmission.tenant_id == tenant_id))
+        identity_row = producer_artifact = None
+        if include_worker_evidence and identity is not None:
+            identity_row = await session.scalar(select(PublicExportIdentity).where(
+                PublicExportIdentity.canonical_digest == identity.canonical_digest,
+                PublicExportIdentity.owner_id == claim.owner_id,
+                PublicExportIdentity.tenant_id == tenant_id,
+                PublicExportIdentity.presentation_id == claim.presentation_id,
+                PublicExportIdentity.revision == claim.expected_revision,
+                PublicExportIdentity.claimed_by_operation_id == producer_id,
+                PublicExportIdentity.state == "succeeded"))
+            if identity_row is not None and identity_row.result_artifact_id is not None:
+                producer_artifact = await session.get(PublicArtifact, identity_row.result_artifact_id)
     if producer is None or producer.state != "succeeded":
         if required:
             raise PublicExportOperationError("public_export_readback_evidence_pending")
@@ -171,6 +185,30 @@ async def _producer_readback(session_factory, *, producer_id, claim, tenant_id, 
         raise PublicExportOperationError("svg_export_readback_binding_invalid")
     evidence = result.get("public_export_worker_evidence")
     readback = evidence.get("structuralReadback") if isinstance(evidence, dict) else None
+    if include_worker_evidence:
+        if (identity_row is None or producer_artifact is None
+                or producer_artifact.owner_id != claim.owner_id or producer_artifact.tenant_id != tenant_id
+                or producer_artifact.created_by_operation_id != producer_id
+                or producer_artifact.sha256 != artifact.sha256 or producer_artifact.kind != artifact.kind
+                or producer_artifact.media_type != artifact.media_type or not isinstance(evidence, dict)
+                or not isinstance(readback, dict)):
+            raise PublicExportOperationError("svg_export_readback_binding_invalid")
+        from utils.hashing import canonical_json_sha256
+
+        binding = dict(schemaVersion="svg-export-reuse-producer-binding/v1",
+            producerOperationId=str(producer_id), consumerOperationId=str(claim.operation_id),
+            canonicalIdentityDigest=identity.canonical_digest, ownerId=str(claim.owner_id),
+            ownerScope=str(claim.owner_scope), tenantId=tenant_id,
+            presentationId=str(claim.presentation_id), sourceRevision=claim.expected_revision,
+            artifactDigest="sha256:" + artifact.sha256,
+            producerWorkerEvidenceDigest="sha256:" + canonical_json_sha256(evidence),
+            producerArtifactRef=producer_artifact.to_ref().model_dump(mode="json", by_alias=True),
+            consumerArtifactRef=artifact.model_dump(mode="json", by_alias=True))
+        preserved = deepcopy(evidence)
+        preserved["reuseProducerWorkerEvidence"] = deepcopy(evidence)
+        preserved["reuseProducerBinding"] = {
+            **binding, "digest": "sha256:" + canonical_json_sha256(binding)}
+        return preserved
     return dict(readback) if isinstance(readback, dict) else None
 
 
@@ -197,9 +235,13 @@ async def export_svg_through_identity(claim, *, tenant_id, request: SvgExportReq
         evidence = dict(metrics.get("public_export_worker_evidence") or {})
         readback = await _producer_readback(
             session_factory, producer_id=join.leading_operation_id, claim=claim, tenant_id=tenant_id, artifact=artifact,
-            required=request.source_preservation is not None)
+            required=request.source_preservation is not None or request.export_format == "pptx",
+            identity=identity, include_worker_evidence=request.export_format == "pptx")
         if readback is not None:
-            evidence["structuralReadback"] = readback
+            if request.export_format == "pptx":
+                evidence = {**readback, **evidence, "structuralReadback": readback["structuralReadback"]}
+            else:
+                evidence["structuralReadback"] = readback
         return PublicWorkerArtifactResult(artifact=artifact, resource_metrics={
             **metrics, "public_export_worker_evidence": evidence,
             "svg_export_timing": {"identityAndReuseMs": (monotonic() - started_at) * 1000,
