@@ -410,7 +410,8 @@ async def recover_deck(ctx, request, presentation_id, outline, job, pages, state
                 payload["svg_content"] = None
                 payload["correction_mode"] = decision["repair_scope"]
                 payload["repair_hint"] = json.dumps({"kind": decision["repair_scope"],
-                    "issues": decision.get("issues", []), "instruction":
+                    "issues": decision.get("issues", []),
+                    **({"design_targets": decision["design_targets"]} if decision.get("design_targets") else {}), "instruction":
                     "Preserve every source word, number, relation, image group and native binding. "
                     "Improve the reported design axes without shrinking or hiding content."}, ensure_ascii=False)
                 await hooks.checkpoint(job, index, payload=payload)
@@ -448,6 +449,10 @@ async def recover_deck(ctx, request, presentation_id, outline, job, pages, state
         priors = {i: p for i, p in priors.items()
                   if pages[i][0].get("quality_recovery", {}).get("status") == "candidate_ready"}
     if not priors:
+        if (ctx.snapshot.get("quality_recovery_policy") or {}).get("version") == 2:
+            await ensure_recovery_authority(job, hooks)
+            return pages, quality.reusable_final_deck_advisory(
+                ctx, pages, first_advisory, job=job, read_png=hooks.read_png)
         return pages, first_advisory
     await quality.classify_pages(pages, job=job, checkpoint=hooks.checkpoint, snapshot=ctx.snapshot)
     ctx.quality_review_prior_pages = {}
@@ -455,6 +460,7 @@ async def recover_deck(ctx, request, presentation_id, outline, job, pages, state
         await ensure_recovery_authority(job, hooks)
         ctx.quality_review_prior_pages[i] = (p, hooks.read_png(p))
     ctx.quality_review_target_axes = {i: decisions.get(i, {}).get("target_axes", []) for i in priors}
+    ctx.quality_review_target_goals = {i: decisions.get(i, {}).get("design_targets", []) for i in priors}
     ctx.quality_recovery_first_advisory = first_advisory
     candidate_advisory = await review(1)
     for index in sorted(priors):
@@ -470,6 +476,16 @@ async def recover_deck(ctx, request, presentation_id, outline, job, pages, state
             current["quality_recovery"].update(status="selected", selection=selection)
         await hooks.checkpoint(job, index, payload=pages[index][0])
     # A mixed deck invalidates global evidence; publication must fail closed.
+    from services.svg_authoring_profile import read_quality_recovery_policy
+    if (read_quality_recovery_policy(ctx.snapshot) or {}).get("version") == 2:
+        await ensure_recovery_authority(job, hooks)
+        for producer in (candidate_advisory, first_advisory):
+            reused = quality.reusable_final_deck_advisory(ctx, pages, producer, job=job, read_png=hooks.read_png)
+            if reused is not None:
+                return pages, reused
+        if plan.get("final_selected_review") is not None:
+            return pages, await _review_final_selected(ctx, request, pages, job, hooks, run_advisory, execution, seed, persist)
+        return pages, None
     if any(p.get("quality_recovery", {}).get("status") == "retained" for p, _ in pages):
         if all((selection.get('selected') != 'candidate' for selection in [p.get('quality_recovery', {}).get('selection', {}) for p, _ in pages] if selection)):
             return pages, first_advisory
@@ -515,6 +531,10 @@ async def _review_final_selected(ctx, request, pages, job, hooks, run_advisory, 
     from services.svg_final_selected_continuation import build_selected_proof, NAMESPACE
     from utils.owner_context import get_current_owner_id, get_current_tenant_id
     manifest = getattr(ctx, "partial_recovery_manifest", None)
+    if manifest is None:
+        from services.svg_authoring_profile import read_quality_recovery_policy
+        if (read_quality_recovery_policy(ctx.snapshot) or {}).get("version") == 2:
+            return await _review_live_final_selected(ctx, pages, job, hooks, run_advisory, execution, persist)
     if not isinstance(manifest, dict) or manifest.get("final_selected_review_control") is None:
         raise ValueError("svg_final_selected_review_not_admitted")
     await ensure_recovery_authority(job, hooks)
@@ -564,6 +584,77 @@ async def _review_final_selected(ctx, request, pages, job, hooks, run_advisory, 
             ctx, pages, job=job, read_png=hooks.read_png, run_advisory=run_advisory,
             round_ordinal=0, final_selected=True, source_evidence=evidence,
         )
+    except BaseException:
+        marker["status"] = "review_unknown"
+        await persist()
+        raise
+    finally:
+        ctx.quality_recovery_review_group_checkpoint = original_checkpoint
+    await ensure_recovery_authority(job, hooks)
+    marker.update(status="completed", advisory=advisory)
+    await persist()
+    return advisory
+
+
+async def _review_live_final_selected(ctx, pages, job, hooks, run_advisory, execution, persist):
+    """Review a fresh v2 mixed deck under its immutable admitted final control."""
+    from services.generation_core.drivers.svg import quality as deck_quality
+    from services.svg_final_selected_continuation import NAMESPACE
+    plan = read_quality_recovery_execution_plan(ctx.snapshot)
+    if plan is None or plan.get("final_selected_review") is None:
+        return None
+    await ensure_recovery_authority(job, hooks)
+    producers, proofs = [], []
+    for ordinal, round_marker in enumerate(execution.get("rounds", [])):
+        advisory = round_marker.get("advisory")
+        gate = deck_quality._gate_intact(advisory)
+        if round_marker.get("status") != "completed" or gate is None:
+            raise ValueError("svg_final_selected_evidence_unproven")
+        producers.append(advisory)
+        proofs.append(dict(round_ordinal=ordinal, producer_gate_digest=gate["digest"],
+            producer_input_digest=gate["inputDigest"], producer_binding=deepcopy(gate["binding"])))
+    if not producers:
+        raise ValueError("svg_final_selected_evidence_unproven")
+    identity = dict(selected=[dict(svg=sha256_hex(p["svg_content"].encode()), png=sha256_hex(png),
+                                     input_digest=p.get("input_digest")) for p, png in pages],
+        producer_proofs=proofs, runtime_binding=ctx.quality_recovery_runtime_binding,
+        snapshot_digest=_digest(ctx.snapshot), control=plan["final_selected_review"])
+    source_digest = _digest(identity)
+    marker = execution.get("final_selected_review")
+    if marker is not None:
+        if marker.get("namespace") != NAMESPACE or marker.get("source_proof_digest") != source_digest:
+            raise ValueError("svg_final_selected_review_source_changed")
+        if marker.get("status") == "completed":
+            reused = deck_quality.reusable_final_deck_advisory(ctx, pages, marker.get("advisory"),
+                                                             job=job, read_png=hooks.read_png)
+            if reused is None:
+                raise ValueError("svg_final_selected_review_source_changed")
+            return reused
+        if marker.get("status") != "review_inflight":
+            raise ValueError("svg_final_selected_review_unavailable")
+    else:
+        marker = dict(namespace=NAMESPACE, status="review_inflight", source_proof_digest=source_digest,
+                      live_producer_proofs=proofs, groups={})
+        execution["final_selected_review"] = marker
+        await persist()
+    checkpoint_lock = asyncio.Lock()
+    async def final_checkpoint(key, value=None):
+        async with checkpoint_lock:
+            await ensure_recovery_authority(job, hooks)
+            if type(key) is not int or not 0 <= key < plan["final_selected_review"]["review_call_limit"]:
+                raise ValueError("svg_quality_recovery_review_limit")
+            key = str(key)
+            if value is None:
+                return deepcopy(marker["groups"].get(key))
+            marker["groups"][key] = deepcopy(value)
+            await persist()
+            return value
+    original_checkpoint = getattr(ctx, "quality_recovery_review_group_checkpoint", None)
+    ctx.quality_recovery_review_group_checkpoint = final_checkpoint
+    try:
+        advisory = await deck_quality.deck_advisory(ctx, pages, job=job, read_png=hooks.read_png,
+            run_advisory=run_advisory, round_ordinal=0, final_selected=True,
+            source_evidence=dict(liveReviewProducers=producers))
     except BaseException:
         marker["status"] = "review_unknown"
         await persist()

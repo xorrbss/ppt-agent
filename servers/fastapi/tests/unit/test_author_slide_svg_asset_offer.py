@@ -148,6 +148,56 @@ def test_author_prompt_uses_content_grounded_neighbor_intent_without_fixed_layou
     assert result.receipt["visual_intent_version"] == "svg-visual-intent/v1"
     assert "layout_id" not in intents[1] and "slots" not in intents[1]
 
+    from copy import deepcopy
+    from llmai.shared import ImageContentPart
+    from utils.hashing import canonical_json_digest, sha256_prefixed
+    from services.generation_core.drivers.svg.visual_intent import visual_intent_receipt
+
+    source = json.dumps({"source_authoring_contract": {"version": "svg-source-whole-page/v1"},
+        "page_id": 9012, "bounds": {"x": 800, "y": 600, "width": 1280}, "source_facts": [
+            {"kind": "text", "data": {"text": "# 시스템 구조"}},
+            {"kind": "text", "data": {"text": "핵심 메시지: 공용 API가 주문의 연결을 유지한다."}},
+            {"kind": "text", "data": {"text": "주문 화면 → 주문 API: 접수\n주문 API → 주문 DB: 저장"}},
+        ]}, ensure_ascii=False, indent=2)
+    policy = {"id": "svg-quality-first", "version": 2}
+    source_intents = build_deck_visual_intents([contents[0], source], ["section", "content"], quality_policy=policy)
+    original_intent = deepcopy(source_intents[1])
+    style = _reference_style(8)
+    style["quality_recovery_policy"] = policy
+    style["digest"] = canonical_json_digest({key: value for key, value in style.items() if key != "digest"})
+    source_images = {f"source-slot-{index}": {"data_url": _data_url((100 + index, 80, 60, 255)),
+                     "description": f"원본 그룹의 상세 화면 {index}: 연결 레이블을 유지", "required": False}
+                     for index in range(3)}
+    grounded = asyncio.run(module.author_slide_svg(source, style, "content", 1, 2,
+                             visual_intent=source_intents[1], source_images=source_images))
+    text = "\n".join(message.content if isinstance(message.content, str) else "\n".join(
+        part.text for part in message.content if hasattr(part, "text")) for message in seen["messages"])
+    images = [part for message in seen["messages"] if not isinstance(message.content, str)
+              for part in message.content if isinstance(part, ImageContentPart)]
+    image_evidence = json.JSONDecoder().raw_decode(text.split("SOURCE IMAGE EVIDENCE (actual offered content):\n", 1)[1])[0]
+    assert source_intents[1] == original_intent
+    assert source_intents[1]["emphasis"]["focal_text"] == "핵심 메시지: 공용 API가 주문의 연결을 유지한다."
+    assert source_intents[1]["neighboring_intents"][0]["page_role"] == "section"
+    assert source_intents[1]["source_evidence"]["blocks"][1]["source_path"] == "source_facts[1].data.text"
+    assert json.dumps(source, ensure_ascii=False) in text
+    assert "원본 그룹의 상세 화면 2" in text and "its supplied source-grounded reason" in text
+    assert grounded.receipt["reference_selection"]["reference_roles"] == ["architecture", "content"]
+    assert len(images) == 5 and len(image_evidence["source_image_inputs"]) == 3
+    for offered in image_evidence["source_image_inputs"]:
+        actual = images[offered["image_index"]]
+        assert sha256_prefixed(actual.data) == sha256_prefixed(base64.b64decode(source_images[offered["slot_id"]]["data_url"].split(",", 1)[1]))
+    assert grounded.receipt["visual_intent_digest"] == visual_intent_receipt(source_intents[1])["visual_intent_digest"]
+    assert all(example["use_for"] for example in grounded.receipt["design_example_inputs"])
+
+    legacy_style = deepcopy(style)
+    legacy_style["quality_recovery_policy"]["version"] = 1
+    legacy_style["digest"] = canonical_json_digest({key: value for key, value in legacy_style.items() if key != "digest"})
+    legacy_intent = build_deck_visual_intents([source])[0]
+    legacy = asyncio.run(module.author_slide_svg(source, legacy_style, "content", 0, 1, visual_intent=legacy_intent))
+    legacy_text = "\n".join(str(message) for message in seen["messages"])
+    assert "source_evidence" not in legacy_text and "SOURCE IMAGE EVIDENCE" not in legacy_text
+    assert legacy.receipt["visual_intent_digest"] == visual_intent_receipt(legacy_intent)["visual_intent_digest"]
+
 
 def test_new_intent_seed_replays_exactly_and_historical_checkpoint_keeps_context(monkeypatch):
     from services.svg_visual_intent_checkpoint import freeze_visual_intents
@@ -439,6 +489,33 @@ def test_v2_reference_role_uses_literal_native_schedule_and_relationship_evidenc
     assert missing["fallback_to_page_role"] is True
     assert select_reference_role(_reference_style(1), "content", cases[2][0]) is None
     assert select_reference_role(_style(), "content", cases[2][0]) is None
+
+    metadata_source = json.dumps({"source_authoring_contract": {"version": "svg-source-whole-page/v1"},
+        "page_id": 8123, "bounds": {"x": 343, "y": 720}, "source_facts": [
+            {"kind": "text", "data": {"text": "# 고객 지원"}},
+            {"kind": "text", "data": {"text": "핵심 메시지: 담당 창구가 요청의 맥락을 유지한다."}},
+            {"kind": "text", "data": {"text": "담당자는 요청 내용을 확인하고 고객에게 결과를 설명한다."}},
+        ]}, ensure_ascii=False, indent=2)
+    legacy_intent = build_deck_visual_intents([metadata_source])[0]
+    legacy_style = _reference_style(8)
+    legacy_style["quality_recovery_policy"] = {"id": "svg-quality-first", "version": 1}
+    legacy_style["digest"] = canonical_json_digest({key: value for key, value in legacy_style.items() if key != "digest"})
+    legacy_selection = select_reference_role(legacy_style, "content", metadata_source, legacy_intent)
+    assert legacy_selection["basis"] == "source_numeric_emphasis"
+    current = deepcopy(legacy_style)
+    current["quality_recovery_policy"]["version"] = 2
+    current["digest"] = canonical_json_digest({key: value for key, value in current.items() if key != "digest"})
+    selected = select_reference_role(current, "content", metadata_source, legacy_intent)
+    assert "data" not in selected["reference_roles"]
+    assert all(advice["basis"] != "source_numeric_emphasis" for advice in selected["expression_advice"])
+    assert selected["source_evidence_basis"] == "original_source_facts"
+    assert build_deck_visual_intents([metadata_source], quality_policy=legacy_style["quality_recovery_policy"]) == [legacy_intent]
+    quantity_source = metadata_source.replace("담당 창구가 요청의 맥락을 유지한다.", "처리율이 42%를 기록했다.")
+    assert any(advice["basis"] == "source_numeric_emphasis" for advice in
+               select_reference_role(current, "content", quantity_source, legacy_intent)["expression_advice"])
+    unknown_json = json.dumps({"metadata": {"page_id": 42, "description": "42원, 2일"}})
+    unknown = select_reference_role(current, "content", unknown_json)
+    assert unknown["source_evidence_basis"] == "unclassified_json" and "data" not in unknown["reference_roles"]
 
 
 def test_v2_author_changes_only_reference_input_and_records_actual_reference_digest(monkeypatch):

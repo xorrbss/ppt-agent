@@ -5,6 +5,7 @@ import json
 import re
 
 from services.generation_core.drivers.svg.native_requirements import requested_native_data
+from services.generation_core.drivers.svg.visual_intent import enrich_visual_intent, source_content_evidence
 from services.svg_authoring_profile import read_authoring_profile, read_quality_recovery_policy
 from services.svg_contract import source_digest
 
@@ -17,14 +18,17 @@ _EDGE = re.compile(r"([^\n,;:：→<>]+?)\s*(?:→|->)\s*([^\n,;:：→<>]+)")
 _STRUCTURE = re.compile(r"구조|시스템|아키텍처|의존관계|외부\s*연계|\b(?:architecture|dependencies|dependency|system|nodes?)\b", re.I)
 _NODE = re.compile(r"\b(?:API|DB|service|database|queue)\b|저장소|이벤트\s*큐|화면|앱|서비스", re.I)
 _QUANTITY = re.compile(r"\d[\d.,]*\s*(?:%|%p|건|명|분|시간|원|일|주|개월)?")
+_SOURCE_QUANTITY = re.compile(r"(?<![\w])(?:[$€₩]\s*\d[\d.,]*|\d[\d.,]*\s*(?:%p?|억원|만원|원|건|명|분|시간|일|주|개월|USD|KRW))", re.I)
 
 
 def select_reference_role(style_snapshot: dict, page_role: str, content: str,
                           visual_intent: dict | None = None, *, has_source_images: bool = False) -> dict | None:
     """Select existing evidence examples without prescribing a page layout."""
-    if read_quality_recovery_policy(style_snapshot) is not None:
+    quality_policy = read_quality_recovery_policy(style_snapshot)
+    if quality_policy is not None:
         return _select_quality_references(style_snapshot, page_role, content, visual_intent,
-                                          has_source_images=has_source_images)
+                                          has_source_images=has_source_images,
+                                          source_grounded=quality_policy["version"] == 2)
     profile = read_authoring_profile(style_snapshot)
     if profile is None or profile["version"] not in (2, 3, 4, 5, 6, 8):
         return None
@@ -61,7 +65,8 @@ _ORDERED = re.compile(r"^\s*\d+[.)]\s+", re.M)
 
 
 def _select_quality_references(style_snapshot: dict, page_role: str, content: str,
-                               visual_intent: dict | None, *, has_source_images: bool) -> dict:
+                               visual_intent: dict | None, *, has_source_images: bool,
+                               source_grounded: bool = False) -> dict:
     """Route existing examples by source meaning, without a layout assignment."""
     references = style_snapshot.get("references", {})
     source_kinds = set()
@@ -89,6 +94,12 @@ def _select_quality_references(style_snapshot: dict, page_role: str, content: st
 
         source_text = "\n".join(original_text([fact.get("data", {}) for fact in facts if isinstance(fact, dict)]))
     intent = (visual_intent if visual_intent and visual_intent.get("source_digest") == source_digest(content) else {})
+    source_evidence = None
+    if source_grounded:
+        source_evidence = source_content_evidence(content)
+        source_text = source_evidence["text"]
+        source_kinds = set(source_evidence["source_kinds"])
+        intent = enrich_visual_intent(content, page_role, intent.get("page_index", 0), intent or None)
     flow = intent.get("reading_flow", {}).get("intent")
     requested = []
     expressions = []
@@ -97,13 +108,19 @@ def _select_quality_references(style_snapshot: dict, page_role: str, content: st
         if role not in [item["role"] for item in requested]:
             requested.append({"role": role, "basis": basis})
         expressions.append({"basis": basis, "advice": advice})
+        if source_grounded:
+            expressions[-1]["role"] = role
+            expressions[-1]["source_basis"] = source_evidence["basis"]
+            expressions[-1]["source_digest"] = source_digest(content)
 
     if page_role in {"cover", "section", "closing"}:
         consider(page_role, "page_purpose", "Give the supplied main statement a distinctive hierarchy and sufficient supporting context.")
     else:
-        native = requested_native_data(content)
+        native = requested_native_data(source_text if source_grounded else content)
         if native.get("tables") or native.get("charts") or source_kinds & {"table", "chart"}:
-            consider("data", "explicit_native_data", "Let exact native evidence carry the main field; associate each supplied explanation with its values.")
+            advice = ("Keep exact native values with their labels and explanations. Their presence alone does not establish the page's main message; preserve the relative importance of source statements, relationships and images."
+                      if source_grounded else "Let exact native evidence carry the main field; associate each supplied explanation with its values.")
+            consider("data", "explicit_native_data", advice)
         if _COMPARISON.search(source_text) or flow == "comparison":
             consider("data", "source_comparison", "Make the supplied comparison dimensions easy to inspect with aligned labels and meaningful emphasis; do not invent values.")
         dated = sum(bool(_DATE_RANGE.search(line) or _PERIOD_RANGE.search(line)) for line in source_text.splitlines())
@@ -117,8 +134,10 @@ def _select_quality_references(style_snapshot: dict, page_role: str, content: st
         elif len(edges) >= 2 and _SEQUENCE.search(source_text):
             consider("timeline", "source_connected_process", "Show only source-supported transitions and their complete labels; use whitespace to keep the sequence readable.")
         emphasis = intent.get("emphasis", {})
-        if (_QUANTITY.search(emphasis.get("focal_text", ""))
-                or len(emphasis.get("supporting_facts", [])) >= 2):
+        numeric_emphasis = (bool(_SOURCE_QUANTITY.search(source_text)) if source_grounded else
+                            bool(_QUANTITY.search(emphasis.get("focal_text", "")))
+                            or len(emphasis.get("supporting_facts", [])) >= 2)
+        if numeric_emphasis:
             consider("data", "source_numeric_emphasis", "Give supplied quantities and their context clear visual weight; a numeric example never permits inventing a chart, denominator or comparison.")
         if has_source_images:
             consider("content", "source_image_explanation", "Keep every supplied image group together with its explanation; let image detail and readable captions shape the page.")
@@ -131,9 +150,10 @@ def _select_quality_references(style_snapshot: dict, page_role: str, content: st
     if not selected_roles:
         selected_roles = [role for role in dict.fromkeys((page_role, "content")) if references.get(role)]
     primary = selected_roles[0] if selected_roles else page_role
-    return {"version": "svg-reference-selection/quality-first-v1", "page_role": page_role,
+    return {"version": "svg-reference-selection/quality-first-v2" if source_grounded else "svg-reference-selection/quality-first-v1", "page_role": page_role,
             "requested_role": requested[0]["role"], "selected_role": primary,
             "basis": requested[0]["basis"], "fallback_to_page_role": primary != requested[0]["role"],
             "reference_roles": selected_roles, "requested_examples": requested,
             "expression_advice": expressions,
+            **({"source_evidence_basis": source_evidence["basis"], "source_digest": source_digest(content)} if source_grounded else {}),
             "semantics": "Design evidence only; sample wording, values and relationships are never current source."}

@@ -34,15 +34,15 @@ def intent_contents(outline, *, source_units=None, raster_analysis=None, raster_
     return contents
 
 
-async def freeze_visual_intents(*, contents, roles, job, historical_payload, checkpoint, trusted_plan=None):
+async def freeze_visual_intents(*, contents, roles, job, historical_payload, checkpoint, trusted_plan=None, quality_policy=None):
     """Only new jobs get advice; resumed jobs keep their original frozen input."""
     if job is None:
-        return _expected_intents(contents, roles, trusted_plan)
+        return _expected_intents(contents, roles, trusted_plan, quality_policy=quality_policy)
     seed = await checkpoint(job, 0) or {}
     saved = seed.get("deck_visual_intents")
     if saved is None and historical_payload:
         return None
-    expected = _expected_intents(contents, roles, trusted_plan)
+    expected = _expected_intents(contents, roles, trusted_plan, quality_policy=quality_policy)
     if saved is not None:
         if saved != expected:
             raise ValueError("svg_visual_intent_checkpoint_conflict")
@@ -52,11 +52,13 @@ async def freeze_visual_intents(*, contents, roles, job, historical_payload, che
     return expected
 
 
-def _expected_intents(contents, roles, trusted_plan):
+def _expected_intents(contents, roles, trusted_plan, *, quality_policy=None):
     from copy import deepcopy
     from services.generation_core.drivers.svg.collect import validate_svg_stage_plan
     from services.generation_core.drivers.svg.visual_intent import build_deck_visual_intents
-    expected = build_deck_visual_intents(contents, roles)
+    expected = (build_deck_visual_intents(contents, roles, quality_policy=quality_policy)
+                if isinstance(quality_policy, dict) and quality_policy.get("version") == 2
+                else build_deck_visual_intents(contents, roles))
     plan = validate_svg_stage_plan(trusted_plan)
     if plan is None or plan.get("visual_intents") is None:
         return expected

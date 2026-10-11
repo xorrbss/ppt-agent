@@ -23,6 +23,7 @@ ART_DIRECTION_PROFILE_V7: SvgAuthoringProfile = {"id": "art-direction-v1", "vers
 ART_DIRECTION_PROFILE_V8: SvgAuthoringProfile = {"id": "art-direction-v1", "version": 8}
 
 QUALITY_RECOVERY_POLICY = {"id": "svg-quality-first", "version": 1}
+QUALITY_RECOVERY_POLICY_V2 = {"id": "svg-quality-first", "version": 2}
 
 
 def validate_quality_recovery_policy(value: object) -> dict | None:
@@ -30,9 +31,9 @@ def validate_quality_recovery_policy(value: object) -> dict | None:
         return None
     if (not isinstance(value, Mapping) or set(value) != {"id", "version"}
             or value.get("id") != QUALITY_RECOVERY_POLICY["id"]
-            or type(value.get("version")) is not int or value["version"] != 1):
+            or type(value.get("version")) is not int or value["version"] not in (1, 2)):
         raise ValueError("svg_quality_recovery_policy_invalid")
-    return dict(QUALITY_RECOVERY_POLICY)
+    return dict(value)
 
 
 def request_quality_recovery_policy(request: object) -> dict | None:
@@ -77,26 +78,35 @@ def seal_new_quality_recovery_plan(request: object, slide_count: int) -> dict | 
             or type(slide_count) is not int or slide_count < 1):
         return None
     single_page = slide_count == 1
+    policy = request_quality_recovery_policy(request) or dict(QUALITY_RECOVERY_POLICY_V2)
     plan = {"schema": "svg-quality-recovery-plan/v2" if single_page else "svg-quality-recovery-plan/v1",
             "review_round_limit": 1 if single_page else 2,
             "page_attempt_limit": 3, "slide_count": slide_count, "review_group_size": 5,
             "review_call_limit": (1 if single_page else
                 2 * (((slide_count + 4) // 5) + 1) if slide_count > 5 else 2)}
+    if policy["version"] == 2 and not single_page:
+        from services.svg_final_selected_continuation import final_review_control
+        physical_offset = plan["review_call_limit"] + (plan["review_round_limit"] if slide_count > 5 else 0)
+        plan["final_selected_review_control"] = final_review_control(slide_count, physical_offset=physical_offset)
     request._svg_quality_recovery_plan = plan
-    request._svg_quality_recovery_policy = dict(QUALITY_RECOVERY_POLICY)
+    request._svg_quality_recovery_policy = policy
     return plan
 
 
 def read_quality_recovery_plan(snapshot: Mapping) -> dict | None:
-    if read_quality_recovery_policy(snapshot) is None:
+    policy = read_quality_recovery_policy(snapshot)
+    if policy is None:
         return None
     plan = snapshot.get("quality_recovery_plan")
     single_page = (isinstance(plan, Mapping)
                    and plan.get("schema") == "svg-quality-recovery-plan/v2"
                    and type(plan.get("slide_count")) is int and plan["slide_count"] == 1)
+    expected_keys = {"schema", "review_round_limit", "page_attempt_limit", "slide_count",
+                     "review_group_size", "review_call_limit"}
+    if policy["version"] == 2 and not single_page:
+        expected_keys.add("final_selected_review_control")
     if (not isinstance(plan, Mapping)
-            or set(plan) != {"schema", "review_round_limit", "page_attempt_limit", "slide_count",
-                            "review_group_size", "review_call_limit"}
+            or set(plan) != expected_keys
             or (not single_page and plan.get("schema") != "svg-quality-recovery-plan/v1")
             or type(plan.get("slide_count")) is not int or plan["slide_count"] < (1 if single_page else 2)
             or type(plan.get("review_round_limit")) is not int
@@ -109,6 +119,18 @@ def read_quality_recovery_plan(snapshot: Mapping) -> dict | None:
                                            if plan["slide_count"] > 5 else 2)
             or plan["review_call_limit"] > plan["slide_count"]):
         raise ValueError("svg_quality_recovery_plan_invalid")
+    if policy["version"] == 2 and not single_page:
+        from services.svg_final_selected_continuation import verify_review_control
+        physical_offset = plan["review_call_limit"] + (plan["review_round_limit"] if plan["slide_count"] > 5 else 0)
+        final_control = plan["final_selected_review_control"]
+        integer_fields = ("page_count", "local_group_size", "local_group_limit", "global_format_retry_limit",
+                          "review_call_limit", "physical_offset", "run_limit")
+        if not isinstance(final_control, Mapping) or any(type(final_control.get(key)) is not int for key in integer_fields):
+            raise ValueError("svg_quality_recovery_plan_invalid")
+        try:
+            verify_review_control(final_control, plan["slide_count"], physical_offset)
+        except ValueError as error:
+            raise ValueError("svg_quality_recovery_plan_invalid") from error
     return dict(plan)
 
 
@@ -119,7 +141,7 @@ def global_format_retry_control(snapshot: Mapping) -> dict | None:
         return None
     rounds = plan["review_round_limit"]
     calls = plan["review_call_limit"] + rounds
-    if calls > plan["slide_count"]:
+    if calls > plan["slide_count"] and read_quality_recovery_policy(snapshot)["version"] != 2:
         return None
     return {
         "schema": "svg-global-format-retry/v1",
@@ -145,6 +167,28 @@ def read_quality_recovery_execution_plan(snapshot: Mapping, *, manifest=None) ->
     result = dict(plan)
     result["global_format_retry_limit"] = 0
     result["phase_group_limit"] = plan["review_call_limit"] // plan["review_round_limit"]
+    policy = read_quality_recovery_policy(snapshot)
+    if policy["version"] == 2:
+        from services.svg_final_selected_continuation import verify_review_control
+        control = (manifest.get("global_format_retry_control") if isinstance(manifest, Mapping)
+                   and "global_format_retry_control" in manifest else global_format_retry_control(snapshot))
+        expected = global_format_retry_control(snapshot)
+        if canonical_json_digest(control, allow_nan=True) != canonical_json_digest(expected, allow_nan=True):
+            raise ValueError("svg_quality_recovery_execution_plan_invalid")
+        if control is not None:
+            result["review_call_limit"] = control["review_call_limit"]
+            result["phase_group_limit"] = control["phase_group_limit"]
+            result["global_format_retry_limit"] = control["global_retry_limit"]
+        final_control = plan.get("final_selected_review_control")
+        if final_control is not None:
+            result["final_selected_review"] = verify_review_control(
+                final_control, plan["slide_count"], result["review_call_limit"],
+            )
+            if (isinstance(manifest, Mapping) and manifest.get("final_selected_review_control") is not None
+                    and canonical_json_digest(manifest["final_selected_review_control"], allow_nan=True)
+                    != canonical_json_digest(final_control, allow_nan=True)):
+                raise ValueError("svg_quality_recovery_execution_plan_invalid")
+        return result
     if not isinstance(manifest, Mapping) or "global_format_retry_control" not in manifest:
         return result
     control = manifest["global_format_retry_control"]
@@ -172,6 +216,7 @@ def svg_quality_review_admission_budget(request: object, slide_count: int) -> in
     """Reserve the sealed review plan without changing legacy or global caps."""
     frozen = getattr(request, "_svg_style_snapshot", None)
     if frozen is not None:
+        snapshot = frozen
         plan = read_quality_recovery_plan(frozen)
     else:
         plan = getattr(request, "_svg_quality_recovery_plan", None)
@@ -187,6 +232,10 @@ def svg_quality_review_admission_budget(request: object, slide_count: int) -> in
     if plan is not None:
         if plan["slide_count"] != slide_count:
             raise ValueError("svg_quality_recovery_plan_conflict")
+        if read_quality_recovery_policy(snapshot)["version"] == 2:
+            execution = read_quality_recovery_execution_plan(snapshot)
+            final_control = execution.get("final_selected_review")
+            return execution["review_call_limit"] + (final_control["review_call_limit"] if final_control else 0)
         return plan["review_call_limit"]
     return slide_count if getattr(request, "vision_qa", False) else 0
 

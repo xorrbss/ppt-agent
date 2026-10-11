@@ -18,7 +18,9 @@ import struct
 from collections.abc import Mapping
 
 from services.generation_core.quality.advisory_record import advisory_record, content_digest, record_matches
-from services.generation_core.quality.vision_advisory_prompt import DESIGN_AXES, DESIGN_REVIEW_PROMPT_VERSION
+from services.generation_core.quality.vision_advisory_prompt import (
+    DESIGN_AXES, DESIGN_REVIEW_PROMPT_VERSION, baseline_review_active,
+)
 from services.generation_core.quality.page_outcome import (
     PageOutcome, classify_page_outcomes, deck_quality_summary,
 )
@@ -169,6 +171,7 @@ def _design_context(ctx, pages, *, job, read_png):
     prior_candidates = {}
     prior_pages = getattr(ctx, "quality_review_prior_pages", {}) or {}
     target_axes = getattr(ctx, "quality_review_target_axes", {}) or {}
+    target_goals = getattr(ctx, "quality_review_target_goals", {}) or {}
     for index, (payload, png) in sorted(prior_pages.items()):
         if type(index) is not int or not 0 <= index < len(pages):
             raise ValueError("svg_quality_recovery_comparison_index_invalid")
@@ -179,7 +182,9 @@ def _design_context(ctx, pages, *, job, read_png):
         prior_candidates[index] = dict(png=png, pageDigest=sha256_hex((payload.get("svg_content") or "").encode()),
             pngDigest=sha256_hex(png), inputDigest=payload.get("input_digest"), targetAxes=targets,
             mandatoryEvidenceValid=bool(_candidate_local_valid(payload, ctx=ctx, index=index)))
-    return _quality_json_value(dict(policy=_quality_policy(snapshot), style=style, priorCandidates=prior_candidates,
+        if (_quality_policy(snapshot) or {}).get("version") == 2:
+            prior_candidates[index]["targetGoals"] = target_goals.get(index, [])
+    context = _quality_json_value(dict(policy=_quality_policy(snapshot), style=style, priorCandidates=prior_candidates,
         styleDigest=content_digest(style), snapshotDigest=content_digest(snapshot), examples=examples,
         runtimeBinding=getattr(ctx, "quality_recovery_runtime_binding", None),
         mandatoryEvidence=[bool(_candidate_local_valid(payload, ctx=ctx, index=index))
@@ -192,6 +197,11 @@ def _design_context(ctx, pages, *, job, read_png):
             presentationId=str(job.presentation_id) if job and getattr(job, "presentation_id", None) else None,
             ownerId=str(get_current_owner_id()) if get_current_owner_id() else None,
             tenantId=str(get_current_tenant_id()) if get_current_tenant_id() else None)))
+    if baseline_review_active(context):
+        # Stable anonymous positioning binds to the displayed bytes, never author order.
+        vector = content_digest([sha256_hex(png if png is not None else read_png(payload)) for payload, png in pages])
+        context["blindVariantLabel"] = "A" if int(vector[-1], 16) % 2 else "B"
+    return context
 
 
 def _local_review_digest(context, payload, png, index):
@@ -237,7 +247,10 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
     from services.svg_final_selected_continuation import INITIAL_NAMESPACE, NAMESPACE
     review_namespace = NAMESPACE if final_selected else INITIAL_NAMESPACE if evidence and phase == 0 else None
     reused_groups, evidence_consumers = ({}, [])
-    if evidence is not None and phase == 0:
+    live_producers = evidence.get("liveReviewProducers") if isinstance(evidence, Mapping) else None
+    if live_producers is not None and (not baseline_review_active(context) or not final_selected):
+        raise ValueError("svg_live_final_selected_review_policy_invalid")
+    if evidence is not None and phase == 0 and live_producers is None:
         from services.svg_final_selected_continuation import reusable_local_groups
         context["priorCandidates"] = {}
         reused_groups, evidence_consumers = reusable_local_groups(context, pages, renders, evidence)
@@ -259,11 +272,20 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
     per_phase = plan["phase_group_limit"]
     group_size = plan["review_group_size"]
     full_review = len(pages) <= group_size
+    global_retry_limit = plan["global_format_retry_limit"]
+    if final_control and baseline_review_active(context):
+        per_phase = final_control["review_call_limit"]
+        group_size = final_control["local_group_size"]
+        global_retry_limit = final_control["global_format_retry_limit"]
+        full_review = False
     groups = [list(range(start, min(start + group_size, len(pages))))
               for start in range(0, len(pages), group_size)]
-    if len(groups) + (not full_review) + plan["global_format_retry_limit"] != per_phase:
+    if len(groups) + (not full_review) + global_retry_limit != per_phase:
         raise ValueError("svg_quality_recovery_review_allocation_invalid")
     local_pages, local_comparisons, records = {}, {}, []
+    if live_producers is not None:
+        context["priorCandidates"] = {}
+        local_pages, evidence_consumers = _reusable_live_local_pages(context, pages, renders, live_producers)
     reservations_ready = asyncio.Event()
     reserved_ordinals = set()
     def local_reserved(ordinal):
@@ -276,11 +298,16 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
     if phase and prior_gate is not None and not full_review:
         for index, (payload, _) in enumerate(pages):
             old = next((page for page in prior_gate["pages"] if page["index"] == index), None)
-            if (index not in changed and old and old.get("evaluated") is True
+            group_changed = baseline_review_active(context) and any(
+                member in changed for member in groups[index // group_size])
+            if (not group_changed and index not in changed and old and old.get("evaluated") is True
                     and old.get("localEvidenceDigest") == _local_review_digest(context, payload, renders[index], index)):
                 axes = {name: old["axes"][name] for name in DESIGN_AXES[:-1]}
                 local_pages[index] = dict(index=index, evaluated=True, axes=axes, issues=old.get("issues", []),
                                          localEvidenceReused=True)
+                if baseline_review_active(context):
+                    local_pages[index]["designTargets"] = [target for target in old.get("designTargets", [])
+                                                          if target["axis"] in DESIGN_AXES[:-1]]
 
     async def request_group(ordinal, indices, group_context, group_renders):
         input_digest = _group_review_input_digest(group_context, group_renders, phase, ordinal, indices)
@@ -308,8 +335,10 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
             with provider_usage_scope(job_id=job.id, operation="authored_generation", stage="vqa",
                     attempt_number=job.attempt_number, round_ordinal=marker["physical_ordinal"],
                     **({"workspace_operation_id": job.workspace_operation_id}
-                       if isinstance(getattr(job, "request_payload", None), dict)
-                       and job.request_payload.get("_svg_partial_recovery") else {})):
+                       if (isinstance(getattr(job, "request_payload", None), dict)
+                           and job.request_payload.get("_svg_partial_recovery"))
+                       or (baseline_review_active(context)
+                           and getattr(job, "workspace_operation_id", None) is not None) else {})):
                 return await run_advisory(group_renders, slide_count=len(group_renders),
                                           required=True, design_context=group_context)
         try:
@@ -379,7 +408,7 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
         representatives = sorted({group["representative"] for group in context["composition"]["groups"]})
         global_context = {**context, "reviewScope": "global", "representativeIndices": representatives,
                           "examples": [], "exampleDigests": []}
-        for format_attempt in range(plan["global_format_retry_limit"] + 1):
+        for format_attempt in range(global_retry_limit + 1):
             global_result = await request_group(len(groups) + format_attempt, list(range(len(pages))), global_context, renders)
             records.append(global_result)
             rejected = global_result["vision"]
@@ -389,7 +418,7 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
                         "axis_keys", "axis_semantics", "evidence_bounds",
                     }):
                 break
-            if format_attempt < plan["global_format_retry_limit"]:
+            if format_attempt < global_retry_limit:
                 global_context = {**global_context, "formatRetry": {
                     "attempt": format_attempt + 1,
                     "reason": rejected.get("schemaRejectionReason"),
@@ -405,6 +434,8 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
             combined.append(dict(index=index, evaluated=local["evaluated"] and global_page["evaluated"],
                 axes={**local["axes"], **global_page["axes"]}, issues=local.get("issues", []),
                 localEvidenceReused=local.get("localEvidenceReused", False)))
+            if baseline_review_active(context):
+                combined[-1]["designTargets"] = local.get("designTargets", []) + global_page.get("designTargets", [])
         global_comparisons = {item["index"]: item for item in global_review.get("candidateComparisons", [])}
         comparisons = []
         for index in sorted(changed):
@@ -413,6 +444,12 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
                 comparisons.append(dict(index=index, evaluated=local["evaluated"] and global_comparison["evaluated"],
                     priorAxes={**local["priorAxes"], **global_comparison["priorAxes"]},
                     visibleEvidence=local["visibleEvidence"] + " " + global_comparison["visibleEvidence"]))
+                if baseline_review_active(context):
+                    if local.get("blindedPresentation") != global_comparison.get("blindedPresentation"):
+                        comparisons[-1]["evaluated"] = False
+                    comparisons[-1].update(axisChanges={**local.get("axisChanges", {}),
+                        **global_comparison.get("axisChanges", {})},
+                        blindedPresentation=local.get("blindedPresentation"))
         vision = dict(promptVersion=DESIGN_REVIEW_PROMPT_VERSION, slideCount=len(pages),
             reviewedPageIndices=list(range(len(pages))), reviewedPngDigests=png_digests,
             model=";".join(sorted({str(record["vision"].get("model") or "") for record in records})),
@@ -427,6 +464,61 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
     vision["designGate"] = _seal_design_gate(context, pages, renders, vision)
     record = advisory_record(vision, page_digests)
     return record
+
+
+def _reusable_live_local_pages(context, pages, renders, producers):
+    """Consume same-operation page proofs; their original verdicts remain unchanged."""
+    from services.svg_final_selected_continuation import NAMESPACE
+    reused, consumers = {}, []
+    if len(pages) <= 5:
+        return reused, consumers
+    for producer in producers:
+        gate = _gate_intact(producer)
+        if gate is None or any(gate.get(key) != context.get(key) for key in
+                ("policy", "binding", "runtimeBinding", "snapshotDigest", "styleDigest", "exampleDigests")):
+            continue
+        by_index = {page.get("index"): page for page in gate.get("pages", [])}
+        reusable_indices = set()
+        for start in range(0, len(pages), 5):
+            indices = list(range(start, min(start + 5, len(pages))))
+            if all(index in by_index and by_index[index].get("evaluated") is True
+                   and by_index[index].get("localEvidenceDigest") == _local_review_digest(
+                       context, pages[index][0], renders[index], index)
+                   and index < len(gate["pageDigests"])
+                   and gate["pageDigests"][index] == sha256_hex((pages[index][0].get("svg_content") or "").encode())
+                   and gate["pngDigests"][index] == sha256_hex(renders[index]) for index in indices):
+                reusable_indices.update(indices)
+        for page in gate.get("pages", []):
+            index = page.get("index")
+            if (type(index) is not int or index in reused or index not in reusable_indices
+                    or page.get("evaluated") is not True
+                    or page.get("localEvidenceDigest") != _local_review_digest(
+                        context, pages[index][0], renders[index], index)
+                    or gate["pageDigests"][index] != sha256_hex((pages[index][0].get("svg_content") or "").encode())
+                    or gate["pngDigests"][index] != sha256_hex(renders[index])):
+                continue
+            reused[index] = dict(index=index, evaluated=True,
+                axes={name: deepcopy(page["axes"][name]) for name in DESIGN_AXES[:-1]},
+                issues=deepcopy(page.get("issues", [])), localEvidenceReused=True,
+                designTargets=[deepcopy(target) for target in page.get("designTargets", [])
+                               if target["axis"] in DESIGN_AXES[:-1]])
+            record = next((record for record in gate.get("reviewGroups", [])
+                           if record.get("reviewScope") == "local" and index in record.get("globalPageIndices", [])), None)
+            group_indices = list(range((index // 5) * 5, min((index // 5 + 1) * 5, len(pages))))
+            if (record is None or record.get("globalPageIndices") != group_indices
+                    or record.get("digest") != content_digest({key: value for key, value in record.items() if key != "digest"})):
+                # A projected page without its physical producer is insufficient.
+                reused.pop(index)
+                continue
+            if not any(consumer["producer_group_id"] == record["groupId"]
+                       and consumer["producer_record_digest"] == record["digest"] for consumer in consumers):
+                consumers.append(dict(schema="svg-local-review-consumer/v1", namespace=NAMESPACE,
+                    producer_operation_id=gate["binding"]["operationId"], producer_job_id=gate["binding"]["jobId"],
+                    producer_group_id=record["groupId"], producer_record_digest=record["digest"],
+                    producer_input_digest=record["inputDigest"], consumer_binding=deepcopy(context["binding"]),
+                    indices=deepcopy(record["globalPageIndices"]), provider_response_reused=False,
+                    original_verdict_preserved=True, producer_gate_digest=gate["digest"]))
+    return reused, consumers
 
 
 def _seal_design_gate(context, pages, renders, vision):
@@ -484,6 +576,10 @@ def _seal_design_gate(context, pages, renders, vision):
                 style=context["styleDigest"], examples=context["exampleDigests"], policy=context["policy"],
                 roles=context["roles"], binding=context["binding"],
                 neighbours=[digest for i, digest in enumerate(page_digests) if i != index]))))
+        if baseline_review_active(context):
+            results[-1].update(designTargets=deepcopy(page.get("designTargets", [])),
+                designImprovementStatus="unjudged" if not evaluated else
+                "needed" if page.get("designTargets") else "no_grounded_target")
     comparisons = []
     comparison_cohort = content_digest(dict(context=base["deckContextDigest"],
         priors={index: {key: value for key, value in prior.items() if key != "png"}
@@ -499,12 +595,19 @@ def _seal_design_gate(context, pages, renders, vision):
             targetAxes=prior["targetAxes"], priorInputDigest=prior["inputDigest"],
             priorMandatoryEvidenceValid=prior["mandatoryEvidenceValid"], deckContextDigest=base["deckContextDigest"],
             comparisonCohortDigest=comparison_cohort, comparisonMode="joint-targets-current-source-context/v1")
+        if baseline_review_active(context):
+            body.update(axisChanges=deepcopy(comparison.get("axisChanges", {})),
+                        blindedPresentation=deepcopy(comparison.get("blindedPresentation")),
+                        targetGoals=deepcopy(prior.get("targetGoals", [])))
         comparisons.append({**body, "digest": content_digest(body)})
     base.update(status="unreviewed" if incomplete else "failed" if blocking else "passed",
         pageCoverageComplete=coverage and not incomplete, pages=results, blockingPages=blocking,
         unreviewedPages=incomplete, advisoryPages=advisories, deckFlow=review.get("deckFlow"),
         reason=vision.get("skipped"), candidateComparisons=comparisons,
         reviewGroups=vision.get("reviewGroups", []))
+    if baseline_review_active(context):
+        base["designImprovementStatus"] = ("unjudged" if incomplete else
+            "needed" if any(page.get("designTargets") for page in results) else "satisfied")
     if vision.get("localEvidenceConsumers"):
         base["localEvidenceConsumers"] = deepcopy(vision["localEvidenceConsumers"])
     if vision.get("reviewNamespace"):
@@ -562,12 +665,15 @@ def quality_recovery_decisions(ctx, pages, advisory):
         if page.get("evaluated") is not True:
             continue
         failed = [axis for axis in page["axes"].values() if axis.get("verdict") == "failed"]
-        if not failed:
+        targets = page.get("designTargets", []) if (gate.get("policy") or {}).get("version") == 2 else []
+        if not failed and not targets:
             continue
-        scope = "design_rewrite" if any(axis["repairScope"] == "design_rewrite" for axis in failed) else "local_repair"
+        scope = "design_rewrite" if targets or any(axis["repairScope"] == "design_rewrite" for axis in failed) else "local_repair"
         decisions[page["index"]] = dict(repair_scope=scope,
-            target_axes=list(page["failedAxes"]),
+            target_axes=list(dict.fromkeys([*page["failedAxes"], *[target["axis"] for target in targets]])),
             issues=[dict(axis=name, **axis) for name, axis in page["axes"].items() if axis.get("verdict") == "failed"])
+        if targets:
+            decisions[page["index"]]["design_targets"] = deepcopy(targets)
     return decisions
 
 
@@ -632,7 +738,9 @@ def compare_quality_recovery_candidates(ctx, prior, new, prior_advisory, new_adv
     if (old_gate["pngDigests"][index] != prior.get("png_sha256")
             or new_gate["pngDigests"][index] != new.get("png_sha256")):
         return reject("comparison_render_stale")
-    target_axes = old_page.get("failedAxes") or []
+    baseline_policy = (new_gate.get("policy") or {}).get("version") == 2
+    goals = old_page.get("designTargets", []) if baseline_policy else []
+    target_axes = list(dict.fromkeys([*(old_page.get("failedAxes") or []), *[goal["axis"] for goal in goals]]))
     if not target_axes:
         return reject("no_targeted_defect")
     paired = next((item for item in new_gate.get("candidateComparisons", []) if item.get("index") == index), None)
@@ -656,13 +764,55 @@ def compare_quality_recovery_candidates(ctx, prior, new, prior_advisory, new_adv
         return reject("comparison_binding_invalid")
     baseline_axes = paired["priorAxes"]
     ranks = {"passed": 0, "advisory": 1, "failed": 2, "unreviewed": 3}
+    if baseline_policy:
+        presentation = paired.get("blindedPresentation") or {}
+        changes = paired.get("axisChanges") or {}
+        if (presentation.get("candidateLabel") not in {"A", "B"}
+                or presentation.get("priorLabel") not in {"A", "B"}
+                or presentation["candidateLabel"] == presentation["priorLabel"]
+                or presentation.get("displayOrder") != ["A", "B"]
+                or presentation.get("chronologyExposed") is not False or presentation.get("versionExposed") is not False
+                or set(changes) != set(DESIGN_AXES) or paired.get("targetGoals", []) != goals):
+            return reject("blinded_comparison_evidence_invalid")
+        if any(change.get("change") == "unjudged" for change in changes.values()):
+            return reject("comparison_improvement_unjudged")
+        if any(changes[name].get("change") != "improved" for name in target_axes):
+            return reject("target_goal_not_improved")
+        if any(new_page["axes"][name]["verdict"] in {"failed", "unreviewed"} for name in target_axes):
+            return reject("target_defect_not_resolved")
+        if any(changes[name].get("change") == "worsened"
+               and new_page["axes"][name]["severity"] in {"major", "critical"} for name in DESIGN_AXES):
+            return reject("candidate_major_regression")
     if any(new_page["axes"][name]["verdict"] in {"failed", "unreviewed"}
-           or ranks[new_page["axes"][name]["verdict"]] >= ranks[baseline_axes[name]["verdict"]] for name in target_axes):
+           or ranks[new_page["axes"][name]["verdict"]] >= ranks[baseline_axes[name]["verdict"]]
+           for name in target_axes if not baseline_policy or name in (old_page.get("failedAxes") or [])):
         return reject("target_defect_not_resolved")
     if any(ranks[new_page["axes"][name]["verdict"]] > ranks[baseline_axes[name]["verdict"]]
            and new_page["axes"][name]["severity"] in {"major", "critical"} for name in DESIGN_AXES):
         return reject("candidate_major_regression")
     return dict(selected="candidate", reason="target_improved_without_major_regression", targetAxes=target_axes)
+
+
+def reusable_final_deck_advisory(ctx, pages, advisory, *, job, read_png):
+    """Reuse the actual producer evidence unchanged, including an original failed verdict."""
+    if (_quality_policy(ctx.snapshot) or {}).get("version") != 2:
+        return None
+    gate = _current_gate(advisory, pages)
+    if gate is None:
+        return None
+    renders = [png if png is not None else read_png(payload) for payload, png in pages]
+    if any(not isinstance(png, bytes) or not png for png in renders):
+        return None
+    context = _design_context(ctx, pages, job=job, read_png=read_png)
+    candidate = _seal_design_gate(context, pages, renders, advisory.get("vision") or {})
+    identities = ("policy", "binding", "pageDigests", "pngDigests", "styleDigest", "snapshotDigest",
+                  "runtimeBinding", "exampleDigests", "inputDigest", "deckContextDigest")
+    if (any(gate.get(key) != candidate.get(key) for key in identities)
+            or len(gate.get("pages", [])) != len(candidate["pages"])
+            or any(old.get("localEvidenceDigest") != current.get("localEvidenceDigest")
+                   for old, current in zip(gate["pages"], candidate["pages"], strict=True))):
+        return None
+    return deepcopy(advisory)
 
 
 def enforce_quality_recovery_publication(snapshot, pages, advisory, *, job=None):
@@ -674,6 +824,8 @@ def enforce_quality_recovery_publication(snapshot, pages, advisory, *, job=None)
         operationId=str(job.workspace_operation_id) if job and getattr(job, "workspace_operation_id", None) else None,
         presentationId=str(job.presentation_id) if job and getattr(job, "presentation_id", None) else None)
     if (gate is None or gate.get("policy") != _quality_policy(snapshot) or gate.get("status") != "passed"
+            or ((_quality_policy(snapshot) or {}).get("version") == 2
+                and gate.get("designImprovementStatus") != "satisfied")
             or gate.get("snapshotDigest") != content_digest(snapshot)
             or any((gate.get("binding") or {}).get(key) != value for key, value in expected_binding.items())
             or gate.get("pageCoverageComplete") is not True

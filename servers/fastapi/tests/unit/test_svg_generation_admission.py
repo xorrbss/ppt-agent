@@ -20,6 +20,83 @@ from services.svg_generation_admission import (
 from tests.support.authored_vnext_master_fixture import master_contract_payload
 
 
+@pytest.mark.parametrize("slide_count", [1, 2, 5, 6, 12, 80])
+def test_restoration_policy_reserves_final_review_without_changing_legacy(slide_count):
+    from copy import deepcopy
+    from services.svg_authoring_profile import (
+        ART_DIRECTION_PROFILE_V8, read_quality_recovery_execution_plan,
+        seal_new_quality_recovery_plan, svg_quality_review_admission_budget,
+        validate_quality_recovery_agreement,
+    )
+    from utils.hashing import canonical_json_digest
+
+    def frozen(request, plan):
+        value = dict(authoring_profile=dict(ART_DIRECTION_PROFILE_V8),
+                     quality_recovery_policy=dict(request._svg_quality_recovery_policy),
+                     quality_recovery_plan=deepcopy(plan))
+        value["digest"] = canonical_json_digest(value, allow_nan=True)
+        return value
+
+    current = SimpleNamespace(vision_qa=False)
+    plan = seal_new_quality_recovery_plan(current, slide_count)
+    assert current._svg_quality_recovery_policy["version"] == 2
+    snapshot = frozen(current, plan)
+    current._svg_style_snapshot = snapshot
+    execution = read_quality_recovery_execution_plan(snapshot)
+    final = execution.get("final_selected_review")
+    if slide_count > 1:
+        assert final["physical_offset"] == execution["review_call_limit"]
+        assert final["run_limit"] == 1
+        assert final["review_call_limit"] == (slide_count + 4) // 5 + 2
+    else:
+        assert final is None
+    total = execution["review_call_limit"] + (final["review_call_limit"] if final else 0)
+    assert svg_quality_review_admission_budget(current, slide_count) == total
+    if slide_count == 80:
+        assert total == 54
+
+    legacy = SimpleNamespace(vision_qa=False, _svg_quality_recovery_policy={"id": "svg-quality-first", "version": 1})
+    old_plan = seal_new_quality_recovery_plan(legacy, slide_count)
+    old_snapshot = frozen(legacy, old_plan)
+    legacy._svg_style_snapshot = old_snapshot
+    original = deepcopy(old_snapshot)
+    assert "final_selected_review_control" not in old_plan
+    assert svg_quality_review_admission_budget(legacy, slide_count) == old_plan["review_call_limit"]
+    assert seal_new_quality_recovery_plan(legacy, slide_count) == old_plan
+    assert old_snapshot == original
+    with pytest.raises(ValueError, match="svg_quality_recovery_policy_conflict"):
+        validate_quality_recovery_agreement(current, old_snapshot)
+
+
+def test_restoration_final_review_control_rejects_tampering():
+    from copy import deepcopy
+    from services.svg_authoring_profile import (
+        ART_DIRECTION_PROFILE_V8, global_format_retry_control,
+        read_quality_recovery_execution_plan, read_quality_recovery_plan,
+        seal_new_quality_recovery_plan,
+    )
+    from utils.hashing import canonical_json_digest
+
+    request = SimpleNamespace(vision_qa=False)
+    plan = seal_new_quality_recovery_plan(request, 12)
+    snapshot = dict(authoring_profile=dict(ART_DIRECTION_PROFILE_V8),
+                    quality_recovery_policy=dict(request._svg_quality_recovery_policy),
+                    quality_recovery_plan=plan)
+    snapshot["digest"] = canonical_json_digest(snapshot, allow_nan=True)
+    for field, value in (("physical_offset", 999), ("run_limit", True), ("namespace", "unadmitted")):
+        changed = deepcopy(snapshot)
+        changed["quality_recovery_plan"]["final_selected_review_control"][field] = value
+        changed["digest"] = canonical_json_digest({k: v for k, v in changed.items() if k != "digest"}, allow_nan=True)
+        with pytest.raises(ValueError, match="svg_quality_recovery_plan_invalid"):
+            read_quality_recovery_plan(changed)
+    manifest = dict(global_format_retry_control=global_format_retry_control(snapshot))
+    manifest["global_format_retry_control"]["global_retry_limit"] = True
+    with pytest.raises(ValueError, match="svg_quality_recovery_execution_plan_invalid"):
+        read_quality_recovery_execution_plan(snapshot, manifest=manifest)
+    with pytest.raises(ValueError, match="svg_quality_recovery_execution_plan_invalid"):
+        read_quality_recovery_execution_plan(snapshot, manifest={"final_selected_review_control": {}})
+
+
 def _svg_request(**overrides):
     base = dict(
         strategy="svg", source_mode=None, design_pack_pin=None,

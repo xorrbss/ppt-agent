@@ -331,12 +331,14 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
         await initialize_checkpoints(job_id=job.id, attempt_token=job.attempt_token, roles=roles,
                                      fencing_token=getattr(job, "_workspace_fencing_token", None))
     from services.svg_visual_intent_checkpoint import freeze_visual_intents, intent_contents
+    from services.svg_authoring_profile import read_quality_recovery_policy
 
     visual_intents = await freeze_visual_intents(
         contents=intent_contents(outline, source_units=source_units,
                                 raster_analysis=raster_analysis, raster_pin=raster_pin),
         roles=roles, job=job, historical_payload=existing, checkpoint=_checkpoint,
             trusted_plan=getattr(request, "_svg_stage_plan", None),
+        quality_policy=read_quality_recovery_policy(snapshot),
     )
     asset_offer = None
     if not source_reflow and not raster_reconstruction:

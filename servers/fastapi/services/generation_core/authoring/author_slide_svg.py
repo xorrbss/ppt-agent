@@ -18,7 +18,9 @@ from services.generation_core.drivers.svg.native_declarations import (
     declaration_receipt, extract_native_declarations, native_author_rules,
 )
 from services.generation_core.drivers.svg.native_requirements import format_requested_native_data
-from services.generation_core.drivers.svg.visual_intent import VISUAL_INTENT_RULES, visual_intent_receipt
+from services.generation_core.drivers.svg.visual_intent import (
+    SOURCE_GROUNDED_INTENT_RULES, VISUAL_INTENT_RULES, enrich_visual_intent, visual_intent_receipt,
+)
 from services.provider_usage_instrumentation import (
     ProviderCallTimer, current_provider_idempotency_key, provider_call_admission, record_provider_call,
 )
@@ -591,6 +593,9 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
                            previous_render_png_digest: str | None = None) -> SvgAuthorResult:
     manifest = preflight_svg_source_images(source_images)
     quality_policy = read_quality_recovery_policy(style_snapshot)
+    source_grounded = quality_policy is not None and quality_policy["version"] == 2
+    if source_grounded:
+        visual_intent = enrich_visual_intent(content, role, index, visual_intent)
     previous_render_part = None
     active_correction = None
     if quality_policy is not None:
@@ -656,14 +661,22 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
             samples = [(sample_role, item) for sample_role in reference_roles
                        for item in style_snapshot.get("references", {}).get(sample_role, [])]
             seen = set()
+            example_by_digest = {}
             for sample_role, item in samples:
                 header, data = item["data_url"].split(",", 1)
                 decoded = base64.b64decode(data)
                 digest = sha256_prefixed(decoded)
                 if digest in seen:
+                    if source_grounded:
+                        example_by_digest[digest]["use_for"].extend(
+                            advice for advice in selection["expression_advice"] if advice["role"] == sample_role)
                     continue
                 seen.add(digest)
                 example_inputs.append({"role": sample_role, "digest": digest, "image_index": len(images)})
+                if source_grounded:
+                    example_inputs[-1]["use_for"] = [advice for advice in selection["expression_advice"]
+                                                     if advice["role"] == sample_role]
+                    example_by_digest[digest] = example_inputs[-1]
                 images.append(ImageContentPart(data=decoded, mime_type=header[5:].split(";")[0]))
         else:
             samples = svg_reference_samples(style_snapshot, reference_role, index, n)
@@ -694,9 +707,17 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
         prompt += "\n\n" + json.dumps({"previous_render_image_index": previous_image_index,
             "semantics": "Rendered evidence of previous_svg, not a new style example or a placeable source asset."}, ensure_ascii=False)
         repair_receipt["repair_input_png_digest"] = previous_render_png_digest
-    for item in manifest.values():
+    source_image_inputs = []
+    for slot, item in manifest.items():
+        if source_grounded:
+            source_image_inputs.append({"slot_id": slot, "image_index": len(images), **offered[slot]})
         header, data = item["data_url"].split(",", 1)
         images.append(ImageContentPart(data=base64.b64decode(data), mime_type=header[5:].split(";")[0]))
+    if source_grounded and source_image_inputs:
+        prompt += "\n\nSOURCE IMAGE EVIDENCE (actual offered content):\n" + json.dumps({
+            "source_image_inputs": source_image_inputs,
+            "semantics": "Image indices bind each offered slot to its actual provider image. Complete slot descriptions and source image-group facts determine required detail and related explanations; preserve every group and follow original crop permissions.",
+        }, ensure_ascii=False)
     image_count = len(images)
     image_bytes = sum(len(part.data) for part in images)
     rules = svg_author_rules(style_snapshot, body_floor)
@@ -725,6 +746,8 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
         )
     if visual_intent is not None:
         rules += VISUAL_INTENT_RULES
+    if source_grounded:
+        rules += SOURCE_GROUNDED_INTENT_RULES
     messages = author_messages(rules, prompt, design, image_parts=images)
     client = get_client(config=get_llm_config())
     model = authoring_model(get_model())

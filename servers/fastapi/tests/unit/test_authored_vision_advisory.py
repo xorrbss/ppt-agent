@@ -173,7 +173,8 @@ def _part_types(message):
     return [type(part).__name__ for part in message.content]
 
 
-def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call():
+@pytest.mark.parametrize("quality_policy_version", [None, 2])
+def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(quality_policy_version, monkeypatch):
     """Bench run 30 came back empty. The shape was not the difference, and it
     must never become one, so it is pinned to the call that does work."""
 
@@ -193,6 +194,84 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call():
     assert advisory[1].content[1].data == b"sheet"
     assert advisory[1].content[1].mime_type == "image/jpeg"
     assert "12" in advisory[1].content[0].text
+    if quality_policy_version == 2:
+        from services.generation_core.quality import vision_advisory as shared_advisory
+        names = prompt_mod.DESIGN_LOCAL_AXES
+        context = dict(policy={"id": "svg-quality-first", "version": 2}, reviewScope="local",
+            deckComplete=False, pages=[dict(index=0, content="Revenue leads the supporting evidence.")],
+            blindVariantLabel="B", priorCandidates={0: dict(png=b"alternative-png", targetAxes=[names[0]])})
+        messages = prompt_mod.build_advisory_messages(b"", slide_count=1, required=True,
+            pngs=[b"evaluation-png"], design_context=context)
+        assert isinstance(messages[0], SystemMessage) and isinstance(messages[1], UserMessage)
+        assert len(messages) == 2
+        labels = [part.text for part in messages[1].content if type(part).__name__ == "TextContentPart"]
+        assert "Variant A, evaluation page 1." in labels and "Variant B, evaluation page 1." in labels
+        visible = messages[0].content + " ".join(labels)
+        assert all(hidden not in visible for hidden in ("PRIOR", "NEW", "priorCandidates", "priorAxes", "svg-quality-first"))
+        images = [part.data for part in messages[1].content if type(part).__name__ == "ImageContentPart"]
+        assert images == [b"alternative-png", b"evaluation-png"]
+        axes = {name: dict(verdict="passed", severity="none", repairScope="none",
+                           visibleEvidence="Clear source grouping remains readable.") for name in names}
+        goal = dict(axis=names[0], evidenceRegion="Title and evidence block",
+            visibleEvidence="Key claim has the same weight as notes.",
+            sourceEvidence="Source revenue claim is the primary message.",
+            improvementGoal="Distinguish the revenue claim from supporting notes.")
+        payload = dict(slides=[dict(index=1, evaluated=True, issues=[], axes=axes, designTargets=[goal])],
+            pairComparisons=[dict(index=1, evaluated=True, alternativeAxes=axes,
+                visibleEvidence="B emphasizes the source claim without hiding evidence.",
+                axisChanges={name: dict(preferred="B" if name == names[0] else "equivalent",
+                    visibleEvidence="Claim is easier to find." if name == names[0] else "Source reading remains equivalent.")
+                    for name in names})])
+        parsed = shared_advisory._parse_baseline_review(payload, slide_count=1, context=context)
+        assert parsed["pages"][0]["axes"][names[0]]["verdict"] == "passed"
+        assert parsed["pages"][0]["designTargets"] == [goal]
+        assert parsed["candidateComparisons"][0]["axisChanges"][names[0]]["change"] == "improved"
+        payload["pairComparisons"][0]["axisChanges"][names[0]]["preferred"] = "unjudged"
+        assert shared_advisory._parse_baseline_review(payload, slide_count=1, context=context)[
+            "candidateComparisons"][0]["axisChanges"][names[0]]["change"] == "unjudged"
+        # Exercise the real review dispatch boundary without provider/DB I/O.
+        from contextlib import contextmanager
+        from uuid import UUID
+        from services import provider_usage_instrumentation, svg_authoring_profile
+        from services.generation_core.drivers.svg import quality as deck_quality
+        from utils.hashing import sha256_hex
+        captured = []
+        @contextmanager
+        def capture_scope(**kwargs):
+            captured.append(kwargs)
+            yield
+        monkeypatch.setattr(provider_usage_instrumentation, "provider_usage_scope", capture_scope)
+        plan = dict(slide_count=1, review_round_limit=1, phase_group_limit=1,
+                    review_group_size=5, global_format_retry_limit=0)
+        monkeypatch.setattr(svg_authoring_profile, "read_quality_recovery_execution_plan", lambda *args, **kwargs: plan)
+        png = _png()
+        page = dict(svg_content="<svg/>", png_sha256=sha256_hex(png))
+        async def checkpoint(*args):
+            return None
+        async def review(*args, **kwargs):
+            return {}
+        monkeypatch.setattr(deck_quality, "_seal_design_gate", lambda *args: {})
+        operation = UUID("c32d38df-40d7-48f1-8706-9b46bde5f085")
+        for version in (1, 2):
+            for operation_id in (operation, None):
+                review_context = dict(policy={"id": "svg-quality-first", "version": version},
+                    style=dict(canvas=dict(width=1280, height=720)), priorCandidates={},
+                    mandatoryEvidence=[True], runtimeBinding="current-runtime",
+                    binding=dict(jobId="current-job", presentationId="current-presentation", ownerId="owner", tenantId="tenant"),
+                    roles=["content"], pages=[dict(index=0, referenceRoles=["content"])],
+                    composition={}, examples=[], exampleDigests=[])
+                monkeypatch.setattr(deck_quality, "_design_context", lambda *args, **kwargs: review_context)
+                ctx = SimpleNamespace(snapshot={}, quality_recovery_review_group_checkpoint=checkpoint)
+                job = SimpleNamespace(id="current-job", workspace_operation_id=operation_id,
+                                      attempt_number=1, request_payload={})
+                _run(deck_quality._quality_first_deck_advisory(ctx, [(page, png)], job=job,
+                    read_png=lambda _: png, run_advisory=review, phase=0))
+                scope = captured[-1]
+                assert scope["job_id"] == job.id
+                if version == 2 and operation_id is not None:
+                    assert scope["workspace_operation_id"] is operation
+                else:
+                    assert "workspace_operation_id" not in scope
 
 
 def test_the_system_prompt_shows_the_model_the_json_it_must_answer_with():

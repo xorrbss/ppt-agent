@@ -32,6 +32,8 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from services.authored_vision_advisory_prompt import (
+    baseline_review_active,
+    baseline_review_json_schema,
     ADVISORY_MAX_OUTPUT_TOKENS,
     ADVISORY_PROMPT_VERSION,
     ADVISORY_REASONING_EFFORT,
@@ -145,9 +147,11 @@ def _global_intentional_page_indices(context):
 
 def _prepare_global_input(sheet, renders, context, *, client=None):
     """Keep complete required evidence and pack supplemental family examples."""
-    schema = design_global_json_schema(slide_count=len(renders),
+    context = {**context, "intentionalPageIndices": _global_intentional_page_indices(context)}
+    schema = (baseline_review_json_schema(slide_count=len(renders), context=context)
+        if baseline_review_active(context) else design_global_json_schema(slide_count=len(renders),
         comparison_indices=sorted(context.get("priorCandidates", {})), finite_review=True,
-        intentional_page_indices=_global_intentional_page_indices(context))
+        intentional_page_indices=_global_intentional_page_indices(context)))
     candidates = list(context.get("representativeIndices", []))
     selected = []
     working = {**context, "representativeIndices": [], "omittedSupplementalRepresentativeIndices": candidates}
@@ -270,7 +274,8 @@ async def _request_advisory(sheet: bytes, *, slide_count: int, required: bool = 
     if design_context is not None:
         if design_context.get("reviewScope") == "global":
             design_context = _prepare_global_input(sheet, pngs, design_context)
-        schema = (design_edited_json_schema(slide_count=slide_count,
+        schema = (baseline_review_json_schema(slide_count=slide_count, context=design_context)
+            if baseline_review_active(design_context) else design_edited_json_schema(slide_count=slide_count,
             changed_indices=design_context["changedPageIndices"])
             if design_context.get("reviewScope") == "edited" else
             design_global_json_schema(slide_count=slide_count,
@@ -409,6 +414,96 @@ def _parse_design_axes(value, axis_names=DESIGN_AXES, *, rejection_reasons=None)
             return _reject_design_review(rejection_reasons, "axis_semantics")
         axes[name] = {key: axis[key] for key in ("verdict", "severity", "visibleEvidence", "repairScope")}
     return axes
+
+
+def _parse_design_targets(value, names):
+    if not isinstance(value, list) or len(value) > len(names):
+        return None
+    targets, seen = [], set()
+    keys = {"axis", "evidenceRegion", "visibleEvidence", "sourceEvidence", "improvementGoal"}
+    for target in value:
+        if (not isinstance(target, Mapping) or set(target) != keys
+                or target.get("axis") not in names or target["axis"] in seen
+                or any(not isinstance(target[key], str) or not target[key].strip()
+                       or len(target[key]) > 160 or len(target[key].split()) > 14 for key in keys - {"axis"})):
+            return None
+        seen.add(target["axis"])
+        targets.append(dict(target))
+    return targets
+
+
+def _parse_baseline_review(payload, *, slide_count, context, rejection_reasons=None, rejection_fields=None):
+    """Project anonymous current-review evidence into the existing sealed gate shape."""
+    from copy import deepcopy
+    if not isinstance(payload, Mapping):
+        return _reject_design_review(rejection_reasons, "page_fields")
+    if context.get("blindVariantLabel", "A") not in {"A", "B"}:
+        return _reject_design_review(rejection_reasons, "comparison_change_fields")
+    normalized = deepcopy(dict(payload))
+    global_review = context.get("reviewScope") == "global"
+    names = (DESIGN_AXES[-1:] if global_review else
+             DESIGN_LOCAL_AXES if context.get("reviewScope") == "local" else DESIGN_AXES)
+    if global_review:
+        normalized["deckReview"] = normalized.get("variantReview")
+        normalized["priorReview"] = normalized.get("alternativeReview")
+        result = _parse_global_review(normalized, slide_count=slide_count, context=context,
+            rejection_reasons=rejection_reasons, rejection_fields=rejection_fields)
+        raw_targets = payload.get("designTargets")
+        if not isinstance(raw_targets, list) or len(raw_targets) > slide_count:
+            return _reject_design_review(rejection_reasons, "design_target_fields")
+        targets_by_index = {}
+        for entry in raw_targets:
+            if (not isinstance(entry, Mapping) or set(entry) != {"index", "targets"}
+                    or type(entry.get("index")) is not int or not 1 <= entry["index"] <= slide_count
+                    or entry["index"] - 1 in targets_by_index):
+                return _reject_design_review(rejection_reasons, "design_target_fields")
+            targets_by_index[entry["index"] - 1] = _parse_design_targets(entry.get("targets"), names)
+    else:
+        if not isinstance(payload.get("slides"), list) or not isinstance(payload.get("pairComparisons", []), list):
+            return _reject_design_review(rejection_reasons, "page_fields")
+        normalized["candidateComparisons"] = [dict(entry, priorAxes=entry.get("alternativeAxes"))
+            for entry in payload.get("pairComparisons", []) if isinstance(entry, Mapping)]
+        result = _parse_design_review(normalized, slide_count=slide_count, context=context,
+                                     rejection_reasons=rejection_reasons)
+        targets_by_index = {entry["index"] - 1: _parse_design_targets(entry.get("designTargets"), names)
+            for entry in payload.get("slides", []) if isinstance(entry, Mapping) and type(entry.get("index")) is int}
+    if result is None or any(value is None for value in targets_by_index.values()):
+        return _reject_design_review(rejection_reasons, "design_target_fields")
+    for page in result["pages"]:
+        targets = targets_by_index.get(page["index"], [] if global_review else None)
+        if targets is None or targets and page.get("evaluated") is not True:
+            return _reject_design_review(rejection_reasons, "design_target_fields")
+        page["designTargets"] = targets
+    expected = set(context.get("priorCandidates", {}))
+    if not expected:
+        return result
+    pairs = payload.get("pairComparisons")
+    if not isinstance(pairs, list) or len(pairs) != len(expected):
+        return _reject_design_review(rejection_reasons, "prior_coverage")
+    changes_by_index = {}
+    main = context.get("blindVariantLabel", "A")
+    for pair in pairs:
+        if (not isinstance(pair, Mapping) or type(pair.get("index")) is not int
+                or pair["index"] - 1 not in expected or pair["index"] - 1 in changes_by_index
+                or not isinstance(pair.get("axisChanges"), Mapping) or set(pair["axisChanges"]) != set(names)):
+            return _reject_design_review(rejection_reasons, "comparison_change_fields")
+        changes = {}
+        for name, change in pair["axisChanges"].items():
+            if (not isinstance(change, Mapping) or set(change) != {"preferred", "visibleEvidence"}
+                    or change.get("preferred") not in {"A", "B", "equivalent", "unjudged"}
+                    or not isinstance(change.get("visibleEvidence"), str) or not change["visibleEvidence"].strip()
+                    or len(change["visibleEvidence"]) > 160 or len(change["visibleEvidence"].split()) > 14):
+                return _reject_design_review(rejection_reasons, "comparison_change_fields")
+            preferred = change["preferred"]
+            changes[name] = dict(change="improved" if preferred == main else
+                "worsened" if preferred in {"A", "B"} else preferred, visibleEvidence=change["visibleEvidence"])
+        changes_by_index[pair["index"] - 1] = changes
+    for comparison in result.get("candidateComparisons", []):
+        comparison["axisChanges"] = changes_by_index[comparison["index"]]
+        comparison["blindedPresentation"] = dict(candidateLabel=main,
+            priorLabel="B" if main == "A" else "A", displayOrder=["A", "B"],
+            chronologyExposed=False, versionExposed=False)
+    return result
 
 
 def _parse_design_review(payload, *, slide_count, context, rejection_reasons=None):
@@ -746,7 +841,10 @@ async def run_vision_advisory(
         if design_context is not None and design_context.get("reviewScope") in {"global", "edited"} and not sheet:
             return {"skipped": "contact_sheet_unavailable"}
         if design_context is not None and design_context.get("reviewScope") == "global" and design_context.get("priorCandidates"):
-            prior_sheet = await compose_contact_sheet([prior["png"] for _, prior in sorted(design_context["priorCandidates"].items())])
+            prior_renders = ([design_context["priorCandidates"].get(index, {}).get("png", png)
+                              for index, png in enumerate(renders)] if baseline_review_active(design_context) else
+                             [prior["png"] for _, prior in sorted(design_context["priorCandidates"].items())])
+            prior_sheet = await compose_contact_sheet(prior_renders)
             if not prior_sheet:
                 return {"skipped": "prior_contact_sheet_unavailable"}
             design_context = {**design_context, "priorSheet": prior_sheet}
@@ -776,7 +874,9 @@ async def run_vision_advisory(
         if design_context is not None:
             rejection_reasons = [] if design_context.get("reviewScope") in {"local", "global"} else None
             rejection_fields = {} if design_context.get("reviewScope") == "global" else None
-            design_review = (_parse_edited_review(payload, slide_count=len(renders), context=design_context)
+            design_review = (_parse_baseline_review(payload, slide_count=len(renders), context=design_context,
+                rejection_reasons=rejection_reasons, rejection_fields=rejection_fields)
+                if baseline_review_active(design_context) else _parse_edited_review(payload, slide_count=len(renders), context=design_context)
                 if design_context.get("reviewScope") == "edited" else
                 _parse_global_review(payload, slide_count=len(renders), context=design_context, rejection_reasons=rejection_reasons, rejection_fields=rejection_fields)
                 if design_context.get("reviewScope") == "global" else
