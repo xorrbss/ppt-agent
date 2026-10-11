@@ -2,14 +2,28 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass
 import json
+
+from pydantic import BaseModel
 
 from services.authored_checkpoint_errors import AuthoredStageError
 from services.svg_authoring_profile import read_quality_recovery_plan
 from services.svg_presentation_checkpoint import _digest, _provider_attempt_count, _provider_attempt_limit
 from utils.hashing import sha256_hex
+
+
+def _quality_json_value(value):
+    """Copy typed quality inputs into JSON values without changing render inputs."""
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode="json")
+    if isinstance(value, Mapping):
+        return {key: _quality_json_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_quality_json_value(item) for item in value]
+    return value
 
 
 def actual_provider_attempt_count(payload):
@@ -197,13 +211,15 @@ def recovery_binding(ctx, request, job):
     }
     ctx.quality_recovery_checkpoint_reuse_eligible = (
         runtime_evidence["worker_binding"].get("checkpointReuseEligible") is True)
-    return _digest({"style": ctx.snapshot, "contents": ctx.quality_review_contents,
+    runtime = (ctx.runtime_profile if isinstance(ctx.runtime_profile, BaseModel)
+        else asdict(ctx.runtime_profile) if is_dataclass(ctx.runtime_profile)
+        else vars(ctx.runtime_profile))
+    return _digest(_quality_json_value({"style": ctx.snapshot, "contents": ctx.quality_review_contents,
         "roles": ctx.roles, "assets": ctx.manifests, "physical": ctx.physical_kwargs,
         "instructions": request.instructions, "font_profile": ctx.source_font_profile,
         "owner": str(get_current_owner_id()), "tenant": str(get_current_tenant_id()),
         "operation": str(getattr(job, "workspace_operation_id", None)),
-        "renderer": runtime_evidence, "runtime": asdict(ctx.runtime_profile)
-            if is_dataclass(ctx.runtime_profile) else vars(ctx.runtime_profile)})
+        "renderer": runtime_evidence, "runtime": runtime}))
 
 
 def _candidate_namespace(job):
@@ -347,6 +363,10 @@ async def recover_deck(ctx, request, presentation_id, outline, job, pages, state
         for index in sorted(decisions):
             payload = pages[index][0]
             if payload.get("quality_recovery", {}).get("status") == "retained":
+                continue
+            if plan["review_round_limit"] <= 1:
+                payload["quality_recovery"] = {"status": "unresolved", "reason": "review_attempt_budget_exhausted"}
+                await hooks.checkpoint(job, index, payload=payload)
                 continue
             limit = min(2, plan["page_attempt_limit"], _provider_attempt_limit(payload, index=index, job=job))
             if actual_provider_attempt_count(payload) >= limit:

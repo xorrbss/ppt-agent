@@ -102,7 +102,8 @@ async def deck_advisory(ctx, pages, *, job, read_png, run_advisory, round_ordina
 def _design_context(ctx, pages, *, job, read_png):
     """Actual selected style/source evidence, without copying unrelated deck SVGs."""
     from utils.owner_context import get_current_owner_id, get_current_tenant_id
-    snapshot = ctx.snapshot
+    from services.generation_core.drivers.svg.quality_recovery import _quality_json_value
+    snapshot = _quality_json_value(ctx.snapshot)
     references = snapshot.get("references") or {}
     roles = getattr(ctx, "roles", [])
     examples, seen, examples_by_digest = [], set(), {}
@@ -174,7 +175,7 @@ def _design_context(ctx, pages, *, job, read_png):
         prior_candidates[index] = dict(png=png, pageDigest=sha256_hex((payload.get("svg_content") or "").encode()),
             pngDigest=sha256_hex(png), inputDigest=payload.get("input_digest"), targetAxes=targets,
             mandatoryEvidenceValid=bool(_candidate_local_valid(payload, ctx=ctx, index=index)))
-    return dict(policy=_quality_policy(snapshot), style=style, priorCandidates=prior_candidates,
+    return _quality_json_value(dict(policy=_quality_policy(snapshot), style=style, priorCandidates=prior_candidates,
         styleDigest=content_digest(style), snapshotDigest=content_digest(snapshot), examples=examples,
         runtimeBinding=getattr(ctx, "quality_recovery_runtime_binding", None),
         mandatoryEvidence=[bool(_candidate_local_valid(payload, ctx=ctx, index=index))
@@ -186,7 +187,7 @@ def _design_context(ctx, pages, *, job, read_png):
             operationId=str(job.workspace_operation_id) if job and getattr(job, "workspace_operation_id", None) else None,
             presentationId=str(job.presentation_id) if job and getattr(job, "presentation_id", None) else None,
             ownerId=str(get_current_owner_id()) if get_current_owner_id() else None,
-            tenantId=str(get_current_tenant_id()) if get_current_tenant_id() else None))
+            tenantId=str(get_current_tenant_id()) if get_current_tenant_id() else None)))
 
 
 def _local_review_digest(context, payload, png, index):
@@ -594,6 +595,8 @@ def compare_quality_recovery_candidates(ctx, prior, new, prior_advisory, new_adv
     new_page = next((page for page in new_gate.get("pages", []) if page.get("index") == index), None)
     if not old_page or not new_page or not old_page.get("evaluated") or not new_page.get("evaluated"):
         return reject("comparison_review_incomplete")
+    if new_page.get("mandatoryEvidenceValid") is not True:
+        return reject("candidate_design_evidence_invalid")
     if (not 0 <= index < len(old_gate["pageDigests"]) or not index < len(new_gate["pageDigests"])
             or old_gate.get("pageDigests", [])[index] != sha256_hex((prior.get("svg_content") or "").encode())
             or new_gate.get("pageDigests", [])[index] != sha256_hex((new.get("svg_content") or "").encode())):
