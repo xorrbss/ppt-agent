@@ -230,7 +230,26 @@ async def _verify_inherited_source_manifest(session, manifest, pointer, *, conte
     operation = await session.get(WorkspaceOperation, operation_id)
     if operation is None or operation.presentation_id != presentation_id:
         raise ValueError("svg_asset_source_revision_conflict")
-    if operation.request_payload.get("recovery_revision") in CACHED_AUTHOR_RENDER_REVISIONS:
+    partial_manifest = None
+    if operation.request_payload.get("recovery_revision") == "svg-partial-recovery/v1":
+        from models.sql.presentation_generation_job import PresentationGenerationJob
+        from services.svg_partial_recovery import verify_episode
+        from sqlalchemy import select
+
+        job = await session.scalar(select(PresentationGenerationJob).where(
+            PresentationGenerationJob.workspace_operation_id == operation.id))
+        if job is None:
+            raise ValueError("svg_asset_source_revision_conflict")
+        partial_manifest = await verify_episode(session, operation, job)
+        asset_binding = partial_manifest["source_asset_binding"]
+        binding = dict(presentation_id=partial_manifest["presentation_id"],
+            presentation_revision=partial_manifest["presentation_revision"],
+            owner_id=partial_manifest["owner_id"], tenant_id=partial_manifest["tenant_id"],
+            source_manifest_presentation_id=asset_binding["presentation_id"],
+            source_manifest_revision=asset_binding["source_revision"],
+            source_manifest_digest=asset_binding["digest"],
+            source_manifest_pointer_digest=canonical_json_sha256(asset_binding["pointer"]))
+    elif operation.request_payload.get("recovery_revision") in CACHED_AUTHOR_RENDER_REVISIONS:
         cached_manifest, _ = await verify_child_lineage(session, operation)
         binding = {
             **cached_manifest["source_manifest_asset_binding"],
@@ -243,9 +262,19 @@ async def _verify_inherited_source_manifest(session, manifest, pointer, *, conte
     else:
         binding, _ = await verify_append_only_child_lineage(session, operation)
     parent = await session.get(PresentationModel, manifest.presentation_id)
+    parent_revision_valid = parent is not None and parent.revision == binding.get(
+        "source_manifest_parent_revision", binding["presentation_revision"])
+    if partial_manifest is not None and parent is not None:
+        parent_revision_valid = parent_revision_valid or (
+            operation.state == "succeeded"
+            and operation.expected_revision == partial_manifest["presentation_revision"]
+            and type(operation.result_revision) is int
+            and operation.result_revision == partial_manifest["presentation_revision"] + 1
+            and parent.id == operation.presentation_id == presentation_id
+            and parent.revision == operation.result_revision)
     if (parent is None or str(manifest.presentation_id) != binding.get("source_manifest_presentation_id", binding["presentation_id"])
         or manifest.source_revision != binding["source_manifest_revision"]
-        or parent.revision != binding.get("source_manifest_parent_revision", binding["presentation_revision"])
+        or not parent_revision_valid
         or parent.owner_id != context.owner_id or str(context.owner_id) != binding["owner_id"]
         or str(context.tenant_id) != binding["tenant_id"]
         or manifest.digest != binding["source_manifest_digest"]

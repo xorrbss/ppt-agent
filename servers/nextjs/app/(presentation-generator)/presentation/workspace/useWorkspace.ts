@@ -471,8 +471,9 @@ export function useWorkspaceTimeline({
   const rememberFailedIntent = useCallback(
     async (intent: WorkspacePendingIntent, requestError: unknown) => {
       if (isRevisionConflict(requestError)) {
-        pendingIntentRef.current = intent;
-        setRetryIntent({
+        const needsRecoveryPlan = intent.kind === "action" && !!intent.request.recoveryRevision;
+        pendingIntentRef.current = needsRecoveryPlan ? null : intent;
+        setRetryIntent(needsRecoveryPlan ? null : {
           reason: "revision_conflict",
           command:
             intent.kind === "command" ? intent.request.command : undefined,
@@ -481,7 +482,9 @@ export function useWorkspaceTimeline({
         try {
           await rebase();
           setRequestError(
-            "다른 탭에서 프레젠테이션이 변경되었습니다. 최신 기록을 확인한 뒤 이 요청을 다시 시도하세요.",
+            needsRecoveryPlan
+              ? "프레젠테이션이 변경되었습니다. 이어 만들기 계획을 다시 확인하고 승인해 주세요."
+              : "다른 탭에서 프레젠테이션이 변경되었습니다. 최신 기록을 확인한 뒤 이 요청을 다시 시도하세요.",
           );
         } catch (rebaseError: unknown) {
           setHistoryError(
@@ -569,6 +572,7 @@ export function useWorkspaceTimeline({
     async (
       operationId: string,
       action: WorkspaceOperationActionRequest["action"],
+      options: Partial<Omit<WorkspaceOperationActionRequest, "action">> = {},
     ) => {
       if (!commandsEnabled || projectionRef.current.writesSafe !== true)
         throw new Error("이 작업공간은 현재 읽기 전용입니다.");
@@ -580,10 +584,12 @@ export function useWorkspaceTimeline({
       );
       const request: WorkspaceOperationActionRequest = {
         action,
-        idempotencyKey: idempotencyKey(),
-        expectedRevision: projection.revision,
+        idempotencyKey: options.idempotencyKey ?? idempotencyKey(),
+        expectedRevision: options.expectedRevision ?? projection.revision,
         expectedOperationVersion:
-          operation?.anchorType === "operation" ? operation.version : undefined,
+          options.expectedOperationVersion ?? (operation?.anchorType === "operation" ? operation.version : undefined),
+        recoveryRevision: options.recoveryRevision,
+        recoveryDecision: options.recoveryDecision,
       };
       try {
         const receipt = await postWorkspaceOperationAction(

@@ -820,6 +820,45 @@ async def post_presentation_workspace_command(
     )
 
 
+@WORKSPACE_ROUTER.get("/operations/{operation_id}/recovery-plan")
+async def get_workspace_operation_recovery_plan(
+    operation_id: uuid.UUID,
+    http_request: Request,
+    session: AsyncSession = Depends(get_async_session),
+) -> dict:
+    from models.sql.presentation import PresentationModel
+    from services.svg_partial_recovery import (
+        PartialRecoveryRejected, build_manifest, review_payload,
+    )
+    from services.workspace_operation_principal import (
+        generation_action_principal, local_development_export_bridge,
+    )
+    from services.workspace_operation_handler_registry import NonRetryableWorkspaceOperationError
+
+    try:
+        presentation_id = await resolve_workspace_operation_presentation_id(session, operation_id)
+        if presentation_id is None:
+            raise WorkspaceAPIException("workspace_operation_not_found", status_code=404)
+        operation = await session.get(WorkspaceOperation, operation_id)
+        presentation = await session.get(PresentationModel, presentation_id)
+        if operation is None or presentation is None:
+            raise WorkspaceAPIException("workspace_operation_not_found", status_code=404)
+        async with generation_action_principal(
+            session, source=operation, action="retry",
+            allow_local_development=local_development_export_bridge(http_request),
+        ):
+            recovery = await build_manifest(
+                session, operation, presentation_revision=int(presentation.revision),
+            )
+        return review_payload(recovery)
+    except PartialRecoveryRejected as error:
+        raise WorkspaceAPIException(error.code, status_code=409) from error
+    except NonRetryableWorkspaceOperationError as error:
+        raise WorkspaceAPIException(error.code, status_code=403) from error
+    except WorkspaceServiceError as error:
+        _raise_service_error(error)
+
+
 @WORKSPACE_ROUTER.post(
     "/operations/{operation_id}/actions",
     response_model=WorkspaceActionResponse,

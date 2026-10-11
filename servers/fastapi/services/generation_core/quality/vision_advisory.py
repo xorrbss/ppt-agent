@@ -54,6 +54,10 @@ from utils.provider_idempotency import ProviderOutcomeError
 LOGGER = logging.getLogger(__name__)
 
 _MAX_ISSUES_PER_SLIDE = 4
+_DESIGN_SCHEMA_REJECTION_REASONS = frozenset({
+    "page_fields", "index_coverage", "axis_keys", "axis_semantics",
+    "evidence_bounds", "issue_axis_consistency", "prior_coverage",
+})
 
 
 class DesignReviewInputCapacityError(ValueError):
@@ -361,58 +365,71 @@ async def _request_advisory(sheet: bytes, *, slide_count: int, required: bool = 
     return model, payload
 
 
-def _parse_design_axes(value, axis_names=DESIGN_AXES):
+def _reject_design_review(rejection_reasons, reason):
+    if reason in _DESIGN_SCHEMA_REJECTION_REASONS and rejection_reasons is not None and not rejection_reasons:
+        rejection_reasons.append(reason)
+    return None
+
+
+def _parse_design_axes(value, axis_names=DESIGN_AXES, *, rejection_reasons=None):
     if not isinstance(value, Mapping) or set(value) != set(axis_names):
-        return None
+        return _reject_design_review(rejection_reasons, "axis_keys")
     severity_for = {"passed": {"none"}, "advisory": {"minor"},
                     "failed": {"major", "critical"}, "unreviewed": {"none"}}
     axes = {}
     for name in axis_names:
         axis = value[name]
         if (not isinstance(axis, Mapping) or axis.get("verdict") not in severity_for
-                or axis.get("severity") not in severity_for[axis["verdict"]]
-                or not isinstance(axis.get("visibleEvidence"), str) or not axis["visibleEvidence"].strip()
-                or len(axis["visibleEvidence"]) > 160 or len(axis["visibleEvidence"].split()) > 14
-                or axis.get("repairScope") not in {"none", "local_repair", "design_rewrite"}
+                or axis.get("severity") not in severity_for[axis["verdict"]]):
+            return _reject_design_review(rejection_reasons, "axis_semantics")
+        if (not isinstance(axis.get("visibleEvidence"), str) or not axis["visibleEvidence"].strip()
+                or len(axis["visibleEvidence"]) > 160 or len(axis["visibleEvidence"].split()) > 14):
+            return _reject_design_review(rejection_reasons, "evidence_bounds")
+        if (axis.get("repairScope") not in {"none", "local_repair", "design_rewrite"}
                 or (axis["verdict"] != "failed" and axis["repairScope"] != "none")
                 or (axis["verdict"] == "failed" and axis["repairScope"] == "none")):
-            return None
+            return _reject_design_review(rejection_reasons, "axis_semantics")
         axes[name] = {key: axis[key] for key in ("verdict", "severity", "visibleEvidence", "repairScope")}
     return axes
 
 
-def _parse_design_review(payload, *, slide_count, context):
+def _parse_design_review(payload, *, slide_count, context, rejection_reasons=None):
     """Reject ambiguous coverage and invented review authority; retain visible reasons."""
     if not isinstance(payload, Mapping) or not isinstance(payload.get("slides"), list):
-        return None
+        return _reject_design_review(rejection_reasons, "page_fields")
     local = context.get("reviewScope") == "local"
     axis_names = DESIGN_LOCAL_AXES if local else DESIGN_AXES
     pages, seen = [], set()
     for page in payload["slides"]:
-        if (not isinstance(page, Mapping) or type(page.get("index")) is not int
-                or not 1 <= page["index"] <= slide_count or page["index"] in seen
-                or type(page.get("evaluated")) is not bool or not isinstance(page.get("axes"), Mapping)
-                or set(page["axes"]) != set(axis_names)
-                or not isinstance(page.get("issues"), list)
+        if not isinstance(page, Mapping):
+            return _reject_design_review(rejection_reasons, "page_fields")
+        if (type(page.get("index")) is not int
+                or not 1 <= page["index"] <= slide_count or page["index"] in seen):
+            return _reject_design_review(rejection_reasons, "index_coverage")
+        if type(page.get("evaluated")) is not bool:
+            return _reject_design_review(rejection_reasons, "page_fields")
+        if not isinstance(page.get("axes"), Mapping) or set(page["axes"]) != set(axis_names):
+            return _reject_design_review(rejection_reasons, "axis_keys")
+        if (not isinstance(page.get("issues"), list)
                 or any(not isinstance(issue, str) or _normalize_issue(issue) is None for issue in page["issues"])):
-            return None
-        axes = _parse_design_axes(page["axes"], axis_names)
+            return _reject_design_review(rejection_reasons, "page_fields")
+        axes = _parse_design_axes(page["axes"], axis_names, rejection_reasons=rejection_reasons)
         if axes is None:
-            return None
+            return _reject_design_review(rejection_reasons, "axis_semantics")
         issues = [_normalize_issue(issue) for issue in page["issues"]]
         if ("illegible" in issues and not any(axes[name]["verdict"] == "failed"
                 for name in ("hierarchy_emphasis", "density_balance"))
                 or "broken_figure" in issues and axes["information_structure"]["verdict"] != "failed"):
-            return None
+            return _reject_design_review(rejection_reasons, "issue_axis_consistency")
         if page["evaluated"] and any(a["verdict"] == "unreviewed" for a in axes.values()):
-            return None
+            return _reject_design_review(rejection_reasons, "axis_semantics")
         if not local and not context.get("deckComplete") and axes["repetition_deck_flow"]["verdict"] != "unreviewed":
-            return None
+            return _reject_design_review(rejection_reasons, "axis_semantics")
         seen.add(page["index"])
         pages.append(dict(index=page["index"] - 1, evaluated=page["evaluated"], axes=axes,
                           issues=issues))
     if seen != set(range(1, slide_count + 1)):
-        return None
+        return _reject_design_review(rejection_reasons, "index_coverage")
     flow = (dict(evaluated=False, visibleEvidence="Global flow is reviewed separately.", repetitionGroups=[])
             if local else payload.get("deckFlow"))
     if (not isinstance(flow, Mapping) or type(flow.get("evaluated")) is not bool
@@ -420,7 +437,7 @@ def _parse_design_review(payload, *, slide_count, context):
             or len(flow["visibleEvidence"]) > 160 or len(flow["visibleEvidence"].split()) > 14
             or not isinstance(flow.get("repetitionGroups"), list)
             or flow["evaluated"] and not context.get("deckComplete")):
-        return None
+        return _reject_design_review(rejection_reasons, "page_fields")
     groups = []
     observations = (context.get("composition") or {}).get("pages") or []
     for group in flow["repetitionGroups"]:
@@ -433,11 +450,11 @@ def _parse_design_review(payload, *, slide_count, context):
                 or len(group["sourceEvidence"]) > 160
                 or not isinstance(group.get("visibleEvidence"), str) or not group["visibleEvidence"].strip()
                 or len(group["visibleEvidence"]) > 160 or len(group["visibleEvidence"].split()) > 14):
-            return None
+            return _reject_design_review(rejection_reasons, "page_fields")
         indices = sorted(index - 1 for index in group["pages"])
         if group["intentional"] and (not group["sourceEvidence"].strip()
                 or any(index >= len(observations) or not observations[index].get("comparisonBasis") for index in indices)):
-            return None
+            return _reject_design_review(rejection_reasons, "issue_axis_consistency")
         groups.append(dict(pages=indices, intentional=group["intentional"],
                            sourceEvidence=group["sourceEvidence"], visibleEvidence=group["visibleEvidence"]))
     if flow["evaluated"]:
@@ -445,24 +462,27 @@ def _parse_design_review(payload, *, slide_count, context):
         # explanation, even when geometry repetition is judged harmless.
         for observed in (context.get("composition") or {}).get("groups", []):
             if not any(set(observed["pages"]) <= set(group["pages"]) for group in groups):
-                return None
+                return _reject_design_review(rejection_reasons, "index_coverage")
     comparisons = []
     prior_candidates = context.get("priorCandidates") or {}
     if prior_candidates:
         raw_comparisons = payload.get("candidateComparisons")
         if not isinstance(raw_comparisons, list) or len(raw_comparisons) != len(prior_candidates):
-            return None
+            return _reject_design_review(rejection_reasons, "prior_coverage")
         seen = set()
         for comparison in raw_comparisons:
             if (not isinstance(comparison, Mapping) or type(comparison.get("index")) is not int
-                    or comparison["index"] - 1 not in prior_candidates or comparison["index"] in seen
-                    or type(comparison.get("evaluated")) is not bool
-                    or not isinstance(comparison.get("visibleEvidence"), str) or not comparison["visibleEvidence"].strip()
+                    or comparison["index"] - 1 not in prior_candidates or comparison["index"] in seen):
+                return _reject_design_review(rejection_reasons, "prior_coverage")
+            if type(comparison.get("evaluated")) is not bool:
+                return _reject_design_review(rejection_reasons, "page_fields")
+            if (not isinstance(comparison.get("visibleEvidence"), str) or not comparison["visibleEvidence"].strip()
                     or len(comparison["visibleEvidence"]) > 160 or len(comparison["visibleEvidence"].split()) > 14):
-                return None
-            axes = _parse_design_axes(comparison.get("priorAxes"), axis_names)
+                return _reject_design_review(rejection_reasons, "evidence_bounds")
+            axes = _parse_design_axes(comparison.get("priorAxes"), axis_names,
+                                      rejection_reasons=rejection_reasons)
             if axes is None or comparison["evaluated"] and any(axis["verdict"] == "unreviewed" for axis in axes.values()):
-                return None
+                return _reject_design_review(rejection_reasons, "axis_semantics")
             seen.add(comparison["index"])
             comparisons.append(dict(index=comparison["index"] - 1, evaluated=comparison["evaluated"],
                                     priorAxes=axes, visibleEvidence=comparison["visibleEvidence"]))
@@ -656,13 +676,16 @@ async def run_vision_advisory(
             return {"skipped": "unparseable_response"}
         design_review = None
         if design_context is not None:
+            rejection_reasons = [] if design_context.get("reviewScope") == "local" else None
             design_review = (_parse_edited_review(payload, slide_count=len(renders), context=design_context)
                 if design_context.get("reviewScope") == "edited" else
                 _parse_global_review(payload, slide_count=len(renders), context=design_context)
                 if design_context.get("reviewScope") == "global" else
-                _parse_design_review(payload, slide_count=len(renders), context=design_context))
+                _parse_design_review(payload, slide_count=len(renders), context=design_context,
+                                     rejection_reasons=rejection_reasons))
             if design_review is None:
-                return {"skipped": "design_review_schema_or_coverage_invalid"}
+                return {"skipped": "design_review_schema_or_coverage_invalid",
+                        **({"schemaRejectionReason": rejection_reasons[0]} if rejection_reasons else {})}
         global_review = design_context is not None and design_context.get("reviewScope") in {"global", "edited"}
         if required and not global_review:
             findings = payload.get("slides") if isinstance(payload, Mapping) else None

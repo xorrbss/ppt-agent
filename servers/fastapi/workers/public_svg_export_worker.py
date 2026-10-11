@@ -318,7 +318,8 @@ async def execute_svg_export(job, store):
                     paths, target, notes, canvas,
                     source_preservation=source_preservation if v3 else None,
                     expected_image_digests=expected_image_digests if v3 else None,
-                    font_embedding=font_embedding, native_objects=native_objects)
+                    font_embedding=font_embedding, native_objects=native_objects,
+                    **({"native_coverage_sources": canonical_sources} if v2 else {}))
             if v4:
                 from services.svg_export_whole_page_verifier import whole_page_verifier_digest
                 from utils.hashing import canonical_json_sha256
@@ -339,6 +340,17 @@ async def execute_svg_export(job, store):
                                 sourceReadbackDigest="sha256:" + canonical_json_sha256(source_readback),
                                 officeRenderMeasured=False)
                 coverage["coverageDigest"] = "sha256:" + canonical_json_sha256(coverage)
+            if v2:
+                import hashlib
+                coverage = readback.get("genericNativeCoverageOoxml")
+                if (not isinstance(coverage, dict) or coverage.get("passed") is not True
+                        or coverage.get("artifactDigest") != "sha256:" + hashlib.sha256(target.read_bytes()).hexdigest()
+                        or coverage.get("sourceDigests") != ["sha256:" + digest for digest in digests]
+                        or len(coverage.get("pages", [])) != len(slides)
+                        or any(page.get("pageIndex") != index or page.get("svgDigest") != "sha256:" + digests[index]
+                               for index, page in enumerate(coverage["pages"]))
+                        or readback.get("nativeObjects", {}).get("fellBack") != 0):
+                    raise PublicWorkerExecutionError("svg_generic_native_ooxml_coverage_mismatch")
             from workers.public_svg_pptx_render import render_final_pptx
             final_render = render_final_pptx(target, scratch / "office-render", page_count=len(sources),
                 width_px=canvas.width_px, height_px=canvas.height_px,
@@ -368,6 +380,19 @@ async def execute_svg_export(job, store):
         artifact = store.put_path(
             target, source=job.input_artifact, operation_id=job.operation_id, kind=f"presentation-{fmt}",
             media_type="application/pdf" if fmt == "pdf" else _PPTX_MEDIA_TYPE)
+        if fmt == "pptx" and v2:
+            from services.svg_export_whole_page_verifier import whole_page_verifier_digest
+            from utils.hashing import canonical_json_sha256
+            coverage = readback.get("genericNativeCoverageOoxml")
+            if coverage["artifactDigest"] != "sha256:" + artifact.sha256:
+                raise PublicWorkerExecutionError("svg_generic_native_ooxml_coverage_mismatch")
+            coverage.update(operationId=str(job.operation_id), presentationId=value["presentationId"],
+                sourceRevision=value["sourceRevision"], ownerId=str(job.input_artifact.owner_id),
+                tenantId=job.input_artifact.tenant_id, artifactRef=artifact.to_wire(),
+                sourceArtifactRefs=[entry["artifactRef"] for entry in slides],
+                verifierCodeDigest=whole_page_verifier_digest(), converterDigest=converter_digest(),
+                officeRenderMeasured=False)
+            coverage["coverageDigest"] = "sha256:" + canonical_json_sha256(coverage)
         evidence = _evidence(value, slides, digests, mode, readback)
         if fmt == "pdf":
             evidence["pdfTextLayer"] = "vector"

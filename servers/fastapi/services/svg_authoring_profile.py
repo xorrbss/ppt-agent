@@ -74,12 +74,14 @@ def seal_new_quality_recovery_plan(request: object, slide_count: int) -> dict | 
             or request_authoring_profile(request) is not None
             or getattr(request, "_svg_stage_plan", None) is not None
             or getattr(request, "source_mode", None) == "raster_reconstruction"
-            or not getattr(request, "vision_qa", False)
-            or type(slide_count) is not int or slide_count < 2):
+            or type(slide_count) is not int or slide_count < 1):
         return None
-    plan = {"schema": "svg-quality-recovery-plan/v1", "review_round_limit": 2,
+    single_page = slide_count == 1
+    plan = {"schema": "svg-quality-recovery-plan/v2" if single_page else "svg-quality-recovery-plan/v1",
+            "review_round_limit": 1 if single_page else 2,
             "page_attempt_limit": 3, "slide_count": slide_count, "review_group_size": 5,
-            "review_call_limit": 2 * (((slide_count + 4) // 5) + 1) if slide_count > 5 else 2}
+            "review_call_limit": (1 if single_page else
+                2 * (((slide_count + 4) // 5) + 1) if slide_count > 5 else 2)}
     request._svg_quality_recovery_plan = plan
     request._svg_quality_recovery_policy = dict(QUALITY_RECOVERY_POLICY)
     return plan
@@ -89,20 +91,48 @@ def read_quality_recovery_plan(snapshot: Mapping) -> dict | None:
     if read_quality_recovery_policy(snapshot) is None:
         return None
     plan = snapshot.get("quality_recovery_plan")
+    single_page = (isinstance(plan, Mapping)
+                   and plan.get("schema") == "svg-quality-recovery-plan/v2"
+                   and type(plan.get("slide_count")) is int and plan["slide_count"] == 1)
     if (not isinstance(plan, Mapping)
             or set(plan) != {"schema", "review_round_limit", "page_attempt_limit", "slide_count",
                             "review_group_size", "review_call_limit"}
-            or plan.get("schema") != "svg-quality-recovery-plan/v1"
-            or type(plan.get("slide_count")) is not int or plan["slide_count"] < 2
-            or type(plan.get("review_round_limit")) is not int or plan["review_round_limit"] != 2
+            or (not single_page and plan.get("schema") != "svg-quality-recovery-plan/v1")
+            or type(plan.get("slide_count")) is not int or plan["slide_count"] < (1 if single_page else 2)
+            or type(plan.get("review_round_limit")) is not int
+            or plan["review_round_limit"] != (1 if single_page else 2)
             or type(plan.get("page_attempt_limit")) is not int or plan["page_attempt_limit"] not in (2, 3)
             or type(plan.get("review_group_size")) is not int or plan["review_group_size"] != 5
             or type(plan.get("review_call_limit")) is not int
-            or plan["review_call_limit"] != (2 * (((plan["slide_count"] + 4) // 5) + 1)
+            or plan["review_call_limit"] != (1 if single_page else
+                                           2 * (((plan["slide_count"] + 4) // 5) + 1)
                                            if plan["slide_count"] > 5 else 2)
             or plan["review_call_limit"] > plan["slide_count"]):
         raise ValueError("svg_quality_recovery_plan_invalid")
     return dict(plan)
+
+
+def svg_quality_review_admission_budget(request: object, slide_count: int) -> int:
+    """Reserve the sealed review plan without changing legacy or global caps."""
+    frozen = getattr(request, "_svg_style_snapshot", None)
+    if frozen is not None:
+        plan = read_quality_recovery_plan(frozen)
+    else:
+        plan = getattr(request, "_svg_quality_recovery_plan", None)
+        if plan is not None:
+            if request_quality_recovery_policy(request) is None:
+                raise ValueError("svg_quality_recovery_plan_invalid")
+            # Validate the same immutable representation admission will freeze.
+            snapshot = {"authoring_profile": dict(ART_DIRECTION_PROFILE_V8),
+                        "quality_recovery_policy": request_quality_recovery_policy(request),
+                        "quality_recovery_plan": dict(plan)}
+            snapshot["digest"] = canonical_json_digest(snapshot, allow_nan=True)
+            plan = read_quality_recovery_plan(snapshot)
+    if plan is not None:
+        if plan["slide_count"] != slide_count:
+            raise ValueError("svg_quality_recovery_plan_conflict")
+        return plan["review_call_limit"]
+    return slide_count if getattr(request, "vision_qa", False) else 0
 
 
 def validate_authoring_profile(value: object) -> SvgAuthoringProfile | None:

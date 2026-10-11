@@ -154,6 +154,89 @@ def _embed_verified_whole_page_fonts(target):
             "ooxmlVerified": True, "sourcePartsPreserved": True}
 
 
+class NativeOoxmlCapture:
+    """Capture converter output before packaging for the shared final verifier."""
+
+    def __init__(self, drawing_converter):
+        self.drawing_converter = drawing_converter
+        self.original_background = drawing_converter._extract_background_candidate
+        self.original_convert_element = drawing_converter.convert_element
+        self.background_paints = {}
+        self.expected_geometry = {}
+        self.expected_return_xml = {}
+        self.group_aliases = {}
+
+    def install(self):
+        original_background = self.original_background
+        original_convert_element = self.original_convert_element
+        background_paints = self.background_paints
+        expected_geometry = self.expected_geometry
+        expected_return_xml = self.expected_return_xml
+        group_aliases = self.group_aliases
+        def signature(node):
+            return (node.tag, tuple(sorted(node.attrib.items())), (node.text or "").strip(), tuple(signature(child) for child in node))
+
+        def traced_element(element, context):
+            result = original_convert_element(element, context)
+            if result is not None:
+                from xml.etree import ElementTree as ET
+                ns = "http://schemas.openxmlformats.org/presentationml/2006/main"
+                drawing_ns = "http://schemas.openxmlformats.org/drawingml/2006/main"
+                relation_ns = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+                wrapper = ET.fromstring(f'<root xmlns:p="{ns}" xmlns:a="{drawing_ns}" xmlns:r="{relation_ns}">' + result.xml + '</root>')
+                page = expected_geometry.setdefault(context.slide_num, {})
+                returned_xml = expected_return_xml.setdefault(context.slide_num, {})
+                if element.tag.rsplit("}", 1)[-1] == "g" and len(wrapper) == 1:
+                    visual = [child for child in element if child.tag.rsplit("}", 1)[-1]
+                              not in {"defs", "metadata", "title", "desc"}]
+                    output = wrapper[0]
+                    nv = next((child for child in output if child.tag.rsplit("}", 1)[-1].startswith("nv")), None)
+                    identity = None if nv is None else nv.find(f"{{{ns}}}cNvPr")
+                    if (len(visual) == 1 and identity is not None and int(identity.get("id")) in page
+                            and returned_xml.get(int(identity.get("id"))) == signature(output)):
+                        sid = int(identity.get("id"))
+                        aliases = group_aliases.setdefault(context.slide_num, {})
+                        aliases[sid] = aliases.get(sid, 0) + 1
+                for node in wrapper.iter():
+                    if node.tag not in {f"{{{ns}}}{tag}" for tag in ("sp", "pic", "graphicFrame", "grpSp")}:
+                        continue
+                    nv = next((child for child in node if child.tag.rsplit("}", 1)[-1].startswith("nv")), None)
+                    identity = None if nv is None else nv.find(f"{{{ns}}}cNvPr")
+                    if identity is None:
+                        raise ValueError("svg_native_ooxml_expected_identity_missing")
+                    sid = int(identity.get("id"))
+                    kind = node.tag.rsplit("}", 1)[-1]
+                    geometry = node.find({"sp": f"{{{ns}}}spPr", "pic": f"{{{ns}}}spPr",
+                                          "graphicFrame": f"{{{ns}}}xfrm", "grpSp": f"{{{ns}}}grpSpPr"}[kind])
+                    if geometry is None:
+                        raise ValueError("svg_native_ooxml_expected_geometry_missing")
+                    value = signature(geometry)
+                    if sid in page and page[sid] != value:
+                        raise ValueError("svg_native_ooxml_expected_geometry_conflict")
+                    page[sid] = value
+                    node_signature = signature(node)
+                    if sid in returned_xml and returned_xml[sid] != node_signature:
+                        raise ValueError("svg_native_ooxml_expected_result_conflict")
+                    returned_xml[sid] = node_signature
+            return result
+
+        def traced_background(root, context):
+            result = original_background(root, context)
+            if result[0]:
+                background_paints[context.slide_num] = result[0]
+            return result
+        self.drawing_converter.convert_element = traced_element
+        self.drawing_converter._extract_background_candidate = traced_background
+
+    def restore(self):
+        self.drawing_converter.convert_element = self.original_convert_element
+        self.drawing_converter._extract_background_candidate = self.original_background
+
+    def verify(self, target, trace_path, source_originals, receipts):
+        return _verified_final_native_ooxml(target, trace_path, source_originals, receipts,
+            self.background_paints, self.expected_geometry, self.group_aliases)
+
+
 def _verified_final_native_ooxml(target, trace_path, source_originals, receipts, background_paints, expected_geometry, group_aliases):
     """Join the existing converter trace to every final editable OOXML shape."""
     import json
@@ -402,65 +485,7 @@ def convert_whole_page_pptx(paths, target, notes, canvas, *, receipts,
         import svg_to_pptx
         original_create_pptx = svg_to_pptx.create_pptx_with_native_svg
         trace_path = target.with_suffix(".native-ooxml-trace.json")
-        original_background = drawing_converter._extract_background_candidate
-        original_convert_element = drawing_converter.convert_element
-        background_paints = {}
-        expected_geometry = {}
-        expected_return_xml = {}
-        group_aliases = {}
-
-        def signature(node):
-            return (node.tag, tuple(sorted(node.attrib.items())), (node.text or "").strip(), tuple(signature(child) for child in node))
-
-        def traced_element(element, context):
-            result = original_convert_element(element, context)
-            if result is not None:
-                from xml.etree import ElementTree as ET
-                ns = "http://schemas.openxmlformats.org/presentationml/2006/main"
-                drawing_ns = "http://schemas.openxmlformats.org/drawingml/2006/main"
-                relation_ns = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
-                wrapper = ET.fromstring(f'<root xmlns:p="{ns}" xmlns:a="{drawing_ns}" xmlns:r="{relation_ns}">' + result.xml + '</root>')
-                page = expected_geometry.setdefault(context.slide_num, {})
-                returned_xml = expected_return_xml.setdefault(context.slide_num, {})
-                if element.tag.rsplit("}", 1)[-1] == "g" and len(wrapper) == 1:
-                    visual = [child for child in element if child.tag.rsplit("}", 1)[-1]
-                              not in {"defs", "metadata", "title", "desc"}]
-                    output = wrapper[0]
-                    nv = next((child for child in output if child.tag.rsplit("}", 1)[-1].startswith("nv")), None)
-                    identity = None if nv is None else nv.find(f"{{{ns}}}cNvPr")
-                    if (len(visual) == 1 and identity is not None and int(identity.get("id")) in page
-                            and returned_xml.get(int(identity.get("id"))) == signature(output)):
-                        sid = int(identity.get("id"))
-                        aliases = group_aliases.setdefault(context.slide_num, {})
-                        aliases[sid] = aliases.get(sid, 0) + 1
-                for node in wrapper.iter():
-                    if node.tag not in {f"{{{ns}}}{tag}" for tag in ("sp", "pic", "graphicFrame", "grpSp")}:
-                        continue
-                    nv = next((child for child in node if child.tag.rsplit("}", 1)[-1].startswith("nv")), None)
-                    identity = None if nv is None else nv.find(f"{{{ns}}}cNvPr")
-                    if identity is None:
-                        raise ValueError("svg_native_ooxml_expected_identity_missing")
-                    sid = int(identity.get("id"))
-                    kind = node.tag.rsplit("}", 1)[-1]
-                    geometry = node.find({"sp": f"{{{ns}}}spPr", "pic": f"{{{ns}}}spPr",
-                                          "graphicFrame": f"{{{ns}}}xfrm", "grpSp": f"{{{ns}}}grpSpPr"}[kind])
-                    if geometry is None:
-                        raise ValueError("svg_native_ooxml_expected_geometry_missing")
-                    value = signature(geometry)
-                    if sid in page and page[sid] != value:
-                        raise ValueError("svg_native_ooxml_expected_geometry_conflict")
-                    page[sid] = value
-                    node_signature = signature(node)
-                    if sid in returned_xml and returned_xml[sid] != node_signature:
-                        raise ValueError("svg_native_ooxml_expected_result_conflict")
-                    returned_xml[sid] = node_signature
-            return result
-
-        def traced_background(root, context):
-            result = original_background(root, context)
-            if result[0]:
-                background_paints[context.slide_num] = result[0]
-            return result
+        capture = NativeOoxmlCapture(drawing_converter)
 
         def traced_create_pptx(*args, **kwargs):
             kwargs["conversion_trace_path"] = trace_path
@@ -580,8 +605,7 @@ def convert_whole_page_pptx(paths, target, notes, canvas, *, receipts,
             result.set("data-pptx-source-fragment-index", str(key[2]))
             return result
 
-        drawing_converter.convert_element = traced_element
-        drawing_converter._extract_background_candidate = traced_background
+        capture.install()
         svg_to_pptx.create_pptx_with_native_svg = traced_create_pptx
         export_scene.prepare_svg_pptx_inputs = prepared
         drawing_converter._CONVERTERS["text"] = named_text
@@ -592,8 +616,7 @@ def convert_whole_page_pptx(paths, target, notes, canvas, *, receipts,
                 source_preservation=None, font_embedding=False,
                 native_objects=native_objects)
         finally:
-            drawing_converter.convert_element = original_convert_element
-            drawing_converter._extract_background_candidate = original_background
+            capture.restore()
             svg_to_pptx.create_pptx_with_native_svg = original_create_pptx
             flatten_tspan._create_text_element_from_line = original_create_line
             flatten_tspan.copy_text_attrs = original_copy_text_attrs
@@ -634,8 +657,8 @@ def convert_whole_page_pptx(paths, target, notes, canvas, *, receipts,
         fragments = [[named_fragments[key] for key in sorted(named_fragments)
                       if key[0] == page_index] for page_index in range(len(paths))]
         readback["sourceStyleReadback"] = _source_style_readback(target, table_alignment_claims, claims)
-        readback["nativeCoverageOoxml"] = _verified_final_native_ooxml(
-            target, trace_path, source_originals, receipts, background_paints, expected_geometry, group_aliases)
+        readback["nativeCoverageOoxml"] = capture.verify(
+            target, trace_path, source_originals, receipts)
         from utils.hashing import canonical_json_sha256
         style_readback = readback["sourceStyleReadback"]
         readback["nativeCoverageOoxml"]["sourceStyleReadbackDigest"] = "sha256:" + canonical_json_sha256(style_readback)

@@ -69,6 +69,100 @@ def _native_ooxml_domain(*, required, worker_metrics, artifact_digest, operation
                         geometryMismatchesAllowed=0, officeRenderMeasured=False)))
 
 
+def _generic_native_ooxml_domain(*, required, slides, worker_metrics, artifact_digest,
+                                 operation_id, presentation_id, source_revision, review_binding):
+    """Validate the existing final-package verifier's generic, owner-bound proof."""
+    if not required:
+        return dict(required=False, status="not_required")
+    from services.isolated_worker_contracts import ArtifactRef
+    from services.svg_contract import source_digest
+    from services.svg_export_whole_page_verifier import whole_page_verifier_digest
+    from workers.public_svg_pptx_convert import converter_digest
+    from utils.hashing import canonical_json_sha256
+    failed = dict(required=True, status="failed", reasonCode="svg_generic_native_ooxml_coverage_evidence_invalid")
+    worker = worker_metrics.get("public_export_worker_evidence", {})
+    structural = worker.get("structuralReadback", {})
+    proof = structural.get("genericNativeCoverageOoxml")
+    native = structural.get("nativeObjects")
+    if (not isinstance(proof, dict) or not isinstance(native, dict)
+            or not isinstance(review_binding, dict) or not review_binding.get("ownerId")):
+        return failed
+    sources = [source_digest(slide.svg_content or "") for slide in slides]
+    unsigned = {key: value for key, value in proof.items() if key != "coverageDigest"}
+    pages, measurements = proof.get("pages"), proof.get("measurements")
+    def digest_valid(value):
+        return (isinstance(value, str) and len(value) == 71 and value.startswith("sha256:")
+                and all(char in "0123456789abcdef" for char in value[7:]))
+    if (not sources or proof.get("schemaVersion") != "svg-generic-native-ooxml-coverage/v1"
+            or proof.get("passed") is not True or proof.get("artifactDigest") != artifact_digest
+            or proof.get("operationId") != str(operation_id)
+            or proof.get("presentationId") != str(presentation_id)
+            or proof.get("sourceRevision") != source_revision
+            or proof.get("ownerId") != review_binding["ownerId"]
+            or not isinstance(proof.get("tenantId"), str) or not proof["tenantId"]
+            or ("tenantId" in review_binding and proof["tenantId"] != review_binding["tenantId"])
+            or proof.get("sourceDigests") != sources
+            or worker.get("sourceDigests") != [digest[7:] for digest in sources]
+            or structural.get("slideCount") != len(sources)
+            or proof.get("verifierCodeDigest") != whole_page_verifier_digest()
+            or proof.get("converterDigest") != converter_digest()
+            or proof.get("coverageDigest") != "sha256:" + canonical_json_sha256(unsigned)
+            or proof.get("nativeObjectsDigest") != "sha256:" + canonical_json_sha256(native)
+            or type(native.get("fellBack")) is not int or native["fellBack"] != 0
+            or native.get("reasons") != [] or worker.get("fallbackReason") is not None
+            or proof.get("officeRenderMeasured") is not False
+            or not digest_valid(proof.get("packagePartsDigest"))
+            or not isinstance(pages, list) or len(pages) != len(sources)
+            or not isinstance(measurements, dict) or type(measurements.get("verifiedPages")) is not int
+            or measurements["verifiedPages"] != len(sources)
+            or any(type(measurements.get(key)) is not int or measurements[key] != 0
+                   for key in ("unboundShapes", "unboundPrimitives", "geometryMismatches", "unboundRelationships"))
+            or any(type(measurements.get(key)) is not int or measurements[key] < 1
+                   for key in ("verifiedShapes", "nativePrimitives", "verifiedRelationships"))):
+        return failed
+    for key in ("conversionSourceDigests", "projectedSourceDigests"):
+        values = proof.get(key)
+        if not isinstance(values, list) or len(values) != len(sources) or not all(map(digest_valid, values)):
+            return failed
+    for index, (page, digest) in enumerate(zip(pages, sources, strict=True)):
+        if (not isinstance(page, dict) or type(page.get("pageIndex")) is not int or page["pageIndex"] != index
+                or page.get("sourcePageId") != f"slide-{index + 1}" or page.get("svgDigest") != digest
+                or any(type(page.get(key)) is not int or page[key] < 1
+                       for key in ("shapeCount", "nativePrimitiveCount"))
+                or type(page.get("promotedBackgroundCount")) is not int
+                or page["promotedBackgroundCount"] not in (0, 1)
+                or not digest_valid(page.get("shapeInventoryDigest")) or not digest_valid(page.get("traceDigest"))):
+            return failed
+    if (sum(page["shapeCount"] for page in pages) != measurements["verifiedShapes"]
+            or sum(page["nativePrimitiveCount"] for page in pages) != measurements["nativePrimitives"]):
+        return failed
+    try:
+        artifact = ArtifactRef.from_wire(proof.get("artifactRef", {}))
+        refs = proof.get("sourceArtifactRefs")
+        if not isinstance(refs, list) or len(refs) != len(sources):
+            return failed
+        source_refs = [ArtifactRef.from_wire(ref) for ref in refs]
+    except (ValueError, TypeError, KeyError, AttributeError):
+        return failed
+    if ("sha256:" + artifact.sha256 != artifact_digest or artifact.kind != "presentation-pptx"
+            or artifact.media_type != "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            or any(str(ref.owner_id) != proof["ownerId"] or ref.tenant_id != proof["tenantId"]
+                   or str(ref.created_by_operation_id) != proof["operationId"] for ref in [artifact, *source_refs])
+            or any(ref.kind != "slide-svg" or ref.media_type != "image/svg+xml" or "sha256:" + ref.sha256 != digest
+                   for ref, digest in zip(source_refs, sources, strict=True))):
+        return failed
+    render = structural.get("finalPptxRender")
+    if isinstance(render, dict) and render.get("status") == "measured" and (
+            render.get("ownerId") != proof["ownerId"] or render.get("tenantId") != proof["tenantId"]):
+        return failed
+    return dict(required=True, status="passed", evidence=dict(
+        checkerVersion="svg-generic-native-ooxml-coverage/v1", inputDigest=proof["coverageDigest"],
+        outputDigest=artifact_digest, measurements=measurements,
+        thresholds=dict(allPagesRequired=True, pageCount=len(sources), unboundShapesAllowed=0,
+                        unboundPrimitivesAllowed=0, geometryMismatchesAllowed=0, unboundRelationshipsAllowed=0, fallbackAllowed=0,
+                        officeRenderMeasured=False)))
+
+
 def source_svg_public_quality_receipt(*, slides, source_preservation, worker_metrics,
         quality_receipt_id, operation_id, presentation_id, artifact_digest,
         source_revision, scene_digest, evaluated_at, exporter_version, advisory=None, source_preservation_parents=None,
@@ -195,10 +289,14 @@ def svg_public_quality_receipt(*, slides, advisory, source_preservation, worker_
         image_content_integrity=dict(required=False, status="not_required"),
         visual_review=svg_visual_review(slides=slides, advisory=advisory, expected_binding=review_binding),
         performance=dict(required=False, status="not_assessed", reasonCode="svg_performance_evidence_missing"),
-        native_coverage_ooxml=_native_ooxml_domain(required=require_native_coverage,
+        native_coverage_ooxml=(_native_ooxml_domain(required=require_native_coverage,
             worker_metrics=worker_metrics, artifact_digest=receipt_args["artifact_digest"],
             operation_id=receipt_args["operation_id"], presentation_id=receipt_args["presentation_id"],
-            source_revision=receipt_args["source_revision"], source_preservation=source_preservation))
+            source_revision=receipt_args["source_revision"], source_preservation=source_preservation)
+            if source_preservation else _generic_native_ooxml_domain(required=require_native_coverage,
+                slides=slides, worker_metrics=worker_metrics, artifact_digest=receipt_args["artifact_digest"],
+                operation_id=receipt_args["operation_id"], presentation_id=receipt_args["presentation_id"],
+                source_revision=receipt_args["source_revision"], review_binding=review_binding)))
     if require_native_coverage:
         from services.svg_final_pptx_review import final_pptx_visual_domain
         domains["visual_review"] = final_pptx_visual_domain(domains["visual_review"],

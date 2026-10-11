@@ -411,6 +411,50 @@ def test_crash_recovery_charges_estimate_and_keeps_actual_unknown(tmp_path: Path
                 assert refreshed is not None
                 assert refreshed.estimated_consumed == 3
                 assert refreshed.estimated_reserved == 0
+            from models.sql.presentation import PresentationModel  # noqa: F401
+            from models.sql.workspace import WorkspaceOperation
+
+            async with engine.begin() as connection:
+                await connection.run_sync(WorkspaceOperation.__table__.create)
+            async with sessions() as session:
+                guarded = []
+                for index, variant in enumerate(("closed", "running", "claim", "tenant", "owner", "unexpired")):
+                    owner = uuid.uuid4()
+                    operation = WorkspaceOperation(
+                        owner_id=owner, owner_scope=owner.hex, conversation_id=uuid.uuid4(),
+                        presentation_id=uuid.uuid4(), anchor_position=index + 1,
+                        kind="presentation.generate", state="running" if variant == "running" else "dead_letter",
+                        idempotency_key_hash=sha256(variant.encode()).hexdigest(),
+                        request_hash=sha256((variant + "request").encode()).hexdigest(),
+                        request_payload={"principal_tenant_id": "tenant-a"},
+                        attempt_token="owned" if variant in {"running", "claim"} else None,
+                        lease_expires_at=get_current_utc_datetime() + timedelta(seconds=60) if variant == "running" else None,
+                    )
+                    session.add(operation)
+                    await session.flush()
+                    budget = await register_durable_budget(
+                        session, tenant_id="tenant-b" if variant == "tenant" else "tenant-a",
+                        owner_id=uuid.uuid4() if variant == "owner" else owner,
+                        job_id=None, workspace_operation_id=operation.id, estimated_limit=10, actual_limit=10,
+                    )
+                    lease = await reserve_provider_call(session, budget_id=budget.id,
+                        reservation_key_hash=sha256((variant + "call").encode()).hexdigest(), estimated_cost=2)
+                    row = await session.get(ProviderRuntimeReservation, lease.reservation_id)
+                    row.lease_expires_at = get_current_utc_datetime() + timedelta(seconds=60 if variant == "unexpired" else -1)
+                    guarded.append((variant, row.id, budget.id))
+                assert await recover_expired_reservations(session, terminal_operations_only=True,
+                    operation_kinds=("presentation.generate",)) == 1
+                assert await recover_expired_reservations(session, terminal_operations_only=True,
+                    operation_kinds=("presentation.generate",)) == 0
+                await session.commit()
+            async with sessions() as session:
+                for variant, row_id, budget_id in guarded:
+                    row = await session.get(ProviderRuntimeReservation, row_id)
+                    budget = await session.get(ProviderRuntimeBudget, budget_id)
+                    assert row.actual_cost is None and row.outcome is None
+                    assert row.state == ("uncertain" if variant == "closed" else "reserved")
+                    assert budget.estimated_consumed == (2 if variant == "closed" else 0)
+                    assert budget.estimated_reserved == (0 if variant == "closed" else 2)
         finally:
             await engine.dispose()
 

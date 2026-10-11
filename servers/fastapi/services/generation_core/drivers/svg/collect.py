@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 from copy import deepcopy
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 INTERNAL_SVG_STAGE_PLAN_KEY = "_internal_svg_stage_plan"
 
@@ -279,6 +280,23 @@ class _RunState:
     fatal_error: BaseException | None = None
     cache_only_approval: dict | None = None
     cached_author_render_manifest_hash: str | None = None
+    terminal_drain_enabled: bool = False
+    hard_deadline_at: datetime | None = None
+
+
+async def _drain_leaf_tasks(tasks, state):
+    """Stop issuing work, but retain terminal results of already issued calls."""
+    from utils.provider_idempotency import PROVIDER_CALL_TIMEOUT_SECONDS
+    timeout = PROVIDER_CALL_TIMEOUT_SECONDS
+    if state.hard_deadline_at is not None:
+        timeout = min(timeout, max(0.0,
+            (state.hard_deadline_at - datetime.now(timezone.utc)).total_seconds()))
+    pending = {task for task in tasks if not task.done()}
+    if pending and timeout > 0:
+        _, pending = await asyncio.wait(pending, timeout=timeout)
+    for task in pending:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
 
 
 async def _generate(request, presentation_id, outline, language, session, job, *, stage_plan=None, review_stage=None):
@@ -316,12 +334,16 @@ async def _generate(request, presentation_id, outline, language, session, job, *
     timing.record_outline(request)
     spans.emit(presentation_id)
     timing.enter_deck_stage(request, "author")
-    state = _RunState()
+    state = _RunState(terminal_drain_enabled=bool(stage_plan is None and (
+        recovery_policy or getattr(ctx, "partial_recovery_manifest", None))))
     if job is not None and job.workspace_operation_id is not None:
         from models.sql.workspace import WorkspaceOperation
         from services.svg_cached_author_render_recovery import REVISIONS
 
         operation = await session.get(WorkspaceOperation, job.workspace_operation_id)
+        if state.terminal_drain_enabled and operation is not None:
+            from utils.datetime_utils import as_utc
+            state.hard_deadline_at = as_utc(operation.deadline_at)
         operation_payload = (operation.request_payload or {}) if operation is not None else {}
         if operation_payload.get("recovery_revision") in REVISIONS:
             if stage_plan is not None:
@@ -341,6 +363,28 @@ async def _generate(request, presentation_id, outline, language, session, job, *
                     raise _stage_error("svg_cached_author_render_marker_missing")
     hooks = _PageHooks(checkpoint=checkpoint, async_session_maker=async_session_maker,
                        read_png=read_png, write_png=write_png)
+    partial_manifest = getattr(ctx, "partial_recovery_manifest", None)
+    if partial_manifest:
+        original_checkpoint = checkpoint
+
+        async def partial_checkpoint(active_job, page_index, *, payload=None):
+            if payload is not None and page_index in partial_manifest["known_indices"]:
+                from services.svg_partial_recovery import verify_cached_page
+                if (payload.get("partial_recovery") or {}).get("operation_id") != str(active_job.workspace_operation_id):
+                    raise ValueError("svg_partial_recovery_page_unbound")
+                witness = partial_manifest["pages"][page_index]
+                if witness.get("phase") == "author-only":
+                    durable = await original_checkpoint(active_job, page_index) or {}
+                    prior_phase = (durable.get("partial_recovery") or {}).get("phase")
+                    next_phase = (payload.get("partial_recovery") or {}).get("phase")
+                    if prior_phase == "finalized" and next_phase != "finalized":
+                        raise ValueError("svg_partial_recovery_cached_phase_rollback")
+                from services.generation_core.drivers.svg.partial_quality_recovery import current_quality_repair_authorized
+                if not await current_quality_repair_authorized(ctx, payload, page_index, active_job, original_checkpoint):
+                    verify_cached_page(payload, partial_manifest, page_index, witness["input_digest"])
+            return await original_checkpoint(active_job, page_index, payload=payload)
+
+        checkpoint = hooks.checkpoint = partial_checkpoint
     if recovery_policy:
         hooks.recovery_snapshot = ctx.snapshot
     from services.svg_authoring_profile import read_authoring_profile
@@ -374,7 +418,7 @@ async def _generate(request, presentation_id, outline, language, session, job, *
     tasks = [tasks_by_index[i] for i in range(ctx.count)] if stage_plan is None else []
     try:
         if stage_plan is None:
-            pages = await _collect_pages_or_fail(tasks)
+            pages = await asyncio.gather(*tasks) if state.terminal_drain_enabled else await _collect_pages_or_fail(tasks)
             if recovery_policy:
                 from services.generation_core.drivers.svg.quality_recovery import recover_screen_pages
                 pages = await recover_screen_pages(ctx, request, presentation_id, outline, job,
@@ -383,10 +427,14 @@ async def _generate(request, presentation_id, outline, language, session, job, *
             pages, stage_advisory = await _collect_stages(ctx, stage_plan, tracked_page, job, checkpoint, read_png, _facade.run_vision_advisory, review_stage)
         if state.fatal_error is not None:
             raise state.fatal_error
-    except BaseException:
-        for task in tasks:
-            task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
+    except BaseException as error:
+        if state.terminal_drain_enabled and isinstance(error, Exception):
+            state.fatal_error = state.fatal_error or error
+            await _drain_leaf_tasks(tasks, state)
+        else:
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
         raise
     timing.settle_page_loop(request)
     timing.enter_deck_stage(request, "quality")
@@ -593,6 +641,55 @@ async def _cached_author_render_page(ctx, request, presentation_id, index, conte
     return result
 
 
+async def _remeasure_partial_cached_page(ctx, request, presentation_id, index, content,
+                                       saved, input_digest, job, hooks):
+    """Measure a bound prior SVG without purchasing or replacing its author bytes."""
+    from services.svg_partial_recovery import verify_cached_page
+    manifest = ctx.partial_recovery_manifest
+    from utils.hashing import sha256_hex
+    if (saved.get("partial_recovery") or {}).get("operation_id") != str(job.workspace_operation_id):
+        raise ValueError("svg_partial_recovery_page_unbound")
+    witness = verify_cached_page(saved, manifest, index, input_digest)
+    payload = deepcopy(saved)
+    current_phase = (saved.get("partial_recovery") or {}).get("phase", "finalized")
+
+    async def guarded_checkpoint(active_job, page_index, *, payload=None):
+        nonlocal current_phase
+        if payload is not None:
+            marker = payload.get("partial_recovery") or {}
+            if witness.get("phase") == "author-only":
+                if current_phase == "finalized" and marker.get("phase") != "finalized":
+                    raise ValueError("svg_partial_recovery_cached_phase_rollback")
+                if current_phase == "author-only":
+                    if marker.get("phase") != "author-only":
+                        raise ValueError("svg_partial_recovery_cached_phase_invalid")
+                    # The existing renderer calls this after its deterministic
+                    # finalizer. Only the already-sealed first canonical hash
+                    # may replace the active author-only drawing.
+                    if sha256_hex(str(payload.get("svg_content", "")).encode()) == witness["final_render_svg_sha256"]:
+                        marker["phase"] = "finalized"
+            verify_cached_page(payload, manifest, index, input_digest)
+            current_phase = marker.get("phase", "finalized")
+        return await hooks.checkpoint(active_job, page_index, payload=payload)
+
+    with timing.observe_stage(request, "render"):
+        result = await render.attempt_render(ctx=ctx, request=request, presentation_id=presentation_id,
+            index=index, content=content, payload=payload, svg=payload["svg_content"],
+            ordinal=max(0, _provider_attempt_count(payload) - 1), job=job,
+            checkpoint=guarded_checkpoint, async_session_maker=hooks.async_session_maker,
+            write_png=hooks.write_png)
+    verify_cached_page(payload, manifest, index, input_digest)
+    if result is render.RETRY or payload.get("quality", {}).get("passed") is not True:
+        raise AuthoredStageError(slide_index=index, stage="render",
+                                 code="svg_partial_recovery_cached_quality_failed", retryable=False)
+    if getattr(ctx, "quality_recovery_input_binding", None):
+        from services.generation_core.drivers.svg.quality_recovery import local_evidence_binding
+        payload["quality_recovery_local_evidence"] = local_evidence_binding(
+            ctx.quality_recovery_input_binding, payload)
+        await guarded_checkpoint(job, index, payload=payload)
+    return result
+
+
 async def _page(ctx, request, presentation_id, outline, language, job, index, state, hooks):
     from services.svg_source_layout import verify_source_receipt
 
@@ -613,6 +710,19 @@ async def _page(ctx, request, presentation_id, outline, language, job, index, st
         if ctx.raster_reconstruction:
             input_digest = _digest({"page": input_digest, "rasterApproval": ctx.raster_pin.approval_digest})
         saved = await hooks.checkpoint(job, index) or {}
+        partial_manifest = getattr(ctx, "partial_recovery_manifest", None)
+        partial_quality_repair = False
+        if saved.get("partial_recovery") or partial_manifest:
+            from services.svg_partial_recovery import verify_cached_page
+            if (not partial_manifest or job is None
+                    or (saved.get("partial_recovery") or {}).get("operation_id") != str(job.workspace_operation_id)):
+                raise ValueError("svg_partial_recovery_page_unbound")
+            from services.generation_core.drivers.svg.partial_quality_recovery import current_quality_repair_authorized
+            partial_quality_repair = await current_quality_repair_authorized(ctx, saved, index, job, hooks.checkpoint)
+            partial_page = (partial_manifest["pages"][index] if partial_quality_repair
+                else verify_cached_page(saved, partial_manifest, index, input_digest))
+        else:
+            partial_page = None
         if getattr(ctx, "quality_recovery_input_binding", None):
             from services.generation_core.drivers.svg.quality_recovery import ensure_recovery_authority
             await ensure_recovery_authority(job, hooks)
@@ -621,6 +731,9 @@ async def _page(ctx, request, presentation_id, outline, language, job, index, st
                     code="public_provider_result_unknown", retryable=False)
         if saved.get("input_digest") and saved.get("input_digest") != input_digest:
             raise RuntimeError("svg_checkpoint_input_conflict")
+        if partial_page and partial_page["category"] == "known" and not partial_quality_repair:
+            return await _remeasure_partial_cached_page(ctx, request, presentation_id, index,
+                content, saved, input_digest, job, hooks)
         if saved.get("cached_author_render"):
             if state.cached_author_render_manifest_hash is None:
                 raise AuthoredStageError(slide_index=index, stage="render",
@@ -778,11 +891,16 @@ async def _attempt_loop(ctx, request, presentation_id, index, content, payload, 
     """Author -> render until the page verifies, with at most one model correction."""
     role = ctx.roles[index]
     attempt_limit = _provider_attempt_limit(payload, index=index, job=job)
+    from services.generation_core.drivers.svg.partial_quality_recovery import current_episode_attempt_count
+    partial_manifest = getattr(ctx, "partial_recovery_manifest", None)
+    partial_known = bool(partial_manifest and index in partial_manifest["known_indices"])
     if getattr(ctx, "quality_recovery_input_binding", None) and payload.get("quality_recovery_fallback", {}).get("status") == "reserved":
         from services.generation_core.drivers.svg.quality_recovery import reserved_recovery_candidate
         reserved_recovery_candidate(ctx, index, content, payload)
         attempt_limit = 3
-    while payload.get("svg_content") is not None or _provider_attempt_count(payload) < attempt_limit:
+    while payload.get("svg_content") is not None or (
+            current_episode_attempt_count(ctx, payload, index) if partial_known
+            else _provider_attempt_count(payload)) < attempt_limit:
         if state.fatal_error is not None:
             raise state.fatal_error
         provider_count = _provider_attempt_count(payload)
@@ -790,8 +908,8 @@ async def _attempt_loop(ctx, request, presentation_id, index, content, payload, 
         ordinal = provider_count if svg is None else max(0, provider_count - 1)
         if svg is None:
             if getattr(ctx, "quality_recovery_input_binding", None):
-                from services.generation_core.drivers.svg.quality_recovery import actual_provider_attempt_count, ensure_recovery_authority
-                if actual_provider_attempt_count(payload) >= attempt_limit:
+                from services.generation_core.drivers.svg.quality_recovery import ensure_recovery_authority
+                if current_episode_attempt_count(ctx, payload, index) >= attempt_limit:
                     raise AuthoredStageError(slide_index=index, stage="author",
                         code="svg_repair_budget_exhausted", retryable=False)
                 await ensure_recovery_authority(job, hooks)

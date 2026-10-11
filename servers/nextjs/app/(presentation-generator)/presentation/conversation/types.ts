@@ -1,3 +1,5 @@
+import type { WorkspaceOperationActionOptions } from "../workspace/types";
+
 export type ConversationRole = "user" | "assistant" | "system";
 
 export interface ConversationAsset {
@@ -58,6 +60,8 @@ export type AgentRunStatus =
 
 export interface AgentRun {
   id: string;
+  operationId?: string;
+  operationType?: string;
   status: AgentRunStatus;
   title?: string;
   version?: number;
@@ -148,6 +152,8 @@ export type ConversationCommandDispatcher = (
 ) => Promise<void>;
 
 export interface ConversationTransport {
+  /** Display support only; server-owned recovery plans still authorize each action. */
+  supportsPartialRecovery?: boolean;
   getOrCreate(presentationId: string, signal?: AbortSignal): Promise<Conversation>;
   getTimeline(
     conversationId: string,
@@ -162,7 +168,8 @@ export interface ConversationTransport {
     conversationId: string,
     runId: string,
     action: ConversationRunAction,
-    request: { idempotencyKey: string; expectedRevision?: number; expectedRunVersion?: number },
+    request: { idempotencyKey: string; expectedRevision?: number; expectedRunVersion?: number }
+      & Pick<WorkspaceOperationActionOptions, "recoveryRevision" | "recoveryDecision">,
     signal?: AbortSignal,
   ): Promise<ConversationTimeline>;
   streamEvents(

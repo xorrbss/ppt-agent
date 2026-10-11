@@ -4,6 +4,8 @@ import { actionMessageKey, runMessageKey, statusMessageKey, statusClass, formatB
 import { ClipboardEvent, DragEvent, FormEvent, useState } from "react";
 import { ArrowUp, Download, FileText, Loader2, Paperclip, X } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { WorkspacePartialRecovery } from "../workspace/WorkspacePartialRecovery";
+import type { WorkspaceOperationActionOptions } from "../workspace/types";
 import { renderMarkdown } from "@/lib/safe-markdown";
 import type {
   ConversationAsset,
@@ -23,6 +25,7 @@ export function ChatSurface(props: {
   timeline: ConversationTimeline;
   loading: boolean;
   submitting: boolean;
+  partialRecoveryEnabled?: boolean;
   error?: string | null;
   connection: "connecting" | "live" | "offline";
   pendingAssets: ConversationAsset[];
@@ -30,7 +33,7 @@ export function ChatSurface(props: {
   onUpload?: (files: File[]) => Promise<void>;
   onRemoveAsset: (assetId: string) => void;
   onSend: (content: string) => Promise<void>;
-  onAction: (runId: string, action: ConversationRunAction) => Promise<void>;
+  onAction: (runId: string, action: ConversationRunAction, options?: WorkspaceOperationActionOptions) => Promise<void>;
 }) {
   const t = useTranslations("conversation");
   const {
@@ -322,6 +325,10 @@ export function ChatSurface(props: {
                   {item.run.error}
                 </p>
               )}
+              {props.partialRecoveryEnabled && item.run.operationType === "presentation.generate" && ["failed", "dead_letter"].includes(item.run.status) && <WorkspacePartialRecovery
+                operationId={item.run.operationId ?? item.run.id} operationVersion={item.run.version}
+                currentRevision={timeline.revision} disabled={submitting || loading}
+                onAction={(operationId, action, options) => onAction(operationId, action, options)} />}
               {actions.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {actions.map((action) => (

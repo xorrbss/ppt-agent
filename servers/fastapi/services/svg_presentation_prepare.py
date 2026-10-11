@@ -81,6 +81,32 @@ class GenerationContext:
     visual_intents: list | None = None
     recovery_cached_first: list[int] | None = None
     quality_recovery_source_evidence: list | None = None
+    partial_recovery_manifest: dict | None = None
+
+
+def _preflight_svg_input_values(*, canvas, physical_kwargs, snapshot, source_document, source_units,
+                                outline, roles, source_font_profile):
+    """Exercise JSON input boundaries without changing typed render metadata."""
+    from services.generation_core.drivers.svg.quality_recovery import _quality_json_value
+    from services.svg_presentation_checkpoint import _digest
+    from services.svg_trusted_fonts import read_trusted_pretendard_faces
+
+    _digest(_quality_json_value(dict(canvas=canvas, physical=physical_kwargs, style=snapshot,
+        source=source_document, units=source_units, contents=[slide.content for slide in outline.slides],
+        roles=roles, font_profile=source_font_profile)))
+    read_trusted_pretendard_faces()
+
+
+async def _preflight_required_source_assets(session, service, manifest, context):
+    """Resolve only assigned required model derivatives before author dispatch."""
+    from services.svg_asset_manifest import read_derivative_bytes
+
+    offered = {slot for page in manifest.offered_pages for slot in page.slot_ids}
+    for slot in manifest.slots:
+        if slot.slot_id in offered and slot.policy.required:
+            await read_derivative_bytes(artifact_service=service, session=session,
+                derivative=slot.model_derivative, owner_id=context.owner_id, tenant_id=context.tenant_id,
+                max_bytes=1536 * 1024, max_pixels=16_777_216)
 
 
 async def _pin_owned_svg_style(request, job, *, pin_style, session_maker, owned_job):
@@ -194,6 +220,25 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
         raise ValueError("raster_generation_page_count_mismatch")
     if not count:
         raise ValueError("svg_outline_empty")
+    partial_recovery_manifest = None
+    if job is not None and (getattr(job, "request_payload", None) or {}).get("_svg_partial_recovery"):
+        from models.sql.workspace import WorkspaceOperation
+        from services.svg_partial_recovery import verify_episode, digest
+        from services.authored_canvas import request_canvas_metadata
+        from utils.owner_context import get_current_owner_id, get_current_tenant_id
+
+        async with async_session_maker() as recovery_session:
+            current = await owned_job(recovery_session, job.id, job.attempt_token,
+                fencing_token=getattr(job, "_workspace_fencing_token", None))
+            operation = await recovery_session.get(WorkspaceOperation, job.workspace_operation_id)
+            if operation is None:
+                raise ValueError("svg_partial_recovery_episode_unbound")
+            partial_recovery_manifest = await verify_episode(recovery_session, operation, current)
+            if (partial_recovery_manifest.get("owner_id") != str(get_current_owner_id())
+                    or partial_recovery_manifest.get("tenant_id") != str(get_current_tenant_id())
+                    or partial_recovery_manifest.get("expected_page_count") != count
+                    or partial_recovery_manifest.get("canvas_digest") != digest(request_canvas_metadata(request))):
+                raise ValueError("svg_partial_recovery_episode_unbound")
     existing = None
     if job is not None:
         # Existing inline checkpoints must finish with their original contract.
@@ -257,6 +302,31 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
     except (ValueError, KeyError, OSError) as error:
         raise AuthoredStageError(slide_index=0, stage="author",
                                 code="preflight_failed", retryable=False) from error
+    _preflight_svg_input_values(canvas=canvas, physical_kwargs=physical_kwargs, snapshot=snapshot,
+        source_document=source_document, source_units=source_units, outline=outline,
+        roles=roles, source_font_profile=source_font_profile)
+    if partial_recovery_manifest:
+        from services.artifact_store import configured_public_artifact_service
+        from services.svg_asset_persistence import load_source_manifest_pointer
+        from services.svg_asset_manifest import ArtifactPointer
+        from services.svg_generation_assets import publication_context
+
+        async with async_session_maker() as asset_session:
+            current_context, _ = await publication_context(asset_session, job)
+            binding = partial_recovery_manifest["source_asset_binding"]
+            pointer = ArtifactPointer.model_validate(binding["pointer"])
+            reference = await configured_public_artifact_service().resolve_ref(asset_session,
+                artifact_id=pointer.ref, owner_id=current_context.owner_id,
+                tenant_id=current_context.tenant_id, expected_digest=pointer.sha256)
+            inherited = await load_source_manifest_pointer(asset_session, configured_public_artifact_service(),
+                pointer=binding["pointer"],
+                owner_id=current_context.owner_id, tenant_id=current_context.tenant_id)
+            if (inherited.digest != binding["digest"] or str(inherited.presentation_id) != binding["presentation_id"]
+                    or inherited.source_revision != binding["source_revision"]
+                    or str(reference.created_by_operation_id) != binding["origin_operation_id"]):
+                raise ValueError("svg_partial_recovery_asset_binding_changed")
+            await _preflight_required_source_assets(asset_session, configured_public_artifact_service(), inherited,
+                current_context)
     if job is not None:
         await initialize_checkpoints(job_id=job.id, attempt_token=job.attempt_token, roles=roles,
                                      fencing_token=getattr(job, "_workspace_fencing_token", None))
@@ -280,6 +350,11 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
         from services.svg_generation_assets import publication_context, prepare_source_manifest
         service = configured_public_artifact_service()
         seed = await _checkpoint(job, 0) or {}
+        if partial_recovery_manifest:
+            original_pointer = partial_recovery_manifest["source_asset_binding"]["pointer"]
+            if seed.get("source_manifest_ref") not in (None, original_pointer):
+                raise ValueError("svg_partial_recovery_asset_binding_changed")
+            seed["source_manifest_ref"] = original_pointer
         if use_content_group_assignment:
             seed["source_image_assignment"] = {
                 "version": "source-image-assignment/v1", "groups": source_image_assignment,
@@ -315,8 +390,11 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
                 planned=planned, saved_pointer=seed.get("source_manifest_ref"),
                 source_preservation_required=source_preservation_required,
                 inherited_operation_id=(job.workspace_operation_id if job is not None
-                        and (getattr(job, "request_payload", None) or {}).get("_svg_recovery_lineage") else None),
+                        and ((getattr(job, "request_payload", None) or {}).get("_svg_recovery_lineage")
+                             or partial_recovery_manifest) else None),
                 )
+            if not partial_recovery_manifest:
+                await _preflight_required_source_assets(asset_session, service, source_manifest, asset_context)
             await asset_session.commit()
         seed["source_manifest_ref"] = source_pointer
         await _checkpoint(job, 0, payload=seed)
@@ -345,6 +423,7 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
         asset_offer=asset_offer,
         visual_intents=visual_intents,
         quality_recovery_source_evidence=getattr(request, "_svg_recovery_source_evidence", None),
+        partial_recovery_manifest=partial_recovery_manifest,
     )
 
 

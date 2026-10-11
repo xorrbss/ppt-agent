@@ -337,6 +337,22 @@ class WorkspaceTemplateApplicationRequest(BaseModel):
         return normalized
 
 
+class SvgPartialRecoveryDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    manifest_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+    nonce: str = Field(pattern=r"^[a-f0-9]{64}$")
+    acknowledged_unknown_indices: list[int] = Field(default_factory=list)
+    additional_budget_microunits: Optional[int] = Field(default=None, gt=0)
+
+    @field_validator("acknowledged_unknown_indices")
+    @classmethod
+    def validate_unknown_indices(cls, value: list[int]) -> list[int]:
+        if len(value) != len(set(value)) or any(index < 0 for index in value):
+            raise ValueError("unknown indices must be unique and nonnegative")
+        return sorted(value)
+
+
 class WorkspaceOperationActionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -353,6 +369,7 @@ class WorkspaceOperationActionRequest(BaseModel):
         max_length=128,
     )
     stage_review_decision: Optional[dict[str, Any]] = None
+    recovery_decision: Optional[SvgPartialRecoveryDecision] = None
 
     @field_validator("idempotency_key")
     @classmethod
@@ -366,6 +383,10 @@ class WorkspaceOperationActionRequest(BaseModel):
     def validate_recovery_revision_action(self):
         if self.recovery_revision is not None and self.action != "retry":
             raise ValueError("recovery_revision is only valid for retry actions")
+        if self.recovery_decision is not None and (
+            self.action != "retry" or self.recovery_revision != "svg-partial-recovery/v1"
+        ):
+            raise ValueError("recovery_decision requires svg partial retry")
         return self
 
 

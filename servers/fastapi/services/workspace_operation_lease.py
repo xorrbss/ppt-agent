@@ -30,6 +30,7 @@ import uuid
 from sqlalchemy import case, exists, or_, select, update
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.orm import defer
 
 from models.sql.public_admission import PublicOperationAdmission, PublicResourceLease
 from models.sql.workspace import WorkspaceOperation
@@ -117,6 +118,7 @@ async def heartbeat_workspace_operation(
                 return False
         operation = await session.scalar(
             select(WorkspaceOperation)
+            .options(defer(WorkspaceOperation.request_payload, raiseload=True))
             .where(WorkspaceOperation.id == operation_id)
             .with_for_update()
         )

@@ -574,8 +574,8 @@ export default function WorkspaceChatPanel({
                     connection: connection === "live" || connection === "polling" ? "confirmed" : "checking" }}
                   currentRevision={projection.revision}
                   disabled={submitting || !writesEnabled}
-                  onAction={(operationId, action) =>
-                    performAction(operationId, action)
+                  onAction={(operationId, action, options) =>
+                    performAction(operationId, action, options)
                   }
                   onReExport={(operationType) => {
                     const format =

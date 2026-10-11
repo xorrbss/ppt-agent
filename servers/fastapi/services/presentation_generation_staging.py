@@ -330,6 +330,7 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
     """Restore private worker state from an internal durable-job payload."""
 
     values = dict(payload)
+    values.pop("_svg_partial_recovery", None)
     speed_arm = validate_speed_arm(values.pop(INTERNAL_BENCH_SPEED_ARM_KEY, None))
     from services.generation_core.drivers.svg.collect import INTERNAL_SVG_STAGE_PLAN_KEY, validate_svg_stage_plan
     stage_plan = validate_svg_stage_plan(values.pop(INTERNAL_SVG_STAGE_PLAN_KEY, None))

@@ -53,7 +53,7 @@ import uuid
 from sqlalchemy import and_, case, exists, func, or_, select, text, update
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import aliased, defer
 
 from models.sql.presentation import (
     PRESENTATION_LIFECYCLE_DELETED,
@@ -4071,7 +4071,8 @@ class _ExecutionContext(WorkspaceOperationExecutionContext):
         try:
             async with self._session_factory() as session:
                 operation = await session.get(
-                    WorkspaceOperation, self.claim.operation_id
+                    WorkspaceOperation, self.claim.operation_id,
+                    options=(defer(WorkspaceOperation.request_payload, raiseload=True),),
                 )
                 if (
                     operation is None
@@ -4133,7 +4134,7 @@ class _ExecutionContext(WorkspaceOperationExecutionContext):
                         if event is None:
                             await session.rollback()
                             return False
-                        await session.refresh(operation)
+                        await session.refresh(operation, attribute_names=["progress", "version"])
                 else:
                     event = await append_operation_event(
                         session,
@@ -4186,7 +4187,8 @@ class _ExecutionContext(WorkspaceOperationExecutionContext):
         try:
             async with self._session_factory() as session:
                 operation = await session.get(
-                    WorkspaceOperation, self.claim.operation_id
+                    WorkspaceOperation, self.claim.operation_id,
+                    options=(defer(WorkspaceOperation.request_payload, raiseload=True),),
                 )
                 if (
                     operation is None
@@ -4287,7 +4289,17 @@ class WorkspaceOperationRunner:
             session_factory=self.session_factory,
             registry=self.registry,
         )
+        await self._recover_terminal_provider_reservations()
         self._loop_task = asyncio.create_task(self._run_loop(), name="workspace-operation-runner")
+
+    async def _recover_terminal_provider_reservations(self) -> None:
+        from services.provider_durable_runtime import recover_expired_reservations
+
+        async with self.session_factory() as session:
+            await recover_expired_reservations(
+                session, terminal_operations_only=True, operation_kinds=self.registry.kinds,
+            )
+            await session.commit()
 
     async def stop(self) -> None:
         self._stopping = True
@@ -4372,6 +4384,7 @@ class WorkspaceOperationRunner:
                         session_factory=self.session_factory,
                         registry=self.registry,
                     )
+                    await self._recover_terminal_provider_reservations()
                     cycle.record(await self.dispatch_once())
             except asyncio.CancelledError:
                 raise

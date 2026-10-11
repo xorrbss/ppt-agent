@@ -13,7 +13,10 @@ deck is a raster-reconstruction deck.
 from __future__ import annotations
 
 import asyncio
+from contextlib import nullcontext
+from contextvars import copy_context
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import json
 import re
 
@@ -61,6 +64,14 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
     if payload.get("cached_author_render"):
         raise AuthoredStageError(slide_index=index, stage="author",
                                  code="svg_cached_author_render_provider_forbidden", retryable=False)
+    if (payload.get("partial_recovery") or {}).get("category") == "known":
+        from services.generation_core.drivers.svg.partial_quality_recovery import current_quality_repair_authorized
+        decision = (payload.get("quality_recovery") or {}).get("decision") or {}
+        if ((payload.get("quality_recovery") or {}).get("status") != "repair_pending"
+                or payload.get("correction_mode") != decision.get("repair_scope")
+                or not await current_quality_repair_authorized(ctx, payload, index, job, checkpoint)):
+            raise AuthoredStageError(slide_index=index, stage="author",
+                                     code="svg_partial_recovery_cached_provider_forbidden", retryable=False)
     from services.document_canvas_generation import source_restyle_font_floor
     from services.generation_core.authoring.author_slide_svg import author_slide_svg
     from utils.provider_overload import ProviderOutcomeError, safe_provider_diagnostics
@@ -189,18 +200,89 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
             payload["local_layout"] = {"model_calls": 0, "status": "resolved"}
         await checkpoint(job, index, payload=payload)
 
+    observer_ready = False
+
     async def before_dispatch(provider_ordinal=provider_ordinal):
+        nonlocal observer_ready
         # A checkpoint is a recovery witness, not a separate
         # purchase ledger. Admission still owns reservation.
+        if getattr(state, "terminal_drain_enabled", False) and state.fatal_error is not None:
+            if job is not None:
+                payload["inflight"] = provider_ordinal
+                await checkpoint(job, index, payload=payload)
+                await save_event({"terminal_event": "dispatch.stopped", "diagnostics": {
+                    "streamStage": "before_stream", "failureKind": "dispatch_stopped"}})
+            raise ProviderOutcomeError("public_provider_dispatch_stopped", recovery_allowed=False,
+                diagnostics={"streamStage": "before_stream", "failureKind": "dispatch_stopped"})
         raise_if_fatal()
         payload["inflight"] = provider_ordinal
         await checkpoint(job, index, payload=payload)
+        observer_ready = True
+
+    observer_scope = nullcontext()
+    if getattr(state, "terminal_drain_enabled", False) and job is not None:
+        from utils.codex_stream_adapter import observe_codex_provider_events
+        from services.svg_presentation_checkpoint import record_svg_provider_event
+        loop, owner_context = asyncio.get_running_loop(), copy_context()
+
+        async def save_event(event):
+            record = {**event, "schema": "svg-provider-terminal/v1", "ordinal": provider_ordinal,
+                "job_id": str(job.id), "operation_id": str(job.workspace_operation_id),
+                "attempt_token": job.attempt_token,
+                "fencing_token": getattr(job, "_workspace_fencing_token", None),
+                "input_digest": payload.get("input_digest")}
+            sealed = await record_svg_provider_event(job, index, record)
+            payload.setdefault("provider_terminal_responses", {})[str(provider_ordinal)] = sealed
+            if sealed.get("terminal_event") in {"response.completed", "dispatch.stopped"}:
+                payload["inflight"] = None
+
+        async def dispatch_preflight():
+            from types import SimpleNamespace
+            from services.generation_core.drivers.svg.quality_recovery import ensure_recovery_authority
+            await ensure_recovery_authority(job, SimpleNamespace(checkpoint=checkpoint,
+                async_session_maker=async_session_maker, recovery_snapshot=ctx.snapshot))
+            if state.fatal_error is not None:
+                await save_event({"terminal_event": "dispatch.stopped", "diagnostics": {
+                    "streamStage": "before_stream", "failureKind": "dispatch_stopped"}})
+                raise ProviderOutcomeError("public_provider_dispatch_stopped", recovery_allowed=False,
+                    diagnostics={"streamStage": "before_stream", "failureKind": "dispatch_stopped"})
+
+        def observe_event(event):
+            if not observer_ready:
+                return
+            deadline = getattr(state, "hard_deadline_at", None)
+            remaining = 30.0 if deadline is None else max(0.0,
+                (deadline - datetime.now(timezone.utc)).total_seconds())
+            if remaining <= 0:
+                raise AuthoredStageError(slide_index=index, stage="author", retryable=False,
+                    code="svg_provider_completed_checkpoint_authority_expired"
+                        if event.get("terminal_event") == "response.completed" else "svg_provider_checkpoint_authority_expired")
+            preflight = event.get("terminal_event") == "dispatch_ready"
+            future = owner_context.run(lambda: asyncio.run_coroutine_threadsafe(
+                dispatch_preflight() if preflight else save_event(event), loop))
+            try:
+                future.result(timeout=min(30.0, remaining))
+            except BaseException as error:
+                future.cancel()
+                from services.generation_core.drivers.svg.partial_quality_recovery import is_current_provider_control_error
+                if is_current_provider_control_error(error):
+                    raise
+                if preflight and isinstance(error, Exception):
+                    raise ProviderOutcomeError("public_provider_dispatch_stopped", recovery_allowed=False,
+                        diagnostics=safe_provider_diagnostics(error, diagnostics={
+                            "streamStage": "before_stream", "failureKind": "dispatch_stopped"})) from error
+                raise
+
+        observer_scope = observe_codex_provider_events(observe_event)
 
     with provider_usage_scope(job_id=job.id if job else None,
                               operation="authored_generation",
                               stage="author" if ordinal == 0 else "repair",
                               slide_index=index,
-                              attempt_number=job.attempt_number if job else 0):
+                              attempt_number=job.attempt_number if job else 0,
+                              **({"workspace_operation_id": job.workspace_operation_id}
+                                 if job is not None and (getattr(job, "request_payload", None) or {}).get("_svg_partial_recovery")
+                                 else {})), observer_scope:
         try:
             if local_authored is not None:
                 authored = local_authored
@@ -273,7 +355,31 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
                 raise
             await asyncio.sleep(min(60., max(30., error.cooldown_seconds or 30.)))
             return AuthorAttempt(svg=None, retry=True)
-    raise_if_fatal()
+        except Exception as error:
+            from services.generation_core.drivers.svg.partial_quality_recovery import is_current_provider_control_error
+            if getattr(state, "terminal_drain_enabled", False) and is_current_provider_control_error(error):
+                raise
+            terminal = (payload.get("provider_terminal_responses") or {}).get(str(provider_ordinal)) or {}
+            if terminal.get("terminal_event") != "response.completed" or not terminal.get("receipt_digest"):
+                raise
+            known = ProviderOutcomeError("public_provider_postresponse_failed", recovery_allowed=False,
+                diagnostics=safe_provider_diagnostics(error, diagnostics={
+                    "terminalEvent": "response.completed", "streamStage": "post_response",
+                    "statusOrigin": "local_stream", "failureKind": "local_postresponse",
+                    "responseId": terminal.get("response_id")}))
+            payload.setdefault("provider_diagnostics", []).append({"ordinal": provider_ordinal,
+                "code": known.code, "diagnostics": known.diagnostics})
+            await checkpoint(job, index, payload=payload)
+            raise known from error
+    if not getattr(state, "terminal_drain_enabled", False):
+        raise_if_fatal()
+    terminal = (payload.get("provider_terminal_responses") or {}).get(str(provider_ordinal)) or {}
+    if terminal.get("terminal_event") == "response.completed":
+        from utils.hashing import sha256_hex
+        if (not terminal.get("receipt_digest")
+                or terminal.get("output_digest") != sha256_hex(authored.raw_response.encode("utf-8"))):
+            raise AuthoredStageError(slide_index=index, stage="author",
+                code="svg_provider_terminal_output_mismatch", retryable=False)
     svg = authored.svg_content
     if not (ctx.source_reflow or ctx.raster_reconstruction):
         from services.svg_default_fonts import normalize_model_font_families
@@ -306,4 +412,6 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
         payload["rasterContentLedger"] = authored.receipt.get("raster_content_ledger")
         payload["rasterRegionBindings"] = authored.receipt.get("raster_region_bindings")
     await checkpoint(job, index, payload=payload)
+    if getattr(state, "terminal_drain_enabled", False):
+        raise_if_fatal()
     return AuthorAttempt(svg=svg, retry=False)

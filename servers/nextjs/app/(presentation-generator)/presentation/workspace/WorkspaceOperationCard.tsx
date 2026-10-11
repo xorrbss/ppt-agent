@@ -5,6 +5,7 @@ import { WorkspaceGenerationProgress } from "./WorkspaceGenerationProgress";
 import { operationFailureMessage, operationProgressEvidence, type WorkspaceOperationObservation } from "./WorkspaceOperationPresentation";
 import { useLocale, useTranslations } from "next-intl";
 import SvgQualityStatusSummary from "./SvgQualityStatusSummary";
+import { WorkspacePartialRecovery } from "./WorkspacePartialRecovery";
 
 import { translateBackendMessage } from "@/lib/backend-messages-intl";
 import {
@@ -1236,6 +1237,9 @@ export function WorkspaceOperationCard({
             );
           })}
       </div>
+      {isPresentationGeneration && failed && !resolvedByLaterSuccess && <WorkspacePartialRecovery
+        operationId={operation.operationId} operationVersion={operation.version} currentRevision={currentRevision}
+        disabled={disabled || pendingAction !== undefined} onAction={onAction} />}
       </ConversationMessageFrame>
     </article>
   );

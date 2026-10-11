@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import type { WorkspaceOperationObservation } from "./WorkspaceOperationPresentation";
-import type { WorkspaceOperationAnchor, WorkspacePageRemakeRequester, WorkspacePresentationRefreshState } from "./types";
+import type { WorkspaceOperationAnchor, WorkspaceOperationActionOptions, WorkspacePageRemakeRequester, WorkspacePresentationRefreshState } from "./types";
 
 export interface WorkspaceOperationCardProps {
   composerCancelOperationId?: string;
@@ -9,7 +9,7 @@ export interface WorkspaceOperationCardProps {
   operation: WorkspaceOperationAnchor;
   currentRevision?: number;
   disabled?: boolean;
-  onAction: (operationId: string, action: "retry" | "cancel" | "approve" | "reject" | "undo") => void | Promise<void>;
+  onAction: (operationId: string, action: "retry" | "cancel" | "approve" | "reject" | "undo", options?: WorkspaceOperationActionOptions) => void | Promise<void>;
   onReExport?: (operationType: "export.pptx" | "export.pdf") => void | Promise<void>;
   onFocusSlide?: (slideIndex: number) => void;
   onRemakePage?: WorkspacePageRemakeRequester;
