@@ -32,6 +32,31 @@ ARCHIVE_V1 = "svg-partial-recovery-archive/v1"
 ARCHIVE_V2 = "svg-partial-recovery-archive/v2"
 OPERATION_REFERENCE = "svg-partial-recovery-operation-ref/v1"
 PAYLOAD_HASH_ALGORITHM = "sha256/postgresql-json-text-utf8/v1"
+
+
+def _recovery_review_allocation(request, snapshot, slide_count):
+    """Keep regular offsets separate from an already admitted v2 final budget."""
+    from services.svg_authoring_profile import (
+        global_format_retry_control, read_quality_recovery_execution_plan,
+        read_quality_recovery_plan, read_quality_recovery_policy,
+        svg_quality_review_admission_budget,
+    )
+    from services.svg_final_selected_continuation import final_review_control
+
+    policy = read_quality_recovery_policy(snapshot)
+    format_control = global_format_retry_control(snapshot)
+    if policy and policy["version"] == 2:
+        execution = read_quality_recovery_execution_plan(snapshot)
+        return (execution["review_call_limit"], format_control,
+                deepcopy(execution.get("final_selected_review")))
+    review_calls = svg_quality_review_admission_budget(request, slide_count)
+    if format_control is not None:
+        review_calls = format_control["review_call_limit"]
+    final_control = (final_review_control(slide_count, physical_offset=review_calls)
+                     if read_quality_recovery_plan(snapshot) is not None else None)
+    return review_calls, format_control, final_control
+
+
 CODE_FILES = (
     "services/svg_partial_recovery.py",
     "services/generation_core/drivers/svg/collect.py",
@@ -1385,13 +1410,11 @@ async def build_manifest(session, operation, *, presentation_revision):
     policy = await load_public_policy(session)
     if policy is None or not policy.enabled:
         reject("svg_partial_recovery_policy_unavailable")
-    from services.svg_authoring_profile import read_quality_recovery_plan, svg_quality_review_admission_budget
+    from services.svg_authoring_profile import read_quality_recovery_plan
 
-    from services.svg_authoring_profile import global_format_retry_control
-    format_control = global_format_retry_control(job.svg_style_snapshot)
-    review_calls = svg_quality_review_admission_budget(request, job.total_slides)
-    if format_control is not None:
-        review_calls = format_control["review_call_limit"]
+    review_calls, format_control, final_control = _recovery_review_allocation(
+        request, job.svg_style_snapshot, job.total_slides,
+    )
     author_calls = sum(page["category"] != "known" for page in pages)
     quality_plan = read_quality_recovery_plan(job.svg_style_snapshot)
     repair_calls = (job.total_slides if quality_plan and quality_plan["review_round_limit"] == 2
@@ -1468,9 +1491,8 @@ async def build_manifest(session, operation, *, presentation_revision):
         "prospective_retry_request_limit": repair_calls}
     if format_control is not None:
         manifest["global_format_retry_control"] = format_control
-    if quality_plan is not None:
-        from services.svg_final_selected_continuation import build_selected_proof, final_review_control
-        final_control = final_review_control(len(pages), physical_offset=review_calls)
+    if final_control is not None:
+        from services.svg_final_selected_continuation import build_selected_proof
         manifest["final_selected_review_control"] = final_control
         manifest["prospective_initial_request_limit"] += final_control["review_call_limit"]
         final_proof = build_selected_proof(

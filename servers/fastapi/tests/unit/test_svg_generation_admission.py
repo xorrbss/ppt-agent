@@ -55,6 +55,18 @@ def test_restoration_policy_reserves_final_review_without_changing_legacy(slide_
     if slide_count == 80:
         assert total == 54
 
+    from services.svg_partial_recovery import _recovery_review_allocation
+    regular, format_control, recovered_final = _recovery_review_allocation(current, snapshot, slide_count)
+    assert regular == execution["review_call_limit"]
+    assert recovered_final == final
+    assert regular + (recovered_final["review_call_limit"] if recovered_final else 0) == total
+    manifest = {}
+    if format_control is not None:
+        manifest["global_format_retry_control"] = format_control
+    if recovered_final is not None:
+        manifest["final_selected_review_control"] = recovered_final
+    assert read_quality_recovery_execution_plan(snapshot, manifest=manifest) == execution
+
     legacy = SimpleNamespace(vision_qa=False, _svg_quality_recovery_policy={"id": "svg-quality-first", "version": 1})
     old_plan = seal_new_quality_recovery_plan(legacy, slide_count)
     old_snapshot = frozen(legacy, old_plan)
@@ -62,6 +74,9 @@ def test_restoration_policy_reserves_final_review_without_changing_legacy(slide_
     original = deepcopy(old_snapshot)
     assert "final_selected_review_control" not in old_plan
     assert svg_quality_review_admission_budget(legacy, slide_count) == old_plan["review_call_limit"]
+    legacy_regular, legacy_format, legacy_final = _recovery_review_allocation(legacy, old_snapshot, slide_count)
+    assert legacy_regular == (legacy_format["review_call_limit"] if legacy_format else old_plan["review_call_limit"])
+    assert legacy_final["physical_offset"] == legacy_regular
     assert seal_new_quality_recovery_plan(legacy, slide_count) == old_plan
     assert old_snapshot == original
     with pytest.raises(ValueError, match="svg_quality_recovery_policy_conflict"):
