@@ -1157,6 +1157,60 @@ async def _verified_retained_source_author(payload, row, *, manifest, operation,
     return replay
 
 
+def _v2_retained_comparison_matches(selection, decision, prior_gate, candidate_gate, index, input_digest):
+    from services.generation_core.quality.advisory_record import content_digest
+    from services.generation_core.quality.vision_advisory_prompt import DESIGN_AXES
+
+    if any((gate.get("policy") or {}).get("version") != 2 for gate in (prior_gate, candidate_gate)):
+        return False
+    if any(gate.get("digest") != content_digest({k: v for k, v in gate.items() if k != "digest"}) for gate in (prior_gate, candidate_gate)):
+        return False
+    if any(prior_gate.get(key) != candidate_gate.get(key) for key in ("binding", "snapshotDigest", "runtimeBinding", "styleDigest", "exampleDigests")):
+        return False
+    old_page = next((item for item in prior_gate.get("pages", []) if item.get("index") == index), {})
+    new_page = next((item for item in candidate_gate.get("pages", []) if item.get("index") == index), {})
+    if not old_page.get("evaluated") or not new_page.get("evaluated") or new_page.get("mandatoryEvidenceValid") is not True:
+        return False
+    comparisons = [item for item in candidate_gate.get("candidateComparisons", []) if item.get("index") == index]
+    if len(comparisons) != 1:
+        return False
+    paired = comparisons[0]
+    targets = decision.get("target_axes") or []
+    goals = decision.get("design_targets") or []
+    if not targets or not goals or any(name not in DESIGN_AXES for name in targets):
+        return False
+    if (paired.get("evaluated") is not True
+            or paired.get("digest") != content_digest({k: v for k, v in paired.items() if k != "digest"})
+            or paired.get("targetAxes") != targets or paired.get("targetGoals") != goals
+            or paired.get("priorInputDigest") != input_digest
+            or paired.get("priorMandatoryEvidenceValid") is not True
+            or paired.get("comparisonMode") != "joint-targets-current-source-context/v1"
+            or not paired.get("comparisonCohortDigest")
+            or paired.get("deckContextDigest") != candidate_gate.get("deckContextDigest")):
+        return False
+    for field, gate, key in (("priorPageDigest", prior_gate, "pageDigests"), ("priorPngDigest", prior_gate, "pngDigests"),
+                             ("candidatePageDigest", candidate_gate, "pageDigests"), ("candidatePngDigest", candidate_gate, "pngDigests")):
+        values = gate.get(key) or []
+        if not 0 <= index < len(values) or paired.get(field) != values[index]:
+            return False
+    presentation = paired.get("blindedPresentation") or {}
+    changes = paired.get("axisChanges") or {}
+    prior_axes = paired.get("priorAxes")
+    if (not isinstance(prior_axes, dict) or set(prior_axes) != set(DESIGN_AXES)
+            or any(not isinstance(axis, dict) for axis in prior_axes.values())
+            or set(changes) != set(DESIGN_AXES)
+            or presentation.get("candidateLabel") not in {"A", "B"}
+            or presentation.get("priorLabel") not in {"A", "B"}
+            or presentation.get("candidateLabel") == presentation.get("priorLabel")
+            or presentation.get("displayOrder") != ["A", "B"]
+            or presentation.get("chronologyExposed") is not False or presentation.get("versionExposed") is not False
+            or any(not isinstance(change, dict) or change.get("change") not in {"improved", "equivalent", "worsened", "unjudged"} for change in changes.values())):
+        return False
+    reason = "comparison_improvement_unjudged" if any(change.get("change") == "unjudged" for change in changes.values()) else (
+        "target_goal_not_improved" if any(changes[name].get("change") != "improved" for name in targets) else None)
+    return selection == {"selected": "prior", "reason": reason} and reason is not None
+
+
 async def _retained_quality_source_author(payload: dict[str, Any], row: Any, *, job: Any, operation: Any, seed: dict[str, Any], completed: dict[str, Any] | None, session, owner, tenant, retained_seen=frozenset(), seal_memo=None):
     """Verify the retained source separately from the discarded candidate history."""
     marker = payload.get("quality_recovery")
@@ -1173,6 +1227,8 @@ async def _retained_quality_source_author(payload: dict[str, Any], row: Any, *, 
         "comparison_render_stale", "no_targeted_defect",
         "baseline_deck_context_review_required", "comparison_binding_invalid",
     }
+    v2_reasons = {"comparison_improvement_unjudged", "target_goal_not_improved"}
+    allowed_reasons |= v2_reasons
     if (not isinstance(selection, dict) or set(selection) != {"selected", "reason"}
             or selection.get("selected") != "prior" or not isinstance(selection.get("reason"), str)
             or selection.get("reason") not in allowed_reasons
@@ -1235,6 +1291,10 @@ async def _retained_quality_source_author(payload: dict[str, Any], row: Any, *, 
             for key in ("binding", "policy", "snapshotDigest", "runtimeBinding", "styleDigest", "exampleDigests"))
             or len(candidate_gate.get("pageDigests", [])) != job.total_slides
             or len(candidate_gate.get("pngDigests", [])) != job.total_slides):
+        reject("svg_partial_recovery_repair_baseline_unproven")
+    if selection.get("reason") in v2_reasons and not _v2_retained_comparison_matches(
+        selection, marker.get("decision") or {}, gate, candidate_gate, row.slide_index, restored.get("input_digest")
+    ):
         reject("svg_partial_recovery_repair_baseline_unproven")
     attempts = payload.get("attempts")
     prior_attempts = restored.get("attempts")

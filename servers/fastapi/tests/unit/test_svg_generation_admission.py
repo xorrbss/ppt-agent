@@ -631,6 +631,60 @@ def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflic
         assert asyncio.run(partial_quality_recovery.current_quality_repair_authorized(
             repair_ctx, candidate, 0, source_job, current_checkpoint)) is True
         assert partial_quality_recovery.current_episode_attempt_count(repair_ctx, candidate, 0) == 0
+        from services.generation_core.quality.vision_advisory_prompt import DESIGN_AXES
+        retained_selection = {"selected": "prior", "reason": "comparison_improvement_unjudged"}
+        compared_gate = deepcopy(gate)
+        compared_gate["pages"][0]["mandatoryEvidenceValid"] = True
+        compared_gate["pageDigests"] = ["sha256:" + "c" * 64]
+        compared_gate["pngDigests"] = ["sha256:" + "d" * 64]
+        paired_body = {
+            "index": 0, "evaluated": True, "priorPageDigest": gate["pageDigests"][0],
+            "priorPngDigest": gate["pngDigests"][0], "candidatePageDigest": compared_gate["pageDigests"][0],
+            "candidatePngDigest": compared_gate["pngDigests"][0], "targetAxes": decision["target_axes"],
+            "targetGoals": deepcopy(decision["design_targets"]), "priorInputDigest": input_digest,
+            "priorMandatoryEvidenceValid": True, "comparisonMode": "joint-targets-current-source-context/v1",
+            "comparisonCohortDigest": "fixture-current-comparison-cohort", "deckContextDigest": compared_gate.get("deckContextDigest"),
+            "priorAxes": {axis: {"verdict": "passed", "repairScope": "none"} for axis in DESIGN_AXES},
+            "axisChanges": {axis: {"change": "unjudged" if axis == "information_structure" else "improved",
+                                      "visibleEvidence": "Synthetic comparison evidence."} for axis in DESIGN_AXES},
+            "blindedPresentation": {"candidateLabel": "B", "priorLabel": "A", "displayOrder": ["A", "B"],
+                                    "chronologyExposed": False, "versionExposed": False},
+        }
+        compared_gate["candidateComparisons"] = [{**paired_body, "digest": content_digest(paired_body)}]
+        compared_gate["digest"] = content_digest({k: v for k, v in compared_gate.items() if k != "digest"})
+        assert recovery._v2_retained_comparison_matches(retained_selection, decision, gate, compared_gate, 0, input_digest)
+        assert not recovery._v2_retained_comparison_matches({"selected": "prior", "reason": "target_goal_not_improved"}, decision, gate, compared_gate, 0, input_digest)
+        for violation in ("source", "png", "goal", "blind", "unknown", "unmeasured", "missing_prior_axes", "invalid_prior_axes"):
+            altered = deepcopy(compared_gate)
+            proof = altered["candidateComparisons"][0]
+            if violation == "source":
+                proof["priorPageDigest"] = "sha256:" + "0" * 64
+            elif violation == "png":
+                proof["candidatePngDigest"] = "sha256:" + "0" * 64
+            elif violation == "goal":
+                proof["targetGoals"][0]["improvementGoal"] = "Different unauthorized goal."
+            elif violation == "blind":
+                proof["blindedPresentation"]["versionExposed"] = True
+            elif violation == "missing_prior_axes":
+                proof.pop("priorAxes")
+            elif violation == "invalid_prior_axes":
+                proof["priorAxes"] = []
+            elif violation == "unmeasured":
+                altered["pages"][0]["mandatoryEvidenceValid"] = False
+            else:
+                altered["pages"][0]["evaluated"] = False
+            proof["digest"] = content_digest({k: v for k, v in proof.items() if k != "digest"})
+            altered["digest"] = content_digest({k: v for k, v in altered.items() if k != "digest"})
+            assert not recovery._v2_retained_comparison_matches(retained_selection, decision, gate, altered, 0, input_digest)
+        assert not recovery._v2_retained_comparison_matches(retained_selection, decision, gate, compared_gate, 0, "different-input")
+        not_improved = deepcopy(compared_gate)
+        proof = not_improved["candidateComparisons"][0]
+        for axis_change in proof["axisChanges"].values():
+            axis_change["change"] = "equivalent"
+        proof["digest"] = content_digest({k: v for k, v in proof.items() if k != "digest"})
+        not_improved["digest"] = content_digest({k: v for k, v in not_improved.items() if k != "digest"})
+        assert recovery._v2_retained_comparison_matches({"selected": "prior", "reason": "target_goal_not_improved"}, decision, gate, not_improved, 0, input_digest)
+        assert not recovery._v2_retained_comparison_matches(retained_selection, decision, gate, not_improved, 0, input_digest)
         purchased = deepcopy(candidate)
         purchased["attempts"].append({"kind": "provider", "raw_response": "new-candidate", "receipt": {}})
         assert partial_quality_recovery.current_episode_attempt_count(repair_ctx, purchased, 0) == 1
@@ -671,6 +725,7 @@ def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflic
         legacy_gate["snapshotDigest"] = content_digest(repair_ctx.snapshot)
         legacy_gate["digest"] = content_digest(legacy_gate)
         seed["quality_recovery_execution"]["rounds"][0]["advisory"] = advisory_record({"designGate": legacy_gate, "slides": []}, [source_hash])
+        assert not recovery._v2_retained_comparison_matches(retained_selection, decision, legacy_gate, compared_gate, 0, input_digest)
         assert asyncio.run(partial_quality_recovery.current_quality_repair_authorized(
             repair_ctx, candidate, 0, source_job, current_checkpoint)) is False
         assert original == before
