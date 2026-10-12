@@ -2,6 +2,8 @@
 from __future__ import annotations
 import json
 import logging
+import uuid
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from sqlalchemy import select
 from models.sql.slide import SlideModel
@@ -393,7 +395,25 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
         grant = await load_public_export_deadline_grant(session_factory, operation_id=claim.operation_id)
         _require_deadline_budget(grant)
         await context.progress(stage="export_rendering", percent=10)
-        advisory = ((presentation.theme or {}).get("svg") or {}).get("advisory")
+        svg_meta = ((presentation.theme or {}).get("svg") or {})
+        advisory = svg_meta.get("advisory")
+        source_review = dict(snapshot=svg_meta.get("styleSnapshot"),
+                             publication=svg_meta.get("qualityRecoveryPublication"), producer=None)
+        publication = source_review["publication"]
+        if isinstance(publication, Mapping):
+            try:
+                producer_id = uuid.UUID(str(publication.get("parentOperationId")))
+            except (ValueError, TypeError):
+                producer_id = None
+            if producer_id is not None:
+                from models.sql.workspace import WorkspaceOperation
+                async with session_factory() as producer_session:
+                    producer = await producer_session.get(WorkspaceOperation, producer_id)
+                    if producer is not None:
+                        source_review["producer"] = dict(operationId=str(producer.id),
+                            presentationId=str(producer.presentation_id), ownerId=str(producer.owner_id),
+                            ownerScope=str(producer.owner_scope), sourceRevision=producer.result_revision,
+                            state=producer.state, kind=producer.kind)
 
         async def run_worker(slide_refs):
             asset_bindings = None
@@ -444,7 +464,8 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
             require_native_coverage=fmt == "pptx",
             export_identity_digest=identity.canonical_digest, export_tenant_id=admission.tenant_id,
             review_binding=dict(presentationId=str(claim.presentation_id), ownerId=str(claim.owner_id),
-                                ownerScope=str(claim.owner_scope), sourceRevision=claim.expected_revision),
+                                ownerScope=str(claim.owner_scope), sourceRevision=claim.expected_revision,
+                                _generationSourceReview=source_review),
             **receipt_args)
         # release-v1 stays a receipt-content gate; the identity join decides
         # only whether bytes are produced or reused, not whether they release.

@@ -14,6 +14,7 @@ import asyncio
 from sqlalchemy import delete, select
 
 from models.presentation_and_path import PresentationPathAndEditPath
+from copy import deepcopy
 from models.sql.presentation import PresentationModel, PRESENTATION_LIFECYCLE_PUBLISHED
 from models.sql.slide import SlideModel
 from services.authored_canvas import merge_presentation_canvas, request_canvas_metadata
@@ -211,18 +212,23 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
         parent = await session.get(WorkspaceOperation, operation_id)
         if parent is None or parent.owner_id != owner or parent.presentation_id != presentation_id:
             raise ValueError("svg_quality_recovery_review_binding_missing")
+        # The ordered queries above may autoflush the initial theme. Mutate a
+        # new JSON value so the final producer evidence remains dirty afterward.
+        publication_theme = deepcopy(presentation.theme)
+        svg_theme = publication_theme["svg"]
         records = split_page_advisories(advisory["vision"], published_slides, range(len(published_slides)))
-        presentation.theme["svg"]["pageAdvisories"] = records
-        presentation.theme["svg"]["advisory"]["pageAdvisories"] = records
+        svg_theme["pageAdvisories"] = records
+        svg_theme["advisory"]["pageAdvisories"] = records
         binding = dict(schemaVersion="svg-visual-review-operation-binding/v1",
             presentationId=str(presentation_id), ownerId=str(owner), ownerScope=str(parent.owner_scope),
             sourceRevision=expected_revision + 1, operationId=str(operation_id),
             reviewedPageIndices=list(range(len(published_slides))), sourceDigests=slide_page_digests(published_slides),
             pngDigests=[(slide.content["svgReceipt"]).get("png_sha256") for slide in published_slides],
             pageRecordDigests=[record["digest"] for record in records])
-        presentation.theme["svg"]["advisory"]["operationBinding"] = {**binding, "digest": content_digest(binding)}
-        presentation.theme["svg"]["advisory"]["savedPageReviewEvidence"] = seal_saved_page_evidence(
+        svg_theme["advisory"]["operationBinding"] = {**binding, "digest": content_digest(binding)}
+        svg_theme["advisory"]["savedPageReviewEvidence"] = seal_saved_page_evidence(
             published_slides, snapshot, advisory["vision"]["designGate"])
+        presentation.theme = publication_theme
     session.add(presentation)
     await session.flush()
     # complete_publish still requires the running operation; terminalize the

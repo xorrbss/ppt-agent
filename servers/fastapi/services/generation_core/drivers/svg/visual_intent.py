@@ -24,11 +24,19 @@ below the supplied readable font floor. Explicit user instructions take priority
 
 SOURCE_GROUNDED_INTENT_RULES = """
 Use visual_intent.source_evidence to find the current page's actual message and central evidence.
-An explicit source conclusion can be the focal statement; a required original heading still
-must remain. When no conclusion is supplied, emphasize the source topic and facts without
-inventing a summary claim. Give evidence weight by its relation to that message, not by
+First-heading or first-line focal_text is a source title reference, not an importance ranking.
+Choose an actual assertion or conclusion already in the source as the first-read message,
+even without a key-message label. Preserve required topic titles without making them the
+largest element by default. Keep that assertion as one coherent message, not independent
+columns or labels; natural line wrapping is allowed. When the source has no assertion,
+emphasize its topic and facts without inventing a summary. Give evidence weight by its relation to that message, not by
 the count of numbers, IDs, JSON fields or transport coordinates. Keywords suggest what
 to inspect; confirm every comparison, sequence and connection against the exact source.
+Choose visual organization and available width from supported relationships and detail amounts.
+Use labelled connections, grouping or containment only for source-supported meaning; never
+invent direction or causality. Repeated panels, bands and bottom strips do not replace an
+information structure. Choose body treatments that express this page's meaning while retaining
+the selected brand; comparable source series may repeat deliberately, with no layout quota.
 Use each design example for its supplied source-grounded reason, retaining selected brand,
 type hierarchy and image treatment while choosing composition freely. Keep source images
 and their complete explanations together; make the described detail readable and crop only
@@ -130,7 +138,7 @@ def enrich_visual_intent(content: str, role: str, index: int, intent: dict | Non
     if messages:
         emphasis.update(focal_text=messages[0]["text"], basis="explicit_source_message")
     emphasis["supporting_facts"] = [block["text"] for block in blocks
-                                   if block["text"].strip() != emphasis["focal_text"]
+                                   if _excerpt(block["text"]) != _excerpt(emphasis["focal_text"])
                                    and not re.match(r"^#{1,6}\s+", block["text"].strip())
                                    and not _TABLE_DIVIDER.match(block["text"])][:3]
     grounded["source_evidence"] = {"basis": evidence["basis"], "message_candidates": messages,

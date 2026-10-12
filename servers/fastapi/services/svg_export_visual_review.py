@@ -202,7 +202,61 @@ def _review_pages(slides) -> list[int]:
                                 for slide in slides])
 
 
+def _generation_source_review(slides, advisory, expected_binding, context):
+    """Consume the intact original source-PNG producer; never mint page receipts."""
+    from services.generation_core.drivers.svg.quality import _current_gate
+    from services.svg_authoring_profile import read_quality_recovery_policy
+    if not isinstance(context, Mapping) or not isinstance(expected_binding, Mapping):
+        return None
+    snapshot, publication, producer = (context.get(key) for key in ("snapshot", "publication", "producer"))
+    if not all(isinstance(value, Mapping) for value in (snapshot, publication, producer)):
+        return None
+    try:
+        policy = read_quality_recovery_policy(snapshot)
+        gate = _current_gate(advisory, [({**_receipt(slide), "svg_content": slide.svg_content}, None) for slide in slides])
+    except (ValueError, TypeError, KeyError):
+        return None
+    if gate is None or policy is None:
+        return None
+    body = {key: value for key, value in publication.items() if key != "digest"}
+    binding = gate.get("binding") or {}
+    vision = advisory["vision"]
+    pngs = [_receipt(slide).get("png_sha256") for slide in slides]
+    if (gate.get("policy") != policy or gate.get("status") != "passed"
+            or policy["version"] == 2 and gate.get("designImprovementStatus") != "satisfied"
+            or gate.get("reason") is not None
+            or gate.get("pageCoverageComplete") is not True or not slides
+            or len(gate.get("pages", [])) != len(slides)
+            or any(page.get("evaluated") is not True or page.get("mandatoryEvidenceValid") is not True
+                   or page.get("status") != "passed" for page in gate.get("pages", []))
+            or any(not page_measurement_current(slide) for slide in slides)
+            or publication.get("schema") != "svg-quality-recovery-publication/v1"
+            or publication.get("digest") != content_digest(body)
+            or publication.get("gateDigest") != gate["digest"]
+            or gate.get("snapshotDigest") != content_digest(snapshot)
+            or publication.get("snapshotDigest") != gate["snapshotDigest"]
+            or publication.get("parentOperationId") != binding.get("operationId")
+            or publication.get("parentJobId") != binding.get("jobId")
+            or publication.get("sourceRevision") != expected_binding.get("sourceRevision")
+            or publication.get("sourceGenerationRevision") != expected_binding.get("sourceRevision")
+            or publication.get("sourceContentDigests") != [content_digest((slide.content or {}).get("source")) for slide in slides]
+            or publication.get("inputDigests") != [_receipt(slide).get("input_digest") for slide in slides]
+            or producer.get("state") != "succeeded" or producer.get("kind") != "presentation.generate"
+            or producer.get("operationId") != binding.get("operationId")
+            or producer.get("sourceRevision") != expected_binding.get("sourceRevision")
+            or any(producer.get(key) != expected_binding.get(key) for key in ("presentationId", "ownerId", "ownerScope"))
+            or any(binding.get(key) != expected_binding.get(key) for key in ("presentationId", "ownerId"))
+            or vision.get("reviewedPageIndices") != list(range(len(slides)))
+            or vision.get("reviewedPngDigests") != pngs):
+        return None
+    return gate
+
+
 def svg_visual_review(*, slides, advisory: Mapping | None, expected_binding: Mapping | None = None) -> dict:
+    source_context = None
+    if isinstance(expected_binding, Mapping):
+        expected_binding = dict(expected_binding)
+        source_context = expected_binding.pop("_generationSourceReview", None)
     if not advisory_ran(advisory):
         return dict(required=True, status="failed", reasonCode="svg_visual_advisory_unavailable")
     digests = slide_page_digests(slides)
@@ -210,20 +264,37 @@ def svg_visual_review(*, slides, advisory: Mapping | None, expected_binding: Map
     # is considered; missing PNG proof describes only otherwise-current SVGs.
     if not record_matches(advisory, digests):
         return dict(required=True, status="failed", reasonCode="svg_visual_advisory_stale")
-    if "pageAdvisories" not in advisory:
-        return dict(required=True, status="failed", reasonCode="svg_visual_advisory_png_evidence_missing")
-    current = current_page_advisories(slides, advisory["pageAdvisories"])
-    if not slides or len(current) != len(slides):
-        return dict(required=True, status="failed", reasonCode="svg_visual_advisory_stale")
     vision = advisory["vision"]
     from services.generation_core.quality.vision_advisory_prompt import DESIGN_REVIEW_PROMPT_VERSION
     design_review = vision.get("promptVersion") == DESIGN_REVIEW_PROMPT_VERSION
+    producer_gate = _generation_source_review(slides, advisory, expected_binding, source_context) if design_review else None
+    if "pageAdvisories" not in advisory:
+        if producer_gate is None or producer_gate["policy"]["version"] != 2:
+            return dict(required=True, status="failed", reasonCode="svg_visual_advisory_png_evidence_missing")
+        flagged, review = advisory_flagged_pages(advisory), _review_pages(slides)
+        evidence = dict(checkerVersion=DESIGN_REVIEW_PROMPT_VERSION,
+            inputDigest=content_digest({"svgDigests": digests, "pngDigests": producer_gate["pngDigests"]}),
+            outputDigest=content_digest({"producerAdvisoryDigest": advisory["digest"], "producerGateDigest": producer_gate["digest"]}),
+            measurements=dict(advisoryDigest=advisory["digest"], pageCount=len(slides),
+                advisoryFlaggedPages=len(flagged), reviewPages=len(review), model=str(vision.get("model") or ""),
+                reviewScope="source-svg-png-design/v1", designGateDigest=producer_gate["digest"],
+                sourceProducerOperationId=producer_gate["binding"]["operationId"]), thresholds={"maxReviewPages": 0})
+        return dict(required=True, status="failed" if review else "passed",
+                    **({"reasonCode": "svg_visual_review_flagged"} if review else {}), evidence=evidence)
+    current = current_page_advisories(slides, advisory["pageAdvisories"])
+    if not slides or len(current) != len(slides):
+        return dict(required=True, status="failed", reasonCode="svg_visual_advisory_stale")
     if design_review:
         from services.generation_core.drivers.svg.quality import _current_gate
-        from services.svg_authoring_profile import QUALITY_RECOVERY_POLICY
+        from services.svg_authoring_profile import validate_quality_recovery_policy
         payloads = [({**_receipt(slide), "svg_content": slide.svg_content}, None) for slide in slides]
         gate = _current_gate(advisory, payloads)
-        if (gate is None or gate.get("status") != "passed" or gate.get("policy") != QUALITY_RECOVERY_POLICY
+        try:
+            policy = validate_quality_recovery_policy(gate.get("policy")) if gate else None
+        except ValueError:
+            policy = None
+        if (gate is None or gate.get("status") != "passed" or policy is None
+                or policy["version"] == 2 and producer_gate is None
                 or gate.get("pageCoverageComplete") is not True
                 or (gate.get("binding") or {}).get("presentationId") != (expected_binding or {}).get("presentationId", (gate.get("binding") or {}).get("presentationId"))
                 or any(current[index]["vision"].get("designGateDigest") != gate["digest"] for index in range(len(slides)))):

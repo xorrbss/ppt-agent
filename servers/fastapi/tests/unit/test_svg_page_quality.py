@@ -235,7 +235,8 @@ def test_visual_review_unavailable_without_an_advisory():
     assert review == {"required": True, "status": "failed", "reasonCode": "svg_visual_advisory_unavailable"}
 
 
-def test_visual_review_passes_with_a_matching_clean_advisory():
+@pytest.mark.parametrize("policy_version", [None, 1, 2])
+def test_visual_review_passes_with_a_matching_clean_advisory(policy_version, monkeypatch):
     slides = [_slide("<svg>a</svg>"), _slide("<svg>b</svg>")]
     digests = slide_page_digests(slides)
     vision = {"slides": [{"index": 0, "issues": []}, {"index": 1, "issues": []}],
@@ -246,6 +247,92 @@ def test_visual_review_passes_with_a_matching_clean_advisory():
 
     assert review["status"] == "passed"
     assert review["evidence"]["measurements"]["advisoryDigest"] == advisory["digest"]
+    if policy_version is not None:
+        from copy import deepcopy
+        import struct
+        import uuid
+        from services.generation_core.drivers.svg.quality import _seal_design_gate
+        from services.generation_core.quality.advisory_record import content_digest
+        from services.generation_core.quality.vision_advisory_prompt import DESIGN_AXES, DESIGN_REVIEW_PROMPT_VERSION
+        from services.svg_authoring_profile import ART_DIRECTION_PROFILE_V8
+        from utils.hashing import canonical_json_digest, sha256_hex
+        owner, operation, job, presentation = (str(uuid.uuid4()) for _ in range(4))
+        monkeypatch.setattr("utils.owner_context.get_current_owner_id", lambda: owner)
+        monkeypatch.setattr("utils.owner_context.get_current_tenant_id", lambda: "fixture-tenant")
+        snapshot = dict(authoring_profile=dict(ART_DIRECTION_PROFILE_V8),
+            quality_recovery_policy={"id": "svg-quality-first", "version": policy_version},
+            canvas={"width": 1280, "height": 720})
+        snapshot["digest"] = canonical_json_digest(snapshot, allow_nan=True)
+        png = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR" + struct.pack(">II", 1280, 720)
+        png_digest = sha256_hex(png)
+        for index, slide in enumerate(slides):
+            receipt = slide.content["svgReceipt"]
+            receipt.update(png_sha256=png_digest, input_digest=f"fixture-input-{index}")
+            receipt["quality"]["png_digest"] = "sha256:" + png_digest
+            slide.content["source"] = f"Fixture source {index}"
+        axes = {name: dict(verdict="passed", severity="none", repairScope="none",
+                           visibleEvidence="Readable source grouping.") for name in DESIGN_AXES}
+        vision = dict(slides=[{"index": 0, "issues": []}, {"index": 1, "issues": []}],
+            promptVersion=DESIGN_REVIEW_PROMPT_VERSION, model="fixture-model",
+            reviewedPageIndices=[0, 1], reviewedPngDigests=[png_digest, png_digest],
+            designReview=dict(pages=[dict(index=index, evaluated=True, axes=deepcopy(axes), issues=[], designTargets=[])
+                                    for index in range(2)], deckFlow={"evaluated": True}))
+        context = dict(policy=snapshot["quality_recovery_policy"], style={"canvas": snapshot["canvas"]},
+            styleDigest=content_digest(snapshot["canvas"]), snapshotDigest=content_digest(snapshot),
+            runtimeBinding="fixture-runtime", exampleDigests=[], roles=["content", "content"],
+            pages=[dict(index=index, content=slide.content["source"]) for index, slide in enumerate(slides)],
+            binding=dict(jobId=job, operationId=operation, presentationId=presentation, ownerId=owner, tenantId="fixture-tenant"),
+            priorCandidates={}, mandatoryEvidence=[True, True], deckComplete=True)
+        vision["designGate"] = _seal_design_gate(context,
+            [({**slide.content["svgReceipt"], "svg_content": slide.svg_content}, png) for slide in slides], [png, png], vision)
+        publication = dict(schema="svg-quality-recovery-publication/v1", gateDigest=vision["designGate"]["digest"],
+            parentOperationId=operation, parentJobId=job, sourceRevision=1, sourceGenerationRevision=1,
+            snapshotDigest=content_digest(snapshot), sourceContentDigests=[content_digest(slide.content["source"]) for slide in slides],
+            inputDigests=[slide.content["svgReceipt"]["input_digest"] for slide in slides])
+        publication["digest"] = content_digest(publication)
+        producer = dict(operationId=operation, presentationId=presentation, ownerId=owner,
+                        ownerScope=owner, sourceRevision=1, state="succeeded", kind="presentation.generate")
+        expected = dict(presentationId=presentation, ownerId=owner, ownerScope=owner, sourceRevision=1,
+            _generationSourceReview=dict(snapshot=snapshot, publication=publication, producer=producer))
+        bound = _bound_advisory(vision, slides)
+        binding = dict(schemaVersion="svg-visual-review-operation-binding/v1", presentationId=presentation,
+            ownerId=owner, ownerScope=owner, sourceRevision=1, operationId=operation, reviewedPageIndices=[0, 1],
+            sourceDigests=digests, pngDigests=[png_digest, png_digest], pageRecordDigests=[record["digest"] for record in bound["pageAdvisories"]])
+        bound["operationBinding"] = {**binding, "digest": content_digest(binding)}
+        assert svg_visual_review(slides=slides, advisory=bound, expected_binding=expected)["status"] == "passed"
+        if policy_version == 2:
+            original = advisory_record(vision, digests)
+            before = deepcopy(original)
+            consumed = svg_visual_review(slides=slides, advisory=original, expected_binding=expected)
+            assert consumed["status"] == "passed" and original == before
+            assert consumed["evidence"]["measurements"]["reviewScope"] == "source-svg-png-design/v1"
+            assert "pageAdvisories" not in original and "operationBinding" not in original
+            for violation in ("goal", "owner_scope", "revision", "snapshot", "png", "unknown", "source"):
+                candidate, evidence = deepcopy(original), deepcopy(expected)
+                candidate_slides = deepcopy(slides)
+                proof = evidence["_generationSourceReview"]
+                if violation == "goal":
+                    gate = candidate["vision"]["designGate"]
+                    gate["designImprovementStatus"] = "needed"
+                    gate["digest"] = content_digest({key: value for key, value in gate.items() if key != "digest"})
+                    proof["publication"]["gateDigest"] = gate["digest"]
+                    proof["publication"]["digest"] = content_digest({key: value for key, value in proof["publication"].items() if key != "digest"})
+                    candidate = advisory_record(candidate["vision"], digests)
+                elif violation == "owner_scope":
+                    proof["producer"]["ownerScope"] = "another-scope"
+                elif violation == "revision":
+                    evidence["sourceRevision"] = 2
+                elif violation == "snapshot":
+                    proof["snapshot"]["canvas"]["width"] = 999
+                elif violation == "png":
+                    candidate_slides[0].content["svgReceipt"]["png_sha256"] = "0" * 64
+                elif violation == "unknown":
+                    proof["producer"]["state"] = "unknown"
+                else:
+                    candidate_slides[0].svg_content = "<svg>changed</svg>"
+                assert svg_visual_review(slides=candidate_slides, advisory=candidate, expected_binding=evidence)["status"] == "failed"
+            assert svg_visual_review(slides=slides, advisory=original, expected_binding={key: value for key, value in expected.items()
+                if key != "_generationSourceReview"})["status"] == "failed"
 
 
 def test_visual_review_records_but_does_not_flag_on_an_advisory_issue():

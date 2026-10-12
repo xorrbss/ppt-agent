@@ -225,6 +225,43 @@ def test_author_prompt_uses_content_grounded_neighbor_intent_without_fixed_layou
     assert "reconstruction instructions and evidence citations stay non-visible, including during repair" in text
     assert "Preserve source-supported visual components as visual components" in text
     assert repaired.receipt["visual_intent_digest"] == visual_intent_receipt(prepared_intent)["visual_intent_digest"]
+    assert module.SVG_SOURCE_GROUNDED_REWRITE_RULES not in text
+    assert "preserve its successful composition, hierarchy" in text
+
+    topic_source = (
+        "# 원본 20페이지\n\n## 원문 전체 텍스트 (읽기 순서, 모든 수치와 정책 조건 보존)\n"
+        "- 서비스 아키텍처\n- 하나의 플랫폼 정책으로\n- 경험·업무·운영 기반을 연결\n"
+        "- 고객 화면과 운영 화면은 분리하고 공통 서버 정책으로 관리합니다."
+    )
+    topic_intent = build_deck_visual_intents([topic_source], quality_policy=policy)[0]
+    assert topic_intent["emphasis"]["focal_text"] == "서비스 아키텍처"
+    assert "- 서비스 아키텍처" not in topic_intent["emphasis"]["supporting_facts"]
+    assert topic_intent["source_evidence"]["blocks"][0]["text"] == "- 서비스 아키텍처"
+    default_topic_intent = build_deck_visual_intents([topic_source])[0]
+    assert build_deck_visual_intents([topic_source], quality_policy=legacy_style["quality_recovery_policy"]) == [default_topic_intent]
+    previous_png = base64.b64decode(_data_url().split(",", 1)[1])
+    rewritten = asyncio.run(module.author_slide_svg(topic_source, style, "content", 0, 1,
+        visual_intent=topic_intent, correction_mode="design_rewrite", correction_hint="source relationship target",
+        previous_svg=_svg(""), previous_render_png=previous_png,
+        previous_render_png_digest=sha256_prefixed(previous_png)))
+    rewritten_text = "\n".join(message.content if isinstance(message.content, str) else "\n".join(
+        part.text for part in message.content if hasattr(part, "text")) for message in seen["messages"])
+    assert json.dumps(topic_source, ensure_ascii=False) in rewritten_text
+    for principle in ("source title reference, not an importance ranking",
+                      "one coherent message, not independent",
+                      "Repeated panels, bands and bottom strips do not replace an",
+                      "Choose visual organization and available width"):
+        assert principle in rewritten_text
+    assert module.SVG_SOURCE_GROUNDED_REWRITE_RULES in rewritten_text
+    assert rewritten.receipt["visual_intent_digest"] == visual_intent_receipt(topic_intent)["visual_intent_digest"]
+    asyncio.run(module.author_slide_svg(topic_source, legacy_style, "content", 0, 1,
+        visual_intent=default_topic_intent, correction_mode="design_rewrite", correction_hint="source relationship target",
+        previous_svg=_svg(""), previous_render_png=previous_png,
+        previous_render_png_digest=sha256_prefixed(previous_png)))
+    legacy_rewrite_text = "\n".join(message.content if isinstance(message.content, str) else "\n".join(
+        part.text for part in message.content if hasattr(part, "text")) for message in seen["messages"])
+    assert "source title reference, not an importance ranking" not in legacy_rewrite_text
+    assert module.SVG_SOURCE_GROUNDED_REWRITE_RULES not in legacy_rewrite_text
 
     from services.svg_presentation_checkpoint import _required_numeric_claims
 
