@@ -1,6 +1,8 @@
 """Freeze content-derived deck advice without changing historical page replay."""
 from __future__ import annotations
 
+import re
+
 from services.generation_core.drivers.svg.visual_intent import build_deck_visual_intents
 
 
@@ -44,12 +46,35 @@ async def freeze_visual_intents(*, contents, roles, job, historical_payload, che
         return None
     expected = _expected_intents(contents, roles, trusted_plan, quality_policy=quality_policy)
     if saved is not None:
-        if saved != expected:
+        if saved != expected and not _previous_quality_support_matches(
+                saved, expected, contents, quality_policy=quality_policy, trusted_plan=trusted_plan):
             raise ValueError("svg_visual_intent_checkpoint_conflict")
         return saved
     seed["deck_visual_intents"] = expected
     await checkpoint(job, 0, payload=seed)
     return expected
+
+
+def _previous_quality_support_matches(saved, expected, contents, *, quality_policy, trusted_plan):
+    """Recognize only the exact v2 advice frozen before topic deduplication."""
+    if (not isinstance(quality_policy, dict) or quality_policy.get("version") != 2
+            or trusted_plan is not None or not isinstance(expected, list)
+            or len(expected) != len(contents)):
+        return False
+    from copy import deepcopy
+    from services.generation_core.drivers.svg.visual_intent import _TABLE_DIVIDER, source_content_evidence
+
+    previous = deepcopy(expected)
+    for content, intent in zip(contents, previous, strict=True):
+        emphasis = intent["emphasis"]
+        emphasis["supporting_facts"] = [block["text"]
+            for block in source_content_evidence(str(content or ""))["blocks"]
+            if block["text"].strip() != emphasis["focal_text"]
+            and not re.match(r"^#{1,6}\s+", block["text"].strip())
+            and not _TABLE_DIVIDER.match(block["text"])][:3]
+    # All source digests, roles, focal text, density, relations and neighboring
+    # advice still have to agree. Never rewrite the saved frozen vector.
+    return saved == previous
 
 
 def _expected_intents(contents, roles, trusted_plan, *, quality_policy=None):

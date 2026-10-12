@@ -285,6 +285,8 @@ def test_author_prompt_uses_content_grounded_neighbor_intent_without_fixed_layou
 def test_new_intent_seed_replays_exactly_and_historical_checkpoint_keeps_context(monkeypatch):
     from services.svg_visual_intent_checkpoint import freeze_visual_intents
     from unittest.mock import AsyncMock
+    from copy import deepcopy
+    from services.generation_core.drivers.svg.visual_intent import build_deck_visual_intents
 
     async def scenario():
         job = object()
@@ -308,6 +310,60 @@ def test_new_intent_seed_replays_exactly_and_historical_checkpoint_keeps_context
                                           historical_payload={"schema_version": "svg-slide-checkpoint/v1"},
                                           checkpoint=legacy) is None
         assert legacy.await_count == 1 and "payload" not in legacy.await_args.kwargs
+
+        policy = {"id": "svg-quality-first", "version": 2}
+        prepared = ("# 원본 20페이지\n\n## 원문 전체 텍스트 (읽기 순서, 모든 수치와 정책 조건 보존)\n"
+                    "- 서비스 아키텍처\n- 원문 주장\n- 중심 근거\n- 관계 설명")
+        current = build_deck_visual_intents([prepared], ["content"], quality_policy=policy)
+        previous = deepcopy(current)
+        previous[0]["emphasis"]["supporting_facts"] = ["- 서비스 아키텍처", "- 원문 주장", "- 중심 근거"]
+
+        async def replay(contents, roles, intents, *, replay_policy=policy, trusted_plan=None):
+            readonly = AsyncMock(return_value={"deck_visual_intents": intents})
+            result = await freeze_visual_intents(contents=contents, roles=roles, job=job,
+                historical_payload={"schema_version": "svg-slide-checkpoint/v1"}, checkpoint=readonly,
+                quality_policy=replay_policy, trusted_plan=trusted_plan)
+            assert readonly.await_count == 1 and "payload" not in readonly.await_args.kwargs
+            assert result is intents
+            return result
+
+        assert await replay([prepared], ["content"], previous) is previous
+        assert await replay([prepared], ["content"], current) is current
+        new_checkpoint = AsyncMock(side_effect=[{}, None])
+        assert await freeze_visual_intents(contents=[prepared], roles=["content"], job=job,
+            historical_payload=None, checkpoint=new_checkpoint, quality_policy=policy) == current
+        assert new_checkpoint.await_args.kwargs["payload"]["deck_visual_intents"] == current
+        for changed_contents, changed_roles, changed_intents in (
+            ([prepared + "\n- 추가 사실"], ["content"], previous),
+            ([prepared], ["section"], previous),
+            ([prepared], ["content"], [{**previous[0], "page_role": "section"}]),
+            ([prepared], ["content"], [{**previous[0], "emphasis": {**previous[0]["emphasis"], "focal_text": "다른 주제"}}]),
+            ([prepared], ["content"], [{**previous[0], "density": {**previous[0]["density"], "level": "dense"}}]),
+        ):
+            with pytest.raises(ValueError, match="svg_visual_intent_checkpoint_conflict"):
+                await replay(changed_contents, changed_roles, changed_intents)
+        with pytest.raises(ValueError, match="svg_visual_intent_checkpoint_conflict"):
+            await replay([prepared], ["content"], previous, replay_policy={"id": "svg-quality-first", "version": 1})
+
+        # The optional operational witness stays outside the repository; never
+        # copy source bodies, owner data or frozen checkpoints into a fixture.
+        import os
+        evidence_path = os.environ.get("SVG_INTENT_REPLAY_EVIDENCE_DB")
+        if evidence_path:
+            evidence = json.loads(Path(evidence_path).read_text(encoding="utf-8-sig"))
+            checkpoints = {row["slide_index"]: row for row in evidence["checkpoints"]}
+            actual = checkpoints[0]["svg_checkpoint"]["deck_visual_intents"]
+            actual_contents = [slide["content"] for slide in evidence["job"]["authored_outline"]["slides"]]
+            actual_roles = [checkpoints[index]["role"] for index in range(len(actual_contents))]
+            actual_policy = evidence["job"]["svg_style_snapshot"]["quality_recovery_policy"]
+            assert len(actual) == len(actual_contents) == 12
+            original = deepcopy(actual)
+            assert await replay(actual_contents, actual_roles, actual, replay_policy=actual_policy) is actual
+            assert actual == original
+            changed = list(actual_contents)
+            changed[0] += "\n추가된 독자 사실"
+            with pytest.raises(ValueError, match="svg_visual_intent_checkpoint_conflict"):
+                await replay(changed, actual_roles, actual, replay_policy=actual_policy)
 
     asyncio.run(scenario())
 

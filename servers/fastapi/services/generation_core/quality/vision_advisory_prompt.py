@@ -32,6 +32,25 @@ DESIGN_AXES = ("hierarchy_emphasis", "information_structure", "brand_expression"
 DESIGN_LOCAL_AXES = DESIGN_AXES[:-1]
 DESIGN_GLOBAL_FINDING_LIMIT = 12
 
+BASELINE_DESIGN_PRINCIPLES = (
+    "Under hierarchy_emphasis, distinguish a claim or conclusion actually stated in the source from a generic "
+    "topic label: the primary source message should have visual priority. Never invent an unstated claim. "
+    "Under information_structure, source words or separate cards alone do not establish that a relationship "
+    "is communicated. Inspect whether the stated sequence, dependency, handoff or grouping is visibly readable; "
+    "never invent relationships or require a particular diagram. Under information_structure and density_balance, "
+    "judge whether long or uneven explanations are organized for their actual volume and importance. Equal-width "
+    "cards are neither automatically good nor automatically defective; preserve all facts and readable text. "
+    "Distinguish brand_expression from repetition_deck_flow: retain chosen fonts, palette, logos and headers, "
+    "while separately inspecting unnecessary reuse of body panels, bands and reading paths across different "
+    "source messages. Do not impose frequency quotas, meaningless variation or rotating layout patterns. "
+)
+
+
+def baseline_design_principles_digest():
+    """Identity of the exact v2 semantic principles sent to the reviewer."""
+    from utils.hashing import sha256_prefixed
+    return sha256_prefixed(BASELINE_DESIGN_PRINCIPLES.encode("utf-8"))
+
 
 def baseline_review_active(context):
     return (context.get("policy") or {}).get("version") == 2
@@ -135,7 +154,7 @@ def _baseline_review_messages(sheet, *, slide_count, pngs, context):
         "advisory uses minor/none; failed uses major or critical and local_repair or design_rewrite; "
         "unreviewed uses none/none. Missing evidence is unreviewed. Preserve historical verdicts. "
         "A valid, passed page may still need better message emphasis, faithful relationships, image readability "
-        "or space allocation. Record designTargets only for concrete visible shortfalls tied to original source "
+        "or space allocation. " + BASELINE_DESIGN_PRINCIPLES + "Record designTargets only for concrete visible shortfalls tied to original source "
         "meaning and supplied design evidence. Give the existing axis, visible region, observed shortfall, "
         "source basis and specific improvement goal. Taste alone, changed geometry or change for its own sake "
         "requires no target. Empty designTargets means no grounded goal; uncertainty never certifies quality. "

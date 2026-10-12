@@ -19,7 +19,7 @@ from collections.abc import Mapping
 
 from services.generation_core.quality.advisory_record import advisory_record, content_digest, record_matches
 from services.generation_core.quality.vision_advisory_prompt import (
-    DESIGN_AXES, DESIGN_REVIEW_PROMPT_VERSION, baseline_review_active,
+    DESIGN_AXES, DESIGN_REVIEW_PROMPT_VERSION, baseline_review_active, baseline_design_principles_digest,
 )
 from services.generation_core.quality.page_outcome import (
     PageOutcome, classify_page_outcomes, deck_quality_summary,
@@ -840,6 +840,8 @@ __all__ = ["classify_pages", "deck_advisory", "page_outcome", "quality_recovery_
 
 def _group_review_input_digest(group_context, group_renders, phase, ordinal, indices):
     public_context = {key: value for key, value in group_context.items() if key not in {'examples', 'priorCandidates'}}
+    if baseline_review_active(group_context):
+        public_context["reviewPrinciplesDigest"] = baseline_design_principles_digest()
     input_digest = content_digest(dict(context=public_context, examples=group_context['exampleDigests'], pngDigests=[sha256_hex(png) for png in group_renders], priorCandidates={index: {key: value for key, value in prior.items() if key != 'png'} for index, prior in group_context['priorCandidates'].items()}, groupId=f'phase-{phase}/group-{ordinal}', indices=indices))
     return input_digest
 

@@ -329,6 +329,40 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
             required=True, design_context=full_context))
         assert missing_targets["schemaRejectionReason"] == "design_target_fields"
         assert set(missing_targets) == {"skipped", "schemaRejectionReason", "schemaRejectionFields"}
+        from utils.hashing import sha256_prefixed
+        principles = prompt_mod.BASELINE_DESIGN_PRINCIPLES
+        assert principles in full_messages[0].content
+        assert prompt_mod.baseline_design_principles_digest() == sha256_prefixed(principles.encode("utf-8"))
+        identity_context = dict(policy={"id": "svg-quality-first", "version": 2},
+                                exampleDigests=[], priorCandidates={}, reviewScope="full")
+        legacy_context = {**identity_context, "policy": {"id": "svg-quality-first", "version": 1}}
+        no_policy_context = {**identity_context, "policy": None}
+        digest_args = ([png], 0, 0, [0])
+        current_digest = deck_quality._group_review_input_digest(identity_context, *digest_args)
+        legacy_digest = deck_quality._group_review_input_digest(legacy_context, *digest_args)
+        no_policy_digest = deck_quality._group_review_input_digest(no_policy_context, *digest_args)
+        saved_input = deck_quality._group_review_input_digest(
+            deck_quality._local_group_context(review_context, [0], True), *digest_args)
+        provider_calls = []
+        async def stale_checkpoint(*args):
+            return {"input_digest": saved_input, "status": "completed"}
+        async def forbidden_provider(*args, **kwargs):
+            provider_calls.append(True)
+            return {}
+        with monkeypatch.context() as changed_principles:
+            changed_principles.setattr(prompt_mod, "BASELINE_DESIGN_PRINCIPLES",
+                                      principles + "Fixture semantic revision. ")
+            assert deck_quality._group_review_input_digest(identity_context, *digest_args) != current_digest
+            assert deck_quality._group_review_input_digest(legacy_context, *digest_args) == legacy_digest
+            assert deck_quality._group_review_input_digest(no_policy_context, *digest_args) == no_policy_digest
+            changed_messages = prompt_mod.build_advisory_messages(b"", slide_count=1, required=True,
+                pngs=[png], design_context=full_context)
+            assert prompt_mod.BASELINE_DESIGN_PRINCIPLES in changed_messages[0].content
+            stale_ctx = SimpleNamespace(snapshot={}, quality_recovery_review_group_checkpoint=stale_checkpoint)
+            with pytest.raises(ValueError, match="svg_quality_recovery_review_group_conflict"):
+                _run(deck_quality._quality_first_deck_advisory(stale_ctx, [(page, png)], job=job,
+                    read_png=lambda _: png, run_advisory=forbidden_provider, phase=0))
+            assert provider_calls == []
 
 
 def test_the_system_prompt_shows_the_model_the_json_it_must_answer_with():
