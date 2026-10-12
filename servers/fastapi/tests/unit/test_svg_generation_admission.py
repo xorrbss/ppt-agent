@@ -593,3 +593,84 @@ def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflic
         assert read_quality_recovery_policy(source_job.svg_style_snapshot) == {"id": "svg-quality-first", "version": 1}
         assert asyncio.run(recovery._completed_source_author_projection(original, row, **kwargs)) is None
         assert original == before
+        from services.generation_core.drivers.svg import partial_quality_recovery, quality_recovery
+        from services.generation_core.quality.advisory_record import advisory_record, content_digest
+        source_job.svg_style_snapshot = snapshot
+        source_job.presentation_id = presentation_id
+        prior = {**deepcopy(projected), "svg_content": first_svg, "last_valid_svg": first_svg}
+        source_hash = sha256_hex(first_svg.encode())
+        source_page = dict(category="known", phase="finalized", svg_sha256=source_hash,
+            input_digest=input_digest, author_receipt_digest=recovery.author_witness(prior), row_digest="original-source-row")
+        source_manifest = {"known_indices": [0], "pages": [source_page]}
+        prior["partial_recovery"] = dict(schema="svg-partial-recovery-page/v1", operation_id=str(operation_id),
+            manifest_hash=recovery.digest(source_manifest), slide_index=0, source_row_digest=source_page["row_digest"], category="known")
+        target = dict(axis="hierarchy_emphasis", evidenceRegion="Topic and claim",
+            visibleEvidence="Generic topic dominates the source claim.", sourceEvidence="Source states the primary claim.",
+            improvementGoal="Give the primary source claim visual priority.")
+        runtime = "fixture-quality-runtime"
+        gate_body = dict(schemaVersion="svg-quality-first-design-gate/v1", policy=snapshot["quality_recovery_policy"],
+            snapshotDigest=content_digest(snapshot), runtimeBinding=runtime, pageCoverageComplete=True,
+            pageDigests=[source_hash], pngDigests=["b" * 64],
+            binding=dict(jobId=str(job_id), operationId=str(operation_id), presentationId=str(presentation_id),
+                         ownerId=str(owner), tenantId=tenant),
+            pages=[dict(index=0, evaluated=True, failedAxes=[],
+                axes={"hierarchy_emphasis": {"verdict": "passed", "repairScope": "none"}}, designTargets=[target])])
+        gate = {**gate_body, "digest": content_digest(gate_body)}
+        current_review = advisory_record({"designGate": gate, "slides": []}, [source_hash])
+        decision = dict(repair_scope="design_rewrite", target_axes=["hierarchy_emphasis"], issues=[], design_targets=[target])
+        candidate = deepcopy(prior)
+        candidate.update(svg_content=None, correction_mode="design_rewrite", quality_recovery=dict(status="repair_pending", decision=decision,
+            prior_candidate={"svg_digest": source_hash}))
+        repair_ctx = SimpleNamespace(snapshot=snapshot, count=1, partial_recovery_manifest=source_manifest,
+            quality_recovery_runtime_binding=runtime, quality_recovery_input_binding=runtime)
+        seed = {"quality_recovery_execution": {"binding": runtime,
+            "rounds": [{"status": "completed", "advisory": current_review}]}}
+        async def current_checkpoint(*args):
+            return deepcopy(seed)
+        monkeypatch.setattr(quality_recovery, "_restore_candidate", lambda *args: deepcopy(prior))
+        assert asyncio.run(partial_quality_recovery.current_quality_repair_authorized(
+            repair_ctx, candidate, 0, source_job, current_checkpoint)) is True
+        assert partial_quality_recovery.current_episode_attempt_count(repair_ctx, candidate, 0) == 0
+        purchased = deepcopy(candidate)
+        purchased["attempts"].append({"kind": "provider", "raw_response": "new-candidate", "receipt": {}})
+        assert partial_quality_recovery.current_episode_attempt_count(repair_ctx, purchased, 0) == 1
+        # Initial cached bytes remain strict; only this exact current repair is authorized.
+        with pytest.raises(recovery.PartialRecoveryRejected, match="cached_source_changed"):
+            recovery.verify_cached_page(candidate, source_manifest, 0, input_digest)
+        for mismatch in ("decision", "scope", "archive", "input", "operation", "history", "review"):
+            invalid = deepcopy(candidate)
+            before_seed = deepcopy(seed)
+            if mismatch == "decision":
+                invalid["quality_recovery"]["decision"]["design_targets"][0]["improvementGoal"] = "Unapproved different goal."
+            elif mismatch == "scope":
+                invalid["correction_mode"] = "local_repair"
+            elif mismatch == "archive":
+                invalid["quality_recovery"]["prior_candidate"]["svg_digest"] = "0" * 64
+            elif mismatch == "input":
+                invalid["input_digest"] = "changed-input"
+            elif mismatch == "operation":
+                invalid["partial_recovery"]["operation_id"] = str(uuid.uuid4())
+            elif mismatch == "history":
+                invalid["attempts"][0]["raw_response"] = "changed-original-history"
+            else:
+                seed["quality_recovery_execution"]["rounds"][0]["status"] = "review_unknown"
+            if mismatch == "history":
+                with pytest.raises(ValueError, match="cached_source_changed"):
+                    asyncio.run(partial_quality_recovery.current_quality_repair_authorized(
+                        repair_ctx, invalid, 0, source_job, current_checkpoint))
+            else:
+                assert asyncio.run(partial_quality_recovery.current_quality_repair_authorized(
+                    repair_ctx, invalid, 0, source_job, current_checkpoint)) is False
+            seed.clear()
+            seed.update(before_seed)
+        legacy_gate = {**deepcopy(gate_body), "policy": {"id": "svg-quality-first", "version": 1},
+                       "snapshotDigest": content_digest(source_job.svg_style_snapshot)}
+        # A fully sealed v1 review with only design targets grants no new repair authority.
+        source_job.svg_style_snapshot = official_pin_svg_style(legacy_request)
+        repair_ctx.snapshot = source_job.svg_style_snapshot
+        legacy_gate["snapshotDigest"] = content_digest(repair_ctx.snapshot)
+        legacy_gate["digest"] = content_digest(legacy_gate)
+        seed["quality_recovery_execution"]["rounds"][0]["advisory"] = advisory_record({"designGate": legacy_gate, "slides": []}, [source_hash])
+        assert asyncio.run(partial_quality_recovery.current_quality_repair_authorized(
+            repair_ctx, candidate, 0, source_job, current_checkpoint)) is False
+        assert original == before

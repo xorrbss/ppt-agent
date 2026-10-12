@@ -75,13 +75,20 @@ async def current_quality_repair_authorized(ctx, payload, index, job, checkpoint
             or len(gate.get("pageDigests", [])) != ctx.count):
         return False
     page = next((page for page in gate.get("pages", []) if page.get("index") == index), None)
-    if not page or page.get("evaluated") is not True or not page.get("failedAxes"):
+    if not page or page.get("evaluated") is not True:
+        return False
+    targets = (page.get("designTargets") or []) if gate["policy"]["version"] == 2 else []
+    if not page.get("failedAxes") and not targets:
         return False
     failed = {name: axis for name, axis in page["axes"].items() if axis.get("verdict") == "failed"}
-    scope = "design_rewrite" if any(axis.get("repairScope") == "design_rewrite" for axis in failed.values()) else "local_repair"
-    decision = dict(repair_scope=scope, target_axes=list(page["failedAxes"]),
+    scope = "design_rewrite" if targets or any(axis.get("repairScope") == "design_rewrite" for axis in failed.values()) else "local_repair"
+    decision = dict(repair_scope=scope, target_axes=list(dict.fromkeys([*page.get("failedAxes", []), *[target["axis"] for target in targets]])),
         issues=[dict(axis=name, **axis) for name, axis in failed.items()])
-    if not failed or marker.get("decision") != decision:
+    if targets:
+        decision["design_targets"] = deepcopy(targets)
+    if (not failed and not targets) or marker.get("decision") != decision:
+        return False
+    if targets and payload.get("correction_mode") != scope:
         return False
     archive = marker.get("prior_candidate")
     witness = manifest["pages"][index]
