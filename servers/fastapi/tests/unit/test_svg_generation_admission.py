@@ -458,6 +458,8 @@ def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflic
     owned_job.assert_awaited_once_with(checkpoint_session, stale_job.id, "attempt", fencing_token=9)
     if conflict is None:
         from copy import deepcopy
+        import json
+        from xml.etree import ElementTree as ET
         from services import svg_partial_recovery as recovery
         from services.svg_authoring_profile import ART_DIRECTION_PROFILE_V8, read_quality_recovery_policy
         from services.svg_generation_admission import pin_svg_style as official_pin_svg_style
@@ -491,14 +493,21 @@ def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflic
         original = dict(svg_content=None, input_digest=input_digest, inflight=None,
             source_manifest_ref=source_pointer, source_manifest_digest=asset.digest,
             initial_quality={"passed": False, "failures": [{"code": "required_text_missing"}]})
-        normalized, _, author_digest, _, _, advisories = recovery._replay_sealed_author_transform(
+        normalized, first_svg, author_digest, _, _, advisories = recovery._replay_sealed_author_transform(
             original, raw, request=source_request, job=source_job, asset=asset, index=0)
         author_receipt = dict(contract_version="svg-static/v2", provider="fixture", requested_model="fixture-model",
             style_digest=snapshot["digest"], authoring_profile=dict(ART_DIRECTION_PROFILE_V8),
             raw_digest="sha256:" + sha256_hex(raw.encode()), source_digest="sha256:" + author_digest,
-            validation_error=None, native_declarations=None, vector_icons_used=[])
+            validation_error=None, native_declarations=None, vector_icons_used=[], attempt_ordinal=1)
+        metrics = {"owned_text": [{"text": "Fixture message"}]}
+        measured = dict(passed=False, measurement_complete=True,
+            failures=[{"code": "required_text_missing"}], source_digest="sha256:" + sha256_hex(first_svg.encode()),
+            browser_metrics=metrics, metrics_digest="sha256:" + sha256_hex(json.dumps(metrics,
+                sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str).encode()),
+            png_digest="sha256:" + "b" * 64, wrapper_digest="sha256:" + "c" * 64)
         original.update(source_digest=author_digest, last_valid_svg="historical-invalid-layout",
-            fontAdvisories=advisories, attempts=[dict(kind="provider", raw_response=raw, receipt=author_receipt)])
+            fontAdvisories=advisories, attempts=[dict(kind="provider", raw_response=raw, receipt=author_receipt,
+                                                    quality=deepcopy(measured))], initial_quality=deepcopy(measured))
         terminal = dict(schema="svg-provider-terminal/v1", terminal_event="response.completed",
             operation_id=str(operation_id), job_id=str(job_id), owner_id=str(owner), tenant_id=tenant,
             input_digest=input_digest, raw_response=raw, output_digest=sha256_hex(raw.encode()), usage={})
@@ -507,7 +516,8 @@ def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflic
         row = SimpleNamespace(slide_index=0, author_status="running", render_status="pending",
                               persist_status="pending", svg_checkpoint=original)
         calls = [SimpleNamespace(slide_index=0, stage="author", outcome="succeeded", state="reported",
-            reconciled_at=object(), provider_id="fixture", model_id="fixture-model")]
+            reconciled_at=object(), provider_id="fixture", model_id="fixture-model",
+            model_dump=lambda **kwargs: {"stage": "author", "slide_index": 0, "outcome": "succeeded"})]
         kwargs = dict(job=source_job, operation=parent, episode_calls=calls, completed=terminal,
             session=object(), request=source_request, binding=None, vectors={}, vector_seed_witness=None)
         before = deepcopy(original)
@@ -525,6 +535,42 @@ def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflic
         child = recovery.cached_page_payload(row, plan, uuid.uuid4())
         assert recovery.verify_cached_page(child, manifest, 0, input_digest) is page
         assert "quality" not in child and "png_sha256" not in child and original == before
+        bad_latest = deepcopy(original)
+        bad_raw = raw.replace('<text ', '<text xml:space="preserve" ')
+        bad_author_digest = sha256_hex(ET.tostring(ET.fromstring(bad_raw), encoding="unicode").encode())
+        bad_receipt = {**deepcopy(author_receipt), "attempt_ordinal": 2,
+            "raw_digest": "sha256:" + sha256_hex(bad_raw.encode()), "source_digest": "sha256:" + bad_author_digest}
+        bad_terminal = {**deepcopy(terminal), "raw_response": bad_raw, "output_digest": sha256_hex(bad_raw.encode())}
+        bad_terminal["receipt_digest"] = recovery.digest({key: value for key, value in bad_terminal.items() if key != "receipt_digest"})
+        bad_latest["attempts"].append(dict(kind="provider", raw_response=bad_raw, receipt=bad_receipt))
+        bad_latest["provider_terminal_responses"]["author/2"] = bad_terminal
+        bad_latest.update(source_digest=bad_author_digest, last_valid_svg=first_svg)
+        bad_before = deepcopy(bad_latest)
+        fallback, selected_witness = asyncio.run(recovery._completed_source_author_projection(
+            bad_latest, row, **{**kwargs, "completed": bad_terminal}))
+        assert bad_latest == bad_before and fallback["attempts"][:-1] == bad_latest["attempts"]
+        assert fallback["svg_content"] == normalized and selected_witness["phase"] == "author-only"
+        assert selected_witness["completed_receipt_digest"] == terminal["receipt_digest"]
+        replay = fallback["attempts"][-1]
+        assert replay["kind"] == "sealed_terminal_replay" and replay["raw_response"] == raw
+        assert replay["receipt"]["terminal_recovery_witness"]["attempt_ordinal"] == 1
+        assert "quality" not in fallback and "png_sha256" not in fallback
+        fallback_page = {**page, "author_receipt_digest": recovery.author_witness(fallback)}
+        fallback_manifest = {"pages": [fallback_page]}
+        fallback_plan = SimpleNamespace(manifest=fallback_manifest, manifest_hash=recovery.digest(fallback_manifest),
+                                        baseline_payloads={0: fallback})
+        fallback_child = recovery.cached_page_payload(row, fallback_plan, uuid.uuid4())
+        assert recovery.verify_cached_page(fallback_child, fallback_manifest, 0, input_digest) is fallback_page
+        unproven = deepcopy(bad_latest)
+        unproven["attempts"][0]["quality"]["source_digest"] = "sha256:" + "0" * 64
+        with pytest.raises(recovery.PartialRecoveryRejected, match="svg_partial_recovery_local_output_requires_repair"):
+            asyncio.run(recovery._completed_source_author_projection(unproven, row,
+                **{**kwargs, "completed": bad_terminal}))
+        all_bad = deepcopy(bad_latest)
+        all_bad["attempts"] = [all_bad["attempts"][-1]]
+        with pytest.raises(recovery.PartialRecoveryRejected, match="svg_partial_recovery_local_output_requires_repair"):
+            asyncio.run(recovery._completed_source_author_projection(all_bad, row,
+                **{**kwargs, "completed": bad_terminal}))
         for violation in ("unknown", "body", "receipt", "input", "owner"):
             candidate = deepcopy(original)
             if violation == "unknown":
