@@ -171,8 +171,16 @@ _SOURCE_REFERENCE_PREFIX = re.compile(
 )
 
 
-def _required_numeric_claims(content: str) -> list[str]:
+def _required_numeric_claims(content: str, *, quality_policy: dict | None = None) -> list[str]:
     """Protect concrete figures without requiring verbatim prose or bullet labels."""
+    if quality_policy is not None and quality_policy.get("version") == 2:
+        from services.generation_core.drivers.svg.visual_intent import source_content_evidence
+
+        # Authoring and required-text measurement must agree on literal reader
+        # content. Keep the immutable source intact; preparation/evidence notes
+        # are still offered to the author as non-visible context.
+        evidence = source_content_evidence(content)
+        content = "\n".join(block["text"] for block in evidence["blocks"])
     # The source extractor's exact wrapper identifies a reference page, not a
     # business figure to display. Keep every number in the actual source body.
     content = _SOURCE_REFERENCE_PREFIX.sub("", content, count=1)

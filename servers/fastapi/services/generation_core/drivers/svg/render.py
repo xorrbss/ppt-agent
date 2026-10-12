@@ -26,7 +26,7 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
     from services.svg_contract import finalize_svg
     from services.svg_renderer import render_svg_with_metrics
     from services.svg_source_layout import verify_source_receipt
-    from services.svg_authoring_profile import read_authoring_profile
+    from services.svg_authoring_profile import read_authoring_profile, read_quality_recovery_policy
     from services.generation_core.drivers.svg.timeline_ink_guard import (
         apply_timeline_ink_quality, source_timeline_rows,
     )
@@ -141,7 +141,8 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
             required_text = (
                 [binding["text"] for binding in payload["source_preservation"]["bindings"]
                  if binding.get("kind") in {"text", "table_cell"} and binding.get("text", "").strip()]
-                if ctx.source_reflow else _required_numeric_claims(content)
+                if ctx.source_reflow else _required_numeric_claims(
+                    content, quality_policy=read_quality_recovery_policy(ctx.snapshot))
             )
             font_profile = ctx.source_font_profile if ctx.source_reflow else None
             raster_authorized_measurement = False

@@ -226,6 +226,24 @@ def test_author_prompt_uses_content_grounded_neighbor_intent_without_fixed_layou
     assert "Preserve source-supported visual components as visual components" in text
     assert repaired.receipt["visual_intent_digest"] == visual_intent_receipt(prepared_intent)["visual_intent_digest"]
 
+    from services.svg_presentation_checkpoint import _required_numeric_claims
+
+    numeric_source = prepared_source.replace(
+        "- 목표 인프라 설계", "- 목표 인프라 설계\n- 처리율 42%, 총계 30.90, 대상 7개"
+    ).replace(
+        "원본 중앙 영역은 공백이며 원문 관계만 재구성합니다.",
+        "원본 중앙 영역은 공백이며 제작 지침 91%를 본문에 인쇄하지 않습니다."
+    ).replace(
+        "선택한 기준 PNG와 native binding에서 확인한 범위입니다.",
+        "기준 presentation 9274cc32-445e-53c4-9a8b-0def0f82f04c의 11페이지에서 확인했습니다."
+    )
+    reader_claims = _required_numeric_claims(numeric_source, quality_policy=policy)
+    assert {"42%", "30.90", "7개"} <= set(reader_claims)
+    assert not {"91%", "9274", "445", "11"} & set(reader_claims)
+    legacy_claims = _required_numeric_claims(numeric_source)
+    assert {"91%", "9274", "445", "11"} <= set(legacy_claims)
+    assert _required_numeric_claims(numeric_source, quality_policy=legacy_style["quality_recovery_policy"]) == legacy_claims
+
 
 def test_new_intent_seed_replays_exactly_and_historical_checkpoint_keeps_context(monkeypatch):
     from services.svg_visual_intent_checkpoint import freeze_visual_intents
