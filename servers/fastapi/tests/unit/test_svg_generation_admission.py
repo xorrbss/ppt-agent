@@ -422,7 +422,7 @@ def test_public_generation_integrity_replay_keeps_authoring_selection(monkeypatc
 
 
 @pytest.mark.parametrize("conflict", [None, "profile", "snapshot"])
-def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflict):
+def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflict, monkeypatch):
     import asyncio
     from unittest.mock import AsyncMock, Mock
 
@@ -456,3 +456,94 @@ def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflic
         pin_style.assert_called_once_with(request)
         checkpoint_session.commit.assert_awaited_once()
     owned_job.assert_awaited_once_with(checkpoint_session, stale_job.id, "attempt", fencing_token=9)
+    if conflict is None:
+        from copy import deepcopy
+        from services import svg_partial_recovery as recovery
+        from services.svg_authoring_profile import ART_DIRECTION_PROFILE_V8, read_quality_recovery_policy
+        from services.svg_generation_admission import pin_svg_style as official_pin_svg_style
+        from services import artifact_store, svg_asset_persistence
+        from models.generate_presentation_request import GeneratePresentationRequest
+        from utils.hashing import sha256_hex
+        owner, operation_id, job_id, presentation_id = (uuid.uuid4() for _ in range(4))
+        tenant = "fixture-tenant"
+        monkeypatch.setattr("utils.owner_context.get_current_owner_id", lambda: owner)
+        monkeypatch.setattr("utils.owner_context.get_current_tenant_id", lambda: tenant)
+        source_request = GeneratePresentationRequest(content="Fixture message", strategy="svg",
+                                                     n_slides=1, language="en")
+        snapshot = official_pin_svg_style(source_request)
+        assert read_quality_recovery_policy(snapshot) == {"id": "svg-quality-first", "version": 2}
+        immutable_request = source_request.model_dump(mode="json")
+        parent = SimpleNamespace(id=operation_id, owner_id=owner, error_code="svg_source_quality_failed",
+            request_payload={"generation_request": immutable_request})
+        source_job = SimpleNamespace(id=job_id, workspace_operation_id=operation_id,
+            request_payload=immutable_request, svg_style_snapshot=snapshot, total_slides=1,
+            authored_outline={"slides": [{"content": "Fixture message"}]})
+        asset = SimpleNamespace(digest="sha256:" + "a" * 64, offered_pages=[], slots=[],
+                                presentation_id=presentation_id, source_revision=1)
+        source_pointer = {"ref": str(uuid.uuid4()), "sha256": "a" * 64}
+        service = SimpleNamespace(resolve_ref=AsyncMock(return_value=SimpleNamespace(created_by_operation_id=operation_id)))
+        monkeypatch.setattr(artifact_store, "configured_public_artifact_service", lambda: service)
+        monkeypatch.setattr(svg_asset_persistence, "load_source_manifest_pointer", AsyncMock(return_value=asset))
+        input_digest = recovery.digest(dict(content="Fixture message", style=snapshot, index=0, count=1,
+            instructions=None, language="en", preset=None))
+        input_digest = recovery.digest({"page": input_digest, "assets": {}})
+        raw = '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"><text x="80" y="100" font-family="Noto Sans KR" font-size="32" font-weight="400" fill="#123456" text-anchor="start">Fixture message</text></svg>'
+        original = dict(svg_content=None, input_digest=input_digest, inflight=None,
+            source_manifest_ref=source_pointer, source_manifest_digest=asset.digest,
+            initial_quality={"passed": False, "failures": [{"code": "required_text_missing"}]})
+        normalized, _, author_digest, _, _, advisories = recovery._replay_sealed_author_transform(
+            original, raw, request=source_request, job=source_job, asset=asset, index=0)
+        author_receipt = dict(contract_version="svg-static/v2", provider="fixture", requested_model="fixture-model",
+            style_digest=snapshot["digest"], authoring_profile=dict(ART_DIRECTION_PROFILE_V8),
+            raw_digest="sha256:" + sha256_hex(raw.encode()), source_digest="sha256:" + author_digest,
+            validation_error=None, native_declarations=None, vector_icons_used=[])
+        original.update(source_digest=author_digest, last_valid_svg="historical-invalid-layout",
+            fontAdvisories=advisories, attempts=[dict(kind="provider", raw_response=raw, receipt=author_receipt)])
+        terminal = dict(schema="svg-provider-terminal/v1", terminal_event="response.completed",
+            operation_id=str(operation_id), job_id=str(job_id), owner_id=str(owner), tenant_id=tenant,
+            input_digest=input_digest, raw_response=raw, output_digest=sha256_hex(raw.encode()), usage={})
+        terminal["receipt_digest"] = recovery.digest(terminal)
+        original["provider_terminal_responses"] = {"author/1": terminal}
+        row = SimpleNamespace(slide_index=0, author_status="running", render_status="pending",
+                              persist_status="pending", svg_checkpoint=original)
+        calls = [SimpleNamespace(slide_index=0, stage="author", outcome="succeeded", state="reported",
+            reconciled_at=object(), provider_id="fixture", model_id="fixture-model")]
+        kwargs = dict(job=source_job, operation=parent, episode_calls=calls, completed=terminal,
+            session=object(), request=source_request, binding=None, vectors={}, vector_seed_witness=None)
+        before = deepcopy(original)
+        projected, witness = asyncio.run(recovery._completed_source_author_projection(original, row, **kwargs))
+        assert original == before and projected["attempts"] == original["attempts"]
+        assert projected["svg_content"] == normalized and witness["phase"] == "author-only"
+        assert "quality" not in projected and "initial_quality" not in projected and "png_sha256" not in projected
+        page = dict(slide_index=0, category="known", row_digest="fixture-row", phase="author-only",
+            svg_sha256=witness["render_svg_sha256"], source_svg_sha256=witness["source_svg_sha256"],
+            final_render_svg_sha256=witness["render_svg_sha256"], input_digest=input_digest,
+            author_receipt_digest=recovery.author_witness(projected))
+        manifest = {"pages": [page]}
+        plan = SimpleNamespace(manifest=manifest, manifest_hash=recovery.digest(manifest),
+                               baseline_payloads={0: projected})
+        child = recovery.cached_page_payload(row, plan, uuid.uuid4())
+        assert recovery.verify_cached_page(child, manifest, 0, input_digest) is page
+        assert "quality" not in child and "png_sha256" not in child and original == before
+        for violation in ("unknown", "body", "receipt", "input", "owner"):
+            candidate = deepcopy(original)
+            if violation == "unknown":
+                candidate["provider_failures"] = [{"code": "public_provider_result_unknown"}]
+            elif violation == "body":
+                candidate["attempts"][-1]["receipt"]["raw_digest"] = "sha256:" + "0" * 64
+            elif violation == "receipt":
+                candidate["attempts"][-1]["receipt"]["validation_error"] = "static-validation-failed"
+            elif violation == "input":
+                candidate["input_digest"] = "unbound-input"
+            else:
+                monkeypatch.setattr("utils.owner_context.get_current_owner_id", lambda: uuid.uuid4())
+            with pytest.raises(recovery.PartialRecoveryRejected):
+                asyncio.run(recovery._completed_source_author_projection(candidate, row, **kwargs))
+            monkeypatch.setattr("utils.owner_context.get_current_owner_id", lambda: owner)
+        legacy_request = GeneratePresentationRequest(content="Fixture message", strategy="svg",
+                                                     n_slides=1, language="en")
+        legacy_request._svg_quality_recovery_policy = {"id": "svg-quality-first", "version": 1}
+        source_job.svg_style_snapshot = official_pin_svg_style(legacy_request)
+        assert read_quality_recovery_policy(source_job.svg_style_snapshot) == {"id": "svg-quality-first", "version": 1}
+        assert asyncio.run(recovery._completed_source_author_projection(original, row, **kwargs)) is None
+        assert original == before

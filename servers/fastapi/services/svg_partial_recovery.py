@@ -794,6 +794,11 @@ async def _completed_repair_author_projection(payload, row, *, job, operation, s
 
 async def _terminal_repair_author_projection(payload, row, *, job, operation, seed, episode_calls, completed, session, request, binding, vectors, vector_seed_witness):
     """Recover only sealed current terminal output using a separate local replay witness."""
+    source_projection = await _completed_source_author_projection(payload, row, job=job,
+        operation=operation, episode_calls=episode_calls, completed=completed, session=session,
+        request=request, binding=binding, vectors=vectors, vector_seed_witness=vector_seed_witness)
+    if source_projection is not None:
+        return source_projection
     from utils.owner_context import get_current_owner_id, get_current_tenant_id
     owner, tenant = (get_current_owner_id(), get_current_tenant_id())
     if not owner or not tenant:
@@ -911,6 +916,88 @@ async def _terminal_repair_author_projection(payload, row, *, job, operation, se
     projected['last_valid_svg'] = normalized
     proof = {'schema': 'svg-terminal-repair-author-projection/v1', 'source_operation_id': str(operation.id), 'source_payload_digest': digest(payload), 'prior_candidate_digest': digest(marker['prior_candidate']), 'approved_gate_digest': digest(gate), 'completed_receipt_digest': completed['receipt_digest'], 'completed_output_digest': completed['output_digest'], 'current_author_witness_digest': author_witness(projected), 'current_author_svg_digest': sha256_hex(normalized.encode()), 'prior_svg_digest': sha256_hex(svg.encode()), 'prior_png_digest': restored['png_sha256'], 'input_digest': payload['input_digest'], 'terminal_recovery_witness': witness}
     return (projected, proof)
+
+
+async def _completed_source_author_projection(payload, row, *, job, operation, episode_calls,
+        completed, session, request, binding, vectors, vector_seed_witness):
+    """Project a valid v2 author-only response without changing historical receipts."""
+    from services.svg_authoring_profile import read_quality_recovery_policy
+    from utils.owner_context import get_current_owner_id, get_current_tenant_id
+    policy = read_quality_recovery_policy(job.svg_style_snapshot)
+    if ((policy or {}).get("version") != 2 or job.request_payload.get(LINEAGE_KEY)
+            or getattr(operation, "error_code", None) != "svg_source_quality_failed"
+            or row.author_status not in {"running", "failed"} or row.render_status != "pending"
+            or row.persist_status != "pending" or payload.get("svg_content") is not None
+            or completed is None):
+        return None
+    owner, tenant = get_current_owner_id(), get_current_tenant_id()
+    attempts = payload.get("attempts")
+    if (not owner or not tenant or operation.owner_id != owner
+            or job.workspace_operation_id != operation.id
+            or operation.request_payload.get("generation_request") != job.request_payload
+            or payload.get("inflight") is not None or _unknown_provider(payload)
+            or _completed_response(payload, job, operation, owner, tenant) != completed
+            or not isinstance(attempts, list) or not attempts
+            or not isinstance(attempts[-1], dict) or attempts[-1].get("kind") != "provider"):
+        reject("svg_partial_recovery_completed_author_unproven")
+    attempt = attempts[-1]
+    receipt = attempt.get("receipt")
+    raw = attempt.get("raw_response")
+    if (not isinstance(receipt, dict) or receipt.get("validation_error") is not None
+            or not isinstance(raw, str) or not raw.strip() or raw != completed.get("raw_response")
+            or str(receipt.get("raw_digest", "")).removeprefix("sha256:") != completed["output_digest"]
+            or receipt.get("contract_version") not in {"svg-static/v1", "svg-static/v2"}
+            or not receipt.get("provider") or not receipt.get("requested_model")
+            or receipt.get("style_digest") != job.svg_style_snapshot.get("digest")
+            or receipt.get("authoring_profile") != job.svg_style_snapshot.get("authoring_profile")):
+        reject("svg_partial_recovery_completed_author_unproven")
+    current_calls = [call for call in episode_calls if call.slide_index == row.slide_index
+                     and call.stage in {"author", "repair", "repair_remake", "repair_patch"}]
+    if (not current_calls or any(call.outcome != "succeeded" or call.reconciled_at is None
+            or call.state not in {"reported", "unavailable"} for call in current_calls)
+            or {(call.provider_id, call.model_id) for call in current_calls}
+               != {(receipt["provider"], receipt["requested_model"])}):
+        reject("svg_partial_recovery_completed_model_unproven")
+    from services.artifact_store import configured_public_artifact_service
+    from services.svg_asset_manifest import ArtifactPointer
+    from services.svg_asset_persistence import load_source_manifest_pointer
+    service = configured_public_artifact_service()
+    pointer = ArtifactPointer.model_validate(payload.get("source_manifest_ref"))
+    reference = await service.resolve_ref(session, artifact_id=pointer.ref,
+        owner_id=owner, tenant_id=tenant, expected_digest=pointer.sha256)
+    asset = await load_source_manifest_pointer(session, service,
+        pointer=payload.get("source_manifest_ref"), owner_id=owner, tenant_id=tenant)
+    current_binding = dict(pointer=deepcopy(payload["source_manifest_ref"]), digest=asset.digest,
+        presentation_id=str(asset.presentation_id), source_revision=asset.source_revision,
+        origin_operation_id=str(reference.created_by_operation_id))
+    if asset.digest != payload.get("source_manifest_digest") or binding not in (None, current_binding):
+        reject("svg_partial_recovery_asset_binding_changed")
+    normalized, _, author_digest, declarations, used, advisories = _replay_sealed_author_transform(
+        payload, raw, request=request, job=job, asset=asset, index=row.slide_index,
+        vectors=vectors, vector_seed_witness=vector_seed_witness)
+    if (str(receipt.get("source_digest", "")).removeprefix("sha256:") != author_digest
+            or payload.get("source_digest") not in (None, author_digest, "sha256:" + author_digest,
+                sha256_hex(normalized.encode()), "sha256:" + sha256_hex(normalized.encode()))):
+        reject("svg_partial_recovery_completed_author_unproven")
+    projected = deepcopy(payload)
+    projected.update(svg_content=normalized, last_valid_svg=normalized, source_digest=None, fontAdvisories=advisories)
+    for key in ("quality", "initial_quality", "png_path", "png_sha256", "browser_metrics", "local_readability_repair"):
+        projected.pop(key, None)
+    from services.generation_core.drivers.svg.native_declarations import (
+        bind_native_declarations, bound_declarations, declaration_receipt,
+    )
+    bind_native_declarations(projected, normalized, declarations)
+    bound, native_valid = bound_declarations(projected, normalized)
+    if declaration_receipt(bound) != declaration_receipt(declarations) or declarations is not None and not native_valid:
+        reject("svg_partial_recovery_completed_native_unproven")
+    from types import SimpleNamespace
+    witness = _author_render_chain(projected, raw, receipt, request=request, job=job, asset=asset,
+        index=row.slide_index, row=SimpleNamespace(author_status="completed", render_status="pending",
+            persist_status="pending", render_path=None, render_sha256=None),
+        completed=completed, vectors=vectors, vector_seed_witness=vector_seed_witness)
+    if witness.get("phase") != "author-only":
+        reject("svg_partial_recovery_completed_author_unproven")
+    return projected, witness
 
 
 
