@@ -1780,6 +1780,12 @@ def cached_page_payload(row, recovery, operation_id):
         final_render_svg_sha256=page.get("final_render_svg_sha256", page["svg_sha256"]))
     payload["partial_recovery"] = marker
     proof = recovery.manifest.get("final_selected_continuation")
+    if not proof and payload.get("final_selected_render_evidence"):
+        from services.svg_authoring_profile import read_quality_recovery_policy
+        source_snapshot = ((getattr(recovery, "archive", {}) or {}).get("job") or {}).get("svg_style_snapshot")
+        source_policy = read_quality_recovery_policy(source_snapshot)
+        if source_policy is not None and source_policy["version"] == 2:
+            payload.pop("final_selected_render_evidence")
     if proof is not None:
         from services.svg_final_selected_continuation import render_evidence_marker, verify_cached_render
         original = row.svg_checkpoint

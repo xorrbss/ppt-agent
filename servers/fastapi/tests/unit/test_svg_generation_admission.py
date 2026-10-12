@@ -532,7 +532,20 @@ def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflic
         manifest = {"pages": [page]}
         plan = SimpleNamespace(manifest=manifest, manifest_hash=recovery.digest(manifest),
                                baseline_payloads={0: projected})
+        projected_before_stale_case = deepcopy(projected)
+        plan.baseline_payloads[0] = deepcopy(plan.baseline_payloads[0])
+        plan.archive = {"job": {"svg_style_snapshot": deepcopy(snapshot)}}
+        plan.baseline_payloads[0]["final_selected_render_evidence"] = {"schemaVersion": "fixture-stale-final-review"}
+        stale_source_before = deepcopy(plan.baseline_payloads[0])
         child = recovery.cached_page_payload(row, plan, uuid.uuid4())
+        assert "final_selected_render_evidence" not in child
+        assert plan.baseline_payloads[0] == stale_source_before
+        assert projected == projected_before_stale_case
+        assert not child.get("quality") and not child.get("png_sha256")
+        invalid_final_child = deepcopy(child)
+        invalid_final_child["final_selected_render_evidence"] = deepcopy(stale_source_before["final_selected_render_evidence"])
+        with pytest.raises(ValueError, match="svg_final_selected_evidence_unproven"):
+            recovery.verify_cached_page(invalid_final_child, plan.manifest, 0, input_digest)
         assert recovery.verify_cached_page(child, manifest, 0, input_digest) is page
         assert "quality" not in child and "png_sha256" not in child and original == before
         bad_latest = deepcopy(original)
@@ -590,6 +603,27 @@ def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflic
                                                      n_slides=1, language="en")
         legacy_request._svg_quality_recovery_policy = {"id": "svg-quality-first", "version": 1}
         source_job.svg_style_snapshot = official_pin_svg_style(legacy_request)
+        legacy_cache_plan = deepcopy(plan)
+        legacy_cache_plan.archive = {"job": {"svg_style_snapshot": deepcopy(source_job.svg_style_snapshot)}}
+        legacy_cached_child = recovery.cached_page_payload(row, legacy_cache_plan, uuid.uuid4())
+        assert legacy_cached_child["final_selected_render_evidence"] == stale_source_before["final_selected_render_evidence"]
+        with pytest.raises(ValueError, match="svg_final_selected_evidence_unproven"):
+            recovery.verify_cached_page(legacy_cached_child, legacy_cache_plan.manifest, 0, input_digest)
+        from utils.hashing import canonical_json_digest
+        from services.svg_authoring_profile import read_authoring_profile
+        no_policy_snapshot = deepcopy(snapshot)
+        no_policy_snapshot.pop("quality_recovery_policy", None)
+        no_policy_snapshot.pop("quality_recovery_plan", None)
+        no_policy_snapshot["digest"] = canonical_json_digest({k: v for k, v in no_policy_snapshot.items() if k != "digest"}, allow_nan=True)
+        assert read_authoring_profile(no_policy_snapshot) == ART_DIRECTION_PROFILE_V8
+        assert read_quality_recovery_policy(no_policy_snapshot) is None
+        no_policy_cache_plan = deepcopy(plan)
+        no_policy_cache_plan.archive = {"job": {"svg_style_snapshot": no_policy_snapshot}}
+        no_policy_cached_child = recovery.cached_page_payload(row, no_policy_cache_plan, uuid.uuid4())
+        assert no_policy_cached_child["final_selected_render_evidence"] == stale_source_before["final_selected_render_evidence"]
+        assert no_policy_cache_plan.baseline_payloads[0] == stale_source_before
+        with pytest.raises(ValueError, match="svg_final_selected_evidence_unproven"):
+            recovery.verify_cached_page(no_policy_cached_child, no_policy_cache_plan.manifest, 0, input_digest)
         assert read_quality_recovery_policy(source_job.svg_style_snapshot) == {"id": "svg-quality-first", "version": 1}
         assert asyncio.run(recovery._completed_source_author_projection(original, row, **kwargs)) is None
         assert original == before
