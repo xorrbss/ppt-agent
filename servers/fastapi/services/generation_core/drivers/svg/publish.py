@@ -42,6 +42,8 @@ def svg_slide_content(payload: dict, *, role, source, pt_per_px: float,
             payload, pt_per_px=pt_per_px,
             verified_fixed_axis_migrations=sidecars))
     preservation = payload.get("source_preservation", {})
+    if preservation is None:
+        preservation = {}
     source_charts = (preservation.get("whole_page_native_groups") or []) + (preservation.get("source_native_charts") or [])
     if source_charts:
         from services.generation_core.native_objects import NativeObjects

@@ -566,3 +566,16 @@ def test_slide_content_carries_the_sidecar_and_only_a_receipt_summary():
     plain = svg_slide_content({"svg_content": payload["svg_content"], "quality": {}}, role="content",
                               source="", pt_per_px=0.75)
     assert "nativeObjects" not in plain and "nativeObjects" not in plain["svgReceipt"]
+    from copy import deepcopy
+    optional_payload = deepcopy(payload)
+    optional_payload["source_preservation"] = None
+    optional_before = deepcopy(optional_payload)
+    optional_content = svg_slide_content(optional_payload, role="content", source="# 표", pt_per_px=0.75)
+    assert optional_content["nativeObjects"] == content["nativeObjects"]
+    assert optional_content["svgReceipt"]["nativeObjects"] == content["svgReceipt"]["nativeObjects"]
+    assert optional_content["__svg__"] == content["__svg__"]
+    assert optional_payload == optional_before
+    source_required_payload = deepcopy(payload)
+    source_required_payload["source_preservation"] = {"source_native_charts": [{"element_id": "missing-source-chart"}]}
+    with pytest.raises(ValueError, match="svg_source_native_chart_unprojectable"):
+        svg_slide_content(source_required_payload, role="content", source="# 표", pt_per_px=0.75)
