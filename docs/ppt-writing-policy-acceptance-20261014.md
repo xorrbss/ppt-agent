@@ -22,6 +22,7 @@
 - Presentation: `94fd999f-620c-4bfc-983f-1df4a8ad0e49`, 게시 revision 1.
 - 최초 operation: `8f6072dc-7b50-47e5-9e19-24de1a0619d7`; 전체 디자인 검토 후 추가 검토 필요로 실패한 기록을 보존했다.
 - 정상 캐시 복구 operation: `877a92d5-5b42-400c-9a27-679dc790d3cf`, succeeded. 복구 계획의 known indices는 0부터 4까지, unknown indices는 없고 prospective author request는 0이었다.
+- 복구 후 생성 단계 designGate는 passed, designImprovementStatus는 satisfied, pageCoverageComplete는 true다. 5/5 페이지 증거와 child operation/job 결합을 독립 확인했다. 캐시의 source/input/PNG digest는 초기본과 같아 복구에서 디자인 자체가 개선됐다고 주장하지 않는다. 이 단계의 판정은 최종 PPTX 시각 검토와 별개다.
 - Export operation: `53104417-44dd-4d77-ab3f-c7ab1fb2bcd7`, succeeded.
 - 게시 artifact: `92d95767-4023-4d23-963e-b4662888367c`, 다운로드 HTTP 200, 69,234 bytes.
 - PPTX SHA-256: `29cd3ca4e4dc95cdf2d00d5331ac4efc3945e398e94d6b273f43dbdd33454de3`.
