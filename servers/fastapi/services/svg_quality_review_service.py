@@ -31,7 +31,7 @@ from services.workspace_authored_async_admission import admit_workspace_authored
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError, WorkspaceOperationLeaseLost, WorkspaceOperationResult,
 )
-from services.workspace_operation_runner import sanitize_workspace_event_payload
+from services.workspace_operation_runner import sanitize_workspace_event_payload, _public_admission_for_operation
 from utils.datetime_utils import get_current_utc_datetime
 
 
@@ -130,6 +130,8 @@ async def admit_svg_quality_review_operation(session, *, operation, presentation
 
 
 async def _assert_fence(session, claim, *, lock=False):
+    if lock:
+        await _public_admission_for_operation(session, claim.operation_id)
     statement = select(WorkspaceOperation.id).where(
         WorkspaceOperation.id == claim.operation_id,
         WorkspaceOperation.presentation_id == claim.presentation_id,
@@ -268,12 +270,11 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
                     request, claim.operation_id, claim.owner_scope)
             except ValueError as error:
                 raise NonRetryableWorkspaceOperationError(str(error)) from error
-            if (current_prepared["context"] != recovery_review["context"]
-                    or current_prepared["currentInputDigests"] != recovery_review["currentInputDigests"]
-                    or current_prepared["runtime"] != recovery_review["runtime"]
-                    or current_prepared["reusable"] != recovery_review["reusable"]
-                    or current_prepared["pages"] != recovery_review["pages"]):
-                raise NonRetryableWorkspaceOperationError("svg_quality_review_source_changed")
+            mismatched = [key for key in ("context", "currentInputDigests", "runtime", "reusable", "pages")
+                if current_prepared[key] != recovery_review[key]]
+            if mismatched:
+                raise NonRetryableWorkspaceOperationError("svg_quality_review_source_changed",
+                    detail={"stage": "source_revalidation:" + ",".join(mismatched)})
             from services.svg_quality_recovery_review import seal_saved_review
             recovery_advisory, publication = seal_saved_review(recovery_review, current_slides, vision, claim)
             vision = recovery_advisory["vision"]

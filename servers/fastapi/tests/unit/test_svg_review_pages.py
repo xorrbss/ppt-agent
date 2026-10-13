@@ -154,7 +154,7 @@ def _review_execution(monkeypatch, *, is_svg=True):
     @asynccontextmanager
     async def factory():
         yield session
-    claim = SimpleNamespace(operation_id=uuid.uuid4(), presentation_id=uuid.uuid4(), owner_id=None,
+    claim = SimpleNamespace(operation_id=uuid.uuid4(), presentation_id=uuid.uuid4(), owner_id=None, owner_scope=None,
         expected_revision=7, attempt_token="current-attempt", fencing_token=3, attempt_number=1,
         request_payload={"context": {"scope": "all", "slide_indices": [], "mode": "analyze_only"}})
     context = SimpleNamespace(claim=claim, progress=AsyncMock(return_value=True), raise_if_cancelled=AsyncMock())
@@ -203,6 +203,8 @@ def test_svg_review_cas_fence_conflict_rolls_back_advice_and_reports_lease_loss(
     import pytest
     from services.presentation_publication_service import PresentationPublicationConflict
     from services.workspace_operation_handler_registry import WorkspaceOperationLeaseLost
+    from services.svg_quality_review_service import _assert_fence as assert_fence
+    from unittest.mock import AsyncMock
 
     module, factory, context, _, _, session = _review_execution(monkeypatch)
     module.publish_presentation_revision.side_effect = PresentationPublicationConflict("stale_operation_fence")
@@ -210,6 +212,29 @@ def test_svg_review_cas_fence_conflict_rolls_back_advice_and_reports_lease_loss(
         asyncio.run(module.execute_svg_quality_review(context, factory))
     session.commit.assert_not_awaited()
     session.rollback.assert_awaited_once()
+    context.claim.owner_scope = "fixture-owner"
+    acquired = []
+    statements = []
+    async def admission(*_):
+        acquired.append("admission")
+    async def operation(statement):
+        acquired.append("operation")
+        statements.append(statement)
+        return context.claim.operation_id
+    monkeypatch.setattr(module, "_public_admission_for_operation", AsyncMock(side_effect=admission))
+    session.scalar = AsyncMock(side_effect=operation)
+    asyncio.run(assert_fence(session, context.claim, lock=True))
+    assert acquired == ["admission", "operation"]
+    assert statements[-1]._for_update_arg is not None
+    predicate = str(statements[-1])
+    assert all(name in predicate for name in ("owner_id", "owner_scope", "fencing_token",
+        "attempt_token", "cancel_requested_at", "lease_expires_at", "expected_revision"))
+    acquired.clear()
+    asyncio.run(assert_fence(session, context.claim, lock=False))
+    assert acquired == ["operation"] and statements[-1]._for_update_arg is None
+    session.scalar = AsyncMock(return_value=None)
+    with pytest.raises(WorkspaceOperationLeaseLost):
+        asyncio.run(assert_fence(session, context.claim, lock=True))
 
 
 def test_stale_measurement_and_missing_saved_png_stop_svg_review_before_provider(monkeypatch):

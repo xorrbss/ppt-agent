@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import math
+import re
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -2002,6 +2003,19 @@ async def claim_next_workspace_operation(
         return claim
 
 
+def _exception_diagnostics(error: BaseException) -> dict[str, Any]:
+    result = {"exception_class": type(error).__name__}
+    try:
+        frame = error.__traceback__
+        while frame is not None and frame.tb_next is not None:
+            frame = frame.tb_next
+        if frame is not None:
+            result.update(exception_frame=frame.tb_frame.f_code.co_name, exception_line=frame.tb_lineno)
+    except Exception:
+        pass
+    return result
+
+
 async def _transition_claim_failure(
     claim: WorkspaceOperationClaim,
     *,
@@ -2010,6 +2024,7 @@ async def _transition_claim_failure(
     detail: Mapping[str, Any] | None = None,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> bool:
+    original_code = code
     now = _utc_now()
     async with session_factory() as session:
         operation = await session.get(WorkspaceOperation, claim.operation_id)
@@ -2092,6 +2107,15 @@ async def _transition_claim_failure(
                 "max_attempts": operation.max_attempts,
             }
         )
+        if isinstance(original_code, str) and re.fullmatch(r"[a-z][a-z0-9_]{0,127}", original_code):
+            error_detail["original_error_code"] = original_code
+        for name in ("exception_class", "exception_frame"):
+            value = (detail or {}).get(name)
+            if isinstance(value, str) and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,127}", value):
+                error_detail[name] = value
+        line = (detail or {}).get("exception_line")
+        if type(line) is int and line > 0:
+            error_detail["exception_line"] = line
         failure_result = await _attach_durable_generation_timing(
             claim,
             operation.result if isinstance(operation.result, Mapping) else {},
@@ -4580,7 +4604,7 @@ class WorkspaceOperationRunner:
                 claim,
                 code=error.code,
                 retryable=error.retryable,
-                detail=error.detail,
+                detail={**(error.detail or {}), "exception_class": type(error).__name__},
                 session_factory=self.session_factory,
             )
         except PublicAdmissionRejected as error:
@@ -4614,7 +4638,7 @@ class WorkspaceOperationRunner:
                     await asyncio.gather(handler_task, return_exceptions=True)
                 await asyncio.shield(release_workspace_operation_claim(claim, session_factory=self.session_factory))
             raise
-        except Exception:
+        except Exception as error:
             # This is the catch-all for anything a handler (or the execution
             # scaffolding around it) didn't raise as one of the typed
             # workspace-operation errors above. Without logging here the
@@ -4630,6 +4654,7 @@ class WorkspaceOperationRunner:
                 claim,
                 code="workspace_operation_internal_error",
                 retryable=True,
+                detail=_exception_diagnostics(error),
                 session_factory=self.session_factory,
             )
         finally:

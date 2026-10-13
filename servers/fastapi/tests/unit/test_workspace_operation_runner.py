@@ -811,6 +811,11 @@ async def _runner_logs_unexpected_handler_exception(tmp_path: Path, caplog):
         # Retryable: requeued (not terminally failed) on the first attempt.
         assert operation.state == "queued"
         assert operation.error_code == "workspace_operation_internal_error"
+        assert operation.error_detail["original_error_code"] == "workspace_operation_internal_error"
+        assert operation.error_detail["exception_class"] == "RuntimeError"
+        assert operation.error_detail["exception_frame"] == "handler"
+        assert operation.error_detail["exception_line"] > 0
+        assert "boom" not in str(operation.error_detail)
 
         matching = [
             record
