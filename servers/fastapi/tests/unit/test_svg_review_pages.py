@@ -267,9 +267,14 @@ def test_skipped_svg_advisory_never_publishes_task_or_theme_success(monkeypatch)
 
     module, factory, context, presentation, _, session = _review_execution(monkeypatch)
     before = deepcopy(presentation.theme)
-    module.run_vision_advisory.return_value = {"skipped": "provider_failed"}
-    with pytest.raises(NonRetryableWorkspaceOperationError, match="svg_quality_review_advisory_unavailable"):
+    module.run_vision_advisory.return_value = {"skipped": "design_review_schema_or_coverage_invalid",
+        "schemaRejectionReason": "axis_keys", "parsedPageCount": 1, "parsedPageIndexCoverage": True,
+        "schemaRejectionFields": {"fieldNames": ["private-response-field"]}}
+    with pytest.raises(NonRetryableWorkspaceOperationError, match="svg_quality_review_advisory_unavailable") as failure:
         asyncio.run(module.execute_svg_quality_review(context, factory))
+    assert failure.value.detail["stage"] == "advisory:design_review_schema_or_coverage_invalid:axis_keys:terminal=unmeasured:indices=complete"
+    assert failure.value.detail["current"] == failure.value.detail["total"] == 1
+    assert "private-response-field" not in str(failure.value.detail)
     assert presentation.theme == before
     module.run_vision_advisory.assert_awaited_once()
     module.publish_presentation_revision.assert_not_awaited()

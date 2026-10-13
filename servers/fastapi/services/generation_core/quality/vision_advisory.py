@@ -903,7 +903,14 @@ async def run_vision_advisory(
                         "page_fields": ["slides", "index", "evaluated", "issues", "deckFlow"],
                     }.get(reason, ["slides"])
                     rejection_fields = {"fieldNames": field_names}
+                parsed_pages = payload.get("slides") if isinstance(payload, Mapping) else None
+                parsed_indices = [page.get("index") for page in parsed_pages if isinstance(page, Mapping)] if isinstance(parsed_pages, list) else []
+                parsed_coverage = (len(parsed_indices) == len(renders)
+                    and all(type(index) is int for index in parsed_indices)
+                    and set(parsed_indices) == set(range(1, len(renders) + 1)))
                 return {"skipped": "design_review_schema_or_coverage_invalid",
+                        "parsedPageCount": len(parsed_pages) if isinstance(parsed_pages, list) else 0,
+                        "parsedPageIndexCoverage": parsed_coverage,
                         **({"schemaRejectionReason": rejection_reasons[0]} if rejection_reasons else {}), **({"schemaRejectionFields": rejection_fields} if rejection_fields else {})}
         global_review = design_context is not None and design_context.get("reviewScope") in {"global", "edited"}
         if required and not global_review:

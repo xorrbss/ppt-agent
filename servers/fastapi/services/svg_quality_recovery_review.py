@@ -120,7 +120,7 @@ def prepare_saved_review(presentation, slides, indices, pngs, *, operation_id, o
     capacity = plan["slide_count"] if baseline else plan["review_group_size"]
     if len(changed) > capacity or baseline and plan["slide_count"] != len(slides):
         raise ValueError("svg_quality_review_single_call_capacity_exceeded")
-    context.update(reviewScope="edited", deckComplete=True, changedPageIndices=changed,
+    context.update(reviewScope="full" if baseline else "edited", deckComplete=True, changedPageIndices=changed,
                    representativeIndices=[], priorCandidates={})
     return dict(context=context, snapshot=snapshot, pages=pages, pngs=pngs, changed=changed,
         reusable=reusable, runtime=runtime, publication=publication,

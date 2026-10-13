@@ -17,7 +17,7 @@ from models.sql.presentation import PresentationModel, PRESENTATION_LIFECYCLE_DE
 from models.sql.slide import SlideModel
 from models.sql.workspace import WorkspaceOperation
 from services.generation_core.quality.advisory_record import advisory_record, advisory_ran, content_digest
-from services.generation_core.quality.vision_advisory import run_vision_advisory
+from services.generation_core.quality.vision_advisory import run_vision_advisory, _DESIGN_SCHEMA_REJECTION_REASONS
 from services.presentation_access_service import require_live_presentation
 from services.presentation_publication_service import PresentationPublicationConflict, publish_presentation_revision
 from services.provider_usage_instrumentation import public_operation_scope, provider_usage_scope, provider_operation_usage_scope
@@ -231,12 +231,26 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
     await context.raise_if_cancelled()
     subset = advisory_record(vision, digests if recovery_review is not None else [digests[index] for index in indices])
     if not advisory_ran(subset):
+        skipped = vision.get("skipped")
+        safe_skipped = skipped if isinstance(skipped, str) and skipped in {
+            "design_review_schema_or_coverage_invalid", "unparseable_response", "review_schema_invalid",
+            "review_input_capacity_unavailable", "render_coverage_invalid", "no_renders"} else "unavailable"
+        reason = vision.get("schemaRejectionReason")
+        safe_reason = reason if isinstance(reason, str) and reason in _DESIGN_SCHEMA_REJECTION_REASONS else "unspecified"
+        counts = usage.terminal_snapshot().get("counts") or {}
+        terminal = next((name for name in ("completed", "incomplete", "failed", "cancelled", "unknown")
+            if counts.get(name)), "unmeasured")
+        coverage = ("complete" if vision.get("parsedPageIndexCoverage") is True else
+            "invalid" if vision.get("parsedPageIndexCoverage") is False else "unmeasured")
         code = ("public_provider_result_unknown"
                 if vision.get("skipped") == "provider_outcome:public_provider_result_unknown"
                 else "svg_quality_review_input_capacity_unavailable"
                 if vision.get("skipped") == "review_input_capacity_unavailable"
                 else "svg_quality_review_advisory_unavailable")
-        raise NonRetryableWorkspaceOperationError(code, detail={"stage_timings_ms": {
+        raise NonRetryableWorkspaceOperationError(code, detail={
+            "stage": f"advisory:{safe_skipped}:{safe_reason}:terminal={terminal}:indices={coverage}",
+            "current": vision.get("parsedPageCount") if type(vision.get("parsedPageCount")) is int else 0,
+            "total": len(pngs), "stage_timings_ms": {
             "preflight": (vqa_started_at - started_at) * 1000,
             "vqa": (vqa_finished_at - vqa_started_at) * 1000,
         }})

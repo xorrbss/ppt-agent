@@ -316,6 +316,7 @@ def test_visual_review_passes_with_a_matching_clean_advisory(policy_version, mon
             expanded_prepared = saved_review.prepare_saved_review(saved_presentation, expanded, [0], [png] * 6,
                 operation_id=operation, owner_scope=owner)
             assert expanded_prepared["changed"] == list(range(6))
+            assert expanded_prepared["context"]["reviewScope"] == "full"
             saved_context["policy"] = {"id": "svg-quality-first", "version": 1}
             with pytest.raises(ValueError, match="single_call_capacity_exceeded"):
                 saved_review.prepare_saved_review(saved_presentation, expanded, [0], [png] * 6,
