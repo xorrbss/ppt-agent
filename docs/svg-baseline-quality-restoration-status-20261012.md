@@ -59,3 +59,25 @@ canonical 작업 `f50aa23c-e491-4ae0-80da-5429e74c8e02`에서는 작성 5회와 
 4. 실제 캡처 사례와 긴 덱을 승인 범위에서 검증하고 웹 적용·기존 정책의 실제 호환성을 확인한다.
 
 `compiled-spec-memory` 스킬은 현재 도구와 관련 경로에서 찾지 못해 자동 기록을 수행하지 않았다. 이 문서 작성이나 좁은 검증을 Spec 자동 기록 성공으로 표시하지 않는다.
+
+## 2026-10-13 최신 완료 증거
+
+위의 실패·미완료·미확인 기록은 각 단계의 역사로 보존한다. 이후 정상 생성·소유자 export·최종 PPTX review 및 현재 artifact 품질 연결이 아래 실제 증거로 완료됐다.
+
+- 현재 구현·런타임 HEAD: `bb6ee8ea004d639ede947b91f1e36f98f7b6c81c`.
+- 정상 presentation `6a027c7a-700a-4036-bcd8-d394c764939e`, revision 1, 12쪽. 최종 `canonical-twelve-editable.pptx`는 113291 bytes, SHA-256 `c4ebff7a5340fdf5de447fa2735c0ecfc1e9a743c43da5da7b60ab6d5f7086ae`.
+- 실제 Office 12쪽 렌더와 native 객체 3개(표 2개·차트 1개)의 편집 가능·데이터 일치를 확인했다. 정상 최종 review `9b87d29e-d41d-4c8d-8994-97d644969705`는 실제 VQA 1회, 검토 12쪽, issue 0, remaining 0이다.
+- 정상 소유자 timeline GET HTTP 200에서 `currentArtifactFidelity=passed`를 확인했다. 동일 artifact `60be0c32-083c-49b5-a85f-8a118969f1d7`, digest, source revision 1, export `5412df28-4881-41ae-baeb-ab094614a064`, 최종 review의 실제 producer 연결을 확인했다. 앞선 standalone consumer의 현재 읽기 미확인은 이 후속 정상 소유자 API 증거로 해소됐다.
+- export 당시 역사적 QualityReceipt의 `blocked`와 원본 실패 증거는 변경하지 않았다. 이 완료 기록은 위 정상 12쪽 전달 범위이며, 모든 source·모델 비교 벤치나 전체 release PASS를 주장하지 않는다. 올바른 URL `http://localhost:5000/presentation?id=6a027c7a-700a-4036-bcd8-d394c764939e`에서 실제 DOM `data-testid=svg-quality-status`의 현재 PPTX 검토 통과 표시를 확인했다. `location.search`의 id 일치, 실제 presentation GET HTTP 200·동일 id·12쪽, timeline HTTP 200도 확인했다. 이전 notfound는 `presentation_id`라는 잘못된 쿼리명 때문이며 인증 원인이 아니다. 화면 증거: [실제 품질 UI](C:/project/PPT-agent/delivery-backups/svg-quality-baseline-20261012/quality-ui-current-artifact-fidelity-verified-20261013.png). 마지막 scrollshot timeout은 위 확인 결과와 별도이다.
+- [전달 상태](C:/project/PPT-agent/delivery-backups/svg-quality-baseline-20261012/canonical-twelve-delivery-status-20261013.md), [정상 소유자 API 증거](C:/project/PPT-agent/delivery-backups/svg-quality-baseline-20261012/canonical-twelve-current-artifact-fidelity-api-proof.json), [통합 증거](C:/project/PPT-agent/delivery-backups/svg-quality-baseline-20261012/current-artifact-fidelity-integration-proof.json), [전달 검증](C:/project/PPT-agent/delivery-backups/svg-quality-baseline-20261012/canonical-twelve-delivery-verification.json).
+
+## 2026-10-13 5·7·8쪽 보완본의 현재 상태
+
+앞 절의 revision 1 결과와 PPTX는 당시의 정상 완료 기록이며 보존했다. 이후 같은 presentation의 5쪽 문장 종결, 7쪽 조사 줄바꿈, 8쪽 순차 관계를 고쳐 revision 4의 12쪽을 게시했다. 나머지 9쪽의 SVG·PNG와 원문, native 객체 계약을 보존했다. 실제 5·7·8쪽 PNG는 독립 검토와 root 확인을 거쳤다.
+
+- 정상 source review `0a2f8032-de53-4e4f-b454-2d36998c6fbe`는 12쪽을 검토했고 issue 0, qualityRecovery passed, blocking 0, unreviewed 0, 실제 VQA 1회와 자동 재시도 0회를 기록했다.
+- 정상 export `9df9a2a7-e8ee-44aa-bf8f-92b295298340`의 새 PublicArtifact는 `3193540b-7829-4be6-ab8b-db02024b51c1`이다. 새 [편집 가능 PPTX](C:/project/PPT-agent/delivery-backups/svg-quality-baseline-20261012/polish-20261013/polished-twelve-editable-revision-4.pptx)는 113537 bytes, SHA-256 `975f7b85796cd1c02dda90da5d458eacca1441e722b2d072b98e0d73c3337560`이다.
+- 실제 Office에서 새 PPTX의 12쪽을 렌더했다. 원본과 새 파일의 8·9쪽 표 셀/병합, 12쪽 차트 시리즈·범주·값이 같고, 변경하지 않은 9쪽 PNG 해시가 같다. 원본 PPTX 해시 `c4ebff7a5340fdf5de447fa2735c0ecfc1e9a743c43da5da7b60ab6d5f7086ae`도 그대로다.
+- 새 PublicArtifact에 묶은 final_pptx review `5b54fbbb-ca41-4214-b319-9f936f20a871`는 실제 VQA 논리 호출 1회를 시작했으나 공급자 결과·사용량이 미확정(`public_provider_result_unknown`)인 상태로 실패했다. 비용 미확정 1건이며 입력·출력 토큰, 실제 비용, 사용 영수증이 없다. 전송 전 실패라고 확정할 증거가 없으므로 임의 재요청·영수증 보정 없이 보존한다. **새 PPTX의 final review 및 currentArtifactFidelity passed는 확인되지 않았다.**
+
+새 파일의 현재 전달 상태와 남은 승인 범위는 [보완본 전달 상태](C:/project/PPT-agent/delivery-backups/svg-quality-baseline-20261012/polish-20261013/polished-twelve-delivery-status-20261013.md)에 기록했다. 위 source·export·Office 완료와 final review 미확정은 서로 다른 검증 단계다.
