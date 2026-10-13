@@ -7,7 +7,7 @@ from fastapi import HTTPException
 
 from models.authored_vnext.deck import MasterDigestPin
 from models.authored_vnext.master.contract import DeckMasterContract
-from models.generate_presentation_request import AuthoredMasterPinInput
+from models.generate_presentation_request import AuthoredMasterPinInput, GeneratePresentationRequest
 from services.authored_vnext.generation.errors import PublishedMasterRequiredError
 from services.authored_vnext.generation.legacy_pin import ResolvedLegacyMasterPin
 from services.generation_core.style.design_pack_projection import DesignPackProjectionError
@@ -18,6 +18,34 @@ from services.svg_generation_admission import (
     source_svg_capability,
 )
 from tests.support.authored_vnext_master_fixture import master_contract_payload
+
+
+def test_partial_recovery_page_input_digest_matches_new_and_legacy_svg_inputs():
+    from services.svg_partial_recovery import _expected_page_input_digest
+    from services.svg_presentation_checkpoint import _digest
+    from services.ppt_writing_policy import WRITING_POLICY_ID
+
+    legacy = GeneratePresentationRequest(content="Quarterly update")
+    current = legacy.model_copy(update={"writing_policy": WRITING_POLICY_ID})
+    job = SimpleNamespace(
+        authored_outline={"slides": [{"content": "Page one"}]},
+        svg_style_snapshot={"digest": "frozen-style"},
+        total_slides=1,
+    )
+    page_assets = {"asset-1": {"sha256": "frozen-asset"}}
+    page_input = {
+        "content": "Page one", "style": job.svg_style_snapshot, "index": 0,
+        "count": 1, "instructions": None, "language": None, "preset": None,
+    }
+    legacy_digest = _digest({"page": _digest(page_input), "assets": page_assets})
+    current_digest = _digest({
+        "page": _digest({**page_input, "writing_policy": WRITING_POLICY_ID}),
+        "assets": page_assets,
+    })
+
+    assert _expected_page_input_digest(legacy, job, 0, page_assets) == legacy_digest
+    assert _expected_page_input_digest(current, job, 0, page_assets) == current_digest
+    assert current_digest != legacy_digest
 
 
 @pytest.mark.parametrize("slide_count", [1, 2, 5, 6, 12, 80])

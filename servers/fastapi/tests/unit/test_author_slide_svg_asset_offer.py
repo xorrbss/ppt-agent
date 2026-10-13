@@ -621,13 +621,20 @@ def test_writing_policy_routes_copy_corrections_without_unlocking_verbatim_sourc
         writing_policy=writing_policy, source_preserved=source_preserved,
         correction_mode='local_repair', correction_hint='writing_policy_visible_symbols: middle_dot',
         previous_svg=response,
+        source_images={'source-slot-generated-scene':{'data_url':_data_url(), 'description':'선택형 생성 삽화',
+                                        'kind':'illustration', 'required':False, 'allowOmit':True}},
+        canonical_source_images=True,
     ))
     prompt = ' '.join(seen['messages'][0].content.split())
+    source_message = seen['messages'][1].content[0].text
+    assert ('"allowOmit": true' in source_message) == editable
     assert result.svg_content
     if editable:
         assert 'explicitly authorizes changing that text' in prompt
         assert 'Ordinary generated prose may be rewritten naturally' in prompt
         assert 'Do not remove or rewrite source wording to fit.' not in prompt
+        assert 'omit a required source image' in prompt.lower()
+        assert 'optional generated visual support' in prompt
     else:
         assert 'Do not remove or rewrite source wording to fit.' in prompt
         assert 'explicitly authorizes changing that text' not in prompt

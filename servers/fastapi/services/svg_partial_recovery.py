@@ -397,6 +397,16 @@ def _frozen_vector_offer(seed_row, job, operation, owner, tenant):
         "plan_digest": digest(seed), "files": files}
 
 
+def _expected_page_input_digest(request, job, index, page_assets):
+    page_input = {"content": job.authored_outline["slides"][index]["content"],
+        "style": job.svg_style_snapshot, "index": index, "count": job.total_slides,
+        "instructions": request.instructions, "language": (request.language or "").strip() or None,
+        "preset": request.codex_generation_preset}
+    if getattr(request, "writing_policy", None) is not None:
+        page_input["writing_policy"] = request.writing_policy
+    return digest({"page": digest(page_input), "assets": page_assets})
+
+
 def _author_render_chain(payload, raw, receipt, *, request, job, asset, index,
                          row=None, completed=None, vectors=None, vector_seed_witness=None):
     """Replay the existing local transforms; hashes alone never authorize bytes."""
@@ -413,11 +423,7 @@ def _author_render_chain(payload, raw, receipt, *, request, job, asset, index,
     offered = next((page.slot_ids for page in asset.offered_pages if page.page_index == index), ())
     slots = {slot.slot_id: slot for slot in asset.slots if slot.slot_id in offered}
     page_assets = {key: slot.model_dump(mode="json", by_alias=True) for key, slot in slots.items()}
-    expected_input = digest({"content": job.authored_outline["slides"][index]["content"],
-        "style": job.svg_style_snapshot, "index": index, "count": job.total_slides,
-        "instructions": request.instructions, "language": (request.language or "").strip() or None,
-        "preset": request.codex_generation_preset})
-    expected_input = digest({"page": expected_input, "assets": page_assets})
+    expected_input = _expected_page_input_digest(request, job, index, page_assets)
     if request.source_mode is None and payload.get("input_digest") != expected_input:
         reject("svg_partial_recovery_page_input_changed")
     # The current author transforms declarations and serializes XML before
@@ -671,8 +677,7 @@ def _replay_sealed_author_transform(payload, raw, *, request, job, asset, index,
     offered = next((page.slot_ids for page in asset.offered_pages if page.page_index == index), ())
     slots = {slot.slot_id: slot for slot in asset.slots if slot.slot_id in offered}
     page_assets = {key: slot.model_dump(mode='json', by_alias=True) for key, slot in slots.items()}
-    expected_input = digest({'content': job.authored_outline['slides'][index]['content'], 'style': job.svg_style_snapshot, 'index': index, 'count': job.total_slides, 'instructions': request.instructions, 'language': (request.language or '').strip() or None, 'preset': request.codex_generation_preset})
-    expected_input = digest({'page': expected_input, 'assets': page_assets})
+    expected_input = _expected_page_input_digest(request, job, index, page_assets)
     if request.source_mode is None and payload.get('input_digest') != expected_input:
         reject('svg_partial_recovery_page_input_changed')
     if request.source_mode == 'source_content_restyle':
