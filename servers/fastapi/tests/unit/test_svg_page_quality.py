@@ -302,6 +302,24 @@ def test_visual_review_passes_with_a_matching_clean_advisory(policy_version, mon
             incomplete_record, _ = seal_saved_review(prepared, slides, incomplete,
                 SimpleNamespace(expected_revision=1, operation_id=operation))
             assert incomplete_record["vision"]["designGate"]["status"] == "unreviewed"
+            from services import svg_quality_recovery_review as saved_review
+            parent = dict(parentOperationId=operation, parentJobId=job, sourceGenerationRevision=1)
+            parent["digest"] = content_digest(parent)
+            saved_presentation = SimpleNamespace(id=presentation, owner_id=owner, revision=1,
+                theme={"svg": {"styleSnapshot": snapshot, "qualityRecoveryPublication": parent}})
+            expanded = [deepcopy(slides[index % 2]) for index in range(6)]
+            monkeypatch.setattr(saved_review, "saved_review_runtime", lambda: {"fixture": "current-runtime"})
+            monkeypatch.setattr("services.svg_authoring_profile.read_quality_recovery_plan",
+                lambda _: dict(slide_count=6, review_group_size=5))
+            monkeypatch.setattr("services.generation_core.drivers.svg.quality._candidate_local_valid", lambda *a, **k: True)
+            monkeypatch.setattr("services.generation_core.drivers.svg.quality._design_context", lambda *a, **k: saved_context)
+            expanded_prepared = saved_review.prepare_saved_review(saved_presentation, expanded, [0], [png] * 6,
+                operation_id=operation, owner_scope=owner)
+            assert expanded_prepared["changed"] == list(range(6))
+            saved_context["policy"] = {"id": "svg-quality-first", "version": 1}
+            with pytest.raises(ValueError, match="single_call_capacity_exceeded"):
+                saved_review.prepare_saved_review(saved_presentation, expanded, [0], [png] * 6,
+                    operation_id=operation, owner_scope=owner)
         publication = dict(schema="svg-quality-recovery-publication/v1", gateDigest=vision["designGate"]["digest"],
             parentOperationId=operation, parentJobId=job, sourceRevision=1, sourceGenerationRevision=1,
             snapshotDigest=content_digest(snapshot), sourceContentDigests=[content_digest(slide.content["source"]) for slide in slides],

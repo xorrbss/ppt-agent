@@ -107,7 +107,7 @@ def prepare_saved_review(presentation, slides, indices, pngs, *, operation_id, o
     # Explicit subset pages refresh locally; every deck page refreshes globally.
     changed = sorted(set(indices) | (set(range(len(slides))) - set(reusable)))
     plan = read_quality_recovery_plan(snapshot)
-    if not plan or len(changed) > plan["review_group_size"]:
+    if not plan:
         raise ValueError("svg_quality_review_single_call_capacity_exceeded")
     job = SimpleNamespace(id=publication["parentJobId"], workspace_operation_id=operation_id,
                           presentation_id=presentation.id)
@@ -116,6 +116,10 @@ def prepare_saved_review(presentation, slides, indices, pngs, *, operation_id, o
         quality_review_contents=[(slide.content or {}).get("source") for slide in slides],
         quality_recovery_runtime_binding=content_digest(runtime))
     context = _design_context(ctx, pages, job=job, read_png=lambda payload: None)
+    baseline = baseline_review_active(context)
+    capacity = plan["slide_count"] if baseline else plan["review_group_size"]
+    if len(changed) > capacity or baseline and plan["slide_count"] != len(slides):
+        raise ValueError("svg_quality_review_single_call_capacity_exceeded")
     context.update(reviewScope="edited", deckComplete=True, changedPageIndices=changed,
                    representativeIndices=[], priorCandidates={})
     return dict(context=context, snapshot=snapshot, pages=pages, pngs=pngs, changed=changed,
