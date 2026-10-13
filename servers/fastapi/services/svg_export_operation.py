@@ -269,6 +269,112 @@ async def render_and_export_svgs(claim, *, tenant_id, svgs, notes, export_format
         "role": exported.role, **exported.resource_metrics,
         "public_export_worker_evidence": dict(exported.execution_evidence)})
 
+async def svg_source_review_context(session, presentation):
+    svg_meta = (presentation.theme or {}).get("svg", {})
+    source_review = dict(snapshot=svg_meta.get('styleSnapshot'), publication=svg_meta.get('qualityRecoveryPublication'), producer=None)
+    publication = source_review['publication']
+    if isinstance(publication, Mapping):
+        try:
+            producer_id = uuid.UUID(str(publication.get('parentOperationId')))
+        except (ValueError, TypeError):
+            producer_id = None
+        if producer_id is not None:
+            from models.sql.workspace import WorkspaceOperation
+            producer = await session.get(WorkspaceOperation, producer_id)
+            if producer is not None:
+                source_review['producer'] = dict(operationId=str(producer.id), presentationId=str(producer.presentation_id), ownerId=str(producer.owner_id), ownerScope=str(producer.owner_scope), sourceRevision=producer.result_revision, state=producer.state, kind=producer.kind)
+    return source_review
+
+
+async def current_svg_artifact_fidelity(session, presentation, review_operation):
+    from copy import deepcopy
+    from sqlalchemy import select
+    from models.sql.public_artifact import PublicArtifact
+    from models.sql.workspace import WorkspaceArtifact, WorkspaceOperation
+    from models.sql.slide import SlideModel
+    from services.svg_export_visual_review import svg_visual_review
+    from services.svg_final_pptx_review import final_pptx_visual_domain
+    from utils.hashing import sha256_hex
+    from utils.owner_context import get_current_owner_id, get_current_tenant_id
+
+    meta = (presentation.theme or {}).get("svg") or {}
+    reviews = meta.get("finalPptxReviews") or {}
+    entries = [entry for entry in reviews.values() if isinstance(entry, dict) and entry.get("operationId") == str(review_operation.id)]
+    if not entries:
+        return None
+    review = entries[0]
+    view = dict(artifactId=review.get("artifactId"), artifactDigest=review.get("artifactDigest"),
+                sourceRevision=review.get("sourceRevision"), exportOperationId=review.get("parentExportOperationId"),
+                reviewOperationId=str(review_operation.id), reviewDigest=review.get("digest"))
+
+    def unavailable(code):
+        return dict(view, status="failed", reasonCode=code)
+
+    if (len(entries) != 1 or review_operation.kind != "quality.review" or review_operation.state != "succeeded"
+            or review_operation.owner_id != presentation.owner_id or get_current_owner_id() != presentation.owner_id
+            or review_operation.presentation_id != presentation.id or review_operation.result_revision != presentation.revision
+            or review.get("sourceRevision") != presentation.revision or review.get("ownerId") != str(presentation.owner_id)
+            or review.get("ownerScope") != str(review_operation.owner_scope)):
+        return unavailable("svg_final_pptx_visual_review_owner_stale")
+    try:
+        public_id = uuid.UUID(str(review.get("artifactId")))
+        export_id = uuid.UUID(str(review.get("parentExportOperationId")))
+    except (ValueError, TypeError):
+        return unavailable("svg_final_pptx_artifact_binding_invalid")
+    from models.svg_quality_review import SvgQualityReviewRequest
+    request_payload = await session.scalar(select(WorkspaceOperation.request_payload).where(
+        WorkspaceOperation.id == review_operation.id, WorkspaceOperation.owner_id == presentation.owner_id))
+    try:
+        request = SvgQualityReviewRequest.model_validate((request_payload or {}).get("context") or {})
+    except ValueError:
+        return unavailable("svg_final_pptx_visual_review_stale")
+    if request.target != "final_pptx" or request.artifact_id != public_id or request.scope != "all":
+        return unavailable("svg_final_pptx_visual_review_stale")
+    if (request_payload or {}).get("principal_tenant_id") != get_current_tenant_id():
+        return unavailable("svg_final_pptx_visual_review_owner_stale")
+    public = await session.get(PublicArtifact, public_id)
+    binding = await session.scalar(select(WorkspaceArtifact).where(WorkspaceArtifact.public_artifact_id == public_id, WorkspaceArtifact.presentation_id == presentation.id, WorkspaceArtifact.owner_id == presentation.owner_id, WorkspaceArtifact.source_revision == presentation.revision, WorkspaceArtifact.kind == 'export.pptx'))
+    if (public is None or binding is None or public.kind != "presentation-pptx"
+            or public.owner_id != presentation.owner_id or public.tenant_id != get_current_tenant_id()
+            or binding.public_artifact_id != public_id or binding.presentation_id != presentation.id
+            or binding.owner_id != presentation.owner_id or binding.source_revision != presentation.revision
+            or binding.operation_id != export_id or review.get("artifactDigest") != "sha256:" + public.sha256
+            or review.get("tenantId") != public.tenant_id):
+        return unavailable("svg_final_pptx_artifact_binding_invalid")
+    export = await session.get(WorkspaceOperation, export_id)
+    if (export is None or export.kind != "export.pptx" or export.state != "succeeded"
+            or export.owner_id != presentation.owner_id or export.presentation_id != presentation.id
+            or export.expected_revision != presentation.revision or export.result_revision != presentation.revision
+            or str(export.owner_scope) != str(review_operation.owner_scope)):
+        return unavailable("svg_final_pptx_export_not_succeeded")
+    export_payload = await session.scalar(select(WorkspaceOperation.request_payload).where(
+        WorkspaceOperation.id == export.id, WorkspaceOperation.owner_id == presentation.owner_id))
+    if (export_payload or {}).get("principal_tenant_id") != get_current_tenant_id():
+        return unavailable("svg_final_pptx_visual_review_owner_stale")
+    slides = list((await session.scalars(select(SlideModel).where(SlideModel.presentation == presentation.id).order_by(SlideModel.index))).all())
+    try:
+        svg_export_admission_snapshot(presentation, slides)
+    except ValueError as error:
+        code = str(error)
+        allowed = {"svg_export_published_source_required", "svg_export_source_snapshot_invalid",
+                   "svg_quality_recovery_export_parent_invalid", "svg_quality_recovery_export_review_required",
+                   "svg_authoring_profile_invalid", "svg_authoring_profile_snapshot_digest_mismatch", "svg_quality_recovery_profile_invalid"}
+        return unavailable(code if code in allowed else "svg_export_source_snapshot_invalid")
+    identity = dict(presentationId=str(presentation.id), ownerId=str(presentation.owner_id),
+                    ownerScope=str(review_operation.owner_scope), sourceRevision=presentation.revision)
+    source_context = await svg_source_review_context(session, presentation)
+    source = svg_visual_review(slides=slides, advisory=meta.get("advisory"),
+                               expected_binding=dict(identity, _generationSourceReview=source_context))
+    metrics = deepcopy(export.result or {})
+    metrics["final_pptx_visual_review"] = deepcopy(review)
+    domain = final_pptx_visual_domain(source, worker_metrics=metrics, artifact_digest=review["artifactDigest"],
+                                     operation_id=str(export.id), presentation_id=str(presentation.id),
+                                     source_revision=presentation.revision,
+                                     source_digests=[sha256_hex((slide.svg_content or "").encode()) for slide in slides],
+                                     expected_binding=dict(identity, tenantId=public.tenant_id))
+    return dict(view, status=domain["status"], reasonCode=domain.get("reasonCode"))
+
+
 async def execute_svg_workspace_export(context, *, presentation, admission, session_factory):
     from services.workspace_operation_handler_registry import (
         NonRetryableWorkspaceOperationError,
@@ -397,23 +503,8 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
         await context.progress(stage="export_rendering", percent=10)
         svg_meta = ((presentation.theme or {}).get("svg") or {})
         advisory = svg_meta.get("advisory")
-        source_review = dict(snapshot=svg_meta.get("styleSnapshot"),
-                             publication=svg_meta.get("qualityRecoveryPublication"), producer=None)
-        publication = source_review["publication"]
-        if isinstance(publication, Mapping):
-            try:
-                producer_id = uuid.UUID(str(publication.get("parentOperationId")))
-            except (ValueError, TypeError):
-                producer_id = None
-            if producer_id is not None:
-                from models.sql.workspace import WorkspaceOperation
-                async with session_factory() as producer_session:
-                    producer = await producer_session.get(WorkspaceOperation, producer_id)
-                    if producer is not None:
-                        source_review["producer"] = dict(operationId=str(producer.id),
-                            presentationId=str(producer.presentation_id), ownerId=str(producer.owner_id),
-                            ownerScope=str(producer.owner_scope), sourceRevision=producer.result_revision,
-                            state=producer.state, kind=producer.kind)
+        async with session_factory() as producer_session:
+            source_review = await svg_source_review_context(producer_session, presentation)
 
         async def run_worker(slide_refs):
             asset_bindings = None

@@ -1410,6 +1410,14 @@ async def workspace_timeline(
         else:
             progress = row.progress or {}
             capacity_waiting, queue_position = _capacity_wait_projection(row)
+            result = _safe_payload(row.result)
+            if row.kind == "quality.review" and isinstance(result, dict) and presentation.is_svg():
+                from services.svg_export_operation import current_svg_artifact_fidelity
+                fidelity = await current_svg_artifact_fidelity(session, presentation, row)
+                if fidelity is not None:
+                    quality_status = dict(result.get("qualityStatus") or {})
+                    quality_status["currentArtifactFidelity"] = fidelity
+                    result = dict(result, qualityStatus=quality_status)
             items.append(
                 {
                     "anchor_type": "operation",
@@ -1426,7 +1434,7 @@ async def workspace_timeline(
                     "error_message": _SAFE_ERROR_MESSAGES.get(row.error_code or ""),
                     "retryable": _operation_retryable(row),
                     "retry_count": row.retry_count,
-                    "result": _safe_payload(row.result),
+                    "result": result,
                     "version": row.version,
                     "expected_revision": row.expected_revision,
                     "result_revision": row.result_revision,

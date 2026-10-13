@@ -114,9 +114,124 @@ def test_persisted_domains_are_connected_without_claiming_visual_or_native_accep
     assert validated.image_content_integrity.status == "passed"
     assert validated.visual_review.required and validated.visual_review.status == "failed"
     assert validated.performance.status == "not_assessed"
-    assert validated.native_coverage_ooxml.status == "pending"
+    assert validated.native_coverage_ooxml.status == 'not_required'
+    assert validated.native_coverage_ooxml.required is False
     assert validated.release_readiness == "blocked"
     assert validated.authoring.evidence.input_digest.startswith("sha256:")
+
+    # Current review acceptance is a read projection; the earlier receipt stays historical.
+    import asyncio
+    import uuid
+    from copy import deepcopy
+    from pathlib import Path
+    from types import SimpleNamespace
+    from models.sql.presentation import PresentationModel
+    from models.sql.slide import SlideModel
+    from models.sql.workspace import WorkspaceArtifact, WorkspaceOperation
+    from services.generation_core.quality.advisory_record import advisory_record, content_digest
+    from services.svg_export_operation import current_svg_artifact_fidelity, svg_source_review_context
+    from services.svg_export_visual_review import split_page_advisories, assemble_page_advisory
+    from services.svg_final_pptx_review import seal_final_review
+    from services.workspace_operation_principal import operation_principal
+    from utils.hashing import canonical_json_digest, sha256_hex
+    from workers import public_svg_pptx_render
+    from workers.public_svg_pptx_convert import converter_digest
+
+    owner, presentation_id, review_id, export_id, public_id = [uuid.uuid4() for _ in range(5)]
+    tenant = "synthetic-review-tenant"
+    svg = slide.svg_content
+    svg_digest, png_digest, artifact_digest = sha256_hex(svg.encode()), "2" * 64, "3" * 64
+    source_content = deepcopy(slide.content)
+    source_content["svgReceipt"].update(png_sha256=png_digest)
+    source_content["svgReceipt"]["quality"] = dict(passed=True, verified=True, measurement_complete=True,
+        source_digest="sha256:" + svg_digest, png_digest="sha256:" + png_digest)
+    current_slide = SlideModel(id=uuid.uuid4(), presentation=presentation_id, owner_id=owner, index=0,
+                              source_format="svg", svg_content=svg, content=source_content)
+    source_vision = dict(promptVersion="svg-required-visual-review/v1", slideCount=1, model="synthetic-model",
+                         reviewedPageIndices=[0], reviewedPngDigests=[png_digest], slides=[dict(index=0, issues=[])])
+    page_records = split_page_advisories(source_vision, [current_slide], [0])
+    advisory = assemble_page_advisory([current_slide], page_records)
+    identity = dict(presentationId=str(presentation_id), ownerId=str(owner), ownerScope="synthetic-owner", sourceRevision=1)
+    binding_body = dict(identity, schemaVersion="svg-visual-review-operation-binding/v1", operationId=str(uuid.uuid4()),
+                        sourceDigests=[svg_digest], pngDigests=[png_digest], pageRecordDigests=[item["digest"] for item in page_records])
+    advisory["operationBinding"] = dict(binding_body, digest=content_digest(binding_body))
+    snapshot = dict(authoring_profile="art-direction-v1@8")
+    snapshot["digest"] = canonical_json_digest(snapshot, allow_nan=True)
+    current = PresentationModel(id=presentation_id, owner_id=owner, n_slides=1, mode="svg", revision=1,
+                                theme=dict(svg=dict(styleSnapshot=snapshot, advisory=advisory)))
+    proof = dict(schemaVersion=public_svg_pptx_render.SCHEMA, status="measured", artifactDigest="sha256:" + artifact_digest,
+                 artifactDigestAfter="sha256:" + artifact_digest, hashInvariant=True, openReadOnly=True, openWithWindow=False,
+                 operationId=str(export_id), presentationId=str(presentation_id), sourceRevision=1,
+                 sourceDigests=[svg_digest], ownerId=str(owner), tenantId=tenant, pageCount=1,
+                 converterDigest=converter_digest(), checkerCodeDigest=sha256_hex(Path(public_svg_pptx_render.__file__).read_bytes()),
+                 availablePhysicalMemoryBytes=2**40, pages=[dict(index=0, pngSha256=png_digest)])
+    proof["evidenceDigest"] = canonical_json_digest(proof)
+    producer = seal_final_review(SimpleNamespace(operation_id=review_id, owner_id=owner, owner_scope="synthetic-owner",
+        presentation_id=presentation_id, expected_revision=1), dict(proof=proof, artifactId=str(public_id),
+        artifactDigest="sha256:" + artifact_digest, parentExportOperationId=str(export_id)), source_vision)
+    current.theme["svg"]["finalPptxReviews"] = {artifact_digest: producer}
+    old_receipt = validated.model_dump(mode="json", by_alias=True)
+    export = SimpleNamespace(id=export_id, kind="export.pptx", state="succeeded", owner_id=owner, owner_scope="synthetic-owner",
+        presentation_id=presentation_id, expected_revision=1, result_revision=1,
+        result=dict(quality_receipt=deepcopy(old_receipt), public_export_worker_evidence=dict(structuralReadback=dict(finalPptxRender=proof))))
+    review_operation = SimpleNamespace(id=review_id, kind="quality.review", state="succeeded", owner_id=owner,
+        owner_scope="synthetic-owner", presentation_id=presentation_id, result_revision=1)
+    public = SimpleNamespace(id=public_id, kind="presentation-pptx", owner_id=owner, tenant_id=tenant, sha256=artifact_digest)
+    binding = SimpleNamespace(public_artifact_id=public_id, operation_id=export_id, owner_id=owner,
+                              presentation_id=presentation_id, source_revision=1)
+    review_request = dict(principal_tenant_id=tenant, context=dict(scope="all", slide_indices=[], mode="analyze_only",
+                          target="final_pptx", artifact_id=str(public_id)))
+    export_request = dict(principal_tenant_id=tenant)
+
+    class ReadSession:
+        async def get(self, model, key):
+            return {public_id: public, export_id: export}.get(key)
+        async def scalar(self, statement):
+            entity = statement.column_descriptions[0]["entity"]
+            if entity is WorkspaceArtifact:
+                return binding
+            values = statement.compile().params.values()
+            return review_request if review_id in values else export_request
+        async def scalars(self, statement):
+            return SimpleNamespace(all=lambda: [current_slide])
+
+    async def consume():
+        return await current_svg_artifact_fidelity(ReadSession(), current, review_operation)
+
+    before_current, before_export = deepcopy(current.theme), deepcopy(export.result)
+    with operation_principal(owner, tenant):
+        assert asyncio.run(svg_source_review_context(ReadSession(), current))["snapshot"] == snapshot
+        accepted = asyncio.run(consume())
+        assert accepted["status"] == "passed"
+        assert accepted["artifactId"] == str(public_id) and accepted["reviewOperationId"] == str(review_id)
+        assert current.theme == before_current and export.result == before_export
+        assert export.result["quality_receipt"] == old_receipt
+        for violation in ("review_unknown", "owner", "tenant", "review_tenant", "export_tenant", "target", "artifact", "revision", "count", "slide_owner", "index", "format", "svg", "png", "parent"):
+            if violation == "review_unknown": review_operation.state = "running"
+            elif violation == "owner": public.owner_id = uuid.uuid4()
+            elif violation == "tenant": public.tenant_id = "different-tenant"
+            elif violation == "review_tenant": review_request["principal_tenant_id"] = "different-tenant"
+            elif violation == "export_tenant": export_request["principal_tenant_id"] = "different-tenant"
+            elif violation == "target": review_request["context"]["target"] = "source_svg"
+            elif violation == "artifact": binding.public_artifact_id = uuid.uuid4()
+            elif violation == "revision": current.revision = 2
+            elif violation == "count": current.n_slides = 2
+            elif violation == "slide_owner": current_slide.owner_id = uuid.uuid4()
+            elif violation == "index": current_slide.index = 1
+            elif violation == "format": current_slide.source_format = "html"
+            elif violation == "svg": current_slide.svg_content = svg + " "
+            elif violation == "png": current_slide.content["svgReceipt"]["png_sha256"] = "4" * 64
+            else: binding.operation_id = uuid.uuid4()
+            assert asyncio.run(consume())["status"] == "failed"
+            review_operation.state = "succeeded"
+            public.owner_id, public.tenant_id = owner, tenant
+            review_request["principal_tenant_id"] = export_request["principal_tenant_id"] = tenant
+            review_request["context"]["target"] = "final_pptx"
+            binding.public_artifact_id, binding.operation_id = public_id, export_id
+            current.revision, current_slide.index, current_slide.source_format, current_slide.svg_content = 1, 0, "svg", svg
+            current.n_slides, current_slide.owner_id = 1, owner
+            current_slide.content["svgReceipt"]["png_sha256"] = png_digest
+        assert current.theme == before_current and export.result == before_export
 
 
 @pytest.mark.parametrize("broken", ["template", "render", "readback"])
