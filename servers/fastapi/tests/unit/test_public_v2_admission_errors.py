@@ -39,6 +39,8 @@ from services.public_v2_request_bridge import (
     resolve_canvas_style_id,
     resolve_internal_generation_request,
 )
+from services.ppt_writing_policy import WRITING_POLICY_ID
+from services.presentation_generation_staging import _durable_request_payload
 from utils.authored_styles import resolve_authored_style
 
 
@@ -111,6 +113,23 @@ def test_raster_reconstruction_admits_the_raster_template_style() -> None:
         effective_generation_engine="authored",
     )
     assert internal_request.authored_style == "screenshot-blue"
+
+
+def test_fresh_v2_request_pins_writing_policy_in_durable_payload() -> None:
+    request = PresentationGenerationRequestV2(content="Quarterly update")
+    internal_request = resolve_internal_generation_request(
+        request,
+        slide_count=5,
+        reference_ids=[],
+        internal_generation_mode=request.generation_mode,
+        internal_design_pack_pin=None,
+        effective_generation_engine="authored",
+    )
+
+    durable_payload = _durable_request_payload(internal_request)
+    assert internal_request.writing_policy == WRITING_POLICY_ID
+    assert durable_payload["writing_policy"] == WRITING_POLICY_ID
+    assert GeneratePresentationRequest.model_validate(durable_payload).writing_policy == WRITING_POLICY_ID
 
 
 def test_pack_plus_restyle_route_resolution_is_422_not_503() -> None:

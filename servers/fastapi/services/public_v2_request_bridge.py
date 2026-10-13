@@ -20,6 +20,7 @@ from models.public_v2_contracts import PresentationGenerationRequestV2
 from services.public_v2_orchestration_types import PublicV2OrchestrationError
 from models.generate_presentation_request import GeneratePresentationRequest
 from services.public_v2_admission_errors import generation_request_admission_error_code
+from services.ppt_writing_policy import WRITING_POLICY_ID
 
 
 def resolve_internal_generation_request(
@@ -60,6 +61,7 @@ def build_internal_generation_request(
 ) -> GeneratePresentationRequest:
     return GeneratePresentationRequest(
         content=request.content,
+        writingPolicy=WRITING_POLICY_ID,
         slides_markdown=request.slides_markdown,
         instructions=request.instructions,
         n_slides=slide_count,
