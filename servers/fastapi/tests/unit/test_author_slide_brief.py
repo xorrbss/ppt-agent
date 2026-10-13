@@ -10,6 +10,13 @@ from types import SimpleNamespace
 
 import pytest
 
+from services.ppt_writing_policy import (
+    WRITING_POLICY_ID,
+    ProtectedSpan,
+    scan_visible_text,
+    writing_policy_prompt,
+)
+
 from services import authored_deck_plans
 from models.authored_vnext.capability_registry import (
     CAPABILITY_REGISTRY_DIGEST,
@@ -42,6 +49,108 @@ from utils.renderer_isolation import admit_authored_html
 #: The composition-shaping half of the 2026-09-05 bundle is switchable and OFF
 #: by default, so every test that reads it states which state it is testing.
 BUNDLE_KNOB = "AUTHORED_PROMPT_BUNDLE_ENABLED"
+
+
+def test_writing_policy_is_retained_in_durable_request_without_legacy_default():
+    from models.generate_presentation_request import GeneratePresentationRequest
+    from services.presentation_generation_staging import _durable_request_payload
+
+    legacy = GeneratePresentationRequest(content="문구", strategy="authored")
+    assert legacy.writing_policy is None
+    assert "writing_policy" not in _durable_request_payload(legacy)
+    current = legacy.model_copy(update={"writing_policy": WRITING_POLICY_ID})
+    payload = _durable_request_payload(current)
+    restored = GeneratePresentationRequest.model_validate(payload)
+    assert restored.writing_policy == WRITING_POLICY_ID
+    assert payload["writing_policy"] == WRITING_POLICY_ID
+
+
+def test_writing_policy_changes_brief_cache_key_without_changing_legacy_input():
+    from services.authored_content_brief_checkpoint import content_brief_checkpoint_input
+
+    kwargs = dict(content="승인 후 적용", language="ko", additional_context=None,
+                  tone=None, verbosity=None, instructions=None)
+    legacy = content_brief_checkpoint_input(**kwargs)
+    current = content_brief_checkpoint_input(**kwargs, writing_policy=WRITING_POLICY_ID)
+    assert "writingPolicy" not in legacy
+    assert current == {**legacy, "writingPolicy": WRITING_POLICY_ID}
+
+
+def test_writing_policy_preserves_source_symbols_but_flags_new_copy():
+    source = "A·B 제품"
+    text = source + " 중복·누락 — 개선"
+    result = scan_visible_text(text, protected_spans=(ProtectedSpan(0, len(source), "source-name-1"),))
+    assert result.protected_counts == {"middle_dot": 1}
+    assert result.violation_counts == {"middle_dot": 1, "long_dash": 1}
+    assert text == source + " 중복·누락 — 개선"
+    with pytest.raises(ValueError):
+        scan_visible_text(text, protected_spans=(ProtectedSpan(0, len(text), "generated-copy"),))
+
+
+def test_writing_policy_keeps_numeric_ranges_urls_and_advisory_style_separate():
+    result = scan_visible_text("핵심은 10–20%와 3/4, 5 N·m, 3⋅4, https://example.com/a/b를 확인하는 것입니다.")
+    assert not result.violations
+    assert result.protected_counts["long_dash"] == 1
+    assert result.protected_counts["middle_dot"] == 2
+    assert result.style_signals
+
+
+def test_writing_policy_reaches_html_and_outline_without_changing_legacy_prompt():
+    from utils.llm_calls.generate_presentation_outlines import get_system_prompt
+
+    baseline = author_prompt("CONTENT", "DESIGN", _brand(), "PILLARS", 2, 9)
+    assert baseline == author_prompt("CONTENT", "DESIGN", _brand(), "PILLARS", 2, 9, writing_policy=None)
+    assert WRITING_POLICY_ID not in baseline
+    assert WRITING_POLICY_ID in author_prompt("CONTENT", "DESIGN", _brand(), "PILLARS", 2, 9,
+                                             writing_policy=WRITING_POLICY_ID, language="ko")
+    assert WRITING_POLICY_ID not in get_system_prompt()
+    assert WRITING_POLICY_ID in get_system_prompt(writing_policy=WRITING_POLICY_ID, language="ko")
+    assert "wording, symbols, spelling, and order exactly" in writing_policy_prompt(source_preserved=True)
+
+
+def test_writing_policy_checks_display_nodes_with_literal_source_provenance():
+    from services.ppt_writing_visible import (
+        assess_visible_nodes, literal_source_values, svg_text_nodes,
+    )
+
+    svg = ('<svg xmlns="http://www.w3.org/2000/svg"><metadata>숨김·문구</metadata>'
+           '<text>A·B 제품</text><text>중복<tspan>·누락</tspan> — 개선</text></svg>')
+    values = literal_source_values(bindings=({"kind": "text", "text": "A·B 제품"},))
+    report = assess_visible_nodes(svg_text_nodes(svg), source_values=values)
+    assert report["visible_node_count"] == 2
+    assert report["protected_symbol_counts"] == {"middle_dot": 1}
+    assert report["hard_violation_counts"] == {"middle_dot": 1, "long_dash": 1}
+    assert "A·B 제품" not in str(report)
+
+
+def test_writing_policy_html_keeps_inline_numeric_semantics_and_skips_hidden_metadata():
+    from services.ppt_writing_visible import assess_visible_nodes, html_text_nodes
+
+    html = ('<html><head><title>숨김·메타</title></head><body>'
+            '<p>범위 10<span>–</span>20%와 <b>중복·누락</b></p>'
+            '<p hidden>숨김·문구</p></body></html>')
+    report = assess_visible_nodes(html_text_nodes(html))
+    assert report["hard_violation_counts"] == {"middle_dot": 1}
+    assert report["protected_symbol_counts"] == {"long_dash": 1}
+
+
+def test_writing_policy_html_candidate_requires_bounded_correction_only_for_hard_symbols():
+    from services.generation_core.authoring.author_deck import (
+        AuthoredWritingPolicyViolation, _admit_html_writing, _classify_author_validation_error,
+    )
+
+    html = "<p>중복·누락을 확인합니다.</p>"
+    receipt = []
+    with pytest.raises(AuthoredWritingPolicyViolation) as error:
+        _admit_html_writing(html, writing_policy=WRITING_POLICY_ID,
+                            source_values=(), source_preserved=False, receipt=receipt)
+    assert _classify_author_validation_error(error.value).category == "writing_policy_visible_symbols"
+    assert receipt[0]["hard_violation_counts"] == {"middle_dot": 1}
+    assert _admit_html_writing(html, writing_policy=None, source_values=(),
+                               source_preserved=False, receipt=None) == html
+    advisory = "<p>핵심은 검토 예정이라는 점입니다.</p>"
+    assert _admit_html_writing(advisory, writing_policy=WRITING_POLICY_ID,
+                               source_values=(), source_preserved=False, receipt=[]) == advisory
 
 
 @pytest.fixture(autouse=True)

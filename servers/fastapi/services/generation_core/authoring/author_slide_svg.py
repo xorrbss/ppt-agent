@@ -24,6 +24,7 @@ from services.generation_core.drivers.svg.visual_intent import (
 from services.provider_usage_instrumentation import (
     ProviderCallTimer, current_provider_idempotency_key, provider_call_admission, record_provider_call,
 )
+from services.ppt_writing_policy import WRITING_POLICY_ID, writing_policy_prompt
 from services.svg_contract import SVG_CONTRACT_VERSION, source_digest, validate_raster_data_url
 from services.svg_authoring_profile import read_authoring_profile, read_quality_recovery_policy
 from utils.hashing import canonical_json_digest, sha256_prefixed
@@ -600,7 +601,10 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
                            previous_svg: str | None = None,
                            correction_mode: str | None = None,
                            previous_render_png: bytes | None = None,
-                           previous_render_png_digest: str | None = None) -> SvgAuthorResult:
+                           previous_render_png_digest: str | None = None,
+                           writing_policy: str | None = None,
+                           source_preserved: bool = False,
+                           language: str | None = None) -> SvgAuthorResult:
     manifest = preflight_svg_source_images(source_images)
     quality_policy = read_quality_recovery_policy(style_snapshot)
     source_grounded = quality_policy is not None and quality_policy["version"] == 2
@@ -760,6 +764,30 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
         rules += VISUAL_INTENT_RULES
     if source_grounded:
         rules += SOURCE_GROUNDED_INTENT_RULES
+    if writing_policy == WRITING_POLICY_ID:
+        rules += "\n" + writing_policy_prompt(
+            source_preserved=source_preserved, language=language,
+        )
+        if not source_preserved:
+            rules += (
+                "\nFor this new-slide writing mode, earlier instructions to preserve exact "
+                "source wording or avoid rewriting source wording protect verified original "
+                "spans and content fidelity; they do not require verbatim copying of ordinary "
+                "generated brief or outline prose. Write newly authored titles, body text, "
+                "and explanations naturally at composition time. Retain every required item "
+                "and its source-backed subject, action, negation, modality, uncertainty, "
+                "conditions, exceptions, sequence, comparison, and causal relationship. "
+                "Keep exact wording where the user explicitly requires it or original "
+                "provenance or a binding protects it, including quotations, legal wording, "
+                "names, formulas, URLs, table cells, chart categories and series, native "
+                "values, and relationship identifiers. Do not treat an unbound generated "
+                "bullet as a protected quotation merely because it appears in source_content. "
+                "Preserve source images, shapes, connectors, native data, and all supported "
+                "facts. When text is long, choose a shorter supported expression only if no "
+                "required detail is lost; use layout changes to resolve remaining crowding. "
+                "In a local correction, keep previous SVG text outside explicitly authorized "
+                "copy changes.\n"
+            )
     messages = author_messages(rules, prompt, design, image_parts=images)
     client = get_client(config=get_llm_config())
     model = authoring_model(get_model())

@@ -99,6 +99,10 @@ class AuthoredBatchSlideRequest:
     chapter_breadcrumb: bool = False
     chapter_prefix: str | None = None
     instructions: str | None = None
+    writing_policy: str | None = None
+    source_preserved: bool = False
+    language: str | None = None
+    source_values: tuple[str, ...] = ()
     illustration_allowed: bool | None = None
     visual_intent: AuthoredSlideVisualIntent | None = None
     infographic: AuthoredSlideInfographic | None = None
@@ -156,6 +160,9 @@ def _prepare_slide(
         chapter_breadcrumb=request.chapter_breadcrumb,
         chapter_prefix=request.chapter_prefix,
         instructions=request.instructions,
+        writing_policy=request.writing_policy,
+        source_preserved=request.source_preserved,
+        language=request.language,
         illustration_allowed=request.illustration_allowed,
         visual_intent=request.visual_intent,
         infographic=request.infographic,

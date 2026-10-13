@@ -30,6 +30,7 @@ failed generation. Checkpoint faults are logged and the stage continues.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping
+from functools import partial
 import logging
 from time import monotonic
 from typing import Optional
@@ -75,6 +76,7 @@ def content_brief_checkpoint_input(
     tone: Optional[str],
     verbosity: Optional[str],
     instructions: Optional[str],
+    writing_policy: str | None = None,
 ) -> dict[str, object]:
     """Digest-only contract covering exactly what the brief prompt reads.
 
@@ -82,7 +84,7 @@ def content_brief_checkpoint_input(
     stays small; the outer digest is over this whole mapping either way.
     """
 
-    return {
+    result = {
         "schemaVersion": _INPUT_SCHEMA,
         "contentDigest": canonical_checkpoint_digest(content or ""),
         "language": (language or None),
@@ -93,6 +95,9 @@ def content_brief_checkpoint_input(
         "verbosity": (verbosity or None),
         "instructionsDigest": canonical_checkpoint_digest(instructions or ""),
     }
+    if writing_policy is not None:
+        result["writingPolicy"] = writing_policy
+    return result
 
 
 def _encode_brief(brief: ContentBrief) -> dict[str, object]:
@@ -187,6 +192,7 @@ async def run_content_brief_with_checkpoint(
     tone: Optional[str],
     verbosity: Optional[str],
     instructions: Optional[str],
+    writing_policy: str | None = None,
     presentation_id: object = None,
     policy: ContentBriefTimeoutPolicy | None = None,
     remaining_operation_seconds: float | None = None,
@@ -198,6 +204,9 @@ async def run_content_brief_with_checkpoint(
     outline streaming endpoint has no job -- and this delegates straight to
     :func:`run_content_brief_with_policy` with identical behaviour.
     """
+
+    if writing_policy is not None:
+        brief_fn = partial(brief_fn, writing_policy=writing_policy)
 
     if generation_job is None:
         return await run_content_brief_with_policy(
@@ -221,6 +230,7 @@ async def run_content_brief_with_checkpoint(
             tone=tone,
             verbosity=verbosity,
             instructions=instructions,
+            writing_policy=writing_policy,
         )
     )
     started = monotonic()

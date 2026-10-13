@@ -706,9 +706,12 @@ async def _page(ctx, request, presentation_id, outline, language, job, index, st
         if state.fatal_error is not None:
             raise state.fatal_error
         content = outline.slides[index].content
-        input_digest = _digest({"content": content, "style": ctx.snapshot, "index": index,
-                                "count": ctx.count, "instructions": request.instructions,
-                                "language": language, "preset": request.codex_generation_preset})
+        page_input = {"content": content, "style": ctx.snapshot, "index": index,
+                      "count": ctx.count, "instructions": request.instructions,
+                      "language": language, "preset": request.codex_generation_preset}
+        if getattr(request, "writing_policy", None) is not None:
+            page_input["writing_policy"] = request.writing_policy
+        input_digest = _digest(page_input)
         input_digest = _digest({"page": input_digest, "assets": ctx.manifests[index]})
         if ctx.source_reflow:
             input_digest = _digest({"page": input_digest,

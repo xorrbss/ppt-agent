@@ -49,7 +49,8 @@ def _whole_page_facts(page, image_slots):
 async def _author_source_whole_page(manifest, page_index, style_snapshot, *, source_images,
         image_slots, min_font_size_px, width, height, instructions, correction_hint,
         receipt_attempt_ordinal, before_dispatch, _validated_pages, visual_intent, previous_svg,
-        correction_mode=None, previous_render_png=None, previous_render_png_digest=None):
+        correction_mode=None, previous_render_png=None, previous_render_png_digest=None,
+        writing_policy=None):
     from services.generation_core.authoring.author_slide_svg import author_slide_svg
     from services.svg_source_layout import bind_whole_page_source_svg
 
@@ -99,7 +100,8 @@ async def _author_source_whole_page(manifest, page_index, style_snapshot, *, sou
         index=page_index, n=len(pages), instructions=(instructions or "") + "\n" + source_rules,
         correction_hint=correction_hint, source_images=source_images,
         receipt_attempt_ordinal=receipt_attempt_ordinal, before_dispatch=before_dispatch,
-        visual_intent=visual_intent, previous_svg=previous_svg, **correction_kwargs)
+        visual_intent=visual_intent, previous_svg=previous_svg,
+        writing_policy=writing_policy, source_preserved=True, **correction_kwargs)
     authored.receipt["source_authoring_contract"] = style_snapshot["source_authoring_contract"]
     if authored.receipt.get("validation_error"):
         return authored
@@ -219,6 +221,7 @@ async def author_source_svg_layout(
     correction_mode=None,
     previous_render_png=None,
     previous_render_png_digest=None,
+    writing_policy=None,
 ):
     contract = style_snapshot.get("source_authoring_contract")
     if contract is not None:
@@ -230,7 +233,8 @@ async def author_source_svg_layout(
             receipt_attempt_ordinal=receipt_attempt_ordinal, before_dispatch=before_dispatch,
             _validated_pages=_validated_pages, visual_intent=visual_intent, previous_svg=previous_svg,
             correction_mode=correction_mode, previous_render_png=previous_render_png,
-            previous_render_png_digest=previous_render_png_digest)
+            previous_render_png_digest=previous_render_png_digest,
+            writing_policy=writing_policy)
     from services.provider_usage_instrumentation import (
         ProviderCallTimer,
         current_provider_idempotency_key,

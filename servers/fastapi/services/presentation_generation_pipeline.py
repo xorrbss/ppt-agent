@@ -46,6 +46,7 @@ from services.presentation_generation_staging import (
     _discard_render_staging,
     _request_from_durable_payload,
 )
+from services.ppt_writing_policy import WRITING_POLICY_ID
 from services.presentation_generation_completion import record_generation_completion
 from constants.presentation import (
     DEFAULT_ATTACHMENT_GENERATION_PROMPT,
@@ -996,6 +997,7 @@ async def generate_presentation_handler(
                             tone=request.tone.value, verbosity=request.verbosity.value,
                             instructions=request.instructions,
                             # A resume reuses this brief instead of re-paying its 500 s.
+                            writing_policy=request.writing_policy,
                             presentation_id=presentation_id, generation_job=generation_job,
                             remaining_operation_seconds=remaining_public_operation_seconds(),
                         )
@@ -1046,6 +1048,7 @@ async def generate_presentation_handler(
                 request.instructions,
                 request.include_title_slide,
                 request.include_table_of_contents, canvas_budget,
+                writing_policy=request.writing_policy,
             )
             # Mem0 is write-only memory here (nothing in this generation reads it
             # back), so the saves run in the background and never delay or fail
@@ -1091,6 +1094,7 @@ async def generate_presentation_handler(
                     request.web_search,
                     request.include_table_of_contents,
                     canvas_budget=canvas_budget,
+                    writing_policy=request.writing_policy,
                 ):
 
                     if isinstance(chunk, HTTPException):
@@ -2051,6 +2055,9 @@ async def queue_presentation_generation(
     from utils.generation_model import generation_model_settings
 
     generation_model_settings(request.codex_generation_preset)
+    # Pin once for a newly admitted request. Workers restoring old payloads do
+    # not pass through this entry point, so an absent historical pin stays absent.
+    request.writing_policy = WRITING_POLICY_ID
     # Apply the authored-vNext creation contract before idempotency lookup or
     # chat-first workspace bootstrap.  This keeps blocked Template V2/legacy
     # requests from minting even a temporary durable presentation shell.
@@ -2107,6 +2114,20 @@ async def queue_presentation_generation(
         await prepare_private_svg_recovery_authority(request, sql_session)
     submitted_payload = _durable_request_payload(request)
     fingerprint = request_sha256(submitted_payload)
+    # A caller replaying a key created before the policy rollout must still
+    # reach that job. Its stored request remains unpinned and runs as before.
+    legacy_payload = dict(submitted_payload)
+    legacy_payload.pop("writing_policy", None)
+    legacy_fingerprint = request_sha256(legacy_payload)
+
+    def matches_existing_job(existing_job: PresentationGenerationJob) -> bool:
+        if existing_job.request_sha256 == fingerprint:
+            return True
+        return (
+            isinstance(existing_job.request_payload, dict)
+            and "writing_policy" not in existing_job.request_payload
+            and existing_job.request_sha256 == legacy_fingerprint
+        )
     key_error: HTTPException | None = None
     try:
         key_hash = (
@@ -2152,7 +2173,7 @@ async def queue_presentation_generation(
                         status_code=404,
                         detail="idempotency_record_not_found",
                     )
-            if existing.request_sha256 != fingerprint:
+            if not matches_existing_job(existing):
                 raise HTTPException(
                     status_code=409,
                     detail="idempotency_key_payload_conflict",
@@ -2291,7 +2312,7 @@ async def queue_presentation_generation(
             )
         ).scalar_one_or_none()
         if existing_for_presentation is not None:
-            if existing_for_presentation.request_sha256 != fingerprint:
+            if not matches_existing_job(existing_for_presentation):
                 raise HTTPException(
                     status_code=409,
                     detail="idempotency_key_payload_conflict",
@@ -2480,7 +2501,7 @@ async def queue_presentation_generation(
                     )
                 )
             ).scalar_one_or_none()
-            if existing is None or existing.request_sha256 != fingerprint:
+            if existing is None or not matches_existing_job(existing):
                 raise HTTPException(
                     status_code=409,
                     detail="generation_concurrency_conflict",
@@ -2523,7 +2544,7 @@ async def queue_presentation_generation(
                 )
             )
         ).scalar_one_or_none()
-        if existing is None or existing.request_sha256 != fingerprint:
+        if existing is None or not matches_existing_job(existing):
             raise HTTPException(
                 status_code=409,
                 detail="idempotency_key_payload_conflict",

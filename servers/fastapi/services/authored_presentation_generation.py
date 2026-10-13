@@ -2525,6 +2525,12 @@ async def _generate_authored_presentation(
         "instructions": request.instructions,
         **job_kwargs,
     }
+    if _callable_accepts_keyword(_author_illustrate_render_pipeline, "writing_policy"):
+        pipeline_kwargs["writing_policy"] = request.writing_policy
+    if _callable_accepts_keyword(_author_illustrate_render_pipeline, "language"):
+        pipeline_kwargs["language"] = language
+    if _callable_accepts_keyword(_author_illustrate_render_pipeline, "source_text"):
+        pipeline_kwargs["source_text"] = request.content
     # Keep narrow legacy/test doubles source-compatible while the product
     # pipeline consumes the frozen composition profile and the figure plan.
     if _callable_accepts_keyword(

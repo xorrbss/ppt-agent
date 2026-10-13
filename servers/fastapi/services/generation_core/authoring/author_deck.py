@@ -145,6 +145,10 @@ class AuthoredDeckPlan:
     # slide-level instruction ("no pictures", "keep it text-only") reaches the
     # slide it is about rather than only the deck-scoped planners.
     instructions: Optional[str] = None
+    writing_policy: str | None = None
+    source_preserved: bool = False
+    language: str | None = None
+    source_values_by_slide: Tuple[Tuple[str, ...], ...] = ()
     # Deck-wide narrative/silhouette decisions for ordinary Authored HTML.
     # None is intentional for exact reconstruction and structured/template-owned
     # geometry: those modes must not be recomposed by this prompt-only plan.
@@ -314,6 +318,42 @@ class _AuthorValidationCorrection:
     hint: str
 
 
+class AuthoredWritingPolicyViolation(ValueError):
+    """Visible generated text needs a bounded existing author correction."""
+
+    def __init__(self, html: str, counts: Mapping[str, int]) -> None:
+        super().__init__("authored_writing_policy_visible_symbols")
+        self.rejected_html = html
+        self.counts = dict(counts)
+
+
+def _admit_html_writing(
+    html: str, *, writing_policy: str | None, source_values: Sequence[str],
+    source_preserved: bool, receipt: list[dict] | None,
+) -> str:
+    if writing_policy is None:
+        return html
+    from services.ppt_writing_visible import assess_visible_nodes, html_text_nodes
+
+    assessment = assess_visible_nodes(html_text_nodes(html), source_values=source_values)
+    ownership_unknown = bool(source_preserved and not source_values)
+    if receipt is not None:
+        receipt.append({
+            "kind": "writing_policy", **assessment,
+            "enforcement": "source_ownership_unavailable" if ownership_unknown else "enforced",
+        })
+    # Exact screenshot reconstruction has no literal text inventory. A symbol
+    # cannot be safely rewritten until source ownership is known.
+    if assessment["hard_violation_counts"] and not ownership_unknown:
+        raise AuthoredWritingPolicyViolation(html, assessment["hard_violation_counts"])
+    return html
+
+
+def _source_values_at(plan: object, index: int) -> tuple[str, ...]:
+    values = getattr(plan, "source_values_by_slide", ()) or ()
+    return tuple(values[index]) if index < len(values) else ()
+
+
 class AuthoredProviderBudgetExhausted(ValueError):
     """A deterministic author rejection remained after the slide call budget."""
 
@@ -366,6 +406,14 @@ def _classify_author_validation_error(
     """Classify fail-closed local rejections without weakening their policies."""
 
     message = str(error)
+    if isinstance(error, AuthoredWritingPolicyViolation):
+        return _AuthorValidationCorrection(
+            "writing_policy_visible_symbols",
+            "Revise only newly written visible wording that uses decorative symbols. "
+            "Use ordinary sentences or line breaks. Keep protected source text, "
+            "native values, numbers, formulas, official names, quotations and layout intact. "
+            f"Observed categories: {','.join(sorted(error.counts))}.",
+        )
     if output_token_limit_in_cause_chain(error):
         # The provider cut the document at its output ceiling: there is no
         # candidate to repair, so the correction is about size. Classified here
@@ -828,6 +876,10 @@ async def _author_one_resilient(
     header_contract: AuthoredHeaderContract | None = None,
     chapter_prefix: str | None = None,
     instructions: str | None = None,
+    writing_policy: str | None = None,
+    source_preserved: bool = False,
+    language: str | None = None,
+    source_values: Sequence[str] = (),
     illustration_allowed: bool | None = None,
     visual_intent: AuthoredSlideVisualIntent | None = None,
     infographic: AuthoredSlideInfographic | None = None,
@@ -921,6 +973,9 @@ async def _author_one_resilient(
                 chapter_breadcrumb=_chapter_breadcrumb(header_contract),
                 chapter_prefix=chapter_prefix,
                 instructions=instructions,
+                writing_policy=writing_policy,
+                source_preserved=source_preserved,
+                language=language,
                 illustration_allowed=illustration_allowed,
                 visual_intent=visual_intent,
                 infographic=infographic,
@@ -981,7 +1036,11 @@ async def _author_one_resilient(
                         aggregate_owner_capacity_violations(constrained, capacity) if capacity is not None else ()
                     )
                     if not owner_violations:
-                        return constrained
+                        return _admit_html_writing(
+                            constrained, writing_policy=writing_policy,
+                            source_values=source_values, source_preserved=source_preserved,
+                            receipt=normalization_receipt,
+                        )
                     if allow_deterministic_owner_reduction and capacity is not None:
                         reduced = reduce_authored_owner_text_capacity(
                             constrained,
@@ -994,7 +1053,11 @@ async def _author_one_resilient(
                             capacity,
                         )
                         if reduced != constrained and not reduced_violations:
-                            return reduced
+                            return _admit_html_writing(
+                                reduced, writing_policy=writing_policy,
+                                source_values=source_values, source_preserved=source_preserved,
+                                receipt=normalization_receipt,
+                            )
                         if reduced != constrained:
                             constrained = reduced
                             owner_violations = reduced_violations
@@ -1024,7 +1087,11 @@ async def _author_one_resilient(
                                 capacity,
                             )
                             if not recovered_violations:
-                                return recovered_html
+                                return _admit_html_writing(
+                                    recovered_html, writing_policy=writing_policy,
+                                    source_values=source_values, source_preserved=source_preserved,
+                                    receipt=normalization_receipt,
+                                )
                             if not any(item.startswith("owner_title:") for item in recovered_violations):
                                 # Titles now fit; only non-title owners remain, and
                                 # they never spend the title recovery call.
@@ -1110,7 +1177,11 @@ async def _author_one_resilient(
             attempts_made,
             last_error,
         )
-        return header_reject
+        return _admit_html_writing(
+            header_reject, writing_policy=writing_policy,
+            source_values=source_values, source_preserved=source_preserved,
+            receipt=normalization_receipt,
+        )
     if raise_on_failure or reference_mode == EXACT_RECONSTRUCTION or structured_context is not None:
         logger.warning(
             "[authored] slide %d/%d failed after %d attempts; refusing a placeholder "
@@ -1133,7 +1204,11 @@ async def _author_one_resilient(
                 allow_summarization=True,
             )
             if reduced != last_error.rejected_html:
-                return reduced
+                return _admit_html_writing(
+                    reduced, writing_policy=writing_policy,
+                    source_values=source_values, source_preserved=source_preserved,
+                    receipt=normalization_receipt,
+                )
         if isinstance(last_error, AuthoredProviderBudgetExhausted):
             raise last_error
         deterministic_failure = _classify_author_validation_error(
@@ -1192,6 +1267,10 @@ def prepare_authored_deck(
     illustration_plan: AuthoredIllustrationPlan | None = None,
     infographic_plan: AuthoredInfographicPlan | None = None,
     instructions: Optional[str] = None,
+    writing_policy: str | None = None,
+    language: str | None = None,
+    source_text: str | None = None,
+    source_block_bindings: Sequence[Sequence[tuple[str, str]]] | None = None,
     composition_profile: CompositionProfile | None = None,
     canvas: object | None = None,
     physical_canvas: object | None = None,
@@ -1229,6 +1308,21 @@ def prepare_authored_deck(
     canvas_width_px, canvas_height_px = canvas_or_default(canvas)
     roles = tuple(plan_deck_roles(outline, chapter_plan))
     reference_mode = normalize_reference_mode(getattr(style, "reference_mode", STYLE_REFERENCE))
+    if writing_policy is not None:
+        from services.ppt_writing_visible import literal_source_values
+
+        common_values = literal_source_values(source_text)
+        source_values_by_slide = tuple(
+            tuple(dict.fromkeys((*common_values, *(text for _, text in bindings))))
+            for bindings in (
+                source_block_bindings[index]
+                if source_block_bindings is not None and index < len(source_block_bindings)
+                else ()
+                for index in range(len(slides))
+            )
+        )
+    else:
+        source_values_by_slide = ()
     if reference_mode == EXACT_RECONSTRUCTION:
         sources = tuple(getattr(style, "slide_reference_images", ()) or ())
         if len(sources) != len(slides):
@@ -1344,6 +1438,13 @@ def prepare_authored_deck(
         illustration_slots=illustration_slots,
         infographic_briefs=infographic_briefs,
         instructions=instructions,
+        writing_policy=writing_policy,
+        source_preserved=(
+            reference_mode == EXACT_RECONSTRUCTION
+            or getattr(composition_profile, "text_mode", None) == "verbatim"
+        ),
+        language=language,
+        source_values_by_slide=source_values_by_slide,
         visual_plan=visual_plan,
         capacity_plan=capacity_plan,
         text_plan=text_plan,
@@ -1437,6 +1538,10 @@ def _planned_batch_request(
         chapter_breadcrumb=_chapter_breadcrumb(plan.header_contract_at(index)),
         chapter_prefix=(plan.chapter_prefixes[index] if plan.chapter_prefixes else None),
         instructions=getattr(plan, "instructions", None),
+        writing_policy=getattr(plan, "writing_policy", None),
+        source_preserved=getattr(plan, "source_preserved", False),
+        language=getattr(plan, "language", None),
+        source_values=_source_values_at(plan, index),
         illustration_allowed=(illustration_slots[index] if illustration_slots else None),
         visual_intent=(visual_plan.at(index) if visual_plan is not None else None),
         infographic=(infographic_briefs[index] if infographic_briefs else None),
@@ -1521,14 +1626,24 @@ def _validate_planned_batch_candidate(
             or plan.reference_mode == EXACT_RECONSTRUCTION
             or plan.structured_contexts[index] is not None
         ):
-            return constrained
+            return _admit_html_writing(
+                constrained, writing_policy=getattr(plan, "writing_policy", None),
+                source_values=_source_values_at(plan, index),
+                source_preserved=getattr(plan, "source_preserved", False),
+                receipt=normalization_receipt,
+            )
         error = ValueError("header contract violated: " + ", ".join(header_violations))
         error.rejected_html = constrained
         raise error
 
     owner_violations = aggregate_owner_capacity_violations(constrained, capacity) if capacity is not None else ()
     if not owner_violations:
-        return constrained
+        return _admit_html_writing(
+            constrained, writing_policy=getattr(plan, "writing_policy", None),
+            source_values=_source_values_at(plan, index),
+            source_preserved=getattr(plan, "source_preserved", False),
+            receipt=normalization_receipt,
+        )
     allow_reduction = bool(
         capacity_plan is not None
         and capacity_plan.profile.profile_id == "ordinary"
@@ -1544,7 +1659,12 @@ def _validate_planned_batch_candidate(
         )
         reduced_violations = aggregate_owner_capacity_violations(reduced, capacity)
         if reduced != constrained and not reduced_violations:
-            return reduced
+            return _admit_html_writing(
+                reduced, writing_policy=getattr(plan, "writing_policy", None),
+                source_values=_source_values_at(plan, index),
+                source_preserved=getattr(plan, "source_preserved", False),
+                receipt=normalization_receipt,
+            )
         if reduced != constrained:
             constrained = reduced
             owner_violations = reduced_violations
@@ -1706,6 +1826,10 @@ async def author_planned_slide(
         header_contract=plan.header_contract_at(index),
         chapter_prefix=(plan.chapter_prefixes[index] if plan.chapter_prefixes else None),
         instructions=getattr(plan, "instructions", None),
+        writing_policy=getattr(plan, "writing_policy", None),
+        source_preserved=getattr(plan, "source_preserved", False),
+        language=getattr(plan, "language", None),
+        source_values=_source_values_at(plan, index),
         illustration_allowed=(illustration_slots[index] if illustration_slots else None),
         visual_intent=(visual_plan.at(index) if visual_plan is not None else None),
         infographic=(infographic_briefs[index] if infographic_briefs else None),

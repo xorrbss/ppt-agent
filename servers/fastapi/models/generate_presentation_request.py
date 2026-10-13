@@ -145,6 +145,11 @@ class GeneratePresentationRequest(BaseModel):
     presentation_id: Optional[uuid.UUID] = Field(default=None)
 
     content: str = Field(..., description="The content for generating the presentation")
+    # Server-pinned at new generation admission. An omitted value on a restored
+    # durable request means the job predates this policy and retains its prompt.
+    writing_policy: Optional[Literal["ppt-writing-policy/v1"]] = Field(
+        default=None, alias="writingPolicy"
+    )
     bench_speed_arm: Optional[Literal["baseline", "brief_off"]] = Field(
         default=None, alias="benchSpeedArm", exclude=True,
     )

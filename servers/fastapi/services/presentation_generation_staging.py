@@ -95,6 +95,10 @@ def _durable_request_payload(
     """Persist canonical identities only, never admission-time raw paths."""
 
     payload = request.model_dump(mode="json")
+    if request.writing_policy is None:
+        # Historical jobs omitted this key. Keep their canonical payload and
+        # idempotency fingerprint stable when they are restored or resumed.
+        payload.pop("writing_policy", None)
     speed_arm = resolve_speed_arm(request)
     if speed_arm is not None:
         payload[INTERNAL_BENCH_SPEED_ARM_KEY] = speed_arm

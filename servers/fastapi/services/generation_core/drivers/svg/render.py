@@ -241,6 +241,32 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
         apply_source_classification_association(rendered.quality, final, content)
         from services.generation_core.drivers.svg.source_paint_occlusion import apply_source_paint_occlusion
         apply_source_paint_occlusion(rendered.quality, final)
+    writing_hint = None
+    if getattr(request, "writing_policy", None) is not None:
+        from services.ppt_writing_visible import (
+            assess_visible_nodes, literal_source_values, svg_text_nodes,
+        )
+
+        preservation = payload.get("source_preservation") or {}
+        source_values = literal_source_values(
+            getattr(request, "content", None),
+            payload.get("nativeRequirements"),
+            preservation.get("bindings") or (),
+            payload.get("rasterContentLedger"),
+        )
+        writing = assess_visible_nodes(svg_text_nodes(final), source_values=source_values)
+        rendered.quality["writing_policy"] = writing
+        if writing["hard_violation_counts"]:
+            rendered.quality["passed"] = False
+            rendered.quality.setdefault("failures", []).append({
+                "kind": "writing_policy_visible_symbols",
+                "counts": writing["hard_violation_counts"],
+            })
+            writing_hint = json.dumps({
+                "kind": "writing_policy_visible_symbols",
+                "counts": writing["hard_violation_counts"],
+                "instruction": "Revise only newly written visible wording that uses decorative symbols. Preserve all source-backed text, native data, numbers, formulas, official names and quotations exactly. Keep facts and slide layout intact.",
+            }, ensure_ascii=False, separators=(",", ":"))
     payload["attempts"][-1]["quality"] = rendered.quality
     if payload.get("fontAdvisories"):
         rendered.quality.setdefault("advisories", []).extend(payload["fontAdvisories"])
@@ -316,6 +342,8 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
                 "instruction": "Repair only the smallest failing region, preserving every word, number, unit, relation and page count. Enlarge space or reflow related objects together. Never shrink fonts, hide or delete content. If local repair cannot fit, freely recompose this same page on the exact canvas; if still impossible, fail with physical_space_insufficient."}, ensure_ascii=False)[:3000]
         else:
             hint = json.dumps(rendered.quality, ensure_ascii=False)[:3000]
+        if writing_hint:
+            hint = (writing_hint + "\n" + hint)[:3000]
         payload["repair_hint"] = hint
         payload["svg_content"] = None
         await checkpoint(job, index, payload=payload)

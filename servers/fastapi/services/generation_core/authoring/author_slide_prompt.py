@@ -17,6 +17,7 @@ import json
 from typing import Any
 
 from models.authored_infographic_plan import AuthoredSlideInfographic
+from services.ppt_writing_policy import WRITING_POLICY_ID, writing_policy_prompt
 from models.authored_visual_plan import AuthoredSlideVisualIntent
 from utils.authored_styles import archetype_for_role
 from utils.llm_calls.author_infographic_marker import infographic_marker
@@ -285,6 +286,9 @@ def author_prompt(
     capacity_brief: str | None = None,
     style_anchor: object | None = None,
     canvas_height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
+    writing_policy: str | None = None,
+    source_preserved: bool = False,
+    language: str | None = None,
 ) -> str:
     """Compose one slide's authoring prompt.
 
@@ -368,6 +372,11 @@ def author_prompt(
     placeholder_contract = placeholder_prompt_for_slide(index)
     if placeholder_contract:
         structured_contract += "\n\n" + placeholder_contract
+    direction = user_direction_brief(instructions)
+    if writing_policy == WRITING_POLICY_ID:
+        direction += "\n\n" + writing_policy_prompt(
+            source_preserved=source_preserved, language=language,
+        )
     blocks = {
         "requirement": requirement_marker(requirements_enabled=requirements_enabled),
         "chapter": chapter_marker(
@@ -381,7 +390,7 @@ def author_prompt(
             page_number_mode=page_number_mode,
             canvas_height_px=canvas_height_px,
         ),
-        "direction": user_direction_brief(instructions),
+        "direction": direction,
         "capacity": capacity_brief or "",
         "anchor": (
             str(style_anchor.prompt_block()).strip() if style_anchor is not None else ""
