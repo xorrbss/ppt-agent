@@ -152,6 +152,7 @@ async def preview_svg(presentation, slides, index, request, task, session):
     from services.document_canvas import DocumentCanvasMetadata, parse_canvas_metadata
     metadata = parse_canvas_metadata(presentation_canvas_metadata(presentation.theme))
     physical_kwargs = {"physical_canvas": metadata} if isinstance(metadata, DocumentCanvasMetadata) else {}
+    readability_policy = ((target.content or {}).get("svgReceipt") or {}).get("readability_policy")
     snapshot = presentation.theme["svg"]["styleSnapshot"]
     from services.svg_authoring_profile import read_quality_recovery_policy
     recovery_policy = read_quality_recovery_policy(snapshot)
@@ -259,6 +260,7 @@ async def preview_svg(presentation, slides, index, request, task, session):
             placement = rebound_placement(final, assets[0], assets[1], revision=presentation.revision + 1)
             render_source = await materialize_rebound_svg(session, presentation, final, assets[0], placement, source_index)
         render = await render_svg_with_metrics(final, width=canvas.width_px, height=canvas.height_px,
+            readability_policy=readability_policy,
             materialized_svg=render_source if render_source != final else None,
             instructions=instruction, **({"timeline_ink_probe": True} if v7_source else {}),
             **({"required_text": _required_numeric_claims(source)} if local_edit else {}),
@@ -389,8 +391,10 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
     from services.document_canvas import DocumentCanvasMetadata, parse_canvas_metadata
     metadata = parse_canvas_metadata(presentation_canvas_metadata(presentation.theme))
     physical_kwargs = {"physical_canvas": metadata} if isinstance(metadata, DocumentCanvasMetadata) else {}
+    readability_policy = ((target.content or {}).get("svgReceipt") or {}).get("readability_policy")
     from services.svg_presentation_checkpoint import _required_numeric_claims
     rendered = await render_svg_with_metrics(svg, width=canvas.width_px, height=canvas.height_px,
+        readability_policy=readability_policy,
         materialized_svg=render_source if render_source != svg else None,
         instructions=data.get("instruction"),
         **({"required_text": _required_numeric_claims((target.content or {}).get("source", ""))} if local_edit else {}),

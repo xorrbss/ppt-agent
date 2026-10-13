@@ -17,7 +17,7 @@ from services.svg_contract import source_digest
 from utils.hashing import sha256_hex
 
 
-def _harness(monkeypatch, *, rowcount=1, wrong_digest=False, assets=False):
+def _harness(monkeypatch, *, rowcount=1, wrong_digest=False, assets=False, readability=False):
     owner, presentation_id = uuid.uuid4(), uuid.uuid4()
     target = SlideModel(presentation=presentation_id, owner_id=owner, index=0,
         layout_group="svg", layout="svg:content", source_format="svg", svg_content="<svg>old</svg>",
@@ -27,6 +27,11 @@ def _harness(monkeypatch, *, rowcount=1, wrong_digest=False, assets=False):
         properties={"image": "old.png"})
     presentation = SimpleNamespace(id=presentation_id, owner_id=owner, revision=3,
         theme={"svg": {"quality": [{}]}})
+    from services.authored_canvas import presentation_canvas_metadata
+    from services.document_canvas_generation import svg_readability_policy
+    policy = svg_readability_policy(presentation_canvas_metadata(presentation.theme)) if readability else None
+    if policy is not None:
+        target.content["svgReceipt"]["readability_policy"] = policy
     svg, png = "<svg>new</svg>", b"new capture"
     image = f"capture-{sha256_hex(png)}.png"
     task = SimpleNamespace(id=uuid.uuid4(), owner_id=owner, status="completed", data={
@@ -43,6 +48,9 @@ def _harness(monkeypatch, *, rowcount=1, wrong_digest=False, assets=False):
                         AsyncMock(return_value=({"rebound": True}, "<svg>materialized</svg>")))
     quality = {"source_digest": source_digest("wrong" if wrong_digest else svg), "passed": True,
                "verified": False, "measurement_complete": True, "semantic_review": "required"}
+    if policy is not None:
+        quality["physical_readability"] = {"policy": policy, "policy_digest": policy["digest"],
+            "measurement_complete": True, "passed": True, "minimum_font_pt": policy["quality_target_font_pt"]}
     monkeypatch.setattr("services.svg_presentation_checkpoint._write_png", lambda payload: {
         "png_sha256": sha256_hex(payload), "png_path": f"svg/{sha256_hex(payload)}.png"})
     capture = AsyncMock(return_value=SimpleNamespace(png=png, quality=quality))
@@ -133,7 +141,7 @@ def test_remeasure_source_publish_preserves_native_sidecars_and_old_author_recei
 
 @pytest.mark.parametrize("assets", [False, True])
 def test_publication_keeps_all_cas_predicates_and_canonical_measurement(monkeypatch, assets):
-    session, presentation, target, task, capture = _harness(monkeypatch, assets=assets)
+    session, presentation, target, task, capture = _harness(monkeypatch, assets=assets, readability=True)
     baseline = deepcopy((target.svg_content, target.content, target.properties))
     from services.generation_core.quality.advisory_record import advisory_record
     from services.svg_export_visual_review import svg_visual_review
@@ -168,6 +176,7 @@ def test_publication_keeps_all_cas_predicates_and_canonical_measurement(monkeypa
     assert statement.get_execution_options()["synchronize_session"] is False
     assert capture.await_args.args[0] == params["svg_content"]
     assert capture.await_args.kwargs["materialized_svg"] == ("<svg>materialized</svg>" if assets else None)
+    assert capture.await_args.kwargs["readability_policy"] == baseline[1]["svgReceipt"]["readability_policy"]
     session.refresh.assert_awaited_once_with(target)
 
 
@@ -191,7 +200,7 @@ def test_digest_mismatch_never_reaches_cas(monkeypatch):
     from utils.hashing import canonical_json_digest
     snapshot = {"authoring_profile": {"id": "art-direction-v1", "version": 7}}
     snapshot["digest"] = canonical_json_digest(snapshot)
-    session, presentation, target, task, capture = _harness(monkeypatch)
+    session, presentation, target, task, capture = _harness(monkeypatch, readability=True)
     presentation.theme["svg"]["styleSnapshot"] = snapshot
     presentation.instructions = None
     target.content["source"] = "A → B: 연결\n외부 연계·저장소: A, B"
@@ -216,6 +225,8 @@ def test_digest_mismatch_never_reaches_cas(monkeypatch):
     assert failure.value.preview_evidence["candidate_svg"]==task.data["candidate_svg"]
     assert failure.value.preview_evidence["phase"]!="preview_ready"
     author.assert_awaited_once()
+    assert "readability_policy" not in author.await_args.kwargs
+    assert capture.await_args.kwargs["readability_policy"] == target.content["svgReceipt"]["readability_policy"]
     assert capture.await_args.args[0] == task.data["candidate_svg"]
     assert capture.await_args.kwargs["timeline_ink_probe"] is True
     assert (target.svg_content, target.content, target.properties, task.data) == baseline
