@@ -594,6 +594,45 @@ def _reference_style(version=2):
     return style
 
 
+@pytest.mark.parametrize('writing_policy,source_preserved,editable', [
+    (None, False, False),
+    ('ppt-writing-policy/v1', True, False),
+    ('ppt-writing-policy/v1', False, True),
+])
+def test_writing_policy_routes_copy_corrections_without_unlocking_verbatim_sources(
+    monkeypatch, writing_policy, source_preserved, editable,
+):
+    from utils.hashing import canonical_json_digest
+    from services.ppt_writing_policy import scan_visible_text
+
+    ranges = scan_visible_text('M1–M2 및 M3–M6는 단계 범위입니다.')
+    assert not ranges.violations
+    assert ranges.protected_counts == {'long_dash':2}
+    assert scan_visible_text('구축—안정화').violation_counts == {'long_dash':1}
+
+    style = _reference_style(8)
+    style['quality_recovery_policy'] = {'id':'svg-quality-first', 'version':2}
+    style['digest'] = canonical_json_digest({key:value for key,value in style.items() if key != 'digest'})
+    seen = {}
+    response = _svg('')
+    _stub_provider(monkeypatch, response, seen)
+    result = asyncio.run(module.author_slide_svg(
+        '# 검토 조건\n승인 후 적용하며 확정 실적은 아닙니다.', style, 'content', 1, 5,
+        writing_policy=writing_policy, source_preserved=source_preserved,
+        correction_mode='local_repair', correction_hint='writing_policy_visible_symbols: middle_dot',
+        previous_svg=response,
+    ))
+    prompt = ' '.join(seen['messages'][0].content.split())
+    assert result.svg_content
+    if editable:
+        assert 'explicitly authorizes changing that text' in prompt
+        assert 'Ordinary generated prose may be rewritten naturally' in prompt
+        assert 'Do not remove or rewrite source wording to fit.' not in prompt
+    else:
+        assert 'Do not remove or rewrite source wording to fit.' in prompt
+        assert 'explicitly authorizes changing that text' not in prompt
+
+
 def test_v2_reference_role_uses_literal_native_schedule_and_relationship_evidence():
     from copy import deepcopy
     from services.generation_core.drivers.svg.reference_selection import select_reference_role

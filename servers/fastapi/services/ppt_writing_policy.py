@@ -158,6 +158,9 @@ _STYLE_PATTERNS: tuple[tuple[StyleSignal, re.Pattern[str]], ...] = (
 _URL_OR_ADDRESS = re.compile(r"(?:https?://|www\.)\S+|[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
 _FILE_PATH = re.compile(r"(?:[A-Za-z]:\\|\\\\)[^\s,;]+|(?<!\w)/(?:[\w.-]+/)+[\w.-]+")
 _NUMERIC_SLASH = re.compile(r"(?<!\w)\d+(?:[.,]\d+)?/\d+(?:[.,]\d+)?(?!\w)")
+# Month and quarter stages use the dash as part of a value, not as prose punctuation.
+# Require the same M/Q prefix and digits on both sides; word-to-word dashes remain reportable.
+_PERIOD_RANGE = re.compile(r"(?<![A-Za-z0-9])([MQ])\d+[ \t]*[–—―][ \t]*\1\d+(?![A-Za-z0-9])")
 _UNIT_SLASH = re.compile(r"(?i)\b(?:km|m|cm|mm|kg|g|mg|l|ml|gb|mb|tb|kwh|wh|mbps|gbps)/(?:h|s|d|m|km|cm|mm|kg|g|mg|l|ml|gb|mb|tb)\b")
 # Exact, conventional unit products only; arbitrary word pairs stay reportable.
 _UNIT_PRODUCT = re.compile(
@@ -227,6 +230,7 @@ def scan_visible_text(
             _URL_OR_ADDRESS,
             _FILE_PATH,
             _NUMERIC_SLASH,
+            _PERIOD_RANGE,
             _UNIT_SLASH,
             _UNIT_PRODUCT,
             _NUMERIC_PRODUCT,
