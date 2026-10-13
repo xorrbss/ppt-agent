@@ -4,7 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from services.generation_core.quality.advisory_record import content_digest
-from services.generation_core.quality.vision_advisory_prompt import DESIGN_LOCAL_AXES
+from services.generation_core.quality.vision_advisory_prompt import DESIGN_LOCAL_AXES, baseline_review_active
 from utils.hashing import sha256_hex
 
 
@@ -139,8 +139,12 @@ def seal_saved_review(prepared, slides, vision, claim):
         combined.append(dict(index=index, evaluated=page["evaluated"] and global_page["evaluated"],
             axes={**page["axes"], **global_page["axes"]}, issues=page.get("issues", []),
             localEvidenceReused=index not in prepared["changed"]))
-    vision = {**vision, "designReview": dict(pages=combined, candidateComparisons=[], deckFlow=review.get("deckFlow")),
-        "slides": [dict(index=page["index"], issues=page["issues"]) for page in combined]}
+    if baseline_review_active(prepared["context"]):
+        # The v2 parser validates every current page on all five axes.
+        vision = {**vision, "designReview": deepcopy(review)}
+    else:
+        vision = {**vision, "designReview": dict(pages=combined, candidateComparisons=[], deckFlow=review.get("deckFlow")),
+            "slides": [dict(index=page["index"], issues=page["issues"]) for page in combined]}
     gate = _seal_design_gate(prepared["context"], prepared["pages"], prepared["pngs"], vision)
     vision["designGate"] = gate
     record = advisory_record(vision, gate["pageDigests"])

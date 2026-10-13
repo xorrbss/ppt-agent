@@ -285,6 +285,23 @@ def test_visual_review_passes_with_a_matching_clean_advisory(policy_version, mon
             priorCandidates={}, mandatoryEvidence=[True, True], deckComplete=True)
         vision["designGate"] = _seal_design_gate(context,
             [({**slide.content["svgReceipt"], "svg_content": slide.svg_content}, png) for slide in slides], [png, png], vision)
+        if policy_version == 2:
+            from services.svg_quality_recovery_review import seal_saved_review
+            saved_context = {**context, "reviewScope": "edited"}
+            prepared = dict(context=saved_context, changed=[0], reusable={}, snapshot=snapshot,
+                runtime={"fixture": "current-runtime"}, ownerScope=owner, sourceGenerationRevision=1,
+                publication=dict(parentOperationId=operation, parentJobId=job),
+                pages=[({**slide.content["svgReceipt"], "svg_content": slide.svg_content}, png) for slide in slides],
+                pngs=[png, png])
+            record, _ = seal_saved_review(prepared, slides, vision,
+                SimpleNamespace(expected_revision=1, operation_id=operation))
+            assert record["vision"]["designReview"] == vision["designReview"]
+            assert record["vision"]["designGate"]["status"] == "passed"
+            incomplete = deepcopy(vision)
+            incomplete["designReview"]["pages"].pop()
+            incomplete_record, _ = seal_saved_review(prepared, slides, incomplete,
+                SimpleNamespace(expected_revision=1, operation_id=operation))
+            assert incomplete_record["vision"]["designGate"]["status"] == "unreviewed"
         publication = dict(schema="svg-quality-recovery-publication/v1", gateDigest=vision["designGate"]["digest"],
             parentOperationId=operation, parentJobId=job, sourceRevision=1, sourceGenerationRevision=1,
             snapshotDigest=content_digest(snapshot), sourceContentDigests=[content_digest(slide.content["source"]) for slide in slides],
