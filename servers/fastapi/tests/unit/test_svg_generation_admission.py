@@ -319,7 +319,10 @@ def test_title_only_terminal_retry_consumes_known_financial_history(monkeypatch)
     generation_payload = {**request.model_dump(mode="json"), "strategy": "svg",
         INTERNAL_HEADER_TITLE_PLAN_KEY: plan,
         "_internal_svg_style_snapshot": header_snapshot_base(frozen_style)}
-    request_digest = pipeline.request_sha256(generation_payload)
+    # The submitted caller fingerprint predates admission/bootstrap payload
+    # fields, so the persisted job hash intentionally differs from this payload.
+    request_digest = "f" * 64
+    assert request_digest != pipeline.request_sha256(generation_payload)
     checkpoint_identity = {"job_id": str(job_id), "request_digest": request_digest,
         "workspace_operation_id": str(source_operation_id), "plan_digest": plan["plan_digest"]}
     checkpoint_payload = {"version": "svg-common-header-title-batch/v1",

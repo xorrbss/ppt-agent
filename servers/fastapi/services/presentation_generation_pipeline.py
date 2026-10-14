@@ -1898,7 +1898,6 @@ async def _unused_terminal_generation_retry_budget(
                     # for a fresh title call. Preserve all ancestor history.
                     if (not isinstance(job.request_payload, dict)
                             or job.request_payload != (operation.request_payload or {}).get("generation_request")
-                            or request_sha256(job.request_payload) != job.request_sha256
                             or job.request_payload.get("strategy") != "svg"
                             or job.request_payload.get("common_header_mode") != "uniform"
                             or job.total_slides not in {0, admission.slide_count}
