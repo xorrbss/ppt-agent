@@ -130,6 +130,43 @@ def test_common_header_browser_ink_preserves_hinted_bearing_without_accepting_ov
     wrong_font["font_size"] = 36
     assert measured(wrong_font)["passed"] is False
 
+    contract["canvas"] = {"width": 1280, "height": 720}
+    body_rect = '<rect x="64" y="201" width="826" height="387" stroke="#222" stroke-width="2"/>'
+    body_box = {"x": 64, "y": 201, "width": 826, "height": 387}
+
+    def measured_body(body_svg, box, *, owned_text=False):
+        import xml.etree.ElementTree as ET
+
+        page_svg = svg.replace("</svg>", body_svg + "</svg>")
+        body_qid = f"svg-{len(list(ET.fromstring(page_svg).iter())) - 1}"
+        body_item = {"qid": body_qid, "bbox": box, "css_visible": True,
+                     "effective_opacity": 1, "has_owned_text": owned_text}
+        if owned_text:
+            body_item.update(text_fragments=[box], text_ink_fragments=[{**box, "cellClusters": 0}])
+        quality = {"passed": True, "geometry_passed": True,
+                   "browser_metrics": {"elements": [deepcopy(item), body_item]}}
+        _apply_common_header_quality(quality, page_svg, contract, binding, None)
+        return quality
+
+    assert measured_body(body_rect, body_box)["passed"] is True
+    top_intrusion = {**body_box, "y": contract["body_box"]["y"]}
+    assert measured_body(body_rect.replace('y="201"', 'y="144"'), top_intrusion)["passed"] is False
+    bottom_intrusion = {**body_box, "y": 257}
+    assert measured_body(body_rect.replace('y="201"', 'y="257"'), bottom_intrusion)["passed"] is False
+    canvas_overflow = '<rect x="64" y="300" width="826" height="20" stroke="#222" stroke-width="132"/>'
+    assert measured_body(canvas_overflow, {**body_box, "y": 300, "height": 20})["passed"] is False
+    assert measured_body(body_rect.replace("<rect ", '<rect transform="scale(1)" '), body_box)["passed"] is False
+    ancestor_transform = '<g transform="translate(0,0)">' + body_rect + "</g>"
+    transformed = measured_body(ancestor_transform, body_box)
+    assert transformed["passed"] is False
+    assert transformed["failures"] == [{"kind": "svg_common_header_body_intrusion", "qid": "svg-3"}]
+    assert measured_body('<text x="63" y="220">본문</text>', {**body_box, "x": 63}, owned_text=True)["passed"] is False
+    outside_fill = body_rect.replace('x="64"', 'x="63"').replace(' stroke="#222" stroke-width="2"', '')
+    assert measured_body(outside_fill, {**body_box, "x": 63})["passed"] is False
+    assert measured_body('<image x="63" y="201" width="826" height="387"/>', {**body_box, "x": 63})["passed"] is False
+    contract["brand_reservations"] = [{"x": 62, "y": 210, "width": 1.5, "height": 20}]
+    assert measured_body(body_rect, body_box)["passed"] is False
+
 
 def test_external_header_title_plan_classifies_page_labels_and_restores_exact_budget():
     from services.presentation_generation_staging import (

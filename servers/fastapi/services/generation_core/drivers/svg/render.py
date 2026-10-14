@@ -30,6 +30,7 @@ def _apply_common_header_quality(quality, svg, contract, binding, furniture_rece
 
     root = ET.fromstring(svg)
     nodes = {f"svg-{i}": node for i, node in enumerate(root.iter())}
+    node_qids = {node: qid for qid, node in nodes.items()}
     parents = {child: parent for parent in root.iter() for child in parent}
     elements = (quality.get("browser_metrics") or {}).get("elements") or []
     by_qid = {item.get("qid"): item for item in elements}
@@ -51,6 +52,21 @@ def _apply_common_header_quality(quality, svg, contract, binding, furniture_rece
                 return current.get(attribute)
             current = parents.get(current)
         return default
+
+    def untransformed(node):
+        current = node
+        while current is not None:
+            style = (by_qid.get(node_qids[current]) or {}).get("computed_style") or {}
+            if ("transform" in current.attrib
+                    or any(style.get(key, "none") != "none" for key in ("transform", "translate", "rotate", "scale"))
+                    or str(style.get("zoom", "1")) not in {"1", "normal"}):
+                return False
+            current = parents.get(current)
+        return True
+
+    def overlaps(first, second):
+        return (min(first["x"] + first["width"], second["x"] + second["width"]) > max(first["x"], second["x"])
+                and min(first["y"] + first["height"], second["y"] + second["height"]) > max(first["y"], second["y"]))
 
     for qid, node in nodes.items():
         tag, node_id = node.tag.rsplit("}", 1)[-1], node.get("id", "")
@@ -78,6 +94,7 @@ def _apply_common_header_quality(quality, svg, contract, binding, furniture_rece
             continue
         if not item.get("css_visible", False) or item.get("effective_opacity", 0) <= 0:
             continue
+        stroke_margin_safe = False
         if item.get("has_owned_text"):
             boxes = [_ink_rect(box) for box, _basis in comparison_fragments(item)]
         elif tag != "tspan":
@@ -115,14 +132,25 @@ def _apply_common_header_quality(quality, svg, contract, binding, furniture_rece
                         box = None
                 half = float(inherited(node, "stroke-width", "1")) / 2
             if box and stroke != "none":
+                layout_box = box
                 box = {"x": box["x"] - half, "y": box["y"] - half,
                        "width": box["width"] + half * 2, "height": box["height"] + half * 2}
+                # A centered stroke can extend into the side margin even when
+                # its layout is inside the body. Keep vertical reservations and
+                # canvas/brand paint checks strict; never extend text/image bounds.
+                canvas_box = {"x": 0, "y": 0, **contract["canvas"]}
+                stroke_margin_safe = (
+                    tag in {"rect", "circle", "ellipse"} and math.isfinite(half) and half > 0
+                    and untransformed(node) and inside(layout_box, body_box) and inside(box, canvas_box)
+                    and box["y"] >= body_box["y"] - tolerance
+                    and box["y"] + box["height"] <= body_box["y"] + body_box["height"] + tolerance
+                    and all(not overlaps(box, reservation) for reservation in contract.get("brand_reservations", [])))
             boxes = [box]
         else:
             continue
         if not boxes or any(box is None for box in boxes):
             failures.append({"kind": "svg_common_header_measurement_unavailable", "qid": qid})
-        elif any(not inside(box, body_box) for box in boxes):
+        elif any(not inside(box, body_box) for box in boxes) and not stroke_margin_safe:
             text = "".join(str(item.get("owned_text") or "").split())
             duplicate = (text and text == "".join(binding["title"].split())
                          and any(box["y"] < body_box["y"] for box in boxes))
