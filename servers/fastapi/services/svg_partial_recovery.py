@@ -1840,7 +1840,7 @@ async def build_manifest(session, operation, *, presentation_revision):
             operation_id=str(operation.id), job_id=str(job.id), owner_id=str(owner),
             tenant_id=tenant, archive_digest=manifest["archive_digest"],
             parent_manifest_hash=(operation.request_payload or {}).get("svg_partial_recovery_manifest_hash", ""),
-            payloads=[r.svg_checkpoint for r in rows],
+            payloads=[r.svg_checkpoint or {} for r in rows],
             execution=seed.get("quality_recovery_execution", {}),
             source_snapshot=job.svg_style_snapshot,
         )
