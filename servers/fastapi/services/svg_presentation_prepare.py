@@ -157,6 +157,82 @@ def _verify_header_title_plan_outline(request, outline):
         raise ValueError("svg_common_header_title_plan_conflict")
 
 
+async def _verified_title_checkpoint_request_digest(session, job):
+    """Recover the submitted fingerprint from sealed partial-recovery ancestry."""
+    from models.sql.workspace import WorkspaceOperation
+    from services.presentation_generation_job_service import request_sha256
+    from services.svg_partial_recovery import (
+        ARCHIVE_KEY, ARCHIVE_V2, LINEAGE_KEY, REVISION, _frozen_payload,
+        _sha256_hex_valid, _verify_operation_references, digest,
+    )
+    from utils.owner_context import get_current_owner_id, get_current_tenant_id
+
+    payload = job.request_payload or {}
+    if LINEAGE_KEY not in payload:
+        return job.request_sha256
+    operation = await session.get(WorkspaceOperation, job.workspace_operation_id)
+    owner, tenant = get_current_owner_id(), get_current_tenant_id()
+    if operation is None or owner is None or not tenant:
+        raise ValueError("svg_common_header_title_checkpoint_conflict")
+    current_sha = job.request_sha256
+    seen = set()
+    while LINEAGE_KEY in payload:
+        if operation.id in seen or not isinstance(payload, dict) or not _sha256_hex_valid(current_sha):
+            raise ValueError("svg_common_header_title_checkpoint_conflict")
+        seen.add(operation.id)
+        operation_payload = operation.request_payload or {}
+        lineage = payload.get(LINEAGE_KEY)
+        manifest = operation_payload.get("svg_partial_recovery_manifest")
+        archive = operation_payload.get(ARCHIVE_KEY)
+        source_job = archive.get("job") if isinstance(archive, dict) else None
+        source_payload = source_job.get("request_payload") if isinstance(source_job, dict) else None
+        source_sha = source_job.get("request_sha256") if isinstance(source_job, dict) else None
+        parent_id = operation.retry_of_operation_id
+        if (not isinstance(lineage, dict) or not isinstance(manifest, dict)
+                or not isinstance(archive, dict) or archive.get("schema") != ARCHIVE_V2
+                or manifest.get("archive_schema") != ARCHIVE_V2
+                or operation_payload.get("recovery_revision") != REVISION
+                or operation_payload.get("generation_request") != payload
+                or lineage != operation_payload.get("svg_partial_recovery_lineage")
+                or lineage.get("schema") != "svg-partial-recovery-lineage/v1"
+                or lineage.get("operation_id") != str(operation.id)
+                or lineage.get("action_operation_id") != manifest.get("operation_id")
+                or lineage.get("source_operation_id") != manifest.get("source_operation_id")
+                or lineage.get("manifest_hash") != digest(manifest)
+                or lineage.get("archive_digest") != manifest.get("archive_digest")
+                or lineage.get("frozen_request_digest") != manifest.get("frozen_request_digest")
+                or lineage.get("frozen_style_digest") != manifest.get("frozen_style_digest")
+                or operation_payload.get("svg_partial_recovery_manifest_hash") != digest(manifest)
+                or digest(archive) != manifest.get("archive_digest")
+                or digest(_frozen_payload(payload)) != manifest.get("frozen_request_digest")
+                or digest(job.svg_style_snapshot) != manifest.get("frozen_style_digest")
+                or parent_id is None or manifest.get("operation_id") != str(parent_id)
+                or operation.owner_id != owner or operation.kind != "presentation.generate"
+                or operation.presentation_id != job.presentation_id
+                or operation_payload.get("principal_tenant_id") != tenant
+                or manifest.get("owner_id") != str(owner)
+                or manifest.get("tenant_id") != tenant
+                or manifest.get("presentation_id") != str(job.presentation_id)
+                or manifest.get("job_id") != str(job.id)
+                or lineage.get("job_id") != str(job.id)
+                or request_sha256(payload) != current_sha
+                or not isinstance(source_payload, dict) or not _sha256_hex_valid(source_sha)
+                or source_job.get("id") != str(job.id)
+                or source_job.get("presentation_id") != str(job.presentation_id)
+                or source_job.get("workspace_operation_id") != str(parent_id)
+                or source_job.get("svg_style_snapshot") != job.svg_style_snapshot
+                or source_job.get("authored_outline") != job.authored_outline
+                or digest(_frozen_payload(source_payload)) != manifest.get("frozen_request_digest")):
+            raise ValueError("svg_common_header_title_checkpoint_conflict")
+        await _verify_operation_references(
+            session, operation, manifest, archive.get("operation_refs"))
+        operation = await session.get(WorkspaceOperation, parent_id)
+        if operation is None:
+            raise ValueError("svg_common_header_title_checkpoint_conflict")
+        payload, current_sha = source_payload, source_sha
+    return current_sha
+
+
 async def _verify_frozen_title_result(session, job, outline, plan):
     """A normal resume must reuse the sealed result that supplied its titles."""
     from uuid import UUID
@@ -198,7 +274,8 @@ async def _verify_frozen_title_result(session, job, outline, plan):
                     or ancestor.conversation_id != current.conversation_id):
                 raise ValueError("svg_common_header_title_checkpoint_conflict")
             current = ancestor
-    identity = {"job_id": str(job.id), "request_digest": job.request_sha256,
+    identity = {"job_id": str(job.id),
+                "request_digest": await _verified_title_checkpoint_request_digest(session, job),
                 "workspace_operation_id": source_text,
                 "plan_digest": plan["plan_digest"]}
     if (row is None or row.input_digest != canonical_checkpoint_digest(identity)
