@@ -153,7 +153,7 @@ PPT/PDF/문서에서 내용만 가져와 새로 구성하는 모드에는 공통
 
 ## 남은 구현 판단
 
-작은 SVG 헤더 어댑터의 정확한 필드명, 새 authoring profile 버전, 원문 없는 제목 입력의 기존 개요 연결 및 UI 컴포넌트 위치는 구현 시 확정한다. 이 항목은 제안 상태이며 현재 제품 동작으로 보고하지 않는다. 사용자 합의 범위와 코드에서 확인한 현재 동작은 앞선 항목과 구분한다.
+새 헤더는 `common_header_mode`와 `common_header_cover_exception`으로 선택하며 `svg-common-header/v1` 설정과 `svg-common-header-page/v1` 제목 바인딩을 고정한다. 기존 작성 profile의 의미를 유지하고 헤더 작성 규칙을 별도 버전으로 연결했다. 아래 구현/검증 증거와 별도로 실제 LLM 생성, 본문 디자인 평가, 승인된 예산 안의 누락 제목 일괄 호출과 최종 릴리스 승인은 남아 있다.
 
 ## 구현 결과와 검증 범위
 
@@ -168,3 +168,5 @@ PPT/PDF/문서에서 내용만 가져와 새로 구성하는 모드에는 공통
 구조 검증용 PPTX는 저장소 밖 `C:\project\PPT-agent\delivery-backups\svg-common-header-20261014\uniform-editable.pptx`에 보존했다. 이 파일의 본문은 검사 도형이며 LLM이 만든 완성 발표자료나 실제 생성 품질 비교 결과가 아니다. 전체 빌드·전체 테스트·유료 제공자 실행·실제 디자인 점수나 속도 우위는 이 선택 검증에서 확인하지 않았다.
 
 구조 검증용 2페이지 PPTX의 공통 제목을 실제 PowerPoint에서 수정하고 저장한 뒤 다시 열어 수정 보존을 확인했다. 기존 사용자 문서와 원본 artifact는 그대로 유지했다. `office-proof.json`에 제목 편집·재열기 및 원본 불변 증거를 보존한다. 이 확인은 실제 Office 편집성 증거이며 최종 LLM 본문이나 시각적 일치 판정을 대신하지 않는다.
+
+로컬 serve 체크아웃에 통합한 뒤 실행 중인 생성/operation 0건을 확인하고 관리 스크립트로 API, 생성 worker와 export worker만 재시작했다. Next.js는 기존 HMR을 사용하고 proxy/PostgreSQL은 재시작하지 않았다. `/upload`와 `/public-v2`는 변경 반영 후 HTTP 200 응답을 확인했다. 이는 페이지 진입과 실행 반영 확인이며 실제 신규 LLM 생성 성공 증거는 아니다. 새로운 Sol 5페이지 실행은 별도 승인 요청 상태로 제공자에 전송하지 않았다.
