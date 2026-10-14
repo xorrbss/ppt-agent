@@ -529,17 +529,70 @@ def _author_render_chain(payload, raw, receipt, *, request, job, asset, index,
         source_manifest=contract,
         header_page=job.authored_outline["slides"][index].get("common_header"))
     stored = payload["svg_content"]
-    if stored == normalized and row is not None and row.render_status == "pending":
-        from utils.owner_context import get_current_owner_id, get_current_tenant_id
+    from utils.owner_context import get_current_owner_id, get_current_tenant_id
 
+    historical_initial_bound = False
+    if (stored == normalized and row is not None and row.render_status == "pending"
+            and payload.get("initial_quality") not in (None, {})):
+        attempts = payload.get("attempts") or []
+        previous = attempts[-2] if len(attempts) == 2 else None
+        previous_quality = previous.get("quality") if isinstance(previous, dict) else None
+        initial = payload.get("initial_quality")
+        prior_svg = payload.get("last_valid_svg")
+        previous_raw = previous.get("raw_response") if isinstance(previous, dict) else None
+        previous_receipt = previous.get("receipt") if isinstance(previous, dict) else None
+        records = payload.get("provider_terminal_responses") or {}
+        ordinal = previous_receipt.get("attempt_ordinal") if isinstance(previous_receipt, dict) else None
+        terminal = records.get(str(ordinal)) if isinstance(records, dict) and type(ordinal) is int else None
+        if (previous is not None and previous.get("kind") == "provider"
+                and isinstance(previous_quality, dict) and isinstance(initial, dict)
+                and initial == {**previous_quality, "stage": "first_response"}
+                and isinstance(prior_svg, str) and prior_svg != stored
+                and isinstance(previous_raw, str) and previous_raw.strip()
+                and isinstance(previous_receipt, dict) and isinstance(terminal, dict)
+                and terminal.get("schema") == "svg-provider-terminal/v1"
+                and terminal.get("terminal_event") == "response.completed"
+                and terminal.get("ordinal") == ordinal
+                and terminal.get("raw_response") == previous_raw
+                and terminal.get("output_digest") == sha256_hex(previous_raw.encode())
+                and str(previous_receipt.get("raw_digest", "")).removeprefix("sha256:")
+                    == terminal["output_digest"]
+                and terminal.get("job_id") == str(job.id)
+                and terminal.get("operation_id") == str(job.workspace_operation_id)
+                and terminal.get("owner_id") == str(get_current_owner_id())
+                and terminal.get("tenant_id") == get_current_tenant_id()
+                and terminal.get("input_digest") == payload.get("input_digest")
+                and terminal.get("receipt_digest") == digest({
+                    key: value for key, value in terminal.items() if key != "receipt_digest"})):
+            try:
+                prior_root = ET.fromstring(normalize_svg_response(previous_raw))
+                if vectors:
+                    from services.generation_core.drivers.svg.embed_assets import replace_vector_icon_images
+                    replace_vector_icon_images(prior_root, vectors)
+                prior_author = ET.tostring(prior_root, encoding="unicode")
+                _, prior_advisories = normalize_model_font_families(prior_author)
+                historical = {**payload, "svg_content": prior_svg,
+                    "source_digest": sha256_hex(prior_svg.encode()),
+                    "quality": previous_quality, "fontAdvisories": prior_advisories,
+                    "png_sha256": None}
+                prior_chain = _author_render_chain(historical, previous_raw, previous_receipt,
+                    request=request, job=job, asset=asset, index=index, vectors=vectors,
+                    vector_seed_witness=vector_seed_witness)
+                historical_initial_bound = (prior_chain["render_svg_sha256"]
+                    == sha256_hex(prior_svg.encode())
+                    == str(initial.get("source_digest", "")).removeprefix("sha256:"))
+            except (ValueError, TypeError, KeyError, ET.ParseError):
+                historical_initial_bound = False
+    if stored == normalized and row is not None and row.render_status == "pending":
         terminal = completed or {}
         unsigned = {key: value for key, value in terminal.items() if key != "receipt_digest"}
         if (row.author_status == "completed" and row.persist_status == "pending"
                 and row.render_path is None and row.render_sha256 is None
-                and payload.get("quality") in (None, {}) and payload.get("initial_quality") in (None, {})
+                and payload.get("quality") in (None, {})
+                and (payload.get("initial_quality") in (None, {}) or historical_initial_bound)
                 and payload.get("png_sha256") is None and payload.get("png_path") is None
                 and payload.get("source_digest") in (None, sha256_hex(stored.encode()), "sha256:" + sha256_hex(stored.encode()))
-                and payload.get("last_valid_svg") in (None, stored)
+                and (payload.get("last_valid_svg") in (None, stored) or historical_initial_bound)
                 and payload.get("local_readability_repair") in (None, {})
                 and terminal.get("schema") == "svg-provider-terminal/v1"
                 and terminal.get("terminal_event") == "response.completed"

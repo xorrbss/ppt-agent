@@ -910,7 +910,7 @@ def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflic
         monkeypatch.setattr("utils.owner_context.get_current_owner_id", lambda: owner)
         monkeypatch.setattr("utils.owner_context.get_current_tenant_id", lambda: tenant)
         source_request = GeneratePresentationRequest(content="Fixture message", strategy="svg",
-                                                     n_slides=1, language="en")
+                                                     n_slides=1, language="en", common_header_mode="free")
         snapshot = official_pin_svg_style(source_request)
         assert read_quality_recovery_policy(snapshot) == {"id": "svg-quality-first", "version": 2}
         immutable_request = source_request.model_dump(mode="json")
@@ -997,6 +997,44 @@ def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflic
         bad_latest["attempts"].append(dict(kind="provider", raw_response=bad_raw, receipt=bad_receipt))
         bad_latest["provider_terminal_responses"]["author/2"] = bad_terminal
         bad_latest.update(source_digest=bad_author_digest, last_valid_svg=first_svg)
+        current_raw = raw.replace('fill="#123456"', 'fill="#234567"')
+        current_author_digest = sha256_hex(ET.tostring(ET.fromstring(current_raw), encoding="unicode").encode())
+        current_receipt = {**deepcopy(author_receipt), "attempt_ordinal": 2,
+            "raw_digest": "sha256:" + sha256_hex(current_raw.encode()),
+            "source_digest": "sha256:" + current_author_digest}
+        current_terminal = {**deepcopy(terminal), "raw_response": current_raw,
+            "output_digest": sha256_hex(current_raw.encode())}
+        current_normalized, _, _, _, _, current_advisories = recovery._replay_sealed_author_transform(
+            original, current_raw, request=source_request, job=source_job, asset=asset, index=0)
+        retained = deepcopy(original)
+        retained["attempts"].append(dict(kind="provider", raw_response=current_raw, receipt=current_receipt))
+        retained.update(svg_content=current_normalized,
+            source_digest=sha256_hex(current_normalized.encode()), fontAdvisories=current_advisories,
+            initial_quality={**deepcopy(measured), "stage": "first_response"}, last_valid_svg=first_svg)
+        retained["provider_terminal_responses"] = {
+            "1": {**deepcopy(terminal), "ordinal": 1},
+            "2": {**current_terminal, "ordinal": 2},
+        }
+        for record in retained["provider_terminal_responses"].values():
+            record["receipt_digest"] = recovery.digest({
+                key: value for key, value in record.items() if key != "receipt_digest"})
+        retained_row = SimpleNamespace(author_status="completed", render_status="pending",
+            persist_status="pending", render_path=None, render_sha256=None)
+        retained_before = deepcopy(retained)
+        retained_chain = recovery._author_render_chain(retained, current_raw, current_receipt,
+            request=source_request, job=source_job, asset=asset, index=0,
+            row=retained_row, completed=retained["provider_terminal_responses"]["2"])
+        assert retained_chain["phase"] == "author-only"
+        assert retained_chain["source_svg_sha256"] == sha256_hex(current_normalized.encode())
+        assert retained == retained_before
+        for field, value in (("raw_response", raw + " "), ("quality", {
+                **measured, "source_digest": "sha256:" + "0" * 64})):
+            tampered = deepcopy(retained)
+            tampered["attempts"][0][field] = value
+            with pytest.raises(recovery.PartialRecoveryRejected):
+                recovery._author_render_chain(tampered, current_raw, current_receipt,
+                    request=source_request, job=source_job, asset=asset, index=0,
+                    row=retained_row, completed=tampered["provider_terminal_responses"]["2"])
         bad_before = deepcopy(bad_latest)
         fallback, selected_witness = asyncio.run(recovery._completed_source_author_projection(
             bad_latest, row, **{**kwargs, "completed": bad_terminal}))
@@ -1039,7 +1077,7 @@ def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflic
                 asyncio.run(recovery._completed_source_author_projection(candidate, row, **kwargs))
             monkeypatch.setattr("utils.owner_context.get_current_owner_id", lambda: owner)
         legacy_request = GeneratePresentationRequest(content="Fixture message", strategy="svg",
-                                                     n_slides=1, language="en")
+                                                     n_slides=1, language="en", common_header_mode="free")
         legacy_request._svg_quality_recovery_policy = {"id": "svg-quality-first", "version": 1}
         source_job.svg_style_snapshot = official_pin_svg_style(legacy_request)
         legacy_cache_plan = deepcopy(plan)
