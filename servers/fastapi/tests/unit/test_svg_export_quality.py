@@ -153,7 +153,8 @@ def test_persisted_domains_are_connected_without_claiming_visual_or_native_accep
     advisory = assemble_page_advisory([current_slide], page_records)
     identity = dict(presentationId=str(presentation_id), ownerId=str(owner), ownerScope="synthetic-owner", sourceRevision=1)
     binding_body = dict(identity, schemaVersion="svg-visual-review-operation-binding/v1", operationId=str(uuid.uuid4()),
-                        sourceDigests=[svg_digest], pngDigests=[png_digest], pageRecordDigests=[item["digest"] for item in page_records])
+                        tenantId=tenant, sourceDigests=[svg_digest], pngDigests=[png_digest],
+                        pageRecordDigests=[item["digest"] for item in page_records])
     advisory["operationBinding"] = dict(binding_body, digest=content_digest(binding_body))
     snapshot = dict(authoring_profile="art-direction-v1@8")
     snapshot["digest"] = canonical_json_digest(snapshot, allow_nan=True)
@@ -206,6 +207,34 @@ def test_persisted_domains_are_connected_without_claiming_visual_or_native_accep
         assert accepted["artifactId"] == str(public_id) and accepted["reviewOperationId"] == str(review_id)
         assert current.theme == before_current and export.result == before_export
         assert export.result["quality_receipt"] == old_receipt
+        # Source authority remains available to its own checker, while final
+        # artifact review compares only its actual owner/revision identity.
+        from services.svg_export_quality import svg_public_quality_receipt
+        full_binding = dict(identity, tenantId=tenant,
+            _generationSourceReview=asyncio.run(svg_source_review_context(ReadSession(), current)))
+        metrics = deepcopy(export.result)
+        metrics["final_pptx_visual_review"] = deepcopy(producer)
+        metrics["public_export_worker_evidence"]["structuralReadback"]["sourcePreservation"] = readback
+        receipt_args = dict(slides=[current_slide], worker_metrics=metrics, advisory=advisory,
+            require_native_coverage=True, review_binding=full_binding,
+            quality_receipt_id="synthetic-final-review", operation_id=str(export_id),
+            presentation_id=str(presentation_id), artifact_digest="sha256:" + artifact_digest,
+            source_revision=1, scene_digest="sha256:" + "b" * 64,
+            evaluated_at=datetime.now(timezone.utc), exporter_version="test-converter/v1")
+        for builder, preservation in ((source_svg_public_quality_receipt, [receipt]),
+                                      (svg_public_quality_receipt, None)):
+            complete = builder(**receipt_args, source_preservation=preservation)
+            assert complete["visualReview"]["status"] == "passed"
+            for key, wrong in (("ownerId", str(uuid.uuid4())), ("ownerScope", "different-owner-scope"),
+                               ("tenantId", "different-tenant"), ("sourceRevision", 2)):
+                changed_metrics = deepcopy(metrics)
+                changed = changed_metrics["final_pptx_visual_review"]
+                changed[key] = wrong
+                changed["digest"] = content_digest({name: value for name, value in changed.items() if name != "digest"})
+                rejected = builder(**{**receipt_args, "worker_metrics": changed_metrics},
+                                   source_preservation=preservation)
+                assert rejected["visualReview"]["status"] == "failed"
+        assert current.theme == before_current and export.result == before_export
         for violation in ("review_unknown", "owner", "tenant", "review_tenant", "export_tenant", "target", "artifact", "revision", "count", "slide_owner", "index", "format", "svg", "png", "parent"):
             if violation == "review_unknown": review_operation.state = "running"
             elif violation == "owner": public.owner_id = uuid.uuid4()
@@ -232,6 +261,88 @@ def test_persisted_domains_are_connected_without_claiming_visual_or_native_accep
             current.n_slides, current_slide.owner_id = 1, owner
             current_slide.content["svgReceipt"]["png_sha256"] = png_digest
         assert current.theme == before_current and export.result == before_export
+
+
+    _assert_cached_native_coverage_promotion_guards()
+
+
+def _assert_cached_native_coverage_promotion_guards():
+    import uuid
+    from copy import deepcopy
+
+    from services.svg_export_quality import _generic_native_ooxml_domain
+    from services.svg_export_whole_page_verifier import whole_page_verifier_digest
+    from utils.hashing import canonical_json_sha256
+    from workers.public_svg_pptx_convert import converter_digest
+
+    producer, consumer, owner, presentation = (uuid.uuid4() for _ in range(4))
+    svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"/>'
+    slide = SimpleNamespace(svg_content=svg, content={})
+    source = source_digest(svg)
+    artifact_digest = "sha256:" + "a" * 64
+    identity = "sha256:" + "b" * 64
+    tenant, scope = "fixture-tenant", "fixture-scope"
+
+    def ref(artifact_id, operation_id, kind, sha256, retention):
+        return dict(schemaVersion="artifact-ref/v1", artifactId=str(artifact_id),
+            ownerId=str(owner), tenantId=tenant, kind=kind, sha256=sha256,
+            sizeBytes=1234, mediaType=("application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                if kind == "presentation-pptx" else "image/svg+xml"),
+            storageKey=f"sha256/{sha256}", createdByOperationId=str(operation_id),
+            retentionClass=retention)
+
+    worker_ref = ref(uuid.uuid4(), producer, "presentation-pptx", artifact_digest[7:], "ephemeral")
+    canonical_ref = ref(uuid.uuid4(), producer, "presentation-pptx", artifact_digest[7:], "published")
+    consumer_ref = ref(uuid.uuid4(), consumer, "presentation-pptx", artifact_digest[7:], "published")
+    source_ref = ref(uuid.uuid4(), producer, "slide-svg", source[7:], "ephemeral")
+    native = {"fellBack": 0, "reasons": []}
+    page = dict(pageIndex=0, sourcePageId="slide-1", svgDigest=source,
+        shapeCount=1, nativePrimitiveCount=1, promotedBackgroundCount=0,
+        shapeInventoryDigest="sha256:" + "c" * 64, traceDigest="sha256:" + "d" * 64)
+    measurements = dict(verifiedPages=1, verifiedShapes=1, nativePrimitives=1,
+        verifiedRelationships=1, unboundShapes=0, unboundPrimitives=0,
+        geometryMismatches=0, unboundRelationships=0)
+    proof = dict(schemaVersion="svg-generic-native-ooxml-coverage/v1", passed=True,
+        artifactDigest=artifact_digest, operationId=str(producer), presentationId=str(presentation),
+        sourceRevision=1, ownerId=str(owner), tenantId=tenant, sourceDigests=[source],
+        verifierCodeDigest=whole_page_verifier_digest(), converterDigest=converter_digest(),
+        nativeObjectsDigest="sha256:" + canonical_json_sha256(native),
+        officeRenderMeasured=False, packagePartsDigest="sha256:" + "e" * 64,
+        pages=[page], measurements=measurements, conversionSourceDigests=[source],
+        projectedSourceDigests=[source], artifactRef=worker_ref, sourceArtifactRefs=[source_ref])
+    proof["coverageDigest"] = "sha256:" + canonical_json_sha256(proof)
+    structural = dict(genericNativeCoverageOoxml=proof, nativeObjects=native, slideCount=1)
+    original = dict(structuralReadback=structural, sourceDigests=[source[7:]], fallbackReason=None)
+    binding = dict(schemaVersion="svg-export-reuse-producer-binding/v1",
+        producerOperationId=str(producer), consumerOperationId=str(consumer),
+        canonicalIdentityDigest=identity, ownerId=str(owner), ownerScope=scope,
+        tenantId=tenant, presentationId=str(presentation), sourceRevision=1,
+        artifactDigest=artifact_digest,
+        producerWorkerEvidenceDigest="sha256:" + canonical_json_sha256(original),
+        producerArtifactRef=canonical_ref, consumerArtifactRef=consumer_ref)
+    binding["digest"] = "sha256:" + canonical_json_sha256(binding)
+    worker = {**deepcopy(original), "reusedCompletedIdentity": True,
+        "reuseProducerWorkerEvidence": deepcopy(original), "reuseProducerBinding": binding}
+    arguments = dict(required=True, slides=[slide], artifact_digest=artifact_digest,
+        operation_id=str(consumer), presentation_id=str(presentation), source_revision=1,
+        review_binding=dict(ownerId=str(owner), ownerScope=scope, tenantId=tenant),
+        export_identity_digest=identity, export_tenant_id=tenant)
+
+    def checked(candidate):
+        return _generic_native_ooxml_domain(**arguments,
+            worker_metrics=dict(public_export_worker_evidence=candidate))
+
+    assert checked(worker)["status"] == "passed"
+    assert worker["reuseProducerWorkerEvidence"] == original
+    for field, changed in (("storageKey", "different/key"), ("ownerId", str(uuid.uuid4())),
+                           ("tenantId", "other-tenant"), ("createdByOperationId", str(uuid.uuid4())),
+                           ("sha256", "f" * 64), ("retentionClass", "ephemeral")):
+        altered = deepcopy(worker)
+        altered_binding = altered["reuseProducerBinding"]
+        altered_binding["producerArtifactRef"][field] = changed
+        altered_binding["digest"] = "sha256:" + canonical_json_sha256({
+            key: value for key, value in altered_binding.items() if key != "digest"})
+        assert checked(altered)["status"] == "failed", field
 
 
 @pytest.mark.parametrize("broken", ["template", "render", "readback"])

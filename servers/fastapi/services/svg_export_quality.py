@@ -245,7 +245,16 @@ def _generic_native_ooxml_domain(*, required, slides, worker_metrics, artifact_d
     except (ValueError, TypeError, KeyError, AttributeError):
         return failed
     if worker.get("reusedCompletedIdentity") is True and artifact != producer_ref:
-        return failed
+        # The worker's ephemeral registration and the server's published
+        # canonical registration may identify the same immutable CAS bytes.
+        # Keep every identity field exact except that proven promotion pair.
+        if (artifact.artifact_id == producer_ref.artifact_id
+                or artifact.retention_class != "ephemeral"
+                or producer_ref.retention_class != "published"
+                or any(getattr(artifact, field) != getattr(producer_ref, field) for field in (
+                    "owner_id", "tenant_id", "kind", "sha256", "size_bytes", "media_type",
+                    "storage_key", "created_by_operation_id"))):
+            return failed
     if ("sha256:" + artifact.sha256 != artifact_digest or artifact.kind != "presentation-pptx"
             or artifact.media_type != "application/vnd.openxmlformats-officedocument.presentationml.presentation"
             or any(str(ref.owner_id) != proof["ownerId"] or ref.tenant_id != proof["tenantId"]
@@ -357,7 +366,8 @@ def source_svg_public_quality_receipt(*, slides, source_preservation, worker_met
             worker_metrics=worker_metrics, artifact_digest=artifact_digest, operation_id=operation_id,
             presentation_id=presentation_id, source_revision=source_revision,
             source_digests=[sha256_prefixed((slide.svg_content or "").encode())[7:] for slide in slides],
-            expected_binding=review_binding)
+            expected_binding={key: value for key, value in (review_binding or {}).items()
+                              if key in {"presentationId", "ownerId", "ownerScope", "sourceRevision", "tenantId"}})
     return QualityReceiptV3(quality_receipt_id=quality_receipt_id, operation_id=operation_id,
         presentation_id=presentation_id, artifact_digest=artifact_digest, source_revision=source_revision,
         scene_digest=scene_digest, capability_registry_digest=CAPABILITY_REGISTRY_DIGEST,
@@ -407,7 +417,8 @@ def svg_public_quality_receipt(*, slides, advisory, source_preservation, worker_
             operation_id=receipt_args["operation_id"], presentation_id=receipt_args["presentation_id"],
             source_revision=receipt_args["source_revision"],
             source_digests=[sha256_prefixed((slide.svg_content or "").encode())[7:] for slide in slides],
-            expected_binding=review_binding)
+            expected_binding={key: value for key, value in (review_binding or {}).items()
+                              if key in {"presentationId", "ownerId", "ownerScope", "sourceRevision", "tenantId"}})
     return QualityReceiptV3(**receipt_args, capability_registry_digest=CAPABILITY_REGISTRY_DIGEST,
         exporter_version=exporter_version, **domains,
         release_readiness=release_readiness(domains.values())).model_dump(mode="json", by_alias=True)
