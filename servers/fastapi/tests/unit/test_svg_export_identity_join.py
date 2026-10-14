@@ -153,7 +153,11 @@ def harness(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     asyncio.run(built.engine.dispose())
 
 
-def test_same_revision_and_format_reuses_the_completed_export_without_the_worker(harness) -> None:
+def test_same_revision_and_format_reuses_the_completed_export_without_the_worker(harness, monkeypatch) -> None:
+    import services.svg_export_whole_page_verifier as whole_page_verifier
+
+    monkeypatch.setattr(whole_page_verifier, "whole_page_verifier_digest", lambda: "a" * 64)
+
     async def scenario() -> None:
         export = await harness()
         first_claim = await export.operation()
@@ -186,6 +190,30 @@ def test_same_revision_and_format_reuses_the_completed_export_without_the_worker
         assert {row.stage_version for row in checkpoints} == {"svg-slide/v1"}
         assert len(checkpoints) == 4  # two slides, bound to each operation's fence
         assert kinds == {"slide-svg", "checkpoint"}
+
+        monkeypatch.setattr(whole_page_verifier, "whole_page_verifier_digest", lambda: "b" * 64)
+        fresh_claim = await export.operation()
+        fresh, fresh_identity = await export.export(fresh_claim, _request())
+        await export.publish(fresh_claim, fresh)
+        assert export.worker_calls == [first_claim.operation_id, fresh_claim.operation_id]
+        assert fresh_identity.canonical_digest != identity.canonical_digest
+        assert fresh_identity.evidence.quality_digest != identity.evidence.quality_digest
+        assert fresh_identity.evidence.scene_digest == identity.evidence.scene_digest
+        assert fresh_identity.evidence.semantic_digest == identity.evidence.semantic_digest
+        assert fresh_identity.evidence.exporter_digest == identity.evidence.exporter_digest
+        assert fresh.artifact.sha256 == first.artifact.sha256
+        assert fresh.resource_metrics["public_export_worker_evidence"]["joined"] is False
+
+        unchanged_claim = await export.operation()
+        unchanged, unchanged_identity = await export.export(unchanged_claim, _request())
+        assert export.worker_calls == [first_claim.operation_id, fresh_claim.operation_id]
+        assert unchanged_identity.canonical_digest == fresh_identity.canonical_digest
+        assert unchanged.resource_metrics["public_export_worker_evidence"]["joinedOperationId"] == str(fresh_claim.operation_id)
+        rows = await export.identity_rows()
+        assert len(rows) == 2
+        original = next(row for row in rows if row.canonical_digest == identity.canonical_digest)
+        assert original.state == "succeeded"
+        assert original.result_artifact_id == first.artifact.artifact_id
 
     asyncio.run(scenario())
 

@@ -110,14 +110,15 @@ async def persist_svg_slide_checkpoints(claim, *, tenant_id, request: SvgExportR
 
 def build_svg_export_identity(claim, *, tenant_id, request: SvgExportRequest,
                               checkpoints: Sequence[SlideCheckpointArtifact]) -> CanonicalExportIdentity:
+    from services.svg_export_whole_page_verifier import whole_page_verifier_digest
+
     quality_inputs = svg_quality_inputs(slides=request.slides, advisory=request.advisory,
                                         quality_policy=request.quality_policy)
+    quality_inputs = {**quality_inputs, "wholePageVerifierDigest": whole_page_verifier_digest()}
     if request.source_manifest is not None:
         from services.svg_export_bundle import digest
-        from services.svg_export_whole_page_verifier import whole_page_verifier_digest
         quality_inputs = {**quality_inputs,
-            "sealedSourceManifestDigest": digest(request.source_manifest),
-            "wholePageVerifierDigest": whole_page_verifier_digest()}
+            "sealedSourceManifestDigest": digest(request.source_manifest)}
     evidence = build_svg_export_evidence_digests(
         svgs=request.svgs, notes=request.notes, canvas=request.canvas,
         source_assets=request.source_assets, source_preservation=request.source_preservation,
