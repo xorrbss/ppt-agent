@@ -159,8 +159,14 @@ def _design_context(ctx, pages, *, job, read_png):
         return value
     style_fields = {"style_id", "canvas", "tokens", "common_guidance", "mapped_guidance", "overrides",
                     "art_direction", "composition_guidance", "master_template", "design_pack_template",
-                    "composition_mode", "reference_semantics", "design_quality_guidance"}
-    style = design_only({key: value for key, value in snapshot.items() if key in style_fields})
+                    "composition_mode", "reference_semantics", "design_quality_guidance", "common_header"}
+    style = design_only({key: value for key, value in snapshot.items() if key in style_fields
+                        and (key != "common_header" or value is not None)})
+    header_pages = getattr(ctx, "header_pages", None)
+    if "common_header" in style and (not isinstance(header_pages, (list, tuple))
+            or len(header_pages) != len(pages)
+            or any(not isinstance(binding, Mapping) for binding in header_pages)):
+        raise ValueError("svg_common_header_review_binding_missing")
     source_pages = []
     for index, (payload, _) in enumerate(pages):
         source_pages.append(dict(index=index, content=contents[index] if index < len(contents) else None,
@@ -168,6 +174,10 @@ def _design_context(ctx, pages, *, job, read_png):
             authorExampleDigests=page_example_digests.get(index),
             preservation=payload.get("source_preservation"), visualIntent=payload.get("visual_intent"),
             inputDigest=payload.get("input_digest")))
+        if "common_header" in style:
+            # These are the bindings validated with the frozen style before
+            # authoring. Keep their original title, page identity and evidence.
+            source_pages[-1]["common_header"] = _quality_json_value(header_pages[index])
     prior_candidates = {}
     prior_pages = getattr(ctx, "quality_review_prior_pages", {}) or {}
     target_axes = getattr(ctx, "quality_review_target_axes", {}) or {}

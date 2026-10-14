@@ -208,8 +208,64 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
         assert "Variant A, evaluation page 1." in labels and "Variant B, evaluation page 1." in labels
         visible = messages[0].content + " ".join(labels)
         assert all(hidden not in visible for hidden in ("PRIOR", "NEW", "priorCandidates", "priorAxes", "svg-quality-first"))
+        assert "frozen document constraints" not in messages[0].content
         images = [part.data for part in messages[1].content if type(part).__name__ == "ImageContentPart"]
         assert images == [b"alternative-png", b"evaluation-png"]
+        # Carry the actual frozen header and page title into the same review
+        # request, keeping all existing source facts and ordinary design goals.
+        from copy import deepcopy
+        from models.presentation_outline_model import PresentationOutlineModel, SlideOutlineModel
+        from services.authored_canvas import canvas_metadata_for_aspect_ratio
+        from services.generation_core.drivers.svg import quality as deck_quality
+        from services.svg_authoring_profile import ART_DIRECTION_PROFILE_V8
+        from services.svg_common_header import prepare_common_header
+        from utils.hashing import canonical_json_digest
+
+        source = context["pages"][0]["content"]
+        outline = PresentationOutlineModel(slides=[SlideOutlineModel(content=source, title="Revenue update")])
+        snapshot = dict(tokens={}, canvas=dict(width=1280, height=720),
+            authoring_profile=dict(ART_DIRECTION_PROFILE_V8), quality_recovery_policy=dict(context["policy"]))
+        snapshot["digest"] = canonical_json_digest(snapshot, allow_nan=True)
+        fixture_ctx = SimpleNamespace(snapshot=snapshot, roles=["content"], count=1,
+            quality_review_contents=[source], header_pages=None)
+        fixture_pages = [(dict(svg_content="<svg/>"), b"evaluation-png")]
+        legacy_context = deck_quality._design_context(fixture_ctx, fixture_pages, job=None, read_png=lambda _: None)
+        assert "common_header" not in legacy_context["style"]
+        assert "common_header" not in legacy_context["pages"][0]
+        contract, bindings = prepare_common_header(snapshot, outline, canvas_metadata_for_aspect_ratio("16:9"))
+        snapshot["common_header"] = contract
+        snapshot["digest"] = canonical_json_digest(
+            {key: value for key, value in snapshot.items() if key != "digest"}, allow_nan=True)
+        with pytest.raises(ValueError, match="svg_common_header_review_binding_missing"):
+            deck_quality._design_context(fixture_ctx, fixture_pages, job=None, read_png=lambda _: None)
+        fixture_ctx.header_pages = bindings
+        before_snapshot, before_bindings = deepcopy(snapshot), deepcopy(bindings)
+        header_context = deck_quality._design_context(fixture_ctx, fixture_pages, job=None, read_png=lambda _: None)
+        assert snapshot == before_snapshot and bindings == before_bindings
+        assert header_context["style"]["common_header"] == contract
+        assert header_context["pages"][0]["common_header"] == bindings[0]
+        assert header_context["pages"][0]["content"] == source
+        context = {**context, "style": header_context["style"], "pages": header_context["pages"]}
+        header_messages = prompt_mod.build_advisory_messages(b"", slide_count=1, required=True,
+            pngs=[b"evaluation-png"], design_context=context)
+        header_text = header_messages[0].content
+        assert "frozen document constraints" in header_text and "document navigation" in header_text
+        assert "common_header.body_box" in header_text and "grounded designTargets" in header_text
+        assert "header substitution or forgery, overlap, clipping" in header_text
+        assert "native binding" in header_text and "never certifies passed quality" in header_text
+        assert "14 words" in header_text and "160 characters" in header_text
+        sent_context = json.loads(header_messages[1].content[0].text)
+        # The existing anonymous projection still omits version metadata;
+        # visible geometry, typography, titles and binding evidence stay exact.
+        projected_contract, projected_binding = deepcopy(contract), deepcopy(bindings[0])
+        projected_contract.pop("version")
+        projected_binding.pop("version")
+        assert sent_context["style"]["common_header"] == projected_contract
+        assert sent_context["style"]["common_header"]["font"] == contract["font"]
+        assert sent_context["style"]["common_header"]["body_box"] == contract["body_box"]
+        assert sent_context["pages"][0]["common_header"] == projected_binding
+        assert sent_context["pages"][0]["content"] == source
+        assert [part.data for part in header_messages[1].content if type(part).__name__ == "ImageContentPart"] == images
         axes = {name: dict(verdict="passed", severity="none", repairScope="none",
                            visibleEvidence="Clear source grouping remains readable.") for name in names}
         goal = dict(axis=names[0], evidenceRegion="Title and evidence block",
@@ -322,13 +378,19 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
             required=True, design_context=full_context))
         assert missing_group["schemaRejectionReason"] == "full_composition_coverage"
         assert missing_group["schemaRejectionFields"] == {"fieldNames": ["deckFlow", "repetitionGroups", "pages"]}
-        assert set(missing_group) == {"skipped", "schemaRejectionReason", "schemaRejectionFields"}
+        assert set(missing_group) == {"skipped", "schemaRejectionReason", "schemaRejectionFields",
+                                      "parsedPageCount", "parsedPageIndexCoverage"}
+        assert missing_group["parsedPageCount"] == 1
+        assert missing_group["parsedPageIndexCoverage"] is True
         full_payload["deckFlow"]["repetitionGroups"] = [harmless_group]
         del full_payload["slides"][0]["designTargets"]
         missing_targets = _run(shared_advisory.run_vision_advisory([png], slide_count=1,
             required=True, design_context=full_context))
         assert missing_targets["schemaRejectionReason"] == "design_target_fields"
-        assert set(missing_targets) == {"skipped", "schemaRejectionReason", "schemaRejectionFields"}
+        assert set(missing_targets) == {"skipped", "schemaRejectionReason", "schemaRejectionFields",
+                                        "parsedPageCount", "parsedPageIndexCoverage"}
+        assert missing_targets["parsedPageCount"] == 1
+        assert missing_targets["parsedPageIndexCoverage"] is True
         from utils.hashing import sha256_prefixed
         principles = prompt_mod.BASELINE_DESIGN_PRINCIPLES
         assert principles in full_messages[0].content
