@@ -161,7 +161,9 @@ def _baseline_review_messages(sheet, *, slide_count, pngs, context):
         "For each compared axis record preferred A/B/equivalent/unjudged and concrete visible evidence. "
         "An improvement must advance the stated goal while keeping every source fact, number, image group "
         "and native binding; never offset clipping or illegibility with aesthetics or propose smaller text. "
-        "Use no total score. Write each evidence/goal field in at most 14 words and 160 characters. "
+        "Use no total score. Aim for eight words per evidence/goal field, with hard limits of 14 words "
+        "and 160 characters. Before returning JSON, count whitespace-separated words in every evidence/goal "
+        "string and rewrite only any over-limit explanation concisely without changing its observation or verdict. "
         + f"The main evaluation variant is {main}; the alternative is {alternative}. "
         + ("Only evaluate repetition_deck_flow globally. Partition every page explicitly once into cleanPages, "
            "unreviewedPages or groups.pages; no omitted page is clean. Each group refers to a shared finding "
@@ -471,8 +473,10 @@ def _design_review_messages(*, slide_count: int, pngs, design_context,
             comparison_indices=sorted(design_context.get("priorCandidates", {})),
             review_scope=design_context.get("reviewScope", "full"),
             standalone_local=standalone_local), separators=(",", ":")))
-    system += (" Keep each visibleEvidence explanation to one concise English sentence of at most 14 words "
-               "and 160 characters; quote at most eight original-language characters when necessary. "
+    system += (" Keep each visibleEvidence explanation to one concise English sentence, aiming for eight words "
+               "and never exceeding 14 words or 160 characters; quote at most eight original-language characters "
+               "when necessary. Before returning JSON, count whitespace-separated words in every visibleEvidence "
+               "string and rewrite any over-limit explanation while preserving its observation and verdict. "
                "Do not repeat source text. This limits review output only; preserve every input fact and image. ")
     system += ("Avoid restating the JSON schema." if local_only else
                "Use brief sourceEvidence phrases and avoid restating the JSON schema.")
