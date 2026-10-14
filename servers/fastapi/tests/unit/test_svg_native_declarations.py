@@ -79,9 +79,42 @@ def test_chart_rule_is_offered_only_behind_the_flag(monkeypatch):
 
 
 def test_binding_digest_survives_finalize_but_not_another_drawing():
-    _, svg = _extract(TABLE)
+    from services.svg_common_header import GROUP_ID
+
+    declarations, svg = _extract(TABLE)
     final = finalize_svg(svg, index=1, n=4)
     assert final != svg and native_binding_digest(final) == native_binding_digest(svg)
+    payload = {}
+    bind_native_declarations(payload, svg, declarations)
+    original_record = json.loads(json.dumps(payload[PAYLOAD_KEY]))
+    root = ET.fromstring(final)
+    server_header = ET.SubElement(root, "{http://www.w3.org/2000/svg}g", {"id": GROUP_ID})
+    ET.SubElement(server_header, "{http://www.w3.org/2000/svg}text").text = "공통 제목"
+    assert bound_declarations(payload, ET.tostring(root, encoding="unicode"))[1] is True
+    assert payload[PAYLOAD_KEY] == original_record
+    duplicate_header = ET.SubElement(root, "{http://www.w3.org/2000/svg}g", {"id": GROUP_ID})
+    ET.SubElement(duplicate_header, "{http://www.w3.org/2000/svg}text").text = "중복 제목"
+    assert bound_declarations(payload, ET.tostring(root, encoding="unicode"))[1] is False
+    root.remove(duplicate_header)
+    user_group = ET.SubElement(root, "{http://www.w3.org/2000/svg}g", {"id": GROUP_ID + "-user"})
+    ET.SubElement(user_group, "{http://www.w3.org/2000/svg}text").text = "사용자 본문"
+    assert bound_declarations(payload, ET.tostring(root, encoding="unicode"))[1] is False
+    root.remove(user_group)
+    user_group = ET.SubElement(root, "{http://www.w3.org/2000/svg}g", {"id": "user-body"})
+    nested_header = ET.SubElement(user_group, "{http://www.w3.org/2000/svg}g", {"id": GROUP_ID})
+    ET.SubElement(nested_header, "{http://www.w3.org/2000/svg}text").text = "사용자 본문"
+    assert bound_declarations(payload, ET.tostring(root, encoding="unicode"))[1] is False
+    root.remove(user_group)
+    # Only the exact server-owned group is excluded, not a body text element
+    # sharing its identifier or another drawing inside the native table.
+    body_text = ET.SubElement(root, "{http://www.w3.org/2000/svg}text", {"id": GROUP_ID})
+    body_text.text = "사용자 본문"
+    assert bound_declarations(payload, ET.tostring(root, encoding="unicode"))[1] is False
+    root.remove(body_text)
+    for node in root.iter():
+        if node.text == "매출":
+            node.text = "비용"
+    assert bound_declarations(payload, ET.tostring(root, encoding="unicode"))[1] is False
     _, other = _extract(TABLE.replace(">매출<", ">비용<"))
     assert native_binding_digest(other) != native_binding_digest(svg)
     assert native_binding_digest("<svg") is None

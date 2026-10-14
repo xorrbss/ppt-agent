@@ -156,16 +156,21 @@ def declaration_receipt(declarations: dict | None) -> dict:
 
 
 def native_binding_digest(svg: str | None) -> str | None:
-    """Digest of ``svg`` with the system page number removed; ``None`` if unparsable."""
+    """Digest excluding server-owned furniture; ``None`` if unparsable."""
     if not isinstance(svg, str) or not svg or re.search(r"<!|<\?", svg):
         return None
     try:
         root = ET.fromstring(svg)
     except ET.ParseError:
         return None
+    from services.svg_common_header import GROUP_ID
+
+    common_header_count = sum(child.tag == _GROUP and child.get("id") == GROUP_ID for child in root)
     for parent in root.iter():
         for child in list(parent):
-            if child.get("id") == PAGE_NUMBER_ID or child.get("id", "").startswith("svg-system-master-"):
+            if (child.get("id") == PAGE_NUMBER_ID or child.get("id", "").startswith("svg-system-master-")
+                    or (common_header_count == 1 and parent is root
+                        and child.tag == _GROUP and child.get("id") == GROUP_ID)):
                 parent.remove(child)
     return source_digest(ET.tostring(root, encoding="unicode"))
 
