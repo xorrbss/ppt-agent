@@ -39,10 +39,10 @@ def _apply_common_header_quality(quality, svg, contract, binding, furniture_rece
     canvas_backgrounds = 0
     tolerance = .5
 
-    def inside(box, bounds):
-        return (box["x"] >= bounds["x"] - tolerance and box["y"] >= bounds["y"] - tolerance
-                and box["x"] + box["width"] <= bounds["x"] + bounds["width"] + tolerance
-                and box["y"] + box["height"] <= bounds["y"] + bounds["height"] + tolerance)
+    def inside(box, bounds, tolerance_px=tolerance):
+        return (box["x"] >= bounds["x"] - tolerance_px and box["y"] >= bounds["y"] - tolerance_px
+                and box["x"] + box["width"] <= bounds["x"] + bounds["width"] + tolerance_px
+                and box["y"] + box["height"] <= bounds["y"] + bounds["height"] + tolerance_px)
 
     def inherited(node, attribute, default):
         current = node
@@ -63,7 +63,10 @@ def _apply_common_header_quality(quality, svg, contract, binding, furniture_rece
         if node_id.startswith(TITLE_ID + "-line-"):
             measured_titles.append(node_id)
             boxes = [(_ink_rect(box), basis) for box, basis in comparison_fragments(item)]
-            if (not boxes or any(box is None or basis != "ink" or not inside(box, title_box)
+            # Chromium's actual-size glyph ink can quantize a bearing to one
+            # CSS pixel where Pillow's 1000px reference scales to a fraction.
+            # Only title ink bounds get this allowance; other gates stay strict.
+            if (not boxes or any(box is None or basis != "ink" or not inside(box, title_box, tolerance_px=1.0)
                                  for box, basis in boxes)
                     or item.get("glyph_clipped") or item.get("font_loaded") is not True
                     or str(item.get("resolved_font_family", "")).strip("'\"") != contract["font"]["family"]

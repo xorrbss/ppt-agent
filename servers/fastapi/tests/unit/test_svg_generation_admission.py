@@ -98,6 +98,39 @@ def test_partial_recovery_page_input_digest_matches_new_and_legacy_svg_inputs():
     assert blocked.value.detail == "svg_common_header_source_preservation_conflict"
 
 
+def test_common_header_browser_ink_preserves_hinted_bearing_without_accepting_overflow():
+    from copy import deepcopy
+    from services.generation_core.drivers.svg.render import _apply_common_header_quality
+    from services.svg_common_header import TITLE_ID
+
+    svg = f'<svg xmlns="http://www.w3.org/2000/svg"><text id="{TITLE_ID}-line-0">AWS operations</text></svg>'
+    contract = {"digest": "header", "title_box": {"x": 64, "y": 32, "width": 1152, "height": 50},
+                "body_box": {"x": 64, "y": 144, "width": 1152, "height": 500},
+                "font": {"family": "Noto Sans KR", "size_px": 34}}
+    binding = {"applied": True, "lines": ["AWS operations"], "title_digest": "title", "digest": "page"}
+    item = {"qid": "svg-1", "text_fragments": [{"x": 64, "y": 32, "width": 200, "height": 50}],
+            "text_ink_fragments": [{"x": 63, "y": 43, "width": 200, "height": 33, "cellClusters": 0}],
+            "font_loaded": True, "resolved_font_family": "Noto Sans KR", "font_size": 34,
+            "css_visible": True, "effective_opacity": 1, "glyph_clipped": False}
+
+    def measured(candidate):
+        quality = {"passed": True, "geometry_passed": True,
+                   "browser_metrics": {"elements": [candidate]}}
+        _apply_common_header_quality(quality, svg, contract, binding, None)
+        return quality
+
+    assert measured(item)["common_header"]["passed"] is True
+    outside = deepcopy(item)
+    outside["text_ink_fragments"][0]["x"] = 62.9
+    assert measured(outside)["passed"] is False
+    clipped = deepcopy(item)
+    clipped["glyph_clipped"] = True
+    assert measured(clipped)["passed"] is False
+    wrong_font = deepcopy(item)
+    wrong_font["font_size"] = 36
+    assert measured(wrong_font)["passed"] is False
+
+
 def test_external_header_title_plan_classifies_page_labels_and_restores_exact_budget():
     from services.presentation_generation_staging import (
         _durable_request_payload, _request_from_durable_payload,
