@@ -182,14 +182,14 @@ class _StagedSvgProviderRequestPlan(ProviderRequestPlan):
 
     @property
     def initial_request_limit(self) -> int:
-        return self.slide_count + self.image_budget + self.vqa_budget
+        return self.slide_count + self.image_budget + self.vqa_budget + self.header_title_budget
 
     @property
     def retry_request_limit(self) -> int:
         return self.repair_budget
 
 
-def _staged_svg_provider_request_plan(slide_count: int, stage_plan: Mapping[str, Any]) -> ProviderRequestPlan:
+def _staged_svg_provider_request_plan(slide_count: int, stage_plan: Mapping[str, Any], *, header_title_budget: int = 0) -> ProviderRequestPlan:
     from services.svg_presentation_checkpoint import _provider_attempt_limit
 
     return _StagedSvgProviderRequestPlan(
@@ -197,6 +197,7 @@ def _staged_svg_provider_request_plan(slide_count: int, stage_plan: Mapping[str,
         image_budget=stage_plan.get("illustration_budget", 0),
         repair_budget=slide_count * (_provider_attempt_limit({}) - 1),
         vqa_budget=len(stage_plan["partitions"]),
+        header_title_budget=header_title_budget,
     )
 
 
@@ -858,6 +859,17 @@ class SqlPublicV2Orchestrator:
                 internal_design_pack_pin=internal_design_pack_pin,
                 effective_generation_engine=effective_generation_engine,
             )
+            from services.svg_common_header_title_budget import (
+                seal_new_external_header_title_plan, svg_header_title_admission_budget,
+            )
+            if resolve_generation_strategy(internal_request) == "svg":
+                from services.svg_generation_admission import pin_fresh_common_header_mode, require_svg_creation_admission
+                try:
+                    pin_fresh_common_header_mode(internal_request)
+                    require_svg_creation_admission(internal_request)
+                    seal_new_external_header_title_plan(internal_request)
+                except ValueError as error:
+                    raise _public_error(422, str(error)) from error
             if svg_authoring_profile is not None or svg_stage_plan is not None:
                 try:
                     if validate_authoring_profile(svg_authoring_profile) is not None and resolve_generation_strategy(internal_request) != "svg":
@@ -1094,12 +1106,14 @@ class SqlPublicV2Orchestrator:
                 actor=actor,
                 operation=operation,
                 operation_kind="generation",
-                request_plan=_staged_svg_provider_request_plan(slide_count, svg_stage_plan) if svg_stage_plan is not None else plan_provider_requests(
+                request_plan=_staged_svg_provider_request_plan(slide_count, svg_stage_plan,
+                    header_title_budget=svg_header_title_admission_budget(internal_request, slide_count)) if svg_stage_plan is not None else plan_provider_requests(
                     slide_count=slide_count,
                     image_budget=slide_count,
                     repair_budget=slide_count,
                     source_image_budget=source_image_admission_budget(snapshots),
                     vqa_budget=svg_quality_review_admission_budget(internal_request, slide_count),
+                    header_title_budget=svg_header_title_admission_budget(internal_request, slide_count),
                 ),
                 resource_plan=self._resource_plan(
                     slide_count=slide_count,

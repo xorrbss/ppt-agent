@@ -95,6 +95,12 @@ def _durable_request_payload(
     """Persist canonical identities only, never admission-time raw paths."""
 
     payload = request.model_dump(mode="json")
+    from services.svg_common_header_title_budget import (
+        INTERNAL_HEADER_TITLE_PLAN_KEY, validate_header_title_plan,
+    )
+    header_title_plan = validate_header_title_plan(request._svg_header_title_plan)
+    if header_title_plan is not None:
+        payload[INTERNAL_HEADER_TITLE_PLAN_KEY] = header_title_plan
     if request.writing_policy is None:
         # Historical jobs omitted this key. Keep their canonical payload and
         # idempotency fingerprint stable when they are restored or resumed.
@@ -334,6 +340,10 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
     """Restore private worker state from an internal durable-job payload."""
 
     values = dict(payload)
+    from services.svg_common_header_title_budget import (
+        INTERNAL_HEADER_TITLE_PLAN_KEY, validate_header_title_plan,
+    )
+    header_title_plan = validate_header_title_plan(values.pop(INTERNAL_HEADER_TITLE_PLAN_KEY, None))
     values.pop("_svg_partial_recovery", None)
     speed_arm = validate_speed_arm(values.pop(INTERNAL_BENCH_SPEED_ARM_KEY, None))
     from services.generation_core.drivers.svg.collect import INTERNAL_SVG_STAGE_PLAN_KEY, validate_svg_stage_plan
@@ -373,6 +383,7 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
     request._bench_speed_arm = speed_arm
     request._svg_authoring_profile = authoring_profile
     request._svg_stage_plan = stage_plan
+    request._svg_header_title_plan = header_title_plan
     request._generation_strategy_reason = strategy_reason
     request._svg_style_snapshot = svg_style_snapshot
     if svg_style_snapshot is not None:

@@ -932,6 +932,26 @@ async def generate_presentation_handler(
     generated_assets: list[ImageAsset] = []
     try:
         using_slides_markdown = False
+        uniform_svg_header = (
+            request.template == AUTHORED_TEMPLATE
+            and resolve_generation_strategy(request) == "svg"
+            and getattr(request, "common_header_mode", None) == "uniform"
+        )
+        preserve_header_title_source = (
+            uniform_svg_header
+            and getattr(request, "_svg_header_title_plan", None) is not None
+        )
+        frozen_uniform_outline = False
+        if uniform_svg_header and generation_job is not None:
+            frozen_style = generation_job.svg_style_snapshot
+            saved_outline = generation_job.authored_outline
+            frozen_uniform_outline = (
+                isinstance(frozen_style, dict)
+                and "common_header" in frozen_style
+                and saved_outline is not None
+            )
+            if (saved_outline is not None or frozen_style is not None) and not frozen_uniform_outline:
+                raise ValueError("svg_common_header_binding_incomplete")
         outline_spans = svg_outline_spans.begin(bench_speed_arm=resolve_speed_arm(request))
         outline_post_started: float | None = None
         language_to_use = (request.language or "").strip() or None
@@ -944,10 +964,10 @@ async def generate_presentation_handler(
             request.n_slides = len(request.slides_markdown)
 
         if (
-            not using_slides_markdown
-            and request.template == AUTHORED_TEMPLATE
+            request.template == AUTHORED_TEMPLATE
             and generation_job is not None
             and generation_job.authored_outline is not None
+            and (frozen_uniform_outline or not using_slides_markdown)
         ):
             # Checkpoints are indexed into this exact plan. Pin the first
             # attempt's outline so resume cannot drift or bill outline calls
@@ -956,6 +976,17 @@ async def generate_presentation_handler(
                 generation_job.authored_outline
             )
             total_outlines = len(presentation_outlines.slides)
+            if frozen_uniform_outline and using_slides_markdown:
+                submitted = PresentationOutlineModel(
+                    slides=[SlideOutlineModel(content=slide)
+                            for slide in request.slides_markdown]
+                )
+                if not preserve_header_title_source:
+                    submitted = strip_outline_citations(submitted)
+                if [slide.content for slide in submitted.slides] != [
+                    slide.content for slide in presentation_outlines.slides
+                ]:
+                    raise ValueError("svg_common_header_source_mismatch")
         elif not using_slides_markdown:
             # Updating async status
             if async_status:
@@ -1169,15 +1200,29 @@ async def generate_presentation_handler(
         # pipeline hands this text to the slide author verbatim — where a link
         # becomes an `<a href>` the renderer isolation policy refuses, failing the
         # slide and, under strict authoring, the deck. Keep the labels, drop the URLs.
-        presentation_outlines = strip_outline_citations(presentation_outlines)
+        # A sealed title batch binds raw external Markdown; preserve those bytes
+        # through title preparation, body authoring, and recovery identity.
+        if not preserve_header_title_source:
+            presentation_outlines = strip_outline_citations(presentation_outlines)
+
+        if uniform_svg_header and not frozen_uniform_outline:
+            if (not preserve_header_title_source
+                    and any(slide.title_source_digest is not None
+                            for slide in presentation_outlines.slides)):
+                raise ValueError("svg_common_header_title_source_unbound")
+            from services.svg_common_header_titles import prepare_missing_header_titles
+            from services.authored_checkpoint_fence import owned_job
+
+            presentation_outlines = await prepare_missing_header_titles(
+                request, generation_job, presentation_outlines,
+                session_maker=async_session_maker, owned_job=owned_job,
+            )
 
         if (
             request.template == AUTHORED_TEMPLATE
             and generation_job is not None
             and generation_job.authored_outline is None
-            and not (resolve_generation_strategy(request) == "svg"
-                and getattr(request, "common_header_mode", None) == "uniform"
-                and generation_job.svg_style_snapshot is None)
+            and not uniform_svg_header
         ):
             generation_job.authored_outline = presentation_outlines.model_dump(
                 mode="json"
@@ -1979,6 +2024,7 @@ async def _admit_generation_operation_v2_compatible(
         review_budget = svg_quality_review_admission_budget(request, slide_count)
     else:
         review_budget = slide_count if request.vision_qa else 0
+    from services.svg_common_header_title_budget import svg_header_title_admission_budget
     try:
         admission = await admit_public_operation_compatible_v2(
             sql_session,
@@ -1993,6 +2039,8 @@ async def _admit_generation_operation_v2_compatible(
                     request._reference_snapshots, request.files
                 ),
                 vqa_budget=review_budget,
+                header_title_budget=(0 if partial_manifest is not None else
+                    svg_header_title_admission_budget(request, slide_count)),
             ),
             resource_plan=plan_weighted_resources(
                 pixel_count=slide_count * 1_920 * 1_080,
@@ -2069,6 +2117,11 @@ async def queue_presentation_generation(
         from services.svg_generation_admission import pin_fresh_common_header_mode, require_svg_creation_admission
         pin_fresh_common_header_mode(request)
         require_svg_creation_admission(request)
+        from services.svg_common_header_title_budget import seal_new_external_header_title_plan
+        try:
+            seal_new_external_header_title_plan(request)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
     # Apply the authored-vNext creation contract before idempotency lookup or
     # chat-first workspace bootstrap.  This keeps blocked Template V2/legacy
     # requests from minting even a temporary durable presentation shell.
@@ -2130,6 +2183,12 @@ async def queue_presentation_generation(
     legacy_payload = dict(submitted_payload)
     legacy_payload.pop("writing_policy", None)
     legacy_fingerprint = request_sha256(legacy_payload)
+    from services.svg_common_header_title_budget import INTERNAL_HEADER_TITLE_PLAN_KEY
+    title_legacy_fingerprints = {
+        request_sha256({key: value for key, value in candidate.items()
+                        if key != INTERNAL_HEADER_TITLE_PLAN_KEY})
+        for candidate in (submitted_payload, legacy_payload)
+    } if INTERNAL_HEADER_TITLE_PLAN_KEY in submitted_payload else set()
     header_legacy_payloads = []
     if (getattr(request, "_common_header_defaulted", False)
             and not getattr(request, "common_header_cover_exception", False)):
@@ -2141,6 +2200,10 @@ async def queue_presentation_generation(
 
     def matches_existing_job(existing_job: PresentationGenerationJob) -> bool:
         if existing_job.request_sha256 == fingerprint:
+            return True
+        if (title_legacy_fingerprints and isinstance(existing_job.request_payload, dict)
+                and INTERNAL_HEADER_TITLE_PLAN_KEY not in existing_job.request_payload
+                and existing_job.request_sha256 in title_legacy_fingerprints):
             return True
         if (header_legacy_payloads and isinstance(existing_job.request_payload, dict)
                 and "common_header_mode" not in existing_job.request_payload

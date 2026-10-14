@@ -26,6 +26,13 @@ def explicit_outline_title(content: str) -> str | None:
     title = candidates[0]
     if re.fullmatch(r"(?:(?:slide|page|슬라이드|페이지)\s*)?\d+[\s.:)\-]*", title, re.IGNORECASE):
         return None
+    if re.fullmatch(
+        r"(?:원본|original|source)\s*(?:(?:page|slide|페이지|슬라이드)\s*)?"
+        r"\d+(?:\s*/\s*\d+)?\s*(?:page|slide|페이지|슬라이드)?[\s.:)\-]*",
+        title,
+        re.IGNORECASE,
+    ):
+        return None
     if not re.search(r"[A-Za-z가-힣\u3400-\u9fff]", title):
         return None
     return title

@@ -159,7 +159,9 @@ PPT/PDF/문서에서 내용만 가져와 새로 구성하는 모드에는 공통
 
 공통 헤더는 별도의 작은 SVG 버전 설정으로 구현했으며 기존 작성 profile의 legacy 의미를 바꾸지 않았다. 서버 제목 합성, 문서 공통 1/2줄 슬롯, 본문 영역 전달, 원자적 제목·스타일 확정, 실제 웹 개요의 제목 전달과 생성·복구 공유 해시를 연결했다. 생성 설정은 정상 화면/public-v2/재시도/래스터 검토에서 같은 선택을 전달한다. 원본 보존 충돌은 제출 전에 안내하고 서버 입장에서도 거부한다.
 
-명시적 제목이 없는 외부 Markdown은 현재 추가 제공자 호출을 하지 않고 title_unresolved로 중단한다. 기존 정상 개요 호출에서 제목을 함께 준비하는 경로는 구현했다. 누락 제목의 독립적인 일괄 호출을 활성화하려면 내구적인 호출 계획·예산·UNKNOWN 경계를 먼저 연결해야 하며, 구현되지 않은 이 경로를 추가 호출 0회인 정상 성공 경로로 보고하지 않는다.
+명시적 제목이 없는 외부 `slides_markdown`은 신규 uniform 요청에서 문서당 최대 1회의 제목 준비 계획을 admission 전에 봉인한다. `원본 N페이지`, `Original page N` 같은 순번은 제목으로 간주하지 않는다. 이미 있는 의미 제목은 그대로 사용하고 누락된 제목만 준비하며, 기존 DTO의 본문 정규화는 유지한다. 본문을 줄이거나 수정해서 제목을 만드는 방식은 사용하지 않는다. 정상 개요 호출은 제목을 함께 준비하므로 이 별도 호출을 추가하지 않는다.
+
+계획은 원문·기존 제목·페이지 순서와 호출 1회, 입력/출력 및 시간 상한을 결합한다. 기존 금액 상한과 재시도 예산을 늘리지 않는다. 실제 호출 전 started checkpoint를 저장하고, 검증된 결과만 succeeded로 저장한다. 검증된 결과의 재사용은 추가 호출 0회이며 started/UNKNOWN/rejected는 자동 재호출하지 않는다. 제목 결과의 provenance와 개요·공통 헤더를 함께 검증하고 확정한다. 기존 계획 없는 frozen 작업에 새 제목 준비 계획을 주입하지 않는다.
 
 선택한 단일 좁은 pytest 실행 범위는 기존 `test_svg_generation_admission.py::test_partial_recovery_page_input_digest_matches_new_and_legacy_svg_inputs`와 `test_document_canvas_svg_export.py::test_worker_native_page_elements_and_legacy_return_sequence`다. 코드 변경으로 확인된 실제 연결 오류를 수정한 후 같은 범위에서 2건이 통과했다. 검사 범위를 확대하지 않았다.
 
@@ -169,4 +171,6 @@ PPT/PDF/문서에서 내용만 가져와 새로 구성하는 모드에는 공통
 
 구조 검증용 2페이지 PPTX의 공통 제목을 실제 PowerPoint에서 수정하고 저장한 뒤 다시 열어 수정 보존을 확인했다. 기존 사용자 문서와 원본 artifact는 그대로 유지했다. `office-proof.json`에 제목 편집·재열기 및 원본 불변 증거를 보존한다. 이 확인은 실제 Office 편집성 증거이며 최종 LLM 본문이나 시각적 일치 판정을 대신하지 않는다.
 
-로컬 serve 체크아웃에 통합한 뒤 실행 중인 생성/operation 0건을 확인하고 관리 스크립트로 API, 생성 worker와 export worker만 재시작했다. Next.js는 기존 HMR을 사용하고 proxy/PostgreSQL은 재시작하지 않았다. `/upload`와 `/public-v2`는 변경 반영 후 HTTP 200 응답을 확인했다. 이는 페이지 진입과 실행 반영 확인이며 실제 신규 LLM 생성 성공 증거는 아니다. 새로운 Sol 5페이지 실행은 별도 승인 요청 상태로 제공자에 전송하지 않았다.
+공통 헤더 기본 구현을 로컬 serve 체크아웃에 통합한 뒤 실행 중인 생성/operation 0건을 확인하고 관리 스크립트로 API, 생성 worker와 export worker만 재시작했다. Next.js는 기존 HMR을 사용하고 proxy/PostgreSQL은 재시작하지 않았다. `/upload`와 `/public-v2`는 변경 반영 후 HTTP 200 응답을 확인했다. 이는 페이지 진입과 실행 반영 확인이며 실제 신규 LLM 생성 성공 증거는 아니다.
+
+누락 제목 후속 구현은 독립 컨텍스트의 Sol 계열 에이전트로 진행했다. 가장 좁은 두 기존 admission 테스트의 실행 범위에서 순번/의미 제목 분류, durable 계획 복원과 legacy absence, 일반/staged 예산 +1, 준비 전 호출 0회, 성공 후 재개 0회 추가, 본문 보존, 원문 변조 거부와 UNKNOWN 재호출 차단을 확인했다. 검증에서 기존 sha256 접두사 계약과 정상 generation의 provider scope 구분 오류를 수정한 후 같은 범위의 2건이 통과했다. 실제 5페이지 LLM 생성 및 PPTX 결과는 별도 제품 증거를 확인한 뒤 기록한다.

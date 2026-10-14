@@ -77,6 +77,10 @@ CODE_FILES = (
     "services/provider_runtime_job_registration.py",
     "services/generation_core/drivers/svg/partial_quality_recovery.py",
     "services/svg_presentation_prepare.py",
+    "services/svg_common_header.py",
+    "services/svg_common_header_titles.py",
+    "services/svg_common_header_title_budget.py",
+    "services/svg_generation_inputs.py",
     "services/svg_presentation_checkpoint.py",
     "services/svg_generation_assets.py",
     "services/svg_default_fonts.py",
@@ -91,6 +95,8 @@ CODE_FILES = (
     "services/generation_core/assets/offer.py",
     "utils/authored_image_slots.py",
     "utils/codex_stream_adapter.py",
+    "utils/llm_calls/prepare_svg_common_header_titles.py",
+    "models/presentation_outline_model.py",
     "utils/slide_capture_result.py",
 )
 
@@ -399,6 +405,7 @@ def _frozen_vector_offer(seed_row, job, operation, owner, tenant):
 
 def _expected_page_input_digest(request, job, index, page_assets):
     from services.svg_generation_inputs import svg_page_input_digest
+    _verify_frozen_header_outline(job)
     slide = job.authored_outline["slides"][index]
     return svg_page_input_digest(content=slide["content"], style=job.svg_style_snapshot,
         index=index, count=job.total_slides, instructions=request.instructions,
@@ -406,6 +413,49 @@ def _expected_page_input_digest(request, job, index, page_assets):
         preset=request.codex_generation_preset, assets=page_assets,
         writing_policy=getattr(request, "writing_policy", None),
         header_page=slide.get("common_header"))
+
+
+def _verify_frozen_header_outline(job):
+    """Use the same frozen title and source binding for review and replay."""
+    from services.svg_common_header import common_header_source_digest, validate_common_header_outline
+    from services.svg_common_header_title_budget import (
+        INTERNAL_HEADER_TITLE_PLAN_KEY, validate_header_title_plan,
+    )
+    from utils.hashing import canonical_json_digest
+
+    style = job.svg_style_snapshot or {}
+    outline = job.authored_outline or {}
+    slides = outline.get("slides") if isinstance(outline, dict) else None
+    if (not isinstance(slides, list)
+            or (job.request_payload.get("common_header_mode") == "uniform"
+                and "common_header" not in style)):
+        reject("svg_partial_recovery_header_binding_invalid")
+    try:
+        validate_common_header_outline(style, outline)
+        plan = validate_header_title_plan(
+            job.request_payload.get(INTERNAL_HEADER_TITLE_PLAN_KEY))
+    except (TypeError, ValueError, KeyError) as error:
+        raise PartialRecoveryRejected("svg_partial_recovery_header_binding_invalid") from error
+    if plan is not None:
+        try:
+            sources = [{"page_index": index,
+                        "source_digest": common_header_source_digest(slide["content"])}
+                       for index, slide in enumerate(slides)]
+        except (TypeError, KeyError, ValueError) as error:
+            raise PartialRecoveryRejected("svg_partial_recovery_header_binding_invalid") from error
+        if (job.request_payload.get("common_header_mode") != "uniform"
+                or len(slides) != plan["page_count"]
+                or canonical_json_digest(sources) != plan["source_digest"]
+                or any(not slides[index].get("title_source_digest")
+                       for index in plan["missing_indices"])):
+            reject("svg_partial_recovery_header_binding_invalid")
+    for slide in slides:
+        if not isinstance(slide, dict):
+            reject("svg_partial_recovery_header_binding_invalid")
+        provenance = slide.get("title_source_digest")
+        if provenance is not None and (not isinstance(provenance, str) or not provenance
+                or (slide.get("common_header") or {}).get("title_source_digest") != provenance):
+            reject("svg_partial_recovery_header_binding_invalid")
 
 
 def _author_render_chain(payload, raw, receipt, *, request, job, asset, index,
@@ -1441,6 +1491,18 @@ async def build_manifest(session, operation, *, presentation_revision):
         reject("svg_partial_recovery_episode_conflict")
     if not isinstance(job.authored_outline, dict) or len(job.authored_outline.get("slides") or []) != job.total_slides:
         reject("svg_partial_recovery_frozen_outline_missing")
+    _verify_frozen_header_outline(job)
+    if (job.request_payload or {}).get("_internal_svg_header_title_plan") is not None:
+        from models.presentation_outline_model import PresentationOutlineModel
+        from services.svg_common_header_title_budget import validate_header_title_plan
+        from services.svg_presentation_prepare import _verify_frozen_title_result
+
+        plan = validate_header_title_plan(job.request_payload["_internal_svg_header_title_plan"])
+        try:
+            await _verify_frozen_title_result(session, job,
+                PresentationOutlineModel.model_validate(job.authored_outline), plan)
+        except (TypeError, ValueError, KeyError) as error:
+            raise PartialRecoveryRejected("svg_partial_recovery_header_binding_invalid") from error
     task = await session.get(AsyncPresentationGenerationTaskModel, job.task_id, with_for_update=True)
     if task is None:
         reject("svg_partial_recovery_task_missing")
@@ -1905,8 +1967,10 @@ async def verify_episode(session, operation, job):
             or str(job.id) != manifest.get("job_id")
             or digest(_frozen_payload(job.request_payload)) != manifest.get("frozen_request_digest")
             or digest(job.svg_style_snapshot) != manifest.get("frozen_style_digest")
+            or job.authored_outline != (archive.get("job") or {}).get("authored_outline")
             or _code_digest() != manifest.get("code_digest")):
         reject("svg_partial_recovery_episode_unbound")
+    _verify_frozen_header_outline(job)
     if archive_schema == ARCHIVE_V2:
         await _verify_operation_references(session, operation, manifest, archive.get("operation_refs"))
     operation_snapshots = (("operations", WorkspaceOperation),) if archive_schema == ARCHIVE_V1 else ()

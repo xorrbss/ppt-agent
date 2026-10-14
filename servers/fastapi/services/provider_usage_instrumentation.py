@@ -167,6 +167,17 @@ class ProviderUsageScope:
         """
 
         normalized = _normalize_semantic_slot(semantic_slot)
+        # The single deck title-preparation call has a durable started marker.
+        # A resumed attempt must retain its original ledger identity and cannot
+        # acquire an attempt-scoped replacement for an unknown provider result.
+        title_slot = normalized.removesuffix(".attempt-1")
+        if (self.stage == "outline" and self.slide_index is None
+                and self.round_ordinal is None
+                and title_slot.startswith("header-titles-")
+                and len(title_slot) == len("header-titles-") + 64
+                and all(character in "0123456789abcdef"
+                        for character in title_slot[len("header-titles-"):])):
+            return normalized
         suffix = self._round_suffix(".")
         if self.attempt_number > 1:
             suffix += f".resume-{self.attempt_number}"

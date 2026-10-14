@@ -98,6 +98,170 @@ def test_partial_recovery_page_input_digest_matches_new_and_legacy_svg_inputs():
     assert blocked.value.detail == "svg_common_header_source_preservation_conflict"
 
 
+def test_external_header_title_plan_classifies_page_labels_and_restores_exact_budget():
+    from services.presentation_generation_staging import (
+        _durable_request_payload, _request_from_durable_payload,
+    )
+    from services.public_operation_admission_models import plan_provider_requests
+    from services.public_v2_orchestrator import _staged_svg_provider_request_plan
+    from services.svg_common_header_title_budget import (
+        INTERNAL_HEADER_TITLE_PLAN_KEY, seal_new_external_header_title_plan,
+        svg_header_title_admission_budget,
+    )
+    from utils.outline_utils import explicit_outline_title
+
+    slides = [
+        "# 원본 1페이지\n운영 계획은 검토 중이다.",
+        "# 원본 21/88페이지\n서비스 흐름을 설명한다.",
+        "# Original page 38\nThe table lists requirements.",
+        "# source page 59\nThe screen shows the approval state.",
+        "# 원본 88페이지\n차트와 구성도는 입력 자료를 따른다.",
+        "# 원본 이미지 보존\n원본 이미지는 승인 전까지 보존한다.",
+    ]
+    assert all(explicit_outline_title(page) is None for page in slides[:5])
+    assert explicit_outline_title(slides[5]) == "원본 이미지 보존"
+    request = GeneratePresentationRequest(
+        content="입력 문서 재구성", template="authored", strategy="svg",
+        common_header_mode="uniform", slides_markdown=slides,
+    )
+    plan = seal_new_external_header_title_plan(request)
+    assert plan["missing_indices"] == [0, 1, 2, 3, 4]
+    assert svg_header_title_admission_budget(request, len(slides)) == 1
+
+    payload = _durable_request_payload(request)
+    restored = _request_from_durable_payload(payload)
+    assert payload[INTERNAL_HEADER_TITLE_PLAN_KEY] == plan
+    assert restored._svg_header_title_plan == plan
+    assert svg_header_title_admission_budget(restored, len(slides)) == 1
+    legacy = dict(payload)
+    legacy.pop(INTERNAL_HEADER_TITLE_PLAN_KEY)
+    assert _request_from_durable_payload(legacy)._svg_header_title_plan is None
+
+    standard = plan_provider_requests(
+        slide_count=len(slides), image_budget=0, repair_budget=0, vqa_budget=0,
+    )
+    funded = plan_provider_requests(
+        slide_count=len(slides), image_budget=0, repair_budget=0, vqa_budget=0,
+        header_title_budget=1,
+    )
+    assert funded.initial_request_limit == standard.initial_request_limit + 1
+    staged = {"illustration_budget": 0, "partitions": []}
+    assert _staged_svg_provider_request_plan(len(slides), staged, header_title_budget=1).initial_request_limit == (
+        _staged_svg_provider_request_plan(len(slides), staged).initial_request_limit + 1
+    )
+
+
+def test_external_header_titles_checkpoint_one_call_resume_unknown_and_source_guard():
+    import asyncio
+
+    from models.presentation_outline_model import PresentationOutlineModel, SlideOutlineModel
+    from services.svg_common_header_title_budget import (
+        INTERNAL_HEADER_TITLE_PLAN_KEY, seal_new_external_header_title_plan,
+    )
+    from services.svg_common_header_titles import prepare_missing_header_titles
+    from services.provider_usage_instrumentation import _ACTIVE_SCOPE
+
+    slides = [
+        "# 원본 1페이지\n운영 계획은 검토 중이다.",
+        "# 서비스 구성\n서비스 구성은 승인 이후 확정한다.",
+    ]
+    request = GeneratePresentationRequest(
+        content="입력 문서 재구성", template="authored", strategy="svg",
+        common_header_mode="uniform", slides_markdown=slides,
+    )
+    plan = seal_new_external_header_title_plan(request)
+    outline = PresentationOutlineModel(slides=[SlideOutlineModel(content=page) for page in slides])
+
+    class MemorySession:
+        def __init__(self):
+            self.row = None
+            self.commits = 0
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+        async def scalar(self, _statement):
+            return self.row
+
+        def add(self, row):
+            self.row = row
+
+        async def execute(self, statement):
+            values = statement.compile().params
+            self.row.payload = values["payload"]
+            self.row.output_digest = values["output_digest"]
+            return SimpleNamespace(rowcount=1)
+
+        async def commit(self):
+            self.commits += 1
+
+    async def owned_job(_session, _id, _token, *, fencing_token=None):
+        return job
+
+    async def prepared_title(payload, *, plan):
+        assert _ACTIVE_SCOPE.get().workspace_operation_id is None
+        calls.append(payload)
+        return {
+            "source_digest": payload["source_digest"],
+            "page_count": payload["page_count"],
+            "titles": [{"page_index": 0, "source_digest": payload["pages"][0]["source_digest"],
+                        "title": "운영 계획", "source_quote": "운영 계획"}],
+        }
+
+    session = MemorySession()
+    calls = []
+    job = SimpleNamespace(
+        id=uuid.uuid4(), attempt_token="first", attempt_number=1,
+        request_sha256="a" * 64, workspace_operation_id=uuid.uuid4(),
+        request_payload={INTERNAL_HEADER_TITLE_PLAN_KEY: plan},
+        _workspace_fencing_token=None, public_only=False,
+    )
+    run = lambda source, callback: asyncio.run(prepare_missing_header_titles(
+        request, job, source, session_maker=lambda: session,
+        owned_job=owned_job, provider_callback=callback,
+    ))
+    assert calls == [] and session.row is None
+    prepared = run(outline, prepared_title)
+    assert len(calls) == 1
+    assert session.row.payload["state"] == "succeeded"
+    assert prepared.slides[0].title == "운영 계획"
+    assert prepared.slides[1].title == "서비스 구성"
+    assert [slide.content for slide in prepared.slides] == slides
+    assert [slide.content for slide in outline.slides] == slides
+
+    job.attempt_token = "resumed"
+    job.attempt_number = 2
+    assert run(outline, prepared_title).slides[0].title == "운영 계획"
+    assert len(calls) == 1
+    changed = PresentationOutlineModel(slides=[
+        SlideOutlineModel(content=slides[0] + "\n새로운 사실"),
+        SlideOutlineModel(content=slides[1]),
+    ])
+    with pytest.raises(ValueError, match="svg_common_header_title_plan_conflict"):
+        run(changed, prepared_title)
+    assert len(calls) == 1
+
+    session = MemorySession()
+    job = SimpleNamespace(**{**vars(job), "id": uuid.uuid4(), "attempt_number": 1,
+                             "attempt_token": "unknown", "request_sha256": "b" * 64})
+
+    async def unknown_provider(_payload, *, plan):
+        assert _ACTIVE_SCOPE.get().workspace_operation_id is None
+        calls.append("attempted")
+        raise RuntimeError("provider result unknown")
+
+    with pytest.raises(RuntimeError, match="provider result unknown"):
+        run(outline, unknown_provider)
+    assert session.row.payload["state"] == "unknown"
+    assert len(calls) == 2
+    with pytest.raises(ValueError, match="svg_common_header_title_outcome_unresolved"):
+        run(outline, prepared_title)
+    assert len(calls) == 2
+
+
 @pytest.mark.parametrize("slide_count", [1, 2, 5, 6, 12, 80])
 def test_restoration_policy_reserves_final_review_without_changing_legacy(slide_count):
     from copy import deepcopy

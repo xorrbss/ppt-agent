@@ -62,6 +62,11 @@ class ProviderRequestPlan:
     repair_budget: int
     vqa_budget: int
     source_image_budget: int = 0
+    header_title_budget: int = 0
+
+    def __post_init__(self) -> None:
+        if type(self.header_title_budget) is not int or self.header_title_budget not in (0, 1):
+            raise ValueError("svg_common_header_title_budget_invalid")
 
     @property
     def initial_request_limit(self) -> int:
@@ -74,6 +79,7 @@ class ProviderRequestPlan:
             + (SOURCE_IMAGE_PHYSICAL_CALL_LIMIT * (self.source_image_budget + 1)
                if self.source_image_budget else 0)
             + min(self.slide_count, self.source_image_budget)
+            + self.header_title_budget
         )
 
     @property
@@ -194,13 +200,15 @@ def current_principal_context() -> PrincipalContext:
 
 def plan_provider_requests(*, slide_count: int, image_budget: int,
                            repair_budget: int, vqa_budget: int,
-                           source_image_budget: int = 0) -> ProviderRequestPlan:
+                           source_image_budget: int = 0,
+                           header_title_budget: int = 0) -> ProviderRequestPlan:
     plan = ProviderRequestPlan(
         slide_count=_nonnegative(slide_count, "slide_count"),
         image_budget=_nonnegative(image_budget, "image_budget"),
         repair_budget=_nonnegative(repair_budget, "repair_budget"),
         vqa_budget=_nonnegative(vqa_budget, "vqa_budget"),
         source_image_budget=_nonnegative(source_image_budget, "source_image_budget"),
+        header_title_budget=header_title_budget,
     )
     if plan.slide_count < 1:
         raise ValueError("slide_count_must_be_positive")

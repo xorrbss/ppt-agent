@@ -137,6 +137,7 @@ class GeneratePresentationRequest(BaseModel):
     _authored_canvas: Any = PrivateAttr(default=None)
     _document_canvas: Any = PrivateAttr(default=None)
     _svg_style_snapshot: Any = PrivateAttr(default=None)
+    _svg_header_title_plan: Any = PrivateAttr(default=None)
     _svg_uploaded_design_reference: Any = PrivateAttr(default=None)
     _bench_speed_arm: Optional[Literal["baseline", "brief_off"]] = PrivateAttr(default=None)
     _generation_strategy_reason: Optional[str] = PrivateAttr(default=None)

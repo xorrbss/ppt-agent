@@ -139,10 +139,68 @@ def _prepare_header_outline(snapshot, outline, canvas, *, mode, cover_exception)
     return snapshot, prepared
 
 
+def _verify_header_title_plan_outline(request, outline):
+    from services.svg_common_header import common_header_source_digest
+    from services.svg_common_header_title_budget import validate_header_title_plan
+    from utils.hashing import canonical_json_digest
+
+    plan = validate_header_title_plan(getattr(request, "_svg_header_title_plan", None))
+    if plan is None:
+        return
+    sources = [{"page_index": index,
+                "source_digest": common_header_source_digest(slide.content)}
+               for index, slide in enumerate(outline.slides)]
+    if (len(sources) != plan["page_count"]
+            or canonical_json_digest(sources) != plan["source_digest"]
+            or any(not outline.slides[index].title_source_digest
+                   for index in plan["missing_indices"])):
+        raise ValueError("svg_common_header_title_plan_conflict")
+
+
+async def _verify_frozen_title_result(session, job, outline, plan):
+    """A normal resume must reuse the sealed result that supplied its titles."""
+    from models.sql.public_admission import AuthoredDeckPlanCheckpoint
+    from services.authored_deck_plan_checkpoint import canonical_checkpoint_digest
+    from services.svg_common_header_titles import _restore_result
+    from utils.hashing import canonical_json_digest
+
+    identity = {"job_id": str(job.id), "request_digest": job.request_sha256,
+                "workspace_operation_id": str(job.workspace_operation_id) if job.workspace_operation_id else None,
+                "plan_digest": plan["plan_digest"]}
+    row = await session.scalar(select(AuthoredDeckPlanCheckpoint).where(
+        AuthoredDeckPlanCheckpoint.generation_job_id == job.id,
+        AuthoredDeckPlanCheckpoint.stage == "header"))
+    stored = row.payload if row is not None else None
+    if (row is None or row.input_digest != canonical_json_digest(identity)
+            or not isinstance(stored, dict)
+            or row.output_digest != canonical_checkpoint_digest(stored)
+            or stored.get("version") != "svg-common-header-title-batch/v1"
+            or stored.get("identity") != identity or stored.get("state") != "succeeded"
+            or set(stored) != {"version", "identity", "state", "result"}):
+        raise ValueError("svg_common_header_title_checkpoint_conflict")
+    pages = [{"page_index": index,
+              "source_digest": slide.common_header["source_digest"],
+              "content": slide.content}
+             for index, slide in enumerate(outline.slides)
+             if index in plan["missing_indices"]]
+    payload = {"source_digest": plan["source_digest"],
+               "page_count": len(outline.slides), "pages": pages}
+    result = _restore_result(stored["result"], payload)
+    if (len(result["titles"]) != len(plan["missing_indices"])
+            or any(outline.slides[item["page_index"]].title != item["title"]
+                   or outline.slides[item["page_index"]].title_source_digest
+                   != canonical_json_digest(item)
+                   for item in result["titles"])):
+        raise ValueError("svg_common_header_title_checkpoint_conflict")
+
+
 async def _pin_owned_svg_style(request, job, *, pin_style, session_maker, owned_job,
                                outline=None, canvas=None):
     from services.svg_authoring_profile import validate_profile_agreement, validate_quality_recovery_agreement
     from services.svg_common_header import header_snapshot_base
+
+    if outline is not None:
+        _verify_header_title_plan_outline(request, outline)
 
     if job is None:
         async with session_maker() as authority_session:
@@ -174,6 +232,11 @@ async def _pin_owned_svg_style(request, job, *, pin_style, session_maker, owned_
                     continue
                 raise RuntimeError("svg_initial_checkpoint_input_conflict")
         saved_outline = getattr(current, "authored_outline", None)
+        if (outline is not None and getattr(request, "common_header_mode", None) == "uniform"
+                and (frozen is not None or saved_outline is not None)
+                and not (isinstance(frozen, dict) and "common_header" in frozen
+                         and saved_outline is not None)):
+            raise ValueError("svg_common_header_binding_incomplete")
         if frozen is not None:
             validate_profile_agreement(request, frozen)
             validate_quality_recovery_agreement(request, frozen)
@@ -208,7 +271,17 @@ async def _pin_owned_svg_style(request, job, *, pin_style, session_maker, owned_
                             or slide.title != slide.common_header.get("title")):
                         raise ValueError("svg_common_header_binding_incomplete")
                     validate_common_header_binding(frozen["common_header"], slide.common_header,
-                        index=index, count=len(prepared.slides))
+                        index=index, count=len(prepared.slides),
+                        content=slide.content, title=slide.title)
+                    if (slide.title_source_digest is not None
+                            and slide.common_header.get("title_source_digest") != slide.title_source_digest):
+                        raise ValueError("svg_common_header_binding_incomplete")
+                if (getattr(request, "_svg_header_title_plan", None) is not None
+                        and not (current.request_payload or {}).get("_svg_partial_recovery")):
+                    from services.svg_common_header_title_budget import validate_header_title_plan
+
+                    plan = validate_header_title_plan(request._svg_header_title_plan)
+                    await _verify_frozen_title_result(checkpoint_session, current, prepared, plan)
                 prepare_common_header(frozen, prepared, canvas,
                     mode=getattr(request, "common_header_mode", None) or "uniform",
                     cover_exception=getattr(request, "common_header_cover_exception", False))
