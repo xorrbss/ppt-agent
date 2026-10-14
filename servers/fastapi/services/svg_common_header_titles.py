@@ -156,7 +156,7 @@ async def _checkpoint(request, job, plan, *, session_maker, owned_job, terminal=
         identity = {"job_id": str(current.id), "request_digest": current.request_sha256,
                     "workspace_operation_id": str(current.workspace_operation_id) if current.workspace_operation_id else None,
                     "plan_digest": plan["plan_digest"]}
-        digest = canonical_json_digest(identity)
+        digest = canonical_checkpoint_digest(identity)
         row = await session.scalar(select(AuthoredDeckPlanCheckpoint).where(
             AuthoredDeckPlanCheckpoint.generation_job_id == job.id, AuthoredDeckPlanCheckpoint.stage == "header"))
         if row is not None:

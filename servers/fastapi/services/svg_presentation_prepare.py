@@ -171,7 +171,7 @@ async def _verify_frozen_title_result(session, job, outline, plan):
         AuthoredDeckPlanCheckpoint.generation_job_id == job.id,
         AuthoredDeckPlanCheckpoint.stage == "header"))
     stored = row.payload if row is not None else None
-    if (row is None or row.input_digest != canonical_json_digest(identity)
+    if (row is None or row.input_digest != canonical_checkpoint_digest(identity)
             or not isinstance(stored, dict)
             or row.output_digest != canonical_checkpoint_digest(stored)
             or stored.get("version") != "svg-common-header-title-batch/v1"

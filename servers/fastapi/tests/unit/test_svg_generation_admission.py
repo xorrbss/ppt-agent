@@ -187,6 +187,9 @@ def test_external_header_titles_checkpoint_one_call_resume_unknown_and_source_gu
             return self.row
 
         def add(self, row):
+            from models.sql.public_admission import AuthoredDeckPlanCheckpoint
+            assert len(row.input_digest) == AuthoredDeckPlanCheckpoint.__table__.c.input_digest.type.length
+            assert len(row.output_digest) == AuthoredDeckPlanCheckpoint.__table__.c.output_digest.type.length
             self.row = row
 
         async def execute(self, statement):
