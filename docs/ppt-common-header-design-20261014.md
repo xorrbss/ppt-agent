@@ -151,36 +151,26 @@ PPT/PDF/문서에서 내용만 가져와 새로 구성하는 모드에는 공통
 
 실제 완료 검증은 같은 자료로 짧은 제목·긴 제목, 표·차트·구성도·화면 설명을 포함한 여러 페이지를 정상 웹 경로에서 생성하는 것이다. 헤더 위치/서체/본문 시작선의 동일성과 본문 구성 다양성을 별도로 확인한다. 최종 PPTX에서 제목·표·차트가 편집 가능하고 PowerPoint 열기·수정·저장·다시 열기가 가능해야 한다. 정적인 검사나 생성 성공만으로 최종 시각 검토/릴리스 승인을 통과했다고 표시하지 않는다.
 
-## 남은 구현 판단
+## 이번 5페이지 완료 판단과 확인 범위
 
-새 헤더는 `common_header_mode`와 `common_header_cover_exception`으로 선택하며 `svg-common-header/v1` 설정과 `svg-common-header-page/v1` 제목 바인딩을 고정한다. 기존 작성 profile의 의미를 유지하고 헤더 작성 규칙을 별도 버전으로 연결했다. 누락 제목 일괄 준비는 실제 호출과 저장 결과 재사용을 확인했다. 최종 5페이지 PPTX, 본문 디자인 평가와 릴리스 승인은 아래 확인 범위와 구분한다.
+이번 5페이지 사례는 실제 생성·재개·게시·native PPTX 내보내기·PowerPoint 편집 확인과 정식 최종 PPTX 시각 검토를 완료했다. 변경하지 않은 현재 코드의 캐시 export operation `8aec1c79-a820-44e4-af65-7b9c9e6a7ffc`에 연결된 최신 quality receipt는 `releaseReadiness=ready`이다. 필수 `authoring`, `geometryFont`, `visualReview`, `nativeCoverageOoxml` 검사는 모두 `passed`다. `performance`는 필수가 아니며 `not_assessed` 상태를 그대로 유지한다.
+
+이 판단은 아래에 고정한 현재 5페이지 파일·원문·검토 증거에 대한 것이다. 다른 자료나 canvas 전체의 완료, 품질·속도 우위 또는 전체 테스트 통과를 뜻하지 않는다. 이전 `releaseReadiness=blocked`, `svg_final_pptx_visual_review_unavailable` receipt와 실패·UNKNOWN 이력은 과거 증거로 보존하며 새 결과로 덮어쓰거나 성공으로 재분류하지 않았다.
 
 ## 구현 결과와 검증 범위
 
-공통 헤더는 별도의 작은 SVG 버전 설정으로 구현했으며 기존 작성 profile의 legacy 의미를 바꾸지 않았다. 서버 제목 합성, 문서 공통 1/2줄 슬롯, 본문 영역 전달, 원자적 제목·스타일 확정, 실제 웹 개요의 제목 전달과 생성·복구 공유 해시를 연결했다. 생성 설정은 정상 화면/public-v2/재시도/래스터 검토에서 같은 선택을 전달한다. 원본 보존 충돌은 제출 전에 안내하고 서버 입장에서도 거부한다.
+정상 개요는 기존 호출 안에서 제목을 준비하여 추가 헤더 호출 0회를 유지한다. 제목 없는 외부 `slides_markdown`은 명시적이고 의미 있는 제목을 먼저 보존하고, 누락 제목만 문서 단위 최대 1회로 준비한다. 이번 실제 실행의 최초 제목 일괄 준비는 1회였다. 입력 용량·승인 예산·원문 digest·페이지 index 및 제목 provenance를 검증하며, durable started/terminal 기록과 검증된 결과 재사용을 연결했다. 미확정·UNKNOWN 결과는 자동 재호출하지 않는다. `common_header_mode`, `common_header_cover_exception`, `svg-common-header/v1` 및 `svg-common-header-page/v1`의 확정 입력을 유지했다.
 
-명시적 제목이 없는 외부 `slides_markdown`은 신규 uniform 요청에서 문서당 최대 1회의 제목 준비 계획을 admission 전에 봉인한다. `원본 N페이지`, `Original page N` 같은 순번은 제목으로 간주하지 않는다. 이미 있는 의미 제목은 그대로 사용하고 누락된 제목만 준비하며, 기존 DTO의 본문 정규화는 유지한다. 본문을 줄이거나 수정해서 제목을 만드는 방식은 사용하지 않는다. 정상 개요 호출은 제목을 함께 준비하므로 이 별도 호출을 추가하지 않는다.
+실제 경로에서 확인된 공통 경계도 최소 범위로 수정했다. Chromium 실제 크기 glyph와 Pillow 기준 측정의 차이는 제목 owned ink 검사에만 제한해 반영했다. 본문 안에 놓인 변환 없는 rect, circle, ellipse의 선 반폭이 좌우 여백으로 확장되는 경우는 배치와 paint를 구분하되, 본문 위·아래와 canvas 및 브랜드 예약 침범은 거부한다. native 선언의 body digest에서는 정확한 단일 최상위 서버 헤더 그룹만 제외한다. 게시 번호 갱신은 저장된 확정 page binding을 검증해 재사용하고, export 부모 검증은 정상 준비와 같은 canonical base/full header 관계만 허용한다. 원문·SVG 배치·기존 frozen 입력·native 선언·provider history 및 기존 UNKNOWN ledger를 변경하지 않았다.
 
-계획은 원문·기존 제목·페이지 순서와 호출 1회, 입력/출력 및 시간 상한을 결합한다. 기존 금액 상한과 재시도 예산을 늘리지 않는다. 실제 호출 전 started checkpoint를 저장하고, 검증된 결과만 succeeded로 저장한다. 검증된 결과의 재사용은 추가 호출 0회이며 started/UNKNOWN/rejected는 자동 재호출하지 않는다. 제목 결과의 provenance와 개요·공통 헤더를 함께 검증하고 확정한다. 기존 계획 없는 frozen 작업에 새 제목 준비 계획을 주입하지 않는다.
+최종 PPTX 검토의 기존 private carrier 전달, 검증된 결과의 CAS 승격, 현재 검증기 코드 pin에 맞춘 기존 PPTX 캐시 재사용도 최소 수정으로 연결했다. 새 검토는 현재 artifact와 5페이지 증거에 결합하며, 과거 실패 receipt나 다른 파일의 검토를 통과 근거로 가져오지 않는다.
 
-선택한 단일 좁은 pytest 실행 범위는 기존 `test_svg_generation_admission.py::test_partial_recovery_page_input_digest_matches_new_and_legacy_svg_inputs`와 `test_document_canvas_svg_export.py::test_worker_native_page_elements_and_legacy_return_sequence`다. 코드 변경으로 확인된 실제 연결 오류를 수정한 후 같은 범위에서 2건이 통과했다. 검사 범위를 확대하지 않았다.
+실제 생성 작업은 `published`, 생성 operation은 `succeeded`, 완료 페이지는 5/5, flagged 페이지는 0이다. 최종 source QA의 gate, 디자인 개선 조건 및 페이지 coverage가 통과했다. 생성 job의 누적 제공자 receipt 14건과 별도의 정식 최종 PPTX 검토 제공자 호출 2건은 구분해 기록한다. 초기 2페이지 구조 검증과 이전 4페이지 평가·중단 기록은 과거 증거로 남겼다.
 
-이 검사는 기존 입력 해시 보존, 새 헤더/제목/원문 결합과 변조 거부, 서버 헤더 위조 거부/검증된 캐시 재합성, 보존 모드 충돌, 기존 canvas 변환과 새 2페이지 편집형 PPTX의 실제 OOXML을 포함한다. 제목 문구·서체·크기·좌표·noAutofit readback은 converter 증거에 봉인된다. 검증 중 actual canvas 별칭, body-only 합성 전 텍스트 조건, DrawingML fragment namespace 및 줄 끝 공백 trim을 바로잡았다.
+현재 납품 파일은 `final-five-editable.pptx`이며 5슬라이드, 2,427,621 bytes다. SHA-256은 `d3da4dbe6828241a64f8b5eaf95748ef84c5a115dea20a2b63874ef6955a0610`이다. `office-final-proof.json`은 `passed`이며 실제 PowerPoint 편집·저장·다시 열기, 원본 불변과 기존 열린 문서 보존을 확인했다. 5개 공통 제목은 편집형 텍스트이고 위치와 25.5pt 크기가 같다. native 표의 48셀과 차트의 6범주 및 값은 원문과 일치하며, 내장 XLSX 데이터에서도 확인했다.
 
-구조 검증용 PPTX는 저장소 밖 `C:\project\PPT-agent\delivery-backups\svg-common-header-20261014\uniform-editable.pptx`에 보존했다. 이 파일의 본문은 검사 도형이며 LLM이 만든 완성 발표자료나 실제 생성 품질 비교 결과가 아니다. 전체 빌드·전체 테스트·유료 제공자 실행·실제 디자인 점수나 속도 우위는 이 선택 검증에서 확인하지 않았다.
+최종 5개 Office PNG는 앞서 확인한 실제 Office PNG와 바이트 단위로 모두 같았다. 수동 및 에이전트 시각 확인에서는 상단 패턴이 일관되고 본문이 개요, 아키텍처, 표, 승인 화면, 차트로 다르게 구성되며 보이는 잘림과 겹침이 없었다. 별도로 정식 최종 검토 operation `1887fed6-6551-49c7-ac83-f57f773743a2`가 현재 파일의 5개 PNG 및 5개 검증된 페이지 항목 전체를 확인하고 문제 없음으로 `succeeded`를 기록했다. 최신 READY receipt의 필수 `visualReview=passed`는 이 정식 검토 증거에 연결되며 수동 확인만으로 승격한 상태가 아니다.
 
-구조 검증용 2페이지 PPTX의 공통 제목을 실제 PowerPoint에서 수정하고 저장한 뒤 다시 열어 수정 보존을 확인했다. 기존 사용자 문서와 원본 artifact는 그대로 유지했다. `office-proof.json`에 제목 편집·재열기 및 원본 불변 증거를 보존한다. 이 확인은 실제 Office 편집성 증거이며 최종 LLM 본문이나 시각적 일치 판정을 대신하지 않는다.
+승인 이후 추가 제공자 호출은 확정된 9건이며 모두 보고·정산되었다. 이 승인 구간의 UNKNOWN과 attempt retry는 0이다. 최초 제목 일괄 준비 1회는 실제 추가 호출이며 0회로 보고하지 않는다. 승인된 USD 1 추가 cap은 실행 예산 한도이고 정액 청구나 실제 invoice 금액이 아니다. 실제 청구액은 미확인이며, 이번 승인 구간의 확정된 상태를 과거 UNKNOWN 기록의 삭제나 비용 0 재분류에 사용하지 않았다.
 
-공통 헤더 기본 구현을 로컬 serve 체크아웃에 통합한 뒤 실행 중인 생성/operation 0건을 확인하고 관리 스크립트로 API, 생성 worker와 export worker만 재시작했다. Next.js는 기존 HMR을 사용하고 proxy/PostgreSQL은 재시작하지 않았다. `/upload`와 `/public-v2`는 변경 반영 후 HTTP 200 응답을 확인했다. 이는 페이지 진입과 실행 반영 확인이며 실제 신규 LLM 생성 성공 증거는 아니다.
-
-누락 제목 후속 구현은 독립 컨텍스트의 Sol 계열 에이전트로 진행했다. 선택한 다섯 admission 테스트에서 순번/의미 제목 분류, durable 계획 복원과 legacy absence, 일반/staged 예산 +1, 준비 전 호출 0회, 성공 후 재개 0회 추가, 본문 보존, 원문 변조 거부, UNKNOWN 재호출 차단, 알려진 비용 이력의 잔여 한도와 실제 글자 측정 경계를 확인했다. 변경으로 결과가 달라지는 좁은 범위만 다시 실행했으며 마지막 실행은 5건 통과였다.
-
-제목 준비의 JSON digest는 기존 `sha256:` 표현을 유지하고 SQL checkpoint의 64자리 digest는 기존 canonical 변환을 사용한다. SDK 설정은 started checkpoint 전에 준비하며 실제 제목 호출은 최대 1회, 숨은 SDK 재시도는 0회다. 성공한 제목 checkpoint 이후 개요·스타일과 첫 페이지 checkpoint의 원자적 준비가 이어지도록 했다. 부분 복구에서는 재개용 lineage를 포함한 현재 요청 해시를 원래 제출 지문으로 간주하지 않는다. 봉인된 archive 및 기존 DB operation 참조를 검증하고 최초 제출 지문을 찾아 저장된 제목 결과와 대조한다. 계획 없는 옛 작업에 신규 계획을 주입하지 않는다.
-
-서버 공통 헤더 합성이 기존 native 표·차트 선언을 stale로 만들지 않도록 native binding digest는 정확한 ID의 단일 최상위 서버 헤더 그룹을 제외한다. 본문 변경, 유사 ID, 중첩 ID, 같은 ID의 다른 요소와 중복 그룹은 해시에 남는다. 대응하는 기존 native binding 테스트 1건이 통과했다. 헤더 내용 자체의 동일성은 별도의 최종 합성 검증이 담당한다.
-
-제목의 실제 글자 잉크는 브라우저의 1px bearing 양자화를 허용하며 다른 글자·서체·클리핑 검사는 유지한다. 변환 없는 rect·circle·ellipse는 배치 bbox가 본문 내부에 있을 때 선 반폭의 좌우 여백 확장만 구분한다. 실제 paint의 본문 위·아래, 캔버스와 브랜드 예약 검사는 유지한다. 글자·이미지·변환된 도형·path·polyline에는 이 예외를 적용하지 않는다. 대응하는 기존 헤더 측정 테스트 1건에서 허용 사례와 실제 침범 거부가 통과했다.
-
-실제 제품 경로의 5페이지 사례에서 누락 제목 5개를 1회 호출로 준비했다. 기록된 시간은 21.516초, 입력/출력 토큰은 4,284/659이며 전체 PPT 생성 시간이나 속도 우위로 해석하지 않는다. 이후 재개에서 제목 추가 호출은 없었다. 저장된 1~3페이지는 제품 경로의 최종 렌더 검증을 통과했고, 4페이지는 동일 원본 SVG의 별도 실제 렌더 재검증에서 통과했다. 4페이지의 테두리 판정 수정은 위치·본문·native 선언과 원본 checkpoint를 바꾸지 않았다.
-
-이 사례의 5페이지 작성은 SDK 실행 전에 중단된 봉인 기록이 있으나 비용 원장의 actual 값은 미확정으로 남아 있다. 기존 복구 API는 이를 유한한 잔여 비용으로 자동 전환하지 않고 별도 episode 예산 상한을 요구한다. 원본 비용·호출 이력은 보존하며, 승인 없는 추가 호출·한도 상향·원장 재분류는 하지 않는다. 최종 5페이지 PPTX 및 실제 PowerPoint 편집·저장·재열기 증거는 아직 없다. 앞의 2페이지 구조용 Office 증거와 합쳐 완료로 표시하지 않는다.
+최신 근거는 저장소 밖 `C:\project\PPT-agent\delivery-backups\svg-common-header-title-20261014\verified-run`의 `final-ready-delivery-receipt.json`, `final-current-pptx-review-probe.json`, `office-final-proof.json`, `publication-final-probe.json`, `export-parent-contract-proof.json`, `approved-completed-final-budget.json`, `final-ready-native-file-proof.json`, `final-current-review-runtime-budget-restored.json`에 보존한다. 최신 artifact 다운로드 SHA와 최종 Office 원본 SHA의 일치 및 임시 검토 runtime budget 원복도 확인했다. 이전 `final-delivery-receipt.json`과 `office-proof.json`도 과거 artifact의 증거로 그대로 남겨 두었다. 이번 문서 갱신에서는 새 생성, 제공자 호출, DB·Git·runtime 변경이나 검증 명령을 실행하지 않았다.
