@@ -139,6 +139,20 @@ async def require_quality_recovery_source_parent(session, presentation, publicat
     job = await session.get(PresentationGenerationJob, UUID(publication["parentJobId"]))
     admission = await session.scalar(select(PublicOperationAdmission).where(
         PublicOperationAdmission.operation_id == UUID(publication["parentOperationId"])))
+    admitted_snapshot = (job.request_payload or {}).get("_internal_svg_style_snapshot") if job is not None else None
+    snapshot_matches = job is not None and admitted_snapshot == job.svg_style_snapshot
+    if (not snapshot_matches and job is not None and isinstance(admitted_snapshot, dict)
+            and "common_header" not in admitted_snapshot and isinstance(job.svg_style_snapshot, dict)
+            and isinstance(job.svg_style_snapshot.get("common_header"), dict)):
+        from services.svg_common_header import header_snapshot_base, validate_common_header_outline
+
+        if admitted_snapshot == header_snapshot_base(job.svg_style_snapshot):
+            try:
+                validate_common_header_outline(job.svg_style_snapshot, job.authored_outline)
+            except (ValueError, KeyError, TypeError):
+                pass
+            else:
+                snapshot_matches = job.authored_outline == presentation.outlines
     if (parent is None or job is None or admission is None or parent.state != "succeeded"
             or parent.kind != "presentation.generate" or job.state != "published"
             or parent.owner_id != presentation.owner_id or admission.owner_id != presentation.owner_id
@@ -148,7 +162,7 @@ async def require_quality_recovery_source_parent(session, presentation, publicat
             or parent.result_revision != publication.get("sourceGenerationRevision", publication["sourceRevision"])
             or type(parent.result_revision) is not int or parent.result_revision > presentation.revision
             or job.svg_style_snapshot != presentation.theme["svg"]["styleSnapshot"]
-            or (job.request_payload or {}).get("_internal_svg_style_snapshot") != job.svg_style_snapshot):
+            or not snapshot_matches):
         raise ValueError("svg_quality_recovery_export_parent_invalid")
 
 

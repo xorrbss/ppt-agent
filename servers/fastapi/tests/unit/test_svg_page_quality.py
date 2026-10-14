@@ -337,6 +337,72 @@ def test_visual_review_passes_with_a_matching_clean_advisory(policy_version, mon
         bound["operationBinding"] = {**binding, "digest": content_digest(binding)}
         assert svg_visual_review(slides=slides, advisory=bound, expected_binding=expected)["status"] == "passed"
         if policy_version == 2:
+            import asyncio
+            from models.presentation_outline_model import PresentationOutlineModel, SlideOutlineModel
+            from services.svg_common_header import prepare_common_header
+            from services.svg_export_operation import require_quality_recovery_source_parent
+
+            header_outline = PresentationOutlineModel(slides=[
+                SlideOutlineModel(content=slide.content["source"], title=f"Source {index + 1}")
+                for index, slide in enumerate(slides)])
+            header, header_bindings = prepare_common_header(snapshot, header_outline, snapshot["canvas"])
+            for page, page_binding in zip(header_outline.slides, header_bindings, strict=True):
+                page.common_header = page_binding
+            frozen_snapshot = {**deepcopy(snapshot), "common_header": header}
+            frozen_snapshot["digest"] = canonical_json_digest(
+                {key: value for key, value in frozen_snapshot.items() if key != "digest"}, allow_nan=True)
+            generation = SimpleNamespace(id=uuid.UUID(operation), state="succeeded", kind="presentation.generate",
+                owner_id=uuid.UUID(owner), presentation_id=uuid.UUID(presentation), result_revision=1)
+            published_job = SimpleNamespace(state="published", workspace_operation_id=generation.id,
+                presentation_id=generation.presentation_id, svg_style_snapshot=frozen_snapshot,
+                authored_outline=header_outline.model_dump(mode="json"),
+                request_payload={"_internal_svg_style_snapshot": deepcopy(snapshot)})
+            current_presentation = SimpleNamespace(id=generation.presentation_id, owner_id=generation.owner_id,
+                revision=1, theme={"svg": {"styleSnapshot": deepcopy(frozen_snapshot)}},
+                outlines=deepcopy(published_job.authored_outline))
+            current_admission = SimpleNamespace(owner_id=generation.owner_id, tenant_id="fixture-tenant")
+
+            class ParentSession:
+                async def get(self, model, _identifier):
+                    return generation if model.__name__ == "WorkspaceOperation" else published_job
+
+                async def scalar(self, _statement):
+                    return current_admission
+
+            before_header_inputs = deepcopy((snapshot, frozen_snapshot, published_job.request_payload))
+            asyncio.run(require_quality_recovery_source_parent(ParentSession(), current_presentation, publication))
+            assert (snapshot, frozen_snapshot, published_job.request_payload) == before_header_inputs
+            wrong_base = deepcopy(snapshot)
+            wrong_base["tokens"] = {"primary": "#FF0000"}
+            wrong_base["digest"] = canonical_json_digest(
+                {key: value for key, value in wrong_base.items() if key != "digest"}, allow_nan=True)
+            published_job.request_payload["_internal_svg_style_snapshot"] = wrong_base
+            with pytest.raises(ValueError, match="svg_quality_recovery_export_parent_invalid"):
+                asyncio.run(require_quality_recovery_source_parent(ParentSession(), current_presentation, publication))
+            published_job.request_payload["_internal_svg_style_snapshot"] = deepcopy(snapshot)
+            generation.state = "failed"
+            with pytest.raises(ValueError, match="svg_quality_recovery_export_parent_invalid"):
+                asyncio.run(require_quality_recovery_source_parent(ParentSession(), current_presentation, publication))
+            generation.state = "succeeded"
+            for violation in ("none", "header_digest", "binding"):
+                published_job.svg_style_snapshot = deepcopy(frozen_snapshot)
+                published_job.authored_outline = header_outline.model_dump(mode="json")
+                if violation == "none":
+                    published_job.svg_style_snapshot["common_header"] = None
+                    published_job.svg_style_snapshot["digest"] = canonical_json_digest(
+                        {key: value for key, value in published_job.svg_style_snapshot.items() if key != "digest"},
+                        allow_nan=True)
+                    for page in published_job.authored_outline["slides"]:
+                        page.pop("common_header")
+                elif violation == "header_digest":
+                    published_job.svg_style_snapshot["common_header"]["digest"] = "sha256:" + "0" * 64
+                else:
+                    published_job.authored_outline["slides"][0]["common_header"]["digest"] = "sha256:" + "0" * 64
+                current_presentation.theme["svg"]["styleSnapshot"] = deepcopy(published_job.svg_style_snapshot)
+                current_presentation.outlines = deepcopy(published_job.authored_outline)
+                with pytest.raises(ValueError, match="svg_quality_recovery_export_parent_invalid"):
+                    asyncio.run(require_quality_recovery_source_parent(ParentSession(), current_presentation, publication))
+
             original = advisory_record(vision, digests)
             before = deepcopy(original)
             consumed = svg_visual_review(slides=slides, advisory=original, expected_binding=expected)
