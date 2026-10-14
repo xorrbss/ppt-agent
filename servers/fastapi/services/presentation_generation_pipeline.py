@@ -1095,6 +1095,8 @@ async def generate_presentation_handler(
                     request.include_table_of_contents,
                     canvas_budget=canvas_budget,
                     writing_policy=request.writing_policy,
+                    common_header_mode=(getattr(request, "common_header_mode", None)
+                        if resolve_generation_strategy(request) == "svg" else "free"),
                 ):
 
                     if isinstance(chunk, HTTPException):
@@ -1173,6 +1175,9 @@ async def generate_presentation_handler(
             request.template == AUTHORED_TEMPLATE
             and generation_job is not None
             and generation_job.authored_outline is None
+            and not (resolve_generation_strategy(request) == "svg"
+                and getattr(request, "common_header_mode", None) == "uniform"
+                and generation_job.svg_style_snapshot is None)
         ):
             generation_job.authored_outline = presentation_outlines.model_dump(
                 mode="json"
@@ -2058,6 +2063,12 @@ async def queue_presentation_generation(
     # Pin once for a newly admitted request. Workers restoring old payloads do
     # not pass through this entry point, so an absent historical pin stays absent.
     request.writing_policy = WRITING_POLICY_ID
+    from services.svg_generation_admission import require_svg_creation_admission
+    require_svg_creation_admission(request)
+    if resolve_generation_strategy(request) == "svg":
+        from services.svg_generation_admission import pin_fresh_common_header_mode, require_svg_creation_admission
+        pin_fresh_common_header_mode(request)
+        require_svg_creation_admission(request)
     # Apply the authored-vNext creation contract before idempotency lookup or
     # chat-first workspace bootstrap.  This keeps blocked Template V2/legacy
     # requests from minting even a temporary durable presentation shell.
@@ -2119,9 +2130,22 @@ async def queue_presentation_generation(
     legacy_payload = dict(submitted_payload)
     legacy_payload.pop("writing_policy", None)
     legacy_fingerprint = request_sha256(legacy_payload)
+    header_legacy_payloads = []
+    if (getattr(request, "_common_header_defaulted", False)
+            and not getattr(request, "common_header_cover_exception", False)):
+        for candidate in (submitted_payload, legacy_payload):
+            candidate = dict(candidate)
+            candidate.pop("common_header_mode", None)
+            candidate.pop("common_header_cover_exception", None)
+            header_legacy_payloads.append(request_sha256(candidate))
 
     def matches_existing_job(existing_job: PresentationGenerationJob) -> bool:
         if existing_job.request_sha256 == fingerprint:
+            return True
+        if (header_legacy_payloads and isinstance(existing_job.request_payload, dict)
+                and "common_header_mode" not in existing_job.request_payload
+                and "common_header_cover_exception" not in existing_job.request_payload
+                and existing_job.request_sha256 in header_legacy_payloads):
             return True
         return (
             isinstance(existing_job.request_payload, dict)

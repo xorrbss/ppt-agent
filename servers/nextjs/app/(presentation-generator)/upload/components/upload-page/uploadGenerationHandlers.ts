@@ -99,6 +99,10 @@ export function createUploadGenerationHandlers({
       }),
       authoredRequest: {
         strategy: generationStrategy,
+        ...(generationStrategy === "svg" ? {
+          commonHeaderMode: config.commonHeaderMode ?? "uniform",
+          commonHeaderCoverException: (config.commonHeaderMode ?? "uniform") === "uniform" && (config.commonHeaderCoverException ?? false),
+        } : {}),
         language:
           config.language && config.language !== LanguageType.Auto
             ? config.language
@@ -300,6 +304,10 @@ export function createUploadGenerationHandlers({
       include_table_of_contents: sourceContentMode ? false : !!config?.includeTableOfContents,
       include_title_slide: sourceContentMode ? false : !!config?.includeTitleSlide,
       web_search: sourceContentMode ? false : !!config?.webSearch,
+      ...(generationStrategy === "svg" ? {
+        common_header_mode: config.commonHeaderMode ?? "uniform",
+        common_header_cover_exception: (config.commonHeaderMode ?? "uniform") === "uniform" && (config.commonHeaderCoverException ?? false),
+      } : {}),
       ...(generationStrategy === "svg" && config.svgDesignReferenceSnapshotId ? { svg_design_reference_snapshot_id: config.svgDesignReferenceSnapshotId } : {}),
       ...(generationStrategy === "svg" && config.svgDesignReferencePin ? { svg_design_reference_pin: config.svgDesignReferencePin } : {}),
       ...documentCanvasRequestForConfig(config),
@@ -381,6 +389,10 @@ export function createUploadGenerationHandlers({
       include_table_of_contents: !!config?.includeTableOfContents,
       include_title_slide: !!config?.includeTitleSlide,
       web_search: !!config?.webSearch,
+      ...(generationStrategy === "svg" ? {
+        common_header_mode: config.commonHeaderMode ?? "uniform",
+        common_header_cover_exception: (config.commonHeaderMode ?? "uniform") === "uniform" && (config.commonHeaderCoverException ?? false),
+      } : {}),
       ...(generationStrategy === "svg" && config.svgDesignReferenceSnapshotId ? { svg_design_reference_snapshot_id: config.svgDesignReferenceSnapshotId } : {}),
       ...(generationStrategy === "svg" && config.svgDesignReferencePin ? { svg_design_reference_pin: config.svgDesignReferencePin } : {}),
       ...documentCanvasRequestForConfig(config),

@@ -265,13 +265,37 @@ def finalize_svg(
     page_number_mode: str = "template",
     source_manifest: dict | None = None,
     allow_image_only: bool = False,
+    header_page: dict | None = None,
+    allow_existing_common_header: bool = False,
 ) -> str:
     from services.svg_master_furniture import furniture_image_manifest, master_furniture, stamp_master_furniture
-    validate_svg(svg, width=width, height=height, source_manifest=source_manifest, allow_image_only=allow_image_only,
-                 trusted_furniture_images=furniture_image_manifest(style_snapshot))
+    from services.svg_common_header import GROUP_ID, render_common_header
+
+    header = render_common_header((style_snapshot or {}).get("common_header"), header_page,
+                                  index=index, count=n)
+    if header is None:
+        validate_svg(svg, width=width, height=height, source_manifest=source_manifest,
+                     allow_image_only=allow_image_only,
+                     trusted_furniture_images=furniture_image_manifest(style_snapshot))
+    # In uniform mode the provider authors only the body. Its visible title is
+    # supplied by the validated server header; validate that complete document
+    # below, with all existing SVG, asset and security checks still required.
     if not 0 <= index < n:
         raise ValueError("svg_page_index_invalid")
     root = ET.fromstring(svg)
+    reserved = [node for node in root.iter() if node.get("id", "").startswith(GROUP_ID)]
+    if reserved:
+        if not allow_existing_common_header or header is None:
+            raise ValueError("svg_common_header_forged")
+        def structure(node):
+            return (node.tag, sorted(node.attrib.items()), node.text or "",
+                    tuple(structure(child) for child in node))
+        groups = [node for node in reserved if node.get("id") == GROUP_ID]
+        if (len(groups) != 1 or groups[0] not in list(root)
+                or structure(groups[0]) != structure(header)
+                or len(reserved) != len(list(header.iter()))):
+            raise ValueError("svg_common_header_digest_mismatch")
+        root.remove(groups[0])
     for parent in root.iter():
         for child in list(parent):
             if child.get("id") == PAGE_NUMBER_ID:
@@ -293,6 +317,8 @@ def finalize_svg(
             },
         )
         node.text = str(index + 1).zfill(2)
+    if header is not None:
+        root.append(header)
     result = ET.tostring(root, encoding="unicode")
     result = stamp_master_furniture(result, style_snapshot, index, n)
     validate_svg(result, width=width, height=height, source_manifest=source_manifest, allow_image_only=allow_image_only,

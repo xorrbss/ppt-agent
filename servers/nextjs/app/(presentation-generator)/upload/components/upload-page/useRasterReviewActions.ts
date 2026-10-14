@@ -159,7 +159,8 @@ export const useRasterReviewActions = ({
       throw new Error("raster_approval_pin_invalid");
     }
     setRasterOperation(approved);
-    handoffRasterGeneration(approved, rasterRecovery ?? {
+    handoffRasterGeneration(approved, {
+      ...(rasterRecovery ?? {
       presentationId: pendingPresentationId,
       operationId: approved.operation_id,
       analysisMode: "reconstruct",
@@ -171,9 +172,12 @@ export const useRasterReviewActions = ({
       orientation: approved.analysis.target_canvas.orientation,
       authoredStyle,
       instructions: [config.prompt, config.instructions].map((part) => part?.trim()).filter(Boolean).join("\n") || null,
+      }),
+      commonHeaderMode: config.commonHeaderMode ?? "uniform",
+      commonHeaderCoverException: (config.commonHeaderMode ?? "uniform") === "uniform" && (config.commonHeaderCoverException ?? false),
     });
     return rasterApprovalForUi(approved);
-  }, [rasterOperation, rasterRecovery, pendingPresentationId, config.prompt, config.instructions, config.svgDesignReferenceSnapshotId, config.svgDesignReferencePin, authoredStyle, handoffRasterGeneration]);
+  }, [rasterOperation, rasterRecovery, pendingPresentationId, config, authoredStyle, handoffRasterGeneration]);
 
   const autoPreserveExistingRaster = async () => {
     const operation = rasterOperation;
@@ -181,6 +185,10 @@ export const useRasterReviewActions = ({
     const snapshotId = recovery?.referenceSnapshotId ?? operation?.reference_snapshot_id;
     if (!operation || !recovery || !snapshotId || recovery.analysisMode === "auto_preserve" ||
         startInFlightRef.current) return;
+    if ((config.commonHeaderMode ?? "uniform") === "uniform") {
+      notify.warning("상단 구성 선택 필요", "원본 화면을 그대로 보존하려면 페이지별 자유 구성을 선택해 주세요.");
+      return;
+    }
     if ((recovery.authoredStyle && recovery.authoredStyle !== "screenshot-blue") || recovery.svgDesignReferenceSnapshotId || recovery.svgDesignReferencePin) {
       notify.warning("선택한 디자인으로 재구성 필요", "선택한 스타일이나 디자인 참고를 적용하려면 원본 화면을 재구성해 주세요. 현재 선택과 검토 내용은 유지됩니다.");
       return;
@@ -195,7 +203,7 @@ export const useRasterReviewActions = ({
         analysis_mode: "auto_preserve",
         style_id: recovery.authoredStyle || "screenshot-blue",
       });
-      const autoRecovery = { ...recovery, referenceSnapshotId: snapshotId,
+      const autoRecovery = { ...recovery, commonHeaderMode: "free" as const, commonHeaderCoverException: false, referenceSnapshotId: snapshotId,
         analysisMode: "auto_preserve" as const, operationId: pending.operation_id };
       rememberRasterReview(autoRecovery);
       setRasterRecovery(autoRecovery);

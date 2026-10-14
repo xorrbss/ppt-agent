@@ -82,6 +82,7 @@ class GenerationContext:
     recovery_cached_first: list[int] | None = None
     quality_recovery_source_evidence: list | None = None
     partial_recovery_manifest: dict | None = None
+    header_pages: list | None = None
 
 
 def _preflight_svg_input_values(*, canvas, physical_kwargs, snapshot, source_document, source_units,
@@ -109,32 +110,80 @@ async def _preflight_required_source_assets(session, service, manifest, context)
                 max_bytes=1536 * 1024, max_pixels=16_777_216)
 
 
-async def _pin_owned_svg_style(request, job, *, pin_style, session_maker, owned_job):
+def _prepare_header_outline(snapshot, outline, canvas, *, mode, cover_exception):
+    """Bind titles on a clone so a failed preparation cannot partly freeze input."""
+    from services.svg_common_header import prepare_common_header
+    from utils.outline_utils import explicit_outline_title
+    from utils.hashing import canonical_json_digest
+
+    stored_header = snapshot.get("common_header")
+    mode = mode or ("uniform" if isinstance(stored_header, dict) and stored_header.get("version") else "free")
+    prepared = outline.model_copy(deep=True)
+    if mode == "uniform":
+        for slide in prepared.slides:
+            if slide.title is None:
+                slide.title = explicit_outline_title(slide.content)
+            if not isinstance(slide.title, str) or not slide.title.strip():
+                raise ValueError("svg_common_header_title_unresolved")
+    contract, bindings = prepare_common_header(snapshot, prepared, canvas,
+        mode=mode, cover_exception=cover_exception)
+    if contract is None:
+        return snapshot, prepared
+    if len(bindings) != len(prepared.slides):
+        raise ValueError("svg_common_header_binding_incomplete")
+    snapshot = {**snapshot, "common_header": contract}
+    snapshot["digest"] = canonical_json_digest(
+        {key: value for key, value in snapshot.items() if key != "digest"}, allow_nan=True)
+    for slide, binding in zip(prepared.slides, bindings):
+        slide.common_header = binding
+    return snapshot, prepared
+
+
+async def _pin_owned_svg_style(request, job, *, pin_style, session_maker, owned_job,
+                               outline=None, canvas=None):
     from services.svg_authoring_profile import validate_profile_agreement, validate_quality_recovery_agreement
+    from services.svg_common_header import header_snapshot_base
 
     if job is None:
         async with session_maker() as authority_session:
             from services.svg_generation_admission import prepare_private_svg_recovery_authority
 
             await prepare_private_svg_recovery_authority(request, authority_session)
-        return pin_style(request)
+        snapshot = pin_style(request)
+        if outline is not None:
+            snapshot, prepared = _prepare_header_outline(snapshot, outline, canvas,
+                mode=getattr(request, "common_header_mode", "free"),
+                cover_exception=getattr(request, "common_header_cover_exception", False))
+            outline.slides = prepared.slides
+            request._svg_style_snapshot = snapshot
+        return snapshot
     async with session_maker() as checkpoint_session:
         current = await owned_job(checkpoint_session, job.id, job.attempt_token,
                                   fencing_token=getattr(job, "_workspace_fencing_token", None))
         admitted = getattr(current, "request_payload", None) or {}
+        frozen = current.svg_style_snapshot
         for key, value in (
             ("_internal_svg_source_binding", getattr(request, "_svg_source_binding", None)),
             ("_internal_svg_style_snapshot", getattr(request, "_svg_style_snapshot", None)),
         ):
             if key in admitted and admitted[key] != value:
+                if (key == "_internal_svg_style_snapshot" and isinstance(frozen, dict)
+                        and "common_header" in frozen and value == frozen
+                        and isinstance(admitted[key], dict) and "common_header" not in admitted[key]
+                        and admitted[key] == header_snapshot_base(frozen)):
+                    continue
                 raise RuntimeError("svg_initial_checkpoint_input_conflict")
-        frozen = current.svg_style_snapshot
+        saved_outline = getattr(current, "authored_outline", None)
         if frozen is not None:
             validate_profile_agreement(request, frozen)
             validate_quality_recovery_agreement(request, frozen)
             staged = getattr(request, "_svg_style_snapshot", None)
             if staged is not None and staged != frozen:
-                raise RuntimeError("svg_style_snapshot_conflict")
+                base_matches = (isinstance(staged, dict) and "common_header" not in staged
+                    and "common_header" in frozen
+                    and staged == header_snapshot_base(frozen))
+                if not base_matches:
+                    raise RuntimeError("svg_style_snapshot_conflict")
             request._svg_style_snapshot = frozen
         from services.svg_generation_admission import prepare_private_svg_recovery_authority
 
@@ -144,6 +193,41 @@ async def _pin_owned_svg_style(request, job, *, pin_style, session_maker, owned_
         validate_quality_recovery_agreement(request, snapshot)
         if frozen is not None and frozen != snapshot:
             raise RuntimeError("svg_style_snapshot_conflict")
+        if outline is not None:
+            if frozen is not None and "common_header" in frozen:
+                from models.presentation_outline_model import PresentationOutlineModel
+                from services.svg_common_header import prepare_common_header, validate_common_header_binding
+
+                if saved_outline is None:
+                    raise ValueError("svg_common_header_binding_incomplete")
+                prepared = PresentationOutlineModel.model_validate(saved_outline)
+                if prepared.model_dump(mode="json") != outline.model_dump(mode="json"):
+                    raise ValueError("svg_common_header_outline_conflict")
+                for index, slide in enumerate(prepared.slides):
+                    if (slide.common_header is None or slide.common_header.get("page_index") != index
+                            or slide.title != slide.common_header.get("title")):
+                        raise ValueError("svg_common_header_binding_incomplete")
+                    validate_common_header_binding(frozen["common_header"], slide.common_header,
+                        index=index, count=len(prepared.slides))
+                prepare_common_header(frozen, prepared, canvas,
+                    mode=getattr(request, "common_header_mode", None) or "uniform",
+                    cover_exception=getattr(request, "common_header_cover_exception", False))
+                outline.slides = prepared.slides
+            elif frozen is None and saved_outline is None:
+                snapshot, prepared = _prepare_header_outline(snapshot, outline, canvas,
+                    mode=getattr(request, "common_header_mode", "free"),
+                    cover_exception=getattr(request, "common_header_cover_exception", False))
+                if "common_header" in snapshot:
+                    # The owned_job check above guards this single transaction:
+                    # no body dispatch can observe style without the page titles.
+                    current.authored_outline = prepared.model_dump(mode="json")
+                outline.slides = prepared.slides
+            elif "common_header" in snapshot or any(
+                    slide.common_header is not None for slide in outline.slides):
+                # A historical absence is free; a partly persisted header is
+                # incomplete and must never be repaired with new defaults.
+                raise ValueError("svg_common_header_binding_incomplete")
+            request._svg_style_snapshot = snapshot
         current.svg_style_snapshot = snapshot
         checkpoint_session.add(current)
         await checkpoint_session.commit()
@@ -202,6 +286,7 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
                        if getattr(request, "_document_canvas", None) is not None else {})
     snapshot = await _pin_owned_svg_style(
         request, job, pin_style=pin_svg_style, session_maker=async_session_maker, owned_job=owned_job,
+        outline=outline, canvas=canvas,
     )
     if source_reflow:
         from services.svg_source_layout import source_pages
@@ -426,6 +511,8 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
         visual_intents=visual_intents,
         quality_recovery_source_evidence=getattr(request, "_svg_recovery_source_evidence", None),
         partial_recovery_manifest=partial_recovery_manifest,
+        header_pages=([slide.common_header for slide in outline.slides]
+                      if "common_header" in snapshot else None),
     )
 
 

@@ -499,7 +499,8 @@ class SvgAuthorResult:
     native_declarations: dict | None = None
 
 
-def svg_author_rules(style_snapshot: dict, body_floor: float, *, new_copy: bool = False) -> str:
+def svg_author_rules(style_snapshot: dict, body_floor: float, *, new_copy: bool = False,
+                     header_page: dict | None = None) -> str:
     canvas = style_snapshot.get("canvas") or {}
     width = int(canvas.get("width", DEFAULT_CANVAS_WIDTH_PX))
     height = int(canvas.get("height", DEFAULT_CANVAS_HEIGHT_PX))
@@ -527,10 +528,38 @@ def svg_author_rules(style_snapshot: dict, body_floor: float, *, new_copy: bool 
     quality_policy = read_quality_recovery_policy(style_snapshot)
     native_rules = (native_author_rules(source_grounded=True)
                     if quality_policy is not None and quality_policy["version"] == 2 else native_author_rules())
-    return ((SVG_NEW_COPY_AUTHOR_RULES if new_copy else SVG_AUTHOR_RULES)
+    rules = ((SVG_NEW_COPY_AUTHOR_RULES if new_copy else SVG_AUTHOR_RULES)
             + native_rules + f"\nBody text minimum: {body_floor:g} CSS px. "
             "Honor explicit user typography constraints.\n" + free_composition_canvas_clause(width, height)
             + reference_caveat(width, height) + spatial_rules + native_grid_rules)
+    if header_page is not None and header_page.get("applied"):
+        rules = _common_header_author_rules(rules, style_snapshot, header_page)
+    return rules
+
+
+def _common_header_author_rules(rules: str, snapshot: dict, binding: dict) -> str:
+    from services.svg_common_header import validate_common_header_binding
+
+    contract = snapshot.get("common_header")
+    validate_common_header_binding(contract, binding)
+    rules = rules.replace("Choose the title's position and visual weight from this page's message and evidence.",
+                          "The server supplies the fixed page title; choose the body evidence hierarchy freely.")
+    rules = rules.replace("title slots, bands, panel counts and page proportions are\noptional evidence.",
+                          "panel counts and page proportions are optional evidence; the common header reservation is mandatory.")
+    rules = rules.replace("Rewrite ordinary newly authored titles and prose", "Rewrite ordinary newly authored body prose")
+    rules = rules.replace("Write newly authored titles, body text,", "Write newly authored body text,")
+    return rules + (
+        "\nCOMMON HEADER: Return a body-only SVG using the original full canvas coordinates. "
+        "The server composes the frozen title and header after authoring. Do not draw a page title, "
+        "header background, divider, eyebrow or subline; do not emit any ID starting with "
+        "svg-system-common-header. All body glyph ink, shapes, images, connectors and strokes "
+        "must stay inside common_header.body_box in the page binding. A single full-canvas "
+        "background is permitted. Honor the existing brand/footer reservations too. Keep "
+        "every required source fact in readable body content, including facts carried by the "
+        "source title; actual evidence captions and local subheadings remain free. Do not move "
+        "or scale the whole body group, shrink text, clip, or hide content to fit. Fixed header "
+        "geometry, font, title wording, and line breaks cannot be rewritten during correction.\n"
+    )
 
 
 def free_composition_canvas_clause(width: int, height: int) -> str:
@@ -707,11 +736,15 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
                            previous_render_png_digest: str | None = None,
                            writing_policy: str | None = None,
                            source_preserved: bool = False,
-                           language: str | None = None) -> SvgAuthorResult:
+                           language: str | None = None,
+                           header_page: dict | None = None) -> SvgAuthorResult:
     manifest = preflight_svg_source_images(source_images)
     new_copy = writing_policy == WRITING_POLICY_ID and not source_preserved
     quality_policy = read_quality_recovery_policy(style_snapshot)
     source_grounded = quality_policy is not None and quality_policy["version"] == 2
+    from services.svg_common_header import validate_common_header_binding
+    validate_common_header_binding(style_snapshot.get("common_header"), header_page, index=index, count=n,
+                                   content=content)
     if source_grounded:
         visual_intent = enrich_visual_intent(content, role, index, visual_intent)
     previous_render_part = None
@@ -750,6 +783,10 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
     prompt = design + "\n\n" + json.dumps({"role": role, "index": index, "slide_count": n,
                                            "instructions": instructions or "", "source_content": content,
                                            "correction": correction_hint or "", "source_images": offered,
+                                           **({"common_header": {"page": header_page,
+                                               "body_box": style_snapshot["common_header"]["body_box"],
+                                               "content_top_px": style_snapshot["common_header"]["content_top_px"]}}
+                                              if header_page is not None and header_page.get("applied") else {}),
                                            **({"visual_intent": visual_intent} if visual_intent is not None else {})},
                                           ensure_ascii=False)
     requested_data = format_requested_native_data(content)
@@ -907,6 +944,8 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
                 "In a local correction, keep previous SVG text outside explicitly authorized "
                 "copy changes.\n"
             )
+    if header_page is not None and header_page.get("applied"):
+        rules = _common_header_author_rules(rules, style_snapshot, header_page)
     messages = author_messages(rules, prompt, design, image_parts=images)
     client = get_client(config=get_llm_config())
     model = authoring_model(get_model())
@@ -919,6 +958,10 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
         kwargs["extra_body"] = extra
     input_receipt = svg_author_input_receipt(style_snapshot, messages, provider=provider,
                                              model=str(model), budget=budget, kwargs=kwargs)
+    if header_page is not None:
+        from services.svg_common_header import common_header_input_digest
+        input_receipt["common_header_input_digest"] = common_header_input_digest(
+            style_snapshot.get("common_header"), header_page)
     await _wait_for_author_rate_slot()
     enforce_llm_egress_policy()
     timer, response, dispatched = ProviderCallTimer(), None, False

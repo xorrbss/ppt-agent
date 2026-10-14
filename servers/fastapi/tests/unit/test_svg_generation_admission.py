@@ -47,6 +47,56 @@ def test_partial_recovery_page_input_digest_matches_new_and_legacy_svg_inputs():
     assert _expected_page_input_digest(current, job, 0, page_assets) == current_digest
     assert current_digest != legacy_digest
 
+    # A frozen common header must bind the same title, content and source in
+    # initial authoring and durable recovery; changing either is not a replay.
+    from copy import deepcopy
+    from models.presentation_outline_model import PresentationOutlineModel, SlideOutlineModel
+    from services.authored_canvas import canvas_metadata_for_aspect_ratio
+    from services.svg_common_header import prepare_common_header
+    from services.svg_generation_inputs import svg_page_input_digest
+    from services.svg_contract import finalize_svg
+
+    outline = PresentationOutlineModel(slides=[
+        SlideOutlineModel(content="원본 운영 현황", title="운영 현황"),
+        SlideOutlineModel(content="승인 전 수정본은 비공개다.",
+            title="승인 전 수정본은 공개하지 않고 게시본을 유지한다"),
+    ])
+    source_style = {"tokens": {}, "common_header": {"title_width_px": 470}}
+    before = deepcopy(source_style)
+    canvas = canvas_metadata_for_aspect_ratio("16:9")
+    contract, bindings = prepare_common_header(source_style, outline, canvas)
+    assert source_style == before
+    assert len(bindings[0]["lines"]) == 1
+    assert len(bindings[1]["lines"]) == 2
+    assert contract["title_slot_lines"] == 2
+    style = {"tokens": {}, "common_header": contract}
+    frozen = SimpleNamespace(svg_style_snapshot=style, total_slides=2,
+        authored_outline={"slides": [
+            {"content": slide.content, "title": slide.title, "common_header": binding}
+            for slide, binding in zip(outline.slides, bindings)
+        ]})
+    for index, binding in enumerate(bindings):
+        initial = svg_page_input_digest(content=outline.slides[index].content, style=style,
+            index=index, count=2, instructions=None, language=None, preset=None,
+            writing_policy=WRITING_POLICY_ID, header_page=binding, assets=page_assets)
+        assert initial == _expected_page_input_digest(current, frozen, index, page_assets)
+    broken = deepcopy(frozen)
+    broken.authored_outline["slides"][0]["content"] = "원본과 다른 내용"
+    with pytest.raises(ValueError, match="svg_common_header"):
+        _expected_page_input_digest(current, broken, 0, page_assets)
+    body = '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"><rect x="64" y="400" width="200" height="60" fill="#2563EB"/></svg>'
+    first = finalize_svg(body, index=0, n=2, style_snapshot=style, header_page=bindings[0])
+    with pytest.raises(ValueError, match="svg_common_header"):
+        finalize_svg(first, index=0, n=2, style_snapshot=style, header_page=bindings[0])
+    assert finalize_svg(first, index=0, n=2, style_snapshot=style,
+        header_page=bindings[0], allow_existing_common_header=True) == first
+    preserved = SimpleNamespace(content="원본 보존", strategy="svg",
+        source_mode="raster_reconstruction", common_header_mode="uniform",
+        full_page_preserve_pages=(0,))
+    with pytest.raises(HTTPException) as blocked:
+        require_svg_creation_admission(preserved)
+    assert blocked.value.detail == "svg_common_header_source_preservation_conflict"
+
 
 @pytest.mark.parametrize("slide_count", [1, 2, 5, 6, 12, 80])
 def test_restoration_policy_reserves_final_review_without_changing_legacy(slide_count):

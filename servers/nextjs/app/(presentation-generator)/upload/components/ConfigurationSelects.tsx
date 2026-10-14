@@ -191,6 +191,35 @@ export function ConfigurationSelects({
                 generationStrategy={generationStrategy}
                 sourceDocumentCanvas={sourceDocumentCanvas}
             />
+            {generationStrategy === "svg" ? (
+                <div className="flex items-center gap-2 text-sm text-slate-700">
+                    <label htmlFor="svg-common-header-mode">페이지 상단</label>
+                    <select
+                        id="svg-common-header-mode"
+                        value={config.commonHeaderMode ?? "uniform"}
+                        onChange={(event) => onConfigChange("commonHeaderMode", event.target.value)}
+                        className="rounded-md border border-slate-200 bg-white px-2 py-1.5"
+                    >
+                        <option value="uniform">상단 통일</option>
+                        <option value="free">페이지별 자유 구성</option>
+                    </select>
+                    {(config.commonHeaderMode ?? "uniform") === "uniform" ? (
+                        <label className="flex items-center gap-1.5 whitespace-nowrap">
+                            <input
+                                type="checkbox"
+                                checked={config.commonHeaderCoverException ?? false}
+                                onChange={(event) => onConfigChange("commonHeaderCoverException", event.target.checked)}
+                            />
+                            표지 제외
+                        </label>
+                    ) : null}
+                </div>
+            ) : null}
+            {generationStrategy === "svg" && sourceContentMode && (config.commonHeaderMode ?? "uniform") === "uniform" ? (
+                <p className="basis-full text-sm text-amber-700" role="alert">
+                    원본 보존은 기존 상단을 유지합니다. 페이지별 자유 구성으로 변경하거나 내용 재배치 모드를 선택하세요.
+                </p>
+            ) : null}
             <AdvanceSettings
                 config={config}
                 onConfigChange={onConfigChange}

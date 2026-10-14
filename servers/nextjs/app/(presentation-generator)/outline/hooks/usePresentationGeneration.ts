@@ -292,6 +292,10 @@ export const usePresentationGeneration = (
       // The immutable source-content path must never enter vision re-authoring,
       // including outline reload/resume paths reconstructed from Redux.
       visionQa: isSourceContentGeneration || generationStrategy === "svg" ? false : authoredVisionQa,
+      ...(generationStrategy === "svg" ? {
+        commonHeaderMode: generationConfig?.commonHeaderMode ?? "uniform",
+        commonHeaderCoverException: (generationConfig?.commonHeaderMode ?? "uniform") === "uniform" && (generationConfig?.commonHeaderCoverException ?? false),
+      } : {}),
       ...(generationStrategy === "svg" && generationConfig?.svgDesignReferenceSnapshotId ? { svgDesignReferenceSnapshotId: generationConfig.svgDesignReferenceSnapshotId } : {}),
       ...(generationStrategy === "svg" && generationConfig?.svgDesignReferencePin ? { svgDesignReferencePin: generationConfig.svgDesignReferencePin } : {}),
       authoredStyle:
@@ -365,6 +369,8 @@ export const usePresentationGeneration = (
         language: authoredRequest.language,
         vision_qa: authoredRequest.visionQa,
         strategy: authoredRequest.strategy ?? "svg",
+        common_header_mode: "commonHeaderMode" in authoredRequest ? authoredRequest.commonHeaderMode : undefined,
+        common_header_cover_exception: "commonHeaderCoverException" in authoredRequest ? authoredRequest.commonHeaderCoverException : undefined,
         authored_style: authoredRequest.authoredStyle,
         svg_design_reference_snapshot_id: "svgDesignReferenceSnapshotId" in authoredRequest ? authoredRequest.svgDesignReferenceSnapshotId : undefined,
         svg_design_reference_pin: "svgDesignReferencePin" in authoredRequest ? authoredRequest.svgDesignReferencePin : undefined,

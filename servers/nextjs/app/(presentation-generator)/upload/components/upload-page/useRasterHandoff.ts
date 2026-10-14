@@ -34,6 +34,9 @@ export const useRasterHandoff = (
           pin.source_sha256 !== operation.analysis.source.source_sha256 || !referenceSnapshotId) {
         throw new Error("raster_approval_pin_invalid");
       }
+      if (pin.full_page_preserve_pages.length > 0 && (recovery.commonHeaderMode ?? "uniform") === "uniform") {
+        throw new Error("svg_common_header_source_preservation_conflict");
+      }
       if (recovery.analysisMode === "auto_preserve") {
         const pages = operation.analysis.pages;
         const expectedPageNumbers = pages.map((page) => page.page_number).sort((a, b) => a - b);
@@ -78,6 +81,8 @@ export const useRasterHandoff = (
           authoredStyle: recovery.authoredStyle,
           svgDesignReferenceSnapshotId: recovery.svgDesignReferenceSnapshotId,
           svgDesignReferencePin: recovery.svgDesignReferencePin,
+          commonHeaderMode: recovery.commonHeaderMode ?? "uniform",
+          commonHeaderCoverException: recovery.commonHeaderMode === "uniform" && (recovery.commonHeaderCoverException ?? false),
           ...(recovery.svgCanvas ? { svgCanvas: recovery.svgCanvas } : recovery.aspectRatio ? { aspectRatio: recovery.aspectRatio } : { pageSize: "A4" as const, orientation: recovery.orientation }),
           sourceMode: "raster_reconstruction",
           rasterApprovalPin: pin,

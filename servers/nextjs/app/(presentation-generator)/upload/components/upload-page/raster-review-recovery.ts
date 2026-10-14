@@ -25,6 +25,8 @@ export type RasterReviewRecovery = {
   analysisMode?: RasterAnalysisMode;
   svgDesignReferenceSnapshotId?: string;
   svgDesignReferencePin?: import("../../type").PresentationConfig["svgDesignReferencePin"];
+  commonHeaderMode?: "uniform" | "free";
+  commonHeaderCoverException?: boolean;
   aspectRatio?: import("../../type").PresentationConfig["aspectRatio"];
   svgCanvas?: { width_mm: number; height_mm: number };
   orientation: "landscape" | "portrait";

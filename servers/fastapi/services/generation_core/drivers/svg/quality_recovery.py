@@ -168,10 +168,19 @@ async def ensure_recovery_authority(job, hooks):
     async with hooks.async_session_maker() as session:
         current_job = await session.get(PresentationGenerationJob, job.id)
         expected_snapshot = getattr(hooks, "recovery_snapshot", None)
+        admitted_snapshot = ((current_job.request_payload or {}).get("_internal_svg_style_snapshot")
+            if current_job is not None else None)
+        snapshot_bound = admitted_snapshot == expected_snapshot
+        if (not snapshot_bound and current_job is not None and expected_snapshot is not None
+                and expected_snapshot.get("common_header") is not None
+                and (current_job.request_payload or {}).get("common_header_mode") == "uniform"):
+            from services.svg_common_header import header_snapshot_base, validate_common_header_outline
+            validate_common_header_outline(expected_snapshot, current_job.authored_outline)
+            snapshot_bound = admitted_snapshot == header_snapshot_base(expected_snapshot)
         if (current_job is None or current_job.attempt_token != job.attempt_token
                 or current_job.workspace_operation_id != job.workspace_operation_id
                 or expected_snapshot is None
-                or (current_job.request_payload or {}).get("_internal_svg_style_snapshot") != expected_snapshot
+                or not snapshot_bound
                 or current_job.svg_style_snapshot != expected_snapshot):
             raise ValueError("svg_quality_recovery_admission_snapshot_conflict")
         admission = await session.scalar(select(PublicOperationAdmission).where(

@@ -20,9 +20,127 @@ from utils.hashing import sha256_hex
 RETRY = object()
 
 
+def _apply_common_header_quality(quality, svg, contract, binding, furniture_receipt):
+    """Use the existing render's owned glyph ink and visible paint boxes."""
+    if binding is None or not binding.get("applied"):
+        return
+    import xml.etree.ElementTree as ET
+    from services.svg_common_header import GROUP_ID, TITLE_ID
+    from services.svg_text_overlap import _ink_rect, comparison_fragments
+
+    root = ET.fromstring(svg)
+    nodes = {f"svg-{i}": node for i, node in enumerate(root.iter())}
+    parents = {child: parent for parent in root.iter() for child in parent}
+    elements = (quality.get("browser_metrics") or {}).get("elements") or []
+    by_qid = {item.get("qid"): item for item in elements}
+    reserved = set((furniture_receipt or {}).get("element_ids") or ())
+    title_box, body_box = contract["title_box"], contract["body_box"]
+    failures, measured_titles = [], []
+    canvas_backgrounds = 0
+    tolerance = .5
+
+    def inside(box, bounds):
+        return (box["x"] >= bounds["x"] - tolerance and box["y"] >= bounds["y"] - tolerance
+                and box["x"] + box["width"] <= bounds["x"] + bounds["width"] + tolerance
+                and box["y"] + box["height"] <= bounds["y"] + bounds["height"] + tolerance)
+
+    def inherited(node, attribute, default):
+        current = node
+        while current is not None:
+            if attribute in current.attrib:
+                return current.get(attribute)
+            current = parents.get(current)
+        return default
+
+    for qid, node in nodes.items():
+        tag, node_id = node.tag.rsplit("}", 1)[-1], node.get("id", "")
+        if tag in {"svg", "g"}:
+            continue
+        item = by_qid.get(qid)
+        if item is None:
+            failures.append({"kind": "svg_common_header_measurement_unavailable", "qid": qid})
+            continue
+        if node_id.startswith(TITLE_ID + "-line-"):
+            measured_titles.append(node_id)
+            boxes = [(_ink_rect(box), basis) for box, basis in comparison_fragments(item)]
+            if (not boxes or any(box is None or basis != "ink" or not inside(box, title_box)
+                                 for box, basis in boxes)
+                    or item.get("glyph_clipped") or item.get("font_loaded") is not True
+                    or str(item.get("resolved_font_family", "")).strip("'\"") != contract["font"]["family"]
+                    or abs(float(item.get("font_size", 0)) - contract["font"]["size_px"]) > tolerance
+                    or not item.get("css_visible", False) or item.get("effective_opacity", 0) < .9):
+                failures.append({"kind": "svg_common_header_title_overflow", "qid": qid})
+            continue
+        if node_id in reserved or node_id == "svg-system-page-number":
+            continue
+        if not item.get("css_visible", False) or item.get("effective_opacity", 0) <= 0:
+            continue
+        if item.get("has_owned_text"):
+            boxes = [_ink_rect(box) for box, _basis in comparison_fragments(item)]
+        elif tag != "tspan":
+            box = _ink_rect(item.get("bbox"))
+            # A single canvas background is independent of body reservations.
+            if (tag == "rect" and box and inherited(node, "stroke", "none") == "none"
+                    and abs(box["x"]) <= tolerance and abs(box["y"]) <= tolerance
+                    and abs(box["width"] - contract["canvas"]["width"]) <= tolerance
+                    and abs(box["height"] - contract["canvas"]["height"]) <= tolerance):
+                canvas_backgrounds += 1
+                earlier_body = any(previous.get("qid") in nodes
+                    and nodes[previous["qid"]].get("id", "") not in reserved
+                    and previous.get("tag") not in {"svg", "g"}
+                    and previous.get("css_visible", False)
+                    for previous in elements[:elements.index(item)])
+                if canvas_backgrounds == 1 and not earlier_body:
+                    continue
+            stroke = inherited(node, "stroke", "none")
+            fill = inherited(node, "fill", "black")
+            if float(inherited(node, "stroke-opacity", "1")) <= 0:
+                stroke = "none"
+            if float(inherited(node, "fill-opacity", "1")) <= 0:
+                fill = "none"
+            if stroke == "none" and (fill == "none" or tag in {"line", "polyline"}):
+                continue
+            # getBoundingClientRect excludes the SVG stroke. Include its ink.
+            if stroke != "none":
+                if box is None:
+                    raw = item.get("bbox") or {}
+                    try:
+                        box = {key: float(raw[key]) for key in ("x", "y", "width", "height")}
+                        if not all(math.isfinite(value) for value in box.values()):
+                            box = None
+                    except (KeyError, TypeError, ValueError):
+                        box = None
+                half = float(inherited(node, "stroke-width", "1")) / 2
+            if box and stroke != "none":
+                box = {"x": box["x"] - half, "y": box["y"] - half,
+                       "width": box["width"] + half * 2, "height": box["height"] + half * 2}
+            boxes = [box]
+        else:
+            continue
+        if not boxes or any(box is None for box in boxes):
+            failures.append({"kind": "svg_common_header_measurement_unavailable", "qid": qid})
+        elif any(not inside(box, body_box) for box in boxes):
+            text = "".join(str(item.get("owned_text") or "").split())
+            duplicate = (text and text == "".join(binding["title"].split())
+                         and any(box["y"] < body_box["y"] for box in boxes))
+            failures.append({"kind": "svg_common_header_duplicate" if duplicate
+                             else "svg_common_header_body_intrusion", "qid": qid})
+    if len(measured_titles) != len(binding["lines"]):
+        failures.append({"kind": "svg_common_header_digest_mismatch"})
+    quality["common_header"] = {"version": "svg-common-header-render/v1",
+        "origin": "generated-common-header", "header_digest": contract["digest"],
+        "title_digest": binding["title_digest"], "page_digest": binding["digest"],
+        "title_element_ids": measured_titles, "body_box": body_box,
+        "basis": "existing_browser_glyph_ink_and_paint", "passed": not failures}
+    if failures:
+        quality["passed"] = False
+        quality["geometry_passed"] = False
+        quality.setdefault("failures", []).extend(failures)
+
+
 async def attempt_render(*, ctx, request, presentation_id, index, content, payload, svg, ordinal,
                          job, checkpoint, async_session_maker, write_png,
-                         recovery_readability_policy=None):
+                         recovery_readability_policy=None, allow_existing_common_header=False):
     from services.svg_contract import finalize_svg
     from services.svg_renderer import render_svg_with_metrics
     from services.svg_source_layout import verify_source_receipt
@@ -32,6 +150,8 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
     )
 
     profile = read_authoring_profile(ctx.snapshot)
+    header_pages = getattr(ctx, "header_pages", None)
+    header_page = header_pages[index] if header_pages else None
     readability_policy = recovery_readability_policy or ctx.snapshot.get("readability_policy")
     if payload.get("cached_author_render"):
         from services.document_canvas_generation import validate_svg_readability_policy
@@ -64,7 +184,9 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
             final = finalize_svg(svg, index=index, n=ctx.count, width=ctx.canvas.width_px,
                                  height=ctx.canvas.height_px, style_snapshot=ctx.snapshot,
                                  source_manifest=finalize_source_manifest,
-                                 allow_image_only=allow_image_only)
+                                 allow_image_only=allow_image_only, header_page=header_page,
+                                 allow_existing_common_header=bool(cache_remeasurement
+                                     or payload.get("cached_author_render") or allow_existing_common_header))
         if cache_remeasurement and sha256_hex(final.encode()) != cache_remeasurement.get("source_sha256"):
             raise AuthoredStageError(slide_index=index, stage="render", code="svg_cache_remeasurement_changed", retryable=False)
         if ctx.source_reflow:
@@ -83,7 +205,7 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
                                   if binding.get("kind") == "image"}
         furniture_receipt = (None if preserved_raster else master_furniture_receipt(final, ctx.snapshot,
             index=index, n=ctx.count, width=ctx.canvas.width_px, height=ctx.canvas.height_px,
-            source_manifest=furniture_contract))
+            source_manifest=furniture_contract, header_page=header_page))
         if furniture_receipt is not None:
             payload["system_furniture"] = furniture_receipt
         materialized = None
@@ -200,7 +322,7 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
                                    or ctx.source_reflow and code.startswith("svg_source_"))
             raise AuthoredStageError(slide_index=index,
                 stage="author" if source_plan_failure else "render",
-                code=code if source_plan_failure else "svg_validation_failed",
+                code=code if source_plan_failure or code.startswith("svg_common_header_") else "svg_validation_failed",
                 retryable=False) from error
         return RETRY
     if cache_remeasurement and (
@@ -209,6 +331,8 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
             or str(rendered.quality.get("png_digest", "")).removeprefix("sha256:") != cache_remeasurement.get("png_sha256")
             or rendered.quality.get("measurement_complete") is not True):
         raise AuthoredStageError(slide_index=index, stage="render", code="svg_cache_remeasurement_changed", retryable=False)
+    _apply_common_header_quality(rendered.quality, final, ctx.snapshot.get("common_header"),
+                                 header_page, furniture_receipt)
     if not (ctx.source_reflow or ctx.raster_reconstruction):
         from services.authored_canvas import request_canvas_metadata
         from services.generation_core.drivers.svg.native_publish import canvas_point_per_px
@@ -275,7 +399,8 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
             **rendered.quality, "stage": "first_response",
         }
     payload["last_valid_svg"] = final
-    if readability_policy is not None and rendered.quality.get("passed") is False and not payload.get("local_readability_repair"):
+    if (readability_policy is not None and rendered.quality.get("passed") is False
+            and not payload.get("local_readability_repair") and not (header_page and header_page.get("applied"))):
         from services.document_canvas_generation import minimal_svg_readability_repair
         from services.generation_core.drivers.svg.native_declarations import PAYLOAD_KEY
 
@@ -377,6 +502,12 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
     apply_vector_icon_quality(rendered.quality, payload)
     payload.update(svg_content=final, source_digest=sha256_hex(final.encode()),
                    quality=rendered.quality, **write_png(rendered.png))
+    header_failures = [failure for failure in rendered.quality.get("failures", [])
+                       if str(failure.get("kind", "")).startswith("svg_common_header_")]
+    if header_failures:
+        await checkpoint(job, index, payload=payload)
+        raise AuthoredStageError(slide_index=index, stage="render",
+                                code=header_failures[0]["kind"], retryable=False)
     if cache_remeasurement:
         from services.svg_classification_remeasurement import remeasurement_digest
         cache_remeasurement.update(status="completed" if rendered.quality.get("passed") is True else "failed",

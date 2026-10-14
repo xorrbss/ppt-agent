@@ -325,6 +325,7 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
                 authored = await author_slide_svg(
                     content=content, style_snapshot=ctx.snapshot, role=role,
                     index=index, n=count, instructions=request.instructions,
+                    header_page=(getattr(ctx, "header_pages", None) or [None] * count)[index],
                     writing_policy=getattr(request, "writing_policy", None),
                     language=getattr(request, "language", None),
                     correction_hint=hint,

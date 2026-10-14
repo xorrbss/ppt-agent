@@ -69,6 +69,62 @@ def _native_ooxml_domain(*, required, worker_metrics, artifact_digest, operation
                         geometryMismatchesAllowed=0, officeRenderMeasured=False)))
 
 
+def _common_header_ooxml_current(slides, proof):
+    """Require the title-specific readback only for pages with a frozen header."""
+    from workers.svg_common_header_export import header_title_lines
+    from services.svg_export_page_evidence import _common_header_current
+    from services.svg_contract import source_digest
+    from utils.hashing import canonical_json_sha256
+    import math
+
+    try:
+        expected_pages = [header_title_lines(slide.svg_content or "") for slide in slides]
+        if not any(expected_pages):
+            return True
+        value = proof.get("commonHeaderReadback") or {}
+        unsigned = {key: item for key, item in value.items() if key != "digest"}
+        pages = value.get("pages")
+        scale = value.get("pointPerPx")
+        if (value.get("schemaVersion") != "svg-common-header-ooxml/v1" or value.get("passed") is not True
+                or value.get("origin") != "generated-common-header" or value.get("officeRenderMeasured") is not False
+                or value.get("digest") != "sha256:" + canonical_json_sha256(unsigned)
+                or not isinstance(scale, (int, float)) or isinstance(scale, bool) or not math.isfinite(scale) or scale <= 0
+                or not isinstance(pages, list) or len(pages) != len(slides)):
+            return False
+        for index, (slide, expected, page) in enumerate(zip(slides, expected_pages, pages, strict=True)):
+            receipt = (slide.content or {}).get("svgReceipt") or {}
+            if not _common_header_current(slide, receipt.get("quality") or {}):
+                return False
+            lines = page.get("lines")
+            if (page.get("pageIndex") != index or page.get("svgDigest") != source_digest(slide.svg_content or "")
+                    or not isinstance(lines, list) or len(lines) != len(expected)):
+                return False
+            shape_ids = set()
+            for line, (identity, source) in zip(lines, expected.items(), strict=True):
+                attrs = source["attributes"]
+                bounds = line.get("boundsEmu")
+                shape_id = line.get("shapeId")
+                if (line.get("elementId") != identity or line.get("text") != source["text"]
+                        or line.get("fontFamily") != attrs["font-family"]
+                        or line.get("fontSizePx") != float(attrs["font-size"])
+                        or not isinstance(line.get("fontSizePt"), (int, float))
+                        or not math.isfinite(line["fontSizePt"])
+                        or abs(line["fontSizePt"] - float(attrs["font-size"]) * scale) > .051
+                        or line.get("fontWeight") != attrs.get("font-weight", "400")
+                        or line.get("color") != attrs["fill"]
+                        or line.get("alignment") != attrs.get("text-anchor", "start")
+                        or line.get("svgAnchor") != {"x": float(attrs["x"]), "baselineY": float(attrs["y"])}
+                        or line.get("autoFit") is not False or type(shape_id) is not int or shape_id < 1
+                        or shape_id in shape_ids or not isinstance(bounds, list) or len(bounds) != 4
+                        or any(type(number) is not int for number in bounds)
+                        or bounds[2] <= bounds[0] or bounds[3] <= bounds[1]):
+                    return False
+                shape_ids.add(shape_id)
+        return True
+    except (KeyError, ValueError, TypeError, AttributeError):
+        return False
+
+
 def _generic_native_ooxml_domain(*, required, slides, worker_metrics, artifact_digest,
                                  operation_id, presentation_id, source_revision, review_binding,
                                  export_identity_digest=None, export_tenant_id=None):
@@ -87,6 +143,8 @@ def _generic_native_ooxml_domain(*, required, slides, worker_metrics, artifact_d
     native = structural.get("nativeObjects")
     if (not isinstance(proof, dict) or not isinstance(native, dict)
             or not isinstance(review_binding, dict) or not review_binding.get("ownerId")):
+        return failed
+    if not _common_header_ooxml_current(slides, proof):
         return failed
     sources = [source_digest(slide.svg_content or "") for slide in slides]
     producer_operation_id = str(operation_id)

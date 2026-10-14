@@ -55,7 +55,9 @@ const EMPTY_FORM = {
   slideCount: "",
   generationMode: "auto" as PublicV2GenerationMode,
   svgDesignReferenceSnapshotId: "",
-  svgComposition: false,
+  svgComposition: true,
+  commonHeaderMode: "uniform" as "uniform" | "free",
+  commonHeaderCoverException: false,
   canvas: "16:9",
   canvasWidth: "320",
   canvasHeight: "180",
@@ -193,6 +195,10 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
       case "public_v2_registered_template_pin_required": return t("failureTemplatePinRequired");
       case "public_v2_source_revision_unavailable": return t("failureSourceRevisionUnavailable");
       case "public_v2_network_error": return t("failureNetworkError");
+      case "svg_common_header_title_unresolved": return t("failureHeaderTitleUnresolved");
+      case "svg_common_header_title_overflow": return t("failureHeaderTitleOverflow");
+      case "svg_common_header_body_space_unresolved": return t("failureHeaderBodySpaceUnresolved");
+      case "svg_common_header_source_preservation_conflict": return t("failureHeaderSourcePreservationConflict");
       default: return t("failureUnknown");
     }
   };
@@ -205,6 +211,8 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
     clear,
   } = usePublicV2Operation({ storageScope });
   const [form, setForm] = useState(EMPTY_FORM);
+  const svgComposition = form.svgComposition && ["auto", "free-design"].includes(form.generationMode);
+  const svgHeaderApplicable = svgComposition || ["brand-style", "fidelity-first"].includes(form.generationMode);
   const [requestError, setRequestError] = useState<string | null>(null);
   const [requestedDownloadId, setRequestedDownloadId] = useState<string | null>(null);
 
@@ -238,7 +246,6 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
       return;
     }
     let designPackPin: PublicV2DesignPackPin | undefined;
-    const svgComposition = form.svgComposition && ["auto", "free-design"].includes(form.generationMode);
     const svgDesignReferenceSnapshotId = form.svgDesignReferenceSnapshotId.trim();
     if (svgComposition && svgDesignReferenceSnapshotId && (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(svgDesignReferenceSnapshotId) || form.designPackId.trim())) {
       setRequestError("유효한 디자인 참고 UUID를 입력하고 등록 디자인 참조와 하나만 선택해 주세요."); return;
@@ -272,7 +279,8 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
         generationMode: form.generationMode,
         ...(svgComposition && svgDesignReferenceSnapshotId ? { svgDesignReferenceSnapshotId } : {}),
         ...(designPackPin ? svgComposition ? { svgDesignReferencePin: designPackPin } : { designPackPin } : {}),
-        ...(svgComposition ? { strategy: "svg" as const, ...(form.canvas === "custom" ? { svgCanvas: { widthMm, heightMm } } : form.canvas.startsWith("a4-") ? { pageSize: "A4" as const, orientation: form.canvas === "a4-portrait" ? "portrait" as const : "landscape" as const } : { aspectRatio: form.canvas as "16:9" | "9:16" | "9:13" | "4:3" | "1:1" | "21:9" }) } : {}),
+        ...(svgComposition ? { strategy: "svg" as const, ...(form.canvas === "custom" ? { svgCanvas: { widthMm, heightMm } } : form.canvas.startsWith("a4-") ? { pageSize: "A4" as const, orientation: form.canvas === "a4-portrait" ? "portrait" as const : "landscape" as const } : { aspectRatio: form.canvas as "16:9" | "9:16" | "9:13" | "4:3" | "1:1" | "21:9" }) } : ["auto", "free-design"].includes(form.generationMode) ? { strategy: "authored" as const } : {}),
+        ...(svgHeaderApplicable ? { commonHeaderMode: form.commonHeaderMode, commonHeaderCoverException: form.commonHeaderMode === "uniform" && form.commonHeaderCoverException } : {}),
         qualityPolicy: "interactive-v1",
       });
     } catch (error) {
@@ -380,6 +388,7 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.svgComposition} onChange={(event) => setForm((value) => ({ ...value, svgComposition: event.target.checked }))} />SVG 자유 구성</label>
               {form.svgComposition && <><label className="block text-sm">캔버스<select aria-label="SVG 캔버스" value={form.canvas} onChange={(event) => setForm((value) => ({ ...value, canvas: event.target.value }))} className="ml-3 rounded border p-2">{["16:9", "9:16", "9:13", "4:3", "1:1", "21:9", "a4-landscape", "a4-portrait", "custom"].map((canvas) => <option key={canvas} value={canvas}>{canvas === "a4-landscape" ? "A4 가로" : canvas === "a4-portrait" ? "A4 세로" : canvas === "custom" ? "사용자 지정 (mm)" : canvas}</option>)}</select></label>{form.canvas === "custom" && <div className="flex gap-2"><input aria-label="SVG 너비 (mm)" type="number" min="50" max="1000" step="0.01" value={form.canvasWidth} onChange={(event) => setForm((value) => ({ ...value, canvasWidth: event.target.value }))} className="w-1/2 rounded border p-2" /><input aria-label="SVG 높이 (mm)" type="number" min="50" max="1000" step="0.01" value={form.canvasHeight} onChange={(event) => setForm((value) => ({ ...value, canvasHeight: event.target.value }))} className="w-1/2 rounded border p-2" /></div>}<p className="text-xs text-slate-600">선택한 디자인은 색상·서체·분위기 참고로 사용하고 배치는 모델이 구성합니다.</p></>}
             </div>}
+            {svgHeaderApplicable ? <div className="flex flex-wrap items-center gap-3 text-sm text-slate-700"><label>페이지 상단 <select aria-label="페이지 상단 구성" value={form.commonHeaderMode} onChange={(event) => setForm((value) => ({ ...value, commonHeaderMode: event.target.value as "uniform" | "free" }))} className="ml-2 rounded border p-2"><option value="uniform">상단 통일</option><option value="free">페이지별 자유 구성</option></select></label>{form.commonHeaderMode === "uniform" ? <label className="flex items-center gap-2"><input type="checkbox" checked={form.commonHeaderCoverException} onChange={(event) => setForm((value) => ({ ...value, commonHeaderCoverException: event.target.checked }))} />표지 제외</label> : null}</div> : null}
             {form.svgComposition && ["auto", "free-design"].includes(form.generationMode) ? <label className="block text-sm text-slate-700">디자인 참고 파일 UUID (선택)<input aria-label="디자인 참고 파일 UUID" value={form.svgDesignReferenceSnapshotId} onChange={(event) => setForm((value) => ({ ...value, svgDesignReferenceSnapshotId: event.target.value }))} className="mt-2 w-full rounded border p-2" placeholder="등록한 디자인 참고 파일의 UUID" /></label> : null}
             {(form.generationMode === "registered-template" || (form.svgComposition && ["auto", "free-design"].includes(form.generationMode))) && <fieldset className="rounded-xl border border-slate-200 bg-slate-50 p-4"><legend className="px-1 text-sm font-semibold text-slate-800">{form.generationMode === "registered-template" ? t("registeredTemplatePin") : "디자인 참고 (선택)"}</legend><div className="grid min-w-0 gap-3 sm:grid-cols-3"><label className="text-xs font-medium text-slate-700" htmlFor="public-v2-design-pack-id">{t("designPackId")}<input id="public-v2-design-pack-id" required={form.generationMode === "registered-template"} value={form.designPackId} onChange={(event) => setForm((value) => ({ ...value, designPackId: event.target.value }))} className="mt-2 min-h-11 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" /></label><label className="text-xs font-medium text-slate-700" htmlFor="public-v2-design-pack-version">{t("version")}<input id="public-v2-design-pack-version" required={form.generationMode === "registered-template" || Boolean(form.designPackId.trim())} min={1} inputMode="numeric" type="number" value={form.designPackVersion} onChange={(event) => setForm((value) => ({ ...value, designPackVersion: event.target.value }))} className="mt-2 min-h-11 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" /></label><label className="text-xs font-medium text-slate-700" htmlFor="public-v2-design-pack-digest">{t("digest")}<input id="public-v2-design-pack-digest" required={form.generationMode === "registered-template" || Boolean(form.designPackId.trim())} pattern="sha256:[0-9a-f]{64}" value={form.designPackDigest} onChange={(event) => setForm((value) => ({ ...value, designPackDigest: event.target.value }))} placeholder={t("sha256")} className="mt-2 min-h-11 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 font-mono text-sm" /></label></div></fieldset>}
             <button type="submit" disabled={pendingExport || current.phase === "submitting" || current.phase === "monitoring"} className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-200 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">

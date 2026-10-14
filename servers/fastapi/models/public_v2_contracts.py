@@ -123,6 +123,8 @@ class PresentationGenerationRequestV2(PublicWireModel):
     # services.generation_core.admission.resolve_generation_strategy. Never
     # read this field directly; every decision goes through the resolver.
     strategy: Literal["authored", "svg"] | None = None
+    common_header_mode: Literal["uniform", "free"] | None = Field(default=None, exclude_if=lambda value: value is None)
+    common_header_cover_exception: bool = False
     generation_mode: GenerationMode = "auto"
     design_pack_pin: DesignPackPinV1 | None = None
     generation_engine: Literal["authored", "deck-ir"] | None = "authored"
@@ -155,6 +157,11 @@ class PresentationGenerationRequestV2(PublicWireModel):
     @model_serializer(mode="wrap")
     def serialize_canvas_selectors(self, handler):
         payload = handler(self)
+        if self.common_header_mode is None:
+            payload.pop("commonHeaderMode", None)
+            payload.pop("common_header_mode", None)
+            payload.pop("commonHeaderCoverException", None)
+            payload.pop("common_header_cover_exception", None)
         for key in (
             ("aspectRatio", "aspect_ratio") if self.page_size is not None else ("pageSize", "page_size", "orientation")
         ):
@@ -187,6 +194,10 @@ class PresentationGenerationRequestV2(PublicWireModel):
 
     @model_validator(mode="after")
     def validate_generation_mode(self) -> "PresentationGenerationRequestV2":
+        if self.common_header_mode is not None and self.strategy == "authored":
+            raise ValueError("common_header_svg_strategy_required")
+        if self.common_header_cover_exception and self.common_header_mode != "uniform":
+            raise ValueError("common_header_cover_exception_requires_uniform")
         references = (self.master_pin, self.svg_design_reference_pin, self.svg_design_reference_snapshot_id)
         if (self.svg_design_reference_pin is not None or self.svg_design_reference_snapshot_id is not None) and sum(value is not None for value in references) > 1:
             raise ValueError("svg_design_reference_conflict")

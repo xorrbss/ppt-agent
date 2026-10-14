@@ -398,13 +398,14 @@ def _frozen_vector_offer(seed_row, job, operation, owner, tenant):
 
 
 def _expected_page_input_digest(request, job, index, page_assets):
-    page_input = {"content": job.authored_outline["slides"][index]["content"],
-        "style": job.svg_style_snapshot, "index": index, "count": job.total_slides,
-        "instructions": request.instructions, "language": (request.language or "").strip() or None,
-        "preset": request.codex_generation_preset}
-    if getattr(request, "writing_policy", None) is not None:
-        page_input["writing_policy"] = request.writing_policy
-    return digest({"page": digest(page_input), "assets": page_assets})
+    from services.svg_generation_inputs import svg_page_input_digest
+    slide = job.authored_outline["slides"][index]
+    return svg_page_input_digest(content=slide["content"], style=job.svg_style_snapshot,
+        index=index, count=job.total_slides, instructions=request.instructions,
+        language=(request.language or "").strip() or None,
+        preset=request.codex_generation_preset, assets=page_assets,
+        writing_policy=getattr(request, "writing_policy", None),
+        header_page=slide.get("common_header"))
 
 
 def _author_render_chain(payload, raw, receipt, *, request, job, asset, index,
@@ -475,7 +476,8 @@ def _author_render_chain(payload, raw, receipt, *, request, job, asset, index,
                 for key, slot in slots.items()}
     first = finalize_svg(normalized, index=index, n=job.total_slides,
         width=canvas.width_px, height=canvas.height_px, style_snapshot=job.svg_style_snapshot,
-        source_manifest=contract)
+        source_manifest=contract,
+        header_page=job.authored_outline["slides"][index].get("common_header"))
     stored = payload["svg_content"]
     if stored == normalized and row is not None and row.render_status == "pending":
         from utils.owner_context import get_current_owner_id, get_current_tenant_id
@@ -520,7 +522,9 @@ def _author_render_chain(payload, raw, receipt, *, request, job, asset, index,
             reject("svg_partial_recovery_render_transform_unproven")
         replayed = finalize_svg(candidate, index=index, n=job.total_slides,
             width=canvas.width_px, height=canvas.height_px, style_snapshot=job.svg_style_snapshot,
-            source_manifest=contract)
+            source_manifest=contract,
+            header_page=job.authored_outline["slides"][index].get("common_header"),
+            allow_existing_common_header=True)
         if replayed != stored:
             reject("svg_partial_recovery_render_transform_unproven")
     stored_digest = sha256_hex(stored.encode())
@@ -702,7 +706,8 @@ def _replay_sealed_author_transform(payload, raw, *, request, job, asset, index,
     author_digest = sha256_hex(author_svg.encode())
     normalized, advisories = normalize_model_font_families(author_svg)
     contract = {key: {'required': slot.policy.required, 'allowOmit': slot.policy.allow_omit} for key, slot in slots.items()}
-    first = finalize_svg(normalized, index=index, n=job.total_slides, width=canvas.width_px, height=canvas.height_px, style_snapshot=job.svg_style_snapshot, source_manifest=contract)
+    first = finalize_svg(normalized, index=index, n=job.total_slides, width=canvas.width_px, height=canvas.height_px, style_snapshot=job.svg_style_snapshot, source_manifest=contract,
+        header_page=job.authored_outline["slides"][index].get("common_header"))
     return (normalized, first, author_digest, declarations, used, advisories)
 
 

@@ -74,6 +74,8 @@ export const useRasterSessionRecovery = ({
       ...previous, sourceCanvas: undefined, svgDesignReferencePending: false,
       svgDesignReferenceSnapshotId: recovery.svgDesignReferenceSnapshotId,
       svgDesignReferencePin: recovery.svgDesignReferencePin,
+      commonHeaderMode: recovery.commonHeaderMode ?? "uniform",
+      commonHeaderCoverException: recovery.commonHeaderMode === "uniform" && (recovery.commonHeaderCoverException ?? false),
       svgCanvas: recovery.svgCanvas,
       ...(recovery.svgCanvas ? { pageSize: undefined, orientation: undefined }
         : recovery.aspectRatio ? { pageSize: undefined, orientation: undefined, aspectRatio: recovery.aspectRatio }

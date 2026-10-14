@@ -23,6 +23,7 @@ _PROJECTION_ADAPTER_FILES = tuple(
         "services/generation_core/drivers/svg/export_scene.py",
         "services/generation_core/drivers/svg/export_chart_style.py",
         "workers/public_svg_pptx_convert.py",
+        "workers/svg_common_header_export.py",
     )
 )
 
@@ -54,6 +55,10 @@ def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
     """
     converter_digest()
     capture = None
+    from workers.svg_common_header_export import CommonHeaderExport
+    width_emu, height_emu = canvas_physical_size(canvas)
+    source_pt_per_px = (0.75 if isinstance(canvas, AuthoredCanvasMetadata)
+                       else width_emu / 12700 / canvas.width_px)
     if native_coverage_sources is not None:
         if (source_preservation is not None or len(native_coverage_sources) != len(paths)
                 or not paths or any(not isinstance(source, str) for source in native_coverage_sources)):
@@ -62,6 +67,9 @@ def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
         # native table/chart groups. Both inputs are bound into the final proof.
         conversion_sources = [path.read_text(encoding="utf-8") for path in paths]
         trace_path = target.with_suffix(".native-ooxml-trace.json")
+    header_export = CommonHeaderExport(
+        native_coverage_sources if native_coverage_sources is not None
+        else [path.read_text(encoding="utf-8") for path in paths], source_pt_per_px)
     from services.generation_core.drivers.svg.export_scene import prepare_svg_pptx_inputs
     from services.svg_text_advance import text_advance
     sys.path.insert(0, str(VENDOR_ROOT))
@@ -77,6 +85,8 @@ def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
             canvas.width_px, canvas.height_px, width_emu, height_emu,
             legacy=isinstance(canvas, AuthoredCanvasMetadata), text_advance=text_advance,
         )
+        from svg_to_pptx.drawingml import converter as drawing_converter
+        header_export.install(drawing_converter)
         if native_coverage_sources is not None:
             from workers.public_svg_whole_page_convert import NativeOoxmlCapture
             from svg_to_pptx.drawingml import converter as drawing_converter
@@ -110,6 +120,7 @@ def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
     finally:
         if capture is not None:
             capture.restore()
+        header_export.restore()
         sys.path.remove(str(VENDOR_ROOT))
     if not success or not target.is_file():
         raise ValueError("svg_native_conversion_failed")
@@ -149,7 +160,12 @@ def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
             projectedSourceDigests=[source_digest(path.read_text(encoding="utf-8")) for path in paths],
             nativeObjectsDigest="sha256:" + canonical_json_sha256(readback["nativeObjects"]),
             officeRenderMeasured=False)
+        header_readback = header_export.verify(target)
+        if header_readback is not None:
+            coverage["commonHeaderReadback"] = header_readback
         readback["genericNativeCoverageOoxml"] = coverage
+    elif any(header_export.lines):
+        readback["commonHeaderReadback"] = header_export.verify(target)
     return readback
 
 

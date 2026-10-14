@@ -91,6 +91,14 @@ const IDEMPOTENCY_ERROR_MESSAGES: Record<string, string> = {
 };
 
 const SOURCE_SVG_ERROR_MESSAGES: Record<string, string> = {
+  svg_common_header_title_unresolved:
+    "상단에 넣을 페이지 제목을 확정하지 못했습니다. 각 페이지의 제목을 확인한 뒤 다시 시도해 주세요.",
+  svg_common_header_title_overflow:
+    "일부 제목이 공통 상단 영역에 들어가지 않습니다. 제목을 검토하거나 페이지별 자유 구성을 선택해 주세요.",
+  svg_common_header_body_space_unresolved:
+    "공통 상단 아래에 본문을 배치할 공간을 확보하지 못했습니다. 페이지 크기나 상단 구성을 확인해 주세요.",
+  svg_common_header_source_preservation_conflict:
+    "원본 페이지 보존과 상단 통일을 함께 사용할 수 없습니다. 원본 보존을 유지하려면 페이지별 자유 구성을 선택하고, 상단을 통일하려면 내용 재배치 모드를 선택하세요.",
   svg_source_chart_unsupported:
     "차트가 포함된 페이지는 현재 원본 보존 SVG로 재배치할 수 없습니다. 차트를 이미지로 바꾼 PPTX를 사용해 주세요.",
   svg_source_image_appearance_unsupported:

@@ -67,12 +67,48 @@ def _font_loaded(quality: Mapping) -> bool:
 
 
 def _authoring_ok(slide, quality: Mapping) -> bool:
-    return _receipt(slide).get("terminal") is None and quality.get("passed") is True
+    return (_receipt(slide).get("terminal") is None and quality.get("passed") is True
+            and _common_header_current(slide, quality))
+
+
+def _common_header_current(slide, quality: Mapping) -> bool:
+    from services.svg_common_header import GROUP_ID, TITLE_ID
+    from services.svg_master_furniture import attested_svg_furniture
+    from xml.etree import ElementTree as ET
+
+    furniture = _receipt(slide).get("system_furniture") or {}
+    generated = furniture.get("generated_common_header")
+    if not generated and GROUP_ID not in (slide.svg_content or ""):
+        return not quality.get("common_header")
+    try:
+        root = ET.fromstring(slide.svg_content or "")
+        has_header = any(node.get("id", "").startswith(GROUP_ID) for node in root.iter())
+        if not generated:
+            return not has_header and not quality.get("common_header")
+        evidence = quality.get("common_header") or {}
+        contract, page = generated["contract"], generated["page"]
+        if (not has_header or evidence.get("passed") is not True
+                or evidence.get("version") != "svg-common-header-render/v1"
+                or evidence.get("origin") != "generated-common-header"
+                or evidence.get("header_digest") != contract["digest"]
+                or evidence.get("title_digest") != page["title_digest"]
+                or evidence.get("page_digest") != page["digest"]
+                or evidence.get("body_box") != contract["body_box"]
+                or evidence.get("title_element_ids") != [TITLE_ID + f"-line-{index + 1}" for index in range(len(page["lines"]))]
+                or not any(node.get("id") == GROUP_ID for node in root)):
+            return False
+        source_contract = {node.get("href"): {"required": True} for node in root.iter()
+                           if node.tag.rsplit("}", 1)[-1] == "image" and node.get("href", "").startswith("source-slot-")}
+        registered = attested_svg_furniture(slide.svg_content, furniture,
+            source_manifest=source_contract or None, width=contract["canvas"]["width"], height=contract["canvas"]["height"])
+        return all(node.get("id") in registered for node in root.iter() if node.get("id", "").startswith(GROUP_ID))
+    except (KeyError, ValueError, TypeError, ET.ParseError):
+        return False
 
 
 def _geometry_ok(slide, quality: Mapping) -> bool:
     return (quality.get("measurement_complete") is True and quality.get("geometry_passed") is True
-            and _font_loaded(quality))
+            and _font_loaded(quality) and _common_header_current(slide, quality))
 
 
 def _page_domain(slides: Sequence, *, name: str, checker: str, page_ok, fields) -> dict:

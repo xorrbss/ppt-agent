@@ -129,6 +129,8 @@ export interface PresentationConfig {
   includeTableOfContents: boolean;
   includeTitleSlide: boolean;
   webSearch: boolean;
+  commonHeaderMode: "uniform" | "free";
+  commonHeaderCoverException: boolean;
   aspectRatio: "16:9" | "9:16" | "9:13" | "1:1" | "21:9" | "4:3";
   svgDesignReferenceSnapshotId?: string;
   svgDesignReferencePending?: boolean;

@@ -68,6 +68,8 @@ def build_internal_generation_request(
         language=request.language,
         template="authored",
         strategy=request.strategy,
+        common_header_mode=request.common_header_mode,
+        common_header_cover_exception=request.common_header_cover_exception,
         qualityProfile=(
             "release" if request.quality_policy == "release-v1" else "development"
         ),

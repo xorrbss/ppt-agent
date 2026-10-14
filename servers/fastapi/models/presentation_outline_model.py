@@ -1,6 +1,6 @@
 import re
 from typing import List
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_serializer
 
 #: Zero-width and invisible format characters. A constrained decoder that must
 #: reach a schema minimum length pads its string with these rather than with
@@ -16,6 +16,18 @@ def strip_invisible_format_chars(text: str) -> str:
 
 class SlideOutlineModel(BaseModel):
     content: str
+    title: str | None = None
+    common_header: dict | None = None
+
+    @model_serializer(mode="wrap")
+    def _serialize_optional_header(self, handler):
+        # Old outlines must retain their original JSON/digest when no header
+        # metadata was supplied, including through nested presentation dumps.
+        result = handler(self)
+        for key in ("title", "common_header"):
+            if result.get(key) is None:
+                result.pop(key, None)
+        return result
 
     @field_validator("content", mode="before")
     @classmethod

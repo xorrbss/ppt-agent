@@ -32,17 +32,28 @@ def attested_svg_furniture(svg: str, furniture_receipt: dict, *, source_manifest
         raise ValueError("svg_source_furniture_receipt_mismatch")
     root = ET.fromstring(svg)
     furniture_ids = furniture.get("element_ids", [])
-    groups = [node for node in root.iter() if node.get("id") == GROUP_ID]
-    if (len(groups) != 1 or not furniture.get("digest")
+    generated = furniture.get("generated_common_header")
+    group_ids = [GROUP_ID] if furniture.get("master_digest", furniture.get("digest")) else []
+    if generated:
+        from services.svg_common_header import GROUP_ID as HEADER_ID, render_common_header
+        expected = render_common_header(generated.get("contract"), generated.get("page"),
+            index=generated.get("index"), count=generated.get("count"))
+        if expected is None or generated.get("origin") != "generated-common-header":
+            raise ValueError("svg_common_header_digest_mismatch")
+        matches = [node for node in root.iter() if node.get("id") == HEADER_ID]
+        if len(matches) != 1 or _structure(matches[0]) != _structure(expected):
+            raise ValueError("svg_common_header_digest_mismatch")
+        group_ids.append(HEADER_ID)
+    groups = [node for node in root.iter() if node.get("id") in group_ids]
+    if (len(groups) != len(group_ids) or not groups or not furniture.get("digest")
             or not isinstance(furniture_ids, list) or not furniture_ids
             or any(not isinstance(node_id, str) or not node_id.startswith("svg-system-") for node_id in furniture_ids)
             or len(furniture_ids) != len(set(furniture_ids))):
         raise ValueError("svg_source_furniture_receipt_mismatch")
-    group = groups[0]
-    elements = {node.get("id"): node for node in group.iter()}
-    if (group.tag != f"{{{SVG_NS}}}g" or set(elements) != set(furniture_ids)
-            or len(elements) != len(list(group.iter()))
-            or set(furniture.get("images", {})) != {node.get("id") for node in group.iter()
+    elements = {node.get("id"): node for group in groups for node in group.iter()}
+    if (any(group.tag != f"{{{SVG_NS}}}g" for group in groups) or set(elements) != set(furniture_ids)
+            or len(elements) != sum(len(list(group.iter())) for group in groups)
+            or set(furniture.get("images", {})) != {node.get("id") for group in groups for node in group.iter()
                                                     if node.tag == f"{{{SVG_NS}}}image"}):
         raise ValueError("svg_source_furniture_receipt_mismatch")
     # Independently check image digests even on ordinary inline SVG, where the
@@ -54,7 +65,8 @@ def attested_svg_furniture(svg: str, furniture_receipt: dict, *, source_manifest
         if not href.startswith("data:image/") or sha256_prefixed(base64.b64decode(href.split(",", 1)[1], validate=True)) != digest:
             raise ValueError("svg_master_furniture_image_digest_mismatch")
     validate_svg(svg, width=width, height=height, source_manifest=source_manifest,
-                 allow_system_page_number=False, trusted_furniture_images=furniture.get("images"))
+                 allow_system_page_number=bool(generated and not furniture.get("master_digest")),
+                 trusted_furniture_images=furniture.get("images"))
     return elements
 
 
@@ -76,10 +88,13 @@ def attested_source_furniture(svg: str, receipt: dict) -> dict[str, ET.Element]:
 
 
 def master_furniture_receipt(svg: str, snapshot: dict, *, width: int, height: int,
-                             index: int, n: int, source_manifest=None) -> dict | None:
+                             index: int, n: int, source_manifest=None,
+                             header_page: dict | None = None) -> dict | None:
     """Attest only deterministic furniture actually stamped from an admitted snapshot."""
     furniture = master_furniture(snapshot)
-    if not furniture:
+    from services.svg_common_header import render_common_header
+    header = render_common_header(snapshot.get("common_header"), header_page, index=index, count=n)
+    if not furniture and header is None:
         return None
     from services.svg_contract import source_digest
 
@@ -92,17 +107,35 @@ def master_furniture_receipt(svg: str, snapshot: dict, *, width: int, height: in
     def structure(node):
         return (node.tag, sorted(node.attrib.items()), node.text or "", tuple(structure(child) for child in node))
 
-    actual = group_from(svg)
-    expected = group_from(stamp_master_furniture(svg, snapshot, index, n))
-    if structure(actual) != structure(expected):
-        raise ValueError("svg_source_furniture_receipt_mismatch")
-    images = {node.get("id") for node in actual.iter() if node.tag == f"{{{SVG_NS}}}image"}
+    groups = []
+    if furniture:
+        actual = group_from(svg)
+        expected = group_from(stamp_master_furniture(svg, snapshot, index, n))
+        if structure(actual) != structure(expected):
+            raise ValueError("svg_source_furniture_receipt_mismatch")
+        groups.append(actual)
+    generated = None
+    if header is not None:
+        matches = [node for node in ET.fromstring(svg).iter() if node.get("id") == header.get("id")]
+        if len(matches) != 1 or structure(matches[0]) != structure(header):
+            raise ValueError("svg_common_header_digest_mismatch")
+        groups.append(matches[0])
+        generated = {"origin": "generated-common-header", "contract": snapshot["common_header"],
+                     "page": header_page, "index": index, "count": n}
+    images = {node.get("id") for group in groups for node in group.iter() if node.tag == f"{{{SVG_NS}}}image"}
     receipt = {"version": "svg-system-furniture/v1", "svg_digest": source_digest(svg),
-               "canvas": {"width": width, "height": height}, "digest": furniture["digest"],
-               "element_ids": [node.get("id") for node in actual.iter()],
+               "canvas": {"width": width, "height": height},
+               "digest": furniture.get("digest") or snapshot["common_header"]["digest"],
+               "element_ids": [node.get("id") for group in groups for node in group.iter()],
                "images": {key: value for key, value in furniture_image_manifest(snapshot).items() if key in images}}
+    if generated:
+        receipt.update(master_digest=furniture.get("digest"), generated_common_header=generated)
     attested_svg_furniture(svg, receipt, source_manifest=source_manifest, width=width, height=height)
     return receipt
+
+
+def _structure(node):
+    return (node.tag, sorted(node.attrib.items()), node.text or "", tuple(_structure(child) for child in node))
 
 
 def stamp_master_furniture(svg: str, style_snapshot: dict | None, index: int, n: int) -> str:

@@ -147,6 +147,8 @@ export const useUploadPageState = ({
     includeTableOfContents: false,
     includeTitleSlide: false,
     webSearch: false,
+    commonHeaderMode: "uniform",
+    commonHeaderCoverException: false,
     pageSize: "A4",
     orientation: "landscape",
     aspectRatio: "16:9",
@@ -392,6 +394,10 @@ export const useUploadPageState = ({
    * @returns boolean indicating if the configuration is valid
    */
   const validateConfiguration = (selectedFiles: File[]): boolean => {
+    if (sourceContentMode && generationStrategy === "svg" && (config.commonHeaderMode ?? "uniform") === "uniform") {
+      notify.warning("상단 구성 선택 필요", "원본 보존은 기존 상단을 유지합니다. 페이지별 자유 구성으로 변경하거나 내용 재배치 모드를 선택하세요.");
+      return false;
+    }
     if (generationStrategy === "svg" && config.svgDesignReferencePending) {
       notify.warning("디자인 참고 등록 필요", "선택한 디자인 참고 파일을 등록하거나 선택을 해제해 주세요."); return false;
     }

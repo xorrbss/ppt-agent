@@ -9,6 +9,28 @@ HEADING_PATTERN = re.compile(r"^\s{0,3}#+\s*(.+)$", re.MULTILINE)
 FIRST_SENTENCE_PATTERN = re.compile(r"^\s*([^.?!]+?[.?!])", re.DOTALL)
 
 
+def explicit_outline_title(content: str) -> str | None:
+    """Reuse a single meaningful Markdown headline, never a body excerpt."""
+    headings = HEADING_PATTERN.findall(content or "")
+    if not headings:
+        return None
+    # Subheadings are body structure. Multiple headings at the first heading's
+    # level leave several possible display titles, so do not choose one.
+    matches = list(re.finditer(r"^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$", content or "", re.MULTILINE))
+    if not matches:
+        return None
+    level = len(matches[0].group(1))
+    candidates = [match.group(2).strip() for match in matches if len(match.group(1)) <= level]
+    if len(candidates) != 1:
+        return None
+    title = candidates[0]
+    if re.fullmatch(r"(?:(?:slide|page|슬라이드|페이지)\s*)?\d+[\s.:)\-]*", title, re.IGNORECASE):
+        return None
+    if not re.search(r"[A-Za-z가-힣\u3400-\u9fff]", title):
+        return None
+    return title
+
+
 def get_presentation_title_from_presentation_outline(
     presentation_outline: PresentationOutlineModel,
 ) -> str:

@@ -686,7 +686,7 @@ async def _remeasure_partial_cached_page(ctx, request, presentation_id, index, c
             index=index, content=content, payload=payload, svg=payload["svg_content"],
             ordinal=max(0, _provider_attempt_count(payload) - 1), job=job,
             checkpoint=guarded_checkpoint, async_session_maker=hooks.async_session_maker,
-            write_png=hooks.write_png)
+            write_png=hooks.write_png, allow_existing_common_header=True)
     verify_cached_page(payload, manifest, index, input_digest)
     if result is render.RETRY or payload.get("quality", {}).get("passed") is not True:
         raise AuthoredStageError(slide_index=index, stage="render",
@@ -706,13 +706,13 @@ async def _page(ctx, request, presentation_id, outline, language, job, index, st
         if state.fatal_error is not None:
             raise state.fatal_error
         content = outline.slides[index].content
-        page_input = {"content": content, "style": ctx.snapshot, "index": index,
-                      "count": ctx.count, "instructions": request.instructions,
-                      "language": language, "preset": request.codex_generation_preset}
-        if getattr(request, "writing_policy", None) is not None:
-            page_input["writing_policy"] = request.writing_policy
-        input_digest = _digest(page_input)
-        input_digest = _digest({"page": input_digest, "assets": ctx.manifests[index]})
+        from services.svg_generation_inputs import svg_page_input_digest
+        header_pages = getattr(ctx, "header_pages", None)
+        input_digest = svg_page_input_digest(content=content, style=ctx.snapshot,
+            index=index, count=ctx.count, instructions=request.instructions,
+            language=language, preset=request.codex_generation_preset,
+            assets=ctx.manifests[index], writing_policy=getattr(request, "writing_policy", None),
+            header_page=header_pages[index] if header_pages is not None else None)
         if ctx.source_reflow:
             input_digest = _digest({"page": input_digest,
                 "source_manifest": ctx.source_document.manifest_digest,
@@ -1031,7 +1031,7 @@ async def _remeasure_append_only_cache(ctx, request, presentation_id, index, con
     result = await render.attempt_render(ctx=ctx, request=request, presentation_id=presentation_id,
         index=index, content=content, payload=payload, svg=svg, ordinal=max(0, len(saved.get("attempts", []))-1),
         job=job, checkpoint=guarded_checkpoint, async_session_maker=hooks.async_session_maker,
-        write_png=hooks.write_png)
+        write_png=hooks.write_png, allow_existing_common_header=True)
     if result is render.RETRY or payload.get("quality", {}).get("passed") is not True:
         payload["append_only_cache"]["status"] = "failed"
         await guarded_checkpoint(job, index, payload=payload)

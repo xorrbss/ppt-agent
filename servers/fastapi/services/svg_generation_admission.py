@@ -38,6 +38,32 @@ def source_svg_capability(*, strategy: str | None, source_content: bool | None,
             "inputFormats": ["pptx"], "productVerified": False}
 
 
+def pin_fresh_common_header_mode(request: object) -> None:
+    """Pin fresh DTOs only; carriers and frozen worker restores keep absence."""
+    if ("common_header_mode" not in getattr(type(request), "model_fields", {})
+            or getattr(request, "common_header_mode", None) is not None
+            or getattr(request, "_svg_style_snapshot", None) is not None
+            or getattr(request, "_svg_authoring_profile_selected", False)):
+        return
+    request.common_header_mode = "uniform"
+    request._common_header_defaulted = True
+
+
+def _common_header_preservation_conflict(request: object) -> bool:
+    if getattr(request, "common_header_mode", None) != "uniform":
+        return False
+    if getattr(request, "source_mode", None) == "source_content_restyle":
+        return True
+    if getattr(request, "source_mode", None) != "raster_reconstruction":
+        return False
+    if getattr(request, "full_page_preserve_pages", ()):
+        return True
+    analysis = getattr(request, "_raster_analysis", None)
+    pages = analysis.get("pages", ()) if isinstance(analysis, dict) else getattr(analysis, "pages", ())
+    return any((page.get("render_mode") if isinstance(page, dict) else getattr(page, "render_mode", None))
+               == "full_page_preserve" for page in pages)
+
+
 def svg_creation_admission_violation(request: object) -> str | None:
     """First reason ``request`` would fail svg admission, or ``None`` if it passes.
 
@@ -93,6 +119,11 @@ def svg_creation_admission_violation(request: object) -> str | None:
 
 
 def require_svg_creation_admission(request: object) -> None:
+    if (getattr(request, "strategy", None) in (None, "svg")
+            and _common_header_preservation_conflict(request)):
+        # This is a conflicting user choice, not a reason to silently select
+        # another generation strategy through the capability predicate.
+        raise HTTPException(status_code=422, detail="svg_common_header_source_preservation_conflict")
     if getattr(request, "strategy", None) != "svg":
         return
     violation = svg_creation_admission_violation(request)
@@ -207,7 +238,9 @@ def pin_svg_style(request: object) -> dict:
     )
 
     frozen = getattr(request, "_svg_style_snapshot", None)
+    require_svg_creation_admission(request)
     if frozen is None:
+        pin_fresh_common_header_mode(request)
         fresh_readability = not getattr(request, "_svg_authoring_profile_selected", False)
         try:
             # Direct durable-payload callers also seal a known fresh count

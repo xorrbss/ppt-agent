@@ -85,6 +85,42 @@ def test_worker_native_page_elements_and_legacy_return_sequence(tmp_path):
         widths = [int(line.attrib["w"]) for line in slide.findall(".//a:ln", NS) if "w" in line.attrib]
         assert (12700 if a4 else 9525) in widths
 
+    # Exercise the production converter and its sealed OOXML readback, with
+    # one-line and wrapped titles sharing a frozen header and native text.
+    from models.presentation_outline_model import PresentationOutlineModel, SlideOutlineModel
+    from services.svg_common_header import prepare_common_header
+    from services.svg_contract import finalize_svg
+    canvas = canvas_metadata_for_aspect_ratio("16:9")
+    outline = PresentationOutlineModel(slides=[
+        SlideOutlineModel(content="운영 현황", title="운영 현황"),
+        SlideOutlineModel(content="승인 조건", title="승인 전 수정본은 공개하지 않고 게시본을 유지한다"),
+    ])
+    contract, bindings = prepare_common_header(
+        {"tokens": {}, "common_header": {"title_width_px": 470}}, outline, canvas)
+    sources, paths = [], []
+    for index, binding in enumerate(bindings):
+        source = finalize_svg('<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"><rect x="64" y="400" width="200" height="60" fill="#2563EB"/></svg>',
+            index=index, n=2, style_snapshot={"common_header": contract}, header_page=binding)
+        path = tmp_path / f"uniform-{index}.svg"
+        path.write_text(source, encoding="utf-8")
+        sources.append(source)
+        paths.append(path)
+    target = tmp_path / "uniform-editable.pptx"
+    result = convert_pptx(paths, target, ["", ""], canvas, native_coverage_sources=sources)
+    readback = result["genericNativeCoverageOoxml"]["commonHeaderReadback"]
+    assert readback["passed"] is True
+    assert [len(page["lines"]) for page in readback["pages"]] == [1, 2]
+    with zipfile.ZipFile(target) as archive:
+        for index, binding in enumerate(bindings):
+            slide = ET.fromstring(archive.read(f"ppt/slides/slide{index + 1}.xml"))
+            title_shapes = [shape for shape in slide.findall(".//p:sp", NS)
+                if "".join(node.text or "" for node in shape.findall(".//a:t", NS)) in binding["lines"]]
+            assert len(title_shapes) == len(binding["lines"])
+            for shape in title_shapes:
+                body_properties = shape.find("p:txBody/a:bodyPr", NS)
+                assert body_properties.find("a:noAutofit", NS) is not None
+                assert body_properties.find("a:spAutoFit", NS) is None
+
 
 @pytest.mark.parametrize(
     "orientation,width_pt,height_pt",

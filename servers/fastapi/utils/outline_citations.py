@@ -19,7 +19,6 @@ from urllib.parse import urlsplit
 
 from models.presentation_outline_model import (
     PresentationOutlineModel,
-    SlideOutlineModel,
 )
 
 # `[label](url)`, tolerating a bracketed URL and a markdown title, and the `!`
@@ -84,7 +83,7 @@ def strip_outline_citations(
     """The same removal across a whole outline, as a new model."""
     return PresentationOutlineModel(
         slides=[
-            SlideOutlineModel(content=strip_outline_citation_links(slide.content))
+            slide.model_copy(update={"content": strip_outline_citation_links(slide.content)})
             for slide in outline.slides
         ]
     )

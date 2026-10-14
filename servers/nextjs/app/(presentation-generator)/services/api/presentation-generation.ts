@@ -363,6 +363,8 @@ export class PresentationGenerationApi {
     include_table_of_contents,
     include_title_slide,
     web_search,
+    common_header_mode,
+    common_header_cover_exception,
     aspect_ratio,
     page_size,
     orientation,
@@ -386,6 +388,8 @@ export class PresentationGenerationApi {
     include_table_of_contents?: boolean;
     include_title_slide?: boolean;
     web_search?: boolean;
+    common_header_mode?: "uniform" | "free";
+    common_header_cover_exception?: boolean;
     aspect_ratio?: "16:9" | "9:16" | "9:13" | "1:1" | "21:9" | "4:3";
     svg_canvas?: { width_mm: number; height_mm: number };
     svg_design_reference_snapshot_id?: string;
@@ -419,6 +423,7 @@ export class PresentationGenerationApi {
             include_table_of_contents,
             include_title_slide,
             web_search,
+            ...(strategy === "svg" && common_header_mode ? { common_header_mode, common_header_cover_exception: common_header_cover_exception ?? false } : {}),
             ...(svg_canvas ? { svg_canvas } : page_size && orientation
               ? { page_size, orientation }
               : { aspect_ratio }),
@@ -741,6 +746,8 @@ export class PresentationGenerationApi {
       slides_markdown?: string[];
       vision_qa?: boolean;
       strategy?: "authored" | "svg";
+      common_header_mode?: "uniform" | "free";
+      common_header_cover_exception?: boolean;
       authored_style?: string;
       aspect_ratio?: "16:9" | "9:16" | "9:13" | "1:1" | "21:9" | "4:3";
       svg_canvas?: { width_mm: number; height_mm: number };
@@ -784,6 +791,10 @@ export class PresentationGenerationApi {
             ...generationPreferencesPayload(body),
             template: "authored",
             strategy: resolvedStrategy,
+            ...(resolvedStrategy === "svg" && body.common_header_mode ? {
+              common_header_mode: body.common_header_mode,
+              common_header_cover_exception: body.common_header_cover_exception ?? false,
+            } : {}),
             export_as: "pptx",
             // Export refuses a "development" receipt in every format.
             qualityProfile: "release",

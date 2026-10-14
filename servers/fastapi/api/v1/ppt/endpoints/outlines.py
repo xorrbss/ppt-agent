@@ -1,11 +1,13 @@
 import asyncio
 import json
 import logging
+import re
 import traceback
 import uuid
 import dirtyjson
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.content_brief_policy import (
@@ -15,6 +17,7 @@ from services.content_brief_policy import (
     run_content_brief_with_policy,
 )
 from models.presentation_outline_model import PresentationOutlineModel
+from models.sql.workspace import WorkspaceOperation, get_workspace_owner_scope
 from services.public_operation_deadline_scope import remaining_public_operation_seconds
 from models.sse_response import (
     SSECompleteResponse,
@@ -40,6 +43,7 @@ from utils.document_context import (
 )
 from utils.llm_utils import message_content_to_text
 from utils.outline_utils import (
+    explicit_outline_title,
     get_no_of_outlines_to_generate_for_n_slides,
     get_presentation_title_from_presentation_outline,
 )
@@ -57,6 +61,44 @@ from utils.sse_heartbeat import (
 
 OUTLINES_ROUTER = APIRouter(prefix="/outlines", tags=["Outlines"])
 LOGGER = logging.getLogger(__name__)
+
+
+async def _outline_common_header_mode(session, presentation) -> str:
+    """Read the same staged, owner-scoped generation choice as bootstrap."""
+    if not presentation.is_svg():
+        return "free"
+    operation = await session.scalar(select(WorkspaceOperation).where(
+        WorkspaceOperation.presentation_id == presentation.id,
+        WorkspaceOperation.owner_scope == get_workspace_owner_scope(),
+        WorkspaceOperation.kind == "presentation.generate",
+        WorkspaceOperation.state == "awaiting_approval",
+        WorkspaceOperation.expected_revision == presentation.revision,
+    ))
+    settings = (operation.request_payload or {}).get("generation_settings", {}) if operation else {}
+    if not isinstance(settings, dict):
+        raise ValueError("svg_common_header_mode_invalid")
+    mode = settings.get("common_header_mode")
+    if mode is None:
+        return "free"
+    if mode not in {"uniform", "free"}:
+        raise ValueError("svg_common_header_mode_invalid")
+    return mode
+
+
+def _retain_outline_header_titles(outline) -> None:
+    """Keep titles in Markdown as the UI forwards content-only outlines."""
+    for slide in outline.slides:
+        title = slide.title
+        if not isinstance(title, str) or not title.strip() or "\n" in title or "\r" in title:
+            raise ValueError("svg_common_header_title_unresolved")
+        headline = explicit_outline_title(slide.content)
+        if headline == title:
+            continue
+        if re.search(r"^\s{0,3}#{1,6}\s+", slide.content, re.MULTILINE):
+            raise ValueError("svg_common_header_title_unresolved")
+        # Add only the separate display title; every original body character
+        # survives the content-only UI handoff unchanged.
+        slide.content = f"## {title}\n\n{slide.content}"
 
 
 @OUTLINES_ROUTER.get("/stream/{id}")
@@ -77,6 +119,7 @@ async def stream_outlines(
     # evaluation and still re-raises unsupported/unavailable runtimes.
     presentation = await require_live_presentation(sql_session, id)
     await require_outline_bootstrap_write_path(sql_session, presentation)
+    common_header_mode = await _outline_common_header_mode(sql_session, presentation)
 
     temp_dir = TEMP_FILE_SERVICE.create_temp_dir()
 
@@ -233,6 +276,7 @@ async def stream_outlines(
             presentation.include_title_slide,
             presentation.include_table_of_contents,
             canvas_budget,
+            common_header_mode=common_header_mode,
         )
         await MEM0_PRESENTATION_MEMORY_SERVICE.store_generation_context(
             presentation_id=presentation.id,
@@ -264,6 +308,7 @@ async def stream_outlines(
             presentation.include_table_of_contents,
             disconnect_checker=request.is_disconnected,
             canvas_budget=canvas_budget,
+            common_header_mode=common_header_mode,
         ):
             # Give control to the event loop
             await asyncio.sleep(0)
@@ -296,6 +341,12 @@ async def stream_outlines(
         # also eats the slide's text budget, so it goes before the outline is
         # stored or shown. The label stays, so the citation still reads as one.
         presentation_outlines = strip_outline_citations(presentation_outlines)
+        if common_header_mode == "uniform":
+            try:
+                _retain_outline_header_titles(presentation_outlines)
+            except ValueError as error:
+                yield SSEErrorResponse(detail=str(error)).to_string()
+                return
 
         # Only undershooting is fatal. Overshooting is trimmed by the slice just
         # below, which this check used to make unreachable for that case.

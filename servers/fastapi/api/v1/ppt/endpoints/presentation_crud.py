@@ -396,6 +396,8 @@ async def create_presentation(
     include_title_slide: Annotated[bool, Body()] = True,
     web_search: Annotated[bool, Body()] = False,
     strategy: Annotated[Literal["authored", "svg"], Body()] = "svg",
+    common_header_mode: Annotated[Optional[Literal["uniform", "free"]], Body()] = None,
+    common_header_cover_exception: Annotated[bool, Body()] = False,
     theme: Annotated[Optional[dict], Body()] = None,
     aspect_ratio: Annotated[Literal["16:9", "4:3", "9:16", "9:13", "1:1", "21:9"], Body()] = "16:9",
     page_size: Annotated[Optional[Literal["A4"]], Body()] = None,
@@ -417,6 +419,10 @@ async def create_presentation(
     )
     if (svg_design_reference_pin is not None or svg_design_reference_snapshot_id is not None) and strategy != "svg":
         raise HTTPException(status_code=422, detail="svg_design_reference_strategy_required")
+    if common_header_mode is not None and strategy != "svg":
+        raise HTTPException(status_code=422, detail="common_header_svg_strategy_required")
+    if common_header_cover_exception and common_header_mode != "uniform":
+        raise HTTPException(status_code=422, detail="common_header_cover_exception_requires_uniform")
     if svg_design_reference_pin is not None and svg_design_reference_snapshot_id is not None:
         raise HTTPException(status_code=422, detail="svg_design_reference_conflict")
     if svg_design_reference_snapshot_id is not None:
@@ -566,6 +572,9 @@ async def create_presentation(
             "web_search": web_search,
             "aspect_ratio": aspect_ratio,
         }
+        if strategy == "svg" and common_header_mode is not None:
+            settings["common_header_mode"] = common_header_mode
+            settings["common_header_cover_exception"] = common_header_cover_exception
         if page_size == "A4":
             settings.pop("aspect_ratio")
             settings.update({"page_size": page_size, "orientation": orientation})

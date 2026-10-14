@@ -104,6 +104,7 @@ class GeneratePresentationRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     _request_id: Optional[str] = PrivateAttr(default=None)
+    _common_header_defaulted: bool = PrivateAttr(default=False)
     _authored_exact_snapshot_id: Optional[str] = PrivateAttr(default=None)
     _authored_master_pin: Any = PrivateAttr(default=None)
     _authored_master_contract: Any = PrivateAttr(default=None)
@@ -215,6 +216,9 @@ class GeneratePresentationRequest(BaseModel):
     @model_serializer(mode="wrap")
     def serialize_canvas_selectors(self, handler):
         payload = handler(self)
+        if self.common_header_mode is None:
+            payload.pop("common_header_mode", None)
+            payload.pop("common_header_cover_exception", None)
         if self.svg_canvas is not None:
             for key in ("aspect_ratio", "page_size", "orientation"):
                 payload.pop(key, None)
@@ -245,6 +249,12 @@ class GeneratePresentationRequest(BaseModel):
             "services.generation_core.admission.resolve_generation_strategy."
         ),
     )
+    # None is the historical request contract. Fresh SVG admission pins an
+    # explicit choice; restoring an older durable job must keep None.
+    common_header_mode: Optional[Literal["uniform", "free"]] = Field(
+        default=None, exclude_if=lambda value: value is None,
+    )
+    common_header_cover_exception: bool = False
     generation_mode: GenerationMode = Field(
         default="auto",
         alias="generationMode",
@@ -348,6 +358,10 @@ class GeneratePresentationRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_generation_mode(self) -> "GeneratePresentationRequest":
+        if self.common_header_mode is not None and self.strategy == "authored":
+            raise ValueError("common_header_svg_strategy_required")
+        if self.common_header_cover_exception and self.common_header_mode != "uniform":
+            raise ValueError("common_header_cover_exception_requires_uniform")
         references = (self.master_pin, self.svg_design_reference_pin, self.svg_design_reference_snapshot_id)
         if (self.svg_design_reference_pin is not None or self.svg_design_reference_snapshot_id is not None) and sum(value is not None for value in references) > 1:
             raise ValueError("svg_design_reference_conflict")

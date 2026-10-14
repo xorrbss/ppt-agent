@@ -215,6 +215,16 @@ const UploadPage = ({
   if (generationAttemptActive && rasterReview) return (
     <Wrapper className="max-w-none pb-20">
       <main className="mx-auto max-w-7xl px-4 pt-8 sm:px-6">
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
+          <label htmlFor="raster-common-header-mode">페이지 상단</label>
+          <select id="raster-common-header-mode" value={config.commonHeaderMode ?? "uniform"} onChange={(event) => handleConfigChange("commonHeaderMode", event.target.value)} className="rounded border border-slate-200 bg-white px-2 py-1.5">
+            <option value="uniform">상단 통일</option>
+            <option value="free">페이지별 자유 구성</option>
+          </select>
+          {(config.commonHeaderMode ?? "uniform") === "uniform" ? <label className="flex items-center gap-1.5"><input type="checkbox" checked={config.commonHeaderCoverException ?? false} onChange={(event) => handleConfigChange("commonHeaderCoverException", event.target.checked)} />표지 제외</label> : null}
+          <span className="text-slate-500">원본 화면을 그대로 보존하는 페이지가 있으면 페이지별 자유 구성을 선택하세요.</span>
+          {(config.commonHeaderMode ?? "uniform") === "uniform" && rasterReview.pages.some((page) => page.renderMode === "full_page_preserve") ? <p className="basis-full text-amber-700" role="alert">원본 화면을 그대로 보존하는 페이지에는 상단 통일을 적용할 수 없습니다. 페이지별 자유 구성을 선택하세요.</p> : null}
+        </div>
         <RasterSourceReview
           analysis={rasterReview}
           variant={rasterAnalysisMode === "auto_redesign" ? "redesign" : "manual"}
