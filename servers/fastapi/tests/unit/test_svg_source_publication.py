@@ -71,6 +71,59 @@ def test_source_publication_preserves_verified_svg_and_rejects_mutations(monkeyp
         asyncio.run(mutations.refresh_svg_page_numbers(session, presentation))
         assert [(slide.svg_content, slide.content) for slide in slides] == originals
     if mutation is None:
+        from models.presentation_outline_model import PresentationOutlineModel, SlideOutlineModel
+        from services.svg_common_header import prepare_common_header
+        from services.svg_contract import finalize_svg
+
+        outline = PresentationOutlineModel(slides=[
+            SlideOutlineModel(content="Source Alpha", title="Alpha"),
+            SlideOutlineModel(content="Source Beta", title="Beta", title_source_digest="sha256:" + "b" * 64),
+        ])
+        header, bindings = prepare_common_header({"tokens": {}}, outline,
+                                                 {"width": canvas.width_px, "height": canvas.height_px})
+        snapshot = {"tokens": {}, "common_header": header}
+        uniform_slides = []
+        body = ('<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">'
+                '<text x="64" y="220" font-family="Noto Sans KR" font-size="24" fill="#111">Body content</text></svg>')
+        for index, (page, binding) in enumerate(zip(outline.slides, bindings, strict=True)):
+            page.common_header = binding
+            final = finalize_svg(body, index=index, n=2, style_snapshot=snapshot, header_page=binding)
+            uniform_slides.append(SimpleNamespace(index=index, svg_content=final, is_svg=lambda: True,
+                properties={"image": f"page-{index}.png"},
+                content={"source": page.content, "svgReceipt": {"png_sha256": f"png-{index}", "quality": {
+                    "passed": True, "verified": True, "classification": "passed",
+                    "common_header": {"passed": True, "header_digest": binding["header_digest"],
+                                      "title_digest": binding["title_digest"], "page_digest": binding["digest"]}}}}))
+        uniform = SimpleNamespace(id="uniform", theme={"svg": {"styleSnapshot": snapshot}},
+                                  outlines=outline.model_dump(mode="json"), is_svg=lambda: True)
+        uniform_session = SimpleNamespace(flush=AsyncMock(), scalars=AsyncMock(return_value=uniform_slides),
+                                          add=lambda _row: None)
+        before = [(slide.svg_content, deepcopy(slide.content), deepcopy(slide.properties)) for slide in uniform_slides]
+        frozen_inputs = deepcopy((snapshot, uniform.outlines))
+        monkeypatch.setattr(mutations, "finalize_svg", finalize_svg)
+        monkeypatch.setattr(mutations, "read_svg_slide_assets", AsyncMock(return_value=None))
+        monkeypatch.setattr(mutations, "render_svg_with_metrics", AsyncMock(side_effect=forbidden))
+        monkeypatch.setattr(mutations, "_save_slide_pngs", forbidden)
+        asyncio.run(mutations.refresh_svg_page_numbers(uniform_session, uniform))
+        assert [(slide.svg_content, slide.content, slide.properties) for slide in uniform_slides] == before
+        assert (snapshot, uniform.outlines) == frozen_inputs
+        mutations.render_svg_with_metrics.assert_not_awaited()
+        uniform_slides.reverse()
+        for index, slide in enumerate(uniform_slides):
+            slide.index = index
+        with pytest.raises(ValueError, match="svg_common_header_source_mismatch"):
+            asyncio.run(mutations.refresh_svg_page_numbers(uniform_session, uniform))
+        uniform_slides.reverse()
+        for index, slide in enumerate(uniform_slides):
+            slide.index = index
+        uniform.outlines["slides"][1]["title_source_digest"] = "changed"
+        with pytest.raises(ValueError, match="svg_common_header_source_mismatch"):
+            asyncio.run(mutations.refresh_svg_page_numbers(uniform_session, uniform))
+        uniform.outlines = deepcopy(frozen_inputs[1])
+        uniform.outlines["slides"][1].pop("common_header")
+        with pytest.raises(ValueError, match="svg_common_header"):
+            asyncio.run(mutations.refresh_svg_page_numbers(uniform_session, uniform))
+
         async def check_recovery_source_read():
             import uuid
             from datetime import datetime, timedelta, timezone

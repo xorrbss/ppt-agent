@@ -177,9 +177,32 @@ async def refresh_svg_page_numbers(session, presentation, *, operation_id=None, 
     snapshot = presentation.theme.get("svg", {}).get("styleSnapshot")
     if not snapshot:
         raise ValueError("svg_style_snapshot_required")
+    header_outline = None
+    if snapshot.get("common_header") is not None:
+        from services.svg_common_header import validate_common_header_outline
+
+        stored = getattr(presentation, "outlines", None)
+        header_outline = stored.get("slides") if isinstance(stored, dict) else None
+        if not isinstance(header_outline, list) or len(header_outline) != len(slides):
+            raise ValueError("svg_common_header_binding_incomplete")
+        validate_common_header_outline(snapshot, stored)
     for index, slide in enumerate(slides):
         if not slide.is_svg() or not slide.svg_content:
             raise ValueError("svg_document_mixed_source")
+        header_page = None
+        if header_outline is not None:
+            page = header_outline[index]
+            header_page = page["common_header"]
+            content = slide.content or {}
+            if (slide.index != index or content.get("source") != page["content"]
+                    or page.get("title_source_digest") != header_page.get("title_source_digest")):
+                raise ValueError("svg_common_header_source_mismatch")
+            if header_page.get("applied"):
+                measured = ((content.get("svgReceipt") or {}).get("quality") or {}).get("common_header") or {}
+                if (measured.get("passed") is not True
+                        or any(measured.get(key) != header_page[value] for key, value in
+                               (("header_digest", "header_digest"), ("page_digest", "digest"), ("title_digest", "title_digest")))):
+                    raise ValueError("svg_common_header_digest_mismatch")
         if _raster_redesign_pin(slide) is not None:
             # Retain the raster footer style and source page. The relabel
             # path remeasures its authorized derivative before publication.
@@ -205,7 +228,9 @@ async def refresh_svg_page_numbers(session, presentation, *, operation_id=None, 
                                if slot in offered}
         final = finalize_svg(slide.svg_content, index=index, n=len(slides), width=canvas.width_px,
                              height=canvas.height_px, style_snapshot=snapshot,
-                             source_manifest=source_manifest)
+                             source_manifest=source_manifest,
+                             **({"header_page": header_page, "allow_existing_common_header": True}
+                                if header_page is not None else {}))
         render_source = final
         content = deepcopy(slide.content or {})
         if assets is not None and (final != slide.svg_content or
