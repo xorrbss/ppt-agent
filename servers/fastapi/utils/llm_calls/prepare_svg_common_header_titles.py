@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from copy import copy
 
 from llmai import get_client
 from llmai.shared import JSONSchemaResponse, SystemMessage, UserMessage
@@ -66,8 +67,8 @@ def validate_header_title_capacity(payload: dict, *, plan: dict) -> None:
         raise ValueError("svg_common_header_title_capacity_exceeded")
 
 
-async def prepare_svg_common_header_titles(payload: dict, *, plan: dict) -> dict:
-    """Reuse configured SDK and accounting with exactly one physical-call budget.
+def build_svg_common_header_title_call(payload: dict, *, plan: dict):
+    """Prepare a configured single-call callback without provider generation I/O.
 
     This path deliberately bypasses schema repair/compaction/clamping, since
     those can shorten mandatory title meaning. Validation belongs to the caller.
@@ -81,16 +82,37 @@ async def prepare_svg_common_header_titles(payload: dict, *, plan: dict) -> dict
     # boundary, so fail closed before entering spend-capable I/O.
     if not callable(getattr(getattr(client, "_client", None), "with_options", None)):
         raise ValueError("svg_common_header_title_single_call_transport_unavailable")
+    try:
+        prepared_transport = client._client.with_options(
+            max_retries=0, timeout=plan["call_timeout_seconds"])
+    except (TypeError, ValueError) as error:
+        raise ValueError("svg_common_header_title_single_call_transport_unavailable") from error
+    client = copy(client)
+    client._client = prepared_transport
     schema = header_title_response_schema(payload)
-    result = await _generate_structured_content_with_transient_retries(
-        client, disconnect_checker=None,
-        semantic_slot="header-titles-" + plan["plan_digest"].removeprefix("sha256:"),
-        call_budget=StructuredProviderCallBudget(limit=1),
-        call_timeout_seconds=plan["call_timeout_seconds"],
-        **get_generate_kwargs(model=get_model(), messages=header_title_messages(payload, plan),
+    kwargs = get_generate_kwargs(model=get_model(), messages=header_title_messages(payload, plan),
             max_tokens=plan["output_token_limit"],
-            response_format=JSONSchemaResponse(name="header_titles", json_schema=schema, strict=True)),
-    )
-    if not isinstance(result, dict):
-        raise ValueError("svg_common_header_title_response_invalid")
-    return result
+            response_format=JSONSchemaResponse(name="header_titles", json_schema=schema, strict=True))
+    expected_payload = json.loads(json.dumps(payload, ensure_ascii=False))
+    expected_plan = dict(plan)
+    budget = StructuredProviderCallBudget(limit=1)
+
+    async def execute(payload: dict, *, plan: dict) -> dict:
+        if payload != expected_payload or plan != expected_plan:
+            raise ValueError("svg_common_header_title_plan_conflict")
+        if budget.remaining != 1:
+            raise ValueError("svg_common_header_title_call_limit_exceeded")
+        result = await _generate_structured_content_with_transient_retries(
+            client, disconnect_checker=None,
+            semantic_slot="header-titles-" + plan["plan_digest"].removeprefix("sha256:"),
+            call_budget=budget, call_timeout_seconds=plan["call_timeout_seconds"], **kwargs)
+        if not isinstance(result, dict):
+            raise ValueError("svg_common_header_title_response_invalid")
+        return result
+
+    return execute
+
+
+async def prepare_svg_common_header_titles(payload: dict, *, plan: dict) -> dict:
+    """Compatibility entry point; durable callers build before starting a slot."""
+    return await build_svg_common_header_title_call(payload, plan=plan)(payload, plan=plan)

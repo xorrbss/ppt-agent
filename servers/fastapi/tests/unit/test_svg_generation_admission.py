@@ -265,6 +265,164 @@ def test_external_header_titles_checkpoint_one_call_resume_unknown_and_source_gu
     assert len(calls) == 2
 
 
+def test_title_only_terminal_retry_consumes_known_financial_history(monkeypatch):
+    import asyncio
+    from copy import deepcopy
+    from datetime import datetime, timedelta, timezone
+
+    from models.presentation_outline_model import PresentationOutlineModel, SlideOutlineModel
+    from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
+    from models.sql.public_admission import (
+        AuthoredDeckPlanCheckpoint, PublicOperationAdmission, PublicProviderLogicalCall,
+    )
+    from models.sql.workspace import WorkspaceOperation
+    from services import presentation_generation_pipeline as pipeline
+    from services.authored_canvas import canvas_metadata_for_aspect_ratio
+    from services.authored_deck_plan_checkpoint import canonical_checkpoint_digest
+    from services.public_operation_admission_models import _logical_call_ordinal
+    from services.svg_common_header import header_snapshot_base, prepare_common_header
+    from services.svg_common_header_title_budget import (
+        INTERNAL_HEADER_TITLE_PLAN_KEY, seal_new_external_header_title_plan,
+    )
+    from services.svg_common_header_titles import _validated_result
+    from utils.hashing import canonical_json_digest, sha256_hex
+
+    source = "# 원본 1페이지\n운영 계획은 검토 중이다."
+    request = GeneratePresentationRequest(
+        content="입력 문서 재구성", template="authored", strategy="svg",
+        common_header_mode="uniform", slides_markdown=[source],
+    )
+    plan = seal_new_external_header_title_plan(request)
+    source_operation_id, child_operation_id = uuid.uuid4(), uuid.uuid4()
+    presentation_id, owner_id, conversation_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    job_id, admission_id = uuid.uuid4(), uuid.uuid4()
+    original = PresentationOutlineModel(slides=[SlideOutlineModel(content=source)])
+    title_payload = {"source_digest": plan["source_digest"], "page_count": 1,
+                     "pages": [{"page_index": 0, "source_digest":
+                                canonical_json_digest(source), "content": source}]}
+    result = _validated_result({"source_digest": plan["source_digest"], "page_count": 1,
+        "titles": [{"page_index": 0, "source_digest": title_payload["pages"][0]["source_digest"],
+                    "title": "운영 계획", "source_quote": "운영 계획"}]}, title_payload)
+    original.slides[0].title = result["titles"][0]["title"]
+    original.slides[0].title_source_digest = canonical_json_digest(result["titles"][0])
+    base_style = {"tokens": {}}
+    base_style["digest"] = canonical_json_digest({"tokens": {}}, allow_nan=True)
+    contract, bindings = prepare_common_header(
+        base_style, original, canvas_metadata_for_aspect_ratio("16:9"),
+    )
+    original.slides[0].common_header = bindings[0]
+    frozen_style = {**base_style, "common_header": contract}
+    frozen_style["digest"] = canonical_json_digest(
+        {key: value for key, value in frozen_style.items() if key != "digest"},
+        allow_nan=True,
+    )
+    generation_payload = {**request.model_dump(mode="json"), "strategy": "svg",
+        INTERNAL_HEADER_TITLE_PLAN_KEY: plan,
+        "_internal_svg_style_snapshot": header_snapshot_base(frozen_style)}
+    request_digest = pipeline.request_sha256(generation_payload)
+    checkpoint_identity = {"job_id": str(job_id), "request_digest": request_digest,
+        "workspace_operation_id": str(source_operation_id), "plan_digest": plan["plan_digest"]}
+    checkpoint_payload = {"version": "svg-common-header-title-batch/v1",
+        "identity": checkpoint_identity, "state": "succeeded", "result": result}
+    checkpoint = SimpleNamespace(
+        input_digest=canonical_checkpoint_digest(checkpoint_identity),
+        output_digest=canonical_checkpoint_digest(checkpoint_payload),
+        payload=checkpoint_payload, produced_attempt_number=1,
+    )
+    job = SimpleNamespace(
+        id=job_id, presentation_id=presentation_id, workspace_operation_id=source_operation_id,
+        request_payload=generation_payload, request_sha256=request_digest,
+        completed_slides=0, total_slides=1, attempt_number=1,
+        authored_outline=original.model_dump(mode="json"), svg_style_snapshot=frozen_style,
+    )
+    now = datetime.now(timezone.utc)
+    deadline = now + timedelta(hours=1)
+    source_operation = SimpleNamespace(
+        id=source_operation_id, owner_id=owner_id, owner_scope="owner", tenant_id="tenant",
+        presentation_id=presentation_id, conversation_id=conversation_id,
+        kind="presentation.generate", state="failed", fencing_token=1,
+        attempt_number=1,
+        contract_version="public-operation/v2", execution_profile_version="public-generation-export/v2",
+        deadline_at=deadline, retry_of_operation_id=None,
+        request_payload={"job_id": str(job_id), "generation_request": generation_payload},
+    )
+    child_operation = SimpleNamespace(
+        id=child_operation_id, retry_of_operation_id=source_operation_id,
+        owner_id=owner_id, owner_scope="owner", presentation_id=presentation_id,
+        conversation_id=conversation_id, kind="presentation.generate",
+        request_payload={"generation_request": generation_payload},
+    )
+    admission = SimpleNamespace(
+        id=admission_id, owner_id=owner_id, tenant_id="tenant", operation_kind="generation",
+        state="failed", fence=1, deadline_at=deadline, slide_count=1,
+        initial_request_count=1, retry_request_count=0,
+        estimated_reserved_microunits=0, actual_reserved_microunits=0,
+        actual_cost_unavailable_count=0, estimated_consumed_microunits=20,
+        actual_consumed_microunits=10, planned_request_limit=5, retry_request_limit=2,
+        estimated_cost_limit_microunits=100, actual_cost_limit_microunits=100,
+    )
+    slot = "header-titles-" + plan["plan_digest"].removeprefix("sha256:") + ".attempt-1"
+    ordinal = _logical_call_ordinal(
+        operation_id=source_operation_id, stage="outline", slide_index=-1,
+        logical_call_ordinal=None, logical_call_key=slot,
+    )
+    key_hash = sha256_hex(
+        f"public-provider-call/v2:{source_operation_id}:outline:-1:{ordinal}:"
+        f"{sha256_hex(slot.encode())}".encode()
+    )
+    call = SimpleNamespace(
+        stage="outline", slide_index=-1, retry_class="initial", state="reported",
+        outcome="succeeded", reconciled_at=now, actual_cost_microunits=10,
+        estimated_cost_microunits=20, provider_id="openai", model_id="model",
+        logical_call_ordinal=ordinal, idempotency_key_hash=key_hash,
+    )
+
+    class HistorySession:
+        async def scalar(self, statement):
+            entity = statement.column_descriptions[0]["entity"]
+            return {WorkspaceOperation: source_operation,
+                    PublicOperationAdmission: admission,
+                    pipeline.PresentationGenerationJob: job,
+                    AuthoredDeckPlanCheckpoint: checkpoint}[entity]
+
+        async def scalars(self, statement):
+            entity = statement.column_descriptions[0]["entity"]
+            return {PublicProviderLogicalCall: [call],
+                    AuthoredSlideCheckpoint: []}[entity]
+
+    monkeypatch.setattr(pipeline, "current_principal_context",
+                        lambda: SimpleNamespace(owner_id=owner_id, tenant_id="tenant"))
+    session = HistorySession()
+
+    def bounds():
+        return asyncio.run(pipeline._unused_terminal_generation_retry_budget(
+            session, source_operation=source_operation, operation=child_operation,
+        ))
+
+    assert bounds() == (4, 2, 80, 90)
+    for state in ("unavailable", "reserved"):
+        call.state = state
+        with pytest.raises(HTTPException, match="generation_retry_provider_history_present"):
+            bounds()
+    call.state = "reported"
+    call.stage = "author"
+    with pytest.raises(HTTPException, match="generation_retry_provider_history_present"):
+        bounds()
+    call.stage = "outline"
+    original_result = deepcopy(checkpoint.payload["result"])
+    checkpoint.payload["result"]["titles"][0]["title"] = "다른 제목"
+    with pytest.raises(HTTPException, match="generation_retry_provider_history_present"):
+        bounds()
+    checkpoint.payload["result"] = original_result
+    job.request_payload["slides_markdown"][0] = source + "\n변경"
+    with pytest.raises(HTTPException, match="generation_retry_provider_history_present"):
+        bounds()
+    job.request_payload["slides_markdown"][0] = source
+    admission.planned_request_limit = 1
+    with pytest.raises(HTTPException, match="generation_retry_provider_history_present"):
+        bounds()
+
+
 @pytest.mark.parametrize("slide_count", [1, 2, 5, 6, 12, 80])
 def test_restoration_policy_reserves_final_review_without_changing_legacy(slide_count):
     from copy import deepcopy

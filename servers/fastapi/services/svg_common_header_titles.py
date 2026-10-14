@@ -145,7 +145,7 @@ def _restore_result(result: object, payload: dict) -> dict:
     return result
 
 
-async def _checkpoint(request, job, plan, *, session_maker, owned_job, terminal=None):
+async def _checkpoint(request, job, plan, *, session_maker, owned_job, terminal=None, reserve=True):
     async with session_maker() as session:
         current = await owned_job(session, job.id, job.attempt_token,
                                   fencing_token=getattr(job, "_workspace_fencing_token", None))
@@ -186,6 +186,8 @@ async def _checkpoint(request, job, plan, *, session_maker, owned_job, terminal=
             return None
         if terminal is not None:
             raise ValueError("svg_common_header_title_checkpoint_missing")
+        if not reserve:
+            return None
         stored = {"version": _VERSION, "identity": identity, "state": "started"}
         session.add(AuthoredDeckPlanCheckpoint(generation_job_id=job.id, stage="header", input_digest=digest,
             output_digest=canonical_checkpoint_digest(stored), payload=stored,
@@ -211,14 +213,16 @@ async def prepare_missing_header_titles(request, job, outline, *, session_maker,
                "pages": [{key: page[key] for key in ("page_index", "source_digest", "content")}
                          for page in pages if page["page_index"] in missing]}
     from utils.llm_calls.prepare_svg_common_header_titles import (
-        prepare_svg_common_header_titles, validate_header_title_capacity,
+        build_svg_common_header_title_call, validate_header_title_capacity,
     )
     validate_header_title_capacity(payload, plan=plan)
-    result = await _checkpoint(request, job, plan, session_maker=session_maker, owned_job=owned_job)
+    result = await _checkpoint(request, job, plan, session_maker=session_maker, owned_job=owned_job, reserve=False)
+    if result is None:
+        callback = provider_callback or build_svg_common_header_title_call(payload, plan=plan)
+        result = await _checkpoint(request, job, plan, session_maker=session_maker, owned_job=owned_job)
     if result is not None:
         result = _restore_result(result, payload)
     else:
-        callback = provider_callback or prepare_svg_common_header_titles
         try:
             with provider_usage_scope(job_id=job.id, operation="generate", stage="outline",
                     attempt_number=job.attempt_number, public_only=bool(getattr(job, "public_only", False)),

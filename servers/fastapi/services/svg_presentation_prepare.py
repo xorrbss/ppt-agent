@@ -159,18 +159,48 @@ def _verify_header_title_plan_outline(request, outline):
 
 async def _verify_frozen_title_result(session, job, outline, plan):
     """A normal resume must reuse the sealed result that supplied its titles."""
+    from uuid import UUID
+
     from models.sql.public_admission import AuthoredDeckPlanCheckpoint
+    from models.sql.workspace import WorkspaceOperation
     from services.authored_deck_plan_checkpoint import canonical_checkpoint_digest
     from services.svg_common_header_titles import _restore_result
     from utils.hashing import canonical_json_digest
 
-    identity = {"job_id": str(job.id), "request_digest": job.request_sha256,
-                "workspace_operation_id": str(job.workspace_operation_id) if job.workspace_operation_id else None,
-                "plan_digest": plan["plan_digest"]}
     row = await session.scalar(select(AuthoredDeckPlanCheckpoint).where(
         AuthoredDeckPlanCheckpoint.generation_job_id == job.id,
         AuthoredDeckPlanCheckpoint.stage == "header"))
     stored = row.payload if row is not None else None
+    stored_identity = stored.get("identity") if isinstance(stored, dict) else None
+    source_text = stored_identity.get("workspace_operation_id") if isinstance(stored_identity, dict) else None
+    current_text = str(job.workspace_operation_id) if job.workspace_operation_id else None
+    if source_text != current_text:
+        try:
+            source_id = UUID(source_text)
+        except (TypeError, ValueError) as error:
+            raise ValueError("svg_common_header_title_checkpoint_conflict") from error
+        current = await session.get(WorkspaceOperation, job.workspace_operation_id)
+        if current is None:
+            raise ValueError("svg_common_header_title_checkpoint_conflict")
+        seen = set()
+        while current.id != source_id:
+            if current.id in seen or current.retry_of_operation_id is None:
+                raise ValueError("svg_common_header_title_checkpoint_conflict")
+            seen.add(current.id)
+            ancestor = await session.get(WorkspaceOperation, current.retry_of_operation_id)
+            if (ancestor is None or ancestor.kind != "presentation.generate"
+                    or ancestor.state not in {"failed", "cancelled", "dead_letter"}
+                    or ancestor.fencing_token < 1
+                    or ancestor.presentation_id != job.presentation_id
+                    or ancestor.presentation_id != current.presentation_id
+                    or ancestor.owner_id != current.owner_id
+                    or ancestor.owner_scope != current.owner_scope
+                    or ancestor.conversation_id != current.conversation_id):
+                raise ValueError("svg_common_header_title_checkpoint_conflict")
+            current = ancestor
+    identity = {"job_id": str(job.id), "request_digest": job.request_sha256,
+                "workspace_operation_id": source_text,
+                "plan_digest": plan["plan_digest"]}
     if (row is None or row.input_digest != canonical_checkpoint_digest(identity)
             or not isinstance(stored, dict)
             or row.output_digest != canonical_checkpoint_digest(stored)
@@ -192,6 +222,7 @@ async def _verify_frozen_title_result(session, job, outline, plan):
                    != canonical_json_digest(item)
                    for item in result["titles"])):
         raise ValueError("svg_common_header_title_checkpoint_conflict")
+    return UUID(source_text) if source_text is not None else None
 
 
 async def _pin_owned_svg_style(request, job, *, pin_style, session_maker, owned_job,

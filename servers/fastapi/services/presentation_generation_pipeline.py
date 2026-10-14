@@ -1836,18 +1836,23 @@ async def _unused_terminal_generation_retry_budget(
             .where(PublicProviderLogicalCall.admission_id == admission.id)
             .with_for_update()
         ))
+        title_only = len(calls) == 1 and calls[0].stage == "outline"
+        zero_fields = ("estimated_reserved_microunits", "actual_reserved_microunits",
+                       "actual_cost_unavailable_count")
+        if not title_only:
+            zero_fields += ("actual_consumed_microunits",)
         if any(
             getattr(admission, field) != 0
-            for field in (
-                "estimated_reserved_microunits", "actual_reserved_microunits",
-                "actual_consumed_microunits", "actual_cost_unavailable_count",
-            )
+            for field in zero_fields
         ) or any(
-            call.stage != "illustration" or call.slide_index != -1
+            call.stage != ("outline" if title_only else "illustration") or call.slide_index != -1
             or call.retry_class != "initial" or call.state != "reported"
             or call.outcome != "succeeded" or call.reconciled_at is None
-            or call.actual_cost_microunits != 0
+            or (type(call.actual_cost_microunits) is not int or call.actual_cost_microunits < 0
+                if title_only else call.actual_cost_microunits != 0)
             or not call.provider_id or not call.model_id
+            or (title_only and (call.provider_id in {"unavailable", "unknown"}
+                                or call.model_id in {"unavailable", "unknown"}))
             for call in calls
         ) or (
             admission.initial_request_count != len(calls)
@@ -1874,6 +1879,76 @@ async def _unused_terminal_generation_retry_budget(
                     or job.completed_slides != 0
                     or job.request_payload != (ancestor.request_payload or {}).get("generation_request")):
                 raise HTTPException(status_code=409, detail="generation_retry_provider_history_present")
+            if title_only:
+                from types import SimpleNamespace
+
+                from models.sql.public_admission import AuthoredDeckPlanCheckpoint
+                from services.public_operation_admission_models import _logical_call_ordinal
+                from services.svg_common_header import header_snapshot_base, validate_common_header_outline
+                from services.svg_common_header_title_budget import (
+                    INTERNAL_HEADER_TITLE_PLAN_KEY, require_header_title_plan, validate_header_title_plan,
+                )
+                from services.svg_common_header_titles import header_title_pages
+                from services.svg_presentation_prepare import _verify_frozen_title_result
+                from utils.hashing import sha256_hex
+
+                try:
+                    # A child can consume only the original request and frozen
+                    # title result; absence or a changed source is not approval
+                    # for a fresh title call. Preserve all ancestor history.
+                    if (not isinstance(job.request_payload, dict)
+                            or job.request_payload != (operation.request_payload or {}).get("generation_request")
+                            or request_sha256(job.request_payload) != job.request_sha256
+                            or job.request_payload.get("strategy") != "svg"
+                            or job.request_payload.get("common_header_mode") != "uniform"
+                            or job.total_slides not in {0, admission.slide_count}
+                            or not isinstance(job.svg_style_snapshot, dict)
+                            or not isinstance(job.svg_style_snapshot.get("common_header"), dict)
+                            or job.request_payload.get("_internal_svg_style_snapshot")
+                            != header_snapshot_base(job.svg_style_snapshot)
+                            or job.authored_outline is None):
+                        raise ValueError("svg_common_header_title_lineage_conflict")
+                    plan = validate_header_title_plan(job.request_payload.get(INTERNAL_HEADER_TITLE_PLAN_KEY))
+                    markdown = job.request_payload.get("slides_markdown")
+                    if plan is None or not isinstance(markdown, list) or not markdown:
+                        raise ValueError("svg_common_header_title_plan_missing")
+                    original = PresentationOutlineModel(slides=[SlideOutlineModel(content=content) for content in markdown])
+                    explicit, pages, missing = header_title_pages(original)
+                    require_header_title_plan(SimpleNamespace(common_header_mode="uniform",
+                        _svg_header_title_plan=plan), pages, missing)
+                    frozen_outline = PresentationOutlineModel.model_validate(job.authored_outline)
+                    if (len(frozen_outline.slides) != admission.slide_count
+                            or [slide.content for slide in frozen_outline.slides]
+                            != [slide.content for slide in original.slides]
+                            or any(frozen_outline.slides[index].title != slide.title
+                                   for index, slide in enumerate(explicit.slides) if index not in missing)):
+                        raise ValueError("svg_common_header_title_source_mismatch")
+                    validate_common_header_outline(job.svg_style_snapshot, frozen_outline)
+                    if await _verify_frozen_title_result(sql_session, job, frozen_outline, plan) != ancestor.id:
+                        raise ValueError("svg_common_header_title_lineage_conflict")
+                    title_checkpoint = await sql_session.scalar(select(AuthoredDeckPlanCheckpoint).where(
+                        AuthoredDeckPlanCheckpoint.generation_job_id == job.id,
+                        AuthoredDeckPlanCheckpoint.stage == "header").with_for_update())
+                    if (title_checkpoint is None or title_checkpoint.produced_attempt_number < 1
+                            # Retry rebind resets the mutable job attempt to zero;
+                            # the verified producing ancestor keeps its history.
+                            or title_checkpoint.produced_attempt_number > ancestor.attempt_number
+                            or any(slide.common_header.get("title_source_digest") != slide.title_source_digest
+                                   for slide in frozen_outline.slides)):
+                        raise ValueError("svg_common_header_title_checkpoint_conflict")
+                    # Match the actual first physical SDK slot, not an arbitrary
+                    # successful outline call or an attempt replacement.
+                    slot = "header-titles-" + plan["plan_digest"].removeprefix("sha256:") + ".attempt-1"
+                    ordinal = _logical_call_ordinal(operation_id=ancestor.id, stage="outline", slide_index=-1,
+                        logical_call_ordinal=None, logical_call_key=slot)
+                    material = sha256_hex(slot.encode("utf-8"))
+                    expected_hash = sha256_hex(
+                        f"public-provider-call/v2:{ancestor.id}:outline:-1:{ordinal}:{material}".encode("utf-8"))
+                    if (calls[0].logical_call_ordinal != ordinal
+                            or calls[0].idempotency_key_hash != expected_hash):
+                        raise ValueError("svg_common_header_title_logical_call_conflict")
+                except (ValueError, TypeError, KeyError, AttributeError):
+                    raise HTTPException(status_code=409, detail="generation_retry_provider_history_present") from None
             rows = list(await sql_session.scalars(select(AuthoredSlideCheckpoint).where(
                 AuthoredSlideCheckpoint.job_id == job_id,
             ).with_for_update()))

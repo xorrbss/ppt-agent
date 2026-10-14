@@ -282,6 +282,131 @@ async def _collect_pages_or_fail(tasks):
         raise
 
 
+async def _verified_header_title_bootstrap(session, job, roles, usage, operation, admission):
+    """Permit one sealed title call before page checkpoints, with no other spend."""
+    from models.presentation_outline_model import PresentationOutlineModel
+    from models.sql.public_admission import PublicOperationAdmission, PublicProviderLogicalCall
+    from models.sql.workspace import WorkspaceOperation
+    from services.generation_core.drivers.svg.collect import _stage_error, _unknown_provider_checkpoint
+    from services.presentation_generation_staging import _request_from_durable_payload
+    from services.public_operation_admission_models import _logical_call_ordinal
+    from services.svg_common_header import validate_common_header_outline
+    from services.svg_common_header_title_budget import (
+        INTERNAL_HEADER_TITLE_PLAN_KEY, validate_header_title_plan,
+    )
+    from services.svg_presentation_prepare import (
+        _verify_frozen_title_result, _verify_header_title_plan_outline,
+    )
+
+    plan = validate_header_title_plan((job.request_payload or {}).get(INTERNAL_HEADER_TITLE_PLAN_KEY))
+    if (plan is None or plan["page_count"] != len(roles)
+            or (job.request_payload or {}).get("common_header_mode") != "uniform"
+            or not isinstance(job.svg_style_snapshot, dict)
+            or "common_header" not in job.svg_style_snapshot
+            or not isinstance(job.authored_outline, dict)
+            or len(usage) != 1):
+        raise RuntimeError("svg_checkpoint_missing")
+    receipt = usage[0]
+    if (receipt.operation != "generate" or receipt.stage != "outline"
+            or receipt.outcome != "succeeded" or receipt.request_count != 1
+            or receipt.usage_state != "reported"):
+        raise RuntimeError("svg_checkpoint_missing")
+    try:
+        outline = PresentationOutlineModel.model_validate(job.authored_outline)
+        _verify_header_title_plan_outline(_request_from_durable_payload(job.request_payload), outline)
+        validate_common_header_outline(job.svg_style_snapshot, outline)
+        source_id = await _verify_frozen_title_result(session, job, outline, plan)
+    except (TypeError, ValueError, KeyError) as error:
+        raise RuntimeError("svg_checkpoint_missing") from error
+    if source_id is None:
+        raise RuntimeError("svg_checkpoint_missing")
+    source_operation = await session.get(WorkspaceOperation, source_id)
+    source_admission = await session.scalar(select(PublicOperationAdmission).where(
+        PublicOperationAdmission.operation_id == source_id))
+    if (source_operation is None or source_admission is None
+            or source_operation.presentation_id != job.presentation_id
+            or source_operation.owner_id != operation.owner_id
+            or source_operation.owner_scope != operation.owner_scope
+            or source_operation.conversation_id != operation.conversation_id
+            or source_operation.fencing_token < 1
+            or source_admission.fence != source_operation.fencing_token
+            or source_admission.owner_id != admission.owner_id
+            or source_admission.tenant_id != admission.tenant_id
+            or source_admission.operation_kind != "generation"
+            or (source_id == operation.id and source_admission.state != "active")
+            or (source_id != operation.id and source_admission.state not in {
+                "failed", "cancelled", "budget_exhausted", "deadline_exceeded"})
+            or source_admission.slide_count != len(roles)
+            or source_admission.planned_request_limit < len(roles) + 1
+            or source_operation.result_revision is not None):
+        raise RuntimeError("svg_checkpoint_missing")
+    if _unknown_provider_checkpoint(source_operation.error_detail or {}):
+        raise _stage_error("public_provider_result_unknown")
+    source_calls = list(await session.scalars(select(PublicProviderLogicalCall).where(
+        PublicProviderLogicalCall.admission_id == source_admission.id)))
+    title_key = "header-titles-" + plan["plan_digest"].removeprefix("sha256:") + ".attempt-1"
+    ordinal = _logical_call_ordinal(operation_id=source_id, stage="outline", slide_index=-1,
+        logical_call_ordinal=None, logical_call_key=title_key)
+    preimage = (f"public-provider-call/v2:{source_id}:outline:-1:{ordinal}:"
+                f"{sha256_hex(title_key.encode('utf-8'))}")
+    expected_key_hash = sha256_hex(preimage.encode("utf-8"))
+    if len(source_calls) != 1:
+        raise RuntimeError("svg_checkpoint_missing")
+    call = source_calls[0]
+    if (call.stage != "outline" or call.slide_index != -1
+            or call.logical_call_ordinal != ordinal
+            or call.idempotency_key_hash != expected_key_hash
+            or call.retry_class not in {"initial", "resume"}
+            or receipt.retry_class != call.retry_class
+            or receipt.provider != call.provider_id
+            or receipt.model != call.model_id
+            or call.state != "reported" or call.outcome != "succeeded"
+            or call.reconciled_at is None or call.actual_cost_microunits is None
+            or receipt.reported_cost_microunits != call.actual_cost_microunits
+            or source_admission.initial_request_count != 1
+            or source_admission.retry_request_count != 0
+            or source_admission.estimated_reserved_microunits != 0
+            or source_admission.actual_reserved_microunits != 0
+            or source_admission.estimated_consumed_microunits != call.estimated_cost_microunits
+            or source_admission.actual_consumed_microunits != call.actual_cost_microunits
+            or source_admission.actual_cost_unavailable_count != 0):
+        raise RuntimeError("svg_checkpoint_missing")
+    current = operation
+    seen = set()
+    while current.id != source_id:
+        if current.id in seen or current.retry_of_operation_id is None:
+            raise RuntimeError("svg_checkpoint_missing")
+        seen.add(current.id)
+        current_admission = (admission if current.id == operation.id else
+            await session.scalar(select(PublicOperationAdmission).where(
+                PublicOperationAdmission.operation_id == current.id)))
+        if current_admission is None:
+            raise RuntimeError("svg_checkpoint_missing")
+        current_calls = list(await session.scalars(select(PublicProviderLogicalCall).where(
+            PublicProviderLogicalCall.admission_id == current_admission.id)))
+        if (current_calls or current_admission.owner_id != admission.owner_id
+                or current_admission.tenant_id != admission.tenant_id
+                or current_admission.operation_kind != "generation"
+                or current_admission.fence != current.fencing_token
+                or current.presentation_id != job.presentation_id
+                or current.owner_id != operation.owner_id
+                or current.owner_scope != operation.owner_scope
+                or current.conversation_id != operation.conversation_id
+                or current_admission.slide_count != len(roles)
+                or current_admission.planned_request_limit < len(roles)
+                or any(getattr(current_admission, field) for field in (
+                    "initial_request_count", "retry_request_count", "estimated_reserved_microunits",
+                    "estimated_consumed_microunits", "actual_reserved_microunits",
+                    "actual_consumed_microunits", "actual_cost_unavailable_count"))):
+            raise RuntimeError("svg_checkpoint_missing")
+        if _unknown_provider_checkpoint(current.error_detail or {}):
+            raise _stage_error("public_provider_result_unknown")
+        current = await session.get(WorkspaceOperation, current.retry_of_operation_id)
+        if current is None:
+            raise RuntimeError("svg_checkpoint_missing")
+    return source_id
+
+
 async def initialize_svg_checkpoints(*, job_id, attempt_token, roles, fencing_token=None):
     """Seed only a wholly unstarted job, under the canonical checkpoint CAS.
 
@@ -313,11 +438,11 @@ async def initialize_svg_checkpoints(*, job_id, attempt_token, roles, fencing_to
         if (job.completed_slides or job.current_stage not in {None, "queued", "outline"}
                 or job.total_slides not in {0, len(roles)}):
             raise RuntimeError("svg_checkpoint_missing")
-        usage = await session.scalar(select(func.count()).select_from(ProviderUsageReceipt).where(
-            ProviderUsageReceipt.job_id == job.id))
+        usage = list(await session.scalars(select(ProviderUsageReceipt).where(
+            ProviderUsageReceipt.job_id == job.id)))
         published = await session.scalar(select(func.count()).select_from(SlideModel).where(
             SlideModel.presentation == job.presentation_id))
-        if usage or published:
+        if published or (usage and job.workspace_operation_id is None):
             raise RuntimeError("svg_checkpoint_missing")
         if job.workspace_operation_id is not None:
             from services.svg_generation_assets import publication_context
@@ -328,19 +453,26 @@ async def initialize_svg_checkpoints(*, job_id, attempt_token, roles, fencing_to
             operation = await session.get(WorkspaceOperation, job.workspace_operation_id)
             admission = await session.scalar(select(PublicOperationAdmission).where(
                 PublicOperationAdmission.operation_id == job.workspace_operation_id))
-            calls = await session.scalar(select(func.count()).select_from(PublicProviderLogicalCall).where(
-                PublicProviderLogicalCall.admission_id == admission.id))
+            if operation is None or admission is None:
+                raise RuntimeError("svg_checkpoint_missing")
+            calls = list(await session.scalars(select(PublicProviderLogicalCall).where(
+                PublicProviderLogicalCall.admission_id == admission.id)))
             if _unknown_provider_checkpoint(operation.error_detail or {}):
                 raise _stage_error("public_provider_result_unknown")
             counters = ("initial_request_count", "retry_request_count", "estimated_reserved_microunits",
                         "estimated_consumed_microunits", "actual_reserved_microunits",
                         "actual_consumed_microunits", "actual_cost_unavailable_count")
-            if (calls or any(getattr(admission, key) for key in counters)
-                    or admission.planned_request_limit < len(roles)
+            if (admission.planned_request_limit < len(roles)
                     or admission.slide_count != len(roles)
                     or as_utc(admission.deadline_at) <= get_current_utc_datetime()
                     or operation.presentation_id != job.presentation_id
                     or operation.result_revision is not None):
+                raise RuntimeError("svg_checkpoint_missing")
+            from services.svg_common_header_title_budget import INTERNAL_HEADER_TITLE_PLAN_KEY
+
+            if (job.request_payload or {}).get(INTERNAL_HEADER_TITLE_PLAN_KEY) is not None:
+                await _verified_header_title_bootstrap(session, job, roles, usage, operation, admission)
+            elif usage or calls or any(getattr(admission, key) for key in counters):
                 raise RuntimeError("svg_checkpoint_missing")
         # Reuse the canonical initializer in this same fenced transaction. It
         # inserts only absent rows and does not clear old checkpoint outcomes.
