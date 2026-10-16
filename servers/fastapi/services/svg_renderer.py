@@ -348,7 +348,12 @@ async def render_svg_with_metrics(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH
     normalized = "".join("".join(item.get("owned_text", "") for item in text).split())
     missing = [value for value in required_text or [] if "".join(value.split()) not in normalized]
     if missing:
-        failures.append({"kind": "required_text_missing", "count": len(missing)})
+        # Keep the literal gate unchanged, but give its bounded author repair
+        # the exact missing wording rather than an unactionable count alone.
+        witnesses = [value for value in missing if len(value) <= 160][:8]
+        failures.append({"kind": "required_text_missing", "count": len(missing),
+            "missing_literals": witnesses,
+            **({"missing_literals_truncated": True} if len(witnesses) < len(missing) else {})})
     font_profile = None
     trusted_weights, weight_advisories = _trusted_font_weights_used(root)
     if trusted_weights:

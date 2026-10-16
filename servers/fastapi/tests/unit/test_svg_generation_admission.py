@@ -489,7 +489,7 @@ def test_header_v2_frozen_v1_replay_keeps_zero_budget_and_exact_payload():
     assert INTERNAL_HEADER_DESIGN_PLAN_KEY not in _durable_request_payload(historical)
 
 
-def test_header_v2_real_fields_reject_title_and_stable_page_id_tampering():
+def test_header_v2_real_fields_reject_title_and_stable_page_id_tampering(monkeypatch):
     from copy import deepcopy
     from models.presentation_outline_model import PresentationOutlineModel, SlideOutlineModel
     from services.authored_canvas import request_canvas_metadata
@@ -549,6 +549,7 @@ def test_header_v2_real_fields_reject_title_and_stable_page_id_tampering():
         return quality
 
     assert measured_body(metrics)["common_header"]["passed"] is True
+    valid_metrics = deepcopy(metrics)
     child = next(item for item in metrics if item["tag"] == "tspan")
     child["text_ink_fragments"] = [{"x": 1200, "y": 200, "width": 16.6, "height": 20}]
     intrusion = measured_body(metrics)
@@ -560,6 +561,163 @@ def test_header_v2_real_fields_reject_title_and_stable_page_id_tampering():
     missing = deepcopy(metrics)
     next(item for item in missing if item["tag"] == "tspan").update(text_fragments=[], text_ink_fragments=[])
     assert measured_body(missing)["passed"] is False
+
+    # A new explicit header revision may remeasure a pristine older-verifier
+    # publication, preserving its exact bytes/PNG and never calling an author.
+    import asyncio
+    from services import svg_renderer, svg_presentation_checkpoint
+    from services.svg_contract import source_digest
+    from services.svg_master_furniture import master_furniture_receipt
+    from services.svg_common_header_generation import _page_input_digest
+    from services.svg_common_header_design_checkpoint import _candidate_key
+    from services import svg_common_header_design_checkpoint as header_checkpoints
+    from services.workspace_svg_header_body_remeasurement import (
+        remeasure_header_body, render_remeasured_body_candidate, require_body_remeasurement_witness,
+    )
+    from utils.hashing import sha256_hex, canonical_json_digest
+    from utils.owner_context import (set_current_owner_id, reset_current_owner_id,
+        set_current_tenant_id, reset_current_tenant_id)
+    png = b"stable-render"
+    png_hash = sha256_hex(png)
+    furniture = master_furniture_receipt(wrapped_final, snapshot, index=0, n=1,
+        width=1280, height=720, header_page=bindings[0])
+    current_quality = dict(passed=True, verified=True, classification="passed", failures=[],
+        measurement_complete=True, geometry_passed=True, source_digest=source_digest(wrapped_final),
+        png_digest="sha256:" + png_hash, browser_metrics={"elements": valid_metrics},
+        trusted_font_materialization={"worker_materialized": True})
+    apply_common_header_v2_quality(current_quality, wrapped_final, contract, bindings[0], furniture)
+    previous_quality = deepcopy(current_quality)
+    previous_quality["common_header"]["verifier_digest"] = "sha256:" + "a" * 64
+    receipt = dict(input_digest="frozen-source-input", source_digest=sha256_hex(wrapped_final.encode()),
+        system_furniture=furniture, quality=previous_quality, png_sha256=png_hash, png_path="old.png")
+    owner_id, presentation_id, operation_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    row = SimpleNamespace(id=uuid.uuid4(), owner_id=owner_id, presentation=presentation_id,
+        index=0, source_format="svg", svg_content=wrapped_final, content={"svgReceipt": receipt})
+    owner = SimpleNamespace(id=operation_id, owner_id=owner_id, presentation_id=presentation_id,
+        owner_scope=str(owner_id), kind="design.apply", state="running", attempt_token=uuid.uuid4(),
+        fencing_token=1, expected_revision=4, request_hash="new-explicit-request",
+        request_payload={"principal_tenant_id": "fresh-body-tenant"})
+    parent = dict(revision=4, theme={"svg": {"styleSnapshot": deepcopy(snapshot)}},
+        outline=outline.model_dump(mode="json"), pages=[dict(id=str(row.id),
+            svg_content=wrapped_final, content=deepcopy(row.content))])
+    ctx = SimpleNamespace(snapshot=deepcopy(snapshot), count=1,
+        canvas=SimpleNamespace(width_px=1280, height_px=720), source_reflow=False,
+        raster_reconstruction=False, canonical_assets=False, manifests=[{}],
+        source_font_profile=None, physical_kwargs={}, render_semaphore=asyncio.Semaphore(1))
+    ctx.header_pages = bindings
+    ctx.snapshot["common_header_design_plan"] = {"max_render_seconds": 60}
+    captures, stored = [], {}
+
+    async def capture(svg, **kwargs):
+        captures.append(svg)
+        return svg_renderer.SvgRenderResult(png, deepcopy(current_quality), "wrapper", source_digest(svg))
+
+    async def save_candidate(active_owner, page_index, *, identity, payload=None, **kwargs):
+        assert active_owner is owner and page_index == 0
+        key = _candidate_key(page_index, identity)
+        if payload is not None:
+            stored[key] = deepcopy(payload)
+        return deepcopy(stored.get(key, {}))
+
+    monkeypatch.setattr(svg_renderer, "render_svg_with_metrics", capture)
+    monkeypatch.setattr(svg_presentation_checkpoint, "_read_png",
+        lambda value: png if value.get("png_sha256") == png_hash else None)
+    monkeypatch.setattr(svg_presentation_checkpoint, "_write_png",
+        lambda value: dict(png_sha256=sha256_hex(value), png_path="new.png"))
+    monkeypatch.setattr(header_checkpoints, "candidate_page_checkpoint", save_candidate)
+    before = deepcopy(row.content)
+    owner_token, tenant_token = set_current_owner_id(owner_id), set_current_tenant_id("fresh-body-tenant")
+    try:
+        async def verify_remeasurement():
+            body, preservation, witness = await remeasure_header_body(row, owner=owner,
+                ctx=ctx, request=request, outline=outline, index=0, parent=parent, session_factory=None)
+            assert row.content == before and len(captures) == 1
+            assert witness["source_receipt_digest"] == canonical_json_digest(receipt, allow_nan=True)
+            assert witness["previous_verifier_digest"] != witness["current_verifier_digest"]
+            identity = {"candidate_revision": "1", "candidate_id": "fresh-local", "page_id": bindings[0]["page_id"]}
+            seeded = dict(svg_content=body, author_body_svg=body, source_preservation=preservation,
+                input_digest=_page_input_digest(ctx, request, outline, request.language, 0),
+                attempts=[{"kind": "local", "receipt": {"version": "svg-common-header-body-reuse/v2",
+                    "body_remeasurement_digest": witness["digest"]}}],
+                body_reuse_remeasurement=witness)
+            result, _ = await render_remeasured_body_candidate(ctx, request, outline, owner, 0,
+                identity=identity, saved=seeded, parent=parent, session_factory=None)
+            assert result["svg_content"] == wrapped_final and len(captures) == 2
+            assert all(attempt["kind"] == "local" for attempt in result["attempts"])
+            require_body_remeasurement_witness(result, owner=owner, index=0, parent=parent)
+            assert row.content == before and previous_quality["common_header"]["verifier_digest"] == "sha256:" + "a" * 64
+            for field in ("body", "source", "owner", "verifier", "native", "removed"):
+                altered = deepcopy(result)
+                proof = altered["body_reuse_remeasurement"]
+                if field == "body":
+                    altered["author_body_svg"] += "changed"
+                    proof["body_digest"] = canonical_json_digest(altered["author_body_svg"])
+                elif field == "source":
+                    proof["source_input_digest"] = "other-input"
+                elif field == "owner":
+                    proof["owner_id"] = str(uuid.uuid4())
+                elif field == "native":
+                    altered["nativeDeclarations"] = {"objects": []}
+                elif field == "verifier":
+                    proof["current_verifier_digest"] = proof["previous_verifier_digest"]
+                proof["digest"] = canonical_json_digest({k: v for k, v in proof.items() if k != "digest"}, allow_nan=True)
+                altered["attempts"][0]["receipt"]["body_remeasurement_digest"] = proof["digest"]
+                if field == "removed":
+                    altered.pop("body_reuse_remeasurement")
+                with pytest.raises(ValueError, match="body_remeasurement_unproven"):
+                    require_body_remeasurement_witness(altered, owner=owner, index=0, parent=parent)
+            # Re-signing both declaration copies cannot change the immutable
+            # native publication. Isolate only the native projection boundary.
+            from services.generation_core.drivers.svg import native_publish
+            native_parent, native_payload = deepcopy(parent), deepcopy(result)
+            native_receipt = native_parent["pages"][0]["content"]["svgReceipt"]
+            native_receipt["nativeObjects"] = {"accepted": 1}
+            native_parent["pages"][0]["content"]["nativeObjects"] = {"cell": "original"}
+            native_proof = native_payload["body_reuse_remeasurement"]
+            native_payload["nativeDeclarations"] = {"cell": "original"}
+            native_proof["source_native_declarations"] = {"cell": "original"}
+            native_proof["source_receipt_digest"] = canonical_json_digest(native_receipt, allow_nan=True)
+
+            def reseal_native():
+                native_proof["native_declarations_digest"] = canonical_json_digest(native_payload["nativeDeclarations"])
+                native_proof["digest"] = canonical_json_digest(
+                    {k: v for k, v in native_proof.items() if k != "digest"}, allow_nan=True)
+                native_payload["attempts"][0]["receipt"]["body_remeasurement_digest"] = native_proof["digest"]
+
+            def project_native(value, **kwargs):
+                assert value["svg_content"] == wrapped_final
+                return deepcopy(value["nativeDeclarations"]), {"accepted": 1}
+
+            with monkeypatch.context() as native_patch:
+                native_patch.setattr(native_publish, "page_native_objects", project_native)
+                reseal_native()
+                require_body_remeasurement_witness(native_payload, owner=owner, index=0, parent=native_parent)
+                native_payload["nativeDeclarations"]["cell"] = "changed"
+                native_proof["source_native_declarations"]["cell"] = "changed"
+                reseal_native()
+                with pytest.raises(ValueError, match="body_remeasurement_unproven"):
+                    require_body_remeasurement_witness(native_payload, owner=owner, index=0, parent=native_parent)
+            bad = deepcopy(row)
+            bad.content["svgReceipt"]["quality"]["geometry_passed"] = False
+            with pytest.raises(ValueError, match="body_remeasurement_unproven"):
+                await remeasure_header_body(bad, owner=owner, ctx=ctx, request=request,
+                    outline=outline, index=0, parent=parent, session_factory=None)
+            assert len(captures) == 2
+            async def failed_capture(svg, **kwargs):
+                captures.append(svg)
+                quality = deepcopy(current_quality)
+                quality.update(passed=False, failures=[{"kind": "required_text_missing"}])
+                return svg_renderer.SvgRenderResult(png, quality, "wrapper", source_digest(svg))
+            monkeypatch.setattr(svg_renderer, "render_svg_with_metrics", failed_capture)
+            with pytest.raises(ValueError, match="body_remeasurement_unproven"):
+                await remeasure_header_body(row, owner=owner, ctx=ctx, request=request,
+                    outline=outline, index=0, parent=parent, session_factory=None)
+            assert len(captures) == 3 and row.content == before
+
+        asyncio.run(verify_remeasurement())
+    finally:
+        reset_current_tenant_id(tenant_token)
+        reset_current_owner_id(owner_token)
 
 
 def test_header_v2_metadata_preserves_exact_values_provenance_and_admitted_input():

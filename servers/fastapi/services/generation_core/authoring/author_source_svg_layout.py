@@ -32,6 +32,8 @@ def _whole_page_facts(page, image_slots):
             continue
         fact = {"source_id": block.source_block_id, "kind": block.kind,
                 "element_id": _whole_page_element_id(block.source_block_id), "data": block.payload}
+        if any(key in block.payload for key in ("headEnd", "tailEnd", "stCxn", "endCxn")):
+            fact["semantic_role"] = block.semantic_role
         if block.kind == "image":
             fact["slot_id"] = image_slots[block.source_block_id]
         if block.kind == "table":
@@ -43,6 +45,22 @@ def _whole_page_facts(page, image_slots):
         if block.kind == "chart":
             fact["element_id"] = "native-chart-" + _whole_page_element_id(block.source_block_id)
         facts.append(fact)
+    by_shape_id = {fact["data"]["shapeId"]: fact for fact in facts if "shapeId" in fact["data"]}
+    for fact in facts:
+        data = fact["data"]
+        if not any(key in data for key in ("headEnd", "tailEnd", "stCxn", "endCxn")):
+            continue
+        connections = {}
+        for key in ("stCxn", "endCxn"):
+            if key not in data:
+                continue
+            connection = dict(data[key])
+            target = by_shape_id.get(connection.get("id"))
+            if target is not None:
+                connection.update(source_id=target["source_id"], element_id=target["element_id"])
+            connections[key] = connection
+        if connections:
+            fact["connections"] = connections
     return facts
 
 
@@ -84,6 +102,14 @@ async def _author_source_whole_page(manifest, page_index, style_snapshot, *, sou
         "Recompose chart geometry and style freely on the target canvas, preserving numeric relationships. "
         "Do not flatten, delete, summarize or relabel an original chart; fail if native projection cannot preserve it. "
     )
+    if any(any(key in fact["data"] for key in ("headEnd", "tailEnd", "stCxn", "endCxn")) for fact in facts):
+        source_rules += (
+            "Native headEnd/tailEnd facts describe the source line's start/end markers; preserve their "
+            "types and directions, including explicit none, without assuming left-to-right flow. "
+            "Native stCxn/endCxn facts and connections bind the start/end to their original target "
+            "source_id/element_id and connection-site idx. Keep those attachments and geometry flips "
+            "when freely repositioning nodes; never reverse or replace a source relationship. "
+        )
     from services.svg_authoring_profile import read_quality_recovery_policy
 
     correction_kwargs = {}

@@ -116,6 +116,22 @@ def _shape_identity(element: etree._Element, fallback: int) -> tuple[str, str]:
     return c_nv_pr.get("id", str(fallback)), c_nv_pr.get("name", "")
 
 
+def _connector_properties(element: etree._Element) -> dict[str, dict[str, str]]:
+    """Keep native line ends and attachment identities without inferring direction."""
+    paths = {
+        "headEnd": "p:spPr/a:ln/a:headEnd",
+        "tailEnd": "p:spPr/a:ln/a:tailEnd",
+        "stCxn": "p:nvCxnSpPr/p:cNvCxnSpPr/a:stCxn",
+        "endCxn": "p:nvCxnSpPr/p:cNvCxnSpPr/a:endCxn",
+    }
+    result = {}
+    for name, path in paths.items():
+        node = element.find(path, namespaces=NS)
+        if node is not None:
+            result[name] = dict(node.attrib)
+    return result
+
+
 
 
 
@@ -254,6 +270,7 @@ def _extract_unit(
                     "shapeId": shape_id,
                     "sourceSlideIndex": source_index,
                     "sourceShapeIndex": current_shape_index,
+                    **_connector_properties(element),
                 }
 
             def geometry_for(block_id: str, element=element) -> dict[str, Any]:
@@ -513,7 +530,7 @@ def extract_pptx_source_content(
     source_bytes = path.read_bytes()
     source_digest = digest_bytes(source_bytes)
     # Revision is part of the seed so an extractor upgrade seals a new manifest_id.
-    seed = f"{MANIFEST_ID_EXTRACTOR_REVISION}+native-chart-facts-v1\n{owner_id}\n{reference_snapshot_id}\n{source_digest}"
+    seed = f"{MANIFEST_ID_EXTRACTOR_REVISION}+native-chart-facts-v1+connector-facts-v1\n{owner_id}\n{reference_snapshot_id}\n{source_digest}"
     manifest_id = f"scm_{sha256_hex(seed.encode('utf-8'))}"
 
     with ZipFile(path, "r") as package:

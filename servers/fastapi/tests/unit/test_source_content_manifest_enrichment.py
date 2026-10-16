@@ -204,6 +204,67 @@ def test_title_run_carries_explicit_size_weight_and_color(manifest: SourceConten
     assert block.semantic_role == "title"
 
 
+def test_connector_native_ends_and_targets_reach_whole_page_facts(tmp_path: Path) -> None:
+    from pptx.enum.shapes import MSO_CONNECTOR, MSO_SHAPE
+    from services.generation_core.authoring.author_source_svg_layout import _whole_page_facts
+
+    deck = Presentation()
+    slide = deck.slides.add_slide(deck.slide_layouts[6])
+    start = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Emu(100000), Emu(100000), Emu(1500000), Emu(700000))
+    start.text = "Source"
+    end = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Emu(4000000), Emu(2000000), Emu(1500000), Emu(700000))
+    end.text = "Target"
+    connector = slide.shapes.add_connector(MSO_CONNECTOR.STRAIGHT,
+        Emu(1600000), Emu(450000), Emu(4000000), Emu(2350000))
+    expected = {
+        "headEnd": {"type": "none", "w": "sm", "len": "lg"},
+        "tailEnd": {"type": "triangle", "w": "lg", "len": "sm"},
+        "stCxn": {"id": str(start.shape_id), "idx": "3"},
+        "endCxn": {"id": str(end.shape_id), "idx": "1"},
+    }
+    shape_properties = connector._element.find(qn("p:spPr"))
+    line = shape_properties.find(qn("a:ln"))
+    if line is None:
+        line = OxmlElement("a:ln")
+        shape_properties.append(line)
+    for name in ("headEnd", "tailEnd"):
+        node = OxmlElement("a:" + name)
+        for key, value in expected[name].items():
+            node.set(key, value)
+        line.append(node)
+    properties = connector._element.find(qn("p:nvCxnSpPr")).find(qn("p:cNvCxnSpPr"))
+    for name in ("stCxn", "endCxn"):
+        node = OxmlElement("a:" + name)
+        for key, value in expected[name].items():
+            node.set(key, value)
+        properties.append(node)
+    plain = slide.shapes.add_connector(MSO_CONNECTOR.STRAIGHT,
+        Emu(100000), Emu(3000000), Emu(4000000), Emu(3000000))
+    path = tmp_path / "directed.pptx"
+    deck.save(path)
+    original_bytes = path.read_bytes()
+    extracted = extract_pptx_source_content(path, owner_id="owner-a", reference_snapshot_id="snapshot-a")
+    page = extracted.manifest.units[0]
+    blocks = {block.payload["shapeId"]: block for block in page.blocks}
+    payload = blocks[str(connector.shape_id)].payload
+    assert {key: payload[key] for key in expected} == expected
+    assert not set(expected).intersection(blocks[str(plain.shape_id)].payload)
+    facts = _whole_page_facts(page, {})
+    by_shape = {fact["data"]["shapeId"]: fact for fact in facts}
+    connection_fact = by_shape[str(connector.shape_id)]
+    assert connection_fact["semantic_role"] == "connector"
+    assert {key: connection_fact["data"][key] for key in expected} == expected
+    for key, target in (("stCxn", start), ("endCxn", end)):
+        target_fact = by_shape[str(target.shape_id)]
+        assert connection_fact["connections"][key] == {
+            **expected[key], "source_id": target_fact["source_id"], "element_id": target_fact["element_id"]}
+    assert "connections" not in by_shape[str(plain.shape_id)]
+    packed = extracted.manifest.model_dump(mode="json", by_alias=True)
+    recorded_digest = packed.pop("manifestDigest")
+    assert digest_json(packed) == recorded_digest
+    assert path.read_bytes() == original_bytes
+
+
 def test_body_runs_inherit_size_from_layout_then_master(manifest: SourceContentManifest) -> None:
     payload = _text_blocks(manifest)["Explicit fourteen"].payload
     paragraphs = payload["paragraphs"]

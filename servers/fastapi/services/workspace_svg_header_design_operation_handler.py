@@ -178,7 +178,8 @@ async def _seed_body(owner, ctx, request, outline, index, identity, body_payload
         return
     payload = {key: deepcopy(value) for key, value in body_payload.items()
                if key in {"author_body_svg", "svg_content", "nativeDeclarations", "nativeRequirements",
-                          "source_preservation", "readability_policy", "rasterRenderAdvisories", "rasterContentLedger", "assetOffer"}}
+                          "source_preservation", "readability_policy", "rasterRenderAdvisories", "rasterContentLedger", "assetOffer",
+                          "body_reuse_remeasurement"}}
     body = payload.get("author_body_svg") or payload.get("svg_content")
     composition = (payload.get("source_preservation") or {}).get("common_header_composition")
     if composition:
@@ -192,7 +193,9 @@ async def _seed_body(owner, ctx, request, outline, index, identity, body_payload
         attempts=[{"kind": "local", "receipt": {"version": "svg-common-header-body-reuse/v2",
             "parent_input_digest": body_payload.get("input_digest"),
             "parent_svg_digest": canonical_json_digest(body_payload.get("svg_content")),
-            "body_digest": canonical_json_digest(body)}}], body_reuse_parent=deepcopy(body_payload))
+            "body_digest": canonical_json_digest(body),
+            **({"body_remeasurement_digest": payload["body_reuse_remeasurement"]["digest"]}
+               if payload.get("body_reuse_remeasurement") else {})}}], body_reuse_parent=deepcopy(body_payload))
     await candidate_page_checkpoint(owner, index, identity=identity, payload=payload, session_maker=session_factory)
 
 
@@ -237,6 +240,35 @@ async def _design_revision(context, owner, request, outline, snapshot, rows, inp
     async def save():
         await context.raise_if_cancelled()
         await read_update_header_design(owner, payload=deepcopy(document), session_maker=session_factory)
+    remeasured_bodies = {}
+
+    async def reuse_body(page_index):
+        row = rows[page_index]
+        try:
+            body, preservation = raw_body(row)
+            return body, preservation, None
+        except ValueError as error:
+            if str(error) != "svg_common_header_body_reuse_unverified":
+                raise
+        if page_index not in remeasured_bodies:
+            from services.workspace_svg_header_body_remeasurement import remeasure_header_body
+            remeasured_bodies[page_index] = asyncio.create_task(remeasure_header_body(row, owner=owner,
+                ctx=ctx, request=request, outline=outline, index=page_index,
+                parent=document["parent_publication"], session_factory=session_factory,
+                source_payload=inputs["reuse_payloads"].get(page_index)))
+        return await remeasured_bodies[page_index]
+
+    async def render_candidate(active, page_outline, page_index, identity):
+        saved = await candidate_page_checkpoint(owner, page_index, identity=identity, session_maker=session_factory)
+        from services.workspace_svg_header_body_remeasurement import require_body_remeasurement_witness
+        require_body_remeasurement_witness(saved, owner=owner, index=page_index, parent=document["parent_publication"])
+        if saved.get("body_reuse_remeasurement"):
+            from services.workspace_svg_header_body_remeasurement import render_remeasured_body_candidate
+            return await render_remeasured_body_candidate(active, request, page_outline, owner, page_index,
+                identity=identity, saved=saved, parent=document["parent_publication"],
+                session_factory=session_factory)
+        return await run_header_candidate_page(active, request, context.claim.presentation_id,
+            page_outline, request.language, owner, page_index, identity, async_session_maker=session_factory)
     index = document.setdefault("representative_index", _representative_index(ctx, outline, request.common_header_cover_exception))
     base = header_snapshot_base(ctx.snapshot)
     base = {**base, "common_header_design_plan": plan}
@@ -286,13 +318,18 @@ async def _design_revision(context, owner, request, outline, snapshot, rows, inp
         require_retry_page_context(owner, active, request, outline, index, identity, saved)
         if not saved and reusable_body(snapshot.get("common_header"), active.snapshot["common_header"], rows[index]):
             prior = deepcopy(inputs["reuse_payloads"].get(index) or {})
-            body, preservation = raw_body(rows[index])
+            body, preservation, remeasurement = await reuse_body(index)
             prior.update(svg_content=body, author_body_svg=body, source_preservation=preservation)
+            if remeasurement:
+                prior["body_reuse_remeasurement"] = remeasurement
+                for name, source_name in (("nativeDeclarations", "source_native_declarations"),
+                                          ("nativeRequirements", "source_native_requirements")):
+                    if remeasurement.get(source_name) is not None:
+                        prior[name] = deepcopy(remeasurement[source_name])
             if not (rows[index].content or {}).get("nativeObjects") or prior.get("nativeDeclarations") or ctx.source_reflow:
                 await _seed_body(owner, active, request, outline, index, identity, prior, session_factory=session_factory)
         try:
-            payload, _ = await run_header_candidate_page(active, request, context.claim.presentation_id,
-                outline, request.language, owner, index, identity, async_session_maker=session_factory)
+            payload, _ = await render_candidate(active, outline, index, identity)
             return candidate_id, {"eligible": payload.get("quality", {}).get("passed") is True,
                 "payload": payload, "header_digest": active.snapshot["common_header"]["digest"]}
         except Exception as error:
@@ -350,15 +387,20 @@ async def _design_revision(context, owner, request, outline, snapshot, rows, inp
         if page_index == index:
             await _seed_body(owner, active, request, outline, page_index, identity, pages[selected_id]["payload"], session_factory=session_factory)
         elif reusable_body(snapshot.get("common_header"), active.snapshot["common_header"], row):
-            body, preservation = raw_body(row)
+            body, preservation, remeasurement = await reuse_body(page_index)
             prior = {**deepcopy(inputs["reuse_payloads"].get(page_index) or {}),
                      "svg_content": body, "author_body_svg": body, "source_preservation": preservation}
+            if remeasurement:
+                prior["body_reuse_remeasurement"] = remeasurement
+                for name, source_name in (("nativeDeclarations", "source_native_declarations"),
+                                          ("nativeRequirements", "source_native_requirements")):
+                    if remeasurement.get(source_name) is not None:
+                        prior[name] = deepcopy(remeasurement[source_name])
             await _seed_body(owner, active, request, outline, page_index, identity, prior, session_factory=session_factory)
         if owner.retry_of_operation_id is not None:
             saved = await candidate_page_checkpoint(owner, page_index, identity=identity, session_maker=session_factory)
             require_retry_page_context(owner, active, request, selected_outline, page_index, identity, saved)
-        payload, png = await run_header_candidate_page(active, request, context.claim.presentation_id,
-            selected_outline, request.language, owner, page_index, identity, async_session_maker=session_factory)
+        payload, png = await render_candidate(active, selected_outline, page_index, identity)
         if payload.get("quality", {}).get("passed") is not True:
             raise ValueError("svg_common_header_final_page_invalid")
         final_pages.append((payload, png))

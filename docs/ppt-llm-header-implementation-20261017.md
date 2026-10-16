@@ -62,3 +62,21 @@ revision 2 내보내기 `d28b40d2-8546-4aeb-ba1b-256e8a648d4f`가 성공했다. 
 - 다중 사용자: quota trigger가 전체 counter를 principal별 RLS 부분 합계와 비교하던 오류를 실제 겹친 요청에서 확인했다. f6c8e0a2b4d7 migration은 기존 계산과 행·RLS·role을 보존하면서 제한된 SECURITY DEFINER trigger 집계만 적용한다. 함수 owner 권한·search_path·정확 trigger binding을 제한하고 실행권을 축소했다. 독립 검토와 좁은 검사, PostgreSQL 적용 및 대상 원행 불변을 확인했다.
 - retry 검증 범위: 실제 SQLite service/admission의 확정 호출 0건 source positive, 모의 settled ledger의 paid-known/body/ancestor/변조 거부, 실제 API stale revision 409를 구분한다. 실제 유료 body retry positive를 완료한 증거는 아니다. 기존 generation partial recovery는 selected representative receipt와 제자리 rebind 때문에 이번 원행 불변 조건에 사용하지 않는다.
 - 보존과 제한: 모든 실패 operation/job/checkpoint 및 replacement manifest는 별도로 보존한다. 12쪽 기준 대비 최종 시각·Office 비교, A4와 웹 5쪽 최종 게시 검증은 진행 중이며 완료로 판정하지 않았다. 비용 원장의 0 기록은 실제 청구 금액이 무료라는 증거가 아니다.
+
+## 추가 수용 검사에서 확인한 미완료 항목
+
+12쪽 작업 a5676fd7-e3b3-4018-9e17-ce1a540c0088과 A4 작업 5c65e7d9-f5a9-4064-96d5-f2357a648d44는 각각 모든 페이지의 개별 측정을 통과했지만 `svg_quality_recovery_review_required`로 종료됐다. 최종 검토의 무결성·현재 SVG/PNG·작업 binding·coverage는 일치하며, 남은 디자인 개선 목표 때문에 `designImprovementStatus=satisfied`를 충족하지 못했다. A4의 표 색상 위계와 12쪽의 밀도 문제는 별개로 남아 있다. 실패를 게시 성공이나 실제 PPTX 통과로 기록하지 않는다.
+
+기존 두 번째 author를 필수 오류 보정에 사용한 페이지는 이후 디자인 검토에서 새로 발견한 목표를 수정할 호출이 없었다. 3회 plan에는 검증된 후보 적용을 위한 별도 예약이 포함되며 일반 자유 author 3회를 의미하지 않는다. 이번 확인에서 호출 한도나 게시 기준을 완화하지 않았다.
+
+기존 12쪽 비교 입력은 현재 API의 원문 문자열만 사용해 원본 9쪽 표의 7개 병합 관계를 빠뜨렸다. 따라서 당시 게시 전 웹 후보의 주관 평가 81점과 기준 86점은 품질 향상 근거가 아니다. 원본 editable PPTX를 정식 분석한 새 manifest에서는 12쪽, 텍스트 432개, 표 2개, 차트 1개와 해당 병합 7개를 확인했다. 원본 3쪽의 방향은 connector endpoint 대신 custom geometry로 표현되어 있으며 관련 명령과 좌표를 확인했다. 전체 원본 페이지 미리보기가 author에 자동 전달된다는 주장은 하지 않는다. 새 source admission은 차트의 `axis_semantics` 지원 판정에서 제공자 호출 전에 거부돼 원인을 별도 조사한다.
+
+웹 5쪽 작업 0b7800f4-42fe-45da-948e-8475424c9b30의 브라우저 대기 종료 뒤에도 서버 작업이 계속된 것을 확인했다. 최종 실패는 표의 숫자·단위를 공통 단위와 셀로 나눈 표현에 따른 필수 문자열 3개 누락이다. 해당 검사와 한도를 보존하면서 실제 누락 literal을 최대 8개, 각 160자 이내로 기존 repair에 전달하도록 보완했고 좁은 검사 1개가 통과했다. 아이콘 누락은 기존 1회 repair에서 실제 복구된 것을 확인했다.
+
+원본 PPTX의 native 화살표 끝·접속 속성은 명시된 값만 추출해 source fact에 보존하고 대상 shape ID를 같은 페이지 source ID로 연결한다. 과거 manifest는 새 extractor identity로 구분하며 덮어쓰지 않는다. 실제 PPTX 파싱부터 author fact 전달까지 좁은 검사 1개가 통과했다. 이 검사는 3쪽에 존재하지 않는 endpoint를 보존했다고 주장하는 근거가 아니다.
+
+A4의 후속 독립 입력에서는 모든 수치·표·장문 제목과 고정 보조 정보를 유지하고 Markdown 줄바꿈을 정규화했으며, 수정 가능한 본문 표 스타일과 강조 위계를 최초 입력에서 명시했다. 작업 4f9e874c-383b-4882-96d7-44704e167236은 문서 5c13a709-5300-565a-80e1-7da90ed51e2f revision 1의 4쪽을 실제 게시했다. 브라우저에서 PPTX 내보내기 1회·다운로드 1회를 확인했고, SHA-256은 6a00ef28f889cc16778add32469f73d3668190239b4c734acac59bbd2b1bdef2다. 읽기 전용 PowerPoint에서 A4 비율 4쪽을 렌더링해 편집 가능한 텍스트 62개·표 3개와 날짜·담당·선행 관계 및 수치를 확인했다. 원본 해시와 기존 열린 문서를 보존했다. 이 작은 A4 결과는 기존 가로 12쪽 기준보다 우수하다는 근거와 구분한다.
+
+웹의 새 5쪽 요청은 create 1회와 generation 1회로 접수됐고 작업 97d65a47-1711-4b3c-802b-5c97a01477f1이 문서 39b9580d-36c0-40cc-9261-b7c238166b81 revision 1로 게시됐다. create 이후 약 3분 16초는 content brief와 outline 스트리밍 단계이며 durable generation queue와 구분한다. 브라우저 내보내기 1회·다운로드 1회 및 읽기 전용 Office 5쪽 렌더링을 확인했다. PPTX SHA-256은 c865e5b3ad67f4994a1d693630ef09617a324241999d53e8e7f8c9fbacca5294이며 텍스트 88개와 native 표 1개가 있다. 원본 해시와 기존 열린 문서는 보존했다.
+
+검증 코드만 갱신된 과거 게시본은 기존 digest를 바꾸지 않고 새 명시적 상단 수정 작업에서 원본 SVG·PNG·입력·본문·native 객체를 검증한 다음 현재 renderer로 실제 재측정한다. 새 revision의 전용 witness와 local receipt에 연결하며, 증거 누락·소유권·본문·native 값 동시 변조는 거부한다. 해당 경로에는 body author 호출이나 측정 실패 뒤 자동 작성 전환이 없다. 동일 작업 재개만 가능하며 다른 child 작업에 이전 소유 증거를 재라벨하지 않는다. 독립 리뷰에서 찾은 누락·동시 변조 경계를 보강한 뒤 기존 좁은 노드가 통과했다. 실제 새 revision 실행 결과는 별도 확인 전까지 성공으로 기록하지 않는다.

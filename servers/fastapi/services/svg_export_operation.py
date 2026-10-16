@@ -251,6 +251,8 @@ async def require_current_header_revision_authority(session, presentation, slide
         key = _candidate_key(index, {"candidate_revision": str(header["revision"]),
             "candidate_id": "final-" + header["candidate_id"], "page_id": outline["page_id"]})
         final = (envelope.get("candidate_pages") or {}).get(key) or {}
+        from services.workspace_svg_header_body_remeasurement import require_body_remeasurement_witness
+        require_body_remeasurement_witness(final, owner=operation, index=index, parent=parent)
         receipt = (slide.content or {}).get("svgReceipt") or {}
         quality = receipt.get("quality") or {}
         generated = (receipt.get("system_furniture") or {}).get("generated_common_header") or {}
