@@ -995,6 +995,68 @@ def test_header_v2_metadata_preserves_exact_values_provenance_and_admitted_input
     from services.svg_common_header_transport import (
         TRANSPORT_RULES, pack_header_transport, restore_header_transport,
     )
+    alias_raw = deepcopy(original_payload)
+    reference = {"identity": {"colors": ["#123456"], "fonts": ["Noto Sans KR"]},
+        "guidance": "Preserve exact typography, spacing and reference identity. " * 80,
+        "source_ref": "exact-reference-source", "metadata": {"document_name": "  원본 문서명  "}}
+    alias_raw["style"]["design_pack_template"] = deepcopy(reference)
+    alias_raw["header_requirements"]["reference_content"] = deepcopy(reference)
+    alias_scoped = _design_prompt_payload(alias_raw)
+    alias_before = deepcopy(alias_scoped)
+    alias_packed, alias_proof = pack_header_transport(alias_scoped)
+    assert alias_packed["header_requirements"]["reference_content"] == {
+        "$header_context_alias": "/style/design_pack_template"}
+    assert alias_packed["style"]["design_pack_template"]["metadata"]["document_name"] == "  원본 문서명  "
+    assert restore_header_transport(alias_packed, alias_proof["source_mapping"],
+        expected_context_digest=canonical_json_digest(alias_scoped)) == alias_scoped
+    assert alias_scoped == alias_before
+    assert "/style/design_pack_template" in TRANSPORT_RULES
+    for version in ("svg-header-source-handles/v1", "svg-header-source-handles/v2"):
+        prior = deepcopy(alias_packed)
+        prior["transport_source_mapping"]["version"] = version
+        with pytest.raises(ValueError, match="svg_common_header_transport_input_invalid"):
+            restore_header_transport(prior, alias_proof["source_mapping"],
+                expected_context_digest=canonical_json_digest(alias_scoped))
+        prior["header_requirements"]["reference_content"] = deepcopy(prior["style"]["design_pack_template"])
+        if version.endswith("/v1"):
+            prior["available_values"]["field_columns"][2] = "user_fixed"
+            for fields in prior["available_values"]["rows"]:
+                for field in fields:
+                    field[2] = bool(field[2])
+        assert restore_header_transport(prior, alias_proof["source_mapping"],
+            expected_context_digest=canonical_json_digest(alias_scoped)) == alias_scoped
+    for mutation in ("path", "extra", "missing", "target", "unresolved"):
+        tampered = deepcopy(alias_packed)
+        if mutation == "path":
+            tampered["header_requirements"]["reference_content"]["$header_context_alias"] = "/style/tokens"
+        elif mutation == "extra":
+            tampered["header_requirements"]["reference_content"]["extra"] = True
+        elif mutation == "missing":
+            del tampered["style"]["design_pack_template"]
+        elif mutation == "target":
+            tampered["style"]["design_pack_template"]["metadata"]["document_name"] += "changed"
+        else:
+            tampered["representative"]["unresolved"] = {"$header_context_alias": "/style/design_pack_template"}
+        with pytest.raises(ValueError, match="svg_common_header_transport_input_invalid"):
+            restore_header_transport(tampered, alias_proof["source_mapping"],
+                expected_context_digest=canonical_json_digest(alias_scoped))
+    unequal = deepcopy(alias_scoped)
+    unequal["header_requirements"]["reference_content"]["metadata"]["document_name"] += "different"
+    unequal_packed, unequal_proof = pack_header_transport(unequal)
+    assert "$header_context_alias" not in unequal_packed["header_requirements"]["reference_content"]
+    assert restore_header_transport(unequal_packed, unequal_proof["source_mapping"],
+        expected_context_digest=canonical_json_digest(unequal)) == unequal
+    different_types = deepcopy(alias_scoped)
+    different_types["style"]["design_pack_template"]["flag"] = 1
+    different_types["header_requirements"]["reference_content"]["flag"] = True
+    types_packed, types_proof = pack_header_transport(different_types)
+    assert "$header_context_alias" not in types_packed["header_requirements"]["reference_content"]
+    assert restore_header_transport(types_packed, types_proof["source_mapping"],
+        expected_context_digest=canonical_json_digest(different_types)) == different_types
+    assert context_bytes(alias_packed, DESIGN_RULES + TRANSPORT_RULES, candidate_schema(alias_raw), compact=True) < context_bytes(
+        unequal_packed, DESIGN_RULES + TRANSPORT_RULES, candidate_schema(unequal), compact=True)
+    with pytest.raises(ValueError, match="svg_common_header_transport_input_invalid"):
+        pack_header_transport({**alias_scoped, "unexpected": {"$header_context_alias": "/style/design_pack_template"}})
     for count in (12, 80):
         dense_outline = PresentationOutlineModel(slides=[SlideOutlineModel(
             page_id=str(uuid.uuid5(uuid.NAMESPACE_URL, f"transport-fixture-{index}")),
@@ -1025,6 +1087,9 @@ def test_header_v2_metadata_preserves_exact_values_provenance_and_admitted_input
             assert proof["source_mapping_digest"] == canonical_json_digest(proof["source_mapping"])
             assert context_bytes(packed, DESIGN_RULES + TRANSPORT_RULES, candidate_schema(raw), compact=True) + 1024 <= 32768
             legacy = deepcopy(packed)
+            if legacy.get("header_requirements", {}).get("reference_content") == {
+                    "$header_context_alias": "/style/design_pack_template"}:
+                legacy["header_requirements"]["reference_content"] = deepcopy(legacy["style"]["design_pack_template"])
             legacy["transport_source_mapping"]["version"] = "svg-header-source-handles/v1"
             legacy["available_values"]["field_columns"][2] = "user_fixed"
             for fields in legacy["available_values"]["rows"]:

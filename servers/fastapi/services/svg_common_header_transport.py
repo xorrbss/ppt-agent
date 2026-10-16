@@ -6,20 +6,39 @@ from copy import deepcopy
 
 from utils.hashing import canonical_json_digest
 
-VERSION = "svg-header-source-handles/v2"
+VERSION = "svg-header-source-handles/v3"
+_PREVIOUS_VERSION = "svg-header-source-handles/v2"
 _LEGACY_VERSION = "svg-header-source-handles/v1"
 TRANSPORT_RULES = """Resolve *_index through shared_value_dictionary, zero based. row_index is
 zero based. Available-value rows use the declared page_binding; otherwise their page_id
 is explicit. Source handles are opaque server provenance, never display values or
 provider authority. user_fixed_01 is 0=false,1=true. Preserve display strings
 verbatim; return original value_ref names.
+An object {"$header_context_alias":"/style/design_pack_template"} at
+header_requirements.reference_content means the complete identical value at
+style.design_pack_template; resolve it there without omitting any reference evidence.
 """
 _SOURCE_KINDS = {"page_id": "p", "representative_page_id": "p", "source_ref": "r", "source_digest": "s"}
 _PRIVATE_KEYS = {"shared_value_dictionary", "transport_source_mapping"}
+_REFERENCE_ALIAS_KEY = "$header_context_alias"
+_REFERENCE_ALIAS = {_REFERENCE_ALIAS_KEY: "/style/design_pack_template"}
 
 
 def _invalid():
     raise ValueError("svg_common_header_transport_input_invalid")
+
+
+def _reference_alias_paths(node, path=()):
+    paths = []
+    if isinstance(node, dict):
+        if _REFERENCE_ALIAS_KEY in node:
+            paths.append(path)
+        for key, item in node.items():
+            paths.extend(_reference_alias_paths(item, path + (key,)))
+    elif isinstance(node, list):
+        for index, item in enumerate(node):
+            paths.extend(_reference_alias_paths(item, path + (index,)))
+    return paths
 
 
 def _opaque_sources(payload):
@@ -56,7 +75,8 @@ def _opaque_sources(payload):
 
 def pack_header_transport(payload):
     """Return model input plus a full server-only source mapping and proof."""
-    if not isinstance(payload, dict) or _PRIVATE_KEYS & set(payload):
+    if (not isinstance(payload, dict) or _PRIVATE_KEYS & set(payload)
+            or _reference_alias_paths(payload)):
         _invalid()
     source_digest = canonical_json_digest(payload)
     value, mapping = _opaque_sources(payload)
@@ -103,6 +123,13 @@ def pack_header_transport(payload):
             rows=[[page["page_id"], fields] for page, fields in zip(available, field_rows, strict=True)])
     value["available_values"] = encoded
     value["shared_value_dictionary"] = dictionary
+    style, requirements = payload.get("style"), payload.get("header_requirements")
+    if isinstance(style, dict) and isinstance(requirements, dict):
+        reference = style.get("design_pack_template")
+        repeated = requirements.get("reference_content")
+        if (isinstance(reference, dict) and reference and repeated == reference
+                and canonical_json_digest(repeated) == canonical_json_digest(reference)):
+            value["header_requirements"]["reference_content"] = dict(_REFERENCE_ALIAS)
     value["transport_source_mapping"] = {"version": VERSION,
         "digest": canonical_json_digest(mapping), "unpacked_context_digest": source_digest}
     restored = restore_header_transport(value, mapping, expected_context_digest=source_digest)
@@ -119,11 +146,20 @@ def restore_header_transport(payload, mapping, *, expected_context_digest):
         value = deepcopy(payload)
         descriptor = value.pop("transport_source_mapping")
         version = descriptor.get("version")
-        if (version not in {VERSION, _LEGACY_VERSION}
+        if (version not in {VERSION, _PREVIOUS_VERSION, _LEGACY_VERSION}
                 or descriptor != {"version": version, "digest": canonical_json_digest(mapping),
                            "unpacked_context_digest": expected_context_digest}
                 or not isinstance(mapping, dict)):
             _invalid()
+        aliases = _reference_alias_paths(value)
+        if aliases:
+            if (version != VERSION or aliases != [("header_requirements", "reference_content")]
+                    or value["header_requirements"]["reference_content"] != _REFERENCE_ALIAS):
+                _invalid()
+            reference = value["style"]["design_pack_template"]
+            if not isinstance(reference, dict) or not reference:
+                _invalid()
+            value["header_requirements"]["reference_content"] = deepcopy(reference)
         dictionary = value.pop("shared_value_dictionary")
         if (not isinstance(dictionary, list) or any(not isinstance(text, str) for text in dictionary)
                 or len(set(dictionary)) != len(dictionary)):
@@ -137,7 +173,7 @@ def restore_header_transport(payload, mapping, *, expected_context_digest):
             return dictionary[index]
 
         available = value["available_values"]
-        fixed_column = "user_fixed_01" if version == VERSION else "user_fixed"
+        fixed_column = "user_fixed" if version == _LEGACY_VERSION else "user_fixed_01"
         if available["field_columns"] != ["value_ref_index", "value_index", fixed_column, "source_ref_handle"]:
             _invalid()
         if "pages" in value:
@@ -160,7 +196,7 @@ def restore_header_transport(payload, mapping, *, expected_context_digest):
             bindings = {}
             for ref, item, fixed, source in fields:
                 name = text(ref)
-                if version == VERSION:
+                if version != _LEGACY_VERSION:
                     if type(fixed) is not int or fixed not in (0, 1):
                         _invalid()
                     fixed = bool(fixed)
