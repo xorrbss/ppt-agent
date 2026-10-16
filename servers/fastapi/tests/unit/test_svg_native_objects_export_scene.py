@@ -29,6 +29,83 @@ TABLE_BOX = (100.0, 150.0, 600.0, 200.0)
 CHART_BOX = (120.0, 120.0, 640.0, 400.0)
 
 
+def test_native_capture_alias_requires_one_actual_child_and_identical_return(tmp_path):
+    import json
+    from xml.etree import ElementTree as ET
+
+    from pptx.enum.shapes import MSO_AUTO_SHAPE_TYPE
+    from services.svg_contract import source_digest
+    from workers.public_svg_whole_page_convert import NativeOoxmlCapture
+
+    for mode in ("one", "two", "tamper"):
+        deck = Presentation()
+        slide = deck.slides.add_slide(deck.slide_layouts[6])
+        native_shapes = [slide.shapes.add_shape(MSO_AUTO_SHAPE_TYPE.RECTANGLE, 100, 100, 200, 100)
+                         for _ in range(2 if mode == "two" else 1)]
+        target = tmp_path / f"{mode}.pptx"
+        deck.save(target)
+        source = ('<svg xmlns="http://www.w3.org/2000/svg"><g id="parent"><g id="empty"/>'
+                  '<metadata/><rect id="first"/>'
+                  + ('<rect id="second"/>' if mode == "two" else '') + '</g></svg>')
+        parent = ET.fromstring(source)[0]
+        events = []
+        converter = SimpleNamespace(_extract_background_candidate=lambda root, context: (None, None))
+
+        def convert(element, context):
+            tag = element.tag.rsplit("}", 1)[-1]
+            if tag == "g":
+                children = [converter.convert_element(child, context) for child in element]
+                returned = [child for child in children if child is not None]
+                # The two-child case intentionally drops output: capture must
+                # never grant this the legitimate single-child alias proof.
+                result = returned[0] if returned else None
+                if result is not None and mode == "tamper":
+                    changed = ET.fromstring(result.xml)
+                    identity = changed.find("{http://schemas.openxmlformats.org/presentationml/2006/main}nvSpPr/"
+                                            "{http://schemas.openxmlformats.org/presentationml/2006/main}cNvPr")
+                    identity.set("name", "tampered")
+                    result = SimpleNamespace(xml=ET.tostring(changed, encoding="unicode"), bounds_emu=result.bounds_emu)
+            elif tag == "rect":
+                shape = native_shapes[1 if element.get("id") == "second" else 0]
+                result = SimpleNamespace(xml=shape._element.xml, bounds_emu=(100, 100, 300, 200))
+            else:
+                result = None
+            if result is None:
+                events.append({"tag": tag, "decision": "skip", "reason": "empty-or-non-rendering"})
+            else:
+                output = ET.fromstring(result.xml)
+                identity = output.find("{http://schemas.openxmlformats.org/presentationml/2006/main}nvSpPr/"
+                                       "{http://schemas.openxmlformats.org/presentationml/2006/main}cNvPr")
+                events.append({"tag": tag, "decision": "native", "shape_id": int(identity.get("id")),
+                               "bounds_emu": list(result.bounds_emu)})
+            return result
+
+        converter.convert_element = convert
+        capture = NativeOoxmlCapture(converter)
+        capture.install()
+        try:
+            if mode == "tamper":
+                with pytest.raises(ValueError, match="svg_native_ooxml_expected_result_conflict"):
+                    converter.convert_element(parent, SimpleNamespace(slide_num=1))
+                assert not capture.group_aliases
+                continue
+            converter.convert_element(parent, SimpleNamespace(slide_num=1))
+            trace = tmp_path / f"{mode}.json"
+            trace.write_text(json.dumps({"slide_count": 1, "slides": [{"slide_num": 1, "events": events}]}), encoding="utf-8")
+            receipts = [{"svg_digest": source_digest(source), "source_page_id": "page-1"}]
+            if mode == "two":
+                assert not capture.group_aliases
+                with pytest.raises(ValueError, match="svg_native_ooxml_primitive_owner_duplicate"):
+                    capture.verify(target, trace, [source], receipts)
+            else:
+                assert capture.group_aliases == {1: {native_shapes[0].shape_id: 1}}
+                evidence = capture.verify(target, trace, [source], receipts)
+                assert evidence["passed"] is True
+                assert evidence["measurements"]["verifiedGroupAliases"] == 1
+        finally:
+            capture.restore()
+
+
 def _svg(body: str) -> str:
     return ('<svg xmlns="http://www.w3.org/2000/svg" width="1188" height="840" viewBox="0 0 1188 840">'
             f"{body}</svg>")

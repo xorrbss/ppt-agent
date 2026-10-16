@@ -312,12 +312,22 @@ def test_visual_review_passes_with_a_matching_clean_advisory(policy_version, mon
             monkeypatch.setattr("services.svg_authoring_profile.read_quality_recovery_plan",
                 lambda _: dict(slide_count=6, review_group_size=5))
             monkeypatch.setattr("services.generation_core.drivers.svg.quality._candidate_local_valid", lambda *a, **k: True)
-            monkeypatch.setattr("services.generation_core.drivers.svg.quality._design_context", lambda *a, **k: saved_context)
+            from services.generation_core.drivers.svg import quality as svg_quality
+            real_design_context = svg_quality._design_context
+            observed_header_pages = []
+            def inspect_design_context(ctx, *args, **kwargs):
+                observed_header_pages.append(deepcopy(ctx.header_pages))
+                return real_design_context(ctx, *args, **kwargs)
+            monkeypatch.setattr(svg_quality, "_design_context", inspect_design_context)
             expanded_prepared = saved_review.prepare_saved_review(saved_presentation, expanded, [0], [png] * 6,
                 operation_id=operation, owner_scope=owner)
             assert expanded_prepared["changed"] == list(range(6))
             assert expanded_prepared["context"]["reviewScope"] == "full"
-            saved_context["policy"] = {"id": "svg-quality-first", "version": 1}
+            legacy_snapshot = deepcopy(snapshot)
+            legacy_snapshot["quality_recovery_policy"]["version"] = 1
+            legacy_snapshot["digest"] = canonical_json_digest(
+                {key: value for key, value in legacy_snapshot.items() if key != "digest"}, allow_nan=True)
+            saved_presentation.theme["svg"]["styleSnapshot"] = legacy_snapshot
             with pytest.raises(ValueError, match="single_call_capacity_exceeded"):
                 saved_review.prepare_saved_review(saved_presentation, expanded, [0], [png] * 6,
                     operation_id=operation, owner_scope=owner)
@@ -360,6 +370,20 @@ def test_visual_review_passes_with_a_matching_clean_advisory(policy_version, mon
             current_presentation = SimpleNamespace(id=generation.presentation_id, owner_id=generation.owner_id,
                 revision=1, theme={"svg": {"styleSnapshot": deepcopy(frozen_snapshot)}},
                 outlines=deepcopy(published_job.authored_outline))
+            current_presentation.theme["svg"]["qualityRecoveryPublication"] = deepcopy(parent)
+            monkeypatch.setattr("services.svg_authoring_profile.read_quality_recovery_plan",
+                lambda _: dict(slide_count=2, review_group_size=5))
+            before_outline = deepcopy(current_presentation.outlines)
+            header_prepared = saved_review.prepare_saved_review(current_presentation, slides, [0], [png, png],
+                operation_id=operation, owner_scope=owner)
+            assert observed_header_pages[-1] == header_bindings
+            assert [page["common_header"] for page in header_prepared["context"]["pages"]] == header_bindings
+            assert current_presentation.outlines == before_outline
+            current_presentation.outlines["slides"][0]["title"] = "Unbound title"
+            with pytest.raises(ValueError, match="svg_common_header"):
+                saved_review.prepare_saved_review(current_presentation, slides, [0], [png, png],
+                    operation_id=operation, owner_scope=owner)
+            current_presentation.outlines = before_outline
             current_admission = SimpleNamespace(owner_id=generation.owner_id, tenant_id="fixture-tenant")
 
             class ParentSession:
@@ -435,6 +459,141 @@ def test_visual_review_passes_with_a_matching_clean_advisory(policy_version, mon
                 assert svg_visual_review(slides=candidate_slides, advisory=candidate, expected_binding=evidence)["status"] == "failed"
             assert svg_visual_review(slides=slides, advisory=original, expected_binding={key: value for key, value in expected.items()
                 if key != "_generationSourceReview"})["status"] == "failed"
+
+            # A fresh source-only review is a separate producer at the current
+            # revision; consume its actual gate and saved page evidence.
+            review_id = str(uuid.uuid4())
+            fresh_prepared = deepcopy(prepared)
+            fresh_prepared["context"] = deepcopy(context)
+            fresh_prepared["context"]["binding"]["operationId"] = review_id
+            fresh, fresh_publication = seal_saved_review(fresh_prepared, slides, deepcopy(vision),
+                SimpleNamespace(expected_revision=2, operation_id=review_id))
+            fresh["pageAdvisories"] = split_page_advisories(fresh["vision"], slides, range(len(slides)))
+            fresh_binding = {**binding, "operationId": review_id, "sourceRevision": 2,
+                "pageRecordDigests": [page["digest"] for page in fresh["pageAdvisories"]]}
+            fresh["operationBinding"] = {**fresh_binding, "digest": content_digest(fresh_binding)}
+            fresh_producer = dict(operationId=review_id, presentationId=presentation, ownerId=owner,
+                ownerScope=owner, tenantId="fixture-tenant", sourceRevision=2, expectedRevision=2,
+                state="succeeded", kind="quality.review", maxAttempts=1, mode="analyze_only", target="source_svg",
+                plannedRequestLimit=1, retryRequestLimit=0, parentOperationId=operation,
+                parentJobId=job, parentSourceRevision=1, publicationDigest=fresh_publication["digest"])
+            fresh_expected = {**expected, "sourceRevision": 2, "_generationSourceReview": dict(
+                snapshot=deepcopy(snapshot), publication=fresh_publication, producer=fresh_producer,
+                currentTenantId="fixture-tenant")}
+            fresh_before = deepcopy(fresh)
+            assert svg_visual_review(slides=slides, advisory=fresh, expected_binding=fresh_expected)["status"] == "passed"
+            assert fresh == fresh_before
+            for field, value in (("kind", "presentation.generate"), ("state", "unknown"),
+                    ("tenantId", "other-tenant"), ("ownerScope", "other-scope"),
+                    ("expectedRevision", 1), ("parentSourceRevision", 2), ("parentJobId", str(uuid.uuid4())),
+                    ("maxAttempts", 2), ("retryRequestLimit", 1), ("mode", "apply"), ("target", "final_pptx")):
+                changed_expected = deepcopy(fresh_expected)
+                changed_expected["_generationSourceReview"]["producer"][field] = value
+                assert svg_visual_review(slides=slides, advisory=fresh, expected_binding=changed_expected)["status"] == "failed"
+            for violation in ("saved_page", "png", "gate", "missing_page"):
+                changed, changed_slides = deepcopy(fresh), deepcopy(slides)
+                if violation == "saved_page":
+                    evidence = changed["savedPageReviewEvidence"]
+                    evidence["pages"][0]["inputDigest"] = "sha256:" + "0" * 64
+                    evidence["digest"] = content_digest({key: value for key, value in evidence.items() if key != "digest"})
+                elif violation == "png":
+                    changed_slides[0].content["svgReceipt"]["png_sha256"] = "0" * 64
+                elif violation == "gate":
+                    changed["vision"]["designGate"]["status"] = "unreviewed"
+                else:
+                    changed["pageAdvisories"].pop()
+                assert svg_visual_review(slides=changed_slides, advisory=changed, expected_binding=fresh_expected)["status"] == "failed"
+
+            # Historical header operations omitted only the final classifier.
+            # Reuse its deterministic result in an owned, read-only view.
+            from services import svg_export_operation as export_operation
+            from services.svg_quality_recovery_review import saved_page_render_input
+            raw_pages = deepcopy(slides)
+            for index, page in enumerate(raw_pages):
+                page.id, page.owner_id, page.index = uuid.uuid4(), owner, index
+                page.source_format = "svg"
+                quality = page.content["svgReceipt"]["quality"]
+                quality.pop("classification", None)
+                quality["verified"] = False
+            raw_before = deepcopy([page.content for page in raw_pages])
+            effective = export_operation._classified_header_slides(raw_pages)
+            assert [page.content for page in raw_pages] == raw_before
+            from services.svg_export_visual_review import svg_quality_status
+            assert svg_quality_status(raw_pages, None)["measured"]["status"] == "failed"
+            assert svg_quality_status(effective, None)["measured"]["status"] == "passed"
+            assert all(page.content["svgReceipt"]["quality"]["verified"] is True
+                       and page.content["svgReceipt"]["quality"]["classification"] == "passed" for page in effective)
+            for violation in ("classified", "terminal", "unknown", "failure"):
+                changed = deepcopy(raw_pages)
+                receipt = changed[0].content["svgReceipt"]
+                if violation == "classified":
+                    receipt["quality"]["classification"] = "review_required"
+                elif violation == "terminal":
+                    receipt["terminal"] = {"reason": "review_required"}
+                elif violation == "unknown":
+                    receipt["inflight"] = {"state": "unknown"}
+                else:
+                    receipt["quality"]["failures"] = [{"kind": "text_overlap"}]
+                assert export_operation._classified_header_slides(changed)[0].content["svgReceipt"]["quality"]["verified"] is False
+            evidence_before = saved_page_render_input(effective[0])
+            annotated = deepcopy(effective[0])
+            annotated.content["svgReceipt"]["qualityRecoveryReview"] = {"operationId": review_id}
+            annotated.content["svgReceipt"]["quality"]["compositionObservation"] = {"diagnostic": True}
+            assert saved_page_render_input(annotated) == evidence_before
+            annotated.content["svgReceipt"]["quality"]["geometry_passed"] = False
+            assert saved_page_render_input(annotated) != evidence_before
+            deck_view = SimpleNamespace(id=presentation, owner_id=owner, revision=2, theme={"svg": {"styleSnapshot": snapshot}},
+                outlines={"slides": [{"page_id": str(page.id)} for page in raw_pages]})
+            scene = export_operation._header_scene_digest(deck_view, raw_pages)
+            authority = export_operation._HeaderRevisionAuthority(review_id, scene, "fixture-proof",
+                export_operation._HEADER_REVISION_AUTHORITY_SEAL, operation, job, 1)
+            assert export_operation._header_authority_current(authority, deck_view, effective)
+            projected = export_operation.header_revision_review_slides(authority, deck_view, raw_pages)
+            assert all(page.content["svgReceipt"]["quality"]["verified"] for page in projected)
+            with pytest.raises(ValueError, match="svg_header_revision_authority_invalid"):
+                export_operation.header_revision_review_slides({"target": "common_header"}, deck_view, raw_pages)
+            changed = deepcopy(raw_pages)
+            changed[0].svg_content += "changed"
+            with pytest.raises(ValueError, match="svg_header_revision_authority_invalid"):
+                export_operation.header_revision_review_slides(authority, deck_view, changed)
+            parent_identity = export_operation.header_revision_source_parent(authority, deck_view, raw_pages)
+            assert parent_identity["sourceRevision"] == parent_identity["sourceGenerationRevision"] == 1
+            assert not any(key in parent_identity for key in ("gateDigest", "snapshotDigest", "vision"))
+
+            # A passed saved-source review may retain minor, nonblocking
+            # design targets; it does not run generation's rewrite loop.
+            needed_vision = deepcopy(vision)
+            for page in needed_vision["designReview"]["pages"]:
+                page["axes"]["brand_expression"] = dict(verdict="advisory", severity="minor", repairScope="none",
+                    visibleEvidence="A minor brand-expression opportunity remains.")
+                page["designTargets"] = [dict(axis="brand_expression", evidenceRegion="header",
+                    visibleEvidence="Minor brand expression", sourceEvidence="Current source and admitted style",
+                    improvementGoal="Optional brand-expression refinement")]
+
+            def saved_source_record(answer):
+                record, current_publication = seal_saved_review(fresh_prepared, slides, deepcopy(answer),
+                    SimpleNamespace(expected_revision=2, operation_id=review_id))
+                record["pageAdvisories"] = split_page_advisories(record["vision"], slides, range(len(slides)))
+                operation_binding = {**fresh_binding, "pageRecordDigests": [page["digest"] for page in record["pageAdvisories"]]}
+                record["operationBinding"] = {**operation_binding, "digest": content_digest(operation_binding)}
+                expected_record = deepcopy(fresh_expected)
+                expected_record["_generationSourceReview"]["publication"] = current_publication
+                expected_record["_generationSourceReview"]["producer"]["publicationDigest"] = current_publication["digest"]
+                return record, expected_record
+
+            needed_record, needed_expected = saved_source_record(needed_vision)
+            assert needed_record["vision"]["designGate"]["status"] == "passed"
+            assert needed_record["vision"]["designGate"]["designImprovementStatus"] == "needed"
+            assert svg_visual_review(slides=slides, advisory=needed_record, expected_binding=needed_expected)["status"] == "passed"
+            for violation in ("failed_axis", "unreviewed"):
+                blocked = deepcopy(needed_vision)
+                if violation == "failed_axis":
+                    blocked["designReview"]["pages"][0]["axes"]["brand_expression"].update(
+                        verdict="failed", severity="major", repairScope="local_repair")
+                else:
+                    blocked["designReview"]["pages"][0]["evaluated"] = False
+                blocked_record, blocked_expected = saved_source_record(blocked)
+                assert svg_visual_review(slides=slides, advisory=blocked_record, expected_binding=blocked_expected)["status"] == "failed"
 
 
 def test_visual_review_records_but_does_not_flag_on_an_advisory_issue():

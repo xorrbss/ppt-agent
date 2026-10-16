@@ -18,6 +18,8 @@ def header_title_lines(svg):
     if GROUP_ID not in svg:
         return {}
     root = ET.fromstring(svg)
+    if any(node.get("id") == "svg-system-common-header-v2-contract" for node in root.iter()):
+        return {}
     groups = [node for node in root.iter() if node.get("id") == GROUP_ID]
     if not groups:
         return {}
@@ -38,7 +40,7 @@ def header_title_lines(svg):
     return result
 
 
-class CommonHeaderExport:
+class FrozenV1CommonHeaderExport:
     def __init__(self, sources, pt_per_px):
         self.sources = sources
         self.lines = [header_title_lines(source) for source in sources]
@@ -165,3 +167,25 @@ class CommonHeaderExport:
                  "origin": "generated-common-header", "pages": pages,
                  "pointPerPx": self.pt_per_px, "officeRenderMeasured": False}
         return {**value, "digest": "sha256:" + canonical_json_sha256(value)}
+
+
+class CommonHeaderExport:
+    """Dispatch explicitly marked v2 scenes while retaining the frozen v1 adapter."""
+
+    def __init__(self, sources, pt_per_px):
+        from workers.svg_common_header_export_v2 import CommonHeaderV2Export
+
+        self.legacy = FrozenV1CommonHeaderExport(sources, pt_per_px)
+        self.v2 = CommonHeaderV2Export(sources, pt_per_px)
+        self.lines = self.legacy.lines if not self.v2.active else [True]
+
+    def install(self, converter):
+        self.legacy.install(converter)
+        self.v2.install(converter)
+
+    def restore(self):
+        self.v2.restore()
+        self.legacy.restore()
+
+    def verify(self, target):
+        return self.v2.verify(target, legacy_readback=self.legacy.verify(target))

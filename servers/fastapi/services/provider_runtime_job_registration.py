@@ -126,6 +126,9 @@ async def ensure_runtime_job(
         deadline = optional_env_int("PROVIDER_JOB_DEADLINE_SECONDS")
         estimated_limit = optional_env_int("PROVIDER_JOB_ESTIMATED_BUDGET_MICROUNITS")
         actual_limit = optional_env_int("PROVIDER_JOB_ACTUAL_BUDGET_MICROUNITS")
+        if getattr(scope, "public_only", False):
+            estimated_limit, actual_limit = await public_header_retry_cost_limits(scope.job_id,
+                estimated_limit, actual_limit)
         if episode_limits is not None:
             estimated_limit = min(estimated_limit, episode_limits[4]) if estimated_limit is not None else episode_limits[4]
             actual_limit = min(actual_limit, episode_limits[5]) if actual_limit is not None else episode_limits[5]
@@ -156,11 +159,36 @@ async def public_review_request_baseline(operation_id):
     from services.database import async_session_maker
     async with async_session_maker() as session:
         row = await require_public_review_job(session, operation_id=operation_id)
-        return row.initial_request_count, row.retry_request_count, 1, 0
+        from models.sql.workspace import WorkspaceOperation
+        operation = await session.get(WorkspaceOperation, operation_id)
+        if operation is not None and operation.kind == "design.apply" and operation.retry_of_operation_id is not None:
+            manifest = operation.request_payload["svg_header_retry"]  # validated by require_public_review_job
+            initial = manifest["consumed"]["planned_request_limit"]
+            retry = manifest["consumed"]["retry_request_limit"]
+            return (row.initial_request_count + initial, row.retry_request_count + retry,
+                    row.planned_request_limit + row.retry_request_limit + initial + retry,
+                    row.retry_request_limit + retry)
+        return (row.initial_request_count, row.retry_request_count,
+                row.planned_request_limit + row.retry_request_limit, row.retry_request_limit)
+
+
+async def public_header_retry_cost_limits(operation_id, estimated, actual):
+    from services.database import async_session_maker
+    from models.sql.workspace import WorkspaceOperation
+    from services.workspace_svg_header_retry import require_header_retry_lineage, retry_runtime_cost_limits
+
+    async with async_session_maker() as session:
+        operation = await session.get(WorkspaceOperation, operation_id)
+        if (operation is None or operation.kind != "design.apply" or operation.retry_of_operation_id is None
+                or (operation.request_payload.get("context") or {}).get("target") != "common_header"):
+            return estimated, actual
+        manifest = await require_header_retry_lineage(session, operation)
+        return retry_runtime_cost_limits(manifest, estimated, actual)
 
 
 async def require_public_review_job(session, *, operation_id,
-                                    expected_attempt_token=None, expected_fencing_token=None):
+                                    expected_attempt_token=None, expected_fencing_token=None,
+                                    expected_operation_kind=None):
     """Validate durable review authority before registering or reserving spend."""
     from sqlalchemy import select
     from models.sql.public_admission import PublicOperationAdmission
@@ -176,6 +204,13 @@ async def require_public_review_job(session, *, operation_id,
         PublicOperationAdmission.state == "active"))
     operation = await session.scalar(select(WorkspaceOperation).where(
         WorkspaceOperation.id == operation_id).with_for_update())
+    if expected_operation_kind is not None and (operation is None or operation.kind != expected_operation_kind):
+        raise RuntimeError("public_review_admission_scope_invalid")
+    if operation is not None and operation.kind == "design.apply" and (
+            (operation.request_payload.get("context") or {}).get("target") == "common_header"):
+        from services.workspace_svg_header_design_operation_handler import require_header_runtime_admission
+        return await require_header_runtime_admission(session, operation=operation, admission=row,
+            expected_attempt_token=expected_attempt_token, expected_fencing_token=expected_fencing_token)
     if (row is None or operation is None or operation.kind != "quality.review"
             or operation.owner_id != row.owner_id or operation.state != "running"
             or operation.owner_scope != get_workspace_owner_scope()

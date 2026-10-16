@@ -195,9 +195,9 @@ export default function WorkspaceChatPanel({
   );
 
   useEffect(() => {
-    onCommandDispatcherReady?.(commandDispatcher);
+    onCommandDispatcherReady?.(writesEnabled ? commandDispatcher : null);
     return () => onCommandDispatcherReady?.(null);
-  }, [commandDispatcher, onCommandDispatcherReady]);
+  }, [commandDispatcher, onCommandDispatcherReady, writesEnabled]);
 
   const qualityReviewRequester = useCallback<WorkspaceQualityReviewRequester>(
     (requestedSlide) => {

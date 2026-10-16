@@ -15,6 +15,7 @@ from sqlalchemy.orm import defer
 from sqlmodel import select
 from models.generate_presentation_request import DesignPackPinInput
 from models.svg_canvas import SvgCanvasInput
+from models.common_header_design import CommonHeaderDesignInput
 
 from api.v1.ppt.endpoints.presentation_helpers import resolve_presentation_fonts
 from api.v1.ppt.endpoints.presentation_crud_helpers import (
@@ -397,6 +398,7 @@ async def create_presentation(
     web_search: Annotated[bool, Body()] = False,
     strategy: Annotated[Literal["authored", "svg"], Body()] = "svg",
     common_header_mode: Annotated[Optional[Literal["uniform", "free"]], Body()] = None,
+    common_header_design: Annotated[Optional[CommonHeaderDesignInput], Body()] = None,
     common_header_cover_exception: Annotated[bool, Body()] = False,
     theme: Annotated[Optional[dict], Body()] = None,
     aspect_ratio: Annotated[Literal["16:9", "4:3", "9:16", "9:13", "1:1", "21:9"], Body()] = "16:9",
@@ -421,6 +423,14 @@ async def create_presentation(
         raise HTTPException(status_code=422, detail="svg_design_reference_strategy_required")
     if common_header_mode is not None and strategy != "svg":
         raise HTTPException(status_code=422, detail="common_header_svg_strategy_required")
+    if common_header_design is not None:
+        if strategy != "svg" or common_header_mode == "free":
+            raise HTTPException(status_code=422, detail="common_header_design_requires_svg_uniform")
+        # Header references reuse only the separately owner-admitted style
+        # reference below; body/document references cannot grant this access.
+        if any(reference_id != svg_design_reference_snapshot_id
+               for reference_id in common_header_design.reference_snapshot_ids):
+            raise HTTPException(status_code=422, detail="svg_common_header_design_reference_admission_required")
     if common_header_cover_exception and common_header_mode != "uniform":
         raise HTTPException(status_code=422, detail="common_header_cover_exception_requires_uniform")
     if svg_design_reference_pin is not None and svg_design_reference_snapshot_id is not None:
@@ -556,6 +566,9 @@ async def create_presentation(
     if svg_design_reference_snapshot_id is not None:
         presentation.theme = {**(presentation.theme or {}),
                               "svgDesignReferenceSnapshotId": str(svg_design_reference_snapshot_id)}
+    if common_header_design is not None:
+        presentation.theme = {**(presentation.theme or {}), "commonHeaderDesign":
+                              common_header_design.model_dump(mode="json", by_alias=True)}
     # Idempotency comparisons and workspace settings must use the same
     # server-issued theme identity that will be persisted.
     resolved_theme = presentation.theme
@@ -575,6 +588,8 @@ async def create_presentation(
         if strategy == "svg" and common_header_mode is not None:
             settings["common_header_mode"] = common_header_mode
             settings["common_header_cover_exception"] = common_header_cover_exception
+        if common_header_design is not None:
+            settings["common_header_design"] = common_header_design.model_dump(mode="json", by_alias=True)
         if page_size == "A4":
             settings.pop("aspect_ratio")
             settings.update({"page_size": page_size, "orientation": orientation})

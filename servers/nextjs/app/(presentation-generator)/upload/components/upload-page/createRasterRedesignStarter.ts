@@ -1,4 +1,5 @@
 "use client";
+import { commonHeaderDesignForConfig } from "@/lib/common-header-design";
 /**
  * Starts the "image-only source, A4 SVG" raster-redesign flow: creates the
  * presentation, kicks off raster analysis, waits for it, and either hands
@@ -91,6 +92,7 @@ export function createRasterRedesignStarter({
         include_title_slide: false,
         web_search: false,
         common_header_mode: config.commonHeaderMode ?? "uniform",
+        common_header_design: commonHeaderDesignForConfig(config),
         common_header_cover_exception: (config.commonHeaderMode ?? "uniform") === "uniform" && (config.commonHeaderCoverException ?? false),
         ...(config.svgDesignReferenceSnapshotId ? { svg_design_reference_snapshot_id: config.svgDesignReferenceSnapshotId } : {}),
         ...(config.svgDesignReferencePin ? { svg_design_reference_pin: config.svgDesignReferencePin } : {}),
@@ -116,6 +118,7 @@ export function createRasterRedesignStarter({
         svgDesignReferenceSnapshotId: config.svgDesignReferenceSnapshotId,
         svgDesignReferencePin: config.svgDesignReferencePin,
         commonHeaderMode: config.commonHeaderMode ?? "uniform",
+        commonHeaderDesign: commonHeaderDesignForConfig(config),
         commonHeaderCoverException: (config.commonHeaderMode ?? "uniform") === "uniform" && (config.commonHeaderCoverException ?? false),
         ...(config.svgCanvas ? { svgCanvas: config.svgCanvas } : config.pageSize !== "A4" ? { aspectRatio: config.aspectRatio } : {}),
         orientation: config.orientation ?? "landscape",

@@ -285,8 +285,13 @@ async def _verify_frozen_title_result(session, job, outline, plan):
             or stored.get("identity") != identity or stored.get("state") != "succeeded"
             or set(stored) != {"version", "identity", "state", "result"}):
         raise ValueError("svg_common_header_title_checkpoint_conflict")
+    from services.svg_common_header import common_header_source_digest
+    preparing_v2 = ((job.svg_style_snapshot or {}).get("common_header_design_plan", {}).get("schema")
+                    == "svg-common-header-design-plan/v2"
+                    and "common_header" not in (job.svg_style_snapshot or {}))
     pages = [{"page_index": index,
-              "source_digest": slide.common_header["source_digest"],
+              "source_digest": (common_header_source_digest(slide.content) if preparing_v2
+                                else slide.common_header["source_digest"]),
               "content": slide.content}
              for index, slide in enumerate(outline.slides)
              if index in plan["missing_indices"]]
@@ -342,6 +347,8 @@ async def _pin_owned_svg_style(request, job, *, pin_style, session_maker, owned_
         saved_outline = getattr(current, "authored_outline", None)
         if (outline is not None and getattr(request, "common_header_mode", None) == "uniform"
                 and (frozen is not None or saved_outline is not None)
+                and (frozen or {}).get("common_header_design_plan", {}).get("schema")
+                    != "svg-common-header-design-plan/v2"
                 and not (isinstance(frozen, dict) and "common_header" in frozen
                          and saved_outline is not None)):
             raise ValueError("svg_common_header_binding_incomplete")
@@ -365,6 +372,35 @@ async def _pin_owned_svg_style(request, job, *, pin_style, session_maker, owned_
         if frozen is not None and frozen != snapshot:
             raise RuntimeError("svg_style_snapshot_conflict")
         if outline is not None:
+            design_plan = snapshot.get("common_header_design_plan") or {}
+            if (design_plan.get("schema") == "svg-common-header-design-plan/v2"
+                    and "common_header" not in snapshot):
+                # The v2 document design owns the later CAS that publishes all
+                # bindings together. Never create a provisional v1 header.
+                from uuid import UUID, uuid5
+                from services.svg_common_header import common_header_source_digest
+                from utils.outline_utils import explicit_outline_title
+
+                prepared = outline.model_copy(deep=True)
+                for index, slide in enumerate(prepared.slides):
+                    if slide.title is None:
+                        slide.title = explicit_outline_title(slide.content)
+                    if not isinstance(slide.title, str) or not slide.title.strip():
+                        raise ValueError("svg_common_header_title_unresolved")
+                    if not slide.page_id:
+                        if current.svg_header_design_checkpoint is not None:
+                            raise ValueError("svg_common_header_checkpoint_page_identity_missing")
+                        slide.page_id = str(uuid5(UUID(str(current.id)),
+                            f"svg-common-header-page/v2:{index}:{common_header_source_digest(slide.content)}"))
+                if len({slide.page_id for slide in prepared.slides}) != len(prepared.slides):
+                    raise ValueError("svg_common_header_page_id_duplicate")
+                outline.slides = prepared.slides
+                current.authored_outline = outline.model_dump(mode="json")
+                current.svg_style_snapshot = snapshot
+                request._svg_style_snapshot = snapshot
+                checkpoint_session.add(current)
+                await checkpoint_session.commit()
+                return snapshot
             if frozen is not None and "common_header" in frozen:
                 from models.presentation_outline_model import PresentationOutlineModel
                 from services.svg_common_header import prepare_common_header, validate_common_header_binding
@@ -469,6 +505,9 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
         request, job, pin_style=pin_svg_style, session_maker=async_session_maker, owned_job=owned_job,
         outline=outline, canvas=canvas,
     )
+    if (snapshot.get("common_header_design_plan") or {}).get("schema") == "svg-common-header-design-plan/v2":
+        from utils.llm_calls.svg_common_header_design import preflight_header_selector
+        preflight_header_selector()
     if source_reflow:
         from services.svg_source_layout import source_pages
         source_units = source_pages(source_document, chart_contract=snapshot.get("source_chart_contract"))

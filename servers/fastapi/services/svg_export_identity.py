@@ -115,6 +115,13 @@ def build_svg_export_identity(claim, *, tenant_id, request: SvgExportRequest,
     quality_inputs = svg_quality_inputs(slides=request.slides, advisory=request.advisory,
                                         quality_policy=request.quality_policy)
     quality_inputs = {**quality_inputs, "wholePageVerifierDigest": whole_page_verifier_digest()}
+    header_bindings = [((slide.content or {}).get("svgReceipt") or {}).get("system_furniture") for slide in request.slides]
+    if any(isinstance(value, dict) and
+           ((value.get("generated_common_header") or {}).get("contract") or {}).get("version") == "svg-common-header/v2"
+           for value in header_bindings):
+        from services.svg_common_header_export_evidence import common_header_verifier_digest
+        quality_inputs = {**quality_inputs, "commonHeaderVerifierDigest": common_header_verifier_digest(),
+                          "commonHeaderBindings": header_bindings}
     if request.source_manifest is not None:
         from services.svg_export_bundle import digest
         quality_inputs = {**quality_inputs,

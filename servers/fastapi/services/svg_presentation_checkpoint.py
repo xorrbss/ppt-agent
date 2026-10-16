@@ -299,10 +299,17 @@ async def _verified_header_title_bootstrap(session, job, roles, usage, operation
     )
 
     plan = validate_header_title_plan((job.request_payload or {}).get(INTERNAL_HEADER_TITLE_PLAN_KEY))
+    from services.svg_common_header_design_plan import validate_header_design_plan
+    design_plan = validate_header_design_plan(
+        (job.request_payload or {}).get("_internal_svg_header_design_plan"))
+    pending_header_design = (design_plan is not None
+        and isinstance(job.svg_style_snapshot, dict)
+        and job.svg_style_snapshot.get("common_header_design_plan") == design_plan
+        and "common_header" not in job.svg_style_snapshot)
     if (plan is None or plan["page_count"] != len(roles)
             or (job.request_payload or {}).get("common_header_mode") != "uniform"
             or not isinstance(job.svg_style_snapshot, dict)
-            or "common_header" not in job.svg_style_snapshot
+            or ("common_header" not in job.svg_style_snapshot and not pending_header_design)
             or not isinstance(job.authored_outline, dict)
             or len(usage) != 1):
         raise RuntimeError("svg_checkpoint_missing")

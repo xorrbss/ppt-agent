@@ -16,6 +16,7 @@ def strip_invisible_format_chars(text: str) -> str:
 
 class SlideOutlineModel(BaseModel):
     content: str
+    page_id: str | None = None
     title: str | None = None
     title_source_digest: str | None = None
     common_header: dict | None = None
@@ -25,7 +26,7 @@ class SlideOutlineModel(BaseModel):
         # Old outlines must retain their original JSON/digest when no header
         # metadata was supplied, including through nested presentation dumps.
         result = handler(self)
-        for key in ("title", "title_source_digest", "common_header"):
+        for key in ("title", "title_source_digest", "common_header", "page_id"):
             if result.get(key) is None:
                 result.pop(key, None)
         return result

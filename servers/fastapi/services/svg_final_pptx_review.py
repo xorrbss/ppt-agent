@@ -47,6 +47,10 @@ async def load_final_review_inputs(session, *, request, presentation, slides):
     from services.public_export_operation import _public_worker_output
     from services.workspace_operation_handler_registry import NonRetryableWorkspaceOperationError
     from utils.owner_context import get_current_tenant_id
+    from services.svg_export_operation import require_current_header_revision_authority, svg_export_admission_snapshot
+    header_authority = await require_current_header_revision_authority(session, presentation, slides)
+    if header_authority is not None:
+        svg_export_admission_snapshot(presentation, slides, header_revision_authority=header_authority)
     public = await session.get(PublicArtifact, request.artifact_id)
     binding = await session.scalar(select(WorkspaceArtifact).where(
         WorkspaceArtifact.public_artifact_id == request.artifact_id,

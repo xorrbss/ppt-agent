@@ -324,6 +324,19 @@ rows does not replace the supplied classification list.
 """
 
 
+def svg_author_semantic_slot(index: int, ordinal: int, identity: dict | None = None) -> str:
+    """Keep candidate purchases distinct from the real page and from each other."""
+    if identity is None:
+        return f"svg-author-{index}-{ordinal}"
+    required = {"candidate_revision", "candidate_id", "page_id"}
+    if (not isinstance(identity, dict) or not required.issubset(identity)
+            or any(not isinstance(identity[key], (str, int)) or isinstance(identity[key], bool)
+                   for key in required) or type(ordinal) is not int or ordinal < 1):
+        raise ValueError("svg_common_header_author_identity_invalid")
+    digest = canonical_json_digest(identity).removeprefix("sha256:")
+    return f"svg-header-body-{digest[:32]}-{ordinal}"
+
+
 def source_relationship_evidence(content: str) -> dict:
     """Describe shared literal endpoints without choosing any SVG geometry."""
     edges = re.findall(r"^\s*(.*?)\s*(?:→|->)\s*(.*?)\s*[:：]", content, re.M)
@@ -553,7 +566,9 @@ def _common_header_author_rules(rules: str, snapshot: dict, binding: dict) -> st
         "The server composes the frozen title and header after authoring. Do not draw a page title, "
         "header background, divider, eyebrow or subline; do not emit any ID starting with "
         "svg-system-common-header. All body glyph ink, shapes, images, connectors and strokes "
-        "must stay inside common_header.body_box in the page binding. A single full-canvas "
+        "must stay inside common_header.body_box in the page binding. Leave clearance inside "
+        "every body_box edge for actual glyph ink and bearings, strokes and marker tips; "
+        "do not place text anchors exactly on the boundary. A single full-canvas "
         "background is permitted. Honor the existing brand/footer reservations too. Keep "
         "every required source fact in readable body content, including facts carried by the "
         "source title; actual evidence captions and local subheadings remain free. Do not move "
@@ -737,14 +752,15 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
                            writing_policy: str | None = None,
                            source_preserved: bool = False,
                            language: str | None = None,
-                           header_page: dict | None = None) -> SvgAuthorResult:
+                           header_page: dict | None = None,
+                           author_attempt_identity: dict | None = None) -> SvgAuthorResult:
     manifest = preflight_svg_source_images(source_images)
     new_copy = writing_policy == WRITING_POLICY_ID and not source_preserved
     quality_policy = read_quality_recovery_policy(style_snapshot)
     source_grounded = quality_policy is not None and quality_policy["version"] == 2
     from services.svg_common_header import validate_common_header_binding
     validate_common_header_binding(style_snapshot.get("common_header"), header_page, index=index, count=n,
-                                   content=content)
+                                   **({} if source_preserved else {"content": content}))
     if source_grounded:
         visual_intent = enrich_visual_intent(content, role, index, visual_intent)
     previous_render_part = None
@@ -785,7 +801,9 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
                                            "correction": correction_hint or "", "source_images": offered,
                                            **({"common_header": {"page": header_page,
                                                "body_box": style_snapshot["common_header"]["body_box"],
-                                               "content_top_px": style_snapshot["common_header"]["content_top_px"]}}
+                                               "content_top_px": style_snapshot["common_header"].get(
+                                                   "content_top_px", style_snapshot["common_header"]["body_box"]["y"]),
+                                               "shared_style": style_snapshot["common_header"].get("shared_style", {})}}
                                               if header_page is not None and header_page.get("applied") else {}),
                                            **({"visual_intent": visual_intent} if visual_intent is not None else {})},
                                           ensure_ascii=False)
@@ -968,7 +986,8 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
     call_outcome = "failed"
     try:
         async with provider_call_admission(is_retry=receipt_attempt_ordinal > 1,
-                semantic_slot=f"svg-author-{index}-{receipt_attempt_ordinal}", provider=provider, model=str(model),
+                semantic_slot=svg_author_semantic_slot(index, receipt_attempt_ordinal, author_attempt_identity),
+                provider=provider, model=str(model),
                 provider_idempotency_capable=supports_provider_idempotency(client, provider_id=provider)):
             call = provider_generate_call(client, provider_id=provider, kwargs=kwargs,
                     idempotency_key=current_provider_idempotency_key(), outcome_scope="authored")
@@ -1041,7 +1060,9 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
             "raw_digest": source_digest(raw), "source_digest": source_digest(svg), "latency_ms": timer.elapsed_ms,
             "effective_model_verified": False, "validation_error": validation_error,
             "input_image_count": image_count, "input_image_bytes": image_bytes,
-            "body_font_floor_px": body_floor, **declaration_receipt(declarations),
+            "body_font_floor_px": body_floor,
+            **({"author_attempt_identity": author_attempt_identity} if author_attempt_identity is not None else {}),
+            **declaration_receipt(declarations),
             **input_receipt,
             **reference_receipt,
             **coverage_receipt,

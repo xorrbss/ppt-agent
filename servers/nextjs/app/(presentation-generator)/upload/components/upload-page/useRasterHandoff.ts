@@ -1,4 +1,5 @@
 "use client";
+import { commonHeaderDesignForConfig } from "@/lib/common-header-design";
 /**
  * Hands a fully-approved raster review off to the SVG generation flow: it
  * verifies the approval pin against the requested analysis mode, stages the
@@ -82,6 +83,7 @@ export const useRasterHandoff = (
           svgDesignReferenceSnapshotId: recovery.svgDesignReferenceSnapshotId,
           svgDesignReferencePin: recovery.svgDesignReferencePin,
           commonHeaderMode: recovery.commonHeaderMode ?? "uniform",
+          commonHeaderDesign: commonHeaderDesignForConfig(recovery),
           commonHeaderCoverException: recovery.commonHeaderMode === "uniform" && (recovery.commonHeaderCoverException ?? false),
           ...(recovery.svgCanvas ? { svgCanvas: recovery.svgCanvas } : recovery.aspectRatio ? { aspectRatio: recovery.aspectRatio } : { pageSize: "A4" as const, orientation: recovery.orientation }),
           sourceMode: "raster_reconstruction",

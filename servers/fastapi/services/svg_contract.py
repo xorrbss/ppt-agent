@@ -301,7 +301,10 @@ def finalize_svg(
             if child.get("id") == PAGE_NUMBER_ID:
                 parent.remove(child)
     furniture = master_furniture(style_snapshot)
-    if page_number_mode not in {"none", "hidden", "off"} and not furniture:
+    header_contract = (style_snapshot or {}).get("common_header") or {}
+    header_numbers_page = (header is not None and header_contract.get("version") == "svg-common-header/v2"
+                           and any(field.get("value_ref") == "page_number" for field in header_contract.get("fields", [])))
+    if page_number_mode not in {"none", "hidden", "off"} and not furniture and not header_numbers_page:
         tokens = (style_snapshot or {}).get("tokens", {})
         node = ET.SubElement(
             root,

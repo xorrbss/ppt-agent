@@ -82,6 +82,7 @@ async def reserve_provider_call_detached(
     async with async_session_maker() as session:
         tenant_id = get_vnext_tenant_id()
         episode = None
+        header_retry = None
         if workspace_operation_id is not None:
             if not expected_attempt_token or expected_fencing_token is None:
                 raise CancellationRequested("provider_workspace_job_scope_invalid")
@@ -90,7 +91,20 @@ async def reserve_provider_call_detached(
                 admission = await require_public_review_job(session,
                     operation_id=workspace_operation_id,
                     expected_attempt_token=expected_attempt_token,
-                    expected_fencing_token=expected_fencing_token)
+                    expected_fencing_token=expected_fencing_token,
+                    expected_operation_kind="quality.review")
+            elif workspace_operation_id == job_id and operation == "authored_generation" and stage in {"header", "author", "repair"}:
+                from sqlalchemy import select
+                from models.sql.public_admission import PublicOperationAdmission
+                from models.sql.workspace import WorkspaceOperation
+                from services.workspace_svg_header_design_operation_handler import require_header_runtime_admission
+                current = await session.get(WorkspaceOperation, workspace_operation_id, with_for_update=True)
+                public_admission = await session.scalar(select(PublicOperationAdmission).where(
+                    PublicOperationAdmission.operation_id == workspace_operation_id))
+                admission = await require_header_runtime_admission(session, operation=current, admission=public_admission,
+                    expected_attempt_token=expected_attempt_token, expected_fencing_token=expected_fencing_token)
+                if current.retry_of_operation_id is not None:
+                    header_retry = current.request_payload["svg_header_retry"]
             else:
                 from services.svg_partial_recovery import runtime_admission
                 episode = await runtime_admission(session, job_id=job_id,
@@ -103,6 +117,9 @@ async def reserve_provider_call_detached(
             tenant_id = admission.tenant_id
         estimated_limit = _optional_limit("PROVIDER_JOB_ESTIMATED_BUDGET_MICROUNITS")
         actual_limit = _optional_limit("PROVIDER_JOB_ACTUAL_BUDGET_MICROUNITS")
+        if header_retry is not None:
+            from services.workspace_svg_header_retry import retry_runtime_cost_limits
+            estimated_limit, actual_limit = retry_runtime_cost_limits(header_retry, estimated_limit, actual_limit)
         if episode is not None:
             estimated_limit = min(estimated_limit, episode.estimated_cost_limit_microunits) if estimated_limit is not None else episode.estimated_cost_limit_microunits
             actual_limit = min(actual_limit, episode.actual_cost_limit_microunits) if actual_limit is not None else episode.actual_cost_limit_microunits

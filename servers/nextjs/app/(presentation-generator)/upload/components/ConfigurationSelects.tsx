@@ -1,3 +1,4 @@
+import CommonHeaderDesignInput from "./CommonHeaderDesignInput";
 import { PresentationConfig } from "../type";
 import { useEffect, useState } from "react";
 import { Check, ChevronUp } from "lucide-react";
@@ -215,6 +216,7 @@ export function ConfigurationSelects({
                     ) : null}
                 </div>
             ) : null}
+            {generationStrategy === "svg" && (config.commonHeaderMode ?? "uniform") === "uniform" ? <CommonHeaderDesignInput config={config} onConfigChange={onConfigChange} /> : null}
             {generationStrategy === "svg" && sourceContentMode && (config.commonHeaderMode ?? "uniform") === "uniform" ? (
                 <p className="basis-full text-sm text-amber-700" role="alert">
                     원본 보존은 기존 상단을 유지합니다. 페이지별 자유 구성으로 변경하거나 내용 재배치 모드를 선택하세요.

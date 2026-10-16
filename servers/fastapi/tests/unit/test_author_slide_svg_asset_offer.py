@@ -125,12 +125,46 @@ def test_source_only_decks_keep_their_receipt_shape(monkeypatch):
     assert len(records)==1 and records[0]['outcome']=='failed' and records[0]['response'] is None
 
 
-def test_omitted_vector_icon_flags_the_page():
+def test_omitted_vector_icon_flags_the_page(monkeypatch):
     quality = {"passed": True}
     apply_vector_icon_quality(quality, {"assetOffer": {"vectorIcons": {"offered": ["a", "b"], "used": ["a"]}}})
     assert quality["passed"] is False
     assert quality["assetOffer"]["omitted"] == ["b"]
     assert quality["failures"] == [{"kind": "asset_icon_omitted", "slotIds": ["b"]}]
+
+    from copy import deepcopy
+    from services.generation_core.drivers.svg.render import RETRY, attempt_render
+
+    monkeypatch.setattr("services.svg_contract.finalize_svg", lambda svg, **kwargs: svg)
+    monkeypatch.setattr("services.svg_master_furniture.master_furniture_receipt", lambda *args, **kwargs: None)
+
+    async def rendered_fixture(svg, **kwargs):
+        return SimpleNamespace(quality={"passed": True, "geometry_passed": True, "failures": []}, png=b"png")
+
+    monkeypatch.setattr("services.svg_renderer.render_svg_with_metrics", rendered_fixture)
+    ctx = SimpleNamespace(snapshot={}, source_reflow=False, raster_reconstruction=False,
+        canonical_assets=False, count=1, canvas=SimpleNamespace(width_px=1280, height_px=720),
+        render_semaphore=asyncio.Semaphore(1), physical_kwargs={})
+    payload = {"attempts": [{"receipt": {}}],
+        "assetOffer": {"vectorIcons": {"offered": ["a", "b"], "used": ["a"]}}}
+    checkpoints = []
+
+    async def save_render(*args, **kwargs):
+        checkpoints.append(deepcopy(kwargs["payload"]))
+
+    def render(ordinal):
+        return asyncio.run(attempt_render(ctx=ctx, request=SimpleNamespace(instructions=None, aspect_ratio="16:9"),
+            presentation_id="presentation", index=0, content="", payload=payload, svg=_svg(""),
+            ordinal=ordinal, job=None, checkpoint=save_render, async_session_maker=None, write_png=lambda _: {}))
+
+    assert render(0) is RETRY
+    assert payload["svg_content"] is None
+    assert json.loads(payload["repair_hint"])["failures"] == quality["failures"]
+    assert checkpoints[-1]["attempts"][0]["quality"]["failures"] == quality["failures"]
+    payload["attempts"].append({"receipt": {}})
+    rejected, _png = render(1)
+    assert rejected["quality"]["passed"] is False
+    assert rejected["quality"]["failures"] == quality["failures"]
 
 
 def test_author_prompt_uses_content_grounded_neighbor_intent_without_fixed_layout(monkeypatch):

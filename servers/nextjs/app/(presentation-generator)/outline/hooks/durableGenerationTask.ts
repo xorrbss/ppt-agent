@@ -34,7 +34,8 @@ export interface DurableGenerationTask {
   // (idempotency_key_payload_conflict), so a resume must resend these exactly.
   authoredRequest?: {
     strategy?: "authored" | "svg";
-    commonHeaderMode?: "uniform" | "free";
+    commonHeaderDesign?: import("@/lib/common-header-design").CommonHeaderDesign;
+  commonHeaderMode?: "uniform" | "free";
     commonHeaderCoverException?: boolean;
     language: string | null;
     instructions?: string | null;

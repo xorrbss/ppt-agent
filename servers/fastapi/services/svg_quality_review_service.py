@@ -53,11 +53,19 @@ async def _prepare_quality_recovery_review(session, presentation, slides, reques
             ((presentation.theme or {}).get("svg") or {}).get("styleSnapshot") or {}):
         return None
     from services.svg_quality_recovery_review import prepare_saved_review
-    from services.svg_export_operation import require_quality_recovery_source_parent
+    from services.svg_export_operation import (require_quality_recovery_source_parent,
+        require_current_header_revision_authority, header_revision_review_slides)
+    header_authority = await require_current_header_revision_authority(session, presentation, slides)
+    if header_authority is not None:
+        slides = header_revision_review_slides(header_authority, presentation, slides)
     prepared = prepare_saved_review(presentation, slides,
         _positions(request, len(slides)) if request.scope != "all" else [],
-        [_review_png(slide) for slide in slides], operation_id=operation_id, owner_scope=owner_scope)
-    await require_quality_recovery_source_parent(session, presentation, prepared["publication"])
+        [_review_png(slide) for slide in slides], operation_id=operation_id, owner_scope=owner_scope,
+        source_parent_authority=header_authority)
+    await require_quality_recovery_source_parent(session, presentation, prepared["publication"],
+        header_revision_authority=header_authority, slides=slides)
+    if header_authority is not None:
+        prepared["effective_slides"] = slides
     from services.authored_canvas import presentation_canvas_contract
     from services.svg_export_source_preservation import source_preservation_receipts, sealed_whole_page_manifest
     from services.public_export_errors import PublicExportOperationError
@@ -290,7 +298,8 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
                 raise NonRetryableWorkspaceOperationError("svg_quality_review_source_changed",
                     detail={"stage": "source_revalidation:" + ",".join(mismatched)})
             from services.svg_quality_recovery_review import seal_saved_review
-            recovery_advisory, publication = seal_saved_review(recovery_review, current_slides, vision, claim)
+            recovery_advisory, publication = seal_saved_review(recovery_review,
+                current_prepared.get("effective_slides", current_slides), vision, claim)
             vision = recovery_advisory["vision"]
             new_records = split_page_advisories(vision, current_slides, range(len(current_slides)))
             svg_theme["qualityRecoveryPublication"] = publication
@@ -332,7 +341,13 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
             target=request.target, artifactId=str(request.artifact_id) if request.artifact_id else None,
             sourceRevision=claim.expected_revision, operationId=str(claim.operation_id), advisory=subset,
             reviewedAt=get_current_utc_datetime().isoformat())
-        svg_theme["qualityStatus"] = svg_quality_status(current_slides, svg_theme.get("advisory"), page_advisories=records)
+        # Status uses the same owned evidence projection as export and source
+        # review; the stored historical page/receipt remains unchanged.
+        from services.svg_export_operation import require_current_header_revision_authority, header_revision_review_slides
+        status_authority = await require_current_header_revision_authority(session, presentation, current_slides)
+        status_slides = (header_revision_review_slides(status_authority, presentation, current_slides)
+                         if status_authority is not None else current_slides)
+        svg_theme["qualityStatus"] = svg_quality_status(status_slides, svg_theme.get("advisory"), page_advisories=records)
         if recovery_review is not None:
             gate = recovery_advisory["vision"]["designGate"]
             svg_theme["qualityStatus"]["qualityRecovery"] = dict(status=gate["status"],

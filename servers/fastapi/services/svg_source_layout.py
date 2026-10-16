@@ -6,6 +6,7 @@ verification. Unsupported source appearance is rejected before provider dispatch
 from __future__ import annotations
 
 from dataclasses import dataclass
+from copy import deepcopy
 import math
 import xml.etree.ElementTree as ET
 
@@ -562,7 +563,70 @@ def bind_whole_page_source_svg(svg, manifest, page_index, *, facts, width, heigh
     return svg, receipt
 
 
+def compose_source_common_header(svg, receipt, manifest, page_index, *, snapshot, binding, _validated_pages=None):
+    """Keep the original source witness and prove a separate editable header layer."""
+    from services.svg_common_header import GROUP_ID, render_common_header, validate_common_header_binding
+    verify_source_receipt(svg, receipt, manifest, page_index, _validated_pages=_validated_pages)
+    if receipt.get("common_header_composition"):
+        original = receipt["common_header_composition"]
+        svg, receipt = original["body_svg"], original["body_receipt"]
+    contract = snapshot.get("common_header")
+    validate_common_header_binding(contract, binding, index=page_index, count=receipt["page_count"])
+    if not isinstance(contract, dict) or contract.get("version") != "svg-common-header/v2":
+        raise ValueError("svg_source_header_contract_invalid")
+    group = render_common_header(contract, binding, index=page_index, count=receipt["page_count"])
+    if group is None:
+        return svg, deepcopy(receipt)
+    root = ET.fromstring(svg)
+    if any(node.get("id", "").startswith(GROUP_ID) for node in root.iter()):
+        raise ValueError("svg_source_header_body_ownership_conflict")
+    root.append(group)
+    final = ET.tostring(root, encoding="unicode")
+    composed = {**deepcopy(receipt), "svg_digest": source_digest(final), "rendering_verified": False,
+        "common_header_composition": {"version": "svg-source-common-header-composition/v2",
+            "body_svg": svg, "body_receipt": deepcopy(receipt), "body_svg_digest": source_digest(svg),
+            "contract": deepcopy(contract), "page": deepcopy(binding),
+            "header_digest": contract["digest"], "page_header_digest": binding["digest"]}}
+    verify_source_receipt(final, composed, manifest, page_index, _validated_pages=_validated_pages)
+    return final, composed
+
+
+def _verify_source_header_composition(svg, receipt, manifest, page_index, *, _validated_pages=None):
+    from services.svg_common_header import GROUP_ID, render_common_header
+    from services.svg_master_furniture import _structure
+    envelope = receipt.get("common_header_composition")
+    if (not isinstance(envelope, dict) or envelope.get("version") != "svg-source-common-header-composition/v2"
+            or not isinstance(envelope.get("body_svg"), str) or not isinstance(envelope.get("body_receipt"), dict)
+            or envelope["body_receipt"].get("common_header_composition")
+            or envelope.get("body_svg_digest") != source_digest(envelope["body_svg"])
+            or receipt.get("svg_digest") != source_digest(svg)):
+        raise ValueError("svg_source_header_composition_invalid")
+    contract, binding = envelope.get("contract"), envelope.get("page")
+    expected = render_common_header(contract, binding, index=page_index, count=receipt["page_count"])
+    if (expected is None or contract.get("version") != "svg-common-header/v2"
+            or envelope.get("header_digest") != contract["digest"]
+            or envelope.get("page_header_digest") != binding["digest"]):
+        raise ValueError("svg_source_header_composition_invalid")
+    root = ET.fromstring(svg)
+    groups = [node for node in root.iter() if node.get("id") == GROUP_ID]
+    if len(groups) != 1 or groups[0] not in list(root) or _structure(groups[0]) != _structure(expected):
+        raise ValueError("svg_source_header_composition_invalid")
+    root.remove(groups[0])
+    if _structure(root) != _structure(ET.fromstring(envelope["body_svg"])):
+        raise ValueError("svg_source_header_body_changed")
+    original = envelope["body_receipt"]
+    if any(receipt.get(key) != value for key, value in original.items()
+           if key not in {"svg_digest", "rendering_verified"}):
+        raise ValueError("svg_source_header_receipt_changed")
+    verify_source_receipt(envelope["body_svg"], original, manifest, page_index,
+                          _validated_pages=_validated_pages)
+    return True
+
+
 def verify_source_receipt(svg, receipt, manifest, page_index, *, _validated_pages=None):
+    if isinstance(receipt, dict) and receipt.get("common_header_composition"):
+        return _verify_source_header_composition(svg, receipt, manifest, page_index,
+            _validated_pages=_validated_pages)
     pages = source_pages(manifest, chart_contract=(receipt or {}).get("source_chart_contract")) if _validated_pages is None else _validated_pages
     if type(page_index) is not int or not 0 <= page_index < len(pages):
         raise ValueError("svg_source_page_index_invalid")

@@ -21,6 +21,7 @@ export default function SvgDesignReferenceInput({ config, onConfigChange, disabl
     epoch.current += 1;
     setFiles(next);
     onConfigChange("svgDesignReferenceSnapshotId", undefined);
+    onConfigChange("commonHeaderDesign", { ...config.commonHeaderDesign, reference_snapshot_ids: undefined });
     onConfigChange("svgDesignReferencePending", next.length > 0);
   };
   const register = async () => {

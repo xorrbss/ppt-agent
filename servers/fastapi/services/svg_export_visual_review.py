@@ -204,6 +204,9 @@ def _review_pages(slides) -> list[int]:
 
 def _generation_source_review(slides, advisory, expected_binding, context):
     """Consume the intact original source-PNG producer; never mint page receipts."""
+    if (isinstance(context, Mapping) and isinstance(context.get("publication"), Mapping)
+            and context["publication"].get("schema") == "svg-quality-recovery-publication/v2"):
+        return _quality_review_source_review(slides, advisory, expected_binding, context)
     from services.generation_core.drivers.svg.quality import _current_gate
     from services.svg_authoring_profile import read_quality_recovery_policy
     if not isinstance(context, Mapping) or not isinstance(expected_binding, Mapping):
@@ -250,6 +253,80 @@ def _generation_source_review(slides, advisory, expected_binding, context):
             or vision.get("reviewedPngDigests") != pngs):
         return None
     return gate
+
+
+def _quality_review_source_review(slides, advisory, expected_binding, context):
+    """Consume the independently admitted source review and its actual saved evidence."""
+    from services.generation_core.drivers.svg.quality import _current_gate
+    from services.svg_authoring_profile import read_quality_recovery_policy
+    from services.svg_quality_recovery_review import seal_saved_page_evidence
+    if not isinstance(expected_binding, Mapping) or not slides:
+        return None
+    snapshot, publication, producer = (context.get(key) for key in ("snapshot", "publication", "producer"))
+    if not all(isinstance(value, Mapping) for value in (snapshot, publication, producer)):
+        return None
+    try:
+        policy = read_quality_recovery_policy(snapshot)
+        gate = _current_gate(advisory,
+            [({**_receipt(slide), "svg_content": slide.svg_content}, None) for slide in slides])
+        if gate is None or policy is None:
+            return None
+        binding, vision = gate.get("binding") or {}, advisory["vision"]
+        revision, parent_revision = expected_binding.get("sourceRevision"), publication.get("sourceGenerationRevision")
+        tenant = context.get("currentTenantId")
+        pngs = [_receipt(slide).get("png_sha256") for slide in slides]
+        # A saved analyze-only review keeps nonblocking improvement goals;
+        # generation's rewrite-loop completion is a separate requirement.
+        if (type(revision) is not int or type(parent_revision) is not int or not 0 <= parent_revision <= revision
+                or not isinstance(tenant, str) or not tenant
+                or policy.get("version") != 2 or gate.get("policy") != policy
+                or gate.get("status") != "passed" or gate.get("designImprovementStatus") not in {"satisfied", "needed"}
+                or gate.get("reason") is not None or gate.get("pageCoverageComplete") is not True
+                or len(gate.get("pages", [])) != len(slides)
+                or any(page.get("index") != index or page.get("evaluated") is not True
+                    or page.get("mandatoryEvidenceValid") is not True or page.get("status") != "passed"
+                    for index, page in enumerate(gate.get("pages", [])))
+                or any(not page_measurement_current(slide) for slide in slides)
+                or publication.get("digest") != content_digest({key: value for key, value in publication.items() if key != "digest"})
+                or publication.get("gateDigest") != gate["digest"]
+                or gate.get("snapshotDigest") != content_digest(snapshot)
+                or publication.get("snapshotDigest") != gate["snapshotDigest"]
+                or not publication.get("parentOperationId") or not publication.get("parentJobId")
+                or publication.get("reviewOperationId") == publication.get("parentOperationId")
+                or publication.get("reviewOperationId") != binding.get("operationId")
+                or publication.get("parentJobId") != binding.get("jobId")
+                or publication.get("sourceRevision") != revision
+                or publication.get("ownerScope") != expected_binding.get("ownerScope")
+                or publication.get("sourceContentDigests") != [content_digest((slide.content or {}).get("source")) for slide in slides]
+                or publication.get("inputDigests") != [_receipt(slide).get("input_digest") for slide in slides]
+                or producer.get("state") != "succeeded" or producer.get("kind") != "quality.review"
+                or producer.get("operationId") != publication.get("reviewOperationId")
+                or producer.get("sourceRevision") != revision or producer.get("expectedRevision") != revision
+                or producer.get("parentOperationId") != publication["parentOperationId"]
+                or producer.get("parentJobId") != publication["parentJobId"]
+                or producer.get("parentSourceRevision") != parent_revision
+                or producer.get("publicationDigest") != publication["digest"]
+                or producer.get("tenantId") != tenant or binding.get("tenantId") != tenant
+                or any(producer.get(key) != expected_binding.get(key) for key in ("presentationId", "ownerId", "ownerScope"))
+                or any(binding.get(key) != expected_binding.get(key) for key in ("presentationId", "ownerId"))
+                or any(type(producer.get(key)) is not int or producer[key] != value
+                       for key, value in (("maxAttempts", 1), ("plannedRequestLimit", 1), ("retryRequestLimit", 0)))
+                or producer.get("mode") != "analyze_only" or producer.get("target") != "source_svg"
+                or vision.get("reviewedPageIndices") != list(range(len(slides)))
+                or vision.get("reviewedPngDigests") != pngs):
+            return None
+        current = current_page_advisories(slides, advisory.get("pageAdvisories"))
+        if len(current) != len(slides) or any(
+                current[index]["vision"].get("designGateDigest") != gate["digest"] for index in range(len(slides))):
+            return None
+        saved = advisory.get("savedPageReviewEvidence")
+        if (not isinstance(saved, Mapping) or not isinstance(saved.get("runtime"), Mapping)
+                or not saved["runtime"]
+                or saved != seal_saved_page_evidence(slides, snapshot, gate, runtime=saved["runtime"])):
+            return None
+        return gate
+    except (KeyError, ValueError, TypeError, IndexError):
+        return None
 
 
 def svg_visual_review(*, slides, advisory: Mapping | None, expected_binding: Mapping | None = None) -> dict:

@@ -950,6 +950,15 @@ async def generate_presentation_handler(
                 and "common_header" in frozen_style
                 and saved_outline is not None
             )
+            if (not frozen_uniform_outline and isinstance(frozen_style, dict)
+                    and saved_outline is not None
+                    and frozen_style.get("common_header_design_plan") is not None):
+                from services.svg_common_header_design_plan import require_header_design_plan
+
+                pending_header_plan = require_header_design_plan(request)
+                if pending_header_plan != frozen_style["common_header_design_plan"]:
+                    raise ValueError("svg_common_header_design_plan_conflict")
+                frozen_uniform_outline = True
             if (saved_outline is not None or frozen_style is not None) and not frozen_uniform_outline:
                 raise ValueError("svg_common_header_binding_incomplete")
         outline_spans = svg_outline_spans.begin(bench_speed_arm=resolve_speed_arm(request))
@@ -1347,6 +1356,15 @@ async def generate_presentation_handler(
                 request_id=request._request_id,
                 attempt_number=authored_attempt_number,
             )
+            api_error_payload = safe_error
+            safe_exception = HTTPException(status_code=500, detail=safe_error)
+        elif (isinstance(e, ValueError) and str(e).isascii() and str(e).isidentifier()
+              and str(e).startswith(("svg_common_header_", "svg_header_design_"))):
+            # Bounded header failures retain their precise safe reason. A new
+            # operation attempt cannot repair exhausted/unknown provider work.
+            safe_error = AuthoredStageError(slide_index=None, stage="author",
+                code=str(e), retryable=False).as_safe_dict(
+                    request_id=request._request_id, attempt_number=authored_attempt_number)
             api_error_payload = safe_error
             safe_exception = HTTPException(status_code=500, detail=safe_error)
         elif isinstance(e, WorkspaceArtifactPublicationError):
@@ -2099,6 +2117,9 @@ async def _admit_generation_operation_v2_compatible(
     else:
         review_budget = slide_count if request.vision_qa else 0
     from services.svg_common_header_title_budget import svg_header_title_admission_budget
+    from services.svg_common_header_design_plan import (
+        svg_header_design_admission_budget, svg_header_representative_body_admission_budget,
+    )
     try:
         admission = await admit_public_operation_compatible_v2(
             sql_session,
@@ -2115,6 +2136,10 @@ async def _admit_generation_operation_v2_compatible(
                 vqa_budget=review_budget,
                 header_title_budget=(0 if partial_manifest is not None else
                     svg_header_title_admission_budget(request, slide_count)),
+                header_design_budget=(0 if partial_manifest is not None else
+                    svg_header_design_admission_budget(request, slide_count)),
+                representative_body_budget=(0 if partial_manifest is not None else
+                    svg_header_representative_body_admission_budget(request, slide_count)),
             ),
             resource_plan=plan_weighted_resources(
                 pixel_count=slide_count * 1_920 * 1_080,
@@ -2248,7 +2273,11 @@ async def queue_presentation_generation(
     # second deck. It now includes the resolved pins/rule/style snapshots.
     if resolve_generation_strategy(request) == "svg":
         from services.svg_generation_admission import prepare_private_svg_recovery_authority
-
+        from services.svg_common_header_design_plan import seal_new_header_design_plan
+        try:
+            seal_new_header_design_plan(request)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
         await prepare_private_svg_recovery_authority(request, sql_session)
     submitted_payload = _durable_request_payload(request)
     fingerprint = request_sha256(submitted_payload)
@@ -2275,6 +2304,11 @@ async def queue_presentation_generation(
     def matches_existing_job(existing_job: PresentationGenerationJob) -> bool:
         if existing_job.request_sha256 == fingerprint:
             return True
+        if (isinstance(existing_job.request_payload, dict)
+                and request_sha256(existing_job.request_payload) == existing_job.request_sha256):
+            from services.svg_common_header_design_replay import matches_header_design_replay
+            if matches_header_design_replay(existing_job.request_payload, submitted_payload):
+                return True
         if (title_legacy_fingerprints and isinstance(existing_job.request_payload, dict)
                 and INTERNAL_HEADER_TITLE_PLAN_KEY not in existing_job.request_payload
                 and existing_job.request_sha256 in title_legacy_fingerprints):

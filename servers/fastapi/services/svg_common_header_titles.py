@@ -33,6 +33,14 @@ _QUALIFICATIONS = re.compile(r"미달성|미확정|미보장|미완료|않|못|�
                              r"\b(?:not|never|no|planned|possible|potential|estimated|expected|conditional|uncertain)\b", re.I)
 
 
+class _TitleValidationError(ValueError):
+    """Safe rejection location; never retain provider titles or source text."""
+
+    def __init__(self, reason: str, *, page_index: int, validation_stage: str):
+        super().__init__(reason)
+        self.diagnostic = {"page_index": page_index, "validation_stage": validation_stage}
+
+
 def header_title_pages(outline) -> tuple[object, list[dict], list[int]]:
     """Clone and reuse meaningful explicit titles without touching source text."""
     prepared = outline.model_copy(deep=True)
@@ -110,8 +118,13 @@ def _validated_result(response: object, payload: dict) -> dict:
         index = item["page_index"]
         page = pages[index]
         if item["source_digest"] != page["source_digest"]:
-            raise ValueError("svg_common_header_title_source_mismatch")
-        title, start, end = _validate_title(item["title"], item["source_quote"], page["content"])
+            raise _TitleValidationError("svg_common_header_title_source_mismatch",
+                page_index=index, validation_stage="source_digest")
+        try:
+            title, start, end = _validate_title(item["title"], item["source_quote"], page["content"])
+        except ValueError as error:
+            raise _TitleValidationError(str(error), page_index=index,
+                validation_stage="title_source_quote") from error
         titles.append({"page_index": index, "source_digest": page["source_digest"], "title": title,
                        "source_start": start, "source_end": end,
                        "source_quote_digest": common_header_source_digest(item["source_quote"])})
@@ -239,8 +252,9 @@ async def prepare_missing_header_titles(request, job, outline, *, session_maker,
         try:
             result = _validated_result(response, payload)
         except ValueError as error:
+            diagnostic = {"diagnostic": error.diagnostic} if isinstance(error, _TitleValidationError) else {}
             await _checkpoint(request, job, plan, session_maker=session_maker, owned_job=owned_job,
-                              terminal={"state": "rejected", "reason": str(error)})
+                              terminal={"state": "rejected", "reason": str(error), **diagnostic})
             raise
         await _checkpoint(request, job, plan, session_maker=session_maker, owned_job=owned_job,
                           terminal={"state": "succeeded", "result": result})

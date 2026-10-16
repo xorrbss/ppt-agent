@@ -165,3 +165,85 @@ def test_page_changed_after_measurement_is_stale():
 
     assert svg_authoring(slides)["reasonCode"] == "svg_authoring_evidence_stale"
     assert svg_geometry_font(slides)["reasonCode"] == "svg_geometry_font_evidence_stale"
+
+
+def test_saved_common_header_candidates_use_allocated_fields_and_measured_collisions():
+    """Offline replay of captured browser evidence, without rendering or providers."""
+    from copy import deepcopy
+    import json
+    import os
+    from pathlib import Path
+    from xml.etree import ElementTree as ET
+
+    from services.svg_common_header_export_evidence import apply_common_header_v2_quality
+
+    directory = os.environ.get("SVG_HEADER_OVERFLOW_REPLAY_DIRECTORY")
+    if not directory:
+        pytest.skip("Set SVG_HEADER_OVERFLOW_REPLAY_DIRECTORY to the saved candidate evidence directory")
+
+    for number in (1, 2):
+        page = json.loads((Path(directory) / f"candidate-page-{number}.json").read_text(encoding="utf-8-sig"))
+        furniture = page["system_furniture"]
+        header = furniture["generated_common_header"]
+
+        def measure(mutate=None, svg=None):
+            # Re-evaluate this helper alone; captured page/global failures stay
+            # untouched in the source artifact and are not release evidence.
+            quality = deepcopy(page["quality"])
+            quality["failures"] = []
+            quality["passed"] = quality["geometry_passed"] = True
+            if mutate:
+                mutate(quality)
+            apply_common_header_v2_quality(quality, svg or page["svg_content"],
+                header["contract"], header["page"], furniture)
+            return quality
+
+        measured = measure()
+        assert measured["common_header"]["passed"] is True
+        assert measured["failures"] == []
+        elements = measured["browser_metrics"]["elements"]
+        header_text = [item for item in elements if item.get("text_ink_fragments")
+                       and item["qid"] in {"svg-23", "svg-25", "svg-26"}]
+        assert len(header_text) == 2
+        qids = [item["qid"] for item in header_text]
+
+        def items(quality):
+            return [next(item for item in quality["browser_metrics"]["elements"] if item["qid"] == qid)
+                    for qid in qids]
+
+        def conservative_cells(quality):
+            for item in items(quality):
+                for fragment in item["text_ink_fragments"]:
+                    fragment["cellClusters"] = 1
+
+        assert measure(conservative_cells)["common_header"]["passed"] is True
+
+        def outside_field(quality):
+            items(quality)[0]["text_ink_fragments"][0]["x"] = -10
+
+        assert any(item["kind"] == "svg_common_header_overflow" for item in measure(outside_field)["failures"])
+
+        def overlapping_text(quality):
+            first, second = items(quality)
+            second["text_ink_fragments"] = deepcopy(first["text_ink_fragments"])
+
+        assert any(item["kind"] == "svg_common_header_text_overlap"
+                   for item in measure(overlapping_text)["failures"])
+
+        def missing_ink(quality):
+            items(quality)[0]["text_ink_fragments"] = []
+
+        assert any(item["kind"] == "svg_common_header_overflow" for item in measure(missing_ink)["failures"])
+
+        for property_name, value in (("glyph_clipped", True), ("font_loaded", False),
+                                     ("resolved_font_family", "untrusted-font"), ("effective_opacity", .5)):
+            def mismatch(quality):
+                items(quality)[0][property_name] = value
+
+            assert any(item["kind"] == "svg_common_header_font_mismatch"
+                       for item in measure(mismatch)["failures"])
+
+        changed = ET.fromstring(page["svg_content"])
+        next(node for node in changed.iter() if node.get("id", "").endswith("-document-line-1")).text += "changed"
+        assert any(item["kind"] == "svg_common_header_digest_mismatch"
+                   for item in measure(svg=ET.tostring(changed, encoding="unicode"))["failures"])

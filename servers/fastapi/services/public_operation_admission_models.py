@@ -63,10 +63,16 @@ class ProviderRequestPlan:
     vqa_budget: int
     source_image_budget: int = 0
     header_title_budget: int = 0
+    header_design_budget: int = 0
+    representative_body_budget: int = 0
 
     def __post_init__(self) -> None:
         if type(self.header_title_budget) is not int or self.header_title_budget not in (0, 1):
             raise ValueError("svg_common_header_title_budget_invalid")
+        if type(self.header_design_budget) is not int or not 0 <= self.header_design_budget <= 4:
+            raise ValueError("svg_common_header_design_budget_invalid")
+        if type(self.representative_body_budget) is not int or not 0 <= self.representative_body_budget <= 2:
+            raise ValueError("svg_common_header_representative_body_budget_invalid")
 
     @property
     def initial_request_limit(self) -> int:
@@ -80,12 +86,16 @@ class ProviderRequestPlan:
                if self.source_image_budget else 0)
             + min(self.slide_count, self.source_image_budget)
             + self.header_title_budget
+            + min(2, self.header_design_budget)
+            + min(1, self.representative_body_budget)
         )
 
     @property
     def retry_request_limit(self) -> int:
         """One bounded validation retry per authored slide."""
-        return self.slide_count + CONTENT_BRIEF_RETRY_REQUESTS
+        return (self.slide_count + CONTENT_BRIEF_RETRY_REQUESTS
+                + max(0, self.header_design_budget - 2)
+                + max(0, self.representative_body_budget - 1))
 
 
 @dataclass(frozen=True, slots=True)
@@ -201,7 +211,8 @@ def current_principal_context() -> PrincipalContext:
 def plan_provider_requests(*, slide_count: int, image_budget: int,
                            repair_budget: int, vqa_budget: int,
                            source_image_budget: int = 0,
-                           header_title_budget: int = 0) -> ProviderRequestPlan:
+                           header_title_budget: int = 0, header_design_budget: int = 0,
+                           representative_body_budget: int = 0) -> ProviderRequestPlan:
     plan = ProviderRequestPlan(
         slide_count=_nonnegative(slide_count, "slide_count"),
         image_budget=_nonnegative(image_budget, "image_budget"),
@@ -209,6 +220,8 @@ def plan_provider_requests(*, slide_count: int, image_budget: int,
         vqa_budget=_nonnegative(vqa_budget, "vqa_budget"),
         source_image_budget=_nonnegative(source_image_budget, "source_image_budget"),
         header_title_budget=header_title_budget,
+        header_design_budget=header_design_budget,
+        representative_body_budget=representative_body_budget,
     )
     if plan.slide_count < 1:
         raise ValueError("slide_count_must_be_positive")

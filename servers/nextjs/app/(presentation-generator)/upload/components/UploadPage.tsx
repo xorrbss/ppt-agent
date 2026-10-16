@@ -1,4 +1,5 @@
 "use client";
+import CommonHeaderDesignInput from "./CommonHeaderDesignInput";
 
 import { useTranslations as useA2bTranslations } from "next-intl";
 /**
@@ -223,6 +224,7 @@ const UploadPage = ({
           </select>
           {(config.commonHeaderMode ?? "uniform") === "uniform" ? <label className="flex items-center gap-1.5"><input type="checkbox" checked={config.commonHeaderCoverException ?? false} onChange={(event) => handleConfigChange("commonHeaderCoverException", event.target.checked)} />표지 제외</label> : null}
           <span className="text-slate-500">원본 화면을 그대로 보존하는 페이지가 있으면 페이지별 자유 구성을 선택하세요.</span>
+          {(config.commonHeaderMode ?? "uniform") === "uniform" ? <CommonHeaderDesignInput config={config} onConfigChange={handleConfigChange} /> : null}
           {(config.commonHeaderMode ?? "uniform") === "uniform" && rasterReview.pages.some((page) => page.renderMode === "full_page_preserve") ? <p className="basis-full text-amber-700" role="alert">원본 화면을 그대로 보존하는 페이지에는 상단 통일을 적용할 수 없습니다. 페이지별 자유 구성을 선택하세요.</p> : null}
         </div>
         <RasterSourceReview

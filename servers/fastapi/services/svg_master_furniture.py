@@ -1,6 +1,7 @@
 """Deterministic brand furniture from an admitted, owner-verified master."""
 from __future__ import annotations
 
+from copy import deepcopy
 import xml.etree.ElementTree as ET
 
 GROUP_ID = "svg-system-master-furniture"
@@ -14,8 +15,12 @@ def master_furniture(snapshot: dict | None) -> dict:
 
 
 def furniture_image_manifest(snapshot: dict | None) -> dict[str, str]:
-    return {item["id"]: item["asset_digest"] for item in master_furniture(snapshot).get("elements", [])
-            if item.get("data_url") and item.get("asset_digest")}
+    images = {item["id"]: item["asset_digest"] for item in master_furniture(snapshot).get("elements", [])
+              if item.get("data_url") and item.get("asset_digest")}
+    header = (snapshot or {}).get("common_header") or {}
+    if header.get("version") == "svg-common-header/v2":
+        images.update(header.get("assets", {}))
+    return images
 
 
 def attested_svg_furniture(svg: str, furniture_receipt: dict, *, source_manifest=None,
@@ -122,6 +127,8 @@ def master_furniture_receipt(svg: str, snapshot: dict, *, width: int, height: in
         groups.append(matches[0])
         generated = {"origin": "generated-common-header", "contract": snapshot["common_header"],
                      "page": header_page, "index": index, "count": n}
+        if snapshot["common_header"].get("version") == "svg-common-header/v2":
+            generated["selection"] = deepcopy(snapshot.get("common_header_selection"))
     images = {node.get("id") for group in groups for node in group.iter() if node.tag == f"{{{SVG_NS}}}image"}
     receipt = {"version": "svg-system-furniture/v1", "svg_digest": source_digest(svg),
                "canvas": {"width": width, "height": height},

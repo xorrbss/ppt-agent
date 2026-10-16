@@ -27,6 +27,7 @@ from pydantic import (
 from pydantic.alias_generators import to_camel
 
 from models.svg_canvas import SvgCanvasInput
+from models.common_header_design import CommonHeaderDesignInput
 
 from models.generate_presentation_request import (
     AuthoredMasterPinInput,
@@ -125,6 +126,9 @@ class PresentationGenerationRequestV2(PublicWireModel):
     strategy: Literal["authored", "svg"] | None = None
     common_header_mode: Literal["uniform", "free"] | None = Field(default=None, exclude_if=lambda value: value is None)
     common_header_cover_exception: bool = False
+    common_header_design: CommonHeaderDesignInput | None = Field(
+        default=None, exclude_if=lambda value: value is None,
+    )
     generation_mode: GenerationMode = "auto"
     design_pack_pin: DesignPackPinV1 | None = None
     generation_engine: Literal["authored", "deck-ir"] | None = "authored"
@@ -194,6 +198,10 @@ class PresentationGenerationRequestV2(PublicWireModel):
 
     @model_validator(mode="after")
     def validate_generation_mode(self) -> "PresentationGenerationRequestV2":
+        if self.common_header_design is not None and (
+            self.strategy == "authored" or self.common_header_mode == "free"
+        ):
+            raise ValueError("common_header_design_requires_svg_uniform")
         if self.common_header_mode is not None and self.strategy == "authored":
             raise ValueError("common_header_svg_strategy_required")
         if self.common_header_cover_exception and self.common_header_mode != "uniform":

@@ -10,6 +10,7 @@ sentinel by continuing its own loop.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import math
 
@@ -24,6 +25,9 @@ def _apply_common_header_quality(quality, svg, contract, binding, furniture_rece
     """Use the existing render's owned glyph ink and visible paint boxes."""
     if binding is None or not binding.get("applied"):
         return
+    if contract.get("version") == "svg-common-header/v2":
+        from services.svg_common_header_export_evidence import apply_common_header_v2_quality
+        return apply_common_header_v2_quality(quality, svg, contract, binding, furniture_receipt)
     import xml.etree.ElementTree as ET
     from services.svg_common_header import GROUP_ID, TITLE_ID
     from services.svg_text_overlap import _ink_rect, comparison_fragments
@@ -169,6 +173,28 @@ def _apply_common_header_quality(quality, svg, contract, binding, furniture_rece
         quality.setdefault("failures", []).extend(failures)
 
 
+def _common_header_body_repair_hint(quality, contract):
+    """Give the bounded author correction the measured reservation witnesses."""
+    failures = quality.get("failures", [])
+    qids = list(dict.fromkeys(failure.get("qid") for failure in failures
+        if failure.get("kind") == "svg_common_header_body_intrusion" and failure.get("qid")))
+    if not qids or not contract:
+        return None
+    from services.svg_text_overlap import comparison_fragments
+
+    metrics = {item.get("qid"): item for item in (quality.get("browser_metrics") or {}).get("elements", [])}
+    witnesses = []
+    for qid in qids[:4]:
+        item = metrics.get(qid) or {}
+        boxes = [box for box, _basis in comparison_fragments(item)] if item.get("has_owned_text") else [item.get("bbox")]
+        witnesses.append({"qid": qid, "tag": item.get("tag"), "measured_boxes": boxes[:4]})
+    return json.dumps({"kind": "svg_common_header_body_repair", "body_box": contract["body_box"],
+        "failures": failures, "witnesses": witnesses,
+        "minimum_body_font_px": quality.get("body_font_floor_px"),
+        "instruction": "Repair the failing body elements inside body_box using the original full-canvas coordinates. The witnesses are measured glyph ink or layout boxes, not text anchors; leave clearance for glyph bearings and visible strokes at each edge. Move or reflow the affected elements and related content only. Preserve every word, number, unit, relation, native binding, required image and page count. Keep the frozen header unchanged. Never shrink fonts, clip, hide or delete content, or move or scale the whole body group."},
+        ensure_ascii=False, separators=(",", ":"))[:3000]
+
+
 async def attempt_render(*, ctx, request, presentation_id, index, content, payload, svg, ordinal,
                          job, checkpoint, async_session_maker, write_png,
                          recovery_readability_policy=None, allow_existing_common_header=False):
@@ -201,7 +227,27 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
     try:
         if payload["attempts"][-1]["receipt"].get("validation_error"):
             raise ValueError(payload["attempts"][-1]["receipt"]["validation_error"])
-        if ctx.source_reflow or ctx.raster_reconstruction:
+        if ctx.source_reflow and (ctx.snapshot.get("common_header") or {}).get("version") == "svg-common-header/v2":
+            from services.svg_source_layout import compose_source_common_header
+            final, source_receipt = compose_source_common_header(
+                svg, payload.get("source_preservation"), ctx.source_document, index,
+                snapshot=ctx.snapshot, binding=header_page)
+            payload["source_preservation"] = source_receipt
+        elif ctx.raster_reconstruction and (ctx.snapshot.get("common_header") or {}).get("version") == "svg-common-header/v2":
+            import xml.etree.ElementTree as ET
+            from services.svg_common_header import GROUP_ID, render_common_header
+            from services.svg_master_furniture import _structure
+            root = ET.fromstring(svg)
+            expected = render_common_header(ctx.snapshot["common_header"], header_page, index=index, count=ctx.count)
+            existing = [node for node in root.iter() if node.get("id") == GROUP_ID]
+            if existing:
+                if (len(existing) != 1 or existing[0] not in list(root) or expected is None
+                        or _structure(existing[0]) != _structure(expected)):
+                    raise ValueError("svg_common_header_digest_mismatch")
+            elif expected is not None:
+                root.append(expected)
+            final = ET.tostring(root, encoding="unicode")
+        elif ctx.source_reflow or ctx.raster_reconstruction:
             final = svg
         else:
             finalize_source_manifest = ({slot: {"required": item["policy"]["required"],
@@ -246,7 +292,10 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
             from services.svg_generation_assets import publication_context
 
             async with async_session_maker() as asset_session:
-                raster_asset_context, raster_asset_revision = await publication_context(asset_session, job)
+                if getattr(ctx, "header_operation_public_only", False):
+                    raster_asset_context, raster_asset_revision = ctx.asset_context, ctx.asset_revision
+                else:
+                    raster_asset_context, raster_asset_revision = await publication_context(asset_session, job)
                 raster_assets = await prepare_raster_page_assets(
                     asset_session, configured_public_artifact_service(),
                     approval_pin=ctx.raster_pin,
@@ -316,7 +365,7 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
 
                         source_font_kwargs["minimum_font_px"] = max(source_font_kwargs["minimum_font_px"],
                             svg_quality_font_floor(readability_policy))
-                rendered = await render_svg_with_metrics(final, width=ctx.canvas.width_px,
+                render_request = render_svg_with_metrics(final, width=ctx.canvas.width_px,
                                                      height=ctx.canvas.height_px,
                                                      # Source instructions are resolved into the hard
                                                      # minimum above, including the 7px lower bound.
@@ -331,6 +380,9 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
                                                      **({"system_furniture": furniture_receipt} if furniture_receipt is not None else {}),
                                                       **({"timeline_ink_probe": True} if timeline_source or profile and profile["version"] in (7, 8) else {}),
                                                      materialized_svg=materialized, **ctx.physical_kwargs)
+                render_timeout = getattr(ctx, "header_render_timeout_seconds", None)
+                rendered = (await asyncio.wait_for(render_request, timeout=render_timeout)
+                            if render_timeout is not None else await render_request)
         except ValueError as error:
             if ctx.canonical_assets:
                 raise AuthoredStageError(slide_index=index, stage="render",
@@ -399,7 +451,7 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
     writing_hint = None
     if getattr(request, "writing_policy", None) is not None:
         from services.ppt_writing_visible import (
-            assess_visible_nodes, literal_source_values, svg_text_nodes,
+            assess_visible_nodes, literal_source_values, svg_text_nodes, svg_writing_repair_witnesses,
         )
 
         preservation = payload.get("source_preservation") or {}
@@ -408,6 +460,8 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
             payload.get("nativeRequirements"),
             preservation.get("bindings") or (),
             payload.get("rasterContentLedger"),
+            header_contract=ctx.snapshot.get("common_header"),
+            header_binding=header_page,
         )
         writing = assess_visible_nodes(svg_text_nodes(final), source_values=source_values)
         rendered.quality["writing_policy"] = writing
@@ -420,8 +474,11 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
             writing_hint = json.dumps({
                 "kind": "writing_policy_visible_symbols",
                 "counts": writing["hard_violation_counts"],
-                "instruction": "Revise only newly written visible wording that uses decorative symbols. Preserve all source-backed text, native data, numbers, formulas, official names and quotations exactly. Keep facts and slide layout intact.",
+                "witnesses": svg_writing_repair_witnesses(final, source_values=source_values),
+                "instruction": "Repair the witnessed unprotected symbols in newly phrased text using commas or words, preserving every term, scope and relation. Preserve protected literals, native cells and labels, official names, quotations, numbers and formulas exactly. Do not change frozen header fields or delete wording. Keep facts and slide layout intact.",
             }, ensure_ascii=False, separators=(",", ":"))
+    from services.generation_core.drivers.svg.embed_assets import apply_vector_icon_quality
+    apply_vector_icon_quality(rendered.quality, payload)
     payload["attempts"][-1]["quality"] = rendered.quality
     if payload.get("fontAdvisories"):
         rendered.quality.setdefault("advisories", []).extend(payload["fontAdvisories"])
@@ -461,6 +518,7 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
             await checkpoint(job, index, payload=payload)
             return result
     if rendered.quality.get("passed") is False and ordinal == 0 and not payload.get("repair_unavailable"):
+        header_body_hint = _common_header_body_repair_hint(rendered.quality, ctx.snapshot.get("common_header"))
         timeline_collisions = rendered.quality.get("timeline_caption_ink", {}).get("collisions")
         classification = rendered.quality.get("source_classification_association", {})
         paint_occlusion = rendered.quality.get("source_paint_occlusion", {})
@@ -489,6 +547,8 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
             hint = json.dumps({"kind": "timeline_caption_bar_ink_overlap",
                 "instruction": "Preserve every source date, duration and dependency. Wrap the task caption in its explanation area and adjust the explanation and bars together until all caption glyphs are clear of the bars. Do not hide, clip or shrink required text.",
                 "witnesses": timeline_collisions[:3]}, ensure_ascii=False)[:3000]
+        elif header_body_hint:
+            hint = header_body_hint
         elif readability_policy is not None:
             hint = json.dumps({"kind": "svg_readability_repair", "failures": rendered.quality.get("failures", []),
                 "physical_page": {key: readability_policy[key] for key in ("purpose", "width_emu", "height_emu", "minimum_font_pt")},
@@ -529,8 +589,6 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
             rendered.quality.setdefault("failures", []).append({
                 "kind": "source_image_omitted", "slotIds": required_omitted,
             })
-    from services.generation_core.drivers.svg.embed_assets import apply_vector_icon_quality
-    apply_vector_icon_quality(rendered.quality, payload)
     payload.update(svg_content=final, source_digest=sha256_hex(final.encode()),
                    quality=rendered.quality, **write_png(rendered.png))
     header_failures = [failure for failure in rendered.quality.get("failures", [])

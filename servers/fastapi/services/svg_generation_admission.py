@@ -52,9 +52,7 @@ def pin_fresh_common_header_mode(request: object) -> None:
 def _common_header_preservation_conflict(request: object) -> bool:
     if getattr(request, "common_header_mode", None) != "uniform":
         return False
-    if getattr(request, "source_mode", None) == "source_content_restyle":
-        return True
-    if getattr(request, "source_mode", None) != "raster_reconstruction":
+    if getattr(request, "source_mode", None) not in {"source_content_restyle", "raster_reconstruction"}:
         return False
     if getattr(request, "full_page_preserve_pages", ()):
         return True
@@ -265,6 +263,9 @@ def pin_svg_style(request: object) -> dict:
         master_rules, master_pin = _resolve_master_rules(request, canvas)
         design_pack_rules = _resolve_design_reference(request, canvas)
         try:
+            from services.svg_common_header_design_plan import seal_new_header_design_plan
+            if fresh_readability:
+                seal_new_header_design_plan(request)
             if source_restyle:
                 from services.document_canvas import canvas_digest
                 from utils.svg_template_rules import resolve_source_template_style
@@ -304,6 +305,13 @@ def pin_svg_style(request: object) -> dict:
                 frozen["digest"] = canonical_json_digest(
                     {key: value for key, value in frozen.items() if key != "digest"}, allow_nan=True,
                 )
+            header_design_plan = getattr(request, "_svg_header_design_plan", None)
+            if header_design_plan is not None:
+                from services.svg_common_header_design_plan import require_header_design_plan
+                frozen["common_header_design_plan"] = require_header_design_plan(request)
+                frozen["digest"] = canonical_json_digest(
+                    {key: value for key, value in frozen.items() if key != "digest"}, allow_nan=True,
+                )
             if fresh_readability:
                 from services.authored_canvas import request_canvas_metadata
                 from services.document_canvas_generation import svg_readability_policy
@@ -333,6 +341,13 @@ def pin_svg_style(request: object) -> dict:
     try:
         validate_profile_agreement(request, frozen)
         validate_quality_recovery_agreement(request, frozen)
+        from services.svg_common_header_design_plan import require_header_design_plan, validate_header_design_plan
+        design_plan = validate_header_design_plan(getattr(request, "_svg_header_design_plan", None))
+        if design_plan is not None:
+            if frozen.get("common_header_design_plan") != require_header_design_plan(request):
+                raise ValueError("svg_common_header_design_plan_conflict")
+        elif frozen.get("common_header_design_plan") is not None:
+            raise ValueError("svg_common_header_design_plan_missing")
         from services.document_canvas_generation import validate_svg_readability_policy
 
         validate_svg_readability_policy(frozen.get("readability_policy"))

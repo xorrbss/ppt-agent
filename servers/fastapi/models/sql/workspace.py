@@ -345,6 +345,9 @@ class WorkspaceOperation(SQLModel, table=True):
     cancelled_at: Optional[datetime] = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
     progress: Optional[dict] = Field(default=None, sa_column=Column(JSON, nullable=True))
     result: Optional[dict] = Field(default=None, sa_column=Column(JSON, nullable=True))
+    svg_header_design_checkpoint: Optional[dict] = Field(
+        default=None, sa_column=Column(JSON, nullable=True),
+    )
     error_code: Optional[str] = Field(default=None, sa_column=Column(String(128), nullable=True))
     error_detail: Optional[dict] = Field(default=None, sa_column=Column(JSON, nullable=True))
     version: int = Field(default=0, sa_column=Column(Integer, nullable=False, default=0, server_default=text("0")))

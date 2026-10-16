@@ -87,6 +87,15 @@ def _common_header_current(slide, quality: Mapping) -> bool:
             return not has_header and not quality.get("common_header")
         evidence = quality.get("common_header") or {}
         contract, page = generated["contract"], generated["page"]
+        if contract.get("version") == "svg-common-header/v2":
+            from services.svg_common_header_export_evidence import common_header_v2_current
+            if not common_header_v2_current(slide, quality, generated):
+                return False
+            source_contract = {node.get("href"): {"required": True} for node in root.iter()
+                               if node.tag.rsplit("}", 1)[-1] == "image" and node.get("href", "").startswith("source-slot-")}
+            registered = attested_svg_furniture(slide.svg_content, furniture,
+                source_manifest=source_contract or None, width=contract["canvas"]["width"], height=contract["canvas"]["height"])
+            return all(node.get("id") in registered for node in root.iter() if node.get("id", "").startswith(GROUP_ID))
         if (not has_header or evidence.get("passed") is not True
                 or evidence.get("version") != "svg-common-header-render/v1"
                 or evidence.get("origin") != "generated-common-header"

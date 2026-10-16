@@ -182,14 +182,17 @@ class _StagedSvgProviderRequestPlan(ProviderRequestPlan):
 
     @property
     def initial_request_limit(self) -> int:
-        return self.slide_count + self.image_budget + self.vqa_budget + self.header_title_budget
+        return (self.slide_count + self.image_budget + self.vqa_budget + self.header_title_budget
+                + min(2, self.header_design_budget) + min(1, self.representative_body_budget))
 
     @property
     def retry_request_limit(self) -> int:
-        return self.repair_budget
+        return (self.repair_budget + max(0, self.header_design_budget - 2)
+                + max(0, self.representative_body_budget - 1))
 
 
-def _staged_svg_provider_request_plan(slide_count: int, stage_plan: Mapping[str, Any], *, header_title_budget: int = 0) -> ProviderRequestPlan:
+def _staged_svg_provider_request_plan(slide_count: int, stage_plan: Mapping[str, Any], *, header_title_budget: int = 0,
+                                      header_design_budget: int = 0, representative_body_budget: int = 0) -> ProviderRequestPlan:
     from services.svg_presentation_checkpoint import _provider_attempt_limit
 
     return _StagedSvgProviderRequestPlan(
@@ -198,6 +201,8 @@ def _staged_svg_provider_request_plan(slide_count: int, stage_plan: Mapping[str,
         repair_budget=slide_count * (_provider_attempt_limit({}) - 1),
         vqa_budget=len(stage_plan["partitions"]),
         header_title_budget=header_title_budget,
+        header_design_budget=header_design_budget,
+        representative_body_budget=representative_body_budget,
     )
 
 
@@ -958,7 +963,11 @@ class SqlPublicV2Orchestrator:
                     raise _public_error(error.status_code, str(error.detail)) from error
             if resolve_generation_strategy(internal_request) == "svg":
                 from services.svg_generation_admission import prepare_private_svg_recovery_authority
-
+                from services.svg_common_header_design_plan import seal_new_header_design_plan
+                try:
+                    seal_new_header_design_plan(internal_request)
+                except ValueError as error:
+                    raise _public_error(422, str(error)) from error
                 await prepare_private_svg_recovery_authority(internal_request, session)
             generation_payload = _durable_request_payload(internal_request)
             generation_payload["generation_route_receipt"] = route_payload
@@ -1101,19 +1110,26 @@ class SqlPublicV2Orchestrator:
             operation.next_attempt_at = get_current_utc_datetime()
             session.add_all((async_status, job, operation))
             await session.flush()
+            from services.svg_common_header_design_plan import (
+                svg_header_design_admission_budget, svg_header_representative_body_admission_budget,
+            )
             admission = await self._admit(
                 session,
                 actor=actor,
                 operation=operation,
                 operation_kind="generation",
                 request_plan=_staged_svg_provider_request_plan(slide_count, svg_stage_plan,
-                    header_title_budget=svg_header_title_admission_budget(internal_request, slide_count)) if svg_stage_plan is not None else plan_provider_requests(
+                    header_title_budget=svg_header_title_admission_budget(internal_request, slide_count),
+                    header_design_budget=svg_header_design_admission_budget(internal_request, slide_count),
+                    representative_body_budget=svg_header_representative_body_admission_budget(internal_request, slide_count)) if svg_stage_plan is not None else plan_provider_requests(
                     slide_count=slide_count,
                     image_budget=slide_count,
                     repair_budget=slide_count,
                     source_image_budget=source_image_admission_budget(snapshots),
                     vqa_budget=svg_quality_review_admission_budget(internal_request, slide_count),
                     header_title_budget=svg_header_title_admission_budget(internal_request, slide_count),
+                    header_design_budget=svg_header_design_admission_budget(internal_request, slide_count),
+                    representative_body_budget=svg_header_representative_body_admission_budget(internal_request, slide_count),
                 ),
                 resource_plan=self._resource_plan(
                     slide_count=slide_count,
@@ -1266,6 +1282,8 @@ class SqlPublicV2Orchestrator:
                 if presentation.mode != "svg":
                     raise _public_error(404, "presentation_not_found")
                 previous_revision = source_operation.result_revision
+                header_revision_authority = None
+                has_header_publication = False
                 publications = (await session.execute(
                     select(WorkspaceOperation).where(
                         WorkspaceOperation.presentation_id == target_id,
@@ -1273,6 +1291,7 @@ class SqlPublicV2Orchestrator:
                         WorkspaceOperation.kind.in_((
                             "slide.regenerate", "presentation.slides.reorder", "version.restore",
                             "presentation.edit", "slide.edit", "slide.delete",
+                            "design.apply",
                         )),
                         WorkspaceOperation.state == "succeeded",
                         WorkspaceOperation.result_revision > WorkspaceOperation.expected_revision,
@@ -1285,6 +1304,10 @@ class SqlPublicV2Orchestrator:
                             or publication.result_revision != previous_revision + 1
                             or publication.request_payload.get(PRINCIPAL_TENANT_PAYLOAD_KEY) != actor.tenant_id):
                         raise _public_error(409, "export_source_revision_lineage_invalid")
+                    if publication.kind == "design.apply":
+                        if (publication.request_payload.get("context") or {}).get("target") != "common_header":
+                            raise _public_error(409, "export_source_revision_lineage_invalid")
+                        has_header_publication = True
                     previous_revision = publication.result_revision
                 if previous_revision != request.source_revision:
                     raise _public_error(409, "export_source_revision_lineage_required")
@@ -1294,8 +1317,20 @@ class SqlPublicV2Orchestrator:
                 )).scalars().all()
                 from services.svg_export_operation import svg_export_admission_snapshot, require_quality_recovery_export_parent
                 try:
-                    await require_quality_recovery_export_parent(session, presentation, slides)
-                    snapshot = svg_export_admission_snapshot(presentation, slides)
+                    if has_header_publication:
+                        from services.svg_export_operation import require_header_revision_lineage_authority
+                        header_revision_authority = await require_header_revision_lineage_authority(
+                            session, presentation, slides, publication_operations=publications)
+                        if header_revision_authority is None:
+                            raise ValueError("svg_header_revision_export_authority_required")
+                    if header_revision_authority is None:
+                        await require_quality_recovery_export_parent(session, presentation, slides)
+                        snapshot = svg_export_admission_snapshot(presentation, slides)
+                    else:
+                        await require_quality_recovery_export_parent(session, presentation, slides,
+                            header_revision_authority=header_revision_authority)
+                        snapshot = svg_export_admission_snapshot(presentation, slides,
+                            header_revision_authority=header_revision_authority)
                 except ValueError as error:
                     raise _public_error(409, str(error)) from error
                 svg_source_revision_binding = {

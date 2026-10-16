@@ -213,6 +213,78 @@ def test_owner_rls_visibility_function_body_is_pinned(migration_module) -> None:
     )
 
 
+    # Shared quota counters also require an owner-authorized fixed-query
+    # boundary rather than the request principal's partial RLS view.
+    quota_path = (
+        FASTAPI_ROOT / "alembic" / "versions"
+        / "f6c8e0a2b4d7_harden_public_quota_invariant_authority.py"
+    )
+    spec = importlib.util.spec_from_file_location("quota_authority_migration", quota_path)
+    quota = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(quota)
+    assert quota.revision == revision_contract.REVISION_PUBLIC_QUOTA_INVARIANT_AUTHORITY
+    assert quota.down_revision == revision_contract.REVISION_SVG_HEADER_DESIGN_CHECKPOINTS
+    script = ScriptDirectory.from_config(_alembic_config("sqlite://"))
+    assert script.get_heads() == [revision_contract.HEAD_REVISION]
+    assert quota.revision in {
+        entry.revision
+        for entry in script.iterate_revisions(revision_contract.HEAD_REVISION, "base")
+    }
+    statements = _run(quota, "upgrade", "postgresql")
+    assert len(statements) == 3
+    preflight, function, revoke = statements
+    assert "p.proowner" in preflight
+    assert "pg_catalog.pg_roles" in preflight
+    assert "(r.rolsuper OR r.rolbypassrls)" in preflight
+    assert "public_quota_invariant_owner_authority_required" in preflight
+    assert "SECURITY DEFINER" in function
+    assert "SET search_path = pg_catalog, pg_temp" in function
+    assert "SET row_security = off" in function
+    assert "public_quota_invariant_trigger_required" in function
+    assert "TG_WHEN <> 'AFTER' OR TG_LEVEL <> 'ROW' OR TG_NARGS <> 0" in function
+    assert "TG_OP NOT IN ('INSERT', 'UPDATE', 'DELETE')" in function
+    for table, trigger in (
+        ("public_resource_leases", "trg_public_resource_lease_counter_consistent"),
+        ("public_quota_counters", "trg_public_quota_counter_consistent"),
+    ):
+        assert f"TG_RELID = 'public.{table}'::regclass" in function
+        assert f"TG_NAME = '{trigger}'" in function
+    assert revoke == (
+        "REVOKE ALL ON FUNCTION public.public_validate_quota_counter_consistency() "
+        "FROM PUBLIC, presenton_public_api, presenton_public_controller"
+    )
+
+    # Compare accounting with the frozen previous invariant: security changes
+    # must preserve counts, resource units, lease-less admissions and scope joins.
+    prior_path = (
+        FASTAPI_ROOT / "alembic" / "versions"
+        / "d4a7c9e1b3f6_count_lease_less_admissions_in_global_quota_invariant.py"
+    )
+    prior_spec = importlib.util.spec_from_file_location("quota_prior_migration", prior_path)
+    prior = importlib.util.module_from_spec(prior_spec)
+    prior_spec.loader.exec_module(prior)
+    old = prior._consistency_function_sql(
+        scope_types=prior._FIXED_SCOPE_TYPES, scope_match=prior._FIXED_SCOPE_MATCH
+    )
+    accounting_start = "IF TG_OP = 'DELETE' THEN"
+    old_body = old[old.index(accounting_start):]
+    new_body = function[function.index(accounting_start):]
+    for table in ("public_resource_leases", "public_operation_admissions", "public_quota_counters"):
+        new_body = new_body.replace(f"public.{table}", table)
+    assert " ".join(new_body.split()) == " ".join(old_body.split())
+    assert not any(
+        token in "\n".join(statements)
+        for token in ("ALTER ROLE", "CREATE ROLE", "ALTER TABLE", "POLICY", "OWNER TO")
+    )
+    assert _run(quota, "upgrade", "sqlite") == []
+    assert _run(quota, "downgrade", "sqlite") == []
+    assert _run(quota, "downgrade", "postgresql") == [
+        "ALTER FUNCTION public.public_validate_quota_counter_consistency() SECURITY INVOKER",
+        "ALTER FUNCTION public.public_validate_quota_counter_consistency() RESET ALL",
+        "GRANT EXECUTE ON FUNCTION public.public_validate_quota_counter_consistency() TO PUBLIC",
+    ]
+
+
 def test_owner_rls_upgrade_emits_forced_policies_per_table(
     migration_module,
 ) -> None:

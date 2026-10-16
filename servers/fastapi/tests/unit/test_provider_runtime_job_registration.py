@@ -224,3 +224,91 @@ def test_seeded_counters_continue_the_durable_request_accounting() -> None:
             )
 
     asyncio.run(scenario())
+
+
+def test_header_revision_provider_scopes_cannot_borrow_quality_review_authority(monkeypatch):
+    """Reject crossed scopes before a reservation; keep the real review gate strict."""
+    from contextlib import asynccontextmanager
+    from datetime import datetime, timedelta, timezone
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from services import provider_durable_admission as durable
+    from services import provider_runtime_job_registration as registration
+    from services.provider_runtime_primitives import CancellationRequested
+
+    identity, owner = uuid.uuid4(), uuid.uuid4()
+    row = SimpleNamespace(operation_id=identity, owner_id=owner, tenant_id="scope-test", state="active",
+        planned_request_limit=1, retry_request_limit=0, initial_request_count=0, retry_request_count=0)
+    operation = SimpleNamespace(id=identity, kind="quality.review", owner_id=owner, owner_scope=str(owner),
+        state="running", max_attempts=1, attempt_number=1, attempt_token="live-attempt", fencing_token=3,
+        cancel_requested_at=None, lease_expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+        expected_revision=4, request_payload={"context": {"mode": "analyze_only"}})
+
+    class Session:
+        def __init__(self):
+            self.calls = 0
+
+        async def scalar(self, query):
+            self.calls += 1
+            return row if self.calls == 1 else operation
+
+        async def get(self, model, key, **kwargs):
+            return operation
+
+    @asynccontextmanager
+    async def sessions():
+        yield Session()
+
+    monkeypatch.setattr(durable, "async_session_maker", sessions)
+    monkeypatch.setattr("services.database.async_session_maker", sessions)
+    monkeypatch.setattr(durable, "get_current_owner_id", lambda: owner)
+    monkeypatch.setattr("utils.owner_context.get_current_owner_id", lambda: owner)
+    monkeypatch.setattr("utils.owner_context.get_current_tenant_id", lambda: "scope-test")
+    monkeypatch.setattr("models.sql.workspace.get_workspace_owner_scope", lambda: str(owner))
+    reserve_budget = AsyncMock(side_effect=AssertionError("crossed scope reached budget reservation"))
+    monkeypatch.setattr(durable, "register_durable_budget", reserve_budget)
+    partial = AsyncMock(return_value=None)
+    monkeypatch.setattr("services.svg_partial_recovery.runtime_admission", partial)
+    phase2 = AsyncMock()
+    monkeypatch.setattr("services.public_operation_admission._require_phase2_provider_contract", phase2)
+
+    async def reserve(service, stage):
+        return await durable.reserve_provider_call_detached(job_id=identity, workspace_operation_id=identity,
+            operation=service, stage=stage, request_id="crossed-scope", estimated_cost=1,
+            expected_attempt_token="live-attempt", expected_fencing_token=3)
+
+    async def scenario():
+        # A valid review lease cannot authorize document-header authoring.
+        with pytest.raises(RuntimeError, match="svg_common_header_runtime_admission_invalid"):
+            await reserve("authored_generation", "header")
+        # A header operation cannot enter the legacy review-only exception.
+        operation.kind = "design.apply"
+        operation.request_payload = {"context": {"target": "common_header"}}
+        with pytest.raises(RuntimeError, match="public_review_admission_scope_invalid"):
+            await reserve("quality_review", "vqa")
+        # Unsupported stages must not even enter the funded header validator.
+        header_validator = AsyncMock(return_value=row)
+        monkeypatch.setattr("services.workspace_svg_header_design_operation_handler.require_header_runtime_admission",
+            header_validator)
+        with pytest.raises(CancellationRequested, match="provider_workspace_job_scope_invalid"):
+            await reserve("authored_generation", "vqa")
+        header_validator.assert_not_awaited()
+        partial.assert_awaited_once()
+        reserve_budget.assert_not_awaited()
+
+        operation.kind = "quality.review"
+        operation.request_payload = {"context": {"mode": "analyze_only"}}
+        assert await registration.require_public_review_job(Session(), operation_id=identity,
+            expected_attempt_token="live-attempt", expected_fencing_token=3,
+            expected_operation_kind="quality.review") is row
+        phase2.assert_awaited_once()
+        # Larger initial or retry quotas are not valid legacy review authority.
+        for initial, retries in ((2, 0), (1, 1)):
+            row.planned_request_limit, row.retry_request_limit = initial, retries
+            with pytest.raises(RuntimeError, match="public_review_admission_scope_invalid"):
+                await registration.require_public_review_job(Session(), operation_id=identity,
+                    expected_operation_kind="quality.review")
+        phase2.assert_awaited_once()
+
+    asyncio.run(scenario())

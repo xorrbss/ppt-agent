@@ -24,6 +24,8 @@ _PROJECTION_ADAPTER_FILES = tuple(
         "services/generation_core/drivers/svg/export_chart_style.py",
         "workers/public_svg_pptx_convert.py",
         "workers/svg_common_header_export.py",
+        "workers/svg_common_header_export_v2.py",
+        "services/svg_common_header_export_evidence.py",
     )
 )
 

@@ -1,4 +1,5 @@
 "use client";
+import { commonHeaderDesignForConfig } from "@/lib/common-header-design";
 import { useTranslations as useA2bTranslations } from "next-intl";
 /**
  * Owns the raster review's operation/page state and its per-request actions
@@ -174,6 +175,7 @@ export const useRasterReviewActions = ({
       instructions: [config.prompt, config.instructions].map((part) => part?.trim()).filter(Boolean).join("\n") || null,
       }),
       commonHeaderMode: config.commonHeaderMode ?? "uniform",
+      commonHeaderDesign: commonHeaderDesignForConfig(config),
       commonHeaderCoverException: (config.commonHeaderMode ?? "uniform") === "uniform" && (config.commonHeaderCoverException ?? false),
     });
     return rasterApprovalForUi(approved);

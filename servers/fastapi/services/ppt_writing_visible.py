@@ -30,10 +30,10 @@ def _tag(name: str) -> str:
     return name.rsplit("}", 1)[-1].lower()
 
 
-def svg_text_nodes(svg: str) -> tuple[str, ...]:
-    """Read only displayed SVG text elements, never attributes or path data."""
+def _svg_text_records(svg: str) -> tuple[dict, ...]:
     root = ET.fromstring(svg)
-    texts: list[str] = []
+    qids = {node: f"svg-{index}" for index, node in enumerate(root.iter())}
+    texts: list[dict] = []
 
     def visit(node: ET.Element, hidden: bool = False) -> None:
         tag = _tag(node.tag)
@@ -44,13 +44,18 @@ def svg_text_nodes(svg: str) -> tuple[str, ...]:
         if tag == "text":
             value = "".join(node.itertext()).strip()
             if value:
-                texts.append(value)
+                texts.append({"qid": qids[node], "node_id": node.get("id"), "text": value})
             return
         for child in node:
             visit(child)
 
     visit(root)
     return tuple(texts)
+
+
+def svg_text_nodes(svg: str) -> tuple[str, ...]:
+    """Read only displayed SVG text elements, never attributes or path data."""
+    return tuple(record["text"] for record in _svg_text_records(svg))
 
 
 class _VisibleHtmlParser(HTMLParser):
@@ -122,9 +127,26 @@ def _provenance_spans(text: str, values: Sequence[str]) -> tuple[ProtectedSpan, 
 
 def literal_source_values(source_text: str | None = None, native: Mapping | None = None,
                           bindings: Sequence[Mapping] = (),
-                          raster_ledger: Mapping | None = None) -> tuple[str, ...]:
+                          raster_ledger: Mapping | None = None, *,
+                          header_contract: Mapping | None = None,
+                          header_binding: Mapping | None = None) -> tuple[str, ...]:
     """Pick explicit literal evidence: quotations, names with symbols, native cells/labels."""
     values: set[str] = set()
+    if (header_contract and header_contract.get("version") == "svg-common-header/v2"
+            and header_binding and header_binding.get("applied") is True):
+        from services.svg_common_header import validate_common_header_binding
+        try:
+            validate_common_header_binding(header_contract, header_binding)
+        except (ValueError, KeyError, TypeError):
+            pass  # Invalid bindings never grant writing-policy exemptions.
+        else:
+            for field in header_binding.get("fields", ()):
+                value, source = field.get("value"), field.get("source_ref")
+                if (field.get("user_fixed") is True and isinstance(source, str)
+                        and source.startswith("request:") and isinstance(value, str) and value.strip()):
+                    values.add(value)
+                    values.update(line.strip() for line in field.get("lines", ())
+                                  if isinstance(line, str) and line.strip())
     if source_text:
         for match in re.finditer(r'[“"]([^“”"\n]{2,120})[”"]', source_text):
             values.add(match.group(1))
@@ -199,3 +221,28 @@ def assess_visible_nodes(
         "protected_symbol_counts": dict(protected),
         "style_signal_counts": dict(style),
     }
+
+
+def svg_writing_repair_witnesses(svg: str, *, source_values: Sequence[str] = (),
+                                 limit: int = 4, max_text_chars: int = 180) -> list[dict]:
+    """Bounded transient repair context; never add visible text to quality receipts."""
+    witnesses = []
+    for record in _svg_text_records(svg):
+        text = record["text"]
+        spans = _provenance_spans(text, source_values)
+        scan = (scan_visible_text(text, source_text=text)
+                if len(spans) == 1 and spans[0].start == 0 and spans[0].end == len(text)
+                else scan_visible_text(text, protected_spans=spans))
+        hard = [item for item in scan.violations if item.category not in _AMBIGUOUS]
+        if not hard:
+            continue
+        start = max(0, min(hard[0].start - max_text_chars // 3, len(text) - max_text_chars))
+        end = start + max_text_chars
+        witnesses.append({"qid": record["qid"], "node_id": record["node_id"],
+            "text": text[start:end], "text_start": start,
+            "symbols": [{"category": item.category.value, "start": item.start - start, "end": item.end - start}
+                        for item in hard if start <= item.start and item.end <= end][:4],
+            "frozen_header": str(record["node_id"] or "").startswith("svg-system-common-header-")})
+        if len(witnesses) >= limit:
+            break
+    return witnesses

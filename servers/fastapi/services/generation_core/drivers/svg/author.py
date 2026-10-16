@@ -140,6 +140,9 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
                 raise ValueError("svg_correction_previous_render_binding_invalid")
             recovery_kwargs.update(previous_render_png=png, previous_render_png_digest="sha256:" + png_digest)
     intent_kwargs = {}
+    author_identity = getattr(ctx, "header_author_attempt_identity", None)
+    if author_identity is not None:
+        intent_kwargs["author_attempt_identity"] = author_identity
     intents = getattr(ctx, "visual_intents", None)
     if isinstance(intents, list) and index < len(intents):
         from services.generation_core.drivers.svg.visual_intent import VISUAL_INTENT_VERSION
@@ -280,6 +283,7 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
                               stage="author" if ordinal == 0 else "repair",
                               slide_index=index,
                               attempt_number=job.attempt_number if job else 0,
+                              public_only=bool(getattr(ctx, "header_operation_public_only", False)),
                               **({"workspace_operation_id": job.workspace_operation_id}
                                  if job is not None and (getattr(job, "request_payload", None) or {}).get("_svg_partial_recovery")
                                  else {})), observer_scope:
@@ -292,6 +296,7 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
                 authored = await author_raster_svg_layout(ctx.raster_analysis, ctx.raster_pin, index, ctx.snapshot,
                     instructions=request.instructions, correction_hint=hint,
                     receipt_attempt_ordinal=provider_ordinal, before_dispatch=before_dispatch,
+                    header_page=(getattr(ctx, "header_pages", None) or [None] * count)[index],
                     **intent_kwargs)
             elif ctx.source_reflow:
                 from services.generation_core.authoring.author_source_svg_layout import author_source_svg_layout
@@ -307,6 +312,7 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
                     receipt_attempt_ordinal=provider_ordinal,
                     before_dispatch=before_dispatch,
                     _validated_pages=ctx.source_units,
+                    header_page=(getattr(ctx, "header_pages", None) or [None] * count)[index],
                     **({"previous_svg": payload.get("last_valid_svg")} if whole_page_source and hint else {}),
                     **recovery_kwargs,
                     **intent_kwargs,
@@ -399,6 +405,9 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
     payload["model_attempt_count"] = _provider_attempt_count(payload)
     payload["inflight"] = None
     payload["svg_content"] = svg
+    if getattr(ctx, "header_author_attempt_identity", None) is not None:
+        payload["author_body_svg"] = svg
+        payload["header_author_attempt_identity"] = dict(ctx.header_author_attempt_identity)
     # Declarations are bound to the digest of this exact drawing; any other SVG
     # this page ends with (correction, restore, fallback) does not match it.
     bind_native_declarations(payload, svg, authored.native_declarations)

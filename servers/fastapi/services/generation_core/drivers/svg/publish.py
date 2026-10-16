@@ -162,6 +162,8 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
     render_advisory_count = sum(len(payload.get("rasterRenderAdvisories", [])) for payload, _ in pages)
     presentation.theme = merge_presentation_canvas({
         **(presentation.theme or {}), "mode": "svg", "style": request.authored_style,
+        **({"commonHeaderDesign": request.common_header_design.model_dump(mode="json")}
+           if getattr(request, "common_header_design", None) is not None else {}),
         "svg": {"schemaVersion": "svg-document/v1", "styleSnapshot": snapshot,
                 **({"sourcePreservation": source_preservation} if source_preservation else {}),
                 "qualityStatus": "review_required" if review else "passed",

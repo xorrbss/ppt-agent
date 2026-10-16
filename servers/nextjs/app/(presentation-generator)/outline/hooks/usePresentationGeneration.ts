@@ -1,3 +1,4 @@
+import { commonHeaderDesignForConfig } from "@/lib/common-header-design";
 import { isAmbiguousGenerationTransportError, isRetryableGenerationStartError, hasRecoverableChatFirstWorkspace, isCompanyStandardAdmissionError } from "./generationStartErrors";
 import { useTranslations as useA2bTranslations } from "next-intl";
 import { useState, useCallback, useEffect, useRef } from "react";
@@ -294,6 +295,7 @@ export const usePresentationGeneration = (
       visionQa: isSourceContentGeneration || generationStrategy === "svg" ? false : authoredVisionQa,
       ...(generationStrategy === "svg" ? {
         commonHeaderMode: generationConfig?.commonHeaderMode ?? "uniform",
+        commonHeaderDesign: commonHeaderDesignForConfig(generationConfig ?? {}),
         commonHeaderCoverException: (generationConfig?.commonHeaderMode ?? "uniform") === "uniform" && (generationConfig?.commonHeaderCoverException ?? false),
       } : {}),
       ...(generationStrategy === "svg" && generationConfig?.svgDesignReferenceSnapshotId ? { svgDesignReferenceSnapshotId: generationConfig.svgDesignReferenceSnapshotId } : {}),
@@ -370,6 +372,7 @@ export const usePresentationGeneration = (
         vision_qa: authoredRequest.visionQa,
         strategy: authoredRequest.strategy ?? "svg",
         common_header_mode: "commonHeaderMode" in authoredRequest ? authoredRequest.commonHeaderMode : undefined,
+        common_header_design: "commonHeaderDesign" in authoredRequest ? authoredRequest.commonHeaderDesign : undefined,
         common_header_cover_exception: "commonHeaderCoverException" in authoredRequest ? authoredRequest.commonHeaderCoverException : undefined,
         authored_style: authoredRequest.authoredStyle,
         svg_design_reference_snapshot_id: "svgDesignReferenceSnapshotId" in authoredRequest ? authoredRequest.svgDesignReferenceSnapshotId : undefined,

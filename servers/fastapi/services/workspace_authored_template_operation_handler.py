@@ -41,6 +41,9 @@ class WorkspaceAuthoredTemplateOperationHandler:
         self, context: WorkspaceOperationExecutionContext
     ) -> WorkspaceOperationResult:
         claim = context.claim
+        if claim.kind == DESIGN_APPLY_OPERATION_KIND and (claim.request_payload.get("context") or {}).get("target") == "common_header":
+            from services.workspace_svg_header_design_operation_handler import WorkspaceSvgHeaderDesignOperationHandler
+            return await WorkspaceSvgHeaderDesignOperationHandler().execute(context)
         if claim.expected_revision is None:
             raise NonRetryableWorkspaceOperationError(
                 "workspace_expected_revision_required"

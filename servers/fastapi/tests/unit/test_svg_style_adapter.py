@@ -280,6 +280,47 @@ def test_uploaded_design_reference_admits_real_owner_snapshot_and_rejects_change
                     resumed = await prepare_svg_uploaded_design_reference(
                         request, session, asset_gateway=gateway, frozen_profile=profile)
                     assert resumed is profile and request._svg_uploaded_design_reference is profile
+                    projected = adapt_svg_style(resolve_authored_style("default"),
+                        **profile["canvas"], request=_request(), design_pack_rules=profile)
+                    assert "references" not in projected["design_pack_template"]
+                    assert projected["references"] == profile["references"]
+                    request._svg_style_snapshot = deepcopy(projected)
+                    before_projection = deepcopy(request._svg_style_snapshot)
+                    replayed = await prepare_svg_uploaded_design_reference(request, session,
+                        asset_gateway=gateway, frozen_profile=request._svg_style_snapshot["design_pack_template"])
+                    assert replayed == profile and replayed["digest"] == profile["digest"]
+                    assert request._svg_style_snapshot == before_projection
+                    for alteration in ("changed", "missing", "extra", "root_missing"):
+                        corrupted = deepcopy(projected)
+                        if alteration == "changed":
+                            corrupted["references"]["content"][0]["data_url"] += "A"
+                        elif alteration == "missing":
+                            corrupted["references"]["content"] = []
+                        elif alteration == "extra":
+                            corrupted["references"]["content"].append(deepcopy(corrupted["references"]["content"][0]))
+                        else:
+                            corrupted.pop("references")
+                        request._svg_style_snapshot = corrupted
+                        with pytest.raises(ReferenceProviderError, match="digest_mismatch"):
+                            await prepare_svg_uploaded_design_reference(request, session,
+                                asset_gateway=gateway, frozen_profile=corrupted["design_pack_template"])
+                    request._svg_style_snapshot = None
+                    request._svg_uploaded_design_reference = profile
+                    import os
+                    import json
+                    from pathlib import Path
+                    replay_evidence = os.environ.get("HEADER_UPLOADED_REFERENCE_REPLAY_EVIDENCE")
+                    if replay_evidence:
+                        evidence_path = Path(replay_evidence)
+                        evidence_bytes = evidence_path.read_bytes()
+                        evidence = json.loads(evidence_bytes.decode("utf-8-sig"))
+                        frozen_evidence = evidence["request_payload"]["_internal_svg_style_snapshot"]
+                        inner_evidence = frozen_evidence["design_pack_template"]
+                        restored = uploaded_module._restore_uploaded_design_reference(inner_evidence, frozen_evidence)
+                        uploaded_module.validate_uploaded_design_reference(restored,
+                            snapshot_id=uuid.UUID(restored["provenance"]["snapshot_id"]), **restored["canvas"])
+                        assert restored["digest"] == inner_evidence["digest"]
+                        assert evidence_path.read_bytes() == evidence_bytes
                     from datetime import timedelta
                     from models.sql.reference_snapshot import ReferenceSnapshot
                     from utils.datetime_utils import get_current_utc_datetime

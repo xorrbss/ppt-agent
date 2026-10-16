@@ -70,6 +70,7 @@ def build_internal_generation_request(
         strategy=request.strategy,
         common_header_mode=request.common_header_mode,
         common_header_cover_exception=request.common_header_cover_exception,
+        common_header_design=request.common_header_design,
         qualityProfile=(
             "release" if request.quality_policy == "release-v1" else "development"
         ),

@@ -24,7 +24,7 @@ def saved_review_runtime():
                          for module in (vision_advisory, vision_advisory_prompt)])
 
 
-def saved_page_digest(slide, snapshot, runtime, binding):
+def saved_page_render_input(slide):
     content = slide.content or {}
     receipt = content.get("svgReceipt") or {}
     # Capture location and previous review operation are not rendering inputs.
@@ -34,11 +34,15 @@ def saved_page_digest(slide, snapshot, runtime, binding):
     quality = dict(evidence.get("quality") or {})
     quality.pop("compositionObservation", None)
     evidence["quality"] = quality
-    return content_digest(dict(svg=slide.svg_content, source=content.get("source"),
+    return dict(svg=slide.svg_content, source=content.get("source"),
         role=content.get("role"), assets=content.get("svgAssetManifest"),
         native={key: value for key, value in content.items() if key not in {
             "svgReceipt", "source", "role", "svgAssetManifest", "__svg__"}},
-        evidence=evidence, snapshot=snapshot, runtime=runtime, binding=binding))
+        evidence=evidence)
+
+
+def saved_page_digest(slide, snapshot, runtime, binding):
+    return content_digest(dict(**saved_page_render_input(slide), snapshot=snapshot, runtime=runtime, binding=binding))
 
 
 def seal_saved_page_evidence(slides, snapshot, gate, *, runtime=None):
@@ -57,7 +61,7 @@ def seal_saved_page_evidence(slides, snapshot, gate, *, runtime=None):
     return {**body, "digest": content_digest(body)}
 
 
-def prepare_saved_review(presentation, slides, indices, pngs, *, operation_id, owner_scope):
+def prepare_saved_review(presentation, slides, indices, pngs, *, operation_id, owner_scope, source_parent_authority=None):
     from services.svg_authoring_profile import read_quality_recovery_plan
     from services.generation_core.drivers.svg.quality import (
         _design_context, _gate_intact, _candidate_local_valid, _render_resolution)
@@ -65,6 +69,9 @@ def prepare_saved_review(presentation, slides, indices, pngs, *, operation_id, o
     meta = (presentation.theme or {}).get("svg") or {}
     snapshot = meta.get("styleSnapshot") or {}
     publication = meta.get("qualityRecoveryPublication") or {}
+    if source_parent_authority is not None:
+        from services.svg_export_operation import header_revision_source_parent
+        publication = header_revision_source_parent(source_parent_authority, presentation, slides)
     parent_revision = publication.get("sourceGenerationRevision", publication.get("sourceRevision"))
     if (type(parent_revision) is not int or parent_revision > presentation.revision
             or not publication.get("parentOperationId") or not publication.get("parentJobId")
@@ -111,10 +118,22 @@ def prepare_saved_review(presentation, slides, indices, pngs, *, operation_id, o
         raise ValueError("svg_quality_review_single_call_capacity_exceeded")
     job = SimpleNamespace(id=publication["parentJobId"], workspace_operation_id=operation_id,
                           presentation_id=presentation.id)
+    header_pages = None
+    if snapshot.get("common_header") is not None:
+        from services.svg_common_header import validate_common_header_outline
+        outline = presentation.outlines
+        if (not isinstance(outline, dict) or not isinstance(outline.get("slides"), list)
+                or len(outline["slides"]) != len(slides)):
+            raise ValueError("svg_common_header_review_binding_missing")
+        validate_common_header_outline(snapshot, outline)
+        if any(page.get("content") != (slide.content or {}).get("source")
+               for page, slide in zip(outline["slides"], slides, strict=True)):
+            raise ValueError("svg_common_header_review_source_mismatch")
+        header_pages = [deepcopy(page["common_header"]) for page in outline["slides"]]
     ctx = SimpleNamespace(snapshot=snapshot, count=len(slides),
         roles=[(slide.content or {}).get("role") or "content" for slide in slides],
         quality_review_contents=[(slide.content or {}).get("source") for slide in slides],
-        quality_recovery_runtime_binding=content_digest(runtime))
+        quality_recovery_runtime_binding=content_digest(runtime), header_pages=header_pages)
     context = _design_context(ctx, pages, job=job, read_png=lambda payload: None)
     baseline = baseline_review_active(context)
     capacity = plan["slide_count"] if baseline else plan["review_group_size"]

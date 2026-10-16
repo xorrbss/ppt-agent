@@ -201,6 +201,16 @@ def project_uploaded_design_reference(path: Path, *, expected_sha256: str, media
     return result
 
 
+def _restore_uploaded_design_reference(profile: dict | None, snapshot: dict | None) -> dict | None:
+    if (isinstance(profile, dict) and "references" not in profile
+            and isinstance(snapshot, dict) and snapshot.get("design_pack_template") == profile
+            and isinstance(snapshot.get("references"), dict)):
+        # Style projection stores sample bytes at the snapshot root. Restore
+        # the original signed profile before checking its unchanged digest.
+        return {**deepcopy(profile), "references": deepcopy(snapshot["references"])}
+    return profile
+
+
 async def prepare_svg_uploaded_design_reference(request: object, session: object, *,
                                                 asset_gateway: AssetGateway | None = None,
                                                 frozen_profile: dict | None = None) -> dict | None:
@@ -211,6 +221,7 @@ async def prepare_svg_uploaded_design_reference(request: object, session: object
     from services.authored_canvas import request_canvas_contract
     canvas = request_canvas_contract(request)
     frozen = frozen_profile if frozen_profile is not None else getattr(request, "_svg_uploaded_design_reference", None)
+    frozen = _restore_uploaded_design_reference(frozen, getattr(request, "_svg_style_snapshot", None))
     gateway = asset_gateway or AssetGateway()
     admitted = await admit_reference_snapshot(session, snapshot_id=snapshot_id, asset_gateway=gateway)
     if admitted.provider_id != "uploaded_document" or len(admitted.asset_bindings) != 1:

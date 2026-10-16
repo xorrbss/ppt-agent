@@ -11,7 +11,7 @@ import re
 
 from services.svg_source_layout import SvgLayoutPlan, assemble_source_svg, page_digest, source_pages
 from services.svg_contract import source_digest
-from services.generation_core.authoring.author_slide_svg import SvgAuthorResult
+from services.generation_core.authoring.author_slide_svg import SvgAuthorResult, svg_author_semantic_slot
 from services.generation_core.authoring.author_slide_svg import free_composition_canvas_clause, svg_prompt_design
 from services.generation_core.drivers.svg.visual_intent import VISUAL_INTENT_RULES, visual_intent_receipt
 from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
@@ -50,7 +50,7 @@ async def _author_source_whole_page(manifest, page_index, style_snapshot, *, sou
         image_slots, min_font_size_px, width, height, instructions, correction_hint,
         receipt_attempt_ordinal, before_dispatch, _validated_pages, visual_intent, previous_svg,
         correction_mode=None, previous_render_png=None, previous_render_png_digest=None,
-        writing_policy=None):
+        writing_policy=None, header_page=None, author_attempt_identity=None):
     from services.generation_core.authoring.author_slide_svg import author_slide_svg
     from services.svg_source_layout import bind_whole_page_source_svg
 
@@ -101,7 +101,8 @@ async def _author_source_whole_page(manifest, page_index, style_snapshot, *, sou
         correction_hint=correction_hint, source_images=source_images,
         receipt_attempt_ordinal=receipt_attempt_ordinal, before_dispatch=before_dispatch,
         visual_intent=visual_intent, previous_svg=previous_svg,
-        writing_policy=writing_policy, source_preserved=True, **correction_kwargs)
+        writing_policy=writing_policy, source_preserved=True, header_page=header_page,
+        author_attempt_identity=author_attempt_identity, **correction_kwargs)
     authored.receipt["source_authoring_contract"] = style_snapshot["source_authoring_contract"]
     if authored.receipt.get("validation_error"):
         return authored
@@ -222,6 +223,8 @@ async def author_source_svg_layout(
     previous_render_png=None,
     previous_render_png_digest=None,
     writing_policy=None,
+    header_page=None,
+    author_attempt_identity=None,
 ):
     contract = style_snapshot.get("source_authoring_contract")
     if contract is not None:
@@ -234,7 +237,8 @@ async def author_source_svg_layout(
             _validated_pages=_validated_pages, visual_intent=visual_intent, previous_svg=previous_svg,
             correction_mode=correction_mode, previous_render_png=previous_render_png,
             previous_render_png_digest=previous_render_png_digest,
-            writing_policy=writing_policy)
+            writing_policy=writing_policy, header_page=header_page,
+            author_attempt_identity=author_attempt_identity)
     from services.provider_usage_instrumentation import (
         ProviderCallTimer,
         current_provider_idempotency_key,
@@ -345,7 +349,7 @@ template_digest=source_template.digest and layout_id=free-svg (an identity marke
     try:
         async with provider_call_admission(
             is_retry=receipt_attempt_ordinal > 1,
-            semantic_slot=f"svg-author-{page_index}-{receipt_attempt_ordinal}",
+            semantic_slot=svg_author_semantic_slot(page_index, receipt_attempt_ordinal, author_attempt_identity),
             provider=provider,
             model=str(model),
             provider_idempotency_capable=supports_provider_idempotency(client, provider_id=provider),

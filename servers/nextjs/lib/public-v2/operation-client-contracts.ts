@@ -50,6 +50,7 @@ export type PublicV2GenerationRequest = {
   generationMode?: PublicV2GenerationMode;
   designPackPin?: PublicV2DesignPackPin;
   strategy?: "authored" | "svg";
+  commonHeaderDesign?: import("@/lib/common-header-design").CommonHeaderDesign;
   commonHeaderMode?: "uniform" | "free";
   commonHeaderCoverException?: boolean;
   svgDesignReferenceSnapshotId?: string;

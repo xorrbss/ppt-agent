@@ -1605,9 +1605,17 @@ async def create_workspace_command(
     content_message: UserMessage | None = None,
     allow_local_development: bool = False,
 ) -> tuple[WorkspaceOperation, bool]:
+    svg_header_design = request.command_type == "design.apply" and request.context.get("target") is not None
+    if svg_header_design:
+        from services.workspace_svg_header_design_operation_handler import validate_header_command
+        try:
+            validate_header_command(request)
+        except ValueError as error:
+            raise WorkspaceServiceError(str(error), status_code=422, retryable=False) from error
     bind_presentation_principal = request.command_type in {
         "export.pptx", "export.pdf", "slide.regenerate.preview", "slide.regenerate",
     }
+    bind_presentation_principal = bind_presentation_principal or svg_header_design
     svg_review = request.command_type == "quality.review" and request.context.get("mode") == "analyze_only"
     if svg_review:
         presentation = await session.scalar(select(PresentationModel).where(
@@ -1748,6 +1756,15 @@ async def _create_workspace_command(
     session.add_all((message, operation))
     try:
         await session.flush()
+        if request.command_type == "design.apply" and request.context.get("target") == "common_header":
+            from services.workspace_svg_header_design_operation_handler import admit_svg_header_design_operation
+            try:
+                await admit_svg_header_design_operation(session, operation=operation, presentation=presentation)
+            except ValueError as error:
+                raise WorkspaceServiceError(str(error), status_code=422, retryable=False) from error
+            except PublicAdmissionRejected as error:
+                raise WorkspaceServiceError(error.code, status_code=429, retryable=True,
+                    retry_after_seconds=error.retry_after_seconds or 15) from error
         if request.command_type == "slide.regenerate.preview":
             from services.workspace_authored_async_admission import admit_svg_page_preview_operation
             try:
@@ -1946,6 +1963,9 @@ async def apply_workspace_action(
         bind_presentation_principal = source is not None and source.kind in {
             "export.pptx", "export.pdf",
         }
+        if source is not None and source.kind == "design.apply" and (
+                (source.request_payload.get("context") or {}).get("target") == "common_header"):
+            bind_presentation_principal = True
         if request.action == "retry" and source is not None and source.kind in {
             "presentation.slides.reorder", "version.restore", "presentation.edit",
             "slide.edit", "slide.delete",
@@ -2137,6 +2157,17 @@ async def _apply_workspace_action(
         "cancelled",
         "dead_letter",
     }
+    header_retry = None
+    if terminal_retry and operation.kind == "design.apply" and (
+            (operation.request_payload.get("context") or {}).get("target") == "common_header"):
+        if (request.expected_revision is None or request.expected_operation_version is None
+                or request.expected_operation_version != operation.version):
+            raise WorkspaceServiceError("operation_state_conflict", status_code=409, retryable=False)
+        from services.workspace_svg_header_retry import header_retry_source
+        try:
+            header_retry = await header_retry_source(session, source=operation, expected_revision=presentation.revision)
+        except ValueError as error:
+            raise WorkspaceServiceError(str(error), status_code=409, retryable=False) from error
     export_v2_authority = (
         await _verified_export_retry_v2_authority(session, operation, request, presentation)
         if terminal_retry else None
@@ -2196,6 +2227,7 @@ async def _apply_workspace_action(
             and not explicit_capacity_recovery
             and not explicit_checkpoint_recovery
             and svg_recovery is None
+            and header_retry is None
             and not (export_v2_authority is not None
                      and request.recovery_revision == EXPORT_V2_AUTHORITY_RECOVERY_REVISION)
         ):
@@ -2238,6 +2270,8 @@ async def _apply_workspace_action(
             "retry_of_operation_id": str(source_operation.id),
             "account_deletion_generation": account_generation,
         }
+        if header_retry is not None:
+            retry_payload["svg_header_retry"] = deepcopy(header_retry)
         if explicit_capacity_recovery or explicit_checkpoint_recovery or svg_recovery is not None:
             retry_payload["recovery_revision"] = request.recovery_revision
         if partial_recovery:
@@ -2331,6 +2365,18 @@ async def _apply_workspace_action(
             # SQLAlchemy cannot infer object ordering from UUID values alone,
             # and SQLite enforces the receipt FK immediately.
             await session.flush()
+            if header_retry is not None:
+                from services.workspace_svg_header_design_operation_handler import admit_svg_header_design_operation
+                try:
+                    await admit_svg_header_design_operation(session, operation=operation, presentation=presentation,
+                        retry_source_operation=source_operation)
+                except ValueError as error:
+                    await session.rollback()
+                    raise WorkspaceServiceError(str(error), status_code=409, retryable=False) from error
+                except PublicAdmissionRejected as error:
+                    await session.rollback()
+                    raise WorkspaceServiceError(error.code, status_code=429, retryable=True,
+                        retry_after_seconds=error.retry_after_seconds or 15) from error
             if operation.kind in {"export.pptx", "export.pdf"}:
                 try:
                     if export_v2_authority is not None:
@@ -2363,10 +2409,10 @@ async def _apply_workspace_action(
                         retry_after_seconds=error.retry_after_seconds or 15,
                     ) from error
             linked_job_id = _linked_generation_job_id(source_operation)
-            if linked_job_id is not None or source_operation.kind in {
+            if header_retry is None and (linked_job_id is not None or source_operation.kind in {
                 "template.apply",
                 "design.apply",
-            }:
+            }):
                 from services.presentation_generation_job_service import (
                     rebind_workspace_linked_generation_job_for_retry,
                 )

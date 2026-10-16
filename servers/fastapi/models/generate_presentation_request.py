@@ -13,6 +13,7 @@ from pydantic import (
 from pydantic.alias_generators import to_camel
 
 from models.svg_canvas import SvgCanvasInput
+from models.common_header_design import CommonHeaderDesignInput
 
 from enums.tone import Tone
 from enums.verbosity import Verbosity
@@ -138,6 +139,7 @@ class GeneratePresentationRequest(BaseModel):
     _document_canvas: Any = PrivateAttr(default=None)
     _svg_style_snapshot: Any = PrivateAttr(default=None)
     _svg_header_title_plan: Any = PrivateAttr(default=None)
+    _svg_header_design_plan: Any = PrivateAttr(default=None)
     _svg_uploaded_design_reference: Any = PrivateAttr(default=None)
     _bench_speed_arm: Optional[Literal["baseline", "brief_off"]] = PrivateAttr(default=None)
     _generation_strategy_reason: Optional[str] = PrivateAttr(default=None)
@@ -256,6 +258,9 @@ class GeneratePresentationRequest(BaseModel):
         default=None, exclude_if=lambda value: value is None,
     )
     common_header_cover_exception: bool = False
+    common_header_design: CommonHeaderDesignInput | None = Field(
+        default=None, alias="commonHeaderDesign", exclude_if=lambda value: value is None,
+    )
     generation_mode: GenerationMode = Field(
         default="auto",
         alias="generationMode",
@@ -359,6 +364,10 @@ class GeneratePresentationRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_generation_mode(self) -> "GeneratePresentationRequest":
+        if self.common_header_design is not None and (
+            self.strategy == "authored" or self.common_header_mode == "free"
+        ):
+            raise ValueError("common_header_design_requires_svg_uniform")
         if self.common_header_mode is not None and self.strategy == "authored":
             raise ValueError("common_header_svg_strategy_required")
         if self.common_header_cover_exception and self.common_header_mode != "uniform":

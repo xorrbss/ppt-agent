@@ -25,7 +25,7 @@ def _digest(value):
 
 
 def _native_ooxml_domain(*, required, worker_metrics, artifact_digest, operation_id,
-                         presentation_id, source_revision, source_preservation):
+                         presentation_id, source_revision, source_preservation, slides=()):
     if not required:
         return dict(required=False, status="not_required")
     from services.svg_export_whole_page_verifier import whole_page_verifier_digest
@@ -37,6 +37,13 @@ def _native_ooxml_domain(*, required, worker_metrics, artifact_digest, operation
     source_readback = structural.get("sourcePreservation")
     style_readback = structural.get("sourceStyleReadback")
     failed = dict(required=True, status="failed", reasonCode="svg_native_ooxml_coverage_evidence_invalid")
+    if slides and not _common_header_ooxml_current(slides, structural):
+        return failed
+    header_readback = structural.get("commonHeaderReadback") or {}
+    if header_readback.get("schemaVersion") == "svg-common-header-ooxml/v2" and (
+            header_readback.get("finalPackageReverified") is not True
+            or not header_readback.get("canonicalProjectionBinding")):
+        return failed
     if not isinstance(proof, dict) or not isinstance(source_readback, dict) or not isinstance(style_readback, dict) or not source_preservation:
         return failed
     unsigned = {key: value for key, value in proof.items() if key != "coverageDigest"}
@@ -78,6 +85,12 @@ def _common_header_ooxml_current(slides, proof):
     import math
 
     try:
+        from services.svg_common_header_export_evidence import header_scene, common_header_v2_ooxml_current
+        if any(header_scene(slide.svg_content or "") is not None for slide in slides):
+            v2_readback = proof.get("commonHeaderReadback") or {}
+            if not common_header_v2_ooxml_current(slides, v2_readback):
+                return False
+            proof = {**proof, "commonHeaderReadback": v2_readback.get("legacyReadback")}
         expected_pages = [header_title_lines(slide.svg_content or "") for slide in slides]
         if not any(expected_pages):
             return True
@@ -121,7 +134,7 @@ def _common_header_ooxml_current(slides, proof):
                     return False
                 shape_ids.add(shape_id)
         return True
-    except (KeyError, ValueError, TypeError, AttributeError):
+    except (KeyError, ValueError, TypeError, AttributeError, SyntaxError):
         return False
 
 
@@ -359,7 +372,7 @@ def source_svg_public_quality_receipt(*, slides, source_preservation, worker_met
         native_coverage_ooxml=_native_ooxml_domain(required=require_native_coverage,
             worker_metrics=worker_metrics, artifact_digest=artifact_digest, operation_id=operation_id,
             presentation_id=presentation_id, source_revision=source_revision,
-            source_preservation=source_preservation))
+            source_preservation=source_preservation, slides=slides))
     if require_native_coverage:
         from services.svg_final_pptx_review import final_pptx_visual_domain
         domains["visual_review"] = final_pptx_visual_domain(domains["visual_review"],
@@ -404,7 +417,7 @@ def svg_public_quality_receipt(*, slides, advisory, source_preservation, worker_
         native_coverage_ooxml=(_native_ooxml_domain(required=require_native_coverage,
             worker_metrics=worker_metrics, artifact_digest=receipt_args["artifact_digest"],
             operation_id=receipt_args["operation_id"], presentation_id=receipt_args["presentation_id"],
-            source_revision=receipt_args["source_revision"], source_preservation=source_preservation)
+            source_revision=receipt_args["source_revision"], source_preservation=source_preservation, slides=slides)
             if source_preservation else _generic_native_ooxml_domain(required=require_native_coverage,
                 slides=slides, worker_metrics=worker_metrics, artifact_digest=receipt_args["artifact_digest"],
                 operation_id=receipt_args["operation_id"], presentation_id=receipt_args["presentation_id"],

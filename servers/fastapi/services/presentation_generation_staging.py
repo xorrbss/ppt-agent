@@ -138,6 +138,19 @@ def _durable_request_payload(
             from services.svg_generation_admission import pin_svg_style
 
             payload["_internal_svg_style_snapshot"] = pin_svg_style(request)
+            # Fresh admission can pin the default after the initial DTO dump.
+            # Persist the same actual choice the immutable design plan hashes.
+            if request.common_header_mode is not None:
+                payload["common_header_mode"] = request.common_header_mode
+                payload["common_header_cover_exception"] = request.common_header_cover_exception
+            from services.svg_common_header_design_plan import (
+                INTERNAL_HEADER_DESIGN_PLAN_KEY, validate_header_design_plan,
+            )
+            header_design_plan = validate_header_design_plan(request._svg_header_design_plan)
+            if header_design_plan is not None:
+                if payload["_internal_svg_style_snapshot"].get("common_header_design_plan") != header_design_plan:
+                    raise ValueError("svg_common_header_design_plan_conflict")
+                payload[INTERNAL_HEADER_DESIGN_PLAN_KEY] = header_design_plan
         if request.source_mode == "source_content_restyle" and request._svg_source_binding is not None:
             payload["_internal_svg_source_binding"] = dict(request._svg_source_binding)
     authoring_profile = request_authoring_profile(request)
@@ -344,6 +357,10 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
         INTERNAL_HEADER_TITLE_PLAN_KEY, validate_header_title_plan,
     )
     header_title_plan = validate_header_title_plan(values.pop(INTERNAL_HEADER_TITLE_PLAN_KEY, None))
+    from services.svg_common_header_design_plan import (
+        INTERNAL_HEADER_DESIGN_PLAN_KEY, validate_header_design_plan,
+    )
+    header_design_plan = validate_header_design_plan(values.pop(INTERNAL_HEADER_DESIGN_PLAN_KEY, None))
     values.pop("_svg_partial_recovery", None)
     speed_arm = validate_speed_arm(values.pop(INTERNAL_BENCH_SPEED_ARM_KEY, None))
     from services.generation_core.drivers.svg.collect import INTERNAL_SVG_STAGE_PLAN_KEY, validate_svg_stage_plan
@@ -384,8 +401,11 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
     request._svg_authoring_profile = authoring_profile
     request._svg_stage_plan = stage_plan
     request._svg_header_title_plan = header_title_plan
+    request._svg_header_design_plan = header_design_plan
     request._generation_strategy_reason = strategy_reason
     request._svg_style_snapshot = svg_style_snapshot
+    if (svg_style_snapshot or {}).get("common_header_design_plan") != header_design_plan:
+        raise ValueError("svg_common_header_design_plan_conflict")
     if svg_style_snapshot is not None:
         validate_profile_agreement(request, svg_style_snapshot)
     request._svg_source_binding = svg_source_binding

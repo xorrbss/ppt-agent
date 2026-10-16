@@ -173,26 +173,35 @@ class NativeOoxmlCapture:
         expected_geometry = self.expected_geometry
         expected_return_xml = self.expected_return_xml
         group_aliases = self.group_aliases
+        element_outputs = {}
         def signature(node):
             return (node.tag, tuple(sorted(node.attrib.items())), (node.text or "").strip(), tuple(signature(child) for child in node))
 
         def traced_element(element, context):
             result = original_convert_element(element, context)
+            element_outputs[context.slide_num, element] = None
             if result is not None:
                 from xml.etree import ElementTree as ET
                 ns = "http://schemas.openxmlformats.org/presentationml/2006/main"
                 drawing_ns = "http://schemas.openxmlformats.org/drawingml/2006/main"
                 relation_ns = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
                 wrapper = ET.fromstring(f'<root xmlns:p="{ns}" xmlns:a="{drawing_ns}" xmlns:r="{relation_ns}">' + result.xml + '</root>')
+                element_outputs[context.slide_num, element] = tuple(signature(node) for node in wrapper)
                 page = expected_geometry.setdefault(context.slide_num, {})
                 returned_xml = expected_return_xml.setdefault(context.slide_num, {})
                 if element.tag.rsplit("}", 1)[-1] == "g" and len(wrapper) == 1:
-                    visual = [child for child in element if child.tag.rsplit("}", 1)[-1]
-                              not in {"defs", "metadata", "title", "desc"}]
+                    child_keys = [(context.slide_num, child) for child in element]
+                    children_measured = all(key in element_outputs for key in child_keys)
+                    child_outputs = [element_outputs[key] for key in child_keys
+                                     if key in element_outputs and element_outputs[key] is not None]
                     output = wrapper[0]
                     nv = next((child for child in output if child.tag.rsplit("}", 1)[-1].startswith("nv")), None)
                     identity = None if nv is None else nv.find(f"{{{ns}}}cNvPr")
-                    if (len(visual) == 1 and identity is not None and int(identity.get("id")) in page
+                    # The converter flattens one returned child, even when
+                    # other SVG children actually returned no visual output.
+                    if (children_measured and len(child_outputs) == 1
+                            and child_outputs[0] == (signature(output),)
+                            and identity is not None and int(identity.get("id")) in page
                             and returned_xml.get(int(identity.get("id"))) == signature(output)):
                         sid = int(identity.get("id"))
                         aliases = group_aliases.setdefault(context.slide_num, {})
@@ -654,6 +663,10 @@ def convert_whole_page_pptx(paths, target, notes, canvas, *, receipts,
         deck.save(str(target))
         if font_embedding:
             readback["fontEmbedding"] = _embed_verified_whole_page_fonts(target)
+        if readback.get("commonHeaderReadback", {}).get("schemaVersion") == "svg-common-header-ooxml/v2":
+            from workers.svg_common_header_export_v2 import verify_final_common_header_readback
+            readback["commonHeaderReadback"] = verify_final_common_header_readback(
+                target, readback["commonHeaderReadback"], source_originals)
         fragments = [[named_fragments[key] for key in sorted(named_fragments)
                       if key[0] == page_index] for page_index in range(len(paths))]
         readback["sourceStyleReadback"] = _source_style_readback(target, table_alignment_claims, claims)

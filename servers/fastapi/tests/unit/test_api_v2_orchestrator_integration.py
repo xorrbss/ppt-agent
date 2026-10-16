@@ -985,6 +985,71 @@ def test_public_export_requires_generation_authority_in_the_actor_tenant(
                 export = await session.get(WorkspaceOperation, uuid.UUID(receipt.operation_id))
                 assert export.request_payload['svg_source_revision_binding']['publicationOperationIds'] == [str(publisher_id)]
 
+        # Header revisions require the source-authority verifier's result, not
+        # merely a design.apply target string. Keep the handoff bound to this
+        # exact current publication and pass it to both export gates.
+        import services.svg_export_operation as svg_export
+        header_payload = {PRINCIPAL_TENANT_PAYLOAD_KEY: 'tenant-a',
+                          'context': {'target': 'common_header'}}
+        await change_publisher(kind='design.apply', request_payload=header_payload)
+        verified_authority = object()
+        authority = AsyncMock(return_value=None)
+        parent_gate = AsyncMock()
+        original_snapshot = svg_export.svg_export_admission_snapshot
+
+        def header_snapshot(presentation, slides, *, header_revision_authority=None):
+            assert header_revision_authority is verified_authority
+            return original_snapshot(presentation, slides)
+
+        with monkeypatch.context() as header_patch:
+            header_patch.setattr(svg_export, 'require_header_revision_lineage_authority', authority)
+            header_patch.setattr(svg_export, 'require_quality_recovery_export_parent', parent_gate)
+            header_patch.setattr(svg_export, 'svg_export_admission_snapshot', header_snapshot)
+            with pytest.raises(PublicV2OrchestrationError) as unproven:
+                await adapter.submit_export(actor=PublicRequestActor(owner, 'tenant-a', 'trace'),
+                    presentation_id=str(presentation_id), idempotency_key='header-unproven', request=request)
+            assert unproven.value.reason_code == 'svg_header_revision_export_authority_required'
+            parent_gate.assert_not_awaited()
+            await change_publisher(request_payload={**header_payload, 'context': {'target': 'other'}})
+            with pytest.raises(PublicV2OrchestrationError) as other_design:
+                await adapter.submit_export(actor=PublicRequestActor(owner, 'tenant-a', 'trace'),
+                    presentation_id=str(presentation_id), idempotency_key='header-other-design', request=request)
+            assert other_design.value.reason_code == 'export_source_revision_lineage_invalid'
+            assert authority.await_count == 1
+            await change_publisher(request_payload=header_payload)
+            authority.return_value = verified_authority
+            receipt = await adapter.submit_export(actor=PublicRequestActor(owner, 'tenant-a', 'trace'),
+                presentation_id=str(presentation_id), idempotency_key='header-proven-current', request=request)
+            assert [item.id for item in authority.await_args.kwargs['publication_operations']] == [publisher_id]
+            assert parent_gate.await_args.kwargs == {'header_revision_authority': verified_authority}
+            async with maker() as session:
+                export = await session.get(WorkspaceOperation, uuid.UUID(receipt.operation_id))
+                assert export.request_payload['svg_source_revision_binding']['publicationOperationIds'] == [str(publisher_id)]
+            # A second closed header revision keeps the first sealed publisher
+            # in the lineage instead of comparing its old scene to revision 3.
+            second_publisher_id = uuid.uuid4()
+            async with maker() as session, session.begin():
+                presentation = await session.get(PresentationModel, presentation_id)
+                presentation.revision = 3
+                previous = await session.get(WorkspaceOperation, publisher_id)
+                session.add(WorkspaceOperation(id=second_publisher_id, owner_id=owner, owner_scope=str(owner),
+                    conversation_id=previous.conversation_id, presentation_id=presentation_id,
+                    anchor_position=99, kind='design.apply', state='succeeded', expected_revision=2,
+                    result_revision=3, idempotency_key_hash='7'*64, request_hash='8'*64,
+                    request_payload=header_payload))
+            repeated = await adapter.submit_export(actor=PublicRequestActor(owner, 'tenant-a', 'trace'),
+                presentation_id=str(presentation_id), idempotency_key='header-proven-repeat',
+                request=request.model_copy(update={'source_revision': 3}))
+            assert [item.id for item in authority.await_args.kwargs['publication_operations']] == [publisher_id, second_publisher_id]
+            async with maker() as session, session.begin():
+                export = await session.get(WorkspaceOperation, uuid.UUID(repeated.operation_id))
+                assert export.request_payload['svg_source_revision_binding']['publicationOperationIds'] == [str(publisher_id), str(second_publisher_id)]
+                presentation = await session.get(PresentationModel, presentation_id)
+                presentation.revision = 2
+                second = await session.get(WorkspaceOperation, second_publisher_id)
+                second.state = 'failed'
+        await change_publisher(request_payload={PRINCIPAL_TENANT_PAYLOAD_KEY: 'tenant-a'})
+
         # Advisory/no-op results cannot stand in for a missing source publication.
         for kind in ('quality.review', 'slide.regenerate.preview', 'slide.regenerate.batch.preview',
                      'export.pptx', 'export.pdf', 'raster.analysis', 'presentation.delete'):

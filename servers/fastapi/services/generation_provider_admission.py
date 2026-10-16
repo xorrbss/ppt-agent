@@ -88,7 +88,10 @@ def generation_provider_capabilities(
     required = ["structuredOutput"]
     if request.web_search:
         required.append("webSearch")
-    if request.vision_qa:
+    from services.svg_common_header_design_plan import validate_header_design_plan
+    automatic_header_selection = (driver_id == "svg-v1" and validate_header_design_plan(
+        getattr(request, "_svg_header_design_plan", None)) is not None)
+    if request.vision_qa or automatic_header_selection:
         required.append("vision")
     if driver_id in {"authored", "svg-v1"} and not disable_thinking():
         required.append("thinking")

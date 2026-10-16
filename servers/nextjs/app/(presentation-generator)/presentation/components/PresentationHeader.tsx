@@ -19,6 +19,7 @@ import NewSlideButton from "./header/NewSlideButton";
 import { cn } from "@/lib/utils";
 import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
 import AuthoredHeaderActions from "./header/AuthoredHeaderActions";
+import CommonHeaderDesignChanger, { existingHeaderDesignReferences, existingHeaderDocumentValues, fullPageHeaderLocked } from "./header/CommonHeaderDesignChanger";
 import ExportMenu, { sourcePreservingSvgPdfUnavailable } from "./header/ExportMenu";
 import ExportQualityDialog from "./header/ExportQualityDialog";
 import HybridCoverageDialog, {
@@ -413,6 +414,19 @@ const PresentationHeader = ({
               onCanonicalSaved={onCanonicalSaved}
             />
           )}
+
+          {presentationData && isSvgPresentation(presentationData) ? (
+            <CommonHeaderDesignChanger
+              key={presentation_id}
+              presentationId={presentation_id}
+              expectedRevision={expectedRevision}
+              disabled={!workspaceCommandsEnabled || isStreaming === true || isPresentationSaving || fullPageHeaderLocked(presentationData)}
+              unavailableReason={fullPageHeaderLocked(presentationData) ? "원본 화면 전체를 보존하는 페이지에는 상단을 덧씌울 수 없습니다." : undefined}
+              referenceSnapshotIds={existingHeaderDesignReferences(presentationData)}
+              documentValues={existingHeaderDocumentValues(presentationData)}
+              onSaved={onCanonicalSaved}
+            />
+          ) : null}
 
           <HeaderToolbar
             presentationData={presentationData}

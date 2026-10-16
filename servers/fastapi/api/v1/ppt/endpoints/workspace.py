@@ -628,15 +628,22 @@ async def get_presentation_workspace_timeline(
     before_position: Optional[int] = Query(default=None, ge=1),
     limit: int = Query(default=50, ge=1, le=200),
     session: AsyncSession = Depends(get_async_session),
+    http_request: Request = None,
 ) -> WorkspaceTimelineResponse:
     _require_supported_runtime()
+    from services.workspace_operation_principal import presentation_export_principal, local_development_export_bridge
+    from services.workspace_operation_handler_registry import NonRetryableWorkspaceOperationError
     try:
-        result = await workspace_timeline(
-            session,
-            presentation_id=presentation_id,
-            before_position=before_position,
-            limit=limit,
-        )
+        if http_request is not None and local_development_export_bridge(http_request):
+            async with presentation_export_principal(session, presentation_id=presentation_id,
+                                                     allow_local_development=True):
+                result = await workspace_timeline(session, presentation_id=presentation_id,
+                    before_position=before_position, limit=limit)
+        else:
+            result = await workspace_timeline(session, presentation_id=presentation_id,
+                before_position=before_position, limit=limit)
+    except NonRetryableWorkspaceOperationError as error:
+        raise WorkspaceAPIException(error.code, status_code=403) from error
     except WorkspaceServiceError as error:
         _raise_service_error(error)
     return project_workspace_timeline(
@@ -651,12 +658,14 @@ async def get_workspace_timeline_compat(
     before_position: Optional[int] = Query(default=None, ge=1),
     limit: int = Query(default=50, ge=1, le=200),
     session: AsyncSession = Depends(get_async_session),
+    http_request: Request = None,
 ) -> WorkspaceTimelineResponse:
     return await get_presentation_workspace_timeline(
         presentation_id=presentation_id,
         before_position=before_position,
         limit=limit,
         session=session,
+        http_request=http_request,
     )
 
 

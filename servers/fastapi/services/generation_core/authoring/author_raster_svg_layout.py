@@ -8,7 +8,7 @@ import re
 
 from llmai.shared import ImageContentPart
 from services.generation_core.authoring.author_slide_svg import (
-    SvgAuthorResult, free_composition_canvas_clause, svg_prompt_design, svg_reference_samples,
+    SvgAuthorResult, free_composition_canvas_clause, svg_prompt_design, svg_reference_samples, svg_author_semantic_slot,
 )
 from services.generation_core.drivers.svg.visual_intent import VISUAL_INTENT_RULES, visual_intent_receipt
 from services.generation_core.authoring.author_slide import (
@@ -32,7 +32,7 @@ from utils.provider_idempotency import provider_generate_call, supports_provider
 
 async def author_raster_svg_layout(analysis, pin, index, snapshot, *, instructions=None,
                                   correction_hint=None, receipt_attempt_ordinal=1, before_dispatch=None,
-                                  visual_intent=None):
+                                  visual_intent=None, header_page=None, author_attempt_identity=None):
     context, items, ledger = raster_composition_context(analysis, pin, index, snapshot)
     design = svg_prompt_design(snapshot)
     prompt_context = svg_prompt_design(context)
@@ -56,6 +56,8 @@ template_digest=source_template.digest and layout_id=free-svg (an identity marke
 """ + free_composition_canvas_clause(context["width"], context["height"])
     if visual_intent is not None:
         rules += VISUAL_INTENT_RULES
+    if header_page is not None and header_page.get("applied"):
+        rules += "\nAll source block glyphs, geometry and strokes must remain inside the frozen common_header.body_box. The server composes the header; do not author or duplicate its fields. Preserve all original source blocks and values.\n"
     images = []
     for reference in svg_reference_samples(snapshot, "content", index, len(analysis.pages)):
         header, encoded = reference["data_url"].split(",", 1)
@@ -74,7 +76,8 @@ template_digest=source_template.digest and layout_id=free-svg (an identity marke
     timer, response, dispatched = ProviderCallTimer(), None, False
     try:
         async with provider_call_admission(is_retry=receipt_attempt_ordinal > 1,
-            semantic_slot=f"svg-author-{index}-{receipt_attempt_ordinal}", provider=provider, model=str(model),
+            semantic_slot=svg_author_semantic_slot(index, receipt_attempt_ordinal, author_attempt_identity),
+            provider=provider, model=str(model),
             provider_idempotency_capable=supports_provider_idempotency(client, provider_id=provider)):
             call = provider_generate_call(client, provider_id=provider, kwargs=kwargs,
                 idempotency_key=current_provider_idempotency_key(), outcome_scope="authored")

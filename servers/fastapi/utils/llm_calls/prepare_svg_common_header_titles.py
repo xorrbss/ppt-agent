@@ -24,16 +24,16 @@ def header_title_response_schema(payload: dict) -> dict:
             "titles": {
                 "type": "array", "minItems": len(payload["pages"]),
                 "maxItems": len(payload["pages"]),
-                "items": {
+                "items": {"anyOf": [{
                     "type": "object", "additionalProperties": False,
                     "required": ["page_index", "source_digest", "title", "source_quote"],
                     "properties": {
-                        "page_index": {"type": "integer", "enum": [p["page_index"] for p in payload["pages"]]},
-                        "source_digest": {"type": "string", "enum": [p["source_digest"] for p in payload["pages"]]},
+                        "page_index": {"type": "integer", "enum": [page["page_index"]]},
+                        "source_digest": {"type": "string", "enum": [page["source_digest"]]},
                         "title": {"type": "string", "minLength": 1},
                         "source_quote": {"type": "string", "minLength": 1},
                     },
-                },
+                } for page in payload["pages"]]},
             },
         },
     }
@@ -45,7 +45,11 @@ def header_title_messages(payload: dict, plan: dict):
         "Return ONLY the requested titles and their source identities. Do not return or "
         "rewrite any page body. Keep all provided indices, digests and page count. "
         "Each source_quote must be an exact contiguous passage from that page supporting "
-        "the title. Prefer a short, readable subject title rather than a long sentence; "
+        "the title. Keep each page_index paired with that same page's source_digest. "
+        "Prefer a neutral, short, readable subject title rather than a long sentence; "
+        "if a title includes a number or a result/benefit/causal claim, its exact written "
+        "number or claim wording must appear in that same source_quote. Do not reformat "
+        "numbers, combine separate figures, or introduce a claim absent from the quote; "
         "preserve necessary conditions and uncertainty. Do not invent results, "
         "benefits, causes, numbers, names or claims. Use the page's language. "
         "Resolve competing headings to a neutral factual subject. Never use a page number "

@@ -35,7 +35,7 @@ def header_snapshot_base(snapshot: dict | None) -> dict | None:
     """Remove only the new header extension; absent legacy snapshots are exact."""
     if not isinstance(snapshot, dict) or "common_header" not in snapshot:
         return snapshot
-    base = {key: value for key, value in snapshot.items() if key != "common_header"}
+    base = {key: value for key, value in snapshot.items() if key not in {"common_header", "common_header_selection"}}
     base["digest"] = canonical_json_digest({key: value for key, value in base.items() if key != "digest"},
                                            allow_nan=True)
     return base
@@ -52,7 +52,7 @@ def validate_common_header_outline(snapshot: dict | None, outline) -> None:
     slides = _slides(outline)
     for index, slide in enumerate(slides):
         validate_common_header_binding(contract, _value(slide, "common_header"), index=index, count=len(slides),
-            content=_value(slide, "content", ""), title=_value(slide, "title"))
+            content=_value(slide, "content", ""), title=_value(slide, "title"), page_id=_value(slide, "page_id"))
 
 
 def common_header_digest(contract: dict | None) -> str | None:
@@ -239,7 +239,8 @@ def prepare_common_header(snapshot: dict, outline, canvas, *, mode="uniform", co
         bindings = [_value(slide, "common_header") for slide in slides]
         for index, binding in enumerate(bindings):
             validate_common_header_binding(frozen, binding, index=index, count=len(slides),
-                content=_value(slides[index], "content", ""), title=_value(slides[index], "title"))
+                content=_value(slides[index], "content", ""), title=_value(slides[index], "title"),
+                page_id=_value(slides[index], "page_id"))
         return frozen, bindings
     options = frozen or {}
     if not isinstance(options, dict):
@@ -371,8 +372,12 @@ def prepare_common_header(snapshot: dict, outline, canvas, *, mode="uniform", co
 
 
 def validate_common_header_binding(contract: dict | None, page_binding: dict | None, *, index=None, count=None,
-                                   content=_MISSING, title=_MISSING):
+                                   content=_MISSING, title=_MISSING, page_id=_MISSING):
     """Fail closed for partial or altered frozen data; absent legacy data is inert."""
+    if isinstance(contract, dict) and contract.get("version") == "svg-common-header/v2":
+        from services.svg_common_header_v2 import validate_common_header_binding_v2
+        return validate_common_header_binding_v2(contract, page_binding, index=index, count=count,
+                                                 content=content, title=title, page_id=page_id)
     if contract is None and page_binding is None:
         return
     if (not isinstance(contract, dict) or contract.get("version") != VERSION
@@ -417,6 +422,9 @@ def validate_common_header_binding(contract: dict | None, page_binding: dict | N
 
 def render_common_header(contract: dict | None, page_binding: dict | None, *, index: int, count: int):
     """Return a system-owned editable SVG group, or None for legacy/explicit cover."""
+    if isinstance(contract, dict) and contract.get("version") == "svg-common-header/v2":
+        from services.svg_common_header_v2 import render_common_header_v2
+        return render_common_header_v2(contract, page_binding, index=index, count=count)
     validate_common_header_binding(contract, page_binding, index=index, count=count)
     if contract is None or not page_binding["applied"]:
         return None
