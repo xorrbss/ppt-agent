@@ -836,6 +836,21 @@ def test_header_v2_metadata_preserves_exact_values_provenance_and_admitted_input
     assert assess_visible_nodes([line.strip() for line in wrapped_lines], source_values=wrapped_symbols)["hard_violation_counts"] == {}
     assert assess_visible_nodes(["AI·추가 — 개선"], source_values=wrapped_symbols)["hard_violation_counts"] == {
         "middle_dot": 1, "long_dash": 1}
+    from services.generation_core.drivers.svg.native_requirements import requested_native_data
+    native_source = '| 처리 유형 | 설명 |\n| --- | --- |\n| 이벤트참여형 경품·혜택 중심 처리 | 보존 |'
+    native_literals = literal_source_values(native=requested_native_data(native_source))
+    assert "이벤트참여형 경품·혜택 중심 처리" in native_literals and "경품·혜택" in native_literals
+    joined_display = "이벤트참여형경품·혜택 중심 처리"
+    assert assess_visible_nodes([joined_display], source_values=native_literals)["hard_violation_counts"] == {}
+    assert assess_visible_nodes([joined_display], source_values=native_literals)["protected_symbol_counts"] == {"middle_dot": 1}
+    assert assess_visible_nodes([joined_display])["hard_violation_counts"] == {"middle_dot": 1}
+    generic = "DevAX·AI는 동기화에 활용합니다."
+    assert assess_visible_nodes([generic], source_values=literal_source_values(generic))["hard_violation_counts"] == {"middle_dot": 1}
+    declared_only = {"objects": [{"kind": "table", "raw": {"rows": [["경품·혜택"]]}}]}
+    assert literal_source_values(native=declared_only) == ()
+    edge_literals = literal_source_values(native={"tables": [{"rows": [[
+        "행 · 열", "행 ·앞 열", "행 뒤· 열", "행 — 열"]]}]})
+    assert not {"·", "·앞", "뒤·", "—"} & set(edge_literals)
     from services.ppt_writing_visible import svg_text_nodes, svg_writing_repair_witnesses
     repair_svg = ('<svg xmlns="http://www.w3.org/2000/svg">'
         '<text id="protected">' + fixed_symbols + '</text>'
@@ -997,10 +1012,21 @@ def test_header_v2_metadata_preserves_exact_values_provenance_and_admitted_input
                 header_contract=contract, header_binding=bindings[document["representative_index"]])
             before = deepcopy(page["quality"])
             after = assess_visible_nodes(svg_text_nodes(page["svg_content"]), source_values=source_values)
+            assert page["nativeRequirements"] == requested_native_data(
+                rejected_outline.slides[document["representative_index"]].content)
+            assert any("지역·팀" in cell.split() for table in page["nativeRequirements"]["tables"]
+                       for row in table["rows"] for cell in row)
+            assert "지역·팀" in source_values
+            if after["hard_violation_counts"] == {"middle_dot": 10}:
+                without_native_token = assess_visible_nodes(svg_text_nodes(page["svg_content"]),
+                    source_values=tuple(value for value in source_values if value != "지역·팀"))
+                assert without_native_token["hard_violation_counts"] == {"middle_dot": 11}
+                assert after["protected_symbol_counts"]["middle_dot"] == (
+                    without_native_token["protected_symbol_counts"]["middle_dot"] + 1)
             assert "long_dash" not in after["hard_violation_counts"]
             assert page["quality"] == before and before["writing_policy"]["hard_violation_counts"]["long_dash"] == 1
             outcomes.append(after["hard_violation_counts"])
-        assert {} in outcomes and {"middle_dot": 11} in outcomes
+        assert {} in outcomes and {"middle_dot": 10} in outcomes
         assert saved["last_error"] == retained_failure
 
     import uuid

@@ -166,7 +166,20 @@ def literal_source_values(source_text: str | None = None, native: Mapping | None
     if native:
         for table in native.get("tables", ()):
             for row in table.get("rows", ()):
-                values.update(value for value in row if isinstance(value, str) and value.strip())
+                for value in row:
+                    if not isinstance(value, str) or not value.strip():
+                        continue
+                    values.add(value)
+                    # Only server-parsed source-native cells authorize these
+                    # complete tokens. Display line wrapping may join adjacent
+                    # cell words, while the exact token itself stays intact.
+                    for token in value.split():
+                        hard = [item for item in scan_visible_text(token).violations
+                                if item.category not in _AMBIGUOUS]
+                        if hard and all(item.start > 0 and item.end < len(token)
+                                        and token[item.start - 1].isalnum() and token[item.end].isalnum()
+                                        for item in hard):
+                            values.add(token)
         for chart in native.get("charts", ()):
             values.update(value for value in chart.get("categories", ()) if isinstance(value, str) and value.strip())
             for key in ("unit", "name"):
