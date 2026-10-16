@@ -106,3 +106,9 @@ A4의 후속 독립 입력에서는 모든 수치·표·장문 제목과 고정 
 최종 검토만 이어가려던 시험 작업 d66d11ca-8496-46df-94da-504730f95ea8은 실제 상단 checkpoint 충돌로 실패했으며 provider logical call은 0건이다. 이 경로의 미완성 변경은 patch로 외부 보관하고 출시 코드에서 제외했다. 기존 partial recovery가 별도 operation을 만들면서 compatibility job과 checkpoint 행은 재사용한다는 점도 확인했다. 이를 job 행까지 불변인 fork라고 주장하지 않는다. 원 job 28개 필드·12 checkpoint 전체 필드·parent operation control 40개 필드와 호출 30건은 봉인 archive에서 실패 전 덤프와 일치했다. DB 원상복구·이력 삭제는 하지 않았다.
 
 후속 정상 생성 작업 28360642-1079-41a2-ae7d-4619fba4cebf는 이전 입력의 원문·요구·예산을 유지하고 새로 업로드한 동일 PNG 참조만 교체했다. 검증된 QA 출처·차트 수정으로 정상 게시와 Office 품질을 확인하기 위한 새 작업이며, 접수만으로 성공을 주장하지 않는다.
+
+해당 정상 작업도 최종 게시에는 도달하지 못했다. 실제 12쪽의 개별 검증은 전부 통과했으며 독립 PNG 평가 89점(기준 86점), native 표 2개·차트 1개 채택, 원문 셀·병합 7개·차트 수치·축 0~7 보존을 확인했다. 문서 VQA는 major/critical 0건이며 원본 병합 오판도 해소됐다. 다만 7·8·9쪽의 밀도 개선 목표가 남아 최종 만족 판정은 미완료다. 8쪽의 두 번째 author/repair 요청에서 `response.created` 뒤 upstream server_error가 발생해 `public_provider_result_unknown`으로 종료됐다. author 13회·header 2회·repair 8회·VQA 4회 중 26건은 reported, 1건은 unavailable이다.
+
+UNKNOWN 호출은 Codex/gpt-6.1-sol, repair/slide_index=7, 논리 호출 88a37693-ae64-46bf-bc95-dd2394df2655다. 지연 130,234ms 후 완료 원문·output digest·usage가 저장되지 않았다. created 이벤트 서명은 완료 응답 증거가 아니며 기존 코드에 출력 재조회 경로도 없다. 기존 유효 SVG는 last_valid_svg로 보존됐고 12개 PNG는 검토 복사본과 동일하다. UNKNOWN을 성공·known으로 바꾸거나 자동 재요청하지 않았다. 89점은 후보 이미지 점수이며 신규 게시·PPTX·Office 성공을 뜻하지 않는다.
+
+재시도 실험 후 live 원 operation·admission·논리 호출 30개 행도 전후 exact 비교에서 불변임을 확인했다. 원 job/checkpoint 행 자체는 재결합됐다는 한계를 별도로 유지한다. 실패 기록·archive·출력 파일을 삭제하거나 DB를 원상복구하지 않았다. 현재 출시 브랜치의 코드 변경은 검증된 QA 출처 전달과 sparse chart 축 보존까지이며, 미완성 continuation 실험은 포함하지 않는다. main/serve 병합은 실제 12쪽 게시·PPTX 검증이 남아 보류한다.
