@@ -6,6 +6,7 @@ from collections import Counter
 from hashlib import sha256
 from html.parser import HTMLParser
 from typing import Iterable, Mapping, Sequence
+import json
 import re
 import xml.etree.ElementTree as ET
 
@@ -224,9 +225,12 @@ def assess_visible_nodes(
 
 
 def svg_writing_repair_witnesses(svg: str, *, source_values: Sequence[str] = (),
-                                 limit: int = 4, max_text_chars: int = 180) -> list[dict]:
+                                 limit: int = 12, max_text_chars: int = 180,
+                                 total_text_chars: int = 720) -> list[dict]:
     """Bounded transient repair context; never add visible text to quality receipts."""
-    witnesses = []
+    if limit <= 0 or max_text_chars <= 0 or total_text_chars <= 0:
+        return []
+    candidates = []
     for record in _svg_text_records(svg):
         text = record["text"]
         spans = _provenance_spans(text, source_values)
@@ -236,13 +240,34 @@ def svg_writing_repair_witnesses(svg: str, *, source_values: Sequence[str] = (),
         hard = [item for item in scan.violations if item.category not in _AMBIGUOUS]
         if not hard:
             continue
-        start = max(0, min(hard[0].start - max_text_chars // 3, len(text) - max_text_chars))
-        end = start + max_text_chars
-        witnesses.append({"qid": record["qid"], "node_id": record["node_id"],
-            "text": text[start:end], "text_start": start,
-            "symbols": [{"category": item.category.value, "start": item.start - start, "end": item.end - start}
-                        for item in hard if start <= item.start and item.end <= end][:4],
-            "frozen_header": str(record["node_id"] or "").startswith("svg-system-common-header-")})
-        if len(witnesses) >= limit:
+        candidates.append((record, hard))
+        if len(candidates) >= min(limit, 12, total_text_chars):
             break
+    # Share the previous 4*180-character budget across more failing nodes,
+    # rather than spending it before later violations can reach the author.
+    excerpt_chars = min(max_text_chars, total_text_chars // max(1, len(candidates)))
+    def build_excerpt(chars, symbol_limit, include_ids=True):
+        witnesses = []
+        for record, hard in candidates:
+            text = record["text"]
+            start = max(0, min(hard[0].start - chars // 3, len(text) - chars))
+            end = start + chars
+            witnesses.append({"qid": record["qid"], "node_id": record["node_id"] if include_ids else None,
+                "text": text[start:end], "text_start": start,
+                "symbols": [{"category": item.category.value, "start": item.start - start, "end": item.end - start}
+                            for item in hard if start <= item.start and item.end <= end][:symbol_limit],
+                "frozen_header": str(record["node_id"] or "").startswith("svg-system-common-header-")})
+        return witnesses
+
+    def context_chars(witnesses):
+        return len(json.dumps(witnesses, ensure_ascii=False, separators=(",", ":")))
+
+    witnesses = build_excerpt(excerpt_chars, 4)
+    if context_chars(witnesses) > 2200:
+        # Reserve room for the counts/instruction inside the existing 3000-char
+        # repair hint. Prefer one located symbol on every node to lost nodes.
+        witnesses = build_excerpt(excerpt_chars, 1, include_ids=False)
+        while context_chars(witnesses) > 2200 and excerpt_chars > 8:
+            excerpt_chars = max(8, excerpt_chars - 8)
+            witnesses = build_excerpt(excerpt_chars, 1, include_ids=False)
     return witnesses

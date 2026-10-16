@@ -854,8 +854,20 @@ def test_header_v2_metadata_preserves_exact_values_provenance_and_admitted_input
         + "가" * 300 + "·" + "나" * 300 + '</text></svg>', max_text_chars=100)[0]
     assert len(long_witness["text"]) == 100 and long_witness["text_start"] > 0
     assert long_witness["text"][long_witness["symbols"][0]["start"]] == "·"
-
     import json
+    many_violations = '<svg xmlns="http://www.w3.org/2000/svg">' + ''.join(
+        f'<text id="node-{index}">' + '앞 문맥 ' * 30 + f'항목{index}·다음항목'
+        + ' 뒤 문맥' * 30 + '</text>' for index in range(15)) + '</svg>'
+    broad_witnesses = svg_writing_repair_witnesses(many_violations)
+    assert len(broad_witnesses) == 12
+    assert [item["qid"] for item in broad_witnesses] == [f"svg-{index}" for index in range(1, 13)]
+    assert sum(len(item["text"]) for item in broad_witnesses) <= 720
+    assert len(json.dumps(broad_witnesses, ensure_ascii=False, separators=(",", ":"))) <= 2200
+    for witness in broad_witnesses:
+        assert witness["text"][witness["symbols"][0]["start"]] == "·"
+    assert len(svg_writing_repair_witnesses(many_violations, limit=2)) == 2
+    assert svg_writing_repair_witnesses(many_violations, source_values=svg_text_nodes(many_violations)) == []
+
     import struct
     from pathlib import Path
     from llmai.shared import SystemMessage, UserMessage
