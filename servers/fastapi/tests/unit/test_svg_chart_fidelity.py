@@ -280,6 +280,63 @@ def test_retained_axis_furniture_proves_scale_and_category_frame(kind, canvas):
         assert _retained_axis_plot(untouched, item, invalid_root, invalid_plots, categories, auto_axes) is None
         assert untouched == {"type": kind} and auto_axes == {"category": {}, "value": {}}
 
+    if kind == "column" and canvas == (1280, 720):
+        # Sparse 0/4/7 ticks are outside the chart while their grid is inside.
+        # All six bars share the actual 26px/unit scale and the zero baseline.
+        from services.generation_core.native_objects import NativeObjects
+        from services.generation_core.drivers.svg.export_projection import converter_payload
+        from services.generation_core.drivers.svg.export_chart_style import apply_drawn_chart_style
+        values = [4.75, 6.35, 5.35, 5.6, 5.1, 3.75]
+        labels = [f"M{i + 1}" for i in range(6)]
+        declaration = {"chartType": "column", "categories": labels,
+            "series": [{"name": "Monthly work", "values": values}],
+            "categoryOrder": "leftToRight", "valueLabels": {"shown": True, "position": "outsideEnd"},
+            "markers": False}
+        parts = [_text(125, 247, "Monthly work"),
+                 *[f'<line x1="125" y1="{y}" x2="809" y2="{y}" stroke="#CCCCCC"/>'
+                   for y in (270, 348, 452)]]
+        for i, value in enumerate(values):
+            center, height = 182 + i * 114, value * 26
+            parts += [f'<rect x="{center - 37}" y="{452 - height}" width="74" height="{height}" fill="#2457D6"/>',
+                      _text(center, 442 - height, str(value), centered=True),
+                      _text(center, 475, labels[i], centered=True)]
+        ticks = ''.join(_text(109, y + 5, label).replace('<text ',
+            f'<text id="axis-tick-{i}" text-anchor="end" ', 1)
+            for i, (label, y) in enumerate((("7.0", 270), ("4.0", 348), ("0", 452))))
+        group = ('<g id="native-chart-sparse" data-native-chart=\'' + json.dumps(declaration)
+                 + '\'>' + ''.join(parts) + '</g>' + ticks)
+        svg, content = _publish(group, 0)
+        assert content["svgReceipt"]["nativeObjects"] == {"declared": 1, "accepted": 1, "dropped": []}
+        chart = NativeObjects.from_wire(content["nativeObjects"]).objects[0]
+        source_root = ET.fromstring(svg)
+        frozen_svg, frozen_content = ET.tostring(source_root), deepcopy(content)
+
+        def project(candidate_root):
+            result = converter_payload(chart)
+            apply_drawn_chart_style(result, chart, candidate_root)
+            return result
+
+        projected = project(source_root)
+        assert projected["axes"]["value"]["minimum"] == 0
+        assert projected["axes"]["value"]["maximum"] == 7
+        assert projected["plot_layout"] and not projected["axes"]["category"]["visible"]
+        assert not projected["axes"]["value"]["visible"]
+        assert ET.tostring(source_root) == frozen_svg and content == frozen_content
+        for violation in ("missing_ticks", "ambiguous_tick", "wrong_scale", "bounds"):
+            changed = deepcopy(source_root)
+            tick = next(node for node in changed if node.get("id") == "axis-tick-1")
+            if violation == "missing_ticks":
+                for node in list(changed):
+                    if node.get("id", "").startswith("axis-tick-"):
+                        changed.remove(node)
+            elif violation == "ambiguous_tick":
+                changed.append(deepcopy(tick))
+            elif violation == "wrong_scale":
+                tick.text = "4.1"
+            else:
+                changed.set("width", "800")
+            assert "maximum" not in project(changed).get("axes", {}).get("value", {})
+
 
 def test_shifted_or_inconsistent_bar_scale_keeps_automatic_axis_and_plot():
     from types import SimpleNamespace

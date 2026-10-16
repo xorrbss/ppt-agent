@@ -245,6 +245,43 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
         assert header_context["style"]["common_header"] == contract
         assert header_context["pages"][0]["common_header"] == bindings[0]
         assert header_context["pages"][0]["content"] == source
+        # Original user constraints are deck-wide source evidence, not authored
+        # native declarations, and must invalidate every relevant review cache.
+        from services.generation_core.drivers.svg.native_requirements import requested_native_data
+        authority_ctx = deepcopy(fixture_ctx)
+        authority_ctx.quality_review_contents = [source + "\n| User | Action |\n| --- | --- |\n| Member | Policy |"]
+        authority_pages = deepcopy(fixture_pages)
+        authority_pages[0][0].update(nativeRequirements={"tables": [{"rows": [["forged"]]}]},
+            nativeDeclarations={"tables": [{"mergedCells": [{"columnSpan": 99}]}]})
+        directives = "  Preserve original merged policy cells across covered actions.\nKeep all source facts.  "
+        authority_job = SimpleNamespace(id="source-job", workspace_operation_id="source-operation",
+            presentation_id="source-presentation", request_payload={"instructions": directives})
+        before_authority = deepcopy((authority_ctx.quality_review_contents, authority_pages, authority_job.request_payload))
+        authority_context = deck_quality._design_context(authority_ctx, authority_pages,
+            job=authority_job, read_png=lambda _: None)
+        assert before_authority == (authority_ctx.quality_review_contents, authority_pages, authority_job.request_payload)
+        assert authority_context["sourceDirectives"] == directives
+        expected_native = requested_native_data(authority_ctx.quality_review_contents[0])
+        assert authority_context["pages"][0]["sourceNativeRequirements"] == expected_native
+        assert "sourceDirectives" not in authority_context["pages"][0]
+        local_context = deck_quality._local_group_context(authority_context, [0])
+        global_context = {**authority_context, "reviewScope": "global", "representativeIndices": []}
+        for review_context in (local_context, global_context):
+            sent = prompt_mod.build_advisory_messages(b"sheet", slide_count=1, required=True,
+                pngs=[b"evaluation-png"], design_context=review_context)
+            sent_source = json.loads(sent[1].content[0].text)
+            assert sent_source["sourceDirectives"] == directives
+            # The existing anonymous public projection strips opaque IDs only.
+            assert sent_source["pages"][0]["sourceNativeRequirements"]["tables"] == [
+                {key: value for key, value in table.items() if key != "id"}
+                for table in expected_native["tables"]]
+            assert prompt_mod.SOURCE_AUTHORITY_REVIEW_RULES in sent[0].content
+            changed_context = {**review_context, "sourceDirectives": directives + "\nAdditional source constraint."}
+            assert deck_quality._group_review_input_digest(review_context, [b"evaluation-png"], 0, 0, [0]) != (
+                deck_quality._group_review_input_digest(changed_context, [b"evaluation-png"], 0, 0, [0]))
+        changed_authority = {**authority_context, "sourceDirectives": directives + "\nAdditional source constraint."}
+        assert deck_quality._local_review_digest(authority_context, authority_pages[0][0], b"evaluation-png", 0) != (
+            deck_quality._local_review_digest(changed_authority, authority_pages[0][0], b"evaluation-png", 0))
         context = {**context, "style": header_context["style"], "pages": header_context["pages"]}
         header_messages = prompt_mod.build_advisory_messages(b"", slide_count=1, required=True,
             pngs=[b"evaluation-png"], design_context=context)

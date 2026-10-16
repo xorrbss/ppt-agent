@@ -109,6 +109,7 @@ def _design_context(ctx, pages, *, job, read_png):
     """Actual selected style/source evidence, without copying unrelated deck SVGs."""
     from utils.owner_context import get_current_owner_id, get_current_tenant_id
     from services.generation_core.drivers.svg.quality_recovery import _quality_json_value
+    from services.generation_core.drivers.svg.native_requirements import requested_native_data
     snapshot = _quality_json_value(ctx.snapshot)
     references = snapshot.get("references") or {}
     roles = getattr(ctx, "roles", [])
@@ -170,6 +171,7 @@ def _design_context(ctx, pages, *, job, read_png):
     source_pages = []
     for index, (payload, _) in enumerate(pages):
         source_pages.append(dict(index=index, content=contents[index] if index < len(contents) else None,
+            sourceNativeRequirements=requested_native_data(contents[index] if index < len(contents) else None),
             referenceRoles=page_reference_roles.get(index, [roles[index] if index < len(roles) else "content"]),
             authorExampleDigests=page_example_digests.get(index),
             preservation=payload.get("source_preservation"), visualIntent=payload.get("visual_intent"),
@@ -207,6 +209,10 @@ def _design_context(ctx, pages, *, job, read_png):
             presentationId=str(job.presentation_id) if job and getattr(job, "presentation_id", None) else None,
             ownerId=str(get_current_owner_id()) if get_current_owner_id() else None,
             tenantId=str(get_current_tenant_id()) if get_current_tenant_id() else None)))
+    request = getattr(job, "request_payload", None)
+    if isinstance(request, Mapping) and isinstance(request.get("instructions"), str):
+        # Admitted user constraints, once per deck; never authored declarations.
+        context["sourceDirectives"] = request["instructions"]
     if baseline_review_active(context):
         # Stable anonymous positioning binds to the displayed bytes, never author order.
         vector = content_digest([sha256_hex(png if png is not None else read_png(payload)) for payload, png in pages])
@@ -221,7 +227,8 @@ def _local_review_digest(context, payload, png, index):
         pngDigest=sha256_hex(png), inputDigest=payload.get("input_digest"),
         source=context["pages"][index], preservation=payload.get("source_preservation"), quality=quality,
         snapshot=context["snapshotDigest"], runtime=context["runtimeBinding"], policy=context["policy"],
-        binding=context["binding"]))
+        binding=context["binding"],
+        **({"sourceDirectives": context["sourceDirectives"]} if "sourceDirectives" in context else {})))
 
 
 def _render_resolution(png, canvas):
@@ -542,7 +549,8 @@ def _seal_design_gate(context, pages, renders, vision):
                                    if key not in {"examples", "priorCandidates"}}),
         deckContextDigest=content_digest(dict(pages=page_digests, renders=png_digests,
             sources=context["pages"], style=context["styleDigest"], examples=context["exampleDigests"],
-            roles=context["roles"], policy=context["policy"], binding=context["binding"])))
+            roles=context["roles"], policy=context["policy"], binding=context["binding"],
+            **({"sourceDirectives": context["sourceDirectives"]} if "sourceDirectives" in context else {}))))
     review = vision.get("designReview") or {}
     reviewed = review.get("pages") or []
     review_by_index = {page.get("index"): page for page in reviewed if isinstance(page, Mapping)
@@ -585,6 +593,7 @@ def _seal_design_gate(context, pages, renders, vision):
             comparisonContextDigest=content_digest(dict(sources=context["pages"],
                 style=context["styleDigest"], examples=context["exampleDigests"], policy=context["policy"],
                 roles=context["roles"], binding=context["binding"],
+                **({"sourceDirectives": context["sourceDirectives"]} if "sourceDirectives" in context else {}),
                 neighbours=[digest for i, digest in enumerate(page_digests) if i != index]))))
         if baseline_review_active(context):
             results[-1].update(designTargets=deepcopy(page.get("designTargets", [])),

@@ -133,8 +133,8 @@ def _proportional_bar_plot(projected, item, plots, categories, axes, grid_lines=
         projected["gap_width"] = max(0, min(500, round((spacing / thickness - 1) * 100)))
 
 
-def _retained_axis_plot(projected, item, root, plots, categories, axes):
-    """Bind retained sibling axes only when their ticks prove the drawn bar scale."""
+def _retained_axis_plot(projected, item, root, plots, categories, axes, grid_lines=()):
+    """Bind retained ticks to proven sibling or chart-local grid lines."""
     if projected["type"] not in {"bar", "column"} or len(item.payload["series"]) != 1:
         return None
     values = item.payload["series"][0]["values"]
@@ -179,7 +179,10 @@ def _retained_axis_plot(projected, item, root, plots, categories, axes):
         return None
     low, high = ordered[0] - spacing / 2, ordered[-1] + spacing / 2
     candidates = []
-    for line in furniture.shapes:
+    # Numeric ticks can be siblings while their explicit grid lines belong to
+    # the native chart group. Group membership does not change their scale;
+    # retain all existing numeric, alignment, uniqueness and bounds checks.
+    for line in (*furniture.shapes, *grid_lines):
         box = line.box
         start, end = (box.y0, box.y1) if horizontal else (box.x0, box.x1)
         position = box.x0 if horizontal else box.y0
@@ -524,8 +527,9 @@ def _apply_drawn_chart_style_core(projected: dict, item, root) -> ET.Element | N
                                         label_position="nextTo" if tick_labels else "none",
                                         major_gridlines=bool(grids))
     retained_categories = None
-    if not tick_labels and not grids:
-        retained_categories = _retained_axis_plot(projected, item, root, plots, categories, axes)
+    if not tick_labels:
+        retained_categories = _retained_axis_plot(projected, item, root, plots, categories, axes,
+                                                 grid_lines=lines if grids else ())
     if not tick_labels and retained_categories is None:
         _proportional_bar_plot(projected, item, plots, categories, axes,
                                grid_lines=lines if grids else (), source_lines=lines)
