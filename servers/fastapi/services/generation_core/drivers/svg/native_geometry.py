@@ -145,6 +145,17 @@ def inherit(attrs: dict, node: ET.Element) -> dict:
     """``attrs`` as seen by ``node``'s children (``_opacity`` is the opacity product)."""
     merged = {**attrs, **{k: node.get(k) for k in _INHERITED if node.get(k) is not None}}
     merged["_opacity"] = attrs.get("_opacity", 1.0) * float(node.get("opacity", 1.0))
+    # Only the table path reader consumes this flag; ordinary shapes/charts
+    # retain their established paint interpretation.
+    unsupported = {"style": {None}, "class": {None},
+        "clip-path": {None, "none"}, "mask": {None, "none"}, "filter": {None, "none"},
+        "marker-start": {None, "none"}, "marker-mid": {None, "none"}, "marker-end": {None, "none"},
+        "stroke-dasharray": {None, "none"}, "stroke-dashoffset": {None, "0"},
+        "stroke-linecap": {None, "butt"}, "stroke-linejoin": {None, "miter"},
+        "stroke-miterlimit": {None, "4"}, "vector-effect": {None, "none"}}
+    if (attrs.get("_table_path_unsupported_paint")
+            or any(node.get(key) not in permitted for key, permitted in unsupported.items())):
+        merged["_table_path_unsupported_paint"] = True
     return merged
 
 
@@ -383,6 +394,14 @@ def collect_primitives(group, offset, inherited, allowed):
                     raise NativeRejection("native_group_transform_unsupported")
                 texts.append(transformed)
         else:
+            if tag == "path":
+                from services.generation_core.drivers.svg.native_table import TABLE_ELEMENTS, table_path_segments
+                if allowed is TABLE_ELEMENTS:
+                    for x1, y1, x2, y2 in table_path_segments(node, attrs):
+                        line = ET.Element("line", {"x1": str(x1), "y1": str(y1),
+                                                   "x2": str(x2), "y2": str(y2)})
+                        shapes.append(transform_shape(shape_of(line, "line", 0.0, 0.0, attrs), position))
+                    continue
             shapes.append(transform_shape(shape_of(node, tag, 0.0, 0.0, attrs), position))
     return GroupPrimitives(tuple(shapes), tuple(texts), frozenset(tags))
 

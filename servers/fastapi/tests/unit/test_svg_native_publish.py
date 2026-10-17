@@ -111,6 +111,61 @@ def test_korean_table_is_accepted_with_exact_anchor_and_payload():
     merged_table = _accepted_table(ElementTree.tostring(merged_group, encoding='unicode'))
     assert merged_table['mergedCells'] == [{'row':3,'column':1,'rowSpan':1,'columnSpan':2}]
     assert [[cell['text'] for cell in row] for row in merged_table['rows']] == ROWS
+    # Compound stroke-only paths are the same grid, including translated groups.
+    for source, expected in ((_table_group(), table),
+                             (ElementTree.tostring(merged_group, encoding='unicode'), merged_table)):
+        parsed = ElementTree.fromstring('<g>' + source + '</g>')
+        for parent in parsed.iter():
+            lines = [child for child in parent if child.tag.rsplit('}', 1)[-1] == 'line']
+            batches = {}
+            for line in lines:
+                attributes = {key: value for key, value in line.attrib.items()
+                              if key not in {'x1', 'y1', 'x2', 'y2'}}
+                key = tuple(sorted(attributes.items()))
+                batches.setdefault(key, []).append(line)
+            for attributes, batch in batches.items():
+                drawing = []
+                for line in batch:
+                    drawing.append('M ' + line.get('x1') + ',' + line.get('y1'))
+                    drawing.append(('H ' + line.get('x2')) if line.get('y1') == line.get('y2')
+                                   else ('V ' + line.get('y2')))
+                path = ElementTree.Element('path', {**dict(attributes), 'fill': 'none', 'd': ' '.join(drawing)})
+                parent.insert(list(parent).index(batch[0]), path)
+                for line in batch:
+                    parent.remove(line)
+        compound = ElementTree.tostring(parsed, encoding='unicode')
+        assert _accepted_table(compound) == expected
+        payload, _ = _page(compound)
+        from copy import deepcopy
+        frozen = deepcopy(payload)
+        page_native_objects(payload, pt_per_px=0.75)
+        assert payload == frozen
+        from services.generation_core.drivers.svg.native_table import apply_drawn_table_style
+        [entry] = NativeObjects.from_wire(page_native_objects(payload, pt_per_px=0.75)[0]).objects
+        from services.generation_core.drivers.svg.export_projection import converter_payload
+        projected = converter_payload(entry)
+        apply_drawn_table_style(projected, entry, ElementTree.fromstring(payload['svg_content']))
+        assert payload == frozen
+        import pytest
+        from services.generation_core.drivers.svg.native_table import TABLE_ELEMENTS, table_path_segments
+        from services.generation_core.drivers.svg.native_geometry import NativeRejection, collect_primitives, find_group
+        for invalid_d, invalid_fill in (('M 0 0 L 10 10', 'none'),
+                ('M 0 0 C 0 1 1 1 1 0', 'none'), ('M 0 0 H 200 Z', 'none'),
+                ('M 0 0 H 200 garbage', 'none'), ('M 0 0 H', 'none'),
+                ('M 0 0 H 200', '#FFFFFF')):
+            invalid = ElementTree.fromstring(compound)
+            path = next(node for node in invalid.iter() if node.tag.rsplit('}', 1)[-1] == 'path')
+            path.set('d', invalid_d)
+            path.set('fill', invalid_fill)
+            with pytest.raises(NativeRejection, match='native_table_path_unsupported'):
+                table_path_segments(path, dict(path.attrib))
+        for key, value in (('stroke-dasharray', '2 3'), ('stroke-linecap', 'round'),
+                ('marker-start', 'url(#arrow)'), ('style', 'stroke-dasharray:2 3'),
+                ('filter', 'url(#shadow)')):
+            invalid = ElementTree.fromstring(compound)
+            invalid.set(key, value)
+            with pytest.raises(NativeRejection, match='native_table_path_unsupported'):
+                collect_primitives(*find_group(invalid, 'native-table-sales'), allowed=TABLE_ELEMENTS)
     # Mixed tspan styles retain the drawn text base style after exact cell matching.
     multiline_rows = [list(row) for row in ROWS]
     multiline_group = ElementTree.fromstring(_table_group(before=""))

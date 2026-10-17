@@ -21,6 +21,7 @@ what the group already shows.
 from __future__ import annotations
 
 import math
+import re
 
 from collections import Counter
 
@@ -29,9 +30,80 @@ from services.generation_core.drivers.svg.native_geometry import (
 )
 from services.generation_core.drivers.svg.native_paint import cell_borders, effective_fill, group_strokes
 
-TABLE_ELEMENTS = frozenset({"g", "rect", "line", "text", "tspan"})
+TABLE_ELEMENTS = frozenset({"g", "rect", "line", "path", "text", "tspan"})
 _ALIGN = {"start": "left", "middle": "center", "end": "right"}
 _EDGE_TOLERANCE = 1.5
+
+
+def table_path_segments(node, attrs):
+    """Read a stroke-only orthogonal grid without changing its source path."""
+    reject = lambda: NativeRejection("native_table_path_unsupported")
+    if (attrs.get("_table_path_unsupported_paint")
+            or attrs.get("fill", "black") != "none" or not attrs.get("stroke")
+            or attrs.get("stroke") == "none"
+            or any(key in node.attrib for key in ("style", "class", "clip-path", "mask", "filter",
+                                                  "marker-start", "marker-mid", "marker-end"))
+            or node.get("stroke-dasharray", "none") != "none"
+            or node.get("stroke-dashoffset", "0") != "0"
+            or node.get("stroke-linecap", "butt") != "butt"):
+        raise reject()
+    from services.generation_core.drivers.svg.native_geometry import paint
+    width = float(attrs.get("stroke-width", 1.0))
+    alpha = float(attrs.get("stroke-opacity", 1.0)) * attrs.get("_opacity", 1.0)
+    if (paint(attrs["stroke"]) is None or not math.isfinite(width) or width <= 0
+            or not math.isfinite(alpha) or not 0 < alpha <= 1):
+        raise reject()
+    raw = node.get("d", "")
+    pattern = re.compile(r"[A-Za-z]|[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?")
+    matches = list(pattern.finditer(raw))
+    tokens, end = [], 0
+    for match in matches:
+        gap = raw[end:match.start()].strip()
+        token = match.group()
+        if gap not in {"", ","} or (gap == "," and
+                (not tokens or tokens[-1].isalpha() or token.isalpha())):
+            raise reject()
+        tokens.append(token)
+        end = match.end()
+    if raw[end:].strip() or not tokens:
+        raise reject()
+    segments, cursor, command, index = [], None, None, 0
+    while index < len(tokens):
+        if tokens[index].isalpha():
+            command = tokens[index]
+            index += 1
+        if command not in {"M", "m", "L", "l", "H", "h", "V", "v"}:
+            raise reject()
+        count = 2 if command.upper() in {"M", "L"} else 1
+        if index + count > len(tokens) or any(token.isalpha() for token in tokens[index:index + count]):
+            raise reject()
+        values = [float(token) for token in tokens[index:index + count]]
+        if not all(math.isfinite(value) for value in values):
+            raise reject()
+        index += count
+        if cursor is None and command.upper() != "M":
+            raise reject()
+        x, y = cursor or (0.0, 0.0)
+        relative = command.islower()
+        if command.upper() in {"M", "L"}:
+            point = (values[0] + (x if relative else 0), values[1] + (y if relative else 0))
+        elif command.upper() == "H":
+            point = (values[0] + (x if relative else 0), y)
+        else:
+            point = (x, values[0] + (y if relative else 0))
+        if not all(math.isfinite(value) for value in point):
+            raise reject()
+        if command.upper() == "M":
+            cursor = point
+            command = "l" if relative else "L"
+            continue
+        if point == cursor or (point[0] != x and point[1] != y):
+            raise reject()
+        segments.append((x, y, *point))
+        cursor = point
+    if not segments:
+        raise reject()
+    return segments
 
 
 def _model_rows(raw: dict) -> tuple[list[list[str]], int | None]:
