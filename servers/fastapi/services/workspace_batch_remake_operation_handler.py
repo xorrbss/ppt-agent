@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 import asyncio
+import logging
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import select
@@ -45,6 +47,7 @@ from services.workspace_operation_handler_registry import (
 from services.workspace_operation_runner import sanitize_workspace_event_payload
 
 OPERATION_KIND = "slide.regenerate.batch"
+LOGGER = logging.getLogger(__name__)
 # The batch publishes inside one write transaction, so its lease must cover the
 # whole run.  Observed authored republication is well under two minutes a page;
 # double that so a slow provider does not cost the deck its attempt.
@@ -190,6 +193,17 @@ class WorkspaceBatchRemakeOperationHandler:
                 ) from error
             except Exception as error:
                 await session.rollback()
+                frame = error.__traceback__
+                while frame is not None and frame.tb_next is not None:
+                    frame = frame.tb_next
+                LOGGER.error(
+                    "batch_remake_failure operation_id=%s exception_class=%s file=%s function=%s line=%s",
+                    claim.operation_id,
+                    type(error).__name__,
+                    Path(frame.tb_frame.f_code.co_filename).name if frame is not None else None,
+                    frame.tb_frame.f_code.co_name if frame is not None else None,
+                    frame.tb_lineno if frame is not None else None,
+                )
                 raise RetryableWorkspaceOperationError(
                     "page_remake_publish_failed"
                 ) from error
