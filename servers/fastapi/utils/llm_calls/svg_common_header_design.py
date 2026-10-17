@@ -180,12 +180,17 @@ the actual screens. The diagnostic never replaces your final aesthetic judgment.
 """
 
 
-def build_header_call(payload, *, plan, stage, ordinal, images=()):
+def build_header_call(payload, *, plan, stage, ordinal, images=(), on_terminal=None):
     """Preflight transport/capacity before a durable started marker is committed."""
     if stage not in {"design", "selection"} or ordinal not in {1, 2}:
         raise ValueError("svg_common_header_call_identity_invalid")
     enforce_llm_egress_policy()
-    client = get_client(config=get_llm_config())
+    if on_terminal is None:
+        client = get_client(config=get_llm_config())
+    else:
+        from utils.codex_stream_adapter import observe_codex_provider_events
+        with observe_codex_provider_events(on_terminal):
+            client = get_client(config=get_llm_config())
     model, provider = get_model(), str(get_llm_provider().value)
     if plan.get("model") not in {None, str(model)} or plan.get("provider") not in {None, provider}:
         raise ValueError("svg_common_header_model_changed")

@@ -144,6 +144,24 @@ def test_a_completed_stream_is_recorded_as_stop(client_type, provider_id):
     assert outcome.raw_reason is None
     assert outcome.usage.output_tokens == 16_000
 
+    parser_error = ValueError("private response text")
+
+    class _FailingParser(client_type):
+        def generate(self, **kwargs):
+            super().generate(**kwargs)
+            raise parser_error
+
+    failed_call = _call(_FailingParser([_completed()]), provider_id=provider_id)
+    with pytest.raises(ValueError) as raised:
+        failed_call()
+
+    assert raised.value is parser_error
+    assert failed_call.terminal_outcome.finish_reason == FINISH_STOP
+    assert parser_error.diagnostics["terminalEvent"] == "response.completed"
+    assert parser_error.diagnostics["usage"]["output_tokens"] == 16_000
+    assert "private" not in str(parser_error.diagnostics)
+    assert failed_call.receipt["failureDiagnostics"] == [parser_error.diagnostics]
+
 
 def test_the_outcome_is_recorded_before_the_authored_guard_raises():
     """Under the authored scope the chatgpt guard still turns ``response.incomplete``

@@ -1195,6 +1195,100 @@ def test_header_v2_metadata_preserves_exact_values_provenance_and_admitted_input
             asyncio.run(call_once())
         assert calls == ["entered"]
 
+    from contextlib import asynccontextmanager
+    from utils.codex_stream_adapter import _ObservedResponses, _PROVIDER_EVENT_OBSERVER
+    from utils.hashing import sha256_hex
+    from utils.provider_overload import ProviderOutcomeError
+    from utils.llm_calls import svg_common_header_design as header_calls
+
+    raw = '{"selected_candidate_id":"candidate-a"}'
+    event = SimpleNamespace(type="response.completed", response=SimpleNamespace(
+        id="resp_headerfixture", status="completed", incomplete_details=None,
+        usage=SimpleNamespace(input_tokens=12, output_tokens=7, total_tokens=19),
+        output=[SimpleNamespace(type="message", content=[SimpleNamespace(type="output_text", text=raw)])]))
+    bounded_plan = {"header_call_limit": 4, "call_timeout_seconds": 180,
+        "input_token_limit": 32768, "output_token_limit": 4096,
+        "provider": "codex", "model": "header-fixture"}
+
+    for failure in (None, "usage", "admission", "terminal_save"):
+        terminal_document, saved, dispatched, usage_calls = {"steps": {}}, [], [], []
+        save_failed = False
+
+        async def save_terminal_document():
+            nonlocal save_failed
+            step = terminal_document["steps"]["selection-1"]
+            if failure == "terminal_save" and "terminal_evidence" in step and not save_failed:
+                save_failed = True
+                raise RuntimeError("private terminal save failure")
+            saved.append(deepcopy(terminal_document))
+
+        class HeaderClient:
+            def __init__(self):
+                self.observer = _PROVIDER_EVENT_OBSERVER.get()
+                self._client = SimpleNamespace(with_options=lambda **kwargs: self._client)
+
+        async def generate_header(client, **kwargs):
+            assert client.observer is not None
+            assert kwargs["call_timeout_seconds"] == 180
+            dispatched.append("physical")
+            await asyncio.to_thread(lambda: list(_ObservedResponses._events(
+                iter([event]), observer=client.observer)))
+            return SimpleNamespace(content={"selected_candidate_id": "candidate-a"},
+                response=SimpleNamespace(content=raw))
+
+        @asynccontextmanager
+        async def admit_header(**kwargs):
+            yield
+            if failure == "admission":
+                raise RuntimeError("private admission failure")
+
+        async def record_header_usage(**kwargs):
+            usage_calls.append(kwargs)
+            if failure == "usage":
+                raise RuntimeError("private usage failure")
+
+        async def terminal_call():
+            return await _paid_step(terminal_document, key="selection-1", stage="selection", ordinal=1,
+                payload=selection, images=screens, plan=bounded_plan,
+                job=SimpleNamespace(id=uuid.uuid4(), attempt_number=1, public_only=False),
+                save=save_terminal_document)
+
+        with patch.object(header_calls, "get_client", side_effect=lambda **kwargs: HeaderClient()), \
+             patch.object(header_calls, "get_llm_config", return_value=None), \
+             patch.object(header_calls, "get_model", return_value="header-fixture"), \
+             patch.object(header_calls, "get_llm_provider", return_value=SimpleNamespace(value="codex")), \
+             patch.object(header_calls, "enforce_llm_egress_policy"), \
+             patch.object(header_calls, "preflight_header_selector"), \
+             patch.object(header_calls, "get_generate_kwargs", side_effect=lambda **kwargs: kwargs), \
+             patch.object(header_calls, "_generate_structured_content", side_effect=generate_header), \
+             patch.object(header_calls, "provider_call_admission", side_effect=admit_header), \
+             patch.object(header_calls, "record_provider_call", side_effect=record_header_usage), \
+             patch("services.generation_core.quality.vision_advisory._check_design_input",
+                return_value={"serializedContextBytes": 123}):
+            if failure is None:
+                response = asyncio.run(terminal_call())
+                assert response["raw_response"] == raw
+                assert asyncio.run(terminal_call()) == response
+            else:
+                with pytest.raises(ProviderOutcomeError if failure == "terminal_save" else RuntimeError):
+                    asyncio.run(terminal_call())
+                with pytest.raises(ValueError, match="svg_common_header_provider_result_unknown"):
+                    asyncio.run(terminal_call())
+        step = saved[-1]["steps"]["selection-1"]
+        assert dispatched == ["physical"]
+        assert step["status"] == ("succeeded" if failure is None else "unknown")
+        assert step["terminal_evidence"]["raw_response"] == raw
+        assert step["terminal_evidence"]["output_digest"] == sha256_hex(raw.encode("utf-8"))
+        assert step["terminal_evidence"]["usage"] == {
+            "input_tokens": 12, "output_tokens": 7, "total_tokens": 19}
+        if failure != "terminal_save":
+            assert saved[1]["steps"]["selection-1"]["status"] == "started"
+            assert "terminal_evidence" in saved[1]["steps"]["selection-1"]
+        if failure is not None:
+            assert "private" not in str(step["failure_diagnostics"])
+            assert "response" not in step
+        assert len(usage_calls) == 1
+
 
 def test_header_v2_pending_owned_preparation_persists_titles_and_reuses_stable_page_ids(monkeypatch):
     import asyncio

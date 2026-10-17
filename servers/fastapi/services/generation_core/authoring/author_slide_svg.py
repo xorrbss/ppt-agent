@@ -97,6 +97,15 @@ SVG_NEW_COPY_AUTHOR_RULES = SVG_AUTHOR_RULES.replace(
 SVG_QUALITY_FIRST_DESIGN_RULES = """
 Design quality is required in the first whole-page SVG: establish a source-supported focal
 message, a clear title/evidence/detail hierarchy, deliberate whitespace and meaningful grouping.
+The supplied minimum font size is a safety floor, not the normal body-text target. Budget
+readable space for essential evidence, complete conditions, exceptions and responsibilities
+before allocating decorative space. Do not make these details tiny while enlarging short labels.
+For long prose or table cells, wrap at meaningful boundaries and rebalance the related regions;
+do not force complete statements onto one line or shrink the whole page to fit. Preserve table
+headers, merged-cell associations, values and native bindings. Make source-supported sequence,
+branch conditions and responsibility relationships traceable in the reading flow, with each
+condition beside the action or evidence it qualifies. Never invent links between independent
+items. In local repair, apply these choices only to affected content and its related geometry.
 Use the selected style's complete visual intent and the relevant example evidence together.
 Compare their useful type hierarchy, evidence emphasis, reading flow and image treatment, then
 choose the page's own supported composition. Example labels, company names, numbers, claims
@@ -112,6 +121,15 @@ offered source images and their complete slot descriptions identify the actual c
 SVG_NEW_COPY_QUALITY_FIRST_DESIGN_RULES = """
 Design quality is required in the first whole-page SVG: establish a source-supported focal
 message, clear title/evidence/detail hierarchy, deliberate whitespace and meaningful grouping.
+The supplied minimum font size is a safety floor, not the normal body-text target. Budget
+readable space for essential evidence, complete conditions, exceptions and responsibilities
+before allocating decorative space. Do not make these details tiny while enlarging short labels.
+For long prose or table cells, wrap at meaningful boundaries and rebalance the related regions;
+do not force complete statements onto one line or shrink the whole page to fit. Preserve table
+headers, merged-cell associations, values and native bindings. Make source-supported sequence,
+branch conditions and responsibility relationships traceable in the reading flow, with each
+condition beside the action or evidence it qualifies. Never invent links between independent
+items. In local repair, apply these choices only to affected content and its related geometry.
 Use the selected style and relevant examples together, but choose this page's own supported
 composition. Reference mechanics and copy limits never authorize unsupported SVG, missing
 required source content, page splitting, smaller type or missing required source images.

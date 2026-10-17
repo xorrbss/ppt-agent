@@ -189,7 +189,36 @@ async def _paid_step(document, *, key, stage, ordinal, payload, images, plan, jo
         return deepcopy(existing["response"])
     if len(document["steps"]) >= plan["header_call_limit"]:
         raise ValueError("svg_common_header_call_limit_exceeded")
-    execute = build_header_call(payload, plan=plan, stage=stage, ordinal=ordinal, images=images)
+    from utils.provider_overload import safe_provider_diagnostics
+    loop = asyncio.get_running_loop()
+
+    async def save_terminal(event):
+        raw = event.get("raw_response")
+        if not isinstance(raw, str) or event.get("output_digest") != sha256_hex(raw.encode("utf-8")):
+            raise ValueError("svg_common_header_terminal_evidence_invalid")
+        diagnostics = safe_provider_diagnostics(diagnostics={
+            **(event.get("diagnostics") or {}), "usage": event.get("usage"),
+            "responseId": event.get("response_id"), "terminalEvent": "response.completed"})
+        evidence = {"terminal_event": "response.completed", "raw_response": raw,
+            "output_digest": event["output_digest"], "diagnostics": diagnostics}
+        if "responseId" in diagnostics:
+            evidence["response_id"] = diagnostics["responseId"]
+        if "usage" in diagnostics:
+            evidence["usage"] = diagnostics["usage"]
+        step = document["steps"][key]
+        if step.get("terminal_evidence", evidence) != evidence:
+            raise ValueError("svg_common_header_terminal_evidence_conflict")
+        step["terminal_evidence"] = evidence
+        # The raw provider completion is evidence, not permission to publish or
+        # replay this step. Only the normal execute return can mark success.
+        await save()
+
+    def on_terminal(event):
+        if event.get("terminal_event") == "response.completed":
+            asyncio.run_coroutine_threadsafe(save_terminal(deepcopy(event)), loop).result()
+
+    execute = build_header_call(payload, plan=plan, stage=stage, ordinal=ordinal,
+        images=images, on_terminal=on_terminal)
     projection = getattr(execute, "input_projection", None)
     if projection is not None and projection.get("source_context_digest") != input_digest:
         raise ValueError("svg_common_header_checkpoint_input_conflict")
@@ -205,8 +234,9 @@ async def _paid_step(document, *, key, stage, ordinal, payload, images, plan, jo
                 attempt_number=job.attempt_number,
                 public_only=isinstance(job, WorkspaceOperation) or bool(getattr(job, "public_only", False))):
             response = await execute()
-    except BaseException:
+    except BaseException as error:
         document["steps"][key]["status"] = "unknown"
+        document["steps"][key]["failure_diagnostics"] = safe_provider_diagnostics(error)
         await save()
         raise
     document["steps"][key].update(status="succeeded", response=response)
@@ -370,6 +400,34 @@ async def prepare_document_header(ctx, request, presentation_id, outline, langua
         raise ValueError("svg_common_header_preserved_raster_unsupported")
     if ctx.source_reflow and ctx.snapshot.get("source_authoring_contract") != {"version": "svg-source-whole-page/v1"}:
         raise ValueError("svg_common_header_source_authoring_contract_unsupported")
+    manifest = getattr(ctx, "partial_recovery_manifest", None)
+    if isinstance(manifest, dict) and manifest.get("append_only_recovery") is True:
+        # The producer envelope keeps its own identity. A consumer of already
+        # published frozen bindings must not relabel or rerun its header calls.
+        from models.sql.workspace import WorkspaceOperation
+        from services.svg_partial_recovery import verify_episode, verified_header_producer
+        from services.svg_common_header_design_checkpoint import _envelope
+        async with async_session_maker() as source_session:
+            operation = await source_session.get(WorkspaceOperation, job.workspace_operation_id)
+            if operation is None:
+                raise ValueError("svg_common_header_publication_conflict")
+            verified = await verify_episode(source_session, operation, job)
+            producer = await verified_header_producer(source_session,operation,job)
+            if (verified != manifest or producer is None
+                    or producer.svg_style_snapshot != ctx.snapshot
+                    or producer.authored_outline != outline.model_dump(mode="json")):
+                raise ValueError("svg_common_header_publication_conflict")
+            envelope = _envelope(producer, producer.svg_header_design_checkpoint)
+            source = envelope["document"]
+            selection = ctx.snapshot.get("common_header_selection")
+            if (source.get("status") != "published" or not isinstance(selection, dict)
+                    or source.get("selection") != selection
+                    or source.get("selection_input_digest") != selection.get("selection_input_digest")
+                    or envelope.get("published_inputs") != {
+                        "snapshot_digest": ctx.snapshot.get("digest"),
+                        "outline_digest": _digest(producer.authored_outline)}):
+                raise ValueError("svg_common_header_publication_conflict")
+        return ctx
     from services import svg_presentation_service as facade
     storage = {"session_maker": async_session_maker, "owned_job": facade.owned_job}
     document = await read_update_header_design(job, **storage)

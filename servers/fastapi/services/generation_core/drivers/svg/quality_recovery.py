@@ -509,7 +509,7 @@ async def _prepare_final_selected_source(ctx, job, hooks):
     if not isinstance(manifest, dict) or manifest.get("final_selected_continuation") is None:
         return None
     from models.sql.workspace import WorkspaceOperation
-    from services.svg_partial_recovery import ARCHIVE_KEY, verify_episode, _frozen_payload
+    from services.svg_partial_recovery import ARCHIVE_KEY, verify_episode, _frozen_payload, frozen_episode_payload
     from services.svg_final_selected_continuation import archived_producer_payloads
     await ensure_recovery_authority(job, hooks)
     async with hooks.async_session_maker() as session:
@@ -523,7 +523,7 @@ async def _prepare_final_selected_source(ctx, job, hooks):
         await session.rollback()
     equivalent = (
         bool(getattr(ctx, "quality_recovery_checkpoint_reuse_eligible", False))
-        and _digest(_frozen_payload(job.request_payload)) == _digest(_frozen_payload(producer_job["request_payload"]))
+        and _digest(frozen_episode_payload(job.request_payload, current)) == _digest(_frozen_payload(producer_job["request_payload"]))
         and _digest(job.svg_style_snapshot) == _digest(producer_job["svg_style_snapshot"])
     )
     from services.svg_final_selected_continuation import INITIAL_NAMESPACE
@@ -531,6 +531,11 @@ async def _prepare_final_selected_source(ctx, job, hooks):
                     execution=payloads[0]["quality_recovery_execution"],
                     producer_job=producer_job, producer_payloads=payloads,
                     consumer_runtime_equivalent=equivalent)
+    if current.get("append_only_recovery") is True:
+        evidence["consumer_binding"] = dict(jobId=str(job.id),
+            operationId=str(job.workspace_operation_id), presentationId=str(job.presentation_id),
+            ownerId=current["owner_id"], tenantId=current["tenant_id"])
+        evidence["producer_presentation_id"] = producer_job["presentation_id"]
     ctx.quality_final_selected_source = evidence
     return evidence
 

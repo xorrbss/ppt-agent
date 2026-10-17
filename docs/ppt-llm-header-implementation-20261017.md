@@ -122,3 +122,16 @@ UNKNOWN 호출은 Codex/gpt-6.1-sol, repair/slide_index=7, 논리 호출 88a3769
 새 진단용 PPTX는 외부 근거 폴더 normal12-grid-preserved/editable-candidate.pptx이며 SHA-256은 ad683c939a7a7573da8c92709962754a854264159ff51522f4825b876b55c132다. 실제 Office 12쪽 재검증에서 1~11쪽 PNG는 이전 파일과 byte-identical, 12쪽만 0·4·7 선이 막대 뒤에 복원됐다. 최종 Office 수동 평가는 89점(기준 86점)이다. native 표 2개·차트 1개·텍스트 객체 494개·벡터 객체 704개, 그림과 fallback 0개를 확인했다. 표 원문·병합 master 7/covered 21·차트 cache/내장 XLSX의 6개 값과 합 30.90·숨김 축 0~7은 일치한다. 원본 26개 파일 해시와 별도 source job 해시도 보존됐다.
 
 이 결과는 실제 편집 가능한 진단 PPTX와 Office 증거까지이며, 정상 웹 생성·최종 VQA 승인·게시 성공으로 확대하지 않는다. 7·8·9쪽의 구체적인 밀도 개선 목표도 남아 있다. 정상 12쪽 게시가 미완료여서 main/serve 병합은 계속 보류한다. UNKNOWN 및 실패 이력과 이전 PPTX는 그대로 남긴다.
+
+## 후속 범용 수정과 검증 범위
+
+- 첫 작성 및 기존 수정 프롬프트는 최소 폰트를 일반 본문의 목표 크기로 사용하지 않도록 보강했다. 조건·예외·담당 관계와 긴 표 셀을 위한 공간과 의미 단위 줄바꿈을 우선하며, 원문 병합·대응 관계를 유지한다. 고정 레이아웃, 특정 페이지 예외, 폰트 하한 변경, 추가 호출은 없다. 기존 prompt-route 노드 1개가 8.82초에 통과했다. 새 출력의 디자인 향상은 아직 실측하지 않았다.
+- 일반 structured 호출에서 완료 스트림 이후 파싱이 실패하면 원래 예외 타입을 유지한 채 관측된 안전 진단을 보존한다. 기존 completed-stream 노드의 두 provider 매개변수가 0.41초에 통과했다. 과거 서버 오류나 180초 실패의 직접 원인을 수정한 증거와 구분한다.
+- 헤더는 실제 completed 원문·digest·안전한 usage를 기존 fenced 저장 경로에 먼저 기록한다. 후속 사용량·admission 처리 실패 시 status는 UNKNOWN이며, 원문 증거만으로 성공 판정 또는 재호출을 허용하지 않는다. 정상 완료, 사용량 실패, admission 종료 실패, terminal 저장 실패를 포함한 기존 metadata 노드 1개가 7.46초에 통과했다. 이 검증은 가짜 SDK 스트림을 사용하며 실제 provider 실행 증거가 아니다.
+- 새로운 partial recovery는 기존 append-only staging 문서 생성 경로와 별도 job/task/checkpoint를 사용한다. 원본 job·페이지·operation·provider 이력은 재바인딩하지 않는다. manifest와 새 v2 lineage에서 producer와 consumer를 분리하며, presentation routing 값만 명시적으로 producer에 투영한다. 전역 frozen payload 계약과 과거 v1 episode 검증은 유지한다.
+- 원본 job 및 전체 checkpoint 행을 실제 DB 조회와 대조한다. 서로 다른 문서의 조상 연결은 검증된 append-only edge로 제한한다. 이미 완료된 헤더는 검증된 조상을 따라 원래 envelope를 소비하며, 원문 응답이나 producer identity를 새 작업으로 재라벨하지 않는다. local quality 소비도 producer identity와 consumer binding 전체를 검증한다.
+- 기존 append-only 테스트 매개변수 1개에 실제 격리 SQLite 행의 첫 fork, 두 번째 fork, 헤더 무호출 재사용, 원본 보존, 입력·소유 연결 변조 거절을 확장해 최종 6.74초에 통과했다. PostgreSQL JSON 저장 해시 adapter만 대체했으며 실제 PostgreSQL 복구 제출이나 유료 이어가기 성공을 뜻하지 않는다. 기존 source-author terminal projection 검증 노드도 별도로 통과했다. 코드 검토에서 제기된 중간 상태와 반복 복구 경계도 확인·보완했다.
+- 실제 12쪽 실패 작업의 읽기 전용 복구 검토에서 두 추가 결함을 확인했다. 먼저 뒤 호출이 inflight인 상태에서 앞 호출의 completed 응답을 현재 결과로 읽던 선택을 순번으로 제한했다. 명시적인 과거 결과 소비는 기존 provenance 검증을 유지한 canonical key로 분리한다. 다음으로 선택된 대표페이지의 author style은 선택 메타데이터 추가 전 snapshot이라는 점을 실제 published envelope·후보 identity·재계산 style·author witness로 증명한다. 임의 style 불일치를 허용하지 않고 검증된 producer 조상을 따라 원래 증거를 소비한다.
+- 실제 PostgreSQL 상태에 대한 롤백되는 읽기 전용 service 검토는 알려진 11쪽과 미확정 8쪽을 분리하는 계획을 산출했다. 새 본문 작성은 1회이며, 기존 동결 정책의 검토·수정 슬롯과 한도는 유지된다. 원본 operation/job/checkpoint/UNKNOWN 변경이나 복구 작업 제출, provider 호출은 수행하지 않았다.
+- API와 생성 워커를 관리 스크립트로 재시작한 뒤 실제 인증된 웹 recovery-plan GET도 HTTP 200과 동일한 11쪽/1쪽 분리를 반환했다. `normal12-final-readonly-recovery-plan.json`에 근거를 남겼다. 별도 PostgreSQL 읽기 전용 대조에서는 원 operation·job·12 checkpoint·admission·logical call 전체 행이 이전 terminal 덤프와 동일했다(`normal12-post-fix-preservation-proof.json`). 실제 복구 실행과 최종 게시·다운로드는 아직 수행하지 않았다.
+- 호출 한도, deadline, UNKNOWN 상태, 디자인·원본 보존·게시 기준은 완화하지 않았다. 실제 웹 생성과 게시·다운로드 검증 및 main 병합은 계속 별도 완료 조건이다.

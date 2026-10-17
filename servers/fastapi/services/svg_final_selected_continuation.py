@@ -267,7 +267,12 @@ def _consume_local_producer(context, pages, renders, evidence, reused, consumers
     _require(gate is not None)
     _require(context["binding"].get("ownerId") == proof["owner_id"])
     _require(context["binding"].get("tenantId") == proof["tenant_id"])
-    _require(context["binding"].get("presentationId") == gate["binding"].get("presentationId"))
+    if (evidence.get("consumer_binding") is not None
+            or context["binding"].get("presentationId") != gate["binding"].get("presentationId")):
+        _require(evidence.get("consumer_binding") == context["binding"])
+        _require(gate["binding"].get("presentationId") == evidence.get("producer_presentation_id"))
+        _require(gate["binding"].get("jobId") == proof["source_job_id"])
+        _require(gate["binding"].get("operationId") == proof["source_operation_id"])
     if evidence.get("consumer_runtime_equivalent") is not True:
         raise FinalSelectedEvidenceError("svg_final_selected_runtime_unproven")
     groups = original.get("groups")

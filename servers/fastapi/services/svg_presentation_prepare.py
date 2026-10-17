@@ -243,6 +243,20 @@ async def _verify_frozen_title_result(session, job, outline, plan):
     from services.svg_common_header_titles import _restore_result
     from utils.hashing import canonical_json_digest
 
+    lineage = (job.request_payload or {}).get("_svg_partial_recovery") or {}
+    if lineage.get("schema") == "svg-partial-recovery-lineage/v2":
+        from models.sql.presentation_generation_job import PresentationGenerationJob
+        from services.svg_partial_recovery import verify_episode
+        operation = await session.get(WorkspaceOperation, job.workspace_operation_id)
+        if operation is None:
+            raise ValueError("svg_common_header_title_checkpoint_conflict")
+        manifest = await verify_episode(session, operation, job)
+        producer = await session.get(PresentationGenerationJob, UUID(manifest["job_id"]))
+        if (producer is None or producer.authored_outline != outline.model_dump(mode="json")
+                or producer.svg_style_snapshot != job.svg_style_snapshot):
+            raise ValueError("svg_common_header_title_checkpoint_conflict")
+        return await _verify_frozen_title_result(session, producer, outline, plan)
+
     row = await session.scalar(select(AuthoredDeckPlanCheckpoint).where(
         AuthoredDeckPlanCheckpoint.generation_job_id == job.id,
         AuthoredDeckPlanCheckpoint.stage == "header"))

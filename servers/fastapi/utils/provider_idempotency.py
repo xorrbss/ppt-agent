@@ -396,6 +396,17 @@ def provider_generate_call(
                 # at the bridge would create a cause cycle and hide the source.
                 raise provider_outcome from provider_outcome.__cause__
             if not authored_request:
+                # Structured calls keep the SDK exception and its existing
+                # retry policy, but must not lose a terminal event observed
+                # before the SDK's local parser failed.
+                if terminal.diagnostics:
+                    try:
+                        error.diagnostics = safe_provider_diagnostics(
+                            error, diagnostics=terminal.diagnostics,
+                        )
+                    except Exception:
+                        # Diagnostic attachment cannot replace the failure.
+                        pass
                 raise
             reset_at = usage_limit_reset_epoch(error)
             if reset_at is not None:

@@ -313,6 +313,7 @@ async def _generation_action_principal_bridge(tmp_path, monkeypatch):
 def test_svg_timeout_repurchase_requires_bound_consent_and_preserves_completed_sources(tmp_path, monkeypatch, mixed):
     if mixed == "append_only":
         asyncio.run(_svg_append_only_recovery_contract(tmp_path, monkeypatch))
+        asyncio.run(_svg_partial_append_only_contract(tmp_path, monkeypatch))
         return
     asyncio.run(_svg_timeout_repurchase_bound_consent(tmp_path, monkeypatch, mixed=mixed))
 
@@ -2820,6 +2821,316 @@ async def _blocked_retry_resumes_same_operation_after_assets_are_ready(
             assert await session.scalar(
                 select(func.count()).select_from(WorkspaceOperation)
             ) == 1
+    finally:
+        await engine.dispose()
+
+
+async def _svg_partial_append_only_contract(tmp_path, monkeypatch):
+    """Real isolated rows: fork, prepare, and fail closed without buying calls."""
+    from copy import deepcopy
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from models.generate_presentation_request import GeneratePresentationRequest
+    from models.presentation_outline_model import PresentationOutlineModel, SlideOutlineModel
+    from models.sql.async_presentation_generation_status import AsyncPresentationGenerationTaskModel
+    from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
+    from models.sql.presentation_generation_job import PresentationGenerationJob
+    from services import svg_partial_recovery as recovery
+    from services import svg_common_header_generation as headers
+    from services.svg_common_header_design_checkpoint import _envelope
+    from services.svg_common_header_v2 import prepare_common_header_v2
+    from services.authored_canvas import request_canvas_metadata
+    from services.presentation_generation_job_service import request_sha256
+    from services.workspace_service import _fork_append_only_svg_recovery_workspace
+    from utils.hashing import sha256_hex
+
+    engine, maker = await _database(tmp_path / "svg-partial-append-only.db")
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(lambda conn: SQLModel.metadata.create_all(conn, tables=[
+                AsyncPresentationGenerationTaskModel.__table__, PresentationGenerationJob.__table__,
+                AuthoredSlideCheckpoint.__table__]))
+        presentation = await _create_presentation(maker)
+        async with maker() as session:
+            user = User(username="partial-owner", hashed_password="unused")
+            session.add(user)
+            await session.flush()
+            _, _, source, _ = await bootstrap_workspace(session, presentation_id=presentation.id,
+                request=_bootstrap_request(key="partial-immutable-source"))
+            source.owner_id = user.id
+            source.kind, source.state, source.fencing_token = "presentation.generate", "failed", 1
+            source.request_payload = {**source.request_payload, "principal_tenant_id": "partial-test"}
+            parent_presentation = await session.get(PresentationModel, presentation.id)
+            parent_presentation.owner_id = user.id
+            request = GeneratePresentationRequest(content="Three source pages", template="authored",
+                strategy="svg", common_header_mode="uniform", n_slides=3)
+            outline = PresentationOutlineModel(slides=[SlideOutlineModel(content=f"Source {i}",
+                title=f"Title {i}", page_id=f"source-page-{i}") for i in range(3)])
+            candidate = dict(candidate_id="source-header", revision=1,
+                svg='<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"><text id="heading" fill="#111111"/></svg>',
+                body_box=dict(x=64, y=150, width=1152, height=520), fields=[dict(node_id="heading",
+                    role="title", value_ref="title", box=dict(x=64,y=25,width=1152,height=70),
+                    font_family="Noto Sans KR",font_weight=700,font_size_px=32,line_height_px=45,
+                    baseline_offset_px=38,max_lines=2,alignment="left",optional=False)])
+            contract, bindings = prepare_common_header_v2(candidate, outline,
+                request_canvas_metadata(request), snapshot={})
+            for slide, binding in zip(outline.slides, bindings, strict=True):
+                slide.common_header = binding
+            selection = dict(plan_digest="fixture-plan", selected_candidate_id="source-header",
+                selected_revision=1, selection_input_digest="fixture-selection",representative_page_id="source-page-0")
+            style = dict(common_header=contract, common_header_selection=selection,
+                common_header_design_plan=dict(schema="svg-common-header-design-plan/v2", plan_digest="fixture-plan"))
+            style["digest"] = recovery.digest(style)
+            task = AsyncPresentationGenerationTaskModel(status="failed", owner_id=user.id)
+            session.add(task)
+            await session.flush()
+            payload = dict(presentation_id=str(presentation.id), strategy="svg", common_header_mode="uniform",
+                instructions="Keep every source condition", content="Three source pages")
+            parent = PresentationGenerationJob(task_id=task.id,presentation_id=presentation.id,
+                workspace_operation_id=source.id,idempotency_key_hash="1"*64,
+                request_sha256=request_sha256(payload),request_payload=payload,
+                svg_style_snapshot=style,authored_outline=outline.model_dump(mode="json"),
+                state="failed",total_slides=3)
+            envelope = _envelope(parent, None)
+            envelope["document"] = dict(status="published", selection=selection,
+                selection_input_digest="fixture-selection")
+            envelope["published_inputs"] = dict(snapshot_digest=style["digest"],
+                outline_digest=headers._digest(parent.authored_outline))
+            parent.svg_header_design_checkpoint = envelope
+            session.add(parent)
+            await session.flush()
+            source.request_payload = {**source.request_payload, "generation_request": payload,
+                "job_id": str(parent.id), "task_id": task.id}
+            for index in range(3):
+                saved = dict(input_digest=f"source-input-{index}", inflight=None, attempts=[])
+                if index == 0:
+                    saved.update(svg_content="<svg>exact confirmed source</svg>",quality=dict(passed=True))
+                elif index == 1:
+                    saved["inflight"] = dict(status="unknown")
+                session.add(AuthoredSlideCheckpoint(job_id=parent.id, slide_index=index,
+                    author_status="completed" if index == 0 else "pending",svg_checkpoint=saved))
+            await session.commit()
+            parent_id, source_id = parent.id, source.id
+
+        async with maker() as session:
+            parent = await session.get(PresentationGenerationJob, parent_id)
+            source = await session.get(WorkspaceOperation, source_id)
+            task = await session.get(AsyncPresentationGenerationTaskModel, parent.task_id)
+            rows = list(await session.scalars(select(AuthoredSlideCheckpoint).where(
+                AuthoredSlideCheckpoint.job_id == parent.id).order_by(AuthoredSlideCheckpoint.slide_index)))
+            completed_record = dict(schema="svg-provider-terminal/v1",terminal_event="response.completed",
+                operation_id=str(source.id),job_id=str(parent.id),owner_id=str(source.owner_id),tenant_id="partial-test",
+                input_digest="ordinal-input",ordinal=1,raw_response="original author",usage={},
+                output_digest=sha256_hex(b"original author"))
+            completed_record["receipt_digest"] = recovery.digest(completed_record)
+            ordinal_payload = dict(input_digest="ordinal-input",inflight=None,
+                provider_terminal_responses={"1":completed_record})
+            assert recovery._completed_response(ordinal_payload,parent,source,source.owner_id,"partial-test") == completed_record
+            ordinal_payload["inflight"] = 2
+            assert recovery._completed_response(ordinal_payload,parent,source,source.owner_id,"partial-test") is None
+            ordinal_payload["provider_terminal_responses"]["2"] = dict(ordinal=2,terminal_event="response.created")
+            ordinal_payload["inflight"] = None
+            assert recovery._completed_response(ordinal_payload,parent,source,source.owner_id,"partial-test") is None
+            next_record = {**completed_record,"ordinal":2,"raw_response":"completed repair",
+                "output_digest":sha256_hex(b"completed repair")}
+            next_record["receipt_digest"] = recovery.digest({k:v for k,v in next_record.items() if k!="receipt_digest"})
+            ordinal_payload["provider_terminal_responses"]["2"] = next_record
+            assert recovery._completed_response(ordinal_payload,parent,source,source.owner_id,"partial-test") == next_record
+            from services.svg_common_header_design_checkpoint import _candidate_key
+            from utils.hashing import canonical_json_digest
+            candidate_identity = dict(candidate_revision="1",candidate_id="source-header",page_id="source-page-0")
+            candidate_style = {k:v for k,v in parent.svg_style_snapshot.items() if k not in {"digest","common_header_selection"}}
+            candidate_digest = canonical_json_digest(candidate_style)
+            candidate_receipt = dict(style_digest=candidate_digest)
+            representative = dict(common_header_candidate_lineage=candidate_identity,
+                common_header_candidate_style_digest=candidate_digest,
+                attempts=[dict(kind="provider",raw_response="exact candidate body",receipt=candidate_receipt)])
+            proof_job = PresentationGenerationJob(**deepcopy(parent.model_dump()))
+            proof_job.svg_header_design_checkpoint["candidate_pages"][_candidate_key(0,candidate_identity)] = {
+                **deepcopy(representative),"header_author_attempt_identity":deepcopy(candidate_identity)}
+            assert recovery._author_style_matches(representative,candidate_receipt,proof_job,0)
+            copied_job = PresentationGenerationJob(**deepcopy(proof_job.model_dump()))
+            copied_job.id = uuid.uuid4()
+            copied_job.svg_header_design_checkpoint = None
+            assert not recovery._author_style_matches(representative,candidate_receipt,copied_job,0)
+            assert recovery._author_style_matches(representative,candidate_receipt,copied_job,0,header_producer=proof_job)
+            assert not recovery._author_style_matches(representative,candidate_receipt,proof_job,1)
+            for field in ("common_header_candidate_lineage","common_header_candidate_style_digest","attempts"):
+                altered = deepcopy(representative)
+                altered[field] = {} if field == "common_header_candidate_lineage" else [] if field == "attempts" else "different"
+                assert not recovery._author_style_matches(altered,candidate_receipt,proof_job,0)
+            seal = dict(tenant_id="partial-test",payload_sha256=recovery.digest(source.request_payload),
+                archive_storage_sha256=None,archive_schema=None,archive_canonical_sha256=None)
+            archive = dict(schema=recovery.ARCHIVE_V2, job=parent.model_dump(mode="json"),
+                task=task.model_dump(mode="json"), checkpoints=[row.model_dump(mode="json") for row in rows],
+                operation_refs=[recovery._operation_reference(source,seal,tenant="partial-test")])
+            pages = [dict(slide_index=row.slide_index,category=category,row_digest=recovery.digest(row.model_dump(mode="json")),
+                svg_sha256=sha256_hex((row.svg_checkpoint.get("svg_content") or "").encode()),
+                input_digest=row.svg_checkpoint["input_digest"],author_receipt_digest=recovery.author_witness(row.svg_checkpoint))
+                for row,category in zip(rows,["known","unknown","unstarted"],strict=True)]
+            manifest = dict(recovery_revision=recovery.REVISION,append_only_recovery=True,
+                operation_id=str(source.id),source_operation_id=str(source.id),owner_id=str(source.owner_id),
+                tenant_id="partial-test",presentation_id=str(source.presentation_id),job_id=str(parent.id),
+                archive_schema=recovery.ARCHIVE_V2,archive_digest=recovery.digest(archive),expected_page_count=3,
+                known_indices=[0],unknown_indices=[1],new_indices=[2],pages=pages,
+                frozen_request_digest=recovery.digest(recovery._frozen_payload(parent.request_payload)),
+                frozen_style_digest=recovery.digest(parent.svg_style_snapshot),code_digest=recovery._code_digest())
+            plan = recovery.PartialRecovery(manifest,archive,rows,recovery.digest(manifest))
+            child_presentation, child_conversation = await _fork_append_only_svg_recovery_workspace(
+                session, source, await session.get(PresentationModel,source.presentation_id), plan)
+            child = WorkspaceOperation(owner_id=source.owner_id,owner_scope=source.owner_scope,
+                presentation_id=child_presentation.id,conversation_id=child_conversation.id,
+                retry_of_operation_id=source.id,anchor_position=1,kind="presentation.generate",state="queued",
+                request_payload=dict(recovery_revision=recovery.REVISION,principal_tenant_id="partial-test"),
+                request_hash="2"*64,idempotency_key_hash="3"*64,expected_revision=0)
+            session.add(child)
+            await session.flush()
+            consumer = await recovery.rebind_episode(session,source,child,plan,key_hash="4"*64)
+            await session.commit()
+            consumer_id, child_id = consumer.id, child.id
+
+        with monkeypatch.context() as scoped:
+            async def storage_seals(session, ids, **kwargs):
+                # Only the PostgreSQL JSON storage-hash adapter is substituted;
+                # producer rows, operation controls and all comparisons are real.
+                seals = {}
+                for operation_id in ids:
+                    original_payload = await session.scalar(select(WorkspaceOperation.request_payload).where(
+                        WorkspaceOperation.id == operation_id))
+                    original_archive = original_payload.get(recovery.ARCHIVE_KEY)
+                    seals[str(operation_id)] = dict(tenant_id="partial-test",
+                        payload_sha256=recovery.digest(original_payload),
+                        archive_storage_sha256=recovery.digest(original_archive) if original_archive else None,
+                        archive_schema=original_archive.get("schema") if original_archive else None,
+                        archive_canonical_sha256=recovery.digest(original_archive) if original_archive else None)
+                return seals
+            scoped.setattr(recovery,"_payload_storage_seals",storage_seals)
+            scoped.setattr(headers,"preflight_header_selector",lambda: {})
+            async with maker() as session:
+                consumer = await session.get(PresentationGenerationJob,consumer_id)
+                child = await session.get(WorkspaceOperation,child_id)
+                assert consumer.id != parent_id and consumer.presentation_id != presentation.id
+                assert consumer.idempotency_key_hash == "4"*64 and consumer.svg_header_design_checkpoint is None
+                assert await recovery.verify_episode(session,child,consumer) == manifest
+                assert recovery.frozen_episode_payload(consumer.request_payload,manifest) == archive["job"]["request_payload"]
+                copied = list(await session.scalars(select(AuthoredSlideCheckpoint).where(
+                    AuthoredSlideCheckpoint.job_id == consumer_id).order_by(AuthoredSlideCheckpoint.slide_index)))
+                assert copied[0].svg_checkpoint["svg_content"] == rows[0].svg_checkpoint["svg_content"]
+                assert copied[0].author_status == "completed"
+                assert recovery.verify_cached_page(copied[0].svg_checkpoint,manifest,0,"source-input-0") == pages[0]
+                assert copied[1].svg_checkpoint["partial_recovery"]["category"] == "unknown"
+                assert "svg_content" not in copied[1].svg_checkpoint and copied[1].author_status == "pending"
+                ctx = SimpleNamespace(snapshot=deepcopy(consumer.svg_style_snapshot),partial_recovery_manifest=manifest,
+                    raster_reconstruction=False,source_reflow=False)
+                runner = AsyncMock(side_effect=AssertionError("must not reauthor a published header"))
+                assert await headers.prepare_document_header(ctx,request,consumer.presentation_id,
+                    PresentationOutlineModel.model_validate(consumer.authored_outline),"en",consumer,
+                    checkpoint=runner,async_session_maker=maker,read_png=runner,write_png=runner,
+                    page_runner=runner,page_hooks_factory=runner,state_factory=runner) is ctx
+                runner.assert_not_called()
+                # Guard the actual quality consumer's producer/consumer
+                # identity boundary; the existing tests cover gate integrity.
+                from services.generation_core.drivers.svg import quality as deck_quality
+                from services.svg_final_selected_continuation import (
+                    _consume_local_producer, FinalSelectedEvidenceError, INITIAL_NAMESPACE)
+                producer_binding = dict(jobId=str(parent_id),operationId=str(source_id),
+                    presentationId=str(presentation.id),ownerId=manifest["owner_id"],tenantId=manifest["tenant_id"])
+                consumer_binding = {**producer_binding,"jobId":str(consumer_id),"operationId":str(child_id),
+                    "presentationId":str(consumer.presentation_id)}
+                gate = dict(binding=deepcopy(producer_binding),runtimeBinding={})
+                evidence = dict(proof=dict(owner_id=manifest["owner_id"],tenant_id=manifest["tenant_id"],
+                    source_job_id=str(parent_id),source_operation_id=str(source_id)),
+                    execution=dict(rounds=[dict(advisory={},groups={})]),consumer_runtime_equivalent=True,
+                    consumer_binding=consumer_binding,producer_presentation_id=str(presentation.id))
+                with scoped.context() as quality_scope:
+                    quality_scope.setattr(deck_quality,"_gate_intact",lambda _: gate)
+                    _consume_local_producer(dict(binding=consumer_binding),[],[],evidence,{},[],INITIAL_NAMESPACE)
+                    for field in consumer_binding:
+                        changed = {**consumer_binding,field:"different"}
+                        with pytest.raises(FinalSelectedEvidenceError):
+                            _consume_local_producer(dict(binding=changed),[],[],evidence,{},[],INITIAL_NAMESPACE)
+                    with pytest.raises(FinalSelectedEvidenceError):
+                        _consume_local_producer(dict(binding=producer_binding),[],[],evidence,{},[],INITIAL_NAMESPACE)
+                    for field in ("jobId","operationId","presentationId"):
+                        original_value = gate["binding"][field]
+                        gate["binding"][field] = "different"
+                        with pytest.raises(FinalSelectedEvidenceError):
+                            _consume_local_producer(dict(binding=consumer_binding),[],[],evidence,{},[],INITIAL_NAMESPACE)
+                        gate["binding"][field] = original_value
+                assert await recovery._verify_producer_rows(session,manifest,archive) is not None
+                assert (await session.get(PresentationGenerationJob,parent_id)).model_dump(mode="json") == archive["job"]
+                for field in ("instructions","presentation_id"):
+                    altered = deepcopy(consumer.request_payload)
+                    altered[field] = "different"
+                    if field == "presentation_id":
+                        with pytest.raises(recovery.PartialRecoveryRejected):
+                            recovery.frozen_episode_payload(altered,manifest)
+                    else:
+                        assert recovery.digest(recovery.frozen_episode_payload(altered,manifest)) != manifest["frozen_request_digest"]
+                saved = consumer.request_payload
+                altered = deepcopy(saved)
+                altered[recovery.LINEAGE_KEY]["source_job_id"] = str(uuid.uuid4())
+                consumer.request_payload = altered
+                with pytest.raises(recovery.PartialRecoveryRejected):
+                    await recovery.verify_episode(session,child,consumer)
+                consumer.request_payload = saved
+                await session.rollback()
+            # A failed consumer can itself become a preserved producer. Its
+            # original header envelope stays on the original producing job.
+            async with maker() as session:
+                previous = await session.get(WorkspaceOperation,child_id)
+                previous.state = "failed"
+                previous_job = await session.get(PresentationGenerationJob,consumer_id)
+                previous_job.state = "failed"
+                await session.commit()
+                await session.refresh(previous)
+                await session.refresh(previous_job)
+                previous_rows = list(await session.scalars(select(AuthoredSlideCheckpoint).where(
+                    AuthoredSlideCheckpoint.job_id == consumer_id).order_by(AuthoredSlideCheckpoint.slide_index)))
+                previous_task = await session.get(AsyncPresentationGenerationTaskModel,previous_job.task_id)
+                previous_seal = (await storage_seals(session,[child_id]))[str(child_id)]
+                next_archive = dict(schema=recovery.ARCHIVE_V2,job=previous_job.model_dump(mode="json"),
+                    task=previous_task.model_dump(mode="json"),checkpoints=[r.model_dump(mode="json") for r in previous_rows],
+                    operation_refs=[recovery._operation_reference(previous,previous_seal,tenant="partial-test"),
+                        *archive["operation_refs"]])
+                next_pages = [{**page,"row_digest":recovery.digest(row.model_dump(mode="json"))}
+                              for page,row in zip(pages,previous_rows,strict=True)]
+                next_manifest = {**manifest,"operation_id":str(child_id),"presentation_id":str(previous.presentation_id),
+                    "job_id":str(consumer_id),"archive_digest":recovery.digest(next_archive),"pages":next_pages,
+                    "frozen_request_digest":recovery.digest(recovery._frozen_payload(previous_job.request_payload))}
+                next_plan = recovery.PartialRecovery(next_manifest,next_archive,previous_rows,recovery.digest(next_manifest))
+                next_presentation,next_conversation = await _fork_append_only_svg_recovery_workspace(session,previous,
+                    await session.get(PresentationModel,previous.presentation_id),next_plan)
+                next_operation = WorkspaceOperation(owner_id=previous.owner_id,owner_scope=previous.owner_scope,
+                    presentation_id=next_presentation.id,conversation_id=next_conversation.id,
+                    retry_of_operation_id=previous.id,anchor_position=1,kind="presentation.generate",state="queued",
+                    request_payload=dict(recovery_revision=recovery.REVISION,principal_tenant_id="partial-test"),
+                    request_hash="5"*64,idempotency_key_hash="6"*64,expected_revision=0)
+                session.add(next_operation)
+                await session.flush()
+                next_job = await recovery.rebind_episode(session,previous,next_operation,next_plan,key_hash="7"*64)
+                await session.commit()
+                next_operation_id,next_job_id = next_operation.id,next_job.id
+            async with maker() as session:
+                next_job = await session.get(PresentationGenerationJob,next_job_id)
+                next_operation = await session.get(WorkspaceOperation,next_operation_id)
+                assert await recovery.verify_episode(session,next_operation,next_job) == next_manifest
+                next_ctx = SimpleNamespace(snapshot=deepcopy(next_job.svg_style_snapshot),partial_recovery_manifest=next_manifest,
+                    raster_reconstruction=False,source_reflow=False)
+                assert await headers.prepare_document_header(next_ctx,request,next_job.presentation_id,
+                    PresentationOutlineModel.model_validate(next_job.authored_outline),"en",next_job,
+                    checkpoint=runner,async_session_maker=maker,read_png=runner,write_png=runner,
+                    page_runner=runner,page_hooks_factory=runner,state_factory=runner) is next_ctx
+                runner.assert_not_called()
+                assert await recovery._verify_producer_rows(session,next_manifest,next_archive) is not None
+                assert await recovery._verify_producer_rows(session,manifest,archive) is not None
+            async with maker() as session:
+                original = await session.get(AuthoredSlideCheckpoint,rows[0].id)
+                original.svg_checkpoint = {**original.svg_checkpoint,"input_digest":"tampered"}
+                await session.commit()
+            async with maker() as session:
+                with pytest.raises(recovery.PartialRecoveryRejected,match="history_changed"):
+                    await recovery._verify_producer_rows(session,manifest,archive)
     finally:
         await engine.dispose()
 
