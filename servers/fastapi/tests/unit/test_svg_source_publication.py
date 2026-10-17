@@ -11,6 +11,7 @@ from services.svg_contract import source_digest
 
 @pytest.mark.parametrize("mutation", [None, "reorder", "delete", "content", "marker", "receipt", "unverified"])
 def test_source_publication_preserves_verified_svg_and_rejects_mutations(monkeypatch, mutation):
+    real_read_svg_slide_assets = mutations.read_svg_slide_assets
     canvas = SimpleNamespace(width_px=1280, height_px=720)
     marker = {"schemaVersion": "svg-source-preservation/v1", "manifestDigest": "sha256:" + "a" * 64, "pageCount": 2}
     presentation = SimpleNamespace(
@@ -251,6 +252,81 @@ def test_source_publication_preserves_verified_svg_and_rejects_mutations(monkeyp
             finally:
                 await engine.dispose()
         asyncio.run(check_recovery_source_read())
+
+        async def check_publication_source_reuse():
+            import uuid
+            from services import artifact_store, svg_asset_persistence, svg_asset_resolver
+            from utils import owner_context
+
+            owner = uuid.uuid4()
+            pointer = {"ref": "ancestor-source", "sha256": "a" * 64}
+            source = SimpleNamespace(presentation_id=uuid.uuid4(), digest="sha256:" + "a" * 64,
+                slots=[], offered_pages=[SimpleNamespace(page_index=i, slot_ids=[]) for i in range(12)])
+            for scenario in ("unchanged", "placement_changed", "producer_changed", "ledger_changed"):
+                state = {"producer_unchanged": True, "ledger_unchanged": True}
+                snapshot = {"tokens": {}}
+                target = SimpleNamespace(id=uuid.uuid4(), owner_id=owner, revision=0,
+                    n_slides=0, instructions=None, is_svg=lambda: True,
+                    theme={"svg": {"styleSnapshot": snapshot}})
+                pages = [SimpleNamespace(id=uuid.uuid4(), index=i, owner_id=owner,
+                    is_svg=lambda: True, svg_content=finalize_svg(body, index=i, n=12,
+                        style_snapshot=snapshot), properties={"image": f"page-{i}.png"},
+                    content={"svgReceipt": {"quality": {"passed": True, "verified": True}},
+                        "svgAssetManifest": {"schemaVersion": "svg-slide-assets/v1",
+                            "canonicalVersion": "svg-static/v2", "sourceManifest": deepcopy(pointer),
+                            "screenPlacement": {"ref": str(i)}, "sourcePageIndex": i, "slideRevision": 1}})
+                    for i in range(12)]
+                transaction = object()
+                publishing = SimpleNamespace(flush=AsyncMock(), scalars=AsyncMock(return_value=pages),
+                    add=lambda row: None, get_transaction=lambda: transaction)
+
+                async def full_source_check(session, presentation, manifest, value, current_owner, tenant):
+                    assert session is publishing and presentation is target
+                    assert manifest.digest == source.digest and value == pointer
+                    assert current_owner == owner and tenant == "tenant"
+                    return all(state.values())
+
+                async def load_placement(session, service, *, pointer, **kwargs):
+                    index = int(pointer["ref"])
+                    return SimpleNamespace(purpose="screen", slide_revision=1,
+                        canonical_svg_digest=("sha256:" + "b" * 64
+                            if scenario == "placement_changed" and index == 7
+                            else source_digest(pages[index].svg_content)), placements=[],
+                        validate_source=lambda manifest, **kwargs: None)
+
+                resolved_indices = []
+
+                async def resolve(svg, **kwargs):
+                    resolved_indices.append(kwargs["page_index"])
+                    if kwargs["page_index"] == 11 and scenario in {"producer_changed", "ledger_changed"}:
+                        state[scenario.replace("_changed", "_unchanged")] = False
+                    return svg
+
+                full_check = AsyncMock(side_effect=full_source_check)
+                with monkeypatch.context() as local:
+                    local.setattr(mutations, "read_svg_slide_assets", real_read_svg_slide_assets)
+                    local.setattr(mutations, "_verified_inherited_slide_source", full_check)
+                    local.setattr(artifact_store, "configured_public_artifact_service", lambda: object())
+                    local.setattr(svg_asset_persistence, "load_source_manifest_pointer", AsyncMock(return_value=source))
+                    local.setattr(svg_asset_persistence, "load_placement_manifest_pointer", AsyncMock(side_effect=load_placement))
+                    local.setattr(svg_asset_resolver, "resolve_svg_for_render", AsyncMock(side_effect=resolve))
+                    local.setattr(owner_context, "get_current_owner_id", lambda: owner)
+                    local.setattr(owner_context, "get_current_tenant_id", lambda: "tenant")
+                    if scenario == "unchanged":
+                        await mutations.refresh_svg_page_numbers(publishing, target)
+                        assert target.n_slides == 12
+                    else:
+                        with pytest.raises(ValueError, match="svg_asset_revision_binding_invalid"):
+                            await mutations.refresh_svg_page_numbers(publishing, target)
+                        assert target.n_slides == 0
+                if scenario == "placement_changed":
+                    assert full_check.await_count == 1
+                    assert resolved_indices == list(range(7))
+                else:
+                    assert full_check.await_count == 2
+                    assert resolved_indices == list(range(12))
+
+        asyncio.run(check_publication_source_reuse())
         from uuid import uuid4
         from pydantic import ValidationError
         from models.sql.public_artifact import ArtifactRef, artifact_storage_key

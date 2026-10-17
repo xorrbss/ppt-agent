@@ -1,5 +1,6 @@
 """Keep system page numbers and derivatives coherent after structural edits."""
 from copy import deepcopy
+import logging
 from sqlalchemy import select
 from models.sql.slide import SlideModel
 from services.authored_canvas import presentation_canvas_contract
@@ -109,7 +110,7 @@ def _raster_redesign_pin(slide):
     return pin if pin is not None and receipt.get("rasterSourcePageNumber") in pin.automatic_redesign_pages else None
 
 
-async def read_svg_slide_assets(session, presentation, slide):
+async def read_svg_slide_assets(session, presentation, slide, *, _source_verifier=None):
     """Read v2 asset bindings using the current authenticated principal."""
     metadata = (slide.content or {}).get("svgAssetManifest")
     if metadata is None:
@@ -131,7 +132,8 @@ async def read_svg_slide_assets(session, presentation, slide):
                                                 owner_id=owner, tenant_id=tenant)
     placement = await load_placement_manifest_pointer(session, service, pointer=metadata.get("screenPlacement"),
                                                       owner_id=owner, tenant_id=tenant)
-    if ((source.presentation_id != presentation.id and not await _verified_inherited_slide_source(session, presentation, source, metadata.get("sourceManifest"), owner, tenant)) or placement.purpose != "screen"
+    verify_source = _source_verifier or _verified_inherited_slide_source
+    if ((source.presentation_id != presentation.id and not await verify_source(session, presentation, source, metadata.get("sourceManifest"), owner, tenant)) or placement.purpose != "screen"
             or placement.slide_revision != metadata.get("slideRevision")
             or placement.canonical_svg_digest != source_digest(slide.svg_content)):
         raise ValueError("svg_asset_revision_binding_invalid")
@@ -161,6 +163,44 @@ async def read_svg_slide_assets(session, presentation, slide):
     return source, placement, materialized
 
 
+class _PublicationSourceVerification:
+    """Share only successful ancestor reads until this publication's final check."""
+
+    def __init__(self, session, presentation):
+        self.session, self.presentation = session, presentation
+        self.transaction = None
+        self.sources = {}
+
+    async def verify(self, session, presentation, source, pointer, owner, tenant):
+        from utils.hashing import canonical_json_sha256
+
+        transaction = session.get_transaction()
+        if (session is not self.session or presentation is not self.presentation
+                or transaction is None
+                or (self.transaction is not None and transaction is not self.transaction)):
+            raise ValueError("svg_asset_revision_binding_invalid")
+        self.transaction = transaction
+        key = (str(presentation.id), presentation.revision, str(owner), str(tenant),
+               str(source.presentation_id), source.digest, canonical_json_sha256(pointer))
+        if key not in self.sources:
+            if not await _verified_inherited_slide_source(
+                    session, presentation, source, pointer, owner, tenant):
+                return False
+            self.sources[key] = (deepcopy(source), deepcopy(pointer), owner, tenant)
+        return True
+
+    async def revalidate(self):
+        from utils.owner_context import get_current_owner_id, get_current_tenant_id
+
+        for key, (source, pointer, owner, tenant) in self.sources.items():
+            if (self.session.get_transaction() is not self.transaction
+                    or key[:4] != (str(self.presentation.id), self.presentation.revision,
+                        str(get_current_owner_id()), str(get_current_tenant_id()))
+                    or not await _verified_inherited_slide_source(
+                        self.session, self.presentation, source, pointer, owner, tenant)):
+                raise ValueError("svg_asset_revision_binding_invalid")
+
+
 async def refresh_svg_page_numbers(session, presentation, *, operation_id=None, attempt_token=None,
                                    expected_revision=None, source_manifest=None):
     if not presentation.is_svg():
@@ -186,6 +226,7 @@ async def refresh_svg_page_numbers(session, presentation, *, operation_id=None, 
         if not isinstance(header_outline, list) or len(header_outline) != len(slides):
             raise ValueError("svg_common_header_binding_incomplete")
         validate_common_header_outline(snapshot, stored)
+    source_verification = _PublicationSourceVerification(session, presentation)
     for index, slide in enumerate(slides):
         if not slide.is_svg() or not slide.svg_content:
             raise ValueError("svg_document_mixed_source")
@@ -214,7 +255,8 @@ async def refresh_svg_page_numbers(session, presentation, *, operation_id=None, 
             slide.index = index
             session.add(slide)
             continue
-        assets = await read_svg_slide_assets(session, presentation, slide)
+        assets = await read_svg_slide_assets(session, presentation, slide,
+            _source_verifier=source_verification.verify)
         if _raster_preserve_pin(slide) is not None:
             if assets is None or slide.index != index:
                 raise ValueError("raster_publication_page_binding_invalid")
@@ -253,6 +295,9 @@ async def refresh_svg_page_numbers(session, presentation, *, operation_id=None, 
         elif content != slide.content:
             set_svg_page(slide, svg_content=final, content=content)
         session.add(slide)
+    # Recheck every consumed ancestor after all page work, before the revision
+    # CAS. The local reuse never becomes a durable receipt or skips page assets.
+    await source_verification.revalidate()
     presentation.n_slides = len(slides)
     from services.generation_core.quality.page_outcome import review_page_indices
     metadata = dict(presentation.theme.get("svg", {}))
@@ -394,7 +439,10 @@ async def _verified_inherited_slide_source(session, presentation, source, pointe
             return False
         if lease.tzinfo is None:
             lease = lease.replace(tzinfo=timezone.utc)
-        if type(operation.expected_revision) is not int or lease <= datetime.now(timezone.utc) or presentation.revision not in {operation.expected_revision, operation.expected_revision + 1}:
+        if lease <= datetime.now(timezone.utc):
+            logging.getLogger(__name__).warning("svg_asset_operation_lease_expired")
+            return False
+        if type(operation.expected_revision) is not int or presentation.revision not in {operation.expected_revision, operation.expected_revision + 1}:
             return False
     elif operation.state in {"completed", "succeeded"}:
         if operation.result_revision is None or presentation.revision < operation.result_revision or job.state not in {"published", "completed", "succeeded"}:
