@@ -206,7 +206,36 @@ async def test_batch_handler_publishes_every_slide_with_one_revision_bump(
         )
 
         context = _context(claim)
+        writes_started = []
+        progress_transactions = []
+        original_publish = handler_module.publish_authored_page_remake
+        original_progress, original_extend = context.progress, context.extend_lease
+
+        async def publish_with_write_lock(**kwargs):
+            writes_started.append(True)
+            assert session.in_transaction()
+            return await original_publish(**kwargs)
+
+        async def progress_outside_write_transaction(**kwargs):
+            progress_transactions.append((kwargs["stage"], session.in_transaction()))
+            assert not writes_started or not session.in_transaction()
+            await original_progress(**kwargs)
+            # Publication already committed; a telemetry fence miss cannot
+            # convert that success into a failed operation.
+            return kwargs["stage"] != "batch_remake_completed"
+
+        async def extend_before_writes(**kwargs):
+            assert not writes_started
+            return await original_extend(**kwargs)
+
+        monkeypatch.setattr(handler_module, "publish_authored_page_remake", publish_with_write_lock)
+        context.progress = progress_outside_write_transaction
+        context.extend_lease = extend_before_writes
         result = await WorkspaceBatchRemakeOperationHandler().execute(context)
+        assert len(writes_started) == 2
+        assert progress_transactions == [
+            ("batch_remake_validating", False), ("batch_remake_completed", False)
+        ]
 
         # The publish is one write transaction, so no heartbeat can renew the
         # lease while it runs: the whole batch has to be paid for up front.

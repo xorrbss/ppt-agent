@@ -277,17 +277,6 @@ class WorkspaceBatchRemakeOperationHandler:
                             "preview_task_id": preview_task_id,
                         }
                     )
-                if (
-                    await context.progress(
-                        stage="batch_remake_publishing",
-                        current=done,
-                        total=total,
-                        percent=5 + round(85 * done / total),
-                    )
-                    is False
-                ):
-                    raise WorkspaceOperationLeaseLost("operation_lease_lost")
-
             payload = _batch_payload(claim.presentation_id, slide_results, total)
             if payload["published_count"] == 0:
                 await session.rollback()
