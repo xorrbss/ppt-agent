@@ -1613,7 +1613,7 @@ async def create_workspace_command(
         except ValueError as error:
             raise WorkspaceServiceError(str(error), status_code=422, retryable=False) from error
     bind_presentation_principal = request.command_type in {
-        "export.pptx", "export.pdf", "slide.regenerate.preview", "slide.regenerate",
+        "export.pptx", "export.pdf", "slide.regenerate.preview", "slide.regenerate", "slide.regenerate.batch",
     }
     bind_presentation_principal = bind_presentation_principal or svg_header_design
     svg_review = request.command_type == "quality.review" and request.context.get("mode") == "analyze_only"

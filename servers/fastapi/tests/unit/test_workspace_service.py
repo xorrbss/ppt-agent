@@ -111,7 +111,7 @@ def test_generation_action_principal_binds_exact_owner_and_verified_local_tenant
     asyncio.run(_generation_action_principal_bridge(tmp_path, monkeypatch))
 
 
-@pytest.mark.parametrize("kind",["slide.regenerate.preview","slide.regenerate"])
+@pytest.mark.parametrize("kind",["slide.regenerate.preview","slide.regenerate","slide.regenerate.batch"])
 def test_preview_principal_bridge_keeps_owner_and_refuses_normal_tenant_switch(tmp_path,monkeypatch,kind):
     asyncio.run(_preview_principal_bridge(tmp_path,monkeypatch,kind))
 
@@ -162,6 +162,13 @@ async def _preview_principal_bridge(tmp_path,monkeypatch,kind):
                     await service.create_workspace_command(session,presentation_id=presentation.id,request=request)
             async with maker() as session:
                 assert await service.create_workspace_command(session,presentation_id=presentation.id,request=request,allow_local_development=True)=="preview-created"
+            assert observed==[(owner.id,"local-development")]
+            assert get_current_owner_id()==owner.id and get_current_tenant_id()=="service-default"
+            with operation_principal(uuid.uuid4(),"service-default"):
+                async with maker() as session:
+                    with pytest.raises(WorkspaceServiceError,match="workspace_operation_principal_conflict"):
+                        await service.create_workspace_command(session,presentation_id=presentation.id,
+                            request=request,allow_local_development=True)
             assert observed==[(owner.id,"local-development")]
             assert get_current_owner_id()==owner.id and get_current_tenant_id()=="service-default"
     finally:
