@@ -344,20 +344,33 @@ def _frozen_payload(payload):
     return {key: value for key, value in payload.items() if key != LINEAGE_KEY}
 
 
+def _source_request_routing(payload):
+    return {"presentation_id_present": "presentation_id" in payload,
+            "presentation_id": deepcopy(payload.get("presentation_id"))}
+
+
 def frozen_episode_payload(payload, manifest):
     """Project only a verified fork's routing identity back to its producer."""
     frozen = deepcopy(_frozen_payload(payload))
     if manifest.get("append_only_recovery") is not True:
         return frozen
     lineage = payload.get(LINEAGE_KEY) or {}
-    if (lineage.get("schema") != "svg-partial-recovery-lineage/v2"
+    routing = manifest.get("source_request_routing")
+    if (not isinstance(routing, dict)
+            or set(routing) != {"presentation_id_present", "presentation_id"}
+            or type(routing.get("presentation_id_present")) is not bool
+            or (routing["presentation_id_present"] is False and routing["presentation_id"] is not None)
+            or lineage.get("schema") != "svg-partial-recovery-lineage/v2"
             or lineage.get("source_job_id") != manifest.get("job_id")
             or lineage.get("source_presentation_id") != manifest.get("presentation_id")
             or lineage.get("manifest_hash") != digest(manifest)
             or frozen.get("presentation_id") != lineage.get("presentation_id")
             or lineage.get("presentation_id") == manifest.get("presentation_id")):
         reject("svg_partial_recovery_episode_unbound")
-    frozen["presentation_id"] = manifest["presentation_id"]
+    if routing["presentation_id_present"]:
+        frozen["presentation_id"] = deepcopy(routing["presentation_id"])
+    else:
+        frozen.pop("presentation_id", None)
     return frozen
 
 
@@ -1923,6 +1936,7 @@ async def build_manifest(session, operation, *, presentation_revision):
         "owner_id": str(owner), "tenant_id": tenant, "job_id": str(job.id),
         "expected_page_count": job.total_slides, "archive_digest": digest(archive),
         "archive_schema": ARCHIVE_V2, "append_only_recovery": True,
+        "source_request_routing": _source_request_routing(job.request_payload),
         "frozen_request_digest": digest(_frozen_payload(job.request_payload)),
         "frozen_style_digest": digest(job.svg_style_snapshot),
         "canvas_digest": digest(request_canvas_metadata(request)),
@@ -2158,7 +2172,9 @@ async def verify_episode(session, operation, job):
             or str(job.id) != (lineage.get("job_id") if append_only else manifest.get("job_id"))
             or (append_only and (lineage.get("presentation_id") != str(job.presentation_id)
                 or lineage.get("source_job_id") != manifest.get("job_id")
-                or lineage.get("source_presentation_id") != manifest.get("presentation_id")))
+                or lineage.get("source_presentation_id") != manifest.get("presentation_id")
+                or manifest.get("source_request_routing") != _source_request_routing(
+                    (archive.get("job") or {}).get("request_payload") or {})))
             or digest(frozen_episode_payload(job.request_payload, manifest)) != manifest.get("frozen_request_digest")
             or digest(job.svg_style_snapshot) != manifest.get("frozen_style_digest")
             or job.authored_outline != (archive.get("job") or {}).get("authored_outline")

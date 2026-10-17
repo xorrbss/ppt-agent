@@ -313,7 +313,10 @@ async def _generation_action_principal_bridge(tmp_path, monkeypatch):
 def test_svg_timeout_repurchase_requires_bound_consent_and_preserves_completed_sources(tmp_path, monkeypatch, mixed):
     if mixed == "append_only":
         asyncio.run(_svg_append_only_recovery_contract(tmp_path, monkeypatch))
-        asyncio.run(_svg_partial_append_only_contract(tmp_path, monkeypatch))
+        for routing in ("uuid", "null", "missing"):
+            case_dir = tmp_path / routing
+            case_dir.mkdir()
+            asyncio.run(_svg_partial_append_only_contract(case_dir, monkeypatch, source_routing=routing))
         return
     asyncio.run(_svg_timeout_repurchase_bound_consent(tmp_path, monkeypatch, mixed=mixed))
 
@@ -2825,7 +2828,7 @@ async def _blocked_retry_resumes_same_operation_after_assets_are_ready(
         await engine.dispose()
 
 
-async def _svg_partial_append_only_contract(tmp_path, monkeypatch):
+async def _svg_partial_append_only_contract(tmp_path, monkeypatch, *, source_routing="uuid"):
     """Real isolated rows: fork, prepare, and fail closed without buying calls."""
     from copy import deepcopy
     from types import SimpleNamespace
@@ -2886,6 +2889,10 @@ async def _svg_partial_append_only_contract(tmp_path, monkeypatch):
             await session.flush()
             payload = dict(presentation_id=str(presentation.id), strategy="svg", common_header_mode="uniform",
                 instructions="Keep every source condition", content="Three source pages")
+            if source_routing == "null":
+                payload["presentation_id"] = None
+            elif source_routing == "missing":
+                payload.pop("presentation_id")
             parent = PresentationGenerationJob(task_id=task.id,presentation_id=presentation.id,
                 workspace_operation_id=source.id,idempotency_key_hash="1"*64,
                 request_sha256=request_sha256(payload),request_payload=payload,
@@ -2971,6 +2978,7 @@ async def _svg_partial_append_only_contract(tmp_path, monkeypatch):
             manifest = dict(recovery_revision=recovery.REVISION,append_only_recovery=True,
                 operation_id=str(source.id),source_operation_id=str(source.id),owner_id=str(source.owner_id),
                 tenant_id="partial-test",presentation_id=str(source.presentation_id),job_id=str(parent.id),
+                source_request_routing=recovery._source_request_routing(parent.request_payload),
                 archive_schema=recovery.ARCHIVE_V2,archive_digest=recovery.digest(archive),expected_page_count=3,
                 known_indices=[0],unknown_indices=[1],new_indices=[2],pages=pages,
                 frozen_request_digest=recovery.digest(recovery._frozen_payload(parent.request_payload)),
@@ -3097,6 +3105,7 @@ async def _svg_partial_append_only_contract(tmp_path, monkeypatch):
                               for page,row in zip(pages,previous_rows,strict=True)]
                 next_manifest = {**manifest,"operation_id":str(child_id),"presentation_id":str(previous.presentation_id),
                     "job_id":str(consumer_id),"archive_digest":recovery.digest(next_archive),"pages":next_pages,
+                    "source_request_routing":recovery._source_request_routing(previous_job.request_payload),
                     "frozen_request_digest":recovery.digest(recovery._frozen_payload(previous_job.request_payload))}
                 next_plan = recovery.PartialRecovery(next_manifest,next_archive,previous_rows,recovery.digest(next_manifest))
                 next_presentation,next_conversation = await _fork_append_only_svg_recovery_workspace(session,previous,

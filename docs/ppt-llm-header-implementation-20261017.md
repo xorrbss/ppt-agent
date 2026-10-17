@@ -135,3 +135,5 @@ UNKNOWN 호출은 Codex/gpt-6.1-sol, repair/slide_index=7, 논리 호출 88a3769
 - 실제 PostgreSQL 상태에 대한 롤백되는 읽기 전용 service 검토는 알려진 11쪽과 미확정 8쪽을 분리하는 계획을 산출했다. 새 본문 작성은 1회이며, 기존 동결 정책의 검토·수정 슬롯과 한도는 유지된다. 원본 operation/job/checkpoint/UNKNOWN 변경이나 복구 작업 제출, provider 호출은 수행하지 않았다.
 - API와 생성 워커를 관리 스크립트로 재시작한 뒤 실제 인증된 웹 recovery-plan GET도 HTTP 200과 동일한 11쪽/1쪽 분리를 반환했다. `normal12-final-readonly-recovery-plan.json`에 근거를 남겼다. 별도 PostgreSQL 읽기 전용 대조에서는 원 operation·job·12 checkpoint·admission·logical call 전체 행이 이전 terminal 덤프와 동일했다(`normal12-post-fix-preservation-proof.json`). 실제 복구 실행과 최종 게시·다운로드는 아직 수행하지 않았다.
 - 호출 한도, deadline, UNKNOWN 상태, 디자인·원본 보존·게시 기준은 완화하지 않았다. 실제 웹 생성과 게시·다운로드 검증 및 main 병합은 계속 별도 완료 조건이다.
+
+사용자가 추가 확인 없이 계속 진행하도록 승인한 후 준비된 복구 action을 제출했으나 provider admission 이전에 `svg_partial_recovery_episode_unbound`로 거절됐다. 실제 원본 durable request의 `presentation_id`는 null인 반면 격리 검증은 실제 UUID만 사용한 차이를 확인했다. 복구 manifest에 원본 요청 필드의 존재 여부와 정확한 값을 봉인하고 archive 원문과 다시 대조하여 없음·null·UUID를 그대로 복원하도록 수정했다. 전역 frozen digest를 완화하지 않으며 기존 HTTP 실패 응답은 보존한다. 같은 좁은 append-only 노드에 세 요청 형태의 첫·두 번째 복구 및 헤더 재사용을 포함해 8.19초에 통과했고 독립 코드 검토도 완료했다.
