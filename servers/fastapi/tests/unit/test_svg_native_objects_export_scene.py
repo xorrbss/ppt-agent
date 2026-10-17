@@ -288,7 +288,7 @@ def test_native_objects_bind_pptx_bundle_identity_and_semantic_digest_only():
     assert with_native.semantic_digest != without.semantic_digest
 
 
-def test_raster_grid_projects_to_the_converter_payload_the_grid_draws(monkeypatch):
+def test_raster_grid_projects_to_the_converter_payload_the_grid_draws(monkeypatch, tmp_path):
     import xml.etree.ElementTree as ET
 
     from services.generation_core.drivers.svg.export_projection import converter_payload
@@ -327,6 +327,7 @@ def test_raster_grid_projects_to_the_converter_payload_the_grid_draws(monkeypatc
     from copy import deepcopy
     from services.generation_core.drivers.svg.export_scene import _source_table_vertical_padding
     from services.generation_core.drivers.svg.native_publish import _entry
+    from services.generation_core.drivers.svg.native_declarations import native_binding_digest
     from workers.public_svg_pptx_convert import VENDOR_ROOT
     monkeypatch.syspath_prepend(str(VENDOR_ROOT))
     from svg_to_pptx.conversion_context import ConversionContext, scoped_conversion_context
@@ -349,7 +350,10 @@ def test_raster_grid_projects_to_the_converter_payload_the_grid_draws(monkeypatc
     custom_root = ET.fromstring('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 320">' + ''.join(body) + '</svg>')
     custom_item = _entry(custom_root, {"id": "table-font-custom", "kind": "table",
                          "raw": {"rows": source_rows, "headerRows": 1}},
-                         width=1280, height=320, pt_per_px=factor)
+                         width=1280, height=320, pt_per_px=factor,
+                         svg=ET.tostring(custom_root, encoding="unicode"), source_preservation=None,
+                         native_group_ids=frozenset({"table-font-custom"}), native_group_ids_complete=True,
+                         binding_digest=native_binding_digest(ET.tostring(custom_root, encoding="unicode")))
     frozen_payload = deepcopy(custom_item.payload)
     projected = converter_payload(custom_item, pt_per_px=factor)
     assert projected["rows"][0][0]["font_size"] == 16
@@ -366,6 +370,73 @@ def test_raster_grid_projects_to_the_converter_payload_the_grid_draws(monkeypatc
 
     attrs = padding_attrs(conversion_context=ConversionContext(1280, 320, 14400000, 3600000, legacy=False), pptx_structure="flat")
     assert custom_item.payload == frozen_payload
+
+    # Real source paragraph baselines survive the projection and serializer,
+    # including mixed emphasis, without changing source data or row geometry.
+    from services.generation_core.drivers.svg.native_table import apply_drawn_table_style
+    from svg_to_pptx.native_objects.table import _table_cell_paragraphs
+    spaced_rows = [["확인 사항"], ["첫 문단\n두 번째 문단\n마지막 문단"]]
+    spaced_body = ('<g id="native-table-paragraphs">'
+        '<rect x="90" y="60" width="610" height="50" fill="#F1F5F9"/>'
+        '<rect x="90" y="110" width="610" height="320" fill="#FFFFFF"/>'
+        '<text x="114" y="95" font-family="Noto Sans KR" font-size="22" fill="#111111">확인 사항</text>'
+        '<text x="114" y="160" font-family="Noto Sans KR" font-size="24" fill="#111111">'
+        '<tspan x="114" y="160">첫 문단</tspan><tspan x="114" y="252">두 번째 문단</tspan>'
+        '<tspan x="114" y="354" fill="#2563EB" font-weight="700">마지막 문단</tspan></text></g>')
+    spaced_svg = _svg(spaced_body)
+    spaced_root = ET.fromstring(spaced_svg)
+    spaced_item = _entry(spaced_root, {"id": "native-table-paragraphs", "kind": "table",
+                         "raw": {"rows": spaced_rows, "headerRows": 1}},
+                         width=1188, height=840, pt_per_px=EMU_PER_PX / 12700,
+                         svg=spaced_svg, source_preservation=None,
+                         native_group_ids=frozenset({"native-table-paragraphs"}), native_group_ids_complete=True,
+                         binding_digest=native_binding_digest(spaced_svg))
+    frozen_item = deepcopy(spaced_item.to_wire())
+    spaced = converter_payload(spaced_item, pt_per_px=EMU_PER_PX / 12700)
+    apply_drawn_table_style(spaced, spaced_item, spaced_root)
+    cell = spaced["rows"][1][0]
+    assert [p["line_spacing"] for p in cell["paragraphs"]] == [30, 30, 30]
+    assert [p["space_before"] for p in cell["paragraphs"]] == [0, 62, 72]
+    assert cell["padding"] == {"top": 26, "bottom": 70}
+    assert cell["valign"] == "top"
+    assert [p["runs"][0]["text"] for p in cell["paragraphs"]] == spaced_rows[1][0].split("\n")
+    assert cell["paragraphs"][-1]["runs"][0]["color"] == "#2563EB"
+    assert cell["paragraphs"][-1]["runs"][0]["bold"] is True
+    assert spaced_item.to_wire() == frozen_item
+    explicit_padding = converter_payload(spaced_item, pt_per_px=EMU_PER_PX / 12700)
+    explicit_padding["rows"][1][0]["padding"] = {"top": 5, "bottom": 7, "left": 12}
+    apply_drawn_table_style(explicit_padding, spaced_item, spaced_root)
+    explicit_cell = explicit_padding["rows"][1][0]
+    assert explicit_cell["padding"] == {"top": 5, "bottom": 7, "left": 12}
+    assert explicit_cell["valign"] == "middle"
+    assert all("line_spacing" not in paragraph and "space_before" not in paragraph
+               for paragraph in explicit_cell["paragraphs"])
+    assert [p["runs"] for p in explicit_cell["paragraphs"]] == [p["runs"] for p in cell["paragraphs"]]
+    for field in ("line_spacing", "space_before"):
+        invalid_values = [-1, float("nan"), float("inf"), True, None, 1e10]
+        if field == "line_spacing":
+            invalid_values.append(0)
+        for invalid in invalid_values:
+            with pytest.raises(RuntimeError):
+                _table_cell_paragraphs({"paragraphs": [{"text": "원문", field: invalid}]})
+    assert _table_cell_paragraphs({"paragraphs": ["원문"]})[0].line_spacing is None
+    paragraph_dir = tmp_path / "paragraph-native"
+    paragraph_dir.mkdir()
+    spaced_readback, spaced_deck = _convert(paragraph_dir, [spaced_svg], [_sidecar(spaced_item.to_wire())])
+    assert spaced_readback["nativeObjects"] == {"offered": 1, "native": 1, "fellBack": 0, "reasons": []}
+    spaced_table = next(shape.table for shape in _shapes(spaced_deck.slides[0].shapes) if shape.has_table)
+    assert [[c.text for c in row.cells] for row in spaced_table.rows] == spaced_rows
+    assert [row.height for row in spaced_table.rows] == pytest.approx([50 * EMU_PER_PX, 320 * EMU_PER_PX], abs=1)
+    assert sum(row.height for row in spaced_table.rows) == 370 * EMU_PER_PX
+    paragraph_cell = spaced_table.cell(1, 0)
+    assert paragraph_cell.margin_top == 26 * EMU_PER_PX
+    assert paragraph_cell.margin_bottom == 70 * EMU_PER_PX
+    assert [int(p._p.xpath("a:pPr/a:lnSpc/a:spcPts")[0].get("val"))
+            for p in paragraph_cell.text_frame.paragraphs] == [round(30 * EMU_PER_PX / 127)] * 3
+    assert [int(p._p.xpath("a:pPr/a:spcBef/a:spcPts")[0].get("val"))
+            for p in paragraph_cell.text_frame.paragraphs] == [round(gap * EMU_PER_PX / 127) for gap in (0, 62, 72)]
+    assert paragraph_cell.text_frame.paragraphs[-1].runs[0].font.bold is True
+    assert str(paragraph_cell.text_frame.paragraphs[-1].runs[0].font.color.rgb) == "2563EB"
 
     from workers import public_svg_pptx_convert as runtime
     import hashlib

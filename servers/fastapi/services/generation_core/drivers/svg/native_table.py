@@ -293,10 +293,13 @@ def apply_drawn_table_style(projected: dict, item, root) -> None:
              for merge in item.payload.get("mergedCells", []) if merge["rowSpan"] == 1}
     placed = _place(prims.texts, xs, ys, cells, spans)
     for (row, column), text in placed.items():
-        if text.uniform or not text.run_lines:
+        cell = projected["rows"][row][column]
+        geometry = (None if any(edge in cell.get("padding", {}) for edge in ("top", "bottom"))
+                    else _paragraph_geometry(text, ys[row], ys[row + 1]))
+        if not text.run_lines or (text.uniform and geometry is None):
             continue
         paragraphs = []
-        for line in text.run_lines:
+        for index, line in enumerate(text.run_lines):
             runs = []
             for source in line:
                 run = {"text": source.text, "font_size": source.size,
@@ -307,7 +310,32 @@ def apply_drawn_table_style(projected: dict, item, root) -> None:
                 if family:
                     run["font_family"] = family
                 runs.append(run)
-            paragraphs.append({"runs": runs})
-        cell = projected["rows"][row][column]
+            paragraphs.append({"runs": runs, **(geometry[0][index] if geometry else {})})
         cell.pop("text", None)
         cell["paragraphs"] = paragraphs
+        if geometry is not None:
+            # Use the same first-baseline/font box as shared table padding;
+            # leave existing horizontal margins and the grid untouched.
+            cell["padding"] = {**cell.get("padding", {}), **geometry[1]}
+            cell["valign"] = "top"
+
+
+def _paragraph_geometry(text: DrawnText, top: float, bottom: float):
+    """Optional canvas-unit spacing for source lines with one common font size."""
+    if (len(text.lines) < 2 or len(text.lines) != len(text.points)
+            or len(text.lines) != len(text.run_lines)
+            or any(run.size != text.size or run.family != text.family
+                   for line in text.run_lines for run in line)
+            or any(abs(point[0] - text.points[0][0]) > 1e-6 for point in text.points)):
+        return None
+    line_box = text.size * 1.25
+    gaps = [text.points[index][1] - text.points[index - 1][1]
+            for index in range(1, len(text.points))]
+    padding = {"top": text.points[0][1] - text.size - top,
+               "bottom": bottom - text.points[-1][1] - text.size * 0.25}
+    if (not math.isfinite(line_box) or line_box <= 0
+            or any(not math.isfinite(gap) or gap < line_box for gap in gaps)
+            or any(not math.isfinite(value) or value < 0 for value in padding.values())):
+        return None
+    return ([{"line_spacing": line_box, "space_before": 0.0 if index == 0 else gaps[index - 1] - line_box}
+             for index in range(len(text.lines))], padding)

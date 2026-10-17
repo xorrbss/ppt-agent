@@ -7,6 +7,7 @@ from typing import Any
 from xml.etree import ElementTree as ET
 
 from ..drawingml.context import ConvertContext, ShapeResult
+from ..conversion_context import current_conversion_context
 from ..drawingml.theme_colors import ThemeColorSpec, color_node_xml
 from ..drawingml.utils import _xml_escape, detect_text_lang, font_px_to_hpt
 from .chart_style import _font_face_xml
@@ -145,6 +146,21 @@ class _TableParagraph:
     text: str
     align: str | None = None
     runs: tuple[_TableRun, ...] | None = None
+    line_spacing: int | None = None
+    space_before: int | None = None
+
+
+def _table_paragraph_spacing(value, field: str, paragraph_idx: int) -> int | None:
+    """Optional canvas units become DrawingML hundredths of a point once."""
+    if field not in value:
+        return None
+    pixels = _number(value[field], f"paragraph {paragraph_idx} {field}")
+    if pixels < 0 or (field == "line_spacing" and pixels == 0):
+        raise RuntimeError(f"Native PPTX table paragraph {paragraph_idx} {field} is out of range")
+    points = round(pixels * current_conversion_context().hundredths_pt_per_unit)
+    if not 0 <= points <= 158400 or (field == "line_spacing" and points == 0):
+        raise RuntimeError(f"Native PPTX table paragraph {paragraph_idx} {field} is out of range")
+    return points
 
 
 def _table_rows(payload: dict[str, Any]) -> list[list[Any]]:
@@ -185,10 +201,12 @@ def _table_cell_paragraphs(
             raise RuntimeError(
                 f"Native PPTX table paragraph {idx} must be a string or object"
             )
-        if set(value) - {"text", "runs", "align"}:
+        if set(value) - {"text", "runs", "align", "line_spacing", "space_before"}:
             raise RuntimeError(
-                f"Native PPTX table paragraph {idx} accepts text/runs/align only"
+                f"Native PPTX table paragraph {idx} contains unsupported fields"
             )
+        line_spacing = _table_paragraph_spacing(value, "line_spacing", idx)
+        space_before = _table_paragraph_spacing(value, "space_before", idx)
         has_text = "text" in value
         has_runs = "runs" in value
         if has_text == has_runs:
@@ -206,7 +224,7 @@ def _table_cell_paragraphs(
                 raise RuntimeError(
                     f"Native PPTX table paragraph {idx} text must be a string"
                 )
-            paragraphs.append(_TableParagraph(text, align))
+            paragraphs.append(_TableParagraph(text, align, line_spacing=line_spacing, space_before=space_before))
             continue
 
         raw_runs = value.get("runs")
@@ -219,7 +237,7 @@ def _table_cell_paragraphs(
             for run_idx, run in enumerate(raw_runs, start=1)
         )
         paragraphs.append(
-            _TableParagraph("".join(run.text for run in runs), align, runs)
+            _TableParagraph("".join(run.text for run in runs), align, runs, line_spacing, space_before)
         )
     return tuple(paragraphs)
 
@@ -974,6 +992,13 @@ def _build_native_table(elem: ET.Element, ctx: ConvertContext, payload: dict[str
                         if paragraph.align is not None or paragraph_align != "l"
                         else "<a:pPr/>"
                     )
+                    spacing_xml = "".join(
+                        f'<a:{tag}><a:spcPts val="{value}"/></a:{tag}>'
+                        for tag, value in (("lnSpc", paragraph.line_spacing), ("spcBef", paragraph.space_before))
+                        if value is not None
+                    )
+                    if spacing_xml:
+                        paragraph_props = paragraph_props[:-2] + ">" + spacing_xml + "</a:pPr>"
                     if paragraph.runs is None:
                         text_run_xml = _table_text_run(
                             paragraph.text,

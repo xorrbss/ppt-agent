@@ -112,6 +112,11 @@ decorating the area. Choose the visual treatment freely within the selected styl
 the source's scope, negation and severity; never invent a warning or turn advice into a ban.
 Never invent links between independent items. In local repair, apply these choices only to
 affected content and its related geometry.
+Before finishing, inspect the complete body's visual weight at the intended page size. If a
+large empty band has no reading or grouping purpose, rebalance existing evidence positions,
+natural line spacing and row heights together. Do not fill it by adding unsupported content,
+repeating evidence or inflating empty table rows or decoration. Keep intentional whitespace
+that clarifies the source; the composition remains yours to choose.
 Use the selected style's complete visual intent and the relevant example evidence together.
 Compare their useful type hierarchy, evidence emphasis, reading flow and image treatment, then
 choose the page's own supported composition. Example labels, company names, numbers, claims
@@ -142,6 +147,11 @@ decorating the area. Choose the visual treatment freely within the selected styl
 the source's scope, negation and severity; never invent a warning or turn advice into a ban.
 Never invent links between independent items. In local repair, apply these choices only to
 affected content and its related geometry.
+Before finishing, inspect the complete body's visual weight at the intended page size. If a
+large empty band has no reading or grouping purpose, rebalance existing evidence positions,
+natural line spacing and row heights together. Do not fill it by adding unsupported content,
+repeating evidence or inflating empty table rows or decoration. Keep intentional whitespace
+that clarifies the source; the composition remains yours to choose.
 Use the selected style and relevant examples together, but choose this page's own supported
 composition. Reference mechanics and copy limits never authorize unsupported SVG, missing
 required source content, page splitting, smaller type or missing required source images.
