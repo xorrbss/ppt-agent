@@ -255,6 +255,87 @@ def test_digest_mismatch_never_reaches_cas(monkeypatch):
     assert invalid_response.value.preview_evidence["candidate_svg"]==task.data["candidate_svg"]
     author.assert_awaited_once()
 
+    # The real frozen v2 binding follows preview through canonicalization,
+    # furniture attestation, measured header quality and publication.
+    from models.presentation_outline_model import PresentationOutlineModel, SlideOutlineModel
+    from services.authored_canvas import presentation_canvas_metadata
+    from services.svg_common_header_v2 import prepare_common_header_v2
+    from services.svg_contract import finalize_svg as canonical_finalize
+    from services.generation_core.drivers.svg import render as render_driver
+    session, presentation, target, task, capture = _harness(monkeypatch)
+    presentation.instructions = None
+    outline = PresentationOutlineModel(slides=[SlideOutlineModel(
+        page_id='stable-preview-page', content='keep', title='Frozen title')])
+    candidate = dict(candidate_id='frozen-preview-header', revision=1,
+        svg='<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"><text id="heading" fill="#111111"/></svg>',
+        body_box=dict(x=64, y=150, width=1152, height=520),
+        fields=[dict(node_id='heading', role='title', value_ref='title',
+            box=dict(x=64, y=25, width=1152, height=70), font_family='Noto Sans KR',
+            font_weight=700, font_size_px=32, line_height_px=45, baseline_offset_px=38,
+            max_lines=2, alignment='left', optional=False)])
+    contract, bindings = prepare_common_header_v2(candidate, outline,
+        presentation_canvas_metadata(presentation.theme), snapshot={})
+    outline.slides[0].common_header = bindings[0]
+    presentation.outlines = outline.model_dump(mode='json')
+    presentation.theme['svg']['styleSnapshot'] = {'common_header': contract}
+    body = ('<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">'
+            '<text x="80" y="200" font-family="Noto Sans KR" font-size="20" fill="#111111">keep</text></svg>')
+    target.svg_content = canonical_finalize(body, index=0, n=1,
+        style_snapshot=presentation.theme['svg']['styleSnapshot'], header_page=bindings[0])
+    frozen_inputs = deepcopy((presentation.theme['svg']['styleSnapshot'], presentation.outlines))
+    author = AsyncMock(return_value=SimpleNamespace(svg_content=body, receipt={},
+        native_declarations=None, raw_response='body-only provider response'))
+    monkeypatch.setattr(remake, 'author_slide_svg', author)
+    monkeypatch.setattr(remake, 'finalize_svg', canonical_finalize)
+    png = capture.return_value.png
+    capture.side_effect = lambda svg, **kwargs: SimpleNamespace(png=png, quality=dict(
+        passed=True, verified=False, measurement_complete=True, source_digest=source_digest(svg), failures=[]))
+    header_checks, header_failure = [], [False]
+    def apply_header(quality, svg, frozen_contract, binding, furniture):
+        assert frozen_contract == contract and binding == bindings[0]
+        assert furniture['generated_common_header']['page'] == bindings[0]
+        assert furniture['svg_digest'] == source_digest(svg)
+        header_checks.append(svg)
+        quality['common_header'] = dict(passed=not header_failure[0], header_digest=contract['digest'],
+            page_digest=binding['digest'], title_digest=binding['title_digest'])
+        if header_failure[0]:
+            quality['passed'] = False
+    monkeypatch.setattr(render_driver, '_apply_common_header_quality', apply_header)
+    saved = AsyncMock()
+    monkeypatch.setattr('services.authored_page_remake_service._set_task', saved)
+    image = task.data['candidate_image']
+    monkeypatch.setattr(remake, '_save_slide_pngs', lambda *args: [image])
+    asyncio.run(remake.preview_svg(presentation, [target], 0, SimpleNamespace(instruction=None), task, session))
+    assert author.await_args.kwargs['header_page'] == bindings[0]
+    assert author.await_args.args[0] == presentation.outlines['slides'][0]['content']
+    assert author.await_args.args[3:5] == (0, 1)
+    assert capture.await_args.kwargs['system_furniture']['generated_common_header']['page'] == bindings[0]
+    task.data = deepcopy(saved.await_args.kwargs['data'])
+    ready = deepcopy(task.data)
+    asyncio.run(remake.publish_svg_candidate(session, presentation, [target], 0, task, snapshot=False))
+    params = session.execute.await_args.args[0].compile(dialect=sqlite.dialect()).params
+    receipt = params['content']['svgReceipt']
+    assert receipt['quality']['common_header']['passed'] is True
+    assert receipt['quality']['common_header']['page_digest'] == bindings[0]['digest']
+    assert receipt['system_furniture']['generated_common_header']['page'] == bindings[0]
+    assert len(header_checks) == 2
+    assert (presentation.theme['svg']['styleSnapshot'], presentation.outlines) == frozen_inputs
+    task.data = ready
+    session.execute.reset_mock()
+    header_failure[0] = True
+    with pytest.raises(AuthoredPageRemakeError, match='svg_common_header_quality_failed'):
+        asyncio.run(remake.publish_svg_candidate(session, presentation, [target], 0, task, snapshot=False))
+    session.execute.assert_not_awaited()
+    author.reset_mock()
+    target.content['source'] = 'changed source'
+    with pytest.raises(ValueError, match='svg_common_header_source_mismatch'):
+        asyncio.run(remake.preview_svg(presentation, [target], 0, SimpleNamespace(instruction=None), task, session))
+    target.content['source'] = 'keep'
+    presentation.outlines['slides'][0]['common_header']['header_digest'] = 'altered'
+    with pytest.raises(ValueError, match='svg_common_header_digest_mismatch'):
+        asyncio.run(remake.preview_svg(presentation, [target], 0, SimpleNamespace(instruction=None), task, session))
+    author.assert_not_awaited()
+
 
 
 @pytest.mark.parametrize("stale_binding", [False, True])

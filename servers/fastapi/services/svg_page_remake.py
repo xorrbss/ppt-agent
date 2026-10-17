@@ -24,6 +24,24 @@ def _v7_source_profile(snapshot):
     return bool(profile and profile["version"] in {7, 8})
 
 
+def _common_header_page(presentation, slides, index):
+    snapshot = presentation.theme.get("svg", {}).get("styleSnapshot") or {}
+    if snapshot.get("common_header") is None:
+        return None
+    from services.svg_common_header import validate_common_header_outline
+    outline = getattr(presentation, "outlines", None)
+    pages = outline.get("slides") if isinstance(outline, dict) else None
+    if not isinstance(pages, list) or len(pages) != len(slides):
+        raise ValueError("svg_common_header_binding_incomplete")
+    validate_common_header_outline(snapshot, outline)
+    page, target = pages[index], slides[index]
+    binding = page["common_header"]
+    if (target.index != index or (target.content or {}).get("source") != page["content"]
+            or page.get("title_source_digest") != binding.get("title_source_digest")):
+        raise ValueError("svg_common_header_source_mismatch")
+    return deepcopy(binding)
+
+
 def _local_svg_supported(presentation, target):
     from services.svg_document_mutations import _raster_pin
 
@@ -154,6 +172,8 @@ async def preview_svg(presentation, slides, index, request, task, session):
     physical_kwargs = {"physical_canvas": metadata} if isinstance(metadata, DocumentCanvasMetadata) else {}
     readability_policy = ((target.content or {}).get("svgReceipt") or {}).get("readability_policy")
     snapshot = presentation.theme["svg"]["styleSnapshot"]
+    header_page = _common_header_page(presentation, slides, index)
+    header_kwargs = {"header_page": header_page} if header_page is not None else {}
     from services.svg_authoring_profile import read_quality_recovery_policy
     recovery_policy = read_quality_recovery_policy(snapshot)
     v7_source = _v7_source_profile(snapshot)
@@ -227,7 +247,8 @@ async def preview_svg(presentation, slides, index, request, task, session):
             declarations = extract_native_declarations(root)
             clean = ET.tostring(root, encoding="unicode")
             final = finalize_svg(clean, index=index, n=len(slides), width=canvas.width_px,
-                height=canvas.height_px, style_snapshot=snapshot, source_manifest=contract)
+                height=canvas.height_px, style_snapshot=snapshot, source_manifest=contract,
+                **({**header_kwargs, "allow_existing_common_header": True} if header_kwargs else {}))
             native = _native_candidate(final, clean, declarations)
             _local_native_projection(final, native, presentation, target)
         except Exception as error:
@@ -238,14 +259,14 @@ async def preview_svg(presentation, slides, index, request, task, session):
                 result = await author_slide_svg(source, snapshot, target.content.get("role", "content"), index, len(slides),
                                                 instructions=instruction, source_images=manifest,
                                                 **({"previous_svg": target.svg_content} if recovery_policy else {}),
-                                                canonical_source_images=assets is not None, **physical_kwargs)
+                                                canonical_source_images=assets is not None, **physical_kwargs, **header_kwargs)
         except Exception as error:
             reject(error, "generation")
         if result.receipt.get("validation_error"):
             reject(ValueError(result.receipt["validation_error"]), "author_validation")
         try:
             final = finalize_svg(result.svg_content, index=index, n=len(slides), width=canvas.width_px,
-                                 height=canvas.height_px, style_snapshot=snapshot, source_manifest=contract)
+                                 height=canvas.height_px, style_snapshot=snapshot, source_manifest=contract, **header_kwargs)
         except Exception as error:
             reject(error, "canonical_validation")
         try:
@@ -256,6 +277,10 @@ async def preview_svg(presentation, slides, index, request, task, session):
     render_source = final
     try:
         from services.svg_presentation_checkpoint import _required_numeric_claims
+        from services.svg_master_furniture import master_furniture_receipt
+        furniture = (master_furniture_receipt(final, snapshot, index=index, n=len(slides),
+            width=canvas.width_px, height=canvas.height_px, source_manifest=contract, header_page=header_page)
+            if header_page is not None else None)
         if assets is not None:
             placement = rebound_placement(final, assets[0], assets[1], revision=presentation.revision + 1)
             render_source = await materialize_rebound_svg(session, presentation, final, assets[0], placement, source_index)
@@ -264,11 +289,17 @@ async def preview_svg(presentation, slides, index, request, task, session):
             materialized_svg=render_source if render_source != final else None,
             instructions=instruction, **({"timeline_ink_probe": True} if v7_source else {}),
             **({"required_text": _required_numeric_claims(source)} if local_edit else {}),
+            **({"system_furniture": furniture} if furniture is not None else {}),
             **physical_kwargs)
+        if header_page is not None:
+            from services.generation_core.drivers.svg.render import _apply_common_header_quality
+            _apply_common_header_quality(render.quality, final, snapshot["common_header"], header_page, furniture)
     except Exception as error:
         reject(error, "candidate_render", candidate_svg=final, candidate_native=native)
     try:
-        failure = _source_candidate_quality(render.quality, final, source) if v7_source else None
+        failure = ("svg_common_header_quality_failed" if header_page and header_page.get("applied")
+            and (render.quality.get("common_header") or {}).get("passed") is not True else
+            _source_candidate_quality(render.quality, final, source) if v7_source else None)
     except Exception as error:
         reject(error, "source_quality", candidate_svg=final, candidate_native=native,
                candidate_quality=render.quality)
@@ -327,6 +358,7 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
         _json_cas_predicate, version_service,
     )
     target = slides[index]
+    header_page = _common_header_page(presentation, slides, index)
     data = task.data or {}
     from services.svg_document_mutations import read_svg_slide_assets, rebind_svg_assets
     assets = await read_svg_slide_assets(session, presentation, target)
@@ -392,6 +424,17 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
     metadata = parse_canvas_metadata(presentation_canvas_metadata(presentation.theme))
     physical_kwargs = {"physical_canvas": metadata} if isinstance(metadata, DocumentCanvasMetadata) else {}
     readability_policy = ((target.content or {}).get("svgReceipt") or {}).get("readability_policy")
+    from services.svg_master_furniture import master_furniture_receipt
+    furniture_manifest = None
+    if header_page is not None and assets is not None:
+        from services.svg_asset_resolver import _contract_manifest
+        source_index = target.content["svgAssetManifest"].get("sourcePageIndex", index)
+        offered = next(page.slot_ids for page in assets[0].offered_pages if page.page_index == source_index)
+        furniture_manifest = {slot: policy for slot, policy in _contract_manifest(assets[0]).items() if slot in offered}
+    furniture = (master_furniture_receipt(svg, presentation.theme["svg"]["styleSnapshot"],
+        index=index, n=len(slides), width=canvas.width_px, height=canvas.height_px,
+        source_manifest=furniture_manifest, header_page=header_page)
+        if header_page is not None else None)
     from services.svg_presentation_checkpoint import _required_numeric_claims
     rendered = await render_svg_with_metrics(svg, width=canvas.width_px, height=canvas.height_px,
         readability_policy=readability_policy,
@@ -399,7 +442,14 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
         instructions=data.get("instruction"),
         **({"required_text": _required_numeric_claims((target.content or {}).get("source", ""))} if local_edit else {}),
         **({"timeline_ink_probe": True} if _v7_source_profile(presentation.theme.get("svg", {}).get("styleSnapshot", {})) else {}),
+        **({"system_furniture": furniture} if furniture is not None else {}),
         **physical_kwargs)
+    if header_page is not None:
+        from services.generation_core.drivers.svg.render import _apply_common_header_quality
+        _apply_common_header_quality(rendered.quality, svg, presentation.theme["svg"]["styleSnapshot"].get("common_header"),
+                                     header_page, furniture)
+        if header_page.get("applied") and (rendered.quality.get("common_header") or {}).get("passed") is not True:
+            raise AuthoredPageRemakeError("svg_common_header_quality_failed", stage="publish_validation")
     if _v7_source_profile(presentation.theme.get("svg", {}).get("styleSnapshot", {})):
         source = (target.content or {}).get("source") or "\n".join(ET.fromstring(target.svg_content).itertext())
         failure = _source_candidate_quality(rendered.quality, svg, source)
@@ -421,6 +471,8 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
     content = deepcopy(target.content or {})
     from services.generation_core.native_objects import SLIDE_CONTENT_KEY as NATIVE_OBJECTS_KEY
     receipt = dict(content.get("svgReceipt") or {})
+    if furniture is not None:
+        receipt["system_furniture"] = furniture
     if not local_measurement:
         content.pop(NATIVE_OBJECTS_KEY, None)
         receipt.pop("nativeObjects", None)
