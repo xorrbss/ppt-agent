@@ -9,6 +9,7 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import get_args
 import uuid
 
 from sqlalchemy import JSON, Text, case, cast, column, func, literal, or_, select, true
@@ -126,6 +127,97 @@ def _operation_control(row):
 
 def _sha256_hex_valid(value):
     return isinstance(value, str) and len(value) == 64 and all(char in "0123456789abcdef" for char in value)
+
+
+class _EpisodeVerification:
+    """One call's historical proofs, fenced by fresh dependency reads at exit."""
+
+    def __init__(self, session):
+        from utils.owner_context import get_current_owner_id, get_current_tenant_id
+        self.session = session
+        self.principal = (get_current_owner_id(), get_current_tenant_id())
+        self.transaction = session.sync_session.get_transaction()
+        self.episodes = {}
+        self.references = set()
+        self.active = set()
+        self.rows = {}
+        self.controls = {}
+        self.ledgers = {}
+        self.producers = {}
+        self.seal_memo = {"session": session, "transaction": None, "principal": None,
+                          "seals": {}, "verification": self}
+
+    def check(self, session):
+        from utils.owner_context import get_current_owner_id, get_current_tenant_id
+        transaction = session.sync_session.get_transaction()
+        if (session is not self.session
+                or (get_current_owner_id(), get_current_tenant_id()) != self.principal
+                or self.transaction is not None and transaction is not self.transaction):
+            reject("svg_partial_recovery_request_snapshot_changed")
+        if self.transaction is None:
+            self.transaction = transaction
+
+    def expect(self, model, snapshot, *, identity="id"):
+        key = (model, identity, str(snapshot[identity]))
+        expected = digest(snapshot)
+        if key in self.rows and self.rows[key] != expected:
+            reject("svg_partial_recovery_request_snapshot_changed")
+        self.rows[key] = expected
+
+    async def ledger(self, operation_ids, job_id, *, archive=None):
+        ids = tuple(sorted({str(value) for value in operation_ids}))
+        key = (ids, str(job_id))
+        if key not in self.ledgers:
+            self.ledgers[key] = await _fresh_recovery_ledger_snapshot(self.session,
+                [uuid.UUID(value) for value in ids], uuid.UUID(str(job_id)))
+        if archive is not None:
+            expected = digest({name: sorted(archive.get(archived, []), key=lambda item: str(item["id"]))
+                for name, archived in (("admissions", "admissions"), ("calls", "logical_calls"),
+                    ("leases", "resource_leases"), ("usage", "usage"),
+                    ("budgets", "runtime_budgets"), ("reservations", "runtime_reservations"))})
+            if self.ledgers[key] != expected:
+                reject("svg_partial_recovery_history_changed")
+
+    async def finish(self):
+        # Never consume the memo here: identity-map rows and previously sealed
+        # JSON are insufficient evidence that dependencies stayed unchanged.
+        self.check(self.session)
+        groups = {}
+        for model, identity, value in self.rows:
+            groups.setdefault((model, identity), []).append(value)
+        for (model, identity), values in groups.items():
+            field = getattr(model, identity)
+            annotation = model.model_fields[identity].annotation
+            is_uuid = annotation is uuid.UUID or uuid.UUID in get_args(annotation)
+            typed = [uuid.UUID(value) if is_uuid else value
+                     for value in values]
+            rows = await _fresh_recovery_model_rows(self.session, model, field.in_(typed))
+            actual = {str(getattr(row, identity)): digest(_dump(row)) for row in rows}
+            if actual != {value: self.rows[(model, identity, value)] for value in values}:
+                reject("svg_partial_recovery_request_snapshot_changed")
+        if self.controls:
+            fresh = await _fresh_recovery_operation_controls(self.session, self.controls)
+            if fresh != self.controls:
+                reject("svg_partial_recovery_request_snapshot_changed")
+        for (operation_ids, job_id), expected in self.ledgers.items():
+            fresh = await _fresh_recovery_ledger_snapshot(self.session,
+                [uuid.UUID(value) for value in operation_ids], uuid.UUID(job_id))
+            if fresh != expected:
+                reject("svg_partial_recovery_request_snapshot_changed")
+        if self.producers:
+            rows = await _fresh_recovery_model_rows(self.session, AuthoredSlideCheckpoint,
+                AuthoredSlideCheckpoint.job_id.in_([uuid.UUID(value) for value in self.producers]))
+            actual = {value: {} for value in self.producers}
+            for row in rows:
+                actual[str(row.job_id)][str(row.id)] = digest(_dump(row))
+            if actual != self.producers:
+                reject("svg_partial_recovery_request_snapshot_changed")
+        seals = self.seal_memo["seals"]
+        if seals:
+            fresh = await _payload_storage_seals(self.session, [uuid.UUID(value) for value in seals])
+            if fresh != seals:
+                reject("svg_partial_recovery_request_snapshot_changed")
+        self.check(self.session)
 
 
 async def _fresh_recovery_model_rows(session, model, predicate, *, skip_request_payload=False):
@@ -251,7 +343,24 @@ def _operation_reference(row, storage_seal, *, tenant):
             "archive_storage_sha256": storage_seal["archive_storage_sha256"]}}
 
 
-async def _verify_operation_references(session, operation, manifest, references, *, seal_memo=None):
+async def _verify_operation_references(session, operation, manifest, references, *, seal_memo=None,
+                                       verification=None):
+    verification = verification or (seal_memo or {}).get("verification")
+    owns_verification = verification is None
+    verification = verification or _EpisodeVerification(session)
+    verification.check(session)
+    key = digest([_operation_control(operation), operation.request_payload, manifest, references])
+    if key not in verification.references:
+        await _verify_operation_references_once(session, operation, manifest, references,
+            seal_memo=seal_memo or verification.seal_memo, verification=verification)
+        verification.check(session)
+        verification.references.add(key)
+    if owns_verification:
+        await verification.finish()
+
+
+async def _verify_operation_references_once(session, operation, manifest, references, *, seal_memo,
+                                            verification):
     if not isinstance(references, list) or not references or not isinstance(references[0], dict):
         reject("svg_partial_recovery_archive_reference_unbound")
     ids = []
@@ -302,6 +411,10 @@ async def _verify_operation_references(session, operation, manifest, references,
     fresh_controls = await _fresh_recovery_operation_controls(session, ids)
     if set(fresh_controls) != set(originals) or any(_operation_control(row) != fresh_controls[key] for key, row in originals.items()):
         reject("svg_partial_recovery_request_snapshot_changed")
+    for key, control in fresh_controls.items():
+        if key in verification.controls and verification.controls[key] != control:
+            reject("svg_partial_recovery_request_snapshot_changed")
+        verification.controls[key] = control
     for entry in references:
         original, seal = originals.get(entry["id"]), seals.get(entry["id"])
         ref = entry["payload_ref"]
@@ -315,10 +428,10 @@ async def _verify_operation_references(session, operation, manifest, references,
         child, parent = originals[newer], originals[older]
         if (child.presentation_id, child.conversation_id) != (parent.presentation_id, parent.conversation_id):
             await session.refresh(child, attribute_names=["request_payload"])
-            await _verify_append_only_edge(session, child, parent)
+            await _verify_append_only_edge(session, child, parent, verification=verification)
 
 
-async def _verify_append_only_edge(session, child, parent):
+async def _verify_append_only_edge(session, child, parent, *, verification=None):
     """A cross-document ancestor must be a verified append-only consumer."""
     lineage = child.request_payload.get("svg_partial_recovery_lineage") or {}
     if (lineage.get("schema") != "svg-partial-recovery-lineage/v2"
@@ -331,7 +444,7 @@ async def _verify_append_only_edge(session, child, parent):
         PresentationGenerationJob.presentation_id == child.presentation_id))
     if job is None:
         reject("svg_partial_recovery_lineage_conflict")
-    await verify_episode(session, child, job, require_current_code=False)
+    await verify_episode(session, child, job, require_current_code=False, verification=verification)
 
 
 def _base_code_digest():
@@ -467,20 +580,25 @@ def _author_style_matches(payload, receipt, job, index, *, header_producer=None)
         return False
 
 
-async def verified_header_producer(session, operation, job):
+async def verified_header_producer(session, operation, job, *, verification=None):
     """Resolve preserved header evidence through verified consumer episodes."""
+    owns_verification = verification is None
+    verification = verification or _EpisodeVerification(session)
+    verification.check(session)
     producer, current, seen = job, operation, set()
     while (producer.request_payload.get(LINEAGE_KEY) or {}).get("schema") == "svg-partial-recovery-lineage/v2":
         if producer.id in seen or current is None:
             reject("svg_partial_recovery_header_binding_invalid")
         seen.add(producer.id)
         manifest = await verify_episode(session,current,producer,
-            require_current_code=not _historical_episode(current, producer))
+            require_current_code=not _historical_episode(current, producer), verification=verification)
         producer = await session.get(PresentationGenerationJob,uuid.UUID(manifest["job_id"]))
         if (producer is None or producer.svg_style_snapshot != job.svg_style_snapshot
                 or producer.authored_outline != job.authored_outline):
             reject("svg_partial_recovery_header_binding_invalid")
         current = await session.get(WorkspaceOperation,producer.workspace_operation_id)
+    if owns_verification:
+        await verification.finish()
     return producer
 
 
@@ -1713,6 +1831,8 @@ async def build_manifest(session, operation, *, presentation_revision):
         raise
     except (OSError, ValueError, TypeError, KeyError) as error:
         raise PartialRecoveryRejected("svg_partial_recovery_vector_transform_unproven") from error
+    verification = _EpisodeVerification(session)
+    seal_memo = verification.seal_memo
     ancestors, admissions, calls, leases = [], [], [], []
     current, previous, seen = operation, None, set()
     while current is not None:
@@ -1724,7 +1844,7 @@ async def build_manifest(session, operation, *, presentation_revision):
             reject("svg_partial_recovery_lineage_conflict")
         if previous is not None and (current.presentation_id, current.conversation_id) != (
                 previous.presentation_id, previous.conversation_id):
-            await _verify_append_only_edge(session, previous, current)
+            await _verify_append_only_edge(session, previous, current, verification=verification)
         seen.add(current.id)
         ancestors.append(current)
         admission = await session.scalar(select(PublicOperationAdmission).where(
@@ -1759,8 +1879,7 @@ async def build_manifest(session, operation, *, presentation_revision):
     pages, binding, baseline_payloads = [], None, {}
     episode_calls = [call for call in calls if call.admission_id == admissions[0].id]
     seed = rows[0].svg_checkpoint or {}
-    header_producer = await verified_header_producer(session,operation,job)
-    seal_memo = {"session": session, "transaction": None, "principal": None, "seals": {}}
+    header_producer = await verified_header_producer(session,operation,job, verification=verification)
     initial_controls = {str(item.id): _operation_control(item) for item in ancestors}
     initial_job_control = _operation_control(job)
     initial_presentation_control = _operation_control(presentation)
@@ -1889,6 +2008,7 @@ async def build_manifest(session, operation, *, presentation_revision):
     quality_plan = read_quality_recovery_plan(job.svg_style_snapshot)
     repair_calls = (job.total_slides if quality_plan and quality_plan["review_round_limit"] == 2
                     else author_calls)
+    await verification.finish()
     storage_seals = await _payload_storage_seals(session, [row.id for row in ancestors])
     if any(storage_seals.get(key) != value for key, value in seal_memo["seals"].items()):
         reject("svg_partial_recovery_request_snapshot_changed")
@@ -2119,7 +2239,7 @@ async def rebind_episode(session, source, child, recovery, *, key_hash):
     return job
 
 
-async def _verify_producer_rows(session, manifest, archive):
+async def _verify_producer_rows(session, manifest, archive, *, verification=None):
     """Check real immutable producer rows, not only their archived copies."""
     jobs = await _fresh_recovery_model_rows(session, PresentationGenerationJob,
         PresentationGenerationJob.id == uuid.UUID(manifest["job_id"]))
@@ -2134,6 +2254,13 @@ async def _verify_producer_rows(session, manifest, archive):
     if (len(rows) != manifest["expected_page_count"] or current != archived
             or sorted(row.slide_index for row in rows) != list(range(jobs[0].total_slides))):
         reject("svg_partial_recovery_history_changed")
+    if verification is not None:
+        verification.expect(PresentationGenerationJob, archive["job"])
+        expected = {key: digest(snapshot) for key, snapshot in archived.items()}
+        job_id = str(jobs[0].id)
+        if job_id in verification.producers and verification.producers[job_id] != expected:
+            reject("svg_partial_recovery_request_snapshot_changed")
+        verification.producers[job_id] = expected
     return jobs[0]
 
 
@@ -2142,7 +2269,37 @@ def _historical_episode(operation, job):
             and job.state in {"failed", "cancelled", "published", "completed", "succeeded"})
 
 
-async def verify_episode(session, operation, job, *, require_current_code=True):
+async def verify_episode(session, operation, job, *, require_current_code=True, verification=None):
+    owns_verification = verification is None
+    verification = verification or _EpisodeVerification(session)
+    verification.check(session)
+    identity = str(operation.id)
+    if identity in verification.active:
+        reject("svg_partial_recovery_lineage_conflict")
+    # A changed in-memory input cannot inherit an earlier successful proof.
+    key = (identity, digest([_operation_control(operation), operation.request_payload]),
+           digest(_dump(job)))
+    if require_current_code or key not in verification.episodes:
+        verification.active.add(identity)
+        try:
+            manifest = await _verify_episode_once(session, operation, job,
+                require_current_code=require_current_code, verification=verification)
+            verification.check(session)
+            verification.expect(WorkspaceOperation,
+                {**_operation_control(operation), "request_payload": operation.request_payload})
+            verification.expect(PresentationGenerationJob, _dump(job))
+            if not require_current_code:
+                verification.episodes[key] = manifest
+        finally:
+            verification.active.remove(identity)
+    else:
+        manifest = verification.episodes[key]
+    if owns_verification:
+        await verification.finish()
+    return manifest
+
+
+async def _verify_episode_once(session, operation, job, *, require_current_code, verification):
     from models.sql.async_presentation_generation_status import AsyncPresentationGenerationTaskModel
     from models.sql.source_content import SourceContentManifestRecord
     if not require_current_code and not _historical_episode(operation, job):
@@ -2190,9 +2347,10 @@ async def verify_episode(session, operation, job, *, require_current_code=True):
         reject("svg_partial_recovery_episode_unbound")
     _verify_frozen_header_outline(job)
     if append_only:
-        await _verify_producer_rows(session, manifest, archive)
+        await _verify_producer_rows(session, manifest, archive, verification=verification)
     if archive_schema == ARCHIVE_V2:
-        await _verify_operation_references(session, operation, manifest, archive.get("operation_refs"))
+        await _verify_operation_references(session, operation, manifest, archive.get("operation_refs"),
+            verification=verification)
     operation_snapshots = (("operations", WorkspaceOperation),) if archive_schema == ARCHIVE_V1 else ()
     for key, model in (*operation_snapshots, ("admissions", PublicOperationAdmission),
             ("logical_calls", PublicProviderLogicalCall), ("usage", ProviderUsageReceipt),
@@ -2207,14 +2365,21 @@ async def verify_episode(session, operation, job, *, require_current_code=True):
             original = originals.get(snapshot["id"])
             if original is None or digest(_dump(original)) != digest(snapshot):
                 reject("svg_partial_recovery_history_changed")
+            verification.expect(model, snapshot)
     historical_task = await session.get(AsyncPresentationGenerationTaskModel, archive.get("task", {}).get("id"))
     if historical_task is None or digest(_dump(historical_task)) != digest(archive.get("task")):
         reject("svg_partial_recovery_history_changed")
+    verification.expect(AsyncPresentationGenerationTaskModel, archive["task"])
     source_record = archive.get("source_record")
     if source_record is not None:
         original = await session.get(SourceContentManifestRecord, source_record["manifest_id"])
         if original is None or digest(_dump(original)) != digest(source_record):
             reject("svg_partial_recovery_source_changed")
+        verification.expect(SourceContentManifestRecord, source_record, identity="manifest_id")
+    operation_ids = {item["id"] for item in archive.get(
+        "operation_refs" if archive_schema == ARCHIVE_V2 else "operations", [])}
+    await verification.ledger(operation_ids, manifest["job_id"], archive=archive)
+    await verification.ledger({str(operation.id), *operation_ids}, job.id)
     return manifest
 
 

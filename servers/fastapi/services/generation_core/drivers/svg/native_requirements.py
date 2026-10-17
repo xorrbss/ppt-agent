@@ -16,6 +16,7 @@ _CHART = re.compile(r"(?:\bchart\b|차트)\s*[:：]\s*([^\n]+)", re.I)
 _SERIES_NAME = r"(?:[^,;:：()]|\([^()]*\))+"
 _NAMED_SERIES = re.compile(rf"\s*({_SERIES_NAME}?)\s*[:：]\s*(.+)")
 _TABLE_PREFIX = re.compile(r"^[^|]*?(?:\btable\b|(?<![가-힣])표)\s*[:：]\s*", re.I)
+_CELL_BREAK = re.compile(r"<br[ \t]*/?>", re.I)
 
 
 def _compact(value: str) -> str:
@@ -26,21 +27,27 @@ def _table_cells(line: str) -> list[str] | None:
     line = _TABLE_PREFIX.sub("", line.strip(), count=1)
     if "|" not in line:
         return None
+    enclosed = line.startswith("|") and line.endswith("|") and not line.endswith("\\|")
     if line.startswith("|"):
         line = line[1:]
         if line.endswith("|") and not line.endswith("\\|"):
             line = line[:-1]
-    cells = [cell.strip().replace(r"\|", "|") for cell in re.split(r"(?<!\\)\|", line)]
-    return cells if len(cells) >= 2 else None
+    cells = [_CELL_BREAK.sub("\n", cell.strip().replace(r"\|", "|"))
+             for cell in re.split(r"(?<!\\)\|", line)]
+    return cells if len(cells) >= 2 or enclosed else None
 
 
 def _tables(content: str) -> list[dict]:
     tables, rows = [], []
+    single_column_header = False
 
     def flush():
-        if len(rows) >= 2 and len({len(row) for row in rows}) == 1:
+        nonlocal single_column_header
+        if (len(rows) >= 2 and len({len(row) for row in rows}) == 1
+                and (len(rows[0]) > 1 or single_column_header)):
             tables.append({"id": f"table-{len(tables) + 1}", "rows": list(rows), "headerRows": 1})
         rows.clear()
+        single_column_header = False
 
     for line in content.splitlines():
         cells = _table_cells(line)
@@ -53,6 +60,8 @@ def _tables(content: str) -> list[dict]:
                 rows.append(header)
             if rows and len(cells) != len(rows[0]):
                 flush()
+            elif len(rows) == 1 and len(cells) == 1:
+                single_column_header = True
         else:
             if rows and _TABLE_PREFIX.match(line.strip()):
                 flush()
@@ -177,6 +186,9 @@ def format_requested_native_data(content: str) -> str:
             + json.dumps(requirements, ensure_ascii=False, separators=(",", ":"))
             + "\nDraw each independent table/chart in its own native declaration group. Preserve table cell text, "
               "empty cells, row/column order, chart category order and every explicit series exactly. "
+              "A cell's explicit <br> or <br/> is supplied as a newline in rows: retain that original "
+              "paragraph boundary in both the drawn tspan lines and native JSON. Additional visual "
+              "wrapping is allowed within each paragraph; never replace an original break with a space. "
               "Convert chart values to JSON numbers without rescaling (30% remains 30). "
               "Draw every requiredUnitLabels.text exactly in the declared chart title; each paired label "
               "binds its exact source series name to its unit. Keep each series name unchanged. "
@@ -192,6 +204,28 @@ def _same_values(actual: list, expected: list) -> bool:
         return [Decimal(str(value)) for value in actual] == [Decimal(str(value)) for value in expected]
     except (InvalidOperation, ValueError, TypeError):
         return False
+
+
+def _table_cell_matches(actual: str, expected: str) -> bool:
+    """Keep explicit source breaks while allowing extra visual wrapping."""
+    if _compact(actual) != _compact(expected):
+        return False
+
+    def boundaries(value):
+        offset = 0
+        for line in value.replace("\r\n", "\n").replace("\r", "\n").split("\n")[:-1]:
+            offset += len(_compact(line))
+            yield offset
+
+    drawn = iter(boundaries(actual))
+    return all(any(candidate == required for candidate in drawn) for required in boundaries(expected))
+
+
+def _table_rows_match(actual: list, expected: list) -> bool:
+    return len(actual) == len(expected) and all(
+        len(row) == len(wanted) and all(
+            _table_cell_matches(cell["text"], text) for cell, text in zip(row, wanted, strict=True))
+        for row, wanted in zip(actual, expected, strict=True))
 
 
 def _unit_in_title(unit: str, title: str) -> bool:
@@ -238,9 +272,8 @@ def apply_requested_native_quality(quality: dict, payload: dict, svg: str, conte
     remaining = list((wire or {}).get("objects", []))
     failures = []
     for expected in requirements["tables"]:
-        wanted = [[_compact(cell) for cell in row] for row in expected["rows"]]
         match = next((entry for entry in remaining if entry["kind"] == "table"
-                      and [[_compact(cell["text"]) for cell in row] for row in entry["payload"].get("rows", [])] == wanted), None)
+                      and _table_rows_match(entry["payload"].get("rows", []), expected["rows"])), None)
         if match is None:
             failures.append({"kind": "native_requested_table_missing", "requirementId": expected["id"], "requiredRows": expected["rows"]})
         else:
@@ -257,7 +290,7 @@ def apply_requested_native_quality(quality: dict, payload: dict, svg: str, conte
     quality["requestedNativeObjects"] = {"version": REQUIREMENTS_VERSION,
         "requiredTables": len(requirements["tables"]), "requiredCharts": len(requirements["charts"]),
         "passed": not failures, "projection": summary,
-        "repairInstruction": "Preserve each independent table/chart with its exact data and all series in its own data-native-table/data-native-chart group. Retain every required unit label with its series association in the declared chart title. Unsupported unit mappings cannot be repaired by changing values or inventing units. Fix rejected declaration geometry without changing its meaning."}
+        "repairInstruction": "Preserve each independent table/chart with its exact data and all series in its own data-native-table/data-native-chart group. Retain explicit source cell paragraph breaks; additional visual wrapping may occur within a paragraph, but cannot replace its original boundary with a space. Retain every required unit label with its series association in the declared chart title. Unsupported unit mappings cannot be repaired by changing values or inventing units. Fix rejected declaration geometry without changing its meaning."}
     if failures:
         quality["passed"] = False
         quality.setdefault("failures", []).extend(failures)

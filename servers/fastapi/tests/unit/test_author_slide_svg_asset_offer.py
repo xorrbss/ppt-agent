@@ -663,6 +663,10 @@ def test_writing_policy_routes_copy_corrections_without_unlocking_verbatim_sourc
     source_message = seen['messages'][1].content[0].text
     assert ('"allowOmit": true' in source_message) == editable
     assert result.svg_content
+    assert 'prerequisite, prohibition or exception' in prompt
+    assert 'distinct emphasis relative to routine explanation' in prompt
+    assert 'do not bury it in a dense footer' in prompt
+    assert 'never invent a warning or turn advice into a ban' in prompt
     if editable:
         assert 'explicitly authorizes changing that text' in prompt
         assert 'Ordinary generated prose may be rewritten naturally' in prompt

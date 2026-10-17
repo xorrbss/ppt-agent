@@ -2838,6 +2838,10 @@ async def _svg_partial_append_only_contract(tmp_path, monkeypatch, *, source_rou
     from models.sql.async_presentation_generation_status import AsyncPresentationGenerationTaskModel
     from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
     from models.sql.presentation_generation_job import PresentationGenerationJob
+    from models.sql.public_admission import PublicPolicyProfile, PublicOperationAdmission, PublicProviderLogicalCall
+    from models.sql.public_admission import PublicResourceLease
+    from models.sql.provider_runtime_reservation import ProviderRuntimeBudget, ProviderRuntimeReservation
+    from models.sql.provider_usage_receipt import ProviderUsageReceipt
     from services import svg_partial_recovery as recovery
     from services import svg_common_header_generation as headers
     from services.svg_common_header_design_checkpoint import _envelope
@@ -2852,7 +2856,10 @@ async def _svg_partial_append_only_contract(tmp_path, monkeypatch, *, source_rou
         async with engine.begin() as connection:
             await connection.run_sync(lambda conn: SQLModel.metadata.create_all(conn, tables=[
                 AsyncPresentationGenerationTaskModel.__table__, PresentationGenerationJob.__table__,
-                AuthoredSlideCheckpoint.__table__]))
+                AuthoredSlideCheckpoint.__table__, PublicPolicyProfile.__table__,
+                PublicOperationAdmission.__table__, PublicProviderLogicalCall.__table__,
+                PublicResourceLease.__table__, ProviderRuntimeBudget.__table__,
+                ProviderRuntimeReservation.__table__, ProviderUsageReceipt.__table__]))
         presentation = await _create_presentation(maker)
         async with maker() as session:
             user = User(username="partial-owner", hashed_password="unused")
@@ -2908,6 +2915,24 @@ async def _svg_partial_append_only_contract(tmp_path, monkeypatch, *, source_rou
             await session.flush()
             source.request_payload = {**source.request_payload, "generation_request": payload,
                 "job_id": str(parent.id), "task_id": task.id}
+            policy_values = {c.name: 100 for c in PublicPolicyProfile.__table__.columns
+                if not c.nullable and c.default is None and c.server_default is None}
+            policy = PublicPolicyProfile(**{**policy_values, "version": "partial-scope-test"})
+            session.add(policy)
+            await session.flush()
+            admission = PublicOperationAdmission(operation_id=source.id, policy_version=policy.version,
+                owner_id=user.id, tenant_id="partial-test", trace_id_hash="a"*64,
+                operation_kind="generation", resource_units=1, policy_digest="b"*64,
+                deadline_at=get_current_utc_datetime(), state="failed", planned_request_limit=3,
+                retry_request_limit=0, estimated_cost_limit_microunits=100,
+                actual_cost_limit_microunits=100)
+            session.add(admission)
+            await session.flush()
+            unknown_call = PublicProviderLogicalCall(admission_id=admission.id, stage="author",
+                slide_index=1, logical_call_ordinal=1, retry_class="initial",
+                idempotency_key_hash="c"*64, estimated_cost_microunits=100,
+                state="reserved", outcome="unknown")
+            session.add(unknown_call)
             for index in range(3):
                 saved = dict(input_digest=f"source-input-{index}", inflight=None, attempts=[])
                 if index == 0:
@@ -2918,6 +2943,7 @@ async def _svg_partial_append_only_contract(tmp_path, monkeypatch, *, source_rou
                     author_status="completed" if index == 0 else "pending",svg_checkpoint=saved))
             await session.commit()
             parent_id, source_id = parent.id, source.id
+            admission_id, unknown_call_id = admission.id, unknown_call.id
 
         async with maker() as session:
             parent = await session.get(PresentationGenerationJob, parent_id)
@@ -2970,6 +2996,8 @@ async def _svg_partial_append_only_contract(tmp_path, monkeypatch, *, source_rou
                 archive_storage_sha256=None,archive_schema=None,archive_canonical_sha256=None)
             archive = dict(schema=recovery.ARCHIVE_V2, job=parent.model_dump(mode="json"),
                 task=task.model_dump(mode="json"), checkpoints=[row.model_dump(mode="json") for row in rows],
+                admissions=[(await session.get(PublicOperationAdmission, admission_id)).model_dump(mode="json")],
+                logical_calls=[(await session.get(PublicProviderLogicalCall, unknown_call_id)).model_dump(mode="json")],
                 operation_refs=[recovery._operation_reference(source,seal,tenant="partial-test")])
             pages = [dict(slide_index=row.slide_index,category=category,row_digest=recovery.digest(row.model_dump(mode="json")),
                 svg_sha256=sha256_hex((row.svg_checkpoint.get("svg_content") or "").encode()),
@@ -3012,7 +3040,7 @@ async def _svg_partial_append_only_contract(tmp_path, monkeypatch, *, source_rou
                         archive_schema=original_archive.get("schema") if original_archive else None,
                         archive_canonical_sha256=recovery.digest(original_archive) if original_archive else None)
                 return seals
-            scoped.setattr(recovery,"_payload_storage_seals",storage_seals)
+            scoped.setattr(recovery,"_fresh_payload_storage_seals",storage_seals)
             scoped.setattr(headers,"preflight_header_selector",lambda: {})
             async with maker() as session:
                 consumer = await session.get(PresentationGenerationJob,consumer_id)
@@ -3099,6 +3127,7 @@ async def _svg_partial_append_only_contract(tmp_path, monkeypatch, *, source_rou
                 previous_seal = (await storage_seals(session,[child_id]))[str(child_id)]
                 next_archive = dict(schema=recovery.ARCHIVE_V2,job=previous_job.model_dump(mode="json"),
                     task=previous_task.model_dump(mode="json"),checkpoints=[r.model_dump(mode="json") for r in previous_rows],
+                    admissions=deepcopy(archive["admissions"]),logical_calls=deepcopy(archive["logical_calls"]),
                     operation_refs=[recovery._operation_reference(previous,previous_seal,tenant="partial-test"),
                         *archive["operation_refs"]])
                 next_pages = [{**page,"row_digest":recovery.digest(row.model_dump(mode="json"))}
@@ -3133,6 +3162,87 @@ async def _svg_partial_append_only_contract(tmp_path, monkeypatch, *, source_rou
                 runner.assert_not_called()
                 assert await recovery._verify_producer_rows(session,next_manifest,next_archive) is not None
                 assert await recovery._verify_producer_rows(session,manifest,archive) is not None
+                if source_routing == "uuid":
+                    from sqlalchemy import update
+                    from utils.owner_context import get_current_owner_id, get_current_tenant_id
+
+                    checks = []
+                    original_once = recovery._verify_episode_once
+                    async def counted_once(session, operation, job, **kwargs):
+                        checks.append(str(operation.id))
+                        return await original_once(session, operation, job, **kwargs)
+                    with scoped.context() as memo_scope:
+                        memo_scope.setattr(recovery, "_verify_episode_once", counted_once)
+                        verification = recovery._EpisodeVerification(session)
+                        for _ in range(2):
+                            assert await recovery.verify_episode(session,next_operation,next_job,
+                                verification=verification) == next_manifest
+                        # Current-code consumers always run in full; the shared
+                        # historical producer succeeds only once per scope.
+                        assert checks.count(str(next_operation_id)) == 2
+                        assert checks.count(str(child_id)) == 1
+                        await verification.finish()
+                    # Context changes and a new transaction cannot reuse proofs.
+                    original_owner, original_tenant = get_current_owner_id(), get_current_tenant_id()
+                    for owner, tenant in ((uuid.uuid4(), original_tenant),
+                                          (original_owner, "different-tenant")):
+                        # The earlier contract in this parameterized node
+                        # substitutes these getters; vary that same boundary.
+                        with scoped.context() as principal_scope:
+                            principal_scope.setattr("utils.owner_context.get_current_owner_id",lambda:owner)
+                            principal_scope.setattr("utils.owner_context.get_current_tenant_id",lambda:tenant)
+                            with pytest.raises(recovery.PartialRecoveryRejected,match="snapshot_changed"):
+                                verification.check(session)
+                    verification.active.add(str(next_operation_id))
+                    with pytest.raises(recovery.PartialRecoveryRejected,match="lineage_conflict"):
+                        await recovery.verify_episode(session,next_operation,next_job,
+                            verification=verification)
+                    verification.active.clear()
+                    # Change persisted data behind the identity map after a
+                    # successful memo population. Exit reads must be fresh.
+                    changes = [
+                        (WorkspaceOperation, next_operation_id, "state", "cancelled", next_operation.state),
+                        (WorkspaceOperation, next_operation_id, "owner_id", None, next_operation.owner_id),
+                        (WorkspaceOperation, next_operation_id, "lease_expires_at",
+                         get_current_utc_datetime()+timedelta(minutes=1), next_operation.lease_expires_at),
+                        (WorkspaceOperation, next_operation_id, "version", next_operation.version+1, next_operation.version),
+                        (WorkspaceOperation, next_operation_id, "request_payload",
+                         {**next_operation.request_payload,"tampered":True}, next_operation.request_payload),
+                        (WorkspaceOperation, source_id, "request_payload",
+                         {**source.request_payload,"tampered":True}, source.request_payload),
+                        (WorkspaceOperation, child_id, "retry_of_operation_id", None, source_id),
+                        (PublicProviderLogicalCall, unknown_call_id, "outcome", "succeeded", "unknown"),
+                        (AuthoredSlideCheckpoint, rows[1].id, "svg_checkpoint",
+                         {**rows[1].svg_checkpoint,"inflight":None}, rows[1].svg_checkpoint),
+                    ]
+                    for model, row_id, field, changed, original in changes:
+                        verification = recovery._EpisodeVerification(session)
+                        await recovery.verify_episode(session,next_operation,next_job,
+                            verification=verification)
+                        mutation = await session.begin_nested()
+                        try:
+                            await session.execute(update(model).where(model.id == row_id)
+                                .values(**{field:changed}).execution_options(synchronize_session=False))
+                            with pytest.raises(recovery.PartialRecoveryRejected,match="snapshot_changed"):
+                                await verification.finish()
+                        finally:
+                            # Restore implicit onupdate columns along with the
+                            # intended mutation before checking another guard.
+                            await mutation.rollback()
+                    verification = recovery._EpisodeVerification(session)
+                    await recovery.verify_episode(session,next_operation,next_job,verification=verification)
+                    new_usage = ProviderUsageReceipt(job_id=parent_id, operation="generation",
+                        stage="author", provider="unavailable", model="unavailable",
+                        receipt_key_hash="d"*64, retry_class="initial", outcome="failed",
+                        latency_ms=0, usage_state="unavailable")
+                    session.add(new_usage)
+                    await session.flush()
+                    with pytest.raises(recovery.PartialRecoveryRejected,match="snapshot_changed"):
+                        await verification.finish()
+                    await session.rollback()
+                    await session.execute(select(WorkspaceOperation.id).limit(1))
+                    with pytest.raises(recovery.PartialRecoveryRejected,match="snapshot_changed"):
+                        verification.check(session)
             async with maker() as session:
                 original = await session.get(AuthoredSlideCheckpoint,rows[0].id)
                 original.svg_checkpoint = {**original.svg_checkpoint,"input_digest":"tampered"}

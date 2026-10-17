@@ -408,13 +408,40 @@ def test_independent_tables_require_separate_objects_without_merging(monkeypatch
     assert len(merged["failures"]) == 2
 
 
-def test_unlabelled_markdown_preserves_empty_cells_colons_and_escaped_pipes(monkeypatch):
-    from services.generation_core.drivers.svg.native_requirements import requested_native_data
+@pytest.mark.parametrize("single_column", [False, True])
+@pytest.mark.parametrize("source_cell, expected_cell, drawn_cell, passed", [
+    ("A \\| B", "A | B", "A | B", True),
+    ("요청<br>조합 가능", "요청\n조합 가능", "요청\n조합 가능", True),
+    ("요청<br/>조합 가능", "요청\n조합 가능", "요청 조합 가능", False),
+    ("요청<br />조합 가능", "요청\n조합 가능", "요청\n조합\n가능", True),
+    ("요청<br>조합 가능", "요청\n조합 가능", "요청 조합\n가능", False),
+    ("요청<br><br>조합", "요청\n\n조합", "요청\n조합", False),
+    ("요청<br><br>조합", "요청\n\n조합", "요청\n\n조합", True),
+    ("요청 조합 가능", "요청 조합 가능", "요청\n조합\n가능", True),
+    ("&lt;br&gt;", "&lt;br&gt;", "&lt;br&gt;", True),
+    ("<br class='x'>", "<br class='x'>", "<br class='x'>", True),
+    ("<br onload='x'>", "<br onload='x'>", "\n", False),
+])
+def test_unlabelled_markdown_preserves_empty_cells_colons_and_escaped_pipes(
+        monkeypatch, source_cell, expected_cell, drawn_cell, passed, single_column):
+    from services.generation_core.drivers.svg.native_requirements import (
+        format_requested_native_data, requested_native_data,
+    )
 
-    source = "| 항목 | 시간 | 비고 |\n| --- | :---: | ---: |\n| A \\| B | 12:30 | |"
-    rows = [["항목", "시간", "비고"], ["A | B", "12:30", ""]]
+    source = f"| 항목 | 시간 | 비고 |\n| --- | :---: | ---: |\n| {source_cell} | 12:30 | |"
+    rows = [["항목", "시간", "비고"], [expected_cell, "12:30", ""]]
+    if single_column:
+        source = f"| 항목 |\n| --- |\n| {source_cell} |"
+        rows = [["항목"], [expected_cell]]
+        assert not requested_native_data("| 단독 |\n| 문장 |")
+        assert not requested_native_data("| 항목 |\n| - |\n| 문장 |")
+        assert not requested_native_data("| 항목 |\n| --- | --- |\n| 문장 |")
+        assert not requested_native_data("|---|\n| 단독 |\n| 문장 |")
     assert requested_native_data(source)["tables"][0]["rows"] == rows
-    assert _requested_quality(monkeypatch, source, [_requested_table_entry(rows, "unlabelled")])["passed"]
+    grounding = format_requested_native_data(source)
+    assert json.loads(next(line for line in grounding.splitlines() if line.startswith("{")))["tables"][0]["rows"] == rows
+    drawn_rows = [rows[0], [drawn_cell] if single_column else [drawn_cell, "12:30", ""]]
+    assert _requested_quality(monkeypatch, source, [_requested_table_entry(drawn_rows, "unlabelled")])["passed"] is passed
 
 
 @pytest.mark.parametrize("kind", ["table", "chart"])

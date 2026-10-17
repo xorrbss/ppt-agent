@@ -48,7 +48,9 @@ NATIVE_TABLE_RULE = (
     "JSON is {\"rows\":[[\"Header\",\"Header\"],[\"cell\",\"1,200\"]],\"headerRows\":1}: every row "
     "has the same number of cells, each cell string is exactly the text drawn in that cell "
     "(\\n between lines), \"\" for an empty cell. No other text inside the group; put captions "
-    "and sources outside it. XML-escape &, < and ' inside the attribute.\n"
+    "and sources outside it. Preserve explicit source cell paragraph breaks in the drawing and JSON; "
+    "additional visual wrapping is allowed within a paragraph, but cannot join original paragraphs. "
+    "XML-escape &, < and ' inside the attribute.\n"
 )
 NATIVE_CHART_RULE = (
     "For a bar, column, line, area, pie or donut chart draw it as <g id=\"native-chart-SLUG\" "

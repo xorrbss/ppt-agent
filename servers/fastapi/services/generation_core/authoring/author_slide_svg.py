@@ -104,8 +104,14 @@ For long prose or table cells, wrap at meaningful boundaries and rebalance the r
 do not force complete statements onto one line or shrink the whole page to fit. Preserve table
 headers, merged-cell associations, values and native bindings. Make source-supported sequence,
 branch conditions and responsibility relationships traceable in the reading flow, with each
-condition beside the action or evidence it qualifies. Never invent links between independent
-items. In local repair, apply these choices only to affected content and its related geometry.
+condition beside the action or evidence it qualifies. A source-stated prerequisite, prohibition
+or exception that changes how a claim or action applies needs readable body space and distinct
+emphasis relative to routine explanation; do not bury it in a dense footer or give every summary
+line the same bold treatment. Let its complete meaning set the space and line breaks before
+decorating the area. Choose the visual treatment freely within the selected style, preserving
+the source's scope, negation and severity; never invent a warning or turn advice into a ban.
+Never invent links between independent items. In local repair, apply these choices only to
+affected content and its related geometry.
 Use the selected style's complete visual intent and the relevant example evidence together.
 Compare their useful type hierarchy, evidence emphasis, reading flow and image treatment, then
 choose the page's own supported composition. Example labels, company names, numbers, claims
@@ -128,8 +134,14 @@ For long prose or table cells, wrap at meaningful boundaries and rebalance the r
 do not force complete statements onto one line or shrink the whole page to fit. Preserve table
 headers, merged-cell associations, values and native bindings. Make source-supported sequence,
 branch conditions and responsibility relationships traceable in the reading flow, with each
-condition beside the action or evidence it qualifies. Never invent links between independent
-items. In local repair, apply these choices only to affected content and its related geometry.
+condition beside the action or evidence it qualifies. A source-stated prerequisite, prohibition
+or exception that changes how a claim or action applies needs readable body space and distinct
+emphasis relative to routine explanation; do not bury it in a dense footer or give every summary
+line the same bold treatment. Let its complete meaning set the space and line breaks before
+decorating the area. Choose the visual treatment freely within the selected style, preserving
+the source's scope, negation and severity; never invent a warning or turn advice into a ban.
+Never invent links between independent items. In local repair, apply these choices only to
+affected content and its related geometry.
 Use the selected style and relevant examples together, but choose this page's own supported
 composition. Reference mechanics and copy limits never authorize unsupported SVG, missing
 required source content, page splitting, smaller type or missing required source images.
