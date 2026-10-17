@@ -171,11 +171,21 @@ class _EpisodeVerification:
             self.ledgers[key] = await _fresh_recovery_ledger_snapshot(self.session,
                 [uuid.UUID(value) for value in ids], uuid.UUID(str(job_id)))
         if archive is not None:
-            expected = digest({name: sorted(archive.get(archived, []), key=lambda item: str(item["id"]))
-                for name, archived in (("admissions", "admissions"), ("calls", "logical_calls"),
-                    ("leases", "resource_leases"), ("usage", "usage"),
-                    ("budgets", "runtime_budgets"), ("reservations", "runtime_reservations"))})
-            if self.ledgers[key] != expected:
+            # A generation job also receives later, independently fenced page
+            # preview accounting. Only operation-owned membership is frozen by
+            # the archive; every archived row remains checked individually.
+            budgets = [row for row in archive.get("runtime_budgets", [])
+                       if str(row.get("workspace_operation_id")) in ids]
+            budget_ids = {row["id"] for row in budgets}
+            expected = digest({name: sorted(rows, key=lambda item: str(item["id"]))
+                for name, rows in (("admissions", archive.get("admissions", [])),
+                    ("calls", archive.get("logical_calls", [])),
+                    ("leases", archive.get("resource_leases", [])), ("usage", []),
+                    ("budgets", budgets), ("reservations", [row for row in
+                        archive.get("runtime_reservations", []) if row["budget_id"] in budget_ids]))})
+            operation_owned = await _fresh_recovery_ledger_snapshot(self.session,
+                [uuid.UUID(value) for value in ids], uuid.UUID(str(job_id)), operation_bound_only=True)
+            if operation_owned != expected:
                 reject("svg_partial_recovery_history_changed")
 
     async def finish(self):
@@ -241,14 +251,17 @@ def _recovery_ledger_snapshot(admissions, calls, leases, usage, budgets, reserva
                           ("usage", usage), ("budgets", budgets), ("reservations", reservations))})
 
 
-async def _fresh_recovery_ledger_snapshot(session, operation_ids, job_id):
+async def _fresh_recovery_ledger_snapshot(session, operation_ids, job_id, *, operation_bound_only=False):
     admissions = await _fresh_recovery_model_rows(session, PublicOperationAdmission, PublicOperationAdmission.operation_id.in_(operation_ids))
     admission_ids = [row.id for row in admissions]
     calls = await _fresh_recovery_model_rows(session, PublicProviderLogicalCall, PublicProviderLogicalCall.admission_id.in_(admission_ids)) if admission_ids else []
     leases = await _fresh_recovery_model_rows(session, PublicResourceLease, PublicResourceLease.admission_id.in_(admission_ids)) if admission_ids else []
-    usage = await _fresh_recovery_model_rows(session, ProviderUsageReceipt, ProviderUsageReceipt.job_id == job_id)
-    budgets = await _fresh_recovery_model_rows(session, ProviderRuntimeBudget,
-        or_(ProviderRuntimeBudget.workspace_operation_id.in_(operation_ids), ProviderRuntimeBudget.job_id == job_id))
+    usage = ([] if operation_bound_only else await _fresh_recovery_model_rows(
+        session, ProviderUsageReceipt, ProviderUsageReceipt.job_id == job_id))
+    budget_predicate = ProviderRuntimeBudget.workspace_operation_id.in_(operation_ids)
+    if not operation_bound_only:
+        budget_predicate = or_(budget_predicate, ProviderRuntimeBudget.job_id == job_id)
+    budgets = await _fresh_recovery_model_rows(session, ProviderRuntimeBudget, budget_predicate)
     budget_ids = [row.id for row in budgets]
     reservations = await _fresh_recovery_model_rows(session, ProviderRuntimeReservation, ProviderRuntimeReservation.budget_id.in_(budget_ids)) if budget_ids else []
     return _recovery_ledger_snapshot(admissions, calls, leases, usage, budgets, reservations)

@@ -4,7 +4,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from services.generation_core.quality.advisory_record import content_digest
-from services.generation_core.quality.vision_advisory_prompt import DESIGN_LOCAL_AXES, baseline_review_active
+from services.generation_core.quality.vision_advisory_prompt import (
+    DESIGN_LOCAL_AXES, DESIGN_PRINCIPLES_VERSION, baseline_review_active,
+)
 from utils.hashing import sha256_hex
 
 
@@ -134,7 +136,8 @@ def prepare_saved_review(presentation, slides, indices, pngs, *, operation_id, o
         roles=[(slide.content or {}).get("role") or "content" for slide in slides],
         quality_review_contents=[(slide.content or {}).get("source") for slide in slides],
         quality_recovery_runtime_binding=content_digest(runtime), header_pages=header_pages)
-    context = _design_context(ctx, pages, job=job, read_png=lambda payload: None)
+    context = _design_context(ctx, pages, job=job, read_png=lambda payload: None,
+                              review_principles_version=DESIGN_PRINCIPLES_VERSION)
     baseline = baseline_review_active(context)
     capacity = plan["slide_count"] if baseline else plan["review_group_size"]
     if len(changed) > capacity or baseline and plan["slide_count"] != len(slides):

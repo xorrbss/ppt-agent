@@ -229,7 +229,10 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
         fixture_ctx = SimpleNamespace(snapshot=snapshot, roles=["content"], count=1,
             quality_review_contents=[source], header_pages=None)
         fixture_pages = [(dict(svg_content="<svg/>"), b"evaluation-png")]
+        build_design_context = deck_quality._design_context
+        seal_design_gate = deck_quality._seal_design_gate
         legacy_context = deck_quality._design_context(fixture_ctx, fixture_pages, job=None, read_png=lambda _: None)
+        assert "reviewPrinciplesVersion" not in legacy_context
         assert "common_header" not in legacy_context["style"]
         assert "common_header" not in legacy_context["pages"][0]
         contract, bindings = prepare_common_header(snapshot, outline, canvas_metadata_for_aspect_ratio("16:9"))
@@ -380,6 +383,7 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
         from copy import deepcopy
         from jsonschema import ValidationError, validate
         full_context = {**context, "reviewScope": "full", "deckComplete": True, "priorCandidates": {},
+            "reviewPrinciplesVersion": prompt_mod.DESIGN_PRINCIPLES_VERSION,
             "composition": {"pages": [{}], "groups": [{"pages": [0]}]}}
         full_axes = {name: dict(verdict="passed", severity="none", repairScope="none",
             visibleEvidence="Distinct grouping preserves readable source meaning.") for name in prompt_mod.DESIGN_AXES}
@@ -431,15 +435,33 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
         from utils.hashing import sha256_prefixed
         principles = prompt_mod.BASELINE_DESIGN_PRINCIPLES
         assert principles in full_messages[0].content
-        assert prompt_mod.baseline_design_principles_digest() == sha256_prefixed(principles.encode("utf-8"))
+        legacy_principles = prompt_mod.LEGACY_BASELINE_DESIGN_PRINCIPLES
+        legacy_principles_digest = "sha256:6e16d5429931c880019fa8346543acd5fd3a126f4172a57ec7635f0ba8c5d9ce"
+        assert sha256_prefixed(legacy_principles.encode("utf-8")) == legacy_principles_digest
+        assert prompt_mod.baseline_design_principles_digest() == legacy_principles_digest
+        assert prompt_mod.baseline_design_principles_digest(full_context) == sha256_prefixed(principles.encode("utf-8"))
+        for cue in ("actual painted distribution", "large empty bands", "Intentional whitespace",
+                    "low occupancy alone is not a defect", "grounded designTarget", "Do not invent an issue"):
+            assert cue in full_messages[0].content
+            assert cue not in messages[0].content
         identity_context = dict(policy={"id": "svg-quality-first", "version": 2},
-                                exampleDigests=[], priorCandidates={}, reviewScope="full")
-        legacy_context = {**identity_context, "policy": {"id": "svg-quality-first", "version": 1}}
-        no_policy_context = {**identity_context, "policy": None}
+                                exampleDigests=[], priorCandidates={}, reviewScope="full",
+                                reviewPrinciplesVersion=prompt_mod.DESIGN_PRINCIPLES_VERSION)
+        old_v2_context = {key: value for key, value in identity_context.items() if key != "reviewPrinciplesVersion"}
+        legacy_context = {**old_v2_context, "policy": {"id": "svg-quality-first", "version": 1}}
+        no_policy_context = {**old_v2_context, "policy": None}
         digest_args = ([png], 0, 0, [0])
         current_digest = deck_quality._group_review_input_digest(identity_context, *digest_args)
+        old_v2_digest = deck_quality._group_review_input_digest(old_v2_context, *digest_args)
+        old_digest_context = {**{key: value for key, value in old_v2_context.items()
+                                if key not in {'examples', 'priorCandidates'}},
+                              "reviewPrinciplesDigest": legacy_principles_digest}
+        assert old_v2_digest == deck_quality.content_digest(dict(context=old_digest_context,
+            examples=[], pngDigests=[sha256_hex(png)], priorCandidates={}, groupId="phase-0/group-0", indices=[0]))
+        assert current_digest != old_v2_digest
         legacy_digest = deck_quality._group_review_input_digest(legacy_context, *digest_args)
         no_policy_digest = deck_quality._group_review_input_digest(no_policy_context, *digest_args)
+        review_context["reviewPrinciplesVersion"] = prompt_mod.DESIGN_PRINCIPLES_VERSION
         saved_input = deck_quality._group_review_input_digest(
             deck_quality._local_group_context(review_context, [0], True), *digest_args)
         provider_calls = []
@@ -452,6 +474,8 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
             changed_principles.setattr(prompt_mod, "BASELINE_DESIGN_PRINCIPLES",
                                       principles + "Fixture semantic revision. ")
             assert deck_quality._group_review_input_digest(identity_context, *digest_args) != current_digest
+            assert deck_quality._group_review_input_digest(old_v2_context, *digest_args) == old_v2_digest
+            assert prompt_mod.baseline_design_principles_digest() == legacy_principles_digest
             assert deck_quality._group_review_input_digest(legacy_context, *digest_args) == legacy_digest
             assert deck_quality._group_review_input_digest(no_policy_context, *digest_args) == no_policy_digest
             changed_messages = prompt_mod.build_advisory_messages(b"", slide_count=1, required=True,
@@ -462,6 +486,66 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
                 _run(deck_quality._quality_first_deck_advisory(stale_ctx, [(page, png)], job=job,
                     read_png=lambda _: png, run_advisory=forbidden_provider, phase=0))
             assert provider_calls == []
+
+        # Existing failed gates keep their exact principles and verdict when read
+        # or inherited; only explicitly fresh contexts use density review v2.
+        from services.generation_core.quality.advisory_record import advisory_record, content_digest
+        from services.svg_final_selected_continuation import _consume_local_producer, INITIAL_NAMESPACE
+        valid_pages = [(page, png)]
+        failed_payload = deepcopy(full_payload)
+        failed_payload['slides'][0]['designTargets'] = []
+        failed_payload['slides'][0]['axes']['density_balance'].update(
+            verdict='failed', severity='major', repairScope='design_rewrite',
+            visibleEvidence='An unexplained lower band disconnects the source evidence.')
+        failed_payload['slides'][0]['issues'] = ['empty_band']
+        with monkeypatch.context() as actual_context:
+            actual_context.setattr(deck_quality, '_design_context', build_design_context)
+            actual_context.setattr(deck_quality, '_seal_design_gate', seal_design_gate)
+            actual_context.setattr(deck_quality, '_candidate_local_valid', lambda *args, **kwargs: True)
+            for version in (None, prompt_mod.DESIGN_PRINCIPLES_VERSION):
+                frozen_context = build_design_context(fixture_ctx, valid_pages, job=None,
+                    read_png=lambda _: png, review_principles_version=version)
+                frozen_review = shared_advisory._parse_baseline_review(
+                    failed_payload, slide_count=1, context=frozen_context)
+                vision = dict(promptVersion=prompt_mod.DESIGN_REVIEW_PROMPT_VERSION,
+                    reviewedPageIndices=[0], reviewedPngDigests=[sha256_hex(png)], designReview=frozen_review)
+                frozen_gate = seal_design_gate(frozen_context, valid_pages, [png], vision)
+                assert frozen_gate['status'] == 'failed'
+                assert frozen_gate.get('reviewPrinciplesVersion') == version
+                record = advisory_record({**vision, 'designGate': frozen_gate}, frozen_gate['pageDigests'])
+                before_record = deepcopy(record)
+                decision = deck_quality.quality_recovery_decisions(fixture_ctx, valid_pages, record)[0]
+                assert decision['repair_scope'] == 'design_rewrite'
+                assert decision['target_axes'] == ['density_balance']
+                assert deck_quality.reusable_final_deck_advisory(fixture_ctx, valid_pages, record,
+                    job=None, read_png=lambda _: png) == before_record
+                assert record == before_record
+                if version is None:
+                    fresh_context = build_design_context(fixture_ctx, valid_pages, job=None,
+                        read_png=lambda _: png, review_principles_version=prompt_mod.DESIGN_PRINCIPLES_VERSION)
+                    producer_group = deck_quality._local_group_context(frozen_context, [0], False)
+                    producer_input = deck_quality._group_review_input_digest(producer_group, *digest_args)
+                    producer_body = dict(inputDigest=producer_input, globalPageIndices=[0], reviewScope='local',
+                        groupId='phase-0/group-0', vision={'slides': [{'index': 1, 'issues': ['empty_band']}]})
+                    producer = {**producer_body, 'digest': content_digest(producer_body)}
+                    evidence = dict(proof=dict(owner_id=frozen_context['binding']['ownerId'],
+                        tenant_id=frozen_context['binding']['tenantId'], source_operation_id=None, source_job_id=None),
+                        consumer_runtime_equivalent=True, execution=dict(rounds=[dict(advisory=record,
+                            groups={'0': dict(status='completed', group_id='phase-0/group-0', review_scope='local', indices=[0],
+                                input_digest=producer_input, advisory=producer)})]))
+                    reused, consumers = {}, []
+                    _consume_local_producer(fresh_context, valid_pages, [png], evidence,
+                        reused, consumers, INITIAL_NAMESPACE)
+                    assert reused == {0: producer}
+                    assert consumers[0]['original_verdict_preserved'] is True
+                    assert record == before_record
+                forged_gate = {**frozen_gate, 'reviewPrinciplesVersion': 'unrecognized-principles'}
+                forged_gate['digest'] = content_digest({key: value for key, value in forged_gate.items() if key != 'digest'})
+                forged = advisory_record({**vision, 'designGate': forged_gate}, frozen_gate['pageDigests'])
+                assert deck_quality._gate_intact(forged) is None
+            with pytest.raises(ValueError, match='svg_quality_review_principles_version_invalid'):
+                build_design_context(fixture_ctx, valid_pages, job=None, read_png=lambda _: png,
+                    review_principles_version='unrecognized-principles')
 
 
 def test_the_system_prompt_shows_the_model_the_json_it_must_answer_with():

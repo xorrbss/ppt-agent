@@ -281,6 +281,10 @@ def _consume_local_producer(context, pages, renders, evidence, reused, consumers
     projected_context["binding"] = deepcopy(gate["binding"])
     projected_context["runtimeBinding"] = deepcopy(gate["runtimeBinding"])
     projected_context["priorCandidates"] = {}
+    if "reviewPrinciplesVersion" in gate:
+        projected_context["reviewPrinciplesVersion"] = gate["reviewPrinciplesVersion"]
+    else:
+        projected_context.pop("reviewPrinciplesVersion", None)
     for ordinal, start in enumerate(range(0, len(pages), 5)):
         if ordinal in reused:
             continue

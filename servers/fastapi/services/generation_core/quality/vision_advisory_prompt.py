@@ -42,7 +42,7 @@ SOURCE_AUTHORITY_REVIEW_RULES = (
     "under the existing unreviewed contract. Continue to assess actual visible fidelity, clarity and readability. "
 )
 
-BASELINE_DESIGN_PRINCIPLES = (
+LEGACY_BASELINE_DESIGN_PRINCIPLES = (
     "Under hierarchy_emphasis, distinguish a claim or conclusion actually stated in the source from a generic "
     "topic label: the primary source message should have visual priority. Never invent an unstated claim. "
     "Under information_structure, source words or separate cards alone do not establish that a relationship "
@@ -56,11 +56,33 @@ BASELINE_DESIGN_PRINCIPLES = (
     + SOURCE_AUTHORITY_REVIEW_RULES
 )
 
+DESIGN_PRINCIPLES_VERSION = "svg-source-design-principles/v2"
+BASELINE_DESIGN_PRINCIPLES = LEGACY_BASELINE_DESIGN_PRINCIPLES + (
+    "Under density_balance, inspect the full-resolution body's actual painted distribution, including "
+    "large empty bands and visual weight pooled on one side or corner. Intentional whitespace that "
+    "supports grouping, emphasis or breathing room is valid; low occupancy alone is not a defect. "
+    "When an unexplained empty band or imbalance materially weakens the source evidence's reading flow, "
+    "record the visible region and source basis under density_balance, using failed with design_rewrite "
+    "for a major defect or a grounded designTarget for a concrete improvement goal. Do not invent an "
+    "issue, impose a fill ratio or layout, add unsupported content, repeat evidence, enlarge empty rows "
+    "or decoration, remove facts or reduce readable type to fill space. "
+)
 
-def baseline_design_principles_digest():
-    """Identity of the exact v2 semantic principles sent to the reviewer."""
+
+def baseline_design_principles(context=None):
+    """Missing markers identify immutable reviews made before density review v2."""
+    version = (context or {}).get("reviewPrinciplesVersion")
+    if version is None:
+        return LEGACY_BASELINE_DESIGN_PRINCIPLES
+    if version == DESIGN_PRINCIPLES_VERSION:
+        return BASELINE_DESIGN_PRINCIPLES
+    raise ValueError("svg_quality_review_principles_version_invalid")
+
+
+def baseline_design_principles_digest(context=None):
+    """Identity of the exact frozen or explicitly selected review principles."""
     from utils.hashing import sha256_prefixed
-    return sha256_prefixed(BASELINE_DESIGN_PRINCIPLES.encode("utf-8"))
+    return sha256_prefixed(baseline_design_principles(context).encode("utf-8"))
 
 
 def baseline_review_active(context):
@@ -177,7 +199,7 @@ def _baseline_review_messages(sheet, *, slide_count, pngs, context):
         "advisory uses minor/none; failed uses major or critical and local_repair or design_rewrite; "
         "unreviewed uses none/none. Missing evidence is unreviewed. Preserve historical verdicts. "
         "A valid, passed page may still need better message emphasis, faithful relationships, image readability "
-        "or space allocation. " + BASELINE_DESIGN_PRINCIPLES + header_guidance + "Record designTargets only for concrete visible shortfalls tied to original source "
+        "or space allocation. " + baseline_design_principles(context) + header_guidance + "Record designTargets only for concrete visible shortfalls tied to original source "
         "meaning and supplied design evidence. Give the existing axis, visible region, observed shortfall, "
         "source basis and specific improvement goal. Taste alone, changed geometry or change for its own sake "
         "requires no target. Empty designTargets means no grounded goal; uncertainty never certifies quality. "

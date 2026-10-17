@@ -3166,6 +3166,44 @@ async def _svg_partial_append_only_contract(tmp_path, monkeypatch, *, source_rou
                     from sqlalchemy import update
                     from utils.owner_context import get_current_owner_id, get_current_tenant_id
 
+                    # A separately fenced preview legitimately appends job-wide
+                    # usage and a legacy job budget after an episode archive.
+                    preview = WorkspaceOperation(owner_id=source.owner_id,owner_scope=source.owner_scope,
+                        presentation_id=source.presentation_id,conversation_id=source.conversation_id,
+                        anchor_position=1,kind="slide.regenerate.preview",state="succeeded",
+                        request_payload={"principal_tenant_id":"partial-test"},
+                        request_hash="8"*64,idempotency_key_hash="9"*64,expected_revision=0)
+                    session.add(preview)
+                    await session.flush()
+                    preview_usage = ProviderUsageReceipt(job_id=parent_id,
+                        operation=f"svg_page_preview_{preview.id.hex}",stage="author",
+                        provider="unavailable",model="unavailable",receipt_key_hash="e"*64,
+                        retry_class="initial",outcome="succeeded",latency_ms=0,usage_state="unavailable")
+                    preview_budget = ProviderRuntimeBudget(job_id=parent_id,
+                        owner_id=source.owner_id,tenant_id="partial-test")
+                    session.add_all((preview_usage,preview_budget))
+                    await session.flush()
+                    session.add(ProviderRuntimeReservation(budget_id=preview_budget.id,
+                        reservation_key_hash="f"*64,state="reconciled",estimated_cost=1,
+                        actual_cost=1,outcome="succeeded",lease_token_hash="a"*64,
+                        lease_expires_at=get_current_utc_datetime()))
+                    await session.commit()
+                    assert await recovery.verify_episode(session,next_operation,next_job) == next_manifest
+
+                    # New UNKNOWN work owned by the archived source operation
+                    # is still forbidden, even before the memo is populated.
+                    mutation = await session.begin_nested()
+                    try:
+                        session.add(PublicProviderLogicalCall(admission_id=admission_id,stage="author",
+                            slide_index=1,logical_call_ordinal=2,retry_class="initial",
+                            idempotency_key_hash="f"*64,estimated_cost_microunits=100,
+                            state="reserved",outcome="unknown"))
+                        await session.flush()
+                        with pytest.raises(recovery.PartialRecoveryRejected,match="history_changed"):
+                            await recovery.verify_episode(session,next_operation,next_job)
+                    finally:
+                        await mutation.rollback()
+
                     checks = []
                     original_once = recovery._verify_episode_once
                     async def counted_once(session, operation, job, **kwargs):

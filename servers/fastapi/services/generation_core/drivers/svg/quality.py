@@ -19,7 +19,8 @@ from collections.abc import Mapping
 
 from services.generation_core.quality.advisory_record import advisory_record, content_digest, record_matches
 from services.generation_core.quality.vision_advisory_prompt import (
-    DESIGN_AXES, DESIGN_REVIEW_PROMPT_VERSION, baseline_review_active, baseline_design_principles_digest,
+    DESIGN_AXES, DESIGN_REVIEW_PROMPT_VERSION, DESIGN_PRINCIPLES_VERSION,
+    baseline_review_active, baseline_design_principles_digest,
 )
 from services.generation_core.quality.page_outcome import (
     PageOutcome, classify_page_outcomes, deck_quality_summary,
@@ -105,7 +106,7 @@ async def deck_advisory(ctx, pages, *, job, read_png, run_advisory, round_ordina
     return record
 
 
-def _design_context(ctx, pages, *, job, read_png):
+def _design_context(ctx, pages, *, job, read_png, review_principles_version=None):
     """Actual selected style/source evidence, without copying unrelated deck SVGs."""
     from utils.owner_context import get_current_owner_id, get_current_tenant_id
     from services.generation_core.drivers.svg.quality_recovery import _quality_json_value
@@ -214,6 +215,9 @@ def _design_context(ctx, pages, *, job, read_png):
         # Admitted user constraints, once per deck; never authored declarations.
         context["sourceDirectives"] = request["instructions"]
     if baseline_review_active(context):
+        if review_principles_version is not None:
+            baseline_design_principles_digest({"reviewPrinciplesVersion": review_principles_version})
+            context["reviewPrinciplesVersion"] = review_principles_version
         # Stable anonymous positioning binds to the displayed bytes, never author order.
         vector = content_digest([sha256_hex(png if png is not None else read_png(payload)) for payload, png in pages])
         context["blindVariantLabel"] = "A" if int(vector[-1], 16) % 2 else "B"
@@ -228,6 +232,8 @@ def _local_review_digest(context, payload, png, index):
         source=context["pages"][index], preservation=payload.get("source_preservation"), quality=quality,
         snapshot=context["snapshotDigest"], runtime=context["runtimeBinding"], policy=context["policy"],
         binding=context["binding"],
+        **({"reviewPrinciplesVersion": context["reviewPrinciplesVersion"]}
+           if "reviewPrinciplesVersion" in context else {}),
         **({"sourceDirectives": context["sourceDirectives"]} if "sourceDirectives" in context else {})))
 
 
@@ -255,7 +261,8 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
     if any(not isinstance(png, bytes) or not png for png in renders):
         return advisory_record({"skipped": "render_missing"},
             [sha256_hex((payload.get("svg_content") or "").encode()) for payload, _ in pages])
-    context = _design_context(ctx, pages, job=job, read_png=read_png)
+    context = _design_context(ctx, pages, job=job, read_png=read_png,
+                              review_principles_version=DESIGN_PRINCIPLES_VERSION)
     final_control = plan.get("final_selected_review") if final_selected else None
     if final_selected and final_control is None:
         raise ValueError("svg_final_selected_review_not_admitted")
@@ -539,6 +546,8 @@ def _reusable_live_local_pages(context, pages, renders, producers):
 
 
 def _seal_design_gate(context, pages, renders, vision):
+    if baseline_review_active(context):
+        baseline_design_principles_digest(context)
     page_digests = [sha256_hex((payload.get("svg_content") or "").encode()) for payload, _ in pages]
     png_digests = [sha256_hex(png) for png in renders]
     base = dict(schemaVersion="svg-quality-first-design-gate/v1", policy=context["policy"],
@@ -551,6 +560,8 @@ def _seal_design_gate(context, pages, renders, vision):
             sources=context["pages"], style=context["styleDigest"], examples=context["exampleDigests"],
             roles=context["roles"], policy=context["policy"], binding=context["binding"],
             **({"sourceDirectives": context["sourceDirectives"]} if "sourceDirectives" in context else {}))))
+    if "reviewPrinciplesVersion" in context:
+        base["reviewPrinciplesVersion"] = context["reviewPrinciplesVersion"]
     review = vision.get("designReview") or {}
     reviewed = review.get("pages") or []
     review_by_index = {page.get("index"): page for page in reviewed if isinstance(page, Mapping)
@@ -646,6 +657,11 @@ def _gate_intact(advisory):
     body = {key: value for key, value in gate.items() if key != "digest"}
     if gate.get("digest") != content_digest(body):
         return None
+    if baseline_review_active(gate):
+        try:
+            baseline_design_principles_digest(gate)
+        except ValueError:
+            return None
     from utils.owner_context import get_current_owner_id, get_current_tenant_id
     owner, tenant = get_current_owner_id(), get_current_tenant_id()
     binding = gate.get("binding") or {}
@@ -822,7 +838,8 @@ def reusable_final_deck_advisory(ctx, pages, advisory, *, job, read_png):
     renders = [png if png is not None else read_png(payload) for payload, png in pages]
     if any(not isinstance(png, bytes) or not png for png in renders):
         return None
-    context = _design_context(ctx, pages, job=job, read_png=read_png)
+    context = _design_context(ctx, pages, job=job, read_png=read_png,
+                              review_principles_version=gate.get("reviewPrinciplesVersion"))
     candidate = _seal_design_gate(context, pages, renders, advisory.get("vision") or {})
     identities = ("policy", "binding", "pageDigests", "pngDigests", "styleDigest", "snapshotDigest",
                   "runtimeBinding", "exampleDigests", "inputDigest", "deckContextDigest")
@@ -860,7 +877,7 @@ __all__ = ["classify_pages", "deck_advisory", "page_outcome", "quality_recovery_
 def _group_review_input_digest(group_context, group_renders, phase, ordinal, indices):
     public_context = {key: value for key, value in group_context.items() if key not in {'examples', 'priorCandidates'}}
     if baseline_review_active(group_context):
-        public_context["reviewPrinciplesDigest"] = baseline_design_principles_digest()
+        public_context["reviewPrinciplesDigest"] = baseline_design_principles_digest(group_context)
     input_digest = content_digest(dict(context=public_context, examples=group_context['exampleDigests'], pngDigests=[sha256_hex(png) for png in group_renders], priorCandidates={index: {key: value for key, value in prior.items() if key != 'png'} for index, prior in group_context['priorCandidates'].items()}, groupId=f'phase-{phase}/group-{ordinal}', indices=indices))
     return input_digest
 
