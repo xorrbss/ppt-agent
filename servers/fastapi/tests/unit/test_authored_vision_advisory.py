@@ -490,7 +490,9 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
         # Existing failed gates keep their exact principles and verdict when read
         # or inherited; only explicitly fresh contexts use density review v2.
         from services.generation_core.quality.advisory_record import advisory_record, content_digest
-        from services.svg_final_selected_continuation import _consume_local_producer, INITIAL_NAMESPACE
+        from services.svg_final_selected_continuation import (
+            _consume_local_producer, INITIAL_NAMESPACE, NAMESPACE, FinalSelectedEvidenceError,
+        )
         valid_pages = [(page, png)]
         failed_payload = deepcopy(full_payload)
         failed_payload['slides'][0]['designTargets'] = []
@@ -521,6 +523,10 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
                     job=None, read_png=lambda _: png) == before_record
                 assert record == before_record
                 if version is None:
+                    legacy_frozen_context = deepcopy(frozen_context)
+                    legacy_gate = deepcopy(frozen_gate)
+                    legacy_review = deepcopy(frozen_review)
+                    legacy_vision = deepcopy(vision)
                     fresh_context = build_design_context(fixture_ctx, valid_pages, job=None,
                         read_png=lambda _: png, review_principles_version=prompt_mod.DESIGN_PRINCIPLES_VERSION)
                     producer_group = deck_quality._local_group_context(frozen_context, [0], False)
@@ -534,7 +540,11 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
                             groups={'0': dict(status='completed', group_id='phase-0/group-0', review_scope='local', indices=[0],
                                 input_digest=producer_input, advisory=producer)})]))
                     reused, consumers = {}, []
-                    _consume_local_producer(fresh_context, valid_pages, [png], evidence,
+                    with pytest.raises(FinalSelectedEvidenceError, match='svg_final_selected_context_unproven'):
+                        _consume_local_producer(fresh_context, valid_pages, [png], evidence,
+                            reused, consumers, INITIAL_NAMESPACE)
+                    assert reused == {} and consumers == []
+                    _consume_local_producer(frozen_context, valid_pages, [png], evidence,
                         reused, consumers, INITIAL_NAMESPACE)
                     assert reused == {0: producer}
                     assert consumers[0]['original_verdict_preserved'] is True
@@ -546,6 +556,92 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
             with pytest.raises(ValueError, match='svg_quality_review_principles_version_invalid'):
                 build_design_context(fixture_ctx, valid_pages, job=None, read_png=lambda _: png,
                     review_principles_version='unrecognized-principles')
+
+        # Resume an old final-selected parent with completed local/global groups.
+        # Its absent marker stays legacy even when the process defaults to v2.
+        from services.generation_core.drivers.svg import quality_recovery as recovery
+        from services.authored_checkpoint_errors import AuthoredStageError
+        resume_context = deepcopy(legacy_frozen_context)
+        resume_context.update(runtimeBinding='current-runtime', mandatoryEvidence=[True],
+            binding=dict(jobId='current-job', presentationId='current-presentation', ownerId='owner', tenantId='tenant'),
+            priorCandidates={}, composition=dict(pages=[{}], groups=[]))
+        old_producer_gate = deepcopy(legacy_gate)
+        old_producer_record = advisory_record({**legacy_vision, 'designGate': old_producer_gate}, old_producer_gate['pageDigests'])
+        control = dict(review_call_limit=2, local_group_size=5, global_format_retry_limit=0, physical_offset=1)
+        resume_plan = {**plan, 'final_selected_review': control}
+        local_context = deck_quality._local_group_context(resume_context, [0], False)
+        global_context = {**resume_context, 'reviewScope': 'global', 'representativeIndices': [],
+                          'examples': [], 'exampleDigests': []}
+        local_page = deepcopy(legacy_review['pages'][0])
+        local_page['axes'] = {name: local_page['axes'][name] for name in prompt_mod.DESIGN_LOCAL_AXES}
+        global_page = dict(index=0, evaluated=True, issues=[], designTargets=[],
+            axes={'repetition_deck_flow': deepcopy(legacy_review['pages'][0]['axes']['repetition_deck_flow'])})
+        records = {}
+        for ordinal, (group_context, group_vision) in enumerate([
+            (local_context, dict(designReview=dict(pages=[local_page], candidateComparisons=[]))),
+            (global_context, dict(designReview=dict(pages=[global_page], candidateComparisons=[],
+                deckFlow=dict(evaluated=True, visibleEvidence='The source sequence remains coherent.', repetitionGroups=[])))),
+        ]):
+            group_input = deck_quality._group_review_input_digest(group_context, [png], 0, ordinal, [0])
+            body = dict(groupId=f'phase-0/group-{ordinal}', globalPageIndices=[0], inputDigest=group_input,
+                        reviewScope=group_context['reviewScope'], vision=group_vision)
+            records[str(ordinal)] = dict(status='completed', input_digest=group_input,
+                advisory={**body, 'digest': content_digest(body)})
+        proofs = [dict(round_ordinal=0, producer_gate_digest=old_producer_gate['digest'],
+            producer_input_digest=old_producer_gate['inputDigest'], producer_binding=deepcopy(old_producer_gate['binding']))]
+        identity = dict(selected=[dict(svg=sha256_hex(page['svg_content'].encode()), png=sha256_hex(png),
+                            input_digest=page.get('input_digest'))], producer_proofs=proofs,
+            runtime_binding='current-runtime', snapshot_digest=recovery._digest(fixture_ctx.snapshot), control=control)
+        old_execution = dict(rounds=[dict(status='completed', advisory=old_producer_record)],
+            final_selected_review=dict(namespace=NAMESPACE, status='review_inflight',
+                source_proof_digest=recovery._digest(identity), groups=records))
+        resume_calls, persisted = [], []
+        async def authority(*args):
+            return None
+        async def persist_resume():
+            persisted.append(True)
+        async def forbid_resume_provider(*args, **kwargs):
+            resume_calls.append(True)
+            raise AssertionError('A saved group cannot purchase another review.')
+        def frozen_resume_context(*args, review_principles_version=None, **kwargs):
+            result = deepcopy(resume_context)
+            if review_principles_version is not None:
+                result['reviewPrinciplesVersion'] = review_principles_version
+            return result
+        resume_ctx = SimpleNamespace(snapshot=fixture_ctx.snapshot, quality_recovery_runtime_binding='current-runtime',
+            quality_review_principles_version=prompt_mod.DESIGN_PRINCIPLES_VERSION)
+        with monkeypatch.context() as resume_scope:
+            resume_scope.setattr(recovery, 'ensure_recovery_authority', authority)
+            resume_scope.setattr(recovery, 'read_quality_recovery_execution_plan', lambda *args, **kwargs: resume_plan)
+            resume_scope.setattr(svg_authoring_profile, 'read_quality_recovery_execution_plan', lambda *args, **kwargs: resume_plan)
+            resume_scope.setattr(deck_quality, '_design_context', frozen_resume_context)
+            resume_scope.setattr(deck_quality, '_seal_design_gate', seal_design_gate)
+            resumed = deepcopy(old_execution)
+            result = _run(recovery._review_live_final_selected(resume_ctx, valid_pages, job,
+                SimpleNamespace(read_png=lambda _: png), forbid_resume_provider, resumed, persist_resume))
+            assert resumed['final_selected_review']['status'] == 'completed'
+            assert 'reviewPrinciplesVersion' not in resumed['final_selected_review']
+            assert 'reviewPrinciplesVersion' not in result['vision']['designGate']
+            assert resumed['final_selected_review']['groups'] == records
+            assert resume_ctx.quality_review_principles_version == prompt_mod.DESIGN_PRINCIPLES_VERSION
+            assert resume_calls == [] and old_execution['final_selected_review']['status'] == 'review_inflight'
+            unknown = deepcopy(old_execution)
+            unknown['final_selected_review']['groups']['0']['status'] = 'review_inflight'
+            before_unknown_groups = deepcopy(unknown['final_selected_review']['groups'])
+            with pytest.raises(AuthoredStageError) as unknown_error:
+                _run(recovery._review_live_final_selected(resume_ctx, valid_pages, job,
+                    SimpleNamespace(read_png=lambda _: png), forbid_resume_provider, unknown, persist_resume))
+            assert unknown_error.value.code == 'public_provider_result_unknown'
+            assert unknown['final_selected_review']['groups'] == before_unknown_groups
+            assert 'reviewPrinciplesVersion' not in unknown['final_selected_review']
+            assert resume_calls == []
+            forged_scope = deepcopy(old_execution)
+            forged_scope['final_selected_review'].update(status='completed', reviewPrinciplesVersion='unrecognized-principles')
+            with pytest.raises(ValueError, match='svg_quality_review_principles_version_invalid'):
+                _run(recovery._review_live_final_selected(resume_ctx, valid_pages, job,
+                    SimpleNamespace(read_png=lambda _: png), forbid_resume_provider, forged_scope, persist_resume))
+        assert recovery._review_scope_principles({}) is None
+        assert recovery._review_scope_principles({'reviewPrinciplesVersion': prompt_mod.DESIGN_PRINCIPLES_VERSION}) == prompt_mod.DESIGN_PRINCIPLES_VERSION
 
 
 def test_the_system_prompt_shows_the_model_the_json_it_must_answer_with():

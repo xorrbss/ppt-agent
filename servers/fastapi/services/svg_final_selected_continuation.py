@@ -265,6 +265,8 @@ def _consume_local_producer(context, pages, renders, evidence, reused, consumers
     original = evidence["execution"]["rounds"][0]
     gate = _gate_intact(original["advisory"])
     _require(gate is not None)
+    if gate.get("reviewPrinciplesVersion") != context.get("reviewPrinciplesVersion"):
+        raise FinalSelectedEvidenceError("svg_final_selected_context_unproven")
     _require(context["binding"].get("ownerId") == proof["owner_id"])
     _require(context["binding"].get("tenantId") == proof["tenant_id"])
     if (evidence.get("consumer_binding") is not None

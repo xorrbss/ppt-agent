@@ -13,6 +13,9 @@ from services.authored_checkpoint_errors import AuthoredStageError
 from services.svg_authoring_profile import read_quality_recovery_plan
 from services.svg_authoring_profile import read_quality_recovery_execution_plan
 from services.svg_presentation_checkpoint import _digest, _provider_attempt_count, _provider_attempt_limit
+from services.generation_core.quality.vision_advisory_prompt import (
+    DESIGN_PRINCIPLES_VERSION, baseline_design_principles_digest,
+)
 from utils.hashing import sha256_hex
 
 
@@ -29,6 +32,12 @@ def _quality_json_value(value):
 
 def actual_provider_attempt_count(payload):
     return _provider_attempt_count(payload) + len(payload.get("provider_failures", []))
+
+
+def _review_scope_principles(scope):
+    """An existing scope without a marker keeps its original legacy criteria."""
+    baseline_design_principles_digest(scope)
+    return scope.get("reviewPrinciplesVersion")
 
 
 @dataclass
@@ -306,6 +315,9 @@ async def recover_deck(ctx, request, presentation_id, outline, job, pages, state
     execution = deepcopy(seed.get("quality_recovery_execution") or {})
     if execution and execution.get("binding") != binding:
         raise ValueError("svg_quality_recovery_evidence_conflict")
+    if not execution:
+        execution["reviewPrinciplesVersion"] = DESIGN_PRINCIPLES_VERSION
+    ctx.quality_review_principles_version = _review_scope_principles(execution)
     execution.setdefault("schema", "svg-quality-recovery-execution/v1")
     execution.setdefault("binding", binding)
     execution.setdefault("rounds", [])
@@ -566,6 +578,7 @@ async def _review_final_selected(ctx, request, pages, job, hooks, run_advisory, 
             raise ValueError("svg_final_selected_evidence_unproven")
     marker = execution.get("final_selected_review")
     if marker is not None:
+        _review_scope_principles(marker)
         if marker.get("namespace") != NAMESPACE or marker.get("source_proof_digest") != proof["digest"]:
             raise ValueError("svg_final_selected_review_source_changed")
         if marker.get("status") == "completed":
@@ -575,6 +588,8 @@ async def _review_final_selected(ctx, request, pages, job, hooks, run_advisory, 
     else:
         marker = dict(namespace=NAMESPACE, status="review_inflight",
                       source_proof_digest=proof["digest"], producer_proof=proof, groups={})
+        if "reviewPrinciplesVersion" in execution:
+            marker["reviewPrinciplesVersion"] = execution["reviewPrinciplesVersion"]
         execution["final_selected_review"] = marker
         await persist()
     checkpoint_lock = asyncio.Lock()
@@ -592,7 +607,10 @@ async def _review_final_selected(ctx, request, pages, job, hooks, run_advisory, 
                     additional_producers=[original_producer] if original_producer else [],
                     consumer_runtime_equivalent=bool(getattr(ctx, "quality_recovery_checkpoint_reuse_eligible", False)))
     original_checkpoint = getattr(ctx, "quality_recovery_review_group_checkpoint", None)
+    original_principles = getattr(ctx, "quality_review_principles_version", DESIGN_PRINCIPLES_VERSION)
+    scope_principles = _review_scope_principles(marker)
     ctx.quality_recovery_review_group_checkpoint = final_checkpoint
+    ctx.quality_review_principles_version = scope_principles
     try:
         advisory = await deck_quality.deck_advisory(
             ctx, pages, job=job, read_png=hooks.read_png, run_advisory=run_advisory,
@@ -604,6 +622,7 @@ async def _review_final_selected(ctx, request, pages, job, hooks, run_advisory, 
         raise
     finally:
         ctx.quality_recovery_review_group_checkpoint = original_checkpoint
+        ctx.quality_review_principles_version = original_principles
     await ensure_recovery_authority(job, hooks)
     marker.update(status="completed", advisory=advisory)
     await persist()
@@ -636,6 +655,7 @@ async def _review_live_final_selected(ctx, pages, job, hooks, run_advisory, exec
     source_digest = _digest(identity)
     marker = execution.get("final_selected_review")
     if marker is not None:
+        _review_scope_principles(marker)
         if marker.get("namespace") != NAMESPACE or marker.get("source_proof_digest") != source_digest:
             raise ValueError("svg_final_selected_review_source_changed")
         if marker.get("status") == "completed":
@@ -649,6 +669,8 @@ async def _review_live_final_selected(ctx, pages, job, hooks, run_advisory, exec
     else:
         marker = dict(namespace=NAMESPACE, status="review_inflight", source_proof_digest=source_digest,
                       live_producer_proofs=proofs, groups={})
+        if "reviewPrinciplesVersion" in execution:
+            marker["reviewPrinciplesVersion"] = execution["reviewPrinciplesVersion"]
         execution["final_selected_review"] = marker
         await persist()
     checkpoint_lock = asyncio.Lock()
@@ -664,7 +686,10 @@ async def _review_live_final_selected(ctx, pages, job, hooks, run_advisory, exec
             await persist()
             return value
     original_checkpoint = getattr(ctx, "quality_recovery_review_group_checkpoint", None)
+    original_principles = getattr(ctx, "quality_review_principles_version", DESIGN_PRINCIPLES_VERSION)
+    scope_principles = _review_scope_principles(marker)
     ctx.quality_recovery_review_group_checkpoint = final_checkpoint
+    ctx.quality_review_principles_version = scope_principles
     try:
         advisory = await deck_quality.deck_advisory(ctx, pages, job=job, read_png=hooks.read_png,
             run_advisory=run_advisory, round_ordinal=0, final_selected=True,
@@ -675,6 +700,7 @@ async def _review_live_final_selected(ctx, pages, job, hooks, run_advisory, exec
         raise
     finally:
         ctx.quality_recovery_review_group_checkpoint = original_checkpoint
+        ctx.quality_review_principles_version = original_principles
     await ensure_recovery_authority(job, hooks)
     marker.update(status="completed", advisory=advisory)
     await persist()

@@ -262,7 +262,8 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
         return advisory_record({"skipped": "render_missing"},
             [sha256_hex((payload.get("svg_content") or "").encode()) for payload, _ in pages])
     context = _design_context(ctx, pages, job=job, read_png=read_png,
-                              review_principles_version=DESIGN_PRINCIPLES_VERSION)
+                              review_principles_version=getattr(
+                                  ctx, "quality_review_principles_version", DESIGN_PRINCIPLES_VERSION))
     final_control = plan.get("final_selected_review") if final_selected else None
     if final_selected and final_control is None:
         raise ValueError("svg_final_selected_review_not_admitted")
@@ -498,6 +499,8 @@ def _reusable_live_local_pages(context, pages, renders, producers):
         return reused, consumers
     for producer in producers:
         gate = _gate_intact(producer)
+        if gate is not None and gate.get("reviewPrinciplesVersion") != context.get("reviewPrinciplesVersion"):
+            raise ValueError("svg_quality_recovery_review_principles_conflict")
         if gate is None or any(gate.get(key) != context.get(key) for key in
                 ("policy", "binding", "runtimeBinding", "snapshotDigest", "styleDigest", "exampleDigests")):
             continue
