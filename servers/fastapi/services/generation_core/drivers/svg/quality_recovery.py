@@ -280,8 +280,8 @@ def _restore_candidate(archive, current, job):
         raise ValueError("svg_quality_recovery_candidate_invalid")
     restored = deepcopy(archive["evidence"])
     restored.update(svg_content=raw.decode("utf-8"), last_valid_svg=raw.decode("utf-8"))
-    # Provider history is append-only even when the older drawing wins.
-    for key in ("attempts", "model_attempt_count", "provider_failures", "provider_diagnostics", "quality_recovery_execution"):
+    # Keep provider history and its correction authority when the older drawing wins.
+    for key in ("attempts", "model_attempt_count", "provider_failures", "provider_diagnostics", "quality_recovery_execution", "correction_mode"):
         if key in current:
             restored[key] = deepcopy(current[key])
     restored["quality_recovery"] = deepcopy(current.get("quality_recovery", {}))

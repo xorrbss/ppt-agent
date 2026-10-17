@@ -240,7 +240,8 @@ async def _verify_inherited_source_manifest(session, manifest, pointer, *, conte
             PresentationGenerationJob.workspace_operation_id == operation.id))
         if job is None:
             raise ValueError("svg_asset_source_revision_conflict")
-        partial_manifest = await verify_episode(session, operation, job)
+        partial_manifest = await verify_episode(session, operation, job,
+            require_current_code=operation.state not in {"completed", "succeeded"})
         asset_binding = partial_manifest["source_asset_binding"]
         binding = dict(presentation_id=partial_manifest["presentation_id"],
             presentation_revision=partial_manifest["presentation_revision"],

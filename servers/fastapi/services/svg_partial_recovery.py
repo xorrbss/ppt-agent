@@ -331,7 +331,7 @@ async def _verify_append_only_edge(session, child, parent):
         PresentationGenerationJob.presentation_id == child.presentation_id))
     if job is None:
         reject("svg_partial_recovery_lineage_conflict")
-    await verify_episode(session, child, job)
+    await verify_episode(session, child, job, require_current_code=False)
 
 
 def _base_code_digest():
@@ -474,7 +474,8 @@ async def verified_header_producer(session, operation, job):
         if producer.id in seen or current is None:
             reject("svg_partial_recovery_header_binding_invalid")
         seen.add(producer.id)
-        manifest = await verify_episode(session,current,producer)
+        manifest = await verify_episode(session,current,producer,
+            require_current_code=not _historical_episode(current, producer))
         producer = await session.get(PresentationGenerationJob,uuid.UUID(manifest["job_id"]))
         if (producer is None or producer.svg_style_snapshot != job.svg_style_snapshot
                 or producer.authored_outline != job.authored_outline):
@@ -2136,9 +2137,16 @@ async def _verify_producer_rows(session, manifest, archive):
     return jobs[0]
 
 
-async def verify_episode(session, operation, job):
+def _historical_episode(operation, job):
+    return (operation.state in {"failed", "cancelled", "dead_letter", "completed", "succeeded"}
+            and job.state in {"failed", "cancelled", "published", "completed", "succeeded"})
+
+
+async def verify_episode(session, operation, job, *, require_current_code=True):
     from models.sql.async_presentation_generation_status import AsyncPresentationGenerationTaskModel
     from models.sql.source_content import SourceContentManifestRecord
+    if not require_current_code and not _historical_episode(operation, job):
+        reject("svg_partial_recovery_episode_unbound")
     manifest = operation.request_payload.get("svg_partial_recovery_manifest") or {}
     archive = operation.request_payload.get(ARCHIVE_KEY) or {}
     lineage = job.request_payload.get(LINEAGE_KEY) or {}
@@ -2178,7 +2186,7 @@ async def verify_episode(session, operation, job):
             or digest(frozen_episode_payload(job.request_payload, manifest)) != manifest.get("frozen_request_digest")
             or digest(job.svg_style_snapshot) != manifest.get("frozen_style_digest")
             or job.authored_outline != (archive.get("job") or {}).get("authored_outline")
-            or _code_digest() != manifest.get("code_digest")):
+            or (require_current_code and _code_digest() != manifest.get("code_digest"))):
         reject("svg_partial_recovery_episode_unbound")
     _verify_frozen_header_outline(job)
     if append_only:
