@@ -763,6 +763,60 @@ async def current_svg_artifact_fidelity(session, presentation, review_operation)
     return dict(view, status=domain["status"], reasonCode=domain.get("reasonCode"))
 
 
+async def _build_slide_asset_bindings(context, *, slides, service, session, tenant_id, export_format, canvas, grant):
+    """Share producer proof only inside this export preparation transaction."""
+    from models.sql.presentation import PresentationModel
+    from services.artifact_store import _locked_current_operation
+    from services.svg_document_mutations import _PublicationSourceVerification
+    from services.svg_export_assets import build_slide_export_assets
+    from utils.datetime_utils import as_utc, get_current_utc_datetime
+
+    claim = context.claim
+    def claim_binding():
+        return (claim.operation_id, claim.presentation_id, claim.owner_id, claim.attempt_number,
+                claim.attempt_token, claim.fencing_token, claim.expected_revision, claim.kind, tenant_id)
+    expected_claim = claim_binding()
+    presentation = await session.get(PresentationModel, claim.presentation_id, populate_existing=True)
+    if (presentation is None or presentation.owner_id != claim.owner_id
+            or presentation.revision != claim.expected_revision):
+        raise ValueError("svg_export_source_snapshot_changed")
+    verification = _PublicationSourceVerification(session, presentation)
+
+    async def verify_source(*args):
+        if claim_binding() != expected_claim:
+            raise ValueError("svg_export_asset_fence_lost")
+        _require_deadline_budget(grant)
+        return await verification.verify(*args)
+
+    bindings = []
+    for slide in slides:
+        await context.raise_if_cancelled()
+        _require_deadline_budget(grant)
+        bindings.append(await build_slide_export_assets(slide, service=service, session=session,
+            claim=claim, tenant_id=tenant_id, export_format=export_format, canvas=canvas,
+            _source_verifier=verify_source))
+    await verification.revalidate()
+    await context.raise_if_cancelled()
+    _require_deadline_budget(grant)
+    if claim_binding() != expected_claim:
+        raise ValueError("svg_export_asset_fence_lost")
+    current = await _locked_current_operation(session, operation_id=claim.operation_id,
+        owner_id=claim.owner_id, tenant_id=tenant_id, attempt_number=claim.attempt_number,
+        attempt_token=claim.attempt_token, fencing_token=claim.fencing_token, operation_kind="export")
+    if current is None:
+        raise ValueError("svg_export_asset_fence_lost")
+    await session.refresh(current)
+    await session.refresh(presentation, attribute_names=["owner_id", "revision"])
+    if (current.presentation_id != claim.presentation_id
+            or current.expected_revision != claim.expected_revision
+            or current.cancel_requested_at is not None or current.lease_expires_at is None
+            or as_utc(current.lease_expires_at) <= get_current_utc_datetime()
+            or presentation.owner_id != claim.owner_id or presentation.revision != claim.expected_revision):
+        raise ValueError("svg_export_asset_fence_lost")
+    _require_deadline_budget(grant)
+    return bindings
+
+
 async def execute_svg_workspace_export(context, *, presentation, admission, session_factory):
     from services.workspace_operation_handler_registry import (
         NonRetryableWorkspaceOperationError,
@@ -900,16 +954,11 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
         async def run_worker(slide_refs):
             asset_bindings = None
             if any(asset is not None for asset in source_assets):
-                from services.svg_export_assets import build_slide_export_assets
                 service = configured_public_artifact_service()
-                asset_bindings = []
                 async with session_factory() as session:
-                    for slide in slides:
-                        await context.raise_if_cancelled()
-                        _require_deadline_budget(grant)
-                        asset_bindings.append(await build_slide_export_assets(
-                            slide, service=service, session=session, claim=claim, tenant_id=admission.tenant_id,
-                            export_format=fmt, canvas=canvas))
+                    asset_bindings = await _build_slide_asset_bindings(context, slides=slides,
+                        service=service, session=session, tenant_id=admission.tenant_id,
+                        export_format=fmt, canvas=canvas, grant=grant)
                     await session.commit()
             return await render_and_export_svgs(
                 claim, tenant_id=admission.tenant_id, svgs=svgs, notes=notes, export_format=fmt, canvas=canvas,

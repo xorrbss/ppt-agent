@@ -327,6 +327,86 @@ def test_source_publication_preserves_verified_svg_and_rejects_mutations(monkeyp
                     assert resolved_indices == list(range(12))
 
         asyncio.run(check_publication_source_reuse())
+
+        async def check_export_source_reuse():
+            from datetime import timedelta
+            from uuid import uuid4
+            from services import artifact_store, svg_export_assets, svg_export_operation
+            from utils import owner_context
+            from utils.datetime_utils import get_current_utc_datetime
+
+            owner = uuid4()
+            pointer = {"ref": "ancestor-source", "sha256": "a" * 64}
+            source = SimpleNamespace(presentation_id=uuid4(), digest="sha256:" + "a" * 64)
+            for scenario in ("unchanged", "producer_changed", "fence_lost", "lease_expired", "deadline_expired"):
+                state = {"producer_valid": True, "deadline_valid": True}
+                target = SimpleNamespace(id=uuid4(), owner_id=owner, revision=3)
+                claim = SimpleNamespace(operation_id=uuid4(), presentation_id=target.id,
+                    owner_id=owner, attempt_number=1, attempt_token="current", fencing_token=2,
+                    expected_revision=3, kind="export.pptx")
+                transaction = object()
+                exporting = SimpleNamespace(get=AsyncMock(return_value=target),
+                    refresh=AsyncMock(), get_transaction=lambda: transaction)
+                current = SimpleNamespace(presentation_id=target.id, expected_revision=3,
+                    cancel_requested_at=None,
+                    lease_expires_at=get_current_utc_datetime() + timedelta(minutes=5))
+                context = SimpleNamespace(claim=claim, raise_if_cancelled=AsyncMock())
+
+                async def full_source_check(session, presentation, manifest, value, current_owner, tenant):
+                    assert session is exporting and presentation is target
+                    assert manifest.digest == source.digest and value == pointer
+                    assert current_owner == owner and tenant == "tenant"
+                    return state["producer_valid"]
+
+                def deadline_budget():
+                    if not state["deadline_valid"]:
+                        raise ValueError("public_export_admission_deadline_exhausted")
+                    return 60
+
+                async def build_assets(slide, **kwargs):
+                    assert kwargs["session"] is exporting and kwargs["claim"] is claim
+                    assert await kwargs["_source_verifier"](
+                        exporting, target, source, pointer, owner, "tenant")
+                    if slide.index == 11:
+                        if scenario == "producer_changed":
+                            state["producer_valid"] = False
+                        elif scenario == "lease_expired":
+                            current.lease_expires_at = get_current_utc_datetime() - timedelta(seconds=1)
+                        elif scenario == "deadline_expired":
+                            state["deadline_valid"] = False
+                    return {"pageIndex": slide.index}
+
+                full_check = AsyncMock(side_effect=full_source_check)
+                asset_builder = AsyncMock(side_effect=build_assets)
+                fence = AsyncMock(return_value=None if scenario == "fence_lost" else current)
+                with monkeypatch.context() as local:
+                    local.setattr(mutations, "_verified_inherited_slide_source", full_check)
+                    local.setattr(svg_export_assets, "build_slide_export_assets", asset_builder)
+                    local.setattr(artifact_store, "_locked_current_operation", fence)
+                    local.setattr(owner_context, "get_current_owner_id", lambda: owner)
+                    local.setattr(owner_context, "get_current_tenant_id", lambda: "tenant")
+                    arguments = dict(slides=[SimpleNamespace(index=i) for i in range(12)],
+                        service=object(), session=exporting, tenant_id="tenant", export_format="pptx",
+                        canvas=canvas, grant=SimpleNamespace(export_worker_seconds=deadline_budget))
+                    if scenario == "unchanged":
+                        bindings = await svg_export_operation._build_slide_asset_bindings(context, **arguments)
+                        assert [item["pageIndex"] for item in bindings] == list(range(12))
+                    else:
+                        reason = ("svg_asset_revision_binding_invalid" if scenario == "producer_changed"
+                            else "public_export_admission_deadline_exhausted" if scenario == "deadline_expired"
+                            else "svg_export_asset_fence_lost")
+                        with pytest.raises(ValueError, match=reason):
+                            await svg_export_operation._build_slide_asset_bindings(context, **arguments)
+                assert asset_builder.await_count == 12
+                assert full_check.await_count == 2
+                if scenario in {"unchanged", "fence_lost", "lease_expired"}:
+                    fence.assert_awaited_once_with(exporting, operation_id=claim.operation_id,
+                        owner_id=owner, tenant_id="tenant", attempt_number=1, attempt_token="current",
+                        fencing_token=2, operation_kind="export")
+                else:
+                    fence.assert_not_awaited()
+
+        asyncio.run(check_export_source_reuse())
         from uuid import uuid4
         from pydantic import ValidationError
         from models.sql.public_artifact import ArtifactRef, artifact_storage_key

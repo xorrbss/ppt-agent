@@ -284,7 +284,8 @@ async def _load_original_bytes(
         reset_current_owner_id(owner_token)
 
 
-async def build_slide_export_assets(slide, *, service, session, claim, tenant_id, export_format, canvas):
+async def build_slide_export_assets(slide, *, service, session, claim, tenant_id, export_format, canvas,
+                                   _source_verifier=None):
     """Publish export-purpose recipes from original assets under the live fence."""
     import asyncio
     from services.svg_asset_manifest import PlacementManifest, SvgPlacement
@@ -305,7 +306,8 @@ async def build_slide_export_assets(slide, *, service, session, claim, tenant_id
         from models.sql.presentation import PresentationModel
         from services.svg_document_mutations import _verified_inherited_slide_source
         presentation = await session.get(PresentationModel, claim.presentation_id)
-        if presentation is None or presentation.owner_id != claim.owner_id or not await _verified_inherited_slide_source(session, presentation, source, envelope["sourceManifest"], claim.owner_id, tenant_id):
+        verify_source = _source_verifier or _verified_inherited_slide_source
+        if presentation is None or presentation.owner_id != claim.owner_id or not await verify_source(session, presentation, source, envelope["sourceManifest"], claim.owner_id, tenant_id):
             raise ValueError("svg_export_manifest_presentation_mismatch")
     revision = envelope.get("slideRevision")
     if type(revision) is not int or revision < 0:
