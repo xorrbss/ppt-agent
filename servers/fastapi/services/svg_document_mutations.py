@@ -362,12 +362,17 @@ async def _verified_inherited_slide_source(session, presentation, source, pointe
     from services.svg_timeout_repurchase import TimeoutRepurchaseRejected
     job = await session.scalar(select(PresentationGenerationJob).where(
         PresentationGenerationJob.presentation_id == presentation.id,
-    ).order_by(PresentationGenerationJob.created_at.desc()).limit(1))
+    ).order_by(PresentationGenerationJob.created_at.desc()).limit(1)
+        .execution_options(populate_existing=True))
     if (job is None or not job.workspace_operation_id or job.request_payload.get("strategy") != "svg"
             or not (job.request_payload.get("_svg_recovery_lineage")
                     or job.request_payload.get("_svg_partial_recovery"))):
         return False
-    operation = await session.get(WorkspaceOperation, job.workspace_operation_id)
+    # Generation may have committed before a long model review. With no active
+    # transaction, rollback does not expire its retained ORM identities. Read
+    # the current fence, including leases renewed by the controller session.
+    operation = await session.get(WorkspaceOperation, job.workspace_operation_id,
+                                  populate_existing=True)
     if (operation is None or operation.presentation_id != presentation.id or operation.owner_id != presentation.owner_id
         or str(operation.owner_id) != str(owner) or operation.fencing_token < 1
         or operation.attempt_number != job.attempt_number

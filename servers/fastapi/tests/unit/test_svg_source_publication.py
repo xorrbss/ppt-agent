@@ -137,7 +137,7 @@ def test_source_publication_preserves_verified_svg_and_rejects_mutations(monkeyp
             class Session:
                 async def scalar(self, statement):
                     return job
-                async def get(self, model, identifier):
+                async def get(self, model, identifier, **kwargs):
                     return operation
             async def verify_inherited(session, manifest, value, *, context, presentation_id, operation_id):
                 if value != pointer or context.owner_id != owner or context.tenant_id != "tenant" or presentation_id != presentation.id or operation_id != operation.id:
@@ -174,6 +174,82 @@ def test_source_publication_preserves_verified_svg_and_rejects_mutations(monkeyp
             operation.lease_expires_at = datetime.now(timezone.utc)+timedelta(minutes=1)
             operation.owner_id = uuid.uuid4()
             assert not await read(session, presentation, source, pointer, owner, "tenant")
+
+            from sqlalchemy import update
+            from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+            from sqlmodel import SQLModel
+            from models.sql.presentation_generation_job import PresentationGenerationJob
+            from models.sql.workspace import WorkspaceOperation
+
+            engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+            maker = async_sessionmaker(engine, expire_on_commit=False)
+            expired = datetime.now(timezone.utc) - timedelta(minutes=1)
+            renewed = datetime.now(timezone.utc) + timedelta(minutes=5)
+            operation_id, job_id = operation.id, uuid.uuid4()
+            try:
+                async with engine.begin() as connection:
+                    await connection.run_sync(lambda sync: SQLModel.metadata.create_all(sync, tables=[
+                        WorkspaceOperation.__table__, PresentationGenerationJob.__table__]))
+                async with maker() as seed:
+                    seed.add(WorkspaceOperation(id=operation_id, owner_id=owner, owner_scope=str(owner),
+                        conversation_id=uuid.uuid4(), presentation_id=presentation.id, anchor_position=1,
+                        kind="presentation.generate", state="running", idempotency_key_hash="a" * 64,
+                        request_hash="b" * 64, attempt_number=1, attempt_token="current", fencing_token=1,
+                        expected_revision=0, lease_expires_at=expired))
+                    seed.add(PresentationGenerationJob(id=job_id, task_id=str(uuid.uuid4()),
+                        presentation_id=presentation.id, workspace_operation_id=operation_id,
+                        request_sha256="c" * 64, request_payload={"strategy": "svg",
+                            "_svg_partial_recovery": {"operation_id": str(operation_id)}},
+                        state="running", attempt_number=1, attempt_token="current"))
+                    await seed.commit()
+
+                async def change_rows(*, operation_values, job_values=None):
+                    async with maker() as heartbeat:
+                        await heartbeat.execute(update(WorkspaceOperation).where(
+                            WorkspaceOperation.id == operation_id).values(**operation_values))
+                        if job_values is not None:
+                            await heartbeat.execute(update(PresentationGenerationJob).where(
+                                PresentationGenerationJob.id == job_id).values(**job_values))
+                        await heartbeat.commit()
+
+                async with maker() as publishing:
+                    cached_operation = await publishing.get(WorkspaceOperation, operation_id)
+                    cached_job = await publishing.get(PresentationGenerationJob, job_id)
+                    await publishing.commit()
+                    await change_rows(operation_values={"lease_expires_at": renewed},
+                        job_values={"state": "staging"})
+                    # Preparation committed without expiring its identity map.
+                    # With no active transaction publication's rollback is a no-op.
+                    assert not publishing.in_transaction()
+                    await publishing.rollback()
+                    assert cached_operation.lease_expires_at.replace(tzinfo=timezone.utc) == expired
+                    assert cached_job.state == "running"
+                    assert await read(publishing, presentation, source, pointer, owner, "tenant")
+                    assert cached_operation.lease_expires_at.replace(tzinfo=timezone.utc) == renewed
+                    assert cached_job.state == "staging"
+                    await publishing.commit()
+
+                    await change_rows(operation_values={"state": "cancelled"})
+                    assert cached_operation.state == "running"
+                    assert not await read(publishing, presentation, source, pointer, owner, "tenant")
+                    assert cached_operation.state == "cancelled"
+                    await publishing.commit()
+
+                    await change_rows(operation_values={"state": "running", "lease_expires_at": renewed})
+                    assert await read(publishing, presentation, source, pointer, owner, "tenant")
+                    await publishing.commit()
+                    await change_rows(operation_values={"lease_expires_at": expired})
+                    assert cached_operation.lease_expires_at.replace(tzinfo=timezone.utc) == renewed
+                    assert not await read(publishing, presentation, source, pointer, owner, "tenant")
+                    await publishing.commit()
+
+                    await change_rows(operation_values={"lease_expires_at": renewed},
+                        job_values={"state": "failed"})
+                    assert cached_job.state == "staging"
+                    assert not await read(publishing, presentation, source, pointer, owner, "tenant")
+                    assert cached_job.state == "failed"
+            finally:
+                await engine.dispose()
         asyncio.run(check_recovery_source_read())
         from uuid import uuid4
         from pydantic import ValidationError
