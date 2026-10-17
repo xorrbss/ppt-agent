@@ -137,3 +137,7 @@ UNKNOWN 호출은 Codex/gpt-6.1-sol, repair/slide_index=7, 논리 호출 88a3769
 - 호출 한도, deadline, UNKNOWN 상태, 디자인·원본 보존·게시 기준은 완화하지 않았다. 실제 웹 생성과 게시·다운로드 검증 및 main 병합은 계속 별도 완료 조건이다.
 
 사용자가 추가 확인 없이 계속 진행하도록 승인한 후 준비된 복구 action을 제출했으나 provider admission 이전에 `svg_partial_recovery_episode_unbound`로 거절됐다. 실제 원본 durable request의 `presentation_id`는 null인 반면 격리 검증은 실제 UUID만 사용한 차이를 확인했다. 복구 manifest에 원본 요청 필드의 존재 여부와 정확한 값을 봉인하고 archive 원문과 다시 대조하여 없음·null·UUID를 그대로 복원하도록 수정했다. 전역 frozen digest를 완화하지 않으며 기존 HTTP 실패 응답은 보존한다. 같은 좁은 append-only 노드에 세 요청 형태의 첫·두 번째 복구 및 헤더 재사용을 포함해 8.19초에 통과했고 독립 코드 검토도 완료했다.
+
+실제 append-only 복구 3676de99-875e-4c3f-a146-66f027c3a980은 11쪽을 재사용하고 8쪽만 새로 작성하여 12쪽 로컬 검증을 통과했다. 문서 VQA 한 그룹에서 upstream HTTP500/server_error가 발생해 UNKNOWN으로 종료됐으며 timeout으로 단정하지 않는다. 후속 11a1aee0-cb94-4fcc-832f-ae446835dd3e는 12쪽 전체를 재사용하고 VQA 8회·repair 2회를 모두 reported로 완료했다. 10·11쪽의 새 후보가 실제 selected가 됐고, 최종 SVG와 두 번째 검토 gate는 일치하며 gate 재사용·게시 전 검증도 저장 payload 재현에서 통과했다. 독립 이미지 평가는 후보 기준 91점(원본 86점)이며 최종 Office 점수는 아직 아니다.
+
+해당 후속 작업은 게시 단계에서 generic HTTP500으로 실패했다. 원본 presentation의 asset manifest를 이어받은 12쪽이 있는데 `read_svg_slide_assets`의 inherited-source guard는 timeout-repurchase lineage만 허용하고 partial lineage와 실제 publication 상태 `staging`을 빠뜨리고 있었다. 이 두 누락만 기존 owner/token/lease 검사 아래 허용했으며, 원본 manifest·archive·lineage 검증은 기존 `_verify_inherited_source_manifest`와 `verify_episode`를 그대로 통과해야 한다. 기존 source-publication 정상 노드에 partial/staging 성공 및 잘못된 pointer·tenant·token·lease·owner 거절을 포함해 5.25초에 통과했다. 이전 작업·UNKNOWN·완료 호출·원본 파일은 보존하며 신규 게시 성공으로 표시하지 않는다.

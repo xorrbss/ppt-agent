@@ -157,6 +157,9 @@ def test_source_publication_preserves_verified_svg_and_rejects_mutations(monkeyp
             assert not await read(session, presentation, source, pointer, owner, "tenant")
             job.state = "publishing"
             job.attempt_token = operation.attempt_token
+            job.request_payload = {"strategy": "svg", "_svg_partial_recovery": {"operation_id": str(operation.id)}}
+            job.state = "staging"
+            assert await read(session, presentation, source, pointer, owner, "tenant")
             assert not await read(session, presentation, source, {"digest":"foreign"}, owner, "tenant")
             assert not await read(session, presentation, source, pointer, owner, "foreign-tenant")
             saved = job.request_payload

@@ -363,13 +363,15 @@ async def _verified_inherited_slide_source(session, presentation, source, pointe
     job = await session.scalar(select(PresentationGenerationJob).where(
         PresentationGenerationJob.presentation_id == presentation.id,
     ).order_by(PresentationGenerationJob.created_at.desc()).limit(1))
-    if job is None or not job.workspace_operation_id or job.request_payload.get("strategy") != "svg" or not job.request_payload.get("_svg_recovery_lineage"):
+    if (job is None or not job.workspace_operation_id or job.request_payload.get("strategy") != "svg"
+            or not (job.request_payload.get("_svg_recovery_lineage")
+                    or job.request_payload.get("_svg_partial_recovery"))):
         return False
     operation = await session.get(WorkspaceOperation, job.workspace_operation_id)
     if (operation is None or operation.presentation_id != presentation.id or operation.owner_id != presentation.owner_id
         or str(operation.owner_id) != str(owner) or operation.fencing_token < 1
         or operation.attempt_number != job.attempt_number
-        or job.state not in {"running", "publishing", "published", "completed", "succeeded"}):
+        or job.state not in {"running", "staging", "publishing", "published", "completed", "succeeded"}):
         return False
     if job.state == "published":
         if job.attempt_token is not None or job.lease_expires_at is not None or not job.published_at or not job.last_started_at or not operation.started_at:
