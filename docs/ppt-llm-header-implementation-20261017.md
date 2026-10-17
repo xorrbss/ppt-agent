@@ -112,3 +112,13 @@ A4의 후속 독립 입력에서는 모든 수치·표·장문 제목과 고정 
 UNKNOWN 호출은 Codex/gpt-6.1-sol, repair/slide_index=7, 논리 호출 88a37693-ae64-46bf-bc95-dd2394df2655다. 지연 130,234ms 후 완료 원문·output digest·usage가 저장되지 않았다. created 이벤트 서명은 완료 응답 증거가 아니며 기존 코드에 출력 재조회 경로도 없다. 기존 유효 SVG는 last_valid_svg로 보존됐고 12개 PNG는 검토 복사본과 동일하다. UNKNOWN을 성공·known으로 바꾸거나 자동 재요청하지 않았다. 89점은 후보 이미지 점수이며 신규 게시·PPTX·Office 성공을 뜻하지 않는다.
 
 재시도 실험 후 live 원 operation·admission·논리 호출 30개 행도 전후 exact 비교에서 불변임을 확인했다. 원 job/checkpoint 행 자체는 재결합됐다는 한계를 별도로 유지한다. 실패 기록·archive·출력 파일을 삭제하거나 DB를 원상복구하지 않았다. 현재 출시 브랜치의 코드 변경은 검증된 QA 출처 전달과 sparse chart 축 보존까지이며, 미완성 continuation 실험은 포함하지 않는다. main/serve 병합은 실제 12쪽 게시·PPTX 검증이 남아 보류한다.
+
+사용자가 추가 생성 1회를 승인한 뒤 작업 cdb8603d-3cc6-44ea-9cd9-e418c68798e7을 제출했다. 대표 후보 2개의 로컬 검증은 통과했으나 header selection 요청이 180,781ms 후 UNKNOWN으로 종료됐다. header 2·author 2·repair 2회 중 5건 reported, 1건 unavailable이며 전체 12쪽 게시에는 도달하지 않았다. 동결된 plan과 SDK timeout은 모두 180초지만 상세 예외가 저장되지 않아 timeout을 직접 원인으로 확정하지 않는다. 이전 8쪽 server_error와 같은 원인이라고도 단정하지 않는다. 추가 재호출은 하지 않았다.
+
+웹 게시와 구분한 진단용 편집 PPTX를 기존 실제 convert_pptx 서비스로 생성했다. 원본은 89점 후보의 해시 검증된 SVG 12개·원 native 선언이며, 임의 operation identity나 테스트용 영수증을 만들지 않고 DB/provider/publish 경로를 사용하지 않았다. 실제 PowerPoint 읽기 전용 12쪽은 통과했고 기존 열린 문서와 원본도 보존했다. 첫 Office 수동 평가는 차트 기준선 누락 때문에 88점으로 낮아졌다.
+
+확인된 export 회귀는 strict scale/tick/category/coextent/bounds 증명을 만족한 내부 grid 선을 원 paint 순서대로 native chart 바로 앞의 source underlay로 보존하도록 수정했다. 선의 유일 대응·paint 일치·pre-bar 순서를 요구하며 중복·불일치·bar 이후 선은 거부한다. 상속 paint와 중첩 transform을 보존하고 clone의 중복 ID/native 메타데이터는 제거한다. 원 SVG·선언·데이터·축은 불변이며 vendor 수정은 없다. 기존 retained-axis 테스트 node 4개가 6.05초에 통과했고 독립 읽기 검토도 완료했다. 영향을 받는 export worker만 재시작했다.
+
+새 진단용 PPTX는 외부 근거 폴더 normal12-grid-preserved/editable-candidate.pptx이며 SHA-256은 ad683c939a7a7573da8c92709962754a854264159ff51522f4825b876b55c132다. 실제 Office 12쪽 재검증에서 1~11쪽 PNG는 이전 파일과 byte-identical, 12쪽만 0·4·7 선이 막대 뒤에 복원됐다. 최종 Office 수동 평가는 89점(기준 86점)이다. native 표 2개·차트 1개·텍스트 객체 494개·벡터 객체 704개, 그림과 fallback 0개를 확인했다. 표 원문·병합 master 7/covered 21·차트 cache/내장 XLSX의 6개 값과 합 30.90·숨김 축 0~7은 일치한다. 원본 26개 파일 해시와 별도 source job 해시도 보존됐다.
+
+이 결과는 실제 편집 가능한 진단 PPTX와 Office 증거까지이며, 정상 웹 생성·최종 VQA 승인·게시 성공으로 확대하지 않는다. 7·8·9쪽의 구체적인 밀도 개선 목표도 남아 있다. 정상 12쪽 게시가 미완료여서 main/serve 병합은 계속 보류한다. UNKNOWN 및 실패 이력과 이전 PPTX는 그대로 남긴다.

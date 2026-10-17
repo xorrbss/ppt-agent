@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from copy import deepcopy
 import math
 from statistics import median
 from xml.etree import ElementTree as ET
@@ -133,7 +134,61 @@ def _proportional_bar_plot(projected, item, plots, categories, axes, grid_lines=
         projected["gap_width"] = max(0, min(500, round((spacing / thickness - 1) * 100)))
 
 
-def _retained_axis_plot(projected, item, root, plots, categories, axes, grid_lines=()):
+def _proven_grid_underlay(root, item, plots, grid_lines, proven_lines):
+    """Copy only uniquely proven chart-local lines that were painted before bars."""
+    selected = [line for line in proven_lines if line in grid_lines]
+    if not selected:
+        return None
+    found = find_group(root, item.id)
+    if found is None:
+        raise NativeRejection("native_chart_grid_underlay_unproven")
+    group, offset, inherited = found
+    prims = collect_primitives(group, offset, inherited, CHART_ELEMENTS)
+    nodes = []
+
+    def leaves(node):
+        for child in node:
+            tag = child.tag.rsplit("}", 1)[-1]
+            if tag == "g":
+                leaves(child)
+            elif tag != "text":
+                nodes.append(child)
+
+    leaves(group)
+    if len(nodes) != len(prims.shapes):
+        raise NativeRejection("native_chart_grid_underlay_unproven")
+    selected_nodes, selected_positions = set(), []
+    for line in selected:
+        matches = [i for i, shape in enumerate(prims.shapes) if shape == line]
+        if len(matches) != 1 or nodes[matches[0]].tag.rsplit("}", 1)[-1] != "line":
+            raise NativeRejection("native_chart_grid_underlay_unproven")
+        selected_positions.append(matches[0])
+        selected_nodes.add(nodes[matches[0]])
+    bars = [i for i, shape in enumerate(prims.shapes) if shape in plots]
+    if (len(selected_nodes) != len(selected) or len(bars) != len(plots)
+            or not bars or max(selected_positions) >= min(bars)):
+        raise NativeRejection("native_chart_grid_underlay_unproven")
+
+    def retained(node):
+        if node in selected_nodes:
+            result = deepcopy(node)
+        elif node.tag.rsplit("}", 1)[-1] == "g":
+            result = ET.Element(node.tag, dict(node.attrib))
+            result.extend(copy for child in node if (copy := retained(child)) is not None)
+            if not len(result):
+                return None
+        else:
+            return None
+        for key in list(result.attrib):
+            if key == "id" or key.startswith(("data-native-", "data-pptx-")):
+                del result.attrib[key]
+        return result
+
+    return retained(group)
+
+
+def _retained_axis_plot(projected, item, root, plots, categories, axes, grid_lines=(),
+                        source_underlays=None):
     """Bind retained ticks to proven sibling or chart-local grid lines."""
     if projected["type"] not in {"bar", "column"} or len(item.payload["series"]) != 1:
         return None
@@ -178,7 +233,7 @@ def _retained_axis_plot(projected, item, root, plots, categories, axes, grid_lin
     except (NativeRejection, ValueError):
         return None
     low, high = ordered[0] - spacing / 2, ordered[-1] + spacing / 2
-    candidates = []
+    candidates, proven_lines = [], []
     # Numeric ticks can be siblings while their explicit grid lines belong to
     # the native chart group. Group membership does not change their scale;
     # retain all existing numeric, alignment, uniqueness and bounds checks.
@@ -206,6 +261,7 @@ def _retained_axis_plot(projected, item, root, plots, categories, axes, grid_lin
                 ticks.append(number)
         if len(ticks) == 1 and ticks[0] >= 0:
             candidates.append((line.box, ticks[0]))
+            proven_lines.append(line)
     if (len(candidates) < 3 or len({value for _, value in candidates}) != len(candidates)
             or sum(value == 0 for _, value in candidates) != 1):
         return None
@@ -226,6 +282,9 @@ def _retained_axis_plot(projected, item, root, plots, categories, axes, grid_lin
     source = _editable_source_legend(categories, (), anchor)
     if source is None:
         return None
+    underlay = _proven_grid_underlay(root, item, plots, grid_lines, proven_lines)
+    if underlay is not None and source_underlays is not None:
+        source_underlays.append(underlay)
     # Rebase every pre-existing layout when the proven category cells extend
     # beyond the frozen primitive-only frame; do not mutate the saved sidecar.
     title = projected.get("title")
@@ -419,7 +478,7 @@ def _editable_source_categories(projected, item, categories):
     return source
 
 
-def _apply_drawn_chart_style_core(projected: dict, item, root) -> ET.Element | None:
+def _apply_drawn_chart_style_core(projected: dict, item, root, *, source_underlays=None) -> ET.Element | None:
     """Preserve visible labels without trusting a frozen chart-wide text colour."""
     if item.svg_appearance is None:
         return
@@ -529,7 +588,8 @@ def _apply_drawn_chart_style_core(projected: dict, item, root) -> ET.Element | N
     retained_categories = None
     if not tick_labels:
         retained_categories = _retained_axis_plot(projected, item, root, plots, categories, axes,
-                                                 grid_lines=lines if grids else ())
+                                                 grid_lines=lines if grids else (),
+                                                 source_underlays=source_underlays)
     if not tick_labels and retained_categories is None:
         _proportional_bar_plot(projected, item, plots, categories, axes,
                                grid_lines=lines if grids else (), source_lines=lines)
@@ -681,9 +741,9 @@ def _fixed_axis_series_label_styles(projected, item, prims, categories, value_la
         raise NativeRejection("native_chart_data_label_style_unproven")
 
 
-def apply_drawn_chart_style(projected, item, root: ET.Element):
+def apply_drawn_chart_style(projected, item, root: ET.Element, *, source_underlays=None):
     """Keep proven visible precision and non-data chart text as editable furniture."""
-    furniture = _apply_drawn_chart_style_core(projected, item, root)
+    furniture = _apply_drawn_chart_style_core(projected, item, root, source_underlays=source_underlays)
     found = find_group(root, item.id)
     if found is None:
         return furniture

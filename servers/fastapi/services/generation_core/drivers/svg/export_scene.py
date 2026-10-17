@@ -236,12 +236,14 @@ def _annotate(root: ET.Element, entries: list[tuple[NativeObject, bool]], index:
             apply_drawn_table_style(projected, item, root)
             _source_table_vertical_padding(root, item, projected, pt_per_px=pt_per_px)
         source_legend = None
+        source_underlays = []
         if item.kind == "chart":
             from services.generation_core.drivers.svg.export_chart_style import apply_drawn_chart_style
             from services.generation_core.drivers.svg.native_geometry import NativeRejection
 
             try:
-                source_legend = apply_drawn_chart_style(projected, item, root)
+                source_legend = apply_drawn_chart_style(projected, item, root,
+                                                       source_underlays=source_underlays)
             except NativeRejection as error:
                 del element.attrib["data-pptx-native"]
                 offer.reason = str(error)[:_MAX_REASON]
@@ -262,6 +264,9 @@ def _annotate(root: ET.Element, entries: list[tuple[NativeObject, bool]], index:
             offer.reason = f"converter_rejected:{error}"[:_MAX_REASON]
             continue
         offer.native = True
+        for underlay in source_underlays:
+            parent = parents[element]
+            parent.insert(list(parent).index(element), underlay)
         if source_legend is not None:
             root.append(source_legend)
         marked += 1

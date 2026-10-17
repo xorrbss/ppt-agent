@@ -227,7 +227,7 @@ def test_chart_appearance_survives_worker_and_pptx_readback(tmp_path):
 
 @pytest.mark.parametrize("kind", ["column", "bar"])
 @pytest.mark.parametrize("canvas", [(1280, 720), (720, 1280)])
-def test_retained_axis_furniture_proves_scale_and_category_frame(kind, canvas):
+def test_retained_axis_furniture_proves_scale_and_category_frame(kind, canvas, tmp_path):
     from copy import deepcopy
     from types import SimpleNamespace
     from xml.etree import ElementTree as ET
@@ -293,7 +293,7 @@ def test_retained_axis_furniture_proves_scale_and_category_frame(kind, canvas):
             "categoryOrder": "leftToRight", "valueLabels": {"shown": True, "position": "outsideEnd"},
             "markers": False}
         parts = [_text(125, 247, "Monthly work"),
-                 *[f'<line x1="125" y1="{y}" x2="809" y2="{y}" stroke="#CCCCCC"/>'
+                 *[f'<line id="source-grid-{y}" x1="125" y1="{y}" x2="809" y2="{y}" stroke="#CCCCCC" stroke-width="1"/>'
                    for y in (270, 348, 452)]]
         for i, value in enumerate(values):
             center, height = 182 + i * 114, value * 26
@@ -322,6 +322,64 @@ def test_retained_axis_furniture_proves_scale_and_category_frame(kind, canvas):
         assert projected["plot_layout"] and not projected["axes"]["category"]["visible"]
         assert not projected["axes"]["value"]["visible"]
         assert ET.tostring(source_root) == frozen_svg and content == frozen_content
+        underlays = []
+        apply_drawn_chart_style(converter_payload(chart), chart, source_root,
+                               source_underlays=underlays)
+        assert len(underlays) == 1
+        retained = list(underlays[0].iter())
+        assert len([node for node in retained if node.tag.rsplit("}", 1)[-1] == "line"]) == 3
+        assert not any(key == "id" or key.startswith(("data-native-", "data-pptx-"))
+                       for node in retained for key in node.attrib)
+        deck, evidence = _export(tmp_path, [svg], [content])
+        assert evidence["structuralReadback"]["nativeObjects"] == {
+            "offered": 1, "native": 1, "fellBack": 0, "reasons": []}
+        (frame,) = [shape for shape in _frames(deck.slides[0]) if shape.has_chart]
+        slide_xml = deck.slides[0]._element
+        tree = list(slide_xml.iter())
+        line_shapes = [shape._element for shape in _frames(deck.slides[0])
+                       if shape.name.startswith("Line ")
+                       and shape._element.xpath("./p:spPr/a:custGeom")]
+        assert len(line_shapes) == 3
+        for node, y in zip(line_shapes, (270, 348, 452), strict=True):
+            xfrm = node.xpath("./p:spPr/a:xfrm")[0]
+            assert int(xfrm.find("{http://schemas.openxmlformats.org/drawingml/2006/main}off").get("x")) == 125 * 9525
+            assert int(xfrm.find("{http://schemas.openxmlformats.org/drawingml/2006/main}off").get("y")) == y * 9525
+            assert int(xfrm.find("{http://schemas.openxmlformats.org/drawingml/2006/main}ext").get("cx")) == 684 * 9525
+            assert int(xfrm.find("{http://schemas.openxmlformats.org/drawingml/2006/main}ext").get("cy")) == 9525
+            assert node.xpath("./p:spPr/a:custGeom/a:pathLst/a:path/a:moveTo/a:pt[@x='0'][@y='0']")
+            assert node.xpath("./p:spPr/a:custGeom/a:pathLst/a:path/a:lnTo/a:pt[@x='6515100'][@y='0']")
+            assert node.xpath("./p:spPr/a:ln[@w='9525']/a:solidFill/a:srgbClr[@val='CCCCCC']")
+            assert tree.index(node) < tree.index(frame._element)
+        assert frame.chart._element.xpath("./c:spPr/a:noFill")
+        assert frame.chart._element.xpath("./c:chart/c:plotArea/c:spPr/a:noFill")
+        assert ET.tostring(source_root) == frozen_svg and content == frozen_content
+        from services.generation_core.drivers.svg.native_geometry import NativeRejection
+        after_bar = deepcopy(source_root)
+        chart_group = next(node for node in after_bar.iter() if node.get("id") == chart.id)
+        first_grid = next(node for node in chart_group if node.tag.rsplit("}", 1)[-1] == "line")
+        chart_group.remove(first_grid)
+        chart_group.append(first_grid)
+        with pytest.raises(NativeRejection, match="native_chart_grid_underlay_unproven"):
+            project(after_bar)
+        from dataclasses import replace
+        from services.generation_core.drivers.svg.export_chart_style import _proven_grid_underlay
+        from services.generation_core.drivers.svg.native_chart import CHART_ELEMENTS
+        from services.generation_core.drivers.svg.native_chart_visual import _bar_matrix, _category_texts
+        from services.generation_core.drivers.svg.native_geometry import collect_primitives, find_group
+        chart_group, offset, inherited = find_group(source_root, chart.id)
+        primitives = collect_primitives(chart_group, offset, inherited, CHART_ELEMENTS)
+        bars = [bar for series in _bar_matrix(chart.payload, primitives,
+                _category_texts(chart.payload, primitives)) for bar in series]
+        grid = [shape for shape in primitives.shapes if shape.tag == "line"]
+        wrong_paint = replace(grid[0], stroke="#000000")
+        with pytest.raises(NativeRejection, match="native_chart_grid_underlay_unproven"):
+            _proven_grid_underlay(source_root, chart, bars, [wrong_paint], [wrong_paint])
+        duplicate = deepcopy(source_root)
+        duplicate_group = next(node for node in duplicate.iter() if node.get("id") == chart.id)
+        duplicate_group.insert(0, deepcopy(next(node for node in duplicate_group
+                                              if node.tag.rsplit("}", 1)[-1] == "line")))
+        with pytest.raises(NativeRejection, match="native_chart_grid_underlay_unproven"):
+            _proven_grid_underlay(duplicate, chart, bars, grid, grid)
         for violation in ("missing_ticks", "ambiguous_tick", "wrong_scale", "bounds"):
             changed = deepcopy(source_root)
             tick = next(node for node in changed if node.get("id") == "axis-tick-1")
@@ -335,7 +393,11 @@ def test_retained_axis_furniture_proves_scale_and_category_frame(kind, canvas):
                 tick.text = "4.1"
             else:
                 changed.set("width", "800")
-            assert "maximum" not in project(changed).get("axes", {}).get("value", {})
+            rejected_underlays = []
+            result = converter_payload(chart)
+            apply_drawn_chart_style(result, chart, changed, source_underlays=rejected_underlays)
+            assert "maximum" not in result.get("axes", {}).get("value", {})
+            assert not rejected_underlays
 
 
 def test_shifted_or_inconsistent_bar_scale_keeps_automatic_axis_and_plot():
