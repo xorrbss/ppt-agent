@@ -39,6 +39,16 @@ class BudgetExceededError(RuntimeControlError):
 class RetryAmplificationError(RuntimeControlError):
     """Raised when planned retries would exceed the configured multiplier."""
 
+    def __init__(self, *args):
+        super().__init__(*args)
+        if (type(self) is RetryAmplificationError and len(args) == 1
+                and type(args[0]) is str and args[0] in {
+                    "retry_requires_an_initial_request",
+                    "retry_amplification_ceiling_exceeded",
+                }):
+            self.code = args[0]
+            self.retryable = False
+
 
 class CancellationRequested(RuntimeControlError):
     """Raised at an admission boundary after a job kill condition fires."""

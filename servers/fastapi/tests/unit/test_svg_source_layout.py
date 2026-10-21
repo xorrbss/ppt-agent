@@ -1,4 +1,6 @@
 from copy import deepcopy
+import asyncio
+from html import escape
 import xml.etree.ElementTree as ET
 
 import pytest
@@ -96,6 +98,8 @@ def test_merged_table_cells_keep_values_structure_and_reading_order():
 
 
 @pytest.mark.parametrize("kind,payload", [("chart", {}), ("shape", {"preset": "star5"}),
+    ("shape", {"preset": "diamond", "geometry": {"rotationDegrees": 45}}),
+    ("shape", {"preset": "diamond", "geometry": {"flipH": True}}),
     ("image", {"crop": {"left": .1}}), ("image", {"geometry": {"rotationDegrees": 90}})])
 def test_unsupported_content_fails_preflight(kind, payload):
     with pytest.raises(ValueError, match="unsupported"):
@@ -112,6 +116,36 @@ def test_parallelogram_preserves_shape_occurrence_as_static_polygon():
     result = assemble(manifest)
     assert "polygon" in result.svg_content
     assert len([b for b in result.receipt["bindings"] if b["kind"] == "shape"]) == 1
+
+
+def test_diamond_preserves_all_occurrences_as_editable_polygons():
+    manifest = manifest_for([("text", {"text": "Original facts 100%"}),
+        *[("shape", {"preset": "diamond"}) for _ in range(8)],
+        ("shape", {"preset": "rect"})])
+    original = manifest.model_dump(mode="json", by_alias=True)
+    plan = plan_for(manifest)
+    for index, placement in enumerate(plan["placements"][1:]):
+        placement.update(x=50 + index * 100, y=320, width=80, height=40,
+                         background="#234567", stroke="#ABCDEF")
+    result = assemble(manifest, plan)
+    root = ET.fromstring(result.svg_content)
+    nodes = {node.get("id"): node for node in root.iter() if node.get("id")}
+    shapes = [binding for binding in result.receipt["bindings"] if binding["kind"] == "shape"]
+    assert len(shapes) == 9
+    for index, binding in enumerate(shapes[:8]):
+        node = nodes[binding["element_id"]]
+        x = 50 + index * 100
+        assert node.tag == "{http://www.w3.org/2000/svg}polygon"
+        assert [tuple(map(float, point.split(","))) for point in node.get("points").split()] == [
+            (x + 40, 320), (x + 80, 340), (x + 40, 360), (x, 340)]
+        assert node.get("fill") == "#234567"
+        assert node.get("stroke") == "#ABCDEF"
+        assert binding["source_id"] == manifest.units[0].blocks[index + 1].source_block_id
+    assert nodes[shapes[-1]["element_id"]].tag == "{http://www.w3.org/2000/svg}rect"
+    assert "".join(binding["text"] for binding in result.receipt["bindings"]
+                   if binding["kind"] == "text") == "Original facts 100%"
+    assert manifest.model_dump(mode="json", by_alias=True) == original
+    assert verify_source_receipt(result.svg_content, result.receipt, manifest, 0)
 
 
 def test_straight_connector_flip_preserves_endpoint_direction():
@@ -136,6 +170,136 @@ def test_receipt_rejects_tamper_even_if_attacker_updates_svg_digest():
     receipt["svg_digest"] = source_digest(svg)
     with pytest.raises(ValueError, match="text_mismatch"):
         verify_source_receipt(svg, receipt, manifest, 0)
+
+
+def _source_linefeed_case(expected, body):
+    from services.generation_core.authoring.author_source_svg_layout import _whole_page_facts
+    manifest = manifest_for([("text", {"text": expected})])
+    facts = _whole_page_facts(manifest.units[0], {})
+    svg = ('<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">'
+        '<rect x="10" y="10" width="400" height="100" fill="#ffffff" stroke="#000000"/>'
+        f'<text id="{facts[0]["element_id"]}" x="20" y="50" font-family="Pretendard" '
+        'font-size="20" font-weight="700" fill="#111111" xml:space="preserve">' + body + '</text></svg>')
+    return manifest, facts, svg
+
+
+def _restore_source_linefeed_case(manifest, facts, svg):
+    from services.svg_source_layout import restore_source_linefeeds
+    return restore_source_linefeeds(svg, facts=facts, manifest_digest=manifest.manifest_digest,
+        source_page_id="p0", raw_output_digest=source_digest(svg))
+
+
+@pytest.mark.parametrize("expected,body", [
+    ("A\nB", 'A<tspan x="20" y="80">B</tspan>'),
+    ("A\n\nB\n", 'A\n<tspan x="20" y="80">B</tspan>'),
+    ("\nA\nB", '<tspan x="20" y="80">A</tspan>B'),
+    ("A & <\nB\t12\nC", 'A &amp; &lt;<tspan x="20" y="80">B\t12</tspan>C'),
+])
+def test_source_linefeed_restoration_preserves_text_slots_geometry_and_is_idempotent(expected, body):
+    manifest, facts, svg = _source_linefeed_case(expected, body)
+    before = ET.fromstring(svg)
+    restored, proof = _restore_source_linefeed_case(manifest, facts, svg)
+    after = ET.fromstring(restored)
+    assert "".join(next(n for n in after if n.tag.endswith("}text")).itertext()) == expected
+    assert [(n.tag, n.attrib) for n in before.iter()] == [(n.tag, n.attrib) for n in after.iter()]
+    assert proof["raw_output_digest"] == source_digest(svg)
+    assert proof["input_svg_digest"] == source_digest(svg)
+    assert proof["restored_svg_digest"] == source_digest(restored)
+    assert proof["restored_lf_count"] == expected.count("\n") - "".join(
+        next(n for n in before if n.tag.endswith("}text")).itertext()).count("\n")
+    assert proof["bindings"][0]["source_text_digest"] == source_digest(expected)
+    assert all(expected[position] == "\n" for position in proof["bindings"][0]["positions"])
+    assert _restore_source_linefeed_case(manifest, facts, restored) == (restored, None)
+
+
+@pytest.mark.parametrize("expected,actual", [
+    ("A\n12 B", "A13 B"), ("A\n12 B", "A12  B"),
+    ("A\nB", "A\n\nB"), ("A\nBC", "AB\nC"),
+    ("A\t\nB", "A B"), ("A\r\nB", "AB"), ("A\nB", "B A"),
+])
+def test_source_linefeed_restoration_rejects_non_lf_changes_extra_or_moved_lf(expected, actual):
+    manifest, facts, svg = _source_linefeed_case(expected, escape(actual))
+    assert _restore_source_linefeed_case(manifest, facts, svg) == (svg, None)
+
+
+@pytest.mark.parametrize("mutation", ["missing", "duplicate", "overlap"])
+def test_source_linefeed_restoration_rejects_ambiguous_source_owners(mutation):
+    manifest, facts, svg = _source_linefeed_case("A\nB", "AB")
+    root = ET.fromstring(svg)
+    if mutation == "missing":
+        root.remove(root[-1])
+    elif mutation == "duplicate":
+        root.append(deepcopy(root[-1]))
+    else:
+        other = deepcopy(facts[0])
+        facts.append(other)
+    raw = ET.tostring(root, encoding="unicode")
+    assert _restore_source_linefeed_case(manifest, facts, raw) == (raw, None)
+
+
+def test_source_linefeed_binding_is_opt_in_and_final_verbatim_validator_remains_strict():
+    from services.svg_source_layout import bind_whole_page_source_svg
+    manifest, facts, svg = _source_linefeed_case("A\nB", 'A<tspan x="20" y="80">B</tspan>')
+    kwargs = dict(facts=facts, width=1280, height=720, style_snapshot={"digest": "sha256:style",
+                  "source_authoring_contract": {"version": "svg-source-whole-page/v1"}},
+                  minimum_font_px=12)
+    with pytest.raises(ValueError, match="text_mismatch"):
+        bind_whole_page_source_svg(svg, manifest, 0, **kwargs)
+    restored, receipt = bind_whole_page_source_svg(svg, manifest, 0, **kwargs,
+        restore_source_lf=True, raw_output_digest=source_digest(svg))
+    proof = receipt["source_lf_restoration"]
+    assert proof["canonical_svg_digest"] == receipt["svg_digest"] == source_digest(restored)
+    assert proof["manifest_digest"] == manifest.manifest_digest
+    assert verify_source_receipt(restored, receipt, manifest, 0)
+    tampered = restored.replace("A\n", "A")
+    changed_receipt = {**receipt, "svg_digest": source_digest(tampered)}
+    with pytest.raises(ValueError, match="text_mismatch"):
+        verify_source_receipt(tampered, changed_receipt, manifest, 0)
+
+
+def test_source_linefeed_table_cell_and_source_image_geometry_are_preserved():
+    from services.generation_core.authoring.author_source_svg_layout import _whole_page_facts
+    from services.svg_source_layout import restore_source_linefeeds
+    manifest = manifest_for([("table", {"rows": [[{"text": "A\nB", "sourceCellId": "cell-original"}]]}),
+                             ("image", {"contentDigest": "sha256:image"})])
+    facts = _whole_page_facts(manifest.units[0], {"p0:1": "source-slot-image"})
+    table, image = facts
+    svg = ('<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">'
+        f'<g id="{table["element_id"]}"><rect x="20" y="20" width="200" height="100" fill="#ffffff"/>'
+        f'<text id="{table["cells"][0]["element_id"]}" x="30" y="60" font-family="Pretendard" '
+        'font-size="20" fill="#111111">A<tspan x="30" y="90">B</tspan></text></g>'
+        f'<image id="{image["element_id"]}" x="300" y="40" width="100" height="80" '
+        'href="source-slot-image" preserveAspectRatio="xMidYMid meet"/></svg>')
+    restored, proof = restore_source_linefeeds(svg, facts=facts, manifest_digest=manifest.manifest_digest,
+        source_page_id="p0", raw_output_digest=source_digest(svg))
+    assert proof["bindings"][0]["source_id"] == "cell-original"
+    assert "".join(next(n for n in ET.fromstring(restored).iter() if n.tag.endswith("}text")).itertext()) == "A\nB"
+    assert [(n.tag, n.attrib) for n in ET.fromstring(svg).iter()] == [
+        (n.tag, n.attrib) for n in ET.fromstring(restored).iter()]
+
+
+def test_source_linefeed_author_preserves_sealed_raw_receipt_and_optional_provenance(monkeypatch):
+    from services.generation_core.authoring.author_slide_svg import SvgAuthorResult
+    from services.generation_core.authoring.author_source_svg_layout import author_source_svg_layout
+    manifest, _facts, raw = _source_linefeed_case("A\nB", 'A<tspan x="20" y="80">B</tspan>')
+    sealed_receipt = {"raw_digest": source_digest(raw), "source_digest": source_digest(raw),
+                      "provider": "codex", "attempt_ordinal": 1}
+
+    async def author(**kwargs):
+        return SvgAuthorResult(raw, raw, deepcopy(sealed_receipt), None)
+
+    monkeypatch.setattr("services.generation_core.authoring.author_slide_svg.author_slide_svg", author)
+    result = asyncio.run(author_source_svg_layout(manifest, 0,
+        {"digest": "sha256:style", "source_authoring_contract": {"version": "svg-source-whole-page/v1"}},
+        image_slots={}, source_images={}, min_font_size_px=12, width=1280, height=720))
+    assert result.raw_response == raw
+    assert sealed_receipt["source_digest"] == source_digest(raw)
+    assert result.receipt["raw_digest"] == source_digest(raw)
+    assert result.receipt["provider"] == "codex" and result.receipt["attempt_ordinal"] == 1
+    assert not result.receipt.get("validation_error")
+    preservation = result.receipt["source_preservation"]
+    assert preservation["source_lf_restoration"]["restored_lf_count"] == 1
+    assert verify_source_receipt(result.svg_content, preservation, manifest, 0)
 
 
 def test_boxes_cannot_occlude_other_content_and_font_floor_cannot_drop():
@@ -213,6 +377,155 @@ def _v2_style():
     return dict(digest="sha256:style", source_template=template)
 
 
+def _authored_source_table_drawing(manifest, xs, ys):
+    from services.generation_core.authoring.author_source_svg_layout import _whole_page_facts
+    fact = _whole_page_facts(manifest.units[0], {})[0]
+    ns = "{http://www.w3.org/2000/svg}"
+    root = ET.Element(ns + "svg", width="1280", height="840", viewBox="0 0 1280 840")
+    group = ET.SubElement(root, ns + "g", id=fact["element_id"])
+    for cell in fact["cells"]:
+        row, column, rs, cs = cell["row"], cell["column"], cell["row_span"], cell["column_span"]
+        ET.SubElement(group, ns + "rect", x=str(xs[column]), y=str(ys[row]),
+            width=str(xs[column + cs] - xs[column]), height=str(ys[row + rs] - ys[row]),
+            fill="#EEF2FF", stroke="#334155", **{"stroke-width": "1"})
+        ET.SubElement(group, ns + "text", id=cell["element_id"],
+            x=str(xs[column] + 4), y=str(ys[row] + 25),
+            **{"font-family": "Inter", "font-size": "18", "fill": "#111111"}).text = cell["text"]
+    return root, fact
+
+
+def _merged_source_table_manifest():
+    return manifest_for([("table", {"rows": [
+        [{"text": "Merged source", "rowSpan": 2, "gridSpan": 2},
+         {"text": "", "mergeCovered": True}, {"text": "A"}],
+        [{"text": "", "mergeCovered": True}, {"text": "", "mergeCovered": True}, {"text": "B"}],
+        [{"text": "C"}, {"text": "D"}, {"text": "E"}]],
+        "columnWidthsEmu": [100, 100, 100], "rowHeightsEmu": [100, 100, 100]})])
+
+
+def _bind_authored_source_table(root, manifest):
+    from services.generation_core.authoring.author_source_svg_layout import _whole_page_facts
+    from services.svg_source_layout import bind_whole_page_source_svg
+    return bind_whole_page_source_svg(ET.tostring(root, encoding="unicode"), manifest, 0,
+        facts=_whole_page_facts(manifest.units[0], {}), width=1280, height=840,
+        style_snapshot={"digest": "sha256:style", "source_authoring_contract": {"version": "svg-source-whole-page/v1"}},
+        minimum_font_px=12)
+
+
+@pytest.mark.parametrize("merged", [False, True])
+@pytest.mark.parametrize("text_encoding", ["direct", "tspan_only", "mixed"])
+@pytest.mark.parametrize("mixed_borders", [False, True])
+def test_source_native_table_authored_variable_grid_preserves_projection(merged, text_encoding, mixed_borders):
+    from services.svg_source_native_tables import source_table_native_objects, source_table_grid_correction
+    if merged:
+        manifest = _merged_source_table_manifest()
+        widths, heights = [100, 250, 50], [38, 59, 59]
+    else:
+        # Geometry ratios from an observed 9x6 candidate; no document content.
+        widths, heights = [100, 250, 50, 390, 180, 138], [38] + [59] * 8
+        manifest = manifest_for([("table", {"rows": [[{"text": f"{r}:{c}"} for c in range(6)] for r in range(9)],
+            "columnWidthsEmu": [100] * 6, "rowHeightsEmu": [100] * 9})])
+    table_source = deepcopy(manifest.units[0].blocks[0].payload)
+    table_source["rows"][0][0]["text"] = "A\nB"
+    manifest = manifest_for([("table", table_source)])
+    original = manifest.model_dump(mode="json", by_alias=True)
+    xs, ys = [40], [120]
+    for width in widths:
+        xs.append(xs[-1] + width)
+    for height in heights:
+        ys.append(ys[-1] + height)
+    root, fact = _authored_source_table_drawing(manifest, xs, ys)
+    if mixed_borders:
+        rects = [node for node in root[0] if node.tag.endswith("}rect")]
+        for cell, rect in zip(fact["cells"], rects, strict=True):
+            if cell["row"] == len(heights) - 1:
+                rect.set("stroke", "#2563EB")
+    if text_encoding != "direct":
+        for node in root[0]:
+            if node.tag != "{http://www.w3.org/2000/svg}text" or not node.text:
+                continue
+            content = node.text
+            node.text = None if text_encoding == "tspan_only" else content[:1]
+            ET.SubElement(node, "{http://www.w3.org/2000/svg}tspan").text = (
+                content if text_encoding == "tspan_only" else content[1:])
+    original_svg = ET.tostring(root, encoding="unicode")
+    assert source_table_grid_correction(manifest.units[0].blocks[0], root[0]) is None
+    svg, receipt = _bind_authored_source_table(root, manifest)
+    assert verify_source_receipt(svg, receipt, manifest, 0)
+    wire, summary = source_table_native_objects(svg, receipt, manifest, 0, pt_per_px=.75)
+    table = wire["objects"][0]
+    assert summary["accepted"] == 1 and summary["source_cells_verified"]
+    assert table["id"] == fact["element_id"]
+    assert table["payload"]["columnWidths"] == widths
+    assert table["payload"]["rowHeightsPt"] == [height * .75 for height in heights]
+    for cell in fact["cells"]:
+        projected = table["payload"]["rows"][cell["row"]][cell["column"]]
+        assert projected["text"] == cell["text"]
+        assert projected["fontSizePt"] == 13.5 and projected["fontFamily"] == "Inter"
+        assert projected["fill"] == "#EEF2FF"
+        borders = table["payload"]["cellStyles"][cell["row"]][cell["column"]]["borders"]
+        assert set(borders) == {"top", "right", "bottom", "left"}
+        for edge, border in borders.items():
+            # The last row paints after its neighbours: its top edge also
+            # becomes the bottom edge of the cell(s) immediately above it.
+            blue = mixed_borders and (cell["row"] == len(heights) - 1 or (
+                edge == "bottom" and cell["row"] + cell["row_span"] == len(heights) - 1))
+            assert border == {"color": "#2563EB" if blue else "#334155", "widthPt": .75}
+    assert table["payload"]["rows"][0][0]["text"] == "A\nB"
+    if mixed_borders:
+        # Filled cells without an opaque positive stroke can occlude a
+        # neighbour's painted edge; they must never become a full native line.
+        for changes in ({"stroke": "none"}, {"stroke-opacity": "0"}, {"stroke-width": "0"}):
+            unsafe_root = deepcopy(root)
+            next(node for node in unsafe_root[0] if node.tag.endswith("}rect")).attrib.update(changes)
+            unsafe_svg, unsafe_receipt = _bind_authored_source_table(unsafe_root, manifest)
+            with pytest.raises(ValueError, match="^svg_source_native_table_border_style_mismatch$"):
+                source_table_native_objects(unsafe_svg, unsafe_receipt, manifest, 0, pt_per_px=.75)
+        from services.svg_source_native_tables import _mixed_cell_borders
+        from services.generation_core.drivers.svg.native_geometry import Box
+        for tiny_cell in (Box(0, 0, 1.5, 10), Box(0, 0, 10, 1.5)):
+            with pytest.raises(ValueError, match="^svg_source_native_table_border_style_mismatch$"):
+                _mixed_cell_borders([], tiny_cell, under="#FFFFFF", pt_per_px=.75)
+    if merged:
+        assert table["payload"]["mergedCells"] == [dict(row=0, column=0, rowSpan=2, columnSpan=2)]
+    else:
+        assert not table["payload"].get("mergedCells")
+    assert ET.tostring(root, encoding="unicode") == original_svg
+    assert manifest.model_dump(mode="json", by_alias=True) == original
+
+
+@pytest.mark.parametrize("mutation", ["column_gap", "row_overlap", "nonpositive"])
+def test_source_native_table_authored_variable_grid_rejects_inconsistent_boundaries(mutation):
+    from services.svg_source_native_tables import source_table_grid_correction
+    manifest = _merged_source_table_manifest()
+    root, _ = _authored_source_table_drawing(manifest, [40, 140, 390, 440], [120, 158, 217, 276])
+    rects = [node for node in root[0] if node.tag.endswith("}rect")]
+    if mutation == "column_gap":
+        rects[-3].set("width", "100.00001")
+    elif mutation == "row_overlap":
+        rects[1].set("height", "37.99999")
+    else:
+        rects[-3].set("width", "0")
+    diagnostic = source_table_grid_correction(manifest.units[0].blocks[0], root[0])
+    assert diagnostic["problem"] == ("invalid_rectangle_geometry" if mutation == "nonpositive" else "inconsistent_grid_boundary")
+    expected_error = "svg_contract_positive_required" if mutation == "nonpositive" else "svg_source_native_table_grid_mismatch"
+    with pytest.raises(ValueError, match=expected_error):
+        _bind_authored_source_table(root, manifest)
+
+
+def test_source_native_table_authored_variable_grid_rejects_unproven_merged_boundary():
+    from services.svg_source_native_tables import source_table_grid_correction
+    manifest = manifest_for([("table", {"rows": [
+        [{"text": "A", "gridSpan": 2}, {"text": "", "mergeCovered": True}],
+        [{"text": "B", "gridSpan": 2}, {"text": "", "mergeCovered": True}]]})])
+    root, _ = _authored_source_table_drawing(manifest, [40, 140, 390], [120, 158, 217])
+    diagnostic = source_table_grid_correction(manifest.units[0].blocks[0], root[0])
+    assert diagnostic["problem"] == "unproven_grid_boundary"
+    assert diagnostic["axis"] == "x" and diagnostic["missing_boundary_indices"] == [1]
+    with pytest.raises(ValueError, match="svg_source_native_table_grid_mismatch"):
+        _bind_authored_source_table(root, manifest)
+
+
 def test_source_native_table_preserves_merged_wrapped_and_blank_cells_and_rejects_paint_tamper():
     from services.svg_source_template_layout import resolve_source_plan
     from services.svg_source_native_tables import source_table_native_objects, unwrap_source_table_groups
@@ -237,6 +550,8 @@ def test_source_native_table_preserves_merged_wrapped_and_blank_cells_and_reject
     assert summary["accepted"] == 1 and summary["source_cells_verified"]
     table = wire["objects"][0]
     assert [[cell["text"] for cell in row] for row in table["payload"]["rows"]] == [[cell["text"] for cell in row] for row in rows]
+    assert table["payload"]["columnWidths"] == [576, 576]
+    assert table["payload"]["rowHeightsPt"] == [90, 90, 90]
     assert table["payload"]["mergedCells"] == [dict(row=0, column=0, rowSpan=1, columnSpan=2)]
     assert len([binding for binding in result.receipt["bindings"] if binding["source_id"] == "wrapped"]) == 2
     unwrapped = ET.fromstring(unwrap_source_table_groups(result.svg_content, result.receipt))
@@ -249,6 +564,71 @@ def test_source_native_table_preserves_merged_wrapped_and_blank_cells_and_reject
     receipt["svg_digest"] = source_digest(tampered)
     with pytest.raises(ValueError, match="svg_source_native_table_group_invalid"):
         source_table_native_objects(tampered, receipt, manifest, 0, pt_per_px=.75)
+
+    # Source-empty owners are invisible, but their exact identities remain mandatory.
+    from services.generation_core.authoring.author_source_svg_layout import _whole_page_facts
+    from services.svg_source_layout import bind_whole_page_source_svg, restore_source_empty_table_texts, page_digest
+    authored_root, authored_fact = _authored_source_table_drawing(manifest,
+        [64, 640, 1216], [120, 240, 360, 480])
+    complete = ET.tostring(authored_root, encoding="unicode")
+    facts = _whole_page_facts(manifest.units[0], {})
+    blank_fact = next(cell for cell in authored_fact["cells"] if cell["text"] == "")
+    blank_node = next(node for node in authored_root[0] if node.get("id") == blank_fact["element_id"])
+    authored_root[0].remove(blank_node)
+    missing = ET.tostring(authored_root, encoding="unicode")
+    wire_digest = source_digest("the wire response includes its own envelope")
+    normalization_args = dict(page=manifest.units[0], facts=facts,
+        manifest_digest=manifest.manifest_digest, source_page_digest=page_digest(manifest, 0),
+        raw_output_digest=wire_digest)
+    binding_args = dict(facts=facts, width=1280, height=840,
+        style_snapshot={"digest": "sha256:style", "source_authoring_contract": {"version": "svg-source-whole-page/v1"}},
+        minimum_font_px=12, restore_source_lf=True, raw_output_digest=wire_digest)
+    restored, restored_receipt = bind_whole_page_source_svg(missing, manifest, 0, **binding_args)
+    restoration = restored_receipt["source_empty_table_text_restoration"]
+    assert restoration["input_svg_digest"] == source_digest(missing)
+    assert restoration["raw_output_digest"] == "sha256:" + wire_digest.removeprefix("sha256:")
+    assert restoration["canonical_svg_digest"] == source_digest(restored)
+    assert restoration["existing_tree_preserved"] and restoration["added_visible_characters"] == 0
+    assert len(restoration["empty_texts"]) == 1 and restoration["empty_texts"][0]["exact_empty"]
+    restored_root = ET.fromstring(restored)
+    restored_node = next(node for node in restored_root[0] if node.get("id") == blank_fact["element_id"])
+    assert not "".join(restored_node.itertext())
+    restored_root[0].remove(restored_node)
+    assert ET.tostring(restored_root, encoding="unicode") == missing
+    complete_svg, complete_receipt = bind_whole_page_source_svg(complete, manifest, 0, **binding_args)
+    restored_wire, restored_summary = source_table_native_objects(restored, restored_receipt, manifest, 0, pt_per_px=.75)
+    complete_wire, complete_summary = source_table_native_objects(complete_svg, complete_receipt, manifest, 0, pt_per_px=.75)
+    assert restored_wire == complete_wire and restored_summary == complete_summary
+    # Nonempty text, including whitespace, is never an empty-placeholder exception.
+    for source_text in ("source content", " ", "\t"):
+        rejected_rows = deepcopy(rows)
+        rejected_rows[1][1]["text"] = source_text
+        rejected_manifest = manifest_for([("table", {"rows": rejected_rows})])
+        rejected_root, rejected_fact = _authored_source_table_drawing(rejected_manifest,
+            [64, 640, 1216], [120, 240, 360, 480])
+        target = next(cell for cell in rejected_fact["cells"] if cell["row"] == 1 and cell["column"] == 1)
+        rejected_root[0].remove(next(node for node in rejected_root[0] if node.get("id") == target["element_id"]))
+        rejected_svg = ET.tostring(rejected_root, encoding="unicode")
+        rejected_facts = _whole_page_facts(rejected_manifest.units[0], {})
+        assert restore_source_empty_table_texts(rejected_svg, page=rejected_manifest.units[0],
+            facts=rejected_facts, manifest_digest=rejected_manifest.manifest_digest,
+            source_page_digest=page_digest(rejected_manifest, 0), raw_output_digest=wire_digest) == (rejected_svg, None)
+        with pytest.raises(ValueError):
+            bind_whole_page_source_svg(rejected_svg, rejected_manifest, 0,
+                **{**binding_args, "facts": rejected_facts})
+    duplicate_root = ET.fromstring(missing)
+    duplicate_root[0].append(deepcopy(next(node for node in duplicate_root[0] if node.tag.endswith("}text"))))
+    duplicate_svg = ET.tostring(duplicate_root, encoding="unicode")
+    assert restore_source_empty_table_texts(duplicate_svg, **normalization_args) == (duplicate_svg, None)
+    with pytest.raises(ValueError):
+        bind_whole_page_source_svg(duplicate_svg, manifest, 0, **binding_args)
+    bad_grid = ET.fromstring(missing)
+    first_rect = next(node for node in bad_grid[0] if node.tag.endswith("}rect"))
+    first_rect.set("width", str(float(first_rect.get("width")) + 1))
+    bad_grid_svg = ET.tostring(bad_grid, encoding="unicode")
+    assert restore_source_empty_table_texts(bad_grid_svg, **normalization_args) == (bad_grid_svg, None)
+    with pytest.raises(ValueError):
+        bind_whole_page_source_svg(bad_grid_svg, manifest, 0, **binding_args)
 
 
 def test_source_token_wrap_preserves_numeric_latin_runs_and_legacy_snapshot_replay():
@@ -291,7 +671,7 @@ def test_v2_public_model_schema_has_no_character_ranges_and_rejects_old_response
 
 
 @pytest.mark.parametrize("style_id", [None, "screenshot-blue"])
-def test_template_server_path_resolves_korean_table_and_image_without_provider(style_id):
+def test_template_server_path_resolves_or_defers_free_svg_without_provider(style_id):
     from services.svg_source_template_layout import try_template_source_layout
     manifest = manifest_for([("text", {"text": "원문 & <숫자> " * 30}),
         ("table", {"rows": [[{"text": "원본 셀"}, {"text": "42%"}]]}),
@@ -311,18 +691,17 @@ def test_template_server_path_resolves_korean_table_and_image_without_provider(s
     result = try_template_source_layout(manifest, 0, style, source_images={"source-slot-one": {"required":True}},
         image_slots={"p0:2":"source-slot-one"}, min_font_size_px=12, width=width, height=height,
         local_layout_budget_ms=10000)
+    if style_id:
+        assert result == dict(escalation_reason="layout_candidate_unavailable", model_layout_allowed=True,
+            model_calls=0, composition_mode="free-svg", attempted_layout_ids=[])
+        assert [block.kind for block in manifest.units[0].blocks] == ["text", "text", "image"]
+        assert manifest.units[0].blocks[2].payload["contentDigest"] == "sha256:image"
+        return
     assert result.receipt["model_calls"] == 0
     assert result.receipt["source_layout_version"] == "svg-source-layout/v2"
     preserved = result.receipt["source_preservation"]
     assert preserved["template_application"]["passed"]
     assert verify_source_receipt(result.svg_content, preserved, manifest, 0)
-    if style_id:
-        root = ET.fromstring(result.svg_content)
-        image = next(n for n in root.iter() if n.tag.endswith("}image"))
-        assert image.get("href") == "source-slot-one"
-        assert image.get("preserveAspectRatio") == "xMidYMid meet"
-        assert float(image.get("width")) > width * .7
-        assert float(image.get("height")) > height * .5
 
 
 def test_template_ink_overlap_repairs_coordinates_but_empty_margins_may_overlap():

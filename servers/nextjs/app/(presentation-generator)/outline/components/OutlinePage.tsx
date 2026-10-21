@@ -67,6 +67,12 @@ const OutlinePage: React.FC<{
   const [autoIntentState, setAutoIntentState] = useState<
     "checking" | "pending" | "none"
   >(auto ? "checking" : "none");
+  const [autoIntentPresentationId, setAutoIntentPresentationId] = useState<string | null>(null);
+  const autoIntentChecking = auto && (autoIntentState === "checking" ||
+    autoIntentPresentationId !== resolvedPresentationId);
+  const [sourceSvgAutoPresentationId, setSourceSvgAutoPresentationId] = useState<string | null>(null);
+  const sourceSvgAutoReady = auto && !autoIntentChecking && autoIntentState === "pending" &&
+    sourceSvgAutoPresentationId === resolvedPresentationId;
   const masterSelectionEpochRef = useRef(0);
   const openMasterDesigner = useCallback(() => setMasterDesignerOpen(true), []);
 
@@ -80,7 +86,12 @@ const OutlinePage: React.FC<{
     }
     openMasterDesigner();
   }, [auto, openMasterDesigner, resolvedPresentationId, router]);
-  const streamState = useOutlineStreaming(resolvedPresentationId);
+  // Resolve the immutable source intent before opening an outline stream.
+  // Source SVG reads its content from the manifest, including after a reload.
+  const streamState = useOutlineStreaming(
+    autoIntentChecking || sourceSvgAutoReady
+      ? null : resolvedPresentationId,
+  );
   const { handleDragEnd, handleAddSlide } = useOutlineManagement(outlines);
   const { loadingState, handleSubmit, startRecovery } =
     usePresentationGeneration(
@@ -92,9 +103,26 @@ const OutlinePage: React.FC<{
   useEffect(() => {
     if (!auto || !resolvedPresentationId) {
       setAutoIntentState("none");
+      setAutoIntentPresentationId(null);
+      setSourceSvgAutoPresentationId(null);
       return;
     }
     const staged = findDurableGenerationTask(resolvedPresentationId);
+    autoSubmittedRef.current = false;
+    autoRecoveryStartedRef.current = false;
+    outlineStreamStartedRef.current = false;
+    setAutoIntentPresentationId(resolvedPresentationId);
+    const request = staged?.authoredRequest;
+    const pin = request?.sourceContentManifestPin;
+    setSourceSvgAutoPresentationId(
+      staged?.mode === "svg" && staged.status === "starting" && !staged.taskId &&
+      request?.strategy === "svg" && request.sourceMode === "source_content_restyle" &&
+      typeof pin?.manifestId === "string" && pin.manifestId.trim().length > 0 &&
+      /^sha256:[0-9a-f]{64}$/i.test(pin.digest) &&
+      request.contentPolicy?.text === "verbatim" &&
+      request.contentPolicy.allowSummarization === false
+        ? resolvedPresentationId : null,
+    );
     setAutoIntentState(
       staged?.status === "starting" && !staged.taskId ? "pending" : "none"
     );
@@ -227,6 +255,7 @@ const OutlinePage: React.FC<{
   // Auto-bridge: once the outline stream completes, submit exactly once.
   const autoSubmittedRef = useRef(false);
   const autoRecoveryStartedRef = useRef(false);
+  const outlineStreamStartedRef = useRef(false);
   // Only auto-submit for a stream that actually ran THIS mount. If the outlines
   // were already in the store when this page mounted (back-navigation into a
   // completed auto flow), don't re-fire generation — show the outline instead.
@@ -234,6 +263,7 @@ const OutlinePage: React.FC<{
   useEffect(() => {
     if (
       !auto ||
+      autoIntentChecking ||
       autoIntentState !== "none" ||
       !resolvedPresentationId ||
       autoRecoveryStartedRef.current
@@ -287,6 +317,7 @@ const OutlinePage: React.FC<{
     };
   }, [
     auto,
+    autoIntentChecking,
     autoIntentState,
     resolvedPresentationId,
     router,
@@ -295,7 +326,7 @@ const OutlinePage: React.FC<{
 
   useEffect(() => {
     if (!auto || autoSubmittedRef.current) return;
-    if (autoIntentState === "checking") return;
+    if (autoIntentChecking) return;
     if (!resolvedPresentationId) return;
     const staged = findDurableGenerationTask(resolvedPresentationId);
     const approvedRasterAuto = autoIntentState === "pending" &&
@@ -303,7 +334,7 @@ const OutlinePage: React.FC<{
       staged.authoredRequest?.sourceMode === "raster_reconstruction" &&
       Boolean(staged.authoredRequest.rasterApprovalPin) &&
       staged.authoredRequest.referenceSnapshotIds?.length === 1;
-    if (!approvedRasterAuto) {
+    if (!approvedRasterAuto && !sourceSvgAutoReady) {
       if (outlinesPreexistingRef.current && autoIntentState !== "pending") return;
       if (streamState.isStreaming) return;
       if (!streamState.hasCompleted && autoIntentState !== "pending") return;
@@ -314,6 +345,9 @@ const OutlinePage: React.FC<{
     handleSubmit();
   }, [
     auto,
+    autoIntentChecking,
+    autoIntentState,
+    sourceSvgAutoReady,
     resolvedPresentationId,
     streamState.isStreaming,
     streamState.hasCompleted,
@@ -326,20 +360,26 @@ const OutlinePage: React.FC<{
   useEffect(() => {
     if (
       !auto ||
-      autoIntentState === "checking" ||
+      autoIntentChecking ||
       autoIntentState === "pending" ||
       !outlinesPreexistingRef.current ||
       !resolvedPresentationId ||
       autoRecoveryStartedRef.current
     ) return;
     router.replace(`/outline?id=${encodeURIComponent(resolvedPresentationId)}`);
-  }, [auto, autoIntentState, resolvedPresentationId, router]);
+  }, [auto, autoIntentChecking, autoIntentState, resolvedPresentationId, router]);
 
   useEffect(() => {
+    if (streamState.isStreaming) {
+      if (!autoIntentChecking) outlineStreamStartedRef.current = true;
+      return;
+    }
     if (
       !auto ||
       !resolvedPresentationId ||
-      streamState.isStreaming ||
+      autoIntentChecking ||
+      sourceSvgAutoReady ||
+      !outlineStreamStartedRef.current ||
       streamState.hasCompleted ||
       autoRecoveryStartedRef.current
     ) return;
@@ -349,6 +389,9 @@ const OutlinePage: React.FC<{
     router.replace(`/outline?id=${encodeURIComponent(resolvedPresentationId)}`);
   }, [
     auto,
+    autoIntentChecking,
+    autoIntentState,
+    sourceSvgAutoReady,
     resolvedPresentationId,
     router,
     streamState.hasCompleted,

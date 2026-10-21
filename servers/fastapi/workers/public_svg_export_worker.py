@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import tempfile
 import time
 from pathlib import Path
@@ -16,23 +17,32 @@ SVG_EXPORT_SCHEMA = "public-svg-export-bundle/v1"
 SVG_EXPORT_SCHEMA_V2 = "public-svg-export-bundle/v2"
 SVG_EXPORT_SCHEMA_V3 = "public-svg-export-bundle/v3"
 SVG_EXPORT_SCHEMA_V4 = "public-svg-export-bundle/v4"
+LOGGER = logging.getLogger(__name__)
 # Re-exported: callers and tests import the converter surface from this module.
 __all__ = ["CONVERTER_VERSION", "SVG_EXPORT_SCHEMA", "SVG_EXPORT_SCHEMA_V2", "SVG_EXPORT_SCHEMA_V3", "SVG_EXPORT_SCHEMA_V4",
            "VENDOR_ROOT", "_source_preservation_readback", "convert_pptx", "converter_digest",
            "execute_svg_export", "is_svg_export_bundle"]
 
 
-def is_svg_export_bundle(job, store):
+def load_svg_export_bundle(job, store):
+    """Parse the input bundle once; the parsed value when it is an svg export bundle, else None."""
     try:
         value = json.loads(store.read(job.input_artifact))
-        return isinstance(value, dict) and value.get("schemaVersion") in {
-            SVG_EXPORT_SCHEMA, SVG_EXPORT_SCHEMA_V2, SVG_EXPORT_SCHEMA_V3, SVG_EXPORT_SCHEMA_V4
-        }
     except (ValueError, UnicodeDecodeError):
-        return False
+        return None
+    if isinstance(value, dict) and value.get("schemaVersion") in {
+        SVG_EXPORT_SCHEMA, SVG_EXPORT_SCHEMA_V2, SVG_EXPORT_SCHEMA_V3, SVG_EXPORT_SCHEMA_V4
+    }:
+        return value
+    return None
+
+
+def is_svg_export_bundle(job, store):
+    return load_svg_export_bundle(job, store) is not None
+
 
 def _validate_source_preservation_entry(source, receipt, *, index, page_count, canvas,
-                                        source_manifest=None):
+                                        source_manifest=None, pages_resolver=None):
     from services.svg_contract import SVG_NS, source_digest
     from xml.etree import ElementTree as ET
     expected = {
@@ -57,11 +67,11 @@ def _validate_source_preservation_entry(source, receipt, *, index, page_count, c
     ))):
         raise PublicWorkerExecutionError("svg_source_export_preservation_failed")
     if whole_page:
-        from services.svg_source_layout import verify_source_receipt
+        from services.svg_source_layout import ValidatedSourcePages
         if receipt.get("source_authoring_contract") != {"version": "svg-source-whole-page/v1"}:
             raise PublicWorkerExecutionError("svg_source_export_whole_page_contract_invalid")
         try:
-            verify_source_receipt(source, receipt, source_manifest, index)
+            (pages_resolver or ValidatedSourcePages(source_manifest)).verify_receipt(source, receipt, index)
         except (ValueError, TypeError, KeyError) as error:
             raise PublicWorkerExecutionError("svg_source_export_whole_page_proof_invalid") from error
     bindings = receipt.get("bindings")
@@ -150,9 +160,10 @@ def _evidence(value, slides, digests, mode, readback):
     }
 
 
-async def execute_svg_export(job, store):
+async def execute_svg_export(job, store, *, bundle=None):
     from services.svg_contract import SVG_CONTRACT_VERSION, validate_svg
-    value = json.loads(store.read(job.input_artifact))
+    # ``bundle`` is this job's input already parsed by the caller (same process, same bytes).
+    value = bundle if bundle is not None else json.loads(store.read(job.input_artifact))
     v2 = value.get("schemaVersion") == SVG_EXPORT_SCHEMA_V2
     v3 = value.get("schemaVersion") == SVG_EXPORT_SCHEMA_V3
     v4 = value.get("schemaVersion") == SVG_EXPORT_SCHEMA_V4
@@ -182,11 +193,12 @@ async def execute_svg_export(job, store):
             or not 1 <= len(slides) <= 100):
         raise PublicWorkerExecutionError("svg_export_slide_count_invalid")
     source_manifest = None
+    pages_resolver = None
     if v4:
         from services.svg_export_whole_page_verifier import whole_page_verifier_digest
         from services.source_content.contracts import SourceContentManifest
         from services.source_content.digests import digest_json
-        from services.svg_source_layout import source_pages
+        from services.svg_source_layout import ValidatedSourcePages
         if value.get("wholePageVerifierDigest") != whole_page_verifier_digest():
             raise PublicWorkerExecutionError("svg_source_export_verifier_code_mismatch")
         bound = value["sourceManifest"]
@@ -199,12 +211,13 @@ async def execute_svg_export(job, store):
         try:
             source_manifest = SourceContentManifest.model_validate({
                 **bound["manifest"], "ownerId": owner_scope})
+            pages_resolver = ValidatedSourcePages(source_manifest)
             sealed = source_manifest.model_dump(mode="json", by_alias=True)
             sealed.pop("manifestDigest", None)
             if (source_manifest.manifest_digest != bound["manifestDigest"]
                     or source_manifest.source_digest != bound["sourceDigest"]
                     or digest_json(sealed) != bound["manifestDigest"]
-                    or len(source_pages(source_manifest, chart_contract=(slides[0]["sourcePreservation"] or {}).get(
+                    or len(pages_resolver.pages_for((slides[0]["sourcePreservation"] or {}).get(
                         "source_chart_contract"))) != len(slides)):
                 raise ValueError("source_manifest_mismatch")
         except (ValueError, TypeError, KeyError) as error:
@@ -212,6 +225,7 @@ async def execute_svg_export(job, store):
     native_objects = _native_objects(value, fmt, len(slides))
     sources, notes, digests, admitted_assets, canonical_sources = [], [], [], [], []
     source_preservation, expected_image_digests = [], []
+    source_manifest_cache = {}
     for index, entry in enumerate(slides):
         expected_slide_keys = ({"slideIndex", "artifactRef", "notes", "assets", "sourcePreservation"}
                                if v3 or v4 else {"slideIndex", "artifactRef", "notes", "assets"}
@@ -230,6 +244,7 @@ async def execute_svg_export(job, store):
             source_preservation.append(_validate_source_preservation_entry(
                 source, entry["sourcePreservation"], index=index,
                 page_count=len(slides), canvas=canvas, source_manifest=source_manifest,
+                pages_resolver=pages_resolver,
             ))
         assets = entry.get("assets")
         if assets is not None:
@@ -239,6 +254,7 @@ async def execute_svg_export(job, store):
             source, source_contract = materialize_export_assets(
                 assets, svg=source, job=job, store=store, presentation_id=value["presentationId"],
                 export_format=fmt, width=canvas.width_px, height=canvas.height_px,
+                source_cache=source_manifest_cache,
                 **({"source_preservation": entry["sourcePreservation"]} if v3 or v4 else {}))
             admitted_assets.append(admit_authorized_svg_materialized(
                 canonical_source, source, source_manifest=source_contract, width_px=canvas.width_px,
@@ -396,4 +412,6 @@ async def execute_svg_export(job, store):
         evidence = _evidence(value, slides, digests, mode, readback)
         if fmt == "pdf":
             evidence["pdfTextLayer"] = "vector"
+        LOGGER.info("svg_export_io phase=worker operation=%s cas_reads=%s cas_bytes_hashed=%s",
+                    job.operation_id, getattr(store, "cas_reads", 0), getattr(store, "cas_bytes_hashed", 0))
         return WorkerOutput(artifact=artifact, evidence=evidence)

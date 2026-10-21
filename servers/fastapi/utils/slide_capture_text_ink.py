@@ -71,21 +71,59 @@ TEXT_INK_JS = r"""
     };
     const inkContent = (node, text) => {
       // Match the addressable characters Chromium laid out, else refuse.
-      const collapsed = String(text.textContent || '').replace(/[\t\n\r ]+/g, ' ');
+      const source = String(text.textContent || '');
       const count = node.getNumberOfChars();
+      const whitespace = getComputedStyle(node).whiteSpace;
+      if (whitespace === 'pre') {
+        // SVG XML whitespace preserves character addresses while TAB/LF/CR
+        // paint as spaces. Keep every address, including indentation and
+        // repeated trailing whitespace, and retain the normal advance guards.
+        const preserved = source.replace(/[\t\n\r]/g, ' ');
+        return preserved.length === count ? preserved : null;
+      }
+      if (whitespace && !['normal', 'nowrap'].includes(whitespace)) return null;
+      const collapsed = source.replace(/[\t\n\r ]+/g, ' ');
       if (collapsed.length === count) return collapsed;
       const trimmed = collapsed.trim();
       return trimmed.length === count ? trimmed : null;
     };
-    const inkLanguage = (node) => {
+    const inkLanguageContext = (node) => {
       for (let current = node; current; current = current.parentElement) {
         const language = current.getAttribute('lang') ??
           current.getAttributeNS('http://www.w3.org/XML/1998/namespace', 'lang');
-        if (language !== null) return language || 'und';
+        if (language !== null) return {language: language || 'und', explicit: true};
       }
       // No language attribute means the SVG language is unspecified; the
       // browser UI locale is not an author-supplied shaping language.
-      return 'und';
+      return {language: 'und', explicit: false};
+    };
+    const inkLanguage = (node) => inkLanguageContext(node).language;
+    const inkSourceTextContext = (node) => {
+      for (let current = node; current; current = current.parentElement) {
+        if (current instanceof SVGTextElement) return String(current.textContent || '');
+      }
+      return '';
+    };
+    const localizedInkWitness = (node, context, segment, isolated, layoutAdvance, scale) => {
+      const source = inkLanguageContext(node);
+      if (source.explicit || !('lang' in context) || segment !== '\u00b7' ||
+          !/\p{Script=Hangul}/u.test(inkSourceTextContext(node)) ||
+          Math.abs(isolated.width * scale - layoutAdvance) <= 1) {
+        return {metrics: isolated, language: source.language};
+      }
+      // A tspan keeps its original text owner's shaping context. Measure with
+      // that script context only in the same loaded face, and require its
+      // advance to reproduce the actual SVG character before accepting ink.
+      const previous = context.lang;
+      let localized;
+      try {
+        context.lang = 'ko';
+        localized = context.measureText(segment);
+      } finally {
+        context.lang = previous;
+      }
+      return Number.isFinite(localized.width) && Math.abs(localized.width * scale - layoutAdvance) <= 1
+        ? {metrics: localized, language: 'ko'} : {metrics: isolated, language: source.language};
     };
     const inkBox = (node, text, rect) => {
       const context = inkCanvasContext;
@@ -131,8 +169,10 @@ TEXT_INK_JS = r"""
       if (Math.abs(origin.y - fontAscent - rect.y) > 1 || Math.abs(origin.x - rect.x) > 1) return null;
       let left = Infinity, right = -Infinity, top = Infinity, bottom = -Infinity;
       let cellClusters = 0;
+      let isolatedInkClusters = 0, pairInkClusters = 0;
       const exposeGlyphInk = document.body.classList.contains('codex-timeline-ink-v1');
       const glyphInkClusters = exposeGlyphInk ? [] : null;
+      const pairInkWitnesses = exposeGlyphInk ? [] : null;
       const segmenter = new Intl.Segmenter(undefined, {granularity: 'grapheme'});
       const clusters = Array.from(segmenter.segment(content), ({segment, index}) => ({segment, index}));
       const expectedGlyphClusters = clusters.filter(({segment}) => segment.trim()).length;
@@ -147,24 +187,10 @@ TEXT_INK_JS = r"""
         if (![start.x, start.y, end.x, end.y].every(Number.isFinite)) return null;
         if (Math.abs(start.y - origin.y) > 0.01) return null;
         if ('fontKerning' in context) context.fontKerning = 'none';
-        let isolated = context.measureText(segment);
+        const initial = context.measureText(segment);
         const layoutAdvance = end.x - start.x;
-        let glyphLanguage = inkLanguage(node);
-        // An unspecified-language Korean run can contain both localized dot
-        // forms: SVG retains its shaping-run context, whereas measuring one
-        // grapheme loses it. Try only the source's Hangul localization, and
-        // accept it only when it reproduces this exact SVG character advance.
-        if ('lang' in context && glyphLanguage === 'und' && segment === '\u00b7' &&
-            /\p{Script=Hangul}/u.test(content) &&
-            Math.abs(isolated.width * k - layoutAdvance) > 1) {
-          context.lang = 'ko';
-          const localized = context.measureText(segment);
-          context.lang = glyphLanguage;
-          if (Number.isFinite(localized.width) && Math.abs(localized.width * k - layoutAdvance) <= 1) {
-            isolated = localized;
-            glyphLanguage = 'ko';
-          }
-        }
+        const localized = localizedInkWitness(node, context, segment, initial, layoutAdvance, k);
+        const isolated = localized.metrics, glyphLanguage = localized.language;
         if ('fontKerning' in context) context.fontKerning = kerning;
         const pair = next ? context.measureText(segment + next.segment) : null;
         const nextWidth = next ? context.measureText(next.segment).width : 0;
@@ -187,6 +213,17 @@ TEXT_INK_JS = r"""
         const cellLeft = Math.min(start.x, end.x), cellRight = Math.max(start.x, end.x);
         if (witness && [witness.actualBoundingBoxLeft, witness.actualBoundingBoxRight,
                         witness.actualBoundingBoxAscent, witness.actualBoundingBoxDescent].every(Number.isFinite)) {
+          if (isolatedMatches) isolatedInkClusters += 1;
+          else {
+            pairInkClusters += 1;
+            if (exposeGlyphInk) pairInkWitnesses.push({index, length: segment.length,
+              contextLength: segment.length + next.segment.length, nextIndex: next.index,
+              x: start.x - witness.actualBoundingBoxLeft * k,
+              y: start.y - witness.actualBoundingBoxAscent * k,
+              width: (witness.actualBoundingBoxLeft + witness.actualBoundingBoxRight) * k,
+              height: (witness.actualBoundingBoxAscent + witness.actualBoundingBoxDescent) * k,
+              basis: 'matching-pair-advance', language: inkLanguage(node)});
+          }
           left = Math.min(left, cellLeft - Math.max(0, witness.actualBoundingBoxLeft * k));
           right = Math.max(right, cellRight + Math.max(0, (witness.actualBoundingBoxRight - witness.width) * k));
           top = Math.min(top, start.y - witness.actualBoundingBoxAscent * k);
@@ -209,7 +246,10 @@ TEXT_INK_JS = r"""
       }
       return {x: left - pad, y: top - pad, width: right - left + 2 * pad,
         height: bottom - top + 2 * pad, cellClusters,
-        ...(exposeGlyphInk && pad === 0 ? {glyphInkClusters,
+        ...(exposeGlyphInk && pad === 0 ? {glyphInkClusters, pairInkWitnesses,
+          glyphPaintCoverage: {expected: expectedGlyphClusters, isolated: isolatedInkClusters,
+            pair: pairInkClusters, cell: cellClusters,
+            complete: isolatedInkClusters + pairInkClusters === expectedGlyphClusters && cellClusters === 0},
           glyphInkCoverage: {expected: expectedGlyphClusters, measured: glyphInkClusters.length,
             complete: glyphInkClusters.length === expectedGlyphClusters,
             language: inkLanguage(node)}} : {})};

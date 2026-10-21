@@ -194,7 +194,11 @@ def test_persisted_domains_are_connected_without_claiming_visual_or_native_accep
             values = statement.compile().params.values()
             return review_request if review_id in values else export_request
         async def scalars(self, statement):
-            return SimpleNamespace(all=lambda: [current_slide])
+            entity = statement.column_descriptions[0]["entity"]
+            # This fixture has no completed header edit. Header authority queries
+            # operations independently of the presentation's current slide list.
+            assert entity in {WorkspaceOperation, SlideModel}
+            return SimpleNamespace(all=lambda: [] if entity is WorkspaceOperation else [current_slide])
 
     async def consume():
         return await current_svg_artifact_fidelity(ReadSession(), current, review_operation)
@@ -343,7 +347,6 @@ def _assert_cached_native_coverage_promotion_guards():
         altered_binding["digest"] = "sha256:" + canonical_json_sha256({
             key: value for key, value in altered_binding.items() if key != "digest"})
         assert checked(altered)["status"] == "failed", field
-
 
 @pytest.mark.parametrize("broken", ["template", "render", "readback"])
 def test_missing_evidence_is_never_promoted(broken):

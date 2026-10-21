@@ -32,6 +32,7 @@ import LoadingState from "./LoadingState";
 import { applyPresentationThemeToElement } from "../utils/applyPresentationThemeDom";
 import { tryResolveServerIssuedPresentationProfile } from "@/lib/presentation-profile";
 import PresentationHeader from "./PresentationHeader";
+import DraftCheckpointPreview from "./DraftCheckpointPreview";
 import PresentationShell, {
   PresentationFeatureSlot,
   PresentationRuntimeDependencies,
@@ -700,6 +701,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
         onRefreshStaging={refreshWorkspaceStaging} onOpenChat={openWorkspaceOperation}
       />}
       <div ref={containerRef} className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden">
+        {!showResult && !loading && slidesLength === 0 && <DraftCheckpointPreview key={presentation_id} presentationId={presentation_id} />}
         {showResult && <PresentationFeatureSlot name="editorSurface">
           <div
             id="presentation-slides-pane"

@@ -98,7 +98,7 @@ def build_selected_proof(*, operation_id: str, job_id: str, owner_id: str,
     selections = [{"index": i, "status": p.get("quality_recovery", {}).get("status"),
                    "selection": deepcopy(p.get("quality_recovery", {}).get("selection"))}
                   for i, p in enumerate(payloads) if p.get("quality_recovery", {}).get("selection")]
-    if not any(s["status"] == "selected" for s in selections) or not any(s["status"] == "retained" for s in selections):
+    if not any(s["status"] == "selected" for s in selections):
         return None
     from services.generation_core.drivers.svg.quality import _gate_intact
     rounds = execution.get("rounds")
@@ -152,6 +152,8 @@ def build_selected_proof(*, operation_id: str, job_id: str, owner_id: str,
                  source_pages=vector, fresh_local_indices=affected,
                  original_gate_digests=[g["digest"] for g in gates],
                  original_round_digests=[content_digest(r) for r in rounds])
+    if not any(s["status"] == "retained" for s in selections):
+        value["local_review_mode"] = "fresh-all"
     return value | {"digest": content_digest(value)}
 
 
@@ -240,11 +242,43 @@ def archived_producer_payloads(archive: Mapping[str, Any], proof: Mapping[str, A
     return deepcopy(dict(job)), payloads
 
 
+def _fresh_local_review_required(context, pages, renders, evidence):
+    """Selected-only sources keep render authority; all local QA is fresh."""
+    proof = evidence.get("proof") or {}
+    if proof.get("local_review_mode") != "fresh-all":
+        return False
+    _require(proof.get("schema") == SCHEMA and proof.get("namespace") == NAMESPACE)
+    producer_job = evidence["producer_job"]
+    _require(str(producer_job.get("id")) == proof["source_job_id"]
+             and str(producer_job.get("workspace_operation_id")) == proof["source_operation_id"]
+             and str(producer_job.get("presentation_id")) == str(evidence.get("producer_presentation_id"))
+             and evidence["producer_payloads"][0].get("quality_recovery_execution") == evidence["execution"])
+    verify_selected_proof(proof, operation_id=proof["source_operation_id"], job_id=proof["source_job_id"],
+        owner_id=proof["owner_id"], tenant_id=proof["tenant_id"], archive_digest=proof["archive_digest"],
+        parent_manifest_hash=proof["parent_manifest_hash"], payloads=evidence["producer_payloads"],
+        execution=evidence["execution"], source_snapshot=producer_job["svg_style_snapshot"])
+    # Old QA is never consumed in this mode. A new current runtime and
+    # complete current evidence are required, not old reviewer equivalence.
+    _sha(context.get("runtimeBinding"))
+    _require(evidence.get("consumer_binding") == context["binding"]
+             and context["binding"].get("ownerId") == proof["owner_id"]
+             and context["binding"].get("tenantId") == proof["tenant_id"]
+             and context.get("snapshotDigest") == proof["source_snapshot_digest"]
+             and len(pages) == len(renders) == len(proof["source_pages"])
+             and len(context.get("mandatoryEvidence", [])) == len(pages)
+             and all(context["mandatoryEvidence"]))
+    for index, ((payload, _), png) in enumerate(zip(pages, renders, strict=True)):
+        _require(_svg_sha(payload) == proof["source_pages"][index]["svg_digest"]
+                 and sha256(png).hexdigest() == proof["source_pages"][index]["png_digest"])
+    return True
+
 def reusable_local_groups(context: Mapping[str, Any], pages: Sequence, renders: Sequence[bytes],
                           evidence: Mapping[str, Any]) -> tuple[dict[int, dict], list[dict]]:
     from services.generation_core.drivers.svg.quality import (
         _gate_intact, _group_review_input_digest, _local_group_context,
     )
+    if _fresh_local_review_required(context, pages, renders, evidence):
+        return {}, []
     reused, consumers = {}, []
     sources = [evidence, *evidence.get("additional_producers", [])]
     for source in sources:

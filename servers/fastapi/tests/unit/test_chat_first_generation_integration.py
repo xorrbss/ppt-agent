@@ -88,6 +88,43 @@ def test_v1_async_generation_uses_strict_v2_admission_before_claim(
 ):
     """The browser-compatible v1 route must stamp the v2 operation contract."""
 
+    from copy import deepcopy
+    from pydantic import ValidationError
+    from services.presentation_generation_staging import _durable_request_payload, _request_from_durable_payload
+    from services.presentation_generation_job_service import request_sha256
+
+    values = dict(content="Browser cost cap", n_slides=3, language="en", strategy="authored")
+    omitted = GeneratePresentationRequest(**values)
+    explicit_none = GeneratePresentationRequest(**values, providerCostCapMicrounits=None)
+    for mode in ("python", "json"):
+        for aliases in (False, True):
+            assert omitted.model_dump(mode=mode, by_alias=aliases) == explicit_none.model_dump(mode=mode, by_alias=aliases)
+            assert "provider_cost_cap_microunits" not in omitted.model_dump(mode=mode, by_alias=aliases)
+            assert "providerCostCapMicrounits" not in omitted.model_dump(mode=mode, by_alias=aliases)
+    omitted_durable, none_durable = _durable_request_payload(omitted), _durable_request_payload(explicit_none)
+    assert omitted_durable == none_durable
+    assert request_sha256(omitted_durable) == request_sha256(none_durable)
+    capped = GeneratePresentationRequest(**values, providerCostCapMicrounits=12_500_000)
+    capped_payload = _durable_request_payload(capped)
+    assert capped.model_dump(mode="json", by_alias=True)["providerCostCapMicrounits"] == 12_500_000
+    assert capped_payload["provider_cost_cap_microunits"] == 12_500_000
+    restored = _request_from_durable_payload(deepcopy(capped_payload))
+    assert restored.provider_cost_cap_microunits == 12_500_000
+    assert request_sha256(_durable_request_payload(restored)) == request_sha256(capped_payload)
+    other_cap = GeneratePresentationRequest(**values, provider_cost_cap_microunits=12_000_000)
+    assert request_sha256(_durable_request_payload(other_cap)) != request_sha256(capped_payload)
+    assert request_sha256(omitted_durable) != request_sha256(capped_payload)
+    # Oversized requested ceilings remain valid inputs; admission's existing
+    # min(policy, cap) is the hard authority and never raises the policy cap.
+    assert GeneratePresentationRequest(**values, providerCostCapMicrounits=100_000_000).provider_cost_cap_microunits == 100_000_000
+    for invalid in (0, -1, True, False, 1.0, 1.5, "12500000"):
+        with pytest.raises(ValidationError):
+            GeneratePresentationRequest(**values, providerCostCapMicrounits=invalid)
+    for second in (12_500_000, 50_000_000, None):
+        with pytest.raises(ValidationError, match="provider_cost_cap_alias_conflict"):
+            GeneratePresentationRequest(**values, providerCostCapMicrounits=12_500_000,
+                provider_cost_cap_microunits=second)
+
     async def scenario():
         engine, maker = await _database(tmp_path / "v1-v2-admission.db")
         async with maker() as session, session.begin():
@@ -155,6 +192,7 @@ def test_v1_async_generation_uses_strict_v2_admission_before_claim(
                 n_slides=3,
                 language="en",
                 strategy="authored",
+                providerCostCapMicrounits=12_500_000,
             )
             async with maker() as session:
                 request_http = Request(
@@ -196,6 +234,24 @@ def test_v1_async_generation_uses_strict_v2_admission_before_claim(
                 assert operation.deadline_at is not None
                 assert operation.fencing_token == 1
                 assert observed["operation_kind"] == "generation"
+                assert observed["estimated_cost_limit_microunits"] == 12_500_000
+                assert observed["actual_cost_limit_microunits"] == 12_500_000
+                durable_job = await session.scalar(select(PresentationGenerationJob).where(
+                    PresentationGenerationJob.workspace_operation_id == operation.id))
+                assert durable_job.request_payload["provider_cost_cap_microunits"] == 12_500_000
+                assert operation.request_payload["generation_request"]["provider_cost_cap_microunits"] == 12_500_000
+                changed = request.model_copy(update={"provider_cost_cap_microunits": 12_000_000})
+                with pytest.raises(HTTPException) as changed_replay:
+                    await generation_pipeline.queue_presentation_generation(changed, BackgroundTasks(), session,
+                        idempotency_key=f"presentation-generate:{presentation_id}")
+                assert changed_replay.value.status_code == 409
+                assert changed_replay.value.detail == "idempotency_key_payload_conflict"
+                observed.clear()
+                presentation = await session.get(PresentationModel, presentation_id)
+                await generation_pipeline._admit_generation_operation_v2_compatible(
+                    session, request=omitted, presentation=presentation, operation=operation)
+                assert "estimated_cost_limit_microunits" not in observed
+                assert "actual_cost_limit_microunits" not in observed
         finally:
             reset_current_owner_id(owner_token)
             await engine.dispose()

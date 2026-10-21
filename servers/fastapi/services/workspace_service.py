@@ -1945,10 +1945,32 @@ async def apply_workspace_action(
     allow_local_development: bool = False,
 ) -> tuple[WorkspaceActionReceipt, WorkspaceOperation, bool]:
     if request.action in {"cancel", "retry"} and get_current_owner_id() is not None:
-        source = await session.scalar(select(WorkspaceOperation).where(
+        from types import SimpleNamespace
+        from services.workspace_operation_principal import PRINCIPAL_TENANT_PAYLOAD_KEY
+
+        # Principal routing consumes only these metadata/tenant leaves. A Core
+        # mapping cannot install a partial payload into the ORM identity map.
+        source_metadata = (await session.execute(select(
+            WorkspaceOperation.id, WorkspaceOperation.owner_id,
+            WorkspaceOperation.kind, WorkspaceOperation.execution_profile_version,
+            WorkspaceOperation.presentation_id,
+            WorkspaceOperation.request_payload[PRINCIPAL_TENANT_PAYLOAD_KEY].label("source_principal_tenant"),
+            WorkspaceOperation.request_payload["tenant_id"].label("source_tenant"),
+            WorkspaceOperation.request_payload["context"]["tenant_id"].label("source_context_tenant"),
+            WorkspaceOperation.request_payload["context"]["target"].label("source_context_target"),
+        ).where(
             WorkspaceOperation.id == operation_id,
             WorkspaceOperation.owner_id == get_current_owner_id(),
-        ))
+        ))).mappings().one_or_none()
+        source = (SimpleNamespace(
+            id=source_metadata["id"], owner_id=source_metadata["owner_id"],
+            kind=source_metadata["kind"], execution_profile_version=source_metadata["execution_profile_version"],
+            presentation_id=source_metadata["presentation_id"], request_payload={
+                PRINCIPAL_TENANT_PAYLOAD_KEY: source_metadata["source_principal_tenant"],
+                "tenant_id": source_metadata["source_tenant"],
+                "context": {"tenant_id": source_metadata["source_context_tenant"],
+                            "target": source_metadata["source_context_target"]},
+            }) if source_metadata is not None else None)
         if (source is not None and source.kind == "presentation.generate"
                 and source.execution_profile_version == "public-generation-export/v2"):
             from services.workspace_operation_principal import generation_action_principal
@@ -2152,11 +2174,32 @@ async def _apply_workspace_action(
     values: dict[str, Any]
     now = get_current_utc_datetime()
     retry_of_operation_id: Optional[uuid.UUID] = None
-    terminal_retry = request.action == "retry" and operation.state in {
-        "failed",
-        "cancelled",
-        "dead_letter",
-    }
+    terminal_retry = request.action == "retry" and (
+        operation.state in {"failed", "cancelled", "dead_letter"}
+        or (operation.state == "deadline_exceeded"
+            and operation.kind == "presentation.generate"
+            and request.recovery_revision == "svg-partial-recovery/v1")
+    )
+    if terminal_retry:
+        # Cheap duplicate probe ahead of the expensive recovery proofs; the unique
+        # constraint and the later lookup below remain the authoritative guards.
+        early_retry = (
+            await session.execute(
+                select(WorkspaceOperation.id).where(
+                    WorkspaceOperation.retry_of_operation_id == operation.id,
+                    WorkspaceOperation.owner_scope == get_workspace_owner_scope(),
+                ).limit(1)
+            )
+        ).first()
+        if early_retry is not None:
+            await session.rollback()
+            return await _replay_action_receipt_after_conflict(
+                session,
+                operation_id=operation_id,
+                action_type=request.action,
+                idempotency_hash=idempotency_hash,
+                request_hash=request_hash,
+            )
     header_retry = None
     if terminal_retry and operation.kind == "design.apply" and (
             (operation.request_payload.get("context") or {}).get("target") == "common_header"):
@@ -2473,6 +2516,7 @@ async def _apply_workspace_action(
                                 SVG_CACHED_AUTHOR_RENDER, SVG_CACHED_AUTHOR_RENDER_V2,
                                 SVG_CACHED_AUTHOR_RENDER_V3},
                             partial_svg_recovery=partial_recovery,
+                            partial_svg_verification=(svg_recovery.verification if partial_recovery else None),
                         )
                     except HTTPException as error:
                         await session.rollback()

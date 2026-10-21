@@ -164,6 +164,89 @@ async def _drain_once(runner: WorkspaceOperationRunner) -> int:
     return dispatched
 
 
+@pytest.mark.parametrize("mode", ["normal", "partial", "partial_rejected", "partial_bad_binding", "partial_missing_ext"])
+def test_generation_progress_poller_runs_for_normal_and_partial_recovery(mode, monkeypatch):
+    from unittest.mock import AsyncMock, Mock
+    from copy import deepcopy
+    from services import presentation_generation_operation_handler as adapter
+    from services.svg_partial_recovery import LINEAGE_KEY, digest
+    from services.workspace_operation_handler_registry import NonRetryableWorkspaceOperationError
+    from services.workspace_operation_lease import WorkspaceOperationLeaseLost
+
+    operation_id, job_id, presentation_id, owner = (uuid.uuid4() for _ in range(4))
+    payload = {"codex_generation_preset": None}
+    carrier = {"generation_request": payload}
+    if mode != "normal":
+        manifest = {"append_only_recovery": True, "owner_id": str(owner),
+            "expected_page_count": 2, "archive_digest": "b" * 64}
+        manifest_hash = digest(manifest)
+        payload[LINEAGE_KEY] = {"schema": "svg-partial-recovery-lineage/v2",
+            "operation_id": str(operation_id), "job_id": str(job_id),
+            "presentation_id": str(presentation_id), "manifest_hash": manifest_hash,
+            "archive_digest": manifest["archive_digest"]}
+        carrier.update(recovery_revision="svg-partial-recovery/v1", svg_partial_recovery_manifest=manifest,
+            svg_partial_recovery_lineage=deepcopy(payload[LINEAGE_KEY]),
+            svg_partial_recovery_manifest_hash=manifest_hash)
+    if mode == "partial_bad_binding":
+        carrier["svg_partial_recovery_lineage"]["job_id"] = str(uuid.uuid4())
+    linked = SimpleNamespace(id=job_id, presentation_id=presentation_id,
+        workspace_operation_id=operation_id, request_payload=payload, total_slides=2)
+    result = WorkspaceOperationResult(payload={"status": "completed"})
+    events = []
+
+    async def run_pipeline(*args):
+        events.append("pipeline")
+        return result
+
+    async def claim_job(**kwargs):
+        events.append("claim")
+        return job_id, "fixture-task"
+
+    async def extend(**kwargs):
+        events.append("extend")
+        return mode != "partial_rejected"
+
+    pipeline = AsyncMock(side_effect=run_pipeline)
+    handler = PresentationGenerationOperationHandler(session_factory=Mock(), pipeline=pipeline)
+    monkeypatch.setattr(handler, "_linked_job", AsyncMock(return_value=linked))
+    monkeypatch.setattr(adapter, "claim_linked_generation_job", AsyncMock(side_effect=claim_job))
+    stage = AsyncMock(return_value=True)
+    monkeypatch.setattr(adapter, "mark_authored_generation_stage", stage)
+    stop = AsyncMock()
+    start = Mock(return_value=stop)
+    monkeypatch.setattr(adapter, "start_authored_generation_progress_polling", start)
+    extension = AsyncMock(side_effect=extend)
+    context = SimpleNamespace(claim=SimpleNamespace(operation_id=operation_id, attempt_number=1,
+        owner_id=owner, presentation_id=presentation_id, request_payload=carrier,
+        attempt_token="fixture-attempt", fencing_token=1),
+        raise_if_cancelled=AsyncMock(), progress=AsyncMock(return_value=True), extend_lease=extension)
+    if mode == "partial_missing_ext":
+        del context.extend_lease
+    if mode in {"partial_rejected", "partial_bad_binding", "partial_missing_ext"}:
+        expected = NonRetryableWorkspaceOperationError if mode == "partial_bad_binding" else WorkspaceOperationLeaseLost
+        with pytest.raises(expected):
+            asyncio.run(handler._execute_without_deadline(context))
+        pipeline.assert_not_awaited()
+        stage.assert_not_awaited()
+        start.assert_not_called()
+        assert events == (["claim", "extend"] if mode == "partial_rejected" else ["claim"])
+        if mode != "partial_rejected":
+            extension.assert_not_awaited()
+        return
+    assert asyncio.run(handler._execute_without_deadline(context)) is result
+    pipeline.assert_awaited_once_with(job_id, "fixture-task", None, context)
+    stage.assert_awaited_once()
+    assert [call.kwargs["stage"] for call in context.progress.await_args_list] == ["generation_started", "authored_outline"]
+    start.assert_called_once()
+    stop.assert_awaited_once()
+    if mode == "partial":
+        extension.assert_awaited_once_with(seconds=900)
+        assert events == ["claim", "extend", "pipeline"]
+    else:
+        extension.assert_not_awaited()
+        assert events == ["claim", "pipeline"]
+
+
 @pytest.mark.parametrize(
     ("owner_id", "headers", "expected_cookie"),
     [
@@ -439,6 +522,43 @@ def test_public_provider_control_error_keeps_terminal_retryability() -> None:
         "public_provider_terminal_replay_unsupported",
         False,
     )
+    from services.provider_runtime_primitives import RetryAmplificationError
+    from services.public_generation_worker_lifecycle import durable_generation_failure
+
+    for reason in (
+        "retry_requires_an_initial_request",
+        "retry_amplification_ceiling_exceeded",
+    ):
+        source_error = RetryAmplificationError(reason)
+        assert source_error.args == (reason,) and str(source_error) == reason
+        assert source_error.code == reason and source_error.retryable is False
+        normalized = _durable_generation_control_http_exception(source_error)
+        assert normalized is not None and normalized.status_code == 422
+        assert normalized.code == reason and normalized.retryable is False
+        assert normalized.detail == {"code": reason, "retryable": False}
+        payload = APIErrorModel.from_exception(normalized).model_dump(mode="json")
+        assert payload["code"] == reason and payload["retryable"] is False
+        assert _safe_failure(payload) == (reason, False)
+        assert durable_generation_failure(normalized) == (reason, False)
+
+    for unknown in (
+        RetryAmplificationError("unrecognized_retry_failure"),
+        RetryAmplificationError("retry_amplification_ceiling_exceeded: private detail"),
+        RetryAmplificationError("retry_requires_an_initial_request", "private detail"),
+        RetryAmplificationError(),
+        RuntimeError("retry_amplification_ceiling_exceeded"),
+    ):
+        assert not hasattr(unknown, "code") and not hasattr(unknown, "retryable")
+        assert unknown.args == RuntimeError(*unknown.args).args
+        assert str(unknown) == str(RuntimeError(*unknown.args))
+        assert _durable_generation_control_http_exception(unknown) is None
+
+    class UnknownRetryAmplificationError(RetryAmplificationError):
+        pass
+
+    derived = UnknownRetryAmplificationError("retry_requires_an_initial_request")
+    assert not hasattr(derived, "code") and not hasattr(derived, "retryable")
+    assert _durable_generation_control_http_exception(derived) is None
 
 
 async def _non_retryable_generation_failure_disables_resume(

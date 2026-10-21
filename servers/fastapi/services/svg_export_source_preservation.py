@@ -125,7 +125,7 @@ async def sealed_whole_page_manifest(session, *, claim, presentation, slides, re
     from models.sql.source_content import SourceContentManifestRecord
     from services.source_content.errors import SourceContentError
     from services.source_content.manifest_store import _manifest_from_record
-    from services.svg_source_layout import verify_source_receipt
+    from services.svg_source_layout import ValidatedSourcePages
 
     owner_predicate = (SourceContentManifestRecord.owner_id == claim.owner_id
                        if claim.owner_id is not None else SourceContentManifestRecord.owner_id.is_(None))
@@ -138,8 +138,18 @@ async def sealed_whole_page_manifest(session, *, claim, presentation, slides, re
         raise PublicExportOperationError("svg_source_export_manifest_binding_invalid")
     try:
         manifest = _manifest_from_record(rows[0], owner_id=claim.owner_id)
-        for index, (slide, receipt) in enumerate(zip(slides, receipts, strict=True)):
-            verify_source_receipt(slide.svg_content, receipt, manifest, index)
+        # ORM attributes are read here, on the loop; the pure per-page proof then runs
+        # off the event loop. Whole-manifest validation runs once per chart contract for
+        # this call; each page's own receipt and bindings are still verified.
+        svgs = [slide.svg_content for slide in slides]
+
+        def verify_pages():
+            verifier = ValidatedSourcePages(manifest)
+            for index, (svg, receipt) in enumerate(zip(svgs, receipts, strict=True)):
+                verifier.verify_receipt(svg, receipt, index)
+
+        import asyncio
+        await asyncio.to_thread(verify_pages)
     except (ValueError, TypeError, KeyError, SourceContentError) as error:
         raise PublicExportOperationError("svg_source_export_manifest_proof_invalid") from error
     return {"ownerScope": claim.owner_scope,

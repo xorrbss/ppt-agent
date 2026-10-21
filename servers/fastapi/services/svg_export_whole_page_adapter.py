@@ -82,6 +82,12 @@ def project_source_table_end_alignment(canonical_svg, receipt, native_page):
             if binding.get("kind") == "table_cell" and binding.get("block_id") == declarations[object_.id]:
                 cells.setdefault((binding["row"], binding["column"], binding["source_id"]), []).append(binding)
         for (row, column, source_id), bindings in cells.items():
+            # Only a numeric label is aligned by this projection. A wrapped or otherwise
+            # non-numeric cell contributes nothing here, and its text is proven by the
+            # source receipt, so it must not be re-matched against joined line text.
+            numeric = parse_label_number("".join(binding["text"] for binding in sorted(bindings, key=lambda binding: binding["start"])))
+            if numeric is None:
+                continue
             texts = []
             for binding in bindings:
                 matches = nodes.get(binding["element_id"], [])
@@ -92,8 +98,7 @@ def project_source_table_end_alignment(canonical_svg, receipt, native_page):
                 if normalize_text(primitive.text) != normalize_text(binding["text"]):
                     raise ValueError("svg_source_export_table_style_text_mismatch")
                 texts.append((node, primitive))
-            numeric = parse_label_number("".join(binding["text"] for binding in sorted(bindings, key=lambda binding: binding["start"])))
-            if numeric is not None and texts and all(node.get("text-anchor") == "end" and text.anchor == "end" and text.uniform
+            if texts and all(node.get("text-anchor") == "end" and text.anchor == "end" and text.uniform
                                                     for node, text in texts):
                 styles[row][column]["horizontalAlign"] = "right"
                 claims.append({"tableId": object_.id, "sourceId": source_id, "row": row, "column": column,
@@ -322,6 +327,93 @@ def bind_chart_text_projection(path, *, canonical_svg, receipt, native_page, pag
     return claims
 
 
+def fragment_lines_match(lines, text):
+    """True when ``text`` is the lines joined with an optional single space per boundary.
+
+    A source line may break between words (a space is dropped) or inside a word, as
+    Korean text commonly does (no space exists), so both joins describe the same text.
+    """
+    text = normalize_text(text)
+    position = 0
+    for index, line in enumerate(lines):
+        if not text.startswith(line, position):
+            return False
+        position += len(line)
+        if index < len(lines) - 1 and text.startswith(" ", position):
+            position += 1
+    return position == len(text)
+
+
+def source_fragment_lines(node, text, parents):
+    """Per-line fragments of a start-anchored, uniformly styled multi-line source text.
+
+    Returns ``None`` for any other multi-line text. The converter and the readback both
+    call this one predicate so they always agree on which texts carry fragment identity.
+    """
+    children = list(node)
+    if len(children) < 2 or node.tag != _TEXT:
+        return None
+    if (node.text and node.text.strip()) or any(child.tail and child.tail.strip() for child in children):
+        return None
+    if node.get("transform") or any(child.get("style") or child.get("transform") for child in children):
+        return None
+    ancestor = node
+    while ancestor in parents:
+        ancestor = parents[ancestor]
+        if ancestor.get("transform"):
+            return None
+    lines, positions, fragments = [], set(), []
+    for child in children:
+        if child.tag != f"{{{SVG_NS}}}tspan" or list(child):
+            return None
+        try:
+            x, y = float(child.attrib["x"]), float(child.attrib["y"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        if not math.isfinite(x) or not math.isfinite(y) or (x, y) in positions:
+            return None
+        positions.add((x, y))
+        line = normalize_text(child.text or "")
+        if not line:
+            return None
+        lines.append(line)
+        fragments.append({"index": len(fragments), "x": x, "y": y,
+                          "textDigest": hashlib.sha256(line.encode("utf-8")).hexdigest()})
+    if not fragment_lines_match(lines, text):
+        return None
+    try:
+        drawn = _single_text(node)
+        _style(drawn)
+    except ValueError:
+        return None
+    if drawn.anchor != "start":
+        return None
+    return lines, fragments
+
+
+def source_text_lines(node):
+    """Lines of a multi-line source text that the converter flattens to one shape per line.
+
+    The first line may be the element's own text; every further line is a positional
+    tspan. Anything else is a single shape and is not described here.
+    """
+    children = list(node)
+    if node.tag != _TEXT or not children:
+        return None
+    lines = []
+    lead = normalize_text(node.text or "")
+    if lead:
+        lines.append(lead)
+    for child in children:
+        if (child.tag != f"{{{SVG_NS}}}tspan" or list(child) or (child.tail and child.tail.strip())
+                or "x" not in child.attrib or "y" not in child.attrib):
+            return None
+        line = normalize_text(child.text or "")
+        if line:
+            lines.append(line)
+    return lines if len(lines) >= 2 else None
+
+
 def bind_source_text_fragments(path, *, canonical_svg, receipt, page_index):
     """Mark only source-proven multi-line text outside native objects."""
     if source_digest(canonical_svg) != receipt.get("svg_digest"):
@@ -337,6 +429,7 @@ def bind_source_text_fragments(path, *, canonical_svg, receipt, page_index):
                     raise ValueError("svg_source_export_fragment_id_duplicate")
                 index[source_id] = node
     parents = {child: parent for parent in projected.iter() for child in parent}
+    source_parents = {child: parent for parent in source.iter() for child in parent}
     marked = []
     for binding in receipt["bindings"]:
         if binding["kind"] != "text" or not binding.get("text"):
@@ -348,29 +441,12 @@ def bind_source_text_fragments(path, *, canonical_svg, receipt, page_index):
         children = list(original)
         if len(children) < 2:
             continue
-        if (original.text and original.text.strip()) or any(
-                child.tail and child.tail.strip() for child in children):
-            raise ValueError("svg_source_export_fragment_mixed_text")
-        lines, positions, fragments = [], set(), []
-        for child in children:
-            if child.tag != f"{{{SVG_NS}}}tspan" or list(child):
-                raise ValueError("svg_source_export_fragment_nested_text")
-            try:
-                x, y = float(child.attrib["x"]), float(child.attrib["y"])
-            except (KeyError, TypeError, ValueError) as error:
-                raise ValueError("svg_source_export_fragment_position_invalid") from error
-            if (not math.isfinite(x) or not math.isfinite(y)
-                    or (x, y) in positions):
-                raise ValueError("svg_source_export_fragment_position_invalid")
-            positions.add((x, y))
-            line = normalize_text(child.text or "")
-            if not line:
-                raise ValueError("svg_source_export_fragment_empty")
-            lines.append(line)
-            fragments.append({"index": len(fragments), "x": x, "y": y,
-                              "textDigest": hashlib.sha256(line.encode("utf-8")).hexdigest()})
-        if normalize_text(" ".join(lines)) != normalize_text(binding["text"]):
-            raise ValueError("svg_source_export_fragment_receipt_mismatch")
+        eligible = source_fragment_lines(original, binding["text"], source_parents)
+        if eligible is None:
+            # Not representable as per-line fragments (centered, mixed styling, ...): it stays
+            # ordinary editable text, and the readback expects its lines individually.
+            continue
+        lines, fragments = eligible
         if ET.tostring(original) != ET.tostring(current):
             raise ValueError("svg_source_export_fragment_projection_mismatch")
         ancestor = current
@@ -378,10 +454,6 @@ def bind_source_text_fragments(path, *, canonical_svg, receipt, page_index):
             ancestor = parents[ancestor]
             if ancestor.get("transform") or ancestor.get("data-pptx-native"):
                 raise ValueError("svg_source_export_fragment_parent_unsupported")
-        if current.get("transform") or any(child.get("style") or child.get("transform")
-                                              for child in children):
-            raise ValueError("svg_source_export_fragment_style_unsupported")
-        _style(_single_text(original))
         current.set(_FRAGMENT_ATTRIBUTE, source_id)
         current.set(_FRAGMENT_PAGE_ATTRIBUTE, str(page_index))
         marked.append({"sourceId": source_id, "fragments": fragments})

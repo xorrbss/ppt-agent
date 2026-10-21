@@ -18,7 +18,21 @@ _BINDING_URI = "{4e7bc59a-8a06-4a9f-9c7e-4eeb9930a54f}"
 _DRAWING_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
 
 
-def _style_matches_xml(run_properties, source_style, emu_per_unit):
+def _style_matches_xml(run_properties, source_style, emu_per_unit, *, text=None):
+    expected_family = source_style["fontFamily"]
+    if text is not None and expected_family == "Noto Sans KR":
+        from utils.svg_template_fonts import trusted_font_fallback_plan
+
+        try:
+            plan = trusted_font_fallback_plan(
+                text, expected_family, 700 if source_style["bold"] else 400)
+        except ValueError:
+            return False
+        families = {segment["family"] for segment in plan["segments"]}
+        if len(families) > 1:
+            return False
+        if families:
+            expected_family = next(iter(families))
     expected_hpt = round(float(source_style["fontSizePx"]) * emu_per_unit / 127)
     fills = run_properties.findall(f"{{{_DRAWING_NS}}}solidFill/{{{_DRAWING_NS}}}srgbClr")
     fonts = run_properties.findall(f"{{{_DRAWING_NS}}}latin")
@@ -27,7 +41,7 @@ def _style_matches_xml(run_properties, source_style, emu_per_unit):
             and run_properties.get("b") in ({"1", "true"} if source_style["bold"]
                                             else {None, "0", "false"})
             and len(fills) == 1 and fills[0].get("val", "").upper() == source_style["fill"]
-            and len(fonts) == 1 and fonts[0].get("typeface") == source_style["fontFamily"])
+            and len(fonts) == 1 and fonts[0].get("typeface") == expected_family)
 
 
 def _chart_text_style_matches(node, source_style, emu_per_unit):
@@ -91,6 +105,19 @@ def _readback_text(value):
     return re.sub(r"\s+", " ", value).strip()
 
 
+_TEXT_BULLET_MARKER = re.compile(r"^\s*[·•●▪■◆◇◦‣]\s*")
+
+
+def _expected_visible_text(value):
+    """Text left in a shape after the converter turns a leading bullet marker into a
+    native paragraph bullet (same rule and marker set as the vendored converter)."""
+    text = _readback_text(value)
+    match = _TEXT_BULLET_MARKER.match(text)
+    if match and text[match.end():].strip():
+        return _readback_text(text[match.end():])
+    return text
+
+
 def _binding_digest(value):
     return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
 
@@ -143,9 +170,16 @@ def _source_native_tables(shapes, receipt, deck):
                 cursor = line["end"]
             value = "".join(fragments)
             cell = table.cell(r, c)
-            if (cell.is_spanned or cell.span_height != rs or cell.span_width != cs
-                    or _readback_text(cell.text) != _readback_text(value)):
+            if cell.is_spanned or cell.span_height != rs or cell.span_width != cs:
                 raise ValueError("svg_source_pptx_table_cell_mismatch")
+            if _readback_text(cell.text) != _readback_text(value):
+                # A source-wrapped cell keeps one paragraph per drawn line; the declared cell
+                # text then equals those lines joined with an optional space per boundary.
+                from services.svg_export_whole_page_adapter import fragment_lines_match
+                paragraph_lines = [line for paragraph in cell.text_frame.paragraphs
+                                   if (line := _readback_text(paragraph.text))]
+                if not paragraph_lines or not fragment_lines_match(paragraph_lines, _readback_text(value)):
+                    raise ValueError("svg_source_pptx_table_cell_mismatch")
             for row in range(r, r + rs):
                 for column in range(c, c + cs):
                     key = (row, column)
@@ -289,7 +323,8 @@ def _whole_page_native_charts(shapes, receipt, source, native_page, claims,
                         or not text_runs
                         or any((properties := run.find(f"{{{_DRAWING_NS}}}rPr")) is None
                                or not _style_matches_xml(properties, source_styles[source_id],
-                                                         emu_per_unit)
+                                                         emu_per_unit,
+                                                         text=run.findtext(f"{{{_DRAWING_NS}}}t", ""))
                                for run in text_runs)):
                     raise ValueError("svg_source_pptx_overlay_readback_mismatch")
             categories = [_readback_text(category.label) for category in chart.plots[0].categories]
@@ -456,7 +491,9 @@ def _whole_page_native_charts(shapes, receipt, source, native_page, claims,
 
 
 def _source_fragment_readback(shapes, receipt, source_svg, claims, page_index, slide_width):
-    from services.svg_export_whole_page_adapter import _single_text, _style, fragment_shape_name
+    from services.svg_export_whole_page_adapter import (
+        _single_text, _style, fragment_shape_name, source_fragment_lines,
+    )
     from workers.public_svg_pptx_convert import VENDOR_ROOT
 
     root = ET.fromstring(source_svg)
@@ -483,38 +520,20 @@ def _source_fragment_readback(shapes, receipt, source_svg, claims, page_index, s
         node = nodes.get(source_id)
         if node is None:
             raise ValueError("svg_source_pptx_fragment_source_missing")
-        spans = list(node)
-        if len(spans) < 2:
+        if len(list(node)) < 2:
             continue
-        if ((node.text or "").strip() or any((span.tail or "").strip() for span in spans)
-                or node.get("transform") or any(span.tag != "{http://www.w3.org/2000/svg}tspan"
-                or list(span) or span.get("style") or span.get("transform") for span in spans)):
-            raise ValueError("svg_source_pptx_fragment_source_unsupported")
-        ancestor = node
-        while ancestor in parents:
-            ancestor = parents[ancestor]
-            if ancestor.get("transform"):
-                raise ValueError("svg_source_pptx_fragment_transform_unsupported")
-        drawn = _single_text(node)
-        if drawn.anchor != "start":
-            raise ValueError("svg_source_pptx_fragment_anchor_unsupported")
-        style = _style(drawn)
-        values = []
-        for index, span in enumerate(spans):
-            try:
-                x, y = float(span.attrib["x"]), float(span.attrib["y"])
-            except (KeyError, TypeError, ValueError) as error:
-                raise ValueError("svg_source_pptx_fragment_position_invalid") from error
-            value = _readback_text(span.text)
-            if not value or not math.isfinite(x) or not math.isfinite(y):
-                raise ValueError("svg_source_pptx_fragment_position_invalid")
+        # The converter marks exactly the texts this shared predicate accepts; every other
+        # multi-line text stays ordinary text whose lines are accounted for individually.
+        eligible = source_fragment_lines(node, binding["text"], parents)
+        if eligible is None:
+            continue
+        lines, fragments = eligible
+        style = _style(_single_text(node))
+        for index, fragment in enumerate(fragments):
             key = (source_id, index)
             if key in source:
                 raise ValueError("svg_source_pptx_fragment_source_duplicate")
-            source[key] = (x, y, value, style)
-            values.append(value)
-        if _readback_text(" ".join(values)) != _readback_text(binding["text"]):
-            raise ValueError("svg_source_pptx_fragment_receipt_mismatch")
+            source[key] = (fragment["x"], fragment["y"], lines[index], style)
     claimed = {}
     for claim in claims:
         key = (claim.get("sourceId"), claim.get("fragmentIndex"))
@@ -546,13 +565,14 @@ def _source_fragment_readback(shapes, receipt, source_svg, claims, page_index, s
                 or abs(shape.left - expected_left) > 1
                 or abs(shape.top - expected_top) > 1
                 or shape._element.nvSpPr.cNvPr.get("descr") != name
-                or _readback_text(shape.text_frame.text) != value
+                or _readback_text(shape.text_frame.text) != _expected_visible_text(value)
                 or not runs
                 or any((properties := run.find(f"{{{_DRAWING_NS}}}rPr")) is None
-                       or not _style_matches_xml(properties, style, emu_per_unit)
+                       or not _style_matches_xml(properties, style, emu_per_unit,
+                                                 text=run.findtext(f"{{{_DRAWING_NS}}}t", ""))
                        for run in runs)):
             raise ValueError("svg_source_pptx_fragment_readback_mismatch")
-    return Counter(value for _, _, value, _ in source.values()), len(source)
+    return Counter(_expected_visible_text(value) for _, _, value, _ in source.values()), len(source)
 
 
 def source_preservation_readback(deck, receipts, expected_image_digests, *,
@@ -587,10 +607,27 @@ def source_preservation_readback(deck, receipts, expected_image_digests, *,
         fragment_ids = {claim["sourceId"] for claim in fragment_claims[index]} if whole_page else set()
         if fragment_ids & native_role_ids:
             raise ValueError("svg_source_pptx_fragment_native_conflict")
-        expected_text = Counter(_readback_text(binding["text"]) for binding in text_bindings
+        ordinary_lines = {}
+        if whole_page:
+            from services.svg_export_whole_page_adapter import fragment_lines_match, source_text_lines
+            source_nodes = {node.get("id"): node for node in ET.fromstring(source_svgs[index]).iter() if node.get("id")}
+            for binding in text_bindings:
+                node = source_nodes.get(binding["element_id"])
+                if (binding["kind"] == "text" and node is not None and binding["element_id"] not in fragment_ids
+                        and binding.get("block_id") not in native_blocks
+                        and binding["element_id"] not in native_role_ids):
+                    lines = source_text_lines(node)
+                    if lines is not None:
+                        # The converter flattens positional tspans to one shape per line.
+                        if not fragment_lines_match(lines, binding["text"]):
+                            raise ValueError("svg_source_pptx_text_line_mismatch")
+                        ordinary_lines[binding["element_id"]] = lines
+        expected_text = Counter(_expected_visible_text(binding["text"]) for binding in text_bindings
                                 if binding.get("block_id") not in native_blocks
                                 and binding["element_id"] not in native_role_ids
-                                and binding["element_id"] not in fragment_ids)
+                                and binding["element_id"] not in fragment_ids
+                                and binding["element_id"] not in ordinary_lines)
+        expected_text.update(_expected_visible_text(line) for lines in ordinary_lines.values() for line in lines)
         expected_text.update(fragment_text)
         furniture = receipt.get("_export_furniture") or {}
         furniture_text = Counter(value for text in furniture.get("texts", []) if (value := _readback_text(text)))

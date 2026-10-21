@@ -7,9 +7,14 @@ in-place episodes remain verifiable, but are never created again.
 from __future__ import annotations
 
 from copy import deepcopy
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
+from threading import RLock
+from types import SimpleNamespace
 from typing import get_args
+from weakref import ReferenceType, ref
+import hashlib
 import uuid
 
 from sqlalchemy import JSON, Text, case, cast, column, func, literal, or_, select, true
@@ -31,8 +36,85 @@ LINEAGE_KEY = "_svg_partial_recovery"
 ARCHIVE_KEY = "_svg_partial_recovery_archive"
 ARCHIVE_V1 = "svg-partial-recovery-archive/v1"
 ARCHIVE_V2 = "svg-partial-recovery-archive/v2"
+ARCHIVE_V3 = "svg-partial-recovery-archive/v3"
+CHECKPOINT_REFERENCE = "svg-partial-recovery-checkpoint-ref/v1"
 OPERATION_REFERENCE = "svg-partial-recovery-operation-ref/v1"
 PAYLOAD_HASH_ALGORITHM = "sha256/postgresql-json-text-utf8/v1"
+
+# A successful preparation proves historical producers once for this worker
+# attempt. Provider calls check the live consumer, not its entire ancestry.
+_PREPARED_EPISODES = OrderedDict()
+_PREPARED_EPISODES_LOCK = RLock()
+_RUNTIME_OPERATION_FIELDS = (
+    "id", "kind", "owner_id", "owner_scope", "presentation_id",
+    "retry_of_operation_id", "contract_version", "execution_profile_version",
+    "attempt_token", "fencing_token", "deadline_at",
+)
+_RUNTIME_PAYLOAD_FIELDS = (
+    "principal_tenant_id", "recovery_revision", "svg_partial_recovery_manifest",
+    "svg_partial_recovery_manifest_hash", "svg_partial_recovery_lineage",
+    "recovery_decision", "job_id",
+)
+
+
+def _runtime_episode_key(operation, job):
+    from utils.owner_context import get_current_owner_id, get_current_tenant_id
+    return (str(get_current_owner_id()), str(get_current_tenant_id()),
+            str(operation.id), str(job.id), operation.attempt_token, operation.fencing_token)
+
+
+def _runtime_episode_digest(operation, job):
+    # These projections contain no archive, historical checkpoint, or SDK body.
+    return digest({
+        "operation": {key: str(getattr(operation, key, None)) for key in _RUNTIME_OPERATION_FIELDS},
+        "payload": {key: operation.request_payload.get(key) for key in _RUNTIME_PAYLOAD_FIELDS},
+        "job": {"id": str(job.id), "operation_id": str(job.workspace_operation_id),
+                "presentation_id": str(job.presentation_id), "attempt_token": job.attempt_token,
+                "total_slides": job.total_slides, "request": job.request_payload,
+                "style": job.svg_style_snapshot, "outline": job.authored_outline},
+        "code": _code_digest(),
+    })
+
+
+def _remember_prepared_episode(operation, job):
+    if (operation.state != "running" or job.state not in {"running", "staging"}
+            or not (job.request_payload or {}).get(LINEAGE_KEY)
+            or not operation.attempt_token or job.attempt_token != operation.attempt_token):
+        return
+    key, fingerprint = _runtime_episode_key(operation, job), _runtime_episode_digest(operation, job)
+    with _PREPARED_EPISODES_LOCK:
+        _PREPARED_EPISODES[key] = fingerprint
+        _PREPARED_EPISODES.move_to_end(key)
+        while len(_PREPARED_EPISODES) > 128:
+            _PREPARED_EPISODES.popitem(last=False)
+
+
+def _require_prepared_episode(operation, job):
+    key = _runtime_episode_key(operation, job)
+    with _PREPARED_EPISODES_LOCK:
+        expected = _PREPARED_EPISODES.get(key)
+    if expected is None:
+        reject("svg_partial_recovery_runtime_not_prepared")
+    if expected != _runtime_episode_digest(operation, job):
+        reject("svg_partial_recovery_request_snapshot_changed")
+
+
+async def _runtime_episode_operation(session, operation_id):
+    # Extract only current authority from JSON in PostgreSQL. Loading the ORM
+    # request_payload here would decode the complete historical archive again.
+    statement = select(
+        *(getattr(WorkspaceOperation, key) for key in _RUNTIME_OPERATION_FIELDS),
+        WorkspaceOperation.state, WorkspaceOperation.cancel_requested_at,
+        *(WorkspaceOperation.request_payload[key].label("payload_" + key)
+          for key in _RUNTIME_PAYLOAD_FIELDS),
+    ).where(WorkspaceOperation.id == operation_id)
+    row = (await session.execute(statement)).mappings().one_or_none()
+    if row is None:
+        return None
+    return SimpleNamespace(
+        **{key: row[key] for key in (*_RUNTIME_OPERATION_FIELDS, "state", "cancel_requested_at")},
+        request_payload={key: row["payload_" + key] for key in _RUNTIME_PAYLOAD_FIELDS},
+    )
 
 
 def _recovery_review_allocation(request, snapshot, slide_count):
@@ -60,6 +142,7 @@ def _recovery_review_allocation(request, snapshot, slide_count):
 
 CODE_FILES = (
     "services/svg_partial_recovery.py",
+    "services/svg_source_local_review_continuation.py",
     "services/generation_core/drivers/svg/collect.py",
     "services/generation_core/drivers/svg/author.py",
     "services/generation_core/drivers/svg/render.py",
@@ -68,6 +151,7 @@ CODE_FILES = (
     "services/generation_core/quality/vision_advisory.py",
     "services/generation_core/quality/vision_advisory_prompt.py",
     "services/svg_source_layout.py",
+    "services/svg_source_native_tables.py",
     "services/document_canvas_generation.py",
     "services/presentation_generation_staging.py",
     "services/presentation_generation_pipeline.py",
@@ -89,6 +173,10 @@ CODE_FILES = (
     "services/svg_default_fonts.py",
     "services/svg_contract.py",
     "services/svg_renderer.py",
+    "utils/svg_template_fonts.py",
+    "services/authored_vnext/semantic/typography.py",
+    "services/svg_text_advance.py",
+    "services/svg_text_overlap.py",
     "services/svg_master_furniture.py",
     "services/generation_core/drivers/svg/native_declarations.py",
     "services/generation_core/drivers/svg/asset_slots.py",
@@ -102,6 +190,8 @@ CODE_FILES = (
     "services/generation_core/authoring/author_slide_svg.py",
     "models/presentation_outline_model.py",
     "utils/slide_capture_result.py",
+    "utils/slide_capture.py",
+    "utils/slide_capture_text_ink.py",
 )
 
 
@@ -114,6 +204,14 @@ class PartialRecoveryRejected(ValueError):
 
 
 def reject(code="svg_partial_recovery_unproven"):
+    if code == "svg_partial_recovery_request_snapshot_changed":
+        import logging
+        import sys
+
+        caller = sys._getframe(1)
+        logging.getLogger(__name__).warning(
+            "SVG partial recovery snapshot guard rejected: function=%s line=%s",
+            caller.f_code.co_name, caller.f_lineno)
     raise PartialRecoveryRejected(code)
 
 
@@ -121,12 +219,167 @@ def _dump(row):
     return row.model_dump(mode="json")
 
 
+def _fresh_producer_checkpoint_digest(row):
+    """Only for finish()'s freshly decoded, unexposed CP Core-select rows."""
+    if type(row) is AuthoredSlideCheckpoint and type(row.svg_checkpoint) is dict:
+        envelope = row.model_dump(mode="json", exclude={"svg_checkpoint"})
+        return digest(envelope | {"svg_checkpoint": row.svg_checkpoint})
+    return digest(_dump(row))
+
+
 def _operation_control(row):
     return row.model_dump(mode="json", exclude={"request_payload"})
 
 
+def _operation_projection(row):
+    """Control plus the live payload in _dump() key order; digest() sorts keys.
+
+    finish() compares this against a fresh _dump(row): matching key order lets
+    its marshal hint succeed instead of walking the whole payload in Python.
+    """
+    control = _operation_control(row)
+    fields = getattr(type(row), "model_fields", None) or ()
+    projection = {key: row.request_payload if key == "request_payload" else control[key]
+                  for key in fields if key == "request_payload" or key in control}
+    if projection.keys() != control.keys() | {"request_payload"}:
+        return {**control, "request_payload": row.request_payload}
+    return projection
+
+
 def _sha256_hex_valid(value):
     return isinstance(value, str) and len(value) == 64 and all(char in "0123456789abcdef" for char in value)
+
+
+def _same_json_value(left, right):
+    """Compare finite JSON exactly; unsupported graphs take the original digest path."""
+    import math
+    pending = [(left, right, False)]
+    left_active, right_active = set(), set()
+    while pending:
+        expected, actual, leaving = pending.pop()
+        kind = type(expected)
+        if leaving:
+            left_active.remove(id(expected))
+            right_active.remove(id(actual))
+            continue
+        if kind is not type(actual):
+            return False
+        if kind in {dict, list}:
+            if id(expected) in left_active or id(actual) in right_active:
+                return None
+            if kind is dict:
+                if (any(type(key) is not str for key in expected)
+                        or any(type(key) is not str for key in actual)):
+                    return None
+                if expected.keys() != actual.keys():
+                    return False
+                pairs = [(value, actual[key], False) for key, value in expected.items()]
+            else:
+                if len(expected) != len(actual):
+                    return False
+                pairs = [(a, b, False) for a, b in zip(expected, actual)]
+            left_active.add(id(expected))
+            right_active.add(id(actual))
+            pending.append((expected, actual, True))
+            pending.extend(pairs)
+        elif kind is float:
+            if not math.isfinite(expected) or not math.isfinite(actual):
+                return None
+            if expected.hex() != actual.hex():
+                return False
+        elif kind not in {str, int, bool, type(None)}:
+            return None
+        elif expected != actual:
+            return False
+    return True
+
+
+def _marshal_json_bytes(value):
+    """A CPython-only encoding hint, never a JSON eligibility verdict."""
+    import sys
+    if sys.implementation.name != "cpython" or sys.version_info[:2] != (3, 11):
+        return None
+    import marshal
+    try:
+        return marshal.dumps(value, 2)
+    except Exception:
+        return None
+
+
+def _exact_json_snapshot(value):
+    """(independent copy, marshal hint) only for provably finite, exact JSON.
+
+    json.loads only yields exact dict/list/str/int/float/bool/None, and our
+    allow_nan=False dump never emits NaN, so a marshal-identical round trip
+    is the verdict _same_json_value(value, value) gives, without the Python
+    walk. Anything else returns None and keeps the original walking path.
+    """
+    encoded = _marshal_json_bytes(value)
+    if encoded is None:
+        return None
+    try:
+        import json
+        candidate = json.loads(json.dumps(
+            value, allow_nan=False, ensure_ascii=True, sort_keys=False,
+        ))
+    except Exception:
+        return None
+    # Differs for tuples, non-str keys, subclasses, joined surrogate pairs.
+    if _marshal_json_bytes(candidate) != encoded:
+        return None
+    return candidate, encoded
+
+
+def _same_json_snapshot(snapshot, actual, encoded):
+    """Only a previously proven finite, exact JSON snapshot may supply encoded."""
+    if encoded is not None and _marshal_json_bytes(actual) == encoded:
+        return True
+    return _same_json_value(snapshot, actual)
+
+
+def _json_fingerprint_snapshot(value, fingerprint):
+    """Keep an independent exact-value snapshot; unsupported copies stay legacy."""
+    copied = False
+    snapshot = None
+    try:
+        if _same_json_value(value, value) is True:
+            import json
+            candidate = json.loads(json.dumps(
+                value, allow_nan=False, ensure_ascii=True, sort_keys=False,
+            ))
+            # JSON can combine adjacent surrogate code points without raising.
+            if _same_json_value(value, candidate) is True:
+                snapshot = candidate
+                copied = True
+    except Exception:
+        pass
+    if not copied:
+        snapshot = deepcopy(value)
+    return snapshot, fingerprint, _marshal_json_bytes(snapshot)
+
+
+def _proven_json_snapshot(value, fingerprint):
+    """A fingerprint memo entry for finite exact JSON, else None."""
+    prepared = _exact_json_snapshot(value)
+    if prepared is not None:
+        return prepared[0], fingerprint, prepared[1]
+    if _same_json_value(value, value) is True:
+        return _json_fingerprint_snapshot(value, fingerprint)
+    return None
+
+
+@dataclass
+class _HistoricalOperationRead:
+    verification: object
+    operation: object
+    control_digest: str
+    storage_digest: str
+    consumed: bool = False
+
+
+_CHECKPOINT_ARCHIVE_MEMO_MAX_BYTES = 512 * 1024 * 1024
+_CHECKPOINT_ARCHIVE_MEMO_MAX_ENTRIES = 8
+_CHECKPOINT_ARCHIVE_MEMO_GUARD_DOMAIN = b"svg-checkpoint-hydration-memo/cpython311-marshal2/sha256/v1\x00"
 
 
 class _EpisodeVerification:
@@ -138,14 +391,227 @@ class _EpisodeVerification:
         self.principal = (get_current_owner_id(), get_current_tenant_id())
         self.transaction = session.sync_session.get_transaction()
         self.episodes = {}
+        self.operation_fingerprints = {}
+        self.job_fingerprints = {}
         self.references = set()
         self.active = set()
         self.rows = {}
+        self.row_fingerprints = {}
         self.controls = {}
         self.ledgers = {}
         self.producers = {}
+        # {job_id: {row_id: (storage sha256, finish digest)}}: both values come from the one
+        # first-pass SELECT that decoded the row. In memory only; finish() always re-reads.
+        self.producer_storage = {}
+        # Per-verification counters and visited (operation, job) episodes; evidence only.
+        self.stats = {"rows_decoded_python": 0, "rows_redecoded_finish": 0, "episode_visits": 0,
+                      "episode_memo_hits": 0, "reference_edges": 0}
+        self.visited_episodes = set()
+        self.checkpoint_archives = {}
+        self.checkpoint_archive_bytes = 0
+        self.live_operation = None
+        self.live_job = None
+        self.live_admission_id = None
+        self.live_admission = None
+        self.live_leases = {}
+        self.live_lease_ids = None
+        self.live_budget = None
         self.seal_memo = {"session": session, "transaction": None, "principal": None,
-                          "seals": {}, "verification": self}
+                          "seals": {}, "verification": ref(self)}
+
+    def bind_live(self, operation, job):
+        """Separate this attempt's heartbeat from its immutable authority."""
+        if operation.state != "running":
+            return
+        if (operation.owner_id != self.principal[0] or not operation.attempt_token
+                or operation.contract_version != "public-operation/v2"
+                or job.workspace_operation_id != operation.id
+                or job.state not in {"running", "staging"}
+                or job.attempt_token != operation.attempt_token):
+            reject("svg_partial_recovery_request_snapshot_changed")
+        self.live_operation = _operation_control(operation)
+        snapshot = _dump(job)
+        self.live_job = {key: snapshot.get(key) for key in (
+            "id", "heartbeat_at", "updated_at", "completed_slides", "total_slides", "current_stage")}
+        self._heartbeat_snapshot(self.live_operation, self.live_operation)
+
+    def _nonnegative_counters(self, snapshot, baseline, fields, *, monotonic=False):
+        for key in fields:
+            value = snapshot.get(key, 0)
+            if (type(value) is not int or value < 0
+                    or monotonic and value < baseline.get(key, 0)):
+                reject("svg_partial_recovery_request_snapshot_changed")
+            baseline[key] = value
+
+    def _operating_times(self, snapshot, baseline, fields):
+        from datetime import datetime
+        from utils.datetime_utils import as_utc
+
+        for key in fields:
+            value, previous = snapshot.get(key), baseline.get(key)
+            if value is None or previous is None:
+                reject("svg_partial_recovery_request_snapshot_changed")
+            value_time = datetime.fromisoformat(value) if isinstance(value, str) else value
+            old_time = datetime.fromisoformat(previous) if isinstance(previous, str) else previous
+            if as_utc(value_time) < as_utc(old_time):
+                reject("svg_partial_recovery_request_snapshot_changed")
+            baseline[key] = value
+
+    def _heartbeat_snapshot(self, snapshot, baseline, *, resource=False, require_live=True):
+        from datetime import datetime
+        from utils.datetime_utils import as_utc
+
+        def instant(value):
+            if value is None:
+                reject("svg_partial_recovery_request_snapshot_changed")
+            return as_utc(datetime.fromisoformat(value) if isinstance(value, str) else value)
+
+        deadline = instant(self.live_operation["deadline_at"])
+        expiry, heartbeat = instant(snapshot.get("lease_expires_at")), instant(snapshot.get("heartbeat_at"))
+        if (expiry < instant(baseline.get("lease_expires_at"))
+                or heartbeat < instant(baseline.get("heartbeat_at"))
+                or (require_live and expiry <= as_utc(get_current_utc_datetime()))
+                or expiry > deadline or heartbeat > expiry):
+            reject("svg_partial_recovery_request_snapshot_changed")
+        fields = {"heartbeat_at", "lease_expires_at"}
+        if resource:
+            if snapshot.get("version", -1) < baseline.get("version", 0):
+                reject("svg_partial_recovery_request_snapshot_changed")
+            fields.add("version")
+        else:
+            if instant(snapshot.get("updated_at")) < instant(baseline.get("updated_at")):
+                reject("svg_partial_recovery_request_snapshot_changed")
+            fields.add("updated_at")
+        stable = {key: value for key, value in snapshot.items() if key not in fields}
+        for key in fields:
+            baseline[key] = snapshot[key]
+        return stable
+
+    def row_snapshot(self, model, snapshot, *, require_live=True):
+        if (model is WorkspaceOperation and self.live_operation is not None
+                and str(snapshot["id"]) == str(self.live_operation["id"])):
+            stable = self._heartbeat_snapshot(snapshot, self.live_operation, require_live=require_live)
+            self._nonnegative_counters(snapshot, self.live_operation, ("version", "next_event_sequence"), monotonic=True)
+            progress = snapshot.get("progress")
+            if progress is not None:
+                if not isinstance(progress, dict):
+                    reject("svg_partial_recovery_request_snapshot_changed")
+                for key in ("percent", "current", "total"):
+                    value = progress.get(key)
+                    if value is not None and (type(value) is not int or value < 0 or key == "percent" and value > 100):
+                        reject("svg_partial_recovery_request_snapshot_changed")
+                if (progress.get("current") is not None and progress.get("total") is not None
+                        and progress["current"] > progress["total"]):
+                    reject("svg_partial_recovery_request_snapshot_changed")
+            return {key: value for key, value in stable.items() if key not in {"version", "next_event_sequence", "progress"}}
+        if (model is PresentationGenerationJob and self.live_job is not None
+                and str(snapshot["id"]) == str(self.live_job["id"])):
+            self._operating_times(snapshot, self.live_job, ("heartbeat_at", "updated_at"))
+            self._nonnegative_counters(snapshot, self.live_job, ("completed_slides",), monotonic=True)
+            if (snapshot.get("total_slides") != self.live_job["total_slides"]
+                    or snapshot.get("completed_slides", 0) > self.live_job["total_slides"]
+                    or snapshot.get("current_stage") is not None and (
+                        not isinstance(snapshot["current_stage"], str) or len(snapshot["current_stage"]) > 128)):
+                reject("svg_partial_recovery_request_snapshot_changed")
+            return {key: value for key, value in snapshot.items() if key not in {
+                "heartbeat_at", "updated_at", "current_stage", "completed_slides"}}
+        return snapshot
+
+    def lease_snapshots(self, admissions, leases):
+        if self.live_operation is None:
+            return [_dump(row) for row in leases]
+        operation = self.live_operation
+        active = [row for row in admissions if str(row.operation_id) == str(operation["id"])]
+        if active:
+            if (len(active) != 1 or active[0].state != "active"
+                    or str(active[0].owner_id) != str(operation["owner_id"])
+                    or active[0].tenant_id != self.principal[1]
+                    or active[0].fence != operation["fencing_token"]
+                    or _dump(active[0])["deadline_at"] != operation["deadline_at"]
+                    or self.live_admission_id not in (None, str(active[0].id))):
+                reject("svg_partial_recovery_request_snapshot_changed")
+            self.live_admission_id = str(active[0].id)
+            related = [row for row in leases if str(row.operation_id) == str(operation["id"])
+                or str(row.admission_id) == self.live_admission_id]
+            own = {str(row.id) for row in related}
+            if (len(related) != 3 or len(own) != 3 or self.live_lease_ids not in (None, own)
+                    or any(str(row.operation_id) != str(operation["id"])
+                        or str(row.admission_id) != self.live_admission_id for row in related)):
+                reject("svg_partial_recovery_request_snapshot_changed")
+            self.live_lease_ids = own
+        result = []
+        for row in leases:
+            snapshot = _dump(row)
+            if str(row.operation_id) == str(operation["id"]):
+                if (str(row.admission_id) != self.live_admission_id or row.state != "leased"
+                        or row.attempt != operation["attempt_number"] or row.fence != operation["fencing_token"]
+                        or row.lease_owner_hash != sha256_hex(operation["attempt_token"].encode())
+                        or snapshot["deadline_at"] != operation["deadline_at"]):
+                    reject("svg_partial_recovery_request_snapshot_changed")
+                baseline = self.live_leases.setdefault(str(row.id), deepcopy(snapshot))
+                snapshot = self._heartbeat_snapshot(snapshot, baseline, resource=True)
+            result.append(snapshot)
+        return result
+
+    def ledger_snapshots(self, admissions, calls, leases, usage, budgets, reservations):
+        projected_leases = self.lease_snapshots(admissions, leases)
+        live = self.live_operation
+        if live is None:
+            return {name: [_dump(row) for row in rows] for name, rows in (
+                ("admissions", admissions), ("calls", calls), ("leases", leases),
+                ("usage", usage), ("budgets", budgets), ("reservations", reservations))}
+        active = [row for row in admissions if str(row.operation_id) == str(live["id"])]
+        projected_admissions = []
+        for row in admissions:
+            snapshot = _dump(row)
+            if active and row is active[0]:
+                baseline = self.live_admission or deepcopy(snapshot)
+                self._nonnegative_counters(snapshot, baseline, ("initial_request_count", "retry_request_count",
+                    "estimated_consumed_microunits"), monotonic=True)
+                # A late receipt replaces an estimated actual charge and can
+                # reduce both actual consumption and the unavailable count.
+                self._nonnegative_counters(snapshot, baseline, ("estimated_reserved_microunits",
+                    "actual_reserved_microunits", "actual_consumed_microunits", "actual_cost_unavailable_count"))
+                self._operating_times(snapshot, baseline, ("updated_at",))
+                if (snapshot.get("initial_request_count", 0) > snapshot["planned_request_limit"]
+                        or snapshot.get("retry_request_count", 0) > snapshot["retry_request_limit"]):
+                    reject("svg_partial_recovery_request_snapshot_changed")
+                self.live_admission = baseline
+                snapshot = {key: value for key, value in snapshot.items() if key not in {
+                    "initial_request_count", "retry_request_count", "estimated_consumed_microunits",
+                    "actual_consumed_microunits", "actual_cost_unavailable_count", "estimated_reserved_microunits",
+                    "actual_reserved_microunits", "updated_at"}}
+            projected_admissions.append(snapshot)
+        own_budgets = [row for row in budgets if str(row.workspace_operation_id) == str(live["id"])
+            or self.live_job is not None and str(row.job_id) == str(self.live_job["id"])]
+        if len(own_budgets) > 1:
+            reject("svg_partial_recovery_request_snapshot_changed")
+        if own_budgets:
+            row = own_budgets[0]
+            snapshot = _dump(row)
+            if (not active or str(row.workspace_operation_id) != str(live["id"])
+                    or row.job_id is not None or str(row.owner_id) != str(live["owner_id"])
+                    or row.tenant_id != self.principal[1] or row.state != "active" or row.cancellation_reason is not None
+                    or type(row.estimated_limit) is not int or not 0 <= row.estimated_limit <= active[0].estimated_cost_limit_microunits
+                    or type(row.actual_limit) is not int or not 0 <= row.actual_limit <= active[0].actual_cost_limit_microunits):
+                reject("svg_partial_recovery_request_snapshot_changed")
+            baseline = self.live_budget or deepcopy(snapshot)
+            self._nonnegative_counters(snapshot, baseline, ("estimated_consumed", "actual_consumed", "request_count", "version"), monotonic=True)
+            self._nonnegative_counters(snapshot, baseline, ("estimated_reserved",))
+            self._operating_times(snapshot, baseline, ("updated_at",))
+            operating = {"estimated_consumed", "actual_consumed", "request_count", "version", "estimated_reserved", "updated_at"}
+            if {key: value for key, value in snapshot.items() if key not in operating} != {
+                    key: value for key, value in baseline.items() if key not in operating}:
+                reject("svg_partial_recovery_request_snapshot_changed")
+            self.live_budget = baseline
+        elif active and self.live_budget is not None:
+            reject("svg_partial_recovery_request_snapshot_changed")
+        budget_ids = {row.id for row in own_budgets}
+        return {"admissions": projected_admissions, "leases": projected_leases,
+            "calls": [_dump(row) for row in calls if str(row.admission_id) != self.live_admission_id],
+            "usage": [_dump(row) for row in usage if self.live_job is None or str(row.job_id) != str(self.live_job["id"])],
+            "budgets": [_dump(row) for row in budgets if row not in own_budgets],
+            "reservations": [_dump(row) for row in reservations if row.budget_id not in budget_ids]}
 
     def check(self, session):
         from utils.owner_context import get_current_owner_id, get_current_tenant_id
@@ -157,19 +623,93 @@ class _EpisodeVerification:
         if self.transaction is None:
             self.transaction = transaction
 
+    def operation_fingerprint(self, operation, read, *, require_current_code):
+        self.check(self.session)
+        if read is None:
+            control = _operation_control(operation)
+            identity = str(operation.id)
+            if self.controls.get(identity) == control:
+                control_digest = digest(control)
+                for (cached_id, cached_control, _), cached in self.operation_fingerprints.items():
+                    if (cached_id == identity and cached_control == control_digest
+                            and _same_json_snapshot(cached[0], operation.request_payload, cached[2]) is True):
+                        return cached[1], None
+            # No new storage-bound proof is minted on this direct-call path.
+            return digest([control, operation.request_payload]), None
+        if (require_current_code or not isinstance(read, _HistoricalOperationRead)
+                or read.verification is not self or read.operation is not operation or read.consumed):
+            reject("svg_partial_recovery_request_snapshot_changed")
+        read.consumed = True
+        control = _operation_control(operation)
+        if (digest(control) != read.control_digest
+                or self.controls.get(str(operation.id)) != control):
+            reject("svg_partial_recovery_request_snapshot_changed")
+        key = (str(operation.id), read.control_digest, read.storage_digest)
+        cached = self.operation_fingerprints.get(key)
+        if cached is not None:
+            same = _same_json_snapshot(cached[0], operation.request_payload, cached[2])
+            if same is None:
+                return digest([control, operation.request_payload]), None
+            if not same:
+                reject("svg_partial_recovery_request_snapshot_changed")
+            return cached[1], None
+        fingerprint = digest([control, operation.request_payload])
+        prepared = _exact_json_snapshot(operation.request_payload)
+        if prepared is not None:
+            return fingerprint, (key, prepared[0])
+        if _same_json_value(operation.request_payload, operation.request_payload) is not True:
+            return fingerprint, None
+        return fingerprint, (key, deepcopy(operation.request_payload))
+
+    def job_fingerprint(self, job):
+        self.check(self.session)
+        projection = _dump(job)
+        key = str(job.id)
+        cached = self.job_fingerprints.get(key) if self.transaction is not None else None
+        if cached is not None and _same_json_snapshot(cached[0], projection, cached[2]) is True:
+            return cached[1]
+        fingerprint = digest(projection)
+        if self.transaction is not None and key not in self.job_fingerprints:
+            prepared = _proven_json_snapshot(projection, fingerprint)
+            if prepared is not None:
+                self.job_fingerprints[key] = prepared
+        return fingerprint
+
     def expect(self, model, snapshot, *, identity="id"):
+        self.check(self.session)
         key = (model, identity, str(snapshot[identity]))
-        expected = digest(snapshot)
+        # This may be an earlier ORM read from before a slow historical proof.
+        # finish() checks the freshly read lease against the current time.
+        projection = self.row_snapshot(model, snapshot, require_live=False)
+        cached = self.row_fingerprints.get(key) if self.transaction is not None else None
+        job_cached = (self.job_fingerprints.get(str(snapshot[identity]))
+            if model is PresentationGenerationJob
+            and identity == "id" and self.transaction is not None
+            and (self.live_job is None or str(snapshot["id"]) != str(self.live_job["id"])) else None)
+        if (job_cached is not None
+                and _same_json_snapshot(job_cached[0], projection, job_cached[2]) is True):
+            # The job projection is the one already fingerprinted for this episode key.
+            expected = job_cached[1]
+        else:
+            job_cached = None
+            expected = (cached[1] if cached is not None
+                and _same_json_snapshot(cached[0], projection, cached[2]) is True else digest(projection))
         if key in self.rows and self.rows[key] != expected:
             reject("svg_partial_recovery_request_snapshot_changed")
         self.rows[key] = expected
+        if self.transaction is not None and key not in self.row_fingerprints:
+            # A job_cached match already proved projection equals an exact snapshot.
+            prepared = (job_cached if job_cached is not None
+                else _proven_json_snapshot(projection, expected))
+            if prepared is not None:
+                self.row_fingerprints[key] = prepared
 
     async def ledger(self, operation_ids, job_id, *, archive=None):
         ids = tuple(sorted({str(value) for value in operation_ids}))
         key = (ids, str(job_id))
         if key not in self.ledgers:
             self.ledgers[key] = await _fresh_recovery_ledger_snapshot(self.session,
-                [uuid.UUID(value) for value in ids], uuid.UUID(str(job_id)))
+                [uuid.UUID(value) for value in ids], uuid.UUID(str(job_id)), verification=self)
         if archive is not None:
             # A generation job also receives later, independently fenced page
             # preview accounting. Only operation-owned membership is frozen by
@@ -188,6 +728,55 @@ class _EpisodeVerification:
             if operation_owned != expected:
                 reject("svg_partial_recovery_history_changed")
 
+    def record_producer_storage(self, identity, storage):
+        """Bind registered producer digests to the storage hashes of the SELECT that decoded them."""
+        expected = self.producers.get(identity)
+        if (not isinstance(storage, dict) or expected is None or set(storage) != set(expected)
+                or any(not _sha256_hex_valid(sha) for sha, _ in storage.values())):
+            return
+        self.producer_storage.setdefault(identity, storage)
+
+    async def _fresh_producer_digests(self):
+        """Fresh {job: {row: finish digest}}; Python decodes only rows whose stored bytes changed."""
+        jobs = list(self.producers)
+        fresh = None
+        if self.producer_storage and _checkpoint_storage_supported(self.session):
+            fresh = await _fresh_checkpoint_storage_digests(self.session, jobs)
+        if fresh is None:
+            rows = await _fresh_recovery_model_rows(self.session, AuthoredSlideCheckpoint,
+                AuthoredSlideCheckpoint.job_id.in_([uuid.UUID(value) for value in jobs]))
+            self.stats["rows_redecoded_finish"] += len(rows)
+            actual = {value: {} for value in jobs}
+            for row, value in zip(rows, await _producer_digests_off_loop(rows), strict=True):
+                actual[str(row.job_id)][str(row.id)] = value
+            return actual, "legacy"
+        # The exact fresh row set of every producer job must equal the registered one.
+        if ({job: set(rows) for job, rows in fresh.items()}
+                != {job: set(rows) for job, rows in self.producers.items()}):
+            reject("svg_partial_recovery_request_snapshot_changed")
+        actual, changed = {value: {} for value in jobs}, {}
+        for job, rows in fresh.items():
+            bound = self.producer_storage.get(job) or {}
+            for row_id, sha in rows.items():
+                record = bound.get(row_id)
+                if record is not None and _sha256_hex_valid(sha) and record[0] == sha:
+                    # Byte-identical stored tuple: a fresh decode yields this same digest.
+                    actual[job][row_id] = record[1]
+                else:
+                    changed[row_id] = job
+        if changed:
+            rows = await _fresh_recovery_model_rows(self.session, AuthoredSlideCheckpoint,
+                AuthoredSlideCheckpoint.id.in_([uuid.UUID(value) for value in changed]))
+            self.stats["rows_redecoded_finish"] += len(rows)
+            for row, value in zip(rows, await _producer_digests_off_loop(rows), strict=True):
+                row_id = str(row.id)
+                if changed.pop(row_id, None) != str(row.job_id):
+                    reject("svg_partial_recovery_request_snapshot_changed")
+                actual[str(row.job_id)][row_id] = value
+            if changed:
+                reject("svg_partial_recovery_request_snapshot_changed")
+        return actual, "storage"
+
     async def finish(self):
         # Never consume the memo here: identity-map rows and previously sealed
         # JSON are insufficient evidence that dependencies stayed unchanged.
@@ -195,14 +784,29 @@ class _EpisodeVerification:
         groups = {}
         for model, identity, value in self.rows:
             groups.setdefault((model, identity), []).append(value)
+        producer_ids = {value for expected in self.producers.values() for value in expected}
+        deferred_checkpoints = {}
         for (model, identity), values in groups.items():
+            if (model is AuthoredSlideCheckpoint and identity == "id"
+                    and set(values).issubset(producer_ids)):
+                # Keep both checks at the final producer fresh-read boundary.
+                deferred_checkpoints = {value: self.rows[(model, identity, value)] for value in values}
+                continue
             field = getattr(model, identity)
             annotation = model.model_fields[identity].annotation
             is_uuid = annotation is uuid.UUID or uuid.UUID in get_args(annotation)
             typed = [uuid.UUID(value) if is_uuid else value
                      for value in values]
             rows = await _fresh_recovery_model_rows(self.session, model, field.in_(typed))
-            actual = {str(getattr(row, identity)): digest(_dump(row)) for row in rows}
+            actual = {}
+            for row in rows:
+                value = str(getattr(row, identity))
+                projection = self.row_snapshot(model, _dump(row))
+                key = (model, identity, value)
+                cached = self.row_fingerprints.get(key) if self.transaction is not None else None
+                actual[value] = (cached[1] if cached is not None and
+                    _same_json_snapshot(cached[0], projection, cached[2]) is True
+                    else digest(projection))
             if actual != {value: self.rows[(model, identity, value)] for value in values}:
                 reject("svg_partial_recovery_request_snapshot_changed")
         if self.controls:
@@ -211,23 +815,58 @@ class _EpisodeVerification:
                 reject("svg_partial_recovery_request_snapshot_changed")
         for (operation_ids, job_id), expected in self.ledgers.items():
             fresh = await _fresh_recovery_ledger_snapshot(self.session,
-                [uuid.UUID(value) for value in operation_ids], uuid.UUID(job_id))
+                [uuid.UUID(value) for value in operation_ids], uuid.UUID(job_id), verification=self)
             if fresh != expected:
                 reject("svg_partial_recovery_request_snapshot_changed")
+        producer_mode = "none"
         if self.producers:
-            rows = await _fresh_recovery_model_rows(self.session, AuthoredSlideCheckpoint,
-                AuthoredSlideCheckpoint.job_id.in_([uuid.UUID(value) for value in self.producers]))
-            actual = {value: {} for value in self.producers}
-            for row in rows:
-                actual[str(row.job_id)][str(row.id)] = digest(_dump(row))
+            actual, producer_mode = await self._fresh_producer_digests()
             if actual != self.producers:
+                reject("svg_partial_recovery_request_snapshot_changed")
+            checked_rows = {value: fingerprint for expected in actual.values()
+                            for value, fingerprint in expected.items() if value in deferred_checkpoints}
+            if checked_rows != deferred_checkpoints:
                 reject("svg_partial_recovery_request_snapshot_changed")
         seals = self.seal_memo["seals"]
         if seals:
             fresh = await _payload_storage_seals(self.session, [uuid.UUID(value) for value in seals])
             if fresh != seals:
                 reject("svg_partial_recovery_request_snapshot_changed")
+        for working, guard in self.checkpoint_archives.values():
+            encoded = _marshal_json_bytes(working)
+            if encoded is None:
+                reject("svg_partial_recovery_request_snapshot_changed")
+            current_guard = hashlib.sha256(_CHECKPOINT_ARCHIVE_MEMO_GUARD_DOMAIN)
+            current_guard.update(encoded)
+            del encoded
+            if current_guard.digest() != guard:
+                reject("svg_partial_recovery_request_snapshot_changed")
         self.check(self.session)
+        import logging
+        stats = self.stats
+        logging.getLogger(__name__).info(
+            "SVG partial recovery verification finished: distinct_jobs=%s distinct_episodes=%s "
+            "episode_visits=%s episode_memo_hits=%s reference_edges=%s rows_decoded_python=%s "
+            "rows_redecoded_finish=%s producer_mode=%s",
+            len(self.producers), len(self.visited_episodes), stats["episode_visits"],
+            stats["episode_memo_hits"], stats["reference_edges"], stats["rows_decoded_python"],
+            stats["rows_redecoded_finish"], producer_mode)
+
+
+def _count(verification, key, amount=1):
+    # Counters are evidence only; substituted verifier doubles may not carry them.
+    stats = getattr(verification, "stats", None)
+    if type(stats) is dict:
+        stats[key] = stats.get(key, 0) + amount
+
+
+async def _producer_digests_off_loop(rows):
+    """Digest private, freshly decoded rows without blocking the event loop (no session use)."""
+    if not rows:
+        return []
+    import asyncio
+    rows = list(rows)
+    return await asyncio.to_thread(lambda: [_fresh_producer_checkpoint_digest(row) for row in rows])
 
 
 async def _fresh_recovery_model_rows(session, model, predicate, *, skip_request_payload=False):
@@ -238,6 +877,76 @@ async def _fresh_recovery_model_rows(session, model, predicate, *, skip_request_
     return [model.model_validate(dict(record) | ({"request_payload": {}} if skip_request_payload and "request_payload" in model.model_fields else {})) for record in records]
 
 
+def _pg_sha256_text(value):
+    return func.encode(func.sha256(func.convert_to(cast(value, Text), "UTF8")), "hex")
+
+
+def _checkpoint_storage_supported(session):
+    """PostgreSQL >= 11 (sha256) only; anything else keeps the full legacy decode."""
+    try:
+        dialect = session.get_bind().dialect
+        version = dialect.server_version_info
+    except Exception:
+        # Not knowing the bind is never a reason to skip a decode: take the legacy path.
+        return False
+    return (dialect.name == "postgresql" and isinstance(version, tuple)
+            and bool(version) and type(version[0]) is int and version[0] >= 11)
+
+
+def _checkpoint_storage_expression(overrides=None):
+    """sha256 over the JSON array text of every stored checkpoint column, in model order.
+
+    Every column type here (uuid, integer, varchar, text, json, timestamptz) has an exact,
+    injective JSON rendering, so equal hashes in one transaction mean an identical stored
+    tuple. ``overrides`` ({column name: expression}) exists only for the read-only PG check.
+    """
+    from sqlalchemy import inspect as inspect_model
+    names = [item.key for item in inspect_model(AuthoredSlideCheckpoint).column_attrs]
+    if not names or len(names) >= 100:
+        return None
+    overrides = overrides or {}
+    return _pg_sha256_text(func.json_build_array(
+        *(overrides.get(name, getattr(AuthoredSlideCheckpoint, name)) for name in names)))
+
+
+async def _fresh_checkpoint_rows_sealed(session, predicate):
+    """Rows plus {row_id: storage sha256} from the same SELECT; storage None means legacy read."""
+    expression = _checkpoint_storage_expression() if _checkpoint_storage_supported(session) else None
+    if expression is None:
+        return await _fresh_recovery_model_rows(session, AuthoredSlideCheckpoint, predicate), None
+    from sqlalchemy import inspect as inspect_model
+    names = [item.key for item in inspect_model(AuthoredSlideCheckpoint).column_attrs]
+    statement = select(*(getattr(AuthoredSlideCheckpoint, name).label(name) for name in names),
+                       expression.label("_storage_sha256")).where(predicate)
+    rows, storage = [], {}
+    for record in (await session.execute(statement)).mappings().all():
+        values = dict(record)
+        sha = values.pop("_storage_sha256")
+        row = AuthoredSlideCheckpoint.model_validate(values)
+        rows.append(row)
+        storage[str(row.id)] = sha
+    if len(storage) != len(rows):
+        return rows, None
+    return rows, storage
+
+
+async def _fresh_checkpoint_storage_digests(session, job_ids):
+    """{job_id: {row_id: storage sha256}} for every requested job; no payload column is returned."""
+    expression = _checkpoint_storage_expression()
+    if expression is None:
+        return None
+    result = await session.execute(select(
+        AuthoredSlideCheckpoint.id, AuthoredSlideCheckpoint.job_id, expression.label("storage_sha256"),
+    ).where(AuthoredSlideCheckpoint.job_id.in_([uuid.UUID(str(value)) for value in job_ids])))
+    fresh = {str(value): {} for value in job_ids}
+    for row_id, job_id, sha in result.all():
+        rows = fresh.get(str(job_id))
+        if rows is None or str(row_id) in rows:
+            reject("svg_partial_recovery_request_snapshot_changed")
+        rows[str(row_id)] = sha
+    return fresh
+
+
 async def _fresh_recovery_operation_controls(session, operation_ids):
     from uuid import UUID
     ids = [UUID(str(value)) for value in operation_ids]
@@ -245,17 +954,24 @@ async def _fresh_recovery_operation_controls(session, operation_ids):
     return {str(row.id): _operation_control(row) for row in rows}
 
 
-def _recovery_ledger_snapshot(admissions, calls, leases, usage, budgets, reservations):
-    return digest({name: [_dump(row) for row in sorted(rows, key=lambda item: str(item.id))]
-        for name, rows in (("admissions", admissions), ("calls", calls), ("leases", leases),
-                          ("usage", usage), ("budgets", budgets), ("reservations", reservations))})
+def _recovery_ledger_snapshot(admissions, calls, leases, usage, budgets, reservations, *, verification=None):
+    groups = [sorted(rows, key=lambda item: str(item.id)) for rows in (admissions, calls, leases, usage, budgets, reservations)]
+    if verification is not None:
+        return digest(verification.ledger_snapshots(*groups))
+    return digest({name: [_dump(row) for row in rows] for name, rows in zip(
+        ("admissions", "calls", "leases", "usage", "budgets", "reservations"), groups)})
 
 
-async def _fresh_recovery_ledger_snapshot(session, operation_ids, job_id, *, operation_bound_only=False):
+async def _fresh_recovery_ledger_snapshot(session, operation_ids, job_id, *, operation_bound_only=False, verification=None):
     admissions = await _fresh_recovery_model_rows(session, PublicOperationAdmission, PublicOperationAdmission.operation_id.in_(operation_ids))
     admission_ids = [row.id for row in admissions]
     calls = await _fresh_recovery_model_rows(session, PublicProviderLogicalCall, PublicProviderLogicalCall.admission_id.in_(admission_ids)) if admission_ids else []
-    leases = await _fresh_recovery_model_rows(session, PublicResourceLease, PublicResourceLease.admission_id.in_(admission_ids)) if admission_ids else []
+    lease_predicate = PublicResourceLease.admission_id.in_(admission_ids)
+    live_id = (verification.live_operation or {}).get("id") if verification is not None else None
+    include_live = live_id is not None and str(live_id) in {str(value) for value in operation_ids}
+    if include_live:
+        lease_predicate = or_(lease_predicate, PublicResourceLease.operation_id == uuid.UUID(str(live_id)))
+    leases = await _fresh_recovery_model_rows(session, PublicResourceLease, lease_predicate) if admission_ids or include_live else []
     usage = ([] if operation_bound_only else await _fresh_recovery_model_rows(
         session, ProviderUsageReceipt, ProviderUsageReceipt.job_id == job_id))
     budget_predicate = ProviderRuntimeBudget.workspace_operation_id.in_(operation_ids)
@@ -264,7 +980,7 @@ async def _fresh_recovery_ledger_snapshot(session, operation_ids, job_id, *, ope
     budgets = await _fresh_recovery_model_rows(session, ProviderRuntimeBudget, budget_predicate)
     budget_ids = [row.id for row in budgets]
     reservations = await _fresh_recovery_model_rows(session, ProviderRuntimeReservation, ProviderRuntimeReservation.budget_id.in_(budget_ids)) if budget_ids else []
-    return _recovery_ledger_snapshot(admissions, calls, leases, usage, budgets, reservations)
+    return _recovery_ledger_snapshot(admissions, calls, leases, usage, budgets, reservations, verification=verification)
 
 
 async def _payload_storage_seals(session, operation_ids, *, seal_memo=None):
@@ -330,7 +1046,7 @@ def _operation_reference(row, storage_seal, *, tenant):
         reject("svg_partial_recovery_archive_reference_unbound")
     archive_schema = archive_digest = None
     if ARCHIVE_KEY in payload:
-        if not isinstance(prior_archive, dict) or prior_archive.get("schema") not in {ARCHIVE_V1, ARCHIVE_V2}:
+        if not isinstance(prior_archive, dict) or prior_archive.get("schema") not in {ARCHIVE_V1, ARCHIVE_V2, ARCHIVE_V3}:
             reject("svg_partial_recovery_archive_schema_invalid")
         archive_schema, archive_digest = prior_archive["schema"], digest(prior_archive)
         prior_manifest = payload.get("svg_partial_recovery_manifest") or {}
@@ -356,16 +1072,34 @@ def _operation_reference(row, storage_seal, *, tenant):
             "archive_storage_sha256": storage_seal["archive_storage_sha256"]}}
 
 
+def _seal_memo_verification(seal_memo, *, verification=None):
+    if seal_memo is None or "verification" not in seal_memo:
+        return None
+    reference = seal_memo["verification"]
+    if type(reference) is not ReferenceType:
+        reject("svg_partial_recovery_request_snapshot_changed")
+    current = reference()
+    if (type(current) is not _EpisodeVerification or current.seal_memo is not seal_memo
+            or verification is not None and current is not verification):
+        reject("svg_partial_recovery_request_snapshot_changed")
+    return current
+
 async def _verify_operation_references(session, operation, manifest, references, *, seal_memo=None,
-                                       verification=None):
-    verification = verification or (seal_memo or {}).get("verification")
+                                       verification=None, reuse_historical_seals=False,
+                                       operation_digest=None):
+    memo_verification = _seal_memo_verification(seal_memo, verification=verification)
+    verification = verification or memo_verification
     owns_verification = verification is None
     verification = verification or _EpisodeVerification(session)
     verification.check(session)
-    key = digest([_operation_control(operation), operation.request_payload, manifest, references])
+    # The manifest and references are bound to the payload by their stored hashes.
+    if operation_digest is None:
+        operation_digest, _ = verification.operation_fingerprint(operation, None, require_current_code=False)
+    key = (str(operation.id), operation_digest)
     if key not in verification.references:
         await _verify_operation_references_once(session, operation, manifest, references,
-            seal_memo=seal_memo or verification.seal_memo, verification=verification)
+            seal_memo=seal_memo or verification.seal_memo, verification=verification,
+            reuse_historical_seals=reuse_historical_seals)
         verification.check(session)
         verification.references.add(key)
     if owns_verification:
@@ -373,7 +1107,7 @@ async def _verify_operation_references(session, operation, manifest, references,
 
 
 async def _verify_operation_references_once(session, operation, manifest, references, *, seal_memo,
-                                            verification):
+                                            verification, reuse_historical_seals=False):
     if not isinstance(references, list) or not references or not isinstance(references[0], dict):
         reject("svg_partial_recovery_archive_reference_unbound")
     ids = []
@@ -400,11 +1134,11 @@ async def _verify_operation_references_once(session, operation, manifest, refere
                 or (not ids and (control.get("presentation_id") != source_presentation
                     or control.get("conversation_id") != source_conversation))
                 or control.get("kind") != "presentation.generate"
-                or control.get("state") not in {"failed", "cancelled", "dead_letter"}
+                or control.get("state") not in {"failed", "cancelled", "dead_letter", "deadline_exceeded"}
                 or expected in ids):
             reject("svg_partial_recovery_archive_reference_unbound")
         if (ref.get("archive_schema") is not None and (
-                ref["archive_schema"] not in {ARCHIVE_V1, ARCHIVE_V2}
+                ref["archive_schema"] not in {ARCHIVE_V1, ARCHIVE_V2, ARCHIVE_V3}
                 or not _sha256_hex_valid(ref.get("archive_storage_sha256"))
                 or not _sha256_hex_valid(ref.get("archive_canonical_sha256")))
                 or ref.get("archive_schema") is None and any(ref.get(key) is not None
@@ -440,11 +1174,74 @@ async def _verify_operation_references_once(session, operation, manifest, refere
     for newer, older in zip(ids, ids[1:]):
         child, parent = originals[newer], originals[older]
         if (child.presentation_id, child.conversation_id) != (parent.presentation_id, parent.conversation_id):
-            await session.refresh(child, attribute_names=["request_payload"])
-            await _verify_append_only_edge(session, child, parent, verification=verification)
+            verification.check(session)
+            _count(verification, "reference_edges")
+            fresh_seals, missing, newer_same = {}, [], None
+            for identity in (newer, older):
+                expected_seal = seals.get(identity)
+                candidate = originals[identity]
+                eligible = (reuse_historical_seals and verification.transaction is not None
+                    and seal_memo is verification.seal_memo
+                    and candidate.state in {"failed", "cancelled", "dead_letter", "deadline_exceeded"}
+                    and verification.controls.get(identity) == fresh_controls[identity]
+                    and isinstance(expected_seal, dict))
+                snapshot_same = None
+                if eligible:
+                    storage = dict(expected_seal)
+                    storage_id = storage.get("id", identity)
+                    eligible = ((isinstance(storage_id, uuid.UUID) or type(storage_id) is str)
+                                and str(storage_id) == identity)
+                    if eligible:
+                        if "id" in storage:
+                            storage["id"] = identity
+                        memo_key = (identity, digest(fresh_controls[identity]), digest(storage))
+                        cached = verification.operation_fingerprints.get(memo_key)
+                        eligible = (cached is not None
+                            and any(key[0] == identity and key[1] == cached[1]
+                                    for key in verification.episodes)
+                            and "request_payload" in vars(candidate))
+                        if eligible:
+                            snapshot_same = _same_json_snapshot(
+                                cached[0], vars(candidate)["request_payload"], cached[2])
+                            eligible = snapshot_same is True
+                        if eligible and identity == newer:
+                            newer_same = snapshot_same
+                if eligible:
+                    fresh_seals[identity] = expected_seal
+                else:
+                    missing.append(uuid.UUID(identity))
+            if missing:
+                fresh_seals.update(await _fresh_payload_storage_seals(session, missing))
+            verification.check(session)
+            if fresh_seals != {value: seals.get(value) for value in (newer, older)}:
+                reject("svg_partial_recovery_history_changed")
+            storage_fingerprint = dict(fresh_seals[newer])
+            if "id" in storage_fingerprint:
+                storage_id = storage_fingerprint["id"]
+                if (not (isinstance(storage_id, uuid.UUID) or type(storage_id) is str)
+                        or str(storage_id) != newer):
+                    reject("svg_partial_recovery_history_changed")
+                storage_fingerprint["id"] = newer
+            control_digest = digest(fresh_controls[newer])
+            storage_digest = digest(storage_fingerprint)
+            cached = verification.operation_fingerprints.get((newer, control_digest, storage_digest))
+            if newer_same is True and not missing:
+                # The same cached snapshot and payload were compared above with no await since.
+                same = True
+            else:
+                same = (_same_json_snapshot(cached[0], vars(child)["request_payload"], cached[2])
+                        if cached is not None and "request_payload" in vars(child) else None)
+            if same is False:
+                reject("svg_partial_recovery_request_snapshot_changed")
+            if same is not True:
+                await session.refresh(child, attribute_names=["request_payload"])
+            read = _HistoricalOperationRead(verification, child,
+                control_digest, storage_digest)
+            await _verify_append_only_edge(session, child, parent,
+                verification=verification, _operation_read=read)
 
 
-async def _verify_append_only_edge(session, child, parent, *, verification=None):
+async def _verify_append_only_edge(session, child, parent, *, verification=None, _operation_read=None):
     """A cross-document ancestor must be a verified append-only consumer."""
     lineage = child.request_payload.get("svg_partial_recovery_lineage") or {}
     if (lineage.get("schema") != "svg-partial-recovery-lineage/v2"
@@ -457,13 +1254,36 @@ async def _verify_append_only_edge(session, child, parent, *, verification=None)
         PresentationGenerationJob.presentation_id == child.presentation_id))
     if job is None:
         reject("svg_partial_recovery_lineage_conflict")
-    await verify_episode(session, child, job, require_current_code=False, verification=verification)
+    await verify_episode(session, child, job, require_current_code=False, verification=verification,
+        _operation_read=_operation_read)
 
 
-def _base_code_digest():
+def _base_code_digest(files=None):
     root = Path(__file__).resolve().parents[1]
     return digest([{ "path": name, "sha256": sha256_hex((root / name).read_bytes())}
-                   for name in CODE_FILES])
+                   for name in (CODE_FILES if files is None else files)])
+
+
+# Authority remains pinned by _code_digest(). Measured page equivalence excludes
+# only recovery/operation/provider authority, retaining every other CODE_FILES
+# dependency and the final-selected continuation outside that original list.
+_PAGE_RENDER_AUTHORITY_FILES = frozenset({
+    "services/svg_partial_recovery.py",
+    "services/svg_source_local_review_continuation.py",
+    "services/workspace_service.py",
+    "services/provider_durable_admission.py",
+    "services/provider_usage_instrumentation.py",
+    "services/provider_runtime_job_registration.py",
+    "services/generation_core/quality/vision_advisory.py",
+    "services/generation_core/quality/vision_advisory_prompt.py",
+    "services/generation_core/drivers/svg/quality.py",
+})
+
+
+def _page_render_code_digest():
+    return _base_code_digest(tuple(name for name in CODE_FILES
+                                   if name not in _PAGE_RENDER_AUTHORITY_FILES)
+                             + ("services/svg_final_selected_continuation.py",))
 
 
 def _frozen_payload(payload):
@@ -713,8 +1533,44 @@ def _verify_frozen_header_outline(job):
             reject("svg_partial_recovery_header_binding_invalid")
 
 
+def _recovery_source_pages(source, job, validation=None):
+    from services.svg_source_layout import source_pages
+    chart = job.svg_style_snapshot.get("source_chart_contract")
+    if (validation is not None and validation[0] is source
+            and validation[1] == chart and validation[2] is source.units):
+        return validation[2]
+    return source_pages(source, chart_contract=chart)
+
+def _source_author_render_witness(svg, payload, raw, *, job, row, completed):
+    """Keep source-only replay unrendered until the existing real render path."""
+    value = {'author_svg_sha256': sha256_hex(svg.encode()),
+             'render_svg_sha256': sha256_hex(svg.encode()), 'transform': 'source-preserved'}
+    if row is None or row.render_status != 'pending':
+        return value
+    from utils.owner_context import get_current_owner_id, get_current_tenant_id
+    terminal = completed or {}
+    unsigned = {key: item for key, item in terminal.items() if key != 'receipt_digest'}
+    if (row.author_status != 'completed' or row.persist_status != 'pending'
+            or row.render_path is not None or row.render_sha256 is not None
+            or payload.get('quality') not in (None, {}) or payload.get('initial_quality') not in (None, {})
+            or payload.get('png_sha256') is not None or payload.get('png_path') is not None
+            or payload.get('source_digest') not in (None, value['author_svg_sha256'], 'sha256:' + value['author_svg_sha256'])
+            or payload.get('last_valid_svg') not in (None, svg)
+            or payload.get('local_readability_repair') not in (None, {})
+            or terminal.get('schema') != 'svg-provider-terminal/v1'
+            or terminal.get('terminal_event') != 'response.completed'
+            or terminal.get('receipt_digest') != digest(unsigned)
+            or terminal.get('raw_response') != raw or terminal.get('output_digest') != sha256_hex(raw.encode())
+            or terminal.get('job_id') != str(job.id) or terminal.get('operation_id') != str(job.workspace_operation_id)
+            or terminal.get('owner_id') != str(get_current_owner_id()) or terminal.get('tenant_id') != get_current_tenant_id()
+            or not terminal.get('input_digest') or terminal.get('input_digest') != payload.get('input_digest')):
+        reject('svg_partial_recovery_completed_author_unproven')
+    return {**value, 'phase': 'author-only', 'source_svg_sha256': value['author_svg_sha256'],
+            'first_render_svg_sha256': value['render_svg_sha256'], 'completed_receipt_digest': terminal['receipt_digest']}
+
+
 def _author_render_chain(payload, raw, receipt, *, request, job, asset, index,
-                         row=None, completed=None, vectors=None, vector_seed_witness=None):
+                         row=None, completed=None, vectors=None, vector_seed_witness=None, source=None, _source_validation=None):
     """Replay the existing local transforms; hashes alone never authorize bytes."""
     import json
     import xml.etree.ElementTree as ET
@@ -740,8 +1596,14 @@ def _author_render_chain(payload, raw, receipt, *, request, job, asset, index,
         author_svg = payload.get("svg_content")
         if str(receipt.get("source_digest", "")).removeprefix("sha256:") != sha256_hex(author_svg.encode()):
             reject("svg_partial_recovery_source_transform_unproven")
-        return {"author_svg_sha256": sha256_hex(author_svg.encode()),
-                "render_svg_sha256": sha256_hex(author_svg.encode()), "transform": "source-preserved"}
+        restoration = (receipt.get("source_preservation") or {}).get("source_lf_restoration")
+        stored_restoration = (payload.get("source_preservation") or {}).get("source_lf_restoration")
+        if restoration is None and stored_restoration is None:
+            return _source_author_render_witness(author_svg, payload, raw, job=job, row=row, completed=completed)
+        if (source is None or not isinstance(restoration, dict)
+                or restoration != stored_restoration
+                or str(receipt.get("raw_digest", "")).removeprefix("sha256:") != sha256_hex(raw.encode())):
+            reject("svg_partial_recovery_source_transform_unproven")
     vectors = vectors or {}
     vector_offer = (payload.get("assetOffer") or {}).get("vectorIcons") or {}
     recorded_used = receipt.get("vector_icons_used") or []
@@ -771,6 +1633,39 @@ def _author_render_chain(payload, raw, receipt, *, request, job, asset, index,
         if node.tag.rsplit("}", 1)[-1] == "image" and node.get("href") not in slots:
             reject("svg_partial_recovery_author_asset_unproven")
     author_svg = ET.tostring(root, encoding="unicode")
+    if request.source_mode == "source_content_restyle":
+        from services.svg_source_layout import source_pages, bind_whole_page_source_svg
+        from services.generation_core.authoring.author_source_svg_layout import _whole_page_facts
+        from services.document_canvas_generation import source_restyle_font_floor, svg_quality_font_floor
+        try:
+            pages = _recovery_source_pages(source, job, _source_validation)
+            image_slots = {}
+            for block in pages[index].blocks:
+                if block.kind != "image":
+                    continue
+                try:
+                    occurrence = uuid.UUID(block.source_block_id)
+                except ValueError:
+                    occurrence = uuid.uuid5(asset.presentation_id, f"source-occurrence:{block.source_block_id}")
+                matches = [slot.slot_id for slot in slots.values() if slot.occurrence_id == occurrence]
+                if len(matches) != 1:
+                    reject("svg_partial_recovery_source_transform_unproven")
+                image_slots[block.source_block_id] = matches[0]
+            floor = source_restyle_font_floor(request.instructions, getattr(request, "_document_canvas", None))
+            if job.svg_style_snapshot.get("readability_policy") is not None:
+                floor = max(floor, svg_quality_font_floor(job.svg_style_snapshot["readability_policy"]))
+            rebound, preservation = bind_whole_page_source_svg(author_svg, source, index,
+                facts=_whole_page_facts(pages[index], image_slots), width=canvas.width_px,
+                height=canvas.height_px, style_snapshot=job.svg_style_snapshot, minimum_font_px=floor,
+                _validated_pages=pages, native_declarations=declarations,
+                restore_source_lf=True, raw_output_digest="sha256:" + sha256_hex(raw.encode()))
+        except PartialRecoveryRejected:
+            raise
+        except (ValueError, TypeError, KeyError, IndexError) as error:
+            raise PartialRecoveryRejected("svg_partial_recovery_source_transform_unproven") from error
+        if rebound != payload["svg_content"] or preservation.get("source_lf_restoration") != restoration:
+            reject("svg_partial_recovery_source_transform_unproven")
+        return _source_author_render_witness(rebound, payload, raw, job=job, row=row, completed=completed)
     author_digest = sha256_hex(author_svg.encode())
     if str(receipt.get("source_digest", "")).removeprefix("sha256:") != author_digest:
         reject("svg_partial_recovery_author_transform_unproven")
@@ -929,6 +1824,8 @@ class PartialRecovery:
     manifest_hash: str
     approved_budget: int | None = None
     baseline_payloads: dict = field(default_factory=dict)
+    # One transaction only; never serialized into the episode or archive.
+    verification: _EpisodeVerification | None = field(default=None, repr=False, compare=False)
 
 
 async def _pre_dispatch_repair_baseline(payload, row, *, job, operation, seed,
@@ -1022,7 +1919,7 @@ def _completed_repair_guard_reject(condition, index):
     raise error
 
 
-def _replay_sealed_author_transform(payload, raw, *, request, job, asset, index, row=None, completed=None, vectors=None, vector_seed_witness=None):
+def _replay_sealed_author_transform(payload, raw, *, request, job, asset, index, row=None, completed=None, vectors=None, vector_seed_witness=None, source=None, _source_validation=None, source_projection=None):
     from services.svg_contract import normalize_svg_response
     raw_svg = normalize_svg_response(raw)
     if not isinstance(raw_svg, str) or not raw_svg.strip() or "<!" in raw_svg or "<?" in raw_svg:
@@ -1042,9 +1939,8 @@ def _replay_sealed_author_transform(payload, raw, *, request, job, asset, index,
     expected_input = _expected_page_input_digest(request, job, index, page_assets)
     if request.source_mode is None and payload.get('input_digest') != expected_input:
         reject('svg_partial_recovery_page_input_changed')
-    if request.source_mode == 'source_content_restyle':
-        author_svg = payload.get('svg_content')
-        return {'author_svg_sha256': sha256_hex(author_svg.encode()), 'render_svg_sha256': sha256_hex(author_svg.encode()), 'transform': 'source-preserved'}
+    if request.source_mode == 'source_content_restyle' and (source is None or source_projection is None):
+        reject('svg_partial_recovery_source_transform_unproven')
     vectors = vectors or {}
     vector_offer = (payload.get('assetOffer') or {}).get('vectorIcons') or {}
     recorded_used = receipt.get('vector_icons_used') or []
@@ -1061,6 +1957,38 @@ def _replay_sealed_author_transform(payload, raw, *, request, job, asset, index,
         if node.tag.rsplit('}', 1)[-1] == 'image' and node.get('href') not in slots:
             reject('svg_partial_recovery_author_asset_unproven')
     author_svg = ET.tostring(root, encoding='unicode')
+    if request.source_mode == 'source_content_restyle':
+        from services.svg_source_layout import bind_whole_page_source_svg
+        from services.generation_core.authoring.author_source_svg_layout import _whole_page_facts
+        from services.document_canvas_generation import source_restyle_font_floor, svg_quality_font_floor
+        try:
+            pages = _recovery_source_pages(source, job, _source_validation)
+            image_slots = {}
+            for block in pages[index].blocks:
+                if block.kind != 'image':
+                    continue
+                try:
+                    occurrence = uuid.UUID(block.source_block_id)
+                except ValueError:
+                    occurrence = uuid.uuid5(asset.presentation_id, f'source-occurrence:{block.source_block_id}')
+                matches = [slot.slot_id for slot in slots.values() if slot.occurrence_id == occurrence]
+                if len(matches) != 1:
+                    reject('svg_partial_recovery_source_transform_unproven')
+                image_slots[block.source_block_id] = matches[0]
+            floor = source_restyle_font_floor(request.instructions, getattr(request, '_document_canvas', None))
+            if job.svg_style_snapshot.get('readability_policy') is not None:
+                floor = max(floor, svg_quality_font_floor(job.svg_style_snapshot['readability_policy']))
+            rebound, preservation = bind_whole_page_source_svg(author_svg, source, index,
+                facts=_whole_page_facts(pages[index], image_slots), width=canvas.width_px,
+                height=canvas.height_px, style_snapshot=job.svg_style_snapshot, minimum_font_px=floor,
+                _validated_pages=pages, native_declarations=declarations,
+                restore_source_lf=True, raw_output_digest='sha256:' + sha256_hex(raw.encode()))
+        except PartialRecoveryRejected:
+            raise
+        except (ValueError, TypeError, KeyError, IndexError) as error:
+            raise PartialRecoveryRejected('svg_partial_recovery_source_transform_unproven') from error
+        source_projection['source_preservation'] = deepcopy(preservation)
+        return rebound, rebound, sha256_hex(rebound.encode()), declarations, used, []
     author_digest = sha256_hex(author_svg.encode())
     normalized, advisories = normalize_model_font_families(author_svg)
     contract = {key: {'required': slot.policy.required, 'allowOmit': slot.policy.allow_omit} for key, slot in slots.items()}
@@ -1160,11 +2088,12 @@ async def _completed_repair_author_projection(payload, row, *, job, operation, s
     return (projected, proof)
 
 
-async def _terminal_repair_author_projection(payload, row, *, job, operation, seed, episode_calls, completed, session, request, binding, vectors, vector_seed_witness):
+async def _terminal_repair_author_projection(payload, row, *, job, operation, seed, episode_calls, completed, session, request, binding, vectors, vector_seed_witness, source=None, _source_validation=None):
     """Recover only sealed current terminal output using a separate local replay witness."""
     source_projection = await _completed_source_author_projection(payload, row, job=job,
         operation=operation, episode_calls=episode_calls, completed=completed, session=session,
-        request=request, binding=binding, vectors=vectors, vector_seed_witness=vector_seed_witness)
+        request=request, binding=binding, vectors=vectors, vector_seed_witness=vector_seed_witness,
+        source=source, _source_validation=_source_validation)
     if source_projection is not None:
         return source_projection
     from utils.owner_context import get_current_owner_id, get_current_tenant_id
@@ -1265,7 +2194,8 @@ async def _terminal_repair_author_projection(payload, row, *, job, operation, se
     if not current_calls or len(models) != 1 or (not all((provider and model for provider, model in models))):
         reject('svg_partial_recovery_completed_model_unproven')
     provider, model = next(iter(models))
-    normalized, first, author_digest, declarations, used, advisories = _replay_sealed_author_transform(payload, completed['raw_response'], request=request, job=job, asset=asset, index=row.slide_index, row=row, completed=completed, vectors=vectors, vector_seed_witness=vector_seed_witness)
+    source_projection = {}
+    normalized, first, author_digest, declarations, used, advisories = _replay_sealed_author_transform(payload, completed['raw_response'], request=request, job=job, asset=asset, index=row.slide_index, row=row, completed=completed, vectors=vectors, vector_seed_witness=vector_seed_witness, source=source, _source_validation=_source_validation, source_projection=source_projection)
     projected = deepcopy(payload)
     projected['svg_content'] = normalized
     projected['fontAdvisories'] = advisories
@@ -1277,6 +2207,10 @@ async def _terminal_repair_author_projection(payload, row, *, job, operation, se
         reject('svg_partial_recovery_completed_native_unproven')
     witness = {'schema': 'svg-author-terminal-local-replay/v1', 'completed_receipt_digest': completed['receipt_digest'], 'completed_output_digest': completed['output_digest'], 'source_operation_id': str(operation.id), 'source_job_id': str(job.id), 'input_digest': payload['input_digest'], 'current_calls_digest': digest([_dump(call) for call in current_calls]), 'provider': provider, 'requested_model': model, 'first_render_svg_digest': sha256_hex(first.encode())}
     receipt = {'contract_version': SVG_CONTRACT_VERSION, 'provider': provider, 'requested_model': model, 'style_digest': job.svg_style_snapshot['digest'], 'authoring_profile': job.svg_style_snapshot.get('authoring_profile'), 'raw_digest': 'sha256:' + completed['output_digest'], 'source_digest': 'sha256:' + author_digest, 'native_declarations': declaration_receipt(declarations).get('native_declarations'), 'vector_icons_used': sorted(used), 'terminal_recovery_witness': witness}
+    if source_projection:
+        projected['source_preservation'] = deepcopy(source_projection['source_preservation'])
+        receipt.update(source_preservation=deepcopy(source_projection['source_preservation']),
+            source_authoring_contract=deepcopy(job.svg_style_snapshot.get('source_authoring_contract')))
     projected.setdefault('attempts', []).append({'kind': 'sealed_terminal_replay', 'raw_response': completed['raw_response'], 'receipt': receipt})
     for key in ('quality', 'initial_quality', 'png_path', 'png_sha256', 'browser_metrics', 'local_readability_repair'):
         projected.pop(key, None)
@@ -1288,7 +2222,7 @@ async def _terminal_repair_author_projection(payload, row, *, job, operation, se
 
 async def _completed_source_author_projection(payload, row, *, job, operation, episode_calls,
         completed, session, request, binding, vectors, vector_seed_witness,
-        _selected_attempt_index=None):
+        _selected_attempt_index=None, source=None, _source_validation=None):
     """Project a valid v2 author-only response without changing historical receipts."""
     from services.svg_authoring_profile import read_quality_recovery_policy
     from utils.owner_context import get_current_owner_id, get_current_tenant_id
@@ -1346,10 +2280,12 @@ async def _completed_source_author_projection(payload, row, *, job, operation, e
         origin_operation_id=str(reference.created_by_operation_id))
     if asset.digest != payload.get("source_manifest_digest") or binding not in (None, current_binding):
         reject("svg_partial_recovery_asset_binding_changed")
+    source_projection = {}
     try:
         normalized, first, author_digest, declarations, used, advisories = _replay_sealed_author_transform(
             payload, raw, request=request, job=job, asset=asset, index=row.slide_index,
-            vectors=vectors, vector_seed_witness=vector_seed_witness)
+            vectors=vectors, vector_seed_witness=vector_seed_witness, source=source,
+            _source_validation=_source_validation, source_projection=source_projection)
     except ValueError as error:
         if isinstance(error, PartialRecoveryRejected):
             raise
@@ -1369,7 +2305,8 @@ async def _completed_source_author_projection(payload, row, *, job, operation, e
                     return await _completed_source_author_projection(payload, row, job=job,
                         operation=operation, episode_calls=episode_calls, completed=terminal,
                         session=session, request=request, binding=binding, vectors=vectors,
-                        vector_seed_witness=vector_seed_witness, _selected_attempt_index=index)
+                        vector_seed_witness=vector_seed_witness, _selected_attempt_index=index,
+                        source=source, _source_validation=_source_validation)
                 except PartialRecoveryRejected:
                     continue
         raise PartialRecoveryRejected("svg_partial_recovery_local_output_requires_repair") from error
@@ -1405,6 +2342,10 @@ async def _completed_source_author_projection(payload, row, *, job, operation, e
             reject("svg_partial_recovery_completed_author_unproven")
     projected = deepcopy(payload)
     projected.update(svg_content=normalized, last_valid_svg=normalized, source_digest=None, fontAdvisories=advisories)
+    if source_projection:
+        if receipt.get('source_preservation') != source_projection['source_preservation']:
+            reject('svg_partial_recovery_source_transform_unproven')
+        projected['source_preservation'] = deepcopy(source_projection['source_preservation'])
     for key in ("quality", "initial_quality", "png_path", "png_sha256", "browser_metrics", "local_readability_repair"):
         projected.pop(key, None)
     from services.generation_core.drivers.svg.native_declarations import (
@@ -1418,7 +2359,8 @@ async def _completed_source_author_projection(payload, row, *, job, operation, e
     witness = _author_render_chain(projected, raw, receipt, request=request, job=job, asset=asset,
         index=row.slide_index, row=SimpleNamespace(author_status="completed", render_status="pending",
             persist_status="pending", render_path=None, render_sha256=None),
-        completed=completed, vectors=vectors, vector_seed_witness=vector_seed_witness)
+        completed=completed, vectors=vectors, vector_seed_witness=vector_seed_witness,
+        source=source, _source_validation=_source_validation)
     if witness.get("phase") != "author-only":
         reject("svg_partial_recovery_completed_author_unproven")
     if _selected_attempt_index is not None:
@@ -1488,8 +2430,10 @@ async def _verified_retained_source_author(payload, row, *, manifest, operation,
         if (source_id is None or str(carrier.retry_of_operation_id) != source_id
                 or not any(item.get("id") == source_id for item in references)):
             reject(code)
-        snapshot = carrier_archive.get("job")
-        checkpoints = carrier_archive.get("checkpoints")
+        working_archive = await _hydrate_checkpoint_archive(session, carrier_manifest, carrier_archive,
+            verification=_seal_memo_verification(seal_memo))
+        snapshot = working_archive.get("job")
+        checkpoints = working_archive.get("checkpoints")
         if not isinstance(snapshot, dict) or not isinstance(checkpoints, list):
             reject(code)
         if source_id == producer_id:
@@ -1752,6 +2696,8 @@ async def _inherited_terminal_author_verified(payload, row, *, manifest, manifes
         if not isinstance(manifest, dict) or not isinstance(archive, dict) or digest(manifest) != carrier.request_payload.get("svg_partial_recovery_manifest_hash") or digest(archive) != manifest.get("archive_digest") or archive.get("schema") != manifest.get("archive_schema") or str(carrier.retry_of_operation_id) != manifest.get("operation_id") or source_id not in {r.get("id") for r in archive.get("operation_refs", []) if isinstance(r, dict)}:
             _completed_repair_guard_reject(48, row.slide_index)
         await _verify_operation_references(session, carrier, manifest, archive.get("operation_refs"), seal_memo=seal_memo)
+    archive = await _hydrate_checkpoint_archive(session, manifest, archive,
+        verification=_seal_memo_verification(seal_memo))
     job_snapshot = archive.get("job")
     row_snapshot = next((r for r in archive.get("checkpoints", []) if r.get("slide_index") == row.slide_index), None)
     if not isinstance(job_snapshot, dict) or not isinstance(row_snapshot, dict) or str(job_snapshot.get("id")) != witness["source_job_id"] or str(job_snapshot.get("workspace_operation_id")) != witness["source_operation_id"]:
@@ -1763,6 +2709,480 @@ async def _inherited_terminal_author_verified(payload, row, *, manifest, manifes
     completed = _completed_response(row_snapshot.get("svg_checkpoint") or {}, prior_job, prior_operation, owner, tenant)
     raw = (payload.get("attempts") or [{}])[-1].get("raw_response")
     return bool(completed and completed.get("raw_response") == raw and completed.get("receipt_digest") == witness.get("completed_receipt_digest") and completed.get("output_digest") == witness.get("completed_output_digest") and witness.get("input_digest") == payload.get("input_digest"))
+
+
+def _historical_uniform_grid_rejection(svg, preservation, page, *, operation, job):
+    """Prove only the old equal-cell assumption rejected a strict authored grid."""
+    carrier = getattr(operation, "request_payload", None) or {}
+    manifest = carrier.get("svg_partial_recovery_manifest") or {}
+    lineage = (job.request_payload or {}).get(LINEAGE_KEY) or {}
+    old_code = manifest.get("code_digest")
+    current_code = _code_digest()
+    if (not _sha256_hex_valid(old_code) or old_code == current_code
+            or digest(manifest) != carrier.get("svg_partial_recovery_manifest_hash")
+            or lineage.get("schema") != "svg-partial-recovery-lineage/v2"
+            or lineage != carrier.get("svg_partial_recovery_lineage")
+            or lineage.get("manifest_hash") != digest(manifest)
+            or lineage.get("operation_id") != str(operation.id)
+            or lineage.get("job_id") != str(job.id)
+            or str(getattr(operation, "retry_of_operation_id", None)) != manifest.get("operation_id")
+            or carrier.get("generation_request") != job.request_payload):
+        return None
+    import xml.etree.ElementTree as ET
+    from services.svg_source_native_tables import _evidence
+
+    tables = []
+    for record, group, rows, cells, rects, owned, xs, ys in _evidence(ET.fromstring(svg), preservation, page):
+        frame = record["frame"]
+        column_width = frame["width"] / len(rows[0])
+        row_height = frame["height"] / len(rows)
+        widths = [right - left for left, right in zip(xs, xs[1:])]
+        heights = [bottom - top for top, bottom in zip(ys, ys[1:])]
+        if not (any(abs(value - column_width) > .000001 for value in widths)
+                or any(abs(value - row_height) > .000001 for value in heights)):
+            continue
+        # Reproduce only the former formula; the current module above proves
+        # every shared edge, source span, cell identity and text membership.
+        mismatch = None
+        for (row, column, rs, cs, cell), rect in zip(cells, rects, strict=True):
+            actual = [float(rect.get(key)) for key in ("x", "y", "width", "height")]
+            expected = [frame["x"] + column * column_width, frame["y"] + row * row_height,
+                cs * column_width, rs * row_height]
+            if any(abs(value - target) > .000001 for value, target in zip(actual, expected, strict=True)):
+                mismatch = {"row": row, "column": column, "row_span": rs, "column_span": cs,
+                    "actual": actual, "uniform_expected": expected}
+                break
+        if mismatch is not None:
+            tables.append({"block_id": record["block_id"], "element_id": record["element_id"],
+                "rows": len(rows), "columns": len(rows[0]), "cell_count": len(cells),
+                "column_widths": widths, "row_heights": heights, "first_uniform_mismatch": mismatch})
+    if not tables:
+        return None
+    return {"reason": "historical_uniform_grid_rejected", "historical_code_digest": old_code,
+        "current_code_digest": current_code, "current_source_svg_sha256": sha256_hex(svg.encode()),
+        "current_source_receipt_digest": digest(preservation), "tables": tables}
+
+
+def _unresolved_provider_call(call):
+    return (call.outcome == "unknown" or call.state in {"reserved", "uncertain"}
+        or getattr(call, "actual_cost_microunits", None) is None and call.outcome != "succeeded")
+
+
+def _require_known_source_page_accounting(*, episode_calls, usage, job, index, receipt, code):
+    author_stages = {"author", "repair", "repair_remake", "repair_patch"}
+    if (not episode_calls or not usage or any(
+            not isinstance(call.stage, str) or not call.stage
+            or not isinstance(call.provider_id, str) or not call.provider_id
+            or not isinstance(call.model_id, str) or not call.model_id
+            or call.stage in author_stages and (type(call.slide_index) is not int
+                or not 0 <= call.slide_index < job.total_slides) for call in episode_calls)):
+        reject(code)
+    # Match the invalid-source contract: only another mapped author's UNKNOWN
+    # is outside this page's settled-output proof. Preserve it in the ledger.
+    unresolved_other_calls = [call for call in episode_calls if call.stage in author_stages
+        and call.slide_index != index and _unresolved_provider_call(call)]
+    known_calls = [call for call in episode_calls if not (
+        call.stage in author_stages and call.slide_index != index
+        and _unresolved_provider_call(call))]
+    if any(call.state != "reported" or call.outcome != "succeeded" or call.reconciled_at is None
+            or call.actual_cost_microunits is None for call in known_calls):
+        reject(code)
+    page_calls = [call for call in episode_calls if call.slide_index == index and call.stage in author_stages]
+    if (not page_calls or {(call.provider_id, call.model_id) for call in page_calls}
+            != {(receipt.get("provider"), receipt.get("requested_model"))}):
+        reject(code)
+    known_groups, unknown_groups = {}, {}
+    for calls, groups in ((known_calls, known_groups), (unresolved_other_calls, unknown_groups)):
+        for call in calls:
+            if call.provider_id != "local":
+                key = (call.stage, call.provider_id, call.model_id)
+                groups[key] = groups.get(key, 0) + 1
+    settled_groups, unsettled_groups = {}, {}
+    for item in usage:
+        if (item.job_id != job.id or type(item.request_count) is not int or item.request_count < 1
+                or not isinstance(item.stage, str) or not item.stage
+                or not isinstance(item.provider, str) or not item.provider
+                or not isinstance(item.model, str) or not item.model
+                or item.usage_state not in {"reported", "estimated", "unavailable"}
+                or item.outcome not in {"succeeded", "failed", "cancelled"}):
+            reject(code)
+        settled = item.usage_state == "reported" and item.outcome == "succeeded"
+        if item.provider == "local":
+            if not settled:
+                reject(code)
+            continue
+        key = (item.stage, item.provider, item.model)
+        groups = settled_groups if settled else unsettled_groups
+        groups[key] = groups.get(key, 0) + item.request_count
+    # Exact job/stage/provider/model matching never credits an unresolved call
+    # with a settled receipt, or an unrelated usage row with another UNKNOWN.
+    if (settled_groups != known_groups or any(count > unknown_groups.get(key, 0)
+            for key, count in unsettled_groups.items())):
+        reject(code)
+
+
+async def _completed_invalid_source_output(payload, row, *, completed, job, operation,
+        request, source, seed, episode_calls, usage, session, owner, tenant, binding,
+        vectors, header_producer, _source_validation=None):
+    """Prove a rejected source response for a separately approved child budget."""
+    attempts = payload.get("attempts")
+    attempt = attempts[-1] if isinstance(attempts, list) and attempts else None
+    receipt = attempt.get("receipt") if isinstance(attempt, dict) else None
+    error = receipt.get("validation_error") if isinstance(receipt, dict) else None
+    native_structure_errors = {"svg_source_native_table_group_invalid",
+        "svg_source_native_table_membership_mismatch"}
+    allowed = {"svg_source_receipt_binding_mismatch", "svg_source_native_table_grid_mismatch",
+        "svg_source_receipt_text_mismatch", *native_structure_errors}
+    if error not in allowed or request.source_mode != "source_content_restyle":
+        return None
+    code = "svg_partial_recovery_invalid_source_unproven"
+    stages = {"author", "repair", "repair_remake", "repair_patch"}
+    if any(call.stage in stages and (type(call.slide_index) is not int
+            or not 0 <= call.slide_index < job.total_slides
+            or not isinstance(call.provider_id, str) or not call.provider_id
+            or not isinstance(call.model_id, str) or not call.model_id) for call in episode_calls):
+        reject(code)
+    # An earlier rejected answer is history while the current call is unresolved.
+    # Leave it to the manifest's UNKNOWN branch; it cannot prove a new purchase.
+    if completed is None and (payload.get("inflight") is not None or _unknown_provider(payload)
+            or any(call.slide_index == row.slide_index and _unresolved_provider_call(call)
+                for call in episode_calls)):
+        return None
+    raw = attempt.get("raw_response")
+    # A design-repair candidate rejected by source validation: the approved prior
+    # render legitimately exists; the page is re-bought as a fresh author in the child.
+    quality_recovery = payload.get("quality_recovery")
+    repair_stage_rejection = (row.render_status == "completed"
+        and isinstance(quality_recovery, dict) and quality_recovery.get("status") == "repair_pending"
+        and payload.get("svg_content") is None and row.author_status in {"running", "failed"})
+    if (source is None or completed is None or not isinstance(raw, str) or not raw.strip()
+            or attempt.get("kind") != "provider" or payload.get("inflight") is not None
+            or _unknown_provider(payload) or operation.owner_id != owner
+            or job.workspace_operation_id != operation.id
+            or row.author_status not in {"completed", "failed", "running"}
+            or (row.render_status != "pending" and not repair_stage_rejection)
+            or row.persist_status != "pending"
+            or job.svg_style_snapshot.get("source_authoring_contract") != {"version": "svg-source-whole-page/v1"}
+            or receipt.get("source_authoring_contract") != job.svg_style_snapshot["source_authoring_contract"]
+            or receipt.get("contract_version") not in {"svg-static/v1", "svg-static/v2"}
+            or not receipt.get("provider") or not receipt.get("requested_model")
+            or not _author_style_matches(payload, receipt, job, row.slide_index, header_producer=header_producer)
+            or receipt.get("authoring_profile") != job.svg_style_snapshot.get("authoring_profile")
+            or completed != _completed_response(payload, job, operation, owner, tenant)
+            or raw != completed["raw_response"]
+            or str(receipt.get("raw_digest", "")).removeprefix("sha256:") != completed["output_digest"]
+            or type(receipt.get("attempt_ordinal")) is not int
+            or receipt["attempt_ordinal"] != completed.get("ordinal")):
+        reject(code)
+    unresolved_other_calls = [call for call in episode_calls if call.stage in stages
+        and call.slide_index != row.slide_index and _unresolved_provider_call(call)]
+    current_calls = [call for call in episode_calls if call.stage in stages
+        and not (call.slide_index != row.slide_index and _unresolved_provider_call(call))]
+    page_calls = [call for call in episode_calls if call.slide_index == row.slide_index]
+    author_calls = [call for call in page_calls if call.stage in stages]
+    if (not author_calls or any(call.state != "reported" or call.outcome != "succeeded"
+            or call.reconciled_at is None for call in [*current_calls, *page_calls])
+            or {(call.provider_id, call.model_id) for call in author_calls}
+                != {(receipt["provider"], receipt["requested_model"])}):
+        reject(code)
+    # An unavailable receipt may be preserved only within the same job/stage/
+    # provider/model UNKNOWN group, bounded by that group's durable call count.
+    unsettled_groups = {}
+    for item in usage:
+        if item.job_id != job.id:
+            reject(code)
+        if item.stage not in stages or item.provider == "local" or (
+                item.usage_state == "reported" and item.outcome == "succeeded"):
+            continue
+        if (type(item.request_count) is not int or item.request_count < 1
+                or item.usage_state not in {"reported", "estimated", "unavailable"}
+                or item.outcome not in {"succeeded", "failed", "cancelled"}):
+            reject(code)
+        key = (item.stage, item.provider, item.model)
+        unsettled_groups[key] = unsettled_groups.get(key, 0) + item.request_count
+    for key, count in unsettled_groups.items():
+        matching = [call for call in unresolved_other_calls
+            if (call.stage, call.provider_id, call.model_id) == key]
+        if count > len(matching):
+            reject(code)
+    # Usage is job/model aggregate evidence. Count every settled success and
+    # preserve explicitly bounded unresolved receipts in the immutable ledger.
+    for provider, model in {(call.provider_id, call.model_id) for call in author_calls}:
+        related_calls = [call for call in current_calls
+            if (call.provider_id, call.model_id) == (provider, model)]
+        unresolved = [call for call in unresolved_other_calls
+            if (call.provider_id, call.model_id) == (provider, model)]
+        related_usage = [item for item in usage if item.job_id == job.id and item.stage in stages
+            and (item.provider, item.model) == (provider, model)]
+        settled_usage = [item for item in related_usage
+            if item.usage_state == "reported" and item.outcome == "succeeded"]
+        if (not settled_usage or any(type(item.request_count) is not int or item.request_count < 1
+                or item.usage_state not in {"reported", "estimated", "unavailable"}
+                or item.outcome not in {"succeeded", "failed", "cancelled"} for item in related_usage)
+                or len(settled_usage) != len(related_usage) and not unresolved
+                or sum(item.request_count for item in settled_usage) < len(related_calls)):
+            reject(code)
+    if error in native_structure_errors:
+        _require_known_source_page_accounting(episode_calls=episode_calls, usage=usage, job=job,
+            index=row.slide_index, receipt=receipt, code=code)
+    from services.artifact_store import configured_public_artifact_service
+    from services.svg_asset_manifest import ArtifactPointer
+    from services.svg_asset_persistence import load_source_manifest_pointer
+    service = configured_public_artifact_service()
+    pointer = ArtifactPointer.model_validate(payload.get("source_manifest_ref"))
+    reference = await service.resolve_ref(session, artifact_id=pointer.ref,
+        owner_id=owner, tenant_id=tenant, expected_digest=pointer.sha256)
+    asset = await load_source_manifest_pointer(session, service,
+        pointer=payload.get("source_manifest_ref"), owner_id=owner, tenant_id=tenant)
+    current_binding = dict(pointer=deepcopy(payload["source_manifest_ref"]), digest=asset.digest,
+        presentation_id=str(asset.presentation_id), source_revision=asset.source_revision,
+        origin_operation_id=str(reference.created_by_operation_id))
+    if asset.digest != payload.get("source_manifest_digest") or binding not in (None, current_binding):
+        reject("svg_partial_recovery_asset_binding_changed")
+    from services.svg_source_layout import source_pages, bind_whole_page_source_svg
+    from services.generation_core.authoring.author_source_svg_layout import _whole_page_facts
+    from services.generation_core.drivers.svg.native_declarations import extract_native_declarations, declaration_receipt
+    from services.svg_contract import normalize_svg_response
+    from utils.svg_template_fonts import source_font_profile
+    from services.authored_canvas import request_canvas_contract
+    from services.document_canvas_generation import source_restyle_font_floor, svg_quality_font_floor
+    import xml.etree.ElementTree as ET
+    pages = _recovery_source_pages(source, job, _source_validation)
+    offered = next((page.slot_ids for page in asset.offered_pages if page.page_index == row.slide_index), ())
+    slots = {slot.slot_id: slot for slot in asset.slots if slot.slot_id in offered}
+    page_assets = {key: slot.model_dump(mode="json", by_alias=True) for key, slot in slots.items()}
+    profile = source_font_profile(job.svg_style_snapshot)
+    expected = digest({"page": _expected_page_input_digest(request, job, row.slide_index, page_assets),
+        "source_manifest": source.manifest_digest, "font_profile": profile,
+        "source_page": pages[row.slide_index].model_dump(mode="json"), "source_layout_version": "svg-source-layout/v2"})
+    if seed.get("source_font_profile") != profile or payload.get("input_digest") != expected:
+        reject("svg_partial_recovery_page_input_changed")
+    image_slots = {}
+    for block in pages[row.slide_index].blocks:
+        if block.kind != "image":
+            continue
+        try:
+            occurrence = uuid.UUID(block.source_block_id)
+        except ValueError:
+            occurrence = uuid.uuid5(asset.presentation_id, f"source-occurrence:{block.source_block_id}")
+        matches = [slot.slot_id for slot in slots.values() if slot.occurrence_id == occurrence]
+        if len(matches) != 1:
+            reject(code)
+        image_slots[block.source_block_id] = matches[0]
+    svg = normalize_svg_response(raw)
+    if "<!" in svg or "<?" in svg:
+        reject(code)
+    historical_grid = None
+    try:
+        root = ET.fromstring(svg)
+        declarations = extract_native_declarations(root)
+        from services.generation_core.drivers.svg.embed_assets import replace_vector_icon_images
+        used = replace_vector_icon_images(root, vectors) if vectors else set()
+        if sorted(used) != sorted(receipt.get("vector_icons_used") or []):
+            reject(code)
+        if declaration_receipt(declarations).get("native_declarations") != receipt.get("native_declarations"):
+            reject(code)
+        for node in root.iter():
+            if node.tag == "{http://www.w3.org/2000/svg}image":
+                if node.get("href") not in slots:
+                    reject(code)
+                used.add(node.get("href"))
+        if any((slot.policy.required or not slot.policy.allow_omit) and key not in used for key, slot in slots.items()):
+            reject(code)
+        svg = ET.tostring(root, encoding="unicode")
+        if (str(receipt.get("source_digest", "")).removeprefix("sha256:") != sha256_hex(svg.encode())
+                or payload.get("svg_content") not in (None, svg)):
+            reject(code)
+        canvas = request_canvas_contract(request)
+        floor = source_restyle_font_floor(request.instructions, getattr(request, "_document_canvas", None))
+        if job.svg_style_snapshot.get("readability_policy") is not None:
+            floor = max(floor, svg_quality_font_floor(job.svg_style_snapshot["readability_policy"]))
+        bound_svg, preservation = bind_whole_page_source_svg(svg, source, row.slide_index,
+            facts=_whole_page_facts(pages[row.slide_index], image_slots), width=canvas.width_px,
+            height=canvas.height_px, style_snapshot=job.svg_style_snapshot, minimum_font_px=floor,
+            _validated_pages=pages, native_declarations=declarations)
+    except PartialRecoveryRejected:
+        raise
+    except (ValueError, TypeError, KeyError, ET.ParseError) as failure:
+        if str(failure) != error:
+            raise PartialRecoveryRejected(code) from failure
+    else:
+        if error == "svg_source_native_table_grid_mismatch":
+            historical_grid = _historical_uniform_grid_rejection(bound_svg, preservation,
+                pages[row.slide_index], operation=operation, job=job)
+        if historical_grid is None:
+            reject(code)
+    return {"reason": "completed_source_invalid", "validation_error": error,
+        "completed_receipt_digest": completed["receipt_digest"], "output_digest": completed["output_digest"],
+        "author_receipt_digest": author_witness(payload), "input_digest": expected,
+        "source_asset_binding": current_binding,
+        **({"historical_uniform_grid_rejection": historical_grid} if historical_grid is not None else {})}
+
+
+def _completed_failed_source_quality(payload, row, *, completed, job, operation,
+        request, source, seed, asset, episode_calls, usage, owner, tenant, header_producer=None, _source_validation=None):
+    """Seal a measured overlap failure for a separately approved fresh author."""
+    quality = payload.get("quality") or {}
+    failures = quality.get("failures")
+    if (request.source_mode != "source_content_restyle" or quality.get("passed") is not False
+            or not isinstance(failures, list) or not failures
+            or any(not isinstance(item, dict) or item.get("kind") != "text_overlap" for item in failures)):
+        return None
+    code = "svg_partial_recovery_failed_source_quality_unproven"
+    attempts = payload.get("attempts") or []
+    attempt = attempts[-1] if attempts and isinstance(attempts[-1], dict) else {}
+    receipt = attempt.get("receipt") or {}
+    svg = payload.get("svg_content")
+    if (source is None or completed is None or operation.owner_id != owner
+            or operation.error_code != "svg_source_quality_failed"
+            or job.workspace_operation_id != operation.id
+            or row.author_status != "completed" or row.render_status != "failed"
+            or row.persist_status != "pending" or payload.get("inflight") is not None
+            or _unknown_provider(payload) or attempt.get("kind") != "provider"
+            or receipt.get("validation_error") is not None
+            or not _author_style_matches(payload, receipt, job, row.slide_index, header_producer=header_producer)
+            or receipt.get("authoring_profile") != job.svg_style_snapshot.get("authoring_profile")
+            or receipt.get("source_authoring_contract") != {"version": "svg-source-whole-page/v1"}
+            or job.svg_style_snapshot.get("source_authoring_contract") != receipt.get("source_authoring_contract")
+            or completed != _completed_response(payload, job, operation, owner, tenant)
+            or attempt.get("raw_response") != completed["raw_response"]
+            or not completed["raw_response"].strip()
+            or receipt.get("attempt_ordinal") != completed.get("ordinal")
+            or str(receipt.get("raw_digest", "")).removeprefix("sha256:") != completed["output_digest"]
+            or not isinstance(svg, str) or not svg.strip()
+            or quality.get("measurement_complete") is not True
+            or quality.get("geometry_passed") is not False
+            or (quality.get("physical_readability") or {}).get("passed") is not True
+            or quality.get("contract_version") not in {"svg-static/v1", "svg-static/v2"}
+            or quality.get("renderer_version") != "svg-chromium/v1"):
+        reject(code)
+    _require_known_source_page_accounting(episode_calls=episode_calls, usage=usage, job=job,
+        index=row.slide_index, receipt=receipt, code=code)
+    from services.svg_source_layout import source_pages, verify_source_receipt
+    from utils.svg_template_fonts import source_font_profile
+    pages = _recovery_source_pages(source, job, _source_validation)
+    offered = next((page.slot_ids for page in asset.offered_pages if page.page_index == row.slide_index), ())
+    page_assets = {slot.slot_id: slot.model_dump(mode="json", by_alias=True)
+        for slot in asset.slots if slot.slot_id in offered}
+    profile = source_font_profile(job.svg_style_snapshot)
+    expected = digest({"page": _expected_page_input_digest(request, job, row.slide_index, page_assets),
+        "source_manifest": source.manifest_digest, "font_profile": profile,
+        "source_page": pages[row.slide_index].model_dump(mode="json"), "source_layout_version": "svg-source-layout/v2"})
+    source_digest = sha256_hex(svg.encode())
+    if (seed.get("source_font_profile") != profile or payload.get("input_digest") != expected
+            or payload.get("source_manifest_digest") != asset.digest
+            or str(payload.get("source_digest", "")).removeprefix("sha256:") != source_digest
+            or str(quality.get("source_digest", "")).removeprefix("sha256:") != source_digest):
+        reject(code)
+    try:
+        verify_source_receipt(svg, payload.get("source_preservation"), source, row.slide_index,
+            _validated_pages=pages)
+    except (ValueError, TypeError, KeyError) as error:
+        raise PartialRecoveryRejected(code) from error
+    images = quality.get("sourceImages") or {}
+    if (images.get("omitted") != [] or set(images.get("offered") or []) != set(offered)
+            or set(images.get("used") or []) != set(offered)):
+        reject(code)
+    import json
+    metrics = quality.get("browser_metrics")
+    if (not isinstance(metrics, dict) or metrics.get("probe_error") or not metrics.get("fonts_ready")
+            or not _sha256_hex_valid(str(quality.get("wrapper_digest", "")).removeprefix("sha256:"))):
+        reject(code)
+    metrics_digest = sha256_hex(json.dumps(metrics, sort_keys=True, separators=(",", ":"),
+        ensure_ascii=False, default=str).encode())
+    recorded = str(quality.get("metrics_digest", "")).removeprefix("sha256:")
+    if metrics_digest != recorded:
+        recovered = json.loads(json.dumps(metrics).replace("\\u241f", "\\u0000"))
+        if (sha256_hex(json.dumps(recovered, sort_keys=True, separators=(",", ":"),
+                ensure_ascii=False, default=str).encode()) != recorded
+                or json.loads(json.dumps(recovered).replace("\\u0000", "\\u241f")) != metrics):
+            reject(code)
+    from services.svg_text_overlap import text_overlaps
+    pairs, basis = text_overlaps([item for item in metrics.get("elements", []) if item.get("has_owned_text")])
+    if not pairs or failures != [{"kind": "text_overlap", "pairs": pairs}] or quality.get("overlap_basis") != basis:
+        reject(code)
+    from services.svg_presentation_checkpoint import _read_png
+    png = _read_png(payload)
+    png_digest = payload.get("png_sha256")
+    if (png is None or sha256_hex(png) != png_digest
+            or str(quality.get("png_digest", "")).removeprefix("sha256:") != png_digest):
+        reject(code)
+    from services.generation_core.drivers.svg.render import native_table_line_pitch_hint
+    table_pitch = native_table_line_pitch_hint(quality, svg, payload.get("source_preservation"))
+    diagnostic_hint = None
+    if table_pitch is not None:
+        diagnostic_hint = json.dumps({"kind": "svg_readability_repair", "native_table_line_pitch": table_pitch},
+            ensure_ascii=False, separators=(",", ":"))
+        if len(diagnostic_hint) > 3000:
+            diagnostic_hint = None
+    return {"reason": "completed_source_quality_failed", "failure_kind": "text_overlap",
+        **({"diagnostic_hint": diagnostic_hint} if diagnostic_hint else {}),
+        "completed_receipt_digest": completed["receipt_digest"], "output_digest": completed["output_digest"],
+        "author_receipt_digest": author_witness(payload), "input_digest": expected,
+        "source_svg_sha256": source_digest, "png_sha256": png_digest,
+        "metrics_digest": recorded, "quality_digest": digest(quality)}
+
+
+class _SourceBundleRequestReuse:
+    """One build call/transaction only; never stores authority across requests."""
+    def __init__(self, session, service, *, owner, tenant, context):
+        self.session, self.service = session, service
+        self.owner, self.tenant, self.context = owner, tenant, context
+        self.transaction = session.sync_session.get_transaction()
+        self.entries, self.closed = {}, False
+        self._guard(session, owner, tenant, context)
+
+    def _guard(self, session, owner, tenant, context):
+        from utils.owner_context import get_current_owner_id, get_current_tenant_id
+        if (self.closed or self.transaction is None or session is not self.session
+                or session.sync_session.get_transaction() is not self.transaction
+                or (owner, tenant, context) != (self.owner, self.tenant, self.context)
+                or (get_current_owner_id(), get_current_tenant_id()) != (owner, tenant)):
+            reject('svg_partial_recovery_request_snapshot_changed')
+
+    async def load(self, session, *, pointer, reference, owner, tenant, context):
+        from services.svg_asset_manifest import ArtifactPointer
+        from services.svg_asset_persistence import load_source_manifest_pointer
+        self._guard(session, owner, tenant, context)
+        pointer = ArtifactPointer.model_validate(pointer)
+        key = (owner, tenant, context, digest(pointer.model_dump(mode='json', by_alias=True)))
+        if reference.kind != 'source-manifest' or reference.media_type != 'application/json':
+            reject('svg_partial_recovery_asset_binding_changed')
+        entry = self.entries.get(key)
+        if entry is not None:
+            if reference != entry['reference']:
+                reject('svg_partial_recovery_asset_binding_changed')
+            return entry['asset']
+        asset = await load_source_manifest_pointer(session, self.service, pointer=pointer,
+            owner_id=owner, tenant_id=tenant)
+        self._guard(session, owner, tenant, context)
+        self.entries[key] = dict(pointer=pointer, reference=reference, asset=asset, seal=digest(_dump(asset)))
+        return asset
+
+    async def finish(self):
+        from services.svg_asset_persistence import load_source_manifest_pointer
+        from models.sql.public_artifact import PublicArtifact
+        self._guard(self.session, self.owner, self.tenant, self.context)
+        for entry in self.entries.values():
+            pointer = entry['pointer']
+            # Refresh the same scoped row before the official resolver; an
+            # ORM identity-map hit is not a final metadata readback.
+            refreshed = await self.session.scalar(select(PublicArtifact).where(
+                PublicArtifact.id == pointer.ref, PublicArtifact.owner_id == self.owner,
+                PublicArtifact.tenant_id == self.tenant, PublicArtifact.sha256 == pointer.sha256,
+                PublicArtifact.lifecycle_state == 'committed').execution_options(populate_existing=True))
+            if refreshed is None:
+                reject('svg_partial_recovery_asset_binding_changed')
+            reference = await self.service.resolve_ref(self.session, artifact_id=pointer.ref,
+                owner_id=self.owner, tenant_id=self.tenant, expected_digest=pointer.sha256)
+            fresh = await load_source_manifest_pointer(self.session, self.service, pointer=pointer,
+                owner_id=self.owner, tenant_id=self.tenant)
+            self._guard(self.session, self.owner, self.tenant, self.context)
+            if (reference != entry['reference'] or digest(_dump(entry['asset'])) != entry['seal']
+                    or digest(_dump(fresh)) != entry['seal']):
+                reject('svg_partial_recovery_asset_binding_changed')
+        self.closed = True
+        self.entries.clear()
 
 
 async def build_manifest(session, operation, *, presentation_revision):
@@ -1784,7 +3204,7 @@ async def build_manifest(session, operation, *, presentation_revision):
     now = get_current_utc_datetime()
     if (owner is None or operation.owner_id != owner or not tenant
             or operation.kind != "presentation.generate"
-            or operation.state not in {"failed", "cancelled", "dead_letter"}
+            or operation.state not in {"failed", "cancelled", "dead_letter", "deadline_exceeded"}
             or operation.result_revision is not None or _live(operation.lease_expires_at, now)):
         reject()
     presentation = await session.scalar(select(PresentationModel).where(
@@ -1823,6 +3243,7 @@ async def build_manifest(session, operation, *, presentation_revision):
             or request.web_search or request.n_slides != job.total_slides):
         reject("svg_partial_recovery_source_plan_invalid")
     record = source = None
+    source_validation = None
     if pin is not None:
         record = await session.scalar(select(SourceContentManifestRecord).where(
             SourceContentManifestRecord.manifest_id == pin.manifest_id,
@@ -1833,6 +3254,12 @@ async def build_manifest(session, operation, *, presentation_revision):
             manifest_id=pin.manifest_id, digest=pin.digest)
         if len(source.units) != job.total_slides:
             reject("svg_partial_recovery_source_count_changed")
+    if source is not None:
+        from services.source_content.contracts import SourceContentManifest
+        if isinstance(source, SourceContentManifest):
+            from services.svg_source_layout import source_pages
+            chart = deepcopy(job.svg_style_snapshot.get("source_chart_contract"))
+            source_validation = (source, chart, source_pages(source, chart_contract=chart))
     rows = list(await session.scalars(select(AuthoredSlideCheckpoint).where(
         AuthoredSlideCheckpoint.job_id == job.id).order_by(
         AuthoredSlideCheckpoint.slide_index).with_for_update()))
@@ -1852,7 +3279,7 @@ async def build_manifest(session, operation, *, presentation_revision):
         if (current.id in seen or current.owner_id != owner
                 or current.owner_scope != operation.owner_scope
                 or current.kind != "presentation.generate"
-                or current.state not in {"failed", "cancelled", "dead_letter"}
+                or current.state not in {"failed", "cancelled", "dead_letter", "deadline_exceeded"}
                 or _live(current.lease_expires_at, now)):
             reject("svg_partial_recovery_lineage_conflict")
         if previous is not None and (current.presentation_id, current.conversation_id) != (
@@ -1867,9 +3294,12 @@ async def build_manifest(session, operation, *, presentation_revision):
                 or admission.terminal_at is None):
             reject("svg_partial_recovery_admission_unresolved")
         admissions.append(admission)
-        calls.extend(await session.scalars(select(PublicProviderLogicalCall).where(
+        admission_calls = list(await session.scalars(select(PublicProviderLogicalCall).where(
             PublicProviderLogicalCall.admission_id == admission.id).order_by(
             PublicProviderLogicalCall.id).with_for_update()))
+        if any(call.admission_id != admission.id for call in admission_calls):
+            reject("svg_partial_recovery_invalid_source_unproven")
+        calls.extend(admission_calls)
         leases.extend(await session.scalars(select(PublicResourceLease).where(
             PublicResourceLease.admission_id == admission.id).order_by(
             PublicResourceLease.id).with_for_update()))
@@ -1890,6 +3320,13 @@ async def build_manifest(session, operation, *, presentation_revision):
     if any(row.state == "reserved" for row in reservations):
         reject("svg_partial_recovery_active_reservation")
     pages, binding, baseline_payloads = [], None, {}
+    admission_ids = {item.id for item in admissions}
+    author_stages = {"author", "repair", "repair_remake", "repair_patch"}
+    if any(call.admission_id not in admission_ids or (call.stage in author_stages and (
+            type(call.slide_index) is not int or not 0 <= call.slide_index < job.total_slides
+            or not isinstance(call.provider_id, str) or not call.provider_id
+            or not isinstance(call.model_id, str) or not call.model_id)) for call in calls):
+        reject("svg_partial_recovery_invalid_source_unproven")
     episode_calls = [call for call in calls if call.admission_id == admissions[0].id]
     seed = rows[0].svg_checkpoint or {}
     header_producer = await verified_header_producer(session,operation,job, verification=verification)
@@ -1897,20 +3334,40 @@ async def build_manifest(session, operation, *, presentation_revision):
     initial_job_control = _operation_control(job)
     initial_presentation_control = _operation_control(presentation)
     initial_ledger = _recovery_ledger_snapshot(admissions, calls, leases, usage, budgets, reservations)
+    bundle_context = (str(operation.id), str(job.id), str(job.presentation_id), digest(job.svg_style_snapshot),
+        request.source_mode, str(pin.manifest_id) if pin is not None else None, str(pin.digest) if pin is not None else None)
+    bundle_service = configured_public_artifact_service()
+    source_bundle_reuse = _SourceBundleRequestReuse(session, bundle_service,
+        owner=owner, tenant=tenant, context=bundle_context)
     for row in rows:
         payload = row.svg_checkpoint or {}
         completed = _completed_response(payload, job, operation, owner, tenant)
+        prior_lineage = job.request_payload.get(LINEAGE_KEY) or {}
+        undispatched = _undispatched_episode_page(payload, job, operation, owner, tenant)
+        episode_admissions = ({admissions[0].id} if prior_lineage else admission_ids)
+        unknown_calls = [call for call in calls if call.slide_index == row.slide_index
+            and call.admission_id in episode_admissions and _unresolved_provider_call(call)]
+        is_unknown = not undispatched and (bool(unknown_calls) or completed is None and (
+            _unknown_provider(payload) or payload.get("inflight") is not None))
+        if is_unknown:
+            pages.append({"slide_index": row.slide_index, "category": "unknown",
+                "row_digest": digest(_dump(row))})
+            continue
         baseline = await _pre_dispatch_repair_baseline(payload, row, job=job, operation=operation, seed=seed, episode_calls=episode_calls) if completed is None else None
         if baseline is not None:
             payload, baseline_proof = baseline
             baseline_payloads[row.slide_index] = payload
         svg = payload.get("svg_content")
-        prior_lineage = job.request_payload.get(LINEAGE_KEY) or {}
-        undispatched = _undispatched_episode_page(payload, job, operation, owner, tenant)
         completed_output_failure = "completed_empty" if completed is not None and not completed["raw_response"].strip() else None
-        completed_projection = await _completed_repair_author_projection(payload, row, completed=completed, job=job, operation=operation, seed=seed, episode_calls=episode_calls)
-        if completed_projection is None:
-            completed_projection = await _terminal_repair_author_projection(payload, row, completed=completed, job=job, operation=operation, seed=seed, episode_calls=episode_calls, session=session, request=request, binding=binding, vectors=vector_maps[row.slide_index], vector_seed_witness=vector_seed_witness)
+        invalid_source = await _completed_invalid_source_output(payload, row, completed=completed,
+            job=job, operation=operation, request=request, source=source, seed=seed,
+            episode_calls=episode_calls, usage=usage, session=session, owner=owner, tenant=tenant,
+            binding=binding, vectors=vector_maps[row.slide_index], header_producer=header_producer, _source_validation=source_validation)
+        if invalid_source is not None:
+            completed_output_failure = invalid_source["reason"]
+        completed_projection = None if invalid_source else await _completed_repair_author_projection(payload, row, completed=completed, job=job, operation=operation, seed=seed, episode_calls=episode_calls)
+        if completed_projection is None and invalid_source is None:
+            completed_projection = await _terminal_repair_author_projection(payload, row, completed=completed, job=job, operation=operation, seed=seed, episode_calls=episode_calls, session=session, request=request, binding=binding, vectors=vector_maps[row.slide_index], vector_seed_witness=vector_seed_witness, source=source, _source_validation=source_validation)
         if completed_projection:
             payload, baseline_proof = completed_projection
             if completed is not None and baseline_proof.get("completed_receipt_digest") not in (None, completed["receipt_digest"]):
@@ -1924,21 +3381,13 @@ async def build_manifest(session, operation, *, presentation_revision):
             svg = payload.get("svg_content")
         if completed and completed_output_failure is None and not (isinstance(svg, str) and svg and payload.get("attempts")):
             reject("svg_partial_recovery_local_output_requires_repair")
-        episode_admissions = ({admissions[0].id} if prior_lineage else {item.id for item in admissions})
-        unknown_calls = [call for call in calls if call.slide_index == row.slide_index
-            and call.admission_id in episode_admissions
-            and (call.outcome == "unknown" or call.state in {"reserved", "uncertain"}
-                 or call.actual_cost_microunits is None and call.outcome != "succeeded")]
-        is_unknown = not undispatched and completed is None and (
-            _unknown_provider(payload) or payload.get("inflight") is not None or bool(unknown_calls))
         if completed_output_failure is not None:
             category = "known_failed_output"
-        elif is_unknown:
-            category = "unknown"
         elif (baseline is not None or row.author_status == "completed") and isinstance(svg, str) and svg:
             category = "known"
         elif undispatched or (not payload.get("attempts") and not svg and not payload.get("provider_terminal_responses")
-              and not any(call.slide_index == row.slide_index and call.stage == "author" for call in calls)
+              and not any(call.slide_index == row.slide_index and call.stage == "author"
+                          for call in (episode_calls if prior_lineage else calls))
               and row.render_status == "pending" and row.persist_status == "pending"):
             category = "unstarted"
         else:
@@ -1948,7 +3397,7 @@ async def build_manifest(session, operation, *, presentation_revision):
         witness = {"slide_index": row.slide_index, "category": category,
                    "row_digest": digest(_dump(row))}
         if completed_output_failure is not None:
-            witness["completed_output_failure"] = {"reason": completed_output_failure, "completed_receipt_digest": completed["receipt_digest"], "output_digest": completed["output_digest"]}
+            witness["completed_output_failure"] = invalid_source or {"reason": completed_output_failure, "completed_receipt_digest": completed["receipt_digest"], "output_digest": completed["output_digest"]}
         if baseline is not None:
             witness["repair_baseline_projection"] = baseline_proof
         if category == 'known':
@@ -1971,12 +3420,12 @@ async def build_manifest(session, operation, *, presentation_revision):
             if good_calls and not any(call.provider_id == receipt["provider"]
                     and call.model_id == receipt["requested_model"] for call in good_calls):
                 reject("svg_partial_recovery_author_model_unbound")
-            service = configured_public_artifact_service()
+            service = bundle_service
             pointer = ArtifactPointer.model_validate(payload.get("source_manifest_ref"))
             reference = await service.resolve_ref(session, artifact_id=pointer.ref,
                 owner_id=owner, tenant_id=tenant, expected_digest=pointer.sha256)
-            asset = await load_source_manifest_pointer(session, service,
-                pointer=payload.get("source_manifest_ref"), owner_id=owner, tenant_id=tenant)
+            asset = await source_bundle_reuse.load(session, pointer=pointer, reference=reference,
+                owner=owner, tenant=tenant, context=bundle_context)
             current_binding = {"pointer": deepcopy(payload.get("source_manifest_ref")),
                 "digest": asset.digest, "presentation_id": str(asset.presentation_id),
                 "source_revision": asset.source_revision,
@@ -1985,13 +3434,18 @@ async def build_manifest(session, operation, *, presentation_revision):
                 reject("svg_partial_recovery_asset_binding_changed")
             binding = current_binding
             try:
-                transform_witness = _author_render_chain(payload, raw, receipt, request=request, job=job, asset=asset, index=row.slide_index, row=__import__('types').SimpleNamespace(author_status='completed', render_status='pending', persist_status='pending', render_path=None, render_sha256=None) if completed_projection else row, completed=(None if retained_source is not None else completed), vectors=vector_maps[row.slide_index], vector_seed_witness=vector_seed_witness)
+                transform_witness = _author_render_chain(payload, raw, receipt, request=request, job=job, asset=asset, index=row.slide_index, row=__import__('types').SimpleNamespace(author_status='completed', render_status='pending', persist_status='pending', render_path=None, render_sha256=None) if completed_projection else row, completed=(None if retained_source is not None else completed), vectors=vector_maps[row.slide_index], vector_seed_witness=vector_seed_witness, source=source, _source_validation=source_validation)
             except PartialRecoveryRejected:
                 raise
             except (ValueError, TypeError, KeyError) as error:
                 raise PartialRecoveryRejected("svg_partial_recovery_render_transform_unproven") from error
             if source is not None:
-                verify_source_receipt(svg, payload.get("source_preservation"), source, row.slide_index)
+                preservation = payload.get("source_preservation") or {}
+                validated_pages = (_recovery_source_pages(source, job, source_validation)
+                    if source_validation is not None and preservation.get("source_chart_contract") == source_validation[1]
+                    else None)
+                verify_source_receipt(svg, preservation, source, row.slide_index,
+                    _validated_pages=validated_pages)
             witness.update(svg_sha256=transform_witness["render_svg_sha256"],
                 source_svg_sha256=sha256_hex(svg.encode()),
                 final_render_svg_sha256=transform_witness["render_svg_sha256"],
@@ -2001,6 +3455,15 @@ async def build_manifest(session, operation, *, presentation_revision):
                 author_render_chain=transform_witness,
                 input_digest=payload["input_digest"], author_receipt_digest=author_witness(payload),
                 source_font_digest=digest((payload.get("source_preservation") or {}).get("font_profile")))
+            failed_quality = _completed_failed_source_quality(payload, row, completed=completed,
+                job=job, operation=operation, request=request, source=source, seed=seed, asset=asset,
+                episode_calls=episode_calls, usage=usage, owner=owner, tenant=tenant, header_producer=header_producer, _source_validation=source_validation)
+            if failed_quality is not None:
+                witness.update(category="known_failed_output", completed_output_failure=failed_quality)
+            elif witness.get("phase") != "author-only":
+                local_render = _verified_page_render_evidence(payload)
+                if local_render is not None:
+                    witness["page_render_evidence_digest"] = digest(local_render[0])
         pages.append(witness)
     if binding is None:
         reject("svg_partial_recovery_known_source_required")
@@ -2021,6 +3484,25 @@ async def build_manifest(session, operation, *, presentation_revision):
     quality_plan = read_quality_recovery_plan(job.svg_style_snapshot)
     repair_calls = (job.total_slides if quality_plan and quality_plan["review_round_limit"] == 2
                     else author_calls)
+    # Resolve inherited leaf rows before the existing final freshness fence.
+    # This is the same single job dump used by the immutable archive below.
+    source_job_snapshot = _dump(job)
+    # A recovery source job that never reached review has no own review trace, so
+    # the inherited parent source-local proof has nothing to continue from; drop it.
+    no_own_review_trace = ('quality_recovery_execution' not in seed and not any(
+        'quality_recovery' in (row.svg_checkpoint or {}) or 'quality_recovery_execution' in (row.svg_checkpoint or {})
+        for row in rows))
+    from services.svg_source_local_review_continuation import prepare_source_local_leaf, FinalSelectedEvidenceError
+    source_local_leaf = None
+    try:
+        if not no_own_review_trace:
+            source_local_leaf = await prepare_source_local_leaf(session, source_operation=operation,
+                verification=verification, source_job=source_job_snapshot,
+                execution=seed.get("quality_recovery_execution", {}), owner_id=str(owner), tenant_id=tenant,
+                operation_id=str(operation.id), parent_manifest_hash=(operation.request_payload or {}).get("svg_partial_recovery_manifest_hash", ""))
+    except FinalSelectedEvidenceError as error:
+        raise PartialRecoveryRejected(error.code) from error
+    await source_bundle_reuse.finish()
     await verification.finish()
     storage_seals = await _payload_storage_seals(session, [row.id for row in ancestors])
     if any(storage_seals.get(key) != value for key, value in seal_memo["seals"].items()):
@@ -2039,9 +3521,10 @@ async def build_manifest(session, operation, *, presentation_revision):
             or len(fresh_presentations) != 1 or _operation_control(fresh_presentations[0]) != initial_presentation_control
             or await _fresh_recovery_ledger_snapshot(session, [item.id for item in ancestors], job.id) != initial_ledger):
         reject("svg_partial_recovery_request_snapshot_changed")
-    archive = {"schema": ARCHIVE_V2, "operation_refs": [
+    archive = {"schema": ARCHIVE_V3, "operation_refs": [
         _operation_reference(row, storage_seals.get(str(row.id)), tenant=tenant) for row in ancestors],
-        "job": _dump(job), "task": _dump(task), "checkpoints": [_dump(row) for row in rows],
+        "job": source_job_snapshot, "task": _dump(task), "checkpoint_refs": [
+            _checkpoint_reference(_dump(row), owner_id=str(owner), tenant_id=tenant) for row in rows],
         "admissions": [_dump(row) for row in admissions], "logical_calls": [_dump(row) for row in calls],
         "usage": [_dump(row) for row in usage], "resource_leases": [_dump(row) for row in leases],
         "runtime_budgets": [_dump(row) for row in budgets],
@@ -2069,7 +3552,7 @@ async def build_manifest(session, operation, *, presentation_revision):
         "presentation_id": str(operation.presentation_id), "presentation_revision": presentation_revision,
         "owner_id": str(owner), "tenant_id": tenant, "job_id": str(job.id),
         "expected_page_count": job.total_slides, "archive_digest": digest(archive),
-        "archive_schema": ARCHIVE_V2, "append_only_recovery": True,
+        "archive_schema": ARCHIVE_V3, "append_only_recovery": True,
         "source_request_routing": _source_request_routing(job.request_payload),
         "frozen_request_digest": digest(_frozen_payload(job.request_payload)),
         "frozen_style_digest": digest(job.svg_style_snapshot),
@@ -2095,6 +3578,37 @@ async def build_manifest(session, operation, *, presentation_revision):
         "prospective_retry_request_limit": repair_calls}
     if format_control is not None:
         manifest["global_format_retry_control"] = format_control
+    source_local_proof = None
+    inherited_local = (operation.request_payload.get("svg_partial_recovery_manifest") or {}).get("source_local_continuation")
+    if no_own_review_trace:
+        inherited_local = None
+    local_categories = {"known", "unknown", "unstarted", "known_failed_output"}
+    if inherited_local is not None and any(page.get("category") not in local_categories for page in pages):
+        reject("svg_final_selected_evidence_unproven")
+    if inherited_local is not None or len(manifest["known_indices"]) == len(pages):
+        from services.svg_source_local_review_continuation import build_source_local_proof, FinalSelectedEvidenceError
+        try:
+            source_local_proof = build_source_local_proof(flattened_leaf=source_local_leaf,
+                operation_id=str(operation.id), job_id=str(job.id), owner_id=str(owner), tenant_id=tenant,
+                archive_digest=manifest["archive_digest"],
+                parent_manifest_hash=(operation.request_payload or {}).get("svg_partial_recovery_manifest_hash", ""),
+                payloads=[baseline_payloads.get(row.slide_index, row.svg_checkpoint or {})
+                    if pages[row.slide_index]["category"] == "known" else row.svg_checkpoint or {} for row in rows],
+                raw_payloads=[row.svg_checkpoint or {} for row in rows],
+                fresh_page_witnesses={str(page["slide_index"]): dict(category=page["category"],
+                    row_digest=page["row_digest"], source_payload_digest=digest(rows[page["slide_index"]].svg_checkpoint or {}))
+                    for page in pages if page["category"] in {"unknown", "unstarted", "known_failed_output"}},
+                baseline_projections={str(index): {"witness": deepcopy(pages[index]["repair_baseline_projection"]),
+                    "projected_payload_digest": digest(payload)} for index, payload in baseline_payloads.items()
+                    if pages[index].get("category") == "known" and pages[index].get("repair_baseline_projection") is not None},
+                execution=seed.get("quality_recovery_execution", {}), source_job=archive["job"])
+        except FinalSelectedEvidenceError as error:
+            raise PartialRecoveryRejected(error.code) from error
+        if source_local_proof is not None:
+            manifest["source_local_continuation"] = source_local_proof
+            # Only the completed first-phase local calls are no longer purchased.
+            # The existing repair pool and later review phases stay admitted.
+            manifest["prospective_initial_request_limit"] -= len(source_local_proof["source_local_group_digests"])
     if final_control is not None:
         from services.svg_final_selected_continuation import build_selected_proof
         manifest["final_selected_review_control"] = final_control
@@ -2110,8 +3624,22 @@ async def build_manifest(session, operation, *, presentation_revision):
         if final_proof is not None:
             if len(manifest["known_indices"]) != len(pages):
                 reject("svg_final_selected_evidence_unproven")
+            # The external final-selected consumer hashes the raw archive and
+            # reads inline checkpoints. Preserve its v2 contract unchanged.
+            archive = {key: value for key, value in archive.items() if key != "checkpoint_refs"}
+            archive.update(schema=ARCHIVE_V2, checkpoints=[_dump(row) for row in rows])
+            manifest.update(archive_schema=ARCHIVE_V2, archive_digest=digest(archive))
+            final_proof = build_selected_proof(
+                operation_id=str(operation.id), job_id=str(job.id), owner_id=str(owner),
+                tenant_id=tenant, archive_digest=manifest["archive_digest"],
+                parent_manifest_hash=(operation.request_payload or {}).get("svg_partial_recovery_manifest_hash", ""),
+                payloads=[r.svg_checkpoint or {} for r in rows],
+                execution=seed.get("quality_recovery_execution", {}), source_snapshot=job.svg_style_snapshot)
+            if final_proof is None:
+                reject("svg_final_selected_evidence_unproven")
             manifest["final_selected_continuation"] = final_proof
-    return PartialRecovery(manifest, archive, rows, digest(manifest), baseline_payloads=baseline_payloads)
+    return PartialRecovery(manifest, archive, rows, digest(manifest),
+        baseline_payloads=baseline_payloads, verification=verification)
 
 
 async def verify_action(session, operation, request, *, presentation_revision):
@@ -2142,14 +3670,65 @@ async def verify_action(session, operation, request, *, presentation_revision):
     return recovery
 
 
+def _page_render_result_digest(payload):
+    quality = payload.get("quality") or {}
+    return digest({
+        "svg": sha256_hex(str(payload.get("svg_content", "")).encode()),
+        "author": author_witness(payload),
+        "quality": {key: value for key, value in quality.items()
+                    if key not in {"classification", "verified", "compositionObservation"}},
+        "page": {key: payload.get(key) for key in (
+            "input_digest", "source_digest", "png_sha256", "png_path", "source_manifest_ref",
+            "source_manifest_digest", "source_preservation", "svgAssetManifest",
+            "nativeDeclarations", "readability_policy", "source_font_profile",
+            "system_furniture", "raster_approval_digest", "visual_intent",
+            "source_format", "schema_version", "terminal", "flag")},
+    })
+
+
+def _verified_page_render_evidence(payload):
+    """Read a measured page; consumer/producer ownership stays in the manifest."""
+    from services.svg_presentation_checkpoint import _read_png
+
+    evidence = payload.get("page_render_evidence")
+    quality = payload.get("quality") or {}
+    if (not isinstance(evidence, dict) or set(evidence) != {"environment", "result_digest"}
+            or not isinstance(evidence["environment"], dict)
+            or evidence["result_digest"] != _page_render_result_digest(payload)
+            or payload.get("inflight") is not None or _unknown_provider(payload)
+            or payload.get("terminal") or payload.get("flag")
+            or any(quality.get(key) is not True
+                   for key in ("passed", "geometry_passed", "measurement_complete"))):
+        return None
+    svg_digest = sha256_hex(str(payload.get("svg_content", "")).encode())
+    png = _read_png(payload)
+    if (png is None or sha256_hex(png) != payload.get("png_sha256")
+            or str(quality.get("png_digest", "")).removeprefix("sha256:") != payload["png_sha256"]
+            or str(quality.get("source_digest", "")).removeprefix("sha256:") != svg_digest
+            or str(payload.get("source_digest", "")).removeprefix("sha256:") != svg_digest):
+        return None
+    return evidence, png
+
 def cached_page_payload(row, recovery, operation_id):
     page = recovery.manifest["pages"][row.slide_index]
     marker = {"schema": "svg-partial-recovery-page/v1", "operation_id": str(operation_id),
         "manifest_hash": recovery.manifest_hash, "slide_index": row.slide_index,
         "source_row_digest": page["row_digest"], "category": page["category"]}
     if page["category"] != "known":
-        return {"partial_recovery": marker}
+        result = {"partial_recovery": marker}
+        failure = page.get("completed_output_failure") or {}
+        if (page["category"] == "known_failed_output"
+                and failure.get("reason") == "completed_source_quality_failed"
+                and isinstance(failure.get("diagnostic_hint"), str)):
+            result["repair_hint"] = failure["diagnostic_hint"]
+        return result
     payload = deepcopy(getattr(recovery, "baseline_payloads", {}).get(row.slide_index, row.svg_checkpoint))
+    local_render = (_verified_page_render_evidence(payload)
+                    if page.get("page_render_evidence_digest") else None)
+    render_copy = ({key: deepcopy(payload.get(key)) for key in (
+        "quality", "png_path", "png_sha256", "source_digest", "source_preservation", "page_render_evidence")}
+        if local_render is not None
+        and digest(local_render[0]) == page["page_render_evidence_digest"] else None)
     for key in ("quality", "initial_quality", "browser_metrics", "png_sha256", "png_path",
                 "terminal", "quality_recovery_local_evidence", "quality_receipt", "qualityReceipt",
                 "cache_only_remeasurement", "append_only_cache", "cached_author_render",
@@ -2157,7 +3736,7 @@ def cached_page_payload(row, recovery, operation_id):
                 "last_valid_svg", "quality_recovery", "quality_recovery_fallback",
                 "quality_recovery_execution",
                 "local_readability_repair", "repair_hint", "repair_input_page_evidence",
-                "provider_terminal_responses", "provider_dispatch_stopped"):
+                "provider_terminal_responses", "provider_dispatch_stopped", "page_render_evidence"):
         payload.pop(key, None)
     payload["inflight"] = None
     if isinstance(payload.get("source_preservation"), dict):
@@ -2167,6 +3746,8 @@ def cached_page_payload(row, recovery, operation_id):
         source_svg_sha256=page.get("source_svg_sha256", page["svg_sha256"]),
         final_render_svg_sha256=page.get("final_render_svg_sha256", page["svg_sha256"]))
     payload["partial_recovery"] = marker
+    if render_copy is not None:
+        payload.update(render_copy)
     proof = recovery.manifest.get("final_selected_continuation")
     if not proof and payload.get("final_selected_render_evidence"):
         from services.svg_authoring_profile import read_quality_recovery_policy
@@ -2192,8 +3773,8 @@ async def rebind_episode(session, source, child, recovery, *, key_hash):
     from models.sql.async_presentation_generation_status import AsyncPresentationGenerationTaskModel
     from services.presentation_generation_job_service import request_sha256
     if (digest(recovery.archive) != recovery.manifest["archive_digest"]
-            or recovery.archive.get("schema") != ARCHIVE_V2
-            or recovery.manifest.get("archive_schema") != ARCHIVE_V2
+            or recovery.archive.get("schema") not in {ARCHIVE_V2, ARCHIVE_V3}
+            or recovery.manifest.get("archive_schema") != recovery.archive.get("schema")
             or recovery.manifest.get("append_only_recovery") is not True
             or child.presentation_id == source.presentation_id
             or str(source.presentation_id) != recovery.manifest.get("presentation_id")
@@ -2209,7 +3790,8 @@ async def rebind_episode(session, source, child, recovery, *, key_hash):
     parent = await session.get(PresentationGenerationJob, uuid.UUID(recovery.manifest["job_id"]), with_for_update=True)
     if parent is None or digest(_dump(parent)) != digest(recovery.archive["job"]):
         reject("svg_partial_recovery_episode_conflict")
-    await _verify_producer_rows(session, recovery.manifest, recovery.archive)
+    await _verify_producer_rows(session, recovery.manifest, recovery.archive,
+        verification=recovery.verification)
     task = AsyncPresentationGenerationTaskModel(status="pending", owner_id=source.owner_id)
     session.add(task)
     await session.flush()
@@ -2228,13 +3810,15 @@ async def rebind_episode(session, source, child, recovery, *, key_hash):
         "action_operation_id": str(source.id), "job_id": str(job.id),
         "source_job_id": str(parent.id), "source_presentation_id": str(parent.presentation_id),
         "presentation_id": str(child.presentation_id), "manifest_hash": recovery.manifest_hash,
-        "archive_schema": ARCHIVE_V2,
+        "archive_schema": recovery.archive["schema"],
         **{key: recovery.manifest[key] for key in ("archive_digest", "known_indices", "new_indices",
             "unknown_indices", "frozen_request_digest", "frozen_style_digest")}}
     if recovery.manifest.get("final_selected_review_control") is not None:
         lineage["final_selected_review_control"] = deepcopy(recovery.manifest["final_selected_review_control"])
     if recovery.manifest.get("final_selected_continuation") is not None:
         lineage["final_selected_continuation_digest"] = recovery.manifest["final_selected_continuation"]["digest"]
+    if recovery.manifest.get("source_local_continuation") is not None:
+        lineage["source_local_continuation_digest"] = recovery.manifest["source_local_continuation"]["digest"]
     job.request_payload = {**payload, LINEAGE_KEY: lineage}
     job.request_sha256 = request_sha256(job.request_payload)
     session.add(job)
@@ -2252,16 +3836,258 @@ async def rebind_episode(session, source, child, recovery, *, key_hash):
     return job
 
 
+def _checkpoint_reference(snapshot, *, owner_id, tenant_id):
+    return {"schema": CHECKPOINT_REFERENCE, "id": snapshot["id"], "job_id": snapshot["job_id"],
+        "slide_index": snapshot["slide_index"], "owner_id": owner_id, "tenant_id": tenant_id,
+        "row_digest": digest(snapshot)}
+
+
+async def _hydrate_checkpoint_archive(session, manifest, archive, *, verification=None, _fresh_producer_proof=None):
+    """Resolve v3 into a separate working view; raw archive/storage hashes stay raw."""
+    if archive.get("schema") != ARCHIVE_V3:
+        return archive
+    from models.sql.workspace import get_workspace_owner_scope
+    from utils.owner_context import get_current_owner_id, get_current_tenant_id
+
+    if verification is not None:
+        verification.check(session)
+    owner, tenant = get_current_owner_id(), get_current_tenant_id()
+    refs = archive.get("checkpoint_refs")
+    job_snapshot = archive.get("job")
+    count = manifest.get("expected_page_count")
+    if (manifest.get("archive_schema") != ARCHIVE_V3 or digest(archive) != manifest.get("archive_digest")
+            or "checkpoints" in archive or not isinstance(refs, list) or not isinstance(job_snapshot, dict)
+            or owner is None or manifest.get("owner_id") != str(owner) or not tenant
+            or manifest.get("tenant_id") != tenant or type(count) is not int or count < 1 or len(refs) != count
+            or any(type(manifest.get(key)) is not str for key in ("operation_id", "job_id", "presentation_id"))
+            or job_snapshot.get("id") != manifest.get("job_id")
+            or job_snapshot.get("workspace_operation_id") != manifest.get("operation_id")
+            or job_snapshot.get("presentation_id") != manifest.get("presentation_id")
+            or job_snapshot.get("total_slides") != count):
+        reject("svg_partial_recovery_checkpoint_reference_unbound")
+    expected_keys = {"schema", "id", "job_id", "slide_index", "owner_id", "tenant_id", "row_digest"}
+    ids, pages = set(), set()
+    for ref in refs:
+        if (not isinstance(ref, dict) or set(ref) != expected_keys
+                or ref.get("schema") != CHECKPOINT_REFERENCE or type(ref.get("id")) is not str
+                or ref.get("job_id") != manifest["job_id"] or ref.get("owner_id") != str(owner)
+                or ref.get("tenant_id") != tenant or type(ref.get("slide_index")) is not int
+                or not 0 <= ref["slide_index"] < count or ref["id"] in ids or ref["slide_index"] in pages
+                or not _sha256_hex_valid(ref.get("row_digest"))):
+            reject("svg_partial_recovery_checkpoint_reference_unbound")
+        try:
+            if str(uuid.UUID(ref["id"])) != ref["id"]:
+                raise ValueError()
+        except (ValueError, TypeError, AttributeError):
+            reject("svg_partial_recovery_checkpoint_reference_unbound")
+        ids.add(ref["id"])
+        pages.add(ref["slide_index"])
+    try:
+        parent_id, job_id = uuid.UUID(manifest["operation_id"]), uuid.UUID(manifest["job_id"])
+    except (ValueError, TypeError, AttributeError, KeyError):
+        reject("svg_partial_recovery_checkpoint_reference_unbound")
+    parents = await _fresh_recovery_model_rows(session, WorkspaceOperation,
+        WorkspaceOperation.id == parent_id, skip_request_payload=True)
+    jobs = await _fresh_recovery_model_rows(session, PresentationGenerationJob, PresentationGenerationJob.id == job_id)
+    admissions = await _fresh_recovery_model_rows(session, PublicOperationAdmission,
+        PublicOperationAdmission.operation_id == parent_id)
+    if (len(parents) != 1 or len(jobs) != 1 or len(admissions) != 1
+            or parents[0].owner_id != owner or parents[0].owner_scope != get_workspace_owner_scope()
+            or parents[0].kind != "presentation.generate" or parents[0].state not in {"failed", "cancelled", "dead_letter", "deadline_exceeded"}
+            or str(parents[0].presentation_id) != manifest["presentation_id"]
+            or jobs[0].workspace_operation_id != parent_id or jobs[0].presentation_id != parents[0].presentation_id
+            or digest(_dump(jobs[0])) != digest(job_snapshot)
+            or admissions[0].owner_id != owner or admissions[0].tenant_id != tenant):
+        reject("svg_partial_recovery_checkpoint_reference_unbound")
+    cache_key = (str(parent_id), str(job_id), digest(manifest))
+    if verification is not None and verification.transaction is not None:
+        cached = verification.checkpoint_archives.get(cache_key)
+        if cached is not None:
+            if verification.controls.get(str(parent_id)) != _operation_control(parents[0]):
+                reject("svg_partial_recovery_request_snapshot_changed")
+            verification.expect(PresentationGenerationJob, job_snapshot)
+            encoded = _marshal_json_bytes(cached[0])
+            if encoded is None:
+                reject("svg_partial_recovery_request_snapshot_changed")
+            current_guard = hashlib.sha256(_CHECKPOINT_ARCHIVE_MEMO_GUARD_DOMAIN)
+            current_guard.update(encoded)
+            del encoded
+            if current_guard.digest() != cached[1]:
+                reject("svg_partial_recovery_request_snapshot_changed")
+            verification.check(session)
+            return cached[0]
+    rows, row_storage = await _fresh_checkpoint_rows_sealed(session, AuthoredSlideCheckpoint.job_id == job_id)
+    _count(verification, "rows_decoded_python", len(rows))
+    if (_fresh_producer_proof is not None and verification is not None
+            and verification.transaction is not None):
+        # This existing producer-only proof returns no working archive. Preserve
+        # JSON identity serialization, but digest the private fresh payload once.
+        projections = [row.model_dump(mode="json", include={"id", "job_id", "slide_index"}) for row in rows]
+        fingerprints = {projection["id"]: value
+            for projection, value in zip(projections, await _producer_digests_off_loop(rows), strict=True)}
+        if (len(rows) != count or len(fingerprints) != count or set(fingerprints) != ids
+                or sorted(row.slide_index for row in rows) != list(range(count))):
+            reject("svg_partial_recovery_checkpoint_reference_changed")
+        metadata = {projection["id"]: projection for projection in projections}
+        for ref in refs:
+            projection = metadata[ref["id"]]
+            if (projection.get("job_id") != ref["job_id"]
+                    or projection.get("slide_index") != ref["slide_index"]
+                    or fingerprints[ref["id"]] != ref["row_digest"]):
+                reject("svg_partial_recovery_checkpoint_reference_changed")
+        control = _operation_control(parents[0])
+        identity = str(parent_id)
+        if identity in verification.controls and verification.controls[identity] != control:
+            reject("svg_partial_recovery_request_snapshot_changed")
+        verification.controls[identity] = control
+        verification.expect(PresentationGenerationJob, job_snapshot)
+        verification.check(session)
+        for ref in refs:
+            key = (AuthoredSlideCheckpoint, "id", str(ref["id"]))
+            fingerprint = fingerprints[ref["id"]]
+            if key in verification.rows and verification.rows[key] != fingerprint:
+                reject("svg_partial_recovery_request_snapshot_changed")
+            verification.rows[key] = fingerprint
+        identity = str(job_id)
+        if identity in verification.producers and verification.producers[identity] != fingerprints:
+            reject("svg_partial_recovery_request_snapshot_changed")
+        verification.producers[identity] = fingerprints
+        if row_storage is not None:
+            # Same SELECT, same decoded rows, and the digest finish() itself computes.
+            verification.record_producer_storage(identity, {row_id: (sha, fingerprints.get(row_id))
+                for row_id, sha in row_storage.items()})
+        verification.check(session)
+        _fresh_producer_proof.append((verification, session, verification.transaction, jobs[0]))
+        return None
+    snapshots = {}
+    for row in rows:
+        snapshot = _dump(row)
+        snapshots[snapshot["id"]] = snapshot
+    if (len(rows) != count or len(snapshots) != count or set(snapshots) != ids
+            or sorted(row.slide_index for row in rows) != list(range(count))):
+        reject("svg_partial_recovery_checkpoint_reference_changed")
+    ordered = []
+    validated_fingerprints = {}
+    for ref in refs:
+        snapshot = snapshots[ref["id"]]
+        fingerprint = digest(snapshot)
+        if (snapshot.get("job_id") != ref["job_id"] or snapshot.get("slide_index") != ref["slide_index"]
+                or fingerprint != ref["row_digest"]):
+            reject("svg_partial_recovery_checkpoint_reference_changed")
+        validated_fingerprints[snapshot["id"]] = fingerprint
+        ordered.append(snapshot)
+    ordered.sort(key=lambda snapshot: snapshot["slide_index"])
+    if verification is not None:
+        control = _operation_control(parents[0])
+        identity = str(parent_id)
+        if identity in verification.controls and verification.controls[identity] != control:
+            reject("svg_partial_recovery_request_snapshot_changed")
+        verification.controls[identity] = control
+        verification.expect(PresentationGenerationJob, job_snapshot)
+        if _fresh_producer_proof is not None and verification.transaction is not None:
+            # These exact fresh rows already matched every bound ref digest. Final
+            # complete-producer reads check both row and set fingerprints directly.
+            verification.check(session)
+            for snapshot in ordered:
+                key = (AuthoredSlideCheckpoint, "id", str(snapshot["id"]))
+                fingerprint = validated_fingerprints[snapshot["id"]]
+                if key in verification.rows and verification.rows[key] != fingerprint:
+                    reject("svg_partial_recovery_request_snapshot_changed")
+                verification.rows[key] = fingerprint
+            expected = validated_fingerprints
+        else:
+            for snapshot in ordered:
+                verification.expect(AuthoredSlideCheckpoint, snapshot)
+            expected = {snapshot["id"]: digest(snapshot) for snapshot in ordered}
+        identity = str(job_id)
+        if identity in verification.producers and verification.producers[identity] != expected:
+            reject("svg_partial_recovery_request_snapshot_changed")
+        # No storage binding here: finish() decodes these rows (its digest differs in kind).
+        verification.producers[identity] = expected
+        verification.check(session)
+    if (_fresh_producer_proof is not None and verification is not None
+            and verification.transaction is not None):
+        # Only the immediate producer verifier consumes this validated fresh job;
+        # actual page/seed consumers still require the full working archive below.
+        verification.check(session)
+        _fresh_producer_proof.append((verification, session, verification.transaction, jobs[0]))
+        return None
+    working = deepcopy(archive)
+    working["checkpoints"] = ordered
+    if (verification is not None and verification.transaction is not None
+            and len(verification.checkpoint_archives) < _CHECKPOINT_ARCHIVE_MEMO_MAX_ENTRIES):
+        import math
+        import sys
+
+        remaining = _CHECKPOINT_ARCHIVE_MEMO_MAX_BYTES - verification.checkpoint_archive_bytes
+        # Include the dictionary slot, entry tuple, key and 32-byte guard.
+        # Count repeated scalar references again conservatively. Shared
+        # containers are safely left on the fresh path. Encoding stays temporary.
+        retained = (512 + sys.getsizeof(cache_key)
+            + sum(sys.getsizeof(value) for value in cache_key) + sys.getsizeof(bytes(32)))
+        pending = [iter((working,))]
+        seen = set()
+        eligible = retained <= remaining
+        while eligible and pending:
+            try:
+                value = next(pending[-1])
+            except StopIteration:
+                pending.pop()
+                continue
+            kind = type(value)
+            if kind not in {dict, list, str, int, float, bool, type(None)}:
+                eligible = False
+                break
+            retained += sys.getsizeof(value)
+            if retained > remaining:
+                eligible = False
+                break
+            if kind in {dict, list}:
+                if id(value) in seen:
+                    eligible = False
+                    break
+                seen.add(id(value))
+                if kind is dict:
+                    if any(type(key) is not str for key in value):
+                        eligible = False
+                        break
+                    pending.append(iter(part for pair in value.items() for part in pair))
+                else:
+                    pending.append(iter(value))
+            elif kind is float and not math.isfinite(value):
+                eligible = False
+        if eligible:
+            encoded = _marshal_json_bytes(working)
+            if encoded is not None:
+                current_guard = hashlib.sha256(_CHECKPOINT_ARCHIVE_MEMO_GUARD_DOMAIN)
+                current_guard.update(encoded)
+                del encoded
+                verification.checkpoint_archives[cache_key] = (working, current_guard.digest())
+                verification.checkpoint_archive_bytes += retained
+    return working
+
+
 async def _verify_producer_rows(session, manifest, archive, *, verification=None):
     """Check real immutable producer rows, not only their archived copies."""
+    fresh_producer_proof = []
+    archive = await _hydrate_checkpoint_archive(session, manifest, archive, verification=verification,
+        _fresh_producer_proof=fresh_producer_proof)
+    if fresh_producer_proof:
+        proof_verification, proof_session, proof_transaction, producer = fresh_producer_proof.pop()
+        if (proof_verification is not verification or proof_session is not session
+                or proof_transaction is not session.sync_session.get_transaction()):
+            reject("svg_partial_recovery_request_snapshot_changed")
+        verification.check(session)
+        return producer
     jobs = await _fresh_recovery_model_rows(session, PresentationGenerationJob,
         PresentationGenerationJob.id == uuid.UUID(manifest["job_id"]))
     if (len(jobs) != 1 or digest(_dump(jobs[0])) != digest(archive.get("job"))
             or str(jobs[0].presentation_id) != manifest["presentation_id"]
             or str(jobs[0].workspace_operation_id) != manifest["operation_id"]):
         reject("svg_partial_recovery_history_changed")
-    rows = await _fresh_recovery_model_rows(session, AuthoredSlideCheckpoint,
+    rows, row_storage = await _fresh_checkpoint_rows_sealed(session,
         AuthoredSlideCheckpoint.job_id == jobs[0].id)
+    _count(verification, "rows_decoded_python", len(rows))
     current = {str(row.id): _dump(row) for row in rows}
     archived = {row["id"]: row for row in archive.get("checkpoints", [])}
     if (len(rows) != manifest["expected_page_count"] or current != archived
@@ -2274,45 +4100,158 @@ async def _verify_producer_rows(session, manifest, archive, *, verification=None
         if job_id in verification.producers and verification.producers[job_id] != expected:
             reject("svg_partial_recovery_request_snapshot_changed")
         verification.producers[job_id] = expected
+        if row_storage is not None:
+            # Bind the digest finish() computes, from these same private rows; finish then
+            # compares it with ``expected`` exactly as a fresh decode would.
+            verification.record_producer_storage(job_id, {str(row.id): (row_storage.get(str(row.id)), value)
+                for row, value in zip(rows, await _producer_digests_off_loop(rows), strict=True)})
     return jobs[0]
 
 
 def _historical_episode(operation, job):
-    return (operation.state in {"failed", "cancelled", "dead_letter", "completed", "succeeded"}
+    return (operation.state in {"failed", "cancelled", "dead_letter", "deadline_exceeded", "completed", "succeeded"}
             and job.state in {"failed", "cancelled", "published", "completed", "succeeded"})
 
 
-async def verify_episode(session, operation, job, *, require_current_code=True, verification=None):
+async def verify_episode(session, operation, job, *, require_current_code=True, verification=None,
+                         _operation_read=None, finish_verification=False, _retained_proofs=None):
+    # A caller-owned holder ({operation id: proof}) may carry this owned,
+    # finished historical proof to a later recheck in the same transaction.
+    retained = (type(_retained_proofs) is dict and verification is None
+                and _operation_read is None and not finish_verification
+                and require_current_code is False)
+    if retained:
+        proof = _retained_proofs.pop(str(operation.id), None)
+        manifest = await _recheck_retained_episode(session, operation, job, proof)
+        if manifest is not None:
+            _retained_proofs[str(operation.id)] = proof
+            return manifest
     owns_verification = verification is None
     verification = verification or _EpisodeVerification(session)
+    if owns_verification:
+        verification.bind_live(operation, job)
     verification.check(session)
     identity = str(operation.id)
     if identity in verification.active:
         reject("svg_partial_recovery_lineage_conflict")
-    # A changed in-memory input cannot inherit an earlier successful proof.
-    key = (identity, digest([_operation_control(operation), operation.request_payload]),
-           digest(_dump(job)))
+    # A changed historical job is always re-fingerprinted, including nested payloads.
+    operation_digest, operation_key = verification.operation_fingerprint(operation,
+        _operation_read, require_current_code=require_current_code)
+    job_digest = verification.job_fingerprint(job)
+    key = (identity, operation_digest, job_digest)
+    _count(verification, "episode_visits")
+    visited = getattr(verification, "visited_episodes", None)
+    if type(visited) is set:
+        visited.add((identity, str(getattr(job, "id", None))))
     if require_current_code or key not in verification.episodes:
         verification.active.add(identity)
         try:
             manifest = await _verify_episode_once(session, operation, job,
-                require_current_code=require_current_code, verification=verification)
+                require_current_code=require_current_code, verification=verification,
+                operation_digest=operation_digest)
             verification.check(session)
-            verification.expect(WorkspaceOperation,
-                {**_operation_control(operation), "request_payload": operation.request_payload})
+            verification.expect(WorkspaceOperation, _operation_projection(operation))
             verification.expect(PresentationGenerationJob, _dump(job))
             if not require_current_code:
+                if operation_key is not None:
+                    fingerprint_key, snapshot = operation_key
+                    # snapshot is exact JSON by construction (round-trip proof or a
+                    # deepcopy of a walk-proven payload, no await between), so it may
+                    # supply the marshal hint; a mismatch still takes the exact walk.
+                    encoded = _marshal_json_bytes(snapshot)
+                    if _same_json_snapshot(snapshot, operation.request_payload, encoded) is not True:
+                        reject("svg_partial_recovery_request_snapshot_changed")
+                    # The initial exact-JSON copy stayed private in this
+                    # frame while verification awaited. The comparison above
+                    # proves it remains finite and exact; transfer ownership.
+                    verification.operation_fingerprints[fingerprint_key] = (
+                        snapshot, operation_digest, encoded)
                 verification.episodes[key] = manifest
         finally:
             verification.active.remove(identity)
     else:
+        _count(verification, "episode_memo_hits")
         manifest = verification.episodes[key]
-    if owns_verification:
+    if owns_verification or finish_verification:
+        # A supplied context still needs the fresh exit fence before admission
+        # writes this child's ledger. Historical memo never replaces this read.
         await verification.finish()
+        if require_current_code:
+            _remember_prepared_episode(operation, job)
+    if retained:
+        # Retain only a finished success. finish() never reads the payload
+        # memo copies, so they are released instead of held until recheck.
+        verification.operation_fingerprints.clear()
+        _retained_proofs[identity] = (verification, str(job.id))
     return manifest
 
 
-async def _verify_episode_once(session, operation, job, *, require_current_code, verification):
+async def verify_prepared_episode(session, operation, job):
+    """Reuse a completed preparation only for unchanged consumer authority."""
+    key = _runtime_episode_key(operation, job)
+    with _PREPARED_EPISODES_LOCK:
+        prepared = key in _PREPARED_EPISODES
+    if prepared and operation.state == "running":
+        _require_prepared_episode(operation, job)
+        return operation.request_payload["svg_partial_recovery_manifest"]
+    return await verify_episode(session, operation, job)
+
+
+def _retained_rows_pending(session, verification):
+    """Unflushed edits of any model a proof read force the full cold verification."""
+    tracked = {model for model, _, _ in verification.rows} | {
+        WorkspaceOperation, PresentationGenerationJob, AuthoredSlideCheckpoint,
+        PublicOperationAdmission, PublicProviderLogicalCall, PublicResourceLease,
+        ProviderUsageReceipt, ProviderRuntimeBudget, ProviderRuntimeReservation}
+    sync = session.sync_session
+    return any(type(row) in tracked for pending in (sync.new, sync.dirty, sync.deleted)
+               for row in pending)
+
+
+async def _recheck_retained_episode(session, operation, job, proof):
+    """Re-fence one finished owned historical proof instead of re-deriving it.
+
+    finish() re-reads every row, control, ledger, producer and payload seal the
+    proof consumed and compares them with its first-pass expectations; the
+    caller still re-runs every binding outside verify_episode. Any mismatch
+    returns None, so the unchanged cold verification decides.
+    """
+    import logging
+
+    if proof is None:
+        return None
+    verification, job_id = proof
+    reason = None
+    if (type(verification) is not _EpisodeVerification or job_id != str(job.id)
+            or verification.session is not session or verification.transaction is None
+            or verification.live_operation is not None or verification.live_job is not None
+            or verification.active
+            or (WorkspaceOperation, "id", str(operation.id)) not in verification.rows
+            or (PresentationGenerationJob, "id", job_id) not in verification.rows):
+        reason = "unbound"
+    elif _retained_rows_pending(session, verification):
+        reason = "pending_session_changes"
+    else:
+        try:
+            verification.check(session)
+            # The objects consumed now must be the ones the proof fingerprinted.
+            verification.expect(WorkspaceOperation, _operation_projection(operation))
+            verification.expect(PresentationGenerationJob, _dump(job))
+            await verification.finish()
+        except PartialRecoveryRejected as error:
+            reason = error.code
+    if reason is not None:
+        logging.getLogger(__name__).info(
+            "SVG partial recovery retained proof not reused; verifying cold: operation=%s reason=%s",
+            operation.id, reason)
+        return None
+    logging.getLogger(__name__).info(
+        "SVG partial recovery retained proof rechecked: operation=%s", operation.id)
+    return operation.request_payload.get("svg_partial_recovery_manifest") or {}
+
+
+async def _verify_episode_once(session, operation, job, *, require_current_code, verification,
+                                 operation_digest=None):
     from models.sql.async_presentation_generation_status import AsyncPresentationGenerationTaskModel
     from models.sql.source_content import SourceContentManifestRecord
     if not require_current_code and not _historical_episode(operation, job):
@@ -2325,14 +4264,15 @@ async def _verify_episode_once(session, operation, job, *, require_current_code,
     if archive_schema == ARCHIVE_V1:
         if manifest.get("archive_schema") not in (None, ARCHIVE_V1) or lineage.get("archive_schema") not in (None, ARCHIVE_V1):
             reject("svg_partial_recovery_archive_schema_invalid")
-    elif archive_schema == ARCHIVE_V2:
-        if (manifest.get("archive_schema") != ARCHIVE_V2 or lineage.get("archive_schema") != ARCHIVE_V2
+    elif archive_schema in {ARCHIVE_V2, ARCHIVE_V3}:
+        if (manifest.get("archive_schema") != archive_schema or lineage.get("archive_schema") != archive_schema
                 or "operations" in archive):
             reject("svg_partial_recovery_archive_schema_invalid")
     else:
         reject("svg_partial_recovery_archive_schema_invalid")
+    manifest_digest = digest(manifest)
     if (operation.request_payload.get("recovery_revision") != REVISION
-            or digest(manifest) != operation.request_payload.get("svg_partial_recovery_manifest_hash")
+            or manifest_digest != operation.request_payload.get("svg_partial_recovery_manifest_hash")
             or digest(archive) != manifest.get("archive_digest")
             or lineage != operation.request_payload.get("svg_partial_recovery_lineage")
             or lineage.get("schema") != ("svg-partial-recovery-lineage/v2" if append_only else "svg-partial-recovery-lineage/v1")
@@ -2340,7 +4280,7 @@ async def _verify_episode_once(session, operation, job, *, require_current_code,
             or lineage.get("action_operation_id") != manifest.get("operation_id")
             or any(lineage.get(key) != manifest.get(key) for key in ("archive_digest",
                 "known_indices", "new_indices", "unknown_indices", "frozen_request_digest", "frozen_style_digest"))
-            or lineage.get("manifest_hash") != digest(manifest)
+            or lineage.get("manifest_hash") != manifest_digest
             or lineage.get("operation_id") != str(operation.id)
             or str(operation.retry_of_operation_id) != manifest.get("operation_id")
             or operation.owner_id is None or str(operation.owner_id) != manifest.get("owner_id")
@@ -2358,12 +4298,24 @@ async def _verify_episode_once(session, operation, job, *, require_current_code,
             or job.authored_outline != (archive.get("job") or {}).get("authored_outline")
             or (require_current_code and _code_digest() != manifest.get("code_digest"))):
         reject("svg_partial_recovery_episode_unbound")
+    source_local_proof = manifest.get("source_local_continuation")
+    if source_local_proof is not None and not isinstance(source_local_proof, dict):
+        reject("svg_partial_recovery_episode_unbound")
+    if source_local_proof is not None and (
+            lineage.get("source_local_continuation_digest") != source_local_proof.get("digest")
+            or source_local_proof.get("source_operation_id") != manifest.get("operation_id")
+            or source_local_proof.get("source_job_id") != manifest.get("job_id")
+            or source_local_proof.get("owner_id") != manifest.get("owner_id")
+            or source_local_proof.get("tenant_id") != manifest.get("tenant_id")
+            or source_local_proof.get("archive_digest") != manifest.get("archive_digest")):
+        reject("svg_partial_recovery_episode_unbound")
     _verify_frozen_header_outline(job)
     if append_only:
         await _verify_producer_rows(session, manifest, archive, verification=verification)
-    if archive_schema == ARCHIVE_V2:
+    if archive_schema in {ARCHIVE_V2, ARCHIVE_V3}:
         await _verify_operation_references(session, operation, manifest, archive.get("operation_refs"),
-            verification=verification)
+            verification=verification, reuse_historical_seals=not require_current_code,
+            operation_digest=operation_digest)
     operation_snapshots = (("operations", WorkspaceOperation),) if archive_schema == ARCHIVE_V1 else ()
     for key, model in (*operation_snapshots, ("admissions", PublicOperationAdmission),
             ("logical_calls", PublicProviderLogicalCall), ("usage", ProviderUsageReceipt),
@@ -2390,14 +4342,16 @@ async def _verify_episode_once(session, operation, job, *, require_current_code,
             reject("svg_partial_recovery_source_changed")
         verification.expect(SourceContentManifestRecord, source_record, identity="manifest_id")
     operation_ids = {item["id"] for item in archive.get(
-        "operation_refs" if archive_schema == ARCHIVE_V2 else "operations", [])}
+        "operation_refs" if archive_schema in {ARCHIVE_V2, ARCHIVE_V3} else "operations", [])}
     await verification.ledger(operation_ids, manifest["job_id"], archive=archive)
     await verification.ledger({str(operation.id), *operation_ids}, job.id)
     return manifest
 
 
 async def runtime_admission(session, *, job_id, operation_id,
-                            expected_attempt_token=None, expected_fencing_token=None):
+                            expected_attempt_token=None, expected_fencing_token=None,
+                            slide_index=None, stage=None, is_retry=False,
+                            quality_repair_context=None):
     """Fail closed before spend; retain the actual generation job identity."""
     from models.sql.workspace import get_workspace_owner_scope
     from services.public_operation_admission import _require_phase2_provider_contract
@@ -2406,7 +4360,7 @@ async def runtime_admission(session, *, job_id, operation_id,
     job = await session.get(PresentationGenerationJob, job_id)
     if job is None or not (job.request_payload or {}).get(LINEAGE_KEY):
         return None
-    operation = await session.get(WorkspaceOperation, operation_id)
+    operation = await _runtime_episode_operation(session, operation_id)
     admission = await session.scalar(select(PublicOperationAdmission).where(
         PublicOperationAdmission.operation_id == operation_id,
         PublicOperationAdmission.owner_id == get_current_owner_id(),
@@ -2418,8 +4372,57 @@ async def runtime_admission(session, *, job_id, operation_id,
             or operation.cancel_requested_at is not None or job.state not in {"running", "staging"}
             or not expected_attempt_token or expected_fencing_token is None):
         reject("svg_partial_recovery_runtime_unbound")
-    await verify_episode(session, operation, job)
+    _require_prepared_episode(operation, job)
     manifest = operation.request_payload["svg_partial_recovery_manifest"]
+    if stage in {"author", "repair", "repair_remake", "repair_patch"}:
+        eligible = {*manifest.get("new_indices", []), *manifest.get("unknown_indices", [])}
+        if type(slide_index) is not int:
+            reject("svg_partial_recovery_cached_provider_forbidden")
+        if slide_index not in eligible:
+            ctx = quality_repair_context
+            if (slide_index not in manifest.get("known_indices", [])
+                    or stage not in {"repair", "repair_remake", "repair_patch"}
+                    or is_retry is not True or ctx is None or admission.retry_request_limit < 1
+                    or getattr(ctx, "snapshot", None) != job.svg_style_snapshot
+                    or getattr(ctx, "count", None) != job.total_slides
+                    or digest(getattr(ctx, "partial_recovery_manifest", None)) != digest(manifest)
+                    or not getattr(ctx, "quality_recovery_runtime_binding", None)
+                    or ctx.quality_recovery_runtime_binding != getattr(ctx, "quality_recovery_input_binding", None)):
+                reject("svg_partial_recovery_cached_provider_forbidden")
+            from services.generation_core.drivers.svg.partial_quality_recovery import (
+                current_episode_attempt_count, current_quality_repair_authorized,
+            )
+            from services.svg_authoring_profile import read_quality_recovery_plan
+            plan = read_quality_recovery_plan(job.svg_style_snapshot)
+            fields = ("partial_recovery", "input_digest", "quality_recovery", "correction_mode", "attempts",
+                      "provider_failures", "inflight", "provider_terminal_responses",
+                      "provider_dispatch_stopped", "provider_diagnostics")
+            record = (await session.execute(select(*[
+                AuthoredSlideCheckpoint.svg_checkpoint[key].label(key) for key in fields
+            ]).where(AuthoredSlideCheckpoint.job_id == job.id,
+                     AuthoredSlideCheckpoint.slide_index == slide_index))).mappings().one_or_none()
+            payload = dict(record) if record is not None else {}
+            if (plan is None or (payload.get("quality_recovery") or {}).get("status") != "repair_pending"
+                    or payload.get("inflight") is not None or _unknown_provider(payload)
+                    or current_episode_attempt_count(ctx, payload, slide_index) >= min(2, plan["page_attempt_limit"])):
+                reject("svg_partial_recovery_cached_provider_forbidden")
+
+            async def current_checkpoint(active_job, index):
+                if active_job is not job or index != 0:
+                    reject("svg_partial_recovery_page_unbound")
+                execution = await session.scalar(select(
+                    AuthoredSlideCheckpoint.svg_checkpoint["quality_recovery_execution"]
+                ).where(AuthoredSlideCheckpoint.job_id == job.id,
+                        AuthoredSlideCheckpoint.slide_index == 0))
+                return {"quality_recovery_execution": execution}
+
+            if not await current_quality_repair_authorized(ctx, payload, slide_index, job, current_checkpoint):
+                reject("svg_partial_recovery_cached_provider_forbidden")
+        checkpoint_id = await session.scalar(select(AuthoredSlideCheckpoint.id).where(
+            AuthoredSlideCheckpoint.job_id == job.id,
+            AuthoredSlideCheckpoint.slide_index == slide_index))
+        if checkpoint_id is None:
+            reject("svg_partial_recovery_page_unbound")
     decision = operation.request_payload.get("recovery_decision") or {}
     approved = decision.get("additional_budget_microunits")
     if approved is None:

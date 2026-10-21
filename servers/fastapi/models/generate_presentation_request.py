@@ -148,6 +148,20 @@ class GeneratePresentationRequest(BaseModel):
     # generation ignores this field while the feature flag is disabled.
     presentation_id: Optional[uuid.UUID] = Field(default=None)
 
+    provider_cost_cap_microunits: Optional[int] = Field(
+        default=None, alias="providerCostCapMicrounits", strict=True, gt=0,
+        exclude_if=lambda value: value is None,
+        description="Optional lower provider cost ceiling for a new generation, in USD microunits.",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_provider_cost_cap_aliases(cls, value: Any) -> Any:
+        if (isinstance(value, dict) and "provider_cost_cap_microunits" in value
+                and "providerCostCapMicrounits" in value):
+            raise ValueError("provider_cost_cap_alias_conflict")
+        return value
+
     content: str = Field(..., description="The content for generating the presentation")
     # Server-pinned at new generation admission. An omitted value on a restored
     # durable request means the job predates this policy and retains its prompt.

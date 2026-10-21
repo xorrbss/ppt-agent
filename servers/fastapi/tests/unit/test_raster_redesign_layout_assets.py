@@ -13,6 +13,7 @@ import asyncio
 import hashlib
 import io
 import json
+import types
 import uuid
 
 import pytest
@@ -49,7 +50,8 @@ class MemoryArtifacts:
         assert (owner_id, tenant_id) == (OWNER, TENANT)
         return self.put(payload, kind, media_type)
 
-    async def resolve_ref(self, session, *, artifact_id, owner_id, tenant_id, expected_digest=None):
+    async def resolve_ref(self, session, *, artifact_id, owner_id, tenant_id, expected_digest=None,
+                          check_object=True):
         ref = self.refs[artifact_id]
         assert (ref.owner_id, ref.tenant_id) == (owner_id, tenant_id)
         assert expected_digest in (None, ref.sha256)
@@ -62,6 +64,14 @@ class MemoryArtifacts:
 
     async def read_ref_bytes(self, reference):
         return self.blobs[reference.artifact_id]
+
+    async def read_verified_ref_bytes(self, reference, *, max_bytes=None, counters=None):
+        payload = self.blobs[reference.artifact_id]
+        assert hashlib.sha256(payload).hexdigest() == reference.sha256 and len(payload) == reference.size_bytes
+        if counters is not None:
+            counters.cas_reads += 1
+            counters.cas_bytes_hashed += len(payload)
+        return payload, types.SimpleNamespace(covers=lambda other, ref=reference: other == ref)
 
 
 def _png(size, marks=()):

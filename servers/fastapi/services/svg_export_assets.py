@@ -134,7 +134,7 @@ def _positioned_images(svg, *, excluded_ids=()):
 
 
 async def _load_sealed_source_bytes(
-    slot, *, session, row, owner_id, presentation_id, page_index, receipt
+    slot, *, session, row, owner_id, presentation_id, page_index, receipt, memo=None
 ):
     """Read a source-preserving image only from its sealed source manifest."""
     from sqlalchemy import select
@@ -172,19 +172,30 @@ async def _load_sealed_source_bytes(
         if owner_id is not None
         else SourceContentManifestRecord.owner_id.is_(None)
     )
-    records = list((await session.scalars(
-        select(SourceContentManifestRecord)
-        .where(
-            SourceContentManifestRecord.owner_scope == owner_scope,
-            owner_predicate,
-            SourceContentManifestRecord.manifest_digest == manifest_digest,
-            SourceContentManifestRecord.source_digest == source_file_digest,
-        )
-    )).unique().all())
-    if len(records) != 1:
-        raise ValueError("svg_export_source_manifest_binding_invalid")
-    manifest = _manifest_from_record(records[0], owner_id=owner_id)
-    pages = source_pages(manifest, chart_contract=receipt.get("source_chart_contract"))
+    # Memo holds only the already-verified (manifest, pages) pair.
+    verified_key = (
+        "verified", owner_scope, manifest_digest, source_file_digest,
+        json.dumps(receipt.get("source_chart_contract"), sort_keys=True, default=str),
+    )
+    verified = memo.get(verified_key) if memo is not None else None
+    if verified is None:
+        records = list((await session.scalars(
+            select(SourceContentManifestRecord)
+            .where(
+                SourceContentManifestRecord.owner_scope == owner_scope,
+                owner_predicate,
+                SourceContentManifestRecord.manifest_digest == manifest_digest,
+                SourceContentManifestRecord.source_digest == source_file_digest,
+            )
+        )).unique().all())
+        if len(records) != 1:
+            raise ValueError("svg_export_source_manifest_binding_invalid")
+        manifest = _manifest_from_record(records[0], owner_id=owner_id)
+        pages = source_pages(manifest, chart_contract=receipt.get("source_chart_contract"))
+        if memo is not None:
+            memo[verified_key] = (manifest, pages)
+    else:
+        manifest, pages = verified
     if not 0 <= page_index < len(pages):
         raise ValueError("svg_export_source_page_missing")
     page = pages[page_index]
@@ -216,12 +227,17 @@ async def _load_sealed_source_bytes(
     ):
         raise ValueError("svg_export_source_occurrence_binding_invalid")
 
-    sealed = await load_source_content_manifest_asset(
-        session,
-        owner_id=owner_id,
-        manifest_id=manifest.manifest_id,
-        asset_id=asset_id,
-    )
+    sealed_key = ("sealed", manifest.manifest_id, asset_id)
+    sealed = memo.get(sealed_key) if memo is not None else None
+    if sealed is None:
+        sealed = await load_source_content_manifest_asset(
+            session,
+            owner_id=owner_id,
+            manifest_id=manifest.manifest_id,
+            asset_id=asset_id,
+        )
+        if memo is not None:
+            memo[sealed_key] = sealed
     payload = bytes(sealed.payload)
     if (
         sealed.content_digest != expected_asset_digest
@@ -234,7 +250,7 @@ async def _load_sealed_source_bytes(
 
 async def _load_original_bytes(
     slot, *, session, owner_id, tenant_id, presentation_id=None,
-    page_index=None, source_preservation=None,
+    page_index=None, source_preservation=None, memo=None,
 ):
     import asyncio
     from sqlalchemy import select
@@ -261,6 +277,7 @@ async def _load_original_bytes(
                 presentation_id=presentation_id,
                 page_index=page_index,
                 receipt=source_preservation,
+                memo=memo,
             )
         binding = await canonicalize_legacy_image_asset(session, image=row,
                                                        image_root=get_images_directory())
@@ -284,12 +301,88 @@ async def _load_original_bytes(
         reset_current_owner_id(owner_token)
 
 
+class ExportIoMemo(dict):
+    """Memo for ONE export operation (a dict for the per-slide keys below), never module state.
+
+    ``counters`` is the operation's ``ExportIoCounters``.  ``verified`` maps a manifest key to
+    ``(parsed model, VerifiedArtifactBytes)`` from this operation's single verified read of that
+    ref; it can be shared by the build phase and the prepare phase.  Registered consumer refs
+    belong to one DB transaction, so ``for_session()`` hands a prepare phase a fresh dict body
+    over the same ``verified`` material.
+    """
+
+    def __init__(self, counters=None, verified=None):
+        super().__init__()
+        self.counters = counters
+        self.verified = {} if verified is None else verified
+
+    def for_session(self):
+        return ExportIoMemo(self.counters, self.verified)
+
+
+def _verified_store(memo):
+    if memo is None:
+        return None
+    return memo.verified if isinstance(memo, ExportIoMemo) else memo
+
+
+def _manifest_key(kind, owner_id, tenant_id, pointer):
+    return ("manifest-verified", kind, str(owner_id), str(tenant_id), str(pointer.ref), pointer.sha256)
+
+
+async def _resolve_and_load_manifest(session, service, *, pointer, owner_id, tenant_id, kind, mime, model,
+                                     memo, reuse):
+    """Row/owner/tenant/digest/kind checks on every call; object read and parse once per verified ref.
+
+    The ref is resolved without the separate object probe because the verified read opens the
+    object itself (same ``artifact.object_missing``) and hashes it.  A memo hit skips only that
+    read and parse, and only when its proof covers exactly the ref the row lookup just returned.
+    """
+    ref = await service.resolve_ref(session, artifact_id=pointer.ref, owner_id=owner_id,
+                                    tenant_id=tenant_id, expected_digest=pointer.sha256, check_object=False)
+    if ref.kind != kind or ref.media_type != mime:
+        raise ValueError("svg_export_manifest_artifact_invalid")
+    verified = _verified_store(memo) if reuse else None
+    key = _manifest_key(kind, owner_id, tenant_id, pointer)
+    known = verified.get(key) if verified is not None else None
+    if known is not None and known[1].covers(ref):
+        return known[0], ref, known[1]
+    from services.svg_asset_persistence import read_manifest_verified
+    parsed, proof = await read_manifest_verified(service, ref, pointer=pointer, model=model,
+                                                 counters=getattr(memo, "counters", None))
+    if verified is not None:
+        verified[key] = (parsed, proof)
+    return parsed, ref, proof
+
+
+async def _load_source_manifest_once(session, service, *, pointer, owner_id, tenant_id, memo):
+    """Load the deck-level source manifest once per export operation.
+
+    ``memo`` is the operation-scoped memo.  The key binds owner, tenant and the exact pointer
+    (artifact id + sha256); only a manifest that already passed the full resolve/kind/digest
+    streaming-verification/parse load is kept, and it is a frozen model.
+    """
+    from services.svg_asset_persistence import load_manifest_pointer_verified
+    counters = getattr(memo, "counters", None)
+    normalized = ArtifactPointer.model_validate(pointer)
+    verified = _verified_store(memo)
+    key = _manifest_key(SOURCE_KIND, owner_id, tenant_id, normalized)
+    known = verified.get(key) if verified is not None else None
+    if known is not None:
+        return known[0]
+    parsed, _, proof = await load_manifest_pointer_verified(session, service, pointer=normalized,
+        owner_id=owner_id, tenant_id=tenant_id, kind=SOURCE_KIND, model=SourceManifest, counters=counters)
+    if verified is not None:
+        verified[key] = (parsed, proof)
+    return parsed
+
+
 async def build_slide_export_assets(slide, *, service, session, claim, tenant_id, export_format, canvas,
-                                   _source_verifier=None):
+                                   _source_verifier=None, _memo=None, _deferred_publications=None):
     """Publish export-purpose recipes from original assets under the live fence."""
     import asyncio
     from services.svg_asset_manifest import PlacementManifest, SvgPlacement
-    from services.svg_asset_persistence import (load_source_manifest_pointer, SvgPublicationContext,
+    from services.svg_asset_persistence import (SvgPublicationContext,
         persist_derivative_if_current, persist_manifest_if_current)
     from services.svg_image_derivative import build_purpose_derivative
     from services.svg_renderer import SVG_RENDERER_VERSION
@@ -299,16 +392,25 @@ async def build_slide_export_assets(slide, *, service, session, claim, tenant_id
     if (not isinstance(envelope, dict) or envelope.get("schemaVersion") != "svg-slide-assets/v1"
             or envelope.get("canonicalVersion") != "svg-static/v2"):
         raise ValueError("svg_export_asset_reader_version_unsupported")
-    source = await load_source_manifest_pointer(session, service,
-        pointer=envelope.get("sourceManifest"), owner_id=claim.owner_id, tenant_id=tenant_id)
+    source = await _load_source_manifest_once(session, service,
+        pointer=envelope.get("sourceManifest"), owner_id=claim.owner_id, tenant_id=tenant_id, memo=_memo)
     inherited_source = str(source.presentation_id) != str(claim.presentation_id)
     if inherited_source:
         from models.sql.presentation import PresentationModel
         from services.svg_document_mutations import _verified_inherited_slide_source
         presentation = await session.get(PresentationModel, claim.presentation_id)
         verify_source = _source_verifier or _verified_inherited_slide_source
-        if presentation is None or presentation.owner_id != claim.owner_id or not await verify_source(session, presentation, source, envelope["sourceManifest"], claim.owner_id, tenant_id):
-            raise ValueError("svg_export_manifest_presentation_mismatch")
+        # The inherited-source verification is slide-independent (presentation, pointer,
+        # owner, tenant) and walks the whole recovery lineage; run it once per export
+        # operation instead of once per slide. Only a successful verification is memoized.
+        verified_key = ("inherited-source-verified", str(claim.presentation_id), str(claim.owner_id),
+                        str(tenant_id), json.dumps(envelope["sourceManifest"], sort_keys=True, default=str),
+                        str(source.presentation_id), str(source.digest)) if _memo is not None else None
+        if verified_key is None or verified_key not in _memo:
+            if presentation is None or presentation.owner_id != claim.owner_id or not await verify_source(session, presentation, source, envelope["sourceManifest"], claim.owner_id, tenant_id):
+                raise ValueError("svg_export_manifest_presentation_mismatch")
+            if verified_key is not None:
+                _memo[verified_key] = True
     revision = envelope.get("slideRevision")
     if type(revision) is not int or revision < 0:
         raise ValueError("svg_export_slide_revision_invalid")
@@ -318,7 +420,8 @@ async def build_slide_export_assets(slide, *, service, session, claim, tenant_id
         raise ValueError("svg_export_source_page_missing")
     context = SvgPublicationContext(operation_id=claim.operation_id, owner_id=claim.owner_id,
         tenant_id=tenant_id, attempt_number=claim.attempt_number, attempt_token=claim.attempt_token,
-        fencing_token=claim.fencing_token, operation_kind="export")
+        fencing_token=claim.fencing_token, operation_kind="export",
+        deferred_publications=_deferred_publications)
     slots = {slot.slot_id: slot for slot in source.slots}
     from services.document_canvas import parse_canvas_metadata
     resolved_canvas = parse_canvas_metadata(canvas)
@@ -367,13 +470,24 @@ async def build_slide_export_assets(slide, *, service, session, claim, tenant_id
             session=session,
             owner_id=claim.owner_id,
             tenant_id=tenant_id,
-            presentation_id=claim.presentation_id,
+            # Source image identities derive from the verified source presentation:
+            # the inherited original for recovery children, the claim itself otherwise.
+            presentation_id=source.presentation_id,
             page_index=page_index,
             source_preservation=source_preservation,
+            memo=_memo,
         )
-        preview = await asyncio.to_thread(build_purpose_derivative, payload, purpose="export",
-            width_css_px=float(node.get("width", "0")), height_css_px=float(node.get("height", "0")),
-            fit=slot.export_policy.fit, semantic_kind="unknown")
+        width_css = float(node.get("width", "0"))
+        height_css = float(node.get("height", "0"))
+        preview_key = ("preview", slot.source_sha256, "export", width_css, height_css,
+                       slot.export_policy.fit, "unknown")
+        preview = _memo.get(preview_key) if _memo is not None else None
+        if preview is None:
+            preview = await asyncio.to_thread(build_purpose_derivative, payload, purpose="export",
+                width_css_px=width_css, height_css_px=height_css,
+                fit=slot.export_policy.fit, semantic_kind="unknown")
+            if _memo is not None:
+                _memo[preview_key] = preview
         if (preview.source_sha256 != slot.source_sha256
                 or preview.source_appearance_sha256 != slot.source_appearance_sha256):
             raise ValueError("svg_export_source_appearance_mismatch")
@@ -418,7 +532,7 @@ async def build_slide_export_assets(slide, *, service, session, claim, tenant_id
 
 
 async def prepare_export_assets(binding, *, svg, service, session, claim, tenant_id,
-                                export_format, width, height, source_preservation=None):
+                                export_format, width, height, source_preservation=None, memo=None):
     base_keys = {"sourceManifest", "placementManifest", "pageIndex", "slideRevision"}
     if not base_keys <= set(binding) or set(binding) - base_keys - {"fullPagePreserve", "systemFurniture", "sourceLineage"} or (
         "fullPagePreserve" in binding and type(binding["fullPagePreserve"]) is not bool
@@ -426,30 +540,44 @@ async def prepare_export_assets(binding, *, svg, service, session, claim, tenant
         raise ValueError("svg_export_asset_binding_invalid")
     refs = []
     manifests = []
-    from services.svg_asset_persistence import load_source_manifest_pointer, load_placement_manifest_pointer
-    for name, kind, mime, loader in (
-        ("sourceManifest", SOURCE_KIND, SOURCE_MIME, load_source_manifest_pointer),
-        ("placementManifest", PLACEMENT_KIND, PLACEMENT_MIME, load_placement_manifest_pointer),
+    for name, kind, mime, model in (
+        ("sourceManifest", SOURCE_KIND, SOURCE_MIME, SourceManifest),
+        ("placementManifest", PLACEMENT_KIND, PLACEMENT_MIME, PlacementManifest),
     ):
         pointer = ArtifactPointer.model_validate(binding[name])
-        ref = await service.resolve_ref(session, artifact_id=pointer.ref, owner_id=claim.owner_id,
-                                        tenant_id=tenant_id, expected_digest=pointer.sha256)
-        if ref.kind != kind or ref.media_type != mime:
-            raise ValueError("svg_export_manifest_artifact_invalid")
-        manifests.append(await loader(session, service, pointer=pointer,
-            owner_id=claim.owner_id, tenant_id=tenant_id))
-        refs.append(await service.register_consumer_ref(session, ref, created_by_operation_id=claim.operation_id))
+        # The deck-level source manifest is the same for every slide of this operation: it is
+        # resolved, read, parsed and registered as a consumer once; placement manifests stay per slide.
+        shared_key = (("deck-source-manifest", str(claim.operation_id), str(claim.owner_id), str(tenant_id),
+                       str(pointer.ref), pointer.sha256)
+                      if name == "sourceManifest" and memo is not None else None)
+        shared = memo.get(shared_key) if shared_key is not None else None
+        if shared is not None:
+            manifests.append(shared[0])
+            refs.append(shared[1])
+            continue
+        parsed, ref, proof = await _resolve_and_load_manifest(session, service, pointer=pointer,
+            owner_id=claim.owner_id, tenant_id=tenant_id, kind=kind, mime=mime, model=model,
+            memo=memo, reuse=name == "sourceManifest")
+        manifests.append(parsed)
+        refs.append(await service.register_consumer_ref(session, ref,
+            created_by_operation_id=claim.operation_id, verified=proof))
+        if shared_key is not None:
+            memo[shared_key] = (manifests[-1], refs[-1])
     source, placement = manifests
     source_lineage = None
     lineage_ref = None
     if "sourceLineage" in binding:
-        from services.svg_asset_persistence import _load_manifest_pointer
+        from services.artifact_store import ArtifactBindingError
+        from services.svg_asset_persistence import read_manifest_verified
         lineage_pointer = ArtifactPointer.model_validate(binding["sourceLineage"])
-        proof = await _load_manifest_pointer(session, service, pointer=lineage_pointer, owner_id=claim.owner_id, tenant_id=tenant_id, kind="svg-export-source-lineage", model=_ExportSourceLineage)
+        resolved = await service.resolve_ref(session, artifact_id=lineage_pointer.ref, owner_id=claim.owner_id, tenant_id=tenant_id, expected_digest=lineage_pointer.sha256, check_object=False)
+        if resolved.kind != "svg-export-source-lineage" or resolved.media_type != "application/json":
+            raise ArtifactBindingError("svg_asset_manifest_kind_mismatch")
+        proof, lineage_proof = await read_manifest_verified(service, resolved, pointer=lineage_pointer, model=_ExportSourceLineage, counters=getattr(memo, "counters", None))
         source_lineage = proof.model_dump(mode="json")
         _check_export_source_lineage(source_lineage, source, placement, presentation_id=claim.presentation_id, svg=svg, page_index=binding["pageIndex"], operation_id=claim.operation_id, owner_id=claim.owner_id, tenant_id=tenant_id, attempt_number=claim.attempt_number, fencing_token=claim.fencing_token)
-        resolved = await service.resolve_ref(session, artifact_id=lineage_pointer.ref, owner_id=claim.owner_id, tenant_id=tenant_id, expected_digest=lineage_pointer.sha256)
-        lineage_ref = await service.register_consumer_ref(session, resolved, created_by_operation_id=claim.operation_id)
+        lineage_ref = await service.register_consumer_ref(session, resolved,
+            created_by_operation_id=claim.operation_id, verified=lineage_proof)
     derivatives = validate_export_placement(
     svg,
     source,
@@ -482,7 +610,7 @@ async def prepare_export_assets(binding, *, svg, service, session, claim, tenant
 
 
 def materialize_export_assets(binding, *, svg, job, store, presentation_id,
-                              export_format, width, height, source_preservation=None):
+                              export_format, width, height, source_preservation=None, source_cache=None):
     from services.isolated_worker_contracts import ArtifactRef
     from services.svg_asset_resolver import materialize_svg
     binding_keys = {"sourceManifestRef", "placementManifestRef", "sourceManifestDigest",
@@ -492,16 +620,27 @@ def materialize_export_assets(binding, *, svg, job, store, presentation_id,
     ):
         raise ValueError("svg_export_asset_transport_invalid")
 
-    def read(wire, kind, mime):
+    def bound(wire, kind, mime):
         ref = ArtifactRef.from_wire(wire)
         if (ref.owner_id != job.input_artifact.owner_id or ref.tenant_id != job.input_artifact.tenant_id
                 or ref.created_by_operation_id != job.operation_id or ref.kind != kind or ref.media_type != mime):
             raise ValueError("svg_export_asset_operation_binding_invalid")
+        return ref
+
+    def read(wire, kind, mime):
+        ref = bound(wire, kind, mime)
         return ref, store.read(ref)
 
-    _, source_bytes = read(binding["sourceManifestRef"], SOURCE_KIND, SOURCE_MIME)
+    # ``source_cache`` is scoped to this job: the deck-level source manifest ref is bound,
+    # read, digest-verified and parsed on its first slide; the parsed model is frozen.
+    source_ref = bound(binding["sourceManifestRef"], SOURCE_KIND, SOURCE_MIME)
+    source = source_cache.get(source_ref) if source_cache is not None else None
+    source_bytes = store.read(source_ref) if source is None else None
     _, placement_bytes = read(binding["placementManifestRef"], PLACEMENT_KIND, PLACEMENT_MIME)
-    source = SourceManifest.model_validate_json(source_bytes)
+    if source is None:
+        source = SourceManifest.model_validate_json(source_bytes)
+        if source_cache is not None:
+            source_cache[source_ref] = source
     placement = PlacementManifest.model_validate_json(placement_bytes)
     if source.digest != binding["sourceManifestDigest"] or placement.digest != binding["placementManifestDigest"]:
         raise ValueError("svg_export_manifest_digest_mismatch")

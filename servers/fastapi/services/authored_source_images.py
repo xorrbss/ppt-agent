@@ -103,6 +103,8 @@ async def _strict_manifest_source_image_candidates(
     request: GeneratePresentationRequest,
     presentation_id: uuid.UUID,
     session: AsyncSession,
+    *,
+    source_identity_presentation_id: uuid.UUID | None = None,
 ) -> list[SourceImageCandidate]:
     """Materialize every page-locked manifest image occurrence, or fail."""
 
@@ -183,6 +185,8 @@ async def _strict_manifest_source_image_candidates(
         session,
         presentation_id=presentation_id,
         occurrences=occurrences,
+        **({"source_identity_presentation_id": source_identity_presentation_id}
+           if source_identity_presentation_id is not None else {}),
     )
     if (
         len(candidates) != expected_count
@@ -202,6 +206,7 @@ async def collect_source_image_candidates(
     *,
     registration_report: list[dict] | None = None,
     include_document_images: bool = False,
+    source_identity_presentation_id: uuid.UUID | None = None,
 ) -> list[SourceImageCandidate]:
     """Register reusable pictures and preserve explicit filtering diagnostics.
 
@@ -226,7 +231,11 @@ async def collect_source_image_candidates(
             request,
             presentation_id,
             session,
+            **({"source_identity_presentation_id": source_identity_presentation_id}
+               if source_identity_presentation_id is not None else {}),
         )
+    if source_identity_presentation_id is not None:
+        raise ValueError("source_content_image_identity_unproven")
     if getattr(request, "strategy", None) != "svg" and not is_authored_source_images_enabled():
         return []
     if normalize_reference_mode(

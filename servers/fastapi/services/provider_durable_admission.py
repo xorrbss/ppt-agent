@@ -73,6 +73,9 @@ async def reserve_provider_call_detached(
     workspace_operation_id: uuid.UUID | None = None,
     expected_attempt_token: str | None = None,
     expected_fencing_token: int | None = None,
+    slide_index: int | None = None,
+    is_retry: bool = False,
+    quality_repair_context: object | None = None,
 ) -> DetachedDurableLease:
     owner_id = get_current_owner_id()
     if owner_id is None:
@@ -110,7 +113,10 @@ async def reserve_provider_call_detached(
                 episode = await runtime_admission(session, job_id=job_id,
                     operation_id=workspace_operation_id,
                     expected_attempt_token=expected_attempt_token,
-                    expected_fencing_token=expected_fencing_token)
+                    expected_fencing_token=expected_fencing_token,
+                    slide_index=slide_index, stage=stage,
+                    **(dict(is_retry=is_retry, quality_repair_context=quality_repair_context)
+                       if quality_repair_context is not None else {}))
                 if episode is None:
                     raise CancellationRequested("provider_workspace_job_scope_invalid")
                 admission = episode

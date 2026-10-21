@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import json
+import subprocess
+
+import pytest
+
 from services.svg_text_overlap import comparison_fragments, text_overlaps
 
 
@@ -109,3 +114,111 @@ def test_threshold_is_half_a_pixel_on_both_axes():
     assert text_overlaps([a, touching])[0] == []
     deeper = _item("b", [_rect(0, 9.4, 10, 10)], [_rect(0, 9.4, 10, 10)])
     assert text_overlaps([a, deeper])[0] == [["a", "b"]]
+
+
+@pytest.mark.parametrize("case,complete", [
+    ("ancestor_hangul", True), ("explicit_ko", True),
+    ("english_owner_hangul_body", False), ("mismatched_localized_advance", False),
+    ("explicit_en", False), ("explicit_und", False), ("explicit_empty", False),
+    ("pre_leading_spaces", True), ("pre_trailing_lf", True), ("pre_tab", True),
+])
+def test_source_text_context_requires_actual_font_advance_and_preserves_pair_witness(case, complete):
+    from utils.slide_capture_text_ink import TEXT_INK_JS
+
+    harness = r'''
+const scenario = SCENARIO;
+const leafContent = scenario==='pre_leading_spaces' ? '    L\u00b7' :
+ scenario==='pre_trailing_lf' ? 'L\u00b7\n\n' : scenario==='pre_tab' ? '\tL\u00b7' : 'L\u00b7';
+const starts = scenario==='pre_leading_spaces' ? [10,14,18,22,26,31] :
+ scenario==='pre_trailing_lf' ? [10,15,23,27] : scenario==='pre_tab' ? [10,18,23] : [10,15];
+const ends = scenario==='pre_leading_spaces' ? [14,18,22,26,31,39] :
+ scenario==='pre_trailing_lf' ? [15,23,27,31] : scenario==='pre_tab' ? [18,23,31] : [15,23];
+const style = {filter:'none',textShadow:'none',textDecorationLine:'none',writingMode:'horizontal-tb',
+ direction:'ltr',textTransform:'none',fontVariant:'normal',fontFeatureSettings:'normal',
+ fontVariationSettings:'normal',fontStretch:'normal',fontSizeAdjust:'none',fontWeight:'400',
+ fontStyle:'normal',fontSize:'14px',fontFamily:'Noto Sans KR',fontKerning:'auto',
+ letterSpacing:'normal',wordSpacing:'normal',stroke:'none',whiteSpace:scenario.startsWith('pre_')?'pre':'normal'};
+const getComputedStyle = node => style;
+class SVGTextContentElement {
+ constructor(text,parent=null,attrs={}) { this.textContent=text; this.parentElement=parent;
+  this.attrs=attrs; this.childElementCount=0; }
+ getAttribute(key) { return this.attrs[key] ?? null; }
+ getAttributeNS(ns,key) { return this.attrs['xml:'+key] ?? null; }
+ hasAttribute(key) { return key in this.attrs; }
+ getNumberOfChars() { return this.textContent.length; }
+ getScreenCTM() { return {a:1,b:0,c:0,d:1}; }
+ getStartPositionOfChar(i) { return {x:starts[i],y:20}; }
+ getEndPositionOfChar(i) { return {x:ends[i],y:20}; }
+}
+class SVGTextElement extends SVGTextContentElement {}
+class SVGTextPathElement extends SVGTextContentElement {}
+class DOMPoint { constructor(x,y) {this.x=x;this.y=y;} matrixTransform(ctm) {return this;} }
+const context = {lang:'und',font:'initial',fontKerning:'auto',letterSpacing:'0px',wordSpacing:'0px',
+ measureText(value) {
+  let width = value===' ' ? 4 : value==='L' ? 8 : value==='L\u00b7' ? (this.lang==='ko'?13:8) :
+   this.lang==='ko' ? (scenario==='mismatched_localized_advance'?11:8) : 3;
+  return {width,fontBoundingBoxAscent:16,fontBoundingBoxDescent:4,
+   actualBoundingBoxLeft:0,actualBoundingBoxRight:width,actualBoundingBoxAscent:10,actualBoundingBoxDescent:2};
+ }};
+const document = {body:{classList:{contains:()=>true}},
+ createElement:()=>({getContext:()=>context}),
+ fonts:[{status:'loaded',family:'Noto Sans KR',style:'normal',weight:'100 900'}]};
+const fontEvidence = () => ({loaded:true,source:'loaded-font-face',family:'Noto Sans KR'});
+const px = value => parseFloat(value);
+const body = {textContent:'\ud55c\uae00',parentElement:null,getAttribute:()=>null,getAttributeNS:()=>null};
+const attrs = scenario==='explicit_empty' ? {lang:''} :
+ scenario.startsWith('explicit_') ? {'xml:lang':scenario.slice(9)} : {};
+const owner = new SVGTextElement(scenario==='english_owner_hangul_body' ? 'English L\u00b7' : '\ud55c\uae00 L\u00b7',body,attrs);
+const leaf = new SVGTextContentElement(leafContent,owner);
+const text = {textContent:leafContent,parentElement:leaf};
+'''.replace("SCENARIO", json.dumps(case))
+    script = harness + TEXT_INK_JS + r'''
+const result = inkBox(leaf,text,{x:10,y:4,width:13,height:20});
+const language = inkLanguageContext(leaf);
+const font = context.font;
+document.fonts=[];
+const untrusted = inkBox(leaf,text,{x:10,y:4,width:13,height:20});
+console.log(JSON.stringify({result,language,finalLanguage:context.lang,font,untrusted}));
+'''
+    completed = subprocess.run(["node", "-e", script], capture_output=True, text=True,
+                               encoding="utf-8", check=True)
+    evidence = json.loads(completed.stdout)
+    result = evidence["result"]
+    assert result is not None
+    assert result["glyphPaintCoverage"] == {"expected": 2, "isolated": int(complete),
+        "pair": 1, "cell": int(not complete), "complete": complete}
+    assert result["cellClusters"] == int(not complete)
+    assert result["pairInkWitnesses"][0]["basis"] == "matching-pair-advance"
+    first_cluster_index = 4 if case == "pre_leading_spaces" else 1 if case == "pre_tab" else 0
+    assert result["pairInkWitnesses"][0]["index"] == first_cluster_index
+    assert result["pairInkWitnesses"][0]["length"] == 1
+    # The contextual pair proves bounded ink, not an isolated L glyph.
+    assert result["glyphInkCoverage"]["complete"] is False
+    assert all(glyph["index"] != first_cluster_index for glyph in result["glyphInkClusters"])
+    assert evidence["untrusted"] is None
+    if complete:
+        assert result["glyphInkClusters"][0]["language"] == "ko"
+    expected_language = "ko" if case == "explicit_ko" else "en" if case == "explicit_en" else "und"
+    assert evidence["finalLanguage"] == expected_language
+    assert evidence["language"]["explicit"] is case.startswith("explicit_")
+    assert "Noto Sans KR" in evidence["font"]
+
+
+@pytest.mark.parametrize("whitespace,source,count,expected", [
+    ("pre", "    AB", 6, "    AB"), ("pre", "AB\n\n", 4, "AB  "),
+    ("pre", "\tA\nB\r", 5, " A B "), ("pre", "    AB", 5, None),
+    ("normal", "    AB\n\n", 4, " AB "), ("normal", "    AB\n\n", 2, "AB"),
+    ("nowrap", "A\t \nB", 3, "A B"), ("normal", "    AB\n\n", 3, None),
+    ("pre-wrap", "    AB", 6, None), ("break-spaces", "    AB", 6, None),
+])
+def test_svg_ink_content_respects_preserved_addresses_and_default_collapse(whitespace, source, count, expected):
+    from utils.slide_capture_text_ink import TEXT_INK_JS
+
+    values = json.dumps(dict(whitespace=whitespace, source=source, count=count), ensure_ascii=True)
+    script = ("const values=" + values + "; const document={createElement:()=>({getContext:()=>null})};"
+              "const getComputedStyle=()=>({whiteSpace:values.whitespace});" + TEXT_INK_JS +
+              "const result=inkContent({getNumberOfChars:()=>values.count},{textContent:values.source});"
+              "console.log(JSON.stringify(result));")
+    completed = subprocess.run(["node", "-e", script], capture_output=True, text=True,
+                               encoding="utf-8", check=True)
+    assert json.loads(completed.stdout) == expected

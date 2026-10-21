@@ -6,11 +6,13 @@ neither storage keys nor raster payloads belong in canonical SVG/checkpoints.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import asyncio
+from dataclasses import dataclass, field
 import json
 import uuid
 from typing import Literal
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.artifact_store import (
@@ -39,6 +41,53 @@ async def _load_manifest_pointer(session, service, *, pointer, owner_id, tenant_
     if sha256_hex(payload) != pointer.sha256:
         raise ArtifactBindingError("svg_asset_manifest_bytes_mismatch")
     return model.model_validate_json(payload)
+
+
+#: Manifests above this size are parsed on a worker thread so a deep recovery lineage
+#: cannot hold the event loop (and with it the lease heartbeat) for the whole parse.
+_PARSE_OFF_LOOP_BYTES = 256 * 1024
+
+
+async def read_manifest_verified(service, reference, *, pointer, model, counters=None):
+    """Stream ``reference`` once (hash + size against the ref) and parse those same bytes.
+
+    ``reference`` must already be the owner/tenant/digest-resolved committed row.  Returns
+    ``(parsed, proof)``; the proof lets this operation's ``register_consumer_ref`` skip its
+    producer-byte re-stream for this exact ref.
+    """
+    payload, proof = await service.read_verified_ref_bytes(reference, counters=counters)
+    if reference.sha256 != pointer.sha256:
+        raise ArtifactBindingError("svg_asset_manifest_bytes_mismatch")
+    if len(payload) > _PARSE_OFF_LOOP_BYTES:
+        parsed = await asyncio.to_thread(model.model_validate_json, payload)
+    else:
+        parsed = model.model_validate_json(payload)
+    return parsed, proof
+
+
+async def load_manifest_pointer_verified(
+    session, service, *, pointer, owner_id, tenant_id, kind, model, counters=None
+):
+    """``_load_manifest_pointer`` with a single verified read; returns ``(parsed, reference, proof)``.
+
+    Row, owner, tenant, digest, kind and media checks are unchanged; only the object read
+    (exists + read_bytes + two digests) becomes one streaming read.
+    """
+    pointer = ArtifactPointer.model_validate(pointer)
+    reference = await service.resolve_ref(
+        session,
+        artifact_id=pointer.ref,
+        owner_id=owner_id,
+        tenant_id=tenant_id,
+        expected_digest=pointer.sha256,
+        check_object=False,
+    )
+    if reference.kind != kind or reference.media_type != "application/json":
+        raise ArtifactBindingError("svg_asset_manifest_kind_mismatch")
+    parsed, proof = await read_manifest_verified(
+        service, reference, pointer=pointer, model=model, counters=counters
+    )
+    return parsed, reference, proof
 
 
 async def load_source_manifest_pointer(
@@ -88,6 +137,11 @@ class SvgPublicationContext:
     attempt_token: str
     fencing_token: int
     operation_kind: Literal["generation", "export"] = "generation"
+    # When a list, pointer promotion (and its admission/operation row locks) is
+    # deferred to ``promote_deferred_publications_if_current`` in the same
+    # transaction, so a long caller transaction holds no lock the cancel and
+    # heartbeat paths need. ``None`` keeps the per-call locked publication.
+    deferred_publications: list | None = field(default=None, compare=False, hash=False)
 
     def fence(self) -> dict:
         return dict(
@@ -99,6 +153,38 @@ class SvgPublicationContext:
             fencing_token=self.fencing_token,
             operation_kind=self.operation_kind,
         )
+
+
+async def _current_operation_unlocked(session: AsyncSession, context: SvgPublicationContext):
+    """Fail-fast fence read without row locks; the deferred promotion re-locks."""
+    from models.sql.workspace import WorkspaceOperation
+
+    if context.attempt_number < 1 or context.fencing_token < 1 or not context.attempt_token:
+        return None
+    return await session.scalar(select(WorkspaceOperation).where(
+        WorkspaceOperation.id == context.operation_id,
+        WorkspaceOperation.owner_id == context.owner_id,
+        WorkspaceOperation.state == "running",
+        WorkspaceOperation.attempt_number == context.attempt_number,
+        WorkspaceOperation.attempt_token == context.attempt_token,
+        WorkspaceOperation.fencing_token == context.fencing_token,
+    ))
+
+
+async def _current_operation(session: AsyncSession, context: SvgPublicationContext):
+    if context.deferred_publications is not None:
+        return await _current_operation_unlocked(session, context)
+    return await _locked_current_operation(session, **context.fence())
+
+
+async def promote_deferred_publications_if_current(session: AsyncSession, context: SvgPublicationContext) -> None:
+    """Promote deferred pointers in their original order under the operation lock."""
+    for item in context.deferred_publications or ():
+        published = await promote_artifact_publication_if_current(session, **context.fence(), **item)
+        if published is None:
+            raise ArtifactBindingError("svg_asset_publication_fence_lost")
+    if context.deferred_publications is not None:
+        context.deferred_publications.clear()
 
 
 async def _persist_if_current(
@@ -114,7 +200,7 @@ async def _persist_if_current(
 ):
     if not publication_name.strip() or len(publication_name.strip()) > 64 or revision < 0:
         raise ValueError("svg_asset_publication_identity_invalid")
-    if await _locked_current_operation(session, **context.fence()) is None:
+    if await _current_operation(session, context) is None:
         return None
     reference = await service.persist_bytes(
         session,
@@ -126,6 +212,11 @@ async def _persist_if_current(
         created_by_operation_id=context.operation_id,
         retention_class="checkpoint",
     )
+    if context.deferred_publications is not None:
+        context.deferred_publications.append(dict(
+            publication_name=publication_name, revision=revision,
+            quality_digest=reference.sha256, artifact_id=reference.artifact_id))
+        return ArtifactPointer(ref=reference.artifact_id, sha256=reference.sha256)
     published = await promote_artifact_publication_if_current(
         session,
         **context.fence(),
@@ -194,7 +285,7 @@ async def persist_manifest_if_current(
 ) -> ArtifactPointer | None:
     # Revalidate sealed bytes even when callers constructed a model without validation.
     manifest = type(manifest).model_validate(manifest.model_dump(mode="json", by_alias=True))
-    operation = await _locked_current_operation(session, **context.fence())
+    operation = await _current_operation(session, context)
     if operation is None:
         return None
     if isinstance(manifest, SourceManifest):

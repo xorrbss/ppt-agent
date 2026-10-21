@@ -38,6 +38,7 @@ _MICROSOFT_DOCUMENT_FONT_FAMILIES = frozenset(
         "gungsuh",
         "gungsuhche",
         "malgun gothic",
+        "segoe ui symbol",
     }
 )
 _RESTRICTED_LICENSE_BIT = 0x0002
@@ -105,6 +106,7 @@ def _license_policy(font: TTFont, family: str) -> tuple[str, str | None]:
 class _RegisteredFace:
     receipt: NativeFontFaceReceiptV1
     codepoints: frozenset[int]
+    content: bytes
 
 
 class NativeFontByteRegistry:
@@ -168,11 +170,17 @@ class NativeFontByteRegistry:
         existing = self._faces.get(key)
         if existing is not None and existing.receipt.font_byte_digest != receipt.font_byte_digest:
             raise NativeTypographyRegistryError("authored_native_font_face_conflict")
-        self._faces[key] = _RegisteredFace(receipt=receipt, codepoints=codepoints)
+        self._faces[key] = _RegisteredFace(receipt=receipt, codepoints=codepoints, content=bytes(content))
         return receipt
 
     def resolve(self, family: str, face: str) -> _RegisteredFace | None:
         return self._faces.get((family.casefold(), face.casefold()))
+
+    def font_bytes(self, family: str, face: str) -> bytes:
+        registered = self.resolve(family, face)
+        if registered is None or not registered.receipt.embedding_eligible:
+            raise NativeTypographyRegistryError("authored_native_font_material_unavailable")
+        return registered.content
 
     @property
     def digest(self) -> str:
@@ -195,6 +203,22 @@ class NativeFontByteRegistry:
 
 
 _WINDOWS_CJK_FONT_DIRECTORY = Path(r"C:\Windows\Fonts")
+
+
+def load_bounded_windows_symbol_registry() -> NativeFontByteRegistry:
+    """Resolve one fixed OS face through the existing editable-font policy."""
+    try:
+        content = (_WINDOWS_CJK_FONT_DIRECTORY / "seguisym.ttf").read_bytes()
+    except OSError as error:
+        raise NativeTypographyRegistryError("authored_native_symbol_font_bytes_unavailable") from error
+    registry = NativeFontByteRegistry()
+    receipt = registry.register(content)
+    with TTFont(BytesIO(content)) as font:
+        regular_weight = int(font["OS/2"].usWeightClass) == 400
+    if ((receipt.family.casefold(), receipt.face.casefold()) != ("segoe ui symbol", "normal")
+            or not regular_weight or not receipt.embedding_eligible):
+        raise NativeTypographyRegistryError("authored_native_symbol_font_identity_or_license_invalid")
+    return registry
 
 
 def load_bounded_windows_cjk_registry(

@@ -21,6 +21,47 @@ from utils.hashing import sha256_hex
 RETRY = object()
 
 
+def source_structural_visual_retry(ctx, payload, *, index):
+    """One measured correction may follow one failed source-structure response."""
+    contract = {"version": "svg-source-whole-page/v1"}
+    if (not ctx.source_reflow or ctx.snapshot.get("source_authoring_contract") != contract
+            or getattr(ctx, "header_author_attempt_identity", None)
+            or (payload.get("partial_recovery") or {}).get("category") == "known"
+            or any(payload.get(key) for key in (
+                "provider_failures", "inflight", "cached_author_render", "cache_only_remeasurement",
+                "append_only_cache", "append_only_replacement", "append_only_unstarted",
+                "append_only_cached_repair", "retained_provider_attempt_fence",
+                "timeout_repurchase_approval_manifest", "quality_recovery", "quality_recovery_fallback"))):
+        return False
+    attempts = payload.get("attempts") or []
+    if len(attempts) != 2 or any(attempt.get("kind") != "provider" for attempt in attempts):
+        return False
+    first, measured = attempts
+    receipts = [attempt.get("receipt") or {} for attempt in attempts]
+    if (any(receipt.get("source_authoring_contract") != contract
+            or type(receipt.get("attempt_ordinal")) is not int
+            or receipt["attempt_ordinal"] != ordinal
+            for ordinal, receipt in enumerate(receipts, 1))
+            or not (first.get("validation_error") or receipts[0].get("validation_error"))
+            or first.get("quality") is not None
+            or measured.get("validation_error") or receipts[1].get("validation_error")
+            or (measured.get("quality") or {}).get("passed") is not False):
+        return False
+    preservation = payload.get("source_preservation") or {}
+    authored = receipts[1].get("source_preservation") or {}
+    pages = getattr(ctx, "source_units", ())
+    source = getattr(ctx, "source_document", None)
+    return (source is not None and 0 <= index < len(pages)
+            and preservation.get("source_page_index") == index
+            and preservation.get("source_page_id") == pages[index].source_unit_id
+            and preservation.get("manifest_digest") == source.manifest_digest
+            and preservation.get("source_digest") == source.source_digest
+            and preservation.get("style_digest") == ctx.snapshot.get("digest")
+            and all(authored.get(key) == preservation.get(key) for key in (
+                "manifest_digest", "source_digest", "source_page_id", "source_page_index",
+                "page_digest", "style_digest")))
+
+
 def _apply_common_header_quality(quality, svg, contract, binding, furniture_receipt):
     """Use the existing render's owned glyph ink and visible paint boxes."""
     if binding is None or not binding.get("applied"):
@@ -193,6 +234,127 @@ def _common_header_body_repair_hint(quality, contract):
         "minimum_body_font_px": quality.get("body_font_floor_px"),
         "instruction": "Repair the failing body elements inside body_box using the original full-canvas coordinates. The witnesses are measured glyph ink or layout boxes, not text anchors; leave clearance for glyph bearings and visible strokes at each edge. Move or reflow the affected elements and related content only. Preserve every word, number, unit, relation, native binding, required image and page count. Keep the frozen header unchanged. Never shrink fonts, clip, hide or delete content, or move or scale the whole body group."},
         ensure_ascii=False, separators=(",", ":"))[:3000]
+
+
+def native_table_line_pitch_hint(quality, svg, preservation):
+    """Explain witnessed same-cell collisions; never alter SVG or the gate."""
+    import xml.etree.ElementTree as ET
+    from services.svg_text_overlap import comparison_fragments, OVERLAP_THRESHOLD_PX, _ink_rect
+    from utils.slide_capture_text_ink import TEXT_INK_PROBE_VERSION
+
+    overlap = quality.get("overlap_basis") or {}
+    if (quality.get("passed") is not False or quality.get("measurement_complete") is not True
+            or overlap.get("version") != TEXT_INK_PROBE_VERSION
+            or not isinstance(svg, str) or not isinstance(preservation, dict)
+            or str(quality.get("source_digest", "")).removeprefix("sha256:") != sha256_hex(svg.encode())):
+        return None
+    elements = (quality.get("browser_metrics") or {}).get("elements") or []
+    if any(not isinstance(item, dict) for item in elements):
+        return None
+    metrics = {item.get("qid"): item for item in elements}
+    if len(metrics) != len(elements):
+        return None
+    try:
+        root = ET.fromstring(svg)
+    except (ValueError, ET.ParseError):
+        return None
+    nodes = list(root.iter())
+    parents = {child: parent for parent in nodes for child in parent}
+    bindings = {item.get("element_id"): item for item in preservation.get("bindings", [])
+                if isinstance(item, dict) and item.get("kind") == "table_cell"}
+
+    def complete_ink(item):
+        measured = quality.get("browser_metrics") or {}
+        fragments = item.get("text_ink_fragments")
+        if (measured.get("fonts_ready") is not True or not quality.get("wrapper_digest")
+                or measured.get("source_digest") != quality["wrapper_digest"]
+                or item.get("font_loaded") is not True
+                or item.get("font_resolution_source") != "loaded-font-face"
+                or not isinstance(fragments, list) or not fragments
+                or len(fragments) != len(item.get("text_fragments") or [])):
+            return False
+        for fragment in fragments:
+            if not isinstance(fragment, dict) or _ink_rect(fragment) is None:
+                return False
+            paint, ink = fragment.get("glyphPaintCoverage") or {}, fragment.get("glyphInkCoverage") or {}
+            if not isinstance(paint, dict) or not isinstance(ink, dict):
+                return False
+            expected = ink.get("expected")
+            clusters = fragment.get("glyphInkClusters")
+            if (paint.get("complete") is not True or ink.get("complete") is not True
+                    or type(expected) is not int or expected < 1
+                    or type(ink.get("measured")) is not int or ink["measured"] != expected
+                    or type(paint.get("expected")) is not int or paint["expected"] != expected
+                    or any(type(paint.get(key)) is not int for key in ("isolated", "pair", "cell"))
+                    or paint["cell"] != 0 or paint["isolated"] < 0 or paint["pair"] < 0
+                    or paint["isolated"] + paint["pair"] != expected
+                    or type(fragment.get("cellClusters")) is not int or fragment["cellClusters"] != 0
+                    or not isinstance(clusters, list) or len(clusters) != expected
+                    or any(not isinstance(cluster, dict) or _ink_rect(cluster) is None
+                        or cluster.get("basis") != "isolated-matching-advance" for cluster in clusters)):
+                return False
+        return True
+
+    def cell(qid, metric):
+        import re
+        if not isinstance(qid, str) or not re.fullmatch(r"svg-\d+", qid):
+            return None
+        ordinal = int(qid[4:])
+        if ordinal >= len(nodes):
+            return None
+        node = nodes[ordinal]
+        if node.tag.rsplit("}", 1)[-1] != "tspan" or metric.get("tag") != "tspan":
+            return None
+        while node is not None:
+            if node.get("id") in bindings:
+                return bindings[node.get("id")]
+            node = parents.get(node)
+        return None
+
+    failed_pairs = [pair for failure in quality.get("failures", [])
+                    if isinstance(failure, dict) and failure.get("kind") == "text_overlap"
+                    for pair in failure.get("pairs", [])]
+    witnessed = []
+    for record in overlap.get("pairs", []):
+        if not isinstance(record, dict):
+            continue
+        pair = record.get("pair") if isinstance(record, dict) else None
+        basis = record.get("basis")
+        if basis not in {"ink_cell", "ink"} or pair not in failed_pairs or not isinstance(pair, list) or len(pair) != 2:
+            continue
+        first, second = (metrics.get(qid) for qid in pair)
+        if (not first or not second or not first.get("has_owned_text") or not second.get("has_owned_text")
+                or not first.get("parent_qid") or first.get("parent_qid") != second.get("parent_qid")):
+            continue
+        first_cell, second_cell = cell(pair[0], first), cell(pair[1], second)
+        if (not first_cell or first_cell != second_cell
+                or any(type(first_cell.get(key)) is not int for key in ("row", "column"))):
+            continue
+        if basis == "ink" and not (complete_ink(first) and complete_ink(second)):
+            continue
+        boxes = next(((a, b) for a, ab in comparison_fragments(first)
+                      for b, bb in comparison_fragments(second) if ab == bb == basis
+                      and min(a["x"] + a["width"], b["x"] + b["width"]) - max(a["x"], b["x"]) > OVERLAP_THRESHOLD_PX
+                      and min(a["y"] + a["height"], b["y"] + b["height"]) - max(a["y"], b["y"]) > OVERLAP_THRESHOLD_PX), None)
+        if boxes is None:
+            continue
+        height = max(box["height"] for box in boxes)
+        breathing_room = max(2.0, height * 0.1)
+        witnessed.append({"pair": pair, "basis": basis, "source_id": first_cell.get("source_id"),
+            "row": first_cell["row"], "column": first_cell["column"],
+            "measured_boxes": list(boxes), "measured_fragment_top_gap_px": abs(boxes[1]["y"] - boxes[0]["y"]),
+            "maximum_fragment_height_px": height, "breathing_room_px": breathing_room,
+            "suggested_minimum_line_pitch_px": math.ceil(height + OVERLAP_THRESHOLD_PX + breathing_room)})
+        if len(witnessed) == 3:
+            break
+    if not witnessed:
+        return None
+    result = {"kind": "native_table_cell_line_pitch", "measurement_version": TEXT_INK_PROBE_VERSION,
+        "overlap_threshold_px": OVERLAP_THRESHOLD_PX, "total_overlap_pairs": len(failed_pairs), "witnesses": witnessed,
+        "instruction": "Examples are sampled, not the complete repair scope. Inspect every multiline cell in every native table on this page for the same measured condition and resolve all other measured failures too. Each pair shares one original cell: ink has complete glyph evidence; ink_cell is a conservative full-height fallback, not proof of painted-glyph contact. Preserve the quality gate. Use fragment height plus the current threshold plus breathing room as a starting pitch bound. measured_fragment_top_gap_px is box-top separation, not measured baseline pitch; suggested_minimum_line_pitch_px is derived guidance, not guaranteed acceptance. Recompose row/cell heights and neighboring placement together, keeping all lines clear of cell edges, shared grid/borders and later paint. Preserve original characters, fonts, table data, row/column identities, spans, merges, required grid proportions and exact canvas/page count. Never shrink fonts, clip, hide or delete content. Remeasure the whole page."}
+    while result["witnesses"] and len(json.dumps(result, ensure_ascii=False, separators=(",", ":"))) > 2600:
+        result["witnesses"].pop()
+    return result if result["witnesses"] else None
 
 
 async def attempt_render(*, ctx, request, presentation_id, index, content, payload, svg, ordinal,
@@ -408,6 +570,15 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
                 code=code if source_plan_failure or code.startswith("svg_common_header_") else "svg_validation_failed",
                 retryable=False) from error
         return RETRY
+    font_fallback = (rendered.quality.get("trusted_font_materialization") or {}).get("fallback")
+    if ctx.source_reflow and isinstance(payload.get("source_preservation"), dict) and font_fallback is not None:
+        if (not isinstance(font_fallback, dict)
+                or font_fallback.get("schema") != "svg-template-glyph-fallback/v1"
+                or str(font_fallback.get("canonical_svg_digest", "")).removeprefix("sha256:") != sha256_hex(final.encode())):
+            raise AuthoredStageError(slide_index=index, stage="render",
+                code="svg_template_fallback_binding_invalid", retryable=False)
+        payload["source_preservation"] = {**payload["source_preservation"],
+            "render_font_fallback": json.loads(json.dumps(font_fallback, ensure_ascii=False))}
     if cache_remeasurement and (
             sha256_hex(rendered.png) != cache_remeasurement.get("png_sha256")
             or str(rendered.quality.get("source_digest", "")).removeprefix("sha256:") != cache_remeasurement.get("source_sha256")
@@ -517,8 +688,10 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
             local["remeasurement_passed"] = bool(payload.get("quality", {}).get("passed")) if result is not RETRY else False
             await checkpoint(job, index, payload=payload)
             return result
-    if rendered.quality.get("passed") is False and ordinal == 0 and not payload.get("repair_unavailable"):
+    if (rendered.quality.get("passed") is False and not payload.get("repair_unavailable")
+            and (ordinal == 0 or ordinal == 1 and source_structural_visual_retry(ctx, payload, index=index))):
         header_body_hint = _common_header_body_repair_hint(rendered.quality, ctx.snapshot.get("common_header"))
+        table_pitch = native_table_line_pitch_hint(rendered.quality, final, payload.get("source_preservation"))
         timeline_collisions = rendered.quality.get("timeline_caption_ink", {}).get("collisions")
         classification = rendered.quality.get("source_classification_association", {})
         paint_occlusion = rendered.quality.get("source_paint_occlusion", {})
@@ -549,6 +722,9 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
                 "witnesses": timeline_collisions[:3]}, ensure_ascii=False)[:3000]
         elif header_body_hint:
             hint = header_body_hint
+        elif table_pitch:
+            hint = json.dumps({"kind": "svg_readability_repair", "native_table_line_pitch": table_pitch},
+                ensure_ascii=False, separators=(",", ":"))[:3000]
         elif readability_policy is not None:
             hint = json.dumps({"kind": "svg_readability_repair", "failures": rendered.quality.get("failures", []),
                 "physical_page": {key: readability_policy[key] for key in ("purpose", "width_emu", "height_emu", "minimum_font_pt")},

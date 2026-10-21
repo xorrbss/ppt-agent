@@ -8,6 +8,8 @@ import hashlib
 import json
 from pathlib import Path
 import re
+from collections import Counter
+import xml.etree.ElementTree as ET
 
 from services.svg_source_layout import SvgLayoutPlan, assemble_source_svg, page_digest, source_pages
 from services.svg_contract import source_digest
@@ -64,6 +66,96 @@ def _whole_page_facts(page, image_slots):
     return facts
 
 
+def source_binding_correction_hint(page, image_slots, previous_response, hint):
+    """Explain source failures to the existing bounded provider correction only."""
+    if not hint or not hint.startswith(("svg_source_receipt_", "svg_source_native_table_", "svg_contract_invalid_id")) or not isinstance(previous_response, str):
+        return hint
+    from services.svg_contract import normalize_svg_response, SVG_NS
+
+    svg = normalize_svg_response(previous_response)
+    if re.search(r"<!|<\?", svg):
+        return hint
+    try:
+        root = ET.fromstring(svg)
+    except ET.ParseError:
+        return hint
+    facts = _whole_page_facts(page, image_slots)
+    expected = {}
+    chart_ids = {fact["element_id"] for fact in facts if fact["kind"] == "chart"}
+    for fact in facts:
+        record = {key: fact[key] for key in ("source_id", "kind", "element_id")}
+        if fact["kind"] == "text":
+            record["expected_text"] = fact["data"]["text"]
+        if fact["kind"] == "image":
+            record["expected_slot_id"] = fact["slot_id"]
+        relationships = {key: fact["data"][key] for key in ("headEnd", "tailEnd", "stCxn", "endCxn")
+                         if key in fact["data"]}
+        if relationships:
+            record["expected_relationships"] = relationships
+        if fact.get("connections"):
+            record["expected_connections"] = fact["connections"]
+        expected[fact["element_id"]] = record
+        for cell in fact.get("cells", []):
+            expected[cell["element_id"]] = dict(source_id=fact["source_id"], kind="table_cell",
+                element_id=cell["element_id"], row=cell["row"], column=cell["column"],
+                expected_text=cell["text"])
+    nodes = list(root.iter())
+    counts = Counter(node.get("id") for node in nodes if node.get("id"))
+    by_id = {node.get("id"): node for node in nodes if node.get("id")}
+    missing, mismatched, duplicate = [], [], []
+    for identity, record in expected.items():
+        node = by_id.get(identity)
+        if node is None:
+            missing.append(record)
+        elif counts[identity] > 1:
+            duplicate.append({**record, "observed_count": counts[identity]})
+        elif "expected_text" in record and (
+                node.tag != f"{{{SVG_NS}}}text" or "".join(node.itertext()) != record["expected_text"]):
+            mismatched.append({**record, "observed_text": "".join(node.itertext())})
+        elif record["kind"] == "image" and (
+                node.tag != f"{{{SVG_NS}}}image" or node.get("href") != record["expected_slot_id"]):
+            mismatched.append({**record, "observed_slot_id": node.get("href")})
+    chart_children = {id(node) for group in nodes
+                      if group.get("id") in chart_ids or group.get("data-native-chart") is not None
+                      for node in group.iter()}
+    extra = [{"element_id": node.get("id"), "kind": node.tag.rsplit("}", 1)[-1],
+              **({"observed_text": "".join(node.itertext())} if node.tag == f"{{{SVG_NS}}}text" else {})}
+             for node in nodes if node.tag in {f"{{{SVG_NS}}}text", f"{{{SVG_NS}}}image"}
+             and node.get("id") not in expected and id(node) not in chart_children]
+    from services.svg_source_native_tables import source_table_grid_correction
+    table_grids = []
+    for block in page.blocks:
+        if block.kind != "table":
+            continue
+        fact = next(fact for fact in facts if fact["source_id"] == block.source_block_id)
+        group = by_id.get(fact["element_id"])
+        if group is not None and group.tag == f"{{{SVG_NS}}}g":
+            detail = source_table_grid_correction(block, group)
+            if detail:
+                table_grids.append(detail)
+    if not any((missing, mismatched, duplicate, extra, table_grids)):
+        return hint
+    records = dict(missing=missing, mismatched=mismatched, duplicate=duplicate, extra=extra, table_grids=table_grids)
+    detail = {key: [dict(record) for record in values[:6]] for key, values in records.items()}
+    detail["total_counts"] = {key: len(values) for key, values in records.items()}
+    for values in records.keys():
+        for record in detail[values]:
+            for key, limit in (("expected_text", 512), ("observed_text", 256)):
+                if key in record and len(record[key]) > limit:
+                    record[key + "_length"] = len(record[key])
+                    record[key + "_truncated"] = True
+                    record[key] = record[key][:limit]
+    detail.update(
+        instruction="Correct these exact source facts and identities. Preserve all other source facts, "
+                       "characters, images and relationships; do not summarize or invent replacements. "
+                       "Full original wording remains in source_facts when a diagnostic excerpt is truncated.")
+    while len(json.dumps(detail, ensure_ascii=False)) > 12000 and any(detail[key] for key in records):
+        largest = max(records, key=lambda key: len(json.dumps(detail[key], ensure_ascii=False)))
+        detail[largest].pop()
+    detail["reported_counts"] = {key: len(detail[key]) for key in records}
+    return hint + "\n" + json.dumps({"source_binding_correction": detail}, ensure_ascii=False)
+
+
 async def _author_source_whole_page(manifest, page_index, style_snapshot, *, source_images,
         image_slots, min_font_size_px, width, height, instructions, correction_hint,
         receipt_attempt_ordinal, before_dispatch, _validated_pages, visual_intent, previous_svg,
@@ -84,9 +176,16 @@ async def _author_source_whole_page(manifest, page_index, style_snapshot, *, sou
         "Emit each source image once with its specified slot_id and element_id. "
         "Retain every source shape/connector under its specified element_id, preserving directions and relationships. "
         "Do not invent labels, page numbers or wordmark text outside the source facts. "
+        "Original visible page numbers, footer text and section numbers already in source facts "
+        "are mandatory literal text: retain their exact element_id and characters, without "
+        "adding a duplicate system page number or footer. "
         "For each source table use its specified element_id on a direct child g; preserve all cells and merges. "
-        "The existing source-table native export accepts a uniform row/column grid of cell rects and source cell text, "
+        "Use one consistent row/column grid of cell rects and source cell text; column widths and row heights "
+        "may differ to fit the original cell contents readably, "
         "one rect per unmerged anchor cell in source order, with merged cells spanning their exact rows/columns. "
+        "All cells sharing a logical column or row boundary must use the same x or y boundary; every row/column "
+        "interval must be positive and evidenced by the drawn rects, without gaps or overlapping cells. "
+        "Source columnWidthsEmu and rowHeightsEmu describe the original geometry, not required output sizes. "
         "Choose the table's position, overall size, typography and surrounding composition freely; "
         "keep table group attributes to its id, with no transform, and put captions outside. "
         "If this native data geometry cannot preserve the source, fail rather than dropping cells or flattening data. "
@@ -124,7 +223,7 @@ async def _author_source_whole_page(manifest, page_index, style_snapshot, *, sou
             correction_kwargs["previous_render_png_digest"] = previous_render_png_digest
     authored = await author_slide_svg(content=content, style_snapshot=style_snapshot, role="content",
         index=page_index, n=len(pages), instructions=(instructions or "") + "\n" + source_rules,
-        correction_hint=correction_hint, source_images=source_images,
+        correction_hint=correction_hint, source_images=source_images, canonical_source_images=True,
         receipt_attempt_ordinal=receipt_attempt_ordinal, before_dispatch=before_dispatch,
         visual_intent=visual_intent, previous_svg=previous_svg,
         writing_policy=writing_policy, source_preserved=True, header_page=header_page,
@@ -136,7 +235,8 @@ async def _author_source_whole_page(manifest, page_index, style_snapshot, *, sou
         svg, preservation = bind_whole_page_source_svg(authored.svg_content, manifest, page_index,
             facts=facts, width=width, height=height, style_snapshot=style_snapshot,
             minimum_font_px=min_font_size_px, _validated_pages=pages,
-            native_declarations=authored.native_declarations)
+            native_declarations=authored.native_declarations,
+            restore_source_lf=True, raw_output_digest=source_digest(authored.raw_response))
         authored.receipt.update(source_preservation=preservation, source_digest=source_digest(svg))
         return SvgAuthorResult(svg, authored.raw_response, authored.receipt, authored.native_declarations)
     except (ValueError, TypeError, KeyError) as error:

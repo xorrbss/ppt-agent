@@ -85,6 +85,7 @@ from services.workspace_generation_timing_payload import (
 logger = logging.getLogger(__name__)
 
 PRESENTATION_GENERATION_OPERATION_KIND = "presentation.generate"
+_PARTIAL_RECOVERY_PREPARATION_LEASE_SECONDS = 900
 
 
 def _begin_upstream_outline_timing(request: object) -> None:
@@ -671,6 +672,35 @@ class PresentationGenerationOperationHandler:
             context=context,
             claim_linked=claim_workspace_linked_generation_job,
         )
+        carrier = claim.request_payload or {}
+        if carrier.get("recovery_revision") == "svg-partial-recovery/v1":
+            from services.svg_partial_recovery import LINEAGE_KEY, digest
+
+            payload = linked_job.request_payload or {}
+            lineage = payload.get(LINEAGE_KEY)
+            manifest = carrier.get("svg_partial_recovery_manifest")
+            manifest_hash = carrier.get("svg_partial_recovery_manifest_hash")
+            if (not isinstance(lineage, dict) or not isinstance(manifest, dict)
+                    or manifest.get("append_only_recovery") is not True
+                    or linked_job.id != job_id or linked_job.workspace_operation_id != claim.operation_id
+                    or linked_job.presentation_id != claim.presentation_id
+                    or carrier.get("generation_request") != payload
+                    or carrier.get("svg_partial_recovery_lineage") != lineage
+                    or lineage.get("schema") != "svg-partial-recovery-lineage/v2"
+                    or lineage.get("operation_id") != str(claim.operation_id)
+                    or lineage.get("job_id") != str(job_id)
+                    or lineage.get("presentation_id") != str(claim.presentation_id)
+                    or lineage.get("manifest_hash") != manifest_hash
+                    or digest(manifest) != manifest_hash
+                    or lineage.get("archive_digest") != manifest.get("archive_digest")
+                    or manifest.get("owner_id") != str(claim.owner_id)
+                    or manifest.get("expected_page_count") != linked_job.total_slides):
+                raise NonRetryableWorkspaceOperationError("svg_partial_recovery_episode_unbound")
+            # Pure archive validation shares this loop with the regular heartbeat.
+            extend_preparation = getattr(context, "extend_lease", None)
+            if not callable(extend_preparation) or not await extend_preparation(
+                    seconds=_PARTIAL_RECOVERY_PREPARATION_LEASE_SECONDS):
+                raise WorkspaceOperationLeaseLost("presentation_generation_lifecycle_fenced")
         if claim.attempt_number > 1:
             async with self._session_factory() as session:
                 checkpoint_reuse_count = int(

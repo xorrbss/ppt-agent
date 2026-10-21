@@ -62,6 +62,9 @@ class LocalContentAddressedStore:
         self.output_root = resolved_output.resolve(strict=False)
         self._operation_scoped = self.input_root != self.output_root
         self._active_deadline_epoch_seconds = active_deadline_epoch_seconds
+        # Per-store (one worker job) read counters for the single end-of-job log line.
+        self.cas_reads = 0
+        self.cas_bytes_hashed = 0
         self.output_root.mkdir(parents=True, exist_ok=True)
 
     def _attempt_active(self) -> bool:
@@ -125,7 +128,8 @@ class LocalContentAddressedStore:
             ) from error
         return candidate
 
-    def verified_path(self, reference: ArtifactRef) -> pathlib.Path:
+    def _checked_path(self, reference: ArtifactRef) -> tuple[pathlib.Path, bool]:
+        """Deadline, containment, TTL and size checks shared by ``verified_path`` and ``read``."""
         self._require_active_deadline()
         path = self._path(reference.storage_key)
         if not path.is_file() and self.output_root != self.input_root:
@@ -147,10 +151,16 @@ class LocalContentAddressedStore:
         size = stat.st_size
         if size != reference.size_bytes or size > MAX_ARTIFACT_BYTES:
             raise PublicWorkerExecutionError("public_worker_artifact_size_mismatch")
+        return path, is_output
+
+    def verified_path(self, reference: ArtifactRef) -> pathlib.Path:
+        path, is_output = self._checked_path(reference)
         digest = hashlib.sha256()
         with path.open("rb") as stream:
             while chunk := stream.read(1024 * 1024):
                 digest.update(chunk)
+        self.cas_reads += 1
+        self.cas_bytes_hashed += reference.size_bytes
         if digest.hexdigest() != reference.sha256:
             raise PublicWorkerExecutionError("public_worker_artifact_digest_mismatch")
         if is_output:
@@ -158,7 +168,21 @@ class LocalContentAddressedStore:
         return path
 
     def read(self, reference: ArtifactRef) -> bytes:
-        return self.verified_path(reference).read_bytes()
+        """One read of the object: the returned bytes are the very bytes that were hashed
+        (``verified_path`` + ``read_bytes`` read the file twice and could hand back bytes that
+        were not the ones verified)."""
+        path, is_output = self._checked_path(reference)
+        with path.open("rb") as stream:
+            payload = stream.read(reference.size_bytes + 1)
+        self.cas_reads += 1
+        self.cas_bytes_hashed += len(payload)
+        if len(payload) != reference.size_bytes:
+            raise PublicWorkerExecutionError("public_worker_artifact_size_mismatch")
+        if hashlib.sha256(payload).hexdigest() != reference.sha256:
+            raise PublicWorkerExecutionError("public_worker_artifact_digest_mismatch")
+        if is_output:
+            os.utime(path, None)
+        return payload
 
     def put(
         self,

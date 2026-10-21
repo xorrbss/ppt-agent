@@ -257,11 +257,12 @@ async def execute_export(
     job: IsolatedWorkerJob,
     store: LocalContentAddressedStore,
 ) -> WorkerOutput:
-    from workers.public_svg_export_worker import is_svg_export_bundle, execute_svg_export
+    from workers.public_svg_export_worker import load_svg_export_bundle, execute_svg_export
 
-    if is_svg_export_bundle(job, store):
+    svg_bundle = load_svg_export_bundle(job, store)
+    if svg_bundle is not None:
         try:
-            return await execute_svg_export(job, store)
+            return await execute_svg_export(job, store, bundle=svg_bundle)
         except PublicWorkerExecutionError:
             raise
         except Exception as error:

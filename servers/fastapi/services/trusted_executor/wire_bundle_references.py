@@ -10,7 +10,9 @@ from services.isolated_worker_contracts import ArtifactRef, IsolatedWorkerJob
 from services.trusted_executor.worker_dispatcher import TrustedWorkerWireError
 from utils.hashing import sha256_hex
 
-MAX_EXPORT_BUNDLE_BYTES = 8 * 1024 * 1024
+# The svg export bundle inlines the sealed source manifest, which scales with the source
+# document (a 100-page deck measured 13 MB of an 18 MB bundle).
+MAX_EXPORT_BUNDLE_BYTES = 32 * 1024 * 1024
 
 
 def _furniture_metadata_valid(value: object) -> bool:

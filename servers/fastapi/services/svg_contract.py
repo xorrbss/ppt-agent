@@ -144,6 +144,10 @@ def validate_svg(
         if parent not in {None, "svg", "g", "text"}:
             raise ValueError("svg_contract_invalid_parent")
         for key, value in node.attrib.items():
+            if name in {"text", "tspan"} and key == "{http://www.w3.org/XML/1998/namespace}space":
+                if value not in {"default", "preserve"}:
+                    raise ValueError("svg_contract_invalid_xml_space")
+                continue
             if paragraph_dy and name == "tspan" and key == "dy":
                 values = _numbers(value)
                 if len(values) != 1 or not 0 < values[0] <= _MAX_TSPAN_DY:

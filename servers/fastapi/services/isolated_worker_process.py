@@ -30,7 +30,8 @@ NETWORK_NONE_ATTESTATION = "nonroot-readonly-tmpfs-network-none"
 WINDOWS_LOCAL_DEVELOPMENT_ATTESTATION = "windows-job-object-local-development"
 MAX_JOB_BYTES = 2 * 1024 * 1024
 MAX_RESULT_BYTES = 16 * 1024 * 1024
-MAX_EXECUTION_EVIDENCE_BYTES = 256 * 1024
+# Same bound as workers.public_worker_runtime; inside MAX_RESULT_BYTES (see there).
+MAX_EXECUTION_EVIDENCE_BYTES = 8 * 1024 * 1024
 _ENV_ALLOWLIST = frozenset(
     {
         "CHROME_PATH",

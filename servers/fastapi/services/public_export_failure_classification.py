@@ -55,6 +55,10 @@ NON_RETRYABLE_PUBLIC_EXPORT_MARKERS = (
     "input_too_large",
     "payload_too_large",
     "request_too_large",
+    # The worker's evidence is a pure function of the same bundle: a retry
+    # would repeat the whole preparation only to fail identically.
+    "evidence_too_large",
+    "evidence_invalid",
 )
 RETRYABLE_PUBLIC_EXPORT_FAILURE_CODE = "presentation_export_failed"
 

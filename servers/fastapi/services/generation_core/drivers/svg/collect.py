@@ -1,6 +1,6 @@
 """The per-deck SVG generation loop: fan out one durable page-attempt task per
-slide, drive each page's attempt ``while`` loop (author -> render, at most one
-model correction), then classify every page, run the deck's vision advisory and
+slide, drive each page's bounded attempt ``while`` loop (author -> render),
+then classify every page, run the deck's vision advisory and
 hand the pages to publication.
 
 A page that runs out of attempts no longer cancels the deck by itself: the
@@ -647,6 +647,55 @@ async def _cached_author_render_page(ctx, request, presentation_id, index, conte
     return result
 
 
+def _page_render_environment(ctx, request, index):
+    from dataclasses import asdict, is_dataclass
+    from services.generation_core.drivers.svg.quality_recovery import _quality_json_value
+    from services.public_render_runtime_identity import public_render_runtime_binding
+    from services.svg_partial_recovery import _page_render_code_digest
+
+    validation = getattr(ctx, "quality_recovery_validation_context", None)
+    if (not isinstance(validation, dict)
+            or getattr(ctx, "quality_recovery_checkpoint_reuse_eligible", False) is not True):
+        return None
+    worker = public_render_runtime_binding()
+    if (worker.get("checkpointReuseEligible") is not True
+            or validation.get("runtime_digest") != "sha256:" + _digest(worker)
+            or any(not isinstance(validation.get(key), str) or not validation[key]
+                   for key in ("contract_version", "renderer_digest", "fonts_digest"))):
+        return None
+    profile = getattr(ctx, "runtime_profile", None)
+    runtime = (profile.model_dump(mode="json") if hasattr(profile, "model_dump")
+               else asdict(profile) if is_dataclass(profile)
+               else vars(profile) if profile is not None else None)
+    return _quality_json_value({
+        "validation": deepcopy(validation),
+        "page_render_contract": "svg-page-render-environment/v2",
+        "render_code": _page_render_code_digest(),
+        "style": _digest(ctx.snapshot),
+        "assets": _digest(ctx.manifests[index]), "font_profile": ctx.source_font_profile,
+        "canvas": [ctx.canvas.width_px, ctx.canvas.height_px],
+        "physical": deepcopy(ctx.physical_kwargs), "runtime_profile": deepcopy(runtime),
+        "index": index, "count": ctx.count, "role": ctx.roles[index],
+        "source_reflow": ctx.source_reflow, "raster_reconstruction": ctx.raster_reconstruction,
+        "instructions": request.instructions,
+        "writing_policy": deepcopy(getattr(request, "writing_policy", None)),
+    })
+
+
+def _record_page_render_evidence(payload, environment):
+    from services.svg_partial_recovery import (
+        _page_render_result_digest, _verified_page_render_evidence,
+    )
+
+    payload.pop("page_render_evidence", None)
+    if environment is not None:
+        payload["page_render_evidence"] = {
+            "environment": deepcopy(environment),
+            "result_digest": _page_render_result_digest(payload),
+        }
+        if _verified_page_render_evidence(payload) is None:
+            payload.pop("page_render_evidence")
+
 async def _remeasure_partial_cached_page(ctx, request, presentation_id, index, content,
                                        saved, input_digest, job, hooks):
     """Measure a bound prior SVG without purchasing or replacing its author bytes."""
@@ -666,6 +715,22 @@ async def _remeasure_partial_cached_page(ctx, request, presentation_id, index, c
         await ensure_recovery_authority(job, hooks)
         await hooks.checkpoint(job, index, payload=payload)
         return payload, png
+    from services.svg_partial_recovery import _verified_page_render_evidence
+    render_environment = _page_render_environment(ctx, request, index)
+    local_render = (_verified_page_render_evidence(payload)
+                    if _digest(payload.get("page_render_evidence")) == witness.get("page_render_evidence_digest")
+                    else None)
+    if (local_render is not None and render_environment is not None
+            and local_render[0]["environment"] == render_environment):
+        from services.generation_core.drivers.svg.quality_recovery import ensure_recovery_authority
+        await ensure_recovery_authority(job, hooks)
+        if getattr(ctx, "quality_recovery_input_binding", None):
+            from services.generation_core.drivers.svg.quality_recovery import local_evidence_binding
+            payload["quality_recovery_local_evidence"] = local_evidence_binding(
+                ctx.quality_recovery_input_binding, payload)
+        await hooks.checkpoint(job, index, payload=payload)
+        return payload, local_render[1]
+    payload.pop("page_render_evidence", None)
     current_phase = (saved.get("partial_recovery") or {}).get("phase", "finalized")
 
     async def guarded_checkpoint(active_job, page_index, *, payload=None):
@@ -697,10 +762,14 @@ async def _remeasure_partial_cached_page(ctx, request, presentation_id, index, c
     if result is render.RETRY or payload.get("quality", {}).get("passed") is not True:
         raise AuthoredStageError(slide_index=index, stage="render",
                                  code="svg_partial_recovery_cached_quality_failed", retryable=False)
+    _record_page_render_evidence(payload, render_environment if render_environment
+        == _page_render_environment(ctx, request, index) else None)
     if getattr(ctx, "quality_recovery_input_binding", None):
         from services.generation_core.drivers.svg.quality_recovery import local_evidence_binding
         payload["quality_recovery_local_evidence"] = local_evidence_binding(
             ctx.quality_recovery_input_binding, payload)
+        await guarded_checkpoint(job, index, payload=payload)
+    elif payload.get("page_render_evidence") is not None:
         await guarded_checkpoint(job, index, payload=payload)
     return result
 
@@ -876,7 +945,7 @@ async def _page(ctx, request, presentation_id, outline, language, job, index, st
                 payload["rasterCompositionMode"] = "free-svg"
             if not payload.get("attempts") and not free_redesign:
                 payload["attempts"] = [{"kind": "local", "receipt": {}}]
-        # At most one model correction. Persist the ordinal before purchase;
+        # Persist the ordinal before each bounded correction purchase;
         # an uncertain provider attempt is not silently bought again on resume.
         if svg is None and payload.get("inflight"):
             raise AuthoredStageError(slide_index=index, stage="author",
@@ -906,7 +975,7 @@ async def _page(ctx, request, presentation_id, outline, language, job, index, st
 
 
 async def _attempt_loop(ctx, request, presentation_id, index, content, payload, job, state, hooks):
-    """Author -> render until the page verifies, with at most one model correction."""
+    """Author -> render; a source structural correction may precede one visual correction."""
     role = ctx.roles[index]
     attempt_limit = _provider_attempt_limit(payload, index=index, job=job)
     if getattr(ctx, "header_author_attempt_identity", None) is not None:
@@ -918,9 +987,13 @@ async def _attempt_loop(ctx, request, presentation_id, index, content, payload, 
         from services.generation_core.drivers.svg.quality_recovery import reserved_recovery_candidate
         reserved_recovery_candidate(ctx, index, content, payload)
         attempt_limit = 3
+    def current_attempt_limit():
+        return (3 if attempt_limit == 2 and render.source_structural_visual_retry(ctx, payload, index=index)
+                else attempt_limit)
+
     while payload.get("svg_content") is not None or (
             current_episode_attempt_count(ctx, payload, index) if partial_known
-            else _provider_attempt_count(payload)) < attempt_limit:
+            else _provider_attempt_count(payload)) < current_attempt_limit():
         if state.fatal_error is not None:
             raise state.fatal_error
         provider_count = _provider_attempt_count(payload)
@@ -929,7 +1002,7 @@ async def _attempt_loop(ctx, request, presentation_id, index, content, payload, 
         if svg is None:
             if getattr(ctx, "quality_recovery_input_binding", None):
                 from services.generation_core.drivers.svg.quality_recovery import ensure_recovery_authority
-                if current_episode_attempt_count(ctx, payload, index) >= attempt_limit:
+                if current_episode_attempt_count(ctx, payload, index) >= current_attempt_limit():
                     raise AuthoredStageError(slide_index=index, stage="author",
                         code="svg_repair_budget_exhausted", retryable=False)
                 await ensure_recovery_authority(job, hooks)
@@ -942,6 +1015,7 @@ async def _attempt_loop(ctx, request, presentation_id, index, content, payload, 
             if author_result.retry:
                 continue
             svg = author_result.svg
+        render_environment = _page_render_environment(ctx, request, index)
         with timing.observe_stage(request, "render"):
             render_result = await render.attempt_render(
                 ctx=ctx, request=request, presentation_id=presentation_id, index=index, content=content,
@@ -949,6 +1023,8 @@ async def _attempt_loop(ctx, request, presentation_id, index, content, payload, 
                 async_session_maker=hooks.async_session_maker, write_png=hooks.write_png)
         if render_result is render.RETRY:
             continue
+        _record_page_render_evidence(payload, render_environment if render_environment
+            == _page_render_environment(ctx, request, index) else None)
         if getattr(ctx, "quality_recovery_input_binding", None):
             from services.generation_core.drivers.svg.quality_recovery import local_evidence_binding
             payload["quality_recovery_local_evidence"] = local_evidence_binding(
@@ -957,6 +1033,8 @@ async def _attempt_loop(ctx, request, presentation_id, index, content, payload, 
             if payload.get("quality_recovery", {}).get("status") == "repair_pending":
                 payload["quality_recovery"]["status"] = "candidate_ready"
                 await hooks.checkpoint(job, index, payload=payload)
+        elif payload.get("page_render_evidence") is not None:
+            await hooks.checkpoint(job, index, payload=payload)
         return render_result
     raise AuthoredStageError(slide_index=index, stage="author",
                             code="svg_repair_budget_exhausted", retryable=False)

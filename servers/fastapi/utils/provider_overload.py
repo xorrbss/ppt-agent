@@ -84,6 +84,19 @@ _SAFE_RESPONSE_ID = re.compile(r"resp_[A-Za-z0-9_-]{1,128}\Z")
 _USAGE_FIELDS = frozenset({"input_tokens", "output_tokens", "total_tokens", "reasoning_tokens", "cached_tokens"})
 
 
+from contextvars import ContextVar
+
+_PROVIDER_CALL_DEADLINE = ContextVar("provider_call_absolute_deadline", default=None)
+
+
+def current_provider_call_remaining_seconds():
+    bound = _PROVIDER_CALL_DEADLINE.get()
+    if bound is None or bound[0] is None:
+        return None
+    deadline, clock = bound
+    return max(0.0, deadline - clock())
+
+
 def _structured_provider_error_fields(error: BaseException) -> dict[str, object]:
     """Select SDK error fields without retaining its message or response body."""
     body = getattr(error, "body", None)
@@ -438,6 +451,13 @@ class BoundedProviderCall:
         if self._reserve_retry is not None:
             self._reserve_retry.claim()
 
+    def _run_with_deadline(self, remaining, deadline):
+        token = _PROVIDER_CALL_DEADLINE.set((deadline, self._clock))
+        try:
+            return self._run(remaining)
+        finally:
+            _PROVIDER_CALL_DEADLINE.reset(token)
+
     def __call__(self) -> Any:
         deadline = (
             self._clock() + self._deadline_seconds
@@ -458,7 +478,7 @@ class BoundedProviderCall:
                 int(self._receipt["physicalCallCount"]) + 1
             )
             try:
-                return self._run(remaining)
+                return self._run_with_deadline(remaining, deadline)
             except ProviderQuotaPause as pause:
                 self._receipt["quotaPauseResetAt"] = pause.reset_at
                 self._receipt.setdefault("failureDiagnostics", []).append(safe_provider_diagnostics(pause))

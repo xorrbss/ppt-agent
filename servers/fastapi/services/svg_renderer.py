@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import base64
+import json
 from dataclasses import replace
 from functools import lru_cache
 import re
@@ -79,7 +80,7 @@ def materialize_trusted_svg_fonts(source: str, admitted):
 
 
 def _template_font_used(root: ET.Element) -> bool:
-    from utils.svg_template_fonts import FONT_FAMILY, font_material, require_font_coverage
+    from utils.svg_template_fonts import FONT_FAMILY, font_material, trusted_font_fallback_plan
 
     nodes = [node for node in root.iter() if node.tag.rsplit("}", 1)[-1] == "text"]
     if not any(node.get("font-family", "").strip("'\"") == FONT_FAMILY for node in nodes):
@@ -89,14 +90,74 @@ def _template_font_used(root: ET.Element) -> bool:
         # cannot use the template profile as evidence for a silent fallback.
         family = node.get("font-family", "").strip("'\"")
         font_material(family, node.get("font-weight", "400"))
-        require_font_coverage("".join(node.itertext()), family)
         if any(child.get("font-family", family).strip("'\"") != family for child in node.iter()):
             raise ValueError("svg_template_font_mixed_families")
+        trusted_font_fallback_plan("".join(node.itertext()), family, node.get("font-weight", "400"))
     return True
 
 
+def _svg_fragment(html: str):
+    match = re.search(r"(<(?:[A-Za-z_][\w.-]*:)?svg\b.*?</(?:[A-Za-z_][\w.-]*:)?svg>)", html, re.I | re.S)
+    if match is None:
+        raise ValueError("svg_trusted_font_wrapper_invalid")
+    return match
+
+
+def _fallback_binding(proof):
+    if proof is None:
+        return None
+    from utils.hashing import canonical_json_sha256
+    return canonical_json_sha256({key: proof[key] for key in (
+        "schema", "offset_unit", "primary_family", "primary_font_digest", "fallback_family",
+        "fallback_font_digest", "fallback_weight", "runs")})
+
+
+def _fallback_comment(svg: str) -> str:
+    from utils.svg_template_fonts import materialize_template_fallbacks
+    _derived, proof = materialize_template_fallbacks(svg)
+    marker = _fallback_binding(proof)
+    return f"<!--presenton-template-fallback:{marker}-->" if marker else ""
+
+
+def _declared_fallback(source: str):
+    markers = re.findall(r"<!--presenton-template-fallback:([a-f0-9]{64})-->", source)
+    if len(markers) > 1:
+        raise ValueError("svg_template_fallback_binding_invalid")
+    return markers[0] if markers else None
+
+
+def _inject_template_fonts(admitted, *, expected_fallback):
+    """Only derive from admitted markup; never restore pre-admission attributes."""
+    from utils.svg_template_fonts import FONT_PROFILE, materialize_template_fallbacks, template_font_faces
+
+    match = _svg_fragment(admitted.html)
+    canonical = match.group(1)
+    if not _template_font_used(ET.fromstring(canonical)):
+        raise ValueError("svg_trusted_font_profile_unused")
+    derived, proof = materialize_template_fallbacks(canonical)
+    if _fallback_binding(proof) != expected_fallback:
+        raise ValueError("svg_template_fallback_binding_invalid")
+    csp_font_none = "font-src &#x27;none&#x27;"
+    if admitted.html.count(csp_font_none) != 1 or "</head>" not in admitted.html:
+        raise ValueError("svg_trusted_font_csp_invalid")
+    faces, digests = [], []
+    for family, weight, digest, payload in template_font_faces(canonical):
+        encoded = base64.b64encode(payload).decode("ascii")
+        faces.append(f"@font-face{{font-family:'{family}';font-style:normal;font-weight:{weight};"
+                     f"src:url(data:font/ttf;base64,{encoded}) format('truetype');}}")
+        digests.append(digest)
+    injected = admitted.html[:match.start(1)] + derived + admitted.html[match.end(1):]
+    injected = injected.replace(csp_font_none, "font-src data:", 1).replace(
+        "</head>", f'<style data-presenton-trusted-font-profile="{FONT_PROFILE}">'
+        + "".join(faces) + "</style></head>", 1)
+    added = len(list(ET.fromstring(derived).iter())) - len(list(ET.fromstring(canonical).iter()))
+    return replace(admitted, html=injected,
+        asset_digests=tuple(dict.fromkeys((*admitted.asset_digests, *digests))),
+        node_count=admitted.node_count + 1 + added)
+
+
 def _materialize_template_font(source: str, admitted):
-    from utils.svg_template_fonts import FONT_FAMILY, FONT_PROFILE, font_material, trusted_font_marker
+    from utils.svg_template_fonts import trusted_font_marker
 
     declaration = f'<html title="{trusted_font_marker()}">'
     if source.count(declaration) != 1 or "data:font/" in source.casefold() or "@font-face" in source.casefold():
@@ -104,36 +165,16 @@ def _materialize_template_font(source: str, admitted):
     match = re.search(r"(<(?:[A-Za-z_][\w.-]*:)?svg\b.*?</(?:[A-Za-z_][\w.-]*:)?svg>)", source, re.I | re.S)
     if match is None or not _template_font_used(ET.fromstring(match.group(1))):
         raise ValueError("svg_trusted_font_profile_unused")
-    csp_font_none = "font-src &#x27;none&#x27;"
-    if admitted.html.count(csp_font_none) != 1 or "</head>" not in admitted.html:
-        raise ValueError("svg_trusted_font_csp_invalid")
-    digest, payload = font_material(FONT_FAMILY)
-    encoded = base64.b64encode(payload).decode("ascii")
-    # One variable font payload covers all permitted weights, once per page.
-    face = (f"@font-face{{font-family:'{FONT_FAMILY}';font-style:normal;font-weight:100 900;"
-            f"src:url(data:font/ttf;base64,{encoded}) format('truetype');}}")
-    injected = admitted.html.replace(csp_font_none, "font-src data:", 1).replace(
-        "</head>", f'<style data-presenton-trusted-font-profile="{FONT_PROFILE}">{face}</style></head>', 1)
-    return replace(admitted, html=injected,
-        asset_digests=tuple(dict.fromkeys((*admitted.asset_digests, digest))), node_count=admitted.node_count + 1)
+    return _inject_template_fonts(admitted, expected_fallback=_declared_fallback(source))
 
 
 def _materialize_authorized_raster_font(canonical: ET.Element, admitted):
     """Embed packaged Noto for authorized raster derivatives with real text."""
     if not _template_font_used(canonical):
         return admitted
-    from utils.svg_template_fonts import FONT_FAMILY, FONT_PROFILE, font_material
-    csp_font_none = "font-src &#x27;none&#x27;"
-    if admitted.html.count(csp_font_none) != 1 or "</head>" not in admitted.html:
-        raise ValueError("svg_trusted_font_csp_invalid")
-    digest, payload = font_material(FONT_FAMILY)
-    encoded = base64.b64encode(payload).decode("ascii")
-    face = (f"@font-face{{font-family:'{FONT_FAMILY}';font-style:normal;font-weight:100 900;"
-            f"src:url(data:font/ttf;base64,{encoded}) format('truetype');}}")
-    injected = admitted.html.replace(csp_font_none, "font-src data:", 1).replace(
-        "</head>", f'<style data-presenton-trusted-font-profile="{FONT_PROFILE}">{face}</style></head>', 1)
-    return replace(admitted, html=injected,
-        asset_digests=tuple(dict.fromkeys((*admitted.asset_digests, digest))), node_count=admitted.node_count + 1)
+    from utils.svg_template_fonts import materialize_template_fallbacks
+    _derived, proof = materialize_template_fallbacks(ET.tostring(canonical, encoding="unicode"))
+    return _inject_template_fonts(admitted, expected_fallback=_fallback_binding(proof))
 
 
 def admit_preserved_raster_preview(svg: str, materialized_svg: str, *, width: int, height: int,
@@ -165,16 +206,17 @@ def admit_preserved_raster_preview(svg: str, materialized_svg: str, *, width: in
         width_px=width, height_px=height, allow_image_only=True,
         **({"system_furniture": system_furniture} if system_furniture else {}),
     )
-    admitted = _materialize_authorized_raster_font(canonical, admitted)
     root = ET.fromstring(materialized_svg)
     for index, node in enumerate(root.iter()):
         node.set("data-qid", f"svg-{index}")
     measured = ET.tostring(root, encoding="unicode")
+    fallback = _fallback_comment(measured) if _template_font_used(canonical) else ""
     wrapper = (f'<!DOCTYPE html><html><head><meta charset="utf-8"><style>'
                f'html,body{{margin:0;width:{width}px;height:{height}px;overflow:hidden}}'
-               f'body>svg{{display:block}}</style></head><body>{measured}</body></html>')
-    return replace(admitted, html=admitted.html.replace(materialized_svg, measured),
-                   source_digest=source_digest(wrapper)), wrapper
+            f'body>svg{{display:block}}</style>{fallback}</head><body>{measured}</body></html>')
+    admitted = replace(admitted, html=admitted.html.replace(materialized_svg, measured),
+                       source_digest=source_digest(wrapper))
+    return _materialize_authorized_raster_font(canonical, admitted), wrapper
 
 
 def svg_preview_html(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH_PX, height: int = DEFAULT_CANVAS_HEIGHT_PX,
@@ -215,16 +257,41 @@ def svg_preview_html(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH_PX, height: 
         node.set("data-qid", f"svg-{i}")
     rendered = ET.tostring(root, encoding="unicode")
     marker = f' title="{_trusted_font_marker()}"' if weights else ""
+    fallback = ""
     if template_font:
         from utils.svg_template_fonts import trusted_font_marker
         marker = f' title="{trusted_font_marker()}"'
+        fallback = _fallback_comment(rendered)
     elif source_font_profile is None:
         from services.svg_default_fonts import font_marker, uses_default_font
         if uses_default_font(root):
             marker = f' title="{font_marker()}"'
     return (f'<!DOCTYPE html><html{marker}><head><meta charset="utf-8"><style>'
             f'html,body{{margin:0;width:{width}px;height:{height}px;overflow:hidden}}'
-            f'body>svg{{display:block}}</style></head><body>{rendered}</body></html>')
+            f'body>svg{{display:block}}</style>{fallback}</head><body>{rendered}</body></html>')
+
+
+def _template_fallback_evidence(svg: str, wrapper: str, *, authorized_raster=False):
+    """Bind raw canonical runs to the admitted, measured derivative and font bytes."""
+    from utils.svg_template_fonts import materialize_template_fallbacks
+
+    _derived, canonical = materialize_template_fallbacks(svg)
+    if canonical is None:
+        return None
+    if authorized_raster:
+        measured = _svg_fragment(wrapper).group(1)
+    else:
+        from utils.renderer_isolation import RendererPolicyError, admit_authored_html, admit_static_output_html
+        try:
+            admitted = admit_authored_html(wrapper)
+        except RendererPolicyError:
+            admitted = admit_static_output_html(wrapper)
+        measured = _svg_fragment(admitted.html).group(1)
+    _derived, measured_proof = materialize_template_fallbacks(measured)
+    binding = _fallback_binding(canonical)
+    if binding != _fallback_binding(measured_proof) or binding != _declared_fallback(wrapper):
+        raise ValueError("svg_template_fallback_binding_invalid")
+    return canonical, measured_proof
 
 
 @dataclass(frozen=True)
@@ -345,7 +412,15 @@ async def render_svg_with_metrics(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH
     overlaps, overlap_basis = text_overlaps(text)
     if overlaps:
         failures.append({"kind": "text_overlap", "pairs": overlaps})
-    normalized = "".join("".join(item.get("owned_text", "") for item in text).split())
+    if "ordered_owned_text" in metrics:
+        measured_owners = {item.get("qid") for item in text if item.get("qid")}
+        ordered = metrics["ordered_owned_text"]
+        owned = "".join(item["text"] for item in ordered
+            if isinstance(item, dict) and item.get("qid") in measured_owners
+            and isinstance(item.get("text"), str)) if isinstance(ordered, list) else ""
+    else:
+        owned = "".join(item.get("owned_text", "") for item in text)
+    normalized = "".join(owned.split())
     missing = [value for value in required_text or [] if "".join(value.split()) not in normalized]
     if missing:
         # Keep the literal gate unchanged, but give its bounded author repair
@@ -362,11 +437,18 @@ async def render_svg_with_metrics(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH
             "worker_materialized": bool(text) and all(item.get("font_loaded") is True for item in text),
             **({"weight_normalizations": weight_advisories} if weight_advisories else {})}
     from utils.svg_template_fonts import FONT_PROFILE
-    if f'<html title="{FONT_PROFILE}|' in wrapper:
+    raster_template_font = bool(allow_image_only and materialized_svg is not None and _template_font_used(root))
+    if f'<html title="{FONT_PROFILE}|' in wrapper or raster_template_font:
         from utils.svg_template_fonts import FONT_DIGEST, FONT_FAMILY, FONT_PROFILE
         font_profile = {"profile": FONT_PROFILE, "family": FONT_FAMILY,
             "font_digests": [FONT_DIGEST],
             "worker_materialized": bool(text) and all(item.get("font_loaded") is True for item in text)}
+        fallback = _template_fallback_evidence(svg, wrapper, authorized_raster=raster_template_font)
+        if fallback is not None:
+            canonical_proof, measured_proof = fallback
+            font_profile.update(
+                font_digests=[FONT_DIGEST, canonical_proof["fallback_font_digest"]],
+                fallback=canonical_proof, render_fallback=measured_proof)
     from services.svg_default_fonts import FONT_PROFILE as DEFAULT_FONT_PROFILE
     if f'<html title="{DEFAULT_FONT_PROFILE}|' in wrapper:
         from services.svg_trusted_fonts import DEFAULT_FONT_FAMILY

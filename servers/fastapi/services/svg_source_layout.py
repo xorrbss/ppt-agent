@@ -7,7 +7,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from copy import deepcopy
+from collections import Counter
 import math
+import re
 import xml.etree.ElementTree as ET
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -148,7 +150,7 @@ def source_pages(manifest: SourceContentManifest, *, chart_contract=None):
                 raise ValueError(
                     f"svg_source_connector_geometry_unsupported:page={index + 1}:block={block.source_block_id}")
             if block.kind == "shape" and block.payload.get(
-                "preset") not in {"rect", "roundRect", "ellipse", "line", "straightConnector1", "parallelogram"}:
+                "preset") not in {"rect", "roundRect", "ellipse", "line", "straightConnector1", "parallelogram", "diamond"}:
                 if block.payload.get("preset") is not None or not block.payload.get("customGeometry"):
                     raise ValueError(f"svg_source_shape_unsupported:page={index + 1}:block={block.source_block_id}")
                 validate_custom_geometry(block.payload["customGeometry"])
@@ -165,6 +167,72 @@ def source_pages(manifest: SourceContentManifest, *, chart_contract=None):
                                           or block.payload.get("colorTransforms")):
                 raise ValueError("svg_source_image_appearance_unsupported")
     return manifest.units
+
+
+def _exact_json_key(value):
+    """Order- and type-exact JSON text of a pure JSON value; None when not pure JSON."""
+    import json
+    import math
+    pending = [value]
+    while pending:
+        item = pending.pop()
+        kind = type(item)
+        if kind is dict:
+            if any(type(key) is not str for key in item):
+                return None
+            pending.extend(item.values())
+        elif kind is list:
+            pending.extend(item)
+        elif kind is float:
+            if not math.isfinite(item):
+                return None
+        elif kind not in {str, int, bool, type(None)}:
+            return None
+    try:
+        return json.dumps(value, sort_keys=False, ensure_ascii=True, allow_nan=False)
+    except (TypeError, ValueError, RecursionError):
+        return None
+
+
+class ValidatedSourcePages:
+    """One verification pass's memo of successful ``source_pages`` results for one manifest.
+
+    The whole-manifest validation depends only on the manifest and the chart contract, so it
+    runs once per exact chart contract. Failures raise and are never memoized; a contract
+    without an exact JSON key is always validated afresh. ``verify_source_receipt`` still
+    runs every per-page receipt, digest and binding check. Never share across passes.
+    """
+
+    def __init__(self, manifest):
+        self._manifest = manifest
+        self._pages = {}
+
+    def pages_for(self, chart_contract):
+        key = _exact_json_key(chart_contract)
+        if key is None:
+            return source_pages(self._manifest, chart_contract=chart_contract)
+        pages = self._pages.get(key)
+        if pages is None:
+            pages = source_pages(self._manifest, chart_contract=chart_contract)
+            self._pages[key] = pages
+        return pages
+
+    def verify_receipt(self, svg, receipt, page_index):
+        return verify_source_receipt(svg, receipt, self._manifest, page_index,
+                                     _validated_pages=self._receipt_pages(receipt))
+
+    def _receipt_pages(self, receipt):
+        # The contract the leaf verification would use: a composed receipt verifies its
+        # body receipt. Anything malformed keeps the unmemoized path and its own errors.
+        if not isinstance(receipt, dict):
+            return None
+        leaf = receipt
+        if receipt.get("common_header_composition"):
+            envelope = receipt["common_header_composition"]
+            leaf = envelope.get("body_receipt") if isinstance(envelope, dict) else None
+            if not isinstance(leaf, dict):
+                return None
+        return self.pages_for(leaf.get("source_chart_contract"))
 
 
 def _number(value):
@@ -389,6 +457,11 @@ def assemble_source_svg(manifest, page_index, plan, *, source_images, image_slot
                     (p.x + skew, p.y), (p.x + p.width, p.y),
                     (p.x + p.width - skew, p.y + p.height), (p.x, p.y + p.height)))
                 _node(root, "polygon", id=element_id, points=points, fill=p.background, stroke=p.stroke)
+            elif preset == "diamond":
+                points = " ".join(f"{_number(x)},{_number(y)}" for x, y in (
+                    (p.x + p.width / 2, p.y), (p.x + p.width, p.y + p.height / 2),
+                    (p.x + p.width / 2, p.y + p.height), (p.x, p.y + p.height / 2)))
+                _node(root, "polygon", id=element_id, points=points, fill=p.background, stroke=p.stroke)
             elif preset == "line" or block.semantic_role == "connector":
                 geometry = block.payload.get("geometry") or {}
                 x1, x2 = (p.x + p.width, p.x) if geometry.get("flipH") else (p.x, p.x + p.width)
@@ -454,13 +527,233 @@ def assemble_source_svg(manifest, page_index, plan, *, source_images, image_slot
     return SvgSourceAssembly(svg, receipt, plan)
 
 
+def restore_source_linefeeds(svg, *, facts, manifest_digest, source_page_id, raw_output_digest):
+    """Restore only provably omitted LF characters in independent source text owners."""
+    if not isinstance(svg, str) or re.search(r"<!|<\?", svg):
+        return svg, None
+    try:
+        root = ET.fromstring(svg)
+    except ET.ParseError:
+        return svg, None
+    nodes = list(root.iter())
+    counts = Counter(node.get("id") for node in nodes if node.get("id"))
+    if any(value != 1 for value in counts.values()):
+        return svg, None
+    by_id = {node.get("id"): node for node in nodes if node.get("id")}
+    required, records = [], []
+    for fact in facts:
+        required.append(fact["element_id"])
+        if fact["kind"] == "text":
+            records.append((fact["element_id"], fact["source_id"], fact["data"]["text"]))
+        for cell in fact.get("cells", []):
+            required.append(cell["element_id"])
+            source_cell = fact["data"]["rows"][cell["row"]][cell["column"]]
+            source_id = source_cell.get("sourceCellId",
+                f"{fact['source_id']}:row:{cell['row']}:column:{cell['column']}")
+            records.append((cell["element_id"], source_id, cell["text"]))
+    if len(required) != len(set(required)) or any(identity not in by_id for identity in required):
+        return svg, None
+    chart_children = {id(node) for fact in facts if fact["kind"] == "chart"
+                      for node in by_id[fact["element_id"]].iter()}
+    owners = {identity for identity, _source, _text in records}
+    if any(node.tag == f"{{{SVG_NS}}}text" and node.get("id") not in owners
+           and id(node) not in chart_children for node in nodes):
+        return svg, None
+
+    def lf_positions(value):
+        gaps, plain, offset = {}, [], 0
+        for index, character in enumerate(value):
+            if character == "\n":
+                gaps.setdefault(offset, []).append(index)
+            else:
+                plain.append(character)
+                offset += 1
+        return "".join(plain), gaps
+
+    pending, evidence = [], []
+    for identity, source_id, expected in records:
+        node = by_id[identity]
+        if node.tag != f"{{{SVG_NS}}}text" or any(
+                child.tag != f"{{{SVG_NS}}}tspan" for child in node.iter() if child is not node):
+            return svg, None
+        slots = [(node, "text")]
+        for child in node:
+            # Source text has immediate tspan children; overlapping owners are invalid.
+            if len(child) or child.get("id") in owners:
+                return svg, None
+            slots.extend(((child, "text"), (child, "tail")))
+        actual = "".join(getattr(element, field) or "" for element, field in slots)
+        if actual == expected:
+            continue
+        plain, expected_gaps = lf_positions(expected)
+        actual_plain, actual_gaps = lf_positions(actual)
+        if plain != actual_plain or any(
+                len(positions) > len(expected_gaps.get(gap, [])) for gap, positions in actual_gaps.items()):
+            return svg, None
+        non_lf_indices = [index for index, character in enumerate(actual) if character != "\n"]
+        insertions, restored_positions = {}, []
+        for gap, positions in expected_gaps.items():
+            present = len(actual_gaps.get(gap, []))
+            omitted = positions[present:]
+            if omitted:
+                boundary = non_lf_indices[gap] if gap < len(non_lf_indices) else len(actual)
+                insertions[boundary] = len(omitted)
+                restored_positions.extend(omitted)
+        if not restored_positions:
+            return svg, None
+        cursor, consumed, updates = 0, set(), []
+        for element, field in slots:
+            value = getattr(element, field) or ""
+            local = [(position - cursor, amount) for position, amount in insertions.items()
+                     if cursor <= position <= cursor + len(value) and position not in consumed]
+            for position, amount in sorted(local, reverse=True):
+                value = value[:position] + "\n" * amount + value[position:]
+                consumed.add(cursor + position)
+            updates.append((element, field, value))
+            cursor += len(getattr(element, field) or "")
+        if consumed != set(insertions) or "".join(value for _node, _field, value in updates) != expected:
+            return svg, None
+        pending.extend(updates)
+        evidence.append(dict(source_id=source_id, element_id=identity,
+            source_text_digest=source_digest(expected), positions=sorted(restored_positions),
+            restored_lf_count=len(restored_positions)))
+    if not evidence:
+        return svg, None
+    if not isinstance(raw_output_digest, str) or not re.fullmatch(r"(?:sha256:)?[a-f0-9]{64}", raw_output_digest):
+        raise ValueError("svg_source_lf_provenance_missing")
+    for node, field, value in pending:
+        if (getattr(node, field) or "") != value:
+            setattr(node, field, value)
+    restored = ET.tostring(root, encoding="unicode")
+    roundtrip = {node.get("id"): node for node in ET.fromstring(restored).iter() if node.get("id")}
+    if any("".join(roundtrip[identity].itertext()) != expected for identity, _source, expected in records):
+        return svg, None
+    return restored, dict(schema="svg-source-linefeed-restoration/v1", manifest_digest=manifest_digest,
+        source_page_id=source_page_id, raw_output_digest="sha256:" + raw_output_digest.removeprefix("sha256:"),
+        input_svg_digest=source_digest(svg), restored_svg_digest=source_digest(restored),
+        restored_lf_count=sum(item["restored_lf_count"] for item in evidence), bindings=evidence)
+
+
+def restore_source_empty_table_texts(svg, *, page, facts, manifest_digest,
+                                     source_page_digest, raw_output_digest):
+    import hashlib
+    from services.svg_source_native_tables import _authored_grid, source_table_group_id
+
+    ns = "{" + SVG_NS + "}"
+    if not isinstance(svg, str) or re.search(r"<!|<\?", svg):
+        return svg, None
+    try:
+        root = ET.fromstring(svg)
+    except ET.ParseError:
+        return svg, None
+    nodes = list(root.iter())
+    counts = Counter(node.get("id") for node in nodes if node.get("id"))
+    if any(count != 1 for count in counts.values()):
+        return svg, None
+    by_id = {node.get("id"): node for node in nodes if node.get("id")}
+    fact_counts = Counter(fact["source_id"] for fact in facts)
+    pending = []
+    all_cell_ids = set()
+    for block in page.blocks:
+        if block.kind != "table":
+            continue
+        if fact_counts[block.source_block_id] != 1:
+            return svg, None
+        fact = next(fact for fact in facts if fact["source_id"] == block.source_block_id)
+        group_id = source_table_group_id(block.source_block_id)
+        if (fact.get("kind") != "table" or fact.get("element_id") != group_id
+                or fact.get("data") != block.payload):
+            return svg, None
+        group = by_id.get(group_id)
+        if (group is None or group not in list(root) or group.tag != ns + "g"
+                or group.attrib != {"id": group_id}
+                or (group.text or "").strip() or (group.tail or "").strip()
+                or any(node.tag not in {ns + "rect", ns + "text"} for node in group)):
+            return svg, None
+        rows, cells = _cells(block)
+        cell_facts = fact.get("cells", [])
+        if len(cells) != len(cell_facts):
+            return svg, None
+        rects = [node for node in group if node.tag == ns + "rect"]
+        try:
+            xs, ys = _authored_grid(rows, cells, rects)
+        except (ValueError, TypeError, KeyError):
+            return svg, None
+        expected_ids = set()
+        table_pending = []
+        for (row, column, rs, cs, cell), cell_fact in zip(cells, cell_facts, strict=True):
+            source_id = cell.get("sourceCellId", f"{block.source_block_id}:row:{row}:column:{column}")
+            identity = "source-fact-" + hashlib.sha256(source_id.encode()).hexdigest()[:20]
+            if (identity in all_cell_ids or cell_fact != dict(row=row, column=column,
+                    row_span=rs, column_span=cs, text=cell["text"], element_id=identity)):
+                return svg, None
+            all_cell_ids.add(identity)
+            expected_ids.add(identity)
+            node = by_id.get(identity)
+            if node is not None:
+                if (node not in list(group) or node.tag != ns + "text"
+                        or "".join(node.itertext()) != cell["text"]):
+                    return svg, None
+                continue
+            if cell["text"] != "":
+                return svg, None
+            style_keys = ("font-family", "font-size", "fill")
+            style_node = next((candidate for candidate in group
+                if candidate.tag == ns + "text" and candidate.get("id")
+                and all(key in candidate.attrib for key in style_keys)
+                and candidate.get("fill") != "none"), None)
+            if style_node is None:
+                return svg, None
+            restored = ET.Element(ns + "text", {"id": identity,
+                "x": format(xs[column], ".17g"), "y": format(ys[row], ".17g"),
+                **{key: style_node.get(key) for key in style_keys}})
+            table_pending.append((group, restored, dict(block_id=block.source_block_id,
+                source_id=source_id, element_id=identity, row=row, column=column,
+                row_span=rs, column_span=cs, exact_empty=True,
+                style_source_element_id=style_node.get("id"))))
+        actual_ids = [node.get("id") for node in group if node.get("id")]
+        pending_ids = {node.get("id") for _group, node, _record in table_pending}
+        if (set(actual_ids) != expected_ids - pending_ids
+                or any(node.tag != ns + "text" for node in group if node.get("id"))):
+            return svg, None
+        pending.extend(table_pending)
+    if not pending:
+        return svg, None
+    if not all(isinstance(value, str) and value for value in
+               (manifest_digest, source_page_digest, raw_output_digest)):
+        raise ValueError("svg_source_empty_table_text_provenance_missing")
+    original_tree = ET.tostring(root, encoding="unicode")
+    for group, node, _record in pending:
+        group.append(node)
+    canonical = ET.tostring(root, encoding="unicode")
+    # Prove every existing node, attribute, character and sibling order survived.
+    for group, node, _record in pending:
+        group.remove(node)
+    if ET.tostring(root, encoding="unicode") != original_tree:
+        raise ValueError("svg_source_empty_table_text_existing_paint_changed")
+    return canonical, dict(schema="svg-source-empty-table-text-restoration/v1",
+        manifest_digest=manifest_digest, source_page_digest=source_page_digest,
+        raw_output_digest="sha256:" + raw_output_digest.removeprefix("sha256:"),
+        input_svg_digest=source_digest(svg), restored_svg_digest=source_digest(canonical),
+        original_tree_digest=source_digest(original_tree),
+        empty_texts=[record for _group, _node, record in pending],
+        existing_tree_preserved=True, added_visible_characters=0)
+
+
 def bind_whole_page_source_svg(svg, manifest, page_index, *, facts, width, height,
                                style_snapshot, minimum_font_px, _validated_pages=None,
-                               native_declarations=None):
+                               native_declarations=None, restore_source_lf=False, raw_output_digest=None):
     """Bind a freely authored page to the existing exact source verifier."""
     chart_contract = style_snapshot.get("source_chart_contract")
     pages = source_pages(manifest, chart_contract=chart_contract) if _validated_pages is None else _validated_pages
     page = pages[page_index]
+    restoration = empty_restoration = None
+    if restore_source_lf:
+        svg, empty_restoration = restore_source_empty_table_texts(
+            svg, page=page, facts=facts, manifest_digest=manifest.manifest_digest,
+            source_page_digest=page_digest(manifest, page_index), raw_output_digest=raw_output_digest)
+        svg, restoration = restore_source_linefeeds(svg, facts=facts, manifest_digest=manifest.manifest_digest,
+            source_page_id=page.source_unit_id, raw_output_digest=raw_output_digest)
     root = ET.fromstring(svg)
     elements = {node.get("id"): node for node in root.iter() if node.get("id")}
     bindings, native_tables, source_native_charts, required_ids = [], [], [], set()
@@ -559,6 +852,10 @@ def bind_whole_page_source_svg(svg, manifest, page_index, *, facts, width, heigh
         receipt["source_native_charts"] = [source_chart_record(svg,
             next(b for b in page.blocks if b.source_block_id == record["source_id"]),
             record["element_id"], record["declaration"], chart_contract) for record in source_native_charts]
+    if restoration is not None:
+        receipt["source_lf_restoration"] = {**restoration, "canonical_svg_digest": source_digest(svg)}
+    if empty_restoration is not None:
+        receipt["source_empty_table_text_restoration"] = {**empty_restoration, "canonical_svg_digest": source_digest(svg)}
     verify_source_receipt(svg, receipt, manifest, page_index, _validated_pages=pages)
     return svg, receipt
 

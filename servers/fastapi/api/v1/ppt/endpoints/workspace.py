@@ -856,6 +856,14 @@ async def get_workspace_operation_recovery_plan(
             session, source=operation, action="retry",
             allow_local_development=local_development_export_bridge(http_request),
         ):
+            # Lock-free read-only probe: an existing retry child makes the POST path
+            # answer operation_state_conflict, so skip the expensive proof walk.
+            from sqlalchemy import select
+            if await session.scalar(select(WorkspaceOperation.id).where(
+                    WorkspaceOperation.retry_of_operation_id == operation.id,
+                    WorkspaceOperation.owner_scope == operation.owner_scope,
+            ).limit(1)) is not None:
+                raise WorkspaceAPIException("operation_state_conflict", status_code=409)
             recovery = await build_manifest(
                 session, operation, presentation_revision=int(presentation.revision),
             )

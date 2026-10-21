@@ -209,7 +209,9 @@ async def _generation_action_principal_bridge(tmp_path, monkeypatch):
                 source.phase = "rendering"
                 source.deadline_at = get_current_utc_datetime() + timedelta(minutes=10)
                 source.state, source.version, source.fencing_token = "running", 4, 1
-                source.request_payload = {"principal_tenant_id": "local-development"}
+                source.request_payload = {"principal_tenant_id": "local-development",
+                    "tenant_id": "local-development", "context": {"tenant_id": "local-development"},
+                    "opaque_source_archive": {"full_payload_preserved": True}}
                 policy_values = {column.name: 100 for column in PublicPolicyProfile.__table__.columns
                     if not column.nullable and column.default is None and column.server_default is None}
                 policy_values["version"] = "generation-action-policy"
@@ -272,8 +274,30 @@ async def _generation_action_principal_bridge(tmp_path, monkeypatch):
                 assert stale.value.code == "operation_state_conflict"
                 assert get_current_tenant_id() == "service-default"
             async with maker() as session:
-                receipt, cancelled, duplicate = await apply_workspace_action(session, operation_id=source_id,
-                    request=request, allow_local_development=True)
+                from copy import deepcopy
+                preloaded_source = await session.get(WorkspaceOperation, source_id)
+                preloaded_payload = deepcopy(preloaded_source.request_payload)
+                source_read_shapes = []
+                original_execute = session.execute
+
+                async def observe_source_reads(statement, *args, **kwargs):
+                    if getattr(statement, "is_select", False):
+                        keys = set(statement.selected_columns.keys())
+                        if "source_principal_tenant" in keys:
+                            assert "request_payload" not in keys
+                            assert {"source_tenant", "source_context_tenant", "source_context_target"} <= keys
+                            source_read_shapes.append("metadata")
+                        elif "request_payload" in keys and "owner_scope" in keys:
+                            source_read_shapes.append("full")
+                    return await original_execute(statement, *args, **kwargs)
+
+                with monkeypatch.context() as source_reads:
+                    source_reads.setattr(session, "execute", observe_source_reads)
+                    receipt, cancelled, duplicate = await apply_workspace_action(session, operation_id=source_id,
+                        request=request, allow_local_development=True)
+                assert source_read_shapes[:2] == ["metadata", "full"]
+                assert cancelled is preloaded_source
+                assert cancelled.request_payload == preloaded_payload
                 assert not duplicate and cancelled.state == "cancelling" and cancelled.version == 5
                 assert cancelled.cancel_requested_at is not None and receipt.operation_id == source_id
                 assert get_current_tenant_id() == "service-default" and get_current_owner_id() == owner_id
@@ -2481,6 +2505,83 @@ async def _action_idempotency_scope(tmp_path: Path):
         await engine.dispose()
 
 
+def test_partial_svg_deadline_retry_enters_verified_append_only_fork(monkeypatch):
+    from copy import deepcopy
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from services import workspace_service as service, svg_checkpoint_recovery
+
+    class ForkReached(Exception):
+        pass
+
+    async def exercise(kind, recovery_revision, *, fork_expected):
+        source = WorkspaceOperation(
+            owner_id=uuid.uuid4(), owner_scope="deadline-retry-fixture",
+            conversation_id=uuid.uuid4(), presentation_id=uuid.uuid4(),
+            kind=kind, state="deadline_exceeded", version=4,
+            lease_expires_at=None, request_payload={"immutable": "source"},
+            error_detail={"retryable": False},
+        )
+        before = deepcopy(source.model_dump(mode="json"))
+        presentation = SimpleNamespace(id=source.presentation_id, revision=0)
+        recovery = SimpleNamespace(manifest={"append_only_recovery": True})
+        verification = AsyncMock(return_value=recovery)
+
+        class Session:
+            def __init__(self):
+                self.reads = 0
+                self.rollback = AsyncMock()
+
+            async def execute(self, statement):
+                if statement.is_update:
+                    return SimpleNamespace(scalar_one_or_none=lambda: None)
+                self.reads += 1
+                return SimpleNamespace(scalar_one_or_none=lambda: source if self.reads == 1 else None)
+
+        session = Session()
+
+        async def fork(current_session, current_source, current_presentation, proven_recovery):
+            assert current_session is session and current_source is source
+            assert current_presentation is presentation and proven_recovery is recovery
+            verification.assert_awaited_once()
+            raise ForkReached()
+
+        fork_spy = AsyncMock(side_effect=fork)
+        monkeypatch.setattr(service, "_existing_action_receipt", AsyncMock(return_value=None))
+        monkeypatch.setattr(service, "_lock_workspace_mutation_admission",
+                            AsyncMock(return_value=(presentation, 0)))
+        monkeypatch.setattr(service, "_verified_export_retry_v2_authority", AsyncMock(return_value=None))
+        monkeypatch.setattr(service, "_verified_authored_local_fit_checkpoint_recovery", AsyncMock(return_value=None))
+        monkeypatch.setattr(service, "_is_explicit_authored_capacity_recovery", lambda *args: False)
+        monkeypatch.setattr(service, "_is_retryable_raster_tenant_handoff", lambda *args: False)
+        monkeypatch.setattr(service, "get_workspace_owner_scope", lambda: source.owner_scope)
+        monkeypatch.setattr(service, "_fork_append_only_svg_recovery_workspace", fork_spy)
+        monkeypatch.setattr(svg_checkpoint_recovery, "verified_svg_recovery_checkpoints", verification)
+        monkeypatch.setattr(service, "_replay_action_receipt_after_conflict",
+                            AsyncMock(side_effect=WorkspaceServiceError("operation_state_conflict", status_code=409)))
+        request = WorkspaceOperationActionRequest(
+            action="retry", idempotency_key="deadline-retry-fixture",
+            expected_operation_version=4, expected_revision=0,
+            recovery_revision=recovery_revision,
+        )
+        expected_error = ForkReached if fork_expected else WorkspaceServiceError
+        with pytest.raises(expected_error):
+            await service._apply_workspace_action(session, operation_id=source.id, request=request)
+        if fork_expected:
+            fork_spy.assert_awaited_once()
+        else:
+            fork_spy.assert_not_awaited()
+        assert source.model_dump(mode="json") == before
+
+    async def run():
+        await exercise("presentation.generate", "svg-partial-recovery/v1", fork_expected=True)
+        await exercise("presentation.generate", None, fork_expected=False)
+        await exercise("presentation.generate", "svg-cached-author-render/v1", fork_expected=False)
+        await exercise("export.pptx", "svg-partial-recovery/v1", fork_expected=False)
+
+    asyncio.run(run())
+
+
 def test_terminal_retry_creates_one_new_operation_and_preserves_source(tmp_path: Path):
     asyncio.run(_terminal_retry_creates_one_new_operation_and_preserves_source(tmp_path))
 
@@ -3219,9 +3320,13 @@ async def _svg_partial_append_only_contract(tmp_path, monkeypatch, *, source_rou
                     with scoped.context() as memo_scope:
                         memo_scope.setattr(recovery, "_verify_episode_once", counted_once)
                         verification = recovery._EpisodeVerification(session)
-                        for _ in range(2):
+                        # Review already proved the immutable source in this transaction.
+                        # Admission consumes that proof but freshly verifies its child.
+                        await recovery.verify_episode(session,previous,previous_job,
+                            require_current_code=False,verification=verification)
+                        for final in (False, True):
                             assert await recovery.verify_episode(session,next_operation,next_job,
-                                verification=verification) == next_manifest
+                                verification=verification,finish_verification=final) == next_manifest
                         # Current-code consumers always run in full; the shared
                         # historical producer succeeds only once per scope.
                         assert checks.count(str(next_operation_id)) == 2
