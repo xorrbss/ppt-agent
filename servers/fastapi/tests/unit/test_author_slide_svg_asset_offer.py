@@ -78,6 +78,289 @@ def _run(monkeypatch, response, manifest):
     return result, seen
 
 
+@pytest.mark.parametrize("unknown_slot", [False, True])
+def test_whole_page_source_image_slots_survive_authoring_and_source_binding(monkeypatch, unknown_slot):
+    import xml.etree.ElementTree as ET
+    from test_svg_source_layout import manifest_for
+    from services.generation_core.authoring.author_source_svg_layout import (
+        _whole_page_element_id, author_source_svg_layout,
+    )
+    from services.svg_source_layout import verify_source_receipt
+
+    source = manifest_for([("text", {"text": "Original  125%"}),
+        ("image", {"contentDigest": "sha256:original-image"})])
+    original = source.model_dump(mode="json", by_alias=True)
+    text, image = source.units[0].blocks
+    slot = "source-slot-original-image"
+    href = "source-slot-invented-alias" if unknown_slot else slot
+    response = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">'
+        f'<text id="{_whole_page_element_id(text.source_block_id)}" x="40" y="80" '
+        'font-family="Inter" font-size="32" fill="#111111" xml:space="preserve">Original  125%</text>'
+        f'<image id="{_whole_page_element_id(image.source_block_id)}" href="{href}" '
+        'x="640" y="120" width="400" height="400" preserveAspectRatio="xMidYMid meet"/></svg>'
+    )
+    seen = {}
+    _stub_provider(monkeypatch, response, seen)
+    style = {**_style(), "source_authoring_contract": {"version": "svg-source-whole-page/v1"}}
+    result = asyncio.run(author_source_svg_layout(source, 0, style,
+        source_images={slot: {"data_url": _data_url(), "required": True}},
+        image_slots={image.source_block_id: slot}, min_font_size_px=18))
+
+    assert source.model_dump(mode="json", by_alias=True) == original
+    if unknown_slot:
+        assert result.receipt["validation_error"] == "svg_source_image_unknown_slot"
+        assert "source_preservation" not in result.receipt
+        return
+    assert result.receipt["validation_error"] is None
+    node = ET.fromstring(result.svg_content).find("{http://www.w3.org/2000/svg}image")
+    assert node.get("href") == slot
+    assert ET.fromstring(result.svg_content).find("{http://www.w3.org/2000/svg}text").text == "Original  125%"
+    bindings = result.receipt["source_preservation"]["bindings"]
+    image_binding = next(binding for binding in bindings if binding["kind"] == "image")
+    assert image_binding["source_id"] == image.source_block_id
+    assert image_binding["slot_id"] == slot
+    assert image_binding["asset_digest"] == "sha256:original-image"
+    assert verify_source_receipt(result.svg_content, result.receipt["source_preservation"], source, 0)
+
+
+def test_source_footer_prompt_contract_preserves_bound_literal_and_correction(monkeypatch):
+    import xml.etree.ElementTree as ET
+    from test_svg_source_layout import manifest_for
+    from services.generation_core.authoring.author_source_svg_layout import (
+        _whole_page_element_id, author_source_svg_layout, source_binding_correction_hint,
+    )
+    from services.svg_source_layout import verify_source_receipt
+
+    source = manifest_for([("text", {"text": "Source body"}), ("text", {"text": "- 9 -"})])
+    original = source.model_dump(mode="json", by_alias=True)
+    body, footer = source.units[0].blocks
+    body_node = (f'<text id="{_whole_page_element_id(body.source_block_id)}" x="40" y="80" '
+                 'font-family="Inter" font-size="32" fill="#111111">Source body</text>')
+    footer_node = (f'<text id="{_whole_page_element_id(footer.source_block_id)}" x="400" y="650" '
+                   'font-family="Inter" font-size="24" fill="#111111">- 9 -</text>')
+    prefix = '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">'
+    missing, correct = prefix + body_node + '</svg>', prefix + body_node + footer_node + '</svg>'
+    hint = source_binding_correction_hint(source.units[0], {}, missing, "svg_source_receipt_binding_mismatch")
+    seen = {}
+    _stub_provider(monkeypatch, correct, seen)
+    style = {**_style(), "source_authoring_contract": {"version": "svg-source-whole-page/v1"}}
+    result = asyncio.run(author_source_svg_layout(source, 0, style, source_images={},
+        image_slots={}, min_font_size_px=18, correction_hint=hint, receipt_attempt_ordinal=2))
+
+    system = seen["messages"][0].content
+    assert module.SVG_SOURCE_PAGE_NUMBER_RULES in system
+    assert "Never create a page number" not in system
+    prompt = "\n".join(message.content if isinstance(message.content, str) else "\n".join(
+        part.text for part in message.content if hasattr(part, "text")) for message in seen["messages"])
+    assert json.dumps(hint, ensure_ascii=False) in prompt
+    diagnostic = json.loads(hint.split("\n", 1)[1])["source_binding_correction"]
+    assert diagnostic["missing"][0]["element_id"] == _whole_page_element_id(footer.source_block_id)
+    assert diagnostic["missing"][0]["expected_text"] == "- 9 -"
+    assert result.receipt["validation_error"] is None
+    nodes = list(ET.fromstring(result.svg_content).iter())
+    assert [node.text for node in nodes if node.get("id") == _whole_page_element_id(footer.source_block_id)] == ["- 9 -"]
+    assert not any(node.get("id") == "svg-system-page-number" for node in nodes)
+    assert verify_source_receipt(result.svg_content, result.receipt["source_preservation"], source, 0)
+    assert source.model_dump(mode="json", by_alias=True) == original
+
+
+@pytest.mark.parametrize("contract,source_preserved", [(False, False), (True, False), (False, True)])
+def test_source_footer_prompt_contract_keeps_normal_page_number_prohibition(monkeypatch, contract, source_preserved):
+    seen = {}
+    _stub_provider(monkeypatch, _svg(""), seen)
+    style = _style()
+    if contract:
+        style["source_authoring_contract"] = {"version": "svg-source-whole-page/v1"}
+    result = asyncio.run(module.author_slide_svg("Source body", style, "content", 0, 1,
+        source_preserved=source_preserved, canonical_source_images=True))
+    assert result.receipt["validation_error"] is None
+    assert "Never create a page number" in seen["messages"][0].content
+    assert module.SVG_SOURCE_PAGE_NUMBER_RULES not in seen["messages"][0].content
+
+
+@pytest.mark.parametrize("failure", ["missing", "text_mismatch", "duplicate", "extra"])
+def test_source_binding_correction_identifies_exact_facts_in_provider_hint(monkeypatch, failure):
+    from test_svg_source_layout import manifest_for
+    from services.generation_core.authoring.author_source_svg_layout import (
+        _whole_page_element_id, author_source_svg_layout, source_binding_correction_hint,
+    )
+    from services.svg_source_layout import verify_source_receipt
+
+    source = manifest_for([("text", {"text": "Original 125%"}), ("text", {"text": "원문  5자"})])
+    original = source.model_dump(mode="json", by_alias=True)
+    first, second = source.units[0].blocks
+    second_node = (f'<text id="{_whole_page_element_id(second.source_block_id)}" x="40" y="180" '
+        'font-family="Inter" font-size="32" fill="#111111">원문  5자</text>')
+    correct = ('<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">'
+        f'<text id="{_whole_page_element_id(first.source_block_id)}" x="40" y="80" '
+        'font-family="Inter" font-size="32" fill="#111111">Original 125%</text>' + second_node + '</svg>')
+    bad = {
+        "missing": correct.replace(second_node, ""),
+        "text_mismatch": correct.replace("원문  5자", "원문 5자"),
+        "duplicate": correct.replace(second_node, second_node * 2),
+        "extra": correct.replace('</svg>', '<text x="40" y="280" font-family="Inter" '
+            'font-size="32" fill="#111111">invented</text></svg>'),
+    }[failure]
+    seen = {}
+    _stub_provider(monkeypatch, bad, seen)
+    style = {**_style(), "source_authoring_contract": {"version": "svg-source-whole-page/v1"}}
+    kwargs = dict(source_images={}, image_slots={}, min_font_size_px=18)
+    failed = asyncio.run(author_source_svg_layout(source, 0, style, **kwargs))
+    # Duplicate ids are rejected by the SVG contract before source binding.
+    error = failed.receipt["validation_error"]
+    assert error
+    hint = source_binding_correction_hint(source.units[0], {}, bad, error)
+    diagnostic = json.loads(hint.split("\n", 1)[1])["source_binding_correction"]
+    key = {"missing": "missing", "text_mismatch": "mismatched", "duplicate": "duplicate", "extra": "extra"}[failure]
+    assert len(diagnostic[key]) == 1
+    if failure != "extra":
+        fact = diagnostic[key][0]
+        assert fact["source_id"] == second.source_block_id
+        assert fact["element_id"] == _whole_page_element_id(second.source_block_id)
+        assert fact["expected_text"] == "원문  5자"
+
+    _stub_provider(monkeypatch, correct, seen)
+    corrected = asyncio.run(author_source_svg_layout(source, 0, style,
+        correction_hint=hint, receipt_attempt_ordinal=2, **kwargs))
+    prompt = "\n".join(message.content if isinstance(message.content, str) else "\n".join(
+        part.text for part in message.content if hasattr(part, "text")) for message in seen["messages"])
+    assert json.dumps(hint, ensure_ascii=False) in prompt
+    assert corrected.receipt["validation_error"] is None
+    assert "source_binding_correction" not in corrected.receipt
+    assert verify_source_receipt(corrected.svg_content, corrected.receipt["source_preservation"], source, 0)
+    assert source.model_dump(mode="json", by_alias=True) == original
+    assert failed.raw_response == bad
+
+
+def test_source_binding_correction_retains_missing_connector_relationships():
+    from test_svg_source_layout import manifest_for
+    from services.generation_core.authoring.author_source_svg_layout import source_binding_correction_hint
+
+    source = manifest_for([("text", {"text": "Target", "shapeId": "4"}),
+        ("shape", {"preset": "line", "stCxn": {"id": "4", "idx": "2"},
+                   "tailEnd": {"type": "triangle"}})])
+    raw = '<svg xmlns="http://www.w3.org/2000/svg"/>'
+    hint = source_binding_correction_hint(source.units[0], {}, raw, "svg_source_receipt_binding_mismatch")
+    facts = json.loads(hint.split("\n", 1)[1])["source_binding_correction"]["missing"]
+    connector = next(fact for fact in facts if fact["kind"] == "shape")
+    assert connector["expected_relationships"]["stCxn"] == {"id": "4", "idx": "2"}
+    assert connector["expected_relationships"]["tailEnd"] == {"type": "triangle"}
+    assert connector["expected_connections"]["stCxn"]["source_id"] == source.units[0].blocks[0].source_block_id
+
+
+def test_source_binding_correction_bounds_excerpts_and_reports_total_counts():
+    from test_svg_source_layout import manifest_for
+    from services.generation_core.authoring.author_source_svg_layout import source_binding_correction_hint
+
+    source = manifest_for([("text", {"text": "원문 A " * 1000}) for _ in range(40)])
+    hint = source_binding_correction_hint(source.units[0], {},
+        '<svg xmlns="http://www.w3.org/2000/svg"/>', "svg_source_receipt_binding_mismatch")
+    detail = json.loads(hint.split("\n", 1)[1])["source_binding_correction"]
+    assert detail["total_counts"]["missing"] == 40
+    assert detail["reported_counts"]["missing"] == len(detail["missing"]) <= 6
+    assert detail["missing"][0]["expected_text_length"] == 5000
+    assert len(detail["missing"][0]["expected_text"]) == 512
+    assert detail["missing"][0]["expected_text_truncated"] is True
+    assert len(hint) < 13000
+
+
+@pytest.mark.parametrize("axis", ["width", "height"])
+def test_source_binding_correction_explains_exact_native_table_grid(monkeypatch, axis):
+    from test_svg_source_layout import manifest_for
+    from services.generation_core.authoring.author_source_svg_layout import (
+        _whole_page_element_id, _whole_page_facts, author_source_svg_layout, source_binding_correction_hint,
+    )
+
+    source = manifest_for([("table", {"rows": [
+        [{"text": "A"}, {"text": "B"}], [{"text": "C"}, {"text": "D"}]]})])
+    original = source.model_dump(mode="json", by_alias=True)
+    fact = _whole_page_facts(source.units[0], {})[0]
+    def drawing(invalid):
+        parts = []
+        for cell in fact["cells"]:
+            row, column = cell["row"], cell["column"]
+            width = 40 if invalid and axis == "width" and (row, column) == (1, 0) else 50
+            height = 20 if invalid and axis == "height" and (row, column) == (1, 0) else 40
+            x = 100 + column * 50
+            y = 200 + row * 40
+            parts.append(f'<rect x="{x}" y="{y}" width="{width}" height="{height}" fill="#FFFFFF"/>')
+            parts.append(f'<text id="{cell["element_id"]}" x="{x+3}" y="{y+18}" '
+                         f'font-family="Inter" font-size="18" fill="#111111">{cell["text"]}</text>')
+        return ('<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">'
+                f'<g id="{fact["element_id"]}">' + ''.join(parts) + '</g></svg>')
+    seen = {}
+    bad = drawing(True)
+    _stub_provider(monkeypatch, bad, seen)
+    style = {**_style(), "source_authoring_contract": {"version": "svg-source-whole-page/v1"}}
+    kwargs = dict(source_images={}, image_slots={}, min_font_size_px=18)
+    failed = asyncio.run(author_source_svg_layout(source, 0, style, **kwargs))
+    assert failed.receipt["validation_error"] == "svg_source_native_table_grid_mismatch"
+    hint = source_binding_correction_hint(source.units[0], {}, bad, failed.receipt["validation_error"])
+    grid = json.loads(hint.split("\n", 1)[1])["source_binding_correction"]["table_grids"][0]
+    assert grid["element_id"] == fact["element_id"]
+    assert (grid["rows"], grid["columns"]) == (2, 2)
+    assert grid["frame"] == dict(x=100, y=200, width=100, height=80)
+    assert grid["problem"] == "inconsistent_grid_boundary"
+    assert grid["axis"] == ("x" if axis == "width" else "y")
+    assert grid["expected_edge"] == (150 if axis == "width" else 280)
+    assert grid["actual_edge"] == (140 if axis == "width" else 260)
+    assert "xs[column+columnSpan]" in grid["formula"]
+    assert (grid["first_mismatch"]["row"], grid["first_mismatch"]["column"]) == (1, 0)
+    assert grid["first_mismatch"]["actual_bbox"][axis] == (40 if axis == "width" else 20)
+    _stub_provider(monkeypatch, drawing(False), seen)
+    corrected = asyncio.run(author_source_svg_layout(source, 0, style,
+        correction_hint=hint, receipt_attempt_ordinal=2, **kwargs))
+    assert corrected.receipt["validation_error"] is None
+    assert corrected.receipt["source_preservation"]["native_tables"]
+    prompt = "\n".join(message.content if isinstance(message.content, str) else "\n".join(
+        part.text for part in message.content if hasattr(part, "text")) for message in seen["messages"])
+    assert "column widths and row heights may differ" in prompt
+    assert "uniform row/column grid" not in prompt
+    assert json.dumps(hint, ensure_ascii=False) in prompt
+    assert source.model_dump(mode="json", by_alias=True) == original
+    assert failed.raw_response == bad
+
+
+@pytest.mark.parametrize("element", ["text", "tspan"])
+@pytest.mark.parametrize("value", ["default", "preserve"])
+def test_xml_space_accepts_exact_namespace_without_normalizing_text(element, value):
+    import xml.etree.ElementTree as ET
+    text_attribute = f' xml:space="{value}"' if element == "text" else ""
+    span_attribute = f' xml:space="{value}"' if element == "tspan" else ""
+    svg = ('<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">'
+        f'<text x="40" y="80" font-family="Inter" font-size="32" fill="#111111"{text_attribute}>'
+        f'  A  B <tspan{span_attribute}> C  D </tspan> E </text></svg>')
+    validate_svg(svg)
+    root = ET.fromstring(svg)
+    assert "".join(root.find("{http://www.w3.org/2000/svg}text").itertext()) == "  A  B  C  D  E "
+    target = next(node for node in root.iter() if node.tag == f"{{http://www.w3.org/2000/svg}}{element}")
+    assert target.get("{http://www.w3.org/XML/1998/namespace}space") == value
+
+
+@pytest.mark.parametrize("attribute", [
+    'xml:space="invalid"', 'xml:space=" preserve"', 'xml:space=""',
+    'xml:base="https://example.invalid/"', 'xml:lang="ko"',
+    'xmlns:other="urn:untrusted" other:space="preserve"',
+    'xmlns:other="urn:untrusted" other:href="https://example.invalid/"',
+])
+def test_xml_namespace_attributes_reject_invalid_space_and_unapproved_attributes(attribute):
+    svg = _svg("").replace('<text ', f'<text {attribute} ')
+    with pytest.raises(ValueError, match="svg_contract_(?:invalid_xml_space|unsupported_attribute)"):
+        validate_svg(svg)
+
+
+@pytest.mark.parametrize("element", ["svg", "g"])
+def test_xml_space_does_not_expand_container_attribute_contract(element):
+    svg = _svg("")
+    if element == "svg":
+        svg = svg.replace('<svg ', '<svg xml:space="preserve" ')
+    else:
+        svg = svg.replace('<text ', '<g xml:space="preserve"><text ').replace('</text>', '</text></g>')
+    with pytest.raises(ValueError, match="svg_contract_unsupported_attribute"):
+        validate_svg(svg)
+
+
 def test_vector_icon_slot_is_flattened_in_place_and_reported(monkeypatch):
     icon = flatten_icon_svg(ICON.read_text(encoding="utf-8"), color="#1E5EFF")
     manifest = {

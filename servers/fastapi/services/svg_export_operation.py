@@ -1,5 +1,6 @@
 """SVG export admission using the existing fenced worker and artifact authority."""
 from __future__ import annotations
+import asyncio
 import json
 import logging
 import uuid
@@ -7,6 +8,7 @@ from collections.abc import Mapping
 from datetime import datetime, timezone
 from dataclasses import dataclass
 from sqlalchemy import select
+from sqlalchemy.exc import DBAPIError
 from models.sql.slide import SlideModel
 from services.artifact_store import configured_public_artifact_service
 from services.artifact_store import configured_worker_artifact_cache
@@ -21,7 +23,8 @@ from services.public_export_operation import (
 from services.public_export_deadline import load_public_export_deadline_grant
 from services.public_export_errors import PublicExportOperationError
 from services.svg_contract import validate_svg
-from services.svg_export_bundle import build_svg_export_bundle, digest as _digest
+from services.svg_export_bundle import (ExportIoCounters, build_svg_export_bundle, digest as _digest,
+                                        digest_embedding, encode_sealed_manifest_async)
 from services.svg_export_source_preservation import (
     source_preservation_receipts as _source_preservation_receipts,
     sealed_whole_page_manifest as _sealed_whole_page_manifest,
@@ -500,6 +503,24 @@ def _require_deadline_budget(grant):
         grant.export_worker_seconds()
 
 
+def _export_source_digest(svgs, notes, source_assets, source_preservation, source_manifest, native_objects,
+                          manifest_encoding=None):
+    """The export's ``source_snapshot_sha256``; the asset-less base omits ``assets``."""
+    base = {"svgs": svgs, "notes": notes}
+    if any(asset is not None for asset in source_assets):
+        base["assets"] = source_assets
+    source_digest = _digest(base)
+    if source_preservation is not None:
+        source_digest = _digest({"svgSourceSnapshot": source_digest,
+            "sourcePreservation": source_preservation})
+    if source_manifest is not None:
+        source_digest = digest_embedding({"svgSourceSnapshot": source_digest},
+            "sealedSourceManifest", source_manifest, manifest_encoding)
+    if native_objects is not None:
+        source_digest = _digest({"svgSourceSnapshot": source_digest, "nativeObjects": native_objects})
+    return source_digest
+
+
 def _native_object_entries(slides):
     """Each slide's NativeObjects sidecar as a bundle entry; ``None`` when no
     slide has one (identity digests then stay what they were without them).
@@ -513,7 +534,7 @@ def _native_object_entries(slides):
 async def render_and_export_svgs(claim, *, tenant_id, svgs, notes, export_format, canvas, session_factory,
                                  asset_bindings=None, source_preservation=None, deadline_grant=None,
                                  font_embedding=False, native_objects=None, slide_refs=None,
-                                 source_manifest=None):
+                                 source_manifest=None, source_manifest_encoding=None, io_memo=None):
     """Run the svg worker; ``slide_refs`` are pre-persisted slide svg checkpoints
     (``services.svg_export_identity``), otherwise the sources persist ephemeral."""
     if (claim.owner_id is None or claim.kind != f"export.{export_format}"
@@ -543,10 +564,14 @@ async def render_and_export_svgs(claim, *, tenant_id, svgs, notes, export_format
         session_factory, operation_id=claim.operation_id)
     _require_deadline_budget(grant)
     service = configured_public_artifact_service()
+    from services.svg_export_assets import ExportIoMemo
     async with session_factory() as session:
         refs = []
         asset_refs = []
         assets = []
+        # Verified manifest reads are shared with the build phase (one operation); consumer refs
+        # registered below belong to this transaction only, hence a fresh dict body.
+        asset_memo = io_memo.for_session() if io_memo is not None else ExportIoMemo(ExportIoCounters())
         for index, source in enumerate(svgs):
             _require_deadline_budget(grant)
             binding = asset_bindings[index] if asset_bindings is not None else None
@@ -556,7 +581,8 @@ async def render_and_export_svgs(claim, *, tenant_id, svgs, notes, export_format
                                 if source_preservation is not None else {})
                 wire, bound = await prepare_export_assets(binding, svg=source, service=service,
                     session=session, claim=claim, tenant_id=tenant_id, export_format=export_format,
-                    width=resolved_canvas.width_px, height=resolved_canvas.height_px, **receipt_args)
+                    width=resolved_canvas.width_px, height=resolved_canvas.height_px, memo=asset_memo,
+                    **receipt_args)
                 assets.append(wire)
                 asset_refs.extend(bound)
             else:
@@ -570,12 +596,14 @@ async def render_and_export_svgs(claim, *, tenant_id, svgs, notes, export_format
             source_digests=[ref.sha256 for ref in refs], notes=notes, canvas=canvas,
             export_format=export_format, font_embedding=font_embedding, assets=assets,
             source_preservation=source_preservation, native_objects=native_objects,
-            source_manifest=source_manifest)
+            source_manifest=source_manifest, source_manifest_encoding=source_manifest_encoding)
         bundle = await service.persist_bytes(
             session, owner_id=claim.owner_id, tenant_id=tenant_id, kind="export-bundle",
             payload=json.dumps(payload).encode(), media_type="application/vnd.presenton.export-bundle+json",
             created_by_operation_id=claim.operation_id, retention_class="ephemeral")
         await session.commit()
+    if asset_memo.counters is not None:
+        asset_memo.counters.log(LOGGER, "prepare", claim.operation_id)
     # The worker receives only digest-verified transport bytes, never database
     # credentials or an assumption that the authority is a local filesystem.
     _require_deadline_budget(grant)
@@ -584,7 +612,8 @@ async def render_and_export_svgs(claim, *, tenant_id, svgs, notes, export_format
     # One eviction pass for the whole staging batch instead of one full cache
     # walk per object (services/worker_artifact_cache_maintenance.py).
     async with cache.maintenance_batch():
-        for reference in [*refs, *asset_refs, bundle]:
+        # The deck-level source manifest consumer ref is shared by every slide; stage each exact ref once.
+        for reference in dict.fromkeys([*refs, *asset_refs, bundle]):
             _require_deadline_budget(grant)
             await service.stream_ref_to_object_store(reference, cache)
     exported = await execute_isolated_export_operation(
@@ -763,10 +792,28 @@ async def current_svg_artifact_fidelity(session, presentation, review_operation)
     return dict(view, status=domain["status"], reasonCode=domain.get("reasonCode"))
 
 
-async def _build_slide_asset_bindings(context, *, slides, service, session, tenant_id, export_format, canvas, grant):
-    """Share producer proof only inside this export preparation transaction."""
+_FINAL_LOCK_TIMEOUT_MS = 10_000
+
+
+async def _bound_final_lock_wait(session):
+    """Bound the final admission/operation row-lock wait (PostgreSQL only)."""
+    from sqlalchemy import text
+
+    if session.get_bind().dialect.name == "postgresql":
+        await session.execute(text(f"SET LOCAL lock_timeout = '{_FINAL_LOCK_TIMEOUT_MS}ms'"))
+
+
+async def _build_slide_asset_bindings(context, *, slides, service, session, tenant_id, export_format, canvas, grant,
+                                      io_memo=None):
+    """Share producer proof only inside this export preparation transaction.
+
+    The long per-slide phase reads and writes only content-addressed artifacts;
+    admission/operation rows are locked (and publication pointers promoted) only
+    in the final section, so a cancel request or heartbeat never waits on it.
+    """
     from models.sql.presentation import PresentationModel
     from services.artifact_store import _locked_current_operation
+    from services.svg_asset_persistence import SvgPublicationContext, promote_deferred_publications_if_current
     from services.svg_document_mutations import _PublicationSourceVerification
     from services.svg_export_assets import build_slide_export_assets
     from utils.datetime_utils import as_utc, get_current_utc_datetime
@@ -789,30 +836,46 @@ async def _build_slide_asset_bindings(context, *, slides, service, session, tena
         return await verification.verify(*args)
 
     bindings = []
+    # Operation-scoped memo for verified source manifests, sealed assets and derivatives.
+    # Verified manifest proofs are shared across the operation; per-slide entries belong to this transaction.
+    export_memo = io_memo.for_session() if io_memo is not None else {}
+    deferred_publications = []
     for slide in slides:
         await context.raise_if_cancelled()
         _require_deadline_budget(grant)
         bindings.append(await build_slide_export_assets(slide, service=service, session=session,
             claim=claim, tenant_id=tenant_id, export_format=export_format, canvas=canvas,
-            _source_verifier=verify_source))
+            _source_verifier=verify_source, _memo=export_memo, _deferred_publications=deferred_publications))
     await verification.revalidate()
     await context.raise_if_cancelled()
     _require_deadline_budget(grant)
     if claim_binding() != expected_claim:
         raise ValueError("svg_export_asset_fence_lost")
-    current = await _locked_current_operation(session, operation_id=claim.operation_id,
-        owner_id=claim.owner_id, tenant_id=tenant_id, attempt_number=claim.attempt_number,
-        attempt_token=claim.attempt_token, fencing_token=claim.fencing_token, operation_kind="export")
-    if current is None:
-        raise ValueError("svg_export_asset_fence_lost")
-    await session.refresh(current)
-    await session.refresh(presentation, attribute_names=["owner_id", "revision"])
-    if (current.presentation_id != claim.presentation_id
+    # Final section: the only admission -> operation row locks of this transaction.
+    await _bound_final_lock_wait(session)
+    try:
+        current = await _locked_current_operation(session, operation_id=claim.operation_id,
+            owner_id=claim.owner_id, tenant_id=tenant_id, attempt_number=claim.attempt_number,
+            attempt_token=claim.attempt_token, fencing_token=claim.fencing_token, operation_kind="export")
+    except DBAPIError as error:
+        await context.raise_if_cancelled()
+        raise ValueError("svg_export_asset_lock_timeout") from error
+    if current is not None:
+        await session.refresh(current)
+        await session.refresh(presentation, attribute_names=["owner_id", "revision"])
+    if (current is None or current.presentation_id != claim.presentation_id
             or current.expected_revision != claim.expected_revision
             or current.cancel_requested_at is not None or current.lease_expires_at is None
             or as_utc(current.lease_expires_at) <= get_current_utc_datetime()
             or presentation.owner_id != claim.owner_id or presentation.revision != claim.expected_revision):
+        # A cancel committed during preparation surfaces as the runner's
+        # cancellation, never as a retryable export failure.
+        await context.raise_if_cancelled()
         raise ValueError("svg_export_asset_fence_lost")
+    await promote_deferred_publications_if_current(session, SvgPublicationContext(
+        operation_id=claim.operation_id, owner_id=claim.owner_id, tenant_id=tenant_id,
+        attempt_number=claim.attempt_number, attempt_token=claim.attempt_token,
+        fencing_token=claim.fencing_token, operation_kind="export", deferred_publications=deferred_publications))
     _require_deadline_budget(grant)
     return bindings
 
@@ -859,6 +922,16 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
     if (len(slides) != presentation.n_slides
             or [slide.index for slide in slides] != list(range(len(slides)))):
         raise NonRetryableWorkspaceOperationError("svg_export_incomplete_presentation")
+    # Lineage authority, source preservation and the sealed manifest can keep the
+    # loop busy before asset preparation too; widen the lease before them. A
+    # missing or exhausted grant still fails at its own check below.
+    try:
+        early_lease_seconds = int((await load_public_export_deadline_grant(
+            session_factory, operation_id=claim.operation_id)).export_worker_seconds())
+    except PublicExportOperationError:
+        early_lease_seconds = None
+    if early_lease_seconds is not None:
+        await context.extend_lease(seconds=early_lease_seconds)
     try:
         async with session_factory() as session:
             header_authority = await require_current_header_revision_authority(session, presentation, slides)
@@ -891,6 +964,15 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
                     receipts=measured_source_preservation)
     except PublicExportOperationError as error:
         raise NonRetryableWorkspaceOperationError(str(error)) from error
+    from services.svg_export_assets import ExportIoMemo
+    io_counters = ExportIoCounters()
+    io_memo = ExportIoMemo(io_counters)
+    manifest_encoding = None
+    if source_manifest is not None:
+        # Deep-frozen value + canonical bytes + digest, made once; every later consumer in this
+        # operation uses ``manifest_encoding.value`` so the digest cannot go stale.
+        manifest_encoding = await encode_sealed_manifest_async(source_manifest, counters=io_counters)
+        source_manifest = manifest_encoding.value
     if fmt == "pptx" and measured_source_preservation is not None:
         from services.svg_source_export_projection import project_cached_source_tables
         async with session_factory() as session:
@@ -898,21 +980,13 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
                 receipts=measured_source_preservation, canvas=parse_canvas_metadata(canvas), owner_id=claim.owner_id)
     svgs = [slide.svg_content for slide in slides]
     notes = [slide.speaker_note or "" for slide in slides]
-    source_digest = _digest({"svgs": svgs, "notes": notes})
     source_assets = [(slide.content or {}).get("svgAssetManifest") for slide in slides]
     source_preservation = ([(slide.content or {})["svgReceipt"]["source_preservation"] for slide in slides]
                            if measured_source_preservation is not None else None)
-    if any(asset is not None for asset in source_assets):
-        source_digest = _digest({"svgs": svgs, "notes": notes, "assets": source_assets})
-    if source_preservation is not None:
-        source_digest = _digest({"svgSourceSnapshot": source_digest,
-            "sourcePreservation": source_preservation})
-    if source_manifest is not None:
-        source_digest = _digest({"svgSourceSnapshot": source_digest,
-            "sealedSourceManifest": source_manifest})
     native_objects = _native_object_entries(slides) if fmt == "pptx" else None
-    if native_objects is not None:
-        source_digest = _digest({"svgSourceSnapshot": source_digest, "nativeObjects": native_objects})
+    # Canonical JSON + sha256 over every page's source is pure CPU on plain data.
+    source_digest = await asyncio.to_thread(_export_source_digest, svgs, notes, source_assets,
+        source_preservation, source_manifest, native_objects, manifest_encoding)
     provenance = {
         "schema_version": 1,
         "adapter_chain": ["general"],
@@ -945,6 +1019,11 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
         # deriving assets and staging a bundle on every retry.
         grant = await load_public_export_deadline_grant(session_factory, operation_id=claim.operation_id)
         _require_deadline_budget(grant)
+        # Source verification of a deep recovery lineage keeps the event loop busy for
+        # minutes; widen this attempt's lease to the admitted export window (as the
+        # preview and analysis handlers do) so the heartbeat cannot lapse and cost the
+        # attempt its fence at the end of preparation.
+        await context.extend_lease(seconds=int(grant.export_worker_seconds()) if grant is not None else 1800)
         await context.progress(stage="export_rendering", percent=10)
         svg_meta = ((presentation.theme or {}).get("svg") or {})
         advisory = svg_meta.get("advisory")
@@ -958,14 +1037,16 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
                 async with session_factory() as session:
                     asset_bindings = await _build_slide_asset_bindings(context, slides=slides,
                         service=service, session=session, tenant_id=admission.tenant_id,
-                        export_format=fmt, canvas=canvas, grant=grant)
+                        export_format=fmt, canvas=canvas, grant=grant, io_memo=io_memo)
                     await session.commit()
+                io_counters.log(LOGGER, "bindings", claim.operation_id)
             return await render_and_export_svgs(
                 claim, tenant_id=admission.tenant_id, svgs=svgs, notes=notes, export_format=fmt, canvas=canvas,
                 session_factory=session_factory, asset_bindings=asset_bindings,
                 source_preservation=source_preservation, deadline_grant=grant, font_embedding=font_embedding,
                 native_objects=native_objects, slide_refs=slide_refs,
-                source_manifest=source_manifest)
+                source_manifest=source_manifest, source_manifest_encoding=manifest_encoding,
+                io_memo=io_memo)
 
         # One export per identity: a completed identity is reused without the
         # worker or asset derivation; only a claimed one runs ``run_worker``.
@@ -976,7 +1057,7 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
                 canvas=parse_canvas_metadata(canvas).model_dump(mode="json", by_alias=True), slides=slides,
                 source_assets=source_assets if any(asset is not None for asset in source_assets) else None,
                 source_preservation=source_preservation, native_objects=native_objects,
-                source_manifest=source_manifest,
+                source_manifest=source_manifest, source_manifest_encoding=manifest_encoding,
                 font_embedding=font_embedding, advisory=advisory, quality_policy=quality_policy),
             session_factory=session_factory, grant=grant, execute=run_worker)
         ref = result.artifact

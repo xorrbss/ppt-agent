@@ -157,6 +157,63 @@ def test_retry_amplification_ceiling_and_kill_conditions() -> None:
         with pytest.raises(RetryAmplificationError):
             await amplification.admit("job-1", "retry-2", estimated_cost_microunits=1, is_retry=True)
 
+        # Authorized stage plans stay separate from observed receipt counts.
+        bounded = ProviderRuntimeControl(RuntimeLimits(
+            requests_per_minute=100, retry_amplification_ceiling=2))
+        await bounded.register_job("episode", estimated_budget_microunits=100,
+            actual_budget_microunits=100,
+            kill_conditions=JobKillConditions(max_total_requests=9, max_retry_requests=4),
+            initial_requests=1, retry_requests=2)
+        for ordinal in range(2):
+            lease = await bounded.admit("episode", f"repair-{ordinal}",
+                estimated_cost_microunits=1, is_retry=True, planned_initial_request_limit=5)
+            await lease.finish(actual_cost_microunits=1, outcome="success")
+            if ordinal == 0:
+                bounded = ProviderRuntimeControl.restore(await bounded.snapshot())
+        status = await bounded.job_status("episode")
+        assert status["initial_requests"] == 1
+        assert status["retry_requests"] == 4
+        assert status["total_requests"] == 5
+        with pytest.raises(CancellationRequested, match="max_retry_requests"):
+            await bounded.admit("episode", "repair-over-limit", estimated_cost_microunits=1,
+                is_retry=True, planned_initial_request_limit=5)
+
+        # The approved envelope can itself exceed the global secondary ratio.
+        # Its finite hard caps still bound every admitted retry and actual cost.
+        future = ProviderRuntimeControl(RuntimeLimits(requests_per_minute=100))
+        await future.register_job("future", estimated_budget_microunits=100,
+            actual_budget_microunits=100,
+            kill_conditions=JobKillConditions(max_total_requests=6, max_retry_requests=5),
+            initial_requests=1)
+        for ordinal in range(5):
+            lease = await future.admit("future", f"repair-{ordinal}",
+                estimated_cost_microunits=1, is_retry=True, planned_initial_request_limit=1)
+            await lease.finish(actual_cost_microunits=1, outcome="success")
+        status = await future.job_status("future")
+        assert future.limits.retry_amplification_ceiling == 4
+        assert status["initial_requests"] == 1
+        assert status["retry_requests"] == 5
+        assert status["total_requests"] == 6
+        assert status["actual_consumed_microunits"] == 5
+
+        total_bounded = ProviderRuntimeControl(RuntimeLimits(requests_per_minute=100))
+        await total_bounded.register_job("total", estimated_budget_microunits=100,
+            actual_budget_microunits=100,
+            kill_conditions=JobKillConditions(max_total_requests=3, max_retry_requests=4),
+            initial_requests=1, retry_requests=2)
+        with pytest.raises(CancellationRequested, match="max_total_requests"):
+            await total_bounded.admit("total", "over-limit", estimated_cost_microunits=1,
+                is_retry=True, planned_initial_request_limit=5)
+
+        # An approved plan is never historical evidence of an initial call.
+        empty = ProviderRuntimeControl(RuntimeLimits(requests_per_minute=100))
+        await empty.register_job("empty", estimated_budget_microunits=100,
+            actual_budget_microunits=100,
+            kill_conditions=JobKillConditions(max_total_requests=9, max_retry_requests=4))
+        with pytest.raises(RetryAmplificationError, match="retry_requires_an_initial_request"):
+            await empty.admit("empty", "retry", estimated_cost_microunits=1,
+                is_retry=True, planned_initial_request_limit=5)
+
     asyncio.run(scenario())
 
 

@@ -13,6 +13,7 @@ _FILES = (
     "services/svg_trusted_fonts.py",
     "services/authored_vnext/semantic/typography.py",
     "utils/svg_template_fonts.py",
+    "services/svg_text_advance.py",
     "services/svg_export_whole_page_adapter.py",
     "services/svg_export_source_preservation.py",
     "services/svg_export_operation.py",

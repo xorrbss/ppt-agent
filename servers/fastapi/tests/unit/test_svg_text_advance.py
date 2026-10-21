@@ -92,6 +92,106 @@ def test_measurer_answers_only_for_bundled_families_weights_and_glyphs():
     assert text_advance("68%", 0, "700", NOTO) is None
 
 
+@pytest.mark.parametrize("weight", [400, 700, 800])
+def test_trusted_template_fallback_preserves_source_nodes_text_and_requested_weight(weight):
+    from utils.svg_template_fonts import (
+        FONT_DIGEST, fallback_font_material, materialize_template_fallbacks,
+        template_font_faces, trusted_font_fallback_plan,
+    )
+    from utils.hashing import canonical_json_sha256, sha256_prefixed
+
+    source = _svg(f'<text id="source-a" data-qid="svg-1" x="40" y="80" font-family="Noto Sans KR" '
+        f'font-weight="{weight}" font-size="24">가\u25b8<tspan id="line-a" data-qid="svg-2" '
+        'x="40" y="110">나\u21bb</tspan>다\u2610</text>'
+        '<text id="source-b" data-qid="svg-3" x="40" y="160" font-family="Noto Sans KR" '
+        f'font-weight="{weight}" font-size="24">라\u25be</text>')
+    before = ET.fromstring(source)
+    derived, proof = materialize_template_fallbacks(source)
+    after = ET.fromstring(derived)
+    source_texts = [node for node in before.iter() if node.tag.endswith("}text")]
+    derived_texts = [node for node in after.iter() if node.tag.endswith("}text")]
+    assert ["".join(node.itertext()) for node in derived_texts] == ["".join(node.itertext()) for node in source_texts]
+    old_nodes = {node.get("id"): node for node in before.iter() if node.get("id")}
+    new_nodes = {node.get("id"): node for node in after.iter() if node.get("id")}
+    assert set(old_nodes) == set(new_nodes)
+    assert all(old.attrib == new_nodes[identity].attrib for identity, old in old_nodes.items())
+    inserted = [node for node in after.iter() if node.get("font-family") == "Segoe UI Symbol"]
+    assert len(inserted) == 4
+    assert all(node.attrib == {"font-family": "Segoe UI Symbol", "font-weight": str(weight)} for node in inserted)
+    assert proof["canonical_svg_digest"] == sha256_prefixed(source.encode())
+    assert proof["derived_svg_digest"] == sha256_prefixed(derived.encode())
+    assert proof["primary_font_digest"] == FONT_DIGEST
+    assert proof["proof_digest"] == "sha256:" + canonical_json_sha256(
+        {key: value for key, value in proof.items() if key != "proof_digest"})
+    assert len(proof["runs"]) == 4
+    for run in proof["runs"]:
+        value = "".join(source_texts[run["text_index"]].itertext())[run["start"]:run["end"]]
+        assert run["codepoints"] == list(map(ord, value))
+        assert run["weight"] == run["requested_weight"] == weight
+        assert run["face_weight"] == 400 and run["synthetic_bold"] == (weight >= 600)
+    family, face_weight, digest, payload = fallback_font_material()
+    assert (family, face_weight) == ("Segoe UI Symbol", 400)
+    assert sha256_prefixed(payload) == digest == proof["fallback_font_digest"]
+    faces = template_font_faces(source)
+    assert [(f, w, d) for f, w, d, _ in faces] == [
+        ("Noto Sans KR", "100 900", FONT_DIGEST), (family, 400, digest)]
+    plan = trusted_font_fallback_plan("가\u25b8나", weight=weight)
+    assert "".join(segment["text"] for segment in plan["segments"]) == "가\u25b8나"
+    assert [segment["family"] for segment in plan["segments"]] == ["Noto Sans KR", family, "Noto Sans KR"]
+
+
+def test_trusted_template_fallback_keeps_plain_pages_and_rejects_untrusted_sources():
+    from utils.svg_template_fonts import materialize_template_fallbacks, require_font_coverage, template_font_faces
+
+    source = _svg('<text id="source" x="40" y="80" font-family="Noto Sans KR">원문 125%</text>')
+    derived, proof = materialize_template_fallbacks(source)
+    assert derived is source and proof is None
+    assert len(template_font_faces(source)) == 1
+    with pytest.raises(ValueError, match="svg_template_font_glyph_unavailable"):
+        require_font_coverage("\U0010ffff")
+    for family in ("Arial", "Segoe UI Symbol", "C:/Windows/Fonts/seguisym.ttf", "Noto Sans KR, Segoe UI Symbol"):
+        with pytest.raises(ValueError, match="svg_template_font_unsupported"):
+            materialize_template_fallbacks(source.replace("Noto Sans KR", family))
+    with pytest.raises(ValueError, match="svg_template_font_unsupported"):
+        materialize_template_fallbacks(source.replace("원문 125%", '<tspan font-family="Segoe UI Symbol">\u25b8</tspan>'))
+
+
+def test_trusted_template_fallback_registry_keeps_license_and_embedding_checks():
+    from io import BytesIO
+    from fontTools.ttLib import TTFont
+    from services.authored_vnext.semantic.typography import NativeFontByteRegistry
+    from utils.svg_template_fonts import fallback_font_material
+
+    family, _, _, content = fallback_font_material()
+    registry = NativeFontByteRegistry()
+    receipt = registry.register(content)
+    assert receipt.embedding_eligible and receipt.license_policy == "microsoft-windows-font-eula"
+    assert registry.font_bytes(family, "Normal") == content
+    for mutation in ("restricted", "license_missing"):
+        with TTFont(BytesIO(content)) as font:
+            if mutation == "restricted":
+                font["OS/2"].fsType = 2
+            else:
+                font["name"].names = [entry for entry in font["name"].names if entry.nameID not in {13, 14}]
+            buffer = BytesIO()
+            font.save(buffer)
+        rejected = NativeFontByteRegistry()
+        assert not rejected.register(buffer.getvalue()).embedding_eligible
+        with pytest.raises(ValueError, match="authored_native_font_material_unavailable"):
+            rejected.font_bytes(family, "Normal")
+
+
+def test_trusted_template_fallback_advances_use_the_same_bytes_and_do_not_guess_faux_bold():
+    from utils.svg_template_fonts import FALLBACK_FONT_FAMILY
+
+    glyph = text_advance("\u25b8", 32, "400", FALLBACK_FONT_FAMILY)
+    assert glyph is not None and glyph > 0
+    assert text_advance("한\u25b8글", 32, "400", NOTO) == pytest.approx(
+        text_advance("한", 32, "400", NOTO) + glyph + text_advance("글", 32, "400", NOTO))
+    assert text_advance("한\u25b8글", 32, "700", NOTO) is None
+    assert text_advance("\u25b8", 32, "700", FALLBACK_FONT_FAMILY) is None
+
+
 @pytest.mark.parametrize("anchor,algn", [("start", "l"), ("middle", "ctr"), ("end", "r")])
 def test_single_line_frame_holds_its_text_and_keeps_the_anchor(tmp_path, anchor, algn):
     x = 400.0

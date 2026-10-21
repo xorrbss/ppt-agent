@@ -14,7 +14,7 @@ import uuid
 from sqlalchemy import and_, case, exists, func, or_, text, update
 from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import aliased, defer
 from sqlmodel import select
 
 from models.sql import public_admission as public_admission_models
@@ -256,6 +256,7 @@ async def _require_phase2_provider_contract(
     workspace_model = _require_phase2_workspace_model()
     operation = await session.scalar(
         select(workspace_model)
+        .options(defer(workspace_model.request_payload))
         .where(workspace_model.id == admission.operation_id)
         .with_for_update()
     )
@@ -1664,10 +1665,13 @@ async def reserve_public_provider_call(
         raise PublicAdmissionRejected("public_provider_actual_cost_limit_exceeded")
     if admission is None or admission.state != "active":
         raise PublicAdmissionRejected("public_provider_operation_not_active")
-    operation = await session.get(WorkspaceOperation, admission.operation_id)
-    if operation is not None and operation.request_payload.get("recovery_revision") in {
+    recovery_revision = await session.scalar(select(
+        WorkspaceOperation.request_payload["recovery_revision"].as_string()
+    ).where(WorkspaceOperation.id == admission.operation_id))
+    if recovery_revision in {
         "svg-provider-timeout-repurchase/v2", "svg-provider-timeout-repurchase/v3",
     }:
+        operation = await session.get(WorkspaceOperation, admission.operation_id)
         from services.svg_timeout_repurchase import verify_repurchase_provider_target, TimeoutRepurchaseRejected
         try:
             await verify_repurchase_provider_target(session, operation, admission, stage=stage,
@@ -2340,7 +2344,8 @@ async def reserve_public_provider_call_detached(
                 select(PublicOperationAdmission, WorkspaceOperation).join(
                     WorkspaceOperation,
                     WorkspaceOperation.id == PublicOperationAdmission.operation_id,
-                ).where(PublicOperationAdmission.operation_id == operation_id)
+                ).options(defer(WorkspaceOperation.request_payload))
+                .where(PublicOperationAdmission.operation_id == operation_id)
             )
         ).first()
         if result is None:

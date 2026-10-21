@@ -264,7 +264,12 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
             future = owner_context.run(lambda: asyncio.run_coroutine_threadsafe(
                 dispatch_preflight() if preflight else save_event(event), loop))
             try:
-                future.result(timeout=min(30.0, remaining))
+                from utils.provider_overload import current_provider_call_remaining_seconds
+                provider_remaining = current_provider_call_remaining_seconds()
+                wait_remaining = 30.0 if provider_remaining is None else provider_remaining
+                if deadline is not None:
+                    wait_remaining = min(wait_remaining, remaining)
+                future.result(timeout=wait_remaining)
             except BaseException as error:
                 future.cancel()
                 from services.generation_core.drivers.svg.partial_quality_recovery import is_current_provider_control_error
@@ -284,6 +289,9 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
                               slide_index=index,
                               attempt_number=job.attempt_number if job else 0,
                               public_only=bool(getattr(ctx, "header_operation_public_only", False)),
+                              quality_repair_context=(ctx if
+                                  index in (getattr(ctx, "partial_recovery_manifest", None) or {}).get("known_indices", [])
+                                  and (payload.get("quality_recovery") or {}).get("status") == "repair_pending" else None),
                               **({"workspace_operation_id": job.workspace_operation_id}
                                  if job is not None and (getattr(job, "request_payload", None) or {}).get("_svg_partial_recovery")
                                  else {})), observer_scope:
@@ -299,15 +307,22 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
                     header_page=(getattr(ctx, "header_pages", None) or [None] * count)[index],
                     **intent_kwargs)
             elif ctx.source_reflow:
-                from services.generation_core.authoring.author_source_svg_layout import author_source_svg_layout
+                from services.generation_core.authoring.author_source_svg_layout import (
+                    author_source_svg_layout, source_binding_correction_hint,
+                )
+                image_slots = {candidate.occurrence_id: slot
+                               for slot, candidate in ctx.planned[index].items()}
+                source_hint = hint
+                if whole_page_source and hint and payload.get("attempts"):
+                    source_hint = source_binding_correction_hint(ctx.source_units[index], image_slots,
+                        payload["attempts"][-1].get("raw_response"), hint)
                 authored = await author_source_svg_layout(
                     ctx.source_document, index, ctx.snapshot,
                     source_images=offered_images,
-                    image_slots={candidate.occurrence_id: slot
-                                for slot, candidate in ctx.planned[index].items()},
+                    image_slots=image_slots,
                     min_font_size_px=source_floor,
                     width=ctx.canvas.width_px, height=ctx.canvas.height_px,
-                    instructions=request.instructions, correction_hint=hint,
+                    instructions=request.instructions, correction_hint=source_hint,
                     writing_policy=getattr(request, "writing_policy", None),
                     receipt_attempt_ordinal=provider_ordinal,
                     before_dispatch=before_dispatch,

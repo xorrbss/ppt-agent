@@ -253,6 +253,8 @@ async def run_external_worker(stop: asyncio.Event | None = None) -> None:
 
 
 def main() -> None:
+    from server import configure_file_logging
+
     logging.basicConfig(
         level=getattr(
             logging,
@@ -260,6 +262,7 @@ def main() -> None:
             logging.INFO,
         )
     )
+    configure_file_logging(get_log_level())
 
     async def serve() -> None:
         stop = asyncio.Event()

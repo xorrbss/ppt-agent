@@ -2060,6 +2060,7 @@ async def _admit_generation_operation_v2_compatible(
     retry_source_operation: WorkspaceOperation | None = None,
     zero_provider_cached_author_recovery: bool = False,
     partial_svg_recovery: bool = False,
+    partial_svg_verification: object | None = None,
 ) -> uuid.UUID:
     """Bind the browser-compatible request to one complete v2 admission."""
 
@@ -2074,7 +2075,9 @@ async def _admit_generation_operation_v2_compatible(
         if (operation.request_payload.get("recovery_revision") != REVISION
                 or partial_job is None or request.strategy != "svg"):
             raise HTTPException(status_code=409, detail="svg_partial_recovery_admission_invalid")
-        partial_manifest = await verify_episode(sql_session, operation, partial_job)
+        partial_manifest = await verify_episode(sql_session, operation, partial_job,
+            verification=partial_svg_verification,
+            finish_verification=partial_svg_verification is not None)
     if zero_provider_cached_author_recovery:
         from services.svg_cached_author_render_recovery import REVISIONS
 
@@ -2120,6 +2123,14 @@ async def _admit_generation_operation_v2_compatible(
     from services.svg_common_header_design_plan import (
         svg_header_design_admission_budget, svg_header_representative_body_admission_budget,
     )
+    # Partial episodes retain their separately verified recovery-decision cap.
+    # Normal admission's existing min(policy, caller cap) can only lower cost.
+    requested_cap = (None if partial_svg_recovery else
+        getattr(request, "provider_cost_cap_microunits", None))
+    cost_caps = ({} if requested_cap is None else {
+        "estimated_cost_limit_microunits": requested_cap,
+        "actual_cost_limit_microunits": requested_cap,
+    })
     try:
         admission = await admit_public_operation_compatible_v2(
             sql_session,
@@ -2150,6 +2161,7 @@ async def _admit_generation_operation_v2_compatible(
                 estimated_memory_mib=512,
                 fidelity_mode="standard",
             ),
+            **cost_caps,
         )
     except PublicAdmissionRejected as error:
         raise HTTPException(

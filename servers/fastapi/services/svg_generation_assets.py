@@ -217,7 +217,8 @@ async def screen_placement(session, service, *, context, revision, manifest, sou
     return envelope, materialized
 
 
-async def _verify_inherited_source_manifest(session, manifest, pointer, *, context, presentation_id, operation_id):
+async def _verify_inherited_source_manifest(session, manifest, pointer, *, context, presentation_id, operation_id,
+                                            _episode_proofs=None):
     from models.sql.workspace import WorkspaceOperation
     from models.sql.presentation import PresentationModel
     from services.svg_timeout_repurchase import verify_append_only_child_lineage
@@ -233,15 +234,20 @@ async def _verify_inherited_source_manifest(session, manifest, pointer, *, conte
     partial_manifest = None
     if operation.request_payload.get("recovery_revision") == "svg-partial-recovery/v1":
         from models.sql.presentation_generation_job import PresentationGenerationJob
-        from services.svg_partial_recovery import verify_episode
+        from services.svg_partial_recovery import verify_episode, verify_prepared_episode
         from sqlalchemy import select
 
         job = await session.scalar(select(PresentationGenerationJob).where(
             PresentationGenerationJob.workspace_operation_id == operation.id))
         if job is None:
             raise ValueError("svg_asset_source_revision_conflict")
-        partial_manifest = await verify_episode(session, operation, job,
-            require_current_code=operation.state not in {"completed", "succeeded"})
+        if operation.state == "running" and job.state in {"running", "staging"}:
+            partial_manifest = await verify_prepared_episode(session, operation, job)
+        else:
+            # Only a publication preparation passes its own proof holder.
+            partial_manifest = await verify_episode(session, operation, job,
+                require_current_code=operation.state not in {"completed", "succeeded"},
+                **({"_retained_proofs": _episode_proofs} if _episode_proofs is not None else {}))
         asset_binding = partial_manifest["source_asset_binding"]
         binding = dict(presentation_id=partial_manifest["presentation_id"],
             presentation_revision=partial_manifest["presentation_revision"],

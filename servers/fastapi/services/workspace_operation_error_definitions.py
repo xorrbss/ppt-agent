@@ -9,6 +9,9 @@ _GROUPS = (
         "svg_quality_recovery_review_unavailable",
     )),
     (409, False, "The recovery plan changed or cannot safely reuse the saved results. Review it again.", (
+        "svg_final_selected_evidence_unproven",
+        "svg_final_selected_context_unproven",
+        "svg_final_selected_runtime_unproven",
         "svg_partial_recovery_active_reservation",
         "svg_partial_recovery_additional_budget_required",
         "svg_partial_recovery_admission_conflict",

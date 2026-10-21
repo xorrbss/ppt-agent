@@ -228,6 +228,8 @@ class _PolicyParser(HTMLParser):
             values[name] = value
             if name == "xmlns" and (tag != "svg" or value != _SVG_NAMESPACE):
                 raise RendererPolicyError("inline SVG namespace is not allowed")
+            if name == "xml:space" and value not in {"default", "preserve"}:
+                raise RendererPolicyError("SVG xml:space is invalid")
             if name in _SVG_OPACITY_ATTRIBUTES and (tag in SVG_PRESENTATION_TAGS or tag == "stop"):
                 if _SVG_OPACITY.fullmatch(value.strip()) is None:
                     raise RendererPolicyError(

@@ -7,6 +7,7 @@ otherwise sizes single-line text frames from a per-character estimate, and a
 frame narrower than the text makes renderers that ignore ``wrap="none"``
 (LibreOffice) fold the line -- "68%" became "68" over "%".
 
+Missing primary glyphs may use the same reviewed symbol face as SVG capture.
 ``text_advance`` follows the converter's ``TextAdvance`` contract: the advance
 in canvas units, or ``None`` whenever the answer would not be exact (a family
 that is not bundled, a weight the family cannot render, a glyph it lacks), so
@@ -24,7 +25,10 @@ from services.svg_trusted_fonts import (
     declared_weights,
     read_trusted_pretendard_faces,
 )
-from utils.svg_template_fonts import FONT_FAMILY as NOTO_FAMILY, font_material
+from utils.svg_template_fonts import (
+    FALLBACK_FONT_FAMILY, FONT_FAMILY as NOTO_FAMILY, fallback_font_material,
+    font_material, trusted_font_fallback_plan,
+)
 
 #: Advances are read at this pixel size and scaled linearly. FreeType rounds a
 #: hinted advance to whole pixels, so a large reference keeps that rounding
@@ -41,7 +45,7 @@ def _primary_family(font_family: str) -> str | None:
         name = candidate.strip().strip("'\"")
         if not name:
             continue
-        for bundled in (NOTO_FAMILY, PRETENDARD_FAMILY):
+        for bundled in (NOTO_FAMILY, PRETENDARD_FAMILY, FALLBACK_FONT_FAMILY):
             if name.casefold() == bundled.casefold():
                 return bundled
         return None
@@ -68,6 +72,8 @@ def _rendered_weight(family: str, weight: int) -> int | None:
     if family == NOTO_FAMILY:
         low, high = _NOTO_WEIGHT_RANGE
         return weight if low <= weight <= high else None
+    if family == FALLBACK_FONT_FAMILY:
+        return 400 if weight == 400 else None
     declared = declared_weights(family)
     return None if declared is None else _nearest_declared_weight(declared, weight)
 
@@ -75,6 +81,8 @@ def _rendered_weight(family: str, weight: int) -> int | None:
 def _payload(family: str, weight: int) -> bytes:
     if family == NOTO_FAMILY:
         return font_material(NOTO_FAMILY)[1]
+    if family == FALLBACK_FONT_FAMILY:
+        return fallback_font_material()[3]
     return next(data for face_weight, _digest, data in read_trusted_pretendard_faces() if face_weight == weight)
 
 
@@ -106,7 +114,17 @@ def text_advance(text: str, font_size: float, font_weight: str, font_family: str
         return None
     face, coverage = _face(family, rendered)
     if any(ord(char) not in coverage for char in text):
-        return None
+        if family != NOTO_FAMILY or any(char.isspace() and ord(char) not in coverage for char in text):
+            return None
+        try:
+            plan = trusted_font_fallback_plan(text, family, rendered)
+        except ValueError:
+            return None
+        if any(segment["synthetic_bold"] for segment in plan["segments"]):
+            # Faux-bold advance is renderer-specific; keep the exact-or-None contract.
+            return None
+        return sum(_face(segment["family"], segment["face_weight"])[0].getlength(segment["text"])
+                   for segment in plan["segments"]) * font_size / _REFERENCE_SIZE_PX
     return face.getlength(text) * font_size / _REFERENCE_SIZE_PX
 
 

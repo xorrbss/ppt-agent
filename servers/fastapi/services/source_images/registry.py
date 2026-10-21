@@ -388,6 +388,7 @@ async def register_manifest_image_occurrences(
     *,
     presentation_id: uuid.UUID,
     occurrences: Sequence[ManifestImageOccurrence],
+    source_identity_presentation_id: uuid.UUID | None = None,
 ) -> list[SourceImageCandidate]:
     """Persist every admitted manifest occurrence without relevance filtering.
 
@@ -441,6 +442,7 @@ async def register_manifest_image_occurrences(
             storage_dir=storage_dir,
             presentation_id=presentation_id,
             raw=raw,
+            source_identity_presentation_id=source_identity_presentation_id,
         )
         for raw in raw_images
     ]
@@ -627,19 +629,15 @@ async def _persist_raw_image(
     storage_dir: Path,
     presentation_id: uuid.UUID,
     raw: _RawImage,
+    source_identity_presentation_id: uuid.UUID | None = None,
 ) -> SourceImageCandidate:
     """Materialise one picture in deck storage and record it as an asset."""
 
     suffix = _MIME_TO_SUFFIX[raw.mime_type]
     stored_path = storage_dir / f"{raw.digest}{suffix}"
-    # Digests are unique after deduping, so an existing file holds the same
-    # bytes from an earlier run of the same upload; rewriting it is pure cost.
-    if not await asyncio.to_thread(stored_path.exists):
-        await asyncio.to_thread(_write_stored_bytes, raw, stored_path)
-
     asset_id = (
         source_image_occurrence_asset_id(
-            presentation_id,
+            source_identity_presentation_id or presentation_id,
             raw.occurrence_id,
             raw.digest,
         )
@@ -652,6 +650,27 @@ async def _persist_raw_image(
     # leave that HTML pointing at an identifier the retry never offers, so the
     # picture would be dropped and a row leaked on every attempt.
     asset = await session.get(ImageAsset, asset_id)
+    if source_identity_presentation_id is not None:
+        from utils.owner_context import get_current_owner_id
+
+        owner = get_current_owner_id()
+        extras = (asset.extras or {}) if asset is not None else {}
+        expected = dict(presentation_id=str(source_identity_presentation_id), digest=raw.digest,
+            mime_type=raw.mime_type, width=raw.width, height=raw.height,
+            source_slide_index=raw.source_slide_index, source_occurrence_id=raw.occurrence_id)
+        if (asset is None or owner is None or asset.owner_id != owner or not asset.is_uploaded
+                or raw.occurrence_id is None or any(extras.get(key) != value for key, value in expected.items())):
+            raise ValueError("source_content_image_identity_unproven")
+        try:
+            original_digest = sha256_hex(await asyncio.to_thread(Path(asset.path).read_bytes))
+        except OSError as error:
+            raise ValueError("source_content_image_identity_unproven") from error
+        if original_digest != raw.digest:
+            raise ValueError("source_content_image_digest_mismatch")
+    # Only child storage is materialized. Reusing an inherited identity never
+    # changes its original ImageAsset row, path, metadata, or source bytes.
+    if not await asyncio.to_thread(stored_path.exists):
+        await asyncio.to_thread(_write_stored_bytes, raw, stored_path)
     if asset is None:
         asset = ImageAsset(
             id=asset_id,

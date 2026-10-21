@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import base64
 from contextvars import copy_context
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from functools import partial
 from hashlib import sha256
@@ -322,6 +322,43 @@ class SignedArtifactDownload:
     range_supported: bool = True
 
 
+_VERIFIED_BYTES_MINT = object()
+#: Upper bound for one ``read_verified_ref_bytes`` call; refs read this way are manifests/SVGs.
+VERIFIED_READ_MAX_BYTES = 128 * 1024 * 1024
+
+
+@dataclass(frozen=True, slots=True)
+class VerifiedArtifactBytes:
+    """In-process proof that one exact ref's stored bytes matched its sha256 and size.
+
+    Minted only by ``DurableArtifactService.read_verified_ref_bytes`` and meant to live in
+    an operation-scoped memo, never in a process-wide cache.  The storage key is bound to
+    owner, tenant and sha256 and a committed object is never overwritten, so the proof names
+    content rather than a moment; ``register_consumer_ref`` still re-checks the producer row.
+    The witness also names owner and tenant, so a proof never covers a ref of another scope.
+    """
+
+    owner_id: uuid.UUID
+    tenant_id: str
+    storage_key: str
+    sha256: str
+    size_bytes: int
+    mint: object = field(default=None, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        if self.mint is not _VERIFIED_BYTES_MINT:
+            raise ArtifactBindingError("artifact.verified_bytes_proof_forged")
+
+    def covers(self, reference: ArtifactRef) -> bool:
+        return (
+            reference.owner_id == self.owner_id
+            and reference.tenant_id == self.tenant_id
+            and reference.storage_key == self.storage_key
+            and reference.sha256 == self.sha256
+            and reference.size_bytes == self.size_bytes
+        )
+
+
 def provisional_artifact_storage_key(
     *, owner_id: uuid.UUID, tenant_id: str, upload_id: uuid.UUID
 ) -> str:
@@ -460,6 +497,11 @@ def _strip_extended_length_prefix(path: Path) -> Path:
 
 class LocalDevelopmentArtifactObjectStore:
     """Filesystem adapter/cache for local development, never production authority."""
+
+    #: ``read_verified_bytes`` opens, size-checks and hashes the object exactly once.
+    single_pass_verified_read = True
+    #: ``open_read_stream`` hashes the whole file in its head check before streaming it.
+    head_hashes_body = True
 
     def __init__(
         self,
@@ -695,6 +737,41 @@ class LocalDevelopmentArtifactObjectStore:
             last_modified=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc),
         )
 
+    async def read_verified_bytes(self, artifact: ArtifactRef, *, max_bytes: int) -> bytes:
+        """Open the object once and return bytes whose size and sha256 match ``artifact``.
+
+        Only for a caller that wants the verified bytes themselves: ``open_read_stream`` first
+        hashes the whole file in ``_head_sync`` and then streams it again, this does not.
+        Binding, containment, absence and mismatch use the same errors as ``_head_sync``.
+        """
+
+        started = time.perf_counter()
+        try:
+            return await asyncio.to_thread(self._read_verified_bytes_sync, artifact, max_bytes)
+        finally:
+            if self._observe_authority_metrics:
+                _ARTIFACT_STORE_METRICS.observe_store(
+                    "read", time.perf_counter() - started
+                )
+
+    def _read_verified_bytes_sync(self, artifact: ArtifactRef, max_bytes: int) -> bytes:
+        target = self._path(artifact)
+        if max_bytes <= 0 or artifact.size_bytes > max_bytes:
+            raise ArtifactStoreError("artifact.verified_read_too_large")
+        try:
+            handle = target.open("rb")
+        except OSError as exc:
+            if not target.is_file():
+                raise ArtifactNotFound("artifact.object_missing") from exc
+            raise
+        with handle:
+            if os.fstat(handle.fileno()).st_size != artifact.size_bytes:
+                raise ArtifactStoreError("artifact.immutable_object_conflict")
+            payload = handle.read(artifact.size_bytes + 1)
+        if len(payload) != artifact.size_bytes or sha256_hex(payload) != artifact.sha256:
+            raise ArtifactStoreError("artifact.immutable_object_conflict")
+        return payload
+
     async def open_read_stream(
         self, artifact: ArtifactRef, *, byte_range: ArtifactByteRange | None = None
     ) -> ArtifactReadStream:
@@ -866,6 +943,8 @@ class LocalDevelopmentArtifactObjectStore:
 
 class WorkerArtifactTransportCache(LocalDevelopmentArtifactObjectStore):
     """Digest-verified scratch shared with one-shot network-none workers."""
+
+    single_pass_verified_read = False
 
     _maintenance_lock = threading.Lock()
 
@@ -1599,8 +1678,14 @@ class DurableArtifactService:
         producer_ref: ArtifactRef,
         *,
         created_by_operation_id: uuid.UUID,
+        verified: VerifiedArtifactBytes | None = None,
     ) -> ArtifactRef:
-        """Bind an exact committed producer's CAS bytes to another operation."""
+        """Bind an exact committed producer's CAS bytes to another operation.
+
+        ``verified`` is a proof from ``read_verified_ref_bytes`` for this exact ref in the
+        caller's own operation.  It only replaces the producer-byte re-stream below; the CAS
+        guard and the committed-producer row lookup always run.
+        """
 
         await require_artifact_key_guard(session, producer_ref)
         producer = await session.scalar(
@@ -1617,6 +1702,15 @@ class DurableArtifactService:
         )
         if producer is None or producer.to_ref() != producer_ref:
             raise ArtifactBindingError("artifact.consumer_producer_not_committed_or_exact")
+        if verified is None or not verified.covers(producer_ref):
+            await self._stream_verify_producer_bytes(producer_ref)
+        consumer_ref = producer_ref.model_copy(update={
+            "artifact_id": uuid.uuid4(),
+            "created_by_operation_id": created_by_operation_id,
+        })
+        return await self.register_ref(session, consumer_ref)
+
+    async def _stream_verify_producer_bytes(self, producer_ref: ArtifactRef) -> None:
         opened = await self.open_read_stream(producer_ref)
 
         def verify_producer_bytes() -> None:
@@ -1634,11 +1728,6 @@ class DurableArtifactService:
                 opened.close()
 
         await asyncio.to_thread(verify_producer_bytes)
-        consumer_ref = producer_ref.model_copy(update={
-            "artifact_id": uuid.uuid4(),
-            "created_by_operation_id": created_by_operation_id,
-        })
-        return await self.register_ref(session, consumer_ref)
 
     async def stage_ref_to_path(
         self,
@@ -1753,6 +1842,71 @@ class DurableArtifactService:
         if not await self._object_store.exists(reference):
             raise ArtifactNotFound("artifact.object_missing")
         return await self._object_store.read_bytes(reference)
+
+    async def read_verified_ref_bytes(
+        self,
+        reference: ArtifactRef,
+        *,
+        max_bytes: int = VERIFIED_READ_MAX_BYTES,
+        counters: Any = None,
+    ) -> tuple[bytes, VerifiedArtifactBytes]:
+        """Read one exact ref and verify those same bytes; return them with a proof.
+
+        The caller parses the returned bytes.  A store that declares
+        ``single_pass_verified_read`` (local development) opens the object once and hashes
+        the bytes it returns, so its head-time integrity hash is not repeated.  Any other
+        store keeps the ordinary ``open_read_stream`` contract, head check included, and the
+        bytes are streamed and hashed here.  A missing object raises
+        ``artifact.object_missing`` like ``read_ref_bytes``.  ``counters`` is an optional
+        operation-scoped object with ``cas_reads`` / ``cas_bytes_hashed`` attributes; it
+        counts full-object body passes actually performed, a head pass that hashes the body
+        included (object-store ``HEAD`` metadata calls are not body passes).
+        """
+
+        if max_bytes <= 0 or reference.size_bytes > max_bytes:
+            raise ArtifactStoreError("artifact.verified_read_too_large")
+        store = self._object_store
+        if getattr(store, "single_pass_verified_read", False) is True:
+            payload = await store.read_verified_bytes(reference, max_bytes=max_bytes)
+            if len(payload) != reference.size_bytes:
+                raise ArtifactStoreError("artifact.object_readback_mismatch")
+            body_passes = 1
+        else:
+            body_passes = 2 if getattr(store, "head_hashes_body", False) is True else 1
+            payload = await self._stream_and_verify_ref_bytes(reference)
+        if counters is not None:
+            counters.cas_reads += body_passes
+            counters.cas_bytes_hashed += len(payload) * body_passes
+        return payload, VerifiedArtifactBytes(
+            owner_id=reference.owner_id,
+            tenant_id=reference.tenant_id,
+            storage_key=reference.storage_key,
+            sha256=reference.sha256,
+            size_bytes=reference.size_bytes,
+            mint=_VERIFIED_BYTES_MINT,
+        )
+
+    async def _stream_and_verify_ref_bytes(self, reference: ArtifactRef) -> bytes:
+        opened = await self.open_read_stream(reference)
+
+        def read_and_verify() -> bytes:
+            digest = sha256()
+            chunks: list[bytes] = []
+            size = 0
+            try:
+                for chunk in opened.iter_chunks(chunk_size=1024 * 1024):
+                    size += len(chunk)
+                    if size > reference.size_bytes:
+                        raise ArtifactStoreError("artifact.object_readback_mismatch")
+                    digest.update(chunk)
+                    chunks.append(chunk)
+            finally:
+                opened.close()
+            if size != reference.size_bytes or digest.hexdigest() != reference.sha256:
+                raise ArtifactStoreError("artifact.object_readback_mismatch")
+            return b"".join(chunks)
+
+        return await asyncio.to_thread(read_and_verify)
 
     async def open_read_stream(
         self,
@@ -1908,7 +2062,12 @@ class DurableArtifactService:
         owner_id: uuid.UUID,
         tenant_id: str,
         expected_digest: str,
+        check_object: bool = True,
     ) -> ArtifactRef:
+        """Resolve the committed row; ``check_object=False`` is only for a caller that
+        immediately opens the object itself (``read_verified_ref_bytes`` raises the same
+        ``artifact.object_missing`` and also hashes it)."""
+
         digest = normalize_sha256(expected_digest)
         artifact = await session.scalar(
             select(PublicArtifact).where(
@@ -1923,7 +2082,7 @@ class DurableArtifactService:
             # Deliberately do not distinguish not-found from cross-owner access.
             raise ArtifactNotFound("artifact.ref_not_found")
         reference = artifact.to_ref()
-        if not await self._object_store.exists(reference):
+        if check_object and not await self._object_store.exists(reference):
             raise ArtifactNotFound("artifact.object_missing")
         return reference
 

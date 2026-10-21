@@ -100,6 +100,7 @@ class ProviderUsageScope:
     public_only: bool = False
     workspace_operation_id: UUID | None = None
     episode_limits: tuple[int, int, int, int, int, int] | None = None
+    quality_repair_context: object | None = field(default=None, repr=False)
     _sequence: int = field(default=0, init=False, repr=False)
     _physical_sequences: dict[str, int] = field(
         default_factory=dict, init=False, repr=False
@@ -317,6 +318,7 @@ def provider_usage_scope(
     round_ordinal: int | None = None,
     public_only: bool = False,
     workspace_operation_id: UUID | None = None,
+    quality_repair_context: object | None = None,
 ) -> Iterator[None]:
     """Set receipt context for one bounded pipeline segment.
 
@@ -339,6 +341,7 @@ def provider_usage_scope(
                 round_ordinal=round_ordinal,
                 public_only=public_only,
                 workspace_operation_id=workspace_operation_id,
+                quality_repair_context=quality_repair_context,
             )
         )
     try:
@@ -418,6 +421,7 @@ async def provider_call_admission(
     public_fence = _PUBLIC_OPERATION_FENCE.get()
     if scope.public_only and (public_fence is None or scope.job_id != public_fence.operation_id):
         raise ProviderSpendFenceRejected("provider_public_review_scope_required")
+    verified_initial_request_limit = None
     if not scope.public_only and scope.workspace_operation_id is not None:
         if public_fence is None or public_fence.operation_id != scope.workspace_operation_id:
             raise ProviderSpendFenceRejected("svg_partial_recovery_runtime_unbound")
@@ -428,7 +432,10 @@ async def provider_call_admission(
             episode = await runtime_admission(episode_session, job_id=scope.job_id,
                 operation_id=public_fence.operation_id,
                 expected_attempt_token=public_fence.attempt_token,
-                expected_fencing_token=public_fence.fencing_token)
+                expected_fencing_token=public_fence.fencing_token,
+                slide_index=scope.slide_index, stage=scope.stage,
+                **(dict(is_retry=is_retry, quality_repair_context=scope.quality_repair_context)
+                   if scope.quality_repair_context is not None else {}))
             if episode is None:
                 raise ProviderSpendFenceRejected("svg_partial_recovery_runtime_unbound")
             if episode is not None:
@@ -436,6 +443,7 @@ async def provider_call_admission(
                 scope.episode_limits = (episode.initial_request_count, episode.retry_request_count,
                     episode.planned_request_limit, episode.retry_request_limit,
                     episode.estimated_cost_limit_microunits, episode.actual_cost_limit_microunits)
+                verified_initial_request_limit = episode.planned_request_limit
     active_lease = _ACTIVE_PROVIDER_ADMISSION.get()
     if active_lease is not None:
         yield active_lease
@@ -469,6 +477,8 @@ async def provider_call_admission(
         request_id,
         estimated_cost_microunits=estimated,
         is_retry=is_retry,
+        **(dict(planned_initial_request_limit=verified_initial_request_limit)
+           if verified_initial_request_limit is not None else {}),
     )
     durable_lease = None
     public_lease = None
@@ -485,6 +495,9 @@ async def provider_call_admission(
                 stage=scope.stage,
                 request_id=request_id,
                 estimated_cost=estimated,
+                slide_index=scope.slide_index,
+                **(dict(is_retry=is_retry, quality_repair_context=scope.quality_repair_context)
+                   if scope.quality_repair_context is not None else {}),
                 **(dict(workspace_operation_id=public_fence.operation_id,
                         expected_attempt_token=public_fence.attempt_token,
                         expected_fencing_token=public_fence.fencing_token)

@@ -104,7 +104,7 @@ _BLOCKED_RENDERER_URL_PATTERNS = [
 # is insufficient: local font/image/CSS files and the resolved Chromium binary
 # may change without changing the authored Scene payload.
 CACHE_IDENTITY_VERSION = "authored-render-cache-identity/v2-capability-registry"
-MEASUREMENT_CACHE_VERSION = "authored-measurement/v15-fit-floor-canvas-identity"
+MEASUREMENT_CACHE_VERSION = "authored-measurement/v18-preserved-svg-whitespace"
 _SCENE_DIGEST_PATTERN = re.compile(
     r'(?:data-scene-digest|data-scene-hash|name\s*=\s*["\']scene-digest["\'])'
     r'\s*=\s*["\']([^"\']+)["\']',
@@ -943,12 +943,22 @@ def _instrument_authored_html(
         }}
       }};
     }});
+    const orderedOwnedText = () => {{
+      const result = [];
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      for (let text = walker.nextNode(); text; text = walker.nextNode()) {{
+        const owner = text.parentElement?.closest('[data-qid]');
+        if (owner) result.push({{qid: owner.getAttribute('data-qid'), text: text.textContent || ''}});
+      }}
+      return result;
+    }};
     const payload = {{
       width: window.innerWidth, height: window.innerHeight,
       fonts_ready: !document.fonts || document.fonts.status === 'loaded',
       capabilityRegistry: {registry_metadata},
       source_digest: '{source_digest}', render_digest: '{render_digest}',
       dom_metrics_version: '{DOM_METRICS_VERSION}', metrics_cache_key: '{key}', fit, elements,
+      ordered_owned_text: orderedOwnedText(),
       observation_state: pass, source_viewport_normalization: freezeSourceViewport()
     }};
     let marker = document.getElementById('{_METRICS_ELEMENT_ID}');
@@ -2004,7 +2014,7 @@ CAPTURE_CACHE_BYTE_BUDGET = _env_nonnegative_int(
 _capture_cache: "OrderedDict[tuple[str, str, str], RenderCapture]" = OrderedDict()
 OCCLUSION_PROBE_CONTRACT_VERSION = "owned-paint-v3"
 OCCLUSION_SENSOR_VERSION = "owned-paint-v14-source-image-alpha"
-DOM_METRICS_VERSION = "authored-dom-metrics-v27-source-viewport-effective-font"
+DOM_METRICS_VERSION = "authored-dom-metrics-v30-preserved-svg-whitespace"
 DOM_METRICS_CACHE_SIZE = max(1, RENDER_CACHE_SIZE)
 DOM_METRICS_CACHE_BYTE_BUDGET = _env_nonnegative_int(
     "AUTHORED_DOM_METRICS_CACHE_BYTE_BUDGET", 32 * 1024 * 1024

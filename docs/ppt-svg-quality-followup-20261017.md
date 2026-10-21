@@ -1,5 +1,7 @@
 # SVG 품질·문단 보존·계보 검증 후속 작업
 
+2026-10-18 KST에 동일 문서 r2·4쪽의 새 release-v1 receipt READY 발급과 웹·실제 PowerPoint·native 문단 보존 검증을 완료했다. 별도 결과는 [release-v1 READY 보고](ppt-svg-release-ready-20261018.md)에 기록한다. 아래 본문은 2026-10-17 작업 및 당시 기발급 receipt의 blocked 상태에 대한 기록이며 그대로 보존한다.
+
 2026-10-17 초기 후속 구현 커밋은 `0925eeeb3`이며 이후 보완과 실제 결과는 아래에 기록한다. 기존 12쪽 완료 근거는 [앞선 구현 보고](ppt-llm-header-implementation-20261017.md)에 유지한다. 이번 변경으로 과거 산출물이나 실패·UNKNOWN·blocked 기록을 수정하거나 성공으로 재분류하지 않는다.
 
 최종 실제 결과는 A4 문서 revision 2의 정상 게시·웹 다운로드·Office 4쪽·native 원문 보존·source QA·현재 artifact fidelity까지 통과다. 기발급 export receipt의 `releaseReadiness=blocked`는 유지하며 formal READY나 release 완료를 의미하지 않는다. 아래 초기 실패와 진행 상태는 해당 시점의 기록이며 최종 binding과 근거는 마지막 절에 구분한다.

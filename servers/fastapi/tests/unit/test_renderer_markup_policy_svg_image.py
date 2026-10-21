@@ -184,3 +184,47 @@ def test_svg_contract_materialized_pages_require_png_or_jpeg_bytes(href):
 def test_svg_contract_refuses_external_references_beside_the_slot(extra):
     with pytest.raises(ValueError):
         validate_svg(_canvas_svg(_contract_image(SLOT, extra)), source_manifest=MANIFEST)
+
+
+@pytest.mark.parametrize("admit", ADMISSIONS, ids=lambda f: f.__name__)
+@pytest.mark.parametrize("element", ["text", "tspan"])
+@pytest.mark.parametrize("value", ["default", "preserve"])
+def test_xml_space_survives_svg_preview_and_isolation_preflight(admit, element, value):
+    import re
+    import xml.etree.ElementTree as ET
+    from services.svg_renderer import svg_preview_html
+
+    root = ET.fromstring(_canvas_svg(_contract_image(SLOT)))
+    text = root.find("{http://www.w3.org/2000/svg}text")
+    text.text = "  원문  A "
+    span = ET.SubElement(text, "{http://www.w3.org/2000/svg}tspan")
+    span.text, span.tail = " B  C ", "  끝  "
+    (text if element == "text" else span).set("{http://www.w3.org/XML/1998/namespace}space", value)
+    canonical = ET.tostring(root, encoding="unicode")
+    materialized = canonical.replace(f'href="{SLOT}"', f'href="{DATA_PNG}"')
+    wrapper = svg_preview_html(canonical, materialized_svg=materialized)
+    admitted = admit(wrapper)
+    match = re.search(r"<svg\b.*?</svg>", admitted.html, re.DOTALL)
+    measured = ET.fromstring(match.group(0))
+    measured_text = measured.find("{http://www.w3.org/2000/svg}text")
+    assert "".join(measured_text.itertext()) == "  원문  A  B  C   끝  "
+    target = measured_text if element == "text" else measured_text[0]
+    assert target.get("{http://www.w3.org/XML/1998/namespace}space") == value
+    assert measured.find("{http://www.w3.org/2000/svg}image").get("href") == DATA_PNG
+
+
+@pytest.mark.parametrize("admit", ADMISSIONS, ids=lambda f: f.__name__)
+@pytest.mark.parametrize("inner", [
+    '<text xml:space="invalid">t</text>',
+    '<text xml:space=" preserve">t</text>',
+    '<text xml:space="">t</text>',
+    '<text xml:base="https://evil.test/">t</text>',
+    '<text xmlns:other="urn:untrusted" other:space="preserve">t</text>',
+    '<text xml:space="preserve" onclick="alert(1)">t</text>',
+    '<text xml:space="preserve" style="fill:url(https://evil.test/f)">t</text>',
+    '<g xml:space="preserve"><text>t</text></g>',
+    '<rect xml:space="preserve"/>',
+])
+def test_xml_space_keeps_isolation_value_namespace_and_active_content_guards(admit, inner):
+    with pytest.raises(RendererPolicyError):
+        admit(_page(inner))

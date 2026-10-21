@@ -1,4 +1,4 @@
-"""Embed the trusted Pretendard faces into a converted SVG pptx in place.
+"""Embed byte-verified trusted faces into a converted SVG pptx in place.
 
 Neither python-pptx nor the vendored slide-master converter
 (``vendor/slide_master/svg_to_pptx``) write OOXML embedded fonts. This module
@@ -68,14 +68,43 @@ def _insert_embedded_font_list(presentation_root: ET.Element, embedded_font_lst:
     presentation_root.set("embedTrueTypeFonts", "1")
 
 
-def embed_trusted_fonts(target: Path) -> tuple[str, ...]:
+def trusted_export_font_faces(font_usage=None):
+    """Return only bounded trusted faces, keyed by actual OOXML family/slot."""
+    if font_usage is None:
+        return tuple((FONT_FAMILY, _WEIGHT_SLOT[weight], digest, payload)
+            for weight, digest, payload in read_trusted_pretendard_faces())
+    from utils.svg_template_fonts import FONT_FAMILY as NOTO, font_material, fallback_font_material
+
+    result = []
+    for family, weights in sorted(font_usage.items()):
+        if not weights or not set(weights) <= {400, 700}:
+            raise ValueError("svg_source_export_font_weight_unproven")
+        if family == FONT_FAMILY:
+            result.extend((family, _WEIGHT_SLOT[weight], digest, payload)
+                for weight, digest, payload in read_trusted_pretendard_faces() if weight in weights)
+        elif family == NOTO:
+            for weight in sorted(weights):
+                digest, payload = font_material(family, weight)
+                result.append((family, _WEIGHT_SLOT[weight], digest, payload))
+        else:
+            fallback_family, weight, digest, payload = fallback_font_material()
+            if family != fallback_family or weight != 400:
+                raise ValueError("svg_source_export_font_family_unproven")
+            # The real regular face is embedded; bold remains the original
+            # OOXML requested weight and is synthesized as in Chromium.
+            result.append((family, "regular", digest, payload))
+    return tuple(result)
+
+
+def embed_trusted_fonts(target: Path, *, font_usage=None) -> tuple[str, ...]:
     """Embed the bundled Pretendard faces into the pptx at ``target``, in place.
 
-    Returns each face's ``"sha256:..."`` digest, in ``BUNDLED_FACES`` order,
-    for the export evidence/receipt to bind to.
+    The default preserves the historical Pretendard contract. Whole-page
+    callers supply actual OOXML font usage for Noto and the trusted fallback.
+    Returns each embedded face's digest for the export receipt to bind to.
     """
 
-    faces = read_trusted_pretendard_faces()
+    faces = trusted_export_font_faces(font_usage)
     with zipfile.ZipFile(target) as archive:
         entries = {name: archive.read(name) for name in archive.namelist()}
 
@@ -84,14 +113,16 @@ def embed_trusted_fonts(target: Path) -> tuple[str, ...]:
     rels_root = ET.fromstring(entries[rels_path])
     content_types_root = ET.fromstring(entries["[Content_Types].xml"])
 
-    embedded_font = ET.Element(f"{{{NS_P}}}embeddedFont")
-    font_element = ET.SubElement(embedded_font, f"{{{NS_P}}}font")
-    font_element.set("typeface", FONT_FAMILY)
+    embedded_font_lst = ET.Element(f"{{{NS_P}}}embeddedFontLst")
+    family_nodes = {}
 
     digests: list[str] = []
     next_id = _next_relationship_id(rels_root)
-    for weight, digest, payload in faces:
-        slot = _WEIGHT_SLOT[weight]
+    for family, slot, digest, payload in faces:
+        if family not in family_nodes:
+            embedded_font = ET.SubElement(embedded_font_lst, f"{{{NS_P}}}embeddedFont")
+            ET.SubElement(embedded_font, f"{{{NS_P}}}font", typeface=family)
+            family_nodes[family] = embedded_font
         part_name = f"font{next_id}.fntdata"
         relationship_id = f"rId{next_id}"
         next_id += 1
@@ -100,12 +131,10 @@ def embed_trusted_fonts(target: Path) -> tuple[str, ...]:
         relationship.set("Id", relationship_id)
         relationship.set("Type", FONT_RELATIONSHIP_TYPE)
         relationship.set("Target", f"fonts/{part_name}")
-        slot_element = ET.SubElement(embedded_font, f"{{{NS_P}}}{slot}")
+        slot_element = ET.SubElement(family_nodes[family], f"{{{NS_P}}}{slot}")
         slot_element.set(f"{{{NS_R}}}id", relationship_id)
         digests.append(digest)
 
-    embedded_font_lst = ET.Element(f"{{{NS_P}}}embeddedFontLst")
-    embedded_font_lst.append(embedded_font)
     _insert_embedded_font_list(presentation_root, embedded_font_lst)
     _ensure_fntdata_content_type(content_types_root)
 

@@ -167,11 +167,13 @@ class ProviderRuntimeControl:
         *,
         estimated_cost_microunits: int,
         is_retry: bool = False,
+        planned_initial_request_limit: int | None = None,
     ) -> ProviderCallLease:
         """Queue and admit one call under FIFO, RPM, budget, and breaker limits."""
 
         _validate_identifier(request_id, "request_id")
         _validate_nonnegative(estimated_cost_microunits, "estimated_cost_microunits")
+        _validate_optional_nonnegative(planned_initial_request_limit, "planned_initial_request_limit")
         if not isinstance(is_retry, bool):
             raise ValueError("is_retry must be a boolean")
 
@@ -182,7 +184,8 @@ class ProviderRuntimeControl:
             self._raise_if_circuit_open()
             if len(self._queue) >= self.limits.max_queue_size:
                 raise BackpressureError("provider_admission_queue_full")
-            self._reserve_request(job, estimated_cost_microunits, is_retry)
+            self._reserve_request(job, estimated_cost_microunits, is_retry,
+                                  planned_initial_request_limit=planned_initial_request_limit)
             request = _QueuedAdmission(
                 job=job,
                 request_id=request_id,
@@ -260,7 +263,8 @@ class ProviderRuntimeControl:
         except KeyError as error:
             raise KeyError("job_id is not registered") from error
 
-    def _reserve_request(self, job: _JobState, estimated_cost: int, is_retry: bool) -> None:
+    def _reserve_request(self, job: _JobState, estimated_cost: int, is_retry: bool,
+                         *, planned_initial_request_limit: int | None = None) -> None:
         projected_cost = job.estimated_consumed + job.estimated_reserved + estimated_cost
         if job.estimated_limit is not None and projected_cost > job.estimated_limit:
             job.token.cancel("estimated_budget_exceeded")
@@ -268,11 +272,24 @@ class ProviderRuntimeControl:
 
         projected_initial = job.initial_requests + job.lineage_initial_requests + job.queued_initial + (not is_retry)
         projected_retry = job.retry_requests + job.lineage_retry_requests + job.queued_retry + is_retry
+        amplification_initial = projected_initial
+        amplification_ceiling = self.limits.retry_amplification_ceiling
+        if planned_initial_request_limit is not None:
+            conditions = job.kill_conditions
+            if conditions.max_total_requests is None or conditions.max_retry_requests is None:
+                raise ValueError("planned_initial_request_limit_requires_request_limits")
+            # A verified episode reserves initial and repair stages together.
+            # Reconcile this secondary ratio with its approved request envelope;
+            # observed counts and the hard total/retry/cost limits stay intact.
+            planned_initial = min(planned_initial_request_limit, conditions.max_total_requests)
+            amplification_initial = max(amplification_initial, planned_initial)
+            amplification_ceiling = max(amplification_ceiling,
+                1 + conditions.max_retry_requests / max(1, planned_initial))
         if is_retry and projected_initial == 0:
             job.token.cancel("retry_amplification_exceeded")
             raise RetryAmplificationError("retry_requires_an_initial_request")
         if is_retry and (
-            (projected_initial + projected_retry) / projected_initial > self.limits.retry_amplification_ceiling
+            (amplification_initial + projected_retry) / amplification_initial > amplification_ceiling
         ):
             job.token.cancel("retry_amplification_exceeded")
             raise RetryAmplificationError("retry_amplification_ceiling_exceeded")

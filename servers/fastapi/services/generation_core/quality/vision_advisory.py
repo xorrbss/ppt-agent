@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import json
 import logging
 import re
@@ -34,6 +35,8 @@ from typing import Any
 from services.authored_vision_advisory_prompt import (
     baseline_review_active,
     baseline_review_json_schema,
+    single_current_deck_global,
+    GLOBAL_BASELINE_VISUAL_EVIDENCE_REVISION,
     ADVISORY_MAX_OUTPUT_TOKENS,
     ADVISORY_PROMPT_VERSION,
     ADVISORY_REASONING_EFFORT,
@@ -49,7 +52,7 @@ from services.authored_vision_advisory_prompt import (
     advisory_json_schema,
     build_advisory_messages,
 )
-from services.authored_vision_contact_sheet import compose_contact_sheet
+from services.authored_vision_contact_sheet import compose_contact_sheet, compose_global_page_panels_sync
 from services.provider_runtime_primitives import BudgetExceededError
 from utils.provider_idempotency import ProviderOutcomeError
 
@@ -73,6 +76,10 @@ _DESIGN_SCHEMA_REJECTION_REASONS = frozenset({
 
 class DesignReviewInputCapacityError(ValueError):
     """A local input envelope is unavailable before any provider request."""
+
+    def __init__(self, code, *, input_envelope=None):
+        super().__init__(code)
+        self.input_envelope = input_envelope
 
 
 def _design_input_sizes(messages, schema):
@@ -134,7 +141,12 @@ def _check_design_input(messages, schema, *, client=None):
             or sizes["encodedImageBytes"] > limits["maxEncodedImageBytes"]
             or sizes["serializedContextBytes"] > limits["maxSerializedContextBytes"]
             or sizes["serializedRequestBytes"] > limits["maxSerializedRequestBytes"]):
-        raise DesignReviewInputCapacityError("review_input_capacity_unavailable")
+        envelope = {key: sizes[key] for key in (
+            "imageCount", "encodedImageBytes", "serializedContextBytes", "serializedRequestBytes")}
+        envelope["largestImageBytes"] = max(sizes["imageBytes"], default=0)
+        envelope.update({key: limits[key] for key in (
+            "maxImageBytes", "maxEncodedImageBytes", "maxSerializedContextBytes", "maxSerializedRequestBytes")})
+        raise DesignReviewInputCapacityError("review_input_capacity_unavailable", input_envelope=envelope)
     return {**{key: value for key, value in sizes.items() if key != "imageBytes"}, **limits}
 
 
@@ -151,6 +163,49 @@ def _global_intentional_page_indices(context):
 def _prepare_global_input(sheet, renders, context, *, client=None):
     """Keep complete required evidence and pack supplemental family examples."""
     context = {**context, "intentionalPageIndices": _global_intentional_page_indices(context)}
+    if single_current_deck_global(context):
+        if "_globalPagePanelImages" in context or "globalPagePanels" in context:
+            # Only this request's first packing pass creates these values.
+            # Revalidate them instead of decoding/encoding all PNGs a second time.
+            try:
+                from PIL import Image
+                import io
+                images, metadata = context["_globalPagePanelImages"], context["globalPagePanels"]
+                if (context.get("globalVisualEvidenceRevision") != GLOBAL_BASELINE_VISUAL_EVIDENCE_REVISION
+                        or context.get("globalEvaluationMode") != "single-current-deck"
+                        or not isinstance(images, list) or not isinstance(metadata, list)
+                        or not images or len(images) != len(metadata)
+                        or any(type(index) is not int for panel in metadata for index in panel["pageIndices"])
+                        or [index for panel in metadata for index in panel["pageIndices"]] != list(range(len(renders)))):
+                    raise ValueError("global_page_panel_unavailable")
+                for data, panel in zip(images, metadata, strict=True):
+                    if (not isinstance(data, bytes) or not panel["pageIndices"]
+                            or panel["sheetDigest"] != hashlib.sha256(data).hexdigest()
+                            or panel["sourcePngDigests"] != [hashlib.sha256(renders[index]).hexdigest()
+                                for index in panel["pageIndices"]]):
+                        raise ValueError("global_page_panel_unavailable")
+                    with Image.open(io.BytesIO(data)) as image:
+                        width = image.width // min(2, len(panel["pageIndices"]))
+                        if width < 640 or width != panel["thumbnailWidthPx"] or image.height > 2048:
+                            raise ValueError("global_page_panel_unavailable")
+            except Exception as error:
+                raise DesignReviewInputCapacityError("review_input_capacity_unavailable") from error
+        else:
+            try:
+                panels = compose_global_page_panels_sync(renders)
+            except Exception as error:
+                raise DesignReviewInputCapacityError("review_input_capacity_unavailable") from error
+            indices = [index for panel in panels for index in panel["pageIndices"]]
+            if any(type(index) is not int for index in indices) or indices != list(range(len(renders))):
+                raise DesignReviewInputCapacityError("review_input_capacity_unavailable")
+            context = {**context,
+                "globalVisualEvidenceRevision": GLOBAL_BASELINE_VISUAL_EVIDENCE_REVISION,
+                "globalEvaluationMode": "single-current-deck",
+                "globalPagePanels": [dict(pageIndices=panel["pageIndices"],
+                    thumbnailWidthPx=panel["thumbnailWidthPx"],
+                    sourcePngDigests=[hashlib.sha256(renders[index]).hexdigest() for index in panel["pageIndices"]],
+                    sheetDigest=hashlib.sha256(panel["data"]).hexdigest()) for panel in panels],
+                "_globalPagePanelImages": [panel["data"] for panel in panels]}
     schema = (baseline_review_json_schema(slide_count=len(renders), context=context)
         if baseline_review_active(context) else design_global_json_schema(slide_count=len(renders),
         comparison_indices=sorted(context.get("priorCandidates", {})), finite_review=True,
@@ -388,6 +443,12 @@ async def _request_advisory(sheet: bytes, *, slide_count: int, required: bool = 
         payload = {**payload, "_serverInputEnvelope": input_envelope,
             "_serverRepresentativeIndices": design_context.get("representativeIndices", []),
             "_serverOmittedRepresentativeIndices": design_context.get("omittedSupplementalRepresentativeIndices", [])}
+        if single_current_deck_global(design_context):
+            payload["_serverGlobalVisualEvidence"] = dict(
+                revision=design_context["globalVisualEvidenceRevision"],
+                evaluationMode=design_context["globalEvaluationMode"],
+                panels=design_context["globalPagePanels"],
+                panelBytes=sum(map(len, design_context["_globalPagePanelImages"])))
     return model, payload
 
 
@@ -663,6 +724,59 @@ def _global_review_field_diagnostics(review, *, target, present=True):
             "nullMask": nulls, "expectedTypeMask": expected_types, "boundsMask": bounds}
 
 
+def _global_partition_diagnostics(review, *, expected):
+    """Count explicit wire references only; emit no model text or arbitrary values."""
+    expected_wire = {index + 1 for index in expected}
+    references, array_errors = [], 0
+    review = review if isinstance(review, Mapping) else {}
+    def collect(value):
+        nonlocal array_errors
+        if isinstance(value, list):
+            references.extend(value)
+        else:
+            array_errors += 1
+    collect(review.get("cleanPages"))
+    collect(review.get("unreviewedPages"))
+    groups = review.get("groups")
+    if isinstance(groups, list):
+        for group in groups:
+            collect(group.get("pages") if isinstance(group, Mapping) else None)
+    else:
+        array_errors += 1
+    seen, duplicates, out_of_range = set(), set(), set()
+    invalid_types = duplicate_count = out_of_range_count = 0
+    for index in references:
+        if type(index) is not int:
+            invalid_types += 1
+            continue
+        if index in seen:
+            duplicate_count += 1
+            duplicates.add(index)
+        seen.add(index)
+        if index not in expected_wire:
+            out_of_range_count += 1
+            out_of_range.add(index)
+    assigned = seen & expected_wire
+    missing = expected_wire - assigned
+    safe_max = max(expected_wire, default=0) + 16
+    def sample(indices):
+        # Only page numbers and nearby indexing mistakes may escape. Larger
+        # model integers might be source values or identifiers; count only.
+        return sorted(index for index in indices if -16 <= index <= safe_max)[:16]
+    samples = {"duplicatePageIndices": sample(duplicates),
+               "outOfRangePageIndices": sample(out_of_range), "missingPageIndices": sample(missing)}
+    exact = not (array_errors or invalid_types or duplicate_count or out_of_range_count or missing)
+    return dict(indexBase=1, expectedPageCount=len(expected_wire),
+        explicitReferenceCount=len(references), assignedPageCount=len(assigned),
+        arrayTypeErrorCount=array_errors, invalidIndexTypeCount=invalid_types,
+        duplicateReferenceCount=duplicate_count, outOfRangeReferenceCount=out_of_range_count,
+        missingPageCount=len(missing), exactCoverage=exact, indexSampleLimit=16,
+        safeIndexMinimum=-16, safeIndexMaximum=safe_max,
+        indexSamplesTruncated=any(len(values) != len(samples[key]) for key, values in
+            (("duplicatePageIndices", duplicates), ("outOfRangePageIndices", out_of_range),
+             ("missingPageIndices", missing))), **samples)
+
+
 def _parse_global_review(payload, *, slide_count, context, rejection_reasons=None, rejection_fields=None):
     if (not isinstance(payload, Mapping) or not isinstance(payload.get("findings"), list)
             or len(payload["findings"]) > DESIGN_GLOBAL_FINDING_LIMIT):
@@ -695,6 +809,13 @@ def _parse_global_review(payload, *, slide_count, context, rejection_reasons=Non
             _reject_design_review(rejection_reasons, "global_review_fields")
             return None
         assignments, groups, used_findings = {}, [], set()
+        def reject_partition(field, *, group_ordinal=None):
+            if (rejection_fields is not None and baseline_review_active(context)
+                    and context.get("reviewScope") == "global" and not rejection_fields):
+                rejection_fields.update(reviewTarget="priorReview" if prior else "deckReview",
+                    partitionField=field, groupOrdinal=group_ordinal,
+                    partitionCoverage=_global_partition_diagnostics(review, expected=expected))
+            _reject_design_review(rejection_reasons, "index_coverage")
         def assign(indices, axis):
             if not isinstance(indices, list):
                 return False
@@ -705,13 +826,13 @@ def _parse_global_review(payload, *, slide_count, context, rejection_reasons=Non
             return True
         if not assign(review["cleanPages"], dict(verdict="passed", severity="none",
                 visibleEvidence=review["cleanEvidence"], repairScope="none")):
-            _reject_design_review(rejection_reasons, "index_coverage")
+            reject_partition("cleanPages")
             return None
         if not assign(review["unreviewedPages"], dict(verdict="unreviewed", severity="none",
                 visibleEvidence="Global composition evidence remains insufficient.", repairScope="none")):
-            _reject_design_review(rejection_reasons, "index_coverage")
+            reject_partition("unreviewedPages")
             return None
-        for group in review["groups"]:
+        for group_ordinal, group in enumerate(review["groups"], 1):
             if (not isinstance(group, Mapping) or not isinstance(group.get("pages"), list)
                     or not group["pages"] or type(group.get("findingId")) is not int
                     or group["findingId"] not in findings or not isinstance(group.get("retainedPages"), list)
@@ -724,7 +845,7 @@ def _parse_global_review(payload, *, slide_count, context, rejection_reasons=Non
             used_findings.add(group["findingId"])
             axis = finding["axis"]
             if not assign(group["pages"], axis):
-                _reject_design_review(rejection_reasons, "index_coverage")
+                reject_partition("groupPages", group_ordinal=group_ordinal)
                 return None
             indices = sorted(index - 1 for index in group["pages"])
             retained = [index - 1 for index in group["retainedPages"]]
@@ -757,7 +878,7 @@ def _parse_global_review(payload, *, slide_count, context, rejection_reasons=Non
             groups.append(dict(pages=indices, intentional=finding["intentional"],
                 retainedPages=retained, sourceEvidence=finding["sourceEvidence"], visibleEvidence=axis["visibleEvidence"]))
         if set(assignments) != expected:
-            _reject_design_review(rejection_reasons, "index_coverage")
+            reject_partition("coverage")
             return None
         for observation in context["composition"].get("groups", []):
             unreviewed = {index - 1 for index in review["unreviewedPages"]}
@@ -908,8 +1029,15 @@ async def run_vision_advisory(
                 parsed_coverage = (len(parsed_indices) == len(renders)
                     and all(type(index) is int for index in parsed_indices)
                     and set(parsed_indices) == set(range(1, len(renders) + 1)))
+                parsed_count = len(parsed_pages) if isinstance(parsed_pages, list) else 0
+                if baseline_review_active(design_context) and design_context.get("reviewScope") == "global":
+                    partition = _global_partition_diagnostics(payload.get("variantReview")
+                        if isinstance(payload, Mapping) else None, expected=set(range(len(renders))))
+                    parsed_count, parsed_coverage = partition["assignedPageCount"], partition["exactCoverage"]
+                    if rejection_fields is not None and "partitionCoverage" not in rejection_fields:
+                        rejection_fields["partitionCoverage"] = partition
                 return {"skipped": "design_review_schema_or_coverage_invalid",
-                        "parsedPageCount": len(parsed_pages) if isinstance(parsed_pages, list) else 0,
+                        "parsedPageCount": parsed_count,
                         "parsedPageIndexCoverage": parsed_coverage,
                         **({"schemaRejectionReason": rejection_reasons[0]} if rejection_reasons else {}), **({"schemaRejectionFields": rejection_fields} if rejection_fields else {})}
         global_review = design_context is not None and design_context.get("reviewScope") in {"global", "edited"}
@@ -968,10 +1096,17 @@ async def run_vision_advisory(
                        if design_context.get("reviewScope") == "edited" and design_context["changedPageIndices"] else 0)
                     + len(design_context.get("priorSheet") or b"")}
                if global_review else {}),
+            **({"globalVisualEvidence": payload["_serverGlobalVisualEvidence"],
+                "reviewInputKind": GLOBAL_BASELINE_VISUAL_EVIDENCE_REVISION,
+                "inputImageBytes": len(sheet)
+                    + payload["_serverGlobalVisualEvidence"]["panelBytes"]
+                    + sum(len(renders[index]) for index in payload.get("_serverRepresentativeIndices", []))}
+               if global_review and payload.get("_serverGlobalVisualEvidence") else {}),
             "slides": slides,
         }
     except DesignReviewInputCapacityError as error:
-        return {"skipped": "review_input_capacity_unavailable", "reasonCode": str(error)}
+        return {"skipped": "review_input_capacity_unavailable", "reasonCode": str(error),
+                **({"inputEnvelope": error.input_envelope} if error.input_envelope is not None else {})}
     except (ProviderOutcomeError, BudgetExceededError):
         if design_context is not None:
             raise

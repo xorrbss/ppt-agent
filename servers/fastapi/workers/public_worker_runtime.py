@@ -40,7 +40,11 @@ from workers.public_worker_store import (
 # An execution evidence summary rides back with the artifact so the durable
 # receipt can say which path produced the file. It is a bounded, sanitized
 # summary: never paths, never session material, never raw worker output.
-MAX_EXECUTION_EVIDENCE_BYTES = 256 * 1024
+# A source-preserving SVG export carries per-page readback proofs the controller
+# re-verifies (~25 KB/page; a 100-page deck measured 2.49 MB), so the bound is
+# sized for the admitted page cap and stays well inside the 16 MiB result wire.
+# Must equal services.isolated_worker_process.MAX_EXECUTION_EVIDENCE_BYTES.
+MAX_EXECUTION_EVIDENCE_BYTES = 8 * 1024 * 1024
 _REPLAY_GUARD = CapabilityReplayGuard()
 
 

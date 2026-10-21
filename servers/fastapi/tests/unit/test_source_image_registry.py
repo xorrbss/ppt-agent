@@ -454,7 +454,16 @@ async def test_registration_is_idempotent_across_generation_retries(
 @async_test
 async def test_manifest_occurrences_keep_repeated_bytes_as_distinct_required_slots(
     app_data: Path,
+    monkeypatch,
 ) -> None:
+    from contextvars import ContextVar
+    from copy import deepcopy
+    from types import SimpleNamespace
+    from utils.authored_image_slots import source_slot_id_for_asset
+    from services.svg_presentation_prepare import _restore_pinned_source_image_plan
+
+    owner = uuid.uuid4()
+    monkeypatch.setattr("utils.owner_context._CURRENT_OWNER_ID", ContextVar("registry-owner", default=owner))
     payload = _image_bytes(320, 240)
     digest = f"sha256:{hashlib.sha256(payload).hexdigest()}"
     session = FakeSession()
@@ -494,6 +503,51 @@ async def test_manifest_occurrences_keep_repeated_bytes_as_distinct_required_slo
             f'<html><body><img src="{data_uri}"></body></html>',
             offered,
         )
+    original_rows = {row.id: (row.path, deepcopy(row.extras), row.owner_id) for row in session.added}
+    original_bytes = candidates[0].path.read_bytes()
+    inherited = SimpleNamespace(
+        slots=[SimpleNamespace(slot_id=source_slot_id_for_asset(candidate.asset_id),
+                               source_sha256=candidate.digest) for candidate in candidates],
+        offered_pages=[SimpleNamespace(page_index=0,
+            slot_ids=tuple(source_slot_id_for_asset(candidate.asset_id) for candidate in candidates))])
+    child_id = uuid.uuid4()
+    fresh = await register_manifest_image_occurrences(session, presentation_id=child_id, occurrences=occurrences)
+    with pytest.raises(ValueError, match="svg_asset_source_plan_conflict"):
+        _restore_pinned_source_image_plan(inherited, fresh,
+            [{source_slot_id_for_asset(candidate.asset_id): candidate for candidate in fresh}])
+    added_before_inheritance = len(session.added)
+    for target_id in (child_id, uuid.uuid4()):
+        inherited_candidates = await register_manifest_image_occurrences(session,
+            presentation_id=target_id, occurrences=occurrences, source_identity_presentation_id=presentation_id)
+        assert [candidate.asset_id for candidate in inherited_candidates] == [candidate.asset_id for candidate in candidates]
+        assert all(str(target_id) in str(candidate.path) for candidate in inherited_candidates)
+        assert all(candidate.path.read_bytes() == original_bytes for candidate in inherited_candidates)
+        restored = _restore_pinned_source_image_plan(inherited, inherited_candidates,
+            [{source_slot_id_for_asset(candidate.asset_id): candidate for candidate in inherited_candidates}])
+        assert set(restored[0]) == set(inherited.offered_pages[0].slot_ids)
+    assert len(session.added) == added_before_inheritance
+    for asset_id, (path, extras, asset_owner) in original_rows.items():
+        row = session._by_id[asset_id]
+        assert (row.path, row.extras, row.owner_id) == (path, extras, asset_owner)
+        assert Path(path).read_bytes() == original_bytes
+    first_id = uuid.UUID(candidates[0].asset_id)
+    first = session._by_id[first_id]
+    for violation in ("owner", "metadata", "bytes", "missing"):
+        if violation == "owner":
+            first.owner_id = uuid.uuid4()
+        elif violation == "metadata":
+            first.extras = {**first.extras, "source_occurrence_id": "another-occurrence"}
+        elif violation == "bytes":
+            Path(first.path).write_bytes(b"changed source bytes")
+        else:
+            session._by_id.pop(first_id)
+        with pytest.raises(ValueError, match="source_content_image_identity_unproven|source_content_image_digest_mismatch"):
+            await register_manifest_image_occurrences(session, presentation_id=uuid.uuid4(),
+                occurrences=occurrences, source_identity_presentation_id=presentation_id)
+        first.owner_id = original_rows[first_id][2]
+        first.extras = deepcopy(original_rows[first_id][1])
+        Path(first.path).write_bytes(original_bytes)
+        session._by_id[first_id] = first
 
 
 def test_strict_source_visibility_rejects_hidden_tiny_offcanvas_and_strip(

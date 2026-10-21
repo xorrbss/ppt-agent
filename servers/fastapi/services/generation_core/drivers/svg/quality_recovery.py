@@ -19,6 +19,18 @@ from services.generation_core.quality.vision_advisory_prompt import (
 from utils.hashing import sha256_hex
 
 
+_RETAINABLE_REPAIR_CODES = frozenset({"svg_validation_failed", "svg_source_quality_failed",
+                                      "svg_repair_budget_exhausted"})
+
+
+def _repair_candidate_retainable(code):
+    # A repair candidate that breaks the source's native table/chart structure is
+    # discarded in favour of the already-accepted prior. Deck-level source identity,
+    # digest and plan codes are not candidate rejections and stay fatal.
+    return code in _RETAINABLE_REPAIR_CODES or (
+        isinstance(code, str) and code.startswith("svg_source_native_"))
+
+
 def _quality_json_value(value):
     """Copy typed quality inputs into JSON values without changing render inputs."""
     if isinstance(value, BaseModel):
@@ -440,8 +452,7 @@ async def recover_deck(ctx, request, presentation_id, outline, job, pages, state
                     result = await attempt_loop(ctx, request, presentation_id, index,
                         outline.slides[index].content, payload, job, state, hooks)
                 except AuthoredStageError as error:
-                    if error.code not in {"svg_validation_failed", "svg_source_quality_failed",
-                                          "svg_repair_budget_exhausted"}:
+                    if not _repair_candidate_retainable(error.code):
                         state.fatal_error = state.fatal_error or error
                         raise
                     await ensure_recovery_authority(job, hooks)
@@ -518,6 +529,9 @@ async def recover_deck(ctx, request, presentation_id, outline, job, pages, state
 
 async def _prepare_final_selected_source(ctx, job, hooks):
     manifest = getattr(ctx, "partial_recovery_manifest", None)
+    if isinstance(manifest, dict) and manifest.get("source_local_continuation") is not None:
+        from services.svg_source_local_review_continuation import prepare_source_local_source
+        return await prepare_source_local_source(ctx, job, hooks)
     if not isinstance(manifest, dict) or manifest.get("final_selected_continuation") is None:
         return None
     from models.sql.workspace import WorkspaceOperation

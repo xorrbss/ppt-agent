@@ -9,6 +9,7 @@ same revision and format got back.
 from __future__ import annotations
 
 import asyncio
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import io
@@ -129,7 +130,8 @@ class _Harness:
         """What ``publish_workspace_export_artifact`` records on success."""
         async with self.sessions() as session:
             await session.execute(update(WorkspaceOperation).where(WorkspaceOperation.id == claim.operation_id)
-                                  .values(state="succeeded", result=dict(result.resource_metrics)))
+                                  .values(state="succeeded", result_revision=claim.expected_revision,
+                                          result=dict(result.resource_metrics)))
             await session.commit()
 
     async def identity_rows(self) -> list[PublicExportIdentity]:
@@ -258,6 +260,88 @@ def test_every_pre_export_input_splits_the_identity(harness, change) -> None:
         assert identities[0].evidence != identities[1].evidence
         assert {identity.export_mode for identity in identities} == {"svg-native"}
 
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("policy", ["interactive-v1", None])
+def test_release_predecessor_reuses_exact_bytes_and_keeps_both_identities(harness, policy) -> None:
+    async def scenario() -> None:
+        export = await harness()
+        original_claim = await export.operation()
+        original, original_identity = await export.export(original_claim, _request(quality_policy=policy))
+        original.resource_metrics["public_export_worker_evidence"]["structuralReadback"] = {
+            **READBACK, "finalPptxRender": {"operationId": str(original_claim.operation_id),
+                "pages": [{"pngSha256": "a" * 64}], "evidenceDigest": "sha256:" + "b" * 64}}
+        original.resource_metrics["quality_receipt"] = dict(operationId=str(original_claim.operation_id),
+            presentationId=str(export.presentation_id), sourceRevision=3,
+            artifactDigest="sha256:" + original.artifact.sha256, releaseReadiness="blocked")
+        await export.publish(original_claim, original)
+        before = deepcopy(original.resource_metrics)
+        release_claim = await export.operation()
+        release, release_identity = await export.export(release_claim, _request(quality_policy="release-v1"))
+        assert export.worker_calls == [original_claim.operation_id]
+        assert release_identity.canonical_digest != original_identity.canonical_digest
+        assert release.artifact.artifact_id != original.artifact.artifact_id
+        assert release.artifact.created_by_operation_id == release_claim.operation_id
+        assert (release.artifact.sha256, release.artifact.storage_key) == (
+            original.artifact.sha256, original.artifact.storage_key)
+        evidence = release.resource_metrics["public_export_worker_evidence"]
+        assert evidence["structuralReadback"] == before["public_export_worker_evidence"]["structuralReadback"]
+        assert evidence["releasePredecessorReuse"] is True
+        binding = evidence["reuseProducerBinding"]
+        assert binding["canonicalIdentityDigest"] == release_identity.canonical_digest
+        assert binding["producerCanonicalIdentityDigest"] == original_identity.canonical_digest
+        assert "quality_receipt" not in release.resource_metrics
+        await export.publish(release_claim, release)
+        repeat_claim = await export.operation()
+        repeat, repeat_identity = await export.export(repeat_claim, _request(quality_policy="release-v1"))
+        assert export.worker_calls == [original_claim.operation_id]
+        assert repeat_identity.canonical_digest == release_identity.canonical_digest
+        assert repeat.artifact.created_by_operation_id == repeat_claim.operation_id
+        repeated = repeat.resource_metrics["public_export_worker_evidence"]
+        assert repeated["structuralReadback"] == evidence["structuralReadback"]
+        assert repeated["joinedOperationId"] == str(release_claim.operation_id)
+        assert repeated["physicalProducerOperationId"] == str(original_claim.operation_id)
+        assert repeated["reuseProducerBinding"]["producerOperationId"] == str(original_claim.operation_id)
+        assert repeated["reuseProducerBinding"]["consumerOperationId"] == str(repeat_claim.operation_id)
+        assert "reuseProducerBinding" not in repeated["reuseProducerWorkerEvidence"]
+        assert repeated["reuseProducerWorkerEvidence"] == before["public_export_worker_evidence"]
+        rows = await export.identity_rows()
+        assert len(rows) == 2 and all(row.state == "succeeded" for row in rows)
+        async with export.sessions() as session:
+            saved_original = await session.get(WorkspaceOperation, original_claim.operation_id)
+        assert saved_original.result == before
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("change", ["svg", "native_objects", "font_embedding", "slide_quality",
+                                     "advisory", "notes", "owner", "tenant"])
+def test_release_predecessor_rejects_changed_inputs_or_authority(harness, change) -> None:
+    async def scenario() -> None:
+        export = await harness()
+        original_claim = await export.operation()
+        original, original_identity = await export.export(original_claim, _request(quality_policy="interactive-v1"))
+        await export.publish(original_claim, original)
+        overrides = {"quality_policy": "release-v1"}
+        if change == "owner":
+            export.owner_id = uuid.uuid4()
+        elif change == "tenant":
+            export.tenant_id = "other-tenant"
+        else:
+            overrides.update({
+                "svg": {"svgs": ['<svg id="changed"/>', '<svg id="b"/>']},
+                "native_objects": {"native_objects": [None, None]},
+                "font_embedding": {"font_embedding": True},
+                "slide_quality": {"slides": [_slide("changed"), _slide("b")]},
+                "advisory": {"advisory": {"digest": "changed-source-review"}},
+                "notes": {"notes": ["changed", "note"]},
+            }[change])
+        release_claim = await export.operation()
+        release, release_identity = await export.export(release_claim, _request(**overrides))
+        assert export.worker_calls == [original_claim.operation_id, release_claim.operation_id]
+        assert release_identity.canonical_digest != original_identity.canonical_digest
+        assert release.resource_metrics["svg_export_timing"]["workerExecuted"] is True
+        assert release.resource_metrics["public_export_worker_evidence"].get("releasePredecessorReuse") is not True
     asyncio.run(scenario())
 
 

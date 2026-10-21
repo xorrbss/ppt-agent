@@ -2283,6 +2283,2503 @@ def test_public_generation_integrity_replay_keeps_authoring_selection(monkeypatc
     orchestrator._replay_generation.assert_awaited_once_with(**kwargs)
 
 
+def test_partial_recovery_live_heartbeat_preserves_authority_and_history(monkeypatch, caplog):
+    import asyncio
+    import json
+    from copy import deepcopy
+    from datetime import datetime, timedelta, timezone
+    from unittest.mock import AsyncMock
+    from services import svg_partial_recovery as recovery
+    from models.sql.workspace import WorkspaceOperation
+    from models.sql.presentation_generation_job import PresentationGenerationJob
+    from models.sql.public_admission import PublicOperationAdmission, PublicProviderLogicalCall, PublicResourceLease
+    from models.sql.provider_runtime_reservation import ProviderRuntimeBudget, ProviderRuntimeReservation
+    from models.sql.provider_usage_receipt import ProviderUsageReceipt
+    from utils.hashing import sha256_hex
+
+    class Row(SimpleNamespace):
+        def model_dump(self, **kwargs):
+            return json.loads(json.dumps(vars(self), default=lambda value:
+                value.isoformat() if isinstance(value, datetime) else str(value)))
+
+    now = datetime(2026, 10, 18, tzinfo=timezone.utc)
+    # Match the final Core query boundary: standard JSON decode, plain typed
+    # CP validation, then immediate seal without exposing the fresh row.
+    from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
+    db_json = json.loads('{"text":"원문 12.5%","nested":[{"number":3,"flag":true,"empty":null}],"negative_zero":-0.0}')
+    fresh_cp = AuthoredSlideCheckpoint.model_validate(dict(id=uuid.uuid4(), job_id=uuid.uuid4(),
+        slide_index=0, svg_checkpoint=db_json, author_started_at=now))
+    original_cp_dump = AuthoredSlideCheckpoint.model_dump
+    original_cp_json = json.dumps(fresh_cp.svg_checkpoint, ensure_ascii=False, sort_keys=True)
+    original_cp_seal = recovery.digest(original_cp_dump(fresh_cp, mode="json"))
+    dump_calls = []
+    def tracked_fresh_cp_dump(self, **kwargs):
+        dump_calls.append(kwargs)
+        return original_cp_dump(self, **kwargs)
+    with monkeypatch.context() as fresh_cp_scope:
+        fresh_cp_scope.setattr(AuthoredSlideCheckpoint, "model_dump", tracked_fresh_cp_dump)
+        fresh_cp_scope.setattr(recovery, "_same_json_value", lambda *args:
+            (_ for _ in ()).throw(AssertionError("fresh DB seal must not rescan payload")))
+        assert recovery._fresh_producer_checkpoint_digest(fresh_cp) == original_cp_seal
+        assert dump_calls == [{"mode": "json", "exclude": {"svg_checkpoint"}}]
+        assert json.dumps(fresh_cp.svg_checkpoint, ensure_ascii=False, sort_keys=True) == original_cp_json
+        fresh_cp.svg_checkpoint["nested"][0]["number"] = 4
+        changed_cp_seal = recovery._fresh_producer_checkpoint_digest(fresh_cp)
+        assert changed_cp_seal == recovery.digest(original_cp_dump(fresh_cp, mode="json"))
+        assert changed_cp_seal != original_cp_seal
+        fresh_cp.svg_checkpoint = None
+        dump_calls.clear()
+        assert recovery._fresh_producer_checkpoint_digest(fresh_cp) == recovery.digest(original_cp_dump(fresh_cp, mode="json"))
+        assert dump_calls == [{"mode": "json"}]
+    fake_cp = Row(id=uuid.uuid4(), job_id=uuid.uuid4(), slide_index=0,
+                  svg_checkpoint={"nested": {"value": 1}}, updated_at=now)
+    assert recovery._fresh_producer_checkpoint_digest(fake_cp) == recovery.digest(recovery._dump(fake_cp))
+    owner, operation_id, job_id, admission_id = (uuid.uuid4() for _ in range(4))
+    operation = Row(id=operation_id, owner_id=owner, state="running", contract_version="public-operation/v2",
+        attempt_token="live-attempt", attempt_number=1, fencing_token=9, deadline_at=now + timedelta(hours=1),
+        heartbeat_at=now, lease_expires_at=now + timedelta(minutes=1), updated_at=now,
+        version=7, next_event_sequence=8, progress={"stage": "outline", "percent": 8},
+        cancel_requested_at=None, request_payload={"source": "frozen"})
+    ancestor = Row(**{**vars(deepcopy(operation)), "id": uuid.uuid4(), "state": "failed"})
+    job = Row(id=job_id, workspace_operation_id=operation_id, state="running", attempt_token="live-attempt",
+        request_payload={"source": "frozen"}, svg_style_snapshot={"digest": "frozen-style"}, heartbeat_at=now,
+        updated_at=now, total_slides=2, completed_slides=0, current_stage="outline")
+    admission = Row(id=admission_id, operation_id=operation_id, owner_id=owner, tenant_id="fixture",
+        state="active", fence=9, deadline_at=operation.deadline_at, actual_cost_limit_microunits=100,
+        estimated_cost_limit_microunits=100, actual_consumed_microunits=0, updated_at=now,
+        planned_request_limit=10, retry_request_limit=5, policy_digest="frozen-policy",
+        initial_request_count=0, retry_request_count=0, estimated_consumed_microunits=0,
+        estimated_reserved_microunits=0, actual_reserved_microunits=0, actual_cost_unavailable_count=0)
+    leases = [Row(id=uuid.uuid4(), admission_id=admission_id, operation_id=operation_id,
+        state="leased", attempt=1, fence=9, lease_owner_hash=sha256_hex(b"live-attempt"),
+        deadline_at=operation.deadline_at, heartbeat_at=now, lease_expires_at=operation.lease_expires_at,
+        version=1, scope_key=str(index)) for index in range(3)]
+    budget = Row(id=uuid.uuid4(), job_id=None, workspace_operation_id=operation_id,
+        tenant_id="fixture", owner_id=owner, state="active", cancellation_reason=None,
+        estimated_limit=100, actual_limit=100, actual_consumed=0, estimated_consumed=0,
+        estimated_reserved=0, request_count=0, version=0, updated_at=now)
+    old_admission_id, old_budget_id, old_job_id = (uuid.uuid4() for _ in range(3))
+    old_call = Row(id=uuid.uuid4(), admission_id=old_admission_id, state="reported")
+    old_usage = Row(id=uuid.uuid4(), job_id=old_job_id, actual_cost=1)
+    old_reservation = Row(id=uuid.uuid4(), budget_id=old_budget_id, state="reconciled")
+    old_admission = Row(id=old_admission_id, operation_id=ancestor.id, state="failed")
+    old_budget = Row(id=old_budget_id, workspace_operation_id=ancestor.id, job_id=None, actual_limit=100)
+    database = {WorkspaceOperation: [operation, ancestor], PresentationGenerationJob: [job],
+        PublicOperationAdmission: [admission, old_admission], PublicResourceLease: leases, ProviderRuntimeBudget: [old_budget],
+        PublicProviderLogicalCall: [old_call], ProviderUsageReceipt: [old_usage],
+        ProviderRuntimeReservation: [old_reservation]}
+    transaction = object()
+    session = SimpleNamespace(sync_session=SimpleNamespace(get_transaction=lambda: transaction))
+    monkeypatch.setattr("utils.owner_context.get_current_owner_id", lambda: owner)
+    monkeypatch.setattr("utils.owner_context.get_current_tenant_id", lambda: "fixture")
+    monkeypatch.setattr(recovery, "get_current_utc_datetime", lambda: now + timedelta(seconds=10))
+    async def fresh_rows(session, model, predicate, **kwargs):
+        rows = database.get(model, [])
+        if model is PublicResourceLease:
+            bindings = predicate.compile().params
+            admitted = bindings.get("admission_id_1", [])
+            operation_binding = bindings.get("operation_id_1")
+            rows = [row for row in rows if row.admission_id in admitted
+                or operation_binding is not None and row.operation_id == operation_binding]
+        return rows
+
+    monkeypatch.setattr(recovery, "_fresh_recovery_model_rows", AsyncMock(side_effect=fresh_rows))
+
+    # Retaining a seal memo cannot own the verifier or its hydrated archive graph.
+    import gc
+    import weakref
+    gc_was_enabled = gc.isenabled()
+    gc.disable()
+    try:
+        lifetime = recovery._EpisodeVerification(session)
+        retained_memo = lifetime.seal_memo
+        lifetime_ref = weakref.ref(lifetime)
+        lifetime.checkpoint_archives[("lifetime",)] = ({"checkpoints": [{"payload": "memo"}]}, b"guard")
+        assert type(retained_memo["verification"]) is weakref.ReferenceType
+        assert retained_memo["verification"]() is lifetime
+        assert recovery._seal_memo_verification(retained_memo, verification=lifetime) is lifetime
+        del lifetime
+        assert lifetime_ref() is None
+        with pytest.raises(recovery.PartialRecoveryRejected,
+            match="svg_partial_recovery_request_snapshot_changed"):
+            recovery._seal_memo_verification(retained_memo)
+        # Rejection tracebacks may retain locals; use a separate verifier after the lifetime assertion.
+        lifetime = recovery._EpisodeVerification(session)
+        retained_memo = lifetime.seal_memo
+        lifetime_ref = weakref.ref(lifetime)
+        other_lifetime = recovery._EpisodeVerification(session)
+        with pytest.raises(recovery.PartialRecoveryRejected,
+            match="svg_partial_recovery_request_snapshot_changed"):
+            recovery._seal_memo_verification(retained_memo, verification=other_lifetime)
+        with pytest.raises(recovery.PartialRecoveryRejected,
+            match="svg_partial_recovery_request_snapshot_changed"):
+            recovery._seal_memo_verification(dict(retained_memo))
+        callable_calls = []
+        retained_memo["verification"] = lambda: callable_calls.append(True)
+        with pytest.raises(recovery.PartialRecoveryRejected,
+            match="svg_partial_recovery_request_snapshot_changed"):
+            recovery._seal_memo_verification(retained_memo)
+        assert callable_calls == []
+        retained_memo["verification"] = lifetime_ref
+    finally:
+        if gc_was_enabled:
+            gc.enable()
+
+    async def exercise():
+        verification = recovery._EpisodeVerification(session)
+        verification.bind_live(operation, job)
+        verification.expect(WorkspaceOperation, recovery._dump(operation))
+        verification.expect(WorkspaceOperation, recovery._dump(ancestor))
+        verification.expect(PresentationGenerationJob, recovery._dump(job))
+        await verification.ledger({str(operation_id)}, str(job_id))
+        operation.heartbeat_at += timedelta(seconds=5)
+        operation.lease_expires_at += timedelta(seconds=5)
+        operation.updated_at += timedelta(seconds=5)
+        operation.version += 1
+        operation.next_event_sequence += 1
+        operation.progress = {"stage": "author", "percent": 20, "current": 1, "total": 2}
+        job.heartbeat_at += timedelta(seconds=5)
+        job.updated_at += timedelta(seconds=5)
+        job.current_stage = "author"
+        job.completed_slides = 1
+        admission.updated_at += timedelta(seconds=5)
+        admission.initial_request_count = 2
+        admission.retry_request_count = 1
+        admission.estimated_consumed_microunits = 2
+        admission.actual_consumed_microunits = 3
+        admission.estimated_reserved_microunits = 4
+        admission.actual_reserved_microunits = 4
+        admission.actual_cost_unavailable_count = 1
+        budget.updated_at += timedelta(seconds=5)
+        budget.estimated_consumed = 2
+        budget.actual_consumed = 3
+        budget.estimated_reserved = 4
+        budget.request_count = 3
+        budget.version = 2
+        database[ProviderRuntimeBudget].insert(0, budget)
+        database[PublicProviderLogicalCall].append(Row(id=uuid.uuid4(), admission_id=admission_id, state="reserved"))
+        database[ProviderUsageReceipt].append(Row(id=uuid.uuid4(), job_id=job_id, actual_cost=3))
+        database[ProviderRuntimeReservation].append(Row(id=uuid.uuid4(), budget_id=budget.id, state="reserved"))
+        for lease in leases:
+            lease.heartbeat_at += timedelta(seconds=5)
+            lease.lease_expires_at += timedelta(seconds=5)
+            lease.version += 1
+        await verification.finish()
+        admission.estimated_reserved_microunits = 0
+        admission.actual_reserved_microunits = 0
+        admission.estimated_consumed_microunits += 4
+        admission.actual_consumed_microunits = 2
+        admission.actual_cost_unavailable_count = 0
+        budget.estimated_reserved = 0
+        budget.estimated_consumed += 4
+        budget.actual_consumed += 4
+        budget.version += 1
+        database[PublicProviderLogicalCall][-1].state = "reported"
+        database[ProviderRuntimeReservation][-1].state = "reconciled"
+        await verification.finish()
+        unchanged_authority = deepcopy(database)
+        for violation in ("fence", "owner", "state", "token", "cancel", "progress", "op_version",
+                "heartbeat_backwards", "lease_backwards", "expired", "deadline", "lease_owner",
+                "lease_fence", "lease_state", "lease_version", "ancestor", "frozen", "job", "job_total",
+                "job_state", "job_token", "job_request", "job_completed", "job_heartbeat", "budget",
+                "budget_owner", "budget_binding", "budget_state", "budget_ghost", "budget_missing", "budget_unbound",
+                "admission_cap", "admission_planned", "admission_retry", "admission_policy", "admission_ghost",
+                "admission_negative", "admission_overcalls", "job_backwards", "event_backwards",
+                "ancestor_call", "ancestor_usage", "ancestor_reservation", "ancestor_budget", "lease_ghost",
+                "lease_foreign_admission", "membership"):
+            database.clear()
+            database.update(deepcopy(unchanged_authority))
+            current = database[WorkspaceOperation][0]
+            lease = database[PublicResourceLease][0]
+            if violation == "fence":
+                current.fencing_token += 1
+            elif violation == "owner":
+                current.owner_id = uuid.uuid4()
+            elif violation == "state":
+                current.state = "cancelled"
+            elif violation == "token":
+                current.attempt_token = "another-attempt"
+            elif violation == "cancel":
+                current.cancel_requested_at = now
+            elif violation == "progress":
+                current.progress = {"percent": 101}
+            elif violation == "op_version":
+                current.version -= 1
+            elif violation == "event_backwards":
+                current.next_event_sequence -= 1
+            elif violation == "heartbeat_backwards":
+                current.heartbeat_at = now + timedelta(seconds=4)
+            elif violation == "lease_backwards":
+                current.lease_expires_at = now + timedelta(seconds=64)
+            elif violation == "expired":
+                current.lease_expires_at = now + timedelta(seconds=9)
+            elif violation == "deadline":
+                lease.lease_expires_at = now + timedelta(hours=2)
+            elif violation == "lease_owner":
+                lease.lease_owner_hash = "0" * 64
+            elif violation == "lease_fence":
+                lease.fence += 1
+            elif violation == "lease_state":
+                lease.state = "released"
+            elif violation == "lease_version":
+                lease.version = 1
+            elif violation == "ancestor":
+                database[WorkspaceOperation][1].heartbeat_at += timedelta(seconds=1)
+            elif violation == "frozen":
+                current.request_payload = {"source": "changed"}
+            elif violation == "job":
+                database[PresentationGenerationJob][0].svg_style_snapshot = {"digest": "changed"}
+            elif violation == "job_total":
+                database[PresentationGenerationJob][0].total_slides += 1
+            elif violation == "job_state":
+                database[PresentationGenerationJob][0].state = "cancelled"
+            elif violation == "job_token":
+                database[PresentationGenerationJob][0].attempt_token = "another-attempt"
+            elif violation == "job_request":
+                database[PresentationGenerationJob][0].request_payload = {"source": "changed"}
+            elif violation == "job_completed":
+                database[PresentationGenerationJob][0].completed_slides = 3
+            elif violation == "job_backwards":
+                database[PresentationGenerationJob][0].completed_slides = 0
+            elif violation == "job_heartbeat":
+                database[PresentationGenerationJob][0].heartbeat_at = now
+            elif violation == "budget":
+                database[ProviderRuntimeBudget][0].actual_limit += 1
+            elif violation == "budget_owner":
+                database[ProviderRuntimeBudget][0].owner_id = uuid.uuid4()
+            elif violation == "budget_binding":
+                database[ProviderRuntimeBudget][0].job_id = job_id
+            elif violation == "budget_state":
+                database[ProviderRuntimeBudget][0].state = "cancelled"
+            elif violation == "budget_ghost":
+                database[ProviderRuntimeBudget].append(Row(**{**vars(deepcopy(budget)), "id": uuid.uuid4()}))
+            elif violation == "budget_missing":
+                database[ProviderRuntimeBudget].pop(0)
+            elif violation == "budget_unbound":
+                database[ProviderRuntimeBudget][0].workspace_operation_id = None
+                database[ProviderRuntimeBudget][0].job_id = job_id
+            elif violation.startswith("admission_"):
+                target = database[PublicOperationAdmission][0]
+                if violation == "admission_cap":
+                    target.actual_cost_limit_microunits += 1
+                elif violation == "admission_planned":
+                    target.planned_request_limit += 1
+                elif violation == "admission_retry":
+                    target.retry_request_limit += 1
+                elif violation == "admission_policy":
+                    target.policy_digest = "changed"
+                elif violation == "admission_negative":
+                    target.actual_consumed_microunits = -1
+                elif violation == "admission_overcalls":
+                    target.initial_request_count = target.planned_request_limit + 1
+                else:
+                    database[PublicOperationAdmission].append(Row(**{**vars(deepcopy(target)), "id": uuid.uuid4()}))
+            elif violation == "ancestor_call":
+                database[PublicProviderLogicalCall][0].state = "failed"
+            elif violation == "ancestor_usage":
+                database[ProviderUsageReceipt][0].actual_cost += 1
+            elif violation == "ancestor_reservation":
+                database[ProviderRuntimeReservation][0].state = "cancelled"
+            elif violation == "ancestor_budget":
+                database[ProviderRuntimeBudget][1].actual_limit += 1
+            elif violation == "lease_ghost":
+                database[PublicResourceLease].append(Row(**{**vars(deepcopy(lease)), "id": uuid.uuid4()}))
+            elif violation == "lease_foreign_admission":
+                database[PublicResourceLease].append(Row(**{**vars(deepcopy(lease)),
+                    "id": uuid.uuid4(), "admission_id": uuid.uuid4()}))
+            else:
+                database[PublicResourceLease].pop()
+            with pytest.raises(recovery.PartialRecoveryRejected, match="svg_partial_recovery_request_snapshot_changed"):
+                await verification.finish()
+        for foreign_key in ("operation_id", "admission_id"):
+            database.clear()
+            database.update(deepcopy(unchanged_authority))
+            ghost = deepcopy(database[PublicResourceLease][0])
+            ghost.id = uuid.uuid4()
+            setattr(ghost, foreign_key, uuid.uuid4())
+            database[PublicResourceLease].append(ghost)
+            initial = recovery._EpisodeVerification(session)
+            initial.bind_live(database[WorkspaceOperation][0], database[PresentationGenerationJob][0])
+            with pytest.raises(recovery.PartialRecoveryRejected, match="svg_partial_recovery_request_snapshot_changed"):
+                await initial.ledger({str(operation_id)}, str(job_id))
+
+    asyncio.run(exercise())
+
+    async def exercise_slow_snapshot():
+        initial_operation, initial_job = deepcopy(operation), deepcopy(job)
+        current_time = [now + timedelta(seconds=10)]
+        fresh_operation = deepcopy(initial_operation)
+
+        async def fresh_live_rows(session, model, predicate, **kwargs):
+            assert model is WorkspaceOperation
+            return [fresh_operation]
+
+        with monkeypatch.context() as scoped:
+            scoped.setattr(recovery, "get_current_utc_datetime", lambda: current_time[0])
+            scoped.setattr(recovery, "_fresh_recovery_model_rows", AsyncMock(side_effect=fresh_live_rows))
+            proof = recovery._EpisodeVerification(session)
+            proof.bind_live(initial_operation, initial_job)
+            current_time[0] = now + timedelta(minutes=2)
+            fresh_operation.heartbeat_at = fresh_operation.updated_at = current_time[0]
+            fresh_operation.lease_expires_at = now + timedelta(minutes=5)
+            assert initial_operation.lease_expires_at < current_time[0]
+            proof.expect(WorkspaceOperation, recovery._dump(initial_operation))
+            await proof.finish()
+
+            expired = recovery._EpisodeVerification(session)
+            expired.bind_live(fresh_operation, initial_job)
+            current_time[0] = now + timedelta(minutes=6)
+            expired.expect(WorkspaceOperation, recovery._dump(fresh_operation))
+            with pytest.raises(recovery.PartialRecoveryRejected, match="request_snapshot_changed"):
+                await expired.finish()
+            with pytest.raises(recovery.PartialRecoveryRejected, match="request_snapshot_changed"):
+                recovery._EpisodeVerification(session).bind_live(fresh_operation, initial_job)
+
+    asyncio.run(exercise_slow_snapshot())
+
+    def exercise_canonical_projection():
+        import math
+        import sys
+        from utils import owner_context
+
+        shared = ["immutable text", {"count": 1}]
+        frozen = {"first": shared, "second": shared, "flag": True, "number": 1, "zero": 0.0}
+        reference = deepcopy(frozen)
+        assert reference is not frozen and reference["first"] is not shared
+        assert reference["first"][0] is shared[0]
+        assert recovery._same_json_value(reference, reference) is True
+        encoded = recovery._marshal_json_bytes(reference)
+        actual = deepcopy(frozen)
+        actual["second"] = deepcopy(actual["second"])
+        assert actual["first"] is not actual["second"]
+        assert recovery._same_json_snapshot(reference, actual, encoded) is True
+
+        real_same, real_digest = recovery._same_json_value, recovery.digest
+        comparisons, hashes = [], []
+        with monkeypatch.context() as scoped:
+            scoped.setattr(recovery, "_same_json_value", lambda left, right:
+                comparisons.append((left, right)) or real_same(left, right))
+            if encoded is not None:
+                assert recovery._same_json_snapshot(reference, actual, encoded) is True
+                assert comparisons == []
+            reordered = dict(reversed(list(actual.items())))
+            assert recovery._same_json_snapshot(reference, reordered, encoded) is True
+            assert comparisons
+            for key, value in (("flag", 1), ("number", 1.0), ("zero", -0.0),
+                               ("zero", float("nan")), ("zero", float("inf"))):
+                changed = deepcopy(frozen)
+                changed[key] = value
+                expected_comparison = None if type(value) is float and not math.isfinite(value) else False
+                assert recovery._same_json_snapshot(reference, changed, encoded) is expected_comparison
+            changed = deepcopy(frozen)
+            changed["first"][1]["count"] = 2
+            assert recovery._same_json_snapshot(reference, changed, encoded) is False
+
+        for base, value in ((dict, {"x": 1}), (list, [1]), (int, 1), (float, 1.0), (str, "x")):
+            subclass = type("NonJsonSubclass", (base,), {})
+            unsupported = subclass(value)
+            baseline = deepcopy(value)
+            assert recovery._marshal_json_bytes(unsupported) is None
+            assert recovery._same_json_snapshot(baseline, unsupported,
+                recovery._marshal_json_bytes(baseline)) is False
+            assert recovery._same_json_snapshot({"value": baseline}, {"value": unsupported},
+                recovery._marshal_json_bytes({"value": baseline})) is False
+        for value in (float("nan"), float("inf"), (1,), object()):
+            assert recovery._same_json_value(value, value) is None
+        assert recovery._same_json_snapshot([1], (1,), recovery._marshal_json_bytes([1])) is False
+        assert recovery._same_json_snapshot("x", b"x", recovery._marshal_json_bytes("x")) is False
+        cyclic = {}; cyclic["self"] = cyclic
+        assert recovery._marshal_json_bytes(cyclic) is None
+        assert recovery._same_json_value(cyclic, cyclic) is None
+        assert recovery._same_json_snapshot({}, cyclic, recovery._marshal_json_bytes({})) is False
+        with monkeypatch.context() as scoped:
+            scoped.setattr(sys, "implementation", SimpleNamespace(name="pypy"))
+            assert recovery._marshal_json_bytes(frozen) is None
+            assert recovery._same_json_snapshot(reference, actual, encoded) is True
+        with monkeypatch.context() as scoped:
+            scoped.setattr(sys, "version_info", (3, 12, 0))
+            assert recovery._marshal_json_bytes(frozen) is None
+        import marshal
+        with monkeypatch.context() as scoped:
+            def unavailable(*args):
+                raise ValueError("private encoding unavailable")
+            scoped.setattr(marshal, "dumps", unavailable)
+            assert recovery._same_json_snapshot(reference, actual, encoded) is True
+        transaction = [object()]
+        session = SimpleNamespace(sync_session=SimpleNamespace(get_transaction=lambda: transaction[0]))
+        # Preserve real JSON-mode projection at this boundary, including nested mutation.
+        projected_job = SimpleNamespace(id=uuid.uuid4())
+        projection = {"id": str(projected_job.id), "request_payload": deepcopy(frozen)}
+        projected_job.model_dump = lambda **kwargs: deepcopy(projection)
+        with monkeypatch.context() as scoped:
+            scoped.setattr(recovery, "digest", lambda value: hashes.append(deepcopy(value)) or real_digest(value))
+            proof = recovery._EpisodeVerification(session)
+            expected = proof.job_fingerprint(projected_job)
+            assert proof.job_fingerprint(projected_job) == expected and len(hashes) == 1
+            saved = proof.job_fingerprints[str(projected_job.id)][0]
+            assert saved is not projection and saved["request_payload"] is not projection["request_payload"]
+            projection["request_payload"]["first"][1]["count"] = 9
+            assert proof.job_fingerprint(projected_job) != expected and len(hashes) == 2
+            assert saved["request_payload"]["first"][1]["count"] == 1
+            projection["request_payload"] = deepcopy(frozen)
+            projection["request_payload"]["number"] = 1.0
+            assert proof.job_fingerprint(projected_job) != expected and len(hashes) == 3
+            projection["request_payload"] = deepcopy(frozen)
+            proof.expect(PresentationGenerationJob, projection)
+            before = len(hashes)
+            proof.expect(PresentationGenerationJob, deepcopy(projection))
+            assert len(hashes) == before
+            projection["request_payload"]["flag"] = 1
+            with pytest.raises(recovery.PartialRecoveryRejected):
+                proof.expect(PresentationGenerationJob, projection)
+            assert len(hashes) == before + 1
+            transaction[0] = object()
+            with pytest.raises(recovery.PartialRecoveryRejected):
+                proof.job_fingerprint(projected_job)
+            transaction[0] = proof.transaction
+            with monkeypatch.context() as principal:
+                principal.setattr(owner_context, "get_current_owner_id", lambda: uuid.uuid4())
+                with pytest.raises(recovery.PartialRecoveryRejected):
+                    proof.job_fingerprint(projected_job)
+        transaction[0] = None
+        detached = recovery._EpisodeVerification(session)
+        detached.job_fingerprint(projected_job)
+        detached.job_fingerprint(projected_job)
+        assert detached.job_fingerprints == {}
+
+
+        # Exercise the actual copy boundary and retain real comparator/hash code.
+        import json as copy_json
+        import sys as copy_sys
+        real_copy = recovery.deepcopy
+        copy_fallbacks = []
+
+        def track_copy(value):
+            copy_fallbacks.append(type(value))
+            return real_copy(value)
+
+        pure = {"nested": [{"value": 3}], "large": 2 ** 200,
+            "negative_zero": -0.0, "flags": [True, 1, 1.0],
+            "unicode": "한글🚀", "last": {"child": [7]}}
+        legacy_fingerprint = real_digest(pure)
+        with monkeypatch.context() as copy_scope:
+            copy_scope.setattr(recovery, "deepcopy", track_copy)
+            copied, copied_hash, copied_bytes = recovery._json_fingerprint_snapshot(
+                pure, legacy_fingerprint)
+            assert copy_fallbacks == []
+            assert copied_hash == legacy_fingerprint == real_digest(copied)
+            assert recovery._same_json_value(pure, copied) is True
+            assert list(copied) == list(pure)
+            assert copied_bytes == recovery._marshal_json_bytes(copied)
+            assert copied["negative_zero"].hex() == (-0.0).hex()
+            assert [type(v) for v in copied["flags"]] == [bool, int, float]
+            copied["nested"][0]["value"] = 4
+            copied["last"]["child"].append(8)
+            assert pure["nested"][0]["value"] == 3
+            assert pure["last"]["child"] == [7]
+
+            shared_value = {"child": [1]}
+            aliased = [shared_value, shared_value]
+            detached_alias, _, _ = recovery._json_fingerprint_snapshot(aliased, "a" * 64)
+            assert recovery._same_json_value(aliased, detached_alias) is True
+            assert detached_alias[0] is not shared_value
+            assert detached_alias[1] is not shared_value
+            detached_alias[0]["child"].append(2)
+            assert shared_value["child"] == [1]
+
+            lone = {"text": "\ud800"}
+            lone_copy, _, _ = recovery._json_fingerprint_snapshot(lone, "b" * 64)
+            assert lone_copy == lone and lone_copy is not lone
+            assert [ord(c) for c in lone_copy["text"]] == [0xD800]
+            paired = {"text": "\ud83d\ude00"}
+            before_fallback = len(copy_fallbacks)
+            pair_copy, _, _ = recovery._json_fingerprint_snapshot(paired, "c" * 64)
+            assert len(copy_fallbacks) == before_fallback + 1
+            assert pair_copy == paired and pair_copy is not paired
+            assert [ord(c) for c in pair_copy["text"]] == [0xD83D, 0xDE00]
+
+            huge = {"integer": 10 ** 5000}
+            before_fallback = len(copy_fallbacks)
+            huge_copy, _, _ = recovery._json_fingerprint_snapshot(huge, "d" * 64)
+            assert huge_copy == huge and huge_copy is not huge
+            if 0 < copy_sys.get_int_max_str_digits() <= 5000:
+                assert len(copy_fallbacks) == before_fallback + 1
+
+            cyclic_copy_input = {}
+            cyclic_copy_input["self"] = cyclic_copy_input
+            before_fallback = len(copy_fallbacks)
+            cyclic_copy, _, _ = recovery._json_fingerprint_snapshot(cyclic_copy_input, "e" * 64)
+            assert len(copy_fallbacks) == before_fallback + 1
+            assert cyclic_copy is not cyclic_copy_input
+            assert cyclic_copy["self"] is cyclic_copy
+            for unsupported in [("tuple", [1]), {"nonfinite": float("nan")},
+                {"nonfinite": float("inf")}, {1: "non_string_key"}]:
+                before_fallback = len(copy_fallbacks)
+                fallback_copy, _, _ = recovery._json_fingerprint_snapshot(unsupported, "f" * 64)
+                assert len(copy_fallbacks) == before_fallback + 1
+                assert type(fallback_copy) is type(unsupported)
+            for subclass in (type("CopyInt", (int,), {}), type("CopyList", (list,), {})):
+                unsupported = subclass(1) if issubclass(subclass, int) else subclass([1])
+                before_fallback = len(copy_fallbacks)
+                fallback_copy, _, _ = recovery._json_fingerprint_snapshot(unsupported, "f" * 64)
+                assert len(copy_fallbacks) == before_fallback + 1
+                assert type(fallback_copy) is subclass
+
+            with monkeypatch.context() as failing_encoder:
+                failing_encoder.setattr(copy_json, "dumps",
+                    lambda *args, **kwargs: (_ for _ in ()).throw(ValueError("copy_encoder_unavailable")))
+                before_fallback = len(copy_fallbacks)
+                fallback_copy, fallback_hash, _ = recovery._json_fingerprint_snapshot(pure, legacy_fingerprint)
+                assert len(copy_fallbacks) == before_fallback + 1
+                assert fallback_hash == legacy_fingerprint
+                assert recovery._same_json_value(pure, fallback_copy) is True
+                assert fallback_copy["nested"] is not pure["nested"]
+
+
+        async def exercise_finish_fingerprint():
+            from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
+            row_id, row_job_id = uuid.uuid4(), uuid.uuid4()
+            fresh_projection = {"id": str(row_id), "job_id": str(row_job_id),
+                "svg_checkpoint": {"nested": {"value": 1}, "negative_zero": -0.0}}
+            fresh_row = SimpleNamespace(id=row_id, job_id=row_job_id,
+                model_dump=lambda **kwargs: deepcopy(fresh_projection))
+            stable_transaction = object()
+            finish_session = SimpleNamespace(sync_session=SimpleNamespace(
+                get_transaction=lambda: stable_transaction))
+            canonical_hashes = []
+
+            def track_finish_hash(value):
+                canonical_hashes.append(type(value))
+                return real_digest(value)
+
+            with monkeypatch.context() as finish_scope:
+                fresh_select = AsyncMock(return_value=[fresh_row])
+                finish_scope.setattr(recovery, "_fresh_recovery_model_rows", fresh_select)
+                finish_scope.setattr(recovery, "digest", track_finish_hash)
+                proof = recovery._EpisodeVerification(finish_session)
+                proof.expect(AuthoredSlideCheckpoint, deepcopy(fresh_projection))
+                key = (AuthoredSlideCheckpoint, "id", str(row_id))
+                assert key in proof.row_fingerprints
+                initial_hashes = len(canonical_hashes)
+                assert initial_hashes == 1
+                await proof.finish()
+                await proof.finish()
+                assert len(canonical_hashes) == initial_hashes
+                assert fresh_select.await_count == 2
+
+                # Exact-value/type changes retain the old full canonical path.
+                for changed in (True, 1.0, 2):
+                    fresh_projection["svg_checkpoint"]["nested"]["value"] = changed
+                    before_hashes = len(canonical_hashes)
+                    with pytest.raises(recovery.PartialRecoveryRejected,
+                        match="svg_partial_recovery_request_snapshot_changed"):
+                        await proof.finish()
+                    assert len(canonical_hashes) == before_hashes + 1
+                fresh_projection["svg_checkpoint"]["nested"]["value"] = 1
+                fresh_projection["svg_checkpoint"]["negative_zero"] = 0.0
+                before_hashes = len(canonical_hashes)
+                with pytest.raises(recovery.PartialRecoveryRejected,
+                    match="svg_partial_recovery_request_snapshot_changed"):
+                    await proof.finish()
+                assert len(canonical_hashes) == before_hashes + 1
+                fresh_projection["svg_checkpoint"]["negative_zero"] = -0.0
+
+                fresh_select.return_value = []
+                with pytest.raises(recovery.PartialRecoveryRejected,
+                    match="svg_partial_recovery_request_snapshot_changed"):
+                    await proof.finish()
+                extra_id = uuid.uuid4()
+                extra_projection = {**deepcopy(fresh_projection), "id": str(extra_id)}
+                extra_row = SimpleNamespace(id=extra_id, job_id=row_job_id,
+                    model_dump=lambda **kwargs: deepcopy(extra_projection))
+                fresh_select.return_value = [fresh_row, extra_row]
+                with pytest.raises(recovery.PartialRecoveryRejected,
+                    match="svg_partial_recovery_request_snapshot_changed"):
+                    await proof.finish()
+                fresh_select.return_value = [fresh_row]
+
+                # Missing memo is never a fresh PG validation exemption.
+                registered = dict(proof.row_fingerprints)
+                proof.row_fingerprints.clear()
+                before_hashes = len(canonical_hashes)
+                await proof.finish()
+                assert len(canonical_hashes) == before_hashes + 1
+                proof.row_fingerprints.update(registered)
+
+                # One final fresh scan must prove both rows and producer membership.
+                proof.producers[str(row_job_id)] = {str(row_id): real_digest(deepcopy(fresh_projection))}
+                before_selects = fresh_select.await_count
+                await proof.finish()
+                await proof.finish()
+                assert fresh_select.await_count == before_selects + 2
+                for fresh_rows in ([], [fresh_row, extra_row]):
+                    fresh_select.return_value = fresh_rows
+                    with pytest.raises(recovery.PartialRecoveryRejected,
+                        match="svg_partial_recovery_request_snapshot_changed"):
+                        await proof.finish()
+                fresh_select.return_value = [fresh_row]
+                fresh_projection["svg_checkpoint"]["nested"]["value"] = 2
+                with pytest.raises(recovery.PartialRecoveryRejected,
+                    match="svg_partial_recovery_request_snapshot_changed"):
+                    await proof.finish()
+                fresh_projection["svg_checkpoint"]["nested"]["value"] = 1
+                expected_row = proof.rows[key]
+                proof.rows[key] = "0" * 64
+                with pytest.raises(recovery.PartialRecoveryRejected,
+                    match="svg_partial_recovery_request_snapshot_changed"):
+                    await proof.finish()
+                proof.rows[key] = expected_row
+                await proof.finish()
+
+                # Legacy tuple projections cannot enter the exact JSON memo.
+                fresh_projection["svg_checkpoint"]["unsupported"] = ("tuple", [1])
+                legacy = recovery._EpisodeVerification(finish_session)
+                legacy.expect(AuthoredSlideCheckpoint, deepcopy(fresh_projection))
+                assert key not in legacy.row_fingerprints
+                before_hashes = len(canonical_hashes)
+                await legacy.finish()
+                assert len(canonical_hashes) == before_hashes + 1
+
+        asyncio.run(exercise_finish_fingerprint())
+
+    exercise_canonical_projection()
+    async def exercise_real_historical_recursion():
+        from collections import Counter
+        from asyncpg.pgproto.pgproto import UUID as DriverUUID
+        from models.sql.async_presentation_generation_status import AsyncPresentationGenerationTaskModel
+        from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
+
+        class HistoryRow(SimpleNamespace):
+            def model_dump(self, **kwargs):
+                return json.loads(json.dumps({key: value for key, value in vars(self).items()
+                    if key not in kwargs.get("exclude", ())}, default=str))
+
+        real_digest = recovery.digest
+        operations, jobs, tasks, checkpoints, history_admissions = [], [], [], [], []
+        style, outline = {"digest": "history-style"}, {"slides": [{"content": "A"}, {"content": "B"}]}
+        seal_identity_kind = ["driver"]
+
+        def storage_seal(row):
+            payload = row.request_payload
+            archive = payload.get(recovery.ARCHIVE_KEY)
+            identity = (DriverUUID(str(row.id)) if seal_identity_kind[0] == "driver"
+                else str(row.id) if seal_identity_kind[0] == "string" else row.id)
+            return dict(id=identity, tenant_id="fixture", payload_sha256=real_digest(payload),
+                archive_schema=archive.get("schema") if archive else None,
+                archive_storage_sha256=real_digest(archive) if archive else None,
+                archive_canonical_sha256=real_digest(archive) if archive else None)
+
+        def reference(row):
+            control = recovery._operation_control(row)
+            return dict(schema=recovery.OPERATION_REFERENCE, id=str(row.id), control=control,
+                control_digest=real_digest(control), payload_ref=dict(
+                    algorithm=recovery.PAYLOAD_HASH_ALGORITHM, operation_id=str(row.id),
+                    owner_id=str(owner), owner_scope=str(owner), request_hash=row.request_hash,
+                    **{key: value for key, value in storage_seal(row).items() if key != "id"}))
+
+        for ordinal in range(4):
+            op_id, pid, jid = (uuid.uuid4() for _ in range(3))
+            task = HistoryRow(id=f"history-task-{ordinal}", status="failed")
+            payload = dict(strategy="svg", presentation_id=str(pid), common_header_mode="free",
+                nested={"values": [1, 2]})
+            historical_job = HistoryRow(id=jid, presentation_id=pid, workspace_operation_id=op_id,
+                task_id=task.id, state="failed", total_slides=2, request_payload=payload,
+                svg_style_snapshot=deepcopy(style), authored_outline=deepcopy(outline),
+                completed_slides=0 if ordinal == 2 else 2,
+                current_stage="outline" if ordinal == 2 else "author")
+            historical_op = HistoryRow(id=op_id, owner_id=owner, owner_scope=str(owner),
+                kind="presentation.generate", state="failed", presentation_id=pid, conversation_id=pid,
+                retry_of_operation_id=operations[-1].id if operations else None,
+                request_hash="f" * 64, request_payload={})
+            if operations:
+                parent, producer = operations[-1], jobs[-1]
+                schema = (recovery.ARCHIVE_V1 if ordinal == 1 else
+                    recovery.ARCHIVE_V2 if ordinal == 2 else recovery.ARCHIVE_V3)
+                producer_checkpoints = [row.model_dump() for row in checkpoints if row.job_id == producer.id]
+                archive = dict(schema=schema,
+                    operation_refs=[reference(row) for row in reversed(operations)],
+                    job=producer.model_dump(), task=tasks[-1].model_dump(),
+                    checkpoints=producer_checkpoints,
+                    admissions=[row.model_dump() for row in history_admissions], logical_calls=[],
+                    usage=[], resource_leases=[], runtime_budgets=[], runtime_reservations=[],
+                    deck_plans=[], source_record=None)
+                if schema == recovery.ARCHIVE_V1:
+                    archive["operations"] = [row.model_dump() for row in operations]
+                    archive.pop("operation_refs")
+                elif schema == recovery.ARCHIVE_V3:
+                    archive["checkpoint_refs"] = [recovery._checkpoint_reference(row,
+                        owner_id=str(owner), tenant_id="fixture") for row in archive.pop("checkpoints")]
+                manifest = dict(append_only_recovery=True, archive_schema=schema,
+                    archive_digest=real_digest(archive), operation_id=str(parent.id),
+                    source_operation_id=str(operations[0].id), presentation_id=str(parent.presentation_id),
+                    job_id=str(producer.id), owner_id=str(owner), tenant_id="fixture", expected_page_count=2,
+                    known_indices=[0, 1], new_indices=[], unknown_indices=[],
+                    frozen_request_digest=real_digest(recovery._frozen_payload(producer.request_payload)),
+                    frozen_style_digest=real_digest(style),
+                    source_request_routing=recovery._source_request_routing(producer.request_payload),
+                    code_digest="historical-code")
+                lineage = dict(schema="svg-partial-recovery-lineage/v2", operation_id=str(op_id),
+                    action_operation_id=str(parent.id), source_operation_id=str(operations[0].id),
+                    job_id=str(jid), source_job_id=str(producer.id),
+                    presentation_id=str(pid), source_presentation_id=str(parent.presentation_id),
+                    archive_schema=schema, manifest_hash=real_digest(manifest),
+                    **{key: manifest[key] for key in ("archive_digest", "known_indices", "new_indices",
+                        "unknown_indices", "frozen_request_digest", "frozen_style_digest")})
+                historical_job.request_payload[recovery.LINEAGE_KEY] = deepcopy(lineage)
+                historical_op.request_payload = dict(principal_tenant_id="fixture",
+                    recovery_revision=recovery.REVISION, svg_partial_recovery_manifest=manifest,
+                    svg_partial_recovery_manifest_hash=real_digest(manifest),
+                    svg_partial_recovery_lineage=deepcopy(lineage), **{recovery.ARCHIVE_KEY: archive})
+            historical_op.request_payload.update(generation_request=deepcopy(historical_job.request_payload),
+                probe={"flag": True, "number": 1, "zero": 0.0})
+            for index in range(2):
+                saved_payload = {"immutable": "known-body", "nested": {"quality": [1, True, 0.0]},
+                    "attempts": [{"kind": "author", "raw_response": "sealed-known-body",
+                        "receipt": {"job_id": str(jid)}}]}
+                if ordinal == 2:
+                    prior = next(row for row in checkpoints if row.job_id == jobs[-1].id and row.slide_index == index)
+                    saved_payload = deepcopy(prior.svg_checkpoint)
+                    saved_payload["partial_recovery"] = dict(schema="svg-partial-recovery-page/v1",
+                        operation_id=str(op_id), manifest_hash=real_digest(manifest), slide_index=index,
+                        source_row_digest=real_digest(prior.model_dump()), category="known")
+                checkpoint = HistoryRow(id=uuid.uuid4(), job_id=jid, slide_index=index,
+                    svg_checkpoint=saved_payload, author_status="completed",
+                    render_status="pending" if ordinal == 2 else "completed", persist_status="pending")
+                checkpoints.append(checkpoint)
+            history_admissions.append(HistoryRow(id=uuid.uuid4(), operation_id=op_id,
+                owner_id=owner, tenant_id="fixture", state="released"))
+            operations.append(historical_op); jobs.append(historical_job)
+            tasks.append(task)
+
+        database_history = {
+            WorkspaceOperation: deepcopy(operations), PresentationGenerationJob: deepcopy(jobs),
+            AsyncPresentationGenerationTaskModel: deepcopy(tasks), AuthoredSlideCheckpoint: deepcopy(checkpoints),
+            PublicOperationAdmission: deepcopy(history_admissions)}
+        identities = {WorkspaceOperation: operations, PresentationGenerationJob: jobs,
+            AsyncPresentationGenerationTaskModel: tasks, AuthoredSlideCheckpoint: checkpoints,
+            PublicOperationAdmission: history_admissions}
+        transaction = [object()]
+        canonical_calls, job_selects, payload_refreshes = Counter(), Counter(), Counter()
+        mutate_payload = [None]
+        forged_seal_identity = [None]
+
+        def selected(rows, field, values):
+            allowed = {str(value) for value in values}
+            return [row for row in rows if str(getattr(row, field)) in allowed]
+
+        class HistorySession:
+            sync_session = SimpleNamespace(get_transaction=lambda: transaction[0])
+
+            async def scalars(self, statement):
+                model = statement.column_descriptions[0]["entity"]
+                rows = identities.get(model, [])
+                params = statement.compile().params
+                if params:
+                    field, value = next(iter(params.items()))
+                    rows = selected(rows, field.rsplit("_", 1)[0], value if isinstance(value, list) else [value])
+                return rows
+
+            async def scalar(self, statement):
+                model = statement.column_descriptions[0]["entity"]
+                rows = identities.get(model, [])
+                for key, value in statement.compile().params.items():
+                    rows = selected(rows, key.rsplit("_", 1)[0], [value])
+                result = rows[0] if rows else None
+                if model is PresentationGenerationJob and result is not None:
+                    job_selects[str(result.id)] += 1
+                    if result.id == jobs[1].id and mutate_payload[0] is not None:
+                        mutate_payload[0](operations[1].request_payload)
+                return result
+
+            async def get(self, model, identifier, **kwargs):
+                return next((row for row in identities.get(model, []) if str(row.id) == str(identifier)), None)
+
+            async def refresh(self, row, *, attribute_names):
+                payload_refreshes[str(row.id)] += 1
+                original = next(item for item in database_history[WorkspaceOperation] if item.id == row.id)
+                for name in attribute_names:
+                    setattr(row, name, deepcopy(getattr(original, name)))
+
+        history_session = HistorySession()
+
+        checkpoint_reads = []
+
+        async def fresh_rows(session, model, predicate, **kwargs):
+            rows = database_history.get(model, [])
+            if not rows:
+                return []
+            field = predicate.left.key
+            value = next(iter(predicate.compile().params.values()))
+            matched = selected(rows, field, value if isinstance(value, list) else [value])
+            if model is AuthoredSlideCheckpoint:
+                checkpoint_reads.append(tuple(str(row.id) for row in matched))
+            return deepcopy(matched)
+
+        async def fresh_controls(session, ids):
+            return {str(row.id): recovery._operation_control(row)
+                for row in database_history[WorkspaceOperation] if str(row.id) in {str(value) for value in ids}}
+
+        edge_seal_reads = []
+
+        async def fresh_seals(session, ids):
+            edge_seal_reads.append(tuple(str(value) for value in ids))
+            seals = {str(row.id): storage_seal(row)
+                for row in database_history[WorkspaceOperation] if str(row.id) in {str(value) for value in ids}}
+            if forged_seal_identity[0] is not None and str(operations[1].id) in seals:
+                seals[str(operations[1].id)]["id"] = forged_seal_identity[0]
+            return seals
+
+        def counted_digest(value):
+            if (isinstance(value, list) and len(value) == 2 and isinstance(value[0], dict)
+                    and value[0].get("id") in {str(row.id) for row in operations[1:]}):
+                canonical_calls[value[0]["id"]] += 1
+            return real_digest(value)
+
+        original_operation_fingerprint = recovery._EpisodeVerification.operation_fingerprint
+        original_fingerprint_snapshot = recovery._json_fingerprint_snapshot
+        owned_snapshots, extra_owned_clones = {}, []
+
+        def mutable_ids(value):
+            pending, seen = [value], set()
+            while pending:
+                item = pending.pop()
+                if type(item) not in {dict, list} or id(item) in seen:
+                    continue
+                seen.add(id(item))
+                pending.extend(item.values() if type(item) is dict else item)
+            return seen
+
+        def capture_owned_snapshot(verifier, operation, *args, **kwargs):
+            result = original_operation_fingerprint(verifier, operation, *args, **kwargs)
+            if result[1] is not None:
+                fingerprint_key, snapshot = result[1]
+                assert not mutable_ids(snapshot).intersection(mutable_ids(operation.request_payload))
+                owned_snapshots[id(snapshot)] = (verifier, fingerprint_key, snapshot, deepcopy(snapshot))
+            return result
+
+        def count_owned_clone(value, fingerprint):
+            if id(value) in owned_snapshots:
+                extra_owned_clones.append(id(value))
+            return original_fingerprint_snapshot(value, fingerprint)
+
+        outer = HistoryRow(**{**vars(operations[-1]), "id": uuid.uuid4(), "retry_of_operation_id": operations[-1].id})
+        outer_manifest = dict(append_only_recovery=True, presentation_id=str(operations[-1].presentation_id),
+            source_operation_id=str(operations[0].id), owner_id=str(owner), tenant_id="fixture")
+        outer_references = [reference(row) for row in reversed(operations)]
+        with monkeypatch.context() as scoped:
+            scoped.setattr(recovery, "_fresh_recovery_model_rows", fresh_rows)
+            scoped.setattr(recovery, "_fresh_recovery_operation_controls", fresh_controls)
+            scoped.setattr(recovery, "_fresh_payload_storage_seals", fresh_seals)
+            scoped.setattr("models.sql.workspace.get_workspace_owner_scope", lambda: str(owner))
+            scoped.setattr(recovery, "digest", counted_digest)
+            scoped.setattr(recovery._EpisodeVerification, "operation_fingerprint", capture_owned_snapshot)
+            scoped.setattr(recovery, "_json_fingerprint_snapshot", count_owned_clone)
+            proof = recovery._EpisodeVerification(history_session)
+
+            async def walk():
+                await recovery._verify_operation_references_once(history_session, outer, outer_manifest,
+                    outer_references, seal_memo=proof.seal_memo, verification=proof,
+                    reuse_historical_seals=True)
+
+            assert not isinstance(recovery._verify_append_only_edge, AsyncMock)
+            assert not isinstance(recovery.verify_episode, AsyncMock)
+            await walk()
+            assert owned_snapshots and extra_owned_clones == []
+            for verifier, fingerprint_key, snapshot, unchanged in owned_snapshots.values():
+                assert verifier is proof
+                assert proof.operation_fingerprints[fingerprint_key][0] is snapshot
+                assert snapshot == unchanged
+            initial_refreshes = dict(payload_refreshes)
+            assert initial_refreshes
+            await walk()
+            assert dict(payload_refreshes) == initial_refreshes
+            assert canonical_calls == {str(row.id): 1 for row in operations[1:]}
+            assert extra_owned_clones == []
+            assert job_selects[str(jobs[1].id)] >= 3 and job_selects[str(jobs[2].id)] >= 2
+            before_edges = len(edge_seal_reads)
+            await walk()
+            reused_edge_ids = sum(len(ids) for ids in edge_seal_reads[before_edges:])
+            before_edges = len(edge_seal_reads)
+            # Current-code callers do not opt into the historical edge shortcut.
+            await recovery._verify_operation_references_once(history_session, outer, outer_manifest,
+                outer_references, seal_memo=proof.seal_memo, verification=proof,
+                reuse_historical_seals=False)
+            fresh_edge_ids = sum(len(ids) for ids in edge_seal_reads[before_edges:])
+            assert reused_edge_ids < fresh_edge_ids
+            assert all(len(ids) == 2 for ids in edge_seal_reads[before_edges:])
+            await proof.finish()
+
+            # Direct-call fingerprints reuse only an already sealed exact snapshot.
+            historical = operations[1]
+            direct_payload = deepcopy(historical.request_payload)
+            memo_keys = tuple(proof.operation_fingerprints)
+            direct_expected = real_digest([recovery._operation_control(historical), direct_payload])
+            before_direct = canonical_calls[str(historical.id)]
+            direct_value, direct_key = proof.operation_fingerprint(historical, None, require_current_code=False)
+            assert direct_value == direct_expected and direct_key is None
+            assert canonical_calls[str(historical.id)] == before_direct
+            for field, changed in (("number", 999), ("number", True), ("flag", 1), ("zero", float("nan"))):
+                historical.request_payload = deepcopy(direct_payload)
+                historical.request_payload["probe"][field] = changed
+                before_direct = canonical_calls[str(historical.id)]
+                direct_value, direct_key = proof.operation_fingerprint(historical, None, require_current_code=False)
+                assert direct_value == real_digest([recovery._operation_control(historical), historical.request_payload])
+                assert direct_key is None and canonical_calls[str(historical.id)] == before_direct + 1
+            historical.request_payload = deepcopy(direct_payload)
+            direct_state = historical.state
+            try:
+                historical.state = "cancelled"
+                before_direct = canonical_calls[str(historical.id)]
+                direct_value, direct_key = proof.operation_fingerprint(historical, None, require_current_code=False)
+                assert direct_value == real_digest([recovery._operation_control(historical), historical.request_payload])
+                assert direct_key is None and canonical_calls[str(historical.id)] == before_direct + 1
+            finally:
+                historical.state = direct_state
+            assert tuple(proof.operation_fingerprints) == memo_keys
+            await proof.finish()
+            # Missing loaded payload and unsupported exact comparisons still refresh.
+            historical = operations[1]
+            stored_payload = deepcopy(historical.request_payload)
+            before_refreshes = payload_refreshes[str(historical.id)]
+            del historical.request_payload
+            await walk()
+            assert payload_refreshes[str(historical.id)] == before_refreshes + 1
+            historical.request_payload["probe"]["zero"] = float("nan")
+            before_refreshes = payload_refreshes[str(historical.id)]
+            await walk()
+            assert payload_refreshes[str(historical.id)] == before_refreshes + 1
+            assert historical.request_payload == stored_payload
+
+            # Changed loaded values, including replacement dictionaries, never reuse.
+            for replace_pointer in (False, True):
+                historical.request_payload = deepcopy(stored_payload)
+                if replace_pointer:
+                    historical.request_payload = {**historical.request_payload,
+                        "probe": {**historical.request_payload["probe"], "number": 999}}
+                else:
+                    historical.request_payload["probe"]["number"] = 999
+                before_refreshes = payload_refreshes[str(historical.id)]
+                with pytest.raises(recovery.PartialRecoveryRejected,
+                    match="svg_partial_recovery_request_snapshot_changed"):
+                    await walk()
+                assert payload_refreshes[str(historical.id)] == before_refreshes
+            historical.request_payload = deepcopy(stored_payload)
+            await walk()
+
+            # Edge reuse can defer storage-change detection, never past fresh finish.
+            stored_operation = database_history[WorkspaceOperation][1]
+            stored_operation.request_payload["probe"]["number"] = 999
+            with pytest.raises(recovery.PartialRecoveryRejected,
+                match="svg_partial_recovery_request_snapshot_changed"):
+                await proof.finish()
+            stored_operation.request_payload = deepcopy(stored_payload)
+            await proof.finish()
+            raw_v3 = operations[-1].request_payload[recovery.ARCHIVE_KEY]
+            manifest_v3 = operations[-1].request_payload["svg_partial_recovery_manifest"]
+            assert raw_v3["schema"] == recovery.ARCHIVE_V3 and "checkpoints" not in raw_v3
+            unchanged_raw = deepcopy(raw_v3)
+            hydration = recovery._EpisodeVerification(history_session)
+            working = await recovery._hydrate_checkpoint_archive(history_session, manifest_v3, raw_v3,
+                verification=hydration)
+            assert working is not raw_v3 and raw_v3 == unchanged_raw and "checkpoints" not in raw_v3
+            assert working["job"] is not raw_v3["job"]
+            assert working["job"]["request_payload"] is not raw_v3["job"]["request_payload"]
+            producer_snapshots = [row.model_dump() for row in checkpoints if row.job_id == jobs[-2].id]
+            assert working["checkpoints"] == producer_snapshots
+            assert working["job"]["completed_slides"] == 0 and working["job"]["current_stage"] == "outline"
+            assert all(row["render_status"] == "pending" for row in working["checkpoints"])
+            assert all(row["svg_checkpoint"]["attempts"][0]["receipt"]["job_id"] == str(jobs[-3].id)
+                and row["job_id"] == str(jobs[-2].id) for row in working["checkpoints"])
+            assert {entry[0] for entry in hydration.rows} >= {PresentationGenerationJob, AuthoredSlideCheckpoint}
+            assert str(jobs[-2].id) in hydration.producers
+            before_reuse = len(checkpoint_reads)
+            assert await recovery._hydrate_checkpoint_archive(history_session, manifest_v3, raw_v3,
+                verification=hydration) is working
+            assert len(checkpoint_reads) == before_reuse
+            await hydration.finish()
+            assert len(checkpoint_reads) == before_reuse + 1
+            # Producer-only cold proof avoids a working archive entirely.
+            immediate = recovery._EpisodeVerification(history_session)
+            immediate_materialization = {"copy": 0, "marshal": 0}
+            immediate_deepcopy = recovery.deepcopy
+            immediate_marshal = recovery._marshal_json_bytes
+            immediate_snapshot = recovery._json_fingerprint_snapshot
+            immediate_checkpoint_snapshots = []
+
+            def count_immediate_snapshot(value, fingerprint):
+                if type(value) is dict and "svg_checkpoint" in value and "slide_index" in value:
+                    immediate_checkpoint_snapshots.append(value["id"])
+                return immediate_snapshot(value, fingerprint)
+
+            def count_immediate_copy(value):
+                if value is raw_v3:
+                    immediate_materialization["copy"] += 1
+                return immediate_deepcopy(value)
+
+            def count_immediate_marshal(value):
+                if (type(value) is dict and value.get("schema") == recovery.ARCHIVE_V3
+                        and "checkpoints" in value):
+                    immediate_materialization["marshal"] += 1
+                return immediate_marshal(value)
+
+            with monkeypatch.context() as immediate_hooks:
+                immediate_hooks.setattr(recovery, "deepcopy", count_immediate_copy)
+                immediate_hooks.setattr(recovery, "_marshal_json_bytes", count_immediate_marshal)
+                immediate_hooks.setattr(recovery, "_json_fingerprint_snapshot", count_immediate_snapshot)
+                before_immediate = len(checkpoint_reads)
+                immediate_producer = await recovery._verify_producer_rows(history_session, manifest_v3, raw_v3,
+                    verification=immediate)
+                assert immediate_producer.id == jobs[-2].id
+                assert len(checkpoint_reads) == before_immediate + 1
+                assert immediate_materialization == {"copy": 0, "marshal": 0}
+                assert immediate.checkpoint_archives == {} and immediate.checkpoint_archive_bytes == 0
+                assert immediate_checkpoint_snapshots == []
+                assert not any(key[0] is AuthoredSlideCheckpoint for key in immediate.row_fingerprints)
+                immediate_row_key = next(key for key in immediate.rows if key[0] is AuthoredSlideCheckpoint)
+                immediate_row_digest = immediate.rows[immediate_row_key]
+                immediate.rows[immediate_row_key] = "forged-existing-expectation"
+                try:
+                    with pytest.raises(recovery.PartialRecoveryRejected):
+                        await recovery._verify_producer_rows(history_session, manifest_v3, raw_v3,
+                            verification=immediate)
+                finally:
+                    immediate.rows[immediate_row_key] = immediate_row_digest
+                with monkeypatch.context() as foreign_producer_owner:
+                    foreign_producer_owner.setattr("utils.owner_context.get_current_owner_id", lambda: uuid.uuid4())
+                    with pytest.raises(recovery.PartialRecoveryRejected):
+                        await recovery._verify_producer_rows(history_session, manifest_v3, raw_v3,
+                            verification=immediate)
+                # A real page/seed consumer still receives the full independent view.
+                immediate_working = await recovery._hydrate_checkpoint_archive(history_session, manifest_v3, raw_v3,
+                    verification=immediate)
+                assert immediate_working is not raw_v3 and raw_v3 == unchanged_raw
+                assert immediate_working["checkpoints"] == working["checkpoints"]
+                assert immediate_materialization == {"copy": 1, "marshal": 1}
+                assert len(immediate_checkpoint_snapshots) == len(immediate_working["checkpoints"])
+            # The same cold proof also exercises the production CP serializer.
+            saved_source_rows = database_history[AuthoredSlideCheckpoint]
+            fake_source = next(row for row in saved_source_rows if row.job_id == jobs[-2].id)
+            real_source = AuthoredSlideCheckpoint.model_validate(fake_source.model_dump())
+            real_source.svg_checkpoint["serializer_probe"] = {
+                "integer": 1, "number": 1.0, "negative_zero": -0.0, "unicode": "한글"}
+            full_source_json = real_source.model_dump(mode="json")
+            full_source_digest = real_digest(full_source_json)
+            assert recovery._fresh_producer_checkpoint_digest(real_source) == full_source_digest
+            real_raw = deepcopy(raw_v3)
+            next(ref for ref in real_raw["checkpoint_refs"]
+                if ref["id"] == str(real_source.id))["row_digest"] = full_source_digest
+            real_manifest = {**manifest_v3, "archive_digest": real_digest(real_raw)}
+            database_history[AuthoredSlideCheckpoint] = [
+                real_source if row.id == real_source.id else row for row in saved_source_rows]
+            try:
+                real_proof = recovery._EpisodeVerification(history_session)
+                await recovery._verify_producer_rows(history_session, real_manifest, real_raw,
+                    verification=real_proof)
+                real_key = (AuthoredSlideCheckpoint, "id", str(real_source.id))
+                assert real_proof.rows[real_key] == full_source_digest
+                assert real_proof.producers[str(real_source.job_id)][str(real_source.id)] == full_source_digest
+                assert real_proof.checkpoint_archives == {}
+                await real_proof.finish()
+                real_source.svg_checkpoint["serializer_probe"]["integer"] = True
+                with pytest.raises(recovery.PartialRecoveryRejected,
+                    match="svg_partial_recovery_checkpoint_reference_changed"):
+                    await recovery._verify_producer_rows(history_session, real_manifest, real_raw,
+                        verification=recovery._EpisodeVerification(history_session))
+                with pytest.raises(recovery.PartialRecoveryRejected,
+                    match="svg_partial_recovery_request_snapshot_changed"):
+                    await real_proof.finish()
+            finally:
+                database_history[AuthoredSlideCheckpoint] = saved_source_rows
+            # A hydration memo hit still performs the existing fresh producer read.
+            before_hit = len(checkpoint_reads)
+            await recovery._verify_producer_rows(history_session, manifest_v3, raw_v3,
+                verification=immediate)
+            assert len(checkpoint_reads) == before_hit + 1
+            immediate_changed_producer = next(row for row in database_history[AuthoredSlideCheckpoint]
+                if row.job_id == jobs[-2].id)
+            immediate_original_checkpoint = deepcopy(immediate_changed_producer.svg_checkpoint)
+            try:
+                immediate_changed_producer.svg_checkpoint["immediate_handoff_mutation"] = True
+                with pytest.raises(recovery.PartialRecoveryRejected):
+                    await recovery._verify_producer_rows(history_session, manifest_v3, raw_v3,
+                        verification=immediate)
+                with pytest.raises(recovery.PartialRecoveryRejected):
+                    await immediate.finish()
+            finally:
+                immediate_changed_producer.svg_checkpoint = immediate_original_checkpoint
+            before_finish = len(checkpoint_reads)
+            await immediate.finish()
+            assert len(checkpoint_reads) == before_finish + 1
+            # Without an owning verifier there is no handoff or final-proof trust.
+            before_unowned = len(checkpoint_reads)
+            await recovery._verify_producer_rows(history_session, manifest_v3, raw_v3)
+            assert len(checkpoint_reads) == before_unowned + 2
+            separate = recovery._EpisodeVerification(history_session)
+            before_separate = len(checkpoint_reads)
+            other_working = await recovery._hydrate_checkpoint_archive(history_session, manifest_v3, raw_v3,
+                verification=separate)
+            assert other_working == working and other_working is not working
+            assert len(checkpoint_reads) == before_separate + 1
+            assert recovery._CHECKPOINT_ARCHIVE_MEMO_MAX_BYTES == 512 * 1024 * 1024
+            assert recovery._CHECKPOINT_ARCHIVE_MEMO_MAX_ENTRIES == 8
+            assert 0 < hydration.checkpoint_archive_bytes <= recovery._CHECKPOINT_ARCHIVE_MEMO_MAX_BYTES
+            assert all(type(guard) is bytes and len(guard) == 32
+                for _, guard in hydration.checkpoint_archives.values())
+            import hashlib
+            expected_guard = hashlib.sha256(recovery._CHECKPOINT_ARCHIVE_MEMO_GUARD_DOMAIN)
+            expected_guard.update(recovery._marshal_json_bytes(working))
+            assert next(iter(hydration.checkpoint_archives.values()))[1] == expected_guard.digest()
+            # Equal-looking JSON scalars still differ in the typed marshal guard.
+            for changed in (False, 0.0):
+                working["job"]["completed_slides"] = changed
+                with pytest.raises(recovery.PartialRecoveryRejected):
+                    await recovery._hydrate_checkpoint_archive(history_session, manifest_v3, raw_v3,
+                        verification=hydration)
+                with pytest.raises(recovery.PartialRecoveryRejected):
+                    await hydration.finish()
+                working["job"]["completed_slides"] = 0
+            await hydration.finish()
+
+            # An oversized entry is not registered; repeated calls remain fresh.
+            with monkeypatch.context() as limits:
+                limits.setattr(recovery, "_CHECKPOINT_ARCHIVE_MEMO_MAX_BYTES", 0)
+                uncached = recovery._EpisodeVerification(history_session)
+                before_uncached = len(checkpoint_reads)
+                for _ in range(2):
+                    fresh_working = await recovery._hydrate_checkpoint_archive(history_session,
+                        manifest_v3, raw_v3, verification=uncached)
+                    assert fresh_working == working and fresh_working is not working
+                assert len(checkpoint_reads) == before_uncached + 2
+                assert uncached.checkpoint_archives == {} and uncached.checkpoint_archive_bytes == 0
+                await uncached.finish()
+
+            # The byte budget is shared across all entries in this invocation.
+            with monkeypatch.context() as limits:
+                budget = 2 * hydration.checkpoint_archive_bytes
+                limits.setattr(recovery, "_CHECKPOINT_ARCHIVE_MEMO_MAX_BYTES", budget)
+                bounded = recovery._EpisodeVerification(history_session)
+                retained_working = await recovery._hydrate_checkpoint_archive(history_session,
+                    manifest_v3, raw_v3, verification=bounded)
+                first_bytes = bounded.checkpoint_archive_bytes
+                second_manifest = {**manifest_v3, "memo_probe": "second"}
+                await recovery._hydrate_checkpoint_archive(history_session, second_manifest, raw_v3,
+                    verification=bounded)
+                assert len(bounded.checkpoint_archives) == 2
+                assert first_bytes < bounded.checkpoint_archive_bytes <= budget
+                retained_bytes = bounded.checkpoint_archive_bytes
+                third_manifest = {**manifest_v3, "memo_probe": "third"}
+                before_full = len(checkpoint_reads)
+                for _ in range(2):
+                    await recovery._hydrate_checkpoint_archive(history_session, third_manifest, raw_v3,
+                        verification=bounded)
+                assert len(checkpoint_reads) == before_full + 2
+                assert len(bounded.checkpoint_archives) == 2
+                assert bounded.checkpoint_archive_bytes == retained_bytes
+                # Refusing another registration never evicts a watched working view.
+                assert await recovery._hydrate_checkpoint_archive(history_session, manifest_v3, raw_v3,
+                    verification=bounded) is retained_working
+                retained_working["checkpoints"][0]["svg_checkpoint"]["nested"]["quality"][0] = 999
+                with pytest.raises(recovery.PartialRecoveryRejected):
+                    await recovery._hydrate_checkpoint_archive(history_session, manifest_v3, raw_v3,
+                        verification=bounded)
+                with pytest.raises(recovery.PartialRecoveryRejected):
+                    await bounded.finish()
+
+            # The entry ceiling also falls back without replacing earlier entries.
+            with monkeypatch.context() as limits:
+                limits.setattr(recovery, "_CHECKPOINT_ARCHIVE_MEMO_MAX_ENTRIES", 1)
+                bounded = recovery._EpisodeVerification(history_session)
+                retained_working = await recovery._hydrate_checkpoint_archive(history_session,
+                    manifest_v3, raw_v3, verification=bounded)
+                retained_bytes = bounded.checkpoint_archive_bytes
+                before_full = len(checkpoint_reads)
+                for _ in range(2):
+                    await recovery._hydrate_checkpoint_archive(history_session,
+                        {**manifest_v3, "memo_probe": "entry-overflow"}, raw_v3, verification=bounded)
+                assert len(checkpoint_reads) == before_full + 2
+                assert len(bounded.checkpoint_archives) == 1
+                assert bounded.checkpoint_archive_bytes == retained_bytes
+                assert await recovery._hydrate_checkpoint_archive(history_session, manifest_v3, raw_v3,
+                    verification=bounded) is retained_working
+                await bounded.finish()
+            assert raw_v3 == unchanged_raw
+            for replace_pointer in (False, True):
+                saved_checkpoints = working["checkpoints"]
+                if replace_pointer:
+                    working["checkpoints"] = deepcopy(saved_checkpoints)
+                working["checkpoints"][0]["svg_checkpoint"]["nested"]["quality"][0] = 999
+                with pytest.raises(recovery.PartialRecoveryRejected):
+                    await recovery._hydrate_checkpoint_archive(history_session, manifest_v3, raw_v3,
+                        verification=hydration)
+                with pytest.raises(recovery.PartialRecoveryRejected):
+                    await hydration.finish()
+                working["checkpoints"] = saved_checkpoints
+                working["checkpoints"][0]["svg_checkpoint"]["nested"]["quality"][0] = producer_snapshots[0]["svg_checkpoint"]["nested"]["quality"][0]
+            await hydration.finish()
+            unchanged_database = deepcopy(database_history)
+            for mode in ("missing", "extra", "tampered"):
+                database_history.clear(); database_history.update(deepcopy(unchanged_database))
+                isolated = recovery._EpisodeVerification(history_session)
+                await recovery._hydrate_checkpoint_archive(history_session, manifest_v3, raw_v3,
+                    verification=isolated)
+                producer = next(row for row in database_history[AuthoredSlideCheckpoint]
+                    if row.job_id == jobs[-2].id)
+                if mode == "missing":
+                    database_history[AuthoredSlideCheckpoint].remove(producer)
+                elif mode == "extra":
+                    extra = deepcopy(producer); extra.id = uuid.uuid4()
+                    database_history[AuthoredSlideCheckpoint].append(extra)
+                else:
+                    producer.svg_checkpoint["nested"]["quality"][0] = 999
+                before_reuse = len(checkpoint_reads)
+                await recovery._hydrate_checkpoint_archive(history_session, manifest_v3, raw_v3,
+                    verification=isolated)
+                assert len(checkpoint_reads) == before_reuse
+                with pytest.raises(recovery.PartialRecoveryRejected):
+                    await isolated.finish()
+            database_history.clear(); database_history.update(deepcopy(unchanged_database))
+            working["checkpoints"][0]["svg_checkpoint"]["nested"]["quality"][0] = 999
+            with pytest.raises(recovery.PartialRecoveryRejected):
+                hydration.expect(AuthoredSlideCheckpoint, working["checkpoints"][0])
+            assert raw_v3 == unchanged_raw
+            stored_before = deepcopy(database_history)
+            producer_row = next(row for row in database_history[AuthoredSlideCheckpoint]
+                if row.job_id == jobs[-2].id)
+            producer_row.svg_checkpoint["nested"]["quality"][0] = 99
+            with pytest.raises(recovery.PartialRecoveryRejected):
+                await hydration.finish()
+            database_history.clear(); database_history.update(deepcopy(stored_before))
+            for mode in ("duplicate_id", "duplicate_page", "missing", "foreign_job", "foreign_owner",
+                         "foreign_tenant", "swapped_page", "swapped_id", "bad_digest", "extra_field",
+                         "bool_page", "inline_rows", "raw_archive_digest", "missing_row", "extra_row", "row_tamper",
+                         "parent_owner", "parent_scope", "parent_tenant", "parent_job", "parent_presentation"):
+                database_history.clear(); database_history.update(deepcopy(stored_before))
+                candidate_archive, candidate_manifest = deepcopy(raw_v3), deepcopy(manifest_v3)
+                refs = candidate_archive["checkpoint_refs"]
+                if mode == "duplicate_id": refs[1]["id"] = refs[0]["id"]
+                elif mode == "duplicate_page": refs[1]["slide_index"] = refs[0]["slide_index"]
+                elif mode == "missing": refs.pop()
+                elif mode == "foreign_job": refs[0]["job_id"] = str(uuid.uuid4())
+                elif mode == "foreign_owner": refs[0]["owner_id"] = str(uuid.uuid4())
+                elif mode == "foreign_tenant": refs[0]["tenant_id"] = "foreign"
+                elif mode == "swapped_page":
+                    refs[0]["slide_index"], refs[1]["slide_index"] = refs[1]["slide_index"], refs[0]["slide_index"]
+                elif mode == "swapped_id": refs[0]["id"], refs[1]["id"] = refs[1]["id"], refs[0]["id"]
+                elif mode == "bad_digest": refs[0]["row_digest"] = "0" * 64
+                elif mode == "extra_field": refs[0]["undeclared"] = "value"
+                elif mode == "bool_page": refs[0]["slide_index"] = False
+                elif mode == "inline_rows": candidate_archive["checkpoints"] = producer_snapshots
+                elif mode == "raw_archive_digest": candidate_archive["undeclared"] = "tamper"
+                else:
+                    parent = next(row for row in database_history[WorkspaceOperation] if row.id == operations[-2].id)
+                    producer = next(row for row in database_history[PresentationGenerationJob] if row.id == jobs[-2].id)
+                    admission = next(row for row in database_history[PublicOperationAdmission]
+                        if row.operation_id == parent.id)
+                    row = next(row for row in database_history[AuthoredSlideCheckpoint] if row.job_id == producer.id)
+                    if mode == "missing_row": database_history[AuthoredSlideCheckpoint].remove(row)
+                    elif mode == "extra_row":
+                        extra = deepcopy(row); extra.id = uuid.uuid4()
+                        database_history[AuthoredSlideCheckpoint].append(extra)
+                    elif mode == "row_tamper": row.svg_checkpoint["nested"]["quality"][0] = 9
+                    elif mode == "parent_owner": parent.owner_id = uuid.uuid4()
+                    elif mode == "parent_scope": parent.owner_scope = str(uuid.uuid4())
+                    elif mode == "parent_tenant": admission.tenant_id = "foreign"
+                    elif mode == "parent_job": producer.workspace_operation_id = uuid.uuid4()
+                    else: producer.presentation_id = uuid.uuid4()
+                if mode != "raw_archive_digest":
+                    candidate_manifest["archive_digest"] = real_digest(candidate_archive)
+                with pytest.raises(recovery.PartialRecoveryRejected):
+                    await recovery._hydrate_checkpoint_archive(history_session, candidate_manifest,
+                        candidate_archive, verification=recovery._EpisodeVerification(history_session))
+            database_history.clear(); database_history.update(deepcopy(stored_before))
+            for historical in operations[1:3]:
+                legacy = historical.request_payload[recovery.ARCHIVE_KEY]
+                assert await recovery._hydrate_checkpoint_archive(history_session,
+                    historical.request_payload["svg_partial_recovery_manifest"], legacy) is legacy
+            assert type(storage_seal(operations[1])["id"]) is DriverUUID
+            assert isinstance(storage_seal(operations[1])["id"], uuid.UUID)
+            for representation in ("standard", "string"):
+                seal_identity_kind[0] = representation
+                detached = recovery._EpisodeVerification(history_session)
+                for _ in range(2):
+                    await recovery._verify_operation_references_once(history_session, outer, outer_manifest,
+                        outer_references, seal_memo=detached.seal_memo, verification=detached)
+                await detached.finish()
+            seal_identity_kind[0] = "driver"
+            for invalid_identity in (uuid.uuid4(), DriverUUID(str(uuid.uuid4())), str(uuid.uuid4()), 1):
+                forged_seal_identity[0] = invalid_identity
+                detached = recovery._EpisodeVerification(history_session)
+                with pytest.raises(recovery.PartialRecoveryRejected, match="svg_partial_recovery_history_changed"):
+                    await recovery._verify_operation_references_once(history_session, outer, outer_manifest,
+                        outer_references, seal_memo=detached.seal_memo, verification=detached)
+            forged_seal_identity[0] = None
+            jobs[1].request_payload["nested"]["values"][0] = 999
+            with pytest.raises(recovery.PartialRecoveryRejected):
+                await walk()
+            jobs[1].request_payload = deepcopy(database_history[PresentationGenerationJob][1].request_payload)
+            for value in (1.0, True, -0.0):
+                jobs[1].request_payload["nested"]["values"][0] = value
+                with pytest.raises(recovery.PartialRecoveryRejected):
+                    await walk()
+                jobs[1].request_payload = deepcopy(database_history[PresentationGenerationJob][1].request_payload)
+            for key, value in (("flag", 1), ("number", 1.0), ("zero", -0.0)):
+                mutate_payload[0] = lambda payload, key=key, value=value: payload["probe"].__setitem__(key, value)
+                with pytest.raises(recovery.PartialRecoveryRejected, match="svg_partial_recovery_request_snapshot_changed"):
+                    await walk()
+            mutate_payload[0] = lambda payload: payload["probe"].__setitem__("zero", float("nan"))
+            with pytest.raises(recovery.PartialRecoveryRejected):
+                await walk()
+            for invalid_kind in ("infinite", "non_json", "cycle"):
+                def inject_invalid(payload, invalid_kind=invalid_kind):
+                    if invalid_kind == "infinite":
+                        payload["probe"]["zero"] = float("inf")
+                    elif invalid_kind == "non_json":
+                        payload["probe"]["zero"] = object()
+                    else:
+                        payload["probe"]["cycle"] = payload["probe"]
+                mutate_payload[0] = inject_invalid
+                with pytest.raises((recovery.PartialRecoveryRejected, TypeError, ValueError)):
+                    await walk()
+            mutate_payload[0] = None
+            operations[1].request_payload = deepcopy(database_history[WorkspaceOperation][1].request_payload)
+            operations[1].request_payload["probe"]["number"] = 5
+            with pytest.raises(recovery.PartialRecoveryRejected):
+                await recovery.verify_episode(history_session, operations[1], jobs[1],
+                    require_current_code=False, verification=proof)
+            operations[1].request_payload = deepcopy(database_history[WorkspaceOperation][1].request_payload)
+            database_history[WorkspaceOperation][1].request_payload["changed_storage"] = True
+            # A completed historical edge may defer this DB-only change.
+            await walk()
+            with pytest.raises(recovery.PartialRecoveryRejected,
+                match="svg_partial_recovery_request_snapshot_changed"):
+                await proof.finish()
+            for _, _, snapshot, unchanged in owned_snapshots.values():
+                assert snapshot == unchanged
+            assert extra_owned_clones == []
+
+        assert recovery._same_json_value({"x": True}, {"x": 1}) is False
+        assert recovery._same_json_value({"x": 1}, {"x": 1.0}) is False
+        assert recovery._same_json_value({"x": 0.0}, {"x": -0.0}) is False
+        assert recovery._same_json_value(float("nan"), float("nan")) is None
+        assert recovery._same_json_value(float("inf"), float("inf")) is None
+        assert recovery._same_json_value(object(), object()) is None
+        cyclic = {}; cyclic["self"] = cyclic
+        assert recovery._same_json_value(cyclic, cyclic) is None
+
+    asyncio.run(exercise_real_historical_recursion())
+
+    async def exercise_prepared_runtime():
+        from sqlalchemy.dialects import postgresql
+        from services import public_operation_admission as public
+        from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
+
+        live_operation = Row(**{**vars(operation), "state": "running", "kind": "presentation.generate",
+            "owner_scope": "fixture-owner", "presentation_id": uuid.uuid4(),
+            "retry_of_operation_id": ancestor.id, "execution_profile_version": "public-generation-export/v2",
+            "contract_version": "public-operation/v2", "deadline_at": now + timedelta(hours=1),
+            "phase": "active", "attempt_token": "prepared-attempt", "fencing_token": 9,
+            "cancel_requested_at": None})
+        source_presentation_id = uuid.uuid4()
+        source_pointer = {"ref": str(uuid.uuid4()), "sha256": "a" * 64}
+        manifest = {"new_indices": [1], "unknown_indices": [], "known_indices": [0],
+            "proven_remaining_budget_microunits": 100,
+            "prospective_initial_request_limit": 10, "prospective_retry_request_limit": 5,
+            "owner_id": str(owner), "tenant_id": "fixture",
+            "presentation_id": str(source_presentation_id), "presentation_revision": 7,
+            "source_asset_binding": {"presentation_id": str(source_presentation_id),
+                "source_revision": 7, "digest": "frozen-source", "pointer": source_pointer}}
+        manifest_hash = recovery.digest(manifest)
+        live_operation.request_payload = {
+            "principal_tenant_id": "fixture", "recovery_revision": recovery.REVISION,
+            "svg_partial_recovery_manifest": manifest,
+            "svg_partial_recovery_manifest_hash": manifest_hash,
+            "svg_partial_recovery_lineage": {"schema": "fixture-lineage"},
+            "recovery_decision": {"manifest_hash": manifest_hash,
+                "nonce": recovery.decision_nonce(manifest_hash), "acknowledged_unknown_indices": []},
+            "job_id": str(job_id), recovery.ARCHIVE_KEY: {"historical": "verified once"}}
+        live_job = Row(**{**vars(job), "state": "running", "attempt_token": "prepared-attempt",
+            "workspace_operation_id": operation_id, "total_slides": 2,
+            "presentation_id": live_operation.presentation_id, "authored_outline": {"slides": [0, 1]},
+            "request_payload": {"source": "frozen", recovery.LINEAGE_KEY: {"manifest_hash": manifest_hash}}})
+        live_admission = deepcopy(admission)
+        live_admission.state = "active"
+        live_admission.owner_id, live_admission.tenant_id = owner, "fixture"
+        live_admission.operation_id, live_admission.fence = operation_id, 9
+        live_admission.deadline_at = live_operation.deadline_at
+        live_admission.policy_digest = "prepared-policy"
+        live_admission.actual_cost_limit_microunits = live_admission.estimated_cost_limit_microunits = 100
+        live_admission.planned_request_limit, live_admission.retry_request_limit = 10, 5
+        queries, checkpoint_present = [], [True]
+
+        class RuntimeSession:
+            async def get(self, model, identifier):
+                assert model is PresentationGenerationJob and identifier == job_id
+                return live_job
+
+            async def execute(self, statement):
+                # No full operation JSON, archive, or historical checkpoint is selected.
+                assert all(column is not WorkspaceOperation.__table__.c.request_payload
+                           for column in statement.selected_columns)
+                assert not any(recovery.ARCHIVE_KEY in column.name for column in statement.selected_columns)
+                queries.append("current_operation_projection")
+                values = {key: getattr(live_operation, key) for key in (
+                    *recovery._RUNTIME_OPERATION_FIELDS, "state", "cancel_requested_at")}
+                values.update({"payload_" + key: live_operation.request_payload.get(key)
+                               for key in recovery._RUNTIME_PAYLOAD_FIELDS})
+                return SimpleNamespace(mappings=lambda: SimpleNamespace(one_or_none=lambda: values))
+
+            async def scalar(self, statement):
+                entity = statement.column_descriptions[0]["entity"]
+                if entity is PublicOperationAdmission:
+                    return live_admission
+                if entity is AuthoredSlideCheckpoint:
+                    queries.append("target_page_id")
+                    assert statement.column_descriptions[0]["name"] == "id"
+                    return uuid.uuid4() if checkpoint_present[0] else None
+                assert entity is WorkspaceOperation
+                compiled = str(statement.compile(dialect=postgresql.dialect()))
+                assert "workspace_operations.request_payload" not in compiled
+                queries.append("live_phase2_authority")
+                return live_operation
+
+        session = RuntimeSession()
+        verifier = SimpleNamespace(active=set(), episodes={}, bind_live=lambda *args: None,
+            check=lambda *args: None, operation_fingerprint=lambda *args, **kwargs: ("operation", None),
+            job_fingerprint=lambda *args: "job", expect=lambda *args: None, finish=AsyncMock())
+        historical = AsyncMock(return_value=manifest)
+        with monkeypatch.context() as scoped:
+            scoped.setattr(recovery, "_PREPARED_EPISODES", recovery.OrderedDict())
+            scoped.setattr(recovery, "_EpisodeVerification", lambda _: verifier)
+            scoped.setattr(recovery, "_verify_episode_once", historical)
+            scoped.setattr(recovery, "_code_digest", lambda: "prepared-code")
+            scoped.setattr("utils.owner_context.get_current_owner_id", lambda: owner)
+            scoped.setattr("utils.owner_context.get_current_tenant_id", lambda: "fixture")
+            scoped.setattr("models.sql.workspace.get_workspace_owner_scope", lambda: "fixture-owner")
+            scoped.setattr(public, "_resolved_phase2_authority", AsyncMock())
+            scoped.setattr(public, "get_current_utc_datetime", lambda: now)
+
+            async def admit(index=1, **kwargs):
+                return await recovery.runtime_admission(session, job_id=job_id, operation_id=operation_id,
+                    expected_attempt_token="prepared-attempt", expected_fencing_token=9,
+                    slide_index=index, stage="author", **kwargs)
+
+            with pytest.raises(recovery.PartialRecoveryRejected, match="runtime_not_prepared"):
+                await admit()
+            await recovery.verify_prepared_episode(session, live_operation, live_job)
+            await recovery.verify_prepared_episode(session, live_operation, live_job)
+            assert historical.await_count == verifier.finish.await_count == 1
+            historical.side_effect = AssertionError("runtime must not revisit historical pages")
+
+            from models.sql.presentation import PresentationModel
+            from services.svg_generation_assets import _verify_inherited_source_manifest
+
+            source_presentation = SimpleNamespace(id=source_presentation_id, owner_id=owner, revision=7)
+            source_manifest = SimpleNamespace(presentation_id=source_presentation_id,
+                                             source_revision=7, digest="frozen-source")
+            asset_context = SimpleNamespace(owner_id=owner, tenant_id="fixture")
+
+            class AssetSession:
+                async def get(self, model, identifier):
+                    if model is WorkspaceOperation:
+                        assert identifier == live_operation.id
+                        return live_operation
+                    assert model is PresentationModel and identifier == source_presentation_id
+                    return source_presentation
+
+                async def scalar(self, statement):
+                    assert statement.column_descriptions[0]["entity"] is PresentationGenerationJob
+                    return live_job
+
+            asset_session = AssetSession()
+
+            async def verify_source(pointer=source_pointer, context=asset_context):
+                await _verify_inherited_source_manifest(asset_session, source_manifest, pointer,
+                    context=context, presentation_id=live_operation.presentation_id,
+                    operation_id=live_operation.id)
+
+            for state in ("running", "staging"):
+                live_job.state = state
+                await verify_source()
+            live_job.state = "running"
+            assert historical.await_count == 1
+            with pytest.raises(ValueError, match="svg_asset_source_revision_conflict"):
+                await verify_source({**source_pointer, "sha256": "b" * 64})
+            with pytest.raises(ValueError, match="svg_asset_source_revision_conflict"):
+                await verify_source(context=SimpleNamespace(owner_id=owner, tenant_id="foreign"))
+            historical_verify = AsyncMock(return_value=manifest)
+            with monkeypatch.context() as completed_scope:
+                completed_scope.setattr(recovery, "verify_episode", historical_verify)
+                live_job.state = "published"
+                for state in ("completed", "succeeded"):
+                    live_operation.state = state
+                    await verify_source()
+                    historical_verify.assert_awaited_with(asset_session, live_operation, live_job,
+                                                         require_current_code=False)
+            live_operation.state = live_job.state = "running"
+            assert historical_verify.await_count == 2
+
+            class UnreadableHistory:
+                def __deepcopy__(self, memo):
+                    raise AssertionError("runtime copied historical archive")
+
+            live_operation.request_payload[recovery.ARCHIVE_KEY] = UnreadableHistory()
+            for _ in range(3):
+                assert await admit() is live_admission
+            assert queries.count("target_page_id") == queries.count("live_phase2_authority") == 3
+            assert historical.await_count == 1
+            for invalid_index in (0, True, -1, 2):
+                with pytest.raises(recovery.PartialRecoveryRejected, match="cached_provider_forbidden"):
+                    await admit(invalid_index)
+            checkpoint_present[0] = False
+            with pytest.raises(recovery.PartialRecoveryRejected, match="page_unbound"):
+                await admit()
+            checkpoint_present[0] = True
+            for target, field, changed in (
+                (live_job.request_payload, "source", "changed"),
+                (live_job.svg_style_snapshot, "digest", "changed"),
+                (live_job.authored_outline, "slides", [1, 0]),
+                (live_operation.request_payload, "principal_tenant_id", "foreign"),
+            ):
+                saved = target[field]
+                target[field] = changed
+                with pytest.raises(recovery.PartialRecoveryRejected, match="request_snapshot_changed"):
+                    await admit()
+                target[field] = saved
+            live_operation.cancel_requested_at = now
+            with pytest.raises(recovery.PartialRecoveryRejected, match="runtime_unbound"):
+                await admit()
+            live_operation.cancel_requested_at = None
+            live_admission.actual_cost_limit_microunits = 101
+            with pytest.raises(recovery.PartialRecoveryRejected, match="runtime_budget_unbound"):
+                await admit()
+            live_admission.actual_cost_limit_microunits = 100
+            live_operation.fencing_token = 10
+            with pytest.raises(recovery.PartialRecoveryRejected, match="runtime_not_prepared"):
+                await admit()
+            live_operation.fencing_token = 9
+            scoped.setattr(public, "get_current_utc_datetime", lambda: live_operation.deadline_at + timedelta(seconds=1))
+            with pytest.raises(public.PublicAdmissionRejected, match="public_deadline_insufficient"):
+                await admit()
+            scoped.setattr(public, "get_current_utc_datetime", lambda: now)
+            scoped.setattr(recovery, "_code_digest", lambda: "changed-code")
+            with pytest.raises(recovery.PartialRecoveryRejected, match="request_snapshot_changed"):
+                await admit()
+            scoped.setattr(recovery, "_code_digest", lambda: "prepared-code")
+            scoped.setattr("utils.owner_context.get_current_owner_id", lambda: uuid.uuid4())
+            with pytest.raises(recovery.PartialRecoveryRejected, match="runtime_not_prepared"):
+                await admit()
+            scoped.setattr("utils.owner_context.get_current_owner_id", lambda: owner)
+            # A worker restart or new attempt cannot reuse the old preparation.
+            recovery._PREPARED_EPISODES.clear()
+            with pytest.raises(recovery.PartialRecoveryRejected, match="runtime_not_prepared"):
+                await admit()
+            historical.side_effect = None
+            verifier.finish.side_effect = RuntimeError("preparation did not finish")
+            with pytest.raises(RuntimeError, match="preparation did not finish"):
+                await recovery.verify_prepared_episode(session, live_operation, live_job)
+            assert not recovery._PREPARED_EPISODES
+
+    asyncio.run(exercise_prepared_runtime())
+    caplog.clear()
+
+    def raise_snapshot_guard():
+        recovery.reject("svg_partial_recovery_request_snapshot_changed")
+
+    with pytest.raises(recovery.PartialRecoveryRejected, match="svg_partial_recovery_request_snapshot_changed"):
+        raise_snapshot_guard()
+    records = [record for record in caplog.records if record.name == recovery.__name__]
+    assert len(records) == 1
+    assert records[0].args == ("raise_snapshot_guard", raise_snapshot_guard.__code__.co_firstlineno + 1)
+    caplog.clear()
+    with pytest.raises(recovery.PartialRecoveryRejected, match="svg_partial_recovery_unproven"):
+        recovery.reject()
+    assert not [record for record in caplog.records if record.name == recovery.__name__]
+
+
+@pytest.mark.parametrize("mode", ["descendant", "deadline_exceeded", "current_author", "ancestor_unknown", "superseded_invalid_unknown",
+    "cancelled_unknown_completion", "mixed_unknown_invalid", "mixed_unmapped_call", "mixed_foreign_call",
+    "mixed_excess_usage", "mixed_unmapped_usage", "mixed_own_unknown",
+    "mixed_zero_usage", "mixed_noninteger_usage", "inherited_local_no_review", "inherited_local_partial_review"])
+def test_partial_recovery_descendant_manifest_uses_current_episode_author_calls(mode, monkeypatch):
+    import asyncio
+    import json
+    from unittest.mock import AsyncMock
+    from copy import deepcopy
+    from services import svg_partial_recovery as recovery, artifact_store, svg_asset_persistence
+    from services import public_operation_admission as public_admission
+    from models.sql.presentation import PresentationModel
+    from models.sql.presentation_generation_job import PresentationGenerationJob
+    from models.sql.public_admission import PublicOperationAdmission, PublicProviderLogicalCall
+    from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
+    from models.sql.source_content import SourceContentManifestRecord
+    from models.sql.provider_usage_receipt import ProviderUsageReceipt
+    from services.source_content import manifest_store
+    from services import svg_source_layout
+    from utils.hashing import sha256_hex
+
+    class Row(SimpleNamespace):
+        def model_dump(self, **kwargs):
+            return json.loads(json.dumps({key: value for key, value in vars(self).items()
+                if key not in kwargs.get("exclude", ())}, default=str))
+
+    owner, job_id, parent_id, child_id, parent_pid, child_pid = (uuid.uuid4() for _ in range(6))
+    terminal_state = "deadline_exceeded" if mode == "deadline_exceeded" else "failed"
+    mixed = mode.startswith("mixed_")
+    unknown_mode = mixed or mode in {"superseded_invalid_unknown", "cancelled_unknown_completion"}
+    usage_rows = []
+    if mode == "ancestor_unknown":
+        parent_pid = child_pid
+    request = GeneratePresentationRequest(content="Fixture", strategy="svg", n_slides=3 if mixed else 2,
+        language="en", common_header_mode="free")
+    if unknown_mode:
+        request = GeneratePresentationRequest(content="Fixture", strategy="svg", n_slides=3 if mixed else 2,
+            source_mode="source_content_restyle", language="en", common_header_mode="free",
+            template="authored", authored_style="fixture", content_policy={},
+            source_content_manifest_pin={"manifest_id": "fixture-manifest", "digest": "sha256:" + "f" * 64})
+    payload = request.model_dump(mode="json")
+    if unknown_mode:
+        payload["_internal_svg_source_binding"] = request.source_content_manifest_pin.model_dump(mode="json")
+    if mode != "ancestor_unknown":
+        payload[recovery.LINEAGE_KEY] = {"schema": "svg-partial-recovery-lineage/v2"}
+    snapshot = {"digest": "fixture-style", "authoring_profile": {}}
+    job = Row(id=job_id, task_id="fixture-task", presentation_id=child_pid,
+        workspace_operation_id=child_id, state="failed", total_slides=request.n_slides, lease_expires_at=None,
+        request_payload=payload, svg_style_snapshot=snapshot,
+        authored_outline={"slides": [{"content": text} for text in (["A", "B", "C"] if mixed else ["A", "B"])]})
+    parent = Row(id=parent_id, owner_id=owner, owner_scope="fixture", kind="presentation.generate",
+        presentation_id=parent_pid, conversation_id=parent_pid, state=terminal_state, lease_expires_at=None,
+        retry_of_operation_id=None, request_payload={})
+    operation = Row(id=child_id, owner_id=owner, owner_scope="fixture", kind="presentation.generate",
+        presentation_id=child_pid, conversation_id=child_pid,
+        state=terminal_state if mode == "deadline_exceeded" else "dead_letter", lease_expires_at=None,
+        retry_of_operation_id=parent_id, result_revision=None, version=4, request_payload={"generation_request": payload})
+    presentation = PresentationModel(id=child_pid, owner_id=owner, revision=0)
+    task = Row(id="fixture-task")
+    admissions = [Row(id=uuid.uuid4(), operation_id=item.id, owner_id=owner, tenant_id="fixture",
+        state=terminal_state, terminal_at="terminal", actual_cost_unavailable_count=0,
+        estimated_consumed_microunits=0, estimated_reserved_microunits=0,
+        actual_consumed_microunits=0, actual_reserved_microunits=0,
+        estimated_cost_limit_microunits=100, actual_cost_limit_microunits=100)
+        for item in (operation, parent)]
+    parent_calls = [Row(id=uuid.uuid4(), admission_id=admissions[1].id, slide_index=index,
+        stage="author", state="reported", outcome="succeeded", reconciled_at="reported",
+        provider_id="fixture", model_id="fixture-model", estimated_cost_microunits=1,
+        actual_cost_microunits=1) for index in (0, 1, 1)]
+    if mode == "ancestor_unknown":
+        parent_calls[-1].state, parent_calls[-1].outcome, parent_calls[-1].actual_cost_microunits = "failed", "unknown", None
+    current_calls = []
+    if mode == "current_author":
+        current_calls = [Row(**{**vars(parent_calls[-1]), "id": uuid.uuid4(), "admission_id": admissions[0].id})]
+    raw = "<svg/>"
+    pointer = {"ref": str(uuid.uuid4()), "sha256": "a" * 64}
+    receipt = dict(contract_version="svg-static/v2", provider="fixture", requested_model="fixture-model",
+        style_digest=snapshot["digest"], authoring_profile={}, validation_error=None,
+        raw_digest="sha256:" + sha256_hex(raw.encode()))
+    known = dict(svg_content=raw, input_digest="frozen-page-0", source_manifest_ref=pointer,
+        source_manifest_digest="fixture-asset", attempts=[dict(kind="provider", raw_response=raw, receipt=receipt)])
+    rows = [Row(id=uuid.uuid4(), job_id=job_id, slide_index=0, author_status="completed", render_status="pending",
+        persist_status="pending", svg_checkpoint=known), Row(id=uuid.uuid4(), job_id=job_id, slide_index=1,
+        author_status="pending", render_status="pending", persist_status="pending",
+        svg_checkpoint={"partial_recovery": {"category": "known_failed_output"}})]
+    if unknown_mode:
+        current_calls = [Row(**{**vars(parent_calls[-1]), "id": uuid.uuid4(),
+            "admission_id": admissions[0].id}) for _ in range(2)]
+        current_calls[-1].state = "unavailable"
+        current_calls[-1].outcome = "failed"
+        current_calls[-1].actual_cost_microunits = None
+        admissions[0].actual_cost_unavailable_count = 1
+        invalid = {**receipt, "attempt_ordinal": 1,
+            "validation_error": "svg_source_receipt_text_mismatch"}
+        terminal_identity = dict(schema="svg-provider-terminal/v1", job_id=str(job_id),
+            operation_id=str(child_id), owner_id=str(owner), tenant_id="fixture",
+            input_digest="frozen-page-1", attempt_token="fixture-attempt", fencing_token=1)
+        terminals = {
+            "1": {**terminal_identity, "ordinal": 1, "terminal_event": "response.completed",
+                "response_id": "resp_fixture1", "raw_response": raw,
+                "output_digest": sha256_hex(raw.encode()), "usage": {"input_tokens": 1}},
+            "2": {**terminal_identity, "ordinal": 2, "terminal_event": "response.created",
+                "response_id": "resp_fixture2"}}
+        for terminal in terminals.values():
+            terminal["receipt_digest"] = recovery.digest(terminal)
+        rows[1].author_status = "running"
+        rows[1].svg_checkpoint.update(svg_content=None, input_digest="frozen-page-1", inflight=2,
+            attempts=[dict(kind="provider", raw_response=raw, receipt=invalid)],
+            provider_terminal_responses=terminals,
+            provider_diagnostics=[dict(ordinal=2, code="public_provider_result_unknown")])
+        if mixed or mode == "cancelled_unknown_completion":
+            rows[1].svg_checkpoint["inflight"] = None
+            rows[1].svg_checkpoint["provider_terminal_responses"].pop("2")
+    if mixed:
+        from tests.unit.test_svg_source_layout import manifest_for
+        from services.svg_source_layout import source_pages
+        from services.generation_core.authoring.author_source_svg_layout import _whole_page_facts
+        from utils.hashing import canonical_json_digest
+        import xml.etree.ElementTree as ET
+
+        source_data = manifest_for([("text", {"text": "A"})]).model_dump(mode="json", by_alias=True)
+        for index in (1, 2):
+            unit = deepcopy(source_data["units"][0])
+            unit["sourceUnitId"], unit["sourceIndex"] = f"p{index}", index
+            for block in unit["blocks"]:
+                block["sourceBlockId"] = block["sourceBlockId"].replace("p0:", f"p{index}:")
+            source_data["units"].append(unit)
+        source_data["counts"].update(sourceUnits=3, textBlocks=3)
+        source_data.pop("manifestDigest")
+        source_data["manifestDigest"] = canonical_json_digest(source_data)
+        source_data["ownerId"] = str(owner)
+        source = type(manifest_for([])).model_validate(source_data)
+        snapshot["source_authoring_contract"] = {"version": "svg-source-whole-page/v1"}
+        known["source_font_profile"] = "fixture-font"
+        monkeypatch.setattr("utils.svg_template_fonts.source_font_profile", lambda _: "fixture-font")
+        page = source_pages(source)[2]
+        fact = _whole_page_facts(page, {})[0]
+        failed_raw = ('<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" '
+            'viewBox="0 0 1280 720"><text id="' + fact["element_id"] + '" x="40" y="100" '
+            'font-family="Noto Sans KR" font-size="40" font-weight="400" fill="#111111" '
+            'text-anchor="start">B</text></svg>')
+        failed_svg = ET.tostring(ET.fromstring(failed_raw), encoding="unicode")
+        failed_input = recovery.digest({"page": recovery._expected_page_input_digest(request, job, 2, {}),
+            "source_manifest": source.manifest_digest, "font_profile": "fixture-font",
+            "source_page": page.model_dump(mode="json"), "source_layout_version": "svg-source-layout/v2"})
+        failed_receipt = {**receipt, "source_authoring_contract": snapshot["source_authoring_contract"],
+            "attempt_ordinal": 1, "validation_error": "svg_source_receipt_text_mismatch",
+            "raw_digest": "sha256:" + sha256_hex(failed_raw.encode()),
+            "source_digest": "sha256:" + sha256_hex(failed_svg.encode())}
+        failed_terminal = {**terminal_identity, "input_digest": failed_input, "ordinal": 1,
+            "terminal_event": "response.completed", "raw_response": failed_raw,
+            "output_digest": sha256_hex(failed_raw.encode()), "usage": {"input_tokens": 1}}
+        failed_terminal["receipt_digest"] = recovery.digest(failed_terminal)
+        rows.append(Row(id=uuid.uuid4(), job_id=job_id, slide_index=2, author_status="running", render_status="pending",
+            persist_status="pending", svg_checkpoint=dict(svg_content=failed_svg, input_digest=failed_input,
+                inflight=None, source_manifest_ref=pointer, source_manifest_digest="fixture-asset",
+                attempts=[dict(kind="provider", raw_response=failed_raw, receipt=failed_receipt)],
+                provider_terminal_responses={"1": failed_terminal})))
+        current_calls.append(Row(**{**vars(current_calls[0]), "id": uuid.uuid4(), "slide_index": 2}))
+        usage_rows = [Row(id=uuid.uuid4(), job_id=job_id, stage="author", provider="fixture",
+            model="fixture-model", usage_state="reported", outcome="succeeded", request_count=2),
+            Row(id=uuid.uuid4(), job_id=job_id, stage="author", provider="fixture", model="fixture-model",
+                usage_state="unavailable", outcome="cancelled", request_count=1)]
+        if mode == "mixed_unmapped_call":
+            current_calls[-1].slide_index = 99
+        elif mode == "mixed_foreign_call":
+            current_calls[-1].admission_id = admissions[1].id
+        elif mode == "mixed_excess_usage":
+            usage_rows.append(Row(**{**vars(usage_rows[-1]), "id": uuid.uuid4()}))
+        elif mode == "mixed_unmapped_usage":
+            usage_rows[-1].provider = "unmapped-provider"
+        elif mode == "mixed_zero_usage":
+            usage_rows[-1].request_count = 0
+        elif mode == "mixed_noninteger_usage":
+            usage_rows[-1].request_count = True
+        elif mode == "mixed_own_unknown":
+            current_calls.append(Row(**{**vars(current_calls[-1]), "id": uuid.uuid4(),
+                "state": "uncertain", "outcome": "unknown", "actual_cost_microunits": None}))
+            usage_rows.append(Row(**{**vars(usage_rows[-1]), "id": uuid.uuid4()}))
+
+    class Session:
+        sync_session = SimpleNamespace(get_transaction=lambda: "fixture-transaction")
+
+        async def scalar(self, statement):
+            model = statement.column_descriptions[0]["entity"]
+            if model is PresentationModel:
+                return presentation
+            if model is PresentationGenerationJob:
+                return job
+            if model is PublicOperationAdmission:
+                values = statement.compile().params.values()
+                return next(item for item in admissions if item.operation_id in values)
+            if model is SourceContentManifestRecord:
+                return Row(manifest_id="fixture-manifest")
+            raise AssertionError(model)
+
+        async def scalars(self, statement):
+            model = statement.column_descriptions[0]["entity"]
+            if model is AuthoredSlideCheckpoint:
+                return rows
+            if model is ProviderUsageReceipt:
+                return usage_rows
+            if model is PublicProviderLogicalCall:
+                values = statement.compile().params.values()
+                return current_calls if admissions[0].id in values else parent_calls
+            return []
+
+        async def get(self, model, identifier, **kwargs):
+            return parent if identifier == parent_id else task
+
+    session = Session()
+    controls = {str(item.id): recovery._operation_control(item) for item in (operation, parent)}
+    ledger = recovery._recovery_ledger_snapshot(admissions, current_calls + parent_calls, [], usage_rows, [], [])
+    verification = SimpleNamespace(seal_memo={"seals": {}, "transaction": None}, finish=AsyncMock())
+    monkeypatch.setattr("utils.owner_context.get_current_owner_id", lambda: owner)
+    monkeypatch.setattr("utils.owner_context.get_current_tenant_id", lambda: "fixture")
+    monkeypatch.setattr(recovery, "_EpisodeVerification", lambda _: verification)
+    monkeypatch.setattr(recovery, "_verify_append_only_edge", AsyncMock())
+    monkeypatch.setattr(recovery, "verified_header_producer", AsyncMock(return_value=None))
+    monkeypatch.setattr(recovery, "_frozen_vector_offer", lambda *args: ([{} for _ in range(request.n_slides)], None))
+    for name in ("_pre_dispatch_repair_baseline", "_completed_repair_author_projection",
+                 "_terminal_repair_author_projection", "_retained_quality_source_author"):
+        monkeypatch.setattr(recovery, name, AsyncMock(return_value=None))
+    monkeypatch.setattr(recovery, "_author_render_chain", lambda *args, **kwargs:
+        {"render_svg_sha256": sha256_hex(raw.encode())})
+    monkeypatch.setattr(recovery, "_payload_storage_seals", AsyncMock(return_value={}))
+    monkeypatch.setattr(recovery, "_fresh_recovery_operation_controls", AsyncMock(return_value=controls))
+    monkeypatch.setattr(recovery, "_fresh_recovery_ledger_snapshot", AsyncMock(return_value=ledger))
+    monkeypatch.setattr(recovery, "_fresh_recovery_model_rows", AsyncMock(side_effect=
+        lambda session, model, *args, **kwargs: [job] if model is PresentationGenerationJob else [presentation]))
+    monkeypatch.setattr(recovery, "_operation_reference", lambda item, *args, **kwargs: {"id": str(item.id)})
+    monkeypatch.setattr(recovery, "_recovery_review_allocation", lambda *args: (0, None, None))
+    monkeypatch.setattr(recovery, "_code_digest", lambda: "fixture-code")
+    if unknown_mode:
+        monkeypatch.setattr(manifest_store, "admit_source_content_manifest_pin", AsyncMock(return_value=
+            source if mixed else SimpleNamespace(units=[{}, {}], manifest_digest="fixture-source")))
+        real_verify_source_receipt = svg_source_layout.verify_source_receipt
+
+        def verify_fixture_source_receipt(svg, receipt, manifest, page_index, **kwargs):
+            if page_index == 0:
+                return None
+            return real_verify_source_receipt(svg, receipt, manifest, page_index, **kwargs)
+
+        monkeypatch.setattr(svg_source_layout, "verify_source_receipt", verify_fixture_source_receipt)
+    if mode == "mixed_unknown_invalid":
+        source_validation_counts = {"full": 0, "receipts": []}
+        original_source_pages = svg_source_layout.source_pages
+        original_source_receipt = svg_source_layout.verify_source_receipt
+        original_build_manifest = recovery.build_manifest
+
+        def count_source_pages(manifest, **kwargs):
+            source_validation_counts["full"] += 1
+            return original_source_pages(manifest, **kwargs)
+
+        def count_source_receipt(svg, receipt, manifest, page_index, **kwargs):
+            source_validation_counts["receipts"].append(page_index)
+            assert kwargs.get("_validated_pages") is source.units
+            return original_source_receipt(svg, receipt, manifest, page_index, **kwargs)
+
+        async def count_build_manifest(*args, **kwargs):
+            before_full = source_validation_counts["full"]
+            before_receipts = len(source_validation_counts["receipts"])
+            result = await original_build_manifest(*args, **kwargs)
+            assert source_validation_counts["full"] == before_full + 1
+            assert set(result.manifest["known_indices"]) <= set(source_validation_counts["receipts"][before_receipts:])
+            return result
+
+        monkeypatch.setattr(svg_source_layout, "source_pages", count_source_pages)
+        monkeypatch.setattr(svg_source_layout, "verify_source_receipt", count_source_receipt)
+        monkeypatch.setattr(recovery, "build_manifest", count_build_manifest)
+    policy = Row(enabled=True, version=1, estimated_cost_limit_microunits=100, actual_cost_limit_microunits=100)
+    monkeypatch.setattr(public_admission, "load_public_policy", AsyncMock(return_value=policy))
+    monkeypatch.setattr(public_admission, "_policy_digest", lambda _: "fixture-policy")
+    service = SimpleNamespace(resolve_ref=AsyncMock(return_value=SimpleNamespace(created_by_operation_id=parent_id)))
+    monkeypatch.setattr(artifact_store, "configured_public_artifact_service", lambda: service)
+    monkeypatch.setattr(svg_asset_persistence, "load_source_manifest_pointer", AsyncMock(return_value=
+        SimpleNamespace(digest="fixture-asset", presentation_id=parent_pid, source_revision=1,
+            offered_pages=[SimpleNamespace(page_index=index, slot_ids=()) for index in range(request.n_slides)], slots=[])))
+    if mode.startswith("inherited_local_"):
+        # The parent manifest carries a source-local proof the recovery source job cannot continue.
+        operation.request_payload["svg_partial_recovery_manifest"] = {"source_local_continuation": {"digest": "fixture"}}
+    if mode == "inherited_local_partial_review":
+        rows[1].svg_checkpoint["quality_recovery"] = {"schema": "fixture-partial-review"}
+    original_rows = [operation, parent, job, *admissions, *rows, *parent_calls, *current_calls, *usage_rows]
+    before = [recovery._dump(item) for item in original_rows]
+    if mode == "inherited_local_partial_review":
+        with pytest.raises(recovery.PartialRecoveryRejected, match="svg_final_selected_evidence_unproven"):
+            asyncio.run(recovery.build_manifest(session, operation, presentation_revision=0))
+    elif mode in {"mixed_unmapped_call", "mixed_foreign_call", "mixed_excess_usage", "mixed_unmapped_usage",
+            "mixed_zero_usage", "mixed_noninteger_usage"}:
+        with pytest.raises(recovery.PartialRecoveryRejected, match="svg_partial_recovery_invalid_source_unproven"):
+            asyncio.run(recovery.build_manifest(session, operation, presentation_revision=0))
+    elif mode == "current_author":
+        with pytest.raises(recovery.PartialRecoveryRejected, match="svg_partial_recovery_local_output_requires_repair"):
+            asyncio.run(recovery.build_manifest(session, operation, presentation_revision=0))
+    else:
+        plan = asyncio.run(recovery.build_manifest(session, operation, presentation_revision=0))
+        expected_unknown = [1, 2] if mode == "mixed_own_unknown" else [1]
+        expected_new = [2] if mixed and mode != "mixed_own_unknown" else []
+        assert plan.manifest["known_indices"] == [0]
+        assert len(plan.archive["logical_calls"]) == len(parent_calls) + len(current_calls)
+        if mode == "inherited_local_no_review":
+            assert "source_local_continuation" not in plan.manifest
+            assert plan.manifest["prospective_initial_request_limit"] == plan.manifest["prospective_author_request_count"]
+        if mode in {"descendant", "deadline_exceeded", "inherited_local_no_review"}:
+            assert plan.manifest["new_indices"] == [1] and plan.manifest["unknown_indices"] == []
+            assert plan.manifest["pages"][1]["category"] == "unstarted"
+            assert recovery._historical_episode(operation, job)
+        else:
+            assert plan.manifest["new_indices"] == expected_new and plan.manifest["unknown_indices"] == expected_unknown
+            assert plan.manifest["historical_actual_cost_unbounded"] is True
+            decision = SimpleNamespace(manifest_hash=plan.manifest_hash, nonce=recovery.decision_nonce(plan.manifest_hash),
+                acknowledged_unknown_indices=[], additional_budget_microunits=None)
+            action = SimpleNamespace(action="retry", recovery_revision=recovery.REVISION,
+                expected_operation_version=operation.version, expected_revision=0, recovery_decision=decision)
+            with pytest.raises(recovery.PartialRecoveryRejected, match="svg_partial_recovery_unknown_ack_required"):
+                asyncio.run(recovery.verify_action(session, operation, action, presentation_revision=0))
+            if unknown_mode:
+                assert plan.manifest["pages"][1]["category"] == "unknown"
+                assert (recovery._completed_response(rows[1].svg_checkpoint, job, operation, owner, "fixture") is None) == (mode == "superseded_invalid_unknown")
+                assert plan.manifest["proven_remaining_budget_microunits"] is None
+                assert plan.manifest["prospective_author_request_count"] == (2 if mixed else 1)
+                assert recovery.cached_page_payload(rows[1], plan, uuid.uuid4())["partial_recovery"]["category"] == "unknown"
+                decision.acknowledged_unknown_indices = expected_unknown
+                with pytest.raises(recovery.PartialRecoveryRejected, match="svg_partial_recovery_additional_budget_required"):
+                    asyncio.run(recovery.verify_action(session, operation, action, presentation_revision=0))
+                decision.additional_budget_microunits = plan.manifest["additional_budget_limit_microunits"] + 1
+                with pytest.raises(recovery.PartialRecoveryRejected, match="svg_partial_recovery_budget_exceeds_policy"):
+                    asyncio.run(recovery.verify_action(session, operation, action, presentation_revision=0))
+                decision.additional_budget_microunits = 10
+                approved = asyncio.run(recovery.verify_action(session, operation, action, presentation_revision=0))
+                assert approved.approved_budget == 10
+                assert approved.manifest["unknown_indices"] == expected_unknown and approved.manifest["new_indices"] == expected_new
+                if mode == "mixed_own_unknown":
+                    assert plan.manifest["pages"][2]["category"] == "unknown"
+                elif mixed:
+                    assert plan.manifest["pages"][2]["category"] == "known_failed_output"
+                    assert plan.manifest["pages"][2]["completed_output_failure"]["validation_error"] == "svg_source_receipt_text_mismatch"
+                    assert len(plan.archive["usage"]) == len(usage_rows)
+                    assert recovery.cached_page_payload(rows[2], plan, uuid.uuid4())["partial_recovery"]["category"] == "known_failed_output"
+    assert [recovery._dump(item) for item in original_rows] == before
+
+
+@pytest.mark.parametrize("with_svg", [False, True, "historical_nonuniform", "text_mismatch", "native_table_failures"])
+def test_partial_recovery_proves_completed_invalid_source_for_new_child(with_svg, monkeypatch):
+    import asyncio
+    from copy import deepcopy
+    from unittest.mock import AsyncMock
+    import xml.etree.ElementTree as ET
+    from services import svg_partial_recovery as recovery, artifact_store, svg_asset_persistence
+    from services.svg_source_layout import source_pages
+    from services.generation_core.authoring.author_source_svg_layout import _whole_page_facts
+    from tests.unit.test_svg_source_layout import manifest_for
+    from utils.hashing import sha256_hex
+
+    owner, operation_id, job_id, presentation_id = (uuid.uuid4() for _ in range(4))
+    operation = SimpleNamespace(id=operation_id, owner_id=owner)
+    historical = with_svg == "historical_nonuniform"
+    text_mismatch = with_svg == "text_mismatch"
+    native_structure = with_svg == "native_table_failures"
+    contract = {"version": "svg-source-whole-page/v1"}
+    snapshot = dict(digest="fixture-style", source_authoring_contract=contract, authoring_profile={})
+    request = GeneratePresentationRequest(content="Fixture message", strategy="svg", n_slides=1,
+        source_mode="source_content_restyle", language="en", common_header_mode="free",
+        template="authored", authored_style="fixture", content_policy={},
+        source_content_manifest_pin={"manifest_id": "fixture-manifest", "digest": "sha256:" + "f" * 64})
+    job = SimpleNamespace(id=job_id, workspace_operation_id=operation_id,
+        request_payload={}, svg_style_snapshot=snapshot, total_slides=1,
+        authored_outline={"slides": [{"content": "Fixture message"}]})
+    if historical:
+        request.instructions = "body 7px"
+    blocks = ([("table", {"rows": [[{"text": f"R{r}C{c}"} for c in range(6)] for r in range(24)]})]
+        if historical else [("table", {"rows": [[{"text": "A"}, {"text": "B"}]]})]
+        if with_svg and not text_mismatch else [("text", {"text": "A"})])
+    source = manifest_for(blocks)
+    pages = source_pages(source)
+    facts = _whole_page_facts(pages[0], {})
+    text_style = 'font-family="Noto Sans KR" font-size="40" font-weight="400" fill="#111111" text-anchor="start"'
+    if historical:
+        widths = [90, 205, 48, 505, 208, 52]
+        xs = [40 + sum(widths[:c]) for c in range(6)]
+        historical_text_style = text_style.replace('font-size="40"', 'font-size="14"')
+        pieces = []
+        for cell in facts[0]["cells"]:
+            rr, cc = cell["row"], cell["column"]
+            pieces.append(f'<rect x="{xs[cc]}" y="{40+rr*25}" width="{widths[cc]}" height="25" fill="#ffffff" />')
+            pieces.append(f'<text id="{cell["element_id"]}" x="{xs[cc]+3}" y="{58+rr*25}" '
+                f'{historical_text_style}>{cell["text"]}</text>')
+        body = f'<g id="{facts[0]["element_id"]}">' + ''.join(pieces) + '</g>'
+        validation_error = "svg_source_native_table_grid_mismatch"
+    elif text_mismatch:
+        body = f'<text id="{facts[0]["element_id"]}" x="40" y="100" {text_style}>B</text>'
+        validation_error = "svg_source_receipt_text_mismatch"
+    elif native_structure:
+        cells = facts[0]["cells"]
+        body = (f'<g id="{facts[0]["element_id"]}" fill="#ffffff">'
+            + ''.join(f'<rect x="{40+i*200}" y="80" width="200" height="120" fill="#ffffff" />'
+                      f'<text id="{cell["element_id"]}" x="{60+i*200}" y="140" {text_style}>{cell["text"]}</text>'
+                      for i, cell in enumerate(cells)) + '</g>')
+        validation_error = "svg_source_native_table_group_invalid"
+    elif with_svg:
+        cells = facts[0]["cells"]
+        body = (f'<g id="{facts[0]["element_id"]}"><rect x="40" y="80" width="400" height="120" fill="#ffffff" />'
+            + ''.join(f'<text id="{cell["element_id"]}" x="{60+i*200}" y="140" {text_style}>{cell["text"]}</text>'
+                      for i, cell in enumerate(cells)) + '</g>')
+        validation_error = "svg_source_native_table_grid_mismatch"
+    else:
+        body = f'<text x="40" y="100" {text_style}>A</text>'
+        validation_error = "svg_source_receipt_binding_mismatch"
+    raw = f'<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">{body}</svg>'
+    svg = ET.tostring(ET.fromstring(raw), encoding="unicode")
+    pointer = {"ref": str(uuid.uuid4()), "sha256": "a" * 64}
+    asset = SimpleNamespace(digest="fixture-asset", presentation_id=presentation_id,
+        source_revision=1, offered_pages=[SimpleNamespace(page_index=0, slot_ids=())], slots=[])
+    service = SimpleNamespace(resolve_ref=AsyncMock(return_value=SimpleNamespace(created_by_operation_id=operation_id)))
+    monkeypatch.setattr(artifact_store, "configured_public_artifact_service", lambda: service)
+    monkeypatch.setattr(svg_asset_persistence, "load_source_manifest_pointer", AsyncMock(return_value=asset))
+    monkeypatch.setattr("utils.svg_template_fonts.source_font_profile", lambda _: "fixture-font")
+    input_digest = recovery.digest({"page": recovery._expected_page_input_digest(request, job, 0, {}),
+        "source_manifest": source.manifest_digest, "font_profile": "fixture-font",
+        "source_page": pages[0].model_dump(mode="json"), "source_layout_version": "svg-source-layout/v2"})
+    receipt = dict(contract_version="svg-static/v2", provider="fixture", requested_model="fixture-model",
+        style_digest=snapshot["digest"], authoring_profile={}, source_authoring_contract=contract,
+        attempt_ordinal=2, raw_digest="sha256:" + sha256_hex(raw.encode()),
+        source_digest="sha256:" + sha256_hex(svg.encode()), validation_error=validation_error)
+    terminal = dict(schema="svg-provider-terminal/v1", terminal_event="response.completed",
+        operation_id=str(operation_id), job_id=str(job_id), owner_id=str(owner), tenant_id="fixture",
+        input_digest=input_digest, ordinal=2, raw_response=raw, output_digest=sha256_hex(raw.encode()), usage={})
+    terminal["receipt_digest"] = recovery.digest(terminal)
+    previous_terminal = {**deepcopy(terminal), "ordinal": 1}
+    previous_terminal["receipt_digest"] = recovery.digest({key: value for key, value in previous_terminal.items()
+        if key != "receipt_digest"})
+    payload = dict(svg_content=svg if with_svg else None, inflight=None, input_digest=input_digest,
+        attempts=[dict(kind="provider", raw_response=raw, receipt={**deepcopy(receipt), "attempt_ordinal": 1}),
+                  dict(kind="provider", raw_response=raw, receipt=receipt)],
+        source_manifest_ref=pointer, source_manifest_digest=asset.digest,
+        provider_terminal_responses={"1": previous_terminal, "2": terminal})
+    row = SimpleNamespace(slide_index=0, author_status="completed" if with_svg else "failed",
+        render_status="pending", persist_status="pending", svg_checkpoint=payload)
+    calls = [SimpleNamespace(slide_index=0, stage="author", state="reported", outcome="succeeded",
+        reconciled_at=object(), actual_cost_microunits=1,
+        provider_id="fixture", model_id="fixture-model") for _ in range(2)]
+    usage = [SimpleNamespace(job_id=job_id, stage="author", provider="fixture", model="fixture-model",
+        usage_state="reported", outcome="succeeded", request_count=2)]
+    kwargs = dict(completed=terminal, job=job, operation=operation, request=request, source=source,
+        seed={"source_font_profile": "fixture-font"}, episode_calls=calls, usage=usage, session=object(),
+        owner=owner, tenant="fixture", binding=None, vectors={}, header_producer=None)
+    if historical:
+        manifest_pin = {"operation_id": str(uuid.uuid4()), "code_digest": "a" * 64}
+        lineage = {"schema": "svg-partial-recovery-lineage/v2", "operation_id": str(operation_id),
+            "job_id": str(job_id), "manifest_hash": recovery.digest(manifest_pin)}
+        job.request_payload = {recovery.LINEAGE_KEY: lineage}
+        operation.retry_of_operation_id = uuid.UUID(manifest_pin["operation_id"])
+        operation.request_payload = {"svg_partial_recovery_manifest": manifest_pin,
+            "svg_partial_recovery_manifest_hash": recovery.digest(manifest_pin),
+            "svg_partial_recovery_lineage": lineage, "generation_request": deepcopy(job.request_payload)}
+    before = deepcopy(payload)
+    proof = asyncio.run(recovery._completed_invalid_source_output(payload, row, **kwargs))
+    assert proof["reason"] == "completed_source_invalid" and proof["validation_error"] == validation_error
+    assert proof["completed_receipt_digest"] == terminal["receipt_digest"]
+    assert proof["author_receipt_digest"] == recovery.author_witness(payload) and payload == before
+    if historical:
+        compatibility = proof["historical_uniform_grid_rejection"]
+        assert "services/svg_source_native_tables.py" in recovery.CODE_FILES
+        assert compatibility["reason"] == "historical_uniform_grid_rejected"
+        table = compatibility["tables"][0]
+        assert (table["rows"], table["columns"], table["cell_count"]) == (24, 6, 144)
+        assert table["column_widths"] == widths and table["row_heights"] == [25] * 24
+        assert table["first_uniform_mismatch"]["column"] == 0
+        assert payload.get("source_preservation") is None
+    page = dict(slide_index=0, category="known_failed_output", row_digest="immutable-source-row",
+        completed_output_failure=proof)
+    manifest = {"pages": [page]}
+    plan = SimpleNamespace(manifest=manifest, manifest_hash=recovery.digest(manifest))
+    child = recovery.cached_page_payload(row, plan, uuid.uuid4())
+    assert set(child) == {"partial_recovery"} and child["partial_recovery"]["category"] == "known_failed_output"
+    assert payload == before
+    for violation in ("unknown", "inflight", "raw", "terminal", "style", "input", "frozen_input",
+            "source", "call", "other_page_call", "usage", "owner", "validator"):
+        candidate, changed_calls, changed_usage = deepcopy(payload), deepcopy(calls), deepcopy(usage)
+        options = {**kwargs, "episode_calls": changed_calls, "usage": changed_usage}
+        if violation == "unknown":
+            candidate["provider_failures"] = [{"code": "public_provider_result_unknown"}]
+        elif violation == "inflight":
+            candidate["inflight"] = 3
+        elif violation == "raw":
+            candidate["attempts"][-1]["receipt"]["raw_digest"] = "sha256:" + "0" * 64
+        elif violation == "terminal":
+            candidate["provider_terminal_responses"]["2"]["receipt_digest"] = "0" * 64
+        elif violation == "style":
+            candidate["attempts"][-1]["receipt"]["style_digest"] = "another-style"
+        elif violation == "input":
+            candidate["input_digest"] = "another-input"
+        elif violation == "frozen_input":
+            candidate["input_digest"] = "another-input"
+            changed_terminal = candidate["provider_terminal_responses"]["2"]
+            changed_terminal["input_digest"] = "another-input"
+            changed_terminal["receipt_digest"] = recovery.digest({key: value for key, value in changed_terminal.items()
+                if key != "receipt_digest"})
+            options["completed"] = changed_terminal
+        elif violation == "source":
+            candidate["source_manifest_digest"] = "another-source"
+        elif violation == "call":
+            changed_calls[-1].state = "reserved"
+        elif violation == "other_page_call":
+            other_page = deepcopy(changed_calls[-1])
+            other_page.slide_index, other_page.state = 1, "reserved"
+            changed_calls.append(other_page)
+        elif violation == "usage":
+            changed_usage[0].usage_state = "unavailable"
+        elif violation == "owner":
+            options["owner"] = uuid.uuid4()
+        else:
+            candidate["attempts"][-1]["receipt"]["validation_error"] = (
+                "svg_source_receipt_binding_mismatch" if with_svg else "svg_source_native_table_grid_mismatch")
+        with pytest.raises(recovery.PartialRecoveryRejected):
+            asyncio.run(recovery._completed_invalid_source_output(candidate, row, **options))
+    unsupported = deepcopy(payload)
+    unsupported["attempts"][-1]["receipt"]["validation_error"] = "unproven-local-error"
+    assert asyncio.run(recovery._completed_invalid_source_output(unsupported, row, **kwargs)) is None
+    if native_structure:
+        from services.svg_source_layout import bind_whole_page_source_svg
+
+        def sealed_candidate(candidate_raw, expected_error):
+            candidate = deepcopy(payload)
+            candidate_svg = ET.tostring(ET.fromstring(candidate_raw), encoding="unicode")
+            candidate["svg_content"] = candidate_svg
+            last = candidate["attempts"][-1]
+            last["raw_response"] = candidate_raw
+            last["receipt"].update(validation_error=expected_error,
+                raw_digest="sha256:" + sha256_hex(candidate_raw.encode()),
+                source_digest="sha256:" + sha256_hex(candidate_svg.encode()))
+            last_terminal = candidate["provider_terminal_responses"]["2"]
+            last_terminal.update(raw_response=candidate_raw, output_digest=sha256_hex(candidate_raw.encode()))
+            last_terminal["receipt_digest"] = recovery.digest({key: value for key, value in last_terminal.items()
+                if key != "receipt_digest"})
+            return candidate, last_terminal
+
+        root = ET.fromstring(raw)
+        group = next(node for node in root if node.tag.endswith("}g"))
+        group.attrib.pop("fill")
+        valid_raw = ET.tostring(root, encoding="unicode")
+        # Establish that the corrected original source really binds, then
+        # independently induce a membership failure without changing its text.
+        valid_svg, valid_receipt = bind_whole_page_source_svg(valid_raw, source, 0, facts=facts,
+            width=1280, height=720, style_snapshot=snapshot, minimum_font_px=7)
+        assert valid_receipt["source_authoring_contract"] == contract
+        moved_cell = next(node for node in group if node.tag.endswith("}text"))
+        group.remove(moved_cell)
+        root.append(moved_cell)
+        membership_raw = ET.tostring(root, encoding="unicode")
+        membership, membership_terminal = sealed_candidate(membership_raw,
+            "svg_source_native_table_membership_mismatch")
+        membership_before = deepcopy(membership)
+        membership_proof = asyncio.run(recovery._completed_invalid_source_output(membership, row,
+            **{**kwargs, "completed": membership_terminal}))
+        assert membership_proof["validation_error"] == "svg_source_native_table_membership_mismatch"
+        assert membership == membership_before and "historical_uniform_grid_rejection" not in membership_proof
+        assert payload == before and "historical_uniform_grid_rejection" not in proof
+        for base_payload, sealed, expected_proof, status in (
+                (payload, terminal, proof, "failed"),
+                (membership, membership_terminal, membership_proof, "running")):
+            raw_only = deepcopy(base_payload)
+            raw_only["svg_content"] = None
+            raw_row = deepcopy(row)
+            raw_row.author_status = status
+            assert asyncio.run(recovery._completed_invalid_source_output(raw_only, raw_row,
+                **{**kwargs, "completed": sealed})) == expected_proof
+            assert raw_only["svg_content"] is None
+        for base_payload, sealed in ((payload, terminal), (membership, membership_terminal)):
+            for violation in ("own_actual_unknown", "ghost_usage", "zero_usage", "bool_usage", "float_usage",
+                    "string_usage", "different_error", "raw_changed", "declarations_changed", "currently_valid"):
+                candidate, current_calls, current_usage = deepcopy(base_payload), deepcopy(calls), deepcopy(usage)
+                current_terminal = deepcopy(sealed)
+                if violation == "own_actual_unknown": current_calls[-1].actual_cost_microunits = None
+                elif violation == "ghost_usage": current_usage[0].request_count = 3
+                elif violation in {"zero_usage", "bool_usage", "float_usage", "string_usage"}:
+                    current_usage[0].request_count = {"zero_usage": 0, "bool_usage": True,
+                        "float_usage": 2.0, "string_usage": "2"}[violation]
+                elif violation == "different_error":
+                    candidate["attempts"][-1]["receipt"]["validation_error"] = (
+                        "svg_source_native_table_group_invalid" if base_payload is membership
+                        else "svg_source_native_table_membership_mismatch")
+                elif violation == "raw_changed": candidate["attempts"][-1]["raw_response"] += " "
+                elif violation == "declarations_changed":
+                    candidate["attempts"][-1]["receipt"]["native_declarations"] = {"unproven": True}
+                else:
+                    candidate, current_terminal = sealed_candidate(valid_raw,
+                        base_payload["attempts"][-1]["receipt"]["validation_error"])
+                with pytest.raises(recovery.PartialRecoveryRejected, match="svg_partial_recovery_invalid_source_unproven"):
+                    asyncio.run(recovery._completed_invalid_source_output(candidate, row,
+                        **{**kwargs, "completed": current_terminal, "episode_calls": current_calls,
+                           "usage": current_usage}))
+        other_native_error = deepcopy(payload)
+        other_native_error["attempts"][-1]["receipt"]["validation_error"] = "svg_source_native_table_frame_invalid"
+        assert asyncio.run(recovery._completed_invalid_source_output(other_native_error, row, **kwargs)) is None
+    if historical:
+        from services.svg_source_layout import bind_whole_page_source_svg
+        bound, preserved = bind_whole_page_source_svg(svg, source, 0, facts=facts,
+            width=1280, height=720, style_snapshot=snapshot, minimum_font_px=7)
+        for violation in ("missing_pin", "current_pin", "manifest_hash", "lineage", "parent"):
+            changed_operation = deepcopy(operation)
+            changed_job = deepcopy(job)
+            if violation == "missing_pin":
+                changed_operation.request_payload["svg_partial_recovery_manifest"].pop("code_digest")
+            elif violation == "current_pin":
+                changed_operation.request_payload["svg_partial_recovery_manifest"]["code_digest"] = recovery._code_digest()
+            elif violation == "manifest_hash":
+                changed_operation.request_payload["svg_partial_recovery_manifest_hash"] = "0" * 64
+            elif violation == "lineage":
+                changed_operation.request_payload["svg_partial_recovery_lineage"]["operation_id"] = str(uuid.uuid4())
+            else:
+                changed_operation.retry_of_operation_id = uuid.uuid4()
+            if violation in {"missing_pin", "current_pin"}:
+                changed_hash = recovery.digest(changed_operation.request_payload["svg_partial_recovery_manifest"])
+                changed_operation.request_payload["svg_partial_recovery_manifest_hash"] = changed_hash
+                changed_operation.request_payload["svg_partial_recovery_lineage"]["manifest_hash"] = changed_hash
+                changed_job.request_payload[recovery.LINEAGE_KEY]["manifest_hash"] = changed_hash
+                changed_operation.request_payload["generation_request"] = deepcopy(changed_job.request_payload)
+            with pytest.raises(recovery.PartialRecoveryRejected):
+                asyncio.run(recovery._completed_invalid_source_output(payload, row,
+                    **{**kwargs, "operation": changed_operation, "job": changed_job}))
+        root = ET.fromstring(bound)
+        group = next(node for node in root if node.tag.rsplit('}', 1)[-1] == 'g')
+        for index, rect in enumerate(node for node in group if node.tag.rsplit('}', 1)[-1] == 'rect'):
+            rr, cc = divmod(index, 6)
+            rect.set("x", str(40 + cc * (sum(widths) / 6)))
+            rect.set("width", str(sum(widths) / 6))
+        for index, text in enumerate(node for node in group if node.tag.rsplit('}', 1)[-1] == 'text'):
+            rr, cc = divmod(index, 6)
+            text.set("x", str(43 + cc * (sum(widths) / 6)))
+        uniform = ET.tostring(root, encoding="unicode")
+        uniform, uniform_receipt = bind_whole_page_source_svg(uniform, source, 0, facts=facts,
+            width=1280, height=720, style_snapshot=snapshot, minimum_font_px=7)
+        assert recovery._historical_uniform_grid_rejection(uniform, uniform_receipt, pages[0],
+            operation=operation, job=job) is None
+        assert payload == before
+    if text_mismatch:
+        from services.svg_source_layout import bind_whole_page_source_svg
+        from services.svg_contract import source_digest
+        lf_source = manifest_for([("text", {"text": "A\nB"})])
+        lf_pages = source_pages(lf_source)
+        lf_facts = _whole_page_facts(lf_pages[0], {})
+        lf_raw = (f'<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">'
+            f'<text id="{lf_facts[0]["element_id"]}" x="40" y="100" {text_style}>AB</text></svg>')
+        serialized = ET.tostring(ET.fromstring(lf_raw), encoding="unicode")
+        canonical, preservation = bind_whole_page_source_svg(serialized, lf_source, 0,
+            facts=lf_facts, width=1280, height=720, style_snapshot=snapshot, minimum_font_px=14,
+            restore_source_lf=True, raw_output_digest=source_digest(lf_raw))
+        lf_receipt = {**deepcopy(receipt), "validation_error": None,
+            "raw_digest": source_digest(lf_raw), "source_digest": source_digest(canonical),
+            "source_preservation": deepcopy(preservation)}
+        lf_payload = {"svg_content": canonical, "source_preservation": deepcopy(preservation)}
+        lf_terminal = {**deepcopy(terminal), "raw_response": lf_raw,
+            "output_digest": sha256_hex(lf_raw.encode())}
+        lf_terminal["receipt_digest"] = recovery.digest({key: value for key, value in lf_terminal.items()
+            if key != "receipt_digest"})
+        lf_before = deepcopy((lf_payload, lf_receipt, lf_terminal))
+
+        def replay(candidate, raw_output, author_receipt, sealed):
+            return recovery._author_render_chain(candidate, raw_output, author_receipt,
+                request=request, job=job, asset=asset, index=0, completed=sealed, source=lf_source)
+
+        chain = replay(lf_payload, lf_raw, lf_receipt, lf_terminal)
+        assert chain["transform"] == "source-preserved"
+        assert chain["render_svg_sha256"] == sha256_hex(canonical.encode())
+        assert preservation["source_lf_restoration"]["restored_lf_count"] == 1
+        for violation in ("proof", "raw_sha", "canonical", "other_character", "missing_receipt_proof"):
+            changed_payload, changed_receipt, changed_terminal = deepcopy(lf_before)
+            changed_raw = lf_raw
+            if violation == "proof":
+                for carrier in (changed_payload["source_preservation"], changed_receipt["source_preservation"]):
+                    carrier["source_lf_restoration"]["restored_lf_count"] = 2
+            elif violation == "raw_sha":
+                changed_receipt["raw_digest"] = "sha256:" + "0" * 64
+            elif violation == "canonical":
+                changed_payload["svg_content"] = canonical.replace("#111111", "#222222")
+                changed_receipt["source_digest"] = source_digest(changed_payload["svg_content"])
+            elif violation == "other_character":
+                changed_raw = lf_raw.replace(">AB<", ">AC<")
+                changed_receipt["raw_digest"] = source_digest(changed_raw)
+                changed_terminal["raw_response"] = changed_raw
+                changed_terminal["output_digest"] = sha256_hex(changed_raw.encode())
+                changed_terminal["receipt_digest"] = recovery.digest({key: value for key, value in changed_terminal.items()
+                    if key != "receipt_digest"})
+            else:
+                changed_receipt["source_preservation"].pop("source_lf_restoration")
+            with pytest.raises(recovery.PartialRecoveryRejected, match="svg_partial_recovery_source_transform_unproven"):
+                replay(changed_payload, changed_raw, changed_receipt, changed_terminal)
+        legacy_raw = lf_raw.replace(">AB<", ">A\nB<")
+        legacy_svg, legacy_preservation = bind_whole_page_source_svg(
+            ET.tostring(ET.fromstring(legacy_raw), encoding="unicode"), lf_source, 0,
+            facts=lf_facts, width=1280, height=720, style_snapshot=snapshot, minimum_font_px=14)
+        legacy_receipt = {**deepcopy(lf_receipt), "source_preservation": legacy_preservation,
+            "raw_digest": source_digest(legacy_raw), "source_digest": source_digest(legacy_svg)}
+        assert replay({"svg_content": legacy_svg, "source_preservation": legacy_preservation},
+            legacy_raw, legacy_receipt, None)["render_svg_sha256"] == sha256_hex(legacy_svg.encode())
+        assert (lf_payload, lf_receipt, lf_terminal) == lf_before
+
+
+def test_partial_recovery_failed_source_overlap_requires_bound_evidence(tmp_path, monkeypatch):
+    import json
+    from copy import deepcopy
+    from services import svg_partial_recovery as recovery, svg_presentation_checkpoint as checkpoint
+    from services.svg_source_layout import source_pages, bind_whole_page_source_svg
+    from services.generation_core.authoring.author_source_svg_layout import _whole_page_facts
+    from services.svg_text_overlap import text_overlaps
+    from tests.unit.test_svg_source_layout import manifest_for
+    from utils.hashing import sha256_hex
+    from services.source_content.digests import digest_json
+
+    owner, operation_id, job_id, presentation_id = (uuid.uuid4() for _ in range(4))
+    operation = SimpleNamespace(id=operation_id, owner_id=owner, error_code="svg_source_quality_failed")
+    contract = {"version": "svg-source-whole-page/v1"}
+    snapshot = dict(digest="fixture-style", source_authoring_contract=contract, authoring_profile={})
+    request = GeneratePresentationRequest(content="Fixture", strategy="svg", n_slides=2,
+        source_mode="source_content_restyle", language="en", common_header_mode="free",
+        template="authored", authored_style="fixture", content_policy={},
+        source_content_manifest_pin={"manifest_id": "fixture-manifest", "digest": "sha256:" + "f" * 64})
+    job = SimpleNamespace(id=job_id, workspace_operation_id=operation_id, request_payload={},
+        svg_style_snapshot=snapshot, total_slides=2,
+        authored_outline={"slides": [{"content": "Fixture"}, {"content": "Other page"}]})
+    source = manifest_for([("text", {"text": "A"}), ("text", {"text": "B"})])
+    packed = source.model_dump(mode="json", by_alias=True)
+    another_unit = deepcopy(packed["units"][0])
+    another_unit.update(sourceUnitId="p1", sourceIndex=1)
+    for block in another_unit["blocks"]:
+        block["sourceBlockId"] = block["sourceBlockId"].replace("p0:", "p1:", 1)
+    packed["units"].append(another_unit)
+    packed["counts"].update(sourceUnits=2, textBlocks=4)
+    packed.pop("manifestDigest")
+    packed["manifestDigest"] = digest_json(packed)
+    source = type(source).model_validate({**packed, "ownerId": source.owner_id})
+    pages = source_pages(source)
+    facts = _whole_page_facts(pages[0], {})
+    body = ''.join(f'<text id="{fact["element_id"]}" x="80" y="100" font-family="Noto Sans KR" '
+        f'font-size="40" font-weight="400" fill="#111111" text-anchor="start">{text}</text>'
+        for fact, text in zip(facts, ("A", "B")))
+    raw = f'<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">{body}</svg>'
+    raw, preservation = bind_whole_page_source_svg(raw, source, 0, facts=facts, width=1280,
+        height=720, style_snapshot=snapshot, minimum_font_px=12)
+    asset = SimpleNamespace(digest="fixture-asset", presentation_id=presentation_id,
+        source_revision=1, offered_pages=[SimpleNamespace(page_index=0, slot_ids=())], slots=[])
+    monkeypatch.setattr("utils.svg_template_fonts.source_font_profile", lambda _: "fixture-font")
+    input_digest = recovery.digest({"page": recovery._expected_page_input_digest(request, job, 0, {}),
+        "source_manifest": source.manifest_digest, "font_profile": "fixture-font",
+        "source_page": pages[0].model_dump(mode="json"), "source_layout_version": "svg-source-layout/v2"})
+    source_digest = sha256_hex(raw.encode())
+    receipt = dict(contract_version="svg-static/v2", provider="fixture", requested_model="fixture-model",
+        style_digest=snapshot["digest"], authoring_profile={}, source_authoring_contract=contract,
+        attempt_ordinal=2, raw_digest="sha256:" + source_digest, source_digest="sha256:" + source_digest,
+        validation_error=None)
+    terminal = dict(schema="svg-provider-terminal/v1", terminal_event="response.completed",
+        operation_id=str(operation_id), job_id=str(job_id), owner_id=str(owner), tenant_id="fixture",
+        input_digest=input_digest, ordinal=2, raw_response=raw, output_digest=source_digest, usage={})
+    terminal["receipt_digest"] = recovery.digest(terminal)
+    box = dict(x=80, y=60, width=40, height=40)
+    metrics = {"fonts_ready": True, "elements": [dict(qid=f"svg-{i}", parent_qid="svg-0",
+        has_owned_text=True, text_fragments=[box], text_ink_fragments=[box]) for i in (1, 2)]}
+    pairs, basis = text_overlaps(metrics["elements"])
+    png = b"immutable-checkpoint-image"
+    png_digest = sha256_hex(png)
+    monkeypatch.setattr(checkpoint, "checkpoint_root", lambda: tmp_path)
+    png_path = tmp_path / "svg" / png_digest[:2] / f"{png_digest}.png"
+    png_path.parent.mkdir(parents=True)
+    png_path.write_bytes(png)
+    quality = dict(passed=False, geometry_passed=False, measurement_complete=True,
+        failures=[{"kind": "text_overlap", "pairs": pairs}], overlap_basis=basis,
+        physical_readability={"passed": True}, sourceImages=dict(used=[], offered=[], omitted=[]),
+        contract_version="svg-static/v1", renderer_version="svg-chromium/v1",
+        source_digest="sha256:" + source_digest, png_digest="sha256:" + png_digest,
+        wrapper_digest="sha256:" + "a" * 64, browser_metrics=metrics,
+        metrics_digest="sha256:" + sha256_hex(json.dumps(metrics, sort_keys=True,
+            separators=(",", ":"), ensure_ascii=False, default=str).encode()))
+    payload = dict(svg_content=raw, source_digest=source_digest, source_preservation=preservation,
+        source_manifest_digest=asset.digest, inflight=None, input_digest=input_digest,
+        png_sha256=png_digest, quality=quality,
+        attempts=[dict(kind="provider", raw_response=raw, receipt={**deepcopy(receipt), "attempt_ordinal": 1}),
+                  dict(kind="provider", raw_response=raw, receipt=receipt)],
+        provider_terminal_responses={"2": terminal})
+    row = SimpleNamespace(slide_index=0, author_status="completed", render_status="failed",
+        persist_status="pending", svg_checkpoint=payload)
+    calls = [SimpleNamespace(slide_index=0, stage="author", state="reported", outcome="succeeded",
+        reconciled_at="reported", actual_cost_microunits=1, provider_id="fixture", model_id="fixture-model")
+        for _ in range(2)]
+    usage = [SimpleNamespace(job_id=job_id, stage="author", provider="fixture", model="fixture-model",
+        usage_state="reported", outcome="succeeded", request_count=2)]
+    kwargs = dict(completed=terminal, job=job, operation=operation, request=request, source=source,
+        seed={"source_font_profile": "fixture-font"}, asset=asset, episode_calls=calls, usage=usage,
+        owner=owner, tenant="fixture")
+    before = deepcopy(payload)
+    proof = recovery._completed_failed_source_quality(payload, row, **kwargs)
+    assert proof["reason"] == "completed_source_quality_failed" and proof["failure_kind"] == "text_overlap"
+    page = dict(slide_index=0, category="known_failed_output", row_digest="immutable-row", completed_output_failure=proof)
+    manifest = {"pages": [page]}
+    plan = SimpleNamespace(manifest=manifest, manifest_hash=recovery.digest(manifest))
+    assert set(recovery.cached_page_payload(row, plan, uuid.uuid4())) == {"partial_recovery"}
+    assert payload == before
+    other_known = deepcopy(calls[0])
+    other_known.slide_index, other_known.stage = 1, "repair"
+    other_unknown = deepcopy(calls[0])
+    other_unknown.slide_index, other_unknown.state, other_unknown.outcome = 1, "unavailable", "failed"
+    other_unknown.actual_cost_microunits = None
+    mixed_calls = [*deepcopy(calls), other_known, other_unknown]
+    repair_usage = deepcopy(usage[0])
+    repair_usage.stage, repair_usage.request_count = "repair", 1
+    mixed_usage = [*deepcopy(usage), repair_usage]
+    mixed_before = deepcopy((mixed_calls, mixed_usage, payload))
+    mixed_options = {**kwargs, "episode_calls": mixed_calls, "usage": mixed_usage}
+    assert recovery._completed_failed_source_quality(payload, row, **mixed_options) == proof
+    assert recovery._unresolved_provider_call(other_unknown)
+    assert (mixed_calls, mixed_usage, payload) == mixed_before
+    unresolved_usage = deepcopy(usage[0])
+    unresolved_usage.usage_state, unresolved_usage.outcome, unresolved_usage.request_count = "unavailable", "failed", 1
+    mixed_usage.append(unresolved_usage)
+    assert recovery._completed_failed_source_quality(payload, row,
+        **{**mixed_options, "usage": mixed_usage}) == proof
+    for violation in ("own_unknown", "missing_known_usage", "overreported", "overunsettled",
+            "zero", "bool", "float", "string", "foreign_job", "wrong_stage", "wrong_provider",
+            "wrong_model", "malformed_page", "malformed_model", "header_unknown", "unmapped_known_call"):
+        altered_calls, altered_usage = deepcopy(mixed_calls), deepcopy(mixed_usage)
+        if violation == "own_unknown":
+            altered_calls[0].state, altered_calls[0].outcome = "unavailable", "failed"
+            altered_calls[0].actual_cost_microunits = None
+        elif violation == "missing_known_usage": altered_usage[0].request_count = 1
+        elif violation == "overreported": altered_usage[0].request_count = 3
+        elif violation == "overunsettled": altered_usage[-1].request_count = 2
+        elif violation in {"zero", "bool", "float", "string"}:
+            altered_usage[-1].request_count = {"zero": 0, "bool": True, "float": 1.0, "string": "1"}[violation]
+        elif violation == "foreign_job": altered_usage[-1].job_id = uuid.uuid4()
+        elif violation == "wrong_stage": altered_usage[-1].stage = "review"
+        elif violation == "wrong_provider": altered_usage[-1].provider = "unmapped-provider"
+        elif violation == "wrong_model": altered_usage[-1].model = "unmapped-model"
+        elif violation == "malformed_page": altered_calls[-1].slide_index = 2
+        elif violation == "malformed_model": altered_calls[-1].model_id = ""
+        elif violation == "header_unknown": altered_calls[-1].stage = "review"
+        else:
+            unmatched = deepcopy(other_known)
+            unmatched.stage = "repair_remake"
+            altered_calls.append(unmatched)
+        with pytest.raises(recovery.PartialRecoveryRejected, match="svg_partial_recovery_failed_source_quality_unproven"):
+            recovery._completed_failed_source_quality(payload, row,
+                **{**kwargs, "episode_calls": altered_calls, "usage": altered_usage})
+    assert recovery._unresolved_provider_call(other_unknown)
+    assert payload == before
+    for violation in ("unknown", "inflight", "owner", "terminal", "style", "input", "source", "preservation",
+            "measurement", "physical", "metrics", "pairs", "basis", "png", "images", "call", "other_page",
+            "actual", "usage", "usage_count", "render"):
+        candidate, changed_row = deepcopy(payload), deepcopy(row)
+        changed_calls, changed_usage = deepcopy(calls), deepcopy(usage)
+        options = {**kwargs, "episode_calls": changed_calls, "usage": changed_usage}
+        if violation == "unknown": candidate["provider_failures"] = [{"code": "public_provider_result_unknown"}]
+        elif violation == "inflight": candidate["inflight"] = 3
+        elif violation == "owner": options["owner"] = uuid.uuid4()
+        elif violation == "terminal": candidate["provider_terminal_responses"]["2"]["receipt_digest"] = "0" * 64
+        elif violation == "style": candidate["attempts"][-1]["receipt"]["style_digest"] = "changed"
+        elif violation == "input": candidate["input_digest"] = "changed"
+        elif violation == "source": candidate["source_digest"] = "changed"
+        elif violation == "preservation": candidate["source_preservation"]["manifest_digest"] = "changed"
+        elif violation == "measurement": candidate["quality"]["measurement_complete"] = False
+        elif violation == "physical": candidate["quality"]["physical_readability"]["passed"] = False
+        elif violation == "metrics": candidate["quality"]["metrics_digest"] = "0" * 64
+        elif violation == "pairs": candidate["quality"]["failures"][0]["pairs"] = []
+        elif violation == "basis": candidate["quality"]["overlap_basis"] = {}
+        elif violation == "png": candidate["quality"]["png_digest"] = "0" * 64
+        elif violation == "images": candidate["quality"]["sourceImages"]["omitted"] = ["missing"]
+        elif violation == "call": changed_calls[-1].state = "reserved"
+        elif violation == "other_page":
+            other = deepcopy(changed_calls[-1]); other.slide_index, other.outcome = 2, "unknown"; changed_calls.append(other)
+        elif violation == "actual": changed_calls[-1].actual_cost_microunits = None
+        elif violation == "usage": changed_usage[0].usage_state = "unavailable"
+        elif violation == "usage_count": changed_usage[0].request_count = 1
+        elif violation == "render": changed_row.render_status = "completed"
+        with pytest.raises(recovery.PartialRecoveryRejected):
+            recovery._completed_failed_source_quality(candidate, changed_row, **options)
+    unsupported = deepcopy(payload)
+    unsupported["quality"]["failures"] = [{"kind": "text_clipped"}]
+    assert recovery._completed_failed_source_quality(unsupported, row, **kwargs) is None
+    png_path.unlink()
+    with pytest.raises(recovery.PartialRecoveryRejected):
+        recovery._completed_failed_source_quality(payload, row, **kwargs)
+    assert payload == before
+
+
 @pytest.mark.parametrize("conflict", [None, "profile", "snapshot"])
 def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflict, monkeypatch):
     import asyncio
@@ -2294,7 +4791,7 @@ def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflic
     stale_job = SimpleNamespace(id=uuid.uuid4(), attempt_token="attempt", _workspace_fencing_token=9,
                                 svg_style_snapshot={"digest": "stale-job-object"})
     current = SimpleNamespace(svg_style_snapshot=frozen)
-    request = _svg_request(_svg_style_snapshot=None)
+    request = _svg_request(_svg_style_snapshot=None, aspect_ratio="16:9")
     if conflict == "profile":
         request._svg_authoring_profile = "art-direction-v1"
     elif conflict == "snapshot":
@@ -2319,6 +4816,97 @@ def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflic
         checkpoint_session.commit.assert_awaited_once()
     owned_job.assert_awaited_once_with(checkpoint_session, stale_job.id, "attempt", fencing_token=9)
     if conflict is None:
+        from services.svg_presentation_prepare import _verify_owned_partial_recovery
+        from models.sql.presentation_generation_job import PresentationGenerationJob
+        from models.sql.workspace import WorkspaceOperation
+        from services.authored_canvas import request_canvas_metadata
+        from services.authored_checkpoint_errors import AuthoredStageError
+        from services import svg_partial_recovery as recovery
+
+        owner, operation_id = uuid.uuid4(), uuid.uuid4()
+        stale_job.workspace_operation_id = operation_id
+        fresh = SimpleNamespace(id=stale_job.id, workspace_operation_id=operation_id,
+            attempt_token="attempt", state="running", request_payload={"fresh": True})
+        live_operation = SimpleNamespace(id=operation_id, attempt_token="attempt", fencing_token=9,
+            state="running", cancel_requested_at=None, owner_id=owner)
+        manifest = {"owner_id": str(owner), "tenant_id": "preparation-test",
+            "expected_page_count": 1, "canvas_digest": recovery.digest(request_canvas_metadata(request))}
+
+        async def verify_without_authority_locks(violation=None):
+            events = []
+            sessions = [AsyncMock() for _ in range(3)]
+            authority, read, final_authority = sessions
+            for index, selected in enumerate(sessions):
+                selected.__aenter__.return_value = selected
+                async def leave(*args, index=index):
+                    events.append((index, "closed"))
+                selected.__aexit__.side_effect = leave
+            authority.commit.side_effect = lambda: events.append((0, "committed"))
+            final_authority.commit.side_effect = lambda: events.append((2, "committed"))
+            async def load(model, identity):
+                assert events == [(0, "committed"), (0, "closed")]
+                if model is PresentationGenerationJob:
+                    assert identity == stale_job.id
+                    return fresh
+                assert model is WorkspaceOperation and identity == operation_id
+                return live_operation
+            read.get.side_effect = load
+            verifier = AsyncMock()
+            async def slow_verify(selected_session, selected_operation, selected_job):
+                assert selected_session is read and selected_operation is live_operation
+                assert selected_job is fresh and selected_job is not stale_job
+                assert selected_operation.owner_id == owner
+                assert events == [(0, "committed"), (0, "closed")]
+                await asyncio.sleep(0)
+                return {**manifest, **({"owner_id": str(uuid.uuid4())} if violation == "owner" else {})}
+            verifier.side_effect = slow_verify
+            async def fence(selected_session, identity, token, *, fencing_token=None):
+                assert identity == stale_job.id and token == "attempt" and fencing_token == 9
+                if selected_session is final_authority:
+                    assert (1, "closed") in events
+                if violation == "authority" or violation == "takeover" and selected_session is final_authority:
+                    raise AuthoredStageError(slide_index=0, stage="persist",
+                        code="authored_workspace_operation_fence_lost", retryable=True)
+                return fresh
+            fenced = AsyncMock(side_effect=fence)
+            factory = Mock(side_effect=sessions)
+            with monkeypatch.context() as scoped:
+                scoped.setattr("utils.owner_context.get_current_owner_id", lambda: owner)
+                scoped.setattr("utils.owner_context.get_current_tenant_id", lambda: "preparation-test")
+                scoped.setattr(recovery, "verify_prepared_episode", verifier)
+                call = _verify_owned_partial_recovery(request, stale_job, 1,
+                    session_maker=factory, owned_job=fenced)
+                if violation in {"authority", "takeover"}:
+                    with pytest.raises(AuthoredStageError) as rejected:
+                        await call
+                    assert rejected.value.code == "authored_workspace_operation_fence_lost"
+                elif violation:
+                    with pytest.raises(ValueError, match="svg_partial_recovery_episode_unbound"):
+                        await call
+                else:
+                    assert await call == manifest
+                    assert events[-2:] == [(2, "committed"), (2, "closed")]
+                    assert fenced.await_count == 2
+                read.commit.assert_not_awaited()
+                if violation == "authority":
+                    assert factory.call_count == 1
+                if violation in {"authority", "fence", "attempt", "cancelled"}:
+                    verifier.assert_not_awaited()
+                else:
+                    verifier.assert_awaited_once()
+
+        async def verify_transactions():
+            await verify_without_authority_locks()
+            for violation, field, value in (("fence", "fencing_token", 10),
+                    ("attempt", "attempt_token", "new-attempt"), ("cancelled", "state", "cancelled")):
+                saved = getattr(live_operation, field)
+                setattr(live_operation, field, value)
+                await verify_without_authority_locks(violation)
+                setattr(live_operation, field, saved)
+            for violation in ("owner", "authority", "takeover"):
+                await verify_without_authority_locks(violation)
+
+        asyncio.run(verify_transactions())
         from copy import deepcopy
         import json
         from xml.etree import ElementTree as ET
@@ -2411,7 +4999,7 @@ def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflic
         assert recovery.verify_cached_page(child, manifest, 0, input_digest) is page
         assert "quality" not in child and "png_sha256" not in child and original == before
         bad_latest = deepcopy(original)
-        bad_raw = raw.replace('<text ', '<text xml:space="preserve" ')
+        bad_raw = raw.replace('<text ', '<text xml:base="https://example.invalid/" ')
         bad_author_digest = sha256_hex(ET.tostring(ET.fromstring(bad_raw), encoding="unicode").encode())
         bad_receipt = {**deepcopy(author_receipt), "attempt_ordinal": 2,
             "raw_digest": "sha256:" + sha256_hex(bad_raw.encode()), "source_digest": "sha256:" + bad_author_digest}
@@ -2565,6 +5153,150 @@ def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflic
         assert asyncio.run(partial_quality_recovery.current_quality_repair_authorized(
             repair_ctx, candidate, 0, source_job, current_checkpoint)) is True
         assert partial_quality_recovery.current_episode_attempt_count(repair_ctx, candidate, 0) == 0
+
+        async def exercise_known_quality_runtime_admission():
+            from datetime import datetime, timedelta, timezone
+            from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
+            from models.sql.presentation_generation_job import PresentationGenerationJob
+            from models.sql.public_admission import PublicOperationAdmission
+            from models.sql.workspace import WorkspaceOperation
+            from services import public_operation_admission as public
+            from services.public_operation_admission_models import PublicAdmissionRejected
+
+            originals = deepcopy((source_job, source_manifest, candidate, prior, seed))
+            admitted_manifest = {**deepcopy(source_manifest), "new_indices": [], "unknown_indices": [],
+                "proven_remaining_budget_microunits": 100,
+                "prospective_initial_request_limit": 10, "prospective_retry_request_limit": 5}
+            manifest_hash = recovery.digest(admitted_manifest)
+            admitted_prior, fresh_target = deepcopy(prior), deepcopy(candidate)
+            for payload in (admitted_prior, fresh_target):
+                payload["partial_recovery"]["manifest_hash"] = manifest_hash
+            opaque_canvas = object()
+            admitted_ctx = SimpleNamespace(**{**vars(repair_ctx), "partial_recovery_manifest": admitted_manifest,
+                "physical_kwargs": {"physical_canvas": opaque_canvas}})
+            live_job = SimpleNamespace(**{**deepcopy(vars(source_job)), "state": "running",
+                "attempt_token": "known-repair-attempt", "request_payload": {
+                    **deepcopy(source_job.request_payload), recovery.LINEAGE_KEY: {"manifest_hash": manifest_hash}}})
+            now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+            live_operation = SimpleNamespace(**{**{key: None for key in recovery._RUNTIME_OPERATION_FIELDS},
+                "id": operation_id, "owner_id": owner, "owner_scope": str(owner),
+                "kind": "presentation.generate", "state": "running", "phase": "active",
+                "presentation_id": presentation_id, "attempt_token": live_job.attempt_token,
+                "fencing_token": 9, "deadline_at": now + timedelta(hours=1), "cancel_requested_at": None,
+                "contract_version": "public-operation/v2", "execution_profile_version": "public-generation-export/v2",
+                "request_payload": {"principal_tenant_id": tenant, "recovery_revision": recovery.REVISION,
+                    "svg_partial_recovery_manifest": admitted_manifest,
+                    "svg_partial_recovery_manifest_hash": manifest_hash,
+                    "svg_partial_recovery_lineage": {"manifest_hash": manifest_hash},
+                    "job_id": str(job_id), "recovery_decision": {"manifest_hash": manifest_hash,
+                        "nonce": recovery.decision_nonce(manifest_hash), "acknowledged_unknown_indices": []}}})
+            admission = SimpleNamespace(operation_id=operation_id, owner_id=owner, tenant_id=tenant,
+                state="active", fence=9, deadline_at=live_operation.deadline_at, policy_digest="current-policy",
+                estimated_cost_limit_microunits=100, actual_cost_limit_microunits=100,
+                planned_request_limit=10, retry_request_limit=5)
+            execution = deepcopy(seed["quality_recovery_execution"])
+            queries = []
+            target_fields = ("partial_recovery", "input_digest", "quality_recovery", "correction_mode", "attempts",
+                "provider_failures", "inflight", "provider_terminal_responses",
+                "provider_dispatch_stopped", "provider_diagnostics")
+
+            class KnownRepairSession:
+                async def get(self, model, identifier):
+                    assert model is PresentationGenerationJob and identifier == job_id
+                    return live_job
+
+                async def execute(self, statement):
+                    columns = list(statement.selected_columns)
+                    if statement.column_descriptions[0]["entity"] is WorkspaceOperation:
+                        assert all(column is not WorkspaceOperation.__table__.c.request_payload for column in columns)
+                        queries.append("operation_projection")
+                        values = {key: getattr(live_operation, key) for key in (
+                            *recovery._RUNTIME_OPERATION_FIELDS, "state", "cancel_requested_at")}
+                        values.update({"payload_" + key: live_operation.request_payload.get(key)
+                            for key in recovery._RUNTIME_PAYLOAD_FIELDS})
+                    else:
+                        assert statement.column_descriptions[0]["entity"] is AuthoredSlideCheckpoint
+                        assert tuple(column.name for column in columns) == target_fields
+                        params = statement.compile().params.values()
+                        assert job_id in params and 0 in params
+                        queries.append("fresh_target_fields")
+                        values = {key: deepcopy(fresh_target.get(key)) for key in target_fields}
+                    return SimpleNamespace(mappings=lambda: SimpleNamespace(one_or_none=lambda: values))
+
+                async def scalar(self, statement):
+                    entity = statement.column_descriptions[0]["entity"]
+                    if entity is PublicOperationAdmission:
+                        return admission
+                    if entity is WorkspaceOperation:
+                        queries.append("fresh_phase2_authority")
+                        return live_operation
+                    assert entity is AuthoredSlideCheckpoint and len(statement.selected_columns) == 1
+                    if statement.column_descriptions[0]["name"] == "id":
+                        queries.append("target_checkpoint_id")
+                        return uuid.uuid4()
+                    assert "quality_recovery_execution" in statement.compile().params.values()
+                    queries.append("seed_execution_only")
+                    return deepcopy(execution)
+
+            session = KnownRepairSession()
+            with monkeypatch.context() as scoped:
+                scoped.setattr(recovery, "_PREPARED_EPISODES", recovery.OrderedDict())
+                scoped.setattr("models.sql.workspace.get_workspace_owner_scope", lambda: str(owner))
+                scoped.setattr(public, "_resolved_phase2_authority", AsyncMock())
+                scoped.setattr(public, "get_current_utc_datetime", lambda: now)
+                scoped.setattr(quality_recovery, "_restore_candidate", lambda *args: deepcopy(admitted_prior))
+                recovery._remember_prepared_episode(live_operation, live_job)
+
+                async def admit(**changes):
+                    options = dict(expected_attempt_token=live_job.attempt_token, expected_fencing_token=9,
+                        slide_index=0, stage="repair", is_retry=True, quality_repair_context=admitted_ctx)
+                    options.update(changes)
+                    return await recovery.runtime_admission(session, job_id=job_id,
+                        operation_id=operation_id, **options)
+
+                assert await admit() is admission
+                assert queries.count("fresh_target_fields") == queries.count("seed_execution_only") == 1
+                assert queries.count("fresh_phase2_authority") == 1
+                for stage in ("repair_remake", "repair_patch"):
+                    assert await admit(stage=stage) is admission
+                for options in ({"stage": "author"}, {"quality_repair_context": None}, {"is_retry": False}):
+                    with pytest.raises(recovery.PartialRecoveryRejected, match="cached_provider_forbidden"):
+                        await admit(**options)
+                for violation in ("forged_target", "unfinished_gate", "binding", "no_retry_budget", "unknown", "inflight", "attempt_limit"):
+                    saved_target, saved_execution = deepcopy(fresh_target), deepcopy(execution)
+                    if violation == "forged_target":
+                        fresh_target["quality_recovery"]["decision"]["design_targets"][0]["improvementGoal"] = "Unapproved goal."
+                    elif violation == "unfinished_gate":
+                        execution["rounds"][0]["status"] = "review_unknown"
+                    elif violation == "binding":
+                        admitted_ctx.quality_recovery_runtime_binding = admitted_ctx.quality_recovery_input_binding = "forged-runtime"
+                    elif violation == "no_retry_budget":
+                        admission.retry_request_limit = 0
+                    elif violation == "unknown":
+                        fresh_target["provider_failures"] = [{"code": "public_provider_result_unknown"}]
+                    elif violation == "inflight":
+                        fresh_target["inflight"] = 2
+                    else:
+                        fresh_target["attempts"].extend([{"kind": "provider"}, {"kind": "provider"}])
+                    with pytest.raises(recovery.PartialRecoveryRejected, match="cached_provider_forbidden"):
+                        await admit()
+                    fresh_target.clear(); fresh_target.update(saved_target)
+                    execution.clear(); execution.update(saved_execution)
+                    admitted_ctx.quality_recovery_runtime_binding = admitted_ctx.quality_recovery_input_binding = runtime
+                    admission.retry_request_limit = 5
+                live_operation.owner_id = uuid.uuid4()
+                with pytest.raises(recovery.PartialRecoveryRejected, match="runtime_unbound"):
+                    await admit()
+                live_operation.owner_id = owner
+                for options in ({"expected_fencing_token": 10}, {"expected_attempt_token": "stale-attempt"}):
+                    with pytest.raises(PublicAdmissionRejected) as rejected:
+                        await admit(**options)
+                    assert rejected.value.code == "public_provider_stale_attempt"
+                assert await admit() is admission
+                assert admitted_ctx.physical_kwargs["physical_canvas"] is opaque_canvas
+            assert (source_job, source_manifest, candidate, prior, seed) == originals
+
+        asyncio.run(exercise_known_quality_runtime_admission())
         from services.generation_core.quality.vision_advisory_prompt import DESIGN_AXES
         retained_selection = {"selected": "prior", "reason": "comparison_improvement_unjudged"}
         compared_gate = deepcopy(gate)

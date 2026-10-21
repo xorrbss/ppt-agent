@@ -246,11 +246,11 @@ async def _verify_frozen_title_result(session, job, outline, plan):
     lineage = (job.request_payload or {}).get("_svg_partial_recovery") or {}
     if lineage.get("schema") == "svg-partial-recovery-lineage/v2":
         from models.sql.presentation_generation_job import PresentationGenerationJob
-        from services.svg_partial_recovery import verify_episode
+        from services.svg_partial_recovery import verify_prepared_episode
         operation = await session.get(WorkspaceOperation, job.workspace_operation_id)
         if operation is None:
             raise ValueError("svg_common_header_title_checkpoint_conflict")
-        manifest = await verify_episode(session, operation, job)
+        manifest = await verify_prepared_episode(session, operation, job)
         producer = await session.get(PresentationGenerationJob, UUID(manifest["job_id"]))
         if (producer is None or producer.authored_outline != outline.model_dump(mode="json")
                 or producer.svg_style_snapshot != job.svg_style_snapshot):
@@ -342,6 +342,7 @@ async def _pin_owned_svg_style(request, job, *, pin_style, session_maker, owned_
             outline.slides = prepared.slides
             request._svg_style_snapshot = snapshot
         return snapshot
+    frozen_title_plan = None
     async with session_maker() as checkpoint_session:
         current = await owned_job(checkpoint_session, job.id, job.attempt_token,
                                   fencing_token=getattr(job, "_workspace_fencing_token", None))
@@ -438,8 +439,7 @@ async def _pin_owned_svg_style(request, job, *, pin_style, session_maker, owned_
                         and not (current.request_payload or {}).get("_svg_partial_recovery")):
                     from services.svg_common_header_title_budget import validate_header_title_plan
 
-                    plan = validate_header_title_plan(request._svg_header_title_plan)
-                    await _verify_frozen_title_result(checkpoint_session, current, prepared, plan)
+                    frozen_title_plan = validate_header_title_plan(request._svg_header_title_plan)
                 prepare_common_header(frozen, prepared, canvas,
                     mode=getattr(request, "common_header_mode", None) or "uniform",
                     cover_exception=getattr(request, "common_header_cover_exception", False))
@@ -462,7 +462,59 @@ async def _pin_owned_svg_style(request, job, *, pin_style, session_maker, owned_
         current.svg_style_snapshot = snapshot
         checkpoint_session.add(current)
         await checkpoint_session.commit()
-        return snapshot
+    if frozen_title_plan is not None:
+        from models.sql.presentation_generation_job import PresentationGenerationJob
+
+        # Historical verification must not retain the authority CAS row locks.
+        async with session_maker() as title_session:
+            current = await title_session.get(PresentationGenerationJob, job.id)
+            if (current is None or current.workspace_operation_id != job.workspace_operation_id
+                    or current.svg_style_snapshot != snapshot
+                    or current.authored_outline != prepared.model_dump(mode="json")):
+                raise ValueError("svg_common_header_title_checkpoint_conflict")
+            await _verify_frozen_title_result(title_session, current, prepared, frozen_title_plan)
+        async with session_maker() as authority_session:
+            await owned_job(authority_session, job.id, job.attempt_token,
+                fencing_token=getattr(job, "_workspace_fencing_token", None))
+            await authority_session.commit()
+    return snapshot
+
+
+async def _verify_owned_partial_recovery(request, job, count, *, session_maker, owned_job):
+    from models.sql.presentation_generation_job import PresentationGenerationJob
+    from models.sql.workspace import WorkspaceOperation
+    from services.svg_partial_recovery import verify_prepared_episode, digest
+    from services.authored_canvas import request_canvas_metadata
+    from utils.owner_context import get_current_owner_id, get_current_tenant_id
+
+    async with session_maker() as authority_session:
+        await owned_job(authority_session, job.id, job.attempt_token,
+            fencing_token=getattr(job, "_workspace_fencing_token", None))
+        await authority_session.commit()
+    # The initial historical verification can be slow. Reload its inputs in a
+    # separate read transaction so operation heartbeats can acquire their locks.
+    async with session_maker() as recovery_session:
+        current = await recovery_session.get(PresentationGenerationJob, job.id)
+        operation = await recovery_session.get(WorkspaceOperation, job.workspace_operation_id)
+        if (current is None or operation is None
+                or current.workspace_operation_id != operation.id
+                or current.attempt_token != job.attempt_token
+                or operation.attempt_token != job.attempt_token
+                or operation.fencing_token != getattr(job, "_workspace_fencing_token", None)
+                or current.state not in {"running", "staging"}
+                or operation.state != "running" or operation.cancel_requested_at is not None):
+            raise ValueError("svg_partial_recovery_episode_unbound")
+        manifest = await verify_prepared_episode(recovery_session, operation, current)
+        if (manifest.get("owner_id") != str(get_current_owner_id())
+                or manifest.get("tenant_id") != str(get_current_tenant_id())
+                or manifest.get("expected_page_count") != count
+                or manifest.get("canvas_digest") != digest(request_canvas_metadata(request))):
+            raise ValueError("svg_partial_recovery_episode_unbound")
+    async with session_maker() as authority_session:
+        await owned_job(authority_session, job.id, job.attempt_token,
+            fencing_token=getattr(job, "_workspace_fencing_token", None))
+        await authority_session.commit()
+    return manifest
 
 
 async def _prepare_generation(request, presentation_id, outline, session, job) -> GenerationContext:
@@ -541,23 +593,8 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
         raise ValueError("svg_outline_empty")
     partial_recovery_manifest = None
     if job is not None and (getattr(job, "request_payload", None) or {}).get("_svg_partial_recovery"):
-        from models.sql.workspace import WorkspaceOperation
-        from services.svg_partial_recovery import verify_episode, digest
-        from services.authored_canvas import request_canvas_metadata
-        from utils.owner_context import get_current_owner_id, get_current_tenant_id
-
-        async with async_session_maker() as recovery_session:
-            current = await owned_job(recovery_session, job.id, job.attempt_token,
-                fencing_token=getattr(job, "_workspace_fencing_token", None))
-            operation = await recovery_session.get(WorkspaceOperation, job.workspace_operation_id)
-            if operation is None:
-                raise ValueError("svg_partial_recovery_episode_unbound")
-            partial_recovery_manifest = await verify_episode(recovery_session, operation, current)
-            if (partial_recovery_manifest.get("owner_id") != str(get_current_owner_id())
-                    or partial_recovery_manifest.get("tenant_id") != str(get_current_tenant_id())
-                    or partial_recovery_manifest.get("expected_page_count") != count
-                    or partial_recovery_manifest.get("canvas_digest") != digest(request_canvas_metadata(request))):
-                raise ValueError("svg_partial_recovery_episode_unbound")
+        partial_recovery_manifest = await _verify_owned_partial_recovery(
+            request, job, count, session_maker=async_session_maker, owned_job=owned_job)
     existing = None
     if job is not None:
         # Existing inline checkpoints must finish with their original contract.
@@ -591,10 +628,39 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
                 or bool(existing.get("source_manifest_ref")))
     if source_reflow and not canonical_assets:
         raise ValueError("svg_source_durable_assets_required")
+    source_identity_presentation_id = None
+    if partial_recovery_manifest:
+        from services.artifact_store import configured_public_artifact_service
+        from services.svg_asset_persistence import load_source_manifest_pointer
+        from services.svg_asset_manifest import ArtifactPointer
+        from services.svg_generation_assets import publication_context, _verify_inherited_source_manifest
+
+        async with async_session_maker() as asset_session:
+            current_context, _ = await publication_context(asset_session, job)
+            binding = partial_recovery_manifest["source_asset_binding"]
+            pointer = ArtifactPointer.model_validate(binding["pointer"])
+            reference = await configured_public_artifact_service().resolve_ref(asset_session,
+                artifact_id=pointer.ref, owner_id=current_context.owner_id,
+                tenant_id=current_context.tenant_id, expected_digest=pointer.sha256)
+            inherited = await load_source_manifest_pointer(asset_session, configured_public_artifact_service(),
+                pointer=binding["pointer"],
+                owner_id=current_context.owner_id, tenant_id=current_context.tenant_id)
+            if (inherited.digest != binding["digest"] or str(inherited.presentation_id) != binding["presentation_id"]
+                    or inherited.source_revision != binding["source_revision"]
+                    or str(reference.created_by_operation_id) != binding["origin_operation_id"]):
+                raise ValueError("svg_partial_recovery_asset_binding_changed")
+            await _verify_inherited_source_manifest(asset_session, inherited, binding["pointer"],
+                context=current_context, presentation_id=presentation_id, operation_id=job.workspace_operation_id)
+            await _preflight_required_source_assets(asset_session, configured_public_artifact_service(), inherited,
+                current_context)
+            if source_reflow:
+                source_identity_presentation_id = inherited.presentation_id
     source_image_registration = []
     candidates = await collect_source_image_candidates(
         request, resolve_authored_style(request.authored_style), presentation_id, session,
-        include_document_images=True, registration_report=source_image_registration)
+        include_document_images=True, registration_report=source_image_registration,
+        **({"source_identity_presentation_id": source_identity_presentation_id}
+           if source_identity_presentation_id is not None else {}))
     use_content_group_assignment = not source_preservation_required and not existing
     source_image_assignment = []
     planned = plan_slide_source_images(
@@ -624,28 +690,6 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
     _preflight_svg_input_values(canvas=canvas, physical_kwargs=physical_kwargs, snapshot=snapshot,
         source_document=source_document, source_units=source_units, outline=outline,
         roles=roles, source_font_profile=source_font_profile)
-    if partial_recovery_manifest:
-        from services.artifact_store import configured_public_artifact_service
-        from services.svg_asset_persistence import load_source_manifest_pointer
-        from services.svg_asset_manifest import ArtifactPointer
-        from services.svg_generation_assets import publication_context
-
-        async with async_session_maker() as asset_session:
-            current_context, _ = await publication_context(asset_session, job)
-            binding = partial_recovery_manifest["source_asset_binding"]
-            pointer = ArtifactPointer.model_validate(binding["pointer"])
-            reference = await configured_public_artifact_service().resolve_ref(asset_session,
-                artifact_id=pointer.ref, owner_id=current_context.owner_id,
-                tenant_id=current_context.tenant_id, expected_digest=pointer.sha256)
-            inherited = await load_source_manifest_pointer(asset_session, configured_public_artifact_service(),
-                pointer=binding["pointer"],
-                owner_id=current_context.owner_id, tenant_id=current_context.tenant_id)
-            if (inherited.digest != binding["digest"] or str(inherited.presentation_id) != binding["presentation_id"]
-                    or inherited.source_revision != binding["source_revision"]
-                    or str(reference.created_by_operation_id) != binding["origin_operation_id"]):
-                raise ValueError("svg_partial_recovery_asset_binding_changed")
-            await _preflight_required_source_assets(asset_session, configured_public_artifact_service(), inherited,
-                current_context)
     if job is not None:
         await initialize_checkpoints(job_id=job.id, attempt_token=job.attempt_token, roles=roles,
                                      fencing_token=getattr(job, "_workspace_fencing_token", None))

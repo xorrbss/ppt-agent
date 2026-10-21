@@ -93,6 +93,15 @@ SVG_NEW_COPY_AUTHOR_RULES = SVG_AUTHOR_RULES.replace(
     "source image or source image group."
 )
 
+SVG_SOURCE_PAGE_NUMBER_RULES = (
+    "Preserve every pinned source text fact literally under its specified element_id, including "
+    "original visible page numbers, footer text and section numbers. These are source content, "
+    "not newly generated system furniture; never omit or relabel them. Do not invent any "
+    "additional page number or duplicate a source footer. Never use id svg-system-page-number. "
+    "Reserve the bottom-right 64x36 area for system furniture; freely position preserved source "
+    "facts outside that reserved area without changing their text or source identity."
+)
+
 
 SVG_QUALITY_FIRST_DESIGN_RULES = """
 Design quality is required in the first whole-page SVG: establish a source-supported focal
@@ -553,7 +562,7 @@ class SvgAuthorResult:
 
 
 def svg_author_rules(style_snapshot: dict, body_floor: float, *, new_copy: bool = False,
-                     header_page: dict | None = None) -> str:
+                     header_page: dict | None = None, source_preserved: bool = False) -> str:
     canvas = style_snapshot.get("canvas") or {}
     width = int(canvas.get("width", DEFAULT_CANVAS_WIDTH_PX))
     height = int(canvas.get("height", DEFAULT_CANVAS_HEIGHT_PX))
@@ -581,7 +590,14 @@ def svg_author_rules(style_snapshot: dict, body_floor: float, *, new_copy: bool 
     quality_policy = read_quality_recovery_policy(style_snapshot)
     native_rules = (native_author_rules(source_grounded=True)
                     if quality_policy is not None and quality_policy["version"] == 2 else native_author_rules())
-    rules = ((SVG_NEW_COPY_AUTHOR_RULES if new_copy else SVG_AUTHOR_RULES)
+    author_rules = SVG_NEW_COPY_AUTHOR_RULES if new_copy else SVG_AUTHOR_RULES
+    if (source_preserved
+            and style_snapshot.get("source_authoring_contract") == {"version": "svg-source-whole-page/v1"}):
+        author_rules = author_rules.replace(
+            "Never create a page number or use id svg-system-page-number. Reserve the bottom-right 64x36 area for the system footer.",
+            SVG_SOURCE_PAGE_NUMBER_RULES,
+        )
+    rules = (author_rules
             + native_rules + f"\nBody text minimum: {body_floor:g} CSS px. "
             "Honor explicit user typography constraints.\n" + free_composition_canvas_clause(width, height)
             + reference_caveat(width, height) + spatial_rules + native_grid_rules)
@@ -942,7 +958,8 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
         }, ensure_ascii=False)
     image_count = len(images)
     image_bytes = sum(len(part.data) for part in images)
-    rules = svg_author_rules(style_snapshot, body_floor, new_copy=new_copy)
+    rules = svg_author_rules(style_snapshot, body_floor, new_copy=new_copy,
+                             source_preserved=source_preserved)
     if readability_policy is not None:
         from services.document_canvas_generation import svg_readability_rules
 

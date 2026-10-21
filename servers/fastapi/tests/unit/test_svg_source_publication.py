@@ -280,8 +280,9 @@ def test_source_publication_preserves_verified_svg_and_rejects_mutations(monkeyp
                 publishing = SimpleNamespace(flush=AsyncMock(), scalars=AsyncMock(return_value=pages),
                     add=lambda row: None, get_transaction=lambda: transaction)
 
-                async def full_source_check(session, presentation, manifest, value, current_owner, tenant):
-                    assert session is publishing and presentation is target
+                async def full_source_check(session, presentation, manifest, value, current_owner, tenant,
+                                            *, _episode_proofs):
+                    assert session is publishing and presentation is target and type(_episode_proofs) is dict
                     assert manifest.digest == source.digest and value == pointer
                     assert current_owner == owner and tenant == "tenant"
                     return all(state.values())
@@ -352,8 +353,9 @@ def test_source_publication_preserves_verified_svg_and_rejects_mutations(monkeyp
                     lease_expires_at=get_current_utc_datetime() + timedelta(minutes=5))
                 context = SimpleNamespace(claim=claim, raise_if_cancelled=AsyncMock())
 
-                async def full_source_check(session, presentation, manifest, value, current_owner, tenant):
-                    assert session is exporting and presentation is target
+                async def full_source_check(session, presentation, manifest, value, current_owner, tenant,
+                                            *, _episode_proofs):
+                    assert session is exporting and presentation is target and type(_episode_proofs) is dict
                     assert manifest.digest == source.digest and value == pointer
                     assert current_owner == owner and tenant == "tenant"
                     return state["producer_valid"]

@@ -19,7 +19,7 @@ from collections.abc import Mapping
 
 from services.generation_core.quality.advisory_record import advisory_record, content_digest, record_matches
 from services.generation_core.quality.vision_advisory_prompt import (
-    DESIGN_AXES, DESIGN_REVIEW_PROMPT_VERSION, DESIGN_PRINCIPLES_VERSION,
+    DESIGN_AXES, DESIGN_LOCAL_AXES, DESIGN_REVIEW_PROMPT_VERSION, DESIGN_PRINCIPLES_VERSION,
     baseline_review_active, baseline_design_principles_digest,
 )
 from services.generation_core.quality.page_outcome import (
@@ -224,6 +224,85 @@ def _design_context(ctx, pages, *, job, read_png, review_principles_version=None
     return context
 
 
+def _global_review_context(ctx, context, pages, local_pages, records):
+    """Narrow only the global wire scope after the existing full local gates."""
+    from xml.etree import ElementTree as ET
+    from services.svg_cached_author_render_recovery import _unknown_provider
+    from services.source_content.contracts import SourceContentManifest
+
+    representatives = sorted({group["representative"] for group in context["composition"]["groups"]})
+    result = {**context, "reviewScope": "global", "representativeIndices": representatives,
+              "examples": [], "exampleDigests": []}
+    result.pop("globalScopeRevision", None)
+    result.pop("globalWireProjectionRevision", None)
+    result.pop("localReviewSummary", None)
+    document = getattr(ctx, "source_document", None)
+    units = getattr(ctx, "source_units", None)
+    runtime = getattr(ctx, "quality_recovery_runtime_binding", None)
+    count = len(pages)
+    # _design_context already verified every full source receipt with this real
+    # document/validated unit set. A marker-only or ctx-less path stays legacy.
+    if (not getattr(ctx, "source_reflow", False) or not isinstance(document, SourceContentManifest)
+            or not isinstance(units, (list, tuple)) or len(units) != count
+            or tuple(units) != document.units
+            or not getattr(document, "manifest_digest", None)
+            or not getattr(document, "source_digest", None)
+            or not runtime or runtime != getattr(ctx, "quality_recovery_input_binding", None)
+            or context.get("runtimeBinding") != runtime
+            or len(context.get("mandatoryEvidence", [])) != count
+            or not all(context["mandatoryEvidence"])
+            or len(local_pages) != count
+            or any(index not in local_pages or local_pages[index].get("evaluated") is not True
+                   or set(local_pages[index].get("axes", {})) != set(DESIGN_LOCAL_AXES)
+                   for index in range(count))):
+        return result
+    for payload, _ in pages:
+        preservation = payload.get("source_preservation") or {}
+        if (payload.get("inflight") is not None or _unknown_provider(payload)
+                or preservation.get("manifest_digest") != document.manifest_digest
+                or preservation.get("source_digest") != document.source_digest):
+            return result
+    # request_group verified or wrote these seals against the current local
+    # inputs; unchanged local pages only arrive through the existing bound-reuse
+    # checks above this call. Preserve their actual verdicts, including failures.
+    if any(record.get("digest") != content_digest({key: value for key, value in record.items() if key != "digest"})
+           for record in records):
+        raise ValueError("svg_quality_recovery_review_group_evidence_invalid")
+
+    def svg_text(payload):
+        try:
+            root = ET.fromstring(payload["svg_content"])
+        except (ET.ParseError, KeyError, TypeError) as error:
+            raise ValueError("svg_global_review_text_unavailable") from error
+        return ["".join(node.itertext()) for node in root.iter()
+                if node.tag.rsplit("}", 1)[-1] == "text"]
+
+    result["pages"] = []
+    prior_pages = getattr(ctx, "quality_review_prior_pages", {}) or {}
+    for index, (payload, _) in enumerate(pages):
+        page = {**context["pages"][index], "renderedText": svg_text(payload),
+                "renderedSvgDigest": sha256_hex(payload["svg_content"].encode()),
+                "renderedPngDigest": payload["png_sha256"],
+                "localReview": deepcopy(local_pages[index]),
+                "localSourcePreservation": {"verified": True,
+                    "manifestDigest": document.manifest_digest, "sourceDigest": document.source_digest}}
+        if index in prior_pages:
+            page["alternativeRenderedText"] = svg_text(prior_pages[index][0])
+        result["pages"].append(page)
+    result["globalScopeRevision"] = "rendered-source-deck-flow/v2"
+    result["globalWireProjectionRevision"] = "source-relations/v3"
+    result["localReviewSummary"] = {
+        "coverageComplete": True, "pageCount": count,
+        "evaluatedPageCount": sum(page.get("evaluated") is True for page in local_pages.values()),
+        "failedAxisCount": sum(axis.get("verdict") == "failed" for page in local_pages.values()
+                               for axis in page["axes"].values()),
+        "designTargetCount": sum(len(page.get("designTargets", [])) for page in local_pages.values()),
+        "sealedGroupDigests": [record["digest"] for record in records],
+        "reusedPageIndices": [index for index, page in local_pages.items() if page.get("localEvidenceReused")],
+    }
+    return result
+
+
 def _local_review_digest(context, payload, png, index):
     quality = {key: value for key, value in (payload.get("quality") or {}).items()
                if key not in {"compositionObservation"}}
@@ -276,7 +355,11 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
     if live_producers is not None and (not baseline_review_active(context) or not final_selected):
         raise ValueError("svg_live_final_selected_review_policy_invalid")
     if evidence is not None and phase == 0 and live_producers is None:
-        from services.svg_final_selected_continuation import reusable_local_groups
+        if any(source.get("proof", {}).get("schema") == "svg-source-local-review-continuation/v1"
+               for source in [evidence, *evidence.get("additional_producers", [])]):
+            from services.svg_source_local_review_continuation import reusable_continuation_groups as reusable_local_groups
+        else:
+            from services.svg_final_selected_continuation import reusable_local_groups
         context["priorCandidates"] = {}
         reused_groups, evidence_consumers = reusable_local_groups(context, pages, renders, evidence)
     page_digests = [sha256_hex((payload.get("svg_content") or "").encode()) for payload, _ in pages]
@@ -430,9 +513,7 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
             return advisory_record(vision, page_digests)
         # This call uses the entire contact sheet and observed family
         # representatives only for global flow; fine detail remains local.
-        representatives = sorted({group["representative"] for group in context["composition"]["groups"]})
-        global_context = {**context, "reviewScope": "global", "representativeIndices": representatives,
-                          "examples": [], "exampleDigests": []}
+        global_context = _global_review_context(ctx, context, pages, local_pages, records)
         for format_attempt in range(global_retry_limit + 1):
             global_result = await request_group(len(groups) + format_attempt, list(range(len(pages))), global_context, renders)
             records.append(global_result)
@@ -440,7 +521,7 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
             if (rejected.get("skipped") != "design_review_schema_or_coverage_invalid"
                     or rejected.get("schemaRejectionReason") not in {
                         "global_review_fields", "global_finding_fields", "global_group_fields",
-                        "axis_keys", "axis_semantics", "evidence_bounds",
+                        "axis_keys", "axis_semantics", "evidence_bounds", "index_coverage",
                     }):
                 break
             if format_attempt < global_retry_limit:
@@ -548,6 +629,25 @@ def _reusable_live_local_pages(context, pages, renders, producers):
     return reused, consumers
 
 
+def _blocking_design_targets(page):
+    """Retain explicit optional advice without turning it into a repair order."""
+    targets = page.get("designTargets", [])
+    axes = page.get("axes")
+    if (not isinstance(targets, list) or page.get("evaluated") is not True or page.get("mandatoryEvidenceValid") is not True
+            or page.get("status") != "passed" or page.get("failedAxes") != []
+            or not isinstance(axes, Mapping) or set(axes) != set(DESIGN_AXES)
+            or any(not isinstance(axis, Mapping) or (axis.get("verdict"), axis.get("severity"), axis.get("repairScope"))
+                   not in (("passed", "none", "none"), ("advisory", "minor", "none"))
+                   for axis in axes.values())):
+        return targets
+    if targets and all(isinstance(target, Mapping) and isinstance(target.get("axis"), str)
+                       and target["axis"] in axes and axes[target["axis"]].get("verdict") == "advisory"
+                       for target in targets):
+        return []
+    # An actionable/unknown target keeps the entire original decision contract.
+    return targets
+
+
 def _seal_design_gate(context, pages, renders, vision):
     if baseline_review_active(context):
         baseline_design_principles_digest(context)
@@ -577,6 +677,23 @@ def _seal_design_gate(context, pages, renders, vision):
                 and context["deckComplete"] and (review.get("deckFlow") or {}).get("evaluated") is True)
     results, blocking, incomplete, advisories = [], [], [], []
     canvas = context["style"].get("canvas") or {}
+    if pages:
+        import json
+        from hashlib import sha256
+        from utils.hashing import SHA256_PREFIX
+        comparison_fixed = dict(sources=context["pages"], style=context["styleDigest"],
+            examples=context["exampleDigests"], policy=context["policy"], roles=context["roles"],
+            binding=context["binding"],
+            **({"sourceDirectives": context["sourceDirectives"]} if "sourceDirectives" in context else {}))
+        json_options = dict(sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+        # Exactly the original sorted object, split at its neighbours value.
+        # Both sides are nonempty (binding/examples, then policy/roles/sources/style).
+        # These immutable gate-local bytes encode the full sources only once.
+        comparison_prefix = json.dumps({key: value for key, value in comparison_fixed.items()
+            if key < "neighbours"}, **json_options).encode()[:-1] + b',"neighbours":'
+        comparison_suffix = b',' + json.dumps({key: value for key, value in comparison_fixed.items()
+            if key > "neighbours"}, **json_options).encode()[1:]
+        comparison_prefix_hash = sha256(comparison_prefix)
     for index, ((payload, _), png) in enumerate(zip(pages, renders, strict=True)):
         page = review_by_index.get(index) or {}
         axes = page.get("axes") or {}
@@ -599,20 +716,21 @@ def _seal_design_gate(context, pages, renders, vision):
             blocking.append(index)
         if minor:
             advisories.append(index)
+        comparison_hash = comparison_prefix_hash.copy()
+        comparison_hash.update(json.dumps([digest for i, digest in enumerate(page_digests) if i != index],
+                                         **json_options).encode())
+        comparison_hash.update(comparison_suffix)
         results.append(dict(index=index, evaluated=evaluated, status=status, axes=axes,
             failedAxes=failed_axes, issues=page.get("issues", []), resolution=resolution,
             mandatoryEvidenceValid=mandatory_valid,
             localEvidenceDigest=_local_review_digest(context, payload, png, index),
             deckContextDigest=base["deckContextDigest"],
-            comparisonContextDigest=content_digest(dict(sources=context["pages"],
-                style=context["styleDigest"], examples=context["exampleDigests"], policy=context["policy"],
-                roles=context["roles"], binding=context["binding"],
-                **({"sourceDirectives": context["sourceDirectives"]} if "sourceDirectives" in context else {}),
-                neighbours=[digest for i, digest in enumerate(page_digests) if i != index]))))
+            comparisonContextDigest=SHA256_PREFIX + comparison_hash.hexdigest()))
         if baseline_review_active(context):
-            results[-1].update(designTargets=deepcopy(page.get("designTargets", [])),
-                designImprovementStatus="unjudged" if not evaluated else
-                "needed" if page.get("designTargets") else "no_grounded_target")
+            results[-1]["designTargets"] = deepcopy(page.get("designTargets", []))
+            results[-1]["designImprovementStatus"] = ("unjudged" if not evaluated else
+                "needed" if _blocking_design_targets(results[-1]) else
+                "advisory" if page.get("designTargets") else "no_grounded_target")
     comparisons = []
     comparison_cohort = content_digest(dict(context=base["deckContextDigest"],
         priors={index: {key: value for key, value in prior.items() if key != "png"}
@@ -640,7 +758,7 @@ def _seal_design_gate(context, pages, renders, vision):
         reviewGroups=vision.get("reviewGroups", []))
     if baseline_review_active(context):
         base["designImprovementStatus"] = ("unjudged" if incomplete else
-            "needed" if any(page.get("designTargets") for page in results) else "satisfied")
+            "needed" if any(_blocking_design_targets(page) for page in results) else "satisfied")
     if vision.get("localEvidenceConsumers"):
         base["localEvidenceConsumers"] = deepcopy(vision["localEvidenceConsumers"])
     if vision.get("reviewNamespace"):
@@ -703,7 +821,7 @@ def quality_recovery_decisions(ctx, pages, advisory):
         if page.get("evaluated") is not True:
             continue
         failed = [axis for axis in page["axes"].values() if axis.get("verdict") == "failed"]
-        targets = page.get("designTargets", []) if (gate.get("policy") or {}).get("version") == 2 else []
+        targets = _blocking_design_targets(page) if (gate.get("policy") or {}).get("version") == 2 else []
         if not failed and not targets:
             continue
         scope = "design_rewrite" if targets or any(axis["repairScope"] == "design_rewrite" for axis in failed) else "local_repair"
@@ -777,7 +895,7 @@ def compare_quality_recovery_candidates(ctx, prior, new, prior_advisory, new_adv
             or new_gate["pngDigests"][index] != new.get("png_sha256")):
         return reject("comparison_render_stale")
     baseline_policy = (new_gate.get("policy") or {}).get("version") == 2
-    goals = old_page.get("designTargets", []) if baseline_policy else []
+    goals = _blocking_design_targets(old_page) if baseline_policy else []
     target_axes = list(dict.fromkeys([*(old_page.get("failedAxes") or []), *[goal["axis"] for goal in goals]]))
     if not target_axes:
         return reject("no_targeted_defect")

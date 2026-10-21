@@ -49,6 +49,7 @@ def compose_contact_sheet_sync(
     max_width: int = SHEET_MAX_WIDTH_PX,
     max_height: int = SHEET_MAX_HEIGHT_PX,
     quality: int = SHEET_JPEG_QUALITY,
+    start_index: int = 0,
 ) -> bytes | None:
     """Draw one JPEG grid of every render, or ``None`` when there is nothing to draw.
 
@@ -87,7 +88,7 @@ def compose_contact_sheet_sync(
     for position, frame in enumerate(frames):
         left = (position % columns) * thumb_width
         top = (position // columns) * row_height
-        draw.text((left + 4, top + 2), str(position + 1), fill="black", font=font)
+        draw.text((left + 4, top + 2), str(start_index + position + 1), fill="black", font=font)
         height = max(1, int(round(thumb_width * frame.height / max(1, frame.width))))
         sheet.paste(
             frame.resize((thumb_width, height)), (left, top + SHEET_LABEL_HEIGHT_PX)
@@ -123,6 +124,33 @@ async def compose_contact_sheet(pngs: Sequence[bytes]) -> bytes | None:
     return await asyncio.to_thread(compose_contact_sheet_sync, pngs)
 
 
+def compose_global_page_panels_sync(pngs: Sequence[bytes]) -> list[dict]:
+    """Keep every global page at >=640 px width with its actual deck label."""
+    from PIL import Image
+
+    if not pngs or any(not isinstance(data, (bytes, bytearray)) or not data for data in pngs):
+        raise ValueError("global_page_panel_unavailable")
+    panels, start = [], 0
+    while start < len(pngs):
+        count = min(8, len(pngs) - start)
+        while True:
+            data = compose_contact_sheet_sync(pngs[start:start + count], columns=2,
+                max_width=1280, max_height=2048, start_index=start)
+            width = 0
+            if data and len(data) <= SHEET_MAX_BYTES:
+                with Image.open(io.BytesIO(data)) as image:
+                    width = image.width // min(2, count)
+            if width >= 640:
+                panels.append(dict(pageIndices=list(range(start, start + count)),
+                    thumbnailWidthPx=width, data=data))
+                start += count
+                break
+            if count == 1:
+                raise ValueError("global_page_panel_unavailable")
+            count = max(1, count // 2)
+    return panels
+
+
 __all__ = [
     "SHEET_COLUMNS",
     "SHEET_JPEG_QUALITY",
@@ -132,4 +160,5 @@ __all__ = [
     "SHEET_MAX_WIDTH_PX",
     "compose_contact_sheet",
     "compose_contact_sheet_sync",
+    "compose_global_page_panels_sync",
 ]

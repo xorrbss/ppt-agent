@@ -166,7 +166,24 @@ def _interval(bounds: list[float], value: float) -> int | None:
     return None
 
 
-def _place(texts, xs, ys, cells, spans=None) -> dict[tuple[int, int], DrawnText]:
+def _wrapped_cell_matches(declared: str, lines) -> bool:
+    """A single-paragraph cell drawn over several lines: the lines must spell the declared
+    text exactly, with at most one space dropped at each line break (a wrap between words
+    drops it; a mid-word wrap, common in Korean, has none)."""
+    if len(lines) < 2 or chr(10) in declared:
+        return False
+    position = 0
+    for index, line in enumerate(lines):
+        line = normalize_cell(line)
+        if not line or not declared.startswith(line, position):
+            return False
+        position += len(line)
+        if index < len(lines) - 1 and declared.startswith(" ", position):
+            position += 1
+    return position == len(declared)
+
+
+def _place(texts, xs, ys, cells, spans=None, blocks=None) -> dict[tuple[int, int], DrawnText]:
     placed: dict[tuple[int, int], DrawnText] = {}
     for text in texts:
         x, y = text.points[0]
@@ -177,9 +194,17 @@ def _place(texts, xs, ys, cells, spans=None) -> dict[tuple[int, int], DrawnText]
                 if span_row == row and start <= column < start + width:
                     column = start
                     break
+            # A cell merged over several rows keeps its text in the origin cell, but the
+            # source may vertically centre the drawn text inside any covered row.
+            for (origin_row, origin_column), (row_span, column_span) in (blocks or {}).items():
+                if (origin_row <= row < origin_row + row_span
+                        and origin_column <= column < origin_column + column_span):
+                    row, column = origin_row, origin_column
+                    break
         if column is None or row is None or (row, column) in placed:
             raise NativeRejection("native_table_cell_position_mismatch")
-        if normalize_cell(cells[row][column]) != text.text:
+        declared = normalize_cell(cells[row][column])
+        if declared != text.text and not _wrapped_cell_matches(declared, text.lines):
             raise NativeRejection("native_table_cell_position_mismatch")
         placed[(row, column)] = text
     return placed
@@ -291,11 +316,14 @@ def apply_drawn_table_style(projected: dict, item, root) -> None:
     xs, ys = _grid(prims, frame, len(cells), len(cells[0]))
     spans = {(merge["row"], merge["column"]): merge["columnSpan"]
              for merge in item.payload.get("mergedCells", []) if merge["rowSpan"] == 1}
-    placed = _place(prims.texts, xs, ys, cells, spans)
+    blocks = {(merge["row"], merge["column"]): (merge["rowSpan"], merge["columnSpan"])
+              for merge in item.payload.get("mergedCells", []) if merge["rowSpan"] > 1}
+    placed = _place(prims.texts, xs, ys, cells, spans, blocks)
     for (row, column), text in placed.items():
         cell = projected["rows"][row][column]
+        bottom_row = min(row + blocks.get((row, column), (1, 1))[0], len(ys) - 1)
         geometry = (None if any(edge in cell.get("padding", {}) for edge in ("top", "bottom"))
-                    else _paragraph_geometry(text, ys[row], ys[row + 1]))
+                    else _paragraph_geometry(text, ys[row], ys[bottom_row]))
         if not text.run_lines or (text.uniform and geometry is None):
             continue
         paragraphs = []

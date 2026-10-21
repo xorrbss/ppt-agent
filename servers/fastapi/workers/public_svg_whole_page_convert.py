@@ -89,21 +89,165 @@ def _apply_source_grid_width(chart, claim, *, slide_width_emu, canvas_width_px):
     expected.update(expectedNativeWidthEmu=width_emu, expectedNativeWidthPt=width_emu / 12700)
 
 
-def _embed_verified_whole_page_fonts(target):
+def _project_trusted_symbol_runs(deck, source_originals, receipts):
+    """Map the measured canonical fallback plan to editable text and table runs."""
+    from copy import deepcopy
+    from lxml import etree
+    from utils.svg_template_fonts import (
+        FONT_FAMILY as NOTO, materialize_template_fallbacks, trusted_font_fallback_plan,
+    )
+    from services.svg_trusted_fonts import FONT_FAMILY as PRETENDARD
+
+    measured = set()
+    for source, receipt in zip(source_originals, receipts, strict=True):
+        _, proof = materialize_template_fallbacks(source)
+        recorded = receipt.get("render_font_fallback")
+        if proof != recorded or proof is not None and receipt.get("rendering_verified") is not True:
+            raise ValueError("svg_source_export_font_measurement_unbound")
+        if proof is not None:
+            measured.add(proof["fallback_font_digest"])
+    a = "http://schemas.openxmlformats.org/drawingml/2006/main"
+    usage, runs = {}, []
+    for part in deck.part.package.iter_parts():
+        name = str(part.partname)
+        if not (name.startswith("/ppt/slides/slide") or name.startswith("/ppt/charts/chart")):
+            continue
+        root = getattr(part, "_element", None)
+        if root is None:
+            continue
+        if name.startswith("/ppt/charts/chart"):
+            for value in root.iter(f"{{{_CHART_NS}}}v"):
+                if value.text and trusted_font_fallback_plan(value.text, NOTO, 400)["fallback_font_digest"] is not None:
+                    raise ValueError("svg_source_export_dynamic_symbol_font_unproven")
+        before_text = [node.text or "" for node in root.iter(f"{{{a}}}t")]
+        for ordinal, run in enumerate(list(root.iter(f"{{{a}}}r"))):
+            text = run.find(f"{{{a}}}t")
+            if text is None or not text.text:
+                continue
+            properties = run.find(f"{{{a}}}rPr")
+            latin = None if properties is None else properties.find(f"{{{a}}}latin")
+            if latin is None:
+                raise ValueError("svg_source_export_font_run_unproven")
+            family = latin.get("typeface")
+            weight = 700 if properties.get("b") in {"1", "true"} else 400
+            if family == PRETENDARD:
+                usage.setdefault(family, set()).add(weight)
+                continue
+            if family != NOTO:
+                raise ValueError("svg_source_export_font_family_unproven")
+            plan = trusted_font_fallback_plan(text.text, family, weight)
+            segments = plan["segments"]
+            if plan["fallback_font_digest"] is None:
+                usage.setdefault(family, set()).add(weight)
+                continue
+            if plan["fallback_font_digest"] not in measured:
+                raise ValueError("svg_source_export_font_measurement_unbound")
+            parent, position = run.getparent(), run.getparent().index(run)
+            for offset, segment in enumerate(segments):
+                projected = deepcopy(run)
+                projected_text = projected.find(f"{{{a}}}t")
+                projected_text.text = segment["text"]
+                if segment["text"][:1].isspace() or segment["text"][-1:].isspace():
+                    projected_text.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+                projected.tail = run.tail if offset == len(segments) - 1 else None
+                projected_properties = projected.find(f"{{{a}}}rPr")
+                if segment["family"] != family:
+                    for tag in ("latin", "ea", "cs"):
+                        font = projected_properties.find(f"{{{a}}}{tag}")
+                        if font is None:
+                            font = etree.Element(f"{{{a}}}{tag}")
+                            following = {"sym", "hlinkClick", "hlinkMouseOver", "rtl", "extLst"}
+                            if tag == "ea":
+                                following.add("cs")
+                            position_ = next((i for i, child in enumerate(projected_properties)
+                                if child.tag.rsplit("}", 1)[-1] in following), len(projected_properties))
+                            projected_properties.insert(position_, font)
+                        font.set("typeface", segment["family"])
+                parent.insert(position + offset, projected)
+                usage.setdefault(segment["family"], set()).add(weight)
+            parent.remove(run)
+            runs.append({"part": name, "run_index": ordinal,
+                "text_digest": "sha256:" + hashlib.sha256(text.text.encode()).hexdigest(),
+                "segments": [{key: segment[key] for key in (
+                    "start", "end", "family", "weight", "face_weight", "font_digest", "synthetic_bold")}
+                    for segment in segments]})
+        if "".join(before_text) != "".join(node.text or "" for node in root.iter(f"{{{a}}}t")):
+            raise ValueError("svg_source_export_font_text_changed")
+        # Native chart fonts are definitions rather than individual text runs.
+        for definition in root.iter(f"{{{a}}}defRPr"):
+            latin = definition.find(f"{{{a}}}latin")
+            if latin is not None and latin.get("typeface") in {NOTO, PRETENDARD}:
+                usage.setdefault(latin.get("typeface"), set()).add(
+                    700 if definition.get("b") in {"1", "true"} else 400)
+    return usage, {"schemaVersion": "svg-source-pptx-font-fallback/v1", "runs": runs,
+        "measuredFontDigests": sorted(measured)}
+
+
+def _verify_trusted_symbol_runs(target, expected_usage, proof):
+    import zipfile
+    from xml.etree import ElementTree as ET
+    from utils.svg_template_fonts import FONT_FAMILY as NOTO, trusted_font_fallback_plan
+    from services.svg_trusted_fonts import FONT_FAMILY as PRETENDARD
+
+    a = "http://schemas.openxmlformats.org/drawingml/2006/main"
+    actual, fallback_count = {}, 0
+    measured = set(proof["measuredFontDigests"])
+    with zipfile.ZipFile(target) as archive:
+        for name in archive.namelist():
+            if not (re.fullmatch(r"ppt/slides/slide[0-9]+\.xml", name)
+                    or re.fullmatch(r"ppt/charts/chart[0-9]+\.xml", name)):
+                continue
+            root = ET.fromstring(archive.read(name))
+            for run in root.iter(f"{{{a}}}r"):
+                text = run.find(f"{{{a}}}t")
+                if text is None or not text.text:
+                    continue
+                properties = run.find(f"{{{a}}}rPr")
+                latin = None if properties is None else properties.find(f"{{{a}}}latin")
+                if latin is None:
+                    raise ValueError("svg_source_export_font_run_unproven")
+                family = latin.get("typeface")
+                weight = 700 if properties.get("b") in {"1", "true"} else 400
+                if family != PRETENDARD:
+                    plan = trusted_font_fallback_plan(text.text, NOTO, weight)
+                    if {segment["family"] for segment in plan["segments"]} != {family}:
+                        raise ValueError("svg_source_export_font_run_mismatch")
+                    if family != NOTO:
+                        if plan["fallback_font_digest"] not in measured:
+                            raise ValueError("svg_source_export_font_measurement_unbound")
+                        if any((node := properties.find(f"{{{a}}}{tag}")) is None
+                                or node.get("typeface") != family for tag in ("ea", "cs")):
+                            raise ValueError("svg_source_export_font_run_mismatch")
+                        fallback_count += 1
+                actual.setdefault(family, set()).add(weight)
+            for definition in root.iter(f"{{{a}}}defRPr"):
+                latin = definition.find(f"{{{a}}}latin")
+                if latin is not None and latin.get("typeface") in {NOTO, PRETENDARD}:
+                    actual.setdefault(latin.get("typeface"), set()).add(
+                        700 if definition.get("b") in {"1", "true"} else 400)
+    expected_count = sum(segment["family"] != NOTO for run in proof["runs"] for segment in run["segments"])
+    if actual != expected_usage or fallback_count != expected_count:
+        raise ValueError("svg_source_export_font_run_coverage_mismatch")
+    return {**proof, "ooxmlVerified": True, "fallbackRunCount": fallback_count,
+        "usedFonts": {family: sorted(weights) for family, weights in sorted(actual.items())}}
+
+
+def _embed_verified_whole_page_fonts(target, font_usage=None):
     """Embed licensed trusted faces after the last save and bind final package bytes."""
     import zipfile
     from xml.etree import ElementTree as ET
-    from services.svg_pptx_font_embedding import embed_trusted_fonts, FONT_CONTENT_TYPE, FONT_RELATIONSHIP_TYPE
-    from services.svg_trusted_fonts import FONT_FAMILY, read_trusted_pretendard_faces
+    from services.svg_pptx_font_embedding import (
+        embed_trusted_fonts, trusted_export_font_faces, FONT_CONTENT_TYPE, FONT_RELATIONSHIP_TYPE,
+    )
 
-    faces = read_trusted_pretendard_faces()
+    faces = trusted_export_font_faces(font_usage)
     with zipfile.ZipFile(target) as archive:
         names = archive.namelist()
         if len(names) != len(set(names)):
             raise ValueError("svg_source_export_font_duplicate_part")
         before = {name: archive.read(name) for name in names}
-    digests = embed_trusted_fonts(target)
-    if tuple(digest for _, digest, _ in faces) != digests:
+    digests = embed_trusted_fonts(target, font_usage=font_usage)
+    if tuple(digest for _, _, digest, _ in faces) != digests:
         raise ValueError("svg_source_export_font_identity_mismatch")
     with zipfile.ZipFile(target) as archive:
         if archive.testzip() is not None:
@@ -125,10 +269,13 @@ def _embed_verified_whole_page_fonts(target):
         raise ValueError("svg_source_export_font_list_invalid")
     fonts = lists[0].findall(f"{{{p}}}embeddedFont")
     children = list(presentation)
-    if (len(fonts) != 1 or children.index(lists[0]) == 0
+    expected_families = {family for family, _, _, _ in faces}
+    by_family = {font.find(f"{{{p}}}font").get("typeface"): font for font in fonts
+        if font.find(f"{{{p}}}font") is not None}
+    if (len(fonts) != len(expected_families) or set(by_family) != expected_families
+            or children.index(lists[0]) == 0
             or children[children.index(lists[0]) - 1].tag != f"{{{p}}}notesSz"
-            or fonts[0].find(f"{{{p}}}font") is None
-            or fonts[0].find(f"{{{p}}}font").get("typeface") != FONT_FAMILY):
+            or len(by_family) != len(fonts)):
         raise ValueError("svg_source_export_font_list_invalid")
     rels = ET.fromstring(after["ppt/_rels/presentation.xml.rels"])
     relationships = rels.findall(f"{{{rels_ns}}}Relationship")
@@ -136,8 +283,8 @@ def _embed_verified_whole_page_fonts(target):
     if len(font_relationships) != len(faces):
         raise ValueError("svg_source_export_font_relationship_invalid")
     parts = set()
-    for weight, digest, payload in faces:
-        slot = fonts[0].find(f"{{{p}}}" + {400: "regular", 700: "bold"}[weight])
+    for family, role, digest, payload in faces:
+        slot = by_family[family].find(f"{{{p}}}{role}")
         candidates = [item for item in relationships if slot is not None and item.get("Id") == slot.get(f"{{{r}}}id")]
         if len(candidates) != 1 or candidates[0].get("Type") != FONT_RELATIONSHIP_TYPE or candidates[0].get("TargetMode") is not None:
             raise ValueError("svg_source_export_font_relationship_invalid")
@@ -150,8 +297,14 @@ def _embed_verified_whole_page_fonts(target):
     defaults = ET.fromstring(after["[Content_Types].xml"]).findall(f"{{{ct}}}Default")
     if [item.get("ContentType") for item in defaults if item.get("Extension") == "fntdata"] != [FONT_CONTENT_TYPE]:
         raise ValueError("svg_source_export_font_content_type_invalid")
-    return {"embedded": True, "family": FONT_FAMILY, "faceDigests": list(digests),
+    return {"embedded": True, "families": sorted(expected_families), "faceDigests": list(digests),
+            "faces": [{"family": family, "slot": role, "digest": digest} for family, role, digest, _ in faces],
             "ooxmlVerified": True, "sourcePartsPreserved": True}
+
+
+def _normalize_line(value):
+    from services.generation_core.drivers.svg.native_geometry import normalize_text
+    return normalize_text(value)
 
 
 class NativeOoxmlCapture:
@@ -544,7 +697,7 @@ def convert_whole_page_pptx(paths, target, notes, canvas, *, receipts,
                     raise ValueError("svg_source_export_fragment_conversion_invalid")
                 if (abs(float(element.get("x")) - source["x"]) > 1e-6
                         or abs(float(element.get("y")) - source["y"]) > 1e-6
-                        or hashlib.sha256((element.text or "").strip().encode("utf-8")).hexdigest()
+                        or hashlib.sha256(_normalize_line(element.text or "").encode("utf-8")).hexdigest()
                            != source["textDigest"]):
                     raise ValueError("svg_source_export_fragment_projection_invalid")
                 shape_name = fragment_shape_name(*key)
@@ -607,7 +760,9 @@ def convert_whole_page_pptx(paths, target, notes, canvas, *, receipts,
             if len(candidates) != 1:
                 raise ValueError("svg_source_export_fragment_line_ambiguous")
             key, item = candidates[0]
-            if hashlib.sha256((result.text or "").strip().encode("utf-8")).hexdigest() != item["textDigest"]:
+            # The recorded digest covers the whitespace-normalized source line.
+            from services.generation_core.drivers.svg.native_geometry import normalize_text
+            if hashlib.sha256(normalize_text(result.text or "").encode("utf-8")).hexdigest() != item["textDigest"]:
                 raise ValueError("svg_source_export_fragment_line_text_invalid")
             result.set("data-pptx-source-fragment-binding-id", source_id)
             result.set("data-pptx-source-fragment-page-index", page)
@@ -660,9 +815,11 @@ def convert_whole_page_pptx(paths, target, notes, canvas, *, receipts,
                 _bind_chart_sources(chart, claim)
                 _apply_source_grid_width(chart, claim, slide_width_emu=deck.slide_width,
                                          canvas_width_px=canvas.width_px)
+        font_usage, font_fallback = _project_trusted_symbol_runs(deck, source_originals, receipts)
         deck.save(str(target))
         if font_embedding:
-            readback["fontEmbedding"] = _embed_verified_whole_page_fonts(target)
+            readback["fontEmbedding"] = _embed_verified_whole_page_fonts(target, font_usage)
+        readback["fontFallback"] = _verify_trusted_symbol_runs(target, font_usage, font_fallback)
         if readback.get("commonHeaderReadback", {}).get("schemaVersion") == "svg-common-header-ooxml/v2":
             from workers.svg_common_header_export_v2 import verify_final_common_header_readback
             readback["commonHeaderReadback"] = verify_final_common_header_readback(

@@ -102,6 +102,7 @@ _SVG_TYPESETTING = {
     "alignment-baseline", "font-size", "font-family", "font-weight",
     "font-style", "letter-spacing", "word-spacing", "textlength",
     "lengthadjust", "writing-mode",
+    "xml:space",
 }
 
 

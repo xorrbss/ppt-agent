@@ -169,11 +169,14 @@ class _PublicationSourceVerification:
     def __init__(self, session, presentation):
         self.session, self.presentation = session, presentation
         self.transaction = None
+        # Successful proofs only, for this one preparation; never a process-wide cache.
         self.sources = {}
+        self.verify_calls = 0
 
     async def verify(self, session, presentation, source, pointer, owner, tenant):
         from utils.hashing import canonical_json_sha256
 
+        self.verify_calls += 1
         transaction = session.get_transaction()
         if (session is not self.session or presentation is not self.presentation
                 or transaction is None
@@ -183,22 +186,30 @@ class _PublicationSourceVerification:
         key = (str(presentation.id), presentation.revision, str(owner), str(tenant),
                str(source.presentation_id), source.digest, canonical_json_sha256(pointer))
         if key not in self.sources:
+            # This source's owned historical proof, held only for revalidate().
+            proofs = {}
             if not await _verified_inherited_slide_source(
-                    session, presentation, source, pointer, owner, tenant):
+                    session, presentation, source, pointer, owner, tenant, _episode_proofs=proofs):
                 return False
-            self.sources[key] = (deepcopy(source), deepcopy(pointer), owner, tenant)
+            self.sources[key] = (deepcopy(source), deepcopy(pointer), owner, tenant, proofs)
         return True
 
     async def revalidate(self):
         from utils.owner_context import get_current_owner_id, get_current_tenant_id
 
-        for key, (source, pointer, owner, tenant) in self.sources.items():
+        for key, (source, pointer, owner, tenant, proofs) in self.sources.items():
+            # Every outside binding reruns; the lineage proof is re-fenced, not re-derived.
             if (self.session.get_transaction() is not self.transaction
                     or key[:4] != (str(self.presentation.id), self.presentation.revision,
                         str(get_current_owner_id()), str(get_current_tenant_id()))
                     or not await _verified_inherited_slide_source(
-                        self.session, self.presentation, source, pointer, owner, tenant)):
+                        self.session, self.presentation, source, pointer, owner, tenant,
+                        _episode_proofs=proofs)):
                 raise ValueError("svg_asset_revision_binding_invalid")
+        if self.sources:
+            logging.getLogger(__name__).info(
+                "SVG inherited source revalidated: verify_calls=%s distinct_sources=%s",
+                self.verify_calls, len(self.sources))
 
 
 async def refresh_svg_page_numbers(session, presentation, *, operation_id=None, attempt_token=None,
@@ -396,7 +407,8 @@ async def rebind_svg_assets(session, presentation, slide, svg, assets, *, page_i
         slideRevision=revision), materialized
 
 
-async def _verified_inherited_slide_source(session, presentation, source, pointer, owner, tenant):
+async def _verified_inherited_slide_source(session, presentation, source, pointer, owner, tenant, *,
+                                           _episode_proofs=None):
     """Only a fenced durable recovery job may read its exact immutable ancestor source."""
     from datetime import datetime, timezone
     from types import SimpleNamespace
@@ -451,7 +463,9 @@ async def _verified_inherited_slide_source(session, presentation, source, pointe
         return False
     try:
         await _verify_inherited_source_manifest(session, source, pointer, context=SimpleNamespace(owner_id=owner, tenant_id=tenant),
-                                                presentation_id=presentation.id, operation_id=operation.id)
+                                                presentation_id=presentation.id, operation_id=operation.id,
+                                                **({"_episode_proofs": _episode_proofs}
+                                                   if _episode_proofs is not None else {}))
     except (ValueError, TimeoutRepurchaseRejected):
         return False
     return True
