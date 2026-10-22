@@ -1,7 +1,12 @@
 import { useTranslations } from "next-intl";
 import { isRecord } from "@/lib/guards";
 
-const statusKeys: Record<string, string> = {
+type StatusKey =
+  | "svgStatusAvailable" | "svgStatusUnavailable" | "svgStatusPassed" | "svgStatusFailed"
+  | "svgStatusStale" | "svgStatusUnmeasured" | "svgStatusCurrent" | "svgStatusPartial"
+  | "svgStatusFlagged" | "svgStatusClear";
+
+const statusKeys: Record<string, StatusKey> = {
   available: "svgStatusAvailable", unavailable: "svgStatusUnavailable",
   passed: "svgStatusPassed", failed: "svgStatusFailed", stale: "svgStatusStale",
   unmeasured: "svgStatusUnmeasured", current: "svgStatusCurrent",
