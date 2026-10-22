@@ -211,39 +211,6 @@ class DerivativeRecipe(Metadata):
         return self
 
 
-def derivative_identity(*, tenant_id: str, owner_id: uuid.UUID,
-                        source_appearance_sha256: str, recipe: DerivativeRecipe) -> tuple[str, str, str, str]:
-    from models.sql.public_artifact import normalize_sha256
-    if not tenant_id.strip():
-        raise ValueError("svg_asset_tenant_required")
-    return tenant_id, str(owner_id), normalize_sha256(source_appearance_sha256), canonical_digest(recipe)
-
-
-def page_image_checkpoint(*, manifest: SourceManifest, manifest_ref: uuid.UUID,
-                          page_index: int, used_slot_ids: tuple[str, ...]) -> dict:
-    """Persist references only, without source bytes or model derivative copies."""
-    page = next((page for page in manifest.offered_pages if page.page_index == page_index), None)
-    if page is None or not set(used_slot_ids).issubset(page.slot_ids):
-        raise ValueError("svg_asset_checkpoint_slot_not_offered")
-    if len(set(used_slot_ids)) != len(used_slot_ids):
-        raise ValueError("svg_asset_checkpoint_duplicate_slot")
-    return {"sourceManifestRef": str(manifest_ref), "sourceManifestDigest": manifest.digest,
-            "offeredSlotIds": list(page.slot_ids), "usedSlotIds": list(used_slot_ids)}
-
-
-def unused_slot_outcome(slot: SourceSlot) -> dict:
-    """A missing reason is reported honestly, never inferred from image class."""
-    return {
-        "slotId": slot.slot_id,
-        "reason": "not_selected" if slot.policy.kind == "not_selected" else "not_used_by_model",
-        "requiredMissing": slot.policy.required or not slot.policy.allow_omit,
-        "reviewRequired": slot.policy.kind != "not_selected" and (
-            slot.policy.required or slot.referenced_by_body or slot.importance_uncertain
-            or slot.preservation_class == "critical"
-        ),
-    }
-
-
 class SvgPlacement(Metadata):
     slot_id: str = Field(pattern=r"^source-slot-[A-Za-z0-9_-]+$")
     occurrence_id: uuid.UUID
