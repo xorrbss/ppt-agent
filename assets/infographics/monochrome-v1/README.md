@@ -4,4 +4,4 @@ Open catalogue.html for Korean/English tag search. Insert an originals/*.svg mas
 Ink is a single replaceable #000000 value. Select a theme ink when inserting; do not recolor or overwrite shared masters.
 Manifest metadata records dimensions, checksums, bilingual tags, alt text, source symbols and provenance.
 Vector geometry comes from the locally installed Lucide library with original arrangements and several custom shapes. Retain LICENSE-lucide.txt when redistributing the library.
-Earlier PNG and color SVG prototypes remain separately preserved under premium-minimal-v1 and are not included in this 300-SVG count.
+Earlier PNG and color SVG prototypes (premium-minimal-v1) were removed and are not part of this 300-SVG count.
