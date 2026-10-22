@@ -24,7 +24,10 @@ advisory (its pages are pinned to an approved analysis, not composed).
 
 from __future__ import annotations
 
+import asyncio
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
+import heapq
 
 from services.generation_core.quality.terminal_policy import (
     TerminalPolicy,
@@ -105,4 +108,75 @@ def resolve_svg_runtime_profile(
     )
 
 
-__all__ = ["GenerationRuntimeProfile", "resolve_svg_runtime_profile"]
+class ProviderPermits:
+    """Provider-call permits of one deck attempt; waiting repairs go first.
+
+    A page keeps the deck's in-flight page permit (``ctx.semaphore``) for its
+    whole life and holds one of these only around its author attempt, so a
+    page renders, measures and persists while another authors, and no more
+    author attempts run at once than the configured author concurrency.
+    Waiters are admitted repairs first, then in arrival order. A task that
+    already holds a permit re-enters without taking another, so a nested
+    acquisition can never wait on itself. A permit handed to a waiter that is
+    cancelled before it resumes is passed on, never lost.
+    """
+
+    def __init__(self, capacity: int) -> None:
+        if isinstance(capacity, bool) or not isinstance(capacity, int) or capacity < 1:
+            raise ValueError("svg_provider_permit_capacity_invalid")
+        self.capacity = capacity
+        self._in_use = 0
+        self._sequence = 0
+        self._waiters: list[tuple[int, int, asyncio.Future]] = []
+        self._depth: dict[asyncio.Task, int] = {}
+
+    @property
+    def in_use(self) -> int:
+        return self._in_use
+
+    def _hand_off(self) -> None:
+        while self._waiters:
+            _, _, waiter = heapq.heappop(self._waiters)
+            if not waiter.done():
+                waiter.set_result(None)
+                return
+        self._in_use -= 1
+
+    async def _acquire(self, repair: bool) -> None:
+        if self._in_use < self.capacity and not any(not w.done() for _, _, w in self._waiters):
+            self._in_use += 1
+            return
+        waiter = asyncio.get_running_loop().create_future()
+        heapq.heappush(self._waiters, (0 if repair else 1, self._sequence, waiter))
+        self._sequence += 1
+        try:
+            await waiter
+        except BaseException:
+            if waiter.done() and not waiter.cancelled():
+                self._hand_off()
+            else:
+                waiter.cancel()
+            raise
+
+    @asynccontextmanager
+    async def slot(self, *, repair: bool):
+        task = asyncio.current_task()
+        if task is not None and task in self._depth:
+            self._depth[task] += 1
+            try:
+                yield
+            finally:
+                self._depth[task] -= 1
+            return
+        await self._acquire(repair)
+        if task is not None:
+            self._depth[task] = 1
+        try:
+            yield
+        finally:
+            if task is not None:
+                self._depth.pop(task, None)
+            self._hand_off()
+
+
+__all__ = ["GenerationRuntimeProfile", "ProviderPermits", "resolve_svg_runtime_profile"]

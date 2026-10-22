@@ -356,6 +356,25 @@ def _authored_vnext_generation_http_exception(
     return exception
 
 
+def _generic_generation_failure_payload(
+    error: BaseException,
+    safe_exception: HTTPException,
+    *,
+    request_id: str | None,
+) -> dict:
+    """Status error of a generic generation failure, classified by ``safe_exception``.
+
+    A failure that propagated after a page's exhausted-page evidence could not
+    be written carries a private mark; it only denies the automatic retry.
+    """
+    from services.public_generation_worker_lifecycle import exhausted_evidence_unrecorded
+
+    return APIErrorModel.from_exception(
+        safe_exception, request_id=request_id,
+        retryable=False if exhausted_evidence_unrecorded(error) else None,
+    ).model_dump(mode="json")
+
+
 def _durable_generation_control_http_exception(
     error: BaseException,
 ) -> HTTPException | None:
@@ -1393,9 +1412,9 @@ async def generate_presentation_handler(
                 safe_exception = HTTPException(
                     status_code=500, detail="Presentation generation failed"
                 )
-            api_error_payload = APIErrorModel.from_exception(
-                safe_exception, request_id=request._request_id
-            ).model_dump(mode="json")
+            api_error_payload = _generic_generation_failure_payload(
+                e, safe_exception, request_id=request._request_id
+            )
         else:
             safe_exception = e
             api_error_payload = APIErrorModel.from_exception(

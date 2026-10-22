@@ -650,6 +650,13 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
             }, ensure_ascii=False, separators=(",", ":"))
     from services.generation_core.drivers.svg.embed_assets import apply_vector_icon_quality
     apply_vector_icon_quality(rendered.quality, payload)
+    from services.svg_presentation_checkpoint import compact_browser_metrics, with_browser_metrics
+    # Persist the measured metrics once; checkpoint and publication carry the
+    # bound reference, and the readers below see the exact inline view.
+    measured_metrics = compact_browser_metrics(rendered.quality)
+
+    def measured():
+        return with_browser_metrics(rendered.quality, measured_metrics)
     payload["attempts"][-1]["quality"] = rendered.quality
     if payload.get("fontAdvisories"):
         rendered.quality.setdefault("advisories", []).extend(payload["fontAdvisories"])
@@ -668,7 +675,7 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
             local = {"status": "page_recomposition_required", "reason": "native_data_requires_recomposition",
                      "provider_call_authorized": False}
         else:
-            local = minimal_svg_readability_repair(final, rendered.quality)
+            local = minimal_svg_readability_repair(final, measured())
         candidate = local.pop("svg", None)
         payload["local_readability_repair"] = local
         if candidate is not None:
@@ -690,15 +697,15 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
             return result
     if (rendered.quality.get("passed") is False and not payload.get("repair_unavailable")
             and (ordinal == 0 or ordinal == 1 and source_structural_visual_retry(ctx, payload, index=index))):
-        header_body_hint = _common_header_body_repair_hint(rendered.quality, ctx.snapshot.get("common_header"))
-        table_pitch = native_table_line_pitch_hint(rendered.quality, final, payload.get("source_preservation"))
+        header_body_hint = _common_header_body_repair_hint(measured(), ctx.snapshot.get("common_header"))
+        table_pitch = native_table_line_pitch_hint(measured(), final, payload.get("source_preservation"))
         timeline_collisions = rendered.quality.get("timeline_caption_ink", {}).get("collisions")
         classification = rendered.quality.get("source_classification_association", {})
         paint_occlusion = rendered.quality.get("source_paint_occlusion", {})
         if paint_occlusion.get("status") in {"occluded", "unproven"}:
             from services.generation_core.drivers.svg.source_paint_occlusion import source_paint_repair_hint
 
-            hint = source_paint_repair_hint(rendered.quality, content)
+            hint = source_paint_repair_hint(measured(), content)
         elif classification.get("status") == "unproven":
             from services.generation_core.drivers.svg.source_classification_association import source_classifications
 
@@ -733,7 +740,7 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
                 "local_repair": payload.get("local_readability_repair"),
                 "instruction": "Repair only the smallest failing region, preserving every word, number, unit, relation and page count. Enlarge space or reflow related objects together. Never shrink fonts, hide or delete content. If local repair cannot fit, freely recompose this same page on the exact canvas; if still impossible, fail with physical_space_insufficient."}, ensure_ascii=False)[:3000]
         else:
-            hint = json.dumps(rendered.quality, ensure_ascii=False)[:3000]
+            hint = json.dumps(measured(), ensure_ascii=False)[:3000]
         if writing_hint:
             hint = (writing_hint + "\n" + hint)[:3000]
         payload["repair_hint"] = hint
@@ -776,7 +783,7 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
     if cache_remeasurement:
         from services.svg_classification_remeasurement import remeasurement_digest
         cache_remeasurement.update(status="completed" if rendered.quality.get("passed") is True else "failed",
-            remeasured_metrics_digest=remeasurement_digest(rendered.quality.get("browser_metrics")))
+            remeasured_metrics_digest=remeasurement_digest(measured().get("browser_metrics")))
     if rendered.quality.get("source_paint_occlusion", {}).get("status") in {"occluded", "unproven"}:
         status = rendered.quality["source_paint_occlusion"]["status"]
         await checkpoint(job, index, payload=payload)

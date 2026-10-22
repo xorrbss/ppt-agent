@@ -112,6 +112,55 @@ def _snapshot_status_error(
     return deepcopy(dict(payload)) if isinstance(payload, Mapping) else {}
 
 
+async def _generation_failure_decision(
+    session: AsyncSession,
+    job_id: uuid.UUID,
+    status_error: Mapping[str, object],
+) -> tuple[str, bool]:
+    """Durable retry decision for a failed generation status.
+
+    The failure keeps its own code. It is retryable only when no slide row of
+    the job carries a quality-exhausted ``fail_stage`` record: the job's
+    ``last_error``/``resume_allowed`` hold only the last write, so a later
+    retryable global error would otherwise buy the exhausted page again.
+    Unreadable evidence never reopens an automatic retry.
+    """
+
+    code, retryable = _safe_failure(status_error)
+    if not retryable:
+        return code, retryable
+    from services.generation_core.drivers.svg.terminal import EXHAUSTED_PAGE_CODES
+
+    try:
+        rows = (
+            await session.execute(
+                select(AuthoredSlideCheckpoint.slide_index, AuthoredSlideCheckpoint.error)
+                .where(AuthoredSlideCheckpoint.job_id == job_id)
+                .where(AuthoredSlideCheckpoint.failed_stage.is_not(None))
+            )
+        ).all()
+    except Exception:
+        await session.rollback()
+        logger.warning(
+            "Failed to read slide failure evidence for job %s", job_id, exc_info=True
+        )
+        return code, False
+    for slide_index, error in rows:
+        if (
+            not isinstance(error, Mapping)
+            or not isinstance(error.get("code"), str)
+            or type(error.get("retryable")) is not bool
+            or type(error.get("slide_index")) is not int
+            or error.get("slide_index") != slide_index
+        ):
+            # A failed row whose record cannot be read is not proof that no
+            # page is exhausted.
+            return code, False
+        if error["code"] in EXHAUSTED_PAGE_CODES and error["retryable"] is False:
+            return code, False
+    return code, retryable
+
+
 class PresentationGenerationOperationHandler:
     def __init__(
         self,
@@ -564,7 +613,7 @@ class PresentationGenerationOperationHandler:
             await session.refresh(status)
             if status.status != "completed":
                 status_error = _snapshot_status_error(status)
-                code, retryable = _safe_failure(status_error)
+                code, retryable = await _generation_failure_decision(session, job_id, status_error)
                 projected_error = RuntimeError(code)
                 try:
                     receipt_payload = await _persist_failed_attempt_timing(

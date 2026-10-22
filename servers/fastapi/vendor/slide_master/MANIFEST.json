@@ -75,7 +75,7 @@
     "svg_to_pptx/native_objects/fallback_hash.py": "354da4a4b2c0626af530e9e3f91dced0d93d99dd34e46e2d8320cfc26301d170",
     "svg_to_pptx/native_objects/marker_common.py": "729b4d400294310cc3c93615629c111f3b314c5dd503842825c0a8847dc525fc",
     "svg_to_pptx/native_objects/marker_status.py": "d055178f48b9ca12eded206b53cbe53489111c2e2dc8bdb8e86b2ce637edc9ec",
-    "svg_to_pptx/native_objects/table.py": "a1a6992adb460bff75650f69153853046d44c635a2b2e7553ab54290b3b4c9c1",
+    "svg_to_pptx/native_objects/table.py": "ca1562e42299dd934f538eb63538c6c645062e02ef5622a41a4dea6f9acd6344",
     "svg_to_pptx/native_objects/workbook.py": "f725bb2dc58aadc8ffc293bba994a91cf0477b871829fffbe965acaa36a5b3ea",
     "svg_to_pptx/pptx_package/__init__.py": "78dce81eda479c89d16308e13a536bcd45de039778d80eb0f5a2184415c42f2d",
     "svg_to_pptx/pptx_package/builder.py": "6b61bf78ae04141903caa73a4fd408f81c5b6e8ce9ba43769ad0ac253e16c2dd",

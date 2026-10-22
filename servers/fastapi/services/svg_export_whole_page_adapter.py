@@ -395,22 +395,29 @@ def source_text_lines(node):
     """Lines of a multi-line source text that the converter flattens to one shape per line.
 
     The first line may be the element's own text; every further line is a positional
-    tspan. Anything else is a single shape and is not described here.
+    tspan. A tspan with no position of its own (no x, y, dx or dy) is an inline run that
+    continues the current line, which the converter draws in that line's shape.
+    Anything else is a single shape and is not described here.
     """
     children = list(node)
     if node.tag != _TEXT or not children:
         return None
-    lines = []
-    lead = normalize_text(node.text or "")
-    if lead:
-        lines.append(lead)
+    raw_lines = []
+    if normalize_text(node.text or ""):
+        raw_lines.append(node.text)
     for child in children:
-        if (child.tag != f"{{{SVG_NS}}}tspan" or list(child) or (child.tail and child.tail.strip())
-                or "x" not in child.attrib or "y" not in child.attrib):
+        if child.tag != f"{{{SVG_NS}}}tspan" or list(child) or (child.tail and child.tail.strip()):
             return None
-        line = normalize_text(child.text or "")
-        if line:
-            lines.append(line)
+        positioned = "x" in child.attrib and "y" in child.attrib
+        if not positioned and any(key in child.attrib for key in ("x", "y", "dx", "dy")):
+            return None
+        if positioned or not raw_lines:
+            raw_lines.append(child.text or "")
+        else:
+            raw_lines[-1] += child.text or ""
+        # A whitespace-only tail separates this run from an inline run that follows.
+        raw_lines[-1] += child.tail or ""
+    lines = [line for line in (normalize_text(raw) for raw in raw_lines) if line]
     return lines if len(lines) >= 2 else None
 
 

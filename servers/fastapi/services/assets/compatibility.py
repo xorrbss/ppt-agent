@@ -6,6 +6,7 @@ import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 import os
+import stat
 import uuid
 
 from sqlalchemy import update
@@ -13,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from models.sql.image_asset import ImageAsset
+from models.sql.presentation import PresentationModel
 from models.sql.workspace import WorkspaceAsset
 from services.assets.contracts import AssetBinding, AssetGatewayError, AssetKind
 from services.assets.gateway import AssetGateway
@@ -83,6 +85,97 @@ def _resolve_image_source(
         if relative is not None and len(relative.parts) == 1 and source.is_file():
             return legacy_root, source
     raise AssetGatewayError("legacy_image_path_forbidden", status_code=400)
+
+
+def _is_link(path: Path) -> bool:
+    is_junction = getattr(path, "is_junction", None)
+    return path.is_symlink() or bool(is_junction is not None and is_junction())
+
+
+def _same_path(left: str | Path, right: str | Path) -> bool:
+    return os.path.normcase(os.path.abspath(str(left))) == os.path.normcase(
+        os.path.abspath(str(right))
+    )
+
+
+def _resolve_registered_source_image_path(
+    source_image_root: Path,
+    path: str,
+    presentation_id: uuid.UUID,
+    file_name: str,
+) -> Path:
+    """Resolve the one file the source-image registry wrote for this row.
+
+    The expected location is rebuilt from the row's verified identity, never
+    taken from ``path``: ``<root>/<presentation_id>/<digest><suffix>``.  The
+    stored locator must name exactly that location both lexically and after
+    strict resolution, no component below the root may be a link, and the
+    target must be a regular file.
+    """
+
+    forbidden = AssetGatewayError("legacy_image_path_forbidden", status_code=400)
+    lexical_root = Path(os.path.abspath(str(source_image_root)))
+    root = lexical_root.resolve(strict=True)
+    lexical_expected = lexical_root / str(presentation_id) / file_name
+    expected = root / str(presentation_id) / file_name
+    unresolved = Path(path)
+    if not unresolved.is_absolute() or not _same_path(unresolved, lexical_expected):
+        raise forbidden
+    for component in (unresolved, expected.parent, expected):
+        if _is_link(component):
+            raise forbidden
+    source = unresolved.resolve(strict=True)
+    if not _same_path(source, expected) or not _same_path(
+        expected.resolve(strict=True), expected
+    ):
+        raise forbidden
+    if not stat.S_ISREG(os.lstat(source).st_mode):
+        raise forbidden
+    return source
+
+
+async def _resolve_registered_source_image(
+    session: AsyncSession,
+    *,
+    row: ImageAsset,
+    source_image_root: Path,
+) -> tuple[Path, str]:
+    """Trust a source-registry picture only through its owned deck.
+
+    ``source_images/<presentation_id>`` is per deck, not per owner, so the
+    directory itself proves nothing.  Ownership is proven by the deck row: the
+    presentation named by the registry-derived identity must belong to the
+    same owner as the already owner-scoped ``ImageAsset`` row.
+    """
+
+    from services.source_images.registry import registered_source_image_locator
+
+    forbidden = AssetGatewayError("legacy_image_path_forbidden", status_code=400)
+    owner_id = get_current_owner_id()
+    if not row.is_uploaded or row.owner_id != owner_id:
+        raise forbidden
+    locator = registered_source_image_locator(row.id, row.extras)
+    if locator is None:
+        raise forbidden
+    presentation_id, file_name, digest = locator
+    owned_presentation = await session.scalar(
+        select(PresentationModel.id).where(
+            PresentationModel.id == presentation_id,
+            PresentationModel.owner_id.is_(None)
+            if owner_id is None
+            else PresentationModel.owner_id == owner_id,
+        )
+    )
+    if owned_presentation is None:
+        raise forbidden
+    source = await asyncio.to_thread(
+        _resolve_registered_source_image_path,
+        source_image_root,
+        row.path,
+        presentation_id,
+        file_name,
+    )
+    return source, digest
 
 
 def _cleanup_imported_copy(path: Path | None) -> None:
@@ -192,12 +285,18 @@ async def canonicalize_legacy_image_asset(
     image_root: Path,
     storage_root: Path | None = None,
     admin_legacy_image_root: Path | None = None,
+    source_image_root: Path | None = None,
 ) -> AssetBinding:
     """Copy one owner-scoped legacy image into immutable canonical storage.
 
     The old path is retained only for rollback compatibility. It is resolved
     and containment-checked before any bytes are read, preventing traversal and
     symlink escapes. Re-entry returns the already validated binding.
+
+    ``source_image_root`` opts in to one additional trusted origin: a picture
+    the source-image registry wrote for a deck the current owner owns.  Such a
+    row is accepted only at the exact location its verified identity names,
+    and only when the copied bytes match the digest the registry recorded.
     """
 
     image_id = image.id if isinstance(image, ImageAsset) else image
@@ -264,12 +363,25 @@ async def canonicalize_legacy_image_asset(
                 gateway=gateway,
             )
 
-        _source_root, source = await asyncio.to_thread(
-            _resolve_image_source,
-            image_root,
-            row.path,
-            admin_legacy_image_root,
-        )
+        registered_digest: str | None = None
+        try:
+            _source_root, source = await asyncio.to_thread(
+                _resolve_image_source,
+                image_root,
+                row.path,
+                admin_legacy_image_root,
+            )
+        except AssetGatewayError as error:
+            if (
+                source_image_root is None
+                or error.code != "legacy_image_path_forbidden"
+            ):
+                raise
+            source, registered_digest = await _resolve_registered_source_image(
+                session,
+                row=row,
+                source_image_root=source_image_root,
+            )
         phase = "canonicalization"
         workspace_asset, copied_path = await import_workspace_document_asset(
             session,
@@ -278,6 +390,11 @@ async def canonicalize_legacy_image_asset(
             storage_root=storage_root,
         )
         imported_asset_id = workspace_asset.id
+        if registered_digest is not None and (
+            str(workspace_asset.sha256 or "").removeprefix("sha256:").lower()
+            != registered_digest
+        ):
+            raise AssetGatewayError("legacy_image_digest_mismatch", status_code=409)
         # Gallery images are durable user assets, not orphan request uploads.
         workspace_asset.expires_at = None
         session.add(workspace_asset)

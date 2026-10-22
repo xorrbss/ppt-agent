@@ -377,6 +377,7 @@ async def _settle_provider_call(
     durable_lease: Any,
     durable_outcome: str,
     lease: ProviderCallLease,
+    dispatch_stopped: bool = False,
 ) -> None:
     """Make every reservation behind one SDK call terminal, in order."""
 
@@ -398,6 +399,23 @@ async def _settle_provider_call(
     await lease.finish(
         actual_cost_microunits=None,
         outcome="success" if public_outcome == "succeeded" else durable_outcome,
+        **({"dispatch_stopped": True} if dispatch_stopped else {}),
+    )
+
+
+def _is_pre_sdk_dispatch_freeze(error: BaseException) -> bool:
+    """Whether ``error`` is a dispatch stop raised before the SDK call.
+
+    The SVG author's ``before_dispatch`` hook runs inside admission but before
+    the SDK call is invoked; its dispatch-freeze and terminal-drain stops set
+    ``pre_sdk_dispatch_stop``. Every other error, including an unmarked
+    ``public_provider_dispatch_stopped`` outcome (also raised from inside the
+    SDK call by the stream observer), keeps its provider-health settlement.
+    """
+
+    return (
+        getattr(error, "code", None) == "public_provider_dispatch_stopped"
+        and getattr(error, "pre_sdk_dispatch_stop", False) is True
     )
 
 
@@ -566,6 +584,7 @@ async def provider_call_admission(
         sdk_started_at = monotonic()
         yield lease
     except BaseException as error:
+        dispatch_stopped = sdk_started_at is not None and _is_pre_sdk_dispatch_freeze(error)
         # Shielded: the settlement must reach the database even when the
         # request that owns this task is cancelled again while it runs (a user
         # closing the outline stream).  Unshielded, that second cancellation
@@ -582,13 +601,16 @@ async def provider_call_admission(
                 # A local/durable/public admission refusal happened before the
                 # SDK boundary and says nothing about provider health. In
                 # particular, retry-budget rejection must not open the shared
-                # provider circuit and fan out across concurrent users.
+                # provider circuit and fan out across concurrent users. A
+                # dispatch freeze stopped inside admission is settled the same
+                # way: it never reached the SDK either.
                 durable_outcome=(
                     "failure"
-                    if sdk_started_at is None
+                    if sdk_started_at is None or dispatch_stopped
                     else ("retryable_failure" if is_retry else "failure")
                 ),
                 lease=lease,
+                dispatch_stopped=dispatch_stopped,
             )
         )
         raise

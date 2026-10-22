@@ -369,10 +369,13 @@ class ProviderRuntimeControl:
         *,
         actual_cost_microunits: int | None,
         outcome: str,
+        dispatch_stopped: bool = False,
     ) -> None:
         _validate_optional_nonnegative(actual_cost_microunits, "actual_cost_microunits")
         if outcome not in _OUTCOMES:
             raise ValueError("outcome is not allowlisted")
+        if dispatch_stopped and outcome != "failure":
+            raise ValueError("dispatch_stopped requires a failure outcome")
         budget_error: BudgetExceededError | None = None
         async with self._condition:
             if lease._finished:
@@ -408,7 +411,14 @@ class ProviderRuntimeControl:
                     self._half_open_in_flight = False
             else:
                 job.consecutive_failures += 1
-                if outcome == "retryable_failure":
+                if dispatch_stopped:
+                    # No SDK request was sent, so this says nothing about
+                    # provider health: the circuit stays as it was. A
+                    # half-open probe slot held by this lease is released so
+                    # the next call can probe instead of waiting forever.
+                    if lease._half_open_probe:
+                        self._half_open_in_flight = False
+                elif outcome == "retryable_failure":
                     self._circuit_failures += 1
                     if self._half_open_in_flight or self._circuit_failures >= self.limits.circuit_failure_threshold:
                         self._circuit_open_until = self._clock() + self.limits.circuit_reset_seconds

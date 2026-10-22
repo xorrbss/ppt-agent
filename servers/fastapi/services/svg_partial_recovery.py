@@ -15,9 +15,10 @@ from types import SimpleNamespace
 from typing import get_args
 from weakref import ReferenceType, ref
 import hashlib
+import time
 import uuid
 
-from sqlalchemy import JSON, Text, case, cast, column, func, literal, or_, select, true
+from sqlalchemy import JSON, Text, case, cast, column, func, literal, or_, select, text as sql_text, true
 from sqlalchemy.orm import load_only
 
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
@@ -368,6 +369,24 @@ def _proven_json_snapshot(value, fingerprint):
     return None
 
 
+def _payload_reused_snapshot(projection, fingerprint, payload_snapshot):
+    """A row memo entry around an already proven private payload copy, else None.
+
+    payload_snapshot is (live payload, private exact copy); the caller proved
+    them equal with no intervening code. Only the small control fields are
+    copied here, so the payload is not serialized and decoded a second time.
+    """
+    live, private = payload_snapshot
+    if type(projection) is not dict or projection.get("request_payload") is not live:
+        return None
+    prepared = _exact_json_snapshot(
+        {key: value for key, value in projection.items() if key != "request_payload"})
+    if prepared is None:
+        return None
+    snapshot = {key: private if key == "request_payload" else prepared[0][key] for key in projection}
+    return snapshot, fingerprint, _marshal_json_bytes(snapshot)
+
+
 @dataclass
 class _HistoricalOperationRead:
     verification: object
@@ -375,6 +394,30 @@ class _HistoricalOperationRead:
     control_digest: str
     storage_digest: str
     consumed: bool = False
+
+
+_UNLOADED = object()
+
+
+@dataclass(eq=False)
+class _HistoricalNodeProof:
+    """One proven historical (operation, job) node, bound to its live ORM objects.
+
+    Its content was proven exactly once against private exact snapshots held by
+    the verification's row/job fingerprint memo. Later edge and memo visits
+    reuse it only while the very same objects (and the very same payload object)
+    are presented; finish() rechecks their in-memory content once per node.
+    """
+    operation: object
+    payload: object
+    fingerprint_key: tuple
+    operation_digest: str
+    job: object
+    job_digest: str
+
+
+def _elapsed(verification, key, started):
+    _count(verification, key, time.perf_counter() - started)
 
 
 _CHECKPOINT_ARCHIVE_MEMO_MAX_BYTES = 512 * 1024 * 1024
@@ -405,7 +448,25 @@ class _EpisodeVerification:
         self.producer_storage = {}
         # Per-verification counters and visited (operation, job) episodes; evidence only.
         self.stats = {"rows_decoded_python": 0, "rows_redecoded_finish": 0, "episode_visits": 0,
-                      "episode_memo_hits": 0, "reference_edges": 0}
+                      "episode_memo_hits": 0, "reference_edges": 0,
+                      "expect_digests_reused": 0, "payload_snapshots_reused": 0,
+                      # Whole-payload work: these scale with distinct nodes, not edge visits.
+                      "operation_digests": 0, "job_digests": 0, "payload_marshal_compares": 0,
+                      "node_identity_reuses": 0, "node_finish_checks": 0, "edge_job_id_reads": 0,
+                      # Finish storage fast path (PostgreSQL only).
+                      "rows_storage_hits": 0, "rows_storage_changed": 0, "rows_storage_recorded": 0,
+                      "storage_sha_rows": 0, "ledger_storage_hits": 0, "ledger_storage_changed": 0,
+                      "ledger_union_rows_decoded": 0,
+                      "t_marshal_s": 0.0, "t_digest_s": 0.0, "t_db_fetch_s": 0.0,
+                      "t_storage_sha_s": 0.0, "t_final_decode_s": 0.0}
+        # {operation id: _HistoricalNodeProof}; finish() rechecks each node's live content once.
+        self.node_proofs = {}
+        # {(model, identity, value): (signature, storage sha256, verified digest)}. Each entry
+        # comes from one finish() SELECT that decoded the row AND matched its expectation.
+        self.row_storage = {}
+        # {(operation ids, job id): (signature, {group: {row id: storage sha256}})}, ditto.
+        self.ledger_storage = {}
+        self.storage_modes = {}
         self.visited_episodes = set()
         self.checkpoint_archives = {}
         self.checkpoint_archive_bytes = 0
@@ -623,19 +684,107 @@ class _EpisodeVerification:
         if self.transaction is None:
             self.transaction = transaction
 
-    def operation_fingerprint(self, operation, read, *, require_current_code):
+    def _payload_matches(self, cached, payload):
+        """Whole live payload vs a private exact snapshot (marshal hint, else exact walk)."""
+        started = time.perf_counter()
+        try:
+            return _same_json_snapshot(cached[0], payload, cached[2])
+        finally:
+            _count(self, "payload_marshal_compares")
+            _elapsed(self, "t_marshal_s", started)
+
+    def _operation_digest(self, projection):
+        """The operation fingerprint: digest of exactly the row projection expect() binds.
+
+        Same information as [control, payload] (control never carries the payload),
+        so the in-memory episode memo stays injective, and the row expectation can
+        reuse this digest instead of hashing the whole payload a second time.
+        """
+        started = time.perf_counter()
+        try:
+            return digest(projection)
+        finally:
+            _count(self, "operation_digests")
+            _elapsed(self, "t_digest_s", started)
+
+    def node(self, operation, job=None):
+        """The node proof for these exact live objects, else None (never content-based)."""
+        if self.transaction is None:
+            return None
+        proof = self.node_proofs.get(str(getattr(operation, "id", None)))
+        if (proof is None or proof.operation is not operation
+                or vars(operation).get("request_payload", _UNLOADED) is not proof.payload
+                or job is not None and proof.job is not job):
+            return None
+        return proof
+
+    def remember_node(self, operation, job, fingerprint_key, operation_digest, job_digest):
+        """Bind a just-proven historical node; the caller compared both live values with no await since."""
+        identity = str(operation.id)
+        if self.transaction is None or identity in self.node_proofs:
+            return
+        row = self.row_fingerprints.get((WorkspaceOperation, "id", identity))
+        job_row = self.job_fingerprints.get(str(job.id))
+        payload = vars(operation).get("request_payload", _UNLOADED)
+        cached = self.operation_fingerprints.get(fingerprint_key)
+        if (row is None or job_row is None or cached is None or payload is _UNLOADED
+                or row[1] != operation_digest or job_row[1] != job_digest or cached[1] != operation_digest
+                or self.rows.get((WorkspaceOperation, "id", identity)) != operation_digest
+                or self.rows.get((PresentationGenerationJob, "id", str(job.id))) != job_digest):
+            return
+        self.node_proofs[identity] = _HistoricalNodeProof(
+            operation, payload, fingerprint_key, operation_digest, job, job_digest)
+
+    def _check_node_proofs(self):
+        """Same-process, possibly unflushed in-place edits of a proven node fail closed.
+
+        One whole-content comparison per unique node per finish(), against the
+        private exact snapshots, independent of any database storage hash.
+        """
+        from sqlalchemy import inspect as inspect_state
+        for identity, proof in self.node_proofs.items():
+            started = time.perf_counter()
+            _count(self, "node_finish_checks")
+            # Expired/detached objects would lazy-load (or have no live state): fail closed as a
+            # recovery rejection instead of escaping as an async lazy-load error.
+            for live in (proof.operation, proof.job):
+                state = inspect_state(live)
+                if state.expired_attributes or state.detached:
+                    reject("svg_partial_recovery_request_snapshot_changed")
+            row = self.row_fingerprints.get((WorkspaceOperation, "id", identity))
+            job_row = self.job_fingerprints.get(str(proof.job.id))
+            if row is None or job_row is None or type(row[0]) is not dict:
+                reject("svg_partial_recovery_request_snapshot_changed")
+            control = {key: value for key, value in row[0].items() if key != "request_payload"}
+            if "request_payload" in vars(proof.operation):
+                same = _same_json_snapshot(row[0], _operation_projection(proof.operation), row[2])
+            else:
+                # Not loaded: no in-memory payload exists to drift; the fresh row read binds storage.
+                same = _same_json_value(control, _operation_control(proof.operation))
+            if same is not True or _same_json_snapshot(job_row[0], _dump(proof.job), job_row[2]) is not True:
+                reject("svg_partial_recovery_request_snapshot_changed")
+            _elapsed(self, "t_marshal_s", started)
+
+    def operation_fingerprint(self, operation, read, *, require_current_code, node=None):
         self.check(self.session)
         if read is None:
             control = _operation_control(operation)
             identity = str(operation.id)
             if self.controls.get(identity) == control:
                 control_digest = digest(control)
+                proof = self.node(operation)
+                if proof is not None and proof.fingerprint_key[1] == control_digest:
+                    cached = self.operation_fingerprints.get(proof.fingerprint_key)
+                    if cached is not None and cached[1] == proof.operation_digest:
+                        # Same live objects as the proven node; finish() rechecks content.
+                        _count(self, "node_identity_reuses")
+                        return cached[1], None
                 for (cached_id, cached_control, _), cached in self.operation_fingerprints.items():
                     if (cached_id == identity and cached_control == control_digest
-                            and _same_json_snapshot(cached[0], operation.request_payload, cached[2]) is True):
+                            and self._payload_matches(cached, operation.request_payload) is True):
                         return cached[1], None
             # No new storage-bound proof is minted on this direct-call path.
-            return digest([control, operation.request_payload]), None
+            return self._operation_digest(_operation_projection(operation)), None
         if (require_current_code or not isinstance(read, _HistoricalOperationRead)
                 or read.verification is not self or read.operation is not operation or read.consumed):
             reject("svg_partial_recovery_request_snapshot_changed")
@@ -647,35 +796,60 @@ class _EpisodeVerification:
         key = (str(operation.id), read.control_digest, read.storage_digest)
         cached = self.operation_fingerprints.get(key)
         if cached is not None:
-            same = _same_json_snapshot(cached[0], operation.request_payload, cached[2])
+            if (node is not None and node is self.node(operation) and node.fingerprint_key == key
+                    and node.operation_digest == cached[1]):
+                # The proven node's own objects: no whole-payload marshal per visit.
+                _count(self, "node_identity_reuses")
+                return cached[1], None
+            same = self._payload_matches(cached, operation.request_payload)
             if same is None:
-                return digest([control, operation.request_payload]), None
+                return self._operation_digest(_operation_projection(operation)), None
             if not same:
                 reject("svg_partial_recovery_request_snapshot_changed")
             return cached[1], None
-        fingerprint = digest([control, operation.request_payload])
-        prepared = _exact_json_snapshot(operation.request_payload)
-        if prepared is not None:
-            return fingerprint, (key, prepared[0])
-        if _same_json_value(operation.request_payload, operation.request_payload) is not True:
-            return fingerprint, None
-        return fingerprint, (key, deepcopy(operation.request_payload))
+        projection = _operation_projection(operation)
+        fingerprint = self._operation_digest(projection)
+        started = time.perf_counter()
+        try:
+            prepared = _exact_json_snapshot(operation.request_payload)
+            if prepared is not None:
+                return fingerprint, (key, prepared[0], prepared[1], projection)
+            if _same_json_value(operation.request_payload, operation.request_payload) is not True:
+                return fingerprint, None
+            snapshot = deepcopy(operation.request_payload)
+            return fingerprint, (key, snapshot, _marshal_json_bytes(snapshot), projection)
+        finally:
+            _elapsed(self, "t_marshal_s", started)
 
-    def job_fingerprint(self, job):
+    def job_fingerprint(self, job, *, node=None):
         self.check(self.session)
+        if node is not None and node is self.node(node.operation, job):
+            # The proven node's own job object; finish() rechecks its content once.
+            _count(self, "node_identity_reuses")
+            return node.job_digest
         projection = _dump(job)
         key = str(job.id)
         cached = self.job_fingerprints.get(key) if self.transaction is not None else None
-        if cached is not None and _same_json_snapshot(cached[0], projection, cached[2]) is True:
-            return cached[1]
+        if cached is not None:
+            started = time.perf_counter()
+            same = _same_json_snapshot(cached[0], projection, cached[2])
+            _elapsed(self, "t_marshal_s", started)
+            if same is True:
+                return cached[1]
+        started = time.perf_counter()
         fingerprint = digest(projection)
+        _count(self, "job_digests")
+        _elapsed(self, "t_digest_s", started)
         if self.transaction is not None and key not in self.job_fingerprints:
             prepared = _proven_json_snapshot(projection, fingerprint)
             if prepared is not None:
                 self.job_fingerprints[key] = prepared
         return fingerprint
 
-    def expect(self, model, snapshot, *, identity="id"):
+    def expect(self, model, snapshot, *, identity="id", _digested=None, _payload_snapshot=None):
+        """_digested=(snapshot, digest(snapshot)) and _payload_snapshot=(live
+        payload, proven private copy) are only valid for values the caller
+        produced from these exact objects with no intervening code."""
         self.check(self.session)
         key = (model, identity, str(snapshot[identity]))
         # This may be an earlier ORM read from before a slow historical proof.
@@ -686,7 +860,13 @@ class _EpisodeVerification:
             if model is PresentationGenerationJob
             and identity == "id" and self.transaction is not None
             and (self.live_job is None or str(snapshot["id"]) != str(self.live_job["id"])) else None)
-        if (job_cached is not None
+        if (_digested is not None and _digested[0] is snapshot and projection is snapshot
+                and _sha256_hex_valid(_digested[1])):
+            # The caller just hashed this unprojected object; digest it once.
+            job_cached = None
+            expected = _digested[1]
+            _count(self, "expect_digests_reused")
+        elif (job_cached is not None
                 and _same_json_snapshot(job_cached[0], projection, job_cached[2]) is True):
             # The job projection is the one already fingerprinted for this episode key.
             expected = job_cached[1]
@@ -699,8 +879,13 @@ class _EpisodeVerification:
         self.rows[key] = expected
         if self.transaction is not None and key not in self.row_fingerprints:
             # A job_cached match already proved projection equals an exact snapshot.
-            prepared = (job_cached if job_cached is not None
-                else _proven_json_snapshot(projection, expected))
+            prepared = job_cached
+            if prepared is None and _payload_snapshot is not None:
+                prepared = _payload_reused_snapshot(projection, expected, _payload_snapshot)
+                if prepared is not None:
+                    _count(self, "payload_snapshots_reused")
+            if prepared is None:
+                prepared = _proven_json_snapshot(projection, expected)
             if prepared is not None:
                 self.row_fingerprints[key] = prepared
 
@@ -786,38 +971,20 @@ class _EpisodeVerification:
             groups.setdefault((model, identity), []).append(value)
         producer_ids = {value for expected in self.producers.values() for value in expected}
         deferred_checkpoints = {}
+        # Storage plans (and their catalog guards) are decided afresh for every finish().
+        plans, row_modes = {}, []
         for (model, identity), values in groups.items():
             if (model is AuthoredSlideCheckpoint and identity == "id"
                     and set(values).issubset(producer_ids)):
                 # Keep both checks at the final producer fresh-read boundary.
                 deferred_checkpoints = {value: self.rows[(model, identity, value)] for value in values}
                 continue
-            field = getattr(model, identity)
-            annotation = model.model_fields[identity].annotation
-            is_uuid = annotation is uuid.UUID or uuid.UUID in get_args(annotation)
-            typed = [uuid.UUID(value) if is_uuid else value
-                     for value in values]
-            rows = await _fresh_recovery_model_rows(self.session, model, field.in_(typed))
-            actual = {}
-            for row in rows:
-                value = str(getattr(row, identity))
-                projection = self.row_snapshot(model, _dump(row))
-                key = (model, identity, value)
-                cached = self.row_fingerprints.get(key) if self.transaction is not None else None
-                actual[value] = (cached[1] if cached is not None and
-                    _same_json_snapshot(cached[0], projection, cached[2]) is True
-                    else digest(projection))
-            if actual != {value: self.rows[(model, identity, value)] for value in values}:
-                reject("svg_partial_recovery_request_snapshot_changed")
+            row_modes.append(await self._finish_rows(model, identity, values, plans))
         if self.controls:
             fresh = await _fresh_recovery_operation_controls(self.session, self.controls)
             if fresh != self.controls:
                 reject("svg_partial_recovery_request_snapshot_changed")
-        for (operation_ids, job_id), expected in self.ledgers.items():
-            fresh = await _fresh_recovery_ledger_snapshot(self.session,
-                [uuid.UUID(value) for value in operation_ids], uuid.UUID(job_id), verification=self)
-            if fresh != expected:
-                reject("svg_partial_recovery_request_snapshot_changed")
+        ledger_mode = await self._finish_ledgers(plans)
         producer_mode = "none"
         if self.producers:
             actual, producer_mode = await self._fresh_producer_digests()
@@ -841,16 +1008,168 @@ class _EpisodeVerification:
             del encoded
             if current_guard.digest() != guard:
                 reject("svg_partial_recovery_request_snapshot_changed")
+        # Last, after every await: in-place edits of proven nodes' live ORM objects.
+        self._check_node_proofs()
         self.check(self.session)
         import logging
         stats = self.stats
+        self.storage_modes = {"rows": ",".join(sorted(set(row_modes))) or "none",
+                              "ledgers": ledger_mode, "producers": producer_mode}
         logging.getLogger(__name__).info(
             "SVG partial recovery verification finished: distinct_jobs=%s distinct_episodes=%s "
             "episode_visits=%s episode_memo_hits=%s reference_edges=%s rows_decoded_python=%s "
-            "rows_redecoded_finish=%s producer_mode=%s",
+            "rows_redecoded_finish=%s expect_digests_reused=%s payload_snapshots_reused=%s producer_mode=%s "
+            "distinct_nodes=%s row_mode=%s ledger_mode=%s work=%s",
             len(self.producers), len(self.visited_episodes), stats["episode_visits"],
             stats["episode_memo_hits"], stats["reference_edges"], stats["rows_decoded_python"],
-            stats["rows_redecoded_finish"], producer_mode)
+            stats["rows_redecoded_finish"], stats["expect_digests_reused"],
+            stats["payload_snapshots_reused"], producer_mode, len(self.node_proofs),
+            self.storage_modes["rows"], ledger_mode,
+            " ".join(f"{key}={round(value, 3) if type(value) is float else value}"
+                     for key, value in stats.items() if key.startswith(("t_", "operation_digests",
+                         "job_digests", "payload_marshal", "node_", "edge_job", "rows_storage",
+                         "storage_sha", "ledger_"))))
+
+    def _live_row_values(self, model, identity):
+        """Rows whose heartbeat/lease/progress projection is live authority: never storage-reused."""
+        live = set()
+        if identity == "id" and model is WorkspaceOperation and self.live_operation is not None:
+            live.add(str(self.live_operation["id"]))
+        if identity == "id" and model is PresentationGenerationJob and self.live_job is not None:
+            live.add(str(self.live_job["id"]))
+        return live
+
+    async def _finish_rows(self, model, identity, values, plans):
+        """Fresh check of one expected row group; identical stored rows skip Python decode."""
+        expected = {value: self.rows[(model, identity, value)] for value in values}
+        plan, reason = await _row_storage_plan(self.session, model, identity, plans)
+        live = self._live_row_values(model, identity)
+        actual = {}
+        if plan is not None:
+            recorded = {}
+            for value in values:
+                record = self.row_storage.get((model, identity, value))
+                if value not in live and record is not None and record[0] == plan.signature:
+                    recorded[value] = record
+            if recorded:
+                fresh = await _fresh_row_storage_shas(self.session, model, identity, plan,
+                    list(recorded), verification=self)
+                for value, record in recorded.items():
+                    sha = fresh.get(value)
+                    if _sha256_hex_valid(sha) and sha == record[1]:
+                        # Byte-identical stored row: a fresh decode yields this verified digest.
+                        actual[value] = record[2]
+                        _count(self, "rows_storage_hits")
+                    else:
+                        _count(self, "rows_storage_changed")
+        decode = [value for value in values if value not in actual]
+        storage = {}
+        if decode:
+            field = getattr(model, identity)
+            if plan is not None:
+                typed = [uuid.UUID(value) if plan.is_uuid else value for value in decode]
+                rows, shas = await _fresh_model_rows_with_storage(self.session, model,
+                    field.in_(typed), plan, verification=self)
+            else:
+                annotation = model.model_fields[identity].annotation
+                is_uuid = annotation is uuid.UUID or uuid.UUID in get_args(annotation)
+                typed = [uuid.UUID(value) if is_uuid else value for value in decode]
+                started = time.perf_counter()
+                rows = await _fresh_recovery_model_rows(self.session, model, field.in_(typed))
+                _elapsed(self, "t_db_fetch_s", started)
+                shas = [None] * len(rows)
+            started = time.perf_counter()
+            for row, sha in zip(rows, shas, strict=True):
+                value = str(getattr(row, identity))
+                projection = self.row_snapshot(model, _dump(row))
+                key = (model, identity, value)
+                cached = self.row_fingerprints.get(key) if self.transaction is not None else None
+                actual[value] = (cached[1] if cached is not None and
+                    _same_json_snapshot(cached[0], projection, cached[2]) is True
+                    else digest(projection))
+                storage[value] = sha
+            _elapsed(self, "t_final_decode_s", started)
+        if actual != expected:
+            reject("svg_partial_recovery_request_snapshot_changed")
+        if plan is None:
+            return "exact:" + reason
+        for value, sha in storage.items():
+            # Bind only a digest this very SELECT's decode just matched against its expectation.
+            if value not in live and _sha256_hex_valid(sha) and actual.get(value) == expected.get(value):
+                self.row_storage[(model, identity, value)] = (plan.signature, sha, actual[value])
+                _count(self, "rows_storage_recorded")
+        return "storage"
+
+    async def _finish_ledgers(self, plans):
+        """Fresh ledger fence. With no live authority bound, each group row is read once.
+
+        Live-bound verifications keep the exact per-key path: their projections
+        carry heartbeat/lease/budget monotonic checks that are never reused.
+        """
+        if not self.ledgers:
+            return "none"
+        reason = None
+        if self.live_operation is not None or self.live_job is not None:
+            reason = "live_bound"
+        ledger_plans = {}
+        if reason is None:
+            for name, model, _ in _LEDGER_GROUPS:
+                plan, why = await _row_storage_plan(self.session, model, "id", plans)
+                if plan is None:
+                    reason = name + ":" + why
+                    break
+                ledger_plans[name] = plan
+        if reason is not None:
+            await self._finish_ledgers_exact(list(self.ledgers))
+            return "exact:" + reason
+        signature = tuple(ledger_plans[name].signature for name, _, _ in _LEDGER_GROUPS)
+        recorded = [key for key in self.ledgers
+                    if key in self.ledger_storage and self.ledger_storage[key][0] == signature]
+        if recorded:
+            fresh = await _fresh_ledger_union(self.session, recorded, ledger_plans,
+                decode=False, verification=self)
+            exact = [key for key in self.ledgers if key not in recorded]
+            if fresh is None:
+                exact = list(self.ledgers)
+            else:
+                for key in recorded:
+                    members = _ledger_members(key, fresh)
+                    current = {name: {row_id: fresh[name][row_id][0] for row_id in ids}
+                               for name, ids in members.items()}
+                    if current == self.ledger_storage[key][1]:
+                        _count(self, "ledger_storage_hits")
+                    else:
+                        _count(self, "ledger_storage_changed")
+                        exact.append(key)
+            if exact:
+                await self._finish_ledgers_exact([key for key in self.ledgers if key in set(exact)])
+            return "storage"
+        fresh = await _fresh_ledger_union(self.session, list(self.ledgers), ledger_plans,
+            decode=True, verification=self)
+        if fresh is None:
+            await self._finish_ledgers_exact(list(self.ledgers))
+            return "exact:inconsistent_union"
+        for key, expected in self.ledgers.items():
+            members = _ledger_members(key, fresh)
+            started = time.perf_counter()
+            value = digest({name: [fresh[name][row_id][2] for row_id in sorted(ids)]
+                            for name, ids in members.items()})
+            _elapsed(self, "t_digest_s", started)
+            if value != expected:
+                reject("svg_partial_recovery_request_snapshot_changed")
+            self.ledger_storage[key] = (signature, {name: {row_id: fresh[name][row_id][0] for row_id in ids}
+                                                    for name, ids in members.items()})
+        return "storage_bound"
+
+    async def _finish_ledgers_exact(self, keys):
+        for key in keys:
+            operation_ids, job_id = key
+            started = time.perf_counter()
+            fresh = await _fresh_recovery_ledger_snapshot(self.session,
+                [uuid.UUID(value) for value in operation_ids], uuid.UUID(job_id), verification=self)
+            _elapsed(self, "t_db_fetch_s", started)
+            if fresh != self.ledgers[key]:
+                reject("svg_partial_recovery_request_snapshot_changed")
 
 
 def _count(verification, key, amount=1):
@@ -945,6 +1264,231 @@ async def _fresh_checkpoint_storage_digests(session, job_ids):
             reject("svg_partial_recovery_request_snapshot_changed")
         rows[str(row_id)] = sha
     return fresh
+
+
+# Row storage hashing for finish(): stored PostgreSQL types whose json_build_array
+# rendering is injective for a fixed session (TimeZone only affects timestamptz text,
+# and a changed setting can only turn an equal row into "changed", never the reverse).
+# Floating point, arrays, domains, bytea, intervals and everything else stay exact.
+_ROW_STORAGE_SCHEMA = "svg-partial-recovery-row-storage/v1"
+_ROW_STORAGE_PG_TYPES = frozenset({
+    "uuid", "int2", "int4", "int8", "bool", "varchar", "text", "json", "jsonb",
+    "timestamptz", "timestamp", "date", "numeric"})
+_ROW_STORAGE_BATCH = 500
+_LEDGER_GROUPS = (
+    ("admissions", PublicOperationAdmission, ("operation_id",)),
+    ("calls", PublicProviderLogicalCall, ("admission_id",)),
+    ("leases", PublicResourceLease, ("admission_id",)),
+    ("usage", ProviderUsageReceipt, ("job_id",)),
+    ("budgets", ProviderRuntimeBudget, ("workspace_operation_id", "job_id")),
+    ("reservations", ProviderRuntimeReservation, ("budget_id",)),
+)
+
+
+@dataclass(frozen=True)
+class _RowStoragePlan:
+    signature: tuple
+    expression: object
+    is_uuid: bool
+
+
+def _relation_name(table):
+    return ".".join('"' + part.replace('"', '""') + '"' for part in (table.schema, table.name) if part)
+
+
+async def _row_storage_plan(session, model, identity, cache):
+    """(plan, None) when every mapped column of a single-PK model hashes injectively, else (None, reason).
+
+    The catalog guard runs once per model per finish(): the stored types, not the
+    Python annotations, decide the rendering. The plan signature (schema tag, table,
+    column names and stored types) must match for a recorded hash to be reused.
+    """
+    cache_key = (model, identity)
+    if cache_key not in cache:
+        cache[cache_key] = await _build_row_storage_plan(session, model, identity)
+    return cache[cache_key]
+
+
+async def _build_row_storage_plan(session, model, identity):
+    from sqlalchemy import Column
+    from sqlalchemy import inspect as inspect_model
+    if not _checkpoint_storage_supported(session):
+        return None, "unsupported_dialect"
+    table = getattr(model, "__table__", None)
+    attributes = list(inspect_model(model).column_attrs)
+    if table is None or not attributes or len(attributes) >= 100:
+        return None, "column_count"
+    columns = []
+    for attribute in attributes:
+        if (len(attribute.columns) != 1 or not isinstance(attribute.columns[0], Column)
+                or attribute.columns[0].table is not table):
+            return None, "unmapped_column"
+        columns.append((attribute.key, attribute.columns[0]))
+    key_column = dict(columns).get(identity)
+    primary = list(table.primary_key.columns)
+    if key_column is None or len(primary) != 1 or primary[0] is not key_column:
+        return None, "identity_not_primary_key"
+    # A failing catalog read aborts the PostgreSQL transaction, so it is not a fallback: let it raise.
+    catalog = (await session.execute(sql_text(
+        # typtype is the one-byte "char" type (bytes under asyncpg): compare text only.
+        "SELECT a.attname::text, t.typname::text, t.typtype::text, n.nspname::text "
+        "FROM pg_catalog.pg_attribute a "
+        "JOIN pg_catalog.pg_type t ON t.oid = a.atttypid "
+        "JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace "
+        "WHERE a.attrelid = to_regclass(:relation) AND a.attnum > 0 AND NOT a.attisdropped"),
+        {"relation": _relation_name(table)})).all()
+    stored = {name: (type_name, type_kind, namespace) for name, type_name, type_kind, namespace in catalog}
+    signature = []
+    for key, column_object in columns:
+        found = stored.get(column_object.name)
+        if found is None:
+            return None, "schema_mismatch"
+        type_name, type_kind, namespace = found
+        if type_kind == "e":
+            signature.append((key, column_object.name, "enum:" + namespace + "." + type_name))
+        elif namespace == "pg_catalog" and type_kind == "b" and type_name in _ROW_STORAGE_PG_TYPES:
+            signature.append((key, column_object.name, type_name))
+        else:
+            return None, "unsupported_type:" + type_name
+    # [[is_null, value], ...] in model order: typed, null-safe (SQL NULL vs JSON null) and
+    # unambiguous; nesting keeps json_build_array below its 100-argument limit.
+    expression = _pg_sha256_text(func.json_build_array(*(
+        func.json_build_array(getattr(model, key).is_(None), getattr(model, key)) for key, _ in columns)))
+    annotation = model.model_fields[identity].annotation
+    is_uuid = annotation is uuid.UUID or uuid.UUID in get_args(annotation)
+    return _RowStoragePlan((_ROW_STORAGE_SCHEMA, table.fullname, tuple(signature)), expression, is_uuid), None
+
+
+def _batches(values):
+    values = list(values)
+    for start in range(0, len(values), _ROW_STORAGE_BATCH):
+        yield values[start:start + _ROW_STORAGE_BATCH]
+
+
+async def _fresh_model_rows_with_storage(session, model, predicate, plan, *, verification=None):
+    """Exactly _fresh_recovery_model_rows plus each row's storage sha256 from the same SELECT."""
+    from sqlalchemy import inspect as inspect_model
+    names = [item.key for item in inspect_model(model).column_attrs]
+    started = time.perf_counter()
+    records = (await session.execute(select(
+        *(getattr(model, name).label(name) for name in names),
+        plan.expression.label("_svg_storage_sha256")).where(predicate))).mappings().all()
+    _elapsed(verification, "t_db_fetch_s", started)
+    started = time.perf_counter()
+    rows, shas = [], []
+    for record in records:
+        values = dict(record)
+        shas.append(values.pop("_svg_storage_sha256"))
+        rows.append(model.model_validate(values))
+    _elapsed(verification, "t_final_decode_s", started)
+    _count(verification, "storage_sha_rows", len(rows))
+    return rows, shas
+
+
+async def _fresh_row_storage_shas(session, model, identity, plan, values, *, verification=None):
+    """{identity: storage sha256} in bounded batches; no data column is transferred."""
+    attribute = getattr(model, identity)
+    fresh = {}
+    started = time.perf_counter()
+    for chunk in _batches(values):
+        typed = [uuid.UUID(value) if plan.is_uuid else value for value in chunk]
+        for value, sha in (await session.execute(select(attribute, plan.expression)
+                                                 .where(attribute.in_(typed)))).all():
+            if str(value) in fresh:
+                reject("svg_partial_recovery_request_snapshot_changed")
+            fresh[str(value)] = sha
+    _elapsed(verification, "t_storage_sha_s", started)
+    _count(verification, "storage_sha_rows", len(fresh))
+    return fresh
+
+
+async def _fresh_ledger_union(session, keys, plans, *, decode, verification=None):
+    """Every ledger group row any key can select, once: {group: {id: (sha, links, dump)}}.
+
+    Each group is read with the union of the per-key predicates; membership is
+    then evaluated per key on the link columns of the very SELECT that hashed
+    (and, with decode, decoded) the row. None means an inconsistent re-read.
+    """
+    from sqlalchemy import inspect as inspect_model
+    operations = sorted({str(uuid.UUID(value)) for key in keys for value in key[0]})
+    jobs = sorted({str(uuid.UUID(key[1])) for key in keys})
+    fresh = {}
+
+    async def read(name, model, links, predicates):
+        plan = plans[name]
+        rows = {}
+        names = [item.key for item in inspect_model(model).column_attrs] if decode else ["id", *links]
+        for attribute, values in predicates:
+            for chunk in _batches(values):
+                started = time.perf_counter()
+                records = (await session.execute(select(
+                    *(getattr(model, column_name).label(column_name) for column_name in names),
+                    plan.expression.label("_svg_storage_sha256"))
+                    .where(attribute.in_([uuid.UUID(value) for value in chunk])))).mappings().all()
+                _elapsed(verification, "t_db_fetch_s" if decode else "t_storage_sha_s", started)
+                started = time.perf_counter()
+                for record in records:
+                    values_by_name = dict(record)
+                    sha = values_by_name.pop("_svg_storage_sha256")
+                    if not _sha256_hex_valid(sha):
+                        return None
+                    row_links = tuple(None if values_by_name[link] is None else str(values_by_name[link])
+                                      for link in links)
+                    row_id = str(values_by_name["id"])
+                    dump = None
+                    if decode and row_id not in rows:
+                        dump = _dump(model.model_validate(values_by_name))
+                        _count(verification, "ledger_union_rows_decoded")
+                    previous = rows.get(row_id)
+                    if previous is not None:
+                        if previous[:2] != (sha, row_links):
+                            return None
+                        continue
+                    rows[row_id] = (sha, row_links, dump)
+                _count(verification, "storage_sha_rows", len(records))
+                if decode:
+                    _elapsed(verification, "t_final_decode_s", started)
+        fresh[name] = rows
+        return rows
+
+    groups = {name: (model, links) for name, model, links in _LEDGER_GROUPS}
+
+    def spec(name, *predicates):
+        model, links = groups[name]
+        return name, model, links, [(attribute, values) for attribute, values in predicates if values]
+
+    if await read(*spec("admissions", (PublicOperationAdmission.operation_id, operations))) is None:
+        return None
+    admissions = sorted(fresh["admissions"])
+    for name, attribute in (("calls", PublicProviderLogicalCall.admission_id),
+                            ("leases", PublicResourceLease.admission_id)):
+        if await read(*spec(name, (attribute, admissions))) is None:
+            return None
+    if await read(*spec("usage", (ProviderUsageReceipt.job_id, jobs))) is None:
+        return None
+    if await read(*spec("budgets", (ProviderRuntimeBudget.workspace_operation_id, operations),
+                        (ProviderRuntimeBudget.job_id, jobs))) is None:
+        return None
+    if await read(*spec("reservations", (ProviderRuntimeReservation.budget_id, sorted(fresh["budgets"])))) is None:
+        return None
+    return fresh
+
+
+def _ledger_members(key, fresh):
+    """The exact per-key membership _fresh_recovery_ledger_snapshot selects (no live operation)."""
+    operations = {str(uuid.UUID(value)) for value in key[0]}
+    job = str(uuid.UUID(key[1]))
+    admissions = {row_id for row_id, row in fresh["admissions"].items() if row[1][0] in operations}
+    budgets = {row_id for row_id, row in fresh["budgets"].items()
+               if row[1][0] in operations or row[1][1] == job}
+    return {
+        "admissions": admissions,
+        "calls": {row_id for row_id, row in fresh["calls"].items() if row[1][0] in admissions},
+        "leases": {row_id for row_id, row in fresh["leases"].items() if row[1][0] in admissions},
+        "usage": {row_id for row_id, row in fresh["usage"].items() if row[1][0] == job},
+        "budgets": budgets,
+        "reservations": {row_id for row_id, row in fresh["reservations"].items() if row[1][0] in budgets},
+    }
 
 
 async def _fresh_recovery_operation_controls(session, operation_ids):
@@ -1201,8 +1745,16 @@ async def _verify_operation_references_once(session, operation, manifest, refere
                                     for key in verification.episodes)
                             and "request_payload" in vars(candidate))
                         if eligible:
-                            snapshot_same = _same_json_snapshot(
-                                cached[0], vars(candidate)["request_payload"], cached[2])
+                            node = verification.node(candidate)
+                            if (node is not None and node.fingerprint_key == memo_key
+                                    and node.operation_digest == cached[1]):
+                                # The proven node's own live objects; its whole content
+                                # is rechecked once at finish(), not on every edge.
+                                _count(verification, "node_identity_reuses")
+                                snapshot_same = True
+                            else:
+                                snapshot_same = verification._payload_matches(
+                                    cached, vars(candidate)["request_payload"])
                             eligible = snapshot_same is True
                         if eligible and identity == newer:
                             newer_same = snapshot_same
@@ -1225,11 +1777,19 @@ async def _verify_operation_references_once(session, operation, manifest, refere
             control_digest = digest(fresh_controls[newer])
             storage_digest = digest(storage_fingerprint)
             cached = verification.operation_fingerprints.get((newer, control_digest, storage_digest))
+            node = verification.node(child) if cached is not None else None
+            if (node is None or node.fingerprint_key != (newer, control_digest, storage_digest)
+                    or node.operation_digest != cached[1]):
+                node = None
             if newer_same is True and not missing:
                 # The same cached snapshot and payload were compared above with no await since.
                 same = True
+            elif node is not None:
+                # The proven node's own live objects; finish() rechecks the content once.
+                _count(verification, "node_identity_reuses")
+                same = True
             else:
-                same = (_same_json_snapshot(cached[0], vars(child)["request_payload"], cached[2])
+                same = (verification._payload_matches(cached, vars(child)["request_payload"])
                         if cached is not None and "request_payload" in vars(child) else None)
             if same is False:
                 reject("svg_partial_recovery_request_snapshot_changed")
@@ -1237,21 +1797,34 @@ async def _verify_operation_references_once(session, operation, manifest, refere
                 await session.refresh(child, attribute_names=["request_payload"])
             read = _HistoricalOperationRead(verification, child,
                 control_digest, storage_digest)
+            # Graph relationship reads come from the node's private proof-bound copy.
             await _verify_append_only_edge(session, child, parent,
-                verification=verification, _operation_read=read)
+                verification=verification, _operation_read=read,
+                _payload=cached[0] if node is not None else None)
 
 
-async def _verify_append_only_edge(session, child, parent, *, verification=None, _operation_read=None):
-    """A cross-document ancestor must be a verified append-only consumer."""
-    lineage = child.request_payload.get("svg_partial_recovery_lineage") or {}
+async def _verify_append_only_edge(session, child, parent, *, verification=None, _operation_read=None,
+                                   _payload=None):
+    """A cross-document ancestor must be a verified append-only consumer.
+
+    _payload is only the verification's private exact copy of child's proven
+    payload (finish() rechecks the live one); it is never handed out.
+    """
+    payload = child.request_payload if _payload is None else _payload
+    lineage = payload.get("svg_partial_recovery_lineage") or {}
     if (lineage.get("schema") != "svg-partial-recovery-lineage/v2"
             or lineage.get("action_operation_id") != str(parent.id)
             or lineage.get("source_presentation_id") != str(parent.presentation_id)
             or child.retry_of_operation_id != parent.id):
         reject("svg_partial_recovery_lineage_conflict")
-    job = await session.scalar(select(PresentationGenerationJob).where(
+    # The same binding predicate as before, evaluated in the database; only the
+    # identity is transferred, and the session's identity map supplies the row
+    # (loading it exactly as the former full-row SELECT did when it is absent).
+    job_id = await session.scalar(select(PresentationGenerationJob.id).where(
         PresentationGenerationJob.workspace_operation_id == child.id,
         PresentationGenerationJob.presentation_id == child.presentation_id))
+    _count(verification, "edge_job_id_reads")
+    job = await session.get(PresentationGenerationJob, job_id) if job_id is not None else None
     if job is None:
         reject("svg_partial_recovery_lineage_conflict")
     await verify_episode(session, child, job, require_current_code=False, verification=verification,
@@ -1297,7 +1870,16 @@ def _source_request_routing(payload):
 
 def frozen_episode_payload(payload, manifest):
     """Project only a verified fork's routing identity back to its producer."""
-    frozen = deepcopy(_frozen_payload(payload))
+    return _frozen_episode_projection(payload, manifest, copy=True)
+
+
+def _frozen_episode_projection(payload, manifest, *, copy, manifest_digest=None):
+    """copy=False shares nested caller values; only for an immediate digest.
+
+    Only top-level keys of the new dict are rebound below, so the caller's
+    payload is never mutated and nothing of the result is retained.
+    """
+    frozen = deepcopy(_frozen_payload(payload)) if copy else _frozen_payload(payload)
     if manifest.get("append_only_recovery") is not True:
         return frozen
     lineage = payload.get(LINEAGE_KEY) or {}
@@ -1309,20 +1891,29 @@ def frozen_episode_payload(payload, manifest):
             or lineage.get("schema") != "svg-partial-recovery-lineage/v2"
             or lineage.get("source_job_id") != manifest.get("job_id")
             or lineage.get("source_presentation_id") != manifest.get("presentation_id")
-            or lineage.get("manifest_hash") != digest(manifest)
+            or lineage.get("manifest_hash") != (digest(manifest) if manifest_digest is None else manifest_digest)
             or frozen.get("presentation_id") != lineage.get("presentation_id")
             or lineage.get("presentation_id") == manifest.get("presentation_id")):
         reject("svg_partial_recovery_episode_unbound")
     if routing["presentation_id_present"]:
-        frozen["presentation_id"] = deepcopy(routing["presentation_id"])
+        frozen["presentation_id"] = (deepcopy(routing["presentation_id"]) if copy
+                                     else routing["presentation_id"])
     else:
         frozen.pop("presentation_id", None)
     return frozen
 
 
-def _undispatched_episode_page(payload, job, operation, owner, tenant):
-    """Only a new, server-sealed episode can prove that SDK I/O never began."""
-    if (not job.request_payload.get(LINEAGE_KEY) or payload.get("attempts")
+def _undispatched_episode_page(payload, job, operation, owner, tenant, *, page_calls=None,
+                               attempt_token=None):
+    """Only a new, server-sealed episode can prove that SDK I/O never began.
+
+    Outside a recovery lineage (a first operation) the sealed stops are accepted
+    only when they account for every logical call of the page one to one: each
+    call settled as a failed pre-SDK reservation (no actual cost), each stop
+    bound to the row's attempt, and no other provider outcome on the page.
+    """
+    lineage = bool(job.request_payload.get(LINEAGE_KEY))
+    if ((not lineage and page_calls is None) or payload.get("attempts")
             or payload.get("svg_content") or payload.get("inflight") is not None):
         return False
     records = payload.get("provider_terminal_responses")
@@ -1341,7 +1932,53 @@ def _undispatched_episode_page(payload, job, operation, owner, tenant):
                 or record.get("input_digest") != payload.get("input_digest")
                 or record.get("response_id") is not None or "raw_response" in record or "usage" in record):
             return False
-    return True
+    if lineage:
+        return True
+    ordinals = [record.get("ordinal") for record in records.values()]
+    if (any(type(value) is not int or value < 1 for value in ordinals) or len(set(ordinals)) != len(ordinals)
+            or not isinstance(attempt_token, str) or not attempt_token
+            or any(record.get("attempt_token") != attempt_token
+                   or type(record.get("fencing_token")) is not int for record in records.values())):
+        return False
+    # Every stop has its own diagnostics entry and no other provider outcome is on the page.
+    diagnostics = payload.get("provider_diagnostics") or []
+    if (payload.get("provider_failures") or not isinstance(diagnostics, list)
+            or any(not isinstance(item, dict) or item.get("code") != "public_provider_dispatch_stopped"
+                   for item in diagnostics)
+            or any(type(item.get("ordinal")) is not int or item["ordinal"] < 1 for item in diagnostics)
+            or sorted(item["ordinal"] for item in diagnostics) != sorted(ordinals)):
+        return False
+    # One failed, cost-less pre-SDK reservation per stop; any other call stays unmatched.
+    author_stages = {"author", "repair", "repair_remake", "repair_patch"}
+    return len(page_calls) == len(ordinals) and all(
+        call.stage in author_stages and call.outcome == "failed" and call.state == "unavailable"
+        and getattr(call, "actual_cost_microunits", None) is None for call in page_calls)
+
+
+def _receipt_terminal_ordinal(receipt, payload):
+    """The sealed terminal ordinal a provider attempt's receipt answers for, or None.
+
+    ``attempt_ordinal`` is the attempt index the author sent to admission. Each
+    earlier sealed ``dispatch.stopped`` record of the page occupied one terminal
+    ordinal without a purchase, so the author keys the call past them and
+    writes that key as ``terminal_ordinal``. Receipts without the field (old
+    ones, and every page without stops) answer for ``attempt_ordinal``. A
+    present field must equal the attempt index plus exactly the stops sealed
+    before it; anything else proves nothing.
+    """
+    ordinal = receipt.get("attempt_ordinal") if isinstance(receipt, dict) else None
+    if type(ordinal) is not int or ordinal < 1:
+        return None
+    if "terminal_ordinal" not in receipt:
+        return ordinal
+    terminal = receipt["terminal_ordinal"]
+    records = payload.get("provider_terminal_responses")
+    if type(terminal) is not int or terminal <= ordinal or not isinstance(records, dict):
+        return None
+    stops = sum(isinstance(record, dict) and record.get("terminal_event") == "dispatch.stopped"
+                and type(record.get("ordinal")) is int and record["ordinal"] < terminal
+                and key == str(record["ordinal"]) for key, record in records.items())
+    return terminal if ordinal + stops == terminal else None
 
 
 def _completed_response(payload, job, operation, owner, tenant):
@@ -1692,7 +2329,7 @@ def _author_render_chain(payload, raw, receipt, *, request, job, asset, index,
         previous_raw = previous.get("raw_response") if isinstance(previous, dict) else None
         previous_receipt = previous.get("receipt") if isinstance(previous, dict) else None
         records = payload.get("provider_terminal_responses") or {}
-        ordinal = previous_receipt.get("attempt_ordinal") if isinstance(previous_receipt, dict) else None
+        ordinal = _receipt_terminal_ordinal(previous_receipt, payload)
         terminal = records.get(str(ordinal)) if isinstance(records, dict) and type(ordinal) is int else None
         if (previous is not None and previous.get("kind") == "provider"
                 and isinstance(previous_quality, dict) and isinstance(initial, dict)
@@ -1790,7 +2427,11 @@ def _author_render_chain(payload, raw, receipt, *, request, job, asset, index,
     if quality:
         if str(quality.get("source_digest", "")).removeprefix("sha256:") != stored_digest:
             reject("svg_partial_recovery_render_measurement_unbound")
-        metrics = quality.get("browser_metrics")
+        from services.svg_presentation_checkpoint import quality_browser_metrics
+        try:
+            metrics = quality_browser_metrics(quality)
+        except ValueError:
+            reject("svg_partial_recovery_render_metrics_unbound")
         metrics_digest = sha256_hex(json.dumps(metrics, sort_keys=True, separators=(",", ":"),
             ensure_ascii=False, default=str).encode()) if metrics is not None else None
         recorded_metrics_digest = str(quality.get("metrics_digest", "")).removeprefix("sha256:")
@@ -2319,11 +2960,16 @@ async def _completed_source_author_projection(payload, row, *, job, operation, e
         quality = attempt.get("quality") or {}
         initial = payload.get("initial_quality") or {}
         previous = payload.get("last_valid_svg")
+        from services.svg_presentation_checkpoint import quality_browser_metrics
+        try:
+            selected_metrics = quality_browser_metrics(quality)
+        except ValueError:
+            reject("svg_partial_recovery_completed_author_unproven")
         if (not isinstance(previous, str) or sha256_hex(previous.encode()) != sha256_hex(first.encode())
                 or quality.get("measurement_complete") is not True
                 or str(quality.get("source_digest", "")).removeprefix("sha256:") != sha256_hex(first.encode())
                 or str(initial.get("source_digest", "")).removeprefix("sha256:") != sha256_hex(first.encode())
-                or not isinstance(quality.get("browser_metrics"), dict)
+                or not isinstance(selected_metrics, dict)
                 or not quality.get("metrics_digest") or not quality.get("png_digest") or not quality.get("wrapper_digest")
                 or type(receipt.get("attempt_ordinal")) is not int):
             reject("svg_partial_recovery_completed_author_unproven")
@@ -2872,7 +3518,8 @@ async def _completed_invalid_source_output(payload, row, *, completed, job, oper
             or raw != completed["raw_response"]
             or str(receipt.get("raw_digest", "")).removeprefix("sha256:") != completed["output_digest"]
             or type(receipt.get("attempt_ordinal")) is not int
-            or receipt["attempt_ordinal"] != completed.get("ordinal")):
+            or _receipt_terminal_ordinal(receipt, payload) is None
+            or _receipt_terminal_ordinal(receipt, payload) != completed.get("ordinal")):
         reject(code)
     unresolved_other_calls = [call for call in episode_calls if call.stage in stages
         and call.slide_index != row.slide_index and _unresolved_provider_call(call)]
@@ -3047,7 +3694,8 @@ def _completed_failed_source_quality(payload, row, *, completed, job, operation,
             or completed != _completed_response(payload, job, operation, owner, tenant)
             or attempt.get("raw_response") != completed["raw_response"]
             or not completed["raw_response"].strip()
-            or receipt.get("attempt_ordinal") != completed.get("ordinal")
+            or _receipt_terminal_ordinal(receipt, payload) is None
+            or _receipt_terminal_ordinal(receipt, payload) != completed.get("ordinal")
             or str(receipt.get("raw_digest", "")).removeprefix("sha256:") != completed["output_digest"]
             or not isinstance(svg, str) or not svg.strip()
             or quality.get("measurement_complete") is not True
@@ -3084,7 +3732,11 @@ def _completed_failed_source_quality(payload, row, *, completed, job, operation,
             or set(images.get("used") or []) != set(offered)):
         reject(code)
     import json
-    metrics = quality.get("browser_metrics")
+    from services.svg_presentation_checkpoint import quality_browser_metrics
+    try:
+        metrics = quality_browser_metrics(quality)
+    except ValueError:
+        reject(code)
     if (not isinstance(metrics, dict) or metrics.get("probe_error") or not metrics.get("fonts_ready")
             or not _sha256_hex_valid(str(quality.get("wrapper_digest", "")).removeprefix("sha256:"))):
         reject(code)
@@ -3343,10 +3995,12 @@ async def build_manifest(session, operation, *, presentation_revision):
         payload = row.svg_checkpoint or {}
         completed = _completed_response(payload, job, operation, owner, tenant)
         prior_lineage = job.request_payload.get(LINEAGE_KEY) or {}
-        undispatched = _undispatched_episode_page(payload, job, operation, owner, tenant)
         episode_admissions = ({admissions[0].id} if prior_lineage else admission_ids)
-        unknown_calls = [call for call in calls if call.slide_index == row.slide_index
-            and call.admission_id in episode_admissions and _unresolved_provider_call(call)]
+        page_calls = [call for call in calls if call.slide_index == row.slide_index
+                      and call.admission_id in episode_admissions]
+        undispatched = _undispatched_episode_page(payload, job, operation, owner, tenant,
+            page_calls=page_calls, attempt_token=getattr(row, "attempt_token", None))
+        unknown_calls = [call for call in page_calls if _unresolved_provider_call(call)]
         is_unknown = not undispatched and (bool(unknown_calls) or completed is None and (
             _unknown_provider(payload) or payload.get("inflight") is not None))
         if is_unknown:
@@ -4134,10 +4788,19 @@ async def verify_episode(session, operation, job, *, require_current_code=True, 
     identity = str(operation.id)
     if identity in verification.active:
         reject("svg_partial_recovery_lineage_conflict")
-    # A changed historical job is always re-fingerprinted, including nested payloads.
-    operation_digest, operation_key = verification.operation_fingerprint(operation,
-        _operation_read, require_current_code=require_current_code)
-    job_digest = verification.job_fingerprint(job)
+    # A changed historical job is always re-fingerprinted, including nested payloads,
+    # unless these are the proven node's own live objects (rechecked once at finish()).
+    node = (verification.node(operation, job)
+            if not require_current_code and _operation_read is not None
+            and type(getattr(verification, "node_proofs", None)) is dict else None)
+    if node is None:
+        operation_digest, operation_key = verification.operation_fingerprint(operation,
+            _operation_read, require_current_code=require_current_code)
+        job_digest = verification.job_fingerprint(job)
+    else:
+        operation_digest, operation_key = verification.operation_fingerprint(operation,
+            _operation_read, require_current_code=require_current_code, node=node)
+        job_digest = verification.job_fingerprint(job, node=node)
     key = (identity, operation_digest, job_digest)
     _count(verification, "episode_visits")
     visited = getattr(verification, "visited_episodes", None)
@@ -4150,23 +4813,53 @@ async def verify_episode(session, operation, job, *, require_current_code=True, 
                 require_current_code=require_current_code, verification=verification,
                 operation_digest=operation_digest)
             verification.check(session)
-            verification.expect(WorkspaceOperation, _operation_projection(operation))
+            payload_snapshot = digested = None
+            if not require_current_code and operation_key is not None:
+                fingerprint_key, snapshot, *prepared = operation_key
+                # snapshot is exact JSON by construction (round-trip proof or a
+                # deepcopy of a walk-proven payload, no await between), so it may
+                # supply the marshal hint; a mismatch still takes the exact walk.
+                # Its encoding was taken while it was private; it is never exposed.
+                encoded = prepared[0] if prepared else _marshal_json_bytes(snapshot)
+                started = time.perf_counter()
+                same = _same_json_snapshot(snapshot, operation.request_payload, encoded)
+                _count(verification, "payload_marshal_compares")
+                _elapsed(verification, "t_marshal_s", started)
+                if same is not True:
+                    reject("svg_partial_recovery_request_snapshot_changed")
+                # Proven equal just above with no await until the transfer below,
+                # so the row memo may share this private copy instead of its own.
+                payload_snapshot = (operation.request_payload, snapshot)
+                projection = prepared[1] if len(prepared) > 1 else None
+                if (type(projection) is dict
+                        and projection.get("request_payload") is operation.request_payload
+                        and _same_json_value(
+                            {name: value for name, value in projection.items() if name != "request_payload"},
+                            _operation_control(operation)) is True):
+                    # operation_digest hashed exactly this projection before the
+                    # await; its control still matches and its payload object is the
+                    # one just proven equal to the private snapshot. Hash it once.
+                    digested = (projection, operation_digest)
+            if digested is not None:
+                verification.expect(WorkspaceOperation, digested[0], _digested=digested,
+                    _payload_snapshot=payload_snapshot)
+            elif payload_snapshot is None:
+                verification.expect(WorkspaceOperation, _operation_projection(operation))
+            else:
+                verification.expect(WorkspaceOperation, _operation_projection(operation),
+                    _payload_snapshot=payload_snapshot)
             verification.expect(PresentationGenerationJob, _dump(job))
             if not require_current_code:
                 if operation_key is not None:
-                    fingerprint_key, snapshot = operation_key
-                    # snapshot is exact JSON by construction (round-trip proof or a
-                    # deepcopy of a walk-proven payload, no await between), so it may
-                    # supply the marshal hint; a mismatch still takes the exact walk.
-                    encoded = _marshal_json_bytes(snapshot)
-                    if _same_json_snapshot(snapshot, operation.request_payload, encoded) is not True:
-                        reject("svg_partial_recovery_request_snapshot_changed")
                     # The initial exact-JSON copy stayed private in this
                     # frame while verification awaited. The comparison above
                     # proves it remains finite and exact; transfer ownership.
                     verification.operation_fingerprints[fingerprint_key] = (
                         snapshot, operation_digest, encoded)
                 verification.episodes[key] = manifest
+                if operation_key is not None and type(getattr(verification, "node_proofs", None)) is dict:
+                    # Both live values were compared above with no await since.
+                    verification.remember_node(operation, job, fingerprint_key, operation_digest, job_digest)
         finally:
             verification.active.remove(identity)
     else:
@@ -4181,6 +4874,7 @@ async def verify_episode(session, operation, job, *, require_current_code=True, 
     if retained:
         # Retain only a finished success. finish() never reads the payload
         # memo copies, so they are released instead of held until recheck.
+        # A copy shared with a row fingerprint stays held once, by that row.
         verification.operation_fingerprints.clear()
         _retained_proofs[identity] = (verification, str(job.id))
     return manifest
@@ -4293,7 +4987,8 @@ async def _verify_episode_once(session, operation, job, *, require_current_code,
                 or lineage.get("source_presentation_id") != manifest.get("presentation_id")
                 or manifest.get("source_request_routing") != _source_request_routing(
                     (archive.get("job") or {}).get("request_payload") or {})))
-            or digest(frozen_episode_payload(job.request_payload, manifest)) != manifest.get("frozen_request_digest")
+            or digest(_frozen_episode_projection(job.request_payload, manifest, copy=False,
+                manifest_digest=manifest_digest)) != manifest.get("frozen_request_digest")
             or digest(job.svg_style_snapshot) != manifest.get("frozen_style_digest")
             or job.authored_outline != (archive.get("job") or {}).get("authored_outline")
             or (require_current_code and _code_digest() != manifest.get("code_digest"))):
@@ -4328,19 +5023,34 @@ async def _verify_episode_once(session, operation, job, *, require_current_code,
             model.id.in_([uuid.UUID(item["id"]) for item in snapshots])))}
         for snapshot in snapshots:
             original = originals.get(snapshot["id"])
-            if original is None or digest(_dump(original)) != digest(snapshot):
+            if original is None:
                 reject("svg_partial_recovery_history_changed")
-            verification.expect(model, snapshot)
+            original_digest = digest(_dump(original))
+            snapshot_digest = digest(snapshot)
+            if original_digest != snapshot_digest:
+                reject("svg_partial_recovery_history_changed")
+            verification.expect(model, snapshot, _digested=(snapshot, snapshot_digest))
     historical_task = await session.get(AsyncPresentationGenerationTaskModel, archive.get("task", {}).get("id"))
-    if historical_task is None or digest(_dump(historical_task)) != digest(archive.get("task")):
+    if historical_task is None:
         reject("svg_partial_recovery_history_changed")
-    verification.expect(AsyncPresentationGenerationTaskModel, archive["task"])
+    task_snapshot = archive.get("task")
+    original_digest = digest(_dump(historical_task))
+    task_digest = digest(task_snapshot)
+    if original_digest != task_digest:
+        reject("svg_partial_recovery_history_changed")
+    verification.expect(AsyncPresentationGenerationTaskModel, archive["task"],
+        _digested=(task_snapshot, task_digest))
     source_record = archive.get("source_record")
     if source_record is not None:
         original = await session.get(SourceContentManifestRecord, source_record["manifest_id"])
-        if original is None or digest(_dump(original)) != digest(source_record):
+        if original is None:
             reject("svg_partial_recovery_source_changed")
-        verification.expect(SourceContentManifestRecord, source_record, identity="manifest_id")
+        original_digest = digest(_dump(original))
+        source_digest = digest(source_record)
+        if original_digest != source_digest:
+            reject("svg_partial_recovery_source_changed")
+        verification.expect(SourceContentManifestRecord, source_record, identity="manifest_id",
+            _digested=(source_record, source_digest))
     operation_ids = {item["id"] for item in archive.get(
         "operation_refs" if archive_schema in {ARCHIVE_V2, ARCHIVE_V3} else "operations", [])}
     await verification.ledger(operation_ids, manifest["job_id"], archive=archive)

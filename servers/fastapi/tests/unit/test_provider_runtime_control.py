@@ -257,6 +257,56 @@ def test_circuit_breaker_opens_and_allows_one_half_open_probe() -> None:
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize("dispatch_stopped", [True, False])
+def test_half_open_probe_stopped_before_dispatch_leaves_the_circuit_unchanged(
+    dispatch_stopped: bool,
+) -> None:
+    async def scenario() -> None:
+        control = await _registered(
+            RuntimeLimits(
+                requests_per_minute=100,
+                circuit_failure_threshold=1,
+                circuit_reset_seconds=0.03,
+            )
+        )
+        failing = await control.admit("job-1", "failure", estimated_cost_microunits=1)
+        await failing.finish(actual_cost_microunits=1, outcome="retryable_failure")
+        await asyncio.sleep(0.04)
+        probe = await control.admit("job-1", "probe", estimated_cost_microunits=1)
+        if dispatch_stopped:
+            with pytest.raises(ValueError, match="dispatch_stopped"):
+                await probe.finish(
+                    actual_cost_microunits=None,
+                    outcome="retryable_failure",
+                    dispatch_stopped=True,
+                )
+        await probe.finish(
+            actual_cost_microunits=None,
+            outcome="failure",
+            dispatch_stopped=dispatch_stopped,
+        )
+        status = await control.job_status("job-1")
+        # Unknown cost stays unknown and the job still sees its failure.
+        assert status["actual_cost_unavailable_count"] == 1
+        assert status["consecutive_failures"] == 2
+        circuit = (await control.snapshot())["circuit"]
+        if dispatch_stopped:
+            assert circuit["state"] == "half_open_ready"
+            assert circuit["consecutive_failures"] == 1
+            next_probe = await asyncio.wait_for(
+                control.admit("job-1", "next-probe", estimated_cost_microunits=1),
+                timeout=0.1,
+            )
+            await next_probe.finish(actual_cost_microunits=1, outcome="success")
+        else:
+            # A dispatched probe failure re-opens the circuit as before.
+            assert circuit["state"] == "open"
+            with pytest.raises(CircuitOpenError):
+                await control.admit("job-1", "reopened", estimated_cost_microunits=1)
+
+    asyncio.run(scenario())
+
+
 def test_preexisting_inflight_success_does_not_close_an_open_circuit() -> None:
     async def scenario() -> None:
         control = await _registered(

@@ -41,13 +41,20 @@ class ProviderCallLease:
         *,
         actual_cost_microunits: int | None,
         outcome: Literal["success", "failure", "retryable_failure"],
+        dispatch_stopped: bool = False,
     ) -> None:
-        """Reconcile actual cost and release concurrency."""
+        """Reconcile actual cost and release concurrency.
+
+        ``dispatch_stopped`` marks a ``failure`` whose SDK request was never
+        sent: it still counts against the job but leaves the provider circuit
+        untouched.
+        """
 
         await self._control._finish_lease(
             self,
             actual_cost_microunits=actual_cost_microunits,
             outcome=outcome,
+            dispatch_stopped=dispatch_stopped,
         )
 
     async def __aenter__(self) -> ProviderCallLease:
