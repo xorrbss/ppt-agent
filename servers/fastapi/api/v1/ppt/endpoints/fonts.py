@@ -3,7 +3,6 @@ import uuid
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, File, UploadFile
 from pydantic import BaseModel
-from templates.preview import FontCheckResponse, check_fonts_in_pptx_handler
 from utils.asset_directory_utils import absolute_fastapi_asset_url, get_app_data_directory_env
 from utils.document_path_security import validated_upload_extension
 from utils.upload_limits import get_single_upload_limit_bytes, stream_upload_to_file
@@ -350,9 +349,6 @@ async def get_uploaded_fonts():
         )
 
 
-FONTS_ROUTER.post("/check", response_model=FontCheckResponse)(check_fonts_in_pptx_handler)
-
-
 @FONTS_ROUTER.delete("/delete/{filename}")
 async def delete_font(filename: str):
     """
@@ -397,4 +393,4 @@ async def delete_font(filename: str):
         raise HTTPException(
             status_code=500,
             detail=f"Error deleting font: {str(e)}"
-        ) 
+        )

@@ -19,15 +19,12 @@ from api.v1.ppt.endpoints.openai import OPENAI_ROUTER
 from api.v1.ppt.endpoints.files import FILES_ROUTER
 from api.v1.ppt.endpoints.asset_gateway import ASSET_GATEWAY_ROUTER
 from api.v1.ppt.endpoints.file_decompose_jobs import FILE_DECOMPOSE_JOBS_ROUTER
-from api.v1.ppt.endpoints.pptx_slides import PPTX_SLIDES_ROUTER
-from api.v1.ppt.endpoints.pdf_slides import PDF_SLIDES_ROUTER
 from api.v1.ppt.endpoints.fonts import FONTS_ROUTER
 from api.v1.ppt.endpoints.icons import ICONS_ROUTER
 from api.v1.ppt.endpoints.images import IMAGES_ROUTER
 from api.v1.ppt.endpoints.ollama import OLLAMA_ROUTER
 from api.v1.ppt.endpoints.outlines import OUTLINES_ROUTER
 from api.v1.ppt.endpoints.slide import SLIDE_ROUTER
-from api.v1.ppt.endpoints.pptx_slides import PPTX_FONTS_ROUTER
 from api.v1.ppt.endpoints.theme import THEMES_ROUTER
 from api.v1.ppt.endpoints.theme_generate import THEME_ROUTER
 from api.v1.ppt.endpoints.authored import AUTHORED_ROUTER
@@ -82,17 +79,14 @@ PPT_FEATURE_MODULES = (
         frozenset({"ppt-api", "presentation"}),
     ),
     FeatureModule("presentation-share", PRESENTATION_SHARE_ROUTER, frozenset({"ppt-api", "presentation"})),
-    FeatureModule("pptx-slides", PPTX_SLIDES_ROUTER, frozenset({"ppt-api", "export"})),
     FeatureModule("slide", SLIDE_ROUTER, frozenset({"ppt-api", "presentation"})),
     FeatureModule("images", IMAGES_ROUTER, frozenset({"ppt-api", "assets"})),
     FeatureModule("icons", ICONS_ROUTER, frozenset({"ppt-api", "assets"})),
     FeatureModule("ollama", OLLAMA_ROUTER, frozenset({"ppt-api", "providers"})),
-    FeatureModule("pdf-slides", PDF_SLIDES_ROUTER, frozenset({"ppt-api", "export"})),
     FeatureModule("openai", OPENAI_ROUTER, frozenset({"ppt-api", "providers"})),
     FeatureModule("anthropic", ANTHROPIC_ROUTER, frozenset({"ppt-api", "providers"})),
     FeatureModule("google", GOOGLE_ROUTER, frozenset({"ppt-api", "providers"})),
     FeatureModule("codex-auth", CODEX_AUTH_ROUTER, frozenset({"ppt-api", "providers"})),
-    FeatureModule("pptx-fonts", PPTX_FONTS_ROUTER, frozenset({"ppt-api", "assets", "export"})),
     FeatureModule("themes", THEMES_ROUTER, frozenset({"ppt-api", "presentation"})),
     FeatureModule("theme-generate", THEME_ROUTER, frozenset({"ppt-api", "presentation"})),
     FeatureModule("authored", AUTHORED_ROUTER, frozenset({"ppt-api", "presentation"})),
