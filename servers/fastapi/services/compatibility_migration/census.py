@@ -235,31 +235,9 @@ def classify_presentation(
     )
 
 
-def build_census(
-    presentations: Sequence[object],
-    slides: Sequence[object],
-) -> tuple[PresentationCensusEntry, ...]:
-    """Census every supplied presentation, including decks with zero slides."""
-
-    by_presentation: dict[str, list[object]] = {}
-    for slide in slides:
-        by_presentation.setdefault(str(_read(slide, "presentation")), []).append(slide)
-    return tuple(
-        classify_presentation(
-            presentation,
-            sorted(
-                by_presentation.get(_identifier(presentation), []),
-                key=lambda slide: (_read(slide, "index", -1), _identifier(slide)),
-            ),
-        )
-        for presentation in presentations
-    )
-
-
 __all__ = [
     "CensusClassification",
     "PresentationCensusEntry",
     "SlideEvidence",
-    "build_census",
     "classify_presentation",
 ]

@@ -128,7 +128,6 @@ _MIGRATED_MODULES = [
     "services.authored_vnext.source_unitization",
     "services.chat.slide_ui_query",
     "services.compatibility_migration.archive",
-    "services.compatibility_migration.inventory",
     "services.decompose_job_service",
     "services.document_canvas",
     "services.generation_core.assets.icon_pack.library",
