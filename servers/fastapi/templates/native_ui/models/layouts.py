@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
 
 from .elements import Position, SlideElement, TemplateV2Model
 
@@ -16,19 +16,6 @@ class Component(TemplateV2Model):
     description: str = Field(min_length=10, max_length=300)
     position: Position
     elements: list[SlideElement] = Field(min_length=1)
-
-
-class SimilarComponents(TemplateV2Model):
-    model_config = ConfigDict(extra="forbid")
-    indices: list[int] = Field(min_length=2)
-
-    @model_validator(mode="after")
-    def _indices_must_be_unique_and_non_negative(self) -> "SimilarComponents":
-        if any(index < 0 for index in self.indices):
-            raise ValueError("similar component indices must be non-negative")
-        if len(self.indices) != len(set(self.indices)):
-            raise ValueError("similar component indices must be unique")
-        return self
 
 
 class MergedComponent(TemplateV2Model):

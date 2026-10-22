@@ -43,7 +43,6 @@ from utils.process_kill_on_parent_death import bind_to_parent_lifetime
 from utils.render_cache_budget import (
     capture_cache_resident_bytes,
     metrics_cache_resident_bytes,
-    metrics_payload_bytes,
     render_cache_resident_bytes,
 )
 from utils.renderer_internal_capability import issue_internal_render_capability

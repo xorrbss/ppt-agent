@@ -82,34 +82,9 @@ def _encode_password_hash(password: str) -> str:
     )
 
 
-def _verify_password_hash(password: str, encoded_hash: str) -> bool:
-    try:
-        algorithm, iterations_str, salt_encoded, digest_encoded = encoded_hash.split("$")
-        if algorithm != "pbkdf2_sha256":
-            return False
-
-        iterations = int(iterations_str)
-        salt = _base64url_decode(salt_encoded)
-        expected_digest = _base64url_decode(digest_encoded)
-        actual_digest = hashlib.pbkdf2_hmac(
-            "sha256", password.encode("utf-8"), salt, iterations
-        )
-        return hmac.compare_digest(actual_digest, expected_digest)
-    except Exception:
-        return False
-
-
 def is_auth_configured() -> bool:
     config = _load_user_config()
     return bool(config.get("AUTH_USERNAME") and config.get("AUTH_PASSWORD_HASH"))
-
-
-def get_configured_auth_username() -> Optional[str]:
-    config = _load_user_config()
-    username = config.get("AUTH_USERNAME")
-    if isinstance(username, str) and username.strip():
-        return username.strip()
-    return None
 
 
 def setup_initial_credentials(username: str, password: str) -> None:
