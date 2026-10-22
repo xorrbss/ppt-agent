@@ -418,7 +418,7 @@ runStep({
   args: ["--no-install", "cypress", "verify"],
   cwd: nextDirectory,
   selected: cypressSelected,
-  notRunReason: "requires --with-cypress; GitHub uses the pinned Cypress action with Xvfb",
+  notRunReason: "requires --with-cypress; Bitbucket runs only the Dashboard component spec under xvfb-run",
   precondition: node22Precondition,
   preconditionDescription: "Node 22, npm ci, and cached Cypress binary",
 });
@@ -513,4 +513,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 console.log(`\nSelected host profile passed; ${notRun.length} capability step(s) were NOT RUN.`);
-console.log("GitHub remains authoritative for the other OS, service, and runner-image gates.");
+console.log("Bitbucket Pipelines runs only the gates in bitbucket-pipelines.yml; the full FastAPI suite and the capability gates run nowhere else.");

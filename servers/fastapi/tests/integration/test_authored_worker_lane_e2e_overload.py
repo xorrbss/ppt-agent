@@ -102,8 +102,8 @@ def _overload_scenario(tmp_path, monkeypatch, *, wave_barrier: bool = True):
 # too -- the escape valve fires before the real 30s cooldown has elapsed, the
 # concurrency cap never restores to the profile's steady value, and the last
 # two slides run as two separate single-slide waves instead of one two-slide
-# wave. Reproduced deterministically (4/4 full-file runs). CI runs on
-# ubuntu-latest (.github/workflows/test-all.yml:16), where ``time.monotonic()``
+# wave. Reproduced deterministically (4/4 full-file runs). On Linux (the
+# Bitbucket "FastAPI pytest baseline" image included), ``time.monotonic()``
 # has nanosecond-scale resolution and two real reads essentially never compare
 # equal, so the escape valve only ever fires there for genuine no-op sleepers
 # and this assertion holds. Structural fix (out of this test file's ownership):
