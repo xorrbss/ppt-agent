@@ -11,8 +11,6 @@ class BufferedAsyncSession:
 
     def __init__(self, delegate: AsyncSession) -> None:
         self._delegate = delegate
-        self.defer_external_chat_memory = True
-        self.defer_canonical_chat_persistence = True
 
     def _retain(self, instance: object) -> None:
         retained = self._delegate.info.setdefault("workspace_chat_provisional_instances", {})

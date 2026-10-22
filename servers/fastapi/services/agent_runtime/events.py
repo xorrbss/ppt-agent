@@ -53,33 +53,6 @@ class NullEventSink:
         return None
 
 
-class CompositeEventSink:
-    def __init__(self, *sinks: EventSink) -> None:
-        self._sinks = sinks
-
-    async def status(self, status: str) -> None:
-        for sink in self._sinks:
-            await sink.status(status)
-
-    async def assistant_delta(self, delta: str) -> None:
-        for sink in self._sinks:
-            await sink.assistant_delta(delta)
-
-    async def tool_started(self, *, tool: str, summary: str) -> None:
-        for sink in self._sinks:
-            await sink.tool_started(tool=tool, summary=summary)
-
-    async def tool_completed(
-        self, *, tool: str, status: str, summary: str
-    ) -> None:
-        for sink in self._sinks:
-            await sink.tool_completed(tool=tool, status=status, summary=summary)
-
-    async def finalize(self, assistant_output: str) -> None:
-        for sink in self._sinks:
-            await sink.finalize(assistant_output)
-
-
 class TransientRunEventBroadcaster:
     """Bounded live fanout using the canonical transport-neutral envelope."""
 

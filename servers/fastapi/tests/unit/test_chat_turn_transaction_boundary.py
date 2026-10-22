@@ -46,7 +46,6 @@ from models.sql.workspace import (
 )
 from services.chat import ChatTurnResult
 from services.chat import memory_layer
-from services.chat.conversation_store import ChatConversationStore
 from services.chat.memory_layer import PresentationChatMemoryLayer
 from services.chat.slide_ui_query import slide_ui_revision
 from services.workspace_chat_operation_handler import (
@@ -338,13 +337,6 @@ def _replay_service_factory(
             # calls left open would block this probe.
             if probe is not None:
                 await probe()
-            await ChatConversationStore(self._session).append_turn(
-                presentation_id=self._presentation_id,
-                conversation_id=self._conversation_id,
-                user_message="restructure the deck",
-                assistant_message="Deck restructured.",
-                tool_calls=tool_calls,
-            )
             return ChatTurnResult(
                 conversation_id=self._conversation_id,
                 response_text="Deck restructured.",
