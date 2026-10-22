@@ -14,7 +14,6 @@ from api.v1.ppt.endpoints.presentation_helpers import build_export_cookie_header
 from models.presentation_from_template import (
     AuthoredPageRemakePreviewRequest,
     AuthoredPageRemakePublishRequest,
-    AuthoredQualityReviewRequest,
     RetemplatePresentationRequest,
 )
 from models.sql.async_presentation_generation_status import (
@@ -33,7 +32,6 @@ from services.authored_page_remake_service import (
     remake_http_error,
 )
 from services.authored_quality_ocr import get_ocr_readiness
-from services.authored_quality_review_service import queue_authored_quality_review
 from models.svg_quality_review import SvgQualityReviewRequest
 from services.svg_quality_review_service import queue_svg_quality_review
 from services.database import get_async_session
@@ -207,13 +205,6 @@ async def redo_authored_canonical_document(
 @AUTHORED_OPERATIONS_ROUTER.get("/quality-review/readiness")
 async def authored_quality_review_readiness():
     return await get_ocr_readiness()
-
-
-@AUTHORED_OPERATIONS_ROUTER.post("/{id}/quality-review", response_model=AsyncPresentationGenerationTaskModel)
-async def quality_review_authored_presentation(id: uuid.UUID, request: AuthoredQualityReviewRequest, background_tasks: BackgroundTasks, sql_session: AsyncSession = Depends(get_async_session)):
-    require_legacy_presentation_write_path(id)
-    await require_live_presentation(sql_session, id)
-    return await queue_authored_quality_review(id, request, background_tasks, sql_session)
 
 
 @AUTHORED_OPERATIONS_ROUTER.post("/{id}/slides/{slide_index}/remake/preview", response_model=AsyncPresentationGenerationTaskModel)
