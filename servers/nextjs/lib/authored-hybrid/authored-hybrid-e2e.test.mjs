@@ -21,7 +21,6 @@ import { preflightAuthoredHtmlForHybrid } from "./security.ts";
 import { backplatePixelSize, BACKPLATE_SCALE } from "./capture-scale.ts";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(HERE, "..", "..", "..", "..");
 const FIXTURES = [
   "e2e-text-table-shapes.html",
   "e2e-cjk-9pt-lines-long-text.html",
@@ -173,7 +172,7 @@ function assertRgb(actual, expected, message) {
   );
 }
 
-test("v0.4.8 authored-hybrid representative fixtures preserve editable structure end to end", async (t) => {
+test("authored-hybrid representative fixtures preserve editable structure end to end", async (t) => {
   const chromeExecutable = await resolveAuthoredHybridChromeExecutable();
   if (!chromeExecutable) {
     if (process.env.CI === "true") assert.fail("CI must provide Chrome/Chromium");
@@ -181,19 +180,14 @@ test("v0.4.8 authored-hybrid representative fixtures preserve editable structure
     return;
   }
 
-  const [rootPackage, installedVersion, ...htmlSlides] = await Promise.all([
-    fs.readFile(path.join(REPO_ROOT, "package.json"), "utf8").then(JSON.parse),
-    fs.readFile(path.join(REPO_ROOT, "presentation-export", ".installed-version"), "utf8"),
-    ...FIXTURES.map((fixture) =>
+  const htmlSlides = await Promise.all(
+    FIXTURES.map((fixture) =>
       fs.readFile(path.join(HERE, "fixtures", fixture), "utf8")
     ),
-  ]);
-  assert.equal(rootPackage.presentationExportVersion, "v0.4.8");
-  assert.equal(installedVersion.trim(), "v0.4.8");
+  );
 
-  // No v0.3.3 runtime is retained in the repository. A binary byte comparison
-  // would require downloading or replacing the pinned runtime, so the stable
-  // baseline is the fidelity skeleton contract plus semantic OOXML invariants.
+  // The stable baseline is the fidelity skeleton contract plus semantic OOXML
+  // invariants; no external export runtime participates in this assembly.
   const baseline = fidelitySkeleton(htmlSlides.length);
   const baselineEntries = readPptxArchive(baseline);
   for (let slideNumber = 1; slideNumber <= htmlSlides.length; slideNumber += 1) {

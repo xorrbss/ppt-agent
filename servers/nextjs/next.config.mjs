@@ -3,7 +3,6 @@ import { fileURLToPath } from "node:url";
 
 const nextjsRoot = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(nextjsRoot, "../..");
-const exportRuntimeTrace = ["../../presentation-export/**/*"];
 const semverRuntimeTrace = [
   "node_modules/.pnpm/semver@*/node_modules/semver/**/*",
 ];
@@ -132,8 +131,7 @@ export const appPageCspSource =
 const nextConfig = {
   reactStrictMode: false,
   distDir: process.env.PRESENTON_TEST_NEXT_DIST_DIR || ".next-build",
-  // Next requires this to agree with outputFileTracingRoot. The repository root
-  // is required to trace the presentation-export runtime outside this app.
+  // Next requires this to agree with outputFileTracingRoot.
   turbopack: {
     root: repositoryRoot,
   },
@@ -158,7 +156,6 @@ const nextConfig = {
       ...linkFreeRuntimeTrace,
       ...runtimeTailwindTrace,
     ],
-    "/api/export-presentation": exportRuntimeTrace,
   },
   outputFileTracingExcludes: {
     "/*": [

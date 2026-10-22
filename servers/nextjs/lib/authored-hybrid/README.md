@@ -37,7 +37,8 @@ the H1 contract, not extraction failures.
 The PPTX export API accepts `pptxMode: "fidelity" | "hybrid"`. Missing mode
 defaults to `"hybrid"` so backgrounds, text, pictures, and supported shapes are
 exported as separate PowerPoint objects. Explicit `"fidelity"` remains
-available for compatibility and uses the historical full-slide-image exporter
+available for compatibility and delivers the isolated export worker's
+full-slide-image deck (`servers/fastapi/workers/public_export_worker.py`)
 without entering this module. PDF ignores this PPTX-only option.
 
 `"hybrid"` first produces that fidelity deck as a valid OOXML skeleton. Only
