@@ -286,12 +286,3 @@ def page_edge_conflicts(page, canvas_width_emu: float, clusters: Sequence[Box] =
     ]
     # 1/600 of the canvas width is about 3 source pixels on a 1600-2000 px slide.
     return crop_edge_conflicts(items, words, clusters, tolerance=canvas_width_emu * scale / 600)
-
-
-def redesign_crop_edges(analysis, page_number: int, page_image) -> list[EdgeConflict]:
-    """Crop-edge conflicts of a sealed page, including ink clusters of its source image."""
-
-    page = analysis.pages[page_number - 1]
-    scale = page_image.width / analysis.source.canvas_width_emu
-    clusters = text_ink_clusters(np.asarray(page_image.convert("L"), dtype=np.int16))
-    return page_edge_conflicts(page, analysis.source.canvas_width_emu, clusters, scale)

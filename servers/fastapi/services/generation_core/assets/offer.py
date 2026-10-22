@@ -69,9 +69,6 @@ class AssetOffer:
     slots: tuple[AssetSlot, ...] = ()
     receipt: dict = field(default_factory=dict)
 
-    def for_page(self, index: int) -> tuple[AssetSlot, ...]:
-        return tuple(slot for slot in self.slots if slot.page_index == index)
-
     def to_json(self, *, root: str | Path) -> dict:
         """Persistable form; paths are stored relative to ``root`` (app data)."""
         base = Path(root).resolve()

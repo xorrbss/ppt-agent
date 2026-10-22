@@ -123,18 +123,10 @@ def review_page_indices(qualities: Sequence[Mapping[str, Any]]) -> list[int]:
             or quality.get("verified") is not True or quality.get("passed") is not True]
 
 
-def classification_of(quality: Mapping[str, Any]) -> str | None:
-    """The classification a published page's quality record carries, if any."""
-
-    value = quality.get(CLASSIFICATION_KEY) if isinstance(quality, Mapping) else None
-    return value if isinstance(value, str) else None
-
-
 __all__ = [
     "PASSED",
     "QUALITY_REASON_PREFIX",
     "PageOutcome",
-    "classification_of",
     "classify_page_outcomes",
     "deck_quality_summary",
     "review_page_indices",

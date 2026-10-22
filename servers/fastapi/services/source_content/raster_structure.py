@@ -158,7 +158,7 @@ def redesign_content_ledger(
         violations.append(f"{page.regions[pixel].region_id}:{page.regions[other].region_id}:shown_twice")
 
     # Editable text inside a crop, or a crop cutting its own words, loses or duplicates
-    # content; crops cutting other pixels are measured by ``redesign_crop_edges``.
+    # content; crops that cut only other pixels are not checked here.
     for conflict in page_edge_conflicts(page, analysis.source.canvas_width_emu):
         if conflict.kind in ("text_word", "own_word"):
             violations.append(f"{page.regions[conflict.crop].region_id}:crop_edge_{conflict.kind}")

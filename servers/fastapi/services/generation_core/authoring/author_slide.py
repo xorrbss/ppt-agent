@@ -35,11 +35,8 @@ from utils.llm_calls.author_source_tags import (
     _source_start_tags,
 )
 from utils.llm_calls.author_slide_admission import (
-    AuthorRateState as _AuthorRateState,
     AuthorRateStates,
-    rate_state,
     register_rate_limit,
-    retry_after_seconds,
     wait_for_rate_slot,
 )
 from services.generation_core.authoring import author_slide_prompt
@@ -96,10 +93,6 @@ logger = logging.getLogger(__name__)
 # live in ``author_slide_effort``; they are re-exported here under their historic
 # names because every caller and test imports them from this module.
 AUTHOR_MAX_TOKENS = author_slide_effort.AUTHOR_MAX_TOKENS
-_FAST_ROLE_OUTPUT_BUDGETS = author_slide_effort.FAST_ROLE_OUTPUT_BUDGETS
-_REASONING_EFFORTS = author_slide_effort.REASONING_EFFORTS
-_REASONING_DISABLE = author_slide_effort.REASONING_DISABLE
-_CODEX_REASONING_CAPABILITIES = author_slide_effort.CODEX_REASONING_CAPABILITIES
 _normalized_authoring_reasoning_effort = (
     author_slide_effort.normalized_authoring_reasoning_effort
 )
@@ -156,16 +149,8 @@ AUTHOR_RATE_LIMIT_MAX_COOLDOWN_SECONDS = _env_nonnegative_float(
 _AUTHOR_RATE_STATES: AuthorRateStates = WeakKeyDictionary()
 
 
-def _author_rate_state() -> _AuthorRateState:
-    return rate_state(_AUTHOR_RATE_STATES)
-
-
 async def _wait_for_author_rate_slot() -> None:
     await wait_for_rate_slot(_AUTHOR_RATE_STATES, AUTHOR_REQUESTS_PER_MINUTE)
-
-
-def _retry_after_seconds(error: BaseException) -> float | None:
-    return retry_after_seconds(error)
 
 
 def _register_author_rate_limit(error: BaseException) -> None:
@@ -372,8 +357,6 @@ def _prompt_accepts_style_anchor(builder: object) -> bool:
         return False
 
 
-
-
 _LEADING_FENCE = re.compile(r"^\s*```[a-zA-Z]*\s*\n")
 _TRAILING_FENCE = re.compile(r"\n```\s*$")
 
@@ -532,9 +515,6 @@ def _bind_offered_source_image_slots(
             *((tag.start, tag.end, "") for tag in ordinary[1:]),
         ],
     )
-
-
-_bind_single_offered_source_image_slot = _bind_offered_source_image_slots
 
 
 def validate_authored_slide_html(

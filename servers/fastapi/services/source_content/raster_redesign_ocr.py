@@ -13,7 +13,6 @@ from __future__ import annotations
 import csv
 import io
 import os
-import re
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -30,7 +29,6 @@ SPARSE_ENGINE = "tesseract-kor+eng-psm11-x2"
 # Glyph height (source px per 941 px of page height) at or below which text is
 # application-UI micro text; at slide scale it is also below the 9.5pt floor.
 MICRO_TEXT_RATIO = 13.5 / 941
-_NUMBER = re.compile(r"\d[\d,.]*")
 
 
 @dataclass(frozen=True)
@@ -249,10 +247,6 @@ def _merge_rows(parts: list[list[int]], words: list[RedesignWord]) -> list[list[
             if changed:
                 break
     return merged
-
-
-def _compact(text: str) -> str:
-    return "".join(text.split())
 
 
 def redesign_ocr(

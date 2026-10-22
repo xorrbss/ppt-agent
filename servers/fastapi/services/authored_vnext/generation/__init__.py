@@ -11,7 +11,6 @@ from .outline import (
 from .title_fit import (
     PlannedTitle,
     TitleFitPlanningError,
-    break_title,
     fit_and_promote_title,
     resolve_windows_font,
 )
@@ -32,7 +31,6 @@ __all__ = [
     "PlannedTitle",
     "SlideRole",
     "TitleFitPlanningError",
-    "break_title",
     "fit_and_promote_title",
     "plan_outline",
     "resolve_windows_font",

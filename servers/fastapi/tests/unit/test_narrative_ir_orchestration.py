@@ -12,7 +12,7 @@ from services.authored_vnext.narrative_ir.content_graph import (
     seal_content_integrity_receipt,
     seal_preserve_source_input,
 )
-from services.authored_vnext.narrative_ir.checkpoint import (
+from tests.support.narrative_checkpoint_memory_repository import (
     InMemoryNarrativeCheckpointRepository,
 )
 from services.authored_vnext.narrative_ir.orchestration import (

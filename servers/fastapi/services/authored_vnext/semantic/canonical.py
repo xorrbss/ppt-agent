@@ -21,15 +21,11 @@ from models.authored_vnext.semantic.contracts import (
     AuthoredDeckEmissionManifestV1,
     AuthoredEmissionBundleV1,
     AuthoredSemanticSourceV1,
-    BrowserObservationReceiptV1,
-    CapabilityReceiptV1,
     ElementIdentityRegistryV1,
     ExportAttemptDigestBindingV1,
     ExportAttemptDigestBindingV2,
     FontManifestV1,
-    HybridExportPlanV1,
     LegacyHtmlBundleV1,
-    NativeAdmissionReceiptV1,
     QID_PATTERN,
     SemanticUnavailableReceiptV1,
 )
@@ -206,18 +202,6 @@ def seal_deck_manifest(
     return candidate.model_copy(update={"canonical_digest": canonical_digest(payload)})
 
 
-def seal_derived_receipt(
-    receipt: BrowserObservationReceiptV1
-    | NativeAdmissionReceiptV1
-    | CapabilityReceiptV1,
-) -> BrowserObservationReceiptV1 | NativeAdmissionReceiptV1 | CapabilityReceiptV1:
-    return seal_component(receipt, "receipt_digest")  # type: ignore[return-value]
-
-
-def seal_hybrid_plan(plan: HybridExportPlanV1) -> HybridExportPlanV1:
-    return seal_component(plan, "plan_digest")  # type: ignore[return-value]
-
-
 def seal_export_binding(
     binding: ExportAttemptDigestBindingV1 | ExportAttemptDigestBindingV2,
 ) -> ExportAttemptDigestBindingV1 | ExportAttemptDigestBindingV2:
@@ -271,11 +255,6 @@ def validate_declared_qids(html: str, source: AuthoredSemanticSourceV1) -> tuple
     return strict_qids
 
 
-def require_digest(actual: str | None, expected: str | None, code: str) -> None:
-    if actual is None or expected is None or actual != expected:
-        raise SemanticContractError(code)
-
-
 @dataclass(frozen=True)
 class SealedCandidate:
     html_bytes: bytes
@@ -314,7 +293,6 @@ __all__ = [
     "seal_deck_manifest",
     "seal_export_binding",
     "seal_font_manifest",
-    "seal_hybrid_plan",
     "seal_semantic_source",
     "validate_and_seal_candidate",
     "validate_declared_qids",

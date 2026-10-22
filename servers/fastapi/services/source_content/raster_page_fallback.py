@@ -23,7 +23,6 @@ from services.source_content.raster_page_plan import PagePlan, PlannedRegion
 from utils.env_settings.authored_runtime import get_raster_strict_page_errors
 
 logger = logging.getLogger(__name__)
-STRICT_ENV = "RASTER_STRICT_PAGE_ERRORS"
 TITLE_BAND = 0.25
 
 

@@ -201,17 +201,6 @@ def _transform_of(node):
     return result
 
 
-def translate_of(node: ET.Element) -> tuple[float, float]:
-    value = node.get("transform")
-    if value is None:
-        return 0.0, 0.0
-    match = re.fullmatch(r"\s*translate\(([^()]*)\)\s*", value)
-    numbers = [float(n) for n in _NUMBER.findall(match[1])] if match else []
-    if len(numbers) not in (1, 2):
-        raise NativeRejection("native_group_transform_unsupported")
-    return numbers[0], numbers[1] if len(numbers) == 2 else 0.0
-
-
 def tag_of(node: ET.Element) -> str:
     return node.tag.removeprefix(SVG_NS)
 

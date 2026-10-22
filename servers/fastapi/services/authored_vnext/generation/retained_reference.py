@@ -214,12 +214,6 @@ def _source_kind(shape: ET.Element) -> str:
     return "rect"
 
 
-def _shape_text(shape: ET.Element) -> str:
-    return "\n".join(
-        text.text or "" for text in shape.findall(".//a:t", _NS)
-    ).strip()
-
-
 def _direct_rgb(parent: ET.Element | None, fallback: str) -> str:
     if parent is None:
         return fallback
@@ -257,15 +251,6 @@ def _rect(x: float, y: float, width: float, height: float) -> dict[str, float]:
         "width": round(max(1.0, width), 4),
         "height": round(max(1.0, height), 4),
     }
-
-
-def _inset(rect: dict[str, float], horizontal: float, vertical: float) -> dict[str, float]:
-    return _rect(
-        rect["x"] + horizontal,
-        rect["y"] + vertical,
-        rect["width"] - horizontal * 2,
-        rect["height"] - vertical * 2,
-    )
 
 
 def _reserve_title_marker(
@@ -409,21 +394,6 @@ def _separate_timeline_frame(
         source_shape_id=str(frame["sourceShapeId"]),
     )
     return [*nested, safe_block], [frame_decoration, *decorations]
-
-
-def _grid(rect: dict[str, float], columns: int, rows: int, gap: float) -> list[dict[str, float]]:
-    width = (rect["width"] - gap * (columns - 1)) / columns
-    height = (rect["height"] - gap * (rows - 1)) / rows
-    return [
-        _rect(
-            rect["x"] + column * (width + gap),
-            rect["y"] + row * (height + gap),
-            width,
-            height,
-        )
-        for row in range(rows)
-        for column in range(columns)
-    ]
 
 
 def _plain_rect(value: Any) -> dict[str, float]:
@@ -681,16 +651,6 @@ def _slide_nodes(slide: ET.Element) -> list[ET.Element]:
         for node in slide.findall(f".//p:{tag}", _NS)
         if _emu_rect(node) is not None
     ]
-
-
-def _union(nodes: list[ET.Element]) -> dict[str, float]:
-    bounds = [_emu_rect(node) for node in nodes]
-    values = [value for value in bounds if value is not None]
-    left = min(value["x"] for value in values)
-    top = min(value["y"] for value in values)
-    right = max(value["x"] + value["width"] for value in values)
-    bottom = max(value["y"] + value["height"] for value in values)
-    return _rect(left, top, right - left, bottom - top)
 
 
 def _map_source_bounds(
