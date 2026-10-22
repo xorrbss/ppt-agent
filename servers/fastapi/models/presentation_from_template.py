@@ -1,4 +1,3 @@
-import uuid
 from typing import Annotated, List, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -8,17 +7,6 @@ from models.generate_presentation_request import AuthoredMasterPinInput
 
 ReviewScope = Literal["all", "current", "subset"]
 SlideIndex = Annotated[int, Field(strict=True, ge=0)]
-
-
-class SlideContentUpdate(BaseModel):
-    index: int
-    content: dict
-
-
-class EditPresentationRequest(BaseModel):
-    presentation_id: uuid.UUID
-    slides: List[SlideContentUpdate]
-    export_as: Literal["pptx", "pdf"] = "pptx"
 
 
 class RetemplatePresentationRequest(BaseModel):

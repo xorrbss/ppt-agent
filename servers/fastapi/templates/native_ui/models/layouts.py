@@ -11,10 +11,6 @@ class RawSlideLayout(TemplateV2Model):
     elements: list[SlideElement]
 
 
-class RawSlideLayouts(TemplateV2Model):
-    layouts: list[RawSlideLayout]
-
-
 class Component(TemplateV2Model):
     id: str = Field(min_length=1, max_length=80)
     description: str = Field(min_length=10, max_length=300)
@@ -33,10 +29,6 @@ class SimilarComponents(TemplateV2Model):
         if len(self.indices) != len(set(self.indices)):
             raise ValueError("similar component indices must be unique")
         return self
-
-
-class SimilarComponentsList(TemplateV2Model):
-    similar_components: list[SimilarComponents]
 
 
 class MergedComponent(TemplateV2Model):

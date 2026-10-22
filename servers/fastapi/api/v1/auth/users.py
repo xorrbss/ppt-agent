@@ -4,7 +4,7 @@ from typing import Any
 
 import jwt
 from fastapi import Depends, HTTPException, Request
-from fastapi_users import BaseUserManager, FastAPIUsers, UUIDIDMixin, exceptions
+from fastapi_users import BaseUserManager, UUIDIDMixin, exceptions
 from fastapi_users.authentication import AuthenticationBackend, CookieTransport
 from fastapi_users.authentication.strategy.jwt import JWTStrategy
 from fastapi_users.db import BaseUserDatabase
@@ -194,7 +194,6 @@ AUTH_BACKEND = AuthenticationBackend(
     transport=COOKIE_TRANSPORT,
     get_strategy=get_jwt_strategy,
 )
-FASTAPI_USERS = FastAPIUsers[User, uuid.UUID](get_user_manager, [AUTH_BACKEND])
 
 
 async def read_user_from_cookie(

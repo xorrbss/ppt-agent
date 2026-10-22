@@ -21,8 +21,6 @@ from utils.hashing import sha256_hex, sha256_prefixed
 GLYPH_CLIPPING_SENSOR_VERSION = "glyph-paint-v1-current-reference"
 MAX_GLYPH_SUSPECTS = 4
 MAX_GLYPH_OWNERS = 128
-PROOF_ID = "__codex_glyph_clip_proof"
-PROOF_EXPRESSION = "(async()=>await window.__codexGlyphClipProof)()"
 _W, _H = DEFAULT_CANVAS_SIZE_PX
 
 _SCRIPT = r"""

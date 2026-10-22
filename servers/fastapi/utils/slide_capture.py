@@ -2058,12 +2058,6 @@ def _render_cache_resident_bytes() -> int:
     return render_cache_resident_bytes(_render_cache)
 
 
-def _metrics_payload_bytes(value: Mapping[str, Any]) -> int:
-    return metrics_payload_bytes(
-        value, overflow_bytes=_dom_metrics_cache_limits()[1]
-    )
-
-
 def _metrics_cache_resident_bytes() -> int:
     return metrics_cache_resident_bytes(
         _browser_metrics_cache, overflow_bytes=_dom_metrics_cache_limits()[1]

@@ -516,28 +516,6 @@ def extract_text_length_limits(
     ]
 
 
-def format_text_length_guidance(schema: dict) -> str:
-    limits = extract_text_length_limits(schema)
-    if not limits:
-        return ""
-    lines = [
-        "# Text Length Budgets",
-        (
-            "Write to the recommended length when the source supports it. The "
-            "absolute maximum is a hard limit. Remove repetition or rephrase; "
-            "never end a title or sentence mid-word."
-        ),
-    ]
-    lines.extend(
-        (
-            f"- `{limit.path}`: recommended <= {limit.recommended} characters; "
-            f"absolute maximum {limit.maximum} characters."
-        )
-        for limit in limits
-    )
-    return "\n" + "\n".join(lines) + "\n"
-
-
 def _schema_matches_value(schema: Any, value: Any, root: dict) -> bool:
     schema = _resolve_ref(schema, root)
     if not isinstance(schema, dict):

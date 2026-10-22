@@ -299,20 +299,6 @@ def _decode_jwt_payload(token: str) -> Optional[dict]:
         return None
 
 
-def get_account_id(access_token: str) -> Optional[str]:
-    """Extract the ChatGPT account ID from an access token JWT."""
-    payload = _decode_jwt_payload(access_token)
-    if not payload:
-        return None
-    auth_claims = payload.get(JWT_CLAIM_PATH)
-    if not isinstance(auth_claims, dict):
-        return None
-    account_id = auth_claims.get("chatgpt_account_id")
-    if isinstance(account_id, str) and account_id:
-        return account_id
-    return None
-
-
 def _as_non_empty_str(value) -> Optional[str]:
     if isinstance(value, str):
         stripped = value.strip()

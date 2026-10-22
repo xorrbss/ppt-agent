@@ -7,7 +7,6 @@ import time
 from typing import Optional
 
 from fastapi import Request
-from starlette.responses import Response
 
 from api.v1.auth.secret_store import (
     clear_auth_secret,
@@ -15,7 +14,7 @@ from api.v1.auth.secret_store import (
     peek_auth_secret,
     rotate_auth_secret,
 )
-from utils.get_env import get_user_config_path_env, is_disable_auth_enabled
+from utils.get_env import get_user_config_path_env
 from utils.user_config_store import read_user_config_file, update_user_config_file
 
 SESSION_COOKIE_NAME = "presenton_session"
@@ -156,21 +155,6 @@ def clear_stored_credentials() -> None:
     clear_auth_secret()
 
 
-def verify_credentials(username: str, password: str) -> bool:
-    config = _load_user_config()
-    stored_username = config.get("AUTH_USERNAME")
-    stored_hash = config.get("AUTH_PASSWORD_HASH")
-
-    if not stored_username or not stored_hash:
-        return False
-
-    cleaned_username = (username or "").strip()
-    if not hmac.compare_digest(cleaned_username, stored_username):
-        return False
-
-    return _verify_password_hash(password or "", stored_hash)
-
-
 def _sign_payload(payload_encoded: str, secret: str) -> str:
     signature = hmac.new(
         secret.encode("utf-8"), payload_encoded.encode("utf-8"), hashlib.sha256
@@ -239,56 +223,3 @@ def get_session_token_from_request(request: Request) -> Optional[str]:
         return auth_header[7:].strip() or None
     return None
 
-
-def get_auth_status(session_token: Optional[str] = None) -> dict:
-    config = _load_user_config()
-    configured = bool(config.get("AUTH_USERNAME") and config.get("AUTH_PASSWORD_HASH"))
-    if not configured:
-        return {"configured": False, "authenticated": False, "username": None}
-
-    username = validate_session_token(session_token)
-    return {
-        "configured": True,
-        "authenticated": bool(username),
-        "username": username,
-    }
-
-
-def get_internal_auth_headers() -> dict[str, str]:
-    """Return auth headers for trusted same-host service-to-service API calls."""
-    if is_disable_auth_enabled():
-        return {}
-
-    username = get_configured_auth_username()
-    if not username:
-        return {}
-    return {"Authorization": f"Bearer {create_session_token(username)}"}
-
-
-def _is_secure_request(request: Request) -> bool:
-    forwarded_proto = request.headers.get("x-forwarded-proto", "")
-    if forwarded_proto.lower() == "https":
-        return True
-    return request.url.scheme == "https"
-
-
-def set_session_cookie(response: Response, token: str, request: Request) -> None:
-    response.set_cookie(
-        key=SESSION_COOKIE_NAME,
-        value=token,
-        max_age=SESSION_TTL_SECONDS,
-        httponly=True,
-        secure=_is_secure_request(request),
-        samesite="lax",
-        path="/",
-    )
-
-
-def clear_session_cookie(response: Response, request: Request) -> None:
-    response.delete_cookie(
-        key=SESSION_COOKIE_NAME,
-        httponly=True,
-        secure=_is_secure_request(request),
-        samesite="lax",
-        path="/",
-    )

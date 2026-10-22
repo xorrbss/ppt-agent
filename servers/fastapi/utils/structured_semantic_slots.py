@@ -28,11 +28,6 @@ PARSE_REPAIR_ROUND = "parse-repair"
 SCHEMA_REPAIR_ROUND = "schema-repair"
 SCHEMA_PARSE_REPAIR_ROUND = "schema-parse-repair"
 
-INITIAL = f"{DEFAULT_PREFIX}.{INITIAL_ROUND}"
-PARSE_REPAIR = f"{DEFAULT_PREFIX}.{PARSE_REPAIR_ROUND}"
-SCHEMA_REPAIR = f"{DEFAULT_PREFIX}.{SCHEMA_REPAIR_ROUND}"
-SCHEMA_PARSE_REPAIR = f"{DEFAULT_PREFIX}.{SCHEMA_PARSE_REPAIR_ROUND}"
-
 #: The two call sites the ``vqa`` stage makes per slide. They are separate
 #: logical calls inside one stage, so neither may take ``DEFAULT_PREFIX``.
 VQA_CRITIQUE_PREFIX = "vqa-critique"

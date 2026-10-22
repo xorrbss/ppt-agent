@@ -43,11 +43,6 @@ class PrincipalEnvelope:
     scopes: tuple[str, ...] = ()
 
 
-# Compatibility name for existing v1 call sites.  Public v2 code receives the
-# stronger PrincipalEnvelope shape through the same request state attribute.
-AuthPrincipal = PrincipalEnvelope
-
-
 class PrincipalBoundaryError(RuntimeError):
     """Content-free public auth failure safe to project at the HTTP boundary."""
 
@@ -345,11 +340,4 @@ def principal_from_request(request: Request) -> PrincipalEnvelope:
     principal = getattr(request.state, "auth_principal", None)
     if principal is None:
         raise HTTPException(status_code=401, detail="Unauthorized")
-    return principal
-
-
-def require_browser_admin_principal(request: Request) -> PrincipalEnvelope:
-    principal = principal_from_request(request)
-    if principal.method != "jwt" or not principal.is_admin:
-        raise HTTPException(status_code=403, detail="Admin browser session required")
     return principal
