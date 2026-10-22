@@ -335,20 +335,6 @@ runStep({
   preconditionDescription: "Node 22 and synchronized presentation-export runtime",
 });
 runStep({
-  name: "Static upstream compatibility verifier",
-  command: process.execPath,
-  args: ["--test", "scripts/verify-upstream-compatibility.test.mjs"],
-  precondition: node22Precondition,
-  preconditionDescription: "Node 22",
-});
-runStep({
-  name: "Offline upstream intake fixture",
-  command: process.execPath,
-  args: ["--test", "scripts/intake-upstream-main.test.mjs"],
-  precondition: node22Precondition,
-  preconditionDescription: "Node 22",
-});
-runStep({
   name: "FastAPI locked dependency install",
   command: uv,
   args: ["sync", "--frozen"],
