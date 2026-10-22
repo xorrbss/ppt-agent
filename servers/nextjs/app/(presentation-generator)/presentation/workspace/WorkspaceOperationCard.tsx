@@ -2,6 +2,7 @@ import { useApprovalExpired, editabilityReasonLabels, exportCompletionLabel, typ
 import { useEffect, useState } from "react";
 import { ConversationMessageFrame } from "../conversation/ConversationPrimitives";
 import { WorkspaceGenerationProgress } from "./WorkspaceGenerationProgress";
+import { activeGenerationStep, buildGenerationProgress, latestGenerationEventEvidence } from "./generationProgressSteps";
 import { generationFailureKey } from "./generationFailure";
 import { operationFailureMessage, operationProgressEvidence, type WorkspaceOperationObservation } from "./WorkspaceOperationPresentation";
 import { useLocale, useTranslations } from "next-intl";
@@ -76,6 +77,7 @@ export function WorkspaceOperationCard({
   const t = useTranslations("qualityReview.workspace");
   const tOperation = useTranslations("presentationOperationCard");
   const tFailure = useTranslations("generationFailure");
+  const tProgress = useTranslations("presentationGenerationProgress");
   const locale = useLocale();
   const operationKnown = isKnownWorkspaceOperationType(operation.operationType);
   const statusKnown = (KNOWN_OPERATION_STATUSES as readonly string[]).includes(
@@ -132,7 +134,15 @@ export function WorkspaceOperationCard({
   const createdAt = formatTimestamp(operation.createdAt, locale);
   const updatedAt = formatTimestamp(operation.updatedAt, locale);
   const target = targetSummary(operation.target, operation.operationType);
-  const activity = activitySummary(operation);
+  // The server's activity_summary is English for generation; show the translated step.
+  const liveGenerationStep = isPresentationGeneration && !TERMINAL.has(operation.status)
+    ? activeGenerationStep(buildGenerationProgress({
+      activity: null, evidence: latestGenerationEventEvidence(operation.events), now: 0,
+    }))
+    : null;
+  const activity = isPresentationGeneration && !TERMINAL.has(operation.status)
+    ? tProgress(liveGenerationStep ? `step_${liveGenerationStep}` : "headerRunning")
+    : activitySummary(operation);
   const revision =
     operation.expectedRevision !== undefined ||
     operation.resultRevision !== undefined

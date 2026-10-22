@@ -8,6 +8,13 @@ import {
 } from "../services/api/generation-activity";
 
 export const GENERATION_ACTIVITY_POLL_MS = 15_000;
+/** Cadence while a mounted consumer opted in (e.g. a live generation card). */
+export const GENERATION_ACTIVITY_FAST_POLL_MS = 5_000;
+
+export interface UseGenerationActivityOptions {
+  /** Poll faster for as long as this consumer is mounted. Still one shared poller. */
+  fast?: boolean;
+}
 
 type Listener = (snapshot: GenerationActivitySnapshot | null) => void;
 
@@ -16,6 +23,7 @@ type Listener = (snapshot: GenerationActivitySnapshot | null) => void;
 const listeners = new Set<Listener>();
 let latest: GenerationActivitySnapshot | null = null;
 let timer: ReturnType<typeof setTimeout> | null = null;
+let fastConsumers = 0;
 let inflight: Promise<GenerationActivitySnapshot | null> | null = null;
 
 function publish(snapshot: GenerationActivitySnapshot | null) {
@@ -53,7 +61,15 @@ function schedule() {
       await refreshGenerationActivity();
     }
     schedule();
-  }, GENERATION_ACTIVITY_POLL_MS);
+  }, fastConsumers > 0 ? GENERATION_ACTIVITY_FAST_POLL_MS : GENERATION_ACTIVITY_POLL_MS);
+}
+
+function restartTimer() {
+  if (timer !== null) {
+    clearTimeout(timer);
+    timer = null;
+  }
+  schedule();
 }
 
 function onVisible() {
@@ -63,7 +79,10 @@ function onVisible() {
 }
 
 /** Latest shared snapshot; null until the first successful fetch. */
-export function useGenerationActivity(): GenerationActivitySnapshot | null {
+export function useGenerationActivity(
+  options: UseGenerationActivityOptions = {},
+): GenerationActivitySnapshot | null {
+  const fast = options.fast === true;
   const [snapshot, setSnapshot] = useState<GenerationActivitySnapshot | null>(latest);
 
   useEffect(() => {
@@ -74,9 +93,18 @@ export function useGenerationActivity(): GenerationActivitySnapshot | null {
     } else if (latest) {
       setSnapshot(latest);
     }
-    schedule();
+    if (fast) {
+      fastConsumers += 1;
+      restartTimer();
+    } else {
+      schedule();
+    }
     return () => {
       listeners.delete(setSnapshot);
+      if (fast) {
+        fastConsumers -= 1;
+        if (fastConsumers === 0) restartTimer();
+      }
       if (listeners.size === 0) {
         document.removeEventListener("visibilitychange", onVisible);
         if (timer !== null) {
@@ -85,7 +113,7 @@ export function useGenerationActivity(): GenerationActivitySnapshot | null {
         }
       }
     };
-  }, []);
+  }, [fast]);
 
   return snapshot;
 }

@@ -1685,7 +1685,26 @@
     "noRecentProgress": "The server confirmed the task is running. There is no new progress yet.",
     "lastServerCheck": "Last server check · {time}",
     "lastProgress": "Last progress change · {time}",
-    "noInformation": "No information available"
+    "noInformation": "No information available",
+    "headerRunning": "Generating presentation",
+    "elapsedUnderMinute": "Under 1 min elapsed",
+    "elapsedMinutes": "{minutes} min elapsed",
+    "elapsedHours": "{hours} h {minutes} min elapsed",
+    "etaMinutes": "About {minutes} min left",
+    "etaSoon": "Almost done",
+    "checklistLabel": "Generation steps",
+    "step_prepare": "Analyze and plan",
+    "step_author": "Write slides",
+    "step_render": "Render",
+    "step_persist": "Save and review",
+    "step_publish": "Publish",
+    "state_done": "Done",
+    "state_active": "In progress",
+    "state_pending": "Waiting",
+    "counterValueText": "{current}/{total} slides",
+    "lastActivitySeconds": "Last activity {seconds}s ago",
+    "lastActivityMinutes": "Last activity {minutes} min ago",
+    "lastActivityHours": "Last activity {hours} h ago"
   },
   "presentationLoading": {
     "title": "Creating your presentation",
@@ -5174,7 +5193,15 @@
       "imagePending": "The image for page {page} is not ready yet.",
       "imageFailed": "Could not load the saved image for this page.",
       "imageReload": "Reload image",
-      "imageAlt": "Generation draft of page {page}"
+      "imageAlt": "Generation draft of page {page}",
+      "gridHeading": "Finished slides {rendered}/{total}",
+      "gridProgressAria": "Share of slides rendered",
+      "tileOpenAria": "Open page {page} in the large view",
+      "tileAuthoredAria": "Page {page} is authored and waiting to be rendered",
+      "tilePendingAria": "Page {page} is not started yet",
+      "tileAuthored": "Authored",
+      "tileImageFailed": "Could not load the image",
+      "backToGrid": "Back to grid"
     }
   },
   "generationGuard": {

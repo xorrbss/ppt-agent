@@ -18,7 +18,11 @@ from services.workspace_batch_payload import BATCH_KIND, BATCH_RESULT_KEYS, sani
 from services.workspace_attempt_timing import (
     ATTEMPT_TIMING_KEY, attempt_timing, sanitize_attempt_timing, with_attempt_timing,
 )
-from services.workspace_payload_sanitizers import project_generation_deck_ir, sanitize_worker_resource_samples
+from services.workspace_payload_sanitizers import (
+    project_generation_deck_ir,
+    sanitize_progress_message,
+    sanitize_worker_resource_samples,
+)
 from services.workspace_operation_principal import operation_principal, resolve_operation_tenant
 from services.workspace_requeue_guard import (
     REQUEUE_REJECTED_DETAIL_KEY, claim_from_operation, run_guarded, try_requeue,
@@ -579,6 +583,14 @@ def sanitize_workspace_event_payload(
     safe: dict[str, Any] = {}
     if operation_kind == "presentation.generate":
         safe.update(sanitize_generation_timing_result(payload))
+    # Public text comes only from registered keys; the raw ``message`` stays dropped.
+    message_key, message_params = sanitize_progress_message(
+        payload.get("message_key"), payload.get("message_params")
+    )
+    if message_key is not None:
+        safe["message_key"] = message_key
+        if message_params is not None:
+            safe["message_params"] = message_params
     for key, value in payload.items():
         normalized = str(key)
         if normalized not in allowed_keys:

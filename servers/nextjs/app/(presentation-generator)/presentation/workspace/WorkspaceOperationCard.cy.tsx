@@ -37,7 +37,8 @@ describe("WorkspaceOperationCard quality review", () => {
       events: [{ id: "progress", operationId: generation.operationId, sequence: 1, type: "operation.progress", stage: "authored_render", current: 3, total: 30 }],
     }} composerCancelOperationId={generation.operationId} onAction={() => undefined} />);
     cy.get('[data-testid="generation-progress-response"]').should("contain.text", "3/30장");
-    cy.get('[data-testid="operation-cancel"], [role="progressbar"]').should("not.exist");
+    cy.get('[data-testid="operation-cancel"]').should("not.exist");
+    cy.get('[data-step="render"] [role="progressbar"]').should("have.attr", "aria-valuetext", "3/30장");
     mountCard(<WorkspaceOperationCard operation={{ ...generation, operationType: "export.pptx", allowedActions: [cancel] }} onAction={() => undefined} />);
     cy.get('[data-testid="operation-cancel"]').should("be.enabled");
   });

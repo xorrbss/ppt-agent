@@ -15,6 +15,7 @@ from models.workspace import (
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.workspace import WorkspaceOperation, WorkspaceOperationEvent
 from services.authored_composition_policy import AUTHORED_CAPACITY_BOUNDED_REPAIR_REVISION
+from services.workspace_payload_sanitizers import sanitize_public_progress_fields
 from utils.owner_context import get_current_owner_id, get_current_tenant_id
 
 
@@ -169,6 +170,7 @@ def _event_to_wire(
             if isinstance(payload, dict)
             else None
         ),
+        **sanitize_public_progress_fields(payload if isinstance(payload, dict) else {}),
         "error": (
             payload.get("error_code", payload.get("error"))
             if isinstance(payload, dict)
