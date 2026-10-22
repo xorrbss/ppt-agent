@@ -3,7 +3,6 @@ export type SettingsMode = "nanobanana" | "presenton";
 export type SettingsSection =
   | "text-provider"
   | "image-provider"
-  | "privacy"
   | "admin"
   | "session";
 

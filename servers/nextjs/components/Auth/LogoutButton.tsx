@@ -4,10 +4,6 @@ import { useState } from "react";
 import { LogOut } from "lucide-react";
 
 import { getApiUrl } from "@/utils/api";
-import {
-  MixpanelEvent,
-  trackEventImmediately,
-} from "@/utils/mixpanel";
 
 type LogoutButtonProps = {
   label?: string;
@@ -35,22 +31,8 @@ export default function LogoutButton({
       });
       if (response.ok) {
         window.dispatchEvent(new Event("presenton:auth-logout"));
-        await trackEventImmediately(MixpanelEvent.Auth_Signed_Out, {
-          source: "logout_button",
-        });
-      } else {
-        await trackEventImmediately(MixpanelEvent.Auth_SignOut_Failed, {
-          source: "logout_button",
-          status_code: response.status,
-        });
       }
-    } catch (logoutError) {
-      await trackEventImmediately(MixpanelEvent.Auth_SignOut_Failed, {
-        source: "logout_button",
-        status_code: null,
-        error_type:
-          logoutError instanceof Error ? logoutError.name : "UnknownError",
-      });
+    } catch {
       // Always route back to auth gate even if backend logout fails.
     } finally {
       window.location.replace("/");

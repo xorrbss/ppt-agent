@@ -4,7 +4,6 @@ import { Syne, Unbounded } from "next/font/google";
 import "./globals.css";
 import "katex/dist/katex.min.css";
 import { Providers } from "./providers";
-import MixpanelInitializer from "./MixpanelInitializer";
 import { LocalizedToaster } from "@/components/i18n/LocalizedToaster";
 import TailwindCdnRuntime from "@/components/runtime/TailwindCdnRuntime";
 import { getServerI18n } from "@/i18n/server";
@@ -107,7 +106,7 @@ export default async function RootLayout({
       >
         <Providers locale={locale} messages={messages}>
           <TailwindCdnRuntime />
-          <MixpanelInitializer>{children}</MixpanelInitializer>
+          {children}
           <LocalizedToaster />
         </Providers>
       </body>

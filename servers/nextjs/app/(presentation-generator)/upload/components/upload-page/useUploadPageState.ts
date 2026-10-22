@@ -1,7 +1,7 @@
 "use client";
 import { useTranslations as useA2bTranslations } from "next-intl";
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import {
   LanguageType,
@@ -18,19 +18,16 @@ import {
   setPptGenUploadState,
   type CompanyStandardSelection,
 } from "@/store/slices/presentationGenUpload";
-import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { RootState } from "@/store/store";
 import AuthoredStylesApi, {
   DEFAULT_AUTHORED_STYLE,
 } from "../../../services/api/authored";
 import { abortDocumentProcessing } from "./abortDocumentProcessing";
-import { getFileCategory } from "./fileCategory";
 import {
   fileIdentityOf,
   useSourceContentAdmission,
   type SourceContentAdmission,
 } from "./useSourceContentAdmission";
-import { getSelectedImageQuality, getSelectedTextModel } from "./llmConfigSummary";
 import { LoadingState } from "./types";
 import { AuthoredVnextMasterClient } from "@/lib/authored-vnext/master/client";
 import {
@@ -111,7 +108,6 @@ export const useUploadPageState = ({
       window.removeEventListener("presenton:auth-logout", invalidate);
     };
   }, []);
-  const pathname = usePathname();
   const dispatch = useDispatch();
   const llmConfig = useSelector((state: RootState) => state.userConfig.llm_config);
   const companyStandard = useSelector(
@@ -132,8 +128,6 @@ export const useUploadPageState = ({
   const sourceContentGate = useSourceContentAdmission({
     pendingPresentationId,
     setLoadingState: (state) => setLoadingState(state),
-    trackUploadValidationFailure: (reason) =>
-      trackUploadValidationFailure(reason),
   });
   const [masterAdmissionError, setMasterAdmissionError] =
     useState<UploadMasterAdmissionError | null>(null);
@@ -199,59 +193,13 @@ export const useUploadPageState = ({
   const [canCancelDocumentProcessing, setCanCancelDocumentProcessing] =
     useState(false);
 
-  const getUploadSnapshotProps = (
-    selectedFiles: File[] = filesRef?.current ?? files,
-  ) => {
-    const trimmedPrompt = config.prompt.trim();
-    const trimmedInstructions = (config.instructions || "").trim();
-    const attachmentCategories = Array.from(
-      new Set(selectedFiles.map(getFileCategory)),
-    ).sort();
-    const imageGenerationEnabled = !llmConfig?.DISABLE_IMAGE_GENERATION;
-    const parsedSlides =
-      config.slides && /^\d+$/.test(config.slides) ? Number(config.slides) : null;
-
-    return {
-      pathname,
-      generation_path: selectedFiles.length > 0 ? "documents" : "prompt_only",
-      slides_selected: parsedSlides,
-      slides_mode: config.slides ? "selected" : "auto",
-      language: config.language || "",
-      tone: config.tone,
-      verbosity: config.verbosity,
-      include_table_of_contents: !!config.includeTableOfContents,
-      include_title_slide: !!config.includeTitleSlide,
-      web_search: !!config.webSearch,
-      has_prompt: Boolean(trimmedPrompt),
-      prompt_char_count: trimmedPrompt.length,
-      prompt_word_count: trimmedPrompt ? trimmedPrompt.split(/\s+/).filter(Boolean).length : 0,
-      has_instructions: Boolean(trimmedInstructions),
-      instructions_char_count: trimmedInstructions.length,
-      has_attachments: selectedFiles.length > 0,
-      attachments_count: selectedFiles.length,
-      attachment_categories: attachmentCategories.join(","),
-      text_provider: llmConfig?.LLM || "",
-      text_model: getSelectedTextModel(llmConfig),
-      image_generation_enabled: imageGenerationEnabled,
-      image_provider: imageGenerationEnabled ? (llmConfig?.IMAGE_PROVIDER || "") : "disabled",
-      image_quality: imageGenerationEnabled ? getSelectedImageQuality(llmConfig) : "",
-    };
-  };
-
-  const trackUploadValidationFailure = (reason: string) => {
-    trackEvent(MixpanelEvent.Upload_Configuration_Invalid, {
-      ...getUploadSnapshotProps(),
-      reason,
-    });
-  };
-
   const { handleDocumentProcessing, handleDirectPresentationGeneration,
     handleGenerationError, ensureStockImageProviderReady } = createUploadGenerationHandlers({
       config, sourceContentMode, pendingPresentationId, selectedThemeId,
       previousPresentationId: previousGenerationAttempt.presentationId,
-      generationStrategy, authoredVisionQa, authoredStyle, llmConfig, router, pathname,
+      generationStrategy, authoredVisionQa, authoredStyle, llmConfig, router,
       dispatch, setLoadingState, setCanCancelDocumentProcessing, decomposeAbortControllerRef,
-      setPendingPresentationId, getUploadSnapshotProps, recoverCreateRef,
+      setPendingPresentationId, recoverCreateRef,
       onPresentationCreated: workspace?.bindPresentation,
       saveAdmission: workspace?.saveAdmission,
       captureLiveness: () => {
@@ -413,7 +361,6 @@ export const useUploadPageState = ({
             config.aspectRatio !== "16:9" &&
             companyStandard
         ) {
-      trackUploadValidationFailure("portrait_company_standard_unsupported");
       notify.warning(
         tA2b("portraitGenerationLimitation"),
         tA2b("portraitAuthoredGenerationCannotBeUsedWith"),
@@ -423,7 +370,6 @@ export const useUploadPageState = ({
     if (sourceContentMode) {
       const sourceContentError = validateSourceContentFiles(selectedFiles);
       if (sourceContentError) {
-        trackUploadValidationFailure(sourceContentError);
         notify.warning(
           tA2b("fileLimitForSourceContentPreservation"),
           sourceContentSelectionErrorMessage(sourceContentError),
@@ -436,19 +382,16 @@ export const useUploadPageState = ({
       return true;
     }
     if (!config.language) {
-      trackUploadValidationFailure("language_missing");
       notify.warning("언어를 선택해 주세요", "언어를 선택해 주세요.");
       return false;
     }
 
     if (selectedFiles.length > 0 && config.language === LanguageType.Auto) {
-      trackUploadValidationFailure("language_auto_with_documents");
       notify.warning("언어를 선택해 주세요", "업로드한 문서를 처리하기 전에 언어를 선택해 주세요.");
       return false;
     }
 
     if (!config.prompt.trim() && selectedFiles.length === 0) {
-      trackUploadValidationFailure("prompt_or_document_missing");
       notify.warning("입력이 필요합니다", "프롬프트를 입력하거나 문서를 하나 이상 업로드해 주세요.");
       return false;
     }
@@ -502,9 +445,6 @@ export const useUploadPageState = ({
         hasCompanyStandard: false,
       });
       if (!capability.sourceContentSvg.enabled) {
-        trackUploadValidationFailure(
-          capability.sourceContentSvg.reason || "svg_source_content_unsupported",
-        );
         notify.warning(
           tA2b("svgSourcePreservationGenerationLimitation"),
           tA2b("sourceContentPreservingSvgGenerationIsNot"),
@@ -655,15 +595,10 @@ export const useUploadPageState = ({
         return;
       }
     }
-    trackEvent(
-      MixpanelEvent.Upload_Generation_Started,
-      getUploadSnapshotProps(selectedFiles),
-    );
 
 
     const isStockProviderReady = sourceContentMode || await ensureStockImageProviderReady();
     if (!isStockProviderReady) {
-      trackUploadValidationFailure("stock_image_provider_unreachable");
       abandonRun("이미지 공급자에 연결할 수 없어 생성을 시작하지 않았습니다. 이미지 공급자 설정과 연결을 확인해 주세요.");
       return;
     }

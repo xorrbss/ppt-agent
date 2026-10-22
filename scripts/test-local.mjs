@@ -218,7 +218,6 @@ const commonEnv = {
   PYTEST_DEBUG_TEMPROOT: pytestBaseDirectory,
   USER_CONFIG_PATH: join(appDataDirectory, "userConfig.json"),
   DATABASE_URL: `sqlite+aiosqlite:///${sqlitePath}`,
-  DISABLE_ANONYMOUS_TRACKING: "true",
   DISABLE_IMAGE_GENERATION: "true",
   ...(browserPath ? { PUPPETEER_EXECUTABLE_PATH: browserPath } : {}),
 };

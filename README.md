@@ -354,12 +354,6 @@ The parallel image generation option applies everywhere images are generated: in
   they render with local Office/Windows fallback typefaces instead and no request
   leaves the host. Use it for air-gapped deployments.
 
-#### Telemetry
-
-- **DISABLE_ANONYMOUS_TRACKING**=[true/false]: Anonymous telemetry (Mixpanel) is
-  **off by default** in this fork's Docker, Windows-native, and Electron
-  deployments. Set to **false** to opt in.
-
 #### Multi-user authentication
 
 Presenton supports multiple accounts with a private workspace for each user. The

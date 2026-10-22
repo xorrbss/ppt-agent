@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getFastApiBaseUrl } from "@/lib/fastapi-internal";
 
 /**
- * API-only: session required for all /api/* except auth, telemetry, and
+ * API-only: session required for all /api/* except auth and the other exemptions below.
  * Page routes are protected in server layouts (unknown URLs still 404; login uses relative redirects).
  */
 function isFastApiApiPath(pathname: string): boolean {
@@ -62,7 +62,6 @@ async function getAuthStatus(request: NextRequest): Promise<AuthStatus> {
 function isApiAuthExempt(pathname: string): boolean {
   return (
     pathname.startsWith("/api/v1/auth/") ||
-    pathname === "/api/telemetry-status" ||
     // Liveness probe (EXT-08): container/process healthchecks hit this
     // through nginx with no session. It returns only a static status, so
     // exempting it discloses nothing.

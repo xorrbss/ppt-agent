@@ -12,8 +12,6 @@ import { useSelector } from 'react-redux';
 import { notify } from '@/components/ui/sonner';
 import ToolTip from '../ToolTip';
 import { Switch } from '../ui/switch';
-import { MixpanelEvent, trackEvent } from '@/utils/mixpanel';
-import { usePathname } from 'next/navigation';
 import { getLLMConfigValidationError, handleSaveLLMConfig } from '@/utils/storeHelpers';
 import { checkIfSelectedOllamaModelIsPulled, pullOllamaModel } from '@/utils/providerUtils';
 import { getApiUrl } from '@/utils/api';
@@ -25,11 +23,9 @@ import VertexAzureManualFields from '@/components/VertexAzureManualFields';
 import BedrockManualFields from '@/components/BedrockManualFields';
 import OpenAICompatibleImageFields from '@/components/OpenAICompatibleImageFields';
 import Image from 'next/image';
-import { getSelectedImageQuality, getSelectedTextModel } from './llmConfigSelectors';
 
 const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep: (step: number) => void }) => {
     const t = useTranslations("a2cOnboarding");
-    const pathname = usePathname();
     const [openProviderSelect, setOpenProviderSelect] = useState(false);
     const [openImageProviderSelect, setOpenImageProviderSelect] = useState(false);
     const userConfigState = useSelector((state: RootState) => state.userConfig);
@@ -269,25 +265,6 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                     await handleModelDownload();
                 }
             }
-
-            const textProvider = llmConfig.LLM || '';
-            const textModel = getSelectedTextModel(llmConfig);
-            const imageGenerationEnabled = !llmConfig.DISABLE_IMAGE_GENERATION;
-            const imageProvider = imageGenerationEnabled ? (llmConfig.IMAGE_PROVIDER || '') : 'disabled';
-
-            trackEvent(MixpanelEvent.Onboarding_Providers_Models_Selected, {
-                pathname,
-                text_provider: textProvider,
-                text_provider_label: LLM_PROVIDER_OPTIONS[textProvider]?.label || textProvider || '',
-                text_model: textModel,
-                uses_chatgpt_login: textProvider === 'chatgpt',
-                image_generation_enabled: imageGenerationEnabled,
-                image_provider: imageProvider,
-                image_provider_label: imageGenerationEnabled
-                    ? (IMAGE_PROVIDER_OPTIONS[imageProvider]?.label || imageProvider || '')
-                    : 'Image generation disabled',
-                image_quality: imageGenerationEnabled ? getSelectedImageQuality(llmConfig) : ''
-            });
 
             notify.success(t("settingsSaved"), t("settingsSavedDescription"));
             setStep(3)

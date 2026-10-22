@@ -16,7 +16,6 @@ import SlideContent from "./SlideContent";
 import { Button } from "@/components/ui/button";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { AlertCircle, Keyboard, Layers, X } from "lucide-react";
 import { ConversationWorkspaceToolbar } from "./ConversationWorkspaceToolbar";
 import { ConversationResultNotice } from "./ConversationResultNotice";
@@ -453,14 +452,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     });
     return () => window.cancelAnimationFrame(frame);
   }, [isStreaming, lastStreamingSlideIndex, slidesLength]);
-  useEffect(() => {
-    trackEvent(MixpanelEvent.Presentation_Editor_Viewed, {
-      pathname,
-      presentation_id,
-      stream_mode: !!stream,
-      presentation_mode: isPresentMode ? "present" : "edit",
-    });
-  }, [pathname, presentation_id, stream, isPresentMode]);
   /** Editor tree unmounts in present mode; remount loses inline theme CSS — re-apply from Redux. */
   useLayoutEffect(() => {
     if (isPresentMode) return;
@@ -599,7 +590,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     glowingSlideIndex,
   ]);
   if ((error || previewArtifactState.error) && isPresentMode) {
-    return <PresentationLoadError pathname={pathname} router={router} />;
+    return <PresentationLoadError router={router} />;
   }
   if (isPresentMode) {
     if (previewArtifactRequired && previewSlides === null) {
@@ -828,10 +819,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                           <Button
                             variant="outline"
                             onClick={() => {
-                              trackEvent(MixpanelEvent.Navigation, {
-                                from: pathname,
-                                to: "/dashboard",
-                              });
                               router.push("/dashboard");
                             }}
                           >
@@ -849,7 +836,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                             key={`${slide.type}-${index}-${slide.index}`}
                             slide={slide}
                             index={index}
-                            presentationId={presentation_id}
                             mutationsEnabled={INLINE_MUTATIONS_ENABLED}
                             deferRender
                             resolveSvgAssets={index === selectedSlide}

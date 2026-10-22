@@ -299,7 +299,6 @@ $sharedAuthoredEnvironment = @{
     # The random value is process-scoped and only its hash is persisted.
     "AUTH_USERNAME" = "authored-vnext-local"
     "AUTH_PASSWORD" = $workerToken
-    "DISABLE_ANONYMOUS_TRACKING" = "true"
     "DISABLE_IMAGE_GENERATION" = "true"
     "AUTHORED_SOURCE_IMAGES_ENABLED" = "true"
     "AUTHORED_VNEXT_MASTER_ENABLED" = "true"

@@ -24,9 +24,6 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { notify } from "@/components/ui/sonner";
-import { sanitizeAnalyticsError } from "@/utils/analytics";
-import { formatFastApiDetail } from "@/utils/authErrors";
-import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
 import { useLocale, useTranslations } from "next-intl";
 import { UiLocaleSwitcher } from "@/components/i18n/UiLocaleSwitcher";
 
@@ -53,13 +50,6 @@ type AdminPanelProps = {
   embedded?: boolean;
 };
 
-async function errorDetail(response: Response): Promise<string> {
-  const payload = await response.json().catch(() => null);
-  return payload?.detail === undefined
-    ? `Request failed (${response.status})`
-    : formatFastApiDetail(payload.detail);
-}
-
 function maskedKey(token: string) {
   return `••••••••••••••••${token.slice(-4)}`;
 }
@@ -83,9 +73,7 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [dialog, setDialog] = useState<AdminDialog>(null);
 
-  const loadUsers = useCallback(async (
-    trigger: "initial" | "manual" | "user_created" | "user_deleted" = "initial"
-  ) => {
+  const loadUsers = useCallback(async () => {
     setBusy("users");
     try {
       const response = await fetch("/api/v1/admin/users", {
@@ -95,28 +83,10 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
       if (response.ok) {
         const loadedUsers = (await response.json()) as AdminUser[];
         setUsers(loadedUsers);
-        trackEvent(MixpanelEvent.Auth_Admin_User_List_Loaded, {
-          trigger,
-          user_count: loadedUsers.length,
-        });
       } else {
-        const detail = await errorDetail(response);
-        trackEvent(MixpanelEvent.Auth_Admin_User_List_Failed, {
-          trigger,
-          status_code: response.status,
-          error_message: sanitizeAnalyticsError(detail),
-        });
         notify.error(t("toasts.loadUsersError"), t("tryAgain"));
       }
-    } catch (loadError) {
-      trackEvent(MixpanelEvent.Auth_Admin_User_List_Failed, {
-        trigger,
-        status_code: null,
-        error_message: sanitizeAnalyticsError(
-          loadError,
-          "Could not load users"
-        ),
-      });
+    } catch {
       notify.error(t("toasts.loadUsersError"), t("tryAgain"));
     } finally {
       setBusy(null);
@@ -133,25 +103,10 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
       if (response.ok) {
         const loadedKeys = (await response.json()) as ApiKey[];
         setKeys(loadedKeys);
-        trackEvent(MixpanelEvent.Auth_Admin_API_Key_List_Loaded, {
-          api_key_count: loadedKeys.length,
-        });
       } else {
-        const detail = await errorDetail(response);
-        trackEvent(MixpanelEvent.Auth_Admin_API_Key_List_Failed, {
-          status_code: response.status,
-          error_message: sanitizeAnalyticsError(detail),
-        });
         notify.error(t("toasts.loadKeysError"), t("tryAgain"));
       }
-    } catch (loadError) {
-      trackEvent(MixpanelEvent.Auth_Admin_API_Key_List_Failed, {
-        status_code: null,
-        error_message: sanitizeAnalyticsError(
-          loadError,
-          "Could not load API keys"
-        ),
-      });
+    } catch {
       notify.error(t("toasts.loadKeysError"), t("tryAgain"));
     } finally {
       setBusy(null);
@@ -159,9 +114,6 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
   }, [t]);
 
   useEffect(() => {
-    trackEvent(MixpanelEvent.Auth_Admin_Viewed, {
-      embedded,
-    });
     void Promise.all([loadUsers(), loadKeys()]);
   }, [embedded, loadKeys, loadUsers]);
 
@@ -169,10 +121,6 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
     event.preventDefault();
     const cleanedUsername = username.trim();
     setBusy("add");
-    trackEvent(MixpanelEvent.Auth_Admin_User_Create_Started, {
-      username_length: cleanedUsername.length,
-      user_count_before: users.length,
-    });
     try {
       const response = await fetch("/api/v1/admin/users", {
         method: "POST",
@@ -181,33 +129,17 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
         body: JSON.stringify({ username: cleanedUsername, password }),
       });
       if (response.ok) {
-        trackEvent(MixpanelEvent.Auth_Admin_User_Create_Completed, {
-          username_length: cleanedUsername.length,
-          user_count_after: users.length + 1,
-        });
         notify.success(
           t("toasts.userCreated"),
           t("toasts.userCreatedDescription", { username: cleanedUsername }),
         );
         setUsername("");
         setPassword("");
-        await loadUsers("user_created");
+        await loadUsers();
       } else {
-        const detail = await errorDetail(response);
-        trackEvent(MixpanelEvent.Auth_Admin_User_Create_Failed, {
-          status_code: response.status,
-          error_message: sanitizeAnalyticsError(detail),
-        });
         notify.error(t("toasts.createUserError"), t("tryAgain"));
       }
-    } catch (createError) {
-      trackEvent(MixpanelEvent.Auth_Admin_User_Create_Failed, {
-        status_code: null,
-        error_message: sanitizeAnalyticsError(
-          createError,
-          "Could not create user"
-        ),
-      });
+    } catch {
       notify.error(t("toasts.createUserError"), t("tryAgain"));
     } finally {
       setBusy(null);
@@ -225,9 +157,6 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
 
     const { user } = dialog;
     setBusy(`reset:${user.id}`);
-    trackEvent(MixpanelEvent.Auth_Admin_User_Password_Reset_Started, {
-      target_role: user.role,
-    });
     try {
       const response = await fetch(`/api/v1/admin/users/${user.id}/password`, {
         method: "PUT",
@@ -236,10 +165,6 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
         body: JSON.stringify({ password: resetPasswordValue }),
       });
       if (response.ok) {
-        trackEvent(MixpanelEvent.Auth_Admin_User_Password_Reset_Completed, {
-          target_role: user.role,
-          sessions_invalidated: true,
-        });
         notify.success(
           t("toasts.passwordReset"),
           t("toasts.passwordResetDescription"),
@@ -247,23 +172,9 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
         setDialog(null);
         setResetPasswordValue("");
       } else {
-        const detail = await errorDetail(response);
-        trackEvent(MixpanelEvent.Auth_Admin_User_Password_Reset_Failed, {
-          target_role: user.role,
-          status_code: response.status,
-          error_message: sanitizeAnalyticsError(detail),
-        });
         notify.error(t("toasts.resetPasswordError"), t("tryAgain"));
       }
-    } catch (resetError) {
-      trackEvent(MixpanelEvent.Auth_Admin_User_Password_Reset_Failed, {
-        target_role: user.role,
-        status_code: null,
-        error_message: sanitizeAnalyticsError(
-          resetError,
-          "Could not reset password"
-        ),
-      });
+    } catch {
       notify.error(t("toasts.resetPasswordError"), t("tryAgain"));
     } finally {
       setBusy(null);
@@ -275,44 +186,22 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
 
     const { user } = dialog;
     setBusy(`delete:${user.id}`);
-    trackEvent(MixpanelEvent.Auth_Admin_User_Delete_Started, {
-      target_role: user.role,
-      user_count_before: users.length,
-    });
     try {
       const response = await fetch(`/api/v1/admin/users/${user.id}`, {
         method: "DELETE",
         credentials: "include",
       });
       if (response.ok) {
-        trackEvent(MixpanelEvent.Auth_Admin_User_Delete_Completed, {
-          target_role: user.role,
-          user_count_after: Math.max(0, users.length - 1),
-        });
         notify.success(
           t("toasts.userDeleted"),
           t("toasts.userDeletedDescription", { username: user.username }),
         );
         setDialog(null);
-        await loadUsers("user_deleted");
+        await loadUsers();
       } else {
-        const detail = await errorDetail(response);
-        trackEvent(MixpanelEvent.Auth_Admin_User_Delete_Failed, {
-          target_role: user.role,
-          status_code: response.status,
-          error_message: sanitizeAnalyticsError(detail),
-        });
         notify.error(t("toasts.deleteUserError"), t("tryAgain"));
       }
-    } catch (deleteError) {
-      trackEvent(MixpanelEvent.Auth_Admin_User_Delete_Failed, {
-        target_role: user.role,
-        status_code: null,
-        error_message: sanitizeAnalyticsError(
-          deleteError,
-          "Could not delete user"
-        ),
-      });
+    } catch {
       notify.error(t("toasts.deleteUserError"), t("tryAgain"));
     } finally {
       setBusy(null);
@@ -321,9 +210,6 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
 
   const createKey = async () => {
     setBusy("create-key");
-    trackEvent(MixpanelEvent.Auth_Admin_API_Key_Create_Started, {
-      api_key_count_before: keys.length,
-    });
     try {
       const response = await fetch("/api/v1/auth/token/create", {
         method: "POST",
@@ -332,9 +218,6 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
       if (response.ok) {
         const key = (await response.json()) as ApiKey;
         setKeys((current) => [key, ...current]);
-        trackEvent(MixpanelEvent.Auth_Admin_API_Key_Create_Completed, {
-          api_key_count_after: keys.length + 1,
-        });
         try {
           await navigator.clipboard.writeText(key.token);
           notify.success(
@@ -345,21 +228,9 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
           notify.success(t("toasts.keyCreated"), t("toasts.keyCopyHint"));
         }
       } else {
-        const detail = await errorDetail(response);
-        trackEvent(MixpanelEvent.Auth_Admin_API_Key_Create_Failed, {
-          status_code: response.status,
-          error_message: sanitizeAnalyticsError(detail),
-        });
         notify.error(t("toasts.createKeyError"), t("tryAgain"));
       }
-    } catch (createError) {
-      trackEvent(MixpanelEvent.Auth_Admin_API_Key_Create_Failed, {
-        status_code: null,
-        error_message: sanitizeAnalyticsError(
-          createError,
-          "Could not create API key"
-        ),
-      });
+    } catch {
       notify.error(t("toasts.createKeyError"), t("tryAgain"));
     } finally {
       setBusy(null);
@@ -371,9 +242,6 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
 
     const { key } = dialog;
     setBusy(`revoke:${key.token}`);
-    trackEvent(MixpanelEvent.Auth_Admin_API_Key_Revoke_Started, {
-      api_key_count_before: keys.length,
-    });
     try {
       const response = await fetch("/api/v1/auth/token/revoke", {
         method: "POST",
@@ -388,27 +256,12 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
           next.delete(key.token);
           return next;
         });
-        trackEvent(MixpanelEvent.Auth_Admin_API_Key_Revoke_Completed, {
-          api_key_count_after: Math.max(0, keys.length - 1),
-        });
         setDialog(null);
         notify.success(t("toasts.keyRevoked"));
       } else {
-        const detail = await errorDetail(response);
-        trackEvent(MixpanelEvent.Auth_Admin_API_Key_Revoke_Failed, {
-          status_code: response.status,
-          error_message: sanitizeAnalyticsError(detail),
-        });
         notify.error(t("toasts.revokeKeyError"), t("tryAgain"));
       }
-    } catch (revokeError) {
-      trackEvent(MixpanelEvent.Auth_Admin_API_Key_Revoke_Failed, {
-        status_code: null,
-        error_message: sanitizeAnalyticsError(
-          revokeError,
-          "Could not revoke API key"
-        ),
-      });
+    } catch {
       notify.error(t("toasts.revokeKeyError"), t("tryAgain"));
     } finally {
       setBusy(null);
@@ -553,7 +406,7 @@ export default function AdminPanel({ embedded = false }: AdminPanelProps) {
                   type="button"
                   aria-label={t("refreshAccounts")}
                   className="flex h-9 w-9 items-center justify-center rounded-full border border-surface text-[#667085] transition hover:bg-[#F9FAFB] hover:text-brand"
-                  onClick={() => void loadUsers("manual")}
+                  onClick={() => void loadUsers()}
                 >
                   <RefreshCw className={`h-4 w-4 ${busy === "users" ? "animate-spin" : ""}`} />
                 </button>

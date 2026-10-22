@@ -25,10 +25,8 @@ import {
   Loader2,
   Search,
 } from "lucide-react";
-import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { notify } from "@/components/ui/sonner";
-import { sanitizeAnalyticsError } from "@/utils/analytics";
 
 const PRESENTATIONS_PER_PAGE = 24;
 
@@ -36,7 +34,6 @@ const DashboardPage: React.FC<{ publicV2CanaryEnabled?: boolean }> = ({
   publicV2CanaryEnabled = false,
 }) => {
   const t = useTranslations("dashboardHome");
-  const pathname = usePathname();
   const router = useRouter();
   const [presentations, setPresentations] = useState<
     DashboardPresentation[] | null
@@ -66,8 +63,6 @@ const DashboardPage: React.FC<{ publicV2CanaryEnabled?: boolean }> = ({
   }, [searchQuery]);
 
   const fetchPresentations = useCallback(async () => {
-    let fetchedCount = 0;
-    let hasError = false;
     activeListRequest.current?.abort();
     const controller = new AbortController();
     activeListRequest.current = controller;
@@ -86,7 +81,6 @@ const DashboardPage: React.FC<{ publicV2CanaryEnabled?: boolean }> = ({
         controller.signal,
       );
       if (requestSequence !== listRequestSequence.current) return;
-      fetchedCount = data.total;
       setPresentations(data.items);
       setPresentationTotal(data.total);
     } catch {
@@ -95,23 +89,17 @@ const DashboardPage: React.FC<{ publicV2CanaryEnabled?: boolean }> = ({
       // list. getPresentations() already returns [] for a genuine 404. Surface a
       // recoverable error so the grid shows its retry UI instead of the
       // "no presentations yet" empty state, which reads as account-wide data loss.
-      hasError = true;
       setError(t("loadError"));
       setPresentationTotal(0);
     } finally {
       if (requestSequence === listRequestSequence.current) {
-        trackEvent(MixpanelEvent.Dashboard_Page_Viewed, {
-          pathname,
-          presentation_count: fetchedCount,
-          load_failed: hasError,
-        });
         setIsLoading(false);
         if (activeListRequest.current === controller) {
           activeListRequest.current = null;
         }
       }
     }
-  }, [debouncedSearchQuery, deckSortDirection, page, pathname, t]);
+  }, [debouncedSearchQuery, deckSortDirection, page, t]);
 
   useEffect(() => {
     void fetchPresentations();
@@ -123,19 +111,10 @@ const DashboardPage: React.FC<{ publicV2CanaryEnabled?: boolean }> = ({
 
     blankPresentationRequestInFlight.current = true;
     setIsCreatingBlankPresentation(true);
-    trackEvent(MixpanelEvent.Dashboard_New_Presentation_Clicked, {
-      pathname,
-      source: "dashboard_blank_presentation_card",
-    });
 
     try {
       const presentation =
         await PresentationGenerationApi.createBlankPresentation();
-      trackEvent(MixpanelEvent.Dashboard_Blank_Presentation_Created, {
-        pathname,
-        presentation_id: presentation.id,
-        slide_count: presentation.n_slides,
-      });
       router.push(
         `/presentation?id=${encodeURIComponent(presentation.id)}&driver=standard`
       );
@@ -144,16 +123,12 @@ const DashboardPage: React.FC<{ publicV2CanaryEnabled?: boolean }> = ({
         creationError instanceof Error
           ? creationError.message
           : "Something went wrong while creating the presentation.";
-      trackEvent(MixpanelEvent.Dashboard_Blank_Presentation_Create_Failed, {
-        pathname,
-        error_message: sanitizeAnalyticsError(creationError),
-      });
       notify.error("Could not create blank presentation", message);
     } finally {
       blankPresentationRequestInFlight.current = false;
       setIsCreatingBlankPresentation(false);
     }
-  }, [pathname, router]);
+  }, [router]);
 
   const removePresentation = () => {
     if ((presentations?.length ?? 0) <= 1 && page > 1) {
@@ -193,10 +168,6 @@ const DashboardPage: React.FC<{ publicV2CanaryEnabled?: boolean }> = ({
                 return;
               }
             }
-            trackEvent(MixpanelEvent.Dashboard_New_Presentation_Clicked, {
-              pathname,
-              source: "dashboard_actions_card",
-            });
             router.push("/upload");
           }}
         >

@@ -37,7 +37,6 @@ function mountSlide(mutationsEnabled: boolean) {
           <SlideContent
             slide={slide}
             index={0}
-            presentationId="deck-1"
             mutationsEnabled={mutationsEnabled}
           />
         </Provider>

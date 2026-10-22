@@ -377,7 +377,6 @@ def test_production_api_external_worker_restart_and_sse_backfill(
             # validation remains active without contacting an external model.
             "LLM": "codex",
             "DISABLE_IMAGE_GENERATION": "true",
-            "DISABLE_ANONYMOUS_TRACKING": "true",
             "ENABLE_TEMPLATE_V2": "false",
             "CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE": "sqlite-local",
             "CHAT_FIRST_WORKSPACE_ROLLOUT_PERCENT": "100",

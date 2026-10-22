@@ -50,13 +50,11 @@ export const fileIdentityOf = (files: readonly File[]): string =>
 type UseSourceContentAdmissionArgs = {
   pendingPresentationId: string;
   setLoadingState: (state: LoadingState) => void;
-  trackUploadValidationFailure: (reason: string) => void;
 };
 
 export const useSourceContentAdmission = ({
   pendingPresentationId,
   setLoadingState,
-  trackUploadValidationFailure,
 }: UseSourceContentAdmissionArgs) => {
   const tA2b = useA2bTranslations("uploadExtras");
   const [summary, setSummary] = useState<SourceContentAnalysisSummary | null>(
@@ -82,7 +80,6 @@ export const useSourceContentAdmission = ({
   ): Promise<SourceContentAdmission | null> => {
     const validation = validateSourceContentFiles(selectedFiles);
     if (validation) {
-      trackUploadValidationFailure(validation);
       notify.warning(
         tA2b("fileLimitForSourceContentPreservation"),
         sourceContentSelectionErrorMessage(validation),

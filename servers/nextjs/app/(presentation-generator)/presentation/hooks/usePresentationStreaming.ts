@@ -11,7 +11,6 @@ import {
 } from "@/store/slices/presentationGeneration";
 import { jsonrepair } from "jsonrepair";
 import { notify } from "@/components/ui/sonner";
-import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
 import { getApiUrl, normalizeBackendAssetUrls } from "@/utils/api";
 import { store } from "@/store/store";
 import type { Slide } from "@/app/(presentation-generator)/types/slide";
@@ -397,7 +396,6 @@ export const usePresentationStreaming = (
 
     dispatch(setStreaming(true));
     dispatch(clearPresentationData());
-    trackEvent(MixpanelEvent.Presentation_Stream_API_Call);
     openStream();
 
     return () => {

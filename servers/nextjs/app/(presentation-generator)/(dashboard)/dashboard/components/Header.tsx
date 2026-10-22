@@ -4,7 +4,6 @@ import Wrapper from "@/components/Wrapper";
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { ArrowLeft } from "lucide-react";
 import { useTranslations } from "next-intl";
 
@@ -43,9 +42,6 @@ const Header = () => {
               <Link
                 href={backHref}
                 className="flex h-9 items-center gap-2 rounded-md border border-[#EBEBEC] bg-white px-3 text-xs font-medium text-[#27251E] transition hover:bg-[#F3F4F6]"
-                onClick={() =>
-                  trackEvent(MixpanelEvent.Navigation, { from: pathname, to: backHref })
-                }
               >
                 <ArrowLeft className="w-4 h-4 shrink-0 text-[#333333]" aria-hidden />
                 <span>{backLabel}</span>

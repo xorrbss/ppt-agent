@@ -30,12 +30,9 @@ import { Separator } from "@/components/ui/separator";
 import { notify } from "@/components/ui/sonner";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import { ApiError } from "../../services/api/api-error-handler";
-import { usePathname } from "next/navigation";
-import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { SlideThumbnailCard } from "./SlideThumbnailCard";
 import {
   BLANK_SLIDE_LAYOUT_GROUP,
-  BLANK_SLIDE_LAYOUT_ID,
   createBlankPresentationSlide,
   isTemplateFreePresentation,
 } from "../../_shared/blank-slide";
@@ -61,7 +58,6 @@ const SidePanel = ({
   displayMode = "rail",
 }: SidePanelProps) => {
   const t = useTranslations("slideNavigation");
-  const pathname = usePathname();
   const thumbnailScrollRef = useRef<HTMLDivElement | null>(null);
   const store = useStore<RootState>();
   const orderSaveBusy = useRef(false);
@@ -137,14 +133,6 @@ const SidePanel = ({
           index: lastSlideIndex,
         }),
       );
-      trackEvent(MixpanelEvent.Presentation_Slide_Added, {
-        pathname,
-        presentation_id: presentationId,
-        inserted_after_index: lastSlideIndex,
-        template_id: BLANK_SLIDE_LAYOUT_GROUP,
-        layout_id: BLANK_SLIDE_LAYOUT_ID,
-        source: "blank_side_panel",
-      });
       onSlideClick(newIndex);
       return;
     }
@@ -260,13 +248,6 @@ const SidePanel = ({
           requestAnimationFrame(() => onSlideClick(nextSelectedIndex));
         }
       }
-      trackEvent(MixpanelEvent.Presentation_Slides_Reordered, {
-        pathname,
-        presentation_id: presentationId,
-        from_index: oldIndex,
-        to_index: newIndex,
-        slide_count: updatedArray.length,
-      });
       persistSlideOrder(updatedArray, presentationData.revision);
     }
   };

@@ -1,11 +1,8 @@
 import { ArrowRight, PartyPopper } from 'lucide-react'
-import { usePathname, useRouter } from 'next/navigation'
-import React, { useCallback, useEffect, useState } from 'react'
-import { trackEvent, MixpanelEvent, setTelemetryEnabled } from "@/utils/mixpanel";
-import { Switch } from '../ui/switch';
+import { useRouter } from 'next/navigation'
+import React, { useEffect } from 'react'
 import confetti from 'canvas-confetti';
 import Image from 'next/image';
-import { fetchTelemetryStatus } from "@/app/(presentation-generator)/services/api/telemetry-status";
 
 const CONFETTI_COLORS = ['#ff00c5', '#f3ff00', '#9500d0', '#00d2f2', '#00ea9b', '#ff7f36'];
 
@@ -26,42 +23,15 @@ function fireRealisticConfetti() {
 
 const FinalStep = () => {
     const router = useRouter()
-    const pathname = usePathname()
-    const [trackingEnabled, setTrackingEnabled] = useState<boolean | null>(null);
 
     useEffect(() => {
         fireRealisticConfetti();
     }, []);
 
-    useEffect(() => {
-        void fetchTelemetryStatus().then(setTrackingEnabled);
-    }, []);
-
-    const handleTrackingToggle = useCallback(async (enabled: boolean) => {
-        const prev = trackingEnabled;
-        setTrackingEnabled(enabled);
-        setTelemetryEnabled(enabled);
-        try {
-            // Telemetry defaults to disabled: persist an explicit "false" so
-            // opting in is distinguishable from never having configured it.
-            await fetch('/api/user-config', {
-                method: 'POST',
-                body: JSON.stringify({
-                    DISABLE_ANONYMOUS_TRACKING: enabled ? 'false' : 'true',
-                }),
-            });
-        } catch {
-            setTrackingEnabled(prev);
-            setTelemetryEnabled(prev ?? false);
-        }
-    }, [trackingEnabled]);
-
     const handleGoToDashboard = () => {
-        trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/dashboard" });
         router.push('/dashboard')
     }
     const handleGoToUpload = () => {
-        trackEvent(MixpanelEvent.Navigation, { from: pathname, to: "/upload" });
         router.push('/upload')
     }
     return (
@@ -71,20 +41,6 @@ const FinalStep = () => {
                 <Image src="/final_onboarding.png" alt="DevAX" width={118} height={98} className='w-[118px] h-[98px] object-contain' />
                 <h1 className='text-black text-[30px] font-normal font-unbounded py-2.5'>환영합니다!</h1>
                 <p className='text-base font-normal text-[#000000CC] font-syne sm:text-xl'>모든 준비가 끝났습니다. 첫 번째 발표자료를 만들어 보세요.</p>
-
-                {trackingEnabled !== null && (
-                    <div className='mt-8 flex w-full max-w-md items-center gap-3 rounded-[10px] border border-surface bg-white px-4 py-3.5 text-left sm:px-5'>
-                        <div className='min-w-0 flex-1'>
-                            <p className='text-sm font-medium text-[#191919] font-syne'>사용 분석</p>
-                            <p className='text-[11px] text-[#9CA3AF] font-syne leading-tight mt-0.5'>익명 사용 데이터를 공유해 DevAX 개선에 도움을 주세요.</p>
-                        </div>
-                        <Switch
-                            checked={trackingEnabled}
-                            onCheckedChange={handleTrackingToggle}
-                            className='data-[state=checked]:bg-[#7C51F8]'
-                        />
-                    </div>
-                )}
 
                 <button onClick={handleGoToUpload} className='bg-[#7C51F8] px-[23px] mt-8 py-[15px]  rounded-[70px] text-white text-lg font-syne font-semibold'>첫 발표자료 만들기 🚀</button>
                 <button onClick={fireRealisticConfetti} className='mt-3 flex items-center gap-1.5 text-sm text-brand-accent font-syne font-medium hover:underline'>

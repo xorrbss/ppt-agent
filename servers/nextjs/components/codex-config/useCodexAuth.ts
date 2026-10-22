@@ -5,7 +5,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { notify } from "@/components/ui/sonner";
 import { codexAuthStatus } from "@/app/(presentation-generator)/services/api/codex-auth";
 import { getApiUrl } from "@/utils/api";
-import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
 import { DEFAULT_CODEX_MODEL } from "./constants";
 import { POLL_INTERVAL_MS } from "@/lib/timeouts";
 
@@ -127,7 +126,6 @@ export const useCodexAuth = ({
 
   const handleSignIn = useCallback(async () => {
     try {
-      trackEvent(MixpanelEvent.Codex_SignIn_API_Call);
       onInputChangeRef.current("codex", "LLM");
 
       const res = await fetch(getApiUrl("/api/v1/ppt/codex/auth/initiate"), {
