@@ -227,26 +227,15 @@ the exported PPTX in PowerPoint. The default adaptive/template path is unchanged
 - `AUTHORED_HYBRID_CONCURRENCY` overrides hybrid PPTX slide concurrency; its default is `clamp(4, os.cpus().length - 2, 8)`.
 - `EXPORT_RETENTION_DAYS` controls export retention by last access (default 7 days); `EXPORT_SWEEP_INTERVAL_SECONDS` controls the startup/background sweep interval (default 3600 seconds), and files modified within the last hour are always retained.
 
-## Editable (byte) PPTX/PDF export on Windows
+## PPTX/PDF export on Windows
 
-The `adaptive`/template paths export a fully-editable PPTX by DOM-walking the rendered
-`/pdf-maker` page through the external `presentation-export` runtime. On Windows this
-needs two things the prebuilt runtime doesn't fully ship (authored mode is unaffected —
-it assembles an image PPTX in pure Python):
-
-- **Converter binary** — `npm run sync:presentation-export` now downloads the archive for
-  the current OS/arch (`export-Windows-X64.zip` → `presentation-export/py/convert-win32-x64.exe`).
-  If you synced before this fix, re-run with `--force`.
-- **`sharp` native binary** — the runtime bundles sharp's JS but not its libvips native
-  addon. `npm run sync:presentation-export` now installs it automatically on Windows/macOS
-  (matching the bundle's sharp version). If that step is skipped (e.g. offline), install it
-  manually: `npm install --prefix presentation-export --no-save sharp@0.34.4`.
-- **Chrome** — the runtime renders via puppeteer. The backend now auto-points it at the
-  detected system Chrome (same as authored mode; override with `CHROME_PATH`/
-  `PUPPETEER_EXECUTABLE_PATH`), so puppeteer won't try to download its own.
-
-Verified end-to-end on Windows: adaptive and korean-biz decks export to valid multi-slide
-editable `.pptx` (opens in PowerPoint).
+Export runs as the `export.pptx`/`export.pdf` workspace operation in the isolated
+export workers (`servers/fastapi/workers/`); no external export runtime is downloaded.
+Authored decks get a raster PPTX/PDF built in Python plus the editable hybrid layer from
+`servers/nextjs/scripts/public-hybrid-export-worker.mjs`; SVG decks go through the SVG
+PPTX converter and the vector PDF path. The workers need a Chrome/Chromium, found
+automatically or set with `CHROME_PATH`/`PUPPETEER_EXECUTABLE_PATH`. A leftover
+`presentation-export/` directory from an older checkout is unused and can be deleted.
 
 ## Notes
 - API keys live in `app_data/userConfig.json` (gitignored) — never committed.
