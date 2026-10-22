@@ -27,7 +27,7 @@ The roadmap audit did not retain canonical screen names, so the rollout selected
 
 Generation failures and global toast affordances are also catalog-backed so an otherwise translated flow does not fall back to mixed-language failure text. Arbitrary backend `message` or `detail` values are logged for diagnosis but are not rendered as localized copy; stable error codes must be explicitly mapped to catalog keys.
 
-Dashboard list/search, editor mobile/accessibility, and public-share UI are developed in separate integration sessions. This change provides their shared catalog entries under `overlapMessages`; those owners apply the keys in their components to avoid overlapping edits.
+Dashboard list/search, editor mobile/accessibility, and public-share UI are developed in separate integration sessions.
 
 ## Adding UI copy
 
