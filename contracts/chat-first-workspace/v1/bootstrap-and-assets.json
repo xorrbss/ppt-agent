@@ -90,6 +90,7 @@
           "progress": 0.0,
           "error": null,
           "error_message": null,
+          "failure_class": null,
           "retryable": null,
           "providerAttemptCount": null,
           "retryCount": null,

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { getWorkspaceTimeline } from "../../services/api/workspace";
+import { generationFailureKey } from "../workspace/generationFailure";
 import type {
   WorkspaceOperationAnchor,
   WorkspaceTimelineAnchor,
@@ -52,6 +53,7 @@ export function useWorkspaceStaging({
   fetchUserSlides: FetchSlides;
 }) {
   const t = useTranslations("presentationStaging");
+  const tFailure = useTranslations("generationFailure");
   const [operation, setOperation] = useState<WorkspaceOperationAnchor | null>(null);
   const [networkError, setNetworkError] = useState(false);
   const [pollingPaused, setPollingPaused] = useState(false);
@@ -215,13 +217,14 @@ export function useWorkspaceStaging({
     if (networkError && !pollingPaused) return { title: t("checkingStatus"), description: t("connectionUnstable"), notice: t("retryAutomatically") };
     if (!operation) return { title: t("checkingStatus"), description: t("findingOperation") };
     if (pollingPaused && operation.status === "queued") return { title: t("canContinueChecking"), description: operation.capacityWaiting ? t("capacityCheckPaused") : t("queueCheckPaused"), notice: t("refreshOrChooseAction") };
-    if (terminal) return { title: operation.status === "cancelled" ? t("cancelled") : operation.status === "deadline_exceeded" || operation.status === "expired" ? t("expired") : t("failed"), description: operation.error || t("inspectCause"), notice: t("retryOrCancel") };
+    const failureKey = generationFailureKey(operation.failureClass);
+    if (terminal) return { title: operation.status === "cancelled" ? t("cancelled") : operation.status === "deadline_exceeded" || operation.status === "expired" ? t("expired") : t("failed"), description: failureKey ? tFailure(`${failureKey}.body`) : operation.error || t("inspectCause"), notice: t("retryOrCancel") };
     if (operation.status === "queued") return operation.capacityWaiting ? { title: t("waitingForCapacity"), description: t("startsWhenAvailable"), notice: operation.queuePosition === undefined ? undefined : t("queuePosition", { position: operation.queuePosition }) } : { title: t("waitingForDesign"), description: t("notStartedYet"), notice: t("waitDoesNotFail") };
     if (["waiting_for_assets", "blocked", "approval_required", "awaiting_approval"].includes(operation.status)) return { title: t("needsAttention"), description: t("checkFilesOrApproval"), notice: t("chooseAction") };
     if (operation.status === "cancelling") return { title: t("cancelling"), description: t("waitForCancellation") };
     if (operation.status === "succeeded") return { title: t("finishing"), description: t("loadingSlides") };
     return { title: t("applyingDesign"), description: t("creatingFromSource") };
-  }, [networkError, operation, pollingPaused, terminal, t]);
+  }, [networkError, operation, pollingPaused, terminal, t, tFailure]);
 
   return { content, pollingPaused, refresh, terminal };
 }

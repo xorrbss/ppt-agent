@@ -2,6 +2,7 @@ import { useApprovalExpired, editabilityReasonLabels, exportCompletionLabel, typ
 import { useEffect, useState } from "react";
 import { ConversationMessageFrame } from "../conversation/ConversationPrimitives";
 import { WorkspaceGenerationProgress } from "./WorkspaceGenerationProgress";
+import { generationFailureKey } from "./generationFailure";
 import { operationFailureMessage, operationProgressEvidence, type WorkspaceOperationObservation } from "./WorkspaceOperationPresentation";
 import { useLocale, useTranslations } from "next-intl";
 import SvgQualityStatusSummary from "./SvgQualityStatusSummary";
@@ -74,6 +75,7 @@ export function WorkspaceOperationCard({
 }: WorkspaceOperationCardProps) {
   const t = useTranslations("qualityReview.workspace");
   const tOperation = useTranslations("presentationOperationCard");
+  const tFailure = useTranslations("generationFailure");
   const locale = useLocale();
   const operationKnown = isKnownWorkspaceOperationType(operation.operationType);
   const statusKnown = (KNOWN_OPERATION_STATUSES as readonly string[]).includes(
@@ -125,6 +127,7 @@ export function WorkspaceOperationCard({
     operation.operationType === "presentation.generate";
   const progressEvidence = operationProgressEvidence(operation);
   const failed = ["failed", "dead_letter", "deadline_exceeded"].includes(operation.status);
+  const failureClassKey = isPresentationGeneration ? generationFailureKey(operation.failureClass) : null;
   const actor = actorSummary(operation);
   const createdAt = formatTimestamp(operation.createdAt, locale);
   const updatedAt = formatTimestamp(operation.updatedAt, locale);
@@ -1145,7 +1148,7 @@ export function WorkspaceOperationCard({
           role="alert"
         >
           <span aria-hidden="true" className="font-semibold text-red-700">!</span>
-          {operationFailureMessage(operation)}
+          {failureClassKey ? tFailure(`${failureClassKey}.body`) : operationFailureMessage(operation)}
         </p>
       )}
       {actionError && (

@@ -16,7 +16,7 @@ function item(overrides: Partial<GenerationActivityItem>): GenerationActivityIte
     pages: { authored: 1, rendered: 0, persisted: 0, total: 10 },
     stage: null, queuePosition: null, capacityWaiting: false,
     createdAt: "2026-10-22T00:00:00Z", startedAt: null, lastProgressAt: null,
-    operationVersion: 3, presentationRevision: 2, ...overrides,
+    operationVersion: 3, presentationRevision: 2, retryOfOperationId: null, ...overrides,
   };
 }
 

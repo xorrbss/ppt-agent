@@ -47,6 +47,7 @@ from services import generation_activity as activity_service
 from services.database_owner_scope import register_owner_scope_hooks
 from services.workspace_operation_principal import operation_principal
 from services.workspace_runtime_profile import WorkspaceRuntimeKind, WorkspaceRuntimeProfile
+from services.workspace_error_registry import resolve_workspace_error
 from services.workspace_service import bootstrap_workspace
 
 TABLES = [
@@ -114,6 +115,8 @@ async def _generation(
     version: int = 3,
     started_at: datetime | None = None,
     lifecycle: str | None = None,
+    error_code: str | None = None,
+    retry_of: uuid.UUID | None = None,
 ) -> tuple[uuid.UUID, uuid.UUID]:
     """One deck with a bootstrapped ``presentation.generate`` operation."""
 
@@ -151,6 +154,8 @@ async def _generation(
         operation.created_at = created_at
         operation.started_at = started_at
         operation.progress = progress
+        operation.error_code = error_code
+        operation.retry_of_operation_id = retry_of
         if lifecycle is not None:
             presentation = await session.get(PresentationModel, presentation_id)
             presentation.lifecycle_status = lifecycle
@@ -218,8 +223,18 @@ async def _lists_running_then_queued(tmp_path: Path):
             winding_down = await _generation(
                 maker, state="cancelling", created_at=T0 + timedelta(minutes=1),
             )
-            for state in ("succeeded", "failed", "cancelled", "awaiting_approval"):
-                await _generation(maker, state=state, created_at=T0)
+            finished = {}
+            for state in ("succeeded", "failed", "cancelled"):
+                finished[state] = await _generation(maker, state=state, created_at=T0)
+            # Abandoned approval/asset/blocked rows linger for months without
+            # progressing, so they are not in-flight work.
+            for state in ("awaiting_approval", "approval_required", "waiting_for_assets", "blocked"):
+                await _generation(maker, state=state, created_at=T0 + timedelta(minutes=3))
+            # A resume of the failed deck carries the operation it retries.
+            resumed = await _generation(
+                maker, state="queued", created_at=T0 + timedelta(minutes=7),
+                retry_of=finished["failed"][1],
+            )
             await _generation(
                 maker, state="running", created_at=T0,
                 lifecycle=PRESENTATION_LIFECYCLE_DELETED,
@@ -250,11 +265,17 @@ async def _lists_running_then_queued(tmp_path: Path):
     wire = response.model_dump(mode="json")
     assert datetime.fromisoformat(wire["server_time"]).tzinfo is not None
     items = wire["items"]
-    # Another owner's deck, finished/unapproved work and deleted decks are absent.
+    # Another owner's deck, finished work, waiting states and deleted decks
+    # are absent.
     assert [item["operation_id"] for item in items] == [
-        str(running[1]), str(winding_down[1]), str(earlier_queue[1]), str(later_queue[1]),
+        str(running[1]), str(winding_down[1]),
+        str(earlier_queue[1]), str(later_queue[1]), str(resumed[1]),
     ]
-    assert items[1]["state"] == "cancelling"
+    assert [item["state"] for item in items] == [
+        "running", "cancelling", "queued", "queued", "queued",
+    ]
+    assert items[-1]["retry_of_operation_id"] == str(finished["failed"][1])
+    assert all(item["retry_of_operation_id"] is None for item in items[:-1])
     first, second, third = items[0], items[2], items[3]
     assert first == {
         "operation_id": str(running[1]),
@@ -272,6 +293,7 @@ async def _lists_running_then_queued(tmp_path: Path):
         "last_progress_at": (T0 + timedelta(minutes=33)).isoformat(),
         "operation_version": 7,
         "presentation_revision": 0,
+        "retry_of_operation_id": None,
     }
     assert second["pages"] == {"authored": 0, "rendered": 0, "persisted": 0, "total": None}
     assert second["last_progress_at"] is None and second["started_at"] is None
@@ -456,3 +478,96 @@ async def _draft_preview_last_progress(tmp_path: Path, monkeypatch):
     assert body["lastProgressAt"] == expected
     assert listed.items[0].last_progress_at == expected
     assert empty["lastProgressAt"] is None
+
+
+@pytest.mark.parametrize(
+    ("error_code", "stop_code", "stop_class"),
+    [
+        (None, None, None),
+        ("public_provider_call_timeout", "public_provider_call_timeout", "provider_unstable"),
+        ("svg_source_quality_failed", "svg_source_quality_failed", "quality_not_passed"),
+        ("xd2s", "xd2s", "unknown"),
+        # An unregistered shape is never reflected, so it has no class either.
+        ("Provider said: overloaded", None, None),
+    ],
+)
+def test_draft_preview_classifies_its_stop_code(
+    tmp_path: Path, monkeypatch, error_code, stop_code, stop_class,
+):
+    asyncio.run(
+        _draft_preview_stop_class(tmp_path, monkeypatch, error_code, stop_code, stop_class)
+    )
+
+
+async def _draft_preview_stop_class(tmp_path, monkeypatch, error_code, stop_code, stop_class):
+    engine, maker = await _database(tmp_path / "draft-preview-stop.db")
+    try:
+        owner = await _owner(maker, "preview-stop-owner")
+        with operation_principal(owner, TENANT):
+            presentation_id, operation_id = await _generation(
+                maker, state="failed", created_at=T0, error_code=error_code,
+            )
+
+            async def _context(_session, _presentation_id):
+                return SimpleNamespace(
+                    id=uuid.uuid4(), state="failed", total_slides=3,
+                    current_stage="author", operation_id=operation_id,
+                    operation_state="failed", error_code=error_code,
+                )
+
+            monkeypatch.setattr(draft_preview_endpoint, "_context", _context)
+            async with maker() as session:
+                body = await draft_preview_endpoint.draft_preview(
+                    presentation_id, SimpleNamespace(headers={}), session=session,
+                )
+    finally:
+        await engine.dispose()
+
+    assert body["stopCode"] == stop_code
+    assert body["stopClass"] == stop_class
+
+
+def test_timeline_classifies_only_terminally_failed_generations(tmp_path: Path):
+    asyncio.run(_timeline_failure_class(tmp_path))
+
+
+async def _timeline_failure_class(tmp_path: Path):
+    engine, maker = await _database(tmp_path / "timeline-failure-class.db")
+    cases = {
+        ("failed", "public_provider_call_timeout"): "provider_unstable",
+        ("dead_letter", "http_error_500"): "service_interrupted",
+        ("deadline_exceeded", "public_deadline_exceeded"): "limit_reached",
+        ("failed", None): "unknown",
+        ("running", None): None,
+        ("cancelled", "public_provider_overload"): None,
+    }
+    observed = {}
+    try:
+        owner = await _owner(maker, "timeline-owner")
+        with operation_principal(owner, TENANT):
+            for (state, code), _expected in cases.items():
+                presentation_id, operation_id = await _generation(
+                    maker, state=state, created_at=T0, error_code=code,
+                )
+                async with maker() as session:
+                    timeline = await workspace_endpoint.get_presentation_workspace_timeline(
+                        presentation_id, before_position=None, limit=50, session=session,
+                    )
+                wire = timeline.model_dump(mode="json")
+                operation = next(
+                    item for item in wire["items"]
+                    if item["anchor_type"] == "operation"
+                    and item["operation_id"] == str(operation_id)
+                )
+                observed[(state, code)] = operation
+    finally:
+        await engine.dispose()
+
+    assert {key: item["failure_class"] for key, item in observed.items()} == cases
+    # The public error projection is unchanged: the raw code is still not
+    # reflected, only the registry's public code and message.
+    for (_state, code), item in observed.items():
+        if code is None:
+            continue
+        public = resolve_workspace_error(code)
+        assert (item["error"], item["error_message"]) == (public.code, public.safe_message)

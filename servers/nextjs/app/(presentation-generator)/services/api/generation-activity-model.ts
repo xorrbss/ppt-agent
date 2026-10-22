@@ -29,6 +29,8 @@ export interface GenerationActivityItem {
   lastProgressAt: string | null;
   operationVersion: number;
   presentationRevision: number;
+  /** Set on a resume; identifies the failed operation it continues. */
+  retryOfOperationId: string | null;
 }
 
 export interface GenerationActivitySnapshot {
@@ -94,6 +96,7 @@ function normalizeItem(value: unknown): GenerationActivityItem | null {
     lastProgressAt: timestamp(raw.last_progress_at),
     operationVersion,
     presentationRevision,
+    retryOfOperationId: text(raw.retry_of_operation_id),
   };
 }
 

@@ -18,6 +18,7 @@ from models.sql.public_admission import PublicOperationAdmission
 from models.sql.workspace import WorkspaceOperation
 from services.database import get_async_session
 from services.generation_activity import checkpoint_progress_by_job
+from services.generation_failure_class import classify_generation_failure
 from services.presentation_access_service import require_live_presentation
 from utils.env_settings.authored_runtime import get_authored_checkpoint_directory
 from utils.get_env import get_app_data_directory_env
@@ -66,14 +67,16 @@ async def draft_preview(presentation_id: uuid.UUID, response: Response,
     # Same definition as the generation-activity list's ``last_progress_at``.
     progress = (await checkpoint_progress_by_job(session, [job.id])).get(job.id)
     last_progress_at = progress.last_progress_at if progress is not None else None
+    # Only a registered machine code is returned, never provider detail.
+    stop_code = job.error_code if job.error_code and re.fullmatch(r"[a-z0-9_]{1,128}", job.error_code) else None
     response.headers.update(_PRIVATE_HEADERS)
     return {"kind": "checkpoint_draft", "published": False,
             "jobId": str(job.id), "operationId": str(job.operation_id),
             "jobState": job.state, "operationState": job.operation_state,
             "stage": job.current_stage, "totalPages": job.total_slides,
             "lastProgressAt": last_progress_at.isoformat() if last_progress_at is not None else None,
-            # Only a registered machine code is returned, never provider detail.
-            "stopCode": job.error_code if job.error_code and re.fullmatch(r"[a-z0-9_]{1,128}", job.error_code) else None,
+            "stopCode": stop_code,
+            "stopClass": classify_generation_failure(stop_code),
             "pages": [{"index": row.slide_index, "author": row.author_status,
                        "render": row.render_status, "persist": row.persist_status,
                        "quality": "unconfirmed", "imageAvailability": "unconfirmed",

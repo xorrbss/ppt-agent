@@ -1512,3 +1512,19 @@ test("an unversioned page cannot replace a versioned live attachment projection"
   assert.equal(afterUnversionedPage.revision, 8);
   assert.equal(afterUnversionedPage.eventHighWatermark, "20");
 });
+
+test("operation anchors carry a validated failure_class only for generate operations", () => {
+  const failureClassOf = (operationType: string, failureClass?: string) => {
+    const anchor = normalizeTimelineAnchor(
+      { anchor_type: "operation", operation_id: "op", position: 1, status: "failed",
+        operation_type: operationType, failure_class: failureClass },
+      0,
+    );
+    assert.equal(anchor.anchorType, "operation");
+    return anchor.anchorType === "operation" ? anchor.failureClass : undefined;
+  };
+  assert.equal(failureClassOf("presentation.generate", "provider_unstable"), "provider_unstable");
+  assert.equal(failureClassOf("presentation.generate", "made_up"), undefined);
+  assert.equal(failureClassOf("presentation.edit", "provider_unstable"), undefined);
+  assert.equal(failureClassOf("presentation.generate"), undefined);
+});

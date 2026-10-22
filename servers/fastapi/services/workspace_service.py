@@ -65,6 +65,7 @@ from services.authored_composition_policy import (
     AUTHORED_CAPACITY_BOUNDED_REPAIR_REVISION,
 )
 from services.workspace_error_registry import resolve_workspace_error
+from services.generation_failure_class import generation_operation_failure_class
 from services.public_operation_admission import (
     PublicAdmissionRejected,
     admit_public_operation,
@@ -1442,6 +1443,9 @@ async def workspace_timeline(
                     "queue_position": queue_position,
                     "error": row.error_code,
                     "error_message": _SAFE_ERROR_MESSAGES.get(row.error_code or ""),
+                    "failure_class": generation_operation_failure_class(
+                        kind=row.kind, state=row.state, error_code=row.error_code,
+                    ),
                     "retryable": _operation_retryable(row),
                     "retry_count": row.retry_count,
                     "result": result,

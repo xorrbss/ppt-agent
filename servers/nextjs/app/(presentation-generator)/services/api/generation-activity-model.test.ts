@@ -39,6 +39,12 @@ test("normalizes items and unwraps a data envelope", () => {
   assert.equal(item.operationVersion, 4);
   assert.equal(item.presentationRevision, 2);
   assert.equal(snapshot.serverTime, "2026-10-22T08:35:00Z");
+  assert.equal(item.retryOfOperationId, null);
+});
+
+test("keeps retry_of_operation_id so a client can find the deck a resume created", () => {
+  const [item] = normalizeGenerationActivity({ items: [{ ...ITEM, retry_of_operation_id: "op-failed" }] }).items;
+  assert.equal(item.retryOfOperationId, "op-failed");
 });
 
 test("drops items missing identity, state or cancel preconditions", () => {

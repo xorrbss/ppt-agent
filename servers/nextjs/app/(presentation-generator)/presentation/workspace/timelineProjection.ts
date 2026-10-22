@@ -1,4 +1,5 @@
 import { asRecord, stringValue, numberValue, safeIntegerValue, canonicalCursor, cursorOrdinal, monotonicEventHighWatermark, booleanValue, objectValue, operationStatus, eventStatus, explicitSafeError } from "./timelineProjectionPrimitives";
+import { parseGenerationFailureClass } from "./generationFailure.ts";
 import { isKnownWorkspaceOperationType } from "./types.ts";
 import type {
   WorkspaceAttachment,
@@ -514,6 +515,9 @@ function normalizeOperation(
       raw.errorMessage,
       raw.error_message,
     ),
+    failureClass: operationType === "presentation.generate"
+      ? parseGenerationFailureClass(raw.failureClass ?? raw.failure_class) ?? undefined
+      : undefined,
     retryable: booleanValue(
       raw.retryable,
       rawError.retryable,
@@ -1019,6 +1023,7 @@ function patchOperation(
     // operation resumed. Keeping it here makes an active progress card look
     // terminal even though the authoritative snapshot has no current error.
     error: event.error ?? (clearsTransientFailure ? undefined : operation.error),
+    failureClass: clearsTransientFailure ? undefined : operation.failureClass,
     retryable:
       event.retryable ??
       (clearsTransientFailure ? undefined : operation.retryable),

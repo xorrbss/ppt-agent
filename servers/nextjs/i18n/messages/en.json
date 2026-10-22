@@ -5189,5 +5189,62 @@
     "cancelAndStart": "Cancel existing and start",
     "errorStale": "The existing work changed in the meantime. Review the updated list and choose again.",
     "errorCancel": "Could not cancel the existing work. Nothing was started."
+  },
+  "generationFailure": {
+    "provider_unstable": {
+      "title": "Generation stopped because the AI service was unstable",
+      "body": "Generation stopped because AI responses were delayed or unstable. Completed pages are preserved, so you can resume and build only the remaining ones."
+    },
+    "quality_not_passed": {
+      "title": "Some pages did not pass the quality checks",
+      "body": "Generation stopped because some pages did not pass quality review. Completed pages are preserved; resuming rewrites the remaining ones."
+    },
+    "service_interrupted": {
+      "title": "Generation was interrupted by a service problem",
+      "body": "Generation was interrupted by an internal problem. Completed pages are preserved, so you can resume and build only the remaining ones."
+    },
+    "source_unprocessable": {
+      "title": "The source document could not be processed",
+      "body": "Generation stopped because the uploaded document could not be read or converted. Check the document or convert it to another format, then start a new presentation."
+    },
+    "limit_reached": {
+      "title": "A usage limit was reached",
+      "body": "Generation stopped because a usage or time limit was reached. Check the limits, then start a new presentation or resume the remaining pages within the limit."
+    },
+    "unknown": {
+      "title": "Generation was interrupted",
+      "body": "Generation was interrupted. Completed pages are preserved, so you can resume and build only the remaining ones. If this keeps happening, check the activity log."
+    },
+    "panel": {
+      "aria": "Generation failure guidance",
+      "startNew": "Start a new one",
+      "resuming": "Resuming the remaining pages. Opening the new presentation…",
+      "resumeNotFound": "The new presentation is not visible yet. Check the in-progress list on the dashboard.",
+      "openDashboard": "Go to dashboard"
+    },
+    "recovery": {
+      "checking": "Checking… (up to 30 seconds)",
+      "start": "Resume remaining pages",
+      "planAria": "Plan to resume the remaining pages",
+      "planTitle": "Resume all {count} pages",
+      "reuse": "Reuse {count} existing pages · full quality review pending",
+      "create": "Create {count} pages that have not started",
+      "unknownResult": "{count} pages with unconfirmed results · may be charged twice if regenerated",
+      "ackUnknown": "I understand that the earlier result for page(s) {pages} cannot be confirmed and regenerating may use the quota twice.",
+      "historicalUnbounded": "The actual usage of the earlier unconfirmed request is not final. The limit below applies only to the additional work.",
+      "budgetLabel": "Additional generation limit",
+      "budgetOption": "{percent}% of the allowed limit",
+      "requestsPlanned": "{authorCount} new generation requests and up to {retryLimit} revision requests are planned. Work stops when the selected limit is reached.",
+      "ackBudget": "I approve additional generation within {percent}% of the allowed limit.",
+      "afterNote": "You still need to check the full quality review and export after generation.",
+      "confirming": "Confirming approval…",
+      "confirmAgain": "Check the result of the same approval again",
+      "confirm": "Confirm and resume",
+      "close": "Close",
+      "planUnavailable": "A resume plan is not available for this operation.",
+      "rejected": "The request could not be started. Please check the latest plan again.",
+      "outcomeUnknown": "The result of the request is not confirmed yet. You can check again with the same approval.",
+      "started": "Requested the remaining pages. Full quality review and export are still pending."
+    }
   }
 }

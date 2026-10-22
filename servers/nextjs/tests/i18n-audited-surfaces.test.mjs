@@ -86,6 +86,8 @@ const auditedFiles = [
   "components/OnBoarding/PresentonMode.tsx",
   "components/ui/overlay-loader.tsx",
   "app/(presentation-generator)/presentation/components/DraftCheckpointPreview.tsx",
+  "app/(presentation-generator)/presentation/components/GenerationFailurePanel.tsx",
+  "app/(presentation-generator)/presentation/workspace/WorkspacePartialRecovery.tsx",
   "app/(presentation-generator)/(dashboard)/dashboard/components/GenerationActivitySection.tsx",
   "app/(presentation-generator)/upload/components/upload-page/GenerationGuardDialog.tsx",
   "app/(presentation-generator)/upload/components/upload-page/useGenerationGuard.ts",

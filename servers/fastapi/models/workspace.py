@@ -649,6 +649,18 @@ class WorkspaceAllowedActionResponse(BaseModel):
     reason: Optional[str] = None
 
 
+# Why a deck generation stopped, in the terms its guidance is written in.
+# ``services.generation_failure_class`` is the only place codes map onto it.
+GenerationFailureClass = Literal[
+    "provider_unstable",
+    "quality_not_passed",
+    "service_interrupted",
+    "source_unprocessable",
+    "limit_reached",
+    "unknown",
+]
+
+
 class WorkspaceOperationTimelineItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -665,6 +677,8 @@ class WorkspaceOperationTimelineItem(BaseModel):
     progress: Optional[float] = None
     error: Optional[str] = None
     error_message: Optional[str] = None
+    # Set only for a ``presentation.generate`` operation that failed terminally.
+    failure_class: Optional[GenerationFailureClass] = None
     retryable: Optional[bool] = None
     providerAttemptCount: Optional[int] = Field(default=None, ge=0)
     retryCount: Optional[int] = Field(default=None, ge=0)

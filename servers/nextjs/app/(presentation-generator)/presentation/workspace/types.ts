@@ -1,3 +1,5 @@
+import type { GenerationFailureClass } from "./generationFailure.ts";
+
 export const KNOWN_ASSET_STATUSES = [
   "uploaded",
   "scanning",
@@ -148,6 +150,8 @@ export interface WorkspaceOperationAnchor {
   current?: number;
   total?: number;
   error?: string;
+  /** Server classification of a terminal `presentation.generate` failure. */
+  failureClass?: GenerationFailureClass;
   retryable?: boolean;
   capacityWaiting?: boolean;
   queuePosition?: number;

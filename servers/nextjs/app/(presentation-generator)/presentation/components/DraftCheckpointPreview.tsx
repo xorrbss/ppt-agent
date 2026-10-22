@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { isGenerationStalled, minutesSince } from "../../services/api/generation-activity-model";
+import { GENERATION_RESUMABLE_STATUSES, isGenerationFailureStatus } from "../workspace/generationFailure";
+import GenerationFailurePanel from "./GenerationFailurePanel";
 
 type DraftPage = {
   index: number; author: string; render: string; persist: string;
@@ -13,6 +15,7 @@ type DraftPreview = {
   kind: "checkpoint_draft"; published: false; jobId: string;
   operationState: string; jobState: string; stage: string | null;
   totalPages: number; stopCode: string | null; pages: DraftPage[];
+  operationId?: string; stopClass?: string | null;
   lastProgressAt?: string | null;
 };
 const TERMINAL = new Set(["failed", "dead_letter", "cancelled", "deadline_exceeded", "rejected", "expired"]);
@@ -97,6 +100,12 @@ export default function DraftCheckpointPreview({ presentationId }: { presentatio
     { state: "running", lastProgressAt: draft.lastProgressAt ?? null, startedAt: null }, nowMs);
   const quota = draft.stopCode?.includes("quota") || draft.stopCode?.includes("budget")
     || draft.stopCode === "retry_amplification_ceiling_exceeded";
+  // The class message replaces the generic stop text; an unclassified failure keeps the old text but still offers resume.
+  const failurePanel = stopped && draft.operationId && isGenerationFailureStatus(draft.operationState)
+    ? <GenerationFailurePanel operationId={draft.operationId} failureClass={draft.stopClass}
+      fallbackText={quota ? t("draft.stopQuota") : t("draft.stopGeneric")}
+      resumable={(GENERATION_RESUMABLE_STATUSES as readonly string[]).includes(draft.operationState)} />
+    : null;
   return <section aria-label={t("draft.aria")} className="min-w-0 flex-1 overflow-y-auto border-r border-slate-200 bg-slate-50 p-4">
     <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-slate-800">
       <h2 className="font-semibold">{t("draft.heading")}</h2>
@@ -106,7 +115,7 @@ export default function DraftCheckpointPreview({ presentationId }: { presentatio
       <p className="mt-1">{stopped ? t("draft.stateStopped") : draft.jobState === "succeeded" ? t("draft.stateDone") : t("draft.stateRunning")}{draft.stage ? t("draft.stageSuffix", { stage: stageLabel(t, draft.stage) }) : ""}</p>
       {progressMinutes !== null && <p className="mt-1" data-testid="draft-last-progress">{progressMinutes < 1 ? t("lastProgressJustNow") : t("lastProgress", { minutes: progressMinutes })}</p>}
       {stalled && progressMinutes !== null && <p className="mt-1 font-medium text-amber-900" role="status" data-testid="draft-stalled">{t("stalled", { minutes: progressMinutes })}</p>}
-      {stopped && <p className="mt-1">{quota ? t("draft.stopQuota") : t("draft.stopGeneric")}</p>}
+      {stopped && (failurePanel ?? <p className="mt-1">{quota ? t("draft.stopQuota") : t("draft.stopGeneric")}</p>)}
       {loadFailed && <p role="alert" className="mt-1">{t("draft.staleResult")}</p>}
     </div>
     <div className="mb-3 flex flex-wrap items-center gap-2">

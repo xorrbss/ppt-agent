@@ -43,6 +43,9 @@ from utils.datetime_utils import as_utc, get_current_utc_datetime
 GENERATION_ACTIVITY_KIND = "presentation.generate"
 # ``cancelling`` still holds the owner's generation slot until the worker
 # stops, so a deck queued behind it must be able to see why it waits.
+# Approval/asset/blocked states are deliberately absent: abandoned
+# ``awaiting_approval`` generate rows linger for months without progressing,
+# so listing them would pin permanent rows on the dashboard.
 GENERATION_ACTIVITY_STATES = ("running", "cancelling", "queued")
 GENERATION_ACTIVITY_LIMIT = 20
 
@@ -123,6 +126,7 @@ async def generation_activity(session: AsyncSession) -> GenerationActivityRespon
                 WorkspaceOperation.version,
                 WorkspaceOperation.created_at,
                 WorkspaceOperation.started_at,
+                WorkspaceOperation.retry_of_operation_id,
                 PresentationModel.title,
                 PresentationModel.revision,
             )
@@ -221,6 +225,11 @@ async def generation_activity(session: AsyncSession) -> GenerationActivityRespon
                 last_progress_at=_iso(progress.last_progress_at),
                 operation_version=int(row.version),
                 presentation_revision=int(row.revision),
+                retry_of_operation_id=(
+                    str(row.retry_of_operation_id)
+                    if row.retry_of_operation_id is not None
+                    else None
+                ),
             )
         )
     return GenerationActivityResponse(server_time=server_time.isoformat(), items=items)

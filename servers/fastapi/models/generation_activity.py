@@ -40,6 +40,9 @@ class GenerationActivityItem(BaseModel):
     # The preconditions a ``cancel`` action on this operation must carry.
     operation_version: int = Field(ge=0)
     presentation_revision: int = Field(ge=0)
+    # The failed operation this one resumes, so a client can find the deck a
+    # resume created.
+    retry_of_operation_id: Optional[str] = None
 
 
 class GenerationActivityResponse(BaseModel):
