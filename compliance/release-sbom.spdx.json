@@ -16,7 +16,7 @@
       "annotationDate": "1970-01-01T00:00:00Z",
       "annotationType": "OTHER",
       "annotator": "Tool: scripts/generate-release-sbom.mjs",
-      "comment": "{\"schema\":\"presenton.release-license-attestation/v1\",\"policySha256\":\"037df554b794399a9e6003827260664346bc86d4507f9a47fad7e1e547ea313d\",\"noticeSha256\":\"d5e31c872eafdc8bca5a3acdbc4f45900741b0b5a39a4371665e752a98f693cf\",\"sourceOfferSha256\":\"2b1b29e49e15197bbf46918fa473727aac2f2907cfca9cb453f2e0d137f32a81\"}"
+      "comment": "{\"schema\":\"presenton.release-license-attestation/v1\",\"policySha256\":\"037df554b794399a9e6003827260664346bc86d4507f9a47fad7e1e547ea313d\",\"noticeSha256\":\"64e39cccae44b0cf2f90150e0b8a300c4f8fda8edec7ff6e78c8bcd0edd943d3\",\"sourceOfferSha256\":\"2b1b29e49e15197bbf46918fa473727aac2f2907cfca9cb453f2e0d137f32a81\"}"
     }
   ],
   "documentDescribes": [
