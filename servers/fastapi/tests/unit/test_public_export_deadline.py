@@ -43,6 +43,7 @@ from services.public_export_deadline_policy import (
 )
 from services.public_export_errors import PublicExportOperationError
 from services.public_operation_admission import (
+    PUBLIC_DEFAULT_MAX_SLIDES,
     PUBLIC_DEFAULT_POLICY_VERSION,
     PrincipalContext,
     admit_public_operation,
@@ -81,7 +82,7 @@ def policy_row(
 ) -> PublicPolicyProfile:
     return PublicPolicyProfile(
         version=version,
-        max_slides=100,
+        max_slides=PUBLIC_DEFAULT_MAX_SLIDES,
         global_active_generation=4,
         global_queued_generation=8,
         owner_active_generation=1,

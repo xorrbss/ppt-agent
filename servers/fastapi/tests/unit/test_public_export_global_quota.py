@@ -35,6 +35,7 @@ from models.sql.public_admission import (
 from models.sql.user import User
 from models.sql.workspace import WorkspaceConversation, WorkspaceOperation
 from services.public_operation_admission import (
+    PUBLIC_DEFAULT_MAX_SLIDES,
     PUBLIC_DEFAULT_POLICY_VERSION,
     PrincipalContext,
     PublicAdmissionRejected,
@@ -67,7 +68,7 @@ def _policy() -> PublicPolicyProfile:
 
     return PublicPolicyProfile(
         version=PUBLIC_DEFAULT_POLICY_VERSION,
-        max_slides=100,
+        max_slides=PUBLIC_DEFAULT_MAX_SLIDES,
         global_active_generation=8,
         global_queued_generation=8,
         owner_active_generation=8,

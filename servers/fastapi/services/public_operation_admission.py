@@ -81,7 +81,7 @@ from services.public_operation_admission_models import (
 from utils.hashing import sha256_hex
 
 
-PUBLIC_DEFAULT_MAX_SLIDES = 100
+PUBLIC_DEFAULT_MAX_SLIDES = 200
 def _model_columns(model: type[object]) -> set[str]:
     table = getattr(model, "__table__", None)
     return set(table.columns.keys()) if table is not None else set()

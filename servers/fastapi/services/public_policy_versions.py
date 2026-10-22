@@ -27,17 +27,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.sql.public_admission import PublicPolicyProfile
 
 
-# The policy row admission pins by default.  ``public-default/v5`` is a clone
-# of v4 that only raises ``export_deadline_seconds`` to the export ceiling in
-# ``services/public_export_deadline_policy.py``; see Alembic revision
-# ``b4e6f8a0c2d5``.  (v4 itself raised ``generation_deadline_seconds`` to the
-# generation ceiling; revision ``a2c4e6f8b1d3``.)
-PUBLIC_DEFAULT_POLICY_VERSION = "public-default/v5"
+# The policy row admission pins by default.  ``public-default/v6`` is a clone
+# of v5 that only raises ``max_slides`` from 100 to 200; see Alembic revision
+# ``c3f5a7b9d1e2``.  (v5 raised ``export_deadline_seconds`` to the export
+# ceiling, revision ``b4e6f8a0c2d5``; v4 raised ``generation_deadline_seconds``
+# to the generation ceiling, revision ``a2c4e6f8b1d3``.)
+PUBLIC_DEFAULT_POLICY_VERSION = "public-default/v6"
 
 # The version the default used to fall back to.  Kept because the refusal
 # below names it, and because operations admitted under it are still pinned to
 # it in ``public_operation_admissions`` and ``public_quota_counters``.
-PUBLIC_PREVIOUS_DEFAULT_POLICY_VERSION = "public-default/v4"
+PUBLIC_PREVIOUS_DEFAULT_POLICY_VERSION = "public-default/v5"
 
 
 async def resolve_public_policy_row(

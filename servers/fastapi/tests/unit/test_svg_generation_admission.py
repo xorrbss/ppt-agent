@@ -11,6 +11,7 @@ from models.generate_presentation_request import AuthoredMasterPinInput, Generat
 from services.authored_vnext.generation.errors import PublishedMasterRequiredError
 from services.authored_vnext.generation.legacy_pin import ResolvedLegacyMasterPin
 from services.generation_core.style.design_pack_projection import DesignPackProjectionError
+from services.public_operation_admission import PUBLIC_DEFAULT_MAX_SLIDES, PUBLIC_DEFAULT_POLICY_VERSION
 from services.svg_generation_admission import (
     _resolve_design_reference,
     _resolve_master_rules,
@@ -351,7 +352,7 @@ def test_header_v2_durable_seed_roundtrip_and_caller_intent_replay(tmp_path, mon
                     PublicPolicyProfile.__table__, PublicQuotaCounter.__table__, PublicOperationAdmission.__table__,
                     PublicProviderLogicalCall.__table__, PublicResourceLease.__table__, ProviderRuntimeBudget.__table__,
                     ProviderRuntimeReservation.__table__, ProviderUsageReceipt.__table__]))
-            policy = PublicPolicyProfile(version="public-default/v5", max_slides=100, retry_request_limit=8,
+            policy = PublicPolicyProfile(version=PUBLIC_DEFAULT_POLICY_VERSION, max_slides=PUBLIC_DEFAULT_MAX_SLIDES, retry_request_limit=8,
                 estimated_cost_limit_microunits=10000, actual_cost_limit_microunits=10000,
                 generation_deadline_seconds=900, export_deadline_seconds=600,
                 **{f"{scope}_{state}_{kind}": 8 for scope in ("global", "owner", "tenant")
