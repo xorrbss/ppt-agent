@@ -35,7 +35,7 @@ const runtimeTailwindTrace = [
 // Application security headers. The same set is emitted by nginx.conf and
 // scripts/presenton-local-proxy.mjs so direct :3000 access is covered too.
 // Frame embedding stays SAMEORIGIN: the editor's slide-preview iframes are
-// same-origin (AuthoredSlidePreview/SafeHtmlSlidePreview srcdoc, isolated by
+// same-origin (AuthoredSlidePreview srcdoc, isolated by
 // their own <meta> CSP, not by cross-origin framing), so DENY would break
 // them. Public share pages (/p/) are opened directly via the share link
 // (see SharePopover) — nothing in this codebase frames them, same-origin or
@@ -117,7 +117,7 @@ export const appPageContentSecurityPolicyReportOnly =
 //    via dangerouslySetInnerHTML for pixel-accurate screenshotting, unlike
 //    the editor and /p/ share view which isolate that same HTML inside a
 //    sandboxed srcdoc iframe carrying its own <meta> CSP
-//    (AuthoredSlidePreview/SafeHtmlSlidePreview) — the app policy does not
+//    (AuthoredSlidePreview) — the app policy does not
 //    fit content rendered that way, and is not itself emitted there either.
 //  - p/ (public share pages) are excluded because their content is
 //    end-user-authored and rendered the same way the authenticated editor
