@@ -46,7 +46,8 @@ skills-lock.json
 servers/nextjs/app/presentation-templates/layouts.generated.json
 servers/nextjs/.layout-schemas-gen.mjs
 
-# presenton-export runtime (downloaded via scripts/sync-presentation-export.cjs or Docker build)
+# Retired upstream presenton-export runtime; kept ignored so leftover local
+# downloads from older checkouts stay out of commits.
 presentation-export/
 .cache/presentation-export/
 servers/fastapi/build/
