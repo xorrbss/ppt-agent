@@ -9,7 +9,6 @@ from typing import Any, Callable, Protocol, runtime_checkable
 from models.authored_vnext.master.operations import MasterRevisionResponse
 
 
-
 @runtime_checkable
 class GenerationRepository(Protocol):
     """Minimum persistence contract required by the generation pipeline."""

@@ -294,21 +294,11 @@ def merge_slide_quality_fallbacks(
     return record_slide_quality_receipt(presentation_id, records)
 
 
-def load_slide_quality_receipt(presentation_id: object) -> dict[str, Any]:
-    """Read one presentation's receipt back, or ``{}`` when there is none."""
-
-    try:
-        return _read_manifest(slide_quality_receipt_path(presentation_id))
-    except Exception:
-        return {}
-
-
 __all__ = [
     "SLIDE_QUALITY_MANIFEST_SCHEMA",
     "SLIDE_QUALITY_RECORD_SCHEMA",
     "AuthoredSlideQualityRecord",
     "build_slide_quality_records",
-    "load_slide_quality_receipt",
     "merge_slide_quality_fallbacks",
     "record_slide_quality_receipt",
     "slide_quality_receipt_path",

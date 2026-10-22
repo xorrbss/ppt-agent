@@ -294,34 +294,6 @@ async def capture_once(
     return result
 
 
-async def capture_png_once(html: str, *, index: int | None = None, render, read_metrics):
-    """A PNG-only renderer adapted to the owner, sharing its default profile."""
-
-    session = current_session()
-    if session is None:
-        prepared_html = canonical_capture_html(html, index=index)
-        if prepared_html != html:
-            raise RuntimeError("authored_png_capture_requires_prepared_html")
-        return await render(prepared_html)
-
-    prepared_html = canonical_capture_html(html, index=index)
-    if prepared_html != html:
-        raise RuntimeError("authored_png_capture_requires_prepared_html")
-
-    async def capture(value: str):
-        from utils.slide_capture_result import RenderCapture
-
-        png = await render(value)
-        return RenderCapture.from_payload(
-            html_digest=digest_html(value),
-            png=png,
-            browser_metrics=read_metrics(value),
-            runtime_counters={},
-        )
-
-    return (await capture_once(prepared_html, index=index, capture=capture)).png
-
-
 async def captured_metrics_or_existing(html: str, *, index: int | None = None, ensure):
     """Telemetry for exactly these bytes, from the owner when it has them."""
 
@@ -376,7 +348,6 @@ __all__ = [
     "canonical_capture_html",
     "capture_once",
     "capture_ownership_receipt",
-    "capture_png_once",
     "capture_profile",
     "captured_metrics_or_existing",
 ]

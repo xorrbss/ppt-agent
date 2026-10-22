@@ -26,8 +26,10 @@ from services.authored_generation_planner import plan_authored_text
 from services.authored_generation_timing_receipt import (
     GENERATION_TIMING_STAGES,
     GenerationTimingRecorder,
-    create_generation_attempt_timing_receipt,
     load_generation_attempt_timing_receipts,
+)
+from tests.support.authored_generation_attempt_timing_v1 import (
+    create_generation_attempt_timing_receipt,
 )
 from services.authored_presentation_pipeline import _author_stage_failure
 from services.provider_usage_instrumentation import ProviderUsageScope

@@ -209,7 +209,17 @@ def test_valid_snapshot_is_used_with_zero_historical_payload_bytes(world):
 def test_snapshot_statements_never_select_historical_payload_columns():
     forbidden = {"request_payload", "svg_checkpoint", "result", "svg_header_design_checkpoint", "content",
                  "svg_content", "theme", "outlines", "authored_outline", "svg_style_snapshot"}
-    for statement in snap.snapshot_statements_for_audit(TARGET, OPERATION, OWNER):
+    name = snap.publication_name(OPERATION)
+    statements = (
+        snap.job_statement(TARGET),
+        snap.job_by_id_statement(OPERATION),
+        snap.operation_statement(OPERATION),
+        snap.admission_statement(OPERATION),
+        snap.publication_statement(OPERATION, name),
+        snap.derived_publication_statement(TARGET, OWNER, name, OPERATION),
+        snap.parent_statement(TARGET),
+    )
+    for statement in statements:
         names = {column.key for column in statement.selected_columns}
         assert names and not names & forbidden, names
 

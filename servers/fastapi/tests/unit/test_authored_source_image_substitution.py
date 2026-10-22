@@ -16,10 +16,8 @@ from services.source_images.models import SourceImageCandidate
 from services.authored_illustrations import (
     MAX_INLINE_SOURCE_IMAGE_BYTES,
     apply_authored_illustration,
-    reserve_source_images_for_slide,
 )
 from services.generation_core.authoring.author_slide import validate_authored_slide_html
-from utils.authored_image_slots import source_slot_id_for_asset
 
 _PNG_BYTES = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgYAAAAAMAASsJTYQAAAAASUVORK5CYII="
@@ -293,31 +291,6 @@ def test_raise_on_failure_only_covers_the_generated_fallback(tmp_path: Path):
                 source_images={candidate.asset_id: candidate},
             )
         )
-
-
-def test_reserve_source_images_for_slide_returns_all_slots_and_reuses_ids(tmp_path: Path):
-    first = _candidate(tmp_path, asset_id="src-a")
-    second = _candidate(tmp_path, asset_id="src-b")
-    candidates = {"src-a": first, "src-b": second}
-    placed = set()
-
-    slide_one = reserve_source_images_for_slide(
-        '<img data-asset-id="src-a"><img data-asset-id="src-b">', candidates, placed
-    )
-    slide_two = reserve_source_images_for_slide(
-        '<img data-asset-id="src-a">', candidates, placed
-    )
-    slide_three = reserve_source_images_for_slide(
-        '<img data-asset-id="src-b">', candidates, placed
-    )
-
-    assert slide_one == {
-        source_slot_id_for_asset("src-a"): first,
-        source_slot_id_for_asset("src-b"): second,
-    }
-    assert slide_two == {source_slot_id_for_asset("src-a"): first}
-    assert slide_three == {source_slot_id_for_asset("src-b"): second}
-    assert placed == set()
 
 
 # --------------------------------------------------------------------------
