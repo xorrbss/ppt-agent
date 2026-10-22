@@ -16,8 +16,6 @@
     "test:authored-vnext-local-e2e": "node scripts/run-authored-vnext-local-happy-path-e2e.mjs"
   },
   "dependencies": {
-    "@babel/parser": "^7.29.8",
-    "@babel/traverse": "^7.29.8",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -63,15 +61,16 @@
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",
+    "@babel/parser": "^7.29.8",
     "@babel/preset-env": "^7.29.7",
     "@babel/preset-react": "^7.29.7",
     "@babel/preset-typescript": "^7.29.7",
+    "@babel/traverse": "^7.29.8",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^20.19.43",
     "@types/prismjs": "^1.26.6",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",
-    "@types/uuid": "^10.0.0",
     "axe-core": "4.13.0",
     "babel-loader": "^10.1.1",
     "css-loader": "^7.1.4",

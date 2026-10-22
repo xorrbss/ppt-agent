@@ -3,7 +3,7 @@
   "dataLicense": "CC0-1.0",
   "SPDXID": "SPDXRef-DOCUMENT",
   "name": "presenton-authored-vnext-release",
-  "documentNamespace": "https://github.com/xorrbss/ppt-agent/sbom/067f542ac257d8fcc75df157ee1f2b62246e36a86068cf2a51474239283d7a19",
+  "documentNamespace": "https://github.com/xorrbss/ppt-agent/sbom/eea6189705dbbb5edbf47431806b735d01e398c502f843cb78b7b8d199848244",
   "creationInfo": {
     "created": "1970-01-01T00:00:00Z",
     "creators": [
@@ -16,7 +16,7 @@
       "annotationDate": "1970-01-01T00:00:00Z",
       "annotationType": "OTHER",
       "annotator": "Tool: scripts/generate-release-sbom.mjs",
-      "comment": "{\"schema\":\"presenton.release-license-attestation/v1\",\"policySha256\":\"037df554b794399a9e6003827260664346bc86d4507f9a47fad7e1e547ea313d\",\"noticeSha256\":\"64e39cccae44b0cf2f90150e0b8a300c4f8fda8edec7ff6e78c8bcd0edd943d3\",\"sourceOfferSha256\":\"2b1b29e49e15197bbf46918fa473727aac2f2907cfca9cb453f2e0d137f32a81\"}"
+      "comment": "{\"schema\":\"presenton.release-license-attestation/v1\",\"policySha256\":\"037df554b794399a9e6003827260664346bc86d4507f9a47fad7e1e547ea313d\",\"noticeSha256\":\"7053de97afdab9c2a2c1c4943dd4b9afb293ef3cb02f9cc9cb00919208b96b14\",\"sourceOfferSha256\":\"2b1b29e49e15197bbf46918fa473727aac2f2907cfca9cb453f2e0d137f32a81\"}"
     }
   ],
   "documentDescribes": [
@@ -36,7 +36,7 @@
       "externalRefs": [],
       "supplier": "NOASSERTION",
       "primaryPackagePurpose": "APPLICATION",
-      "comment": "Dependency identity SHA-256: 067f542ac257d8fcc75df157ee1f2b62246e36a86068cf2a51474239283d7a19"
+      "comment": "Dependency identity SHA-256: eea6189705dbbb5edbf47431806b735d01e398c502f843cb78b7b8d199848244"
     },
     {
       "SPDXID": "SPDXRef-npm-nextjs-node-modules-acemir-cssom",
@@ -344,240 +344,6 @@
           "referenceCategory": "PACKAGE-MANAGER",
           "referenceType": "purl",
           "referenceLocator": "pkg:npm/@asamuzakjp%2Fnwsapi@2.3.9"
-        }
-      ],
-      "supplier": "NOASSERTION",
-      "primaryPackagePurpose": "LIBRARY",
-      "comment": "Production dependency from nextjs/package-lock.json; license from nextjs/package-lock.json"
-    },
-    {
-      "SPDXID": "SPDXRef-npm-nextjs-node-modules-babel-code-frame",
-      "name": "@babel/code-frame",
-      "versionInfo": "7.29.7",
-      "downloadLocation": "https://registry.npmjs.org/@babel/code-frame/-/code-frame-7.29.7.tgz",
-      "filesAnalyzed": false,
-      "checksums": [
-        {
-          "algorithm": "SHA512",
-          "checksumValue": "02ea7b69439fa5b01483644e38937a230e5ff43301973bb4988926fe66a52d014dfd84203b8f300a3d0ac5adec10726f3d5160eec891faa4489f05dddaa8502b"
-        }
-      ],
-      "licenseConcluded": "MIT",
-      "licenseDeclared": "MIT",
-      "copyrightText": "NOASSERTION",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:npm/@babel%2Fcode-frame@7.29.7"
-        }
-      ],
-      "supplier": "NOASSERTION",
-      "primaryPackagePurpose": "LIBRARY",
-      "comment": "Production dependency from nextjs/package-lock.json; license from nextjs/package-lock.json"
-    },
-    {
-      "SPDXID": "SPDXRef-npm-nextjs-node-modules-babel-generator",
-      "name": "@babel/generator",
-      "versionInfo": "7.29.8",
-      "downloadLocation": "https://registry.npmjs.org/@babel/generator/-/generator-7.29.8.tgz",
-      "filesAnalyzed": false,
-      "checksums": [
-        {
-          "algorithm": "SHA512",
-          "checksumValue": "8196dea6c761dd60ed8192962febd33e1ef52d206b9bf638fd00d905509c61f99e4c412ea0e630952cbe1b54ad7c983efd9cb9e74bbfdd30136e6eea0db6ccb6"
-        }
-      ],
-      "licenseConcluded": "MIT",
-      "licenseDeclared": "MIT",
-      "copyrightText": "NOASSERTION",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:npm/@babel%2Fgenerator@7.29.8"
-        }
-      ],
-      "supplier": "NOASSERTION",
-      "primaryPackagePurpose": "LIBRARY",
-      "comment": "Production dependency from nextjs/package-lock.json; license from nextjs/package-lock.json"
-    },
-    {
-      "SPDXID": "SPDXRef-npm-nextjs-node-modules-babel-helper-globals",
-      "name": "@babel/helper-globals",
-      "versionInfo": "7.29.7",
-      "downloadLocation": "https://registry.npmjs.org/@babel/helper-globals/-/helper-globals-7.29.7.tgz",
-      "filesAnalyzed": false,
-      "checksums": [
-        {
-          "algorithm": "SHA512",
-          "checksumValue": "de7415500b6f90a1fdcda85f5a0c3de8973fb853a68c0084d64433f3613696a5a61c1823cdb365b02db69ee4137da86659e42d4eae6743fe0d9ddd80d708f8cc"
-        }
-      ],
-      "licenseConcluded": "MIT",
-      "licenseDeclared": "MIT",
-      "copyrightText": "NOASSERTION",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:npm/@babel%2Fhelper-globals@7.29.7"
-        }
-      ],
-      "supplier": "NOASSERTION",
-      "primaryPackagePurpose": "LIBRARY",
-      "comment": "Production dependency from nextjs/package-lock.json; license from nextjs/package-lock.json"
-    },
-    {
-      "SPDXID": "SPDXRef-npm-nextjs-node-modules-babel-helper-string-parser",
-      "name": "@babel/helper-string-parser",
-      "versionInfo": "7.29.7",
-      "downloadLocation": "https://registry.npmjs.org/@babel/helper-string-parser/-/helper-string-parser-7.29.7.tgz",
-      "filesAnalyzed": false,
-      "checksums": [
-        {
-          "algorithm": "SHA512",
-          "checksumValue": "3dbe628cfad9f3d1831fcdb6dcbe143fc8ba400a56c6cd3845b3d02537960d5d3f91e476137e8c78a9f2afa2d899452fa91448f88bfced2b85d56e84ac837363"
-        }
-      ],
-      "licenseConcluded": "MIT",
-      "licenseDeclared": "MIT",
-      "copyrightText": "NOASSERTION",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:npm/@babel%2Fhelper-string-parser@7.29.7"
-        }
-      ],
-      "supplier": "NOASSERTION",
-      "primaryPackagePurpose": "LIBRARY",
-      "comment": "Production dependency from nextjs/package-lock.json; license from nextjs/package-lock.json"
-    },
-    {
-      "SPDXID": "SPDXRef-npm-nextjs-node-modules-babel-helper-validator-identifier",
-      "name": "@babel/helper-validator-identifier",
-      "versionInfo": "7.29.7",
-      "downloadLocation": "https://registry.npmjs.org/@babel/helper-validator-identifier/-/helper-validator-identifier-7.29.7.tgz",
-      "filesAnalyzed": false,
-      "checksums": [
-        {
-          "algorithm": "SHA512",
-          "checksumValue": "a9e8711a4463e7987f7dff0431a27e71887268a947231a980e7ebcdb0403ed1369f54ba3390b07a20dae4b4af6bf3af8a56fac5dff7435e79aca370d697ddf16"
-        }
-      ],
-      "licenseConcluded": "MIT",
-      "licenseDeclared": "MIT",
-      "copyrightText": "NOASSERTION",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:npm/@babel%2Fhelper-validator-identifier@7.29.7"
-        }
-      ],
-      "supplier": "NOASSERTION",
-      "primaryPackagePurpose": "LIBRARY",
-      "comment": "Production dependency from nextjs/package-lock.json; license from nextjs/package-lock.json"
-    },
-    {
-      "SPDXID": "SPDXRef-npm-nextjs-node-modules-babel-parser",
-      "name": "@babel/parser",
-      "versionInfo": "7.29.8",
-      "downloadLocation": "https://registry.npmjs.org/@babel/parser/-/parser-7.29.8.tgz",
-      "filesAnalyzed": false,
-      "checksums": [
-        {
-          "algorithm": "SHA512",
-          "checksumValue": "13c953018341d4a5be147f95189b993358a8031d84ea8565bd0151adfe4ff19666b222576000fdbd3155ef2c84511373821d5d16a319b8eead53070045ba8508"
-        }
-      ],
-      "licenseConcluded": "MIT",
-      "licenseDeclared": "MIT",
-      "copyrightText": "NOASSERTION",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:npm/@babel%2Fparser@7.29.8"
-        }
-      ],
-      "supplier": "NOASSERTION",
-      "primaryPackagePurpose": "LIBRARY",
-      "comment": "Production dependency from nextjs/package-lock.json; license from nextjs/package-lock.json"
-    },
-    {
-      "SPDXID": "SPDXRef-npm-nextjs-node-modules-babel-template",
-      "name": "@babel/template",
-      "versionInfo": "7.29.7",
-      "downloadLocation": "https://registry.npmjs.org/@babel/template/-/template-7.29.7.tgz",
-      "filesAnalyzed": false,
-      "checksums": [
-        {
-          "algorithm": "SHA512",
-          "checksumValue": "a6eabe19fdf9a08db815e375d4b92851016abfdbb035e5a9c57662fc98b7ad1228280cca9f145a67e1a48f4bca4bd6428931127e783537d2f23b25efa3e9be1a"
-        }
-      ],
-      "licenseConcluded": "MIT",
-      "licenseDeclared": "MIT",
-      "copyrightText": "NOASSERTION",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:npm/@babel%2Ftemplate@7.29.7"
-        }
-      ],
-      "supplier": "NOASSERTION",
-      "primaryPackagePurpose": "LIBRARY",
-      "comment": "Production dependency from nextjs/package-lock.json; license from nextjs/package-lock.json"
-    },
-    {
-      "SPDXID": "SPDXRef-npm-nextjs-node-modules-babel-traverse",
-      "name": "@babel/traverse",
-      "versionInfo": "7.29.8",
-      "downloadLocation": "https://registry.npmjs.org/@babel/traverse/-/traverse-7.29.8.tgz",
-      "filesAnalyzed": false,
-      "checksums": [
-        {
-          "algorithm": "SHA512",
-          "checksumValue": "239cfb1f76dfff8d64b6c3552eda4dd3001adf7e8792a20743906e3cb1214e4b758d54b266978d288cd38045a69718dd83cd51d0881409c684f8e93736fadf66"
-        }
-      ],
-      "licenseConcluded": "MIT",
-      "licenseDeclared": "MIT",
-      "copyrightText": "NOASSERTION",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:npm/@babel%2Ftraverse@7.29.8"
-        }
-      ],
-      "supplier": "NOASSERTION",
-      "primaryPackagePurpose": "LIBRARY",
-      "comment": "Production dependency from nextjs/package-lock.json; license from nextjs/package-lock.json"
-    },
-    {
-      "SPDXID": "SPDXRef-npm-nextjs-node-modules-babel-types",
-      "name": "@babel/types",
-      "versionInfo": "7.29.8",
-      "downloadLocation": "https://registry.npmjs.org/@babel/types/-/types-7.29.8.tgz",
-      "filesAnalyzed": false,
-      "checksums": [
-        {
-          "algorithm": "SHA512",
-          "checksumValue": "563d6317770f7f183b3807e823b42754a2e820b966d8917da67547ad7f2ac7b0073226164fe343000ee30a194d8114b85932dcfdf0f59572e63e2c65ba3fb71a"
-        }
-      ],
-      "licenseConcluded": "MIT",
-      "licenseDeclared": "MIT",
-      "copyrightText": "NOASSERTION",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:npm/@babel%2Ftypes@7.29.8"
         }
       ],
       "supplier": "NOASSERTION",
@@ -3263,32 +3029,6 @@
       "comment": "Production dependency from nextjs/package-lock.json; license from nextjs/package-lock.json"
     },
     {
-      "SPDXID": "SPDXRef-npm-nextjs-node-modules-js-tokens",
-      "name": "js-tokens",
-      "versionInfo": "4.0.0",
-      "downloadLocation": "https://registry.npmjs.org/js-tokens/-/js-tokens-4.0.0.tgz",
-      "filesAnalyzed": false,
-      "checksums": [
-        {
-          "algorithm": "SHA512",
-          "checksumValue": "45d2547e5704ddc5332a232a420b02bb4e853eef5474824ed1b7986cf84737893a6a9809b627dca02b53f5b7313a9601b690f690233a49bce0e026aeb16fcf29"
-        }
-      ],
-      "licenseConcluded": "MIT",
-      "licenseDeclared": "MIT",
-      "copyrightText": "NOASSERTION",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:npm/js-tokens@4.0.0"
-        }
-      ],
-      "supplier": "NOASSERTION",
-      "primaryPackagePurpose": "LIBRARY",
-      "comment": "Production dependency from nextjs/package-lock.json; license from nextjs/package-lock.json"
-    },
-    {
       "SPDXID": "SPDXRef-npm-nextjs-node-modules-jsdom",
       "name": "jsdom",
       "versionInfo": "28.1.0",
@@ -3386,32 +3126,6 @@
           "referenceCategory": "PACKAGE-MANAGER",
           "referenceType": "purl",
           "referenceLocator": "pkg:npm/tough-cookie@6.0.2"
-        }
-      ],
-      "supplier": "NOASSERTION",
-      "primaryPackagePurpose": "LIBRARY",
-      "comment": "Production dependency from nextjs/package-lock.json; license from nextjs/package-lock.json"
-    },
-    {
-      "SPDXID": "SPDXRef-npm-nextjs-node-modules-jsesc",
-      "name": "jsesc",
-      "versionInfo": "3.1.0",
-      "downloadLocation": "https://registry.npmjs.org/jsesc/-/jsesc-3.1.0.tgz",
-      "filesAnalyzed": false,
-      "checksums": [
-        {
-          "algorithm": "SHA512",
-          "checksumValue": "fec33774ed853b35e3290849ba8d10d7bdf07f628ea3cb7823cbc7cba945f69a14a7b6ca4f4fcd1c4f1f3d7db73f07e19f291faa70b6c51c4e9d5c395ee18868"
-        }
-      ],
-      "licenseConcluded": "MIT",
-      "licenseDeclared": "MIT",
-      "copyrightText": "NOASSERTION",
-      "externalRefs": [
-        {
-          "referenceCategory": "PACKAGE-MANAGER",
-          "referenceType": "purl",
-          "referenceLocator": "pkg:npm/jsesc@3.1.0"
         }
       ],
       "supplier": "NOASSERTION",
@@ -14925,51 +14639,6 @@
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-npm-nextjs-node-modules-babel-code-frame"
-    },
-    {
-      "spdxElementId": "SPDXRef-Package-presenton",
-      "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-npm-nextjs-node-modules-babel-generator"
-    },
-    {
-      "spdxElementId": "SPDXRef-Package-presenton",
-      "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-npm-nextjs-node-modules-babel-helper-globals"
-    },
-    {
-      "spdxElementId": "SPDXRef-Package-presenton",
-      "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-npm-nextjs-node-modules-babel-helper-string-parser"
-    },
-    {
-      "spdxElementId": "SPDXRef-Package-presenton",
-      "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-npm-nextjs-node-modules-babel-helper-validator-identifier"
-    },
-    {
-      "spdxElementId": "SPDXRef-Package-presenton",
-      "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-npm-nextjs-node-modules-babel-parser"
-    },
-    {
-      "spdxElementId": "SPDXRef-Package-presenton",
-      "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-npm-nextjs-node-modules-babel-template"
-    },
-    {
-      "spdxElementId": "SPDXRef-Package-presenton",
-      "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-npm-nextjs-node-modules-babel-traverse"
-    },
-    {
-      "spdxElementId": "SPDXRef-Package-presenton",
-      "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-npm-nextjs-node-modules-babel-types"
-    },
-    {
-      "spdxElementId": "SPDXRef-Package-presenton",
-      "relationshipType": "DEPENDS_ON",
       "relatedSpdxElement": "SPDXRef-npm-nextjs-node-modules-baseline-browser-mapping"
     },
     {
@@ -15485,11 +15154,6 @@
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-npm-nextjs-node-modules-js-tokens"
-    },
-    {
-      "spdxElementId": "SPDXRef-Package-presenton",
-      "relationshipType": "DEPENDS_ON",
       "relatedSpdxElement": "SPDXRef-npm-nextjs-node-modules-jsdom"
     },
     {
@@ -15506,11 +15170,6 @@
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
       "relatedSpdxElement": "SPDXRef-npm-nextjs-node-modules-jsdom-node-modules-tough-cookie"
-    },
-    {
-      "spdxElementId": "SPDXRef-Package-presenton",
-      "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-npm-nextjs-node-modules-jsesc"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
