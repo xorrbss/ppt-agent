@@ -19,14 +19,13 @@ Korean OCR assets, and an authored high-quality slide mode. Preserve API values,
 provider/model IDs, and other logic literals in English unless a task explicitly
 requires changing them.
 
-## Upstream authority
+## Upstream
 
-The authoritative upstream for this fork is the official Presenton project
-([`presenton/presenton`](https://github.com/presenton/presenton)). The configured
-`origin` remote and local branches or worktrees are collaboration and delivery
-copies; they are not the upstream source of truth. Review and import upstream
-changes against the official Presenton project and follow
-`compatibility/upstream-intake-policy.json`.
+This fork was derived from the official Presenton project
+([`presenton/presenton`](https://github.com/presenton/presenton)) and is now
+maintained independently: it does not track, pin, or import upstream changes.
+The Bitbucket `origin` repository is the source of truth. Keep the upstream
+license and NOTICE attribution.
 
 ## Repository map
 

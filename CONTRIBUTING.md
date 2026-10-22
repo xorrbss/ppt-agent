@@ -14,11 +14,9 @@ project:
 
 - **`origin`** (`bitbucket.org/ibizsoftware/devax-ppt`) is where branches, pull
   requests, and CI run. This is where you push changes and open PRs.
-- **`upstream`** (`github.com/presenton/presenton`) is a read-only reference
-  remote (push disabled) used to track and selectively import changes from the
-  official Presenton project. Do not open pull requests there for work on this
-  fork; see `compatibility/upstream-intake-policy.json` for how upstream changes
-  are reviewed and imported.
+- The official Presenton project (`github.com/presenton/presenton`) is where
+  this fork came from, but the fork no longer tracks or imports its changes.
+  Do not open pull requests there for work on this fork.
 
 Contributions can touch any part of the repository that a task requires —
 `servers/fastapi/`, `servers/nextjs/`, `scripts/`, `docs/`, `contracts/`,
@@ -61,14 +59,10 @@ against this fork's pull requests and `main` branch. It gates:
 - `authored-release-readiness-config` — `node scripts/verify-authored-release-required-checks.mjs`
 - `nextjs-ci-node-contracts` — `npm ci` (root and `servers/nextjs`), then `npm run test:next-ci`
 - `dashboard-component-gate` — the `DashboardPage.cy.tsx` Cypress component spec
-- `upstream-byte-parity-check` — `npm run check:upstream-byte-parity`
-- `workspace-chat-first-e2e` — `uv run ruff check .` in `servers/fastapi`, the template-v2 contract check, and the workspace chat-first browser E2E suite (`npm run test:workspace-e2e`)
+- `workspace-chat-first-e2e` — `uv run ruff check .` in `servers/fastapi`, the authored style sample storage check (`scripts/check_authored_style_samples.py`), and the workspace chat-first browser E2E suite (`npm run test:workspace-e2e`)
 
-The `.github/workflows/*.yml` files in this repository do not run for this
-fork's pull requests: `origin` is Bitbucket, and the configured `upstream`
-GitHub remote has push disabled, so GitHub Actions never see these branches.
-Treat those workflow files as reference/legacy from upstream, not as this
-fork's CI contract.
+There is no other CI: the upstream GitHub Actions workflows were removed with
+`.github/`, since they never ran for this fork's Bitbucket branches.
 
 Before opening a PR, additionally run whatever local checks are narrowly
 relevant to your change — see `CLAUDE.md`'s "Build / test / lint commands" for
