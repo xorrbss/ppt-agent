@@ -49,9 +49,6 @@ _SECONDARY_MUTE_AMOUNTS = tuple(index / 100.0 for index in range(40, 101, 4))
 _SECONDARY_TARGET = 4.6
 #: How far the accent may be pushed toward the readable pole, least first, so
 #: the accent keeps as much of its brand identity as readability allows.
-_ACCENT_SHIFT_AMOUNTS = tuple(index / 100.0 for index in range(0, 101, 4))
-
-
 def normalize_hex(value: object, fallback: str = WHITE) -> str:
     """Return ``value`` as an upper-case ``#RRGGBB`` string, else ``fallback``."""
 
