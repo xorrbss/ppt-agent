@@ -19,10 +19,7 @@ from .core_bridge import (
     AuthoringCoreBridgePort,
     CoreBridgeArtifact,
     CoreBridgeCheckpoint,
-    DeterministicCoreBridge,
-    OoxmlCoreBridgeAdapter,
 )
-from .repository import InMemoryGenerationRepository
 from .pipeline import AuthoredVNextGenerationPipeline
 from .mutations import mutate_scene_element, reorder_deck_slides
 from .scene_compiler import apply_scene_element_mutation, compile_deck_scene, compile_slide_scene
@@ -43,9 +40,6 @@ __all__ = [
     "AuthoredVNextGenerationPipeline",
     "CoreBridgeArtifact",
     "CoreBridgeCheckpoint",
-    "DeterministicCoreBridge",
-    "InMemoryGenerationRepository",
-    "OoxmlCoreBridgeAdapter",
     "apply_scene_element_mutation",
     "compile_deck_scene",
     "compile_slide_scene",

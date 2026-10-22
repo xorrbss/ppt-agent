@@ -1,9 +1,8 @@
-"""Composition checks that seal an Authored publication to one pin.
+"""Company-standard composition projection for an Authored publication.
 
-Company-standard furniture identity and the preview/publication/native-export
-composition pin are validated before the publication transaction opens, so a
-mismatch fails the persist stage instead of publishing a deck whose exported
-composition differs from the one the request approved.
+Company-standard furniture identity is validated before the publication
+transaction opens, so a mismatch fails the persist stage instead of publishing
+a deck whose composition differs from the one the request approved.
 """
 
 from __future__ import annotations
@@ -65,72 +64,6 @@ def _authored_company_standard_projection(
     }
 
 
-def _require_immutable_composition_publication(
-    *,
-    request: GeneratePresentationRequest,
-    master_generation,
-    native_export_evidence: dict[str, object] | None,
-) -> None:
-    """Seal preview, publication, and native export to one composition pin."""
-
-    if master_generation is None:
-        return
-    deck = master_generation.result.deck
-    composition = deck.composition
-    scene = deck.scene
-    requested = request._authored_composition_pin
-    if (
-        scene is None
-        or composition is None
-        or requested is None
-        or requested != composition
-        or master_generation.composition_pin != composition
-        or scene.composition_digest != composition.digest
-    ):
-        raise AuthoredStageError(
-            slide_index=0,
-            stage="persist",
-            code="authored_composition_publication_mismatch",
-            retryable=False,
-            message="The company-standard/authored style composition of the request and the preview do not match.",
-        )
-
-    if request.export_as != "pptx":
-        return
-    preview = (
-        native_export_evidence.get("preview_snapshot")
-        if isinstance(native_export_evidence, dict)
-        else None
-    )
-    native = (
-        native_export_evidence.get("native_pptx_snapshot")
-        if isinstance(native_export_evidence, dict)
-        else None
-    )
-    if (
-        not isinstance(preview, dict)
-        or not isinstance(native, dict)
-        or preview != native
-        or preview.get("composition_digest") != composition.digest
-        or native_export_evidence.get("resolved_composition_digest")
-        != composition.digest
-        or native_export_evidence.get("scene_digest") != scene.scene_digest
-        or native_export_evidence.get("scene_composition_digest")
-        != scene.composition_digest
-        or native_export_evidence.get("scene_slide_digests")
-        != [slide.slide_digest for slide in scene.slides]
-        or native_export_evidence.get("readback_verified") is not True
-    ):
-        raise AuthoredStageError(
-            slide_index=0,
-            stage="persist",
-            code="authored_composition_export_evidence_mismatch",
-            retryable=False,
-            message="The composition verification of the preview and the PowerPoint export do not match.",
-        )
-
-
 __all__ = [
     "_authored_company_standard_projection",
-    "_require_immutable_composition_publication",
 ]

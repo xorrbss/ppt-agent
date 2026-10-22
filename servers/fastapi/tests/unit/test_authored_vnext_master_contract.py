@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from copy import deepcopy
-import inspect
 
 from pydantic import ValidationError
 import pytest
@@ -18,10 +17,6 @@ from models.authored_vnext.master.operations import (
     CreateDraftRequest,
     MasterCasRequest,
     PreviewRequest,
-)
-from services.authored_vnext.master.compiler_port import (
-    OoxmlCompileArtifact,
-    OoxmlMasterCompilerPort,
 )
 from services.authored_vnext.master.digests import seal_master_contract
 from services.authored_vnext.master.errors import MasterRevisionConflictError
@@ -445,25 +440,6 @@ def test_file_repository_keeps_immutable_revisions_and_never_saves_preview_html(
                 expected_digest=draft.digest,
             ),
         )
-
-
-def test_ooxml_port_accepts_only_canonical_contract_slides_and_export_plan() -> None:
-    class FakeCompiler:
-        def compile(self, *, master, slides, export_plan):
-            assert master.digest == export_plan.master_digest
-            assert tuple(slide.spec_digest for slide in slides) == tuple(
-                item.spec_digest for item in export_plan.slides
-            )
-            return OoxmlCompileArtifact(
-                artifact_digest="sha256:" + ("1" * 64),
-                storage_reference="artifact://pptx/test",
-            )
-
-    compiler = FakeCompiler()
-    assert isinstance(compiler, OoxmlMasterCompilerPort)
-    parameters = inspect.signature(OoxmlMasterCompilerPort.compile).parameters
-    assert set(parameters) == {"self", "master", "slides", "export_plan"}
-    assert "html" not in parameters
 
 
 def test_model_dump_uses_only_camel_case_public_fields() -> None:

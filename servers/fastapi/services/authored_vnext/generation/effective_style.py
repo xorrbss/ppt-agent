@@ -188,97 +188,6 @@ def _canvas_rect(contract: DeckMasterContract) -> Rect:
     )
 
 
-def build_ai_edit_zone_template_design_context(
-    contract: DeckMasterContract,
-) -> dict[str, object]:
-    """Project the effective template DNA into a closed AI-zone vocabulary.
-
-    The authoring model receives the template's named tokens and semantic
-    grammar, not an invitation to emit arbitrary CSS values.  All color and
-    font values originate in the already sealed effective contract.
-    """
-
-    if contract.digest is None:
-        raise ValueError("AI edit zone design context requires a sealed contract")
-    font_tokens = contract.tokens.fonts.model_dump(mode="json", by_alias=True)
-    color_tokens = contract.tokens.colors.model_dump(mode="json", by_alias=True)
-    allowed_fonts = list(
-        dict.fromkeys(
-            [
-                contract.tokens.fonts.latin,
-                contract.tokens.fonts.east_asian,
-                contract.tokens.fonts.complex_script,
-                *contract.tokens.fonts.fallbacks,
-                contract.font_manifest.primary,
-                contract.font_manifest.windows_fallback,
-                *contract.font_manifest.fallbacks,
-            ]
-        )
-    )
-    spacing_values = sorted(
-        {
-            value
-            for style in (
-                contract.semantic_styles.eyebrow,
-                contract.semantic_styles.title,
-                contract.semantic_styles.body,
-                contract.semantic_styles.note,
-                contract.semantic_styles.right_callout,
-                contract.semantic_styles.warning,
-                contract.semantic_styles.caption,
-                contract.semantic_styles.source,
-            )
-            for value in (
-                style.margins.left_pt,
-                style.margins.right_pt,
-                style.margins.top_pt,
-                style.margins.bottom_pt,
-            )
-        }
-    )
-    semantic_roles = sorted(
-        {
-            element.content.role
-            for element in contract.semantic_elements
-            if element.content.role
-            and not element.content.role.startswith("deck-metadata:")
-        }
-    )
-    return {
-        "schemaVersion": "authored-vnext-template-design-context/v1",
-        "masterDigest": contract.digest,
-        "stylePolicy": "inheritTemplate",
-        "canvas": {
-            "width": contract.canvas.width_px,
-            "height": contract.canvas.height_px,
-        },
-        "tokens": {
-            "fonts": font_tokens,
-            "colors": color_tokens,
-        },
-        "allowedFonts": allowed_fonts,
-        "spacing": {"unit": "pt", "values": spacing_values},
-        "shapeGrammar": {
-            "allowedPrimitives": [
-                "text",
-                "card",
-                "list",
-                "table",
-                "chart",
-                "icon",
-                "rect",
-                "ellipse",
-            ],
-            "semanticRoles": semantic_roles,
-            "cardPolicy": "surfaceDividerTokensOnly",
-            "iconPolicy": "templateSemanticIconsOnly",
-            "rawCssPolicy": "forbid",
-            "arbitraryColorPolicy": "forbid",
-            "arbitraryFontPolicy": "forbid",
-        },
-    }
-
-
 def _rect_union(values: list[Rect]) -> Rect:
     left = min(value.x for value in values)
     top = min(value.y for value in values)
@@ -633,12 +542,6 @@ def _policy_layout(
             ]
         }
     )
-
-
-def _snapshot_value(snapshot: Any, name: str) -> Any:
-    if isinstance(snapshot, dict):
-        return snapshot.get(name)
-    return getattr(snapshot, name)
 
 
 def _snapshot_rect(value: Any) -> Rect:
@@ -1231,7 +1134,6 @@ def resolve_authored_composition(
 
 
 __all__ = [
-    "build_ai_edit_zone_template_design_context",
     "materialize_authored_composition",
     "materialize_body_visual_contract",
     "build_consistency_policy_snapshot",

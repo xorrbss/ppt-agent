@@ -21,7 +21,7 @@ from models.authored_vnext.deck import (
 )
 from models.authored_vnext.master.contract import DeckMasterContract
 from models.authored_vnext.master.operations import MasterRevisionResponse
-from services.authored_vnext.generation.core_bridge import DeterministicCoreBridge
+from tests.support.authored_vnext_deterministic_core_bridge import DeterministicCoreBridge
 from services.authored_vnext.generation.errors import (
     GenerationConflictError,
     StaleMasterError,
@@ -33,7 +33,7 @@ from services.authored_vnext.generation.outline import plan_outline
 from services.authored_vnext.generation.pipeline import (
     AuthoredVNextGenerationPipeline,
 )
-from services.authored_vnext.generation.repository import (
+from tests.support.authored_vnext_generation_memory_repository import (
     InMemoryGenerationRepository,
 )
 from services.authored_vnext.master.digests import (

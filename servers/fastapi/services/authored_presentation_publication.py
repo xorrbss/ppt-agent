@@ -40,7 +40,6 @@ from services.authored_presentation_artifacts import (
 from services.authored_presentation_contracts import AUTHORED_TEMPLATE
 from services.authored_publication_composition import (
     _authored_company_standard_projection,
-    _require_immutable_composition_publication,
 )
 from services.workspace_artifact_publication_service import (
     WorkspaceArtifactPublicationError,
@@ -90,9 +89,7 @@ async def publish_authored_presentation(
     pngs: list[bytes],
     out_path: str,
     attempt_token: str | None,
-    master_generation=None,
     canonical_scene: DeckSceneIR | None = None,
-    native_export_evidence: dict[str, object] | None = None,
     header_contract: AuthoredHeaderContract | None = None,
     chapter_plan: AuthoredChapterPlan | None = None,
     illustration_plan: AuthoredIllustrationPlan | None = None,
@@ -166,11 +163,6 @@ async def publish_authored_presentation(
                 message="The quality-gate receipt does not match the final slide output.",
             )
     try:
-        _require_immutable_composition_publication(
-            request=request,
-            master_generation=master_generation,
-            native_export_evidence=native_export_evidence,
-        )
         # Reserve and materialize every external artifact before acquiring the
         # caller transaction's publication fence.  In particular, the durable
         # artifact intent uses an independent session; opening it after
@@ -285,63 +277,6 @@ async def publish_authored_presentation(
             presentation.theme["infographicPlan"] = infographic_plan.model_dump(
                 mode="json"
             )
-        if master_generation is not None:
-            deck = master_generation.result.deck
-            scene = deck.scene
-            if scene is None:
-                raise AuthoredStageError(
-                    slide_index=0,
-                    stage="persist",
-                    code="authored_vnext_scene_required",
-                    retryable=False,
-                )
-            pin = deck.master
-            current_authored_projection = presentation.theme.get("authored_vnext")
-            presentation.theme["authored_vnext"] = {
-                **(
-                    dict(current_authored_projection)
-                    if isinstance(current_authored_projection, dict)
-                    else {}
-                ),
-                "canvas": request_canvas_metadata(request),
-                "schemaVersion": "authored-vnext-scene-projection/v1",
-                "deckId": deck.deck_id,
-                "deckRevision": deck.revision,
-                "deckDigest": deck.digest,
-                "sourceDigest": deck.source_digest,
-                "sceneDigest": scene.scene_digest,
-                "scene": scene.model_dump(mode="json", by_alias=True),
-                "masterPin": pin.model_dump(mode="json", by_alias=True),
-                **(
-                    {
-                        "compositionPin": deck.composition.model_dump(
-                            mode="json", by_alias=True
-                        )
-                    }
-                    if deck.composition is not None
-                    else {}
-                ),
-                "exportArtifactDigest": (
-                    master_generation.result.export_artifact_digest
-                ),
-                "aiTextZones": master_generation.ai_text_zones.model_dump(
-                    mode="json"
-                ),
-                **(
-                    {
-                        "sourceSemanticSnapshotDigest": master_generation.source_semantic_snapshot.get(
-                            "digest"
-                        ),
-                        "sourceSemanticSnapshot": master_generation.source_semantic_snapshot,
-                    }
-                    if isinstance(master_generation.source_semantic_snapshot, dict)
-                    and isinstance(
-                        master_generation.source_semantic_snapshot.get("digest"),
-                        str,
-                    )
-                    else {}
-                ),
-            }
         slides = [
             SlideModel(
                 presentation=presentation_id, id=(slide_ids[i] if slide_ids is not None else uuid.uuid4()),
@@ -352,35 +287,6 @@ async def publish_authored_presentation(
                     "__authored__": True,
                     "image": image_refs[i],
                     "role": roles[i],
-                    **(
-                        {
-                            "masterOwned": True,
-                            "layoutId": master_generation.result.deck.slides[
-                                i
-                            ].slide.layout_id,
-                            "masterPin": master_generation.result.deck.master.model_dump(
-                                mode="json", by_alias=True
-                            ),
-                            **(
-                                {
-                                    "compositionPin": master_generation.result.deck.composition.model_dump(
-                                        mode="json", by_alias=True
-                                    )
-                                }
-                                if master_generation.result.deck.composition is not None
-                                else {}
-                            ),
-                            "slideSpecDigest": master_generation.result.deck.slides[
-                                i
-                            ].slide.spec_digest,
-                            "sceneSlideDigest": scene.slides[i].slide_digest,
-                            "sceneSlide": scene.slides[i].model_dump(
-                                mode="json", by_alias=True
-                            ),
-                        }
-                        if master_generation is not None
-                        else {}
-                    ),
                 },
                 html_content=htmls[i],
                 properties={"image": image_refs[i]},
@@ -551,12 +457,7 @@ async def publish_authored_presentation(
             response = PresentationPathAndEditPath(
                 presentation_id=presentation_id,
                 path=published_path,
-                edit_path=(
-                    "/authored-vnext/workbench?authoredDeckId="
-                    f"{master_generation.result.deck.deck_id}"
-                    if master_generation is not None
-                    else f"/presentation?id={presentation_id}"
-                ),
+                edit_path=f"/presentation?id={presentation_id}",
             )
             async_status = await sql_session.get(
                 AsyncPresentationGenerationTaskModel,
@@ -598,7 +499,7 @@ async def publish_authored_presentation(
                 # compensation.  A returned revision means the complete tuple
                 # committed, including after an ambiguous commit ACK.
                 artifact_handed_to_publish = True
-                publication_result_evidence = dict(native_export_evidence or {})
+                publication_result_evidence: dict[str, object] = {}
                 if isinstance(quality_gate_receipt, dict):
                     publication_result_evidence["generationQualityReceipt"] = {
                         "schemaVersion": quality_gate_receipt.get("schemaVersion"),

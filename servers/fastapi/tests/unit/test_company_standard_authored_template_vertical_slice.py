@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 from copy import deepcopy
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 import uuid
 
@@ -24,22 +23,19 @@ from models.presentation_outline_model import PresentationOutlineModel, SlideOut
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from services.authored_vnext.generation.composition import compose_authored_style
-from services.authored_vnext.generation.core_bridge import DeterministicCoreBridge
+from tests.support.authored_vnext_deterministic_core_bridge import DeterministicCoreBridge
 from services.authored_vnext.generation.effective_style import (
     materialize_authored_composition,
     materialize_body_visual_contract,
     resolve_authored_composition,
 )
-from services.authored_vnext.generation.legacy_bridge import (
-    LegacyMasterGeneration,
-    _verified_resolved_snapshot_evidence,
-    build_legacy_generation_export_payload,
-)
 from services.authored_vnext.generation.internal_authored_composition import (
     build_internal_authored_composition,
 )
 from services.authored_vnext.generation.pipeline import AuthoredVNextGenerationPipeline
-from services.authored_vnext.generation.repository import InMemoryGenerationRepository
+from tests.support.authored_vnext_generation_memory_repository import (
+    InMemoryGenerationRepository,
+)
 from services.authored_vnext.integration.export_payload import worker_slides
 from services.authored_vnext.master.digests import canonical_digest, seal_master_contract
 from tests.support.authored_vnext_master_memory_repository import (
@@ -405,92 +401,4 @@ def test_company_standard_authored_template_vertical_slice(
         assert 'semantic-role-document-id' not in previews[1]
         assert 'semantic-role-document-id' in previews[-1]
 
-        generation = LegacyMasterGeneration(
-            result=result,
-            master=master,
-            composition_pin=composition,
-            ai_text_zones=SimpleNamespace(model_dump=lambda **_: {"values": []}),
-            pipeline=SimpleNamespace(),
-            source_semantic_snapshot=semantic,
-        )
-        export_payload = build_legacy_generation_export_payload(generation)
-        assert export_payload["compositionPin"] == composition.model_dump(
-            mode="json", by_alias=True
-        )
-        assert export_payload["sourceSemanticSnapshot"] == semantic
-        assert export_payload["sourceSemanticSnapshot"]["slideCount"] == len(exported)
-        assert export_payload["sceneDigest"] == scene.scene_digest
-        assert export_payload["scene"] == scene.model_dump(
-            mode="json", by_alias=True
-        )
-        visual_evidence = _verified_resolved_snapshot_evidence(
-            generation,
-            readback_verified=True,
-        )
-        assert visual_evidence["resolved_template_id"] == (
-            "artifact-template-ai/osb-proposal-1-29"
-        )
-        assert visual_evidence["resolved_template_digest"] == (
-            composition.authored_template.digest
-        )
-        assert visual_evidence["page_numbers"] == list(
-            range(1, len(exported) + 1)
-        )
-        assert visual_evidence["preview_snapshot"] == visual_evidence[
-            "native_pptx_snapshot"
-        ]
-        assert visual_evidence["visual_fidelity"]["status"] == "passed"
-        assert visual_evidence["readback_verified"] is True
-        composed_generation = LegacyMasterGeneration(
-            result=result,
-            master=master.model_copy(update={"contract": effective}),
-            composition_pin=composition,
-            ai_text_zones=generation.ai_text_zones,
-            pipeline=generation.pipeline,
-            source_semantic_snapshot=semantic,
-        )
-        assert _verified_resolved_snapshot_evidence(
-            composed_generation,
-            readback_verified=True,
-        ) == visual_evidence
         provider_call.assert_not_awaited()
-
-
-def test_visual_evidence_accepts_valid_repeated_semantic_roles() -> None:
-    digest = "sha256:" + "a" * 64
-    resolved = SimpleNamespace(digest=digest, source_digest=digest, layouts=[{}])
-    template = SimpleNamespace(
-        retained_reference_id="artifact-template-ai/osb-proposal-1-29",
-        resolved_reference_layout=resolved,
-        resolved_reference_layout_digest=digest,
-        digest=digest,
-    )
-    policy = SimpleNamespace(digest=digest)
-    composition = SimpleNamespace(
-        master_digest=digest,
-        authored_template=template,
-        consistency_policy=policy,
-        digest=digest,
-        model_dump=lambda **_: {"digest": digest},
-    )
-    scene = SimpleNamespace(
-        slides=[
-            SimpleNamespace(
-                slide_digest=digest,
-                elements=[SimpleNamespace(semantic_role="process-step")],
-            ) for _ in range(2)
-        ],
-        scene_digest=digest, composition_digest=digest,
-    )
-    deck = SimpleNamespace(
-        slides=[SimpleNamespace(slide=SimpleNamespace(layout_id="osb-process")) for _ in range(2)],
-        composition=composition, scene=scene,
-    )
-    generation = SimpleNamespace(
-        result=SimpleNamespace(deck=deck),
-        master=SimpleNamespace(contract=SimpleNamespace(digest="effective:" + digest)),
-    )
-    evidence = _verified_resolved_snapshot_evidence(generation, readback_verified=True)
-
-    assert evidence["semantic_roles_used"] == ["process-step"]
-    assert evidence["page_numbers"] == [1, 2]

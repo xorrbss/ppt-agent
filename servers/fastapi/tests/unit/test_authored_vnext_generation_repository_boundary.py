@@ -16,8 +16,10 @@ import uuid
 
 from services.authored_vnext.generation.repository import (
     AsyncGenerationRepository,
-    InMemoryGenerationRepository,
     async_generation_repository,
+)
+from tests.support.authored_vnext_generation_memory_repository import (
+    InMemoryGenerationRepository,
 )
 from utils.owner_context import (
     get_current_owner_id,
