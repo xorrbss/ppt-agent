@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { isGenerationStalled, minutesSince } from "../../services/api/generation-activity-model";
 import { GENERATION_RESUMABLE_STATUSES, isGenerationFailureStatus } from "../workspace/generationFailure";
 import GenerationFailurePanel from "./GenerationFailurePanel";
+import DraftSlideGrid from "./DraftSlideGrid";
+import { deriveDraftTiles, draftImageUrl } from "./draftGridModel";
 
 type DraftPage = {
   index: number; author: string; render: string; persist: string;
@@ -48,6 +50,7 @@ export default function DraftCheckpointPreview({ presentationId }: { presentatio
   const [clockOffsetMs, setClockOffsetMs] = useState(0);
   const [draft, setDraft] = useState<DraftPreview | null>(null);
   const [selected, setSelected] = useState(0);
+  const [view, setView] = useState<"grid" | "page">("grid");
   const [refresh, setRefresh] = useState(0);
   const [loadFailed, setLoadFailed] = useState(false);
   const [failedPageKey, setFailedPageKey] = useState<string | null>(null);
@@ -81,7 +84,9 @@ export default function DraftCheckpointPreview({ presentationId }: { presentatio
     return () => window.clearTimeout(timer);
   }, [draft]);
 
-  if (!draft || draft.pages.length === 0) {
+  const tiles = useMemo(() => draft ? deriveDraftTiles(draft.pages, draft.totalPages) : [], [draft]);
+
+  if (!draft || tiles.length === 0) {
     return loadFailed ? <div className="p-4 text-sm text-slate-700" role="alert">
       {t("draft.loadFailed")}
       <Button variant="outline" size="sm" onClick={() => setRefresh((value) => value + 1)}>{t("draft.reload")}</Button>
@@ -92,7 +97,7 @@ export default function DraftCheckpointPreview({ presentationId }: { presentatio
   const stopped = TERMINAL.has(draft.operationState) || TERMINAL.has(draft.jobState);
   const imageReady = page?.render === "completed" && Boolean(page.pageVersion);
   const count = (stage: "author" | "render" | "persist") => draft.pages.filter((item) => item[stage] === "completed").length;
-  const imageUrl = `/api/v1/ppt/presentation/${encodeURIComponent(presentationId)}/draft-preview/${selected}/image?job_id=${encodeURIComponent(draft.jobId)}&page_version=${encodeURIComponent(page?.pageVersion ?? "")}`;
+  const imageUrl = draftImageUrl(presentationId, draft.jobId, selected, page?.pageVersion ?? "");
   const nowMs = Date.now() + clockOffsetMs;
   const running = !stopped && draft.jobState !== "succeeded";
   const progressMinutes = running ? minutesSince(draft.lastProgressAt ?? null, nowMs) : null;
@@ -118,7 +123,12 @@ export default function DraftCheckpointPreview({ presentationId }: { presentatio
       {stopped && (failurePanel ?? <p className="mt-1">{quota ? t("draft.stopQuota") : t("draft.stopGeneric")}</p>)}
       {loadFailed && <p role="alert" className="mt-1">{t("draft.staleResult")}</p>}
     </div>
+    {view === "grid" ? <DraftSlideGrid presentationId={presentationId} jobId={draft.jobId} tiles={tiles}
+      stageText={draft.stage ? stageLabel(t, draft.stage) : null} stopped={stopped}
+      qualityLabel={(quality) => qualityLabel(t, quality)}
+      onOpen={(pageIndex) => { setSelected(pageIndex); setFailedPageKey(null); setView("page"); }} /> : <>
     <div className="mb-3 flex flex-wrap items-center gap-2">
+      <Button variant="outline" size="sm" onClick={() => setView("grid")}>{t("draft.backToGrid")}</Button>
       <label className="text-sm" htmlFor="draft-preview-page">{t("draft.pageLabel")}</label>
       <select id="draft-preview-page" value={selected} className="rounded border border-slate-300 bg-white p-2 text-sm"
         onChange={(event) => { setSelected(Number(event.target.value)); setFailedPageKey(null); }}>
@@ -138,5 +148,6 @@ export default function DraftCheckpointPreview({ presentationId }: { presentatio
       <Button variant="outline" size="sm" onClick={() => setFailedPageKey(null)}>{t("draft.imageReload")}</Button>
     </div>
       : <img key={imageUrl} src={imageUrl} alt={t("draft.imageAlt", { page: selected + 1 })} loading="eager" onError={() => setFailedPageKey(pageKey)} className="h-auto w-full bg-white shadow-sm" />}
+    </>}
   </section>;
 }

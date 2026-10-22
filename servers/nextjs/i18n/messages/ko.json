@@ -1685,7 +1685,26 @@
     "noRecentProgress": "서버에서 실행 상태를 확인했어요. 진행 변화는 아직 없습니다.",
     "lastServerCheck": "마지막 서버 확인 · {time}",
     "lastProgress": "마지막 진행 변화 · {time}",
-    "noInformation": "확인 정보 없음"
+    "noInformation": "확인 정보 없음",
+    "headerRunning": "프레젠테이션 생성 중",
+    "elapsedUnderMinute": "1분 미만 경과",
+    "elapsedMinutes": "{minutes}분 경과",
+    "elapsedHours": "{hours}시간 {minutes}분 경과",
+    "etaMinutes": "약 {minutes}분 남음",
+    "etaSoon": "곧 완료",
+    "checklistLabel": "생성 단계",
+    "step_prepare": "자료 분석·구조 설계",
+    "step_author": "슬라이드 작성",
+    "step_render": "렌더링",
+    "step_persist": "저장·검수",
+    "step_publish": "게시",
+    "state_done": "완료",
+    "state_active": "진행 중",
+    "state_pending": "대기",
+    "counterValueText": "{current}/{total}장",
+    "lastActivitySeconds": "마지막 활동 {seconds}초 전",
+    "lastActivityMinutes": "마지막 활동 {minutes}분 전",
+    "lastActivityHours": "마지막 활동 {hours}시간 전"
   },
   "presentationLoading": {
     "title": "발표자료를 만들고 있어요",
@@ -5174,7 +5193,15 @@
       "imagePending": "아직 {page}페이지 이미지가 준비 중입니다.",
       "imageFailed": "이 페이지의 저장된 이미지를 불러오지 못했습니다.",
       "imageReload": "이미지 다시 불러오기",
-      "imageAlt": "{page}페이지 생성 초안"
+      "imageAlt": "{page}페이지 생성 초안",
+      "gridHeading": "완성된 슬라이드 {rendered}/{total}",
+      "gridProgressAria": "렌더링된 슬라이드 비율",
+      "tileOpenAria": "{page}페이지 크게 보기",
+      "tileAuthoredAria": "{page}페이지 작성됨, 렌더링 대기 중",
+      "tileAuthored": "작성됨",
+      "tilePendingAria": "{page}페이지 아직 시작 전",
+      "tileImageFailed": "이미지를 불러오지 못했습니다",
+      "backToGrid": "그리드로 돌아가기"
     }
   },
   "generationGuard": {
