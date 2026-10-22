@@ -127,6 +127,26 @@ def recovery_retry_transition(
     return payload, projection
 
 
+_EXHAUSTED_EVIDENCE_UNRECORDED = "_presenton_exhausted_evidence_unrecorded"
+
+
+def mark_exhausted_evidence_unrecorded(error: BaseException) -> None:
+    """Privately mark ``error`` as propagating after exhausted-page evidence was lost.
+
+    For an error whose own ``code`` has no ``retryable`` flag: setting one
+    would change its control-error classification. The mark lives only on
+    this in-memory object, is never serialized, and only denies a retry.
+    """
+    try:
+        setattr(error, _EXHAUSTED_EVIDENCE_UNRECORDED, True)
+    except (AttributeError, TypeError):
+        pass
+
+
+def exhausted_evidence_unrecorded(error: BaseException) -> bool:
+    return getattr(error, _EXHAUSTED_EVIDENCE_UNRECORDED, False) is True
+
+
 def durable_generation_failure(error: BaseException) -> tuple[str, bool]:
     """Reduce an external/provider exception to a stable durable decision."""
 
@@ -162,7 +182,8 @@ def durable_generation_failure(error: BaseException) -> tuple[str, bool]:
         # the durable operation cannot create the missing initial request and
         # would otherwise keep its lease/heartbeat alive until recovery.
         return normalized_code, False
-    return normalized_code, durable_retryable
+    # Same classification; only a lost exhausted-page record denies the retry.
+    return normalized_code, durable_retryable and not exhausted_evidence_unrecorded(error)
 
 
 async def public_generation_deadline(

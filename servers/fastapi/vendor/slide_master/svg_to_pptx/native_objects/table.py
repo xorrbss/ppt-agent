@@ -139,6 +139,8 @@ class _TableRun:
     font_family: str | None = None
     lang: str | None = None
     alt_lang: str | None = None
+    # A soft line break (DrawingML a:br) inside the paragraph before this run.
+    break_before: bool = False
 
 
 @dataclass(frozen=True)
@@ -253,7 +255,7 @@ def _table_run(
         raise RuntimeError(f"Native PPTX table {label} must be a text object")
     allowed = {
         "text", "bold", "italic", "underline", "strike", "color",
-        "font_size", "font_family", "lang", "alt_lang",
+        "font_size", "font_family", "lang", "alt_lang", "break_before",
     }
     unknown = set(value) - allowed
     if unknown:
@@ -273,6 +275,11 @@ def _table_run(
                 f"Native PPTX table {label} {field} must be a JSON boolean"
             )
         booleans[field] = raw
+    break_before = value.get("break_before", False)
+    if not isinstance(break_before, bool) or (break_before and run_idx == 1):
+        raise RuntimeError(
+            f"Native PPTX table {label} break_before must be a JSON boolean, false on the first run"
+        )
 
     color: str | None = None
     if value.get("color") is not None:
@@ -330,6 +337,7 @@ def _table_run(
         font_family=font_family,
         lang=languages["lang"],
         alt_lang=languages["alt_lang"],
+        break_before=break_before,
     )
 
 
@@ -1011,7 +1019,8 @@ def _build_native_table(elem: ET.Element, ctx: ConvertContext, payload: dict[str
                         )
                     else:
                         text_run_xml = "".join(
-                            _table_text_run(
+                            ("<a:br/>" if run.break_before else "")
+                            + _table_text_run(
                                 run.text,
                                 color=run.color or color,
                                 bold=run.bold if run.bold is not None else bold,

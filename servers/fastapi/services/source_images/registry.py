@@ -623,6 +623,53 @@ def source_image_occurrence_asset_id(
     )
 
 
+_SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
+
+
+def source_image_storage_directory() -> Path:
+    """Return the root every deck's registered pictures are materialised under."""
+
+    return Path(get_writable_path(_STORAGE_ROOT))
+
+
+def registered_source_image_locator(
+    asset_id: uuid.UUID,
+    extras: object,
+) -> tuple[uuid.UUID, str, str] | None:
+    """Return ``(presentation_id, file_name, digest)`` for a registry-written row.
+
+    The answer is derived only from what :func:`_persist_raw_image` records:
+    the deterministic asset id must re-derive from the row's own deck id,
+    digest and occurrence id, and the file name is the digest plus the suffix
+    of the recorded MIME type.  Any row this module did not write -- or whose
+    metadata no longer matches its id -- yields ``None``.
+    """
+
+    if not isinstance(extras, Mapping):
+        return None
+    try:
+        presentation_id = uuid.UUID(str(extras.get("presentation_id")))
+    except (ValueError, TypeError, AttributeError):
+        return None
+    digest = extras.get("digest")
+    if not isinstance(digest, str) or not _SHA256_HEX.match(digest):
+        return None
+    mime_type = extras.get("mime_type")
+    suffix = _MIME_TO_SUFFIX.get(mime_type) if isinstance(mime_type, str) else None
+    if suffix is None:
+        return None
+    occurrence_id = extras.get("source_occurrence_id")
+    if occurrence_id is None:
+        expected_id = source_image_asset_id(presentation_id, digest)
+    elif isinstance(occurrence_id, str) and occurrence_id:
+        expected_id = source_image_occurrence_asset_id(presentation_id, occurrence_id, digest)
+    else:
+        return None
+    if expected_id != asset_id:
+        return None
+    return presentation_id, f"{digest}{suffix}", digest
+
+
 async def _persist_raw_image(
     session: AsyncSession,
     *,

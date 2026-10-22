@@ -661,3 +661,40 @@ def test_slide_content_carries_the_sidecar_and_only_a_receipt_summary():
     source_required_payload["source_preservation"] = {"source_native_charts": [{"element_id": "missing-source-chart"}]}
     with pytest.raises(ValueError, match="svg_source_native_chart_unprojectable"):
         svg_slide_content(source_required_payload, role="content", source="# 표", pt_per_px=0.75)
+
+
+def test_wrapped_multi_paragraph_cell_matches_only_on_drawn_line_breaks():
+    """A multi-paragraph cell may wrap a paragraph; each paragraph break must be a line break."""
+    from services.generation_core.drivers.svg.native_table import _wrapped_cell_matches
+
+    declared = "사용자 심화\n(AI · 바이브 코딩)"
+    assert _wrapped_cell_matches(declared, ["사용자 심화", "(AI · 바이브", "코딩)"])
+    assert _wrapped_cell_matches(declared, ["사용자 심화", "(AI · 바이브 코딩)"])
+    assert not _wrapped_cell_matches(declared, ["사용자 심화 (AI · 바이브", "코딩)"])
+    assert not _wrapped_cell_matches(declared, ["사용자 심화", "(AI · 바이", "코딩)"])
+    assert not _wrapped_cell_matches(declared, ["사용자", "심화", "(AI · 바이브 코딩)", "추가"])
+    assert not _wrapped_cell_matches(declared, ["사용자 심화\n(AI · 바이브 코딩)"])
+    assert _wrapped_cell_matches("실습 완료 여부", ["실습 완료", "여부"])
+    assert not _wrapped_cell_matches("실습 완료 여부", ["실습 완료", "여부", "추가"])
+
+def test_source_text_lines_join_an_unpositioned_inline_run_to_its_line():
+    """A positioned line followed by an unpositioned tspan run is one drawn line (readback)."""
+    import xml.etree.ElementTree as ET
+
+    from services.svg_export_whole_page_adapter import fragment_lines_match, source_text_lines
+
+    ns = "http://www.w3.org/2000/svg"
+    node = ET.fromstring(
+        f'<text xmlns="{ns}" x="70" y="166"><tspan x="70" y="166">업력 20년의 기업으로 </tspan>'
+        '<tspan x="70" y="205" fill="#2563EB">플랫폼 자체 개발</tspan><tspan>과 SI 구축 수행</tspan></text>')
+    lines = source_text_lines(node)
+    assert lines == ["업력 20년의 기업으로", "플랫폼 자체 개발과 SI 구축 수행"]
+    assert fragment_lines_match(lines, "업력 20년의 기업으로 플랫폼 자체 개발과 SI 구축 수행")
+    spaced = ET.fromstring(
+        f'<text xmlns="{ns}"><tspan x="1" y="2">첫 줄</tspan><tspan x="1" y="30">둘째</tspan> '
+        '<tspan fill="#000">강조</tspan></text>')
+    assert source_text_lines(spaced) == ["첫 줄", "둘째 강조"]  # the whitespace tail separates the runs
+    single = ET.fromstring(f'<text xmlns="{ns}" x="1" y="2">한 줄 <tspan fill="#000">강조</tspan></text>')
+    assert source_text_lines(single) is None
+    relative = ET.fromstring(f'<text xmlns="{ns}"><tspan x="1" y="2">가</tspan><tspan dy="20">나</tspan></text>')
+    assert source_text_lines(relative) is None

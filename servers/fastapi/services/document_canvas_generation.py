@@ -232,7 +232,9 @@ def minimal_svg_readability_repair(svg: str, quality: dict) -> dict:
     if any(node.tag.rsplit("}", 1)[-1] in {"line", "polyline", "polygon", "path", "image"}
            or node.get("transform") for node in nodes):
         return {**boundary, "reason": "associated_geometry_requires_recomposition"}
-    metrics = (quality.get("browser_metrics") or {}).get("elements") or []
+    from services.svg_presentation_checkpoint import quality_browser_metrics
+
+    metrics = (quality_browser_metrics(quality) or {}).get("elements") or []
     by_qid = {item.get("qid"): item for item in metrics}
     qids = sorted({item.get("qid") for item in failures if item.get("qid")})
     canvas = parse_canvas_metadata(policy["canvas"])

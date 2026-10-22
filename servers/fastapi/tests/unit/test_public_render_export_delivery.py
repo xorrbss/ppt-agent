@@ -57,6 +57,9 @@ def test_editable_export_delivery_keeps_partial_unknown_and_deterministic_failur
     assert not _public_export_failure_is_non_retryable(
         "public_export_editability_evidence_pending"
     )
+    # Deterministic worker projection/readback rejections of one bundle.
+    assert _public_export_failure_is_non_retryable("svg_source_export_projection_invalid")
+    assert _public_export_failure_is_non_retryable("svg_source_export_readback_invalid")
 
     operation = WorkspaceOperation(
         id=uuid.uuid4(),

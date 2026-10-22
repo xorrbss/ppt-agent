@@ -3041,10 +3041,19 @@ async def _svg_partial_append_only_contract(tmp_path, monkeypatch, *, source_rou
                 idempotency_key_hash="c"*64, estimated_cost_microunits=100,
                 state="reserved", outcome="unknown")
             session.add(unknown_call)
+            # The confirmed page is stored in the current compact form: its
+            # measured metrics live in the content-addressed sidecar and the
+            # checkpoint row carries only the integrity-bound reference.
+            from services import svg_presentation_checkpoint as compact_store
+            monkeypatch.setattr(compact_store, "checkpoint_root", lambda: tmp_path / "checkpoints")
+            compact_metrics = {"elements": [{"id": "body", "bbox": [64, 120, 1152, 480]}], "fonts": ["Pretendard"]}
+            compact_quality = dict(passed=True, browser_metrics=deepcopy(compact_metrics))
+            assert compact_store.compact_browser_metrics(compact_quality) == compact_metrics
+            assert "browser_metrics" not in compact_quality and "browser_metrics_ref" in compact_quality
             for index in range(3):
                 saved = dict(input_digest=f"source-input-{index}", inflight=None, attempts=[])
                 if index == 0:
-                    saved.update(svg_content="<svg>exact confirmed source</svg>",quality=dict(passed=True))
+                    saved.update(svg_content="<svg>exact confirmed source</svg>",quality=deepcopy(compact_quality))
                 elif index == 1:
                     saved["inflight"] = dict(status="unknown")
                 session.add(AuthoredSlideCheckpoint(job_id=parent.id, slide_index=index,
@@ -3162,6 +3171,14 @@ async def _svg_partial_append_only_contract(tmp_path, monkeypatch, *, source_rou
                 assert copied[0].svg_checkpoint["svg_content"] == rows[0].svg_checkpoint["svg_content"]
                 assert copied[0].author_status == "completed"
                 assert recovery.verify_cached_page(copied[0].svg_checkpoint,manifest,0,"source-input-0") == pages[0]
+                # The authoritative verifier proved the producer row in its stored
+                # compact form (the manifest binds that row's digest); the row keeps
+                # the exact reference and its metrics rehydrate losslessly.
+                producer_row = await session.scalar(select(AuthoredSlideCheckpoint).where(
+                    AuthoredSlideCheckpoint.job_id == parent_id, AuthoredSlideCheckpoint.slide_index == 0))
+                assert producer_row.svg_checkpoint["quality"] == compact_quality
+                assert pages[0]["row_digest"] == recovery.digest(producer_row.model_dump(mode="json"))
+                assert compact_store.quality_browser_metrics(producer_row.svg_checkpoint["quality"]) == compact_metrics
                 assert copied[1].svg_checkpoint["partial_recovery"]["category"] == "unknown"
                 assert "svg_content" not in copied[1].svg_checkpoint and copied[1].author_status == "pending"
                 ctx = SimpleNamespace(snapshot=deepcopy(consumer.svg_style_snapshot),partial_recovery_manifest=manifest,
@@ -3379,6 +3396,63 @@ async def _svg_partial_append_only_contract(tmp_path, monkeypatch, *, source_rou
                             # Restore implicit onupdate columns along with the
                             # intended mutation before checking another guard.
                             await mutation.rollback()
+                    # Retained recheck of a finished historical proof: whole-payload work stays
+                    # per node (no new digest on recheck), unchanged rows pass (by storage hash on
+                    # PostgreSQL), committed-equivalent changes and unflushed in-place edits of a
+                    # proven ancestor still fall back to cold verification.
+                    postgres = session.bind.dialect.name == "postgresql"
+                    def retained_proof():
+                        return recovery.verify_episode(session,previous,previous_job,
+                            require_current_code=False,_retained_proofs=holder)
+                    holder = {}
+                    await retained_proof()
+                    proof = holder[str(previous.id)]
+                    retained_stats = proof[0].stats
+                    digests = retained_stats["operation_digests"]
+                    for _ in range(2):
+                        assert await recovery._recheck_retained_episode(session,previous,previous_job,proof) is not None
+                    assert retained_stats["operation_digests"] == digests
+                    if postgres:
+                        assert retained_stats["rows_storage_hits"] > 0
+                        assert "storage" in proof[0].storage_modes["rows"].split(",")
+                    else:
+                        assert proof[0].storage_modes["rows"] == "exact:unsupported_dialect"
+                        assert retained_stats["rows_storage_hits"] == 0
+                    for model, row_id, field, changed in (
+                            (WorkspaceOperation, source_id, "request_payload", {**source.request_payload,"tampered":True}),
+                            (WorkspaceOperation, source_id, "owner_id", None),
+                            (WorkspaceOperation, child_id, "retry_of_operation_id", None),
+                            (PresentationGenerationJob, consumer_id, "request_payload", {**previous_job.request_payload,"tampered":True}),
+                            (PublicProviderLogicalCall, unknown_call_id, "outcome", "succeeded"),
+                            (AuthoredSlideCheckpoint, rows[1].id, "svg_checkpoint", {**rows[1].svg_checkpoint,"inflight":None})):
+                        mutation = await session.begin_nested()
+                        try:
+                            await session.execute(update(model).where(model.id == row_id)
+                                .values(**{field:changed}).execution_options(synchronize_session=False))
+                            assert await recovery._recheck_retained_episode(session,previous,previous_job,proof) is None, (model.__name__, field)
+                        finally:
+                            await mutation.rollback()
+                        holder = {}
+                        await retained_proof()
+                        proof = holder[str(previous.id)]
+                    previous.request_payload["tampered"] = True
+                    try:
+                        assert previous not in session.dirty
+                        assert await recovery._recheck_retained_episode(session,previous,previous_job,proof) is None
+                    finally:
+                        previous.request_payload.pop("tampered")
+                    # A proven historical node (child, reached through the consumer edge):
+                    # its unflushed in-place edit fails at the exit fence.
+                    verification = recovery._EpisodeVerification(session)
+                    await recovery.verify_episode(session,next_operation,next_job,verification=verification)
+                    node = verification.node_proofs[str(child_id)]
+                    node.operation.request_payload["tampered"] = True
+                    try:
+                        assert node.operation not in session.dirty
+                        with pytest.raises(recovery.PartialRecoveryRejected,match="snapshot_changed"):
+                            await verification.finish()
+                    finally:
+                        node.operation.request_payload.pop("tampered")
                     verification = recovery._EpisodeVerification(session)
                     await recovery.verify_episode(session,next_operation,next_job,verification=verification)
                     new_usage = ProviderUsageReceipt(job_id=parent_id, operation="generation",

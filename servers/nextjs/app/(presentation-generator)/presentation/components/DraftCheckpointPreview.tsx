@@ -61,8 +61,9 @@ export default function DraftCheckpointPreview({ presentationId }: { presentatio
     </div> : null;
   }
   const page = draft.pages.find((item) => item.index === selected);
-  const pageKey = `${draft.jobId}:${selected}`;
+  const pageKey = `${draft.jobId}:${selected}:${page?.pageVersion ?? ""}`;
   const stopped = TERMINAL.has(draft.operationState) || TERMINAL.has(draft.jobState);
+  const imageReady = page?.render === "completed" && Boolean(page.pageVersion);
   const count = (stage: "author" | "render" | "persist") => draft.pages.filter((item) => item[stage] === "completed").length;
   const imageUrl = `/api/v1/ppt/presentation/${encodeURIComponent(presentationId)}/draft-preview/${selected}/image?job_id=${encodeURIComponent(draft.jobId)}&page_version=${encodeURIComponent(page?.pageVersion ?? "")}`;
   const quota = draft.stopCode?.includes("quota") || draft.stopCode?.includes("budget")
@@ -88,7 +89,11 @@ export default function DraftCheckpointPreview({ presentationId }: { presentatio
       <Button variant="outline" size="sm" onClick={() => setRefresh((value) => value + 1)}>상태 새로고침</Button>
       <span className="text-xs text-slate-600">이 페이지 품질: {QUALITY[page?.quality ?? "unconfirmed"] ?? "미확인"}</span>
     </div>
-    {failedPageKey === pageKey ? <div role="alert" className="p-4 text-sm text-red-700">
+    {!imageReady ? <div role="status" className="p-4 text-sm text-slate-700">
+      {stopped ? `${selected + 1}페이지는 렌더링되지 않은 상태로 작업이 중단되어 이미지가 없습니다.`
+        : `아직 ${selected + 1}페이지 이미지가 준비 중입니다.`}
+    </div>
+      : failedPageKey === pageKey ? <div role="alert" className="p-4 text-sm text-red-700">
       <p>이 페이지의 저장된 이미지를 불러오지 못했습니다.</p>
       <Button variant="outline" size="sm" onClick={() => setFailedPageKey(null)}>이미지 다시 불러오기</Button>
     </div>

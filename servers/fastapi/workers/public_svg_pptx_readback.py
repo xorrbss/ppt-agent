@@ -173,11 +173,14 @@ def _source_native_tables(shapes, receipt, deck):
             if cell.is_spanned or cell.span_height != rs or cell.span_width != cs:
                 raise ValueError("svg_source_pptx_table_cell_mismatch")
             if _readback_text(cell.text) != _readback_text(value):
-                # A source-wrapped cell keeps one paragraph per drawn line; the declared cell
-                # text then equals those lines joined with an optional space per boundary.
+                # A source-wrapped cell keeps one paragraph per drawn line, or one paragraph
+                # per declared paragraph with its drawn wraps as soft line breaks (python-pptx
+                # reads a:br as a vertical tab); the declared cell text then equals those lines
+                # joined with an optional space per boundary.
                 from services.svg_export_whole_page_adapter import fragment_lines_match
                 paragraph_lines = [line for paragraph in cell.text_frame.paragraphs
-                                   if (line := _readback_text(paragraph.text))]
+                                   for drawn in paragraph.text.split("\v")
+                                   if (line := _readback_text(drawn))]
                 if not paragraph_lines or not fragment_lines_match(paragraph_lines, _readback_text(value)):
                     raise ValueError("svg_source_pptx_table_cell_mismatch")
             for row in range(r, r + rs):

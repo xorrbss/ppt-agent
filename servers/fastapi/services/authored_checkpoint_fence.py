@@ -25,6 +25,7 @@ import uuid
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from models.sql.presentation_generation_job import PresentationGenerationJob
@@ -36,6 +37,15 @@ from utils.datetime_utils import get_current_utc_datetime
 
 
 _FENCED_SESSION_KEY = "authored_checkpoint_fenced"
+
+#: Job columns a ``light`` fence does not transfer: none is a fence predicate.
+_HEAVY_JOB_COLUMNS = (
+    "request_payload",
+    "svg_style_snapshot",
+    "svg_header_design_checkpoint",
+    "authored_outline",
+    "last_error",
+)
 
 #: The slide-local provider-ordinal bookkeeping ``reserve_provider_attempt``
 #: maintains. It lives in the checkpoint's ``error`` JSON column for want of a
@@ -132,13 +142,23 @@ async def owned_job(
     *,
     fencing_token: int | None = None,
     reuse_session_fence: bool = False,
+    light: bool = False,
 ) -> PresentationGenerationJob:
     # Fence every checkpoint transaction, not just final publication.  A plain
     # SELECT leaves a race where cancellation/lease takeover can happen before
     # the checkpoint UPDATE commits.  This conditional no-op UPDATE acquires the
     # job-row write lock and is rechecked by the database before any stage data
     # is made visible.
-    job = await session.get(PresentationGenerationJob, job_id)
+    #
+    # ``light`` leaves the large JSON columns unloaded (raising on access, never
+    # lazy-loading in async code) for callers that only read the job's scalar
+    # columns from a session they own.  Every fence predicate is unchanged.
+    options = (
+        [defer(getattr(PresentationGenerationJob, name), raiseload=True)
+         for name in _HEAVY_JOB_COLUMNS]
+        if light else None
+    )
+    job = await session.get(PresentationGenerationJob, job_id, options=options)
     if job is None:
         await session.rollback()
         raise AuthoredStageError(

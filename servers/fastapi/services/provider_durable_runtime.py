@@ -455,6 +455,21 @@ async def admit_provider_rpm_and_circuit(
     raise RuntimeError("provider_circuit_cas_conflict")
 
 
+async def lock_provider_circuit(session: AsyncSession, service_key: str) -> None:
+    """Take the service circuit row lock before any budget row lock.
+
+    A reservation locks the circuit (RPM admission) and then the budget; a
+    settlement must use the same order, or a reservation and a settlement of
+    two concurrent calls of one deck deadlock in the database.
+    """
+
+    await session.execute(
+        select(ProviderRuntimeCircuit.id)
+        .where(ProviderRuntimeCircuit.service_key == service_key)
+        .with_for_update()
+    )
+
+
 async def record_provider_circuit_outcome(
     session: AsyncSession,
     *,
@@ -509,6 +524,7 @@ async def record_provider_circuit_outcome(
 __all__ = [
     "DurableReservationLease",
     "admit_provider_rpm_and_circuit",
+    "lock_provider_circuit",
     "record_provider_circuit_outcome",
     "recover_expired_reservations",
     "reconcile_provider_call",
