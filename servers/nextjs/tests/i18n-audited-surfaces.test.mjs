@@ -85,6 +85,10 @@ const auditedFiles = [
   "components/codex-config/useCodexAuth.ts",
   "components/OnBoarding/PresentonMode.tsx",
   "components/ui/overlay-loader.tsx",
+  "app/(presentation-generator)/presentation/components/DraftCheckpointPreview.tsx",
+  "app/(presentation-generator)/(dashboard)/dashboard/components/GenerationActivitySection.tsx",
+  "app/(presentation-generator)/upload/components/upload-page/GenerationGuardDialog.tsx",
+  "app/(presentation-generator)/upload/components/upload-page/useGenerationGuard.ts",
 ];
 
 test("the audited surfaces contain no hardcoded user-facing copy", () => {

@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
+import { isGenerationStalled, minutesSince } from "../../services/api/generation-activity-model";
 
 type DraftPage = {
   index: number; author: string; render: string; persist: string;
@@ -11,17 +13,36 @@ type DraftPreview = {
   kind: "checkpoint_draft"; published: false; jobId: string;
   operationState: string; jobState: string; stage: string | null;
   totalPages: number; stopCode: string | null; pages: DraftPage[];
+  lastProgressAt?: string | null;
 };
 const TERMINAL = new Set(["failed", "dead_letter", "cancelled", "deadline_exceeded", "rejected", "expired"]);
-const STAGES: Record<string, string> = {
-  author: "SVG 작성", render: "렌더링", quality: "품질 검토", vqa: "시각 품질 검토", persist: "게시",
-};
-const QUALITY: Record<string, string> = {
-  verified: "검증됨", review_pending: "검토 대기", failed: "실패", passed: "통과", blocked: "차단", draft: "초안", unconfirmed: "미확인",
-};
+type Translate = ReturnType<typeof useTranslations<"generationActivity">>;
+function stageLabel(t: Translate, stage: string): string {
+  switch (stage) {
+    case "author": return t("draft.stageAuthor");
+    case "render": return t("draft.stageRender");
+    case "quality": return t("draft.stageQuality");
+    case "vqa": return t("draft.stageVqa");
+    case "persist": return t("draft.stagePersist");
+    default: return t("draft.stageOther");
+  }
+}
+function qualityLabel(t: Translate, quality: string): string {
+  switch (quality) {
+    case "verified": return t("draft.qualityVerified");
+    case "review_pending": return t("draft.qualityReviewPending");
+    case "failed": return t("draft.qualityFailed");
+    case "passed": return t("draft.qualityPassed");
+    case "blocked": return t("draft.qualityBlocked");
+    case "draft": return t("draft.qualityDraft");
+    default: return t("draft.qualityUnconfirmed");
+  }
+}
 
 /** Separate from published slides: one selected image, no deck asset preloading. */
 export default function DraftCheckpointPreview({ presentationId }: { presentationId: string }) {
+  const t = useTranslations("generationActivity");
+  const [clockOffsetMs, setClockOffsetMs] = useState(0);
   const [draft, setDraft] = useState<DraftPreview | null>(null);
   const [selected, setSelected] = useState(0);
   const [refresh, setRefresh] = useState(0);
@@ -36,6 +57,9 @@ export default function DraftCheckpointPreview({ presentationId }: { presentatio
     }).then(async (response) => {
       if (response.status === 404) return null;
       if (!response.ok) throw new Error("draft_preview_unavailable");
+      // Server clock offset keeps "N minutes ago" independent of client clock skew.
+      const serverDate = Date.parse(response.headers.get("Date") ?? "");
+      if (Number.isFinite(serverDate)) setClockOffsetMs(serverDate - Date.now());
       return response.json() as Promise<DraftPreview>;
     }).then((result) => {
       if (controller.signal.aborted) return;
@@ -56,8 +80,8 @@ export default function DraftCheckpointPreview({ presentationId }: { presentatio
 
   if (!draft || draft.pages.length === 0) {
     return loadFailed ? <div className="p-4 text-sm text-slate-700" role="alert">
-      초안 미리보기를 불러오지 못했습니다.
-      <Button variant="outline" size="sm" onClick={() => setRefresh((value) => value + 1)}>다시 불러오기</Button>
+      {t("draft.loadFailed")}
+      <Button variant="outline" size="sm" onClick={() => setRefresh((value) => value + 1)}>{t("draft.reload")}</Button>
     </div> : null;
   }
   const page = draft.pages.find((item) => item.index === selected);
@@ -66,37 +90,44 @@ export default function DraftCheckpointPreview({ presentationId }: { presentatio
   const imageReady = page?.render === "completed" && Boolean(page.pageVersion);
   const count = (stage: "author" | "render" | "persist") => draft.pages.filter((item) => item[stage] === "completed").length;
   const imageUrl = `/api/v1/ppt/presentation/${encodeURIComponent(presentationId)}/draft-preview/${selected}/image?job_id=${encodeURIComponent(draft.jobId)}&page_version=${encodeURIComponent(page?.pageVersion ?? "")}`;
+  const nowMs = Date.now() + clockOffsetMs;
+  const running = !stopped && draft.jobState !== "succeeded";
+  const progressMinutes = running ? minutesSince(draft.lastProgressAt ?? null, nowMs) : null;
+  const stalled = running && isGenerationStalled(
+    { state: "running", lastProgressAt: draft.lastProgressAt ?? null, startedAt: null }, nowMs);
   const quota = draft.stopCode?.includes("quota") || draft.stopCode?.includes("budget")
     || draft.stopCode === "retry_amplification_ceiling_exceeded";
-  return <section aria-label="생성 초안 미리보기" className="min-w-0 flex-1 overflow-y-auto border-r border-slate-200 bg-slate-50 p-4">
+  return <section aria-label={t("draft.aria")} className="min-w-0 flex-1 overflow-y-auto border-r border-slate-200 bg-slate-50 p-4">
     <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-slate-800">
-      <h2 className="font-semibold">생성 초안 · 게시 전</h2>
-      <p className="mt-1">저장된 렌더 결과입니다. 전체 품질 검토와 최종 게시가 완료되지 않았습니다.</p>
-      <p className="mt-1">각 페이지의 저장된 이미지 유무는 선택할 때 확인합니다.</p>
-      <p className="mt-2" aria-live="polite">SVG 작성 {count("author")}/{draft.totalPages} · 렌더링 {count("render")}/{draft.totalPages} · 게시 {count("persist")}/{draft.totalPages}</p>
-      <p className="mt-1">{stopped ? "작업 중단" : draft.jobState === "succeeded" ? "작업 완료 · 게시 여부 확인 필요" : "진행 중"}{draft.stage ? ` · 저장된 진행 단계: ${STAGES[draft.stage] ?? "처리 중"}` : ""}</p>
-      {stopped && <p className="mt-1">{quota ? "사용 한도에 도달해 후속 작업이 중단되었습니다." : "생성이 중단되었습니다. 자세한 사유는 작업 내역에서 확인할 수 있습니다."}</p>}
-      {loadFailed && <p role="alert" className="mt-1">상태를 새로 불러오지 못해 마지막 조회 결과를 표시합니다.</p>}
+      <h2 className="font-semibold">{t("draft.heading")}</h2>
+      <p className="mt-1">{t("draft.noteSaved")}</p>
+      <p className="mt-1">{t("draft.noteImage")}</p>
+      <p className="mt-2" aria-live="polite">{t("draft.counts", { author: count("author"), render: count("render"), persist: count("persist"), total: draft.totalPages })}</p>
+      <p className="mt-1">{stopped ? t("draft.stateStopped") : draft.jobState === "succeeded" ? t("draft.stateDone") : t("draft.stateRunning")}{draft.stage ? t("draft.stageSuffix", { stage: stageLabel(t, draft.stage) }) : ""}</p>
+      {progressMinutes !== null && <p className="mt-1" data-testid="draft-last-progress">{progressMinutes < 1 ? t("lastProgressJustNow") : t("lastProgress", { minutes: progressMinutes })}</p>}
+      {stalled && progressMinutes !== null && <p className="mt-1 font-medium text-amber-900" role="status" data-testid="draft-stalled">{t("stalled", { minutes: progressMinutes })}</p>}
+      {stopped && <p className="mt-1">{quota ? t("draft.stopQuota") : t("draft.stopGeneric")}</p>}
+      {loadFailed && <p role="alert" className="mt-1">{t("draft.staleResult")}</p>}
     </div>
     <div className="mb-3 flex flex-wrap items-center gap-2">
-      <label className="text-sm" htmlFor="draft-preview-page">페이지</label>
+      <label className="text-sm" htmlFor="draft-preview-page">{t("draft.pageLabel")}</label>
       <select id="draft-preview-page" value={selected} className="rounded border border-slate-300 bg-white p-2 text-sm"
         onChange={(event) => { setSelected(Number(event.target.value)); setFailedPageKey(null); }}>
         {draft.pages.map((item) => <option key={item.index} value={item.index}>
-          {item.index + 1} / {draft.totalPages} · 이미지 미확인
+          {t("draft.pageOption", { page: item.index + 1, total: draft.totalPages })}
         </option>)}
       </select>
-      <Button variant="outline" size="sm" onClick={() => setRefresh((value) => value + 1)}>상태 새로고침</Button>
-      <span className="text-xs text-slate-600">이 페이지 품질: {QUALITY[page?.quality ?? "unconfirmed"] ?? "미확인"}</span>
+      <Button variant="outline" size="sm" onClick={() => setRefresh((value) => value + 1)}>{t("draft.refreshStatus")}</Button>
+      <span className="text-xs text-slate-600">{t("draft.pageQuality", { quality: qualityLabel(t, page?.quality ?? "unconfirmed") })}</span>
     </div>
     {!imageReady ? <div role="status" className="p-4 text-sm text-slate-700">
-      {stopped ? `${selected + 1}페이지는 렌더링되지 않은 상태로 작업이 중단되어 이미지가 없습니다.`
-        : `아직 ${selected + 1}페이지 이미지가 준비 중입니다.`}
+      {stopped ? t("draft.imageStopped", { page: selected + 1 })
+        : t("draft.imagePending", { page: selected + 1 })}
     </div>
       : failedPageKey === pageKey ? <div role="alert" className="p-4 text-sm text-red-700">
-      <p>이 페이지의 저장된 이미지를 불러오지 못했습니다.</p>
-      <Button variant="outline" size="sm" onClick={() => setFailedPageKey(null)}>이미지 다시 불러오기</Button>
+      <p>{t("draft.imageFailed")}</p>
+      <Button variant="outline" size="sm" onClick={() => setFailedPageKey(null)}>{t("draft.imageReload")}</Button>
     </div>
-      : <img key={imageUrl} src={imageUrl} alt={`${selected + 1}페이지 생성 초안`} loading="eager" onError={() => setFailedPageKey(pageKey)} className="h-auto w-full bg-white shadow-sm" />}
+      : <img key={imageUrl} src={imageUrl} alt={t("draft.imageAlt", { page: selected + 1 })} loading="eager" onError={() => setFailedPageKey(pageKey)} className="h-auto w-full bg-white shadow-sm" />}
   </section>;
 }

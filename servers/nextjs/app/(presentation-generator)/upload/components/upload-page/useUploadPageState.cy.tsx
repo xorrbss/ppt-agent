@@ -156,6 +156,11 @@ describe("useUploadPageState source-content abort paths", () => {
   };
 
   beforeEach(() => {
+    // The generation guard asks for in-flight generations before every start.
+    cy.intercept("GET", "**/workspace/generation-activity", {
+      statusCode: 200,
+      body: { server_time: "2026-10-22T08:35:00+00:00", items: [] },
+    }).as("generationActivity");
     cy.intercept("POST", "**/api/v1/ppt/assets/documents", {
       statusCode: 200,
       body: documentAsset,
@@ -202,6 +207,31 @@ describe("useUploadPageState source-content abort paths", () => {
     cy.get("@analyzeSourceContent.all").should("have.length", 1);
 
     cy.get('[data-testid="harness-is-loading"]').should("have.text", "false");
+  });
+
+  it("pauses on the generation guard when another generation is active and starts nothing", () => {
+    cy.intercept("GET", "**/workspace/generation-activity", {
+      statusCode: 200,
+      body: {
+        server_time: "2026-10-22T08:35:00+00:00",
+        items: [{
+          operation_id: "op-1", presentation_id: "p-1", state: "running",
+          presentation_title: "Running deck", source_file_name: null,
+          pages: { authored: 58, rendered: 57, persisted: 0, total: 100 },
+          stage: "author", queue_position: null, capacity_waiting: false,
+          created_at: "2026-10-22T08:00:00+00:00", started_at: "2026-10-22T08:00:01+00:00",
+          last_progress_at: "2026-10-22T08:30:00+00:00",
+          operation_version: 4, presentation_revision: 2,
+        }],
+      },
+    }).as("activeGeneration");
+    mountHarness();
+
+    cy.get('[data-testid="harness-generate"]').click();
+    cy.wait("@activeGeneration");
+    // The harness does not render the dialog; the run must simply be held
+    // before any analysis request is made.
+    cy.get("@analyzeSourceContent.all").should("have.length", 0);
   });
 
   it("rejects an unavailable source SVG combination after analyzing the default A4 input", () => {

@@ -9,6 +9,7 @@ import React, {
 
 import { DashboardApi } from "@/app/(presentation-generator)/services/api/dashboard";
 import type { DashboardPresentation } from "@/app/(presentation-generator)/services/api/dashboard";
+import { GenerationActivitySection } from "@/app/(presentation-generator)/(dashboard)/dashboard/components/GenerationActivitySection";
 import { PresentationGrid } from "@/app/(presentation-generator)/(dashboard)/dashboard/components/PresentationGrid";
 import { PresentationGenerationApi } from "@/app/(presentation-generator)/services/api/presentation-generation";
 import Link from "next/link";
@@ -230,6 +231,8 @@ const DashboardPage: React.FC<{ publicV2CanaryEnabled?: boolean }> = ({
           )}
         </div>
       </section>
+
+      <GenerationActivitySection />
 
       <section className="relative z-10 border-t border-zinc-200/70 pt-8">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

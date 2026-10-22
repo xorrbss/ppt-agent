@@ -51,6 +51,7 @@ import { useRasterReviewActions } from "./useRasterReviewActions";
 import { useRasterBatchPreserve } from "./useRasterBatchPreserve";
 import { useRasterSessionRecovery } from "./useRasterSessionRecovery";
 import { createRasterRedesignStarter } from "./createRasterRedesignStarter";
+import { useGenerationGuard } from "./useGenerationGuard";
 
 const masterClient = new AuthoredVnextMasterClient();
 
@@ -85,6 +86,7 @@ export const useUploadPageState = ({
     () => crypto.randomUUID(),
   );
   const router = useRouter();
+  const generationGuard = useGenerationGuard();
   const workspace = useGenerationWorkspace();
   const [generationAttemptActive, setGenerationAttemptActive] = useState(false);
   const [rasterRecovery, setRasterRecovery] = useState<RasterReviewRecovery | null>(null);
@@ -481,6 +483,12 @@ export const useUploadPageState = ({
     const selectedFileIdentity = fileIdentityOf(selectedFiles);
     if (!validateConfiguration(selectedFiles)) return;
     startInFlightRef.current = true;
+    // Single entry for every user-initiated start (document, direct and raster
+    // paths all continue below). The recovery/resume path does not come here.
+    if (!(await generationGuard.confirmStart())) {
+      startInFlightRef.current = false;
+      return;
+    }
     if (sourceContentMode && generationStrategy === "svg" && config.pageSize !== "A4") {
       setLoadingState({
         isLoading: true,
@@ -714,6 +722,7 @@ export const useUploadPageState = ({
     decomposeAbortControllerRef,
     handleGeneratePresentation,
     handleReviewOutline,
+    generationGuard,
     masterAdmissionError,
     isMasterResolving,
     sourceContentSummary: sourceContentGate.summary,
