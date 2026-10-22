@@ -33,8 +33,6 @@ license and NOTICE attribution.
   provider integrations, and tests. Dependencies are managed with `uv`.
 - `servers/nextjs/`: App Router frontend, editor, templates, Redux state, and API
   proxy routes.
-- `presentation-export/`: versioned PPTX/PDF export runtime. Treat generated or
-  downloaded contents carefully; sync it through the root npm scripts.
 - `scripts/`: local proxy, automation CLI, and repository maintenance scripts.
 - `app_data/`: local runtime data and secrets. Never commit its contents.
 - `RUNNING-LOCAL.md`: authoritative notes for this fork's Windows workflows.
@@ -129,9 +127,6 @@ uv run pytest  # Full backend suite: explicit user request only
 cd servers/nextjs
 npm run lint
 npm run build
-
-# Export runtime consistency (repository root)
-npm run check:presentation-export
 ```
 
 Next.js build output is `.next-build`, not `.next`.
@@ -159,8 +154,7 @@ Next.js build output is `.next-build`, not `.next`.
 
 ## Export and rendering notes
 
-- If editable export assets are missing after a checkout, run
-  `npm run sync:presentation-export` from the repository root.
+- PPTX/PDF export runs in isolated `export.pptx`/`export.pdf` workspace operations; there is no separate export runtime to sync.
 - Rendering requires Chrome/Chromium; `CHROME_PATH` or
   `PUPPETEER_EXECUTABLE_PATH` can override auto-detection.
 - Authored mode produces image-per-slide output and has different editing/export

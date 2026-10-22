@@ -43,8 +43,8 @@ COPY resources/document-extraction/liteparse_runner.mjs /app/document-extraction
 COPY tessdata /app/tessdata
 
 COPY scripts/presenton-terminal-banner.mjs /app/scripts/presenton-terminal-banner.mjs
-RUN mkdir -p /app_data-private/template-v2-imports \
-    && chmod 0700 /app_data-private /app_data-private/template-v2-imports
+RUN mkdir -p /app_data-private \
+    && chmod 0700 /app_data-private
 
 # Bind mount `.:/app` hides any .venv under servers/fastapi at runtime — install deps into
 # system site-packages (same interpreter `start.js` uses as `python`).
