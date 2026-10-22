@@ -78,7 +78,14 @@ _DIAGNOSTIC_ENUMS = {
     "streamStage": frozenset({"before_stream", "stream_opened", "response_created", "output_delta", "terminal_event", "post_response"}),
     "statusOrigin": frozenset({"http_response", "local_stream", "transport", "stream_event"}),
     "incompleteReason": frozenset({"max_output_tokens", "content_filter", "incomplete"}),
+    # ``wall`` is the opt-in per-call stream cap; the others name the httpx
+    # transport phase whose timeout fired.
+    "timeoutPhase": frozenset({"connect", "read", "write", "pool", "wall"}),
 }
+#: Stream timing measured by the Codex stream observer, in milliseconds or
+#: events.  Non-negative integers only.
+_DIAGNOSTIC_COUNTS = ("firstEventMs", "maxEventGapMs", "eventCount")
+_MAX_DIAGNOSTIC_COUNT = 10**12
 _SAFE_REQUEST_ID = re.compile(r"(?:req[_-])?(?:[0-9a-fA-F]{16,64}|[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12})\Z")
 _SAFE_RESPONSE_ID = re.compile(r"resp_[A-Za-z0-9_-]{1,128}\Z")
 _USAGE_FIELDS = frozenset({"input_tokens", "output_tokens", "total_tokens", "reasoning_tokens", "cached_tokens"})
@@ -225,6 +232,10 @@ def safe_provider_diagnostics(
     status = candidates.get("httpStatus")
     if isinstance(status, int) and not isinstance(status, bool) and 100 <= status <= 599 and safe.get("statusOrigin") not in {"local_stream", "stream_event"}:
         safe["httpStatus"] = status
+    for key in _DIAGNOSTIC_COUNTS:
+        count = candidates.get(key)
+        if isinstance(count, int) and not isinstance(count, bool) and 0 <= count <= _MAX_DIAGNOSTIC_COUNT:
+            safe[key] = count
     retry = candidates.get("retryAfterSeconds")
     if isinstance(retry, (int, float)) and not isinstance(retry, bool) and 0 <= retry <= 604800 and math.isfinite(retry):
         safe["retryAfterSeconds"] = retry
@@ -275,6 +286,20 @@ class ProviderQuotaPause(ProviderOutcomeError, WorkspaceOperationDeferred):
             "provider_quota_resume_semantics": "coordinator_requeues_after_reset",
         }
         RuntimeError.__init__(self, self.code)
+
+
+def is_page_recoverable_overload(error: BaseException) -> bool:
+    """True when the producer marked this outcome as overload and replayable for the same page."""
+
+    # The producer is the only authority: a transport timeout is replayable,
+    # the deadline-exhausted timeout of ``BoundedProviderCall`` is not, and a
+    # quota pause belongs to the durable operation queue, never to a page.
+    return (
+        isinstance(error, ProviderOutcomeError)
+        and not isinstance(error, ProviderQuotaPause)
+        and bool(error.overload)
+        and bool(error.recovery_allowed)
+    )
 
 
 def provider_status_code(error: BaseException | None) -> int | None:
@@ -580,6 +605,7 @@ __all__ = [
     "ProviderOutcomeError",
     "ProviderQuotaPause",
     "ProviderRetryReservation",
+    "is_page_recoverable_overload",
     "is_provider_overload",
     "provider_status_code",
     "usage_limit_reset_epoch",

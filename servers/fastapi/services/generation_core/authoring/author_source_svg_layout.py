@@ -382,6 +382,7 @@ async def author_source_svg_layout(
     from utils.llm_config import enforce_llm_egress_policy, get_client, get_llm_config
     from utils.llm_provider import get_llm_provider, get_model
     from utils.llm_utils import extract_text, get_generate_kwargs
+    from utils.llm_calls.author_slide_effort import svg_author_call_timeout_seconds
     from utils.provider_idempotency import provider_generate_call, supports_provider_idempotency
 
     from services.svg_source_template_layout import (
@@ -486,6 +487,7 @@ template_digest=source_template.digest and layout_id=free-svg (an identity marke
                 kwargs=kwargs,
                 idempotency_key=current_provider_idempotency_key(),
                 outcome_scope="authored",
+                wall_timeout_seconds=svg_author_call_timeout_seconds(budget),
             )
             if before_dispatch is not None:
                 await before_dispatch()

@@ -22,6 +22,14 @@ logger = logging.getLogger(__name__)
 # so the document is never truncated mid-markup (truncation => broken render).
 AUTHOR_MAX_TOKENS = 16000
 
+# Wall cap for one SVG author call. The per-phase read timeout only bounds the
+# gap between stream events, so a stalled-but-trickling stream could otherwise
+# run for tens of minutes. The cap assumes a pessimistic output rate (measured
+# gpt-6.1-sol pages run at ~50-60 tok/s) plus a fixed margin for reasoning and
+# time to first token: a full 16k budget gets ~893 s.
+SVG_AUTHOR_MIN_OUTPUT_TOKENS_PER_SECOND = 30.0
+SVG_AUTHOR_CALL_DEADLINE_MARGIN_SECONDS = 360.0
+
 # Kept here, next to the profile that reads it, so this module never imports
 # ``author_slide`` back.
 EXACT_RECONSTRUCTION = "exact_reconstruction"
@@ -69,6 +77,12 @@ FAST_ROLE_OUTPUT_BUDGETS = {
     "AGENDA": AUTHOR_MAX_TOKENS,
     "CLOSING": AUTHOR_MAX_TOKENS,
 }
+
+
+def svg_author_call_timeout_seconds(max_tokens: int = AUTHOR_MAX_TOKENS) -> float:
+    """Wall deadline in seconds for one SVG author call with ``max_tokens`` output budget."""
+
+    return max_tokens / SVG_AUTHOR_MIN_OUTPUT_TOKENS_PER_SECOND + SVG_AUTHOR_CALL_DEADLINE_MARGIN_SECONDS
 
 
 def normalized_authoring_reasoning_effort(model: object, effort: str) -> str:
@@ -202,8 +216,11 @@ __all__ = [
     "FAST_ROLE_OUTPUT_BUDGETS",
     "REASONING_DISABLE",
     "REASONING_EFFORTS",
+    "SVG_AUTHOR_CALL_DEADLINE_MARGIN_SECONDS",
+    "SVG_AUTHOR_MIN_OUTPUT_TOKENS_PER_SECOND",
     "authoring_output_profile",
     "normalized_authoring_reasoning_effort",
     "resolve_authoring_reasoning_level",
     "selected_authoring_model",
+    "svg_author_call_timeout_seconds",
 ]

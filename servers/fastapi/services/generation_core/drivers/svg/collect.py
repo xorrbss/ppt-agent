@@ -299,6 +299,9 @@ class _RunState:
     page_failures: dict = field(default_factory=dict)
     dispatch_frozen: bool = False
     dispatch_approved: set = field(default_factory=set)
+    # Page re-dispatches spent on transport timeouts this run, capped by
+    # ``author.MAX_TIMEOUT_RETRIES_PER_RUN``. In memory only, like the above.
+    timeout_retries: int = 0
 
 
 @dataclass(frozen=True)

@@ -24,7 +24,7 @@ from services.authored_checkpoint_errors import AuthoredStageError
 from services.generation_core.drivers.svg.native_declarations import bind_native_declarations
 from services.provider_usage_instrumentation import provider_usage_scope
 from services.svg_presentation_checkpoint import _provider_attempt_count
-from utils.provider_overload import ProviderOutcomeError
+from utils.provider_overload import ProviderOutcomeError, is_page_recoverable_overload
 
 _LOCAL_ESCALATION_REASONS = {
     "layout_candidate_unavailable", "layout_overflow_unresolved",
@@ -61,6 +61,26 @@ class AuthorAttempt:
 
 
 _DISPATCH_STOPPED = {"streamStage": "before_stream", "failureKind": "dispatch_stopped"}
+
+# Deck-level cap on page re-dispatches triggered by a transport timeout. A
+# timeout after the request was sent may already have been billed, so each
+# replay is a possible duplicate purchase; past the cap the timeout is terminal.
+MAX_TIMEOUT_RETRIES_PER_RUN = 3
+_CALL_TIMEOUT_CODE = "public_provider_call_timeout"
+
+
+def _reserve_timeout_retry(state) -> int | None:
+    """Take one run-wide timeout retry slot; ``None`` when the cap is spent.
+
+    Synchronous on purpose: the cap check and the increment share one region,
+    so concurrent pages can never both take the last slot. A run state without
+    the counter starts at zero.
+    """
+    used = getattr(state, "timeout_retries", 0)
+    if used >= MAX_TIMEOUT_RETRIES_PER_RUN:
+        return None
+    state.timeout_retries = used + 1
+    return used + 1
 
 
 class PageDispatchFrozen(ProviderOutcomeError):
@@ -443,11 +463,22 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
                 "ordinal": provider_ordinal, "code": error.code,
                 "diagnostics": diagnostics,
             })
-            if error.code != "public_provider_overload" or not error.recovery_allowed:
+            if not is_page_recoverable_overload(error):
                 await checkpoint(job, index, payload=payload)
                 raise
+            failure = {"ordinal": provider_ordinal, "code": error.code}
+            # Only a re-dispatch spends the run's timeout cap: restoring the last
+            # valid SVG buys nothing, and the page's second failure raises anyway.
+            # Past the cap the timeout stays terminal, exactly as before.
+            if (error.code == _CALL_TIMEOUT_CODE and not payload.get("last_valid_svg")
+                    and len(payload.get("provider_failures") or ()) + 1 < 2):
+                run_timeout_retry = _reserve_timeout_retry(state)
+                if run_timeout_retry is None:
+                    await checkpoint(job, index, payload=payload)
+                    raise
+                failure["run_timeout_retry"] = run_timeout_retry
             failures = payload.setdefault("provider_failures", [])
-            failures.append({"ordinal": provider_ordinal, "code": error.code})
+            failures.append(failure)
             payload["inflight"] = None
             if payload.get("last_valid_svg"):
                 payload["svg_content"] = payload["last_valid_svg"]

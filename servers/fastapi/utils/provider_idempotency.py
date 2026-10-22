@@ -10,6 +10,8 @@ import time
 from types import MethodType
 from typing import Any, Callable, Mapping
 
+import httpx
+
 from services.authored_batch_policy import OVERLOAD_COOLDOWN_BASE_SECONDS
 from utils.provider_attempt_reservations import (
     ProviderAttemptReservationLease,
@@ -59,6 +61,15 @@ _AUTHORED_OUTCOME_SCOPES = frozenset(
 # stage deadline of its own (the content brief, whose measured wall is 325-455
 # s) passes it as ``timeout_seconds`` and it replaces this generic guard.
 PROVIDER_CALL_TIMEOUT_SECONDS = 360.0
+# The value above (or the caller's own deadline) is the *read* timeout: httpx
+# applies it to every gap between two received bytes, so it bounds a stuck
+# stream, not a long one.  The other phases get their own short limits -- a
+# connection that cannot be opened in 30 s will not open in 360 s, and waiting
+# that long only delays the page's recovery.  None of them may exceed the
+# read value, so a caller's short deadline stays the tightest bound.
+PROVIDER_CONNECT_TIMEOUT_SECONDS = 30.0
+PROVIDER_WRITE_TIMEOUT_SECONDS = 60.0
+PROVIDER_POOL_TIMEOUT_SECONDS = 30.0
 
 
 _TIMEOUT_UNENFORCEABLE_PROVIDERS: set[str] = set()
@@ -78,6 +89,45 @@ def _warn_timeout_unenforceable(provider_id: str, reason: str) -> None:
     )
 
 
+_WALL_TIMEOUT_UNENFORCEABLE_PROVIDERS: set[str] = set()
+
+
+def _warn_wall_timeout_unenforceable(provider_id: str, reason: str) -> None:
+    """Say once, per provider, that this transport cannot cap a call's wall time."""
+
+    if provider_id in _WALL_TIMEOUT_UNENFORCEABLE_PROVIDERS:
+        return
+    _WALL_TIMEOUT_UNENFORCEABLE_PROVIDERS.add(provider_id)
+    LOGGER.warning(
+        "provider_call_wall_timeout_not_enforced provider=%s reason=%s",
+        provider_id,
+        reason,
+    )
+
+
+_PHASE_TIMEOUT_UNSUPPORTED_PROVIDERS: set[str] = set()
+
+
+def _warn_phase_timeout_unsupported(provider_id: str) -> None:
+    """Say once, per provider, that this transport takes no per-phase timeout."""
+
+    if provider_id in _PHASE_TIMEOUT_UNSUPPORTED_PROVIDERS:
+        return
+    _PHASE_TIMEOUT_UNSUPPORTED_PROVIDERS.add(provider_id)
+    LOGGER.warning("provider_phase_timeout_not_supported provider=%s", provider_id)
+
+
+def _phase_timeout(read_seconds: float) -> httpx.Timeout:
+    """One request's per-phase transport timeouts around its read timeout."""
+
+    return httpx.Timeout(
+        connect=min(PROVIDER_CONNECT_TIMEOUT_SECONDS, read_seconds),
+        read=read_seconds,
+        write=min(PROVIDER_WRITE_TIMEOUT_SECONDS, read_seconds),
+        pool=min(PROVIDER_POOL_TIMEOUT_SECONDS, read_seconds),
+    )
+
+
 def _clone_raw_client(
     raw_client: Any,
     options: Mapping[str, Any],
@@ -87,13 +137,19 @@ def _clone_raw_client(
 ) -> Any:
     """Clone the transport with a request timeout, degrading loudly if refused."""
 
-    timeout = (
+    read_timeout = (
         PROVIDER_CALL_TIMEOUT_SECONDS
         if timeout_seconds is None
         else max(0.05, float(timeout_seconds))
     )
     try:
-        return raw_client.with_options(**options, timeout=timeout)
+        return raw_client.with_options(**options, timeout=_phase_timeout(read_timeout))
+    except TypeError:
+        _warn_phase_timeout_unsupported(provider_id)
+    try:
+        # A transport that takes only one number still gets the read bound,
+        # applied to every phase as before.
+        return raw_client.with_options(**options, timeout=read_timeout)
     except TypeError:
         # This transport takes no request timeout.  Keep the existing
         # retry/idempotency contract rather than failing the call, and say so.
@@ -117,6 +173,31 @@ def _is_call_timeout(error: BaseException) -> bool:
         nested = getattr(current, "cause", None) or getattr(current, "__cause__", None)
         current = nested if isinstance(nested, BaseException) else None
     return False
+
+
+_TIMEOUT_PHASES: tuple[tuple[type[BaseException], str], ...] = (
+    (httpx.ConnectTimeout, "connect"),
+    (httpx.ReadTimeout, "read"),
+    (httpx.WriteTimeout, "write"),
+    (httpx.PoolTimeout, "pool"),
+)
+
+
+def _timeout_phase(error: BaseException) -> str | None:
+    """Name the httpx phase whose timeout fired, or ``None`` when unknown."""
+
+    current: BaseException | None = error
+    visited: set[int] = set()
+    for _ in range(6):
+        if current is None or id(current) in visited:
+            return None
+        visited.add(id(current))
+        for timeout_type, phase in _TIMEOUT_PHASES:
+            if isinstance(current, timeout_type):
+                return phase
+        nested = getattr(current, "cause", None) or getattr(current, "__cause__", None)
+        current = nested if isinstance(nested, BaseException) else None
+    return None
 
 
 def _provider_outcome_cause(error: BaseException) -> ProviderOutcomeError | None:
@@ -241,6 +322,7 @@ def provider_generate_call(
     retry_reserver: ProviderRetryReservation | None = None,
     clock: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
+    wall_timeout_seconds: float | None = None,
 ) -> BoundedProviderCall:
     """Return one bounded provider call with optional authored outcome guards.
 
@@ -252,10 +334,22 @@ def provider_generate_call(
     transport and also pins ``max_retries`` to zero: a bounded call that the
     SDK silently replayed after a timeout would run past its deadline and make
     a second physical request under one admission.
+
+    ``wall_timeout_seconds`` is an opt-in cap on how long one physical call may
+    keep streaming, measured from the start of that request and checked on
+    every stream event of a Responses transport.  It changes nothing else --
+    not the per-phase transport timeouts, not the bounded-call deadline, not
+    ``max_retries`` -- so a gap between two events is still bounded only by the
+    read timeout and the worst case is wall plus read.  A call that exceeds it
+    fails as a replayable ``public_provider_call_timeout`` with
+    ``timeoutPhase=wall``.
     """
 
     if outcome_scope is not None and outcome_scope not in _AUTHORED_OUTCOME_SCOPES:
         raise ValueError("provider outcome scope is unsupported")
+    wall_seconds = (
+        None if wall_timeout_seconds is None else max(0.05, float(wall_timeout_seconds))
+    )
     generate_kwargs = dict(kwargs)
     # ``outcome_scope`` is the only authority for the authored guards.  A
     # pending attempt reservation is not one: the streaming author path omits
@@ -327,12 +421,18 @@ def provider_generate_call(
                     authored_request and is_chatgpt
                 ),
                 terminal=terminal,
+                wall_timeout_seconds=wall_seconds,
+                clock=clock,
             )
             if getattr(raw_client, "responses", None) is not None
             else raw_client
         )
+        if wall_seconds is not None and getattr(raw_client, "responses", None) is None:
+            _warn_wall_timeout_unenforceable(provider_id, "no_responses_stream")
     else:
         _warn_timeout_unenforceable(provider_id, "raw_client_not_cloneable")
+        if wall_seconds is not None:
+            _warn_wall_timeout_unenforceable(provider_id, "raw_client_not_cloneable")
     if callable(getattr(adapted_client, "_get_openai_chat_max_tokens_kwargs", None)):
         # llmai 0.3.7 normally retries a rejected output-token parameter once
         # inside `_create_chat_completion`. That hidden second network request
@@ -374,6 +474,8 @@ def provider_generate_call(
                     abort_event=abort_event,
                     guard_outcomes=(authored_request and is_chatgpt),
                     terminal=terminal,
+                    wall_timeout_seconds=wall_seconds,
+                    clock=clock,
                 )
                 if getattr(request_raw_client, "responses", None) is not None
                 else request_raw_client
@@ -415,11 +517,15 @@ def provider_generate_call(
                 # Distinct from the generic bridge failure so the batch policy
                 # can treat a stuck call as overload and the failed slides
                 # still get their one recovery call.
+                timeout_diagnostics: dict[str, object] = {"failureKind": "timeout"}
+                phase = _timeout_phase(error)
+                if phase is not None:
+                    timeout_diagnostics["timeoutPhase"] = phase
                 raise ProviderOutcomeError(
                     "public_provider_call_timeout",
                     recovery_allowed=True,
                     overload=True,
-                    diagnostics=safe_provider_diagnostics(error, diagnostics={"failureKind": "timeout"}),
+                    diagnostics=safe_provider_diagnostics(error, diagnostics=timeout_diagnostics),
                 ) from error
             # llmai's local stream wrapper assigns a synthetic HTTP 500 to an
             # exception with no HTTP evidence. It is not an overload receipt.
@@ -508,6 +614,9 @@ AUTHORED_DECK_OUTCOME_SCOPE = _AUTHORED_DECK_OUTCOME_SCOPE
 __all__ = [
     "AUTHORED_DECK_OUTCOME_SCOPE",
     "PROVIDER_CALL_TIMEOUT_SECONDS",
+    "PROVIDER_CONNECT_TIMEOUT_SECONDS",
+    "PROVIDER_POOL_TIMEOUT_SECONDS",
+    "PROVIDER_WRITE_TIMEOUT_SECONDS",
     "BoundedProviderCall",
     "ProviderCallAborted",
     "ProviderOutcomeError",
