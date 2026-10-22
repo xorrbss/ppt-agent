@@ -571,6 +571,12 @@ class WorkspaceOperationEventResponse(BaseModel):
     status: Optional[str] = None
     message: Optional[str] = None
     progress: Optional[float] = None
+    # Structured progress; text is rendered client-side from ``message_key``.
+    stage: Optional[str] = Field(default=None, pattern=r"^[a-z0-9_.-]{1,64}$")
+    current: Optional[int] = Field(default=None, ge=0)
+    total: Optional[int] = Field(default=None, ge=1)
+    message_key: Optional[str] = Field(default=None, min_length=1, max_length=128)
+    message_params: Optional[dict[str, int | str]] = None
     error: Optional[str] = None
     safe_message: Optional[str] = Field(default=None, min_length=1, max_length=512)
     retryable: Optional[bool] = None
