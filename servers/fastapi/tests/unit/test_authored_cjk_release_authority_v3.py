@@ -27,10 +27,10 @@ from services.authored_vnext.semantic.readiness_validators import (
 )
 from services.authored_vnext.semantic.typography import (
     NativeFontByteRegistry,
-    admit_native_typography,
     load_bounded_windows_cjk_registry,
     native_typography_com_reopen_digest,
 )
+from tests.support.authored_native_typography_admission import admit_native_typography
 
 
 _FONT_DIR = Path(r"C:\Windows\Fonts")

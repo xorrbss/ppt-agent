@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
+from difflib import SequenceMatcher
+import unicodedata
 
 from models.authored_vnext.deck.quality import (
     ConsistencyCheck,
@@ -12,7 +14,54 @@ from models.authored_vnext.deck.quality import (
 )
 from services.authored_vnext.master.digests import canonical_digest
 
-from .quality import _observed_coverage, _plain, _read, _slide_id, _string
+
+_MISSING = object()
+
+
+def _plain(value: object) -> object:
+    model_dump = getattr(value, "model_dump", None)
+    if callable(model_dump):
+        return model_dump(mode="python", by_alias=True)
+    return value
+
+
+def _read(value: object, *names: str, default: object = _MISSING) -> object:
+    value = _plain(value)
+    if isinstance(value, Mapping):
+        for name in names:
+            if name in value:
+                return value[name]
+    else:
+        for name in names:
+            if hasattr(value, name):
+                return getattr(value, name)
+    return default
+
+
+def _slide_id(slide: object) -> str | None:
+    value = _read(slide, "slideId", "slide_id", default=None)
+    return value if isinstance(value, str) and value else None
+
+
+def _string(value: object) -> str | None:
+    return value if isinstance(value, str) and value.strip() else None
+
+
+def _normalized_text(value: str) -> str:
+    normalized = unicodedata.normalize("NFKC", value).casefold()
+    return "".join(character for character in normalized if character.isalnum())
+
+
+def _observed_coverage(expected: str, observed: str) -> float:
+    expected_normalized = _normalized_text(expected)
+    observed_normalized = _normalized_text(observed)
+    if not expected_normalized:
+        return 1.0
+    if not observed_normalized:
+        return 0.0
+    matcher = SequenceMatcher(None, expected_normalized, observed_normalized, autojunk=False)
+    matched = sum(block.size for block in matcher.get_matching_blocks())
+    return min(1.0, matched / len(expected_normalized))
 
 
 def validate_pipeline_slide_candidate(

@@ -11,7 +11,6 @@ from services.authored_vnext.deck_ir.browser_closure import async_close_ranked_c
 from services.authored_vnext.deck_ir.candidates import enumerate_candidates, select_deck_candidates
 from services.authored_vnext.deck_ir.compiler import compile_slide
 from services.authored_vnext.deck_ir.grammar import DeckIrGrammarError, default_design_grammar
-from services.authored_vnext.deck_ir.hybrid_admission import admit_validated_hybrid_subset
 
 
 def _inputs():
@@ -22,7 +21,7 @@ def _inputs():
     return slide, composition, art
 
 
-def test_deterministic_k6_compiler_closure_and_hybrid_admission_stay_bounded() -> None:
+def test_deterministic_k6_compiler_closure_stays_bounded() -> None:
     grammar = default_design_grammar()
     slide, composition, art = _inputs()
     original = deepcopy(art)
@@ -62,8 +61,6 @@ def test_deterministic_k6_compiler_closure_and_hybrid_admission_stay_bounded() -
         "s01.root", "s01.zone.claim", "s01.title", "s01.zone.evidence", "s01.metric.primary",
         "s01.metric.primary.part01", "s01.metric.primary.part02"
     ]
-    admission = admit_validated_hybrid_subset(semantic=closure.result.semantic, browser_observation={"passed": True, "geometryByQid": {item["qid"]: {"x": 0, "y": 0, "width": 100, "height": 40} for item in closure.result.semantic["elements"]}})
-    assert admission.admitted and not admission.native_editability_ready and not admission.promotion_ready
     with pytest.raises(DeckIrGrammarError, match="raw_layout"):
         enumerate_candidates(slide=slide, composition={**composition, "x": 1}, art_direction=art, grammar=grammar)
     # Local exhaustion reaches the sixth pre-enumerated candidate; no new K,
