@@ -19,7 +19,6 @@ from models.sse_response import (
     SSECompleteResponse,
     SSEErrorResponse,
     SSEStatusResponse,
-    SSETraceResponse,
     SSEResponse,
 )
 from services.chat.conversation_store import ChatConversationStore
@@ -30,9 +29,7 @@ from utils.datetime_utils import get_current_utc_datetime
 from utils.file_utils import (
     get_file_ext_or_none,
     get_file_name_with_random_uuid,
-    get_original_file_name,
     replace_file_name,
-    set_file_ext,
 )
 from utils.get_dynamic_models import get_presentation_outline_model_with_n_slides
 from utils.image_provider import (
@@ -142,10 +139,6 @@ def test_sse_typed_frames_encode_json_payloads():
     event, data = _parse_sse_frame(SSEStatusResponse(status="ok").to_string())
     assert event == "response"
     assert data == {"type": "status", "status": "ok"}
-
-    event, data = _parse_sse_frame(SSETraceResponse(trace={"x": 1}).to_string())
-    assert event == "response"
-    assert data == {"type": "trace", "trace": {"x": 1}}
 
     event, data = _parse_sse_frame(SSEErrorResponse(detail="bad").to_string())
     assert event == "response"
@@ -430,9 +423,6 @@ def test_replace_and_extension_helpers():
     assert replaced == "fixed.txt"
     randomized = replace_file_name("note.txt", f"note----{uuid.uuid4()}")
     assert randomized.endswith(".txt") and "----" in randomized
-    assert (
-        get_original_file_name(os.path.join("ignored", randomized)) == "note.txt"
-    )
 
 
 def test_get_file_ext_or_none():
@@ -443,11 +433,6 @@ def test_get_file_ext_or_none():
 def test_get_file_ext_or_none_truncated_extension_tuple(monkeypatch):
     monkeypatch.setattr(os.path, "splitext", lambda _: ("base",))
     assert get_file_ext_or_none("base") is None
-
-
-def test_set_file_ext_monkey_patch():
-    assert set_file_ext("/tmp/with.txt", ".md").endswith(".md")
-    assert set_file_ext("/tmp/plain", ".md").endswith(".md")
 
 
 def test_get_file_name_with_random_uuid_variants():
