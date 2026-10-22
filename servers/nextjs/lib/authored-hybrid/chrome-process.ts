@@ -8,7 +8,6 @@ import { traceEvent } from "./capture-trace.ts";
 import {
   WindowsCleanupCoordinator,
   parseWindowsProfileScan,
-  type WindowsCleanupTelemetry,
   type WindowsProfileProcess,
 } from "./windows-cleanup-coordinator.ts";
 
@@ -178,11 +177,6 @@ function windowsProcessesUsingProfile(
   options: { notBefore?: number } = {}
 ): Promise<number[]> {
   return cleanupCoordinator.profileProcesses(profilePath, options);
-}
-
-/** Kernel-free counters for the shared scan and the helper queue. */
-export function windowsCleanupTelemetry(): WindowsCleanupTelemetry {
-  return cleanupCoordinator.telemetry();
 }
 
 export async function terminateWindowsProfileProcesses(profilePath: string): Promise<void> {

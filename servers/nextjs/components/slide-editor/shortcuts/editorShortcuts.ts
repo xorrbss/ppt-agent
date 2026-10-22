@@ -107,12 +107,6 @@ export const EDITOR_SHORTCUT_SECTIONS: EditorShortcutSection[] = [
   },
 ];
 
-export function editorShortcutById(id: EditorShortcut["id"]) {
-  return EDITOR_SHORTCUT_SECTIONS.flatMap(
-    (section) => section.shortcuts,
-  ).find((shortcut) => shortcut.id === id);
-}
-
 export function shortcutKeyLabel(
   key: EditorShortcutKey,
   applePlatform: boolean,

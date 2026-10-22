@@ -208,10 +208,6 @@ export function deriveFlaggedSlideMap(presentation: {
   return map;
 }
 
-export function flaggedSlideCount(map: FlaggedSlideMap | null | undefined): number {
-  return map ? Object.keys(map).length : 0;
-}
-
 type FlaggedSlideReasonKey =
   | "reason.author"
   | "reason.gate"

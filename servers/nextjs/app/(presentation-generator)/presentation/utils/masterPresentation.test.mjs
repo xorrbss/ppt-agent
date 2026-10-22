@@ -2,23 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  presentationExportBlockReason,
   presentationExportQualityAdvisory,
-  presentationHybridQualityBlockReason,
 } from "./masterPresentation.ts";
 
 const deck = (qualityReceiptV3) => ({ theme: { authoredQualityGate: { qualityReceiptV3 } } });
-
-test("quality states do not withhold original-source export", () => {
-  for (const receipt of [
-    { gatePassed: false, blockers: ["visualReview.required_failed"] },
-    { gatePassed: false, blockers: ["visualReview.failed"] },
-    { gatePassed: false, blockers: ["capacity.required_failed:body"] },
-  ]) {
-    assert.equal(presentationExportBlockReason(deck(receipt)), undefined);
-    assert.equal(presentationHybridQualityBlockReason(deck(receipt)), undefined);
-  }
-});
 
 test("quality status remains a Korean advisory", () => {
   assert.match(

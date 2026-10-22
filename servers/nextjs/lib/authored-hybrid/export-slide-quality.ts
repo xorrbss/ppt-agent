@@ -1,5 +1,4 @@
 import { extractAuthoredSlideDom } from "./index.ts";
-import type { AuthoredHybridSlideLayer } from "./pptx-assembler.ts";
 import type {
   PresentationExportFallbackElement,
   PresentationExportSlideQuality,
@@ -83,5 +82,3 @@ export function fallbackElementForContractElement(
     ])],
   };
 }
-
-export type PreparedSlideLayer = AuthoredHybridSlideLayer | null;

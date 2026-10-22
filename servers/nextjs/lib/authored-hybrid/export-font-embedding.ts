@@ -3,18 +3,12 @@ import {
   sfntHasCodePoint,
   type FontEmbeddingPlan,
 } from "./font-embedding-policy.ts";
-import {
-  embeddedFaceForStyle,
-  resolvePowerPointTypeface,
-  type AuthoredEmbeddedTypefaceFaceEvidence,
-} from "./font-policy.ts";
-import { flattenPreparedNativeElements } from "./native-plan.ts";
+import type { AuthoredEmbeddedTypefaceFaceEvidence } from "./font-policy.ts";
 import { EDITABLE_HYBRID_SHADOW_PROFILE_ID } from "./presentation-mode.ts";
 import {
   embedPowerPointFonts,
   type PowerPointTypefaceInput,
 } from "./pptx-font-embedding.ts";
-import type { AuthoredHybridSlideLayer } from "./pptx-assembler.ts";
 import type { ActiveEmissionExportBinding } from "./active-emission.ts";
 import type { PresentationExportFontEmbeddingStatus } from "../presentation-export-quality.ts";
 
@@ -29,71 +23,6 @@ export interface PreparedFontEmbedding {
 
 export function normalizedTypeface(value: string): string {
   return value.trim().replace(/^['"]|['"]$/g, "").toLocaleLowerCase("en-US");
-}
-
-export function nativeFontUsage(
-  layers: readonly AuthoredHybridSlideLayer[],
-  embedding: PreparedFontEmbedding,
-): Pick<
-  PresentationExportFontEmbeddingStatus,
-  | "nativeTextUsage"
-  | "nativeTextElements"
-  | "nativeTextElementsUsingEmbeddedTypefaces"
-  | "nativeTypefaceFamilies"
-> {
-  const textElements = layers.flatMap((layer) =>
-    flattenPreparedNativeElements(layer.elements).filter(
-      (element) => element.kind === "text",
-    ),
-  );
-  const usedFamilies = new Set<string>();
-  let usingEmbedded = 0;
-  for (const element of textElements) {
-    const usesEmbedded = element.source.text.runs.some((run) => {
-      const face = embeddedFaceForStyle(run.style);
-      const faceFamilies = new Set(
-        embedding.embeddedTypefaceFaces
-          .filter((entry) => entry.face === face)
-          .map((entry) => entry.typeface),
-      );
-      if (!faceFamilies.size) return false;
-      const normalizedEmbedded = new Set(
-        [...faceFamilies].map(normalizedTypeface),
-      );
-      const latin = resolvePowerPointTypeface(run.style.fontFamilies, "Aptos", {
-        preserveAuthoredFamilies: faceFamilies,
-      });
-      const eastAsian = normalizedEmbedded.has(normalizedTypeface(latin))
-        ? latin
-        : resolvePowerPointTypeface(
-            run.style.cjkFallbackFamilies,
-            process.platform === "win32" ? "Malgun Gothic" : "Noto Sans CJK KR",
-            { preserveAuthoredFamilies: faceFamilies },
-          );
-      for (const typeface of [latin, eastAsian]) {
-        if (normalizedEmbedded.has(normalizedTypeface(typeface))) {
-          usedFamilies.add(typeface);
-          return true;
-        }
-      }
-      return false;
-    });
-    if (usesEmbedded) usingEmbedded += 1;
-  }
-  const nativeTextElements = textElements.length;
-  const nativeTextUsage = !embedding.status.applied
-    ? "not-embedded"
-    : nativeTextElements === 0
-      ? "raster-only-unused"
-      : usingEmbedded > 0
-        ? "used"
-        : "not-used";
-  return {
-    nativeTextUsage,
-    nativeTextElements,
-    nativeTextElementsUsingEmbeddedTypefaces: usingEmbedded,
-    nativeTypefaceFamilies: [...usedFamilies].sort(),
-  };
 }
 
 function fontEmbeddingFailures(

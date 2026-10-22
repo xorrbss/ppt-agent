@@ -11,7 +11,6 @@
     "../../../components/authored-vnext/**/*.ts",
     "../../../components/authored-vnext/**/*.tsx",
     "../../../lib/authored-vnext/**/*.ts",
-    "../../../types/global.d.ts",
     "../../../utils/api.ts"
   ],
   "exclude": [

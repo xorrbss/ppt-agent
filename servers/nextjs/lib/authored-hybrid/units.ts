@@ -5,8 +5,6 @@ import type {
 
 import {
   AUTHORED_CSS_DPI,
-  AUTHORED_SLIDE_HEIGHT_PX,
-  AUTHORED_SLIDE_WIDTH_PX,
 } from "./schema.ts";
 
 const OUTPUT_PRECISION = 1_000_000;
@@ -41,6 +39,3 @@ export function rectPxToBounds(rect: AuthoredHybridRect): AuthoredHybridBounds {
     },
   };
 }
-
-export const AUTHORED_SLIDE_WIDTH_IN = pxToInches(AUTHORED_SLIDE_WIDTH_PX);
-export const AUTHORED_SLIDE_HEIGHT_IN = pxToInches(AUTHORED_SLIDE_HEIGHT_PX);

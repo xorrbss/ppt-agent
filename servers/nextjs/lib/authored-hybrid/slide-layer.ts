@@ -7,7 +7,6 @@ import {
   extractDeclaredAuthoredSlideDom,
   extractAuthoredSlideDom,
   renderAuthoredBackplate,
-  renderAuthoredFidelityBackplate,
   renderAuthoredRasterPaintBand,
 } from "./index.ts";
 import {
@@ -26,7 +25,6 @@ import {
 } from "./native-plan.ts";
 import type { AuthoredEmbeddedTypefaceFaceEvidence } from "./font-policy.ts";
 import {
-  isCanvasBackgroundShape,
   preparedNativeElementExpectedReadbackBounds,
   type AuthoredHybridSlideLayer,
 } from "./pptx-assembler.ts";
@@ -34,7 +32,6 @@ import { preflightAuthoredHtmlForHybrid } from "./security.ts";
 import { collectSlideFonts } from "./bundled-fonts-collector.ts";
 import { mergePowerPointTextLayout } from "./font-layout.ts";
 import type {
-  PresentationExportFallbackElement,
   PresentationExportSlideQuality,
 } from "../presentation-export-quality.ts";
 import type { AuthoredHybridSlideV1 } from "./schema.ts";
@@ -45,7 +42,6 @@ import {
 import {
   buildBrowserObservationReceiptV1,
   digestObservedDeclaredAssets,
-  type DeclaredSemanticElementForObservation,
 } from "./semantic-reconciliation.ts";
 import { prepareDeclaredNativeCharts } from "./native-chart.ts";
 import { prepareDeclaredNativeTables } from "./native-table.ts";
@@ -885,47 +881,5 @@ export async function prepareSlideLayer(
         };
       }),
     },
-  };
-}
-
-/**
- * Capture the exact authored browser result as a full-slide backplate without
- * promoting any DOM node. Fidelity export uses this path so it shares the
- * revision-sealed renderer with Hybrid while remaining intentionally raster.
- */
-export async function prepareFidelitySlideLayer(
-  html: string,
-  slideNumber: number,
-  chromeExecutable: string,
-  canvas?: AuthoredCanvasContract,
-): Promise<PreparedFidelitySlideOutcome> {
-  const fontCollection = await collectSlideFonts(html);
-  const fontRendering = {
-    browserFontFilesCollected: fontCollection.fontFiles,
-    browserCollectionFailures: fontCollection.failures.length,
-  };
-  const preflight = preflightAuthoredHtmlForHybrid(
-    fontCollection.htmlForPreflight
-  );
-  if (!preflight.ok) return { layer: null, fontRendering };
-
-  const extractionOptions = {
-    chromeExecutable,
-    timeoutMs: HYBRID_BROWSER_PASS_TIMEOUT_MS,
-    ...(canvas ? { canvas } : {}),
-  };
-  const backplate = await renderAuthoredFidelityBackplate(
-    fontCollection.htmlForChrome,
-    extractionOptions
-  );
-  if (backplate.appliedPromotedElementIds.length !== 0) {
-    throw new Error("authored_fidelity_backplate_identity_mismatch");
-  }
-  return {
-    layer: { slideNumber, backplatePng: backplate.backplatePng, elements: [],
-      localFitCapture: { observation: backplate.localFitObservation,
-        rasterObservations: [{ pngDigest: `sha256:${createHash("sha256").update(backplate.backplatePng).digest("hex")}`,
-          observation: backplate.localFitObservation }] } },
-    fontRendering,
   };
 }
