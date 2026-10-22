@@ -1,12 +1,11 @@
 "use client";
 import { Loader2, AlertTriangle } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import { useTranslations } from "next-intl";
 
 import { RootState } from "@/store/store";
-import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { usePresentationUndoRedo } from "../hooks/PresentationUndoRedo";
 import ToolTip from "@/components/ToolTip";
 import {
@@ -111,7 +110,6 @@ const PresentationHeader = ({
   /** Avoid committing on blur when Save/Cancel was used (focus/click ordering) */
   const titleBlurIntentRef = useRef<"none" | "save" | "cancel">("none");
 
-  const pathname = usePathname();
   const dispatch = useDispatch();
 
   const { presentationData, isStreaming } = useSelector(
@@ -200,12 +198,6 @@ const PresentationHeader = ({
     const next = trimmed || presentationData.title || "발표자료";
     if (next !== presentationData.title) {
       dispatch(updateTitle(next));
-      trackEvent(MixpanelEvent.Presentation_Title_Updated, {
-        pathname,
-        presentation_id,
-        previous_title_length: (presentationData.title || "").length,
-        next_title_length: next.length,
-      });
     }
     setIsEditingTitle(false);
   };
@@ -306,11 +298,6 @@ const PresentationHeader = ({
     setIsRegenerateConfirmOpen(false);
     dispatch(clearPresentationData());
     dispatch(clearHistory());
-    trackEvent(MixpanelEvent.Presentation_Regenerated, {
-      pathname,
-      presentation_id,
-      slide_count: presentationData?.slides?.length || 0,
-    });
     // regenerate=true forces the stream to re-run generation; without it the
     // stream now replays existing slides idempotently (so a refresh can't wipe edits).
     router.push(
@@ -320,13 +307,6 @@ const PresentationHeader = ({
 
   const handleStartPresentation = () => {
     const to = `?id=${presentation_id}&mode=present&slide=${currentSlide || 0}`;
-    trackEvent(MixpanelEvent.Presentation_Mode_Entered, {
-      pathname,
-      presentation_id,
-      slide_index: currentSlide || 0,
-      slide_count: presentationData?.slides?.length || 0,
-    });
-    trackEvent(MixpanelEvent.Navigation, { from: pathname, to });
     router.push(to);
   };
 

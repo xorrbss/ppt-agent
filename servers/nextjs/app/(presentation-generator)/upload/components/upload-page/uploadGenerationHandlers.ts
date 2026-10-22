@@ -15,7 +15,6 @@ import { isAbortError, PresentationGenerationApi, type DocumentUploadAdmission }
 import { SOURCE_CONTENT_POLICY, type SourceContentAnalysisResponseV1 } from "../../../services/api/source-content/contract";
 import { getApiErrorDisplayMessage } from "../../../services/api/api-error-handler";
 import { ImagesApi } from "../../../services/api/images";
-import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { resolveDeckTheme } from "../applyDeckTheme";
 import { clearDurableGenerationTask, createDurableGenerationTask, findDurableGenerationTask, saveDurableGenerationTask } from "../../../outline/hooks/durableGenerationTask";
 import type { GenerationAdmissionRecovery } from "../../../generation-workspace/GenerationWorkspaceProvider";
@@ -33,7 +32,6 @@ interface GenerationHandlersContext {
   authoredStyle: string;
   llmConfig: RootState["userConfig"]["llm_config"];
   router: ReturnType<typeof useRouter>;
-  pathname: string;
   dispatch: ReduxDispatch<UnknownAction>;
   setLoadingState: Dispatch<SetStateAction<LoadingState>>;
   setCanCancelDocumentProcessing: Dispatch<SetStateAction<boolean>>;
@@ -43,7 +41,6 @@ interface GenerationHandlersContext {
   onPresentationCreated?: (id: string) => void;
   saveAdmission?: (recovery: GenerationAdmissionRecovery | null) => void;
   captureLiveness: () => () => boolean;
-  getUploadSnapshotProps: (files?: File[]) => Record<string, unknown>;
 }
 
 const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
@@ -51,9 +48,9 @@ const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
 // Every asynchronous branch receives the same click-time canvas configuration.
 export function createUploadGenerationHandlers({
   config: initialConfig, sourceContentMode, pendingPresentationId, previousPresentationId, selectedThemeId,
-  generationStrategy, authoredVisionQa, authoredStyle, llmConfig, router, pathname,
+  generationStrategy, authoredVisionQa, authoredStyle, llmConfig, router,
   dispatch, setLoadingState, setCanCancelDocumentProcessing, decomposeAbortControllerRef,
-  setPendingPresentationId, getUploadSnapshotProps, recoverCreateRef, onPresentationCreated, saveAdmission, captureLiveness,
+  setPendingPresentationId, recoverCreateRef, onPresentationCreated, saveAdmission, captureLiveness,
 }: GenerationHandlersContext) {
   const sourceContentCanvasForConfig = (sourceContent: SourceContentAnalysisResponseV1, config: PresentationConfig) =>
     generationStrategy === "svg" && config.pageSize === "A4" && config.orientation
@@ -327,14 +324,6 @@ export function createUploadGenerationHandlers({
     const outlineDestination = auto
       ? `/outline?auto=1&id=${encodeURIComponent(createResponse.id)}`
       : `/outline?id=${encodeURIComponent(createResponse.id)}`;
-    trackEvent(MixpanelEvent.Upload_Documents_Processed, {
-      ...getUploadSnapshotProps(selectedFiles),
-      uploaded_documents_count: documentAdmission?.assetIds.length ?? 0,
-      decompose_job_count: responses.length,
-      presentation_id: createResponse.id,
-      destination: outlineDestination,
-    });
-    trackEvent(MixpanelEvent.Navigation, { from: pathname, to: outlineDestination });
     router.push(outlineDestination);
     recoverCreateRef.current = null;
     saveAdmission?.(null);
@@ -415,12 +404,6 @@ export function createUploadGenerationHandlers({
     const outlineDestination = auto
       ? `/outline?auto=1&id=${encodeURIComponent(createResponse.id)}`
       : `/outline?id=${encodeURIComponent(createResponse.id)}`;
-    trackEvent(MixpanelEvent.Upload_Outline_Generation_Requested, {
-      ...getUploadSnapshotProps(),
-      presentation_id: createResponse.id,
-      destination: outlineDestination,
-    });
-    trackEvent(MixpanelEvent.Navigation, { from: pathname, to: outlineDestination });
     router.push(outlineDestination);
     recoverCreateRef.current = null;
     saveAdmission?.(null);

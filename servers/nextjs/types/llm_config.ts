@@ -121,7 +121,4 @@ export interface LLMConfig {
 
   // Only used in UI settings
   USE_CUSTOM_URL?: boolean;
-
-  /** When `"true"`, anonymous analytics (Mixpanel) are off */
-  DISABLE_ANONYMOUS_TRACKING?: string;
 }

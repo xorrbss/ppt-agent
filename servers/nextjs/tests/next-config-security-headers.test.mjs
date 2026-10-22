@@ -29,7 +29,7 @@ const EXPECTED_DEFAULT_CSP_DIRECTIVES = [
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob: http: https:",
   "media-src 'self' data: blob:",
-  "connect-src 'self' https://api-eu.mixpanel.com https://fonts.googleapis.com https://fonts.gstatic.com",
+  "connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com",
   "worker-src 'self' blob:",
   "frame-src 'self' blob: data:",
   "object-src 'none'",

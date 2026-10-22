@@ -1,12 +1,12 @@
 import { useTranslations as useA2bTranslations } from "next-intl";
 import React from 'react'
-import { LogOut, Shield, ShieldCheck } from 'lucide-react'
+import { LogOut, ShieldCheck } from 'lucide-react'
 import { IMAGE_PROVIDER_OPTIONS, LLM_PROVIDER_OPTIONS } from '@/utils/provider-registry.generated'
 import { useSelector } from 'react-redux'
 import { RootState } from '@/store/store'
 import Image from 'next/image'
 
-type SettingsSection = 'text-provider' | 'image-provider' | 'privacy' | 'admin' | 'session'
+type SettingsSection = 'text-provider' | 'image-provider' | 'admin' | 'session'
 
 const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }: { mode: 'nanobanana' | 'presenton', setMode: (mode: 'nanobanana' | 'presenton') => void, selectedProvider: SettingsSection, setSelectedProvider: (provider: SettingsSection) => void }) => {
   const tA2b = useA2bTranslations("dashboardExtras");
@@ -93,15 +93,6 @@ const SettingSideBar = ({ mode, setMode, selectedProvider, setSelectedProvider }
       <section id="settings-other-options" className={`order-4 mt-4 border-t border-zinc-100 pt-4 lg:mt-5 lg:block lg:pt-5 ${mobileOptionsOpen ? "block" : "hidden"}`}>
         <p className="hidden pb-2.5 text-xs font-semibold text-zinc-500 lg:block">{tA2b("other")}</p>
                 <div className='grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-1'>
-                    <button
-                        className={`w-full rounded-xl px-3 py-3 flex items-center gap-2.5 border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 ${selectedProvider === 'privacy' ? 'bg-zinc-100 border-zinc-200' : 'bg-white border-transparent hover:bg-zinc-50 hover:border-zinc-200'}`}
-                        onClick={() => setSelectedProvider('privacy')}
-                    >
-                        <div className='relative w-6 h-6 rounded-full overflow-hidden border border-surface flex items-center justify-center bg-white'>
-                            <Shield className='w-3.5 h-3.5 text-brand' />
-                        </div>
-                        <p className='text-[#191919] text-xs font-medium'>사용 분석</p>
-                    </button>
                     <button
                         className={`w-full rounded-xl px-3 py-3 flex items-center gap-2.5 border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 ${selectedProvider === 'admin' ? 'bg-zinc-100 border-zinc-200' : 'bg-white border-transparent hover:bg-zinc-50 hover:border-zinc-200'}`}
                         onClick={() => setSelectedProvider('admin')}

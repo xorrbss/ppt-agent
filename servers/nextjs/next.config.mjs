@@ -64,7 +64,7 @@ export function fastApiOriginForCsp(rawFastApiUrl = process.env.NEXT_PUBLIC_FAST
 // Report-only CSP for application pages. Hosts are the ones the app actually
 // loads: the shared Tailwind runtime (components/runtime/TailwindCdnRuntime.tsx,
 // also used inside srcdoc preview iframes, which inherit this policy), Google
-// Fonts stylesheets referenced by deck themes, Mixpanel (utils/mixpanel.ts),
+// Fonts stylesheets referenced by deck themes,
 // http(s) images because deck images come from user-configured providers
 // (see images.remotePatterns) including plain-http local providers such as a
 // self-hosted ComfyUI instance, and the FastAPI origin on connect-src (plain
@@ -77,7 +77,6 @@ export function fastApiOriginForCsp(rawFastApiUrl = process.env.NEXT_PUBLIC_FAST
 export function buildAppPageContentSecurityPolicyReportOnly(fastApiOrigin) {
   const connectSrc = [
     "connect-src 'self'",
-    "https://api-eu.mixpanel.com",
     "https://fonts.googleapis.com",
     "https://fonts.gstatic.com",
   ];

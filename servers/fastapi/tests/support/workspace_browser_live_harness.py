@@ -69,7 +69,6 @@ def _configure_production_environment(
             # runtime selection and has no boot-time availability probe.
             "LLM": "codex",
             "DISABLE_IMAGE_GENERATION": "true",
-            "DISABLE_ANONYMOUS_TRACKING": "true",
             # Cypress's component dev server reserves an ephemeral origin.
             # Authentication is disabled in this deterministic browser harness,
             # so no credentialed wildcard request is permitted or required.

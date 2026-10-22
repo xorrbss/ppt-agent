@@ -294,7 +294,7 @@ test("reorder: SidePanel blocks duplicate drags and keeps edits made while the s
     useStore: () => ({ getState: () => ({ presentationGeneration: { presentationData: current } }) }),
     useDispatch: () => action => { current = action.payload; },
     setPresentationData: payload => ({ payload }), isTemplateFreePresentation: () => false,
-    useSensors: () => [], useSensor: () => null, trackEvent: () => {}, MixpanelEvent: {},
+    useSensors: () => [], useSensor: () => null,
     arrayMove: (items, from, to) => { const result = [...items]; result.splice(to, 0, result.splice(from, 1)[0]); return result; },
     flaggedSlideKey: () => "", notify: { error: () => assert.fail("pending save must not show failure") },
     PresentationGenerationApi: { reorderSlides: (_id, _body, options) => {

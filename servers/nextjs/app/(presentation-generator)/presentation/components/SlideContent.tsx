@@ -18,8 +18,6 @@ import {
   updateSlide,
   updateSlideSpeakerNote,
 } from "@/store/slices/presentationGeneration";
-import { usePathname } from "next/navigation";
-import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { addToHistory } from "@/store/slices/undoRedoSlice";
 import SlideScale, { ViewportCulledSlide } from "../../components/PresentationRender";
 import { LEGACY_AUTHORED_CANVAS, resolveAuthoredCanvas } from "@/lib/authored-canvas";
@@ -30,7 +28,6 @@ import { isAuthoredSlide } from "../utils/isAuthoredPresentation";
 interface SlideContentProps {
   slide: any;
   index: number;
-  presentationId: string;
   isChatEditing?: boolean;
   isChatTargeted?: boolean;
   mutationsEnabled?: boolean;
@@ -42,7 +39,6 @@ interface SlideContentProps {
 const SlideContent = ({
   slide,
   index,
-  presentationId,
   isChatEditing = false,
   isChatTargeted = false,
   mutationsEnabled = true,
@@ -65,7 +61,6 @@ const SlideContent = ({
 
   // Use the centralized group layouts hook
 
-  const pathname = usePathname();
 
   const handleSubmit = async () => {
     if (!mutationsEnabled) return;
@@ -83,16 +78,6 @@ const SlideContent = ({
 
       if (response) {
         dispatch(updateSlide({ index: slide.index, slide: response }));
-        trackEvent(MixpanelEvent.Presentation_Slide_Updated, {
-          pathname,
-          presentation_id: presentationId,
-          slide_id: slide.id,
-          slide_index: slide.index,
-          layout: slide.layout,
-          prompt_char_count: editPrompt.trim().length,
-          prompt_word_count: editPrompt.trim().split(/\s+/).filter(Boolean)
-            .length,
-        });
         notify.success("슬라이드 수정 완료", "변경 사항이 이 슬라이드에 적용되었습니다.");
         setEditPrompt("");
       } else {
@@ -112,13 +97,6 @@ const SlideContent = ({
   const onDeleteSlide = async () => {
     if (!mutationsEnabled) return;
     try {
-      trackEvent(MixpanelEvent.Presentation_Slide_Deleted, {
-        pathname,
-        presentation_id: presentationId,
-        slide_id: slide.id,
-        slide_index: slide.index,
-        layout: slide.layout,
-      });
       // Add current state to past
       dispatch(
         addToHistory({

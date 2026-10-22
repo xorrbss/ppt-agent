@@ -11,7 +11,6 @@ import { setCanChangeKeys, setLLMConfig } from "@/store/slices/userConfig";
 import { LLMConfig } from "@/types/llm_config";
 import { hasValidLLMConfig, normalizeLLMConfig } from "@/utils/storeHelpers";
 import { getAuthenticatedLanding } from "./authenticatedLanding";
-import { MixpanelEvent, trackEvent } from "@/utils/mixpanel";
 
 const PRESENTON_SPLASH_MIN_DURATION_MS = 3000;
 
@@ -194,9 +193,6 @@ export default function AuthGate() {
       return;
     }
 
-    trackEvent(MixpanelEvent.Auth_Gate_Viewed, {
-      flow: status.configured ? "sign_in" : "setup",
-    });
   }, [
     hasMetSplashDuration,
     isLoading,
@@ -210,10 +206,6 @@ export default function AuthGate() {
 
     const cleanedUsername = username.trim();
     if (cleanedUsername.length < 3) {
-      trackEvent(MixpanelEvent.Auth_Validation_Failed, {
-        flow: isSetupMode ? "setup" : "sign_in",
-        reason: "username_too_short",
-      });
       notify.warning(
         "사용자 이름이 너무 짧음",
         "사용자 이름은 3자 이상이어야 합니다."
@@ -223,10 +215,6 @@ export default function AuthGate() {
 
     const minimumPasswordLength = isSetupMode ? 8 : 6;
     if (password.length < minimumPasswordLength) {
-      trackEvent(MixpanelEvent.Auth_Validation_Failed, {
-        flow: isSetupMode ? "setup" : "sign_in",
-        reason: "password_too_short",
-      });
       notify.warning(
         "비밀번호가 너무 짧음",
         `비밀번호는 ${minimumPasswordLength}자 이상이어야 합니다.`
@@ -235,10 +223,6 @@ export default function AuthGate() {
     }
 
     if (isSetupMode && password !== confirmPassword) {
-      trackEvent(MixpanelEvent.Auth_Validation_Failed, {
-        flow: "setup",
-        reason: "passwords_do_not_match",
-      });
       notify.warning(
         "비밀번호가 일치하지 않음",
         "계속하기 전에 두 비밀번호가 일치하는지 확인하세요."

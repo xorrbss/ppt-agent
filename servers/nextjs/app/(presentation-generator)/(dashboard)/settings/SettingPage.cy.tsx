@@ -46,12 +46,6 @@ describe("<SettingsPage />", () => {
   beforeEach(() => {
     apiMocks = new ApiMockManager();
     cy.viewport(testViewports.desktop.width, testViewports.desktop.height);
-    // Keep telemetry off so mounting never reaches the real Mixpanel host.
-    apiMocks.setupGetIntercept(
-      "**/api/telemetry-status",
-      { telemetryEnabled: false },
-      "telemetryStatus"
-    );
   });
 
   afterEach(() => {

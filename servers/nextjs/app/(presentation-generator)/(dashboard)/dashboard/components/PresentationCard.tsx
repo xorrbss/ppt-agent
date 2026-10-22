@@ -16,14 +16,13 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { notify } from "@/components/ui/sonner";
 
 import { applyPresentationThemeToElement } from "@/app/(presentation-generator)/presentation/utils/applyPresentationThemeDom";
 import { DeferredSlideThumbnail } from "./DeferredSlideThumbnail";
 import MarkdownRenderer from "@/components/MarkDownRender";
-import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { SharePopover } from "./SharePopover";
 import { getPresentationDisplayTitle } from "@/lib/presentation-display";
 import { tryResolveServerIssuedPresentationProfile } from "@/lib/presentation-profile";
@@ -46,7 +45,6 @@ export const PresentationCard = ({
   const title = getPresentationDisplayTitle({ ...presentation, title: storedTitle }, tWorkspace("untitledPresentation"));
   const locale = useLocale();
   const router = useRouter();
-  const pathname = usePathname();
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
   const [showShareDialog, setShowShareDialog] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
@@ -65,13 +63,6 @@ export const PresentationCard = ({
       notify.error(t("unsupportedProfile"));
       return;
     }
-    trackEvent(MixpanelEvent.Dashboard_Presentation_Opened, {
-      pathname,
-      presentation_id: id,
-      title_length: (title || "").length,
-      slide_count: presentation?.n_slides ?? presentation?.slides?.length ?? 0,
-      presentation_driver_id: presentationDriverId,
-    });
     router.push(`/presentation?id=${id}&driver=${presentationDriverId}`);
   };
   useEffect(() => {
@@ -132,11 +123,6 @@ export const PresentationCard = ({
     const response = await DashboardApi.deletePresentation(id);
 
     if (response?.success) {
-      trackEvent(MixpanelEvent.Dashboard_Presentation_Deleted, {
-        pathname,
-        presentation_id: id,
-        slide_count: presentation?.n_slides ?? presentation?.slides?.length ?? 0,
-      });
       notify.success("발표자료 삭제됨", "발표자료가 대시보드에서 삭제되었습니다.");
       setShowDeleteDialog(false);
       if (onDeleted) {

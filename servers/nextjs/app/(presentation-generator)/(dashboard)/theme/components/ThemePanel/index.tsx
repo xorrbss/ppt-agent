@@ -34,18 +34,16 @@ import { notify } from '@/components/ui/sonner'
 import { Theme, ThemeParams } from '@/app/(presentation-generator)/services/api/types'
 import { ImagesApi } from '@/app/(presentation-generator)/services/api/images'
 import { Input } from '@/components/ui/input'
-import { usePathname, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import CustomTabEmpty from './CustomTabEmpty'
 import ThemeApi from '@/app/(presentation-generator)/services/api/theme'
 import { loadFonts } from '@/app/(presentation-generator)/hooks/useFontLoad'
 import Link from 'next/link'
-import { MixpanelEvent, trackEvent } from '@/utils/mixpanel'
 
 const ThemePanel: React.FC = () => {
   const tA2b = useA2bTranslations("dashboardExtras");
   const fallbackTheme = useMemo(() => createFallbackTheme(tA2b("standardThemeDescription")), [tA2b]);
   const searchParams = useSearchParams()
-  const pathname = usePathname()
 
   const [selectedTheme, setSelectedTheme] = useState<Theme>(fallbackTheme)
   const [tab, setTab] = useState<'custom' | 'default'>('default')
@@ -68,10 +66,6 @@ const ThemePanel: React.FC = () => {
   const previewContainerRef = useRef<HTMLDivElement>(null)
   const slideContainerRef = useRef<HTMLDivElement>(null)
   const [slideContainerWidth, setSlideContainerWidth] = useState<number>(0)
-
-  useEffect(() => {
-    trackEvent(MixpanelEvent.Theme_Page_Viewed, { pathname })
-  }, [pathname])
 
   // Calculate scale dynamically based on container width
   const slideScale = () => {
@@ -245,18 +239,6 @@ const ThemePanel: React.FC = () => {
 
     setThemeCompanyName(theme.company_name || '')
     applyTheme(theme)
-    trackEvent(MixpanelEvent.Theme_Selected, {
-      pathname,
-      theme_id: theme.id,
-      theme_name: theme.name,
-      theme_source: theme.user === 'system' ? 'built_in' : 'custom',
-    })
-    trackEvent(MixpanelEvent.Theme_Editor_Opened, {
-      pathname,
-      theme_id: theme.id,
-      theme_name: theme.name,
-      theme_source: theme.user === 'system' ? 'built_in' : 'custom',
-    })
   }
 
   const handleColorChange = (colorKey: keyof ThemeColors, value: string) => {
@@ -271,12 +253,6 @@ const ThemePanel: React.FC = () => {
 
   const handleFontSelect = (fontName: string, url: string) => {
     setCustomFonts({ textFont: { name: fontName, url: url } })
-    trackEvent(MixpanelEvent.Theme_Font_Changed, {
-      pathname,
-      font_name: fontName,
-      font_url: url,
-      theme_id: selectedTheme.id,
-    })
   }
 
   const handleBrandLogoUpload = async (file: File) => {
@@ -285,12 +261,6 @@ const ThemePanel: React.FC = () => {
       const uploaded = await ImagesApi.uploadImage(file)
       setCustomBrandLogo(uploaded.file_url)
       setCustomBrandLogoId(uploaded.id)
-      trackEvent(MixpanelEvent.Theme_Logo_Uploaded, {
-        pathname,
-        theme_id: selectedTheme.id,
-        file_name: file.name,
-        file_size_bytes: file.size,
-      })
     } catch (error) {
       console.error('Failed to upload logo', error)
       notify.error(
@@ -305,16 +275,8 @@ const ThemePanel: React.FC = () => {
   const generateTheme = async ({
     primary,
     background,
-    source,
-  }: { primary?: string, background?: string; source: "new_theme" | "refresh" }): Promise<ThemeColors> => {
+  }: { primary?: string, background?: string }): Promise<ThemeColors> => {
     const generatedTheme = await ThemeApi.generateTheme({ primary, background })
-    trackEvent(MixpanelEvent.Theme_Palette_Generated, {
-      pathname,
-      source,
-      theme_id: selectedTheme.id,
-      has_primary_seed: Boolean(primary),
-      has_background_seed: Boolean(background),
-    })
     return {
       'primary': generatedTheme.primary,
       'background': generatedTheme.background,
@@ -336,7 +298,6 @@ const ThemePanel: React.FC = () => {
   }
 
   const createNewCustomTheme = async () => {
-    trackEvent(MixpanelEvent.Theme_New_Theme_Clicked, { pathname })
     setIsNewTheme(true)
     const newTheme: Theme = {
       id: `custom-${Date.now()}`,
@@ -371,7 +332,7 @@ const ThemePanel: React.FC = () => {
       }
     }
 
-    const generatedColors = await generateTheme({ source: "new_theme" })
+    const generatedColors = await generateTheme({})
 
 
     const theme = {
@@ -391,12 +352,6 @@ const ThemePanel: React.FC = () => {
 
     setThemeCompanyName('')
     applyTheme(theme)
-    trackEvent(MixpanelEvent.Theme_Editor_Opened, {
-      pathname,
-      theme_id: theme.id,
-      theme_name: theme.name,
-      theme_source: "new_draft",
-    })
   }
 
   const createNewCustomThemeRef = useRef(createNewCustomTheme)
@@ -405,7 +360,7 @@ const ThemePanel: React.FC = () => {
   })
 
   const refeshTheme = async ({ primary, background }: { primary?: string, background?: string }) => {
-    const generatedTheme = await generateTheme({ primary, background, source: "refresh" })
+    const generatedTheme = await generateTheme({ primary, background })
     setCustomColors(generatedTheme)
   }
   const saveAsCustom = async () => {
@@ -413,12 +368,6 @@ const ThemePanel: React.FC = () => {
     if (selectedTheme.user && selectedTheme.user !== 'system' && !selectedTheme.id.startsWith('custom-')) {
       ; (async () => {
         try {
-          trackEvent(MixpanelEvent.Theme_Save_Started, {
-            pathname,
-            mode: "update",
-            theme_id: selectedTheme.id,
-            theme_name: selectedTheme.name,
-          })
           const params: ThemeParams = {
             id: selectedTheme.id,
             name: selectedTheme.name,
@@ -436,14 +385,6 @@ const ThemePanel: React.FC = () => {
           setCustomThemes(customThemes.map(t => t.id === updated.id ? updated : t))
           setSelectedTheme(updated)
           setIsSheetOpen(false)
-          trackEvent(MixpanelEvent.Theme_Saved, {
-            pathname,
-            mode: "update",
-            theme_id: updated.id,
-            theme_name: updated.name,
-            has_logo: Boolean(updated.logo_url),
-            font_name: updated.data?.fonts?.textFont?.name || "",
-          })
           notify.success('테마가 업데이트되었습니다', '테마 변경 사항이 저장되었습니다.')
         } catch (error) {
           console.error('Failed to update theme', error)
@@ -456,12 +397,6 @@ const ThemePanel: React.FC = () => {
       return
     }
     try {
-      trackEvent(MixpanelEvent.Theme_Save_Started, {
-        pathname,
-        mode: "create",
-        theme_id: selectedTheme.id,
-        theme_name: selectedTheme.name,
-      })
       const params: ThemeParams = {
         name: selectedTheme.name,
         description: selectedTheme.description || `${selectedTheme.name}의 커스텀 버전`,
@@ -481,14 +416,6 @@ const ThemePanel: React.FC = () => {
 
 
       window.history.pushState({}, '', '/theme')
-      trackEvent(MixpanelEvent.Theme_Saved, {
-        pathname,
-        mode: "create",
-        theme_id: created.id,
-        theme_name: created.name,
-        has_logo: Boolean(created.logo_url),
-        font_name: created.data?.fonts?.textFont?.name || "",
-      })
       notify.success('테마가 저장되었습니다', '새 테마가 생성되어 사용할 준비가 되었습니다.')
     } catch (error) {
       console.error('Failed to save theme', error)
@@ -506,10 +433,6 @@ const ThemePanel: React.FC = () => {
     try {
       await ThemeApi.deleteTheme(themeId)
       setCustomThemes(customThemes.filter(theme => theme.id !== themeId))
-      trackEvent(MixpanelEvent.Theme_Deleted, {
-        pathname,
-        theme_id: themeId,
-      })
       notify.success("테마가 삭제되었습니다", "라이브러리에서 테마가 제거되었습니다.")
     } catch (error) {
       console.error('Failed to delete theme', error)
@@ -528,19 +451,6 @@ const ThemePanel: React.FC = () => {
           name: font_name,
           url: font_url,
         }
-      })
-      trackEvent(MixpanelEvent.Theme_Custom_Font_Uploaded, {
-        pathname,
-        font_name: name,
-        file_name: fontFile.name,
-        file_size_bytes: fontFile.size,
-      })
-      trackEvent(MixpanelEvent.Theme_Font_Changed, {
-        pathname,
-        theme_id: selectedTheme.id,
-        font_name: font_name,
-        font_url: font_url,
-        source: "uploaded_font",
       })
       // Add the newly uploaded font to userFonts if not already present
       if (!userFonts.fonts.find(f => f.name === font_name)) {
@@ -958,10 +868,6 @@ const ThemePanel: React.FC = () => {
         </h3>
         <Link
           href="/theme?tab=new-theme"
-          onClick={() => trackEvent(MixpanelEvent.Theme_New_Theme_Clicked, {
-            pathname,
-            source: "theme_page_header",
-          })}
           className={buttonVariants({ variant: "toolbar", size: "toolbar", className: "font-syne" })}
           aria-label="새 테마 만들기"
         >
@@ -975,7 +881,6 @@ const ThemePanel: React.FC = () => {
         <button className={`inline-flex min-h-10 items-center gap-2 rounded-lg border bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 ${tab === 'custom' ? 'border-zinc-200 shadow-sm' : 'border-transparent'}`}
           aria-pressed={tab === 'custom'}
           onClick={() => {
-            trackEvent(MixpanelEvent.Theme_Tab_Switched, { pathname, tab: 'custom' })
             setTab('custom')
           }}
         ><SquarePen className="h-4 w-4" aria-hidden="true" />커스텀</button>
@@ -985,7 +890,6 @@ const ThemePanel: React.FC = () => {
         <button className={`inline-flex min-h-10 items-center gap-2 rounded-lg border bg-white px-4 py-2 text-sm font-medium text-zinc-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 ${tab === 'default' ? 'border-zinc-200 shadow-sm' : 'border-transparent'}`}
           aria-pressed={tab === 'default'}
           onClick={() => {
-            trackEvent(MixpanelEvent.Theme_Tab_Switched, { pathname, tab: 'default' })
             setTab('default')
           }}
         ><Palette className="h-4 w-4" aria-hidden="true" />기본 제공</button>

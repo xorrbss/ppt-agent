@@ -3156,7 +3156,6 @@ async function main() {
       NEXT_TELEMETRY_DISABLED: "1",
       DISABLE_AUTH: "true",
       CAN_CHANGE_KEYS: "false",
-      DISABLE_ANONYMOUS_TRACKING: "true",
       FAST_API_INTERNAL_URL: "http://127.0.0.1:1",
       NEXT_PUBLIC_FAST_API: "",
       PRESENTON_TEST_NEXT_DIST_DIR: relativeRunDirectory,

@@ -12,7 +12,6 @@ import {
 } from "@/utils/providerUtils";
 import { useRouter, usePathname } from "next/navigation";
 import { LLMConfig } from "@/types/llm_config";
-import { trackEvent, MixpanelEvent } from "@/utils/mixpanel";
 import { ImagesApi } from "@/app/(presentation-generator)/services/api/images";
 import { isCodexAuthenticated } from "@/app/(presentation-generator)/services/api/codex-auth";
 import type {
@@ -115,9 +114,6 @@ export const useSettingsPageState = () => {
         return;
       }
     }
-    trackEvent(MixpanelEvent.Settings_SaveConfiguration_Button_Clicked, {
-      pathname,
-    });
     const validationError = getLLMConfigValidationError(llmConfig);
     if (validationError) {
       notify.warning("설정을 저장할 수 없습니다", validationError);
@@ -143,11 +139,9 @@ export const useSettingsPageState = () => {
         isDisabled: true,
         text: "설정 저장 중...",
       }));
-      trackEvent(MixpanelEvent.Settings_SaveConfiguration_API_Call);
       await handleSaveLLMConfig(llmConfig);
       let ollamaModelDownloaded = false;
       if (llmConfig.LLM === "ollama" && llmConfig.OLLAMA_MODEL) {
-        trackEvent(MixpanelEvent.Settings_CheckOllamaModelPulled_API_Call);
         const isPulled = await checkIfSelectedOllamaModelIsPulled(
           llmConfig.OLLAMA_MODEL
         );
@@ -160,7 +154,6 @@ export const useSettingsPageState = () => {
             status: "pulling",
             done: false,
           });
-          trackEvent(MixpanelEvent.Settings_DownloadOllamaModel_API_Call);
           const downloadOutcome = await handleModelDownload();
           if (downloadOutcome === "cancelled") {
             return;

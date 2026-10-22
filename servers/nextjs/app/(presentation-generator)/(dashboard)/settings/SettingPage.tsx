@@ -4,7 +4,6 @@ import React from "react";
 import SettingSideBar from "./SettingSideBar";
 import TextProvider from "./TextProvider";
 import ImageProvider from "./ImageProvider";
-import PrivacySettings from "./PrivacySettings";
 import AdminPanel from "../admin/AdminPanel";
 import DownloadProgressModal from "./setting-page/DownloadProgressModal";
 import SaveConfigButton from "./setting-page/SaveConfigButton";
@@ -74,7 +73,6 @@ const SettingsPage = () => {
             llmConfig={llmConfig}
           />}
           {mode === 'presenton' && selectedProvider === 'image-provider' && <ImageProvider llmConfig={llmConfig} setLlmConfig={setLlmConfig} />}
-          {selectedProvider === 'privacy' && <PrivacySettings />}
           {selectedProvider === "admin" && <AdminPanel embedded />}
           {selectedProvider === "session" && <SessionSection />}
 

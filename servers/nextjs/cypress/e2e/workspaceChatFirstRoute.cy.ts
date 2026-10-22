@@ -351,10 +351,6 @@ function interceptAuthenticatedShell(): void {
     statusCode: 200,
     body: { configured: true, config: {} },
   }).as("runtimeConfig");
-  cy.intercept("GET", "**/api/telemetry-status", {
-    statusCode: 200,
-    body: { telemetryEnabled: false },
-  });
   cy.intercept("GET", "**/api/v1/ppt/authored-styles", {
     statusCode: 200,
     body: [],
