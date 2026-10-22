@@ -32,30 +32,33 @@ test("Korean and English catalogs have identical leaves and placeholders", () =>
   }
 });
 
-test("catalog covers the selected audit surfaces and integration-owned overlap copy", () => {
+test("catalog covers the selected audit surfaces", () => {
   for (const namespace of [
     "admin",
-    "editableAssets",
     "generation",
     "globalError",
     "initialization",
-    "iconEditor",
-    "imageEditor",
     "languageSwitcher",
     "notFound",
-    "overlapMessages",
     "pdfMaker",
     "shortcuts",
     "share",
     "slideNavigation",
-    "studio",
     "userSettings",
   ]) {
     assert.ok(en[namespace], `missing English namespace: ${namespace}`);
     assert.ok(ko[namespace], `missing Korean namespace: ${namespace}`);
   }
-  assert.ok(en.overlapMessages.slideLimitTitle);
-  assert.ok(en.overlapMessages.shareExpired);
+  for (const catalog of [en, ko]) {
+    // Retired Template V2 studio copy and unreferenced editor namespaces must not return.
+    for (const retired of ["studio", "imageEditor", "iconEditor", "overlapMessages", "editableAssets", "templates"]) {
+      assert.equal(catalog[retired], undefined, `retired namespace is back: ${retired}`);
+    }
+    // The share namespace holds only what SharePopover reads, not copies of other namespaces.
+    for (const copied of ["imageEditor", "studio", "upload", "generation", "admin", "shortcuts"]) {
+      assert.equal(catalog.share[copied], undefined, `share.${copied} is a stray copy`);
+    }
+  }
 });
 
 test("root locale, provider, and persistence contracts stay synchronized", () => {
