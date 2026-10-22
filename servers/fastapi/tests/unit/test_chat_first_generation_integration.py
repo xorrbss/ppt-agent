@@ -56,6 +56,7 @@ from services import (
 from services.compatibility_migration.admission import (
     stamp_new_authored_presentation,
 )
+from services.public_operation_admission import PUBLIC_DEFAULT_MAX_SLIDES
 from services.public_policy_versions import PUBLIC_DEFAULT_POLICY_VERSION
 from services.source_content.errors import SourceContentError
 from services.workspace_artifact_publication_service import (
@@ -332,7 +333,7 @@ def test_recovery_expires_phase1_partial_before_lease_and_releases_quota(
                 operation.request_payload = {"job_id": str(job.id)}
                 policy = PublicPolicyProfile(
                     version=policy_version,
-                    max_slides=100,
+                    max_slides=PUBLIC_DEFAULT_MAX_SLIDES,
                     global_active_generation=10,
                     global_queued_generation=10,
                     owner_active_generation=10,
@@ -2132,7 +2133,7 @@ def test_source_content_admission_defers_manifest_rejection_to_validation(
 def _public_policy_profile(version: str) -> PublicPolicyProfile:
     return PublicPolicyProfile(
         version=version,
-        max_slides=100,
+        max_slides=PUBLIC_DEFAULT_MAX_SLIDES,
         global_active_generation=10,
         global_queued_generation=10,
         owner_active_generation=10,

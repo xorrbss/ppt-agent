@@ -191,6 +191,7 @@ def test_v4_row_clones_v3_and_only_raises_the_generation_ceiling(tmp_path) -> No
             "public-default/v3",
             "public-default/v4",
             "public-default/v5",
+            "public-default/v6",
         }
         v3 = rows["public-default/v3"]
         v4 = rows["public-default/v4"]
@@ -342,7 +343,7 @@ def test_large_decks_receive_the_formula_not_a_clamp(
                     request_plan=_plan(slide_count),
                     resource_plan=_RESOURCE_PLAN,
                 )
-                assert admitted.policy_version == "public-default/v5"
+                assert admitted.policy_version == "public-default/v6"
                 assert _granted_seconds(admitted) == expected_seconds
                 assert (
                     public_generation_deadline_seconds(slide_count)
@@ -372,7 +373,7 @@ def test_default_version_refuses_instead_of_falling_back_before_migration(
     database_path = tmp_path / "public-policy-fallback.db"
     command.upgrade(
         _alembic_config(f"sqlite:///{database_path.as_posix()}"),
-        V4_REVISION,
+        V5_REVISION,
     )
 
     async def scenario() -> None:
@@ -435,7 +436,7 @@ def test_admission_against_a_database_behind_the_code_writes_nothing(
     database_path = tmp_path / "public-admission-before-v5.db"
     command.upgrade(
         _alembic_config(f"sqlite:///{database_path.as_posix()}"),
-        V4_REVISION,
+        V5_REVISION,
     )
 
     async def scenario() -> None:
@@ -475,6 +476,6 @@ def test_admission_against_a_database_behind_the_code_writes_nothing(
 
 
 def test_both_default_version_constants_move_together() -> None:
-    assert PUBLIC_DEFAULT_POLICY_VERSION == "public-default/v5"
+    assert PUBLIC_DEFAULT_POLICY_VERSION == "public-default/v6"
     assert PUBLIC_PHASE2_DEFAULT_POLICY_VERSION == PUBLIC_DEFAULT_POLICY_VERSION
-    assert PUBLIC_PREVIOUS_DEFAULT_POLICY_VERSION == "public-default/v4"
+    assert PUBLIC_PREVIOUS_DEFAULT_POLICY_VERSION == "public-default/v5"

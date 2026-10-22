@@ -44,6 +44,7 @@ from services.public_generation_deadline_policy import (
     public_generation_wave_seconds,
 )
 from services.public_operation_admission import (
+    PUBLIC_DEFAULT_MAX_SLIDES,
     PUBLIC_DEFAULT_POLICY_VERSION,
     PUBLIC_PHASE2_DEFAULT_POLICY_VERSION,
     PrincipalContext,
@@ -130,8 +131,8 @@ def _three_slide_calls(monkeypatch):
 
 
 def test_public_default_policy_version_is_v4() -> None:
-    assert PUBLIC_DEFAULT_POLICY_VERSION == "public-default/v5"
-    assert PUBLIC_PHASE2_DEFAULT_POLICY_VERSION == "public-default/v5"
+    assert PUBLIC_DEFAULT_POLICY_VERSION == "public-default/v6"
+    assert PUBLIC_PHASE2_DEFAULT_POLICY_VERSION == "public-default/v6"
 
 
 def test_wave_budget_scales_with_the_slides_one_call_returns(monkeypatch) -> None:
@@ -456,7 +457,7 @@ def test_every_term_is_overridable_at_runtime(monkeypatch) -> None:
 def _policy(version: str, *, generation_deadline_seconds: int) -> PublicPolicyProfile:
     return PublicPolicyProfile(
         version=version,
-        max_slides=100,
+        max_slides=PUBLIC_DEFAULT_MAX_SLIDES,
         global_active_generation=4,
         global_queued_generation=8,
         owner_active_generation=2,
@@ -723,6 +724,7 @@ def test_policy_migrations_add_rows_without_touching_older_ones(tmp_path: Path) 
             "public-default/v3",
             "public-default/v4",
             "public-default/v5",
+            "public-default/v6",
         }
         for legacy in ("public-default/v1", "public-default/v2"):
             assert rows[legacy]["generation_deadline_seconds"] == (
@@ -751,5 +753,11 @@ def test_policy_migrations_add_rows_without_touching_older_ones(tmp_path: Path) 
         assert v5["generation_deadline_seconds"] == V4_POLICY_ROW_CEILING_SECONDS
         assert v5["export_deadline_seconds"] == 1800
         assert v5["max_slides"] == v4["max_slides"]
+        # v6 only raises the slide ceiling; every deadline column is v5's.
+        v6 = rows["public-default/v6"]
+        assert v6["max_slides"] == 200
+        assert v6["generation_deadline_seconds"] == v5["generation_deadline_seconds"]
+        assert v6["export_deadline_seconds"] == v5["export_deadline_seconds"]
+        assert v6["retry_request_limit"] == v5["retry_request_limit"]
     finally:
         engine.dispose()

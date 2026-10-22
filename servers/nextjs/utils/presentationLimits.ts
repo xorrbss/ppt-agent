@@ -1,4 +1,4 @@
-export const MAX_NUMBER_OF_SLIDES = 100;
+export const MAX_NUMBER_OF_SLIDES = 200;
 
 export function clampSlideCountValue(value: string): string {
   const digitsOnly = value.replace(/\D+/g, "");
