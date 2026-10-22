@@ -27,9 +27,6 @@ export const AUTHORED_HYBRID_RESULT_MARKER_ID =
 export const AUTHORED_HYBRID_COMPLETION_MARKER_NAME =
   "__presenton_authored_hybrid_complete_v1__";
 
-export const AUTHORED_HYBRID_ELEMENT_ATTRIBUTE =
-  "data-presenton-authored-hybrid-id";
-
 /**
  * Mirrors the inline viewport check spliced into the template below. Chrome
  * executes the template directly as injected source (no bundler, no TS

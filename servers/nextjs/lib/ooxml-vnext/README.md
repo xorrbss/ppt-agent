@@ -28,27 +28,6 @@ patching, validation, and buffered atomic publication.
 - Publication accepts buffered bytes only and follows candidate write, package
   reopen, digest verification, fsync where supported, atomic rename, and final
   read-back. No streaming save API exists.
-- GenOffice is separately available only as an exact-pin, compliance-gated,
-  buffered no-op lab oracle. Text mutation, streaming, and master/layout CUD
-  capabilities are permanently false. PPTist/AGPL and GenOffice `ee`, apps, AI,
-  Electron, and sibling packages fail closed.
-
-## Third-party fail-closed boundary
-
-The optional GenOffice oracle is rejected unless all of the following match the
-recorded evidence exactly: official repository and full commit SHA, pin digest,
-Apache-2.0 component identity, byte digests for both `LICENSE` and `NOTICE`, the
-SPDX 2.3 document digest/namespace/describes fields, the exact 22-package and
-25-relationship production closure, the two runtime dependencies, the 37-file
-source inventory digest, and the 17-check intake receipt. Missing or malformed
-evidence is a rejection, never an allow-with-warning result.
-
-Materialized paths are restricted to the retained license/build metadata and
-`packages/pptx-engine`. `ee`, apps, AI, Electron, PPTist, sibling packages,
-path escapes, unapproved dynamic imports, and any SBOM package declaring AGPL
-fail closed. Passing this gate permits only the optional buffered no-op lab
-oracle; it does not approve GenOffice as a production compiler or release the
-adapter from its independent preservation checks.
 
 ## Focused checks
 

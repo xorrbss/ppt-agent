@@ -1,31 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resolvePptxMode, resolveRequestedPptxMode } from "./mode.ts";
 import {
   EDITABLE_HYBRID_SHADOW_PROFILE_ID,
   isAuthoredPresentation,
   presentationEditableHybridProfileId,
   presentationRequiresRasterOnlyHybrid,
 } from "./presentation-mode.ts";
-
-test("missing mode uses fast fidelity while explicit hybrid remains available", () => {
-  assert.deepEqual(resolvePptxMode(undefined), { ok: true, value: "fidelity" });
-  assert.deepEqual(resolvePptxMode("fidelity"), {
-    ok: true,
-    value: "fidelity",
-  });
-  assert.deepEqual(resolvePptxMode("hybrid"), { ok: true, value: "hybrid" });
-  assert.deepEqual(resolvePptxMode(null), { ok: false });
-  assert.deepEqual(resolvePptxMode("editable"), { ok: false });
-});
-
-test("PDF ignores PPTX-only options", () => {
-  assert.deepEqual(resolveRequestedPptxMode("pdf", "invalid"), {
-    ok: true,
-    value: "fidelity",
-  });
-});
 
 test("authored identity honors explicit mode and legacy sentinels", () => {
   assert.equal(isAuthoredPresentation({ mode: "authored" }), true);

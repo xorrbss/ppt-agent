@@ -10,7 +10,6 @@ import {
 import { backplatePixelSize } from "./capture-scale.ts";
 import { planLayerSafeNativeElements } from "./native-plan.ts";
 import { assembleAuthoredHybridPptx } from "./pptx-assembler.ts";
-import { createAuthoredHybridCoverageManifest } from "./export-metadata.ts";
 import {
   attachAuthoredHybridStage2ReadbackMetadata,
   inspectPptxEditability,
@@ -228,18 +227,6 @@ test("bounded semantic chart becomes native OOXML with data, axes, legend, and f
   assert.equal(quality.status, "fully-editable");
   const detailedQuality = attachAuthoredHybridStage2ReadbackMetadata(quality, pptx);
   assert.deepEqual(detailedQuality.slides[0].nativeElementReadback, readback);
-  const coverage = createAuthoredHybridCoverageManifest(quality, {
-    exportAttemptId: "attempt-chart-readback",
-    presentationRevision: 7,
-    canonicalSourceDigest: `sha256:${"b".repeat(64)}`,
-    sourceDigest: `sha256:${"c".repeat(64)}`,
-  });
-  assert.equal(coverage.nativeChart, 1);
-  // A pure package inspector has no pre-serialization semantic plan; logical
-  // coverage remains zero while OOXML readback still proves the native chart.
-  assert.equal(coverage.logicalCoverage.nativeChart, 0);
-  assert.equal(coverage.ooxmlReadback.nativeChart, 1);
-  assert.equal(coverage.slides[0].nativeChart, 1);
 });
 
 test("unsupported chart contracts and complex chart CSS remain raster islands with stable reasons", () => {

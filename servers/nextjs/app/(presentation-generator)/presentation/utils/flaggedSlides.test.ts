@@ -5,7 +5,6 @@ import {
   deriveFlaggedSlideMap,
   describeFlaggedSlideReason,
   flaggedSlideCategories,
-  flaggedSlideCount,
   flaggedSlideKey,
   flaggedSlideStage,
   readFlaggedSlideEntries,
@@ -111,7 +110,6 @@ test("deriveFlaggedSlideMap keys badges by slide id so a reorder keeps them", ()
   });
   assert.equal(map["s-a"].stage, "author");
   assert.deepEqual(map["s-a"].categories, []);
-  assert.equal(flaggedSlideCount(map), 2);
 });
 
 test("deriveFlaggedSlideMap matches by slideId even when the receipt's index no longer names that slide", () => {
@@ -191,7 +189,6 @@ test("deriveFlaggedSlideMap is empty without a receipt", () => {
   assert.deepEqual(deriveFlaggedSlideMap(null), {});
   assert.deepEqual(deriveFlaggedSlideMap({ theme: null, slides: defaultSlides() }), {});
   assert.deepEqual(deriveFlaggedSlideMap(deck([])), {});
-  assert.equal(flaggedSlideCount(undefined), 0);
 });
 
 test("stage and categories follow the reason prefix", () => {

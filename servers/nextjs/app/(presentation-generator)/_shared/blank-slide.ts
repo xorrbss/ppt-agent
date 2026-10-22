@@ -29,16 +29,6 @@ export function createBlankPresentationSlide({
   };
 }
 
-export function isBlankPresentationSlide(slide: {
-  layout?: unknown;
-} | null | undefined) {
-  if (!slide || typeof slide.layout !== "string") return false;
-  return (
-    slide.layout === BLANK_SLIDE_LAYOUT_ID ||
-    slide.layout.endsWith(`:${BLANK_SLIDE_LAYOUT_ID}`)
-  );
-}
-
 export function isTemplateFreePresentation(presentation: unknown) {
   if (
     !presentation ||

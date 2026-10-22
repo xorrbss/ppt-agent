@@ -114,10 +114,6 @@ export type SourceLockedJobResponseV1 = {
   updated_at: string;
 };
 
-export function sourceLockedJobIsTerminal(job: SourceLockedJobResponseV1): boolean {
-  return ["succeeded", "failed", "cancelled"].includes(job.status);
-}
-
 /** Success is usable only when the same fail-closed restoration receipt passes. */
 export function sourceLockedGenerationFromJob(
   job: SourceLockedJobResponseV1,

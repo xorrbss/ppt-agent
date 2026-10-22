@@ -93,15 +93,6 @@ function sceneSlot(item: MasterSlot): PreviewSceneItem {
   };
 }
 
-export function buildPreviewScene(
-  contract: DeckMasterContractV1,
-  slide: SlideDraft,
-): PreviewScene {
-  const local = validateMasterSetup(contract);
-  if (!local.valid) throw new MasterContractError(local.errors);
-  return buildEditingPreviewScene(contract, slide);
-}
-
 /**
  * Builds the live editor scene without turning a recoverable geometry mistake
  * into a render-time exception. Draft/publish callers must continue to use the

@@ -2,36 +2,6 @@ import { loadFonts } from "../../hooks/useFontLoad";
 import type { Theme } from "../../services/api/types";
 import { applyPresentationThemeTokens } from "./presentationThemeTokens";
 
-const THEME_CSS_KEYS = [
-  "--primary-color",
-  "--background-color",
-  "--card-color",
-  "--stroke",
-  "--primary-text",
-  "--background-text",
-  "--graph-0",
-  "--graph-1",
-  "--graph-2",
-  "--graph-3",
-  "--graph-4",
-  "--graph-5",
-  "--graph-6",
-  "--graph-7",
-  "--graph-8",
-  "--graph-9",
-] as const;
-
-/** Remove theme inline variables from a container (e.g. before switching themes). */
-export function clearPresentationThemeFromElement(element: HTMLElement | null): void {
-  if (!element) return;
-  for (const key of THEME_CSS_KEYS) {
-    element.style.removeProperty(key);
-  }
-  element.style.removeProperty("font-family");
-  element.style.removeProperty("--heading-font-family");
-  element.style.removeProperty("--body-font-family");
-}
-
 /**
  * Apply presentation theme CSS variables + font loading to a DOM subtree
  * (editor: #presentation-slides-wrapper, present: #presentation-mode-wrapper).

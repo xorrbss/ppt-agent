@@ -11,7 +11,6 @@ import { DEFAULT_UI_LOCALE, readUiLocaleCookie, type UiLocale } from "@/i18n/loc
 import { getUiMessages } from "@/i18n/messages";
 
 import {
-  resolveBackendError,
   resolveBackendMessage,
   type BackendMessage,
   type BackendTranslator,
@@ -56,12 +55,4 @@ export function translateBackendMessage(
   locale: UiLocale = currentUiLocale(),
 ): string | undefined {
   return resolveBackendMessage(backendTranslator(locale), message);
-}
-
-export function translateBackendError(
-  code: string | undefined,
-  fallback?: string,
-  locale: UiLocale = currentUiLocale(),
-): string | undefined {
-  return resolveBackendError(backendTranslator(locale), code, fallback);
 }
