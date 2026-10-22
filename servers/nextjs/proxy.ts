@@ -67,7 +67,6 @@ function isApiAuthExempt(pathname: string): boolean {
     // through nginx with no session. It returns only a static status, so
     // exempting it discloses nothing.
     pathname === "/api/health" ||
-    pathname.startsWith("/api/export-presentation-data/") ||
     /** Read-only public share view (token-scoped; FastAPI re-checks on the
      * normalized path, so a traversal here still fails auth there). */
     pathname.startsWith("/api/v1/ppt/presentation/public/") ||

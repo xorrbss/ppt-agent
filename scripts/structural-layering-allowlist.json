@@ -31,7 +31,6 @@
     "servers/fastapi/utils/slide_capture.py"
   ],
   "nextjs_lib_store_import_app": [
-    "servers/nextjs/lib/run-bundled-presentation-export.ts",
     "servers/nextjs/store/slices/presentationGenUpload.ts",
     "servers/nextjs/store/slices/presentationGeneration.ts",
     "servers/nextjs/store/slices/undoRedoSlice.ts"

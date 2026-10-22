@@ -147,7 +147,7 @@ FROM node:20-bookworm-slim AS assets-builder
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates unzip \
+      ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package.json /app/
@@ -157,17 +157,6 @@ RUN mkdir -p /app/document-extraction-liteparse \
     && npm --prefix /app/document-extraction-liteparse install @llamaindex/liteparse@1.4.0 --omit=dev
 
 COPY resources/document-extraction/liteparse_runner.mjs /app/document-extraction-liteparse/liteparse_runner.mjs
-COPY scripts/sync-presentation-export.cjs /app/scripts/sync-presentation-export.cjs
-COPY scripts/lib/presentation-export-readiness.cjs /app/scripts/lib/presentation-export-readiness.cjs
-# The sync requires this module (sync-presentation-export.cjs:29) and reads the
-# checksum manifest from <repoRoot>/compatibility (:46). Both were missing, so
-# `docker build --target assets-builder` failed on the RUN below.
-COPY scripts/lib/presentation-export-assets.cjs /app/scripts/lib/presentation-export-assets.cjs
-COPY compatibility/upstream-compatibility.json /app/compatibility/upstream-compatibility.json
-# The sync installs the matching sharp native addon before recording its version marker.
-RUN rm -rf /app/presentation-export \
-    && node /app/scripts/sync-presentation-export.cjs --force \
-    && chmod +x /app/presentation-export/py/convert-linux-x64
 
 
 FROM python:3.11-slim-trixie AS runtime
@@ -180,9 +169,6 @@ ARG INSTALL_LIBREOFFICE=true
 # LiteParse uses Node + @llamaindex/liteparse; OCR uses Tesseract.
 ENV APP_DATA_DIRECTORY=/app_data \
     TEMP_DIRECTORY=/tmp/presenton \
-    EXPORT_PACKAGE_ROOT=/app/presentation-export \
-    EXPORT_RUNTIME_DIR=/app/presentation-export \
-    BUILT_PYTHON_MODULE_PATH=/app/presentation-export/py/convert-linux-x64 \
     PRESENTON_APP_ROOT=/app \
     AUTHORED_OCR_TESSDATA_PATH=/app/tessdata \
     HF_HOME=/root/.cache/huggingface \
@@ -220,9 +206,6 @@ COPY --from=fastapi-builder /root/.cache/presenton/fastembed-icons /root/.cache/
 
 COPY --from=assets-builder /app/package.json /app/package.json
 COPY --from=assets-builder /app/document-extraction-liteparse /app/document-extraction-liteparse
-COPY --from=assets-builder /app/presentation-export /app/presentation-export
-COPY --from=assets-builder /app/scripts/sync-presentation-export.cjs /app/scripts/sync-presentation-export.cjs
-COPY --from=assets-builder /app/scripts/lib/presentation-export-readiness.cjs /app/scripts/lib/presentation-export-readiness.cjs
 
 # Bundle Tesseract language data so OCR (LiteParse/tesseract.js) works offline.
 # Resolved by LiteParseService via PRESENTON_APP_ROOT (=/app) -> /app/tessdata.

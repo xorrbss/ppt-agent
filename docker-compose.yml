@@ -6,7 +6,8 @@
 # provider_secure_runtime.py, and provider_transport_security.py) is a
 # production-only key set per-service below, not here.
 x-presenton-env: &presenton-env
-  # Bundled PPTX/PDF export (Puppeteer); matches CI and production image.
+  # Chrome/Chromium discovery for authored-hybrid capture and the isolated
+  # export workers; matches CI and production image.
   PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
   MIGRATE_DATABASE_ON_STARTUP: "true"
   # Required only when upgrading a populated PostgreSQL database through e7.

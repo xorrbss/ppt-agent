@@ -32,7 +32,6 @@ const __dirname = dirname(__filename);
 const fastapiDir = join(__dirname, "servers/fastapi");
 const nextjsDir = join(__dirname, "servers/nextjs");
 const nextjsStandaloneServer = join(nextjsDir, "server.js");
-const exportSyncScript = join(__dirname, "scripts/sync-presentation-export.cjs");
 const settingsRegistryPath = join(
   fastapiDir,
   "constants/settings_registry.json"
@@ -213,9 +212,6 @@ const runCommand = (command, commandArgs, options = {}) => {
   });
 };
 
-const runNodeScript = (scriptPath, scriptArgs) =>
-  runCommand(process.execPath, [scriptPath, ...scriptArgs], { cwd: __dirname });
-
 const isTruthyEnv = (value) =>
   value != null &&
   !["", "0", "false", "no", "off"].includes(String(value).trim().toLowerCase());
@@ -234,30 +230,6 @@ const ensureOllamaRuntime = async () => {
   await runCommand("sh", ["-c", "curl -fsSL https://ollama.com/install.sh | sh"], {
     cwd: "/",
   });
-};
-
-const ensurePresentationExportRuntime = async () => {
-  if (process.env.ENSURE_PRESENTATION_EXPORT_RUNTIME === "false") {
-    return;
-  }
-
-  if (!existsSync(exportSyncScript)) {
-    console.warn("presentation-export sync script not found; skipping runtime check");
-    return;
-  }
-
-  try {
-    await runNodeScript(exportSyncScript, ["--check-only"]);
-  } catch (err) {
-    if (!isDev) {
-      throw new Error(
-        "presentation-export runtime is missing in this container image. Rebuild the image so the runtime package is installed."
-      );
-    }
-
-    console.warn("presentation-export runtime missing in dev mount. Syncing runtime package...");
-    await runNodeScript(exportSyncScript, ["--force"]);
-  }
 };
 
 process.env.USER_CONFIG_PATH = userConfigPath;
@@ -548,7 +520,6 @@ const startNginx = () => {
 };
 
 const main = async () => {
-  await ensurePresentationExportRuntime();
   await ensureOllamaRuntime();
 
   if (isDev) {

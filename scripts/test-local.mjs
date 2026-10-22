@@ -314,27 +314,6 @@ runStep({
   preconditionDescription: "Node 22 and npm",
 });
 runStep({
-  name: "presentation-export v0.4.8 synchronization contract",
-  command: npm,
-  args: ["run", "test:presentation-export-sync"],
-  precondition: node22Precondition,
-  preconditionDescription: "Node 22 and root npm ci",
-});
-runStep({
-  name: "Synchronize pinned presentation-export runtime",
-  command: npm,
-  args: ["run", "sync:presentation-export"],
-  precondition: node22Precondition,
-  preconditionDescription: "network access only when the pinned v0.4.8 runtime is absent or stale",
-});
-runStep({
-  name: "Verify pinned presentation-export runtime",
-  command: npm,
-  args: ["run", "check:presentation-export"],
-  precondition: node22Precondition,
-  preconditionDescription: "Node 22 and synchronized presentation-export runtime",
-});
-runStep({
   name: "FastAPI locked dependency install",
   command: uv,
   args: ["sync", "--frozen"],
