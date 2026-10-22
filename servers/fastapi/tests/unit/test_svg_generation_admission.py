@@ -4635,6 +4635,197 @@ def test_partial_recovery_proves_completed_invalid_source_for_new_child(with_svg
         assert (lf_payload, lf_receipt, lf_terminal) == lf_before
 
 
+def test_partial_recovery_replays_compact_output_view_raws_through_the_pinned_view(monkeypatch):
+    """Every replay of a stored compact raw restores it through the job's pinned view."""
+    import asyncio
+    from copy import deepcopy
+    from unittest.mock import AsyncMock
+    import xml.etree.ElementTree as ET
+    from services import svg_partial_recovery as recovery, artifact_store, svg_asset_persistence
+    from services.generation_core.authoring.author_source_svg_layout import _whole_page_facts
+    from services.generation_core.drivers.svg.native_declarations import (
+        declaration_receipt, extract_native_declarations,
+    )
+    from services.svg_author_output_view import parse_author_response
+    from services.svg_contract import source_digest
+    from services.svg_source_layout import bind_whole_page_source_svg, source_pages
+    from tests.unit.test_svg_source_layout import manifest_for
+    from tests.unit.test_svg_output_view import V1, page_responses, source_page
+    from utils.hashing import sha256_hex
+
+    owner, operation_id, job_id, presentation_id = (uuid.uuid4() for _ in range(4))
+    contract = {"version": "svg-source-whole-page/v1"}
+    plain = dict(digest="fixture-style", source_authoring_contract=contract, authoring_profile={})
+    pinned = {**plain, "source_output_view": deepcopy(V1)}
+    future = {**plain, "source_output_view": {"version": "svg-source-output-view/v9", "stages": ["id_alias"]}}
+    request = GeneratePresentationRequest(content="Fixture message", strategy="svg", n_slides=1,
+        source_mode="source_content_restyle", language="en", common_header_mode="free",
+        template="authored", authored_style="fixture", content_policy={},
+        source_content_manifest_pin={"manifest_id": "fixture-manifest", "digest": "sha256:" + "f" * 64})
+
+    def job_for(snapshot):
+        return SimpleNamespace(id=job_id, workspace_operation_id=operation_id, request_payload={},
+            svg_style_snapshot=snapshot, total_slides=1,
+            authored_outline={"slides": [{"content": "Fixture message"}]})
+
+    asset = SimpleNamespace(digest="fixture-asset", presentation_id=presentation_id,
+        source_revision=1, offered_pages=[SimpleNamespace(page_index=0, slot_ids=())], slots=[])
+    text_style = 'font-weight="400" fill="#111111" text-anchor="start"'
+
+    # 1. _author_render_chain: a compact raw whose stored svg_content is its bound expansion.
+    lf_source = manifest_for([("text", {"text": "A\nB"})])
+    lf_facts = _whole_page_facts(source_pages(lf_source)[0], {})
+    compact_lf = ('<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" '
+                  'font-family="Noto Sans KR" font-size="40">'
+                  f'<text id="f1" x="40" y="100" {text_style}>AB</text></svg>')
+    expanded, _ = parse_author_response(compact_lf, view=V1, source_facts=lf_facts)
+    stored, preservation = bind_whole_page_source_svg(ET.tostring(expanded, encoding="unicode"), lf_source, 0,
+        facts=lf_facts, width=1280, height=720, style_snapshot=pinned, minimum_font_px=14,
+        restore_source_lf=True, raw_output_digest=source_digest(compact_lf))
+    assert f'id="{lf_facts[0]["element_id"]}"' in stored and 'font-family="Noto Sans KR"' in stored
+    lf_receipt = dict(contract_version="svg-static/v2", provider="fixture", requested_model="fixture-model",
+        style_digest="fixture-style", authoring_profile={}, source_authoring_contract=contract,
+        attempt_ordinal=1, validation_error=None, raw_digest=source_digest(compact_lf),
+        source_digest=source_digest(stored), source_preservation=deepcopy(preservation))
+    lf_payload = {"svg_content": stored, "source_preservation": deepcopy(preservation)}
+
+    def chain(snapshot):
+        return recovery._author_render_chain(lf_payload, compact_lf, lf_receipt, request=request,
+            job=job_for(snapshot), asset=asset, index=0, source=lf_source)
+
+    assert chain(pinned)["render_svg_sha256"] == sha256_hex(stored.encode())
+    with pytest.raises(recovery.PartialRecoveryRejected, match="svg_partial_recovery_source_transform_unproven"):
+        chain(plain)  # without the pin the compact ids never bind: fail closed, never guessed
+    with pytest.raises(recovery.PartialRecoveryRejected, match="svg_output_view_unsupported"):
+        chain(future)
+
+    # 2. _replay_sealed_author_transform: the rebuilt projection equals today's canonical run and
+    #    carries the producer's output_view receipt entry.
+    source = source_page()
+    canonical, compact, facts = page_responses(source)
+
+    def sealed(snapshot, raw):
+        projection = {}
+        result = recovery._replay_sealed_author_transform({}, raw, request=request, job=job_for(snapshot),
+            asset=asset, index=0, source=source, source_projection=projection)
+        return result, projection
+
+    (today, _, _, today_declarations, _, _), today_projection = sealed(plain, canonical)
+    (viewed, _, digest_value, declarations, _, _), projection = sealed(pinned, compact)
+    assert viewed == today and digest_value == sha256_hex(today.encode())
+    assert declarations == today_declarations and declarations["objects"][0]["kind"] == "table"
+    assert "output_view" not in today_projection
+    assert projection["output_view"] == parse_author_response(compact, view=V1, source_facts=facts)[1]
+    assert projection["output_view"]["inbound"]["native_table_rows"]["expanded"] == 1
+    assert {k: v for k, v in projection["source_preservation"].items() if k != "raw_output_digest"} == \
+        {k: v for k, v in today_projection["source_preservation"].items() if k != "raw_output_digest"}
+    with pytest.raises(recovery.PartialRecoveryRejected, match="svg_output_view_unsupported"):
+        sealed(future, compact)
+
+    # 3. _completed_invalid_source_output: a rejected compact raw reproduces its recorded error.
+    cells = facts[1]["cells"]
+    group =''.join(f'<text id="c{index + 1}" x="{60 + index * 150}" y="140" {text_style}>{cell["text"]}</text>'
+                    for index, cell in enumerate(cells))
+    invalid_compact = ('<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" '
+        'font-family="Noto Sans KR" font-size="40">'
+        f'<text id="f1" x="40" y="60" {text_style}>{facts[0]["data"]["text"].replace("&", "&amp;")}</text>'
+        "<g id=\"t1\" data-native-table='{\"headerRows\":1}'>"
+        '<rect x="40" y="80" width="600" height="120" fill="#ffffff" />' + group + '</g></svg>')
+    expanded_root, _ = parse_author_response(invalid_compact, view=V1, source_facts=facts)
+    expanded_declarations = extract_native_declarations(expanded_root)
+    expanded_svg = ET.tostring(expanded_root, encoding="unicode")
+    pages = source_pages(source)
+    monkeypatch.setattr(artifact_store, "configured_public_artifact_service", lambda: SimpleNamespace(
+        resolve_ref=AsyncMock(return_value=SimpleNamespace(created_by_operation_id=operation_id))))
+    monkeypatch.setattr(svg_asset_persistence, "load_source_manifest_pointer", AsyncMock(return_value=asset))
+    monkeypatch.setattr("utils.svg_template_fonts.source_font_profile", lambda _: "fixture-font")
+
+    def invalid_output(snapshot):
+        job = job_for(snapshot)
+        input_digest = recovery.digest({"page": recovery._expected_page_input_digest(request, job, 0, {}),
+            "source_manifest": source.manifest_digest, "font_profile": "fixture-font",
+            "source_page": pages[0].model_dump(mode="json"), "source_layout_version": "svg-source-layout/v2"})
+        receipt = dict(contract_version="svg-static/v2", provider="fixture", requested_model="fixture-model",
+            style_digest="fixture-style", authoring_profile={}, source_authoring_contract=contract,
+            attempt_ordinal=1, raw_digest=source_digest(invalid_compact), source_digest=source_digest(expanded_svg),
+            validation_error="svg_source_native_table_grid_mismatch",
+            **declaration_receipt(expanded_declarations))
+        terminal = dict(schema="svg-provider-terminal/v1", terminal_event="response.completed",
+            operation_id=str(operation_id), job_id=str(job_id), owner_id=str(owner), tenant_id="fixture",
+            input_digest=input_digest, ordinal=1, raw_response=invalid_compact,
+            output_digest=sha256_hex(invalid_compact.encode()), usage={})
+        terminal["receipt_digest"] = recovery.digest(terminal)
+        payload = dict(svg_content=expanded_svg, inflight=None, input_digest=input_digest,
+            attempts=[dict(kind="provider", raw_response=invalid_compact, receipt=receipt)],
+            source_manifest_ref={"ref": str(uuid.uuid4()), "sha256": "a" * 64},
+            source_manifest_digest=asset.digest, provider_terminal_responses={"1": terminal})
+        row = SimpleNamespace(slide_index=0, author_status="completed", render_status="pending",
+            persist_status="pending", svg_checkpoint=payload)
+        calls = [SimpleNamespace(slide_index=0, stage="author", state="reported", outcome="succeeded",
+            reconciled_at=object(), actual_cost_microunits=1, provider_id="fixture", model_id="fixture-model")]
+        usage = [SimpleNamespace(job_id=job_id, stage="author", provider="fixture", model="fixture-model",
+            usage_state="reported", outcome="succeeded", request_count=1)]
+        return asyncio.run(recovery._completed_invalid_source_output(payload, row, completed=terminal, job=job,
+            operation=SimpleNamespace(id=operation_id, owner_id=owner), request=request, source=source,
+            seed={"source_font_profile": "fixture-font"}, episode_calls=calls, usage=usage, session=object(),
+            owner=owner, tenant="fixture", binding=None, vectors={}, header_producer=None))
+
+    proof = invalid_output(pinned)
+    assert proof["reason"] == "completed_source_invalid"
+    assert proof["validation_error"] == "svg_source_native_table_grid_mismatch"
+    with pytest.raises(recovery.PartialRecoveryRejected):
+        invalid_output(plain)
+    with pytest.raises(recovery.PartialRecoveryRejected, match="svg_output_view_unsupported"):
+        invalid_output(future)
+    assert "services/svg_author_output_view.py" in recovery.CODE_FILES
+    assert {"services/generation_core/authoring/source_id_alias.py",
+            "services/svg_text_defaults.py",
+            "services/generation_core/authoring/author_source_svg_layout.py"} <= set(recovery.CODE_FILES)
+
+
+def test_restyle_admission_pins_the_output_view_only_with_the_knob(monkeypatch):
+    from services.document_canvas import document_canvas_for_orientation
+    from services.generation_core.authoring.author_slide_svg import svg_prompt_design
+    from services.svg_generation_admission import pin_svg_style
+
+    def restyle():
+        request = GeneratePresentationRequest(content="Fixture message", strategy="svg", n_slides=1,
+            source_mode="source_content_restyle", language="en", common_header_mode="free",
+            template="authored", authored_style="academic-edge", content_policy={},
+            source_content_manifest_pin={"manifest_id": "fixture-manifest", "digest": "sha256:" + "f" * 64})
+        request._document_canvas = document_canvas_for_orientation("landscape")
+        return request
+
+    monkeypatch.delenv("SVG_SOURCE_OUTPUT_VIEW", raising=False)
+    off = pin_svg_style(restyle())
+    assert "source_output_view" not in off
+    monkeypatch.setenv("SVG_SOURCE_OUTPUT_VIEW", "v1")
+    on = pin_svg_style(restyle())
+    assert on["source_output_view"] == {"version": "svg-source-output-view/v1",
+        "stages": ["id_alias", "native_table_rows", "text_defaults:family_size"]}
+    assert on["digest"] != off["digest"]
+    assert {k: v for k, v in on.items() if k not in {"source_output_view", "digest"}} == \
+        {k: v for k, v in off.items() if k != "digest"}
+    assert "source_output_view" not in svg_prompt_design(on)
+    content = pin_svg_style(GeneratePresentationRequest(content="Fixture message", strategy="svg",
+                                                        n_slides=1, language="en", common_header_mode="free"))
+    assert "source_output_view" not in content
+    monkeypatch.setenv("SVG_SOURCE_OUTPUT_VIEW", "ids")
+    with pytest.raises(HTTPException) as invalid:
+        pin_svg_style(restyle())
+    assert (invalid.value.status_code, invalid.value.detail) == (422, "svg_output_view_knob_invalid")
+    # A frozen snapshot is never re-read from the knob, and a pin this code cannot read is refused.
+    from utils.hashing import canonical_json_digest
+
+    frozen = restyle()
+    future = {**off, "source_output_view": {"version": "svg-source-output-view/v9", "stages": ["id_alias"]}}
+    future["digest"] = canonical_json_digest({k: v for k, v in future.items() if k != "digest"}, allow_nan=True)
+    frozen._svg_style_snapshot = future
+    with pytest.raises(HTTPException) as unsupported:
+        pin_svg_style(frozen)
+    assert (unsupported.value.status_code, unsupported.value.detail) == (409, "svg_output_view_unsupported")
+
+
 def test_partial_recovery_failed_source_overlap_requires_bound_evidence(tmp_path, monkeypatch):
     import json
     from copy import deepcopy

@@ -413,8 +413,10 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
                                for slot, candidate in ctx.planned[index].items()}
                 source_hint = hint
                 if whole_page_source and hint and payload.get("attempts"):
+                    from services.svg_author_output_view import snapshot_output_view
                     source_hint = source_binding_correction_hint(ctx.source_units[index], image_slots,
-                        payload["attempts"][-1].get("raw_response"), hint)
+                        payload["attempts"][-1].get("raw_response"), hint,
+                        output_view=snapshot_output_view(ctx.snapshot))
                 authored = await author_source_svg_layout(
                     ctx.source_document, index, ctx.snapshot,
                     source_images=offered_images,

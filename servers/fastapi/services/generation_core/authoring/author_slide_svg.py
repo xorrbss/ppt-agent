@@ -26,6 +26,10 @@ from services.provider_usage_instrumentation import (
 )
 from services.ppt_writing_policy import WRITING_POLICY_ID, writing_policy_prompt
 from services.svg_contract import SVG_CONTRACT_VERSION, source_digest, validate_raster_data_url
+from services.svg_author_output_view import (
+    apply_plan, outbound_correction_hint, outbound_previous_svg, outbound_rules, outbound_source_content,
+    output_view_plan, output_view_receipt, snapshot_output_view,
+)
 from services.svg_authoring_profile import read_authoring_profile, read_quality_recovery_policy
 from utils.hashing import canonical_json_digest, sha256_prefixed
 from utils.llm_calls.author_prompt_cache_key import apply_prompt_cache_key
@@ -781,11 +785,14 @@ def svg_prompt_design(style_snapshot: dict) -> dict:
     if profile and profile["version"] == 7:
         # Only the model's style view returns to the legacy recipe. Durable
         # selection, frozen bytes and input receipts retain revision seven.
-        legacy = {key: value for key, value in style_snapshot.items() if key != "authoring_profile"}
+        legacy = {key: value for key, value in style_snapshot.items()
+                  if key not in {"authoring_profile", "source_output_view"}}
         legacy["digest"] = canonical_json_digest({key: value for key, value in legacy.items() if key != "digest"},
                                                 allow_nan=True)
         return public({key: value for key, value in legacy.items() if key not in {"references", "diagnostics"}})
-    excluded = {"references", "diagnostics"}
+    # The pinned author output view is server-side transport, not design identity:
+    # the model learns the compact form from its rules, never from this key.
+    excluded = {"references", "diagnostics", "source_output_view"}
     if read_quality_recovery_policy(style_snapshot) is not None:
         # Recovery candidates belong to fallback admission, not the invariant
         # first-author prompt. Avoid sending unrelated SVG/example data on
@@ -893,8 +900,20 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
                            source_preserved: bool = False,
                            language: str | None = None,
                            header_page: dict | None = None,
-                           author_attempt_identity: dict | None = None) -> SvgAuthorResult:
+                           author_attempt_identity: dict | None = None,
+                           output_view: dict | None = None,
+                           source_facts: list | None = None) -> SvgAuthorResult:
     manifest = preflight_svg_source_images(source_images)
+    # The job's pinned source output view (whole-page source authoring only): the model
+    # reads and writes the compact form, and its response is restored to the canonical
+    # tree right after parsing. ``None`` keeps every prompt and receipt byte as before.
+    view_plan = None
+    if output_view is not None:
+        if (not source_preserved
+                or style_snapshot.get("source_authoring_contract") != {"version": "svg-source-whole-page/v1"}
+                or snapshot_output_view(style_snapshot) != output_view):
+            raise ValueError("svg_output_view_scope_invalid")
+        view_plan = output_view_plan(output_view, source_facts)
     new_copy = writing_policy == WRITING_POLICY_ID and not source_preserved
     quality_policy = read_quality_recovery_policy(style_snapshot)
     source_grounded = quality_policy is not None and quality_policy["version"] == 2
@@ -939,9 +958,12 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
     # Local prompt value only: header binding, visual intent and native data above/below read ``content``.
     prompt_source, dedup_receipt = (_llm_source_content_view(content) if source_preserved
                                     else (content, {}))
+    # Output view: aliased fact ids, and the one point where any correction text enters.
+    prompt_source = outbound_source_content(prompt_source, view_plan)
     prompt = design + "\n\n" + json.dumps({"role": role, "index": index, "slide_count": n,
                                            "instructions": instructions or "", "source_content": prompt_source,
-                                           "correction": correction_hint or "", "source_images": offered,
+                                           "correction": outbound_correction_hint(correction_hint, view_plan) or "",
+                                           "source_images": offered,
                                            **({"common_header": {"page": header_page,
                                                "body_box": style_snapshot["common_header"]["body_box"],
                                                "content_top_px": style_snapshot["common_header"].get(
@@ -955,15 +977,20 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
         prompt += "\n\n" + requested_data
     profile = read_authoring_profile(style_snapshot)
     repair_receipt = {}
+    # The model sees previous_svg in the output view; receipts keep the canonical digest.
+    prompt_previous_svg, previous_svg_compacted = outbound_previous_svg(previous_svg, view_plan)
+    previous_svg_shown = False
     if quality_policy is not None and active_correction:
         prompt += "\n\n" + json.dumps({"correction_mode": active_correction,
-            **({"previous_svg": previous_svg} if previous_svg else {})}, ensure_ascii=False)
+            **({"previous_svg": prompt_previous_svg} if previous_svg else {})}, ensure_ascii=False)
         repair_receipt = {"correction_mode": active_correction,
             **({"repair_input_svg_digest": source_digest(previous_svg)} if previous_svg else {})}
+        previous_svg_shown = bool(previous_svg)
     elif correction_hint and profile and profile["version"] == 8:
         if previous_svg:
-            prompt += "\n\n" + json.dumps({"previous_svg": previous_svg}, ensure_ascii=False)
+            prompt += "\n\n" + json.dumps({"previous_svg": prompt_previous_svg}, ensure_ascii=False)
             repair_receipt = {"repair_input_svg_digest": source_digest(previous_svg)}
+            previous_svg_shown = True
     if profile and profile["version"] == 6 and selection and selection["requested_role"] == "architecture":
         evidence = source_relationship_evidence(content)
         if evidence["edge_count"]:
@@ -1047,6 +1074,9 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
     image_bytes = sum(len(part.data) for part in images)
     rules = svg_author_rules(style_snapshot, body_floor, new_copy=new_copy,
                              source_preserved=source_preserved)
+    # Gated rewrite of this call's rules string only, never of the rule constants.
+    rules = outbound_rules(rules, view_plan,
+                           previous_svg_compacted=previous_svg_shown and previous_svg_compacted)
     if readability_policy is not None:
         from services.document_canvas_generation import svg_readability_rules
 
@@ -1163,9 +1193,15 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
     vector_used: set = set()
     declarations = None
     coverage_receipt = {}
+    output_view_inbound = None
     if not re.search(r"<!|<\?", svg):
         try:
             root = ET.fromstring(svg)
+            if view_plan is not None:
+                # Canonical ids -> source table rows -> text defaults, before anything
+                # (declarations, icons, classification coverage) reads the tree. The same
+                # restoration replays every stored raw (svg_author_output_view).
+                output_view_inbound = apply_plan(root, view_plan)
             # Declaration attributes are outside the SVG contract: strip them
             # before anything validates or stores the tree.
             declarations = extract_native_declarations(root)
@@ -1218,5 +1254,7 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
             **repair_receipt,
             **visual_intent_receipt(visual_intent),
             **({"vector_icons_used": sorted(vector_used)} if any(v.get("vector") is not None
-                                                                 for v in manifest.values()) else {})},
+                                                                 for v in manifest.values()) else {}),
+            **({"output_view": output_view_receipt(view_plan, output_view_inbound)}
+               if view_plan is not None else {})},
             native_declarations=declarations)

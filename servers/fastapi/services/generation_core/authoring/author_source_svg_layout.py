@@ -36,7 +36,7 @@ def _whole_page_facts(page, image_slots):
                 "element_id": _whole_page_element_id(block.source_block_id), "data": block.payload}
         if any(key in block.payload for key in ("headEnd", "tailEnd", "stCxn", "endCxn")):
             fact["semantic_role"] = block.semantic_role
-        if block.kind == "image":
+        if block.kind == "image" and image_slots is not None:
             fact["slot_id"] = image_slots[block.source_block_id]
         if block.kind == "table":
             fact["element_id"] = source_table_group_id(block.source_block_id)
@@ -66,20 +66,37 @@ def _whole_page_facts(page, image_slots):
     return facts
 
 
-def source_binding_correction_hint(page, image_slots, previous_response, hint):
-    """Explain source failures to the existing bounded provider correction only."""
+def whole_page_view_facts(page):
+    """The page's canonical ``source_facts`` without image slot ids.
+
+    Everything a source output view reads (kinds, element ids, cells, table rows) and nothing
+    that needs the job's asset offer, so a replay of a stored raw response can rebuild it.
+    """
+    return _whole_page_facts(page, None)
+
+
+def source_binding_correction_hint(page, image_slots, previous_response, hint, *, output_view=None):
+    """Explain source failures to the existing bounded provider correction only.
+
+    ``output_view`` is the job's pinned source output view: the previous response is restored
+    to canonical ids before it is compared, and the hint stays canonical (the author shows it
+    to the model through the same view).
+    """
     if not hint or not hint.startswith(("svg_source_receipt_", "svg_source_native_table_", "svg_contract_invalid_id")) or not isinstance(previous_response, str):
         return hint
     from services.svg_contract import normalize_svg_response, SVG_NS
+    from services.svg_author_output_view import parse_author_response
 
     svg = normalize_svg_response(previous_response)
     if re.search(r"<!|<\?", svg):
         return hint
+    facts = _whole_page_facts(page, image_slots) if output_view is not None else None
     try:
-        root = ET.fromstring(svg)
+        root, _ = parse_author_response(previous_response, view=output_view, source_facts=facts)
     except ET.ParseError:
         return hint
-    facts = _whole_page_facts(page, image_slots)
+    if facts is None:
+        facts = _whole_page_facts(page, image_slots)
     expected = {}
     chart_ids = {fact["element_id"] for fact in facts if fact["kind"] == "chart"}
     for fact in facts:
@@ -209,6 +226,11 @@ async def _author_source_whole_page(manifest, page_index, style_snapshot, *, sou
             "source_id/element_id and connection-site idx. Keep those attachments and geometry flips "
             "when freely repositioning nodes; never reverse or replace a source relationship. "
         )
+    from services.svg_author_output_view import outbound_source_rules, output_view_plan, snapshot_output_view
+
+    output_view = snapshot_output_view(style_snapshot)
+    source_rules = outbound_source_rules(source_rules, output_view_plan(output_view, facts))
+    view_kwargs = {"output_view": output_view, "source_facts": facts} if output_view is not None else {}
     from services.svg_authoring_profile import read_quality_recovery_policy
 
     correction_kwargs = {}
@@ -227,7 +249,7 @@ async def _author_source_whole_page(manifest, page_index, style_snapshot, *, sou
         receipt_attempt_ordinal=receipt_attempt_ordinal, before_dispatch=before_dispatch,
         visual_intent=visual_intent, previous_svg=previous_svg,
         writing_policy=writing_policy, source_preserved=True, header_page=header_page,
-        author_attempt_identity=author_attempt_identity, **correction_kwargs)
+        author_attempt_identity=author_attempt_identity, **correction_kwargs, **view_kwargs)
     authored.receipt["source_authoring_contract"] = style_snapshot["source_authoring_contract"]
     if authored.receipt.get("validation_error"):
         return authored

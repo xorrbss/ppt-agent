@@ -30,6 +30,7 @@ from utils.get_env_concurrency import (
     get_svg_illustration_timeout_seconds_env,
     get_svg_render_concurrency_env,
     get_svg_render_concurrency_source_reflow_env,
+    get_svg_source_output_view_env,
     get_workspace_operation_max_concurrency_env,
 )
 

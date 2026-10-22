@@ -189,6 +189,10 @@ CODE_FILES = (
     "utils/codex_stream_adapter.py",
     "utils/llm_calls/prepare_svg_common_header_titles.py",
     "services/generation_core/authoring/author_slide_svg.py",
+    "services/svg_author_output_view.py",
+    "services/generation_core/authoring/source_id_alias.py",
+    "services/svg_text_defaults.py",
+    "services/generation_core/authoring/author_source_svg_layout.py",
     "models/presentation_outline_model.py",
     "utils/slide_capture_result.py",
     "utils/slide_capture.py",
@@ -2178,6 +2182,33 @@ def _recovery_source_pages(source, job, validation=None):
         return validation[2]
     return source_pages(source, chart_contract=chart)
 
+
+def _replay_output_view(job, source, index, validation=None, *,
+                        code="svg_partial_recovery_source_transform_unproven"):
+    """(view, facts) to re-derive a stored raw author response of this job's page.
+
+    The view is the one the job pinned at admission, so a replay restores a compact response
+    exactly as its producer did; ``(None, None)`` for jobs without a pin (today's parse). A pin
+    this code cannot interpret rejects with its own code: a replay never guesses.
+    """
+    from services.svg_author_output_view import output_view_plan, snapshot_output_view
+    try:
+        view = snapshot_output_view(getattr(job, "svg_style_snapshot", None))
+    except ValueError as error:
+        raise PartialRecoveryRejected(str(error)) from error
+    if view is None:
+        return None, None
+    from services.generation_core.authoring.author_source_svg_layout import whole_page_view_facts
+    try:
+        facts = whole_page_view_facts(_recovery_source_pages(source, job, validation)[index])
+        output_view_plan(view, facts)
+    except PartialRecoveryRejected:
+        raise
+    except (ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+        raise PartialRecoveryRejected(code) from error
+    return view, facts
+
+
 def _source_author_render_witness(svg, payload, raw, *, job, row, completed):
     """Keep source-only replay unrendered until the existing real render path."""
     value = {'author_svg_sha256': sha256_hex(svg.encode()),
@@ -2212,7 +2243,7 @@ def _author_render_chain(payload, raw, receipt, *, request, job, asset, index,
     import json
     import xml.etree.ElementTree as ET
     from services.authored_canvas import request_canvas_contract
-    from services.svg_contract import normalize_svg_response, finalize_svg
+    from services.svg_contract import finalize_svg
     from services.svg_default_fonts import normalize_model_font_families
     from services.generation_core.drivers.svg.native_declarations import (
         extract_native_declarations, declaration_receipt,
@@ -2246,8 +2277,10 @@ def _author_render_chain(payload, raw, receipt, *, request, job, asset, index,
     recorded_used = receipt.get("vector_icons_used") or []
     if (vectors or recorded_used or vector_offer.get("offered")) and vector_seed_witness is None:
         reject("svg_partial_recovery_vector_transform_unproven")
+    from services.svg_author_output_view import parse_author_response
+    view, view_facts = _replay_output_view(job, source, index, _source_validation)
     try:
-        root = ET.fromstring(normalize_svg_response(raw))
+        root, _ = parse_author_response(raw, view=view, source_facts=view_facts)
     except ET.ParseError as error:
         raise PartialRecoveryRejected("svg_partial_recovery_author_transform_unproven") from error
     declarations = extract_native_declarations(root)
@@ -2352,7 +2385,7 @@ def _author_render_chain(payload, raw, receipt, *, request, job, asset, index,
                 and terminal.get("receipt_digest") == digest({
                     key: value for key, value in terminal.items() if key != "receipt_digest"})):
             try:
-                prior_root = ET.fromstring(normalize_svg_response(previous_raw))
+                prior_root, _ = parse_author_response(previous_raw, view=view, source_facts=view_facts)
                 if vectors:
                     from services.generation_core.drivers.svg.embed_assets import replace_vector_icon_images
                     replace_vector_icon_images(prior_root, vectors)
@@ -2587,8 +2620,10 @@ def _replay_sealed_author_transform(payload, raw, *, request, job, asset, index,
     recorded_used = receipt.get('vector_icons_used') or []
     if (vectors or recorded_used or vector_offer.get('offered')) and vector_seed_witness is None:
         reject('svg_partial_recovery_vector_transform_unproven')
+    from services.svg_author_output_view import parse_author_response
+    view, view_facts = _replay_output_view(job, source, index, _source_validation)
     try:
-        root = ET.fromstring(normalize_svg_response(raw))
+        root, view_receipt = parse_author_response(raw, view=view, source_facts=view_facts)
     except ET.ParseError as error:
         raise PartialRecoveryRejected('svg_partial_recovery_author_transform_unproven') from error
     declarations = extract_native_declarations(root)
@@ -2629,6 +2664,9 @@ def _replay_sealed_author_transform(payload, raw, *, request, job, asset, index,
         except (ValueError, TypeError, KeyError, IndexError) as error:
             raise PartialRecoveryRejected('svg_partial_recovery_source_transform_unproven') from error
         source_projection['source_preservation'] = deepcopy(preservation)
+        if view_receipt is not None:
+            # The producer's receipt entry, recomputed from the same raw and pinned view.
+            source_projection['output_view'] = view_receipt
         return rebound, rebound, sha256_hex(rebound.encode()), declarations, used, []
     author_digest = sha256_hex(author_svg.encode())
     normalized, advisories = normalize_model_font_families(author_svg)
@@ -2638,9 +2676,9 @@ def _replay_sealed_author_transform(payload, raw, *, request, job, asset, index,
     return (normalized, first, author_digest, declarations, used, advisories)
 
 
-async def _completed_repair_author_projection(payload, row, *, job, operation, seed, episode_calls, completed):
+async def _completed_repair_author_projection(payload, row, *, job, operation, seed, episode_calls, completed,
+                                              source=None, _source_validation=None):
     """Separate a sealed current repair author output from its approved prior render."""
-    import xml.etree.ElementTree as ET
     marker = payload.get('quality_recovery') or {}
     if not isinstance(marker, dict) or marker.get('status') != 'repair_pending' or row.author_status != 'completed' or (row.render_status != 'completed') or (row.persist_status != 'pending') or (not isinstance(payload.get('svg_content'), str)) or (not payload['svg_content'].strip()) or (not isinstance(completed, dict)):
         return None
@@ -2711,8 +2749,10 @@ async def _completed_repair_author_projection(payload, row, *, job, operation, s
     except (OSError, ValueError, TypeError, KeyError, IndexError) as error:
         raise PartialRecoveryRejected('svg_partial_recovery_completed_repair_unproven') from error
     from services.generation_core.drivers.svg.native_declarations import bound_declarations, extract_native_declarations, declaration_receipt
-    from services.svg_contract import normalize_svg_response
-    native = extract_native_declarations(ET.fromstring(normalize_svg_response(completed['raw_response'])))
+    from services.svg_author_output_view import parse_author_response
+    view, view_facts = _replay_output_view(job, source, row.slide_index, _source_validation)
+    native = extract_native_declarations(parse_author_response(
+        completed['raw_response'], view=view, source_facts=view_facts)[0])
     bound, binding_valid = bound_declarations(payload, payload['svg_content'])
     if (native is None) != (bound is None) or (native is not None and (not binding_valid or not isinstance(bound, dict) or native.get('objects') != bound.get('objects') or (native.get('dropped') != bound.get('dropped')))):
         reject('svg_partial_recovery_completed_native_unproven')
@@ -2852,6 +2892,8 @@ async def _terminal_repair_author_projection(payload, row, *, job, operation, se
         projected['source_preservation'] = deepcopy(source_projection['source_preservation'])
         receipt.update(source_preservation=deepcopy(source_projection['source_preservation']),
             source_authoring_contract=deepcopy(job.svg_style_snapshot.get('source_authoring_contract')))
+        if source_projection.get('output_view') is not None:
+            receipt['output_view'] = deepcopy(source_projection['output_view'])
     projected.setdefault('attempts', []).append({'kind': 'sealed_terminal_replay', 'raw_response': completed['raw_response'], 'receipt': receipt})
     for key in ('quality', 'initial_quality', 'png_path', 'png_sha256', 'browser_metrics', 'local_readability_repair'):
         projected.pop(key, None)
@@ -2989,7 +3031,8 @@ async def _completed_source_author_projection(payload, row, *, job, operation, e
     projected = deepcopy(payload)
     projected.update(svg_content=normalized, last_valid_svg=normalized, source_digest=None, fontAdvisories=advisories)
     if source_projection:
-        if receipt.get('source_preservation') != source_projection['source_preservation']:
+        if (receipt.get('source_preservation') != source_projection['source_preservation']
+                or receipt.get('output_view') != source_projection.get('output_view')):
             reject('svg_partial_recovery_source_transform_unproven')
         projected['source_preservation'] = deepcopy(source_projection['source_preservation'])
     for key in ("quality", "initial_quality", "png_path", "png_sha256", "browser_metrics", "local_readability_repair"):
@@ -3616,12 +3659,14 @@ async def _completed_invalid_source_output(payload, row, *, completed, job, oper
         if len(matches) != 1:
             reject(code)
         image_slots[block.source_block_id] = matches[0]
+    from services.svg_author_output_view import parse_author_response
+    view, view_facts = _replay_output_view(job, source, row.slide_index, _source_validation, code=code)
     svg = normalize_svg_response(raw)
     if "<!" in svg or "<?" in svg:
         reject(code)
     historical_grid = None
     try:
-        root = ET.fromstring(svg)
+        root, _ = parse_author_response(raw, view=view, source_facts=view_facts)
         declarations = extract_native_declarations(root)
         from services.generation_core.drivers.svg.embed_assets import replace_vector_icon_images
         used = replace_vector_icon_images(root, vectors) if vectors else set()
@@ -4019,7 +4064,9 @@ async def build_manifest(session, operation, *, presentation_revision):
             binding=binding, vectors=vector_maps[row.slide_index], header_producer=header_producer, _source_validation=source_validation)
         if invalid_source is not None:
             completed_output_failure = invalid_source["reason"]
-        completed_projection = None if invalid_source else await _completed_repair_author_projection(payload, row, completed=completed, job=job, operation=operation, seed=seed, episode_calls=episode_calls)
+        completed_projection = None if invalid_source else await _completed_repair_author_projection(
+            payload, row, completed=completed, job=job, operation=operation, seed=seed,
+            episode_calls=episode_calls, source=source, _source_validation=source_validation)
         if completed_projection is None and invalid_source is None:
             completed_projection = await _terminal_repair_author_projection(payload, row, completed=completed, job=job, operation=operation, seed=seed, episode_calls=episode_calls, session=session, request=request, binding=binding, vectors=vector_maps[row.slide_index], vector_seed_witness=vector_seed_witness, source=source, _source_validation=source_validation)
         if completed_projection:

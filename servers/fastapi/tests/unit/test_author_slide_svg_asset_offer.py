@@ -1638,3 +1638,208 @@ def test_v2_author_changes_only_reference_input_and_records_actual_reference_dig
     with pytest.raises(AuthoredStageError) as paint_rejection:
         asyncio.run(measured_paint_failure(1))
     assert paint_rejection.value.code == "svg_source_paint_occluded"
+
+
+# --- source output view (svg_author_output_view) ---------------------------------------------------
+
+_CANONICAL_ID = r"source-fact-[0-9a-f]{20}|source-native-table-[0-9a-f]{16}"
+
+
+def _assembled_prompt(seen):
+    return "\n".join(message.content if isinstance(message.content, str) else "\n".join(
+        part.text for part in message.content if hasattr(part, "text")) for message in seen["messages"])
+
+
+def _source_output_view_run(monkeypatch, source, response, *, pinned, image_slots, **options):
+    from test_svg_output_view import V1
+    from services.generation_core.authoring.author_source_svg_layout import author_source_svg_layout
+
+    seen = {}
+    _stub_provider(monkeypatch, response, seen)
+    style = {**_style(), "source_authoring_contract": {"version": "svg-source-whole-page/v1"},
+             **({"source_output_view": V1} if pinned else {})}
+    slots = {slot: {"data_url": _data_url(), "required": True} for slot in image_slots.values()}
+    result = asyncio.run(author_source_svg_layout(source, 0, style, source_images=slots,
+        image_slots=image_slots, min_font_size_px=18, **options))
+    return result, seen
+
+
+def test_whole_page_compact_response_is_restored_to_the_canonical_page(monkeypatch):
+    import re
+    from test_svg_output_view import IMAGE_SLOT, page_responses, source_page
+    from services.generation_core.authoring.source_id_alias import ALIAS_RULE_SENTENCE
+    from services.svg_contract import source_digest
+    from services.svg_source_layout import verify_source_receipt
+
+    source = source_page(image=True)
+    slots = {"p0:2": IMAGE_SLOT}
+    canonical, compact, _ = page_responses(source, image_slots=slots)
+    off, off_seen = _source_output_view_run(monkeypatch, source, canonical, pinned=False, image_slots=slots)
+    verbose, _ = _source_output_view_run(monkeypatch, source, canonical, pinned=True, image_slots=slots)
+    viewed, seen = _source_output_view_run(monkeypatch, source, compact, pinned=True, image_slots=slots)
+
+    assert off.receipt["validation_error"] is None and "output_view" not in off.receipt
+    for result in (verbose, viewed):
+        assert result.receipt["validation_error"] is None
+        assert result.svg_content == off.svg_content
+        assert result.native_declarations == off.native_declarations
+        assert result.receipt["native_declarations"] == off.receipt["native_declarations"]
+        assert verify_source_receipt(result.svg_content, result.receipt["source_preservation"], source, 0)
+    # No source line-break restoration on this page, so no raw digest enters the preservation receipt.
+    assert verbose.receipt["source_preservation"] == off.receipt["source_preservation"]
+    assert viewed.receipt["source_preservation"] == off.receipt["source_preservation"]
+    # The literal model output stays literal.
+    assert viewed.raw_response == compact and viewed.receipt["raw_digest"] == source_digest(compact)
+    assert viewed.receipt["output_view"]["inbound"] == {
+        "id_alias": {"aliased": 7, "canonical": 0, "unknown_alias": 0, "part": 0},
+        "native_table_rows": {"expanded": 1, "full_form": 0, "absent": 0, "foreign": 0},
+        "text_defaults": {"texts_filled": 5, "containers_stripped": 1}}
+    assert verbose.receipt["output_view"]["inbound"]["id_alias"]["canonical"] == 7
+    # The model reads aliases and the compact rules; canonical ids never reach it.
+    prompt = _assembled_prompt(seen)
+    assert not re.search(_CANONICAL_ID, prompt)
+    assert '"element_id": "t1"' in prompt and '"element_id": "c4"' in prompt and IMAGE_SLOT in prompt
+    assert ALIAS_RULE_SENTENCE in prompt and '{"headerRows":N}' in prompt
+    assert 'font-family="F" font-size="S"' in prompt
+    assert "source_output_view" not in prompt
+    off_prompt = _assembled_prompt(off_seen)
+    assert ALIAS_RULE_SENTENCE not in off_prompt and '{"headerRows":N}' not in off_prompt
+
+
+def test_source_output_view_is_passed_only_for_a_pinned_job(monkeypatch):
+    from test_svg_output_view import V1, page_responses, source_page
+    from services.generation_core.authoring import author_source_svg_layout as layout
+
+    source = source_page()
+    canonical, _, facts = page_responses(source)
+    captured = []
+    real = module.author_slide_svg
+
+    async def spy(**kwargs):
+        captured.append(kwargs)
+        return await real(**kwargs)
+    monkeypatch.setattr(module, "author_slide_svg", spy)
+    _source_output_view_run(monkeypatch, source, canonical, pinned=False, image_slots={})
+    _source_output_view_run(monkeypatch, source, canonical, pinned=True, image_slots={})
+    assert "output_view" not in captured[0] and "source_facts" not in captured[0]
+    assert captured[1]["output_view"] == V1 and captured[1]["source_facts"] == facts
+    assert layout.whole_page_view_facts(source.units[0]) == facts
+    with pytest.raises(ValueError, match="svg_output_view_scope_invalid"):
+        asyncio.run(real(content="x", style_snapshot=_style(), role="content", index=0, n=1,
+                         output_view=V1, source_facts=facts))
+
+
+def test_output_view_repair_shows_compact_previous_svg_and_keeps_canonical_digests(monkeypatch):
+    import re
+    import xml.etree.ElementTree as ET
+    from test_svg_output_view import V1, page_responses, source_page
+    from utils.hashing import canonical_json_digest
+    from services.generation_core.drivers.svg.native_declarations import extract_native_declarations
+    from services.svg_contract import source_digest
+    from services.svg_text_defaults import TEXT_DEFAULTS_REPAIR_SENTENCE
+
+    source = source_page()
+    canonical, compact, facts = page_responses(source)
+    stored_root = ET.fromstring(canonical)
+    extract_native_declarations(stored_root)
+    previous = ET.tostring(stored_root, encoding="unicode")
+    content = json.dumps({"source_authoring_contract": {"version": "svg-source-whole-page/v1"},
+                          "source_page_id": "p0", "source_facts": facts}, ensure_ascii=False)
+    style = _art_direction_style(source_authoring_contract={"version": "svg-source-whole-page/v1"})
+    style["authoring_profile"]["version"] = 8
+    style["digest"] = canonical_json_digest({k: v for k, v in style.items() if k != "digest"})
+    pinned = {**style, "source_output_view": V1}
+    pinned["digest"] = canonical_json_digest({k: v for k, v in pinned.items() if k != "digest"})
+    hint = "svg_source_receipt_binding_mismatch\n" + json.dumps(
+        {"missing": [{"element_id": facts[1]["cells"][3]["element_id"]}]})
+
+    def run(snapshot, **view):
+        seen = {}
+        _stub_provider(monkeypatch, compact if view else canonical, seen)
+        result = asyncio.run(module.author_slide_svg(content, snapshot, "content", 0, 1, correction_hint=hint,
+            previous_svg=previous, source_preserved=True, receipt_attempt_ordinal=2, **view))
+        return result, _assembled_prompt(seen)
+
+    off, off_prompt = run(style)
+    viewed, prompt = run(pinned, output_view=V1, source_facts=facts)
+    assert json.dumps({"previous_svg": previous}, ensure_ascii=False) in off_prompt
+    assert TEXT_DEFAULTS_REPAIR_SENTENCE not in off_prompt and "output_view" not in off.receipt
+    assert viewed.receipt["repair_input_svg_digest"] == source_digest(previous)
+    assert off.receipt["repair_input_svg_digest"] == source_digest(previous)
+    assert json.dumps({"previous_svg": previous}, ensure_ascii=False) not in prompt
+    assert not re.search(_CANONICAL_ID, prompt)
+    assert '\\"element_id\\": \\"c4\\"' in prompt
+    assert TEXT_DEFAULTS_REPAIR_SENTENCE + "." in prompt
+    assert viewed.svg_content == off.svg_content and viewed.native_declarations == off.native_declarations
+
+
+def test_binding_correction_hint_reads_a_compact_response_and_reaches_the_model_aliased(monkeypatch):
+    import re
+    from test_svg_output_view import V1, page_responses, source_page
+    from services.generation_core.authoring.author_source_svg_layout import source_binding_correction_hint
+
+    source = source_page()
+    _, compact, facts = page_responses(source)
+    cell = facts[1]["cells"][3]
+    bad = compact.replace(f'>{cell["text"]}</text>', '>1,201</text>')
+    failed, _ = _source_output_view_run(monkeypatch, source, bad, pinned=True, image_slots={})
+    error = failed.receipt["validation_error"]
+    assert error and error.startswith("svg_source_")
+    assert failed.receipt["output_view"]["inbound"]["id_alias"]["aliased"] == 6
+    hint = source_binding_correction_hint(source.units[0], {}, bad, error, output_view=V1)
+    detail = json.loads(hint.split("\n", 1)[1])["source_binding_correction"]
+    assert detail["mismatched"][0]["element_id"] == cell["element_id"]
+    assert detail["mismatched"][0]["observed_text"] == "1,201"
+    # Without the view the same compact raw explains nothing but missing canonical ids.
+    unviewed = json.loads(source_binding_correction_hint(source.units[0], {}, bad, error).split("\n", 1)[1])
+    assert unviewed["source_binding_correction"]["total_counts"]["missing"] == 6
+    corrected, seen = _source_output_view_run(monkeypatch, source, compact, pinned=True, image_slots={},
+                                              correction_hint=hint, receipt_attempt_ordinal=2)
+    prompt = _assembled_prompt(seen)
+    assert corrected.receipt["validation_error"] is None
+    assert not re.search(_CANONICAL_ID, prompt)
+    assert '\\"element_id\\": \\"c4\\"' in prompt
+
+
+@pytest.mark.parametrize("pinned", [False, True])
+def test_svg_driver_builds_the_binding_hint_through_the_jobs_pinned_view(monkeypatch, pinned):
+    from test_svg_output_view import V1, page_responses, source_page
+    from services.generation_core.authoring import author_source_svg_layout as layout
+    from services.generation_core.drivers.svg.author import attempt_author
+    from services.svg_source_layout import source_pages
+
+    source = source_page()
+    _, compact, facts = page_responses(source)
+    cell = facts[1]["cells"][3]
+    bad = compact.replace(f'>{cell["text"]}</text>', '>1,201</text>')
+    seen = {}
+
+    class Stop(Exception):
+        pass
+
+    async def capture(*args, **kwargs):
+        seen.update(kwargs)
+        raise Stop
+    monkeypatch.setattr(layout, "author_source_svg_layout", capture)
+    snapshot = {"source_authoring_contract": {"version": "svg-source-whole-page/v1"},
+                **({"source_output_view": V1} if pinned else {})}
+    ctx = SimpleNamespace(manifests=[{}], canonical_assets=False, asset_offer=None, visual_intents=None,
+        source_reflow=True, raster_reconstruction=False, snapshot=snapshot, physical_kwargs={},
+        planned=[{}], source_document=source, source_units=source_pages(source),
+        canvas=SimpleNamespace(width_px=1280, height_px=720))
+    payload = {"attempts": [{"kind": "provider", "raw_response": bad, "receipt": {}}], "inflight": None,
+               "repair_hint": "svg_source_receipt_text_mismatch", "last_valid_svg": None}
+
+    async def checkpoint(*_args, **_kwargs):
+        return None
+    with pytest.raises(Stop):
+        asyncio.run(attempt_author(ctx=ctx, request=SimpleNamespace(instructions=""), index=0, content="",
+            role="content", count=1, payload=payload, ordinal=1, provider_ordinal=2, job=None,
+            state=SimpleNamespace(fatal_error=None), checkpoint=checkpoint, async_session_maker=None))
+    detail = json.loads(seen["correction_hint"].split("\n", 1)[1])["source_binding_correction"]
+    if pinned:
+        assert detail["total_counts"]["mismatched"] == 1 and detail["total_counts"]["missing"] == 0
+        assert detail["mismatched"][0]["element_id"] == cell["element_id"]
+    else:
+        # A job without a pin reads the raw literally, exactly as before.
+        assert detail["total_counts"]["missing"] == 6

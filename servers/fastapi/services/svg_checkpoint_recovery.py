@@ -66,6 +66,17 @@ async def verified_svg_recovery_checkpoints(session, operation, request, *, pres
     )
     if job is None or job.state == "published" or job.request_payload.get("strategy") != "svg":
         return None
+    if request.recovery_revision in {SVG_COMMENT_RECOVERY, SVG_PROVIDER_RECOVERY}:
+        # These resets restore svg_content from the literal last raw response. A job with a
+        # pinned author output view stores compact raws that only a page-aware replay
+        # (svg_author_output_view.parse_author_response) restores, so they fail closed here.
+        from services.svg_author_output_view import snapshot_output_view
+
+        try:
+            if snapshot_output_view(getattr(job, "svg_style_snapshot", None)) is not None:
+                return None
+        except ValueError:
+            return None
     rows = list(
         await session.scalars(
             select(AuthoredSlideCheckpoint)

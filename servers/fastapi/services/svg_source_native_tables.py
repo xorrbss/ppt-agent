@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 from xml.etree import ElementTree as ET
 
+from services.generation_core.drivers.svg.native_declarations import TABLE_ATTRIBUTE
 from services.generation_core.drivers.svg.native_geometry import Box, collect_primitives, normalize_cell
 from services.generation_core.drivers.svg.native_paint import background_layers, cell_borders, effective_fill, group_strokes
 from services.generation_core.drivers.svg.native_table import TABLE_ELEMENTS, _text_style
@@ -263,3 +265,166 @@ def source_table_native_objects(svg, receipt, manifest, page_index, *, pt_per_px
     return (NativeObjects(tuple(objects)).to_wire() if objects else None,
             {"declared": len(evidence), "accepted": len(objects), "dropped": [],
              "source_cells_verified": True} if evidence else None)
+
+
+# --- Source output view, native-table stage -----------------------------------------------------
+# The model writes ``data-native-table='{"headerRows":N}'`` on a source table group; the server
+# rebuilds today's full declaration from the table's immutable source cells.  Publication and export
+# of source tables read the source cells and the drawn grid, never the model's JSON, so the rows are
+# only a parse-time copy.  ``services/generation_core/drivers/svg/native_declarations.py`` is a
+# digest-pinned converter file and is deliberately left untouched: the rule wording is rewritten on
+# the per-call rules string instead, never on a module constant.
+
+NATIVE_TABLE_VIEW_VERSION = "svg-native-table-source-rows/v1"
+
+#: Message of every rule rewriter when the sentence it replaces is not exactly once in its input.
+_RULE_ANCHOR_MISSING = "svg_output_view_rule_anchor_missing"
+
+
+def source_table_rows_from_facts(facts) -> dict[str, list[list[str]]]:
+    """Canonical source-table group id -> declaration rows, from whole-page ``source_facts``.
+
+    Each row list has the source grid's size (``data.rows``, as ``svg_source_layout._cells`` reads
+    it); the anchor cell's source text sits at (row, column) and every merge-covered or empty
+    position holds ``""``.  Only ``cells[]`` text is read, so the prompt view that drops
+    ``data.rows[r][c].text`` is equivalent.  ``facts`` must carry canonical ids (before any alias).
+    Facts are server-built, not model output: a malformed table fact is a server defect and raises
+    ``ValueError("svg_output_view_table_facts_invalid")`` instead of yielding wrong rows.
+    """
+    tables: dict[str, list[list[str]]] = {}
+    for fact in facts:
+        if not isinstance(fact, dict) or fact.get("kind") != "table":
+            continue
+        group_id, data, cells = fact.get("element_id"), fact.get("data"), fact.get("cells")
+        grid = data.get("rows") if isinstance(data, dict) else None
+        if (not isinstance(group_id, str) or group_id in tables or not isinstance(cells, list)
+                or not isinstance(grid, list) or not grid or not isinstance(grid[0], list) or not grid[0]
+                or any(not isinstance(row, list) or len(row) != len(grid[0]) for row in grid)):
+            raise ValueError("svg_output_view_table_facts_invalid")
+        rows = [["" for _ in grid[0]] for _ in grid]
+        placed = set()
+        for cell in cells:
+            if not isinstance(cell, dict):
+                raise ValueError("svg_output_view_table_facts_invalid")
+            row, column, text = cell.get("row"), cell.get("column"), cell.get("text")
+            if (type(row) is not int or type(column) is not int or not isinstance(text, str)
+                    or not 0 <= row < len(rows) or not 0 <= column < len(rows[0]) or (row, column) in placed):
+                raise ValueError("svg_output_view_table_facts_invalid")
+            placed.add((row, column))
+            rows[row][column] = text
+        tables[group_id] = rows
+    return tables
+
+
+def _compact_table_declaration(value: str) -> dict | None:
+    """The parsed compact declaration, or ``None`` when ``value`` is not exactly that form.
+
+    Compact means a JSON object whose keys are within ``{"headerRows"}`` and whose ``headerRows``
+    (when present) is an integer; booleans and strings are not integers.
+    """
+    try:
+        raw = json.loads(value)
+    except (ValueError, RecursionError):
+        return None
+    if not isinstance(raw, dict) or not set(raw) <= {"headerRows"}:
+        return None
+    if "headerRows" in raw and type(raw["headerRows"]) is not int:
+        return None
+    return raw
+
+
+def expand_source_table_declarations(root, table_rows) -> dict[str, int]:
+    """Rewrite each compact source-table declaration in ``root`` to today's full form, in place.
+
+    Only a ``data-native-table`` value in the compact form on a node whose ``id`` is a key of
+    ``table_rows`` is rewritten, to ``{"rows": <source rows>, "headerRows": N}`` serialized as the
+    model writes it (``ensure_ascii=False``, compact separators).  Nothing is ever synthesized and
+    nothing raises on model output; every other declaration is left for the existing validators.
+    Counters:
+
+    * ``expanded``  - compact declarations on source table groups, rewritten
+    * ``full_form`` - declarations on source table groups left as written (full JSON, or any value
+      that is not the compact form, e.g. extra keys, ``"headerRows":"1"``, invalid JSON)
+    * ``absent``    - source table groups (``table_rows`` keys) with no declaration attribute anywhere
+    * ``foreign``   - declarations on nodes whose id is not a source table group of this page
+    """
+    counts = {"expanded": 0, "full_form": 0, "absent": 0, "foreign": 0}
+    declared = set()
+    for node in root.iter():
+        value = node.get(TABLE_ATTRIBUTE)
+        if value is None:
+            continue
+        group_id = node.get("id")
+        if group_id not in table_rows:
+            counts["foreign"] += 1
+            continue
+        declared.add(group_id)
+        compact = _compact_table_declaration(value)
+        if compact is None:
+            counts["full_form"] += 1
+            continue
+        node.set(TABLE_ATTRIBUTE, json.dumps({"rows": table_rows[group_id], **compact},
+                                             ensure_ascii=False, separators=(",", ":")))
+        counts["expanded"] += 1
+    counts["absent"] = sum(1 for group_id in table_rows if group_id not in declared)
+    return counts
+
+
+# The native table rule is ``NATIVE_TABLE_RULE`` in native_declarations.py, concatenated into the
+# per-call rules by ``author_slide_svg.svg_author_rules``.  Each (old, new) pair below is applied
+# exactly once; the old text is anchored on its neighbouring words so a second application cannot
+# match the rewritten sentence.
+_COMPACT_TABLE_RULE_EDITS = (
+    ('one explicit y per line). JSON is {"rows":[["Header","Header"],["cell","1,200"]],"headerRows":1}:',
+     'one explicit y per line). For a source table (a source_facts entry of kind table) the group id is its '
+     'element_id and the JSON is only {"headerRows":N} (N = the rows you draw as header); the server fills '
+     "the rows from that table's source cells, so never copy cell text into this attribute. "
+     'For any other table JSON is {"rows":[["Header","Header"],["cell","1,200"]],"headerRows":1}:'),
+    ("Preserve explicit source cell paragraph breaks in the drawing and JSON;",
+     "Preserve explicit source cell paragraph breaks in the drawing;"),
+)
+# Conditional edits: (marker, (old, new)).  The sentence is rewritten only where its marker is
+# present, and once the marker is there the exact sentence must be too, otherwise a reworded
+# sentence would keep contradicting the compact form.
+_COMPACT_CONDITIONAL_RULE_EDITS = (
+    # The source-grounded addendum of the native rule (quality policy v2 only).
+    ("When current source-native bindings or source visual evidence explicitly establish a horizontal merged cell",
+     ("Keep the exact rectangular rows and original empty covered cells in JSON; never repeat the value "
+      "into the covered cells or add mergedCells to this declaration.",
+      "For a source table the server writes the exact rectangular rows and original empty covered cells, so "
+      "declare only headerRows; for any other table keep them in JSON. Never repeat the value into the "
+      "covered cells or add mergedCells to this declaration.")),
+    # ``SVG_AUTHOR_RULES`` (and so ``SVG_NEW_COPY_AUTHOR_RULES``): every svg_author_rules() output
+    # carries it, a bare native rule string does not.
+    ("must have its own data-native-table",
+     ("Every explicitly requested table or supported data chart must have its own data-native-table or\n"
+      "data-native-chart declaration containing that exact requested data.",
+      "Every explicitly requested table or supported data chart must have its own data-native-table or\n"
+      "data-native-chart declaration. A chart declaration, and the declaration of a table that is not a "
+      "source table, contains that exact requested data; for a source table the compact "
+      '{"headerRows":N} declaration is that declaration and the server supplies its rows.')),
+)
+
+
+def compact_source_table_rules(rules: str) -> str:
+    """The svg author rules with the native table sentences rewritten for the compact declaration.
+
+    Apply it only to the per-call rules string, never to ``SVG_AUTHOR_RULES`` or any rule constant
+    (the constants are digest inputs).  Raises ``ValueError("svg_output_view_rule_anchor_missing")``
+    when a sentence to replace is absent or not unique, which includes a second application.
+    """
+    edits = list(_COMPACT_TABLE_RULE_EDITS)
+    edits += [edit for marker, edit in _COMPACT_CONDITIONAL_RULE_EDITS if marker in rules]
+    for old, new in edits:
+        if rules.count(old) != 1:
+            raise ValueError(_RULE_ANCHOR_MISSING)
+        rules = rules.replace(old, new)
+    return rules
+
+
+#: (old, new) for ``author_source_svg_layout._author_source_whole_page``'s ``source_rules``: the
+#: source rule says to keep table group attributes to the id, which the compact declaration extends.
+COMPACT_SOURCE_TABLE_GROUP_RULE = (
+    "keep table group attributes to its id, with no transform",
+    "keep table group attributes to its id and the compact data-native-table, with no transform",
+)

@@ -327,6 +327,12 @@ def pin_svg_style(request: object) -> dict:
                     chart_contract = admitted_source_chart_contract(request)
                     if chart_contract is not None:
                         frozen["source_chart_contract"] = deepcopy(chart_contract)
+                    # The author output view is pinned once, like the contract above, so
+                    # every attempt and replay of this job reads its responses the same way.
+                    from services.svg_author_output_view import admission_output_view
+                    output_view = admission_output_view(request)
+                    if output_view is not None:
+                        frozen["source_output_view"] = output_view
                     # The existing source measurement embeds this frozen font
                     # material; whole-page authors must receive the same family.
                     fonts = frozen["source_template"]["fonts"]
@@ -353,6 +359,8 @@ def pin_svg_style(request: object) -> dict:
         validate_svg_readability_policy(frozen.get("readability_policy"))
         if frozen.get("source_authoring_contract") not in (None, {"version": "svg-source-whole-page/v1"}):
             raise ValueError("svg_source_authoring_contract_invalid")
+        from services.svg_author_output_view import snapshot_output_view
+        snapshot_output_view(frozen)
         from services.svg_source_charts import validate_source_chart_contract
         validate_source_chart_contract(frozen.get("source_chart_contract"))
         if frozen.get("source_chart_contract") and frozen.get("source_authoring_contract") != {"version": "svg-source-whole-page/v1"}:
