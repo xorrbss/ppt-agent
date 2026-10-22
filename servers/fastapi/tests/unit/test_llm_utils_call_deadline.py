@@ -17,6 +17,7 @@ import threading
 import time
 from types import SimpleNamespace
 
+import httpx
 import pytest
 from fastapi import HTTPException
 
@@ -109,6 +110,9 @@ class _BlockingClient:
         self.stats.enter()
         try:
             timeout = self._client.options.get("timeout") if self.honour_timeout else None
+            if isinstance(timeout, httpx.Timeout):
+                # A blocked request is waiting on its read phase.
+                timeout = timeout.read
             if not self.release.wait(timeout=timeout):
                 raise _FakeSdkTimeout("request timed out")
             return SimpleNamespace(content={"result": "ok"})
@@ -156,7 +160,7 @@ def test_call_deadline_reaches_the_transport_and_pins_max_retries(monkeypatch):
     assert result == {"result": "ok"}
     # The caller's deadline replaces the generic 360 s guard, and the SDK may
     # not silently replay a bounded call after its timeout.
-    assert client.cloned_options == {"max_retries": 0, "timeout": 12.5}
+    assert client.cloned_options == {"max_retries": 0, "timeout": httpx.Timeout(12.5)}
 
 
 def test_without_a_caller_deadline_the_generic_guard_stays(monkeypatch):
@@ -166,7 +170,9 @@ def test_without_a_caller_deadline_the_generic_guard_stays(monkeypatch):
 
     asyncio.run(_structured(client))
 
-    assert client.cloned_options == {"timeout": 360.0}
+    assert client.cloned_options == {
+        "timeout": httpx.Timeout(connect=30.0, read=360.0, write=60.0, pool=30.0)
+    }
 
 
 def test_timed_out_call_is_not_running_when_the_retry_starts(monkeypatch):

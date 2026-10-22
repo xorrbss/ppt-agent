@@ -8,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import uuid
 
+import httpx
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
@@ -40,12 +41,15 @@ from services.workspace_operation_runner import (
 )
 from utils.datetime_utils import get_current_utc_datetime
 from utils.provider_idempotency import (
-    PROVIDER_CALL_TIMEOUT_SECONDS,
     ProviderOutcomeError,
     ProviderQuotaPause,
     provider_generate_call,
 )
 from utils.provider_overload import is_provider_overload, safe_provider_diagnostics
+
+# The generic guard is the read timeout; connect, write and pool get their own
+# shorter limits (see ``_phase_timeout``).
+_GENERIC_PHASE_TIMEOUT = httpx.Timeout(connect=30.0, read=360.0, write=60.0, pool=30.0)
 
 
 _VALID_HTML = (
@@ -194,7 +198,7 @@ def test_every_cloneable_transport_gets_the_bounded_call_timeout():
     assert adapted._client.options is None  # the shared client is never mutated
     assert adapted._client.cloned_options == {
         "max_retries": 0,
-        "timeout": PROVIDER_CALL_TIMEOUT_SECONDS,
+        "timeout": _GENERIC_PHASE_TIMEOUT,
     }
 
     plain = _PlainClient()
@@ -208,9 +212,7 @@ def test_every_cloneable_transport_gets_the_bounded_call_timeout():
     generate()
     # Cloned purely for the timeout: no retry/idempotency adaptation applies.
     assert plain._client.options is None
-    assert plain._client.cloned_options == {
-        "timeout": PROVIDER_CALL_TIMEOUT_SECONDS
-    }
+    assert plain._client.cloned_options == {"timeout": _GENERIC_PHASE_TIMEOUT}
 
 
 def test_call_timeout_is_a_distinct_recoverable_outcome():
@@ -329,7 +331,7 @@ def test_idempotent_overload_retry_reserves_and_stays_inside_deadline():
     assert client.call_count[0] == 2
     assert reserver.claimed is True
     assert reserver.ordinals == [2]
-    assert client._client.cloned_options["timeout"] == 30.0
+    assert client._client.cloned_options["timeout"] == httpx.Timeout(30.0)
     assert client._client.cloned_options["max_retries"] == 0
     assert call.receipt == {
         "schemaVersion": 1,
@@ -474,7 +476,7 @@ def test_a_generic_call_is_untouched_by_a_pending_authored_reservation():
     # reservation was never spent by a call that does not belong to it.
     assert receipt["physicalCallCount"] == 1
     assert receipt["idempotencyCapable"] is False
-    assert client._client.cloned_options == {"timeout": PROVIDER_CALL_TIMEOUT_SECONDS}
+    assert client._client.cloned_options == {"timeout": _GENERIC_PHASE_TIMEOUT}
     assert len(still_pending) == 1
 
 

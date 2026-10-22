@@ -31,6 +31,7 @@ from utils.hashing import canonical_json_digest, sha256_prefixed
 from utils.llm_calls.author_prompt_cache_key import apply_prompt_cache_key
 from utils.llm_calls.author_prompt_profile import authoring_model
 from utils.llm_calls.author_prompt_split import author_messages
+from utils.llm_calls.author_slide_effort import svg_author_call_timeout_seconds
 from services.generation_core.authoring.author_slide import (
     _AUTHOR_EXECUTOR, _authoring_extra_body, _authoring_output_profile, _wait_for_author_rate_slot,
 )
@@ -1136,7 +1137,8 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
                 provider=provider, model=str(model),
                 provider_idempotency_capable=supports_provider_idempotency(client, provider_id=provider)):
             call = provider_generate_call(client, provider_id=provider, kwargs=kwargs,
-                    idempotency_key=current_provider_idempotency_key(), outcome_scope="authored")
+                    idempotency_key=current_provider_idempotency_key(), outcome_scope="authored",
+                    wall_timeout_seconds=svg_author_call_timeout_seconds(budget))
             if before_dispatch is not None:
                 await before_dispatch()
             dispatched = True

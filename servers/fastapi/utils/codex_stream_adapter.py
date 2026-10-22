@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from contextvars import ContextVar
+import time
 from typing import Any, Callable, Iterator, Mapping
 
 from llmai.chatgpt.client import ChatGPTClient
@@ -107,6 +108,7 @@ class _ObservedResponses:
     def create(self, *args: Any, **kwargs: Any) -> Any:
         # Admission/HTTP failures before a stream is returned retain their SDK
         # exception. In particular an actual HTTP 429/503 is not a stream drop.
+        started_at = time.monotonic()
         self.observation = {"streamStage": "before_stream"}
         try:
             if self._observer is not None:
@@ -124,7 +126,7 @@ class _ObservedResponses:
         self.observation = safe_provider_diagnostics(diagnostics={
             "streamStage": "stream_opened",
             "streamHttpStatus": _get(_get(response, "response"), "status_code")})
-        return self._events(response, observer=self._observer, observation=self.observation)
+        return self._events(response, observer=self._observer, observation=self.observation, started_at=started_at)
 
     @staticmethod
     @staticmethod
@@ -134,15 +136,27 @@ class _ObservedResponses:
     @staticmethod
     @staticmethod
     @staticmethod
-    def _events(stream: Any, *, observer=None, observation=None) -> Iterator[Any]:
+    def _events(stream: Any, *, observer=None, observation=None, started_at: float | None = None) -> Iterator[Any]:
         recorder = ProviderTerminalOutcomeRecorder()
         observation = observation if observation is not None else {}
         completed = False
         streamed_parts = []
         created_response_id = None
         streamed_items = set()
+        # Timing diagnostics: create() start -> first event, largest inter-event gap, event count.
+        started_at = time.monotonic() if started_at is None else started_at
+        last_event_at = None
         try:
             for event in stream:
+                now = time.monotonic()
+                if last_event_at is None:
+                    observation['firstEventMs'] = max(0, int((now - started_at) * 1000))
+                    observation['maxEventGapMs'] = 0
+                else:
+                    gap_ms = int((now - last_event_at) * 1000)
+                    observation['maxEventGapMs'] = max(observation.get('maxEventGapMs', 0), gap_ms)
+                last_event_at = now
+                observation['eventCount'] = observation.get('eventCount', 0) + 1
                 recorder.observe_event(event)
                 event_type = _get(event, 'type')
                 response = _get(event, 'response')
