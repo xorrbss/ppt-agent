@@ -6,13 +6,15 @@ import { usePathname } from "next/navigation";
 import React, { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useSelector } from "react-redux";
-import { RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { getPresentationDisplayTitle, getPresentationDisplayStatus } from "@/lib/presentation-display";
 import { tryResolveServerIssuedPresentationProfile } from "@/lib/presentation-profile";
 import type { RootState } from "@/store/store";
 import { DashboardApi, type PresentationResponse } from "../services/api/dashboard";
+import { useGenerationActivity } from "../hooks/useGenerationActivity";
+import { activeGenerationItems } from "../services/api/generation-activity-model";
 import { useGenerationWorkspace } from "../generation-workspace/GenerationWorkspaceProvider";
 
 const DEVAX_SHELL_PATHS = [
@@ -38,6 +40,9 @@ function isPathActive(pathname: string, href: string) {
 
 function DevaxSidebar() {
   const t = useTranslations("slideWorkspace");
+  const tActivity = useTranslations("generationActivity");
+  const activity = useGenerationActivity();
+  const activeGenerationCount = activity ? activeGenerationItems(activity.items).length : 0;
   const locale = useLocale();
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
@@ -134,6 +139,18 @@ function DevaxSidebar() {
             </Link>
           );
         })}
+        {activeGenerationCount > 0 ? (
+          <Link
+            href="/dashboard"
+            className="devax-sidebar__nav-item"
+            data-testid="sidebar-generation-badge"
+            title={tActivity("badge", { count: activeGenerationCount })}
+            aria-label={tActivity("badgeAria", { count: activeGenerationCount })}
+          >
+            <Loader2 className="h-[18px] w-[18px] animate-spin motion-reduce:animate-none" aria-hidden="true" />
+            <span className="devax-sidebar__label">{tActivity("badge", { count: activeGenerationCount })}</span>
+          </Link>
+        ) : null}
       </nav>
 
       <div className="devax-sidebar__section">

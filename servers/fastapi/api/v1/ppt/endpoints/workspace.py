@@ -25,6 +25,7 @@ from fastapi import (
 from fastapi.responses import FileResponse, PlainTextResponse, Response, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from models.generation_activity import GenerationActivityResponse
 from models.sql.workspace import WorkspaceOperation
 from models.workspace import (
     WorkspaceBootstrapRequest,
@@ -61,6 +62,7 @@ from services.workspace_artifact_publication_service import (
     resolve_workspace_export_artifact,
 )
 from services.database import async_session_maker, get_async_session, sql_engine
+from services.generation_activity import generation_activity
 from services.workspace_error_registry import (
     WORKSPACE_ERROR_REGISTRY,
     WorkspaceAPIException,
@@ -283,6 +285,19 @@ async def workspace_capabilities(
         kill_switch_active=False,
         shadow_mode=False,
     )
+
+
+@WORKSPACE_ROUTER.get(
+    "/generation-activity",
+    response_model=GenerationActivityResponse,
+)
+async def get_workspace_generation_activity(
+    session: AsyncSession = Depends(get_async_session),
+) -> GenerationActivityResponse:
+    """The caller's running and queued deck generations, for activity badges."""
+
+    _require_supported_runtime()
+    return await generation_activity(session)
 
 
 @WORKSPACE_ROUTER.get(

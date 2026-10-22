@@ -35,6 +35,7 @@ import SvgDesignReferenceInput from "./SvgDesignReferenceInput";
 import { abortDocumentProcessing } from "./upload-page/abortDocumentProcessing";
 import { useSupportingFiles } from "./upload-page/useSupportingFiles";
 import SourceContentLossDialog from "./upload-page/SourceContentLossDialog";
+import GenerationGuardDialog from "./upload-page/GenerationGuardDialog";
 import RasterSourceReview from "./upload-page/RasterSourceReview";
 import { useUploadPageState } from "./upload-page/useUploadPageState";
 import { useMasterCatalogController } from "./upload-page/useMasterCatalogController";
@@ -151,6 +152,7 @@ const UploadPage = ({
     isSourceContentAnalyzing,
     sourceContentLossPrompt,
     resolveSourceContentLossPrompt,
+    generationGuard,
     rasterReview,
     rasterAnalysisMode,
     canAutoPreserveExistingRaster,
@@ -493,6 +495,11 @@ const UploadPage = ({
         <SourceContentLossDialog
           prompt={sourceContentLossPrompt}
           onDecide={resolveSourceContentLossPrompt}
+        />
+        <GenerationGuardDialog
+          prompt={generationGuard.prompt}
+          onChoose={(choice) => void generationGuard.choose(choice)}
+          onDismiss={generationGuard.dismiss}
         />
       </main>
     </Wrapper>

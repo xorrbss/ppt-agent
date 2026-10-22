@@ -67,6 +67,10 @@ describe("DashboardPage", () => {
   beforeEach(() => {
     apiMocks = new ApiMockManager();
     cy.viewport(testViewports.desktop.width, testViewports.desktop.height);
+    // Default: nothing generating. Individual cases override this intercept.
+    cy.intercept("GET", "**/workspace/generation-activity", {
+      body: { server_time: "2026-10-22T09:00:00+00:00", items: [] },
+    });
   });
 
   afterEach(() => {
@@ -237,6 +241,47 @@ describe("DashboardPage", () => {
         sort: "asc",
       });
     });
+  });
+
+  it("shows in-flight generations above the grid, including a stalled and a queued one", () => {
+    const base = {
+      presentation_id: "p-1", source_file_name: null, stage: "author",
+      queue_position: null, capacity_waiting: false,
+      created_at: "2026-10-22T08:00:00+00:00", started_at: "2026-10-22T08:00:00+00:00",
+      operation_version: 3, presentation_revision: 2,
+    };
+    cy.intercept("GET", "**/workspace/generation-activity", {
+      body: {
+        server_time: "2026-10-22T09:00:00+00:00",
+        items: [
+          {
+            ...base, operation_id: "op-run", state: "running", presentation_title: "백페이지 제안서",
+            pages: { authored: 58, rendered: 57, persisted: 0, total: 100 },
+            last_progress_at: "2026-10-22T08:40:00+00:00",
+          },
+          {
+            ...base, operation_id: "op-queued", presentation_id: "p-2", state: "queued",
+            presentation_title: null, source_file_name: "report.pdf", started_at: null,
+            pages: { authored: 0, rendered: 0, persisted: 0, total: null },
+            queue_position: 2, last_progress_at: null,
+          },
+        ],
+      },
+    });
+    cy.stub(DashboardApi, "getPresentations").resolves(pageOf([createDeck(0)]));
+
+    mountDashboard();
+
+    cy.get('[data-testid="generation-activity-row"]').should("have.length", 2);
+    cy.contains("백페이지 제안서").should("be.visible");
+    cy.contains("58/100쪽 작성").should("be.visible");
+    cy.contains("마지막 진척 20분 전").should("be.visible");
+    cy.contains("20분째 새로 완성된 쪽이 없습니다").should("be.visible");
+    cy.contains("report.pdf").should("be.visible");
+    cy.contains("대기 중 · 2번째").should("be.visible");
+    cy.get('[data-testid="generation-activity-row"] a')
+      .first()
+      .should("have.attr", "href", "/presentation?id=p-1");
   });
 
   it("shows a search-specific empty state", () => {

@@ -1138,9 +1138,19 @@ async def _verified_authored_local_fit_checkpoint_recovery(
 def _capacity_wait_projection(operation: WorkspaceOperation) -> tuple[bool, int | None]:
     """Return only durable, non-error capacity-wait metadata for clients."""
 
-    progress = operation.progress if isinstance(operation.progress, Mapping) else {}
+    return capacity_wait_projection(operation.state, operation.progress)
+
+
+def capacity_wait_projection(state: str, raw_progress: Any) -> tuple[bool, int | None]:
+    """``_capacity_wait_projection`` over the two columns it reads.
+
+    Column-only readers (the generation-activity list) project the same
+    queue metadata without hydrating a whole operation row.
+    """
+
+    progress = raw_progress if isinstance(raw_progress, Mapping) else {}
     capacity_waiting = bool(
-        operation.state == "queued"
+        state == "queued"
         and progress.get("stage") == "waiting_for_capacity"
         and progress.get("capacity_waiting") is True
     )

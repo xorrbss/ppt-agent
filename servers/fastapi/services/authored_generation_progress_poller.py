@@ -12,7 +12,10 @@ This poller reads that existing record and translates it into the same
 reporter through the authoring stages.
 
 Progress is advisory. Every failure here is swallowed: a poll that fails costs
-the user narration, never the deck.
+the user narration, never the deck. A failed report is retried on a later tick
+rather than ending the narration, because a deck whose progress silently froze
+looks stalled while it is still generating; only a typed attempt-ended error
+or the owner's stopper ends the poll.
 """
 
 from __future__ import annotations
@@ -34,6 +37,10 @@ from constants.user_messages import (
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from services.database import async_session_maker
+from services.workspace_operation_handler_registry import (
+    WorkspaceOperationCancelled,
+    WorkspaceOperationLeaseLost,
+)
 from services.workspace_poll_backoff import next_poll_delay
 from utils.datetime_utils import get_current_utc_datetime
 
@@ -61,6 +68,10 @@ _STAGE_PROGRESS_BANDS: dict[str, tuple[int, int, str, UserMessageKey]] = {
     "export": (89, 92, "authored_export", UserMessageKey.GENERATION_STAGE_EXPORT),
     "publication": (93, 94, "authored_publication", UserMessageKey.GENERATION_STAGE_PUBLICATION),
 }
+# The typed signals for "this attempt no longer owns a running operation".
+# ``WorkspaceOperationExecutionContext.progress`` returns ``False`` instead,
+# which is ambiguous (see below); a reporter that raises uses these types.
+_ATTEMPT_ENDED_ERRORS = (WorkspaceOperationLeaseLost, WorkspaceOperationCancelled)
 # Stages whose message carries a slide counter (``completed``/``total``).
 _COUNTED_STAGE_KEYS: dict[str, UserMessageKey] = {
     "author": UserMessageKey.GENERATION_STAGE_AUTHOR_COUNTED,
@@ -246,6 +257,8 @@ async def stream_authored_generation_progress(
     # reads that contend with the generation lane's own writes.  Any change
     # resets the interval to the base cadence.
     idle_ticks = 0
+    # Consecutive failed reports; the first of a streak is logged loudly.
+    report_failures = 0
     ceiling = max(interval_seconds, _IDLE_CEILING_SECONDS)
     try:
         while True:
@@ -274,12 +287,10 @@ async def stream_authored_generation_progress(
             if update == last_reported:
                 idle_ticks += 1
                 continue
-            idle_ticks = 0
-            last_reported = update
             stage, percent, message = update
             completed, total, _ = counters
             try:
-                await report(
+                recorded = await report(
                     stage=stage,
                     percent=percent,
                     current=completed if total else None,
@@ -288,13 +299,35 @@ async def stream_authored_generation_progress(
                 )
             except asyncio.CancelledError:
                 raise
-            except Exception:
-                # A lost lease is the runner's to surface; progress must never
-                # be the thing that fails a generation.
-                LOGGER.debug(
-                    "Authored progress report failed for job %s", job_id, exc_info=True
-                )
+            except _ATTEMPT_ENDED_ERRORS:
+                # A lost lease is the runner's to surface; nothing further
+                # this attempt reports can land.
                 return
+            except Exception:
+                # Progress must never be the thing that fails a generation, nor
+                # may one failed write freeze the narration for the rest of the
+                # run.  ``last_reported`` is left unchanged so the next tick
+                # retries this update, and the idle tick lets backoff apply.
+                report_failures += 1
+                LOGGER.log(
+                    logging.WARNING if report_failures == 1 else logging.DEBUG,
+                    "Authored progress report failed for job %s (consecutive=%d)",
+                    job_id,
+                    report_failures,
+                    exc_info=True,
+                )
+                idle_ticks += 1
+                continue
+            if recorded is False:
+                # ``False`` covers a lost lease but also a lost version race
+                # with another writer of the same operation, so it cannot end
+                # the narration: retry later.  A truly ended attempt cancels
+                # this poll through its owner's stopper.
+                idle_ticks += 1
+                continue
+            report_failures = 0
+            idle_ticks = 0
+            last_reported = update
     except asyncio.CancelledError:
         raise
     except Exception:
