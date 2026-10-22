@@ -17,13 +17,6 @@ definitions:
           - npm ci
           - npm ci --prefix servers/nextjs
           - npm run test:next-ci
-    - step: &upstream-byte-parity-check
-        name: Upstream byte-parity verification
-        size: 1x
-        max-time: 10
-        script:
-          - npm ci
-          - npm run check:upstream-byte-parity
     - step: &dashboard-component-gate
         name: Dashboard component gate
         size: 2x
@@ -60,28 +53,6 @@ definitions:
               paths:
                 - test-artifacts/workspace-e2e/**
               capture-on: always
-    - step: &upstream-intake-monitor
-        name: Check upstream main compatibility
-        max-time: 10
-        trigger: manual
-        script:
-          - apt-get update && apt-get install -y --no-install-recommends nodejs npm
-          - npm ci
-          - mkdir -p reports
-          - node scripts/intake-upstream-main.mjs \
-              --json \
-              --output reports/upstream-intake.md \
-              --fail-on-risk \
-              > reports/upstream-intake.json 2>&1 || true
-          - echo "=== Upstream intake report (first 50 lines) ==="
-          - cat reports/upstream-intake.json | head -50
-        artifacts:
-          upload:
-            - name: upstream-intake-reports
-              type: scoped
-              paths:
-                - reports/upstream-intake.*
-              capture-on: always
 
 pipelines:
   pull-requests:
@@ -89,14 +60,12 @@ pipelines:
       - step: *authored-release-readiness-config
       - step: *nextjs-ci-node-contracts
       - step: *dashboard-component-gate
-      - step: *upstream-byte-parity-check
       - step: *workspace-chat-first-e2e
   branches:
     main:
       - step: *authored-release-readiness-config
       - step: *nextjs-ci-node-contracts
       - step: *dashboard-component-gate
-      - step: *upstream-byte-parity-check
       - step: *workspace-chat-first-e2e
   custom:
     FastAPI pytest baseline:
@@ -128,5 +97,3 @@ pipelines:
           max-time: 5
           script:
             - node scripts/verify-authored-release-required-checks.mjs --live
-    Upstream compatibility check:
-      - step: *upstream-intake-monitor

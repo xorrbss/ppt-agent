@@ -20,26 +20,6 @@ const read = (filePath) =>
   readFileSync(new URL(`../${filePath}`, import.meta.url), "utf8");
 const readJson = (filePath) => JSON.parse(read(filePath));
 
-// Strips whole-line YAML comments so a "this used to be here" note explaining a
-// removal cannot itself satisfy — or trip — an executable-content assertion.
-function workflowSteps(source) {
-  return source
-    .split(/\r?\n/u)
-    .filter((line) => !/^\s*#/u.test(line))
-    .join("\n");
-}
-
-function workflowJob(source, jobName) {
-  source = source.replaceAll("\r\n", "\n");
-  const marker = `\n  ${jobName}:\n`;
-  const start = source.indexOf(marker);
-  assert.notEqual(start, -1, `workflow job ${jobName} is missing`);
-  const bodyStart = start + marker.length;
-  const remainder = source.slice(bodyStart);
-  const nextJob = remainder.search(/\n  [a-zA-Z0-9_-]+:\n/u);
-  return nextJob === -1 ? remainder : remainder.slice(0, nextJob);
-}
-
 test("importing the workspace runner does not install process signal handlers", () => {
   const runnerUrl = new URL(
     `../servers/nextjs/scripts/run-workspace-e2e.mjs?signal-probe=${randomUUID()}`,
@@ -61,55 +41,7 @@ test("importing the workspace runner does not install process signal handlers", 
   assert.deepEqual(counts.after, counts.before);
 });
 
-test("workspace E2E is a bounded, diagnostic PR gate on GitHub", () => {
-  const workflow = read(".github/workflows/test-all.yml");
-  const job = workflowJob(workflow, "workspace-e2e");
-
-  assert.match(workflow, /pull_request:\s*\n\s*branches:\s*\[\s*main\s*\]/u);
-  assert.match(job, /name: Workspace chat-first browser E2E/u);
-  assert.match(job, /runs-on: ubuntu-latest/u);
-  assert.match(job, /timeout-minutes: 25/u);
-  assert.match(
-    job,
-    /WORKSPACE_E2E_ARTIFACT_DIR:.*test-artifacts\/workspace-e2e/u,
-  );
-  assert.match(job, /xvfb-run -a npm run test:workspace-e2e/u);
-  assert.match(
-    job,
-    /name: Upload workspace E2E diagnostics\s*\n\s*if: always\(\)/u,
-  );
-  assert.match(job, /test-artifacts\/workspace-e2e/u);
-  assert.match(job, /if-no-files-found: warn/u);
-  assert.match(job, /retention-days: 14/u);
-});
-
-test("the required FastAPI job runs production-lifecycle Gate E exactly once", () => {
-  const workflow = read(".github/workflows/test-all.yml");
-  const job = workflowJob(workflow, "test-fastapi");
-  const gate = "tests/integration/test_workspace_production_lifecycle_gate.py";
-
-  assert.match(
-    job,
-    /name: Run production lifecycle Gate E \(real app \+ worker processes\)/u,
-  );
-  assert.ok(job.includes(`uv run pytest -q --no-header ${gate}`));
-  assert.ok(job.includes(`--ignore=${gate}`));
-  assert.equal(job.split(gate).length - 1, 2);
-
-  const lifecycleTest = read(`servers/fastapi/${gate}`);
-  assert.match(lifecycleTest, /"uvicorn"[\s\S]{0,100}"api\.main:app"/u);
-  assert.match(lifecycleTest, /workspace_crash_probe_worker\.py/u);
-  const workerProbe = read(
-    "servers/fastapi/tests/support/workspace_crash_probe_worker.py",
-  );
-  assert.match(workerProbe, /from services import workspace_operation_worker/u);
-  assert.match(workerProbe, /workspace_operation_worker\.main\(\)/u);
-  assert.match(lifecycleTest, /alembic/u);
-});
-
-test("Ruff is a required locked Python lint gate on both CI providers", () => {
-  const workflow = read(".github/workflows/test-all.yml");
-  const githubFastApiJob = workflowJob(workflow, "test-fastapi");
+test("Ruff is a required locked Python lint gate on Bitbucket", () => {
   const pipeline = read("bitbucket-pipelines.yml");
   const pyproject = read("servers/fastapi/pyproject.toml");
   const lockfile = read("servers/fastapi/uv.lock");
@@ -118,8 +50,6 @@ test("Ruff is a required locked Python lint gate on both CI providers", () => {
   assert.match(pyproject, /select\s*=\s*\["E",\s*"F",\s*"B",\s*"ASYNC"\]/u);
   assert.doesNotMatch(pyproject, /^ignore\s*=/mu);
   assert.match(lockfile, /name = "ruff"\s*\nversion = "0\.16\.2"/u);
-  assert.match(githubFastApiJob, /name: Run Ruff lint gate \(E, F, B, ASYNC\)/u);
-  assert.match(githubFastApiJob, /uv run ruff check \./u);
   assert.match(
     pipeline,
     /uv sync --frozen --directory servers\/fastapi[\s\S]*uv run --directory servers\/fastapi ruff check \./u,
@@ -162,10 +92,8 @@ test("workspace E2E is an always-captured PR gate on Bitbucket", () => {
   assert.match(pipeline, /capture-on: always/u);
 });
 
-test("chat-first deployment configuration is required by both CI providers", () => {
+test("chat-first deployment configuration is required by the Bitbucket CI suite", () => {
   const rootPackage = readJson("package.json");
-  const workflow = read(".github/workflows/test-all.yml");
-  const githubNextJob = workflowJob(workflow, "test-nextjs");
   const pipeline = read("bitbucket-pipelines.yml");
   const nextCiRunner = read("servers/nextjs/scripts/run-ci-node-tests.mjs");
 
@@ -207,7 +135,6 @@ test("chat-first deployment configuration is required by both CI providers", () 
       `${testFile} must remain discoverable by the CI runner`,
     );
   }
-  assert.match(githubNextJob, /npm run test:next-ci/u);
   assert.match(
     pipeline,
     /name: Run shared Next\.js CI Node suite[\s\S]*npm ci --prefix servers\/nextjs[\s\S]*npm run test:next-ci/u,
@@ -221,37 +148,6 @@ test("chat-first deployment configuration is required by both CI providers", () 
   assert.match(
     pipeline,
     /branches:\s*\n\s*main:\s*\n(?:\s*- step: \*[\w-]+\r?\n)*?\s*- step: \*nextjs-ci-node-contracts/u,
-  );
-});
-
-// The Electron packaging matrix and the ClamAV scan of its installers were
-// removed with the desktop shell; the npm/pip dependency audits, which never
-// depended on packaging, are what this workflow still exists for.
-test("the packaging security gate audits the locked FastAPI dependency tree", () => {
-  const workflow = read(".github/workflows/cross-platform-packaging-security.yml");
-  const job = workflowJob(workflow, "audit");
-  const install = job.indexOf("name: Install locked dependencies");
-  const npmAudit = job.indexOf("npm audit --omit=dev --audit-level=info");
-  const nextAudit = job.indexOf(
-    "npm audit --omit=dev --audit-level=info --prefix servers/nextjs",
-  );
-  const pipAudit = job.indexOf("name: Audit locked FastAPI production dependencies");
-
-  assert.ok(install >= 0, "the locked install must remain");
-  assert.ok(npmAudit > install, "the npm production audit must run on locked trees");
-  assert.ok(nextAudit > npmAudit, "the Next.js production tree must be audited too");
-  assert.ok(pipAudit > npmAudit, "the Python audit must sit beside the npm audit");
-  assert.match(job, /uv sync --frozen --directory servers\/fastapi/u);
-  // No desktop packaging, signing, or installer scanning may creep back in.
-  assert.doesNotMatch(workflowSteps(workflow), /electron/iu);
-  assert.doesNotMatch(workflowSteps(workflow), /clamav/iu);
-  assert.match(
-    job,
-    /uv export --frozen --no-dev --no-emit-project --no-hashes \\\n\s*--format requirements-txt --output-file requirements-audit\.txt/u,
-  );
-  assert.match(
-    job,
-    /uvx pip-audit==\d+\.\d+\.\d+ --strict --desc on --no-deps --requirement requirements-audit\.txt/u,
   );
 });
 
@@ -998,29 +894,9 @@ test("the local default profile runs E2E with isolated pytest and Windows diagno
   }
 });
 
-test("the required component gate covers workspace stream and rollback UI", () => {
-  const workflow = read(".github/workflows/test-all.yml");
-  const job = workflowJob(workflow, "test-nextjs");
-
-  for (const requiredComponentSpec of [
-    "ChatSurface.cy.tsx",
-    "WorkspaceChatPanel.cy.tsx",
-    "SharePopover.cy.tsx",
-    "DashboardPage.cy.tsx",
-  ]) {
-    assert.match(
-      job,
-      new RegExp(requiredComponentSpec.replace(".", "\\."), "u"),
-    );
-  }
-});
-
-test("Dashboard component coverage is required on both CI providers", () => {
-  const workflow = read(".github/workflows/test-all.yml");
-  const githubNextJob = workflowJob(workflow, "test-nextjs");
+test("Dashboard component coverage is required on Bitbucket", () => {
   const pipeline = read("bitbucket-pipelines.yml");
 
-  assert.match(githubNextJob, /DashboardPage\.cy\.tsx/u);
   assert.match(
     pipeline,
     /name: Dashboard component gate[\s\S]*DashboardPage\.cy\.tsx/u,
@@ -1051,48 +927,52 @@ test("the structural layering gate is wired into the shared Next.js CI Node suit
 
 test("developer documentation matches the executable lint and test workflow", () => {
   const claude = read("CLAUDE.md");
-  const workflow = read(".github/workflows/test-all.yml");
   const nextPackage = readJson("servers/nextjs/package.json");
   const rootPackage = readJson("package.json");
   const nodeRunner = read("servers/nextjs/scripts/run-ci-node-tests.mjs");
   const pyproject = read("servers/fastapi/pyproject.toml");
-  const specList = workflow.match(/\bspec: "([^"]+)"/u)?.[1]?.split(",");
 
   assert.deepEqual(nextPackage.scripts.lint, "npm run check:i18n && eslint .");
   assert.equal(nextPackage.scripts["test:ci-node"], "node scripts/run-ci-node-tests.mjs");
   assert.match(rootPackage.scripts["test:next-ci"], /test:ci-node/u);
   assert.match(pyproject, /select = \["E", "F", "B", "ASYNC"\]/u);
   assert.match(nodeRunner, /const ROOTS = \["app", "components", "i18n", "lib", "scripts", "store", "tests", "utils"\]/u);
-  assert.equal(specList?.length, 12);
   assert.match(claude, /Ruff is locked/u);
   assert.match(claude, /tests\/?`, and `utils\//u);
-  assert.match(claude, /12 named Cypress specs/u);
   assert.doesNotMatch(claude, /There is \*\*no ruff/u);
   assert.doesNotMatch(claude, /does \*\*not\*\* include `servers\/nextjs\/tests\/`/u);
 });
 
-// The Electron shell was removed from this fork, and with it the packaged
-// resource builder (electron/build_nextjs_resources.js) and its link-free
-// staging copier (electron/scripts/standalone-copy.cjs). What this gate still
-// has to protect on Windows is the pinned export runtime, the authored-hybrid
-// export contracts, and the bounded symlink fallback that the *standard*
-// Next.js build relies on (see the standalone-link-fallback test below).
-test("the Windows PR gate covers the export runtime, authored-hybrid, and symlink policy", () => {
-  const workflow = read(".github/workflows/g4-pptx-roundtrip.yml");
-  const job = workflowJob(workflow, "windows-release-gate");
+// The authored-hybrid export contracts used to be pinned by a GitHub-only
+// Windows workflow that never ran for this fork. What still runs them is the
+// shared Next.js Node suite on Bitbucket, which discovers every *.test.mjs
+// under lib/ except the dedicated end-to-end flows.
+test("the Bitbucket Node suite discovers the authored-hybrid export contracts", () => {
+  const nodeRunner = read("servers/nextjs/scripts/run-ci-node-tests.mjs");
+  const exclusions = nodeRunner.slice(
+    nodeRunner.indexOf("const EXCLUDED"),
+    nodeRunner.indexOf("function walk"),
+  );
+
+  assert.match(nodeRunner, /const ROOTS = \[[^\]]*"lib"[^\]]*\]/u);
+  assert.doesNotMatch(exclusions, /authored-hybrid/u);
+  for (const contract of ["mode", "pptx-archive", "cleanup"]) {
+    const relativePath = `servers/nextjs/lib/authored-hybrid/${contract}.test.mjs`;
+    assert.ok(read(relativePath).length > 0, `${relativePath} must exist`);
+    assert.doesNotMatch(
+      relativePath,
+      /\.e2e\.test\.mjs$/u,
+      `${relativePath} must stay out of the end-to-end exclusion`,
+    );
+  }
+});
+
+// The standard Next.js build relies on this bounded symlink fallback on
+// Windows (see the standalone-link-fallback test below).
+test("the Windows standalone symlink fallback stays bounded", () => {
   const buildFallback = read(
     "servers/nextjs/scripts/next-standalone-symlink-fallback.cjs",
   );
-
-  assert.match(workflow, /push:\s*\n\s*branches: \[main\]/u);
-  assert.match(workflow, /pull_request:\s*\n\s*branches: \[main\]/u);
-  assert.match(job, /runs-on: windows-latest/u);
-  assert.match(job, /npm run test:presentation-export-sync/u);
-  assert.match(job, /lib\/authored-hybrid\/mode\.test\.mjs/u);
-  assert.match(job, /lib\/authored-hybrid\/pptx-archive\.test\.mjs/u);
-  assert.match(job, /lib\/authored-hybrid\/cleanup\.test\.mjs/u);
-  // No desktop packaging may creep back into this workflow.
-  assert.doesNotMatch(workflowSteps(workflow), /electron/iu);
 
   assert.match(
     buildFallback,
@@ -1288,7 +1168,7 @@ test("every shell mark rendered during startup is prioritized for LCP", () => {
 
 // The Cypress gates name specs as globs. Cypress prints an unmatched glob and
 // still exits zero, so a name that no longer resolves silently thins the gate
-// instead of failing it. These helpers re-derive the answer from the workflow
+// instead of failing it. These helpers re-derive the answer from the pipeline
 // and from cypress.config.ts rather than keeping a second copy of the list.
 const NEXT_SERVER_DIRECTORY = new URL("../servers/nextjs/", import.meta.url);
 const SPEC_WALK_SKIP = new Set([
@@ -1399,12 +1279,6 @@ function assertNamedSpecsResolve(specList, sourceLabel) {
     );
   }
 }
-
-test("every Cypress spec named by the GitHub component gate exists and is reachable", () => {
-  const workflow = read(".github/workflows/test-all.yml");
-  const specList = workflow.match(/\bspec: "([^"]+)"/u)?.[1]?.split(",");
-  assertNamedSpecsResolve(specList, ".github/workflows/test-all.yml");
-});
 
 test("every Cypress spec named by the local CI-parity runner exists and is reachable", () => {
   const localRunner = read("scripts/test-local.mjs");

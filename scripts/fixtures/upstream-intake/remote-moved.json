@@ -1,6 +1,0 @@
-{
-  "error": {
-    "code": "REMOTE_MOVED_DURING_INTAKE",
-    "message": "upstream main moved while the snapshot was being inspected"
-  }
-}

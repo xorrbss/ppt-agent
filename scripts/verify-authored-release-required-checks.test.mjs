@@ -62,7 +62,6 @@ function fetchFixture(url) {
       "Authored release readiness configuration",
       "Dashboard component gate",
       "Run shared Next.js CI Node suite",
-      "Upstream byte-parity verification",
       "Workspace chat-first browser E2E",
     ].map((name) => ({ name, state: { result: { name: "SUCCESSFUL" } } })) });
   }
@@ -83,7 +82,6 @@ test("Bitbucket required-check verifier validates configuration and sealed live 
     "Authored release readiness configuration",
     "Dashboard component gate",
     "Run shared Next.js CI Node suite",
-    "Upstream byte-parity verification",
     "Workspace chat-first browser E2E",
   ]);
   assert.deepEqual(result.successfulStepNames, result.requiredPipelineSteps);
@@ -135,7 +133,6 @@ test("required step authority uses only the latest entry for each exact name", a
       const ordinary = [
         "Authored release readiness configuration",
         "Run shared Next.js CI Node suite",
-        "Upstream byte-parity verification",
         "Workspace chat-first browser E2E",
       ].map((name) => ({ name, updated_on: "2026-08-23T19:59:00Z", state: { result: { name: "SUCCESSFUL" } } }));
       return ok({ values: [
@@ -173,7 +170,7 @@ test("receipt digest uses canonical JSON v2 NFC and LF normalization", async () 
   assert.equal(canonical.includes("\\r"), false);
   assert.equal(canonical.includes("RELEASE-é\\nSTATUS"), true);
   assert.equal(receipt.receiptDigest, canonicalSha256(unsigned));
-  const pythonActualProductCanonicalV2Digest = "sha256:f5169d1b850c350e1a48f2ec42ec0b6230a351e0b8f0d4c062379e9cc7d0e965";
+  const pythonActualProductCanonicalV2Digest = "sha256:f2910418245e0aa560bd7c8c6feb236b6e7643d620ab5211285f5152bcc8c6aa";
   assert.equal(receipt.receiptDigest, pythonActualProductCanonicalV2Digest);
 });
 

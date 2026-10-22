@@ -2,10 +2,9 @@
 
 This fork of [Presenton](https://github.com/presenton/presenton) adds a Korean UI and
 a few fixes needed to run the **web** version natively on Windows (without Docker).
-This fork is web-only: there is no Electron desktop shell. Its authoritative upstream
-is the official Presenton project (`presenton/presenton`). The configured `origin`
-remote and local worktree branches are collaboration and delivery copies, not
-upstream sources of truth.
+This fork is web-only: there is no Electron desktop shell. It is maintained
+independently of the official Presenton project (`presenton/presenton`) and no
+longer tracks its changes.
 
 > The git history was slimmed: large regenerable artifacts (PyInstaller builds, the
 > FastEmbed/ONNX model caches, downloaded export runtimes) are **not** committed.
