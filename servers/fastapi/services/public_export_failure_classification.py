@@ -1,28 +1,25 @@
-"""Retry classification for public export failures, shared by every export path.
+"""Public export retry policy: SVG requires an explicit transient failure.
 
-The workspace export handler has two execution paths -- the authored/raster
-path and the SVG-source path -- and both raise the same public export failure
-codes (the admission deadline, worker wire limits, cache budget, ...).  The
-classification used to live only in the authored path's catch-all, so an SVG
-export that ran out of its pinned admission deadline re-raised a bare
-``PublicExportOperationError``; the durable runner recorded it as the generic
-retryable ``workspace_operation_internal_error`` and the operation retried a
-failure that cannot succeed until it went ``dead_letter``, with the real code
-lost from the operation record.
-
-This module is the one place that decides whether a public export failure is
-retryable and what the operation record carries:
-
-* non-retryable -> the real failure code is the operation's ``error_code``;
-* retryable     -> the historical ``presentation_export_failed`` code, with
-  the real failure code preserved as ``error_detail.reason_code``.
+Authored retains its historical deterministic exclusions. SVG defaults to a
+terminal failure and retries only typed infrastructure and readiness signals.
+Both retain the real code; retryable failures use presentation_export_failed
+with the original reason in error_detail.
 """
 
 from __future__ import annotations
 
 import re
+import sqlite3
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Literal
+
+from sqlalchemy.exc import DBAPIError, TimeoutError as DatabaseTimeoutError
+
+from services.artifact_store import ArtifactKeyBusy, ArtifactStoreError
+from services.assets.contracts import AssetGatewayError
+from services.isolated_worker_process import IsolatedWorkerCrashedError, IsolatedWorkerProcessError
+from services.public_export_errors import PublicExportOperationError
+from services.trusted_executor.worker_dispatcher import TrustedWorkerWireError
 
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
@@ -70,6 +67,54 @@ RETRYABLE_PUBLIC_EXPORT_FAILURE_CODE = "presentation_export_failed"
 # ``str(error)`` of an arbitrary exception can be a free-text message; only a
 # code-shaped value is copied into the operation record.
 _REASON_CODE_SHAPE = re.compile(r"^[a-z0-9][a-z0-9_.:-]{0,127}$")
+_SVG_CODE_SHAPE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$")
+
+_TRANSIENT_EXPORT_CODES = frozenset({
+    "public_export_singleflight_in_flight",
+    "public_export_readback_evidence_pending",
+    "public_export_editability_evidence_pending",
+    "public_export_worker_failed",
+    "svg_export_worker_failed",
+})
+_TRANSIENT_WORKER_CODES = frozenset({
+    "deadline_exceeded",
+    "public_worker_job_expired",
+    "svg_export_deadline_exhausted",
+    "public_worker_execution_failed",
+    "trusted_worker_transport_closed",
+    "trusted_worker_stdio_read_failed",
+    "trusted_worker_stdio_drain_incomplete",
+})
+
+
+def _svg_export_failure_is_transient(error: BaseException) -> bool:
+    """Retry only typed infrastructure failures and explicit readiness signals."""
+    from workers.public_worker_store import PublicWorkerExecutionError
+
+    if isinstance(error, (
+        TimeoutError, ConnectionError, DatabaseTimeoutError, ArtifactKeyBusy, IsolatedWorkerCrashedError,
+    )):
+        return True
+    if isinstance(error, DBAPIError):
+        original = error.orig
+        state = getattr(original, "sqlstate", None) or getattr(original, "pgcode", None)
+        sqlite_code = getattr(original, "sqlite_errorcode", None)
+        return bool(
+            error.connection_invalidated
+            or (isinstance(state, str) and (state.startswith("08") or state in {
+                "40001", "40P01", "55P03", "57P01", "57P02", "57P03",
+            }))
+            or (isinstance(sqlite_code, int) and sqlite_code & 0xFF in {
+                sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED,
+            })
+        )
+    if isinstance(error, AssetGatewayError):
+        return error.retryable is True and error.code == "asset_not_ready"
+    if isinstance(error, PublicExportOperationError):
+        return public_export_error_code(error) in _TRANSIENT_EXPORT_CODES | _TRANSIENT_WORKER_CODES
+    if isinstance(error, (IsolatedWorkerProcessError, TrustedWorkerWireError, PublicWorkerExecutionError)):
+        return public_export_error_code(error) in _TRANSIENT_WORKER_CODES
+    return False
 
 
 def public_export_error_code(error: BaseException) -> str:
@@ -97,8 +142,6 @@ def _is_terminal_asset_policy_error(error: BaseException) -> bool:
     retrying the export would only repeat it.
     """
 
-    from services.assets.contracts import AssetGatewayError
-
     return (
         isinstance(error, AssetGatewayError)
         and error.retryable is False
@@ -111,11 +154,42 @@ def classified_public_export_error(
     error: BaseException,
     *,
     detail: Mapping[str, Any] | None = None,
+    strategy: Literal["authored", "svg"] = "authored",
 ) -> WorkspaceOperationExecutionError:
     """Return the typed workspace error a public export failure must raise."""
 
     code = public_export_error_code(error)
     merged = dict(detail) if isinstance(detail, Mapping) else {}
+    if strategy == "svg":
+        from workers.public_svg_projection_error import SvgExportProjectionError, projection_failure_detail
+
+        # Arbitrary exception messages may contain source text. Keep only the
+        # stable code or exception type for failures without a public code.
+        has_code = isinstance(getattr(error, "code", None), str) or isinstance(error, (
+            PublicExportOperationError, IsolatedWorkerProcessError, TrustedWorkerWireError, ArtifactStoreError,
+        ))
+        # Some source validators still raise ValueError with a namespaced code.
+        # Keep that code without persisting arbitrary untyped message text.
+        has_code = has_code or code.startswith(("svg_", "public_", "trusted_worker_", "artifact.", "legacy_"))
+        code = code if has_code and _SVG_CODE_SHAPE.fullmatch(code) else type(error).__name__
+        merged["reason_code"] = code
+        if isinstance(error, SvgExportProjectionError):
+            merged.update(error.detail)
+        elif code == "svg_source_export_projection_invalid" and "svgProjectionFailure" in merged:
+            try:
+                merged.update(projection_failure_detail(merged.pop("svgProjectionFailure")))
+            except ValueError:
+                merged["reason_code"] = "svg_export_projection_failure_detail_invalid"
+        if not _svg_export_failure_is_transient(error):
+            return NonRetryableWorkspaceOperationError(code, detail=merged)
+        return RetryableWorkspaceOperationError(
+            RETRYABLE_PUBLIC_EXPORT_FAILURE_CODE, detail=merged,
+        )
+    if isinstance(error, IsolatedWorkerCrashedError):
+        # Empty crash output previously reached the decoder as a generic process
+        # error. Preserve authored's exact classification and reason detail.
+        merged["reason_code"] = "IsolatedWorkerProcessError"
+        return RetryableWorkspaceOperationError(RETRYABLE_PUBLIC_EXPORT_FAILURE_CODE, detail=merged)
     if public_export_failure_is_non_retryable(code) or _is_terminal_asset_policy_error(error):
         return NonRetryableWorkspaceOperationError(code, detail=merged or None)
     merged["reason_code"] = (

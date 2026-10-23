@@ -11,6 +11,7 @@ from services.svg_export_whole_page_adapter import (
     project_source_table_end_alignment,
 )
 from workers.public_svg_pptx_convert import VENDOR_ROOT, convert_pptx
+from workers.public_svg_projection_error import projection_page
 
 
 _CHART_NS = "http://schemas.openxmlformats.org/drawingml/2006/chart"
@@ -291,10 +292,11 @@ def _embed_verified_whole_page_fonts(target, font_usage=None):
     if len(font_relationships) != len(faces):
         raise ValueError("svg_source_export_font_relationship_invalid")
     parts = set()
-    for family, role, digest, payload in faces:
+    for family, role, _digest, payload in faces:
         slot = by_family[family].find(f"{{{p}}}{role}")
         candidates = [item for item in relationships if slot is not None and item.get("Id") == slot.get(f"{{{r}}}id")]
-        if len(candidates) != 1 or candidates[0].get("Type") != FONT_RELATIONSHIP_TYPE or candidates[0].get("TargetMode") is not None:
+        if (len(candidates) != 1 or candidates[0].get("Type") != FONT_RELATIONSHIP_TYPE
+                or candidates[0].get("TargetMode") is not None):
             raise ValueError("svg_source_export_font_relationship_invalid")
         part = "ppt/" + (candidates[0].get("Target") or "")
         if not re.fullmatch(r"ppt/fonts/font[0-9]+\.fntdata", part) or part in parts or after.get(part) != payload:
@@ -336,7 +338,8 @@ class NativeOoxmlCapture:
         group_aliases = self.group_aliases
         element_outputs = {}
         def signature(node):
-            return (node.tag, tuple(sorted(node.attrib.items())), (node.text or "").strip(), tuple(signature(child) for child in node))
+            return (node.tag, tuple(sorted(node.attrib.items())), (node.text or "").strip(),
+                    tuple(signature(child) for child in node))
 
         def traced_element(element, context):
             result = original_convert_element(element, context)
@@ -346,7 +349,8 @@ class NativeOoxmlCapture:
                 ns = "http://schemas.openxmlformats.org/presentationml/2006/main"
                 drawing_ns = "http://schemas.openxmlformats.org/drawingml/2006/main"
                 relation_ns = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
-                wrapper = ET.fromstring(f'<root xmlns:p="{ns}" xmlns:a="{drawing_ns}" xmlns:r="{relation_ns}">' + result.xml + '</root>')
+                wrapper = ET.fromstring(
+                    f'<root xmlns:p="{ns}" xmlns:a="{drawing_ns}" xmlns:r="{relation_ns}">' + result.xml + '</root>')
                 element_outputs[context.slide_num, element] = tuple(signature(node) for node in wrapper)
                 page = expected_geometry.setdefault(context.slide_num, {})
                 returned_xml = expected_return_xml.setdefault(context.slide_num, {})
@@ -407,7 +411,8 @@ class NativeOoxmlCapture:
             self.background_paints, self.expected_geometry, self.group_aliases)
 
 
-def _verified_final_native_ooxml(target, trace_path, source_originals, receipts, background_paints, expected_geometry, group_aliases):
+def _verified_final_native_ooxml(
+        target, trace_path, source_originals, receipts, background_paints, expected_geometry, group_aliases):
     """Join the existing converter trace to every final editable OOXML shape."""
     import json
     import posixpath
@@ -453,7 +458,8 @@ def _verified_final_native_ooxml(target, trace_path, source_originals, receipts,
     if set(by_page) != set(range(1, len(receipts) + 1)):
         raise ValueError("svg_native_ooxml_trace_pages_invalid")
     def signature(node):
-        return (node.tag, tuple(sorted(node.attrib.items())), (node.text or "").strip(), tuple(signature(child) for child in node))
+        return (node.tag, tuple(sorted(node.attrib.items())), (node.text or "").strip(),
+                tuple(signature(child) for child in node))
     pages = []
     total_shapes = total_events = total_groups = total_aliases = 0
     from services.svg_export_source_preservation import page_svg_digest
@@ -503,7 +509,8 @@ def _verified_final_native_ooxml(target, trace_path, source_originals, receipts,
                     raise ValueError("svg_native_ooxml_group_transform_invalid")
                 bounds = [gx, gy, gx + gw, gy + gh]
                 total_groups += 1
-            if local == "sp" and node.find(f"{{{p}}}spPr/{{{a}}}prstGeom") is None and node.find(f"{{{p}}}spPr/{{{a}}}custGeom") is None:
+            if (local == "sp" and node.find(f"{{{p}}}spPr/{{{a}}}prstGeom") is None
+                    and node.find(f"{{{p}}}spPr/{{{a}}}custGeom") is None):
                 raise ValueError("svg_native_ooxml_editable_geometry_missing")
             if local == "graphicFrame":
                 graphic = node.find(f"{{{a}}}graphic/{{{a}}}graphicData")
@@ -588,10 +595,12 @@ def _verified_final_native_ooxml(target, trace_path, source_originals, receipts,
             "sourceDigests": [page_svg_digest(receipt, source)
                               for receipt, source in zip(receipts, source_originals, strict=True)], "pages": pages,
             "measurements": {"verifiedPages": len(pages), "verifiedShapes": total_shapes,
-                             "verifiedGroups": total_groups, "verifiedGroupAliases": total_aliases, "nativePrimitives": total_events,
+                             "verifiedGroups": total_groups, "verifiedGroupAliases": total_aliases,
+                             "nativePrimitives": total_events,
                              "verifiedRelationships": relationship_count, "unboundShapes": 0,
                              "unboundPrimitives": 0, "geometryMismatches": 0},
-            "packagePartsDigest": "sha256:" + canonical_json_sha256({name: hashlib.sha256(payload).hexdigest() for name, payload in parts.items()})}
+            "packagePartsDigest": "sha256:" + canonical_json_sha256({
+                name: hashlib.sha256(payload).hexdigest() for name, payload in parts.items()})}
 
 
 def _source_style_readback(target, table_alignment_claims, chart_claims):
@@ -608,7 +617,8 @@ def _source_style_readback(target, table_alignment_claims, chart_claims):
             if shape is None:
                 raise ValueError("svg_source_export_table_style_owner_missing")
             cell = shape.table.cell(claim["row"], claim["column"])
-            if cell.is_spanned or any(paragraph.alignment != PP_ALIGN.RIGHT for paragraph in cell.text_frame.paragraphs):
+            if cell.is_spanned or any(
+                    paragraph.alignment != PP_ALIGN.RIGHT for paragraph in cell.text_frame.paragraphs):
                 raise ValueError("svg_source_export_table_alignment_mismatch")
             tables.append({"pageIndex": page_index, **claim, "ooxmlAlignment": "r"})
     for page_index, claims in enumerate(chart_claims):
@@ -645,18 +655,20 @@ def convert_whole_page_pptx(paths, target, notes, canvas, *, receipts,
             or type(font_embedding) is not bool):
         raise ValueError("svg_source_export_overlay_input_invalid")
     projected_pages, table_alignment_claims = [], []
-    for page, source, receipt in zip(native_objects, source_originals, receipts, strict=True):
-        if receipt is None:
-            # A failure placeholder claims no source: it converts as drawn and
-            # may carry no native object a source receipt would have declared.
-            if page.sidecar is not None:
-                raise ValueError("svg_source_export_placeholder_native_objects")
-            projected_pages.append(page)
-            table_alignment_claims.append([])
-            continue
-        projected_page, alignments = project_source_table_end_alignment(source, receipt, page)
-        projected_pages.append(projected_page)
-        table_alignment_claims.append(alignments)
+    for page_index, (page, source, receipt) in enumerate(
+            zip(native_objects, source_originals, receipts, strict=True)):
+        with projection_page(page_index):
+            if receipt is None:
+                # A failure placeholder claims no source: it converts as drawn and
+                # may carry no native object a source receipt would have declared.
+                if page.sidecar is not None:
+                    raise ValueError("svg_source_export_placeholder_native_objects")
+                projected_pages.append(page)
+                table_alignment_claims.append([])
+                continue
+            projected_page, alignments = project_source_table_end_alignment(source, receipt, page)
+            projected_pages.append(projected_page)
+            table_alignment_claims.append(alignments)
     native_objects = projected_pages
     from services.generation_core.drivers.svg import export_scene
 
@@ -688,21 +700,22 @@ def convert_whole_page_pptx(paths, target, notes, canvas, *, receipts,
             scene = original_prepare(page_paths, pages, width=width, height=height,
                                      pt_per_px=pt_per_px)
             for page_index, path in enumerate(page_paths):
-                if receipts[page_index] is None:
-                    claims.append([])  # a failure placeholder claims no source text
-                    continue
-                claims.append(bind_chart_text_projection(
-                    path, canonical_svg=source_originals[page_index],
-                    receipt=receipts[page_index], native_page=pages[page_index],
-                    page_index=page_index))
-                for record in bind_source_text_fragments(
+                with projection_page(page_index):
+                    if receipts[page_index] is None:
+                        claims.append([])  # a failure placeholder claims no source text
+                        continue
+                    claims.append(bind_chart_text_projection(
                         path, canonical_svg=source_originals[page_index],
-                        receipt=receipts[page_index], page_index=page_index):
-                    for fragment in record["fragments"]:
-                        key = (page_index, record["sourceId"], fragment["index"])
-                        if key in fragment_sources:
-                            raise ValueError("svg_source_export_fragment_duplicate")
-                        fragment_sources[key] = fragment
+                        receipt=receipts[page_index], native_page=pages[page_index],
+                        page_index=page_index))
+                    for record in bind_source_text_fragments(
+                            path, canonical_svg=source_originals[page_index],
+                            receipt=receipts[page_index], page_index=page_index):
+                        for fragment in record["fragments"]:
+                            key = (page_index, record["sourceId"], fragment["index"])
+                            if key in fragment_sources:
+                                raise ValueError("svg_source_export_fragment_duplicate")
+                            fragment_sources[key] = fragment
             return scene
 
         def named_text(element, context):

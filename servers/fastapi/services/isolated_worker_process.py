@@ -106,6 +106,25 @@ class IsolatedWorkerProcessError(RuntimeError):
         super().__init__(code)
 
 
+class IsolatedWorkerCrashedError(IsolatedWorkerProcessError):
+    """A worker died abnormally before writing a result, rather than rejecting input."""
+
+    def __init__(self, exit_code: int, *, resource_metrics: Mapping[str, Any] | None = None) -> None:
+        self.exit_code = exit_code
+        super().__init__("public_worker_crashed", resource_metrics=resource_metrics)
+
+
+# Explicit OS crash statuses; normal Python failure (exit 1) is not a crash.
+_WINDOWS_CRASH_STATUSES = frozenset({
+    0xC0000005,  # STATUS_ACCESS_VIOLATION
+    0xC000001D,  # STATUS_ILLEGAL_INSTRUCTION
+    0xC00000FD,  # STATUS_STACK_OVERFLOW
+    0xC0000374,  # STATUS_HEAP_CORRUPTION
+    0xC0000409,  # STATUS_STACK_BUFFER_OVERRUN
+    0xC000013A,  # STATUS_CONTROL_C_EXIT
+})
+
+
 _trusted_worker_dispatcher: TrustedWorkerDispatcher | None = None
 
 
@@ -351,11 +370,28 @@ async def execute_isolated_worker_job(
         ) from error
     if len(wire_result.stdout) > MAX_RESULT_BYTES:
         raise IsolatedWorkerProcessError("public worker result exceeded the wire limit")
+    if not wire_result.stdout and (
+        -0x7F <= wire_result.exit_code < 0  # POSIX signal returncode (7-bit signal number).
+        or wire_result.exit_code & 0xFFFFFFFF in _WINDOWS_CRASH_STATUSES
+    ):
+        raise IsolatedWorkerCrashedError(
+            wire_result.exit_code, resource_metrics=wire_result.resource_metrics,
+        )
     result = _decode_result(wire_result.stdout, job)
     if wire_result.exit_code != 0 or not result.ok:
+        failure_metrics = dict(wire_result.resource_metrics)
+        if (result.error_code == "svg_source_export_projection_invalid"
+                and "svgProjectionFailure" in result.execution_evidence):
+            from workers.public_svg_projection_error import projection_failure_detail
+
+            try:
+                failure_metrics["svgProjectionFailure"] = projection_failure_detail(
+                    result.execution_evidence["svgProjectionFailure"])
+            except ValueError as error:
+                raise IsolatedWorkerProcessError("svg_export_projection_failure_detail_invalid") from error
         raise IsolatedWorkerProcessError(
             result.error_code or "public_worker_execution_failed",
-            resource_metrics=wire_result.resource_metrics,
+            resource_metrics=failure_metrics,
         )
     return replace(result, resource_metrics=dict(wire_result.resource_metrics))
 

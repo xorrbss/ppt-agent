@@ -352,7 +352,11 @@ async def execute_svg_export(job, store, *, bundle=None):
                         native_objects=native_objects or [PageNativeObjects() for _ in sources],
                         source_originals=canonical_sources, font_embedding=font_embedding)
                 except (ValueError, TypeError, KeyError, IndexError) as error:
-                    raise PublicWorkerExecutionError("svg_source_export_projection_invalid") from error
+                    from workers.public_svg_projection_error import SvgExportProjectionError
+
+                    # Deck-level failures have no page; page projections attach
+                    # their actual index before crossing this boundary.
+                    raise SvgExportProjectionError(None, error) from error
                 stage_timings["conversion"] = time.monotonic() - stage_started
                 stage_started = time.monotonic()
                 try:
