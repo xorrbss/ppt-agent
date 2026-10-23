@@ -12,6 +12,7 @@ from collections.abc import Callable
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
+from constants.timeouts import BUSY_WAIT_POLL_INTERVAL_SECONDS
 from services.database import (
     connect_args as database_connect_args,
     sql_engine,
@@ -102,13 +103,12 @@ async def run_threaded_attempt_heartbeat(
     """Bridge thread completion to the runner, including cancel/fence failures.
 
     Shutdown cancels the heartbeat on its own loop, disposes its engine there,
-    and awaits thread completion without borrowing the handler's executor. A daemon thread is
-    a final safeguard against an unresponsive database driver during shutdown.
+    and observes actual thread exit without borrowing the handler's executor.
+    A daemon thread is a final safeguard against an unresponsive database driver.
     """
 
     handler_loop = asyncio.get_running_loop()
     completed = handler_loop.create_future()
-    thread_finished = handler_loop.create_future()
     watchdog = HandlerLoopWatchdog()
     stopping = threading.Event()
     state_lock = threading.Lock()
@@ -122,8 +122,6 @@ async def run_threaded_attempt_heartbeat(
         tick_handle = handler_loop.call_later(HANDLER_TICK_SECONDS, tick)
 
     def finish(error: BaseException | None) -> None:
-        if not thread_finished.done():
-            thread_finished.set_result(None)
         if completed.done():
             return
         if error is None:
@@ -195,6 +193,26 @@ async def run_threaded_attempt_heartbeat(
     )
     tick()
     thread.start()
+
+    async def wait_for_thread_exit() -> None:
+        # A completion callback can run before the thread that posted it exits.
+        exited = handler_loop.create_future()
+        poll_handle: asyncio.TimerHandle | None = None
+
+        def check_exit() -> None:
+            nonlocal poll_handle
+            if thread.is_alive():
+                poll_handle = handler_loop.call_later(BUSY_WAIT_POLL_INTERVAL_SECONDS, check_exit)
+            else:
+                exited.set_result(None)
+
+        check_exit()
+        try:
+            await exited
+        finally:
+            if poll_handle is not None:
+                poll_handle.cancel()
+
     try:
         await completed
     finally:
@@ -207,7 +225,18 @@ async def run_threaded_attempt_heartbeat(
                     worker_loop.call_soon_threadsafe(worker_task.cancel)
                 except RuntimeError:
                     pass
+        cleanup = asyncio.create_task(asyncio.wait_for(
+            wait_for_thread_exit(), HEARTBEAT_SHUTDOWN_SECONDS,
+        ))
+        cancelled = False
         try:
-            await asyncio.wait_for(asyncio.shield(thread_finished), HEARTBEAT_SHUTDOWN_SECONDS)
+            while not cleanup.done():
+                try:
+                    await asyncio.shield(cleanup)
+                except asyncio.CancelledError:
+                    cancelled = True
+            cleanup.result()
         except TimeoutError:
             LOGGER.error("Heartbeat shutdown timed out for operation %s", claim.operation_id)
+        if cancelled:
+            raise asyncio.CancelledError
