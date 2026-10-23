@@ -211,13 +211,6 @@ async def prepare_source_local_leaf(session, *, source_operation=None, verificat
     return material
 
 
-async def build_source_local_manifest_proof(session, *, source_operation=None, verification=None, **kwargs):
-    """Convenience for isolated callers; production prepares before its fresh fence."""
-    material = await prepare_source_local_leaf(session, source_operation=source_operation,
-        verification=verification, **kwargs)
-    return build_source_local_proof(**kwargs, flattened_leaf=material)
-
-
 def _checked_current_local_group(marker, ordinal, vector):
     """Same local-only evidence contract, independent of the global verdict."""
     from services.generation_core.quality.vision_advisory_prompt import DESIGN_LOCAL_AXES, DESIGN_REVIEW_PROMPT_VERSION

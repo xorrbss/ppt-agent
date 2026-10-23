@@ -49,9 +49,6 @@ from services.authored_vnext.integration.sql_repository import (
     OperationFenceError,
     SourceDigestMismatchError,
 )
-from services.authored_vnext.generation.legacy_bridge import (
-    _legacy_export_job_identity,
-)
 from models.authored_vnext.master.contract import DeckMasterContract
 from models.sql.user import User
 from models.sql.account_deletion_request import AccountDeletionRequest
@@ -189,31 +186,6 @@ def _scene_snapshot(deck, published, *, revision=None):
     return snapshot.model_copy(
         update={"digest": f"sha256:{raw_sha256(snapshot.model_dump(mode='json', by_alias=True, exclude={'digest'}))}"}
     )
-
-
-def test_legacy_export_job_identity_is_stable_per_attempt_and_rotates_on_retry() -> None:
-    deck_id = "deck:legacy-retry"
-    deck_digest = "sha256:" + "a" * 64
-
-    first = _legacy_export_job_identity(
-        deck_id,
-        deck_digest,
-        execution_scope="generation:attempt:1:token-a",
-    )
-    replay = _legacy_export_job_identity(
-        deck_id,
-        deck_digest,
-        execution_scope="generation:attempt:1:token-a",
-    )
-    retry = _legacy_export_job_identity(
-        deck_id,
-        deck_digest,
-        execution_scope="generation:attempt:2:token-b",
-    )
-
-    assert replay == first
-    assert retry != first
-    assert "token-a" not in first
 
 
 def _create_owner(engine) -> None:

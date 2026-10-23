@@ -10,7 +10,6 @@ from services.authored_vnext.master.digests import canonical_digest
 from services.authored_quality_receipt_v2 import (
     QualityReceiptLedger,
     QualityReceiptV3Ledger,
-    append_quality_receipt_v3_evidence,
     create_quality_receipt_v2,
     create_quality_receipt_v3,
     create_quality_receipt_v3_from_v2,
@@ -19,7 +18,6 @@ from services.authored_quality_receipt_v2 import (
     public_attempt_id,
     quality_receipt_manifest_path,
     quality_receipt_t1_triggers,
-    release_profile_requirements,
     release_quality_policy,
 )
 
@@ -631,11 +629,12 @@ def test_policy_flags_are_immutable_across_idempotent_retries() -> None:
 
 
 def test_release_profile_rejects_truthy_false_strings_and_unknown_names() -> None:
-    assert release_profile_requirements({"requireVisualReview": "false"})[:2] == (False, False)
+    policy = release_quality_policy({"requireVisualReview": "false"})
+    assert (policy.require_visual_review, policy.require_performance) == (False, False)
     with pytest.raises(ValueError, match="boolean_invalid"):
-        release_profile_requirements({"requireVisualReview": "maybe"})
+        release_quality_policy({"requireVisualReview": "maybe"})
     with pytest.raises(ValueError, match="profile_unknown"):
-        release_profile_requirements("typo-production")
+        release_quality_policy("typo-production")
 
 
 def test_manifest_digest_rejects_record_deletion_after_restart(tmp_path) -> None:
@@ -853,16 +852,14 @@ def test_v3_durable_evidence_events_are_append_only_and_chain_bound(tmp_path) ->
     second_evidence = _v3_evidence()
     second_evidence["qualityTier"] = "T2"
     second_evidence["visualReview"] = {"status": "passed", "fullDeck": True}
-    second = append_quality_receipt_v3_evidence(
-        QualityReceiptV3Ledger(storage_path=path),
+    second = QualityReceiptV3Ledger(storage_path=path).create_or_append(
         attempt_id="v3-chain",
         revision=2,
         evidence=second_evidence,
         event_type="full-deck-review",
     )
     reloaded = QualityReceiptV3Ledger(storage_path=path)
-    retry = append_quality_receipt_v3_evidence(
-        reloaded,
+    retry = reloaded.create_or_append(
         attempt_id="v3-chain",
         revision=2,
         evidence=second_evidence,

@@ -228,22 +228,10 @@ def build_authored_text_image_slides(
     return slides
 
 
-def build_source_document_outline(
-    *, manifest: Any, manifest_pin: SourceContentManifestPin
-) -> SourceDocumentOutline:
-    """Functional façade used by callers that do not need a builder object."""
-
-    return SourceDocumentOutlineBuilder().build(
-        manifest=manifest,
-        manifest_pin=manifest_pin,
-    )
-
-
 __all__ = [
     "OUTLINE_VERSION",
     "SourceDocumentOutline",
     "SourceDocumentOutlineBuilder",
     "SourceDocumentOutlineSlide",
     "build_authored_text_image_slides",
-    "build_source_document_outline",
 ]

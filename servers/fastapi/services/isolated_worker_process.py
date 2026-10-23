@@ -6,7 +6,6 @@ import json
 import os
 import pathlib
 from pathlib import PurePosixPath
-import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any
@@ -361,20 +360,12 @@ async def execute_isolated_worker_job(
     return replace(result, resource_metrics=dict(wire_result.resource_metrics))
 
 
-def development_worker_command(role: WorkerRole) -> list[str]:
-    """Explicit local command helper; never selected implicitly in production."""
-
-    module = f"workers.public_{role}_worker"
-    return [sys.executable, "-m", module]
-
-
 __all__ = [
     "MAX_EXECUTION_EVIDENCE_BYTES",
     "IsolatedWorkerProcessError",
     "IsolatedWorkerResult",
     "NETWORK_NONE_ATTESTATION",
     "WINDOWS_LOCAL_DEVELOPMENT_ATTESTATION",
-    "development_worker_command",
     "execute_isolated_worker_job",
     "install_trusted_worker_dispatcher",
     "worker_command",

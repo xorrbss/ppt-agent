@@ -31,13 +31,11 @@ import re
 from collections import Counter
 from pathlib import Path
 from typing import (
-    Dict,
     Mapping,
     NamedTuple,
     Optional,
     Protocol,
     Sequence,
-    Set,
 )
 
 from models.image_prompt import ImagePrompt
@@ -307,34 +305,6 @@ def strip_illustration_slots(html: str) -> str:
     """
     slots = scan_slots(html, want_assets=False, want_illust=True)
     return rewrite_slots(html, slots, None, None)
-
-
-def reserve_source_images_for_slide(
-    html: str,
-    candidates: Mapping[str, SourceImageCandidate],
-    placed_asset_ids: Optional[Set[str]] = None,
-) -> Dict[str, SourceImageCandidate]:
-    """Return every verified source slot authored on this slide.
-
-    ``placed_asset_ids`` remains accepted for callers from the old API but is no
-    longer used: the same asset is explicitly allowed to be reused across slides.
-    """
-    if not candidates:
-        return {}
-    offered: Dict[str, SourceImageCandidate] = {}
-    for slot in scan_slots(html, want_assets=True, want_illust=False):
-        slot_id = slot.source_slot_id or (
-            source_slot_id_for_asset(slot.asset_id) if slot.asset_id else None
-        )
-        if not slot_id:
-            continue
-        candidate = candidates.get(slot_id)
-        if candidate is None and slot.asset_id:
-            candidate = candidates.get(slot.asset_id)
-        if candidate is None:
-            continue
-        offered[slot_id] = candidate
-    return offered
 
 
 def validate_bound_source_images(

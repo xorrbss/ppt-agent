@@ -71,7 +71,7 @@ from services.authored_provider_rate_profile import (
     TOKEN_PROFILE_NAME,
     resolve_authored_rate_profile,
 )
-from services.presentation_generation_operation_handler import (
+from tests.support.presentation_generation_handler_registration import (
     register_presentation_generation_operation_handler,
 )
 from services.generation_core.authoring import author_batch as author_batch_mod

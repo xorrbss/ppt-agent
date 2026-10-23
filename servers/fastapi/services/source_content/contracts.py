@@ -15,7 +15,6 @@ from utils.naming import snake_to_camel
 from services.document_canvas import DocumentCanvasMetadata
 
 
-DESIGN_ONLY_KINDS = frozenset({"source_note"})
 SOURCE_LAYOUT_VERSION_V2 = "source-layout/v2"
 
 

@@ -18,7 +18,6 @@ from services.authored_admission_capture import (
     RETAINED_CAPTURES,
     capture_once,
     capture_ownership_receipt,
-    capture_png_once,
     capture_profile,
     captured_metrics_or_existing,
 )
@@ -266,26 +265,6 @@ async def test_completed_captures_are_evicted_but_their_metrics_are_not():
     finally:
         _SESSION.reset(token)
     assert ensured == []
-
-
-@sync_async
-async def test_a_png_only_renderer_shares_the_default_profile():
-    renders: list[str] = []
-
-    async def render(html: str) -> bytes:
-        renders.append(html)
-        return b"png"
-
-    capture = Renderer()
-    _, token = session_scope()
-    try:
-        png = await capture_png_once(HTML, index=0, render=render, read_metrics=lambda _html: {"m": 1})
-        again = await capture_once(HTML, index=0, capture=capture)
-    finally:
-        _SESSION.reset(token)
-    assert png == b"png"
-    assert renders == [HTML] and capture.calls == []
-    assert again.browser_metrics == {"m": 1}
 
 
 @sync_async

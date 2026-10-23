@@ -563,60 +563,6 @@ async def _publish_manifest_cas(
         raise SemanticContractError("authored_semantic_cas_conflict")
 
 
-async def publish_editable_scene_revision_cas(
-    session: AsyncSession,
-    *,
-    presentation_id: uuid.UUID,
-    owner_id: uuid.UUID,
-    expected_presentation_revision: int,
-    expected_manifest_digest: str,
-    operation_id: uuid.UUID,
-    scene: DeckSceneIR,
-    tenant_id: str = DEFAULT_TENANT_ID,
-) -> AuthoredDeckEmissionManifestV1:
-    """Append a Scene-only semantic manifest revision under the active CAS."""
-
-    pointer = await session.scalar(
-        select(AuthoredDeckEmissionActivePointer).where(
-            AuthoredDeckEmissionActivePointer.owner_id == owner_id,
-            AuthoredDeckEmissionActivePointer.tenant_id == tenant_id,
-            AuthoredDeckEmissionActivePointer.presentation_id == presentation_id,
-        )
-    )
-    if (
-        pointer is None
-        or pointer.presentation_revision != expected_presentation_revision
-        or pointer.canonical_digest != expected_manifest_digest
-        or pointer.manifest_id is None
-    ):
-        raise SemanticContractError("authored_semantic_cas_conflict")
-    record = await session.get(AuthoredDeckEmissionManifestRecord, pointer.manifest_id)
-    if record is None:
-        raise SemanticContractError("authored_semantic_cas_conflict")
-    current = AuthoredDeckEmissionManifestV1.model_validate(record.payload)
-    target_revision = expected_presentation_revision + 1
-    if scene.revision != target_revision:
-        raise SemanticContractError("authored_semantic_scene_revision_mismatch")
-    candidate = current.model_copy(
-        update={
-            "presentation_revision": target_revision,
-            "operation_id": operation_id,
-            "scene_digest": scene.scene_digest,
-            "scene": scene,
-            "canonical_digest": None,
-        }
-    )
-    manifest = seal_deck_manifest(candidate)
-    await _publish_manifest_cas(
-        session,
-        owner_id=owner_id,
-        tenant_id=tenant_id,
-        manifest=manifest,
-        expected_presentation_revision=expected_presentation_revision,
-    )
-    return manifest
-
-
 def _union_assets(manifests: Sequence[AssetManifestV1]) -> AssetManifestV1:
     by_id: dict[str, ResolvedAssetV1] = {}
     for manifest in manifests:
@@ -647,5 +593,4 @@ def _required(value: str | None) -> str:
 
 __all__ = [
     "publish_authored_semantic_bundle_graph",
-    "publish_editable_scene_revision_cas",
 ]

@@ -81,15 +81,6 @@ class WorkspaceOutboxTopicRegistry:
 workspace_outbox_topic_registry = WorkspaceOutboxTopicRegistry()
 
 
-def register_workspace_outbox_topic_handler(
-    topic: str,
-    handler: WorkspaceOutboxTopicHandler,
-    *,
-    replace: bool = False,
-) -> None:
-    workspace_outbox_topic_registry.register(topic, handler, replace=replace)
-
-
 def _positive_int_env(name: str, default: int) -> int:
     """Silent clamp: a sub-minimum value becomes the minimum, malformed text the default."""
     return env_int(name, default, minimum=1, on_invalid="clamp")
@@ -392,8 +383,3 @@ async def stop_workspace_operation_outbox_dispatcher() -> None:
         return
     await _workspace_outbox_dispatcher.stop()
     _workspace_outbox_dispatcher = None
-
-
-def wake_workspace_operation_outbox_dispatcher() -> None:
-    if _workspace_outbox_dispatcher is not None:
-        _workspace_outbox_dispatcher.wake()

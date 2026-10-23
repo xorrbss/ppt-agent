@@ -15,7 +15,6 @@ from sqlalchemy.orm import Session
 from models.sql.presentation import PresentationModel
 from models.sql.source_content import (
     SourceContentCoverageReceipt,
-    SourceContentGenerationBinding,
     SourceContentManifestAsset,
     SourceContentManifestRecord,
 )
@@ -332,76 +331,6 @@ async def get_source_content_manifest_status(
         provider_id=snapshot.provider_id,
         source_revision=snapshot.source_revision,
     )
-
-
-async def bind_source_content_generation(
-    session: AsyncSession,
-    *,
-    owner_id: uuid.UUID | None,
-    manifest: SourceContentManifest,
-    composition_pin: dict[str, Any],
-    content_policy: dict[str, Any],
-    generation_engine_version: str,
-    presentation_id: uuid.UUID | None = None,
-) -> SourceContentGenerationBinding:
-    content_policy_digest = digest_json(content_policy)
-    identity = digest_json(
-        {
-            "manifestDigest": manifest.manifest_digest,
-            "compositionPin": composition_pin,
-            "contentPolicyDigest": content_policy_digest,
-            "generationEngineVersion": generation_engine_version,
-        }
-    )
-    existing = await session.scalar(
-        select(SourceContentGenerationBinding).where(
-            SourceContentGenerationBinding.owner_scope == _scope(owner_id),
-            SourceContentGenerationBinding.generation_identity_digest == identity,
-        )
-    )
-    if existing is not None:
-        return existing
-    row = SourceContentGenerationBinding(
-        owner_id=owner_id,
-        owner_scope=_scope(owner_id),
-        manifest_id=manifest.manifest_id,
-        manifest_digest=manifest.manifest_digest,
-        composition_pin=composition_pin,
-        content_policy_digest=content_policy_digest,
-        generation_identity_digest=identity,
-        presentation_id=presentation_id,
-    )
-    session.add(row)
-    await session.flush()
-    return row
-
-
-async def append_source_content_coverage_receipt(
-    session: AsyncSession,
-    *,
-    owner_id: uuid.UUID | None,
-    presentation_id: uuid.UUID,
-    presentation_revision: int,
-    receipt: dict[str, Any],
-) -> SourceContentCoverageReceipt:
-    row = SourceContentCoverageReceipt(
-        owner_id=owner_id,
-        owner_scope=_scope(owner_id),
-        contract_version="source-content-coverage-receipt/v1",
-        presentation_id=presentation_id,
-        presentation_revision=presentation_revision,
-        manifest_digest=str(receipt["manifestDigest"]),
-        plan_digest=str(receipt["planDigest"]),
-        scene_digest=str(receipt["sceneDigest"]),
-        candidate_artifact_digest=str(receipt["candidateArtifactDigest"]),
-        export_readback_digest=str(receipt["exportReadbackDigest"]),
-        receipt_json=receipt,
-        edit_state=str(receipt["editState"]),
-        status=str(receipt["status"]),
-    )
-    session.add(row)
-    await session.flush()
-    return row
 
 
 def _modified_theme(theme: dict[str, Any] | None, *, new_revision: int) -> dict[str, Any]:

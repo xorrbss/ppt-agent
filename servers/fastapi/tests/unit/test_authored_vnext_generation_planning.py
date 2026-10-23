@@ -11,7 +11,6 @@ from models.authored_vnext.master.operations import MasterRevisionResponse
 from services.authored_vnext.generation import (
     OutlineItem,
     TitleFitPlanningError,
-    break_title,
     fit_and_promote_title,
     plan_outline,
     resolve_windows_font,
@@ -22,6 +21,16 @@ from services.authored_vnext.master.errors import (
     MasterNotPublishedError,
 )
 from tests.support.authored_vnext_master_fixture import master_contract_payload
+from services.authored_vnext.generation.title_fit import _fit_on_layout
+
+
+def break_title(contract: DeckMasterContract, layout_id: str, text: str):
+    """Break and fit a title on exactly one master layout."""
+
+    planned = _fit_on_layout(contract, layout_id, text, installed_fonts=None)
+    if planned is None:
+        raise TitleFitPlanningError("title exceeds the selected master layout")
+    return planned[0]
 
 
 def _master(*, status: str = "published") -> MasterRevisionResponse:

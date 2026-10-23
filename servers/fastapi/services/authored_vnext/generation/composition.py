@@ -106,9 +106,3 @@ def remember_composition_pin(
     pin: AuthoredCompositionPin | None,
 ) -> AuthoredCompositionPin | None:
     return None if pin is None else composition_repository.remember(pin)
-
-
-def materialize_effective_contract(pin: AuthoredCompositionPin) -> BodyVisualSnapshot:
-    """Return the persisted tokens; never re-resolve the mutable authored YAML."""
-
-    return pin.body_visual

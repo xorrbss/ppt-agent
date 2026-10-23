@@ -13,13 +13,15 @@ from services.authored_generation_timing_receipt import (
     GENERATION_OBSERVABILITY_METRICS,
     GenerationTimingRecorder,
     _attempt_receipt_v2_from_dict,
-    create_generation_attempt_timing_receipt,
     create_generation_attempt_timing_receipt_v2,
     create_generation_timing_receipt,
     generation_attempt_timing_receipt_path,
     generation_timing_receipt_path,
     load_generation_attempt_timing_receipts,
     load_generation_timing_receipt,
+)
+from tests.support.authored_generation_attempt_timing_v1 import (
+    create_generation_attempt_timing_receipt,
 )
 from services.authored_presentation_generation import _PERFORMANCE_STAGE_NAMES
 from services.public_v2_orchestrator import (

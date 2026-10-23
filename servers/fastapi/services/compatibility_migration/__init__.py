@@ -5,10 +5,6 @@ from services.compatibility_migration.census import (
     PresentationCensusEntry,
     classify_presentation,
 )
-from services.compatibility_migration.inventory import (
-    PresentationInventory,
-    build_presentation_inventory,
-)
 from services.compatibility_migration.archive import (
     ArchiveManifestError,
     build_signed_archive_manifest,
@@ -33,8 +29,6 @@ __all__ = [
     "FROZEN_ALLOWED_OPERATIONS",
     "FrozenCompatibilityError",
     "PresentationCensusEntry",
-    "PresentationInventory",
-    "build_presentation_inventory",
     "authorize_frozen_operation",
     "build_signed_archive_manifest",
     "classify_presentation",

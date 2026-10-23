@@ -242,12 +242,6 @@ async def migrate_provider_settings_from_file_record(
     )
 
 
-async def migrate_provider_settings_from_file(
-    session: AsyncSession,
-) -> dict[str, Any]:
-    return (await migrate_provider_settings_from_file_record(session)).config
-
-
 async def get_provider_settings(session: AsyncSession) -> dict[str, Any]:
     return (await get_provider_settings_record(session)).config
 
@@ -275,12 +269,6 @@ async def get_provider_settings_revision(session: AsyncSession) -> int | None:
     )
     revision = result.scalar_one_or_none()
     return int(revision) if revision is not None else None
-
-
-async def save_provider_settings(
-    session: AsyncSession, incoming: dict[str, Any]
-) -> dict[str, Any]:
-    return (await save_provider_settings_record(session, incoming)).config
 
 
 async def save_provider_settings_record(

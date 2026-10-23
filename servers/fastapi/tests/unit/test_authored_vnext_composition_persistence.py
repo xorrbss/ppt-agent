@@ -14,7 +14,7 @@ from models.sql.authored_vnext_generation_operation import (
     AuthoredVNextGenerationOperation,
 )
 from models.sql.user import User
-from services.authored_vnext.generation.core_bridge import DeterministicCoreBridge
+from tests.support.authored_vnext_deterministic_core_bridge import DeterministicCoreBridge
 from services.authored_vnext.generation.effective_style import (
     resolve_authored_composition,
 )

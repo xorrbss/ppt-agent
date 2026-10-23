@@ -4288,7 +4288,6 @@ async def _generate_authored_presentation(
     export_generation_request_id = (
         generation_job.request_id if generation_job is not None else None
     )
-    native_export_evidence = None
     try:
         if generation_job is not None:
             if not attempt_token:
@@ -4412,9 +4411,7 @@ async def _generate_authored_presentation(
         pngs=pngs,
         out_path=out_path,
         attempt_token=attempt_token,
-        master_generation=None,
         canonical_scene=editable_scene,
-        native_export_evidence=native_export_evidence,
         header_contract=header_contract,
         quality_gate_receipt=quality_gate_receipt,
         slide_ids=slide_ids,

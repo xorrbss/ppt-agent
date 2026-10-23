@@ -15,12 +15,20 @@ from services.provider_settings import (
     ProviderSettingsRecord,
     REDACTED_SECRET_PLACEHOLDER,
     merge_provider_settings,
-    migrate_provider_settings_from_file,
+    migrate_provider_settings_from_file_record,
     redact_provider_settings,
-    save_provider_settings,
     sanitize_provider_settings,
+    save_provider_settings_record,
 )
 from utils.user_config_store import read_user_config_file, update_user_config_file
+
+
+async def save_provider_settings(session, incoming):
+    return (await save_provider_settings_record(session, incoming)).config
+
+
+async def migrate_provider_settings_from_file(session):
+    return (await migrate_provider_settings_from_file_record(session)).config
 
 
 class ProviderSettingsSession:

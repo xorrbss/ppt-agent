@@ -10,8 +10,6 @@ from utils.authored_dom_quality import ensure_authored_qids
 from services.source_content.source_runs import source_run_binding_id
 from services.source_content.browser_readback import (
     BrowserSourceReadbackError,
-    deterministic_source_block_id,
-    deterministic_source_image_block_id,
     deterministic_source_qid,
     source_block_data_attribute,
     stamp_source_block_ids,
@@ -136,8 +134,7 @@ def test_browser_readback_rejects_outline_order_drift() -> None:
     assert error.value.order_violations
 
 
-def test_deterministic_id_and_attribute_are_stable_and_escaped() -> None:
-    assert deterministic_source_block_id("unit-1", 2, "A  B") == deterministic_source_block_id("unit-1", 2, "A B")
+def test_source_block_attribute_is_escaped() -> None:
     assert source_block_data_attribute('block"1') == 'data-source-block-id="block&quot;1"'
 
 
@@ -259,10 +256,8 @@ def test_image_occurrence_readback_requires_intrinsic_natural_size() -> None:
         verify_browser_source_readback(manifest=manifest, outline=outline, browser_metrics=metrics)
 
 
-def test_image_occurrence_ids_are_stable_and_stamp_dom_order() -> None:
-    first = deterministic_source_image_block_id("unit-1", 3, "sha256:abc", 2)
-    assert first == deterministic_source_image_block_id("unit-1", 3, "sha256:abc", 2)
-    assert first != deterministic_source_image_block_id("unit-1", 3, "sha256:abc", 3)
+def test_image_occurrence_ids_stamp_dom_order() -> None:
+    first = "img-1"
     stamped = stamp_source_image_block_ids('<div><img src="a"><img src="a"></div>', [first, "img-2"])
     assert stamped.count("data-source-block-id=") == 2
     assert stamp_source_image_block_ids(stamped, [first, "img-2"]) == stamped

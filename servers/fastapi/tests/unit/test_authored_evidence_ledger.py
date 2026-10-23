@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import json
 
 import pytest
@@ -9,7 +8,6 @@ from services.authored_evidence_ledger import (
     DeckEvidenceLedger,
     EvidenceLedgerSealedError,
     EvidenceReuseError,
-    capture_slide_evidence,
     digest_browser_metrics,
 )
 
@@ -78,24 +76,6 @@ def test_metrics_digest_is_mapping_order_independent_and_attempt_revision_is_bou
     assert second.revision > first.revision
     assert second.checkpoint_revision == 7
     assert second.evidence_digest != first.evidence_digest
-
-
-def test_capture_adapter_retains_png_and_metrics_as_one_record(monkeypatch):
-    async def fake_capture(html: str, timeout: int = 60):
-        return b"png", {"source_digest": "sha256:source", "elements": []}
-
-    monkeypatch.setattr(
-        "utils.slide_capture.render_html_to_png_with_metrics", fake_capture
-    )
-    ledger = DeckEvidenceLedger()
-    evidence = asyncio.run(
-        capture_slide_evidence(
-            ledger, attempt_id="attempt-2", slide_index=3, html="<p>ok</p>"
-        )
-    )
-    assert evidence.png == b"png"
-    assert evidence.browser_metrics is not None
-    assert ledger.latest("attempt-2", 3) == evidence
 
 
 def test_sealed_attempt_rejects_mutation():

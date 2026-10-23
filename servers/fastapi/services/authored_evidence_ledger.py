@@ -647,45 +647,11 @@ class DeckEvidenceLedger:
                     self.receipt_store.pop(key, None)
 
 
-async def capture_slide_evidence(
-    ledger: DeckEvidenceLedger,
-    *,
-    attempt_id: str,
-    slide_index: int,
-    html: str,
-    # A renderer deadline handed to the browser process, not an asyncio one:
-    # ``asyncio.timeout`` at the caller would abandon the capture rather than
-    # bound it.
-    timeout: int = 60,  # noqa: ASYNC109
-    revision: int | None = None,
-) -> SlideEvidence:
-    """Capture through ``slide_capture`` and atomically retain its tuple."""
-
-    from utils.slide_capture import render_html_to_png_with_metrics
-
-    capture = await render_html_to_png_with_metrics(html, timeout=timeout)
-    # RenderCapture is atomic; tolerate legacy tuple adapters used by older
-    # integrations while preferring the explicit payload fields.
-    if hasattr(capture, "png") and hasattr(capture, "browser_metrics"):
-        png, metrics = capture.png, capture.browser_metrics
-    else:
-        png, metrics = capture
-    return ledger.record_slide(
-        attempt_id=attempt_id,
-        slide_index=slide_index,
-        html=html,
-        png=png,
-        browser_metrics=metrics,
-        revision=revision,
-    )
-
-
 __all__ = [
     "DeckEvidenceLedger",
     "EvidenceLedgerSealedError",
     "EvidenceReuseError",
     "SlideEvidence",
-    "capture_slide_evidence",
     "digest_browser_metrics",
     "digest_deck_htmls",
     "digest_html",

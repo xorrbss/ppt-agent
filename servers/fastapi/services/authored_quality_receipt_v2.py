@@ -204,18 +204,6 @@ def release_quality_policy(profile: object = None) -> ReleaseQualityPolicy:
     )
 
 
-def release_profile_requirements(profile: object = None) -> tuple[bool, bool, str]:
-    """Resolve release policy for optional visual and performance evidence.
-
-    The default profile keeps these domains explicitly ``not_assessed`` when
-    omitted.  ``strict`` (or a mapping with ``requireVisualReview`` /
-    ``requirePerformance``) promotes them to mandatory release gates.
-    """
-
-    policy = release_quality_policy(profile)
-    return policy.require_visual_review, policy.require_performance, policy.profile_name
-
-
 def _coerce_bool(value: object, field_name: str) -> bool:
     """Parse policy flags without accepting truthy strings such as ``'false'``."""
 
@@ -2457,24 +2445,6 @@ def create_quality_receipt_v3(
     )
 
 
-def append_quality_receipt_v3_evidence(
-    ledger: QualityReceiptV3Ledger,
-    *,
-    attempt_id: str,
-    revision: int,
-    evidence: Mapping[str, object],
-    event_type: str,
-) -> QualityReceiptV3:
-    """Append new evidence; an existing digest/event pair is idempotent."""
-
-    return ledger.create_or_append(
-        attempt_id=attempt_id,
-        revision=revision,
-        evidence=evidence,
-        event_type=event_type,
-    )
-
-
 def create_quality_receipt_v3_from_v2(
     ledger: QualityReceiptV3Ledger,
     *,
@@ -2509,4 +2479,4 @@ def create_quality_receipt_v3_from_v2(
         evidence=adapted_evidence,
     )
 
-__all__ = ["QualityReceipt", "QualityReceiptLedger", "QualityReceiptV2", "QualityReceiptV3", "QualityReceiptV3Ledger", "ReleaseQualityPolicy", "UnifiedGateEvaluation", "append_quality_receipt_v3_evidence", "build_quality_receipt_v2", "create_quality_receipt_v2", "create_quality_receipt_v3", "create_quality_receipt_v3_from_v2", "evaluate_capacity", "evaluate_capacity_browser_metrics", "evaluate_unified_gate", "evaluate_unified_quality_gate", "public_attempt_id", "quality_receipt_manifest_path", "quality_receipt_root", "quality_receipt_t1_triggers", "release_profile_requirements", "release_quality_policy", "release_quality_policy_digest", "validate_current_quality_receipt_payload", "validate_quality_receipt_v3_payload"]
+__all__ = ["QualityReceipt", "QualityReceiptLedger", "QualityReceiptV2", "QualityReceiptV3", "QualityReceiptV3Ledger", "ReleaseQualityPolicy", "UnifiedGateEvaluation", "build_quality_receipt_v2", "create_quality_receipt_v2", "create_quality_receipt_v3", "create_quality_receipt_v3_from_v2", "evaluate_capacity", "evaluate_capacity_browser_metrics", "evaluate_unified_gate", "evaluate_unified_quality_gate", "public_attempt_id", "quality_receipt_manifest_path", "quality_receipt_root", "quality_receipt_t1_triggers", "release_quality_policy", "release_quality_policy_digest", "validate_current_quality_receipt_payload", "validate_quality_receipt_v3_payload"]

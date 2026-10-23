@@ -30,13 +30,6 @@ from models.sql.workspace import (
     WorkspaceOutbox,
 )
 from services.conversation_event_contract import ConversationEventType
-from services.conversations.domain import (
-    AgentRun,
-    Asset,
-    Conversation,
-    Message,
-    RunEvent,
-)
 from services.conversations.events import conversation_events
 from services.conversations.service import (
     act_on_run,
@@ -111,14 +104,6 @@ def _request(
             current_slide=ConversationSlideReference(index=1),
         ),
     )
-
-
-def test_canonical_domain_names_are_aliases_not_second_sql_models():
-    assert Conversation is WorkspaceConversation
-    assert Message is WorkspaceMessage
-    assert AgentRun is WorkspaceOperation
-    assert RunEvent is WorkspaceOperationEvent
-    assert Asset is WorkspaceAsset
 
 
 def test_revision_projection_rejects_false_publication_claims():

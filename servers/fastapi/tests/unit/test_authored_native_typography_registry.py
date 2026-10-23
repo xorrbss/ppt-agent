@@ -16,10 +16,8 @@ from models.authored_vnext.semantic.typography import (
     NativeTypographyRunReadbackV1,
 )
 from services.authored_vnext.semantic.canonical import canonical_digest
-from services.authored_vnext.semantic.typography import (
-    NativeFontByteRegistry,
-    admit_native_typography,
-)
+from services.authored_vnext.semantic.typography import NativeFontByteRegistry
+from tests.support.authored_native_typography_admission import admit_native_typography
 
 
 _FONT_DIR = Path(r"C:\Windows\Fonts")

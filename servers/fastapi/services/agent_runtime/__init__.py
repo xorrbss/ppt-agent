@@ -20,7 +20,6 @@ from services.agent_runtime.contracts import (
 )
 from services.agent_runtime.events import (
     BoundedCheckpointEventSink,
-    CompositeEventSink,
     EventSink,
     NullEventSink,
     RuntimeEventFenceLost,
@@ -33,7 +32,6 @@ __all__ = [
     "AgentRunResult",
     "ApprovalRequest",
     "BoundedCheckpointEventSink",
-    "CompositeEventSink",
     "EventSink",
     "NullEventSink",
     "OperationArtifactScope",

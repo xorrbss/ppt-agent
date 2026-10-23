@@ -306,32 +306,6 @@ def _hex_color(value: object) -> str | None:
     return None
 
 
-def _semantic_text(element: Mapping[str, Any], fallback: str) -> tuple[str, SceneTextStyle]:
-    payload = element.get("payload")
-    paragraphs = payload.get("paragraphs") if isinstance(payload, Mapping) else None
-    texts: list[str] = []
-    first_run: Mapping[str, Any] = {}
-    alignment = None
-    if isinstance(paragraphs, list):
-        for paragraph in paragraphs:
-            if not isinstance(paragraph, Mapping):
-                continue
-            runs = paragraph.get("runs")
-            if isinstance(runs, list):
-                if not first_run:
-                    first_run = next((run for run in runs if isinstance(run, Mapping)), {})
-                texts.append("".join(str(run.get("text", "")) for run in runs if isinstance(run, Mapping)))
-            alignment = alignment or paragraph.get("alignment")
-    text = "\n".join(texts).strip() or fallback.strip()
-    return text, SceneTextStyle(
-        font_family=str(first_run.get("fontFamily") or "Malgun Gothic"),
-        font_size=finite_float(first_run.get("fontSizePt"), 18),
-        font_weight=int(finite_float(first_run.get("weight"), 400)),
-        color=_hex_color(first_run.get("color")) or "#111827",
-        text_align=alignment if alignment in {"left", "center", "right", "justify"} else "left",
-    )
-
-
 def _reviewed_text_style(node) -> SceneTextStyle | None:
     family_value = str(node.style.get("fontFamily", ""))
     family = next((item for item in _REVIEWED_FONTS if item.casefold() in family_value.casefold()), None)

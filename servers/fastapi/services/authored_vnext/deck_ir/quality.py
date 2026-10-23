@@ -60,55 +60,6 @@ DECK_REQUIRED_CHECKS = frozenset(
     }
 )
 
-CRITIC_PATCH_ALLOWLIST = frozenset(
-    {
-        "replaceLayoutVariant",
-        "setDensity",
-        "setEmphasis",
-        "setComponentVariant",
-        "setAssetCropIntent",
-        "setReadingOrderVariant",
-        "setFocalStrength",
-        "setNegativeSpaceIntent",
-        "setAsymmetryIntent",
-        "setImageTreatment",
-        "setTypographyRhythm",
-    }
-)
-
-_CRITIC_FORBIDDEN_KEYS = frozenset(
-    {
-        "html",
-        "css",
-        "javascript",
-        "script",
-        "selector",
-        "x",
-        "y",
-        "width",
-        "height",
-        "fontSize",
-        "fontFamily",
-        "color",
-        "title",
-        "claim",
-        "evidence",
-        "sourceBindingId",
-        "sourceBindingIds",
-        "requirementIds",
-        "qid",
-        "elementKey",
-        "contentPriority",
-        "hardRelation",
-        "overlapPolicy",
-        "textOcclusion",
-        "sourceOcclusion",
-        "capability",
-        "readiness",
-        "fallback",
-    }
-)
-
 
 def _plain(value: object) -> object:
     model_dump = getattr(value, "model_dump", None)
@@ -349,141 +300,13 @@ def evaluate_deck_quality(
     )
 
 
-@dataclass(frozen=True, slots=True)
-class CriticPatchDecision:
-    valid: bool
-    errors: tuple[str, ...]
-    patch_digest: str | None
-
-
-def _find_forbidden_keys(value: object, path: str = "patch") -> list[str]:
-    value = _plain(value)
-    errors: list[str] = []
-    if isinstance(value, Mapping):
-        for key, nested in value.items():
-            key_text = str(key)
-            nested_path = f"{path}.{key_text}"
-            if key_text in _CRITIC_FORBIDDEN_KEYS:
-                errors.append(nested_path)
-            errors.extend(_find_forbidden_keys(nested, nested_path))
-    elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-        for index, nested in enumerate(value):
-            errors.extend(_find_forbidden_keys(nested, f"{path}[{index}]"))
-    return errors
-
-
-def validate_bounded_critic_patch(
-    patch: object,
-    *,
-    expected_deck_ir_digest: str,
-    expected_observation_digest: str,
-    blocking_slide_keys: Iterable[str],
-) -> CriticPatchDecision:
-    """Validate the visual-only patch allowlist and immutable input bindings."""
-
-    errors: list[str] = []
-    if _read(patch, "schemaVersion", "schema_version", default=None) != "deck-critic-patch/v1":
-        errors.append("deck_critic_patch_schema_invalid")
-    if _read(patch, "deckIrDigest", "deck_ir_digest", default=None) != expected_deck_ir_digest:
-        errors.append("deck_critic_patch_deck_digest_mismatch")
-    if _read(patch, "observationDigest", "observation_digest", default=None) != expected_observation_digest:
-        errors.append("deck_critic_patch_observation_digest_mismatch")
-
-    forbidden_paths = _find_forbidden_keys(patch)
-    if forbidden_paths:
-        errors.append("deck_critic_patch_forbidden_field")
-    allowed_slides = frozenset(blocking_slide_keys)
-    targets = _read(patch, "targets", default=None)
-    if isinstance(targets, (str, bytes)) or not isinstance(targets, Sequence) or not targets:
-        errors.append("deck_critic_patch_targets_invalid")
-        targets = ()
-    seen_slides: set[str] = set()
-    for target in targets:
-        slide_key = _read(target, "slideKey", "slide_key", default=None)
-        if not isinstance(slide_key, str) or slide_key not in allowed_slides or slide_key in seen_slides:
-            errors.append("deck_critic_patch_target_scope_invalid")
-        elif isinstance(slide_key, str):
-            seen_slides.add(slide_key)
-        operations = _read(target, "allowedOperations", "allowed_operations", default=None)
-        if isinstance(operations, (str, bytes)) or not isinstance(operations, Sequence) or not operations:
-            errors.append("deck_critic_patch_operations_invalid")
-            continue
-        for operation in operations:
-            op = _read(operation, "op", default=None)
-            if op not in CRITIC_PATCH_ALLOWLIST:
-                errors.append("deck_critic_patch_operation_not_allowed")
-            plain_operation = _plain(operation)
-            has_value = (
-                "value" in plain_operation
-                if isinstance(plain_operation, Mapping)
-                else hasattr(operation, "value")
-            )
-            if not has_value:
-                errors.append("deck_critic_patch_value_missing")
-
-    # WP1 performs strict schema validation too.  Keep this call additive and
-    # never use it to turn a local rejection into a pass.
-    try:
-        from .contracts import DeckCriticPatchV1
-        from .validation import parse_contract
-
-        parse_contract(DeckCriticPatchV1, patch)
-    except ImportError:
-        pass
-    except (TypeError, ValueError):
-        errors.append("deck_critic_patch_contract_invalid")
-
-    unique_errors = tuple(dict.fromkeys(errors))
-    return CriticPatchDecision(
-        valid=not unique_errors,
-        errors=unique_errors,
-        patch_digest=_canonical_digest(patch) if not unique_errors else None,
-    )
-
-
-@dataclass(frozen=True, slots=True)
-class SharedRecoveryBudget:
-    maximum_actions: int = 1
-    consumed_action: Literal["critic", "director-correction"] | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class RecoveryBudgetDecision:
-    accepted: bool
-    reason: str
-    next_budget: SharedRecoveryBudget
-
-
-def consume_shared_recovery_budget(
-    budget: SharedRecoveryBudget,
-    action: Literal["critic", "director-correction"],
-) -> RecoveryBudgetDecision:
-    """Reserve the single attempt-wide recovery action without mutating state."""
-
-    if budget.maximum_actions != 1:
-        raise ValueError("Deck IR shared recovery budget must be exactly one")
-    if budget.consumed_action is not None:
-        return RecoveryBudgetDecision(False, "shared_recovery_budget_exhausted", budget)
-    return RecoveryBudgetDecision(
-        True,
-        "shared_recovery_budget_reserved",
-        SharedRecoveryBudget(maximum_actions=1, consumed_action=action),
-    )
-
-
 __all__ = [
     "BROWSER_REQUIRED_CHECKS",
-    "CRITIC_PATCH_ALLOWLIST",
     "DECK_REQUIRED_CHECKS",
     "STATIC_REQUIRED_CHECKS",
-    "CriticPatchDecision",
     "DeckQualityGateReceipt",
     "QualityIssue",
-    "RecoveryBudgetDecision",
-    "SharedRecoveryBudget",
     "StageQualityDecision",
-    "consume_shared_recovery_budget",
     "evaluate_deck_quality",
     "evaluate_stage_gate",
-    "validate_bounded_critic_patch",
 ]

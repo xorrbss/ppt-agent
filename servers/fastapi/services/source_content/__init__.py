@@ -13,7 +13,6 @@ from services.source_content.outline import (
     SourceDocumentOutline,
     SourceDocumentOutlineBuilder,
     SourceDocumentOutlineSlide,
-    build_source_document_outline,
 )
 
 __all__ = [
@@ -25,5 +24,4 @@ __all__ = [
     "SourceDocumentOutline",
     "SourceDocumentOutlineBuilder",
     "SourceDocumentOutlineSlide",
-    "build_source_document_outline",
 ]

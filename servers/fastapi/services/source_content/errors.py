@@ -26,4 +26,3 @@ def source_error(code: str, *, status_code: int = 422) -> SourceContentError:
 SECURITY_REJECTED = "source_content_security_rejected"
 MANIFEST_INVALID = "source_content_manifest_invalid"
 UNSUPPORTED_OBJECT = "source_content_unsupported_object"
-TEMPLATE_OVERFLOW = "source_content_template_overflow"
