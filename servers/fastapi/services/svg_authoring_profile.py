@@ -26,6 +26,35 @@ QUALITY_RECOVERY_POLICY = {"id": "svg-quality-first", "version": 1}
 QUALITY_RECOVERY_POLICY_V2 = {"id": "svg-quality-first", "version": 2}
 
 
+def _read_only_review_plan(slide_count: int) -> dict:
+    rounds = 1 if slide_count == 1 else 2
+    groups = (slide_count + 4) // 5 + (slide_count > 5)
+    calls = rounds * groups * 2
+    plan = dict(schema="svg-quality-recovery-plan/v3", review_round_limit=rounds,
+                page_attempt_limit=3, slide_count=slide_count, review_group_size=5,
+                review_call_limit=calls, review_retry_limit=1)
+    if slide_count > 1:
+        from services.svg_final_selected_continuation import NAMESPACE
+        local_groups = (slide_count + 4) // 5
+        control = dict(schema="svg-final-selected-review-control/v2", namespace=NAMESPACE,
+                       page_count=slide_count, local_group_size=5, local_group_limit=local_groups,
+                       global_format_retry_limit=0, review_call_limit=(local_groups + 1) * 2,
+                       physical_offset=calls, run_limit=1, review_retry_limit=1)
+        plan["final_selected_review_control"] = {
+            **control, "digest": canonical_json_digest(control, allow_nan=True)}
+    return plan
+
+
+def review_physical_ordinal(ordinal: int, *, phase_group_limit: int, review_retry_limit=0,
+                            review_attempt=0, phase=0, physical_offset=0) -> int:
+    """Map a logical review and its read attempt to one reserved physical slot."""
+    attempts = review_retry_limit + 1
+    if (type(ordinal) is not int or not 0 <= ordinal < phase_group_limit // attempts
+            or type(review_attempt) is not int or not 0 <= review_attempt < attempts):
+        raise ValueError("svg_quality_recovery_review_limit")
+    return physical_offset + phase * phase_group_limit + ordinal * attempts + review_attempt
+
+
 def validate_quality_recovery_policy(value: object) -> dict | None:
     if value is None:
         return None
@@ -79,6 +108,11 @@ def seal_new_quality_recovery_plan(request: object, slide_count: int) -> dict | 
         return None
     single_page = slide_count == 1
     policy = request_quality_recovery_policy(request) or dict(QUALITY_RECOVERY_POLICY_V2)
+    if policy["version"] == 2:
+        plan = _read_only_review_plan(slide_count)
+        request._svg_quality_recovery_plan = plan
+        request._svg_quality_recovery_policy = policy
+        return plan
     plan = {"schema": "svg-quality-recovery-plan/v2" if single_page else "svg-quality-recovery-plan/v1",
             "review_round_limit": 1 if single_page else 2,
             "page_attempt_limit": 3, "slide_count": slide_count, "review_group_size": 5,
@@ -98,6 +132,13 @@ def read_quality_recovery_plan(snapshot: Mapping) -> dict | None:
     if policy is None:
         return None
     plan = snapshot.get("quality_recovery_plan")
+    if isinstance(plan, Mapping) and plan.get("schema") == "svg-quality-recovery-plan/v3":
+        count = plan.get("slide_count")
+        if (policy["version"] != 2 or type(count) is not int or count < 1
+                or canonical_json_digest(plan, allow_nan=True)
+                != canonical_json_digest(_read_only_review_plan(count), allow_nan=True)):
+            raise ValueError("svg_quality_recovery_plan_invalid")
+        return dict(plan)
     single_page = (isinstance(plan, Mapping)
                    and plan.get("schema") == "svg-quality-recovery-plan/v2"
                    and type(plan.get("slide_count")) is int and plan["slide_count"] == 1)
@@ -125,7 +166,8 @@ def read_quality_recovery_plan(snapshot: Mapping) -> dict | None:
         final_control = plan["final_selected_review_control"]
         integer_fields = ("page_count", "local_group_size", "local_group_limit", "global_format_retry_limit",
                           "review_call_limit", "physical_offset", "run_limit")
-        if not isinstance(final_control, Mapping) or any(type(final_control.get(key)) is not int for key in integer_fields):
+        if (not isinstance(final_control, Mapping)
+                or any(type(final_control.get(key)) is not int for key in integer_fields)):
             raise ValueError("svg_quality_recovery_plan_invalid")
         try:
             verify_review_control(final_control, plan["slide_count"], physical_offset)
@@ -137,7 +179,8 @@ def read_quality_recovery_plan(snapshot: Mapping) -> dict | None:
 def global_format_retry_control(snapshot: Mapping) -> dict | None:
     """Plan extra format slots outside the immutable authored style snapshot."""
     plan = read_quality_recovery_plan(snapshot)
-    if plan is None or plan["slide_count"] <= plan["review_group_size"]:
+    if (plan is None or plan.get("review_retry_limit") is not None
+            or plan["slide_count"] <= plan["review_group_size"]):
         return None
     rounds = plan["review_round_limit"]
     calls = plan["review_call_limit"] + rounds
@@ -167,6 +210,18 @@ def read_quality_recovery_execution_plan(snapshot: Mapping, *, manifest=None) ->
     result = dict(plan)
     result["global_format_retry_limit"] = 0
     result["phase_group_limit"] = plan["review_call_limit"] // plan["review_round_limit"]
+    if plan.get("review_retry_limit") is not None:
+        final_control = plan.get("final_selected_review_control")
+        if isinstance(manifest, Mapping):
+            if manifest.get("global_format_retry_control") is not None:
+                raise ValueError("svg_quality_recovery_execution_plan_invalid")
+            if ("final_selected_review_control" in manifest
+                    and canonical_json_digest(manifest["final_selected_review_control"], allow_nan=True)
+                    != canonical_json_digest(final_control, allow_nan=True)):
+                raise ValueError("svg_quality_recovery_execution_plan_invalid")
+        if final_control is not None:
+            result["final_selected_review"] = dict(final_control)
+        return result
     policy = read_quality_recovery_policy(snapshot)
     if policy["version"] == 2:
         from services.svg_final_selected_continuation import verify_review_control
@@ -266,7 +321,9 @@ def validate_authoring_profile(value: object) -> SvgAuthoringProfile | None:
         and type(value.get("version")) is int
         and value["version"] in {1, 2, 3, 4, 5, 6, 7, 8}
     ):
-        return dict({1: ART_DIRECTION_PROFILE, 2: ART_DIRECTION_PROFILE_V2, 3: ART_DIRECTION_PROFILE_V3, 4: ART_DIRECTION_PROFILE_V4, 5: ART_DIRECTION_PROFILE_V5, 6: ART_DIRECTION_PROFILE_V6, 7: ART_DIRECTION_PROFILE_V7, 8: ART_DIRECTION_PROFILE_V8}[value["version"]])
+        return dict({1: ART_DIRECTION_PROFILE, 2: ART_DIRECTION_PROFILE_V2, 3: ART_DIRECTION_PROFILE_V3,
+                     4: ART_DIRECTION_PROFILE_V4, 5: ART_DIRECTION_PROFILE_V5, 6: ART_DIRECTION_PROFILE_V6,
+                     7: ART_DIRECTION_PROFILE_V7, 8: ART_DIRECTION_PROFILE_V8}[value["version"]])
     raise ValueError("svg_authoring_profile_invalid")
 
 
@@ -290,7 +347,7 @@ def new_svg_admission_profile(request: object) -> dict[str, object] | None:
     if profile is not None or getattr(request, "_svg_authoring_profile_selected", False):
         return profile
     profile = validate_authoring_profile("art-direction-v1@8")
-    setattr(request, "_svg_authoring_profile", profile)
+    request._svg_authoring_profile = profile
     return profile
 
 

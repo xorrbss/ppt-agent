@@ -1908,13 +1908,14 @@ def test_restoration_policy_reserves_final_review_without_changing_legacy(slide_
     if slide_count > 1:
         assert final["physical_offset"] == execution["review_call_limit"]
         assert final["run_limit"] == 1
-        assert final["review_call_limit"] == (slide_count + 4) // 5 + 2
+        assert final["review_call_limit"] == ((slide_count + 4) // 5 + 1) * 2
+        assert final["review_retry_limit"] == 1
     else:
         assert final is None
     total = execution["review_call_limit"] + (final["review_call_limit"] if final else 0)
     assert svg_quality_review_admission_budget(current, slide_count) == total
     if slide_count == 80:
-        assert total == 54
+        assert total == 102
 
     from services.svg_partial_recovery import _recovery_review_allocation
     regular, format_control, recovered_final = _recovery_review_allocation(current, snapshot, slide_count)
@@ -1927,6 +1928,27 @@ def test_restoration_policy_reserves_final_review_without_changing_legacy(slide_
     if recovered_final is not None:
         manifest["final_selected_review_control"] = recovered_final
     assert read_quality_recovery_execution_plan(snapshot, manifest=manifest) == execution
+
+    # Frozen restoration plans retain their previous physical allocation.
+    frozen_rounds = 1 if slide_count == 1 else 2
+    frozen_calls = frozen_rounds * ((slide_count + 4) // 5 + (slide_count > 5))
+    frozen_plan = dict(schema="svg-quality-recovery-plan/v2" if slide_count == 1
+                       else "svg-quality-recovery-plan/v1", slide_count=slide_count,
+                       review_round_limit=frozen_rounds, page_attempt_limit=3,
+                       review_group_size=5, review_call_limit=frozen_calls)
+    if slide_count > 1:
+        from services.svg_final_selected_continuation import final_review_control
+        frozen_plan["final_selected_review_control"] = final_review_control(
+            slide_count, physical_offset=frozen_calls + (frozen_rounds if slide_count > 5 else 0))
+    restoration_snapshot = frozen(current, frozen_plan)
+    frozen_copy = deepcopy(restoration_snapshot)
+    restoration = SimpleNamespace(_svg_style_snapshot=restoration_snapshot)
+    assert seal_new_quality_recovery_plan(restoration, slide_count) == frozen_plan
+    assert restoration_snapshot == frozen_copy
+    frozen_execution = read_quality_recovery_execution_plan(restoration_snapshot)
+    frozen_final = frozen_execution.get("final_selected_review")
+    assert svg_quality_review_admission_budget(restoration, slide_count) == (
+        frozen_execution["review_call_limit"] + (frozen_final["review_call_limit"] if frozen_final else 0))
 
     legacy = SimpleNamespace(vision_qa=False, _svg_quality_recovery_policy={"id": "svg-quality-first", "version": 1})
     old_plan = seal_new_quality_recovery_plan(legacy, slide_count)
@@ -1959,14 +1981,15 @@ def test_restoration_final_review_control_rejects_tampering():
                     quality_recovery_policy=dict(request._svg_quality_recovery_policy),
                     quality_recovery_plan=plan)
     snapshot["digest"] = canonical_json_digest(snapshot, allow_nan=True)
-    for field, value in (("physical_offset", 999), ("run_limit", True), ("namespace", "unadmitted")):
+    for field, value in (("physical_offset", 999), ("run_limit", True),
+                         ("namespace", "unadmitted"), ("review_retry_limit", True)):
         changed = deepcopy(snapshot)
         changed["quality_recovery_plan"]["final_selected_review_control"][field] = value
         changed["digest"] = canonical_json_digest({k: v for k, v in changed.items() if k != "digest"}, allow_nan=True)
         with pytest.raises(ValueError, match="svg_quality_recovery_plan_invalid"):
             read_quality_recovery_plan(changed)
-    manifest = dict(global_format_retry_control=global_format_retry_control(snapshot))
-    manifest["global_format_retry_control"]["global_retry_limit"] = True
+    assert global_format_retry_control(snapshot) is None
+    manifest = dict(global_format_retry_control={"global_retry_limit": True})
     with pytest.raises(ValueError, match="svg_quality_recovery_execution_plan_invalid"):
         read_quality_recovery_execution_plan(snapshot, manifest=manifest)
     with pytest.raises(ValueError, match="svg_quality_recovery_execution_plan_invalid"):

@@ -75,7 +75,8 @@ async def classify_pages(pages, *, job, checkpoint, snapshot=None) -> dict[str, 
     """Classify every page in place and persist it; return the deck summary."""
 
     outcomes = classify_page_outcomes([page_outcome(i, payload) for i, (payload, _) in enumerate(pages)])
-    composition = observe_svg_deck_composition(pages, **({"quality_policy": True} if snapshot and _quality_policy(snapshot) else {}))
+    composition = observe_svg_deck_composition(
+        pages, **({"quality_policy": True} if snapshot and _quality_policy(snapshot) else {}))
     _record_classification(pages, outcomes, composition)
     for outcome, (payload, _) in zip(outcomes, pages, strict=True):
         await checkpoint(job, outcome.index, payload=payload)
@@ -95,7 +96,8 @@ def reclassify_pages(pages, *, summary=None) -> dict[str, object]:
     return {**(summary or {}), **deck_quality_summary(outcomes)}
 
 
-async def deck_advisory(ctx, pages, *, job, read_png, run_advisory, round_ordinal: int | None = None, final_selected=False, source_evidence=None):
+async def deck_advisory(ctx, pages, *, job, read_png, run_advisory, round_ordinal: int | None = None,
+                        final_selected=False, source_evidence=None):
     """One vision advisory over the deck's renders, bound to their digests."""
 
     profile = getattr(ctx, "runtime_profile", None)
@@ -112,7 +114,8 @@ async def deck_advisory(ctx, pages, *, job, read_png, run_advisory, round_ordina
         return None
     if policy:
         return await _quality_first_deck_advisory(ctx, pages, job=job, read_png=read_png,
-            run_advisory=run_advisory, phase=round_ordinal or 0, final_selected=final_selected, source_evidence=source_evidence)
+            run_advisory=run_advisory, phase=round_ordinal or 0,
+            final_selected=final_selected, source_evidence=source_evidence)
     from services.provider_usage_instrumentation import provider_usage_scope
 
     renders = [png if png is not None else read_png(payload) for payload, png in pages]
@@ -164,13 +167,15 @@ def _design_context(ctx, pages, *, job, read_png, review_principles_version=None
     for index, (payload, _) in enumerate(pages):
         receipt = next((attempt.get("receipt") for attempt in reversed(payload.get("attempts") or [])
                         if isinstance(attempt, Mapping) and isinstance(attempt.get("receipt"), Mapping)
-                        and (attempt["receipt"].get("reference_selection") or attempt["receipt"].get("design_example_inputs"))), {})
+                        and (attempt["receipt"].get("reference_selection")
+                             or attempt["receipt"].get("design_example_inputs"))), {})
         selected = receipt.get("reference_selection")
         if selected is None and index < len(contents):
             selected = select_reference_role(snapshot, roles[index] if index < len(roles) else "content",
                                              contents[index], payload.get("visual_intent"))
         if selected:
-            chosen = selected.get("reference_roles") or ([selected["selected_role"]] if selected.get("selected_role") else [])
+            chosen = selected.get("reference_roles") or (
+                [selected["selected_role"]] if selected.get("selected_role") else [])
             review_roles.extend(chosen)
             page_reference_roles[index] = chosen
         supplied = receipt.get("design_example_inputs")
@@ -247,7 +252,8 @@ def _design_context(ctx, pages, *, job, read_png, review_principles_version=None
         roles=list(roles), deckComplete=len(pages) == getattr(ctx, "count", len(pages)),
         composition=observe_svg_deck_composition(pages, quality_policy=True),
         binding=dict(jobId=str(job.id) if job else None,
-            operationId=str(job.workspace_operation_id) if job and getattr(job, "workspace_operation_id", None) else None,
+            operationId=(str(job.workspace_operation_id)
+                         if job and getattr(job, "workspace_operation_id", None) else None),
             presentationId=str(job.presentation_id) if job and getattr(job, "presentation_id", None) else None,
             ownerId=str(get_current_owner_id()) if get_current_owner_id() else None,
             tenantId=str(get_current_tenant_id()) if get_current_tenant_id() else None)))
@@ -365,13 +371,14 @@ def _render_resolution(png, canvas):
         sufficient=width >= (canvas.get("width") or 1) and height >= (canvas.get("height") or 1))
 
 
-async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisory, phase, final_selected=False, source_evidence=None):
+async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisory, phase,
+                                       final_selected=False, source_evidence=None):
     """Bound physical review calls to the pre-admitted plan, keeping legacy calls intact.
 
     A group call that failed leaves the review incomplete, so the sealed gate
     holds every page unreviewed; it never fails the deck (``request_group``).
     """
-    from services.svg_authoring_profile import read_quality_recovery_execution_plan
+    from services.svg_authoring_profile import read_quality_recovery_execution_plan, review_physical_ordinal
     from services.provider_usage_instrumentation import provider_usage_scope
     plan = read_quality_recovery_execution_plan(ctx.snapshot, manifest=getattr(ctx, "partial_recovery_manifest", None))
     if (plan is None or plan["slide_count"] != len(pages) or type(phase) is not int
@@ -401,7 +408,9 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
     if evidence is not None and phase == 0 and live_producers is None:
         if any(source.get("proof", {}).get("schema") == "svg-source-local-review-continuation/v1"
                for source in [evidence, *evidence.get("additional_producers", [])]):
-            from services.svg_source_local_review_continuation import reusable_continuation_groups as reusable_local_groups
+            from services.svg_source_local_review_continuation import (
+                reusable_continuation_groups as reusable_local_groups,
+            )
         else:
             from services.svg_final_selected_continuation import reusable_local_groups
         context["priorCandidates"] = {}
@@ -424,6 +433,7 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
     per_phase = plan["phase_group_limit"]
     group_size = plan["review_group_size"]
     full_review = len(pages) <= group_size
+    review_attempt_limit = 1 + plan.get("review_retry_limit", 0)
     global_retry_limit = plan["global_format_retry_limit"]
     if final_control and baseline_review_active(context):
         per_phase = final_control["review_call_limit"]
@@ -432,7 +442,7 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
         full_review = False
     groups = [list(range(start, min(start + group_size, len(pages))))
               for start in range(0, len(pages), group_size)]
-    if len(groups) + (not full_review) + global_retry_limit != per_phase:
+    if (len(groups) + (not full_review) + global_retry_limit) * review_attempt_limit != per_phase:
         raise ValueError("svg_quality_recovery_review_allocation_invalid")
     local_pages, local_comparisons, records = {}, {}, []
     if live_producers is not None:
@@ -453,7 +463,8 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
             group_changed = baseline_review_active(context) and any(
                 member in changed for member in groups[index // group_size])
             if (not group_changed and index not in changed and old and old.get("evaluated") is True
-                    and old.get("localEvidenceDigest") == _local_review_digest(context, payload, renders[index], index)):
+                    and old.get("localEvidenceDigest") == _local_review_digest(
+                        context, payload, renders[index], index)):
                 axes = {name: old["axes"][name] for name in DESIGN_AXES[:-1]}
                 local_pages[index] = dict(index=index, evaluated=True, axes=axes, issues=old.get("issues", []),
                                          localEvidenceReused=True)
@@ -462,15 +473,7 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
                                                           if target["axis"] in DESIGN_AXES[:-1]]
 
     async def request_group(ordinal, indices, group_context, group_renders):
-        """One sealed group review, or an unreviewed marker for its pages.
-
-        A call that fails on the provider side (a timeout, an unknown or failed
-        outcome, a budget refusal) leaves its pages unreviewed instead of failing
-        the deck; the sealed gate then judges no page, which publication reports
-        once for the deck (``gate_design_verdicts``). A saved group
-        that never completed is never bought again, for the same reason. Bound
-        evidence that does not match, cancellation and a quota deferral raise.
-        """
+        """Dispatch a sealed read budget; retain each superseded physical attempt."""
         input_digest = _group_review_input_digest(group_context, group_renders, phase, ordinal, indices)
         saved = await checkpoint(ordinal)
         if saved:
@@ -479,24 +482,37 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
                 # none; it still names no other input, and buys nothing.
                 if saved.get("input_digest") not in {None, input_digest}:
                     raise ValueError("svg_quality_recovery_review_group_conflict")
-                local_reserved(ordinal)
-                return _unreviewed_group(f"phase-{phase}/group-{ordinal}", indices, saved)
-            if saved.get("input_digest") != input_digest:
+                if review_attempt_limit == 1:
+                    local_reserved(ordinal)
+                    return _unreviewed_group(f"phase-{phase}/group-{ordinal}", indices, saved)
+            elif saved.get("input_digest") != input_digest:
                 raise ValueError("svg_quality_recovery_review_group_conflict")
-            sealed = saved.get("advisory")
-            if (not isinstance(sealed, Mapping) or sealed.get("inputDigest") != input_digest
-                    or sealed.get("digest") != content_digest({key: value for key, value in sealed.items() if key != "digest"})):
-                raise ValueError("svg_quality_recovery_review_group_evidence_invalid")
-            local_reserved(ordinal)
-            return saved["advisory"]
+            else:
+                sealed = saved.get("advisory")
+                if (not isinstance(sealed, Mapping) or sealed.get("inputDigest") != input_digest
+                    or sealed.get("digest") != content_digest(
+                        {key: value for key, value in sealed.items() if key != "digest"})):
+                    raise ValueError("svg_quality_recovery_review_group_evidence_invalid")
+                if review_attempt_limit == 1 or not _retryable_review_result(sealed["vision"]):
+                    local_reserved(ordinal)
+                    return sealed
+        def physical_ordinal(attempt):
+            return review_physical_ordinal(ordinal, phase_group_limit=per_phase,
+                review_retry_limit=review_attempt_limit - 1, review_attempt=attempt,
+                phase=phase, physical_offset=physical_offset)
+
         marker = dict(status="review_inflight", input_digest=input_digest,
             group_id=f"phase-{phase}/group-{ordinal}", indices=indices, review_scope=group_context["reviewScope"],
-            physical_ordinal=physical_offset + phase * per_phase + ordinal)
+            physical_ordinal=physical_ordinal(0))
         if review_namespace:
             marker.update(namespace=review_namespace,
                           physical_purpose="final-selected" if final_selected else "initial-continuation")
-        await checkpoint(ordinal, marker)
-        local_reserved(ordinal)
+        if review_attempt_limit > 1:
+            marker.update(review_attempt=0, superseded_attempts=[])
+            if saved:
+                _validate_review_attempts(saved, marker, review_attempt_limit)
+        elif not saved:
+            await checkpoint(ordinal, marker)
         async def dispatch():
             # Fresh generation inherits the public fence. Explicit workspace IDs
             # select the existing typed partial-recovery admission path.
@@ -507,37 +523,57 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
                            and job.request_payload.get("_svg_partial_recovery")) else {})):
                 return await run_advisory(group_renders, slide_count=len(group_renders),
                                           required=True, design_context=group_context)
-        try:
-            if ordinal < len(groups):
-                await reservations_ready.wait()
-            # Group reviews are provider calls: a pipelined deck bounds them by
-            # its provider permits (the author concurrency the page gate had).
-            permits = getattr(ctx, "provider_permits", None)
-            semaphore = permits.slot(repair=False) if permits is not None else getattr(ctx, "semaphore", None)
-            if semaphore is not None:
-                async with semaphore:
+        while True:
+            if saved:
+                if review_attempt_limit == 1 or saved["review_attempt"] + 1 >= review_attempt_limit:
+                    local_reserved(ordinal)
+                    return (saved["advisory"] if saved.get("status") == "completed" else
+                            _unreviewed_group(marker["group_id"], indices, saved))
+                history = deepcopy(saved["superseded_attempts"])
+                history.append({key: deepcopy(value) for key, value in saved.items() if key != "superseded_attempts"})
+                marker.update(review_attempt=saved["review_attempt"] + 1, superseded_attempts=history,
+                              physical_ordinal=physical_ordinal(saved["review_attempt"] + 1))
+            if review_attempt_limit > 1:
+                await checkpoint(ordinal, marker)
+            local_reserved(ordinal)
+            delay = saved.get("retry_delay_seconds", 0) if saved else 0
+            if delay:
+                await asyncio.sleep(delay)
+            try:
+                if ordinal < len(groups):
+                    await reservations_ready.wait()
+                # Backoff holds no provider permit; each dispatch uses the
+                # same concurrency control as the original group call.
+                permits = getattr(ctx, "provider_permits", None)
+                semaphore = permits.slot(repair=False) if permits is not None else getattr(ctx, "semaphore", None)
+                if semaphore is not None:
+                    async with semaphore:
+                        vision = await dispatch()
+                else:
                     vision = await dispatch()
-            else:
-                vision = await dispatch()
-        except BaseException as exc:
-            from services.generation_core.quality.page_failure_kind import absorbable_page_error
-            from utils.provider_overload import safe_provider_diagnostics
-            diagnostics = safe_provider_diagnostics(exc)
-            if not absorbable_page_error(exc):
-                await checkpoint(ordinal, {**marker, "status": "review_unknown", "failureDiagnostics": diagnostics})
-                raise
-            import logging
-            logging.getLogger(__name__).warning("[svg] design review call failed group=%s pages=%s code=%s",
-                marker["group_id"], indices, getattr(exc, "code", type(exc).__name__))
-            failed = {**marker, "status": "review_failed", "failureDiagnostics": diagnostics,
-                      "failureCode": str(getattr(exc, "code", None) or type(exc).__name__)}
-            await checkpoint(ordinal, failed)
-            return _unreviewed_group(marker["group_id"], indices, failed)
-        sealed = dict(groupId=marker["group_id"], globalPageIndices=indices,
-                      inputDigest=input_digest, reviewScope=group_context["reviewScope"], vision=vision)
-        sealed["digest"] = content_digest(sealed)
-        await checkpoint(ordinal, {**marker, "status": "completed", "advisory": sealed})
-        return sealed
+            except BaseException as exc:
+                from services.generation_core.quality.page_failure_kind import absorbable_page_error
+                from utils.provider_overload import safe_provider_diagnostics
+                diagnostics = safe_provider_diagnostics(exc)
+                if not absorbable_page_error(exc):
+                    await checkpoint(ordinal, {**marker, "status": "review_unknown", "failureDiagnostics": diagnostics})
+                    raise
+                import logging
+                logging.getLogger(__name__).warning("[svg] design review call failed group=%s pages=%s code=%s",
+                    marker["group_id"], indices, getattr(exc, "code", type(exc).__name__))
+                saved = {**marker, "status": "review_failed", "failureDiagnostics": diagnostics,
+                         "failureCode": str(getattr(exc, "code", None) or type(exc).__name__)}
+                if review_attempt_limit > 1:
+                    saved["retry_delay_seconds"] = _review_retry_delay(exc)
+                await checkpoint(ordinal, saved)
+                continue
+            sealed = dict(groupId=marker["group_id"], globalPageIndices=indices,
+                          inputDigest=input_digest, reviewScope=group_context["reviewScope"], vision=vision)
+            sealed["digest"] = content_digest(sealed)
+            saved = {**marker, "status": "completed", "advisory": sealed}
+            await checkpoint(ordinal, saved)
+            if review_attempt_limit == 1 or not _retryable_review_result(vision):
+                return sealed
 
     async def local_group(ordinal, indices):
         if ordinal in reused_groups:
@@ -600,7 +636,8 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
         # representatives only for global flow; fine detail remains local.
         global_context = _global_review_context(ctx, context, pages, local_pages, records)
         for format_attempt in range(global_retry_limit + 1):
-            global_result = await request_group(len(groups) + format_attempt, list(range(len(pages))), global_context, renders)
+            global_result = await request_group(
+                len(groups) + format_attempt, list(range(len(pages))), global_context, renders)
             if _UNREVIEWED_GROUP in global_result:
                 unreviewed_groups.append(global_result[_UNREVIEWED_GROUP])
                 return incomplete_review("review_call_unavailable")
@@ -665,6 +702,36 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
 _UNREVIEWED_GROUP = "unreviewedGroup"
 
 
+def _retryable_review_result(vision):
+    return vision.get("skipped") in {
+        "design_review_schema_or_coverage_invalid", "review_schema_invalid",
+        "review_coverage_incomplete", "unparseable_response", "provider_failed",
+    }
+
+
+def _review_retry_delay(error):
+    from utils.provider_overload import is_provider_overload
+    if not is_provider_overload(error):
+        return 0
+    from services.authored_batch_policy import OVERLOAD_COOLDOWN_BASE_SECONDS, OVERLOAD_COOLDOWN_MAX_SECONDS
+    delay = getattr(error, "cooldown_seconds", None)
+    return min(max(float(delay or OVERLOAD_COOLDOWN_BASE_SECONDS), OVERLOAD_COOLDOWN_BASE_SECONDS),
+               OVERLOAD_COOLDOWN_MAX_SECONDS)
+
+
+def _validate_review_attempts(saved, marker, limit):
+    attempt, history = saved.get("review_attempt"), saved.get("superseded_attempts")
+    if (type(attempt) is not int or not 0 <= attempt < limit
+            or not isinstance(history, list) or len(history) != attempt):
+        raise ValueError("svg_quality_recovery_review_group_evidence_invalid")
+    for index, prior in enumerate([*history, saved]):
+        if (not isinstance(prior, Mapping) or prior.get("review_attempt") != index
+                or prior.get("physical_ordinal") != marker["physical_ordinal"] + index
+                or prior.get("input_digest") != marker["input_digest"]
+                or prior.get("status") not in {"review_inflight", "review_unknown", "review_failed", "completed"}):
+            raise ValueError("svg_quality_recovery_review_group_evidence_invalid")
+
+
 def _unreviewed_group(group_id, indices, saved):
     return {_UNREVIEWED_GROUP: dict(groupId=group_id, globalPageIndices=list(indices),
         status=saved.get("status"), failureCode=saved.get("failureCode"))}
@@ -709,10 +776,12 @@ def _reusable_live_local_pages(context, pages, renders, producers):
                 designTargets=[deepcopy(target) for target in page.get("designTargets", [])
                                if target["axis"] in DESIGN_AXES[:-1]])
             record = next((record for record in gate.get("reviewGroups", [])
-                           if record.get("reviewScope") == "local" and index in record.get("globalPageIndices", [])), None)
+                           if record.get("reviewScope") == "local"
+                           and index in record.get("globalPageIndices", [])), None)
             group_indices = list(range((index // 5) * 5, min((index // 5 + 1) * 5, len(pages))))
             if (record is None or record.get("globalPageIndices") != group_indices
-                    or record.get("digest") != content_digest({key: value for key, value in record.items() if key != "digest"})):
+                    or record.get("digest") != content_digest(
+                        {key: value for key, value in record.items() if key != "digest"})):
                 # A projected page without its physical producer is insufficient.
                 reused.pop(index)
                 continue
@@ -731,7 +800,8 @@ def _blocking_design_targets(page):
     """Retain explicit optional advice without turning it into a repair order."""
     targets = page.get("designTargets", [])
     axes = page.get("axes")
-    if (not isinstance(targets, list) or page.get("evaluated") is not True or page.get("mandatoryEvidenceValid") is not True
+    if (not isinstance(targets, list) or page.get("evaluated") is not True
+            or page.get("mandatoryEvidenceValid") is not True
             or page.get("status") != "passed" or page.get("failedAxes") != []
             or not isinstance(axes, Mapping) or set(axes) != set(DESIGN_AXES)
             or any(not isinstance(axis, Mapping) or (axis.get("verdict"), axis.get("severity"), axis.get("repairScope"))
@@ -922,7 +992,8 @@ def quality_recovery_decisions(ctx, pages, advisory):
         targets = _blocking_design_targets(page) if (gate.get("policy") or {}).get("version") == 2 else []
         if not failed and not targets:
             continue
-        scope = "design_rewrite" if targets or any(axis["repairScope"] == "design_rewrite" for axis in failed) else "local_repair"
+        scope = ("design_rewrite" if targets or any(axis["repairScope"] == "design_rewrite" for axis in failed)
+                 else "local_repair")
         decisions[page["index"]] = dict(repair_scope=scope,
             target_axes=list(dict.fromkeys([*page["failedAxes"], *[target["axis"] for target in targets]])),
             issues=[dict(axis=name, **axis) for name, axis in page["axes"].items() if axis.get("verdict") == "failed"])
@@ -988,7 +1059,8 @@ def _source_preservation_intact(payload, *, ctx=None, index=None, snapshot=None,
 
 def compare_quality_recovery_candidates(ctx, prior, new, prior_advisory, new_advisory, index):
     """Uncertain improvement keeps the prior bytes without certifying completion."""
-    reject = lambda reason: dict(selected="prior", reason=reason)
+    def reject(reason):
+        return dict(selected="prior", reason=reason)
     if not _quality_policy(getattr(ctx, "snapshot", {})):
         return reject("quality_policy_inactive")
     if not _candidate_local_valid(new, ctx=ctx, index=index):
@@ -1237,14 +1309,28 @@ def _group_review_input_digest(group_context, group_renders, phase, ordinal, ind
     public_context = {key: value for key, value in group_context.items() if key not in {'examples', 'priorCandidates'}}
     if baseline_review_active(group_context):
         public_context["reviewPrinciplesDigest"] = baseline_design_principles_digest(group_context)
-    input_digest = content_digest(dict(context=public_context, examples=group_context['exampleDigests'], pngDigests=[sha256_hex(png) for png in group_renders], priorCandidates={index: {key: value for key, value in prior.items() if key != 'png'} for index, prior in group_context['priorCandidates'].items()}, groupId=f'phase-{phase}/group-{ordinal}', indices=indices))
+    input_digest = content_digest(dict(context=public_context, examples=group_context['exampleDigests'],
+        pngDigests=[sha256_hex(png) for png in group_renders],
+        priorCandidates={index: {key: value for key, value in prior.items() if key != 'png'}
+                         for index, prior in group_context['priorCandidates'].items()},
+        groupId=f'phase-{phase}/group-{ordinal}', indices=indices))
     return input_digest
 
 def _local_group_context(context, to_review, full_review=False):
-    group_context = {**context, 'reviewScope': 'full' if full_review else 'local', 'globalPageIndices': to_review, 'deckComplete': full_review, 'pages': [{**context['pages'][index], 'index': local, 'deckIndex': index} for local, index in enumerate(to_review)], 'roles': [context['roles'][index] if index < len(context['roles']) else 'content' for index in to_review], 'composition': context['composition'] if full_review else {}, 'priorCandidates': {local: context['priorCandidates'][index] for local, index in enumerate(to_review) if index in context['priorCandidates']}}
+    group_context = {**context, 'reviewScope': 'full' if full_review else 'local',
+        'globalPageIndices': to_review, 'deckComplete': full_review,
+        'pages': [{**context['pages'][index], 'index': local, 'deckIndex': index}
+                  for local, index in enumerate(to_review)],
+        'roles': [context['roles'][index] if index < len(context['roles']) else 'content' for index in to_review],
+        'composition': context['composition'] if full_review else {},
+        'priorCandidates': {local: context['priorCandidates'][index] for local, index in enumerate(to_review)
+                            if index in context['priorCandidates']}}
     relevant_roles = {role for page in group_context['pages'] for role in page['referenceRoles']}
-    actual_example_digests = {digest for page in group_context['pages'] for digest in page.get('authorExampleDigests') or []}
-    group_context['examples'] = [example for example in context['examples'] if (example['digest'] in actual_example_digests if actual_example_digests else bool(set(example.get('roles') or [example['role']]) & relevant_roles))]
+    actual_example_digests = {digest for page in group_context['pages']
+                             for digest in page.get('authorExampleDigests') or []}
+    group_context['examples'] = [example for example in context['examples']
+        if (example['digest'] in actual_example_digests if actual_example_digests
+            else bool(set(example.get('roles') or [example['role']]) & relevant_roles))]
     group_context['exampleDigests'] = sorted((example['digest'] for example in group_context['examples']))
     return group_context
 
