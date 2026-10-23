@@ -75,17 +75,17 @@ def test_fake_deck_exposes_observations_and_render_receipts_without_changing_evi
     for payload, _ in publish.await_args.args[-1]:
         assert "renderAttempts" not in payload
     for render_receipt in request._authored_generation_timing_recorder.render_attempts():
-        assert render_receipt["schema"] == "svg-render-attempt-timing/v1"
+        assert render_receipt["schema"] == "svg-render-attempt-timing/v2"
         assert render_receipt["pageIndex"] in range(3)
         assert render_receipt["attemptOrdinal"] == 1
         assert render_receipt["eventLoopLagMillis"] >= 0
         windows = render_receipt["stages"]
-        assert {window["name"] for window in windows} == {"wait", "work", "post", "checkpoint"}
+        assert {window["name"] for window in windows} == {"prepare", "wait", "work", "post", "checkpoint"}
         for window in windows:
-            assert window["startMonotonic"] <= window["endMonotonic"]
+            assert window["startMillis"] <= window["endMillis"]
             assert window["durationMillis"] >= 0
         for left, right in zip(windows[:-1], windows[1:], strict=True):
-            assert left["endMonotonic"] <= right["startMonotonic"]
+            assert left["endMillis"] <= right["startMillis"]
     sealed = _seal_success(request, logical_calls=3)
     assert sealed["validity"] == "valid"
     assert sealed["observations"] == observations

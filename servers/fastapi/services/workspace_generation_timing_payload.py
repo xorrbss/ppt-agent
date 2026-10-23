@@ -70,7 +70,10 @@ def sanitize_generation_timing_receipt(value: Any) -> dict[str, object]:
                 _attempt_receipt_v2_from_dict,
             )
 
-            return _attempt_receipt_v2_from_dict(value).to_dict()
+            # Render windows are internal diagnostics, excluded from the public
+            # status/timeline/API projection and from receipt identity.
+            public_value = {key: item for key, item in value.items() if key != "renderAttempts"}
+            return _attempt_receipt_v2_from_dict(public_value).to_dict()
         except (TypeError, ValueError):
             return {}
     if value.get("schemaVersion") == "generation-attempt-timing-receipt/v1":

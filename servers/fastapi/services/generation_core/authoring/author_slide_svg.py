@@ -806,7 +806,12 @@ def svg_prompt_design(style_snapshot: dict) -> dict:
 
 def svg_author_input_receipt(style_snapshot: dict, messages: Sequence, *, provider: str,
                              model: str, budget: int, kwargs: dict) -> dict:
-    """Hash the actual assembled request without retaining image bytes or source text."""
+    """Hash the assembled request without retaining image bytes or source text.
+
+    prefix_digest covers invariant messages; prefix_cache_settings_digest covers
+    the provider, model, token budget and all non-message request settings,
+    including prompt_cache_key. Neither field changes author_prompt_digest.
+    """
     profile = read_authoring_profile(style_snapshot)
     if profile is None:
         return {}
@@ -840,6 +845,8 @@ def svg_author_input_receipt(style_snapshot: dict, messages: Sequence, *, provid
     policy = read_quality_recovery_policy(style_snapshot)
     return {"authoring_profile": profile, "author_prompt_digest": canonical_json_digest(payload),
             "prefix_digest": canonical_json_digest({"version": "svg-author-prefix/v1", "messages": prefix}),
+            "prefix_cache_settings_digest": canonical_json_digest({
+                "version": "svg-author-prefix-cache-settings/v1", "settings": payload["settings"]}),
             **({"quality_recovery_policy": policy} if policy is not None else {})}
 
 

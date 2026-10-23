@@ -159,10 +159,19 @@ def test_manifest_garbage_collection_evicts_entry_even_with_retained_pages():
     assert pages[0].blocks[0].payload["text"] == "Original"
 
 
-def test_concurrent_callers_validate_once(monkeypatch):
+def test_concurrent_callers_publish_one_memo_entry(monkeypatch):
     manifest = manifest_for([("text", {"text": "Original"})])
-    validate = _count_validations(monkeypatch)
     barrier = Barrier(8)
+    validation_barrier = Barrier(8)
+    original = layout._validate_source_pages
+
+    def validating(*args, **kwargs):
+        # Concurrent misses may validate redundantly outside the global lock.
+        validation_barrier.wait(timeout=10)
+        return original(*args, **kwargs)
+
+    validate = Mock(side_effect=validating)
+    monkeypatch.setattr(layout, "_validate_source_pages", validate)
 
     def pages(_):
         barrier.wait()
@@ -170,7 +179,8 @@ def test_concurrent_callers_validate_once(monkeypatch):
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         assert all(page is manifest.units for page in executor.map(pages, range(8)))
-    assert validate.call_count == 1
+    assert validate.call_count == 8
+    assert len(layout._SOURCE_PAGES_MEMO[id(manifest)][1]) == 1
 
 
 @pytest.mark.parametrize("mutate", [
