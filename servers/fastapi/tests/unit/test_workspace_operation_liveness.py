@@ -2,6 +2,7 @@
 
 import asyncio
 from dataclasses import replace
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 import threading
 
@@ -64,8 +65,9 @@ async def running_operations(maker, clock, *, kind="test.operation", count=1, ex
 
 @pytest.mark.parametrize("monotonic_runs_during_suspend", [True, False])
 @pytest.mark.parametrize("kind", ["export.pptx", "slide.regenerate.batch"])
+@pytest.mark.parametrize("expires_in", [300, 1802])
 def test_resume_grace_saves_live_holder_and_eventually_recovers_dead_holder(
-    tmp_path, monkeypatch, monotonic_runs_during_suspend, kind,
+    tmp_path, monkeypatch, monotonic_runs_during_suspend, kind, expires_in,
 ):
     clock = Clock()
     clock.install(monkeypatch)
@@ -73,7 +75,9 @@ def test_resume_grace_saves_live_holder_and_eventually_recovers_dead_holder(
     async def scenario():
         engine, maker = await _database(tmp_path / "resume.db")
         try:
-            ids, registry = await running_operations(maker, clock, kind=kind, count=2)
+            ids, registry = await running_operations(
+                maker, clock, kind=kind, count=2, expires_in=expires_in,
+            )
 
             async def sweep():
                 return await runner_module.recover_expired_workspace_operations(
@@ -84,6 +88,7 @@ def test_resume_grace_saves_live_holder_and_eventually_recovers_dead_holder(
             clock.advance(1800, monotonic=monotonic_runs_during_suspend)
             assert await sweep() == 0
             clock.advance(5)
+            assert await sweep() == 0
             assert await lease.heartbeat_workspace_operation(
                 ids[0], "attempt", fencing_token=1, session_factory=maker,
             )
@@ -259,7 +264,7 @@ def test_default_runner_renews_beyond_lease_while_handler_loop_is_blocked(tmp_pa
     asyncio.run(scenario())
 
 
-def test_watchdog_stops_renewing_a_hung_handler_and_disposes_thread(tmp_path, monkeypatch):
+def test_watchdog_pauses_renewal_keeps_polling_and_resumes_the_same_attempt(tmp_path, monkeypatch):
     clock = Clock()
     clock.install(monkeypatch)
     monkeypatch.setattr(threaded, "monotonic", lambda: clock.tick)
@@ -269,23 +274,29 @@ def test_watchdog_stops_renewing_a_hung_handler_and_disposes_thread(tmp_path, mo
     stopped = threading.Event()
     renewals = []
     threads = []
+    paused_polls = []
+    resumed = Future()
     original = lease.heartbeat_workspace_operation
-    original_watch = threaded.HandlerLoopWatchdog.watch
+    original_cancel = lease.operation_cancel_requested
 
-    async def watch(self):
-        try:
-            await original_watch(self)
-        finally:
-            stopped.set()
+    async def cancel(*args, **kwargs):
+        if len(renewals) == 3:
+            paused_polls.append(True)
+            if len(paused_polls) == 3:
+                stopped.set()
+        return await original_cancel(*args, **kwargs)
 
     async def renew(*args, **kwargs):
         threads.append(threading.current_thread())
         result = await original(*args, **kwargs)
         renewals.append(result)
-        clock.advance(1)
+        if len(renewals) <= 3:
+            clock.advance(1)
+        elif not resumed.done():
+            resumed.set_result(None)
         return result
 
-    monkeypatch.setattr(threaded.HandlerLoopWatchdog, "watch", watch)
+    monkeypatch.setattr(lease, "operation_cancel_requested", cancel)
     monkeypatch.setattr(lease, "heartbeat_workspace_operation", renew)
 
     async def scenario():
@@ -295,7 +306,9 @@ def test_watchdog_stops_renewing_a_hung_handler_and_disposes_thread(tmp_path, mo
 
             async def handler(context):
                 assert stopped.wait(5), "watchdog kept renewing the hung handler"
-                await asyncio.sleep(1)
+                assert renewals == [True] * 3
+                assert all(thread.is_alive() for thread in threads)
+                await asyncio.wait_for(asyncio.wrap_future(resumed), 5)
                 return WorkspaceOperationResult()
 
             registry = WorkspaceOperationHandlerRegistry()
@@ -305,10 +318,52 @@ def test_watchdog_stops_renewing_a_hung_handler_and_disposes_thread(tmp_path, mo
                 heartbeat_seconds=0.05, poll_seconds=0.05,
             )
             assert await _drain_once(runner) == 1
-            assert renewals == [True] * 3
-            assert (await _operation(maker, ids[0])).state == "running"
+            assert len(renewals) >= 4 and all(renewals)
+            assert len(paused_polls) >= 3
+            assert (await _operation(maker, ids[0])).state == "succeeded"
             assert all(not thread.is_alive() for thread in threads)
         finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_thread_cleanup_finishes_with_the_default_executor_saturated(tmp_path, monkeypatch):
+    clock = Clock()
+    clock.install(monkeypatch)
+    release = threading.Event()
+    started = threading.Event()
+
+    def occupy_executor():
+        started.set()
+        release.wait(5)
+
+    async def scenario():
+        engine, maker = await _database(tmp_path / "executor.db")
+        executor = ThreadPoolExecutor(max_workers=1)
+        asyncio.get_running_loop().set_default_executor(executor)
+        occupied = executor.submit(occupy_executor)
+        try:
+            assert started.wait(1)
+            _, ids = await _seed_operations(maker)
+
+            async def handler(context):
+                clock.advance(1)
+                return WorkspaceOperationResult()
+
+            registry = WorkspaceOperationHandlerRegistry()
+            registry.register("test.operation", handler)
+            runner = runner_module.WorkspaceOperationRunner(
+                session_factory=maker, registry=registry,
+                heartbeat_seconds=0.05, poll_seconds=0.05,
+            )
+            assert await asyncio.wait_for(_drain_once(runner), 2) == 1
+            assert not release.is_set()
+            assert not occupied.done()
+            assert (await _operation(maker, ids[0])).state == "succeeded"
+        finally:
+            release.set()
+            executor.shutdown(wait=True)
             await engine.dispose()
 
     asyncio.run(scenario())

@@ -109,8 +109,10 @@ def test_generation_job_lease_takeover_and_heartbeat_with_naive_sqlite_timestamp
 
 
 def test_workspace_heartbeat_renews_a_public_v2_lease_with_naive_sqlite_deadlines(
-    tmp_path,
+    tmp_path, monkeypatch,
 ):
+    from services import workspace_operation_lease
+
     async def scenario() -> None:
         engine, maker = await _database(
             tmp_path,
@@ -122,6 +124,7 @@ def test_workspace_heartbeat_renews_a_public_v2_lease_with_naive_sqlite_deadline
         )
         try:
             now = _naive_utc_now()
+            monkeypatch.setattr(workspace_operation_lease, "get_current_utc_datetime", lambda: as_utc(now))
             deadline = now + timedelta(minutes=10)
             attempt_token = "attempt-after-restart"
             owner_id = uuid.uuid4()
@@ -223,6 +226,24 @@ def test_workspace_heartbeat_renews_a_public_v2_lease_with_naive_sqlite_deadline
                     )
                 ).scalars().all()
                 assert versions == [2, 2, 2]
+
+            for wide_seconds, expected in ((300, now + timedelta(seconds=300)), (1800, deadline)):
+                assert await workspace_operation_lease.extend_workspace_operation_lease(
+                    operation.id, attempt_token, fencing_token=2,
+                    session_factory=maker, lease_seconds=wide_seconds,
+                ) == wide_seconds
+                assert await heartbeat_workspace_operation(
+                    operation.id, attempt_token, fencing_token=2,
+                    session_factory=maker, lease_seconds=60,
+                )
+                async with maker() as session:
+                    renewed = await session.get(WorkspaceOperation, operation.id)
+                    assert as_utc(renewed.lease_expires_at) == as_utc(expected)
+                    expiries = (await session.execute(select(PublicResourceLease.lease_expires_at).where(
+                        PublicResourceLease.admission_id == admission.id,
+                    ))).scalars().all()
+                    assert len(expiries) == 3
+                    assert all(as_utc(expiry) == as_utc(expected) for expiry in expiries)
 
             # A naive deadline that has already passed refuses the renewal
             # instead of crashing the heartbeat loop.

@@ -5,6 +5,7 @@ from services.generation_core.runtime.profile import (
     DEFAULT_RENDER_CONCURRENCY,
     DEFAULT_RENDER_CONCURRENCY_SOURCE_REFLOW,
     resolve_svg_runtime_profile,
+    resolve_svg_runtime_profile_with_provenance,
 )
 
 
@@ -28,10 +29,10 @@ def test_defaults_match_the_source_reflow_runtime_defaults(monkeypatch):
     assert ordinary.author_concurrency == DEFAULT_AUTHOR_CONCURRENCY == 3
     assert ordinary.render_concurrency == DEFAULT_RENDER_CONCURRENCY == 3
 
-    reflow = resolve_svg_runtime_profile(source_reflow=True)
+    reflow, provenance = resolve_svg_runtime_profile_with_provenance(source_reflow=True)
     assert reflow.author_concurrency == DEFAULT_AUTHOR_CONCURRENCY_SOURCE_REFLOW == 6
     assert reflow.render_concurrency == DEFAULT_RENDER_CONCURRENCY_SOURCE_REFLOW == 2
-    assert reflow.author_concurrency_source == "default"
+    assert provenance["author_concurrency"]["source"] == "default"
 
     assert ordinary.illustration_budget == DEFAULT_ILLUSTRATION_BUDGET
     # No svg override: the authored image knob's default (180 s) applies.
@@ -69,9 +70,12 @@ def test_source_reflow_author_concurrency_clamps_to_executor(monkeypatch):
 
     monkeypatch.delenv("SVG_AUTHOR_CONCURRENCY_SOURCE_REFLOW", raising=False)
     monkeypatch.setattr(profile, "_author_executor_capacity", lambda: 4)
-    resolved = resolve_svg_runtime_profile(source_reflow=True)
+    resolved, provenance = resolve_svg_runtime_profile_with_provenance(source_reflow=True)
     assert resolved.author_concurrency == 4
-    assert resolved.author_concurrency_source == "clamped-to-executor"
+    assert provenance["author_concurrency"] == {
+        "source": "default", "requested": 6, "executor_capacity": 4,
+        "clamped_to_executor": True, "resolved": 4, "effective": 4,
+    }
 
 
 def test_source_reflow_author_concurrency_records_env_source(monkeypatch):
@@ -79,6 +83,6 @@ def test_source_reflow_author_concurrency_records_env_source(monkeypatch):
 
     monkeypatch.setenv("SVG_AUTHOR_CONCURRENCY_SOURCE_REFLOW", "3")
     monkeypatch.setattr(profile, "_author_executor_capacity", lambda: 8)
-    resolved = resolve_svg_runtime_profile(source_reflow=True)
+    resolved, provenance = resolve_svg_runtime_profile_with_provenance(source_reflow=True)
     assert resolved.author_concurrency == 3
-    assert resolved.author_concurrency_source == "env"
+    assert provenance["author_concurrency"]["source"] == "env"
