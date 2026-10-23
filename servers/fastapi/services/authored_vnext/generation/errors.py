@@ -29,7 +29,3 @@ class CandidateRejectedError(GenerationPipelineError):
 
 class RollbackConflictError(GenerationPipelineError):
     code = "authored_vnext_rollback_conflict"
-
-
-class CoreBridgeExportError(GenerationPipelineError):
-    code = "authored_vnext_core_bridge_export_failed"

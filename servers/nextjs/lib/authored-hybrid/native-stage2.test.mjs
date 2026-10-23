@@ -9,7 +9,6 @@ import { parseAuthoredNativeChartPayload } from "./native-chart.ts";
 import { embedPowerPointFonts, inspectPowerPointFontCollectionInput } from "./pptx-font-embedding.ts";
 import { assembleAuthoredHybridPptx } from "./pptx-assembler.ts";
 import { inspectPptxEditability, inspectPptxNativeElementReadback } from "./pptx-quality-inspection.ts";
-import { createAuthoredHybridCoverageManifest } from "./export-metadata.ts";
 import { readPptxArchive, writePptxArchive } from "./pptx-archive.ts";
 
 const { width: BACKPLATE_WIDTH, height: BACKPLATE_HEIGHT } = backplatePixelSize();
@@ -221,7 +220,7 @@ test("assembler preserves Scene-authoritative advanced text autofit and empty-ru
   assert.throws(() => inspectPptxNativeElementReadback(writePptxArchive(altered)), /OOXML run identity disagrees/);
 });
 
-test("stage2 eligible table and crop survive assembler, OOXML readback, and coverage metadata", async () => {
+test("stage2 eligible table and crop survive assembler and OOXML readback", async () => {
   const table = parseAuthoredNativeTablePayload({ schemaVersion: "authored-native-table/v1", rows: [[{ text: "구분" }, { text: "" }], [{ text: "A" }, { text: "10" }]], headerRows: 1, columnWidths: [180, 340], rowHeightsPt: [42, 138], mergedCells: [{ row: 0, column: 0, rowSpan: 1, columnSpan: 2 }], cellStyles: [[{ fill: "#1463FF", borders: { bottom: { color: "#0B1830", widthPt: 1 } }, horizontalAlign: "center", verticalAlign: "middle" }, {}], [{ horizontalAlign: "left", verticalAlign: "middle" }, { horizontalAlign: "right", verticalAlign: "middle" }]] });
   assert.ok(table);
   const chartBase = { chartStyleVersion: "bounded-native-chart-style/v1", chartStyle: 2, categories: ["Q1", "Q2", "Q3"], title: "Actual product", legend: { visible: true, position: "bottom" }, fontFamily: "Malgun Gothic", fontFace: "Regular", eastAsianTypeface: "Malgun Gothic", fontSizePt: 10, textColor: "#0B1830" };
@@ -247,13 +246,6 @@ test("stage2 eligible table and crop survive assembler, OOXML readback, and cove
   assert.equal(quality.slides[0].nativeTableElements, 1);
   assert.equal(quality.slides[0].nativeChartElements, 2);
   assert.equal(quality.slides[0].nativeImageCropElements, 1);
-  const manifest = createAuthoredHybridCoverageManifest(quality, { exportAttemptId: "attempt-stage2", presentationRevision: 1, canonicalSourceDigest: "sha256:" + "a".repeat(64), sourceDigest: "sha256:" + "b".repeat(64) });
-  assert.equal(manifest.nativeTable, 1);
-  assert.equal(manifest.ooxmlReadback.nativeTable, 1);
-  assert.equal(manifest.nativeChart, 2);
-  assert.equal(manifest.ooxmlReadback.nativeChart, 2);
-  assert.equal(manifest.nativeImageCrop, 1);
-  assert.equal(manifest.ooxmlReadback.nativeImageCrop, 1);
 });
 
 test("font embedding exposes stable TTC extraction and package-reopen receipt", { skip: !existsSync("C:\\Windows\\Fonts\\batang.ttc") }, () => {

@@ -80,11 +80,3 @@ UPLOAD_ACCEPTED_EXTENSIONS = (
 # Includes both MIME types and extensions because some clients upload legacy
 # office files with generic content-type values.
 UPLOAD_ACCEPTED_FILE_TYPES = UPLOAD_ACCEPTED_MIME_TYPES + UPLOAD_ACCEPTED_EXTENSIONS
-
-# Kept for endpoints that strictly require modern .pptx files.
-PPTX_MIME_TYPES = ["application/vnd.openxmlformats-officedocument.presentationml.presentation"]
-
-# Backward compatibility aliases used across existing modules.
-POWERPOINT_TYPES = PPTX_MIME_TYPES
-WORD_TYPES = WORD_MIME_TYPES
-SPREADSHEET_TYPES = SPREADSHEET_MIME_TYPES

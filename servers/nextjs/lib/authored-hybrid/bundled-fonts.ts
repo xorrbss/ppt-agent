@@ -105,8 +105,3 @@ export function loadBundledBrowserFace(
   }
   return pending;
 }
-
-/** Test seam: forget cached bundled font bytes. */
-export function resetBundledFontCache(): void {
-  fileCache.clear();
-}

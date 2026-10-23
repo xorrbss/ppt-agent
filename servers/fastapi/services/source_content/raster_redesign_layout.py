@@ -56,7 +56,7 @@ from services.source_content.raster_redesign_table import render_table, svg_line
 from services.svg_contract import PAGE_NUMBER_ID, RASTER_REDESIGN_ROOT_ID
 
 __all__ = ["RedesignRender", "render_redesign_page", "render_redesign_page_svg", "redesign_crop_regions",
-           "redesign_layout_issue", "instruction_density"]
+           "instruction_density"]
 
 WHITE, PANEL = "#FFFFFF", "#F7FBFF"
 INCOHERENT = "raster_redesign_incoherent:"
@@ -285,12 +285,3 @@ def _geometry_compose(analysis, page, items, page_number, geo, width, height,
     order = [f.region.region_id for f in (*group_fallbacks(page).values(), *region_fallbacks(page).values())]
     chosen = sorted(plan.chosen, key=lambda fallback: order.index(fallback.region.region_id))
     return header_xml, [xml for placed in plan.placements for xml in _content_xml(placed, page_number)], chosen
-
-
-def redesign_layout_issue(analysis, page_number: int, *, instruction: str | None = None) -> str | None:
-    """Preview whether a redesign page fits; returns the error code or None."""
-    try:
-        render_redesign_page_svg(analysis, page_number, instruction=instruction)
-    except ValueError as error:
-        return str(error)
-    return None

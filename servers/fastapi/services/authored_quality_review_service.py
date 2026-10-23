@@ -23,7 +23,6 @@ from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
-from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy import inspect, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -139,7 +138,6 @@ from services.authored_quality_telemetry import (
 from services.authored_review_asset_store import publish_reviewed_png
 from services.slidespec_artifact_store import ACTIVE_POINTER_KEY
 from services.database import async_session_maker
-from services.workspace_authored_async_admission import admit_workspace_authored_task
 from services.image_generation_service import ImageGenerationService
 from utils.asset_directory_utils import get_images_directory
 from utils.authored_dom_categories import (
@@ -2123,49 +2121,3 @@ async def run_authored_quality_review(
         await _run_authored_quality_review_unlocked(
             presentation_id, request, task, session
         )
-
-
-async def queue_authored_quality_review(
-    presentation_id: uuid.UUID,
-    request: AuthoredQualityReviewRequest,
-    background_tasks: BackgroundTasks,
-    session: AsyncSession,
-) -> AsyncPresentationGenerationTaskModel:
-    presentation = await session.get(PresentationModel, presentation_id)
-    if presentation is None:
-        raise HTTPException(status_code=404, detail="Presentation not found")
-
-    slide_rows = await _execute_sqlalchemy(
-        session,
-        select(SlideModel)
-        .where(SlideModel.presentation == presentation_id)
-        .order_by(SlideModel.index),
-    )
-    slides = list(slide_rows.scalars().all())
-    if (
-        not presentation.is_authored()
-        or not slides
-        or not all(slide.is_authored() for slide in slides)
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail="High-quality review supports AI-authored presentations only",
-        )
-    try:
-        _resolve_positions(request, len(slides))
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    # Keep the legacy task response, but make the workspace operation the
-    # durable execution and recovery authority. ``background_tasks`` remains in
-    # the signature for wire compatibility and is intentionally unused.
-    return await admit_workspace_authored_task(
-        session,
-        presentation_id=presentation_id,
-        operation_kind="quality.review",
-        expected_revision=int(presentation.revision),
-        command=user_message(UserMessageKey.QUALITY_REVIEW_COMMAND),
-        context=request.model_dump(mode="json"),
-        task_id_prefix="workspace-quality",
-        pending_message=user_message(UserMessageKey.QUALITY_REVIEW_QUEUED),
-    )

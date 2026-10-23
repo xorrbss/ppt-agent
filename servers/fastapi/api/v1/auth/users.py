@@ -4,8 +4,7 @@ from typing import Any
 
 import jwt
 from fastapi import Depends, HTTPException, Request
-from fastapi_users import BaseUserManager, FastAPIUsers, UUIDIDMixin, exceptions
-from fastapi_users.authentication import AuthenticationBackend, CookieTransport
+from fastapi_users import BaseUserManager, UUIDIDMixin, exceptions
 from fastapi_users.authentication.strategy.jwt import JWTStrategy
 from fastapi_users.db import BaseUserDatabase
 from fastapi_users.jwt import decode_jwt, generate_jwt
@@ -178,23 +177,6 @@ def get_jwt_strategy() -> VersionedJWTStrategy:
         secret=get_or_create_auth_secret(),
         lifetime_seconds=SESSION_TTL_SECONDS,
     )
-
-
-# The explicit login router uses dynamic Secure-cookie handling, but keeping a
-# FastAPI Users backend centralizes the package's account/auth abstractions.
-COOKIE_TRANSPORT = CookieTransport(
-    cookie_name=SESSION_COOKIE_NAME,
-    cookie_max_age=SESSION_TTL_SECONDS,
-    cookie_secure=False,
-    cookie_httponly=True,
-    cookie_samesite="lax",
-)
-AUTH_BACKEND = AuthenticationBackend(
-    name="cookie-jwt",
-    transport=COOKIE_TRANSPORT,
-    get_strategy=get_jwt_strategy,
-)
-FASTAPI_USERS = FastAPIUsers[User, uuid.UUID](get_user_manager, [AUTH_BACKEND])
 
 
 async def read_user_from_cookie(

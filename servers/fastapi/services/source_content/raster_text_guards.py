@@ -53,7 +53,6 @@ from services.source_content.raster_number_suffix import (
 from services.source_content.raster_stage_timing import stage
 
 _HANGUL = re.compile(r"[가-힣]")
-_GLUE = re.compile(r"[\\\[\](){}|]")
 _BULLETS = set("•※·*▪■◆●○-–—→>")
 _WHITELIST = "0123456789%.,+-~/():$"
 HEURISTIC_MIN_CONFIDENCE = 0.7

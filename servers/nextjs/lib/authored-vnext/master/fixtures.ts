@@ -2,7 +2,6 @@ import type {
   DeckMasterContractV1,
   MasterFurniture,
   SemanticStyle,
-  StressCategory,
   TitleStressCase,
   VisualDirection,
 } from "./contracts.ts";
@@ -299,12 +298,3 @@ export const DEFAULT_MASTER_CONTRACT: DeckMasterContractV1 = {
   titleStressCorpus: TITLE_STRESS_CORPUS,
   digest: null,
 };
-
-export function stressCategoryLabel(category: StressCategory): string {
-  return {
-    ko: "한국어",
-    en: "English",
-    mixed: "혼합",
-    numericParenthetical: "숫자·괄호",
-  }[category];
-}

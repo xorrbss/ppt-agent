@@ -38,7 +38,7 @@ from services.source_content.source_stamp_dom import (
     source_block_data_attribute,
 )
 from services.source_content.text_stamping import stamp_source_block_ids
-from utils.hashing import sha256_hex, sha256_prefixed
+from utils.hashing import sha256_prefixed
 
 
 LOGGER = logging.getLogger(__name__)
@@ -155,41 +155,6 @@ class BrowserSourceReadbackResult:
             "verified": self.passed,
             "capabilityRegistry": capability_metadata(consumer="readback"),
         }
-
-
-def deterministic_source_block_id(source_unit_id: str, order: int, text: str) -> str:
-    """Return a stable fallback ID for newly materialized source blocks.
-
-    Existing manifest IDs remain authoritative.  This helper is for adapters
-    that need to stamp a block before a manifest is persisted; it is deliberately
-    content addressed so retries cannot produce a different binding.
-    """
-
-    canonical = re.sub(r"\s+", " ", str(text)).strip()
-    digest = sha256_hex(canonical.encode("utf-8"))[:16]
-    return f"source-block:{source_unit_id}:{int(order)}:{digest}"
-
-
-def deterministic_source_image_block_id(
-    source_unit_id: str,
-    order: int,
-    asset_digest: str,
-    occurrence: int = 1,
-) -> str:
-    """Return a stable identity for one source-image occurrence.
-
-    Image bytes may be deduplicated in the manifest, so the occurrence ordinal
-    is part of the identity.  Including the asset digest prevents two images
-    at the same source order from silently aliasing during retries.
-    """
-
-    unit = str(source_unit_id).strip()
-    digest = str(asset_digest).strip()
-    if not unit or not digest or int(occurrence) < 1:
-        raise ValueError("source image occurrence identity is invalid")
-    canonical = f"{unit}|image|{int(order)}|{digest}|{int(occurrence)}"
-    suffix = sha256_hex(canonical.encode("utf-8"))[:16]
-    return f"source-block:{unit}:image:{int(order)}:{int(occurrence)}:{suffix}"
 
 
 def stamp_source_image_block_ids(
@@ -837,8 +802,6 @@ __all__ = [
     "BrowserSourceReadbackError",
     "BrowserSourceReadbackResult",
     "assert_deck_source_cardinality",
-    "deterministic_source_block_id",
-    "deterministic_source_image_block_id",
     "deterministic_source_qid",
     "source_block_data_attribute",
     "stamp_source_block_ids",

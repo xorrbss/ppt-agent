@@ -3,20 +3,12 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from models.sql.chat_history_message import ChatHistoryMessageModel
-
-
-def _compact_preview(content: str) -> str:
-    preview = content.strip()
-    if len(preview) > 200:
-        return f"{preview[:200]}…"
-    return preview
 
 
 def _serialize_created_at(value: Any) -> str | None:
@@ -30,19 +22,6 @@ def _serialize_created_at(value: Any) -> str | None:
     if isinstance(value, str) and value.strip():
         return value.strip()
     return None
-
-
-def _parse_created_at(value: Any) -> datetime | None:
-    if isinstance(value, datetime):
-        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
-    if not isinstance(value, str) or not value.strip():
-        return None
-    normalized = value.strip().replace("Z", "+00:00")
-    try:
-        parsed = datetime.fromisoformat(normalized)
-    except ValueError:
-        return None
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
 async def load_messages(

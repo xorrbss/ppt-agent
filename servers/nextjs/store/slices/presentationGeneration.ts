@@ -70,9 +70,6 @@ const presentationGenerationSlice = createSlice({
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.isLoading = action.payload;
     },
-    setLayoutLoading: (state, action: PayloadAction<boolean>) => {
-      state.isLayoutLoading = action.payload;
-    },
     // Presentation ID
     setPresentationId: (state, action: PayloadAction<string>) => {
       state.presentation_id = action.payload;
@@ -202,7 +199,6 @@ const presentationGenerationSlice = createSlice({
 export const {
   setStreaming,
   setLoading,
-  setLayoutLoading,
   setPresentationId,
   setError,
   clearPresentationData,

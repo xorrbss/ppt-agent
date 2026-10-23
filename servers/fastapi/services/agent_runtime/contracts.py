@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import mimetypes
 import uuid
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal
 
 
 RunRole = Literal["user", "assistant", "system", "tool"]
@@ -157,12 +157,3 @@ class AgentRunResult:
     tool_summaries: tuple[ToolSummary, ...] = ()
     approval_request: ApprovalRequest | None = None
     page_remake_slide_index: int | None = None
-
-    def public_metadata(self) -> Mapping[str, Any]:
-        """Return bounded metadata; provider payloads and reasoning never enter it."""
-
-        return {
-            "tool_calls": list(self.tool_calls),
-            "mutations": [mutation.kind for mutation in self.mutations],
-            "artifact_count": len(self.artifacts),
-        }

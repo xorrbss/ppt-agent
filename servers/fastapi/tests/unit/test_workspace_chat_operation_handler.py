@@ -33,7 +33,6 @@ from models.sql.workspace import (
 )
 from services.chat import ChatTurnResult
 from services.agent_runtime import AgentRunResult
-from services.chat.conversation_store import ChatConversationStore
 from services.workspace_chat_memory_outbox import (
     WORKSPACE_CHAT_MEMORY_TOPIC,
     deliver_workspace_chat_memory,
@@ -196,13 +195,6 @@ def _service_factory(*, fail_after_flush: bool = False):
             self._session.add(presentation)
             # The adapter must turn this legacy commit into a flush.
             await self._session.commit()
-            await ChatConversationStore(self._session).append_turn(
-                presentation_id=self._presentation_id,
-                conversation_id=self._conversation_id,
-                user_message="change the deck",
-                assistant_message="Deck updated.",
-                tool_calls=["saveSlide"],
-            )
             await self._session.commit()
             if fail_after_flush:
                 raise RuntimeError("provider failed after a tool mutation")

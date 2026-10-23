@@ -7,10 +7,6 @@ function withLeadingSlash(path: string): string {
 }
 
 function getConfiguredFastApiUrl(): string | null {
-  if (typeof window !== "undefined" && window.env?.NEXT_PUBLIC_FAST_API) {
-    return window.env.NEXT_PUBLIC_FAST_API;
-  }
-
   if (process.env.NEXT_PUBLIC_FAST_API) {
     return process.env.NEXT_PUBLIC_FAST_API;
   }

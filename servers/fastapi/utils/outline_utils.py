@@ -1,12 +1,10 @@
 import math
 import re
-from typing import Optional
 
 from models.presentation_outline_model import PresentationOutlineModel
 
 
 HEADING_PATTERN = re.compile(r"^\s{0,3}#+\s*(.+)$", re.MULTILINE)
-FIRST_SENTENCE_PATTERN = re.compile(r"^\s*([^.?!]+?[.?!])", re.DOTALL)
 
 
 def explicit_outline_title(content: str) -> str | None:
@@ -63,30 +61,6 @@ def get_presentation_title_from_presentation_outline(
     )
 
 
-def _get_toc_count_for_total_slides(total_slides: int, title_slide: bool) -> int:
-    if total_slides <= 0:
-        return 0
-
-    first_pass = math.ceil(((total_slides - 1) if title_slide else total_slides) / 10)
-    return math.ceil((total_slides - first_pass) / 10)
-
-
-def get_no_of_toc_required_for_n_outlines(
-    *,
-    n_outlines: int,
-    title_slide: bool,
-    target_total_slides: Optional[int] = None,
-) -> int:
-    if target_total_slides is not None:
-        adjusted_total = max(target_total_slides, n_outlines)
-        return _get_toc_count_for_total_slides(adjusted_total, title_slide)
-
-    if n_outlines <= 0:
-        return 0
-
-    return math.ceil(((n_outlines - 1) if title_slide else n_outlines) / 10)
-
-
 def get_no_of_outlines_to_generate_for_n_slides(
     *,
     n_slides: int,
@@ -102,22 +76,3 @@ def get_no_of_outlines_to_generate_for_n_slides(
     else:
         return n_slides
 
-
-def _extract_outline_title(content: str) -> str:
-    """Get a human-friendly title from an outline's markdown content."""
-    text = content or ""
-
-    heading_match = HEADING_PATTERN.search(text)
-    if heading_match:
-        return heading_match.group(1).strip()
-
-    sentence_match = FIRST_SENTENCE_PATTERN.search(text.strip())
-    if sentence_match:
-        return sentence_match.group(1).strip()
-
-    for line in text.splitlines():
-        stripped_line = line.strip()
-        if stripped_line:
-            return stripped_line
-
-    return "Slide"

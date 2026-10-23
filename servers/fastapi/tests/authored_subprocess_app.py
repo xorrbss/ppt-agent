@@ -22,7 +22,7 @@ from services import authored_presentation_service as authored
 from services import database
 from services import presentation_generation_job_service as jobs
 from services import workspace_operation_runner as workspace_runner
-from services.presentation_generation_operation_handler import (
+from tests.support.presentation_generation_handler_registration import (
     register_presentation_generation_operation_handler,
 )
 from tests.support.authored_checkpoint_public_fixture import (

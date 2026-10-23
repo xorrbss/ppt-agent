@@ -24,21 +24,9 @@ def get_file_name_with_random_uuid(file: str | UploadFile | BinaryIO) -> str:
     )
 
 
-def get_original_file_name(file_path: str) -> str:
-    base_name = os.path.basename(file_path)
-    name = base_name.split("----")[0]
-    ext = get_file_ext_or_none(base_name)
-    return f"{name}{ext}"
-
-
 def get_file_ext_or_none(filename: str) -> str | None:
     splitted = os.path.splitext(filename)
     if len(splitted) > 1:
         return splitted[-1]
     return None
 
-
-def set_file_ext(file_path: str, ext: str) -> str:
-    if get_file_ext_or_none(file_path):
-        return f"{os.path.splitext(file_path)[0]}{ext}"
-    return f"{file_path}{ext}"

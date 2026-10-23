@@ -425,13 +425,6 @@ def is_authored_visual_story_plan_enabled(
     )
 
 
-def get_authored_export_fallback_limit(
-    settings: RuntimeSettings | None = None,
-) -> int:
-    """Raster fallbacks a hybrid-exported slide may keep before it is flagged."""
-    return max(0, _int_setting("AUTHORED_EXPORT_FALLBACK_LIMIT", 2, settings))
-
-
 def is_codex_token_auto_refresh_enabled(
     settings: RuntimeSettings | None = None,
 ) -> bool:

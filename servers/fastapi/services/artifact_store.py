@@ -1582,19 +1582,6 @@ class S3ArtifactObjectStore:
         return removed
 
 
-def require_development_local_artifact_store(
-    root: Path,
-    *,
-    runtime_environment: str,
-    max_object_bytes: int = 512 * 1024 * 1024,
-) -> LocalDevelopmentArtifactObjectStore:
-    """Fail closed if the local adapter is accidentally selected for production."""
-
-    if runtime_environment.strip().lower() not in {"development", "dev", "test"}:
-        raise RuntimeError("artifact.local_adapter_development_only")
-    return LocalDevelopmentArtifactObjectStore(root, max_object_bytes=max_object_bytes)
-
-
 class DurableArtifactService:
     """Coordinates immutable object writes with durable owner-scoped metadata."""
 

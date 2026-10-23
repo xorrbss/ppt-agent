@@ -39,12 +39,6 @@ export {
   type SlideMasterInventoryRecord,
 } from "./master-inventory.ts";
 export {
-  GENOFFICE_LAB_ORACLE_CAPABILITIES,
-  GENOFFICE_LAB_ORACLE_POLICY,
-  evaluateGenOfficeCompliance,
-} from "./compliance.ts";
-export { loadGenOfficeBufferedNoopLabOracle } from "./genoffice-lab-oracle.ts";
-export {
   classifyExternalRelationship,
   evaluateExternalRelationshipPolicy,
   planExternalRelationshipRemoval,

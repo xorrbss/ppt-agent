@@ -51,36 +51,6 @@ def authored_only_admission_policy() -> AuthoredOnlyAdmissionPolicy:
     )
 
 
-def requested_driver_from_generation(request: object) -> str:
-    """Resolve only server-supported compatibility request fields.
-
-    Client-supplied profile/capability objects are intentionally ignored.
-    """
-
-    strategy = getattr(request, "strategy", None)
-    template = str(getattr(request, "template", "") or "").strip().lower()
-    if strategy == "template_v2":
-        return "template-v2"
-    if strategy == "authored" or template == "authored":
-        return "authored"
-    return "legacy"
-
-
-def require_authored_generation_admission(request: object) -> None:
-    policy = authored_only_admission_policy()
-    driver = requested_driver_from_generation(request)
-    if driver != policy.new_presentation_driver:
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "code": policy.stable_error_code,
-                "requested_driver": driver,
-                "required_driver": policy.new_presentation_driver,
-                "upgrade_path": "compatibility.upgrade-fork",
-            },
-        )
-
-
 def require_legacy_creation_closed(*, operation: str) -> None:
     """Reject non-generation entry points that mint a legacy-format deck."""
 
@@ -132,8 +102,6 @@ __all__ = [
     "AUTHORED_ONLY_TEMPLATE_IMPORT_CLOSED",
     "AuthoredOnlyAdmissionPolicy",
     "authored_only_admission_policy",
-    "requested_driver_from_generation",
-    "require_authored_generation_admission",
     "require_legacy_creation_closed",
     "stamp_new_authored_presentation",
     "stamp_new_svg_presentation",

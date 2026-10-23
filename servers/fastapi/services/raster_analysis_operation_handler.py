@@ -28,8 +28,6 @@ from services.workspace_operation_handler_registry import (
 )
 
 
-RASTER_ANALYSIS_OPERATION_KIND = "raster.analysis"
-
 # "auto_redesign" only auto-approves once analysis lands with no
 # low-confidence regions left to review; unlike "auto_preserve" it is not
 # unconditionally approved. "reconstruct" has no automatic approval method.

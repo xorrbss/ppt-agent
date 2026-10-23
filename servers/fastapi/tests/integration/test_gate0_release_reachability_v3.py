@@ -100,8 +100,8 @@ from services.authored_vnext.semantic.release_authority_v3 import (
     build_bound_capability_subject_v3,
 )
 from services.authored_vnext.semantic import release_authority_v3 as release_authority_service
+from tests.support.authored_native_typography_admission import admit_native_typography
 from services.authored_vnext.semantic.typography import (
-    admit_native_typography,
     load_bounded_windows_cjk_registry,
     native_typography_com_reopen_digest,
 )

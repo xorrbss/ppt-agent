@@ -49,9 +49,6 @@ _SECONDARY_MUTE_AMOUNTS = tuple(index / 100.0 for index in range(40, 101, 4))
 _SECONDARY_TARGET = 4.6
 #: How far the accent may be pushed toward the readable pole, least first, so
 #: the accent keeps as much of its brand identity as readability allows.
-_ACCENT_SHIFT_AMOUNTS = tuple(index / 100.0 for index in range(0, 101, 4))
-
-
 def normalize_hex(value: object, fallback: str = WHITE) -> str:
     """Return ``value`` as an upper-case ``#RRGGBB`` string, else ``fallback``."""
 
@@ -199,42 +196,6 @@ def muted_text_color(text_primary: str, background: str, surface: str) -> str:
         if score >= _SECONDARY_TARGET:
             return candidate
     return normalize_hex(text_primary, text_primary)
-
-
-def readable_accent_color(accent: str, background: str, surface: str) -> str:
-    """The accent, darkened or lightened just enough to be legible as text.
-
-    An accent is authored to be seen as a fill or a rule, where WCAG's text
-    floor does not apply, so a style is free to ship one that is far too
-    light or too dark to read: measured across the shipped catalogue, 21 of
-    38 accents land below 4.5:1 against their own page.  Callers that paint
-    small text in the brand colour need this value instead; callers that
-    fill a shape or draw a rule must keep using the accent itself, or every
-    design whose accent is already fine would be flattened.
-
-    The accent is pushed toward the same pole ``readable_text_color`` picks
-    and stops at the first step clearing AA against both planes, so a
-    conforming accent is returned untouched and a failing one moves as
-    little as the floor allows.  Pushing toward black scales the channels
-    proportionally and so holds the hue exactly; pushing toward white
-    desaturates, which is unavoidable when a dark page needs a lighter mark.
-    """
-
-    brand = normalize_hex(accent)
-    page = normalize_hex(background)
-    panel = normalize_hex(surface, page)
-    pole = WHITE if is_dark_color(page) else BLACK
-    for amount in _ACCENT_SHIFT_AMOUNTS:
-        candidate = blend(pole, brand, amount)
-        if (
-            contrast_ratio(candidate, page) >= AA_BODY_TEXT
-            and contrast_ratio(candidate, panel) >= AA_BODY_TEXT
-        ):
-            return candidate
-    # Unreachable while ``pole`` is the winning pole, which clears AA on both
-    # planes by construction; fall back to body ink rather than return unread
-    # colour if that ever stops holding.
-    return readable_text_color(page, panel)
 
 
 @dataclass(frozen=True)

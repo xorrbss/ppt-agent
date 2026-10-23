@@ -15,11 +15,19 @@ from services import authored_slide_quality_receipt as receipts
 from services.authored_slide_quality_receipt import (
     AuthoredSlideQualityRecord,
     build_slide_quality_records,
-    load_slide_quality_receipt,
     merge_slide_quality_fallbacks,
     record_slide_quality_receipt,
     slide_quality_receipt_path,
 )
+
+
+def load_slide_quality_receipt(presentation_id: object) -> dict:
+    """Read one presentation's receipt back, or ``{}`` when it is absent or rejected."""
+
+    try:
+        return receipts._read_manifest(slide_quality_receipt_path(presentation_id))
+    except Exception:
+        return {}
 
 
 @pytest.fixture(autouse=True)

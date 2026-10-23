@@ -798,7 +798,3 @@ class DurableSourceLockedJobStore:
             input_path = row["source_relative_path"]
             connection.commit()
         self._delete_input(input_path)
-
-
-def source_locked_job_identity(owner_id: str, idempotency_key: str, payload_digest: str) -> str:
-    return DurableSourceLockedJobStore._identity(owner_id, idempotency_key, payload_digest)

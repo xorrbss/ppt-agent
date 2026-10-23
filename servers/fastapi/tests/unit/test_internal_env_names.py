@@ -3,7 +3,7 @@
 ``constants/settings_registry.json`` cannot represent an internal knob: a
 registered ``fastapi.runtime`` integer is coerced at snapshot time, so a
 malformed value would fail process start and the admin endpoint would
-expose it. Internal knobs therefore live in ``constants/internal_env_names.py``
+expose it. Internal knobs therefore live in ``tests/support/internal_env_names.py``
 with a one-line purpose each. This test scans the accessor surfaces and
 asserts every name is either registered or listed, and that nothing listed
 has gone stale.
@@ -15,7 +15,7 @@ import ast
 import re
 from pathlib import Path
 
-from constants.internal_env_names import INTERNAL_ENV_NAMES, OS_LEVEL_ENV_NAMES
+from tests.support.internal_env_names import INTERNAL_ENV_NAMES, OS_LEVEL_ENV_NAMES
 from constants.settings_registry import get_settings_by_key
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
@@ -150,7 +150,7 @@ def test_every_accessed_env_name_is_registered_or_listed_internal():
     assert not unaccounted, (
         "env names read through the get_env API but neither registered in "
         "constants/settings_registry.json nor listed in "
-        f"constants/internal_env_names.py: {unaccounted}"
+        f"tests/support/internal_env_names.py: {unaccounted}"
     )
 
 

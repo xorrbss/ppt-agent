@@ -35,7 +35,6 @@ from models.sql.workspace import (
     WorkspaceOutbox,
 )
 from services.chat import ChatTurnResult
-from services.chat.conversation_store import ChatConversationStore
 from services.workspace_chat_operation_handler import (
     PresentationChatOperationHandler,
 )
@@ -168,13 +167,6 @@ def _service_factory(*, edits: bool):
                 # A question still reads the deck; reading must not count as an
                 # edit or the distinction is worthless.
                 await self._session.get(PresentationModel, self._presentation_id)
-            await ChatConversationStore(self._session).append_turn(
-                presentation_id=self._presentation_id,
-                conversation_id=self._conversation_id,
-                user_message="5페이지 비어있네 어떻게 해야해?",
-                assistant_message="이 페이지는 '페이지 다시 만들기'로 재생성해야 합니다.",
-                tool_calls=["getSlideAtIndex"],
-            )
             return ChatTurnResult(
                 conversation_id=self._conversation_id,
                 response_text="이 페이지는 '페이지 다시 만들기'로 재생성해야 합니다.",

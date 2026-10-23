@@ -6,22 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.sql.workspace import WorkspaceConversation, WorkspaceMessage
 from services.chat.chat_memory_store import CHAT_MEMORY_STORE
 from services.chat import sql_chat_history
-from services.workspace_db_adapter import reserve_conversation_positions
 
 
 class ChatConversationStore:
     def __init__(self, sql_session: AsyncSession):
         self._sql = sql_session
-        # Workspace operations wrap the legacy session so inner commits become
-        # flushes.  Their external memory side effect must be emitted from the
-        # transactional outbox only after the fenced publication commits.
-        self._defer_external_memory = (
-            getattr(sql_session, "defer_external_chat_memory", False) is True
-        )
-        self._defer_canonical_persistence = (
-            getattr(sql_session, "defer_canonical_chat_persistence", False)
-            is True
-        )
 
     async def load_history(
         self,
@@ -69,56 +58,6 @@ class ChatConversationStore:
             conversation_id=conversation_id,
         )
         return legacy
-
-    async def append_turn(
-        self,
-        *,
-        presentation_id: uuid.UUID,
-        conversation_id: uuid.UUID,
-        user_message: str,
-        assistant_message: str,
-        tool_calls: list[str] | None = None,
-    ) -> None:
-        # Agent runtime execution is persistence-free; the fenced publication
-        # transaction appends the canonical assistant message exactly once.
-        if self._defer_canonical_persistence:
-            return
-        conversation = await self._sql.get(
-            WorkspaceConversation, conversation_id
-        )
-        if (
-            conversation is None
-            or conversation.presentation_id != presentation_id
-        ):
-            raise ValueError("canonical_conversation_not_found")
-        reservation = await reserve_conversation_positions(
-            self._sql, conversation_id, 2
-        )
-        user_position, assistant_position = reservation.positions
-        self._sql.add_all(
-            (
-                WorkspaceMessage(
-                    conversation_id=conversation_id,
-                    position=user_position,
-                    role="user",
-                    content=user_message,
-                ),
-                WorkspaceMessage(
-                    conversation_id=conversation_id,
-                    position=assistant_position,
-                    role="assistant",
-                    content=assistant_message,
-                    message_metadata={"tool_calls": list(tool_calls or [])},
-                ),
-            )
-        )
-        if not self._defer_external_memory:
-            await CHAT_MEMORY_STORE.store_chat_turn(
-                presentation_id=presentation_id,
-                conversation_id=conversation_id,
-                user_message=user_message,
-                assistant_message=assistant_message,
-            )
 
     async def retrieve_semantic_context(
         self,

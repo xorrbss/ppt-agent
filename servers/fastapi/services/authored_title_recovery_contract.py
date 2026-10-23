@@ -54,16 +54,6 @@ _KOREAN_ABBREVIATIONS = (
 )
 
 
-class AuthoredTitleCapacityUnresolvable(ValueError):
-    """Bounded terminal result; callers must not relax gates or call a provider."""
-
-    code = TITLE_CAPACITY_UNRESOLVABLE
-
-    def __init__(self, receipt: Mapping[str, Any]) -> None:
-        super().__init__(self.code)
-        self.receipt = dict(receipt)
-
-
 def _token_key(token: str) -> str:
     return token.casefold().replace(" ", "")
 
@@ -414,12 +404,6 @@ def resolve_title_capacity_recovery(
         "status": "terminal", "code": TITLE_CAPACITY_UNRESOLVABLE,
         "titles": before, "layoutId": selected_layout_id, "receipt": receipt,
     }
-
-
-def require_title_capacity_resolution(result: Mapping[str, Any]) -> Mapping[str, Any]:
-    if result.get("status") == "terminal":
-        raise AuthoredTitleCapacityUnresolvable(result["receipt"])
-    return result
 
 
 def title_token_diagnostic(

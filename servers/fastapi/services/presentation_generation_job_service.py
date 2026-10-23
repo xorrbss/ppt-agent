@@ -519,26 +519,6 @@ async def project_workspace_linked_generation_claim(
     return job.id, job.task_id
 
 
-async def heartbeat_workspace_linked_generation_job(
-    job_id: uuid.UUID,
-    workspace_operation_id: uuid.UUID,
-    attempt_token: str,
-) -> bool:
-    """Deprecated: linked jobs mirror the generic operation heartbeat."""
-
-    return False
-
-
-async def release_workspace_linked_generation_job(
-    job_id: uuid.UUID,
-    workspace_operation_id: uuid.UUID,
-    attempt_token: str,
-) -> bool:
-    """Deprecated: generic operation recovery owns the linked projection."""
-
-    return False
-
-
 async def project_workspace_linked_generation_cancelled(
     session: AsyncSession,
     workspace_operation_id: uuid.UUID,
@@ -780,18 +760,6 @@ async def rebind_workspace_linked_generation_job_for_retry(
     return True
 
 
-async def fail_workspace_linked_generation_job(
-    job_id: uuid.UUID,
-    workspace_operation_id: uuid.UUID,
-    attempt_token: str,
-    *,
-    error_code: str,
-) -> bool:
-    """Deprecated: generic operation failure owns the linked projection."""
-
-    return False
-
-
 async def project_workspace_linked_generation_succeeded(
     session: AsyncSession,
     workspace_operation_id: uuid.UUID,
@@ -846,16 +814,6 @@ async def project_workspace_linked_generation_succeeded(
     task.updated_at = now
     session.add_all((job, task))
     return True
-
-
-async def complete_workspace_linked_generation_job(
-    job_id: uuid.UUID,
-    workspace_operation_id: uuid.UUID,
-    attempt_token: str,
-) -> bool:
-    """Deprecated: generic operation success owns the linked projection."""
-
-    return False
 
 
 async def heartbeat_generation_job(job_id: uuid.UUID, token: str) -> bool:

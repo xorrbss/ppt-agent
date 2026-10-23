@@ -29,11 +29,6 @@ _HEADER_SENTENCE = (
     "full-bleed closing page — never omit any of them."
 )
 
-_FRAME_SENTENCE = (
-    "The frame is exactly 1280x720px; every element, including absolutely "
-    "positioned ones, must lie entirely inside it."
-)
-
 _OVERLAP_SENTENCE = (
     "Nothing may overlap unless it is a deliberate layered card, and text "
     "must never be clipped by an ancestor with overflow:hidden."

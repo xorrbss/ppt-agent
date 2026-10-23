@@ -324,6 +324,3 @@ def _cached_snapshot(serialized_key: str) -> dict:
         result["allowed_variations"]["max_columns"] = 2 if height > width else 3
     result["digest"] = _digest(result)
     return result
-
-
-build_source_template_snapshot = template_snapshot

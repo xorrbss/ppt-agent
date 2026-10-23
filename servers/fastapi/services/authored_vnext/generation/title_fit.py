@@ -368,26 +368,6 @@ def _fit_on_layout(
     return None
 
 
-def break_title(
-    contract: DeckMasterContract,
-    layout_id: str,
-    text: str,
-    *,
-    installed_fonts: set[str] | list[str] | tuple[str, ...] | None = None,
-) -> ExplicitTitle:
-    """Break and fit a title on exactly one master layout."""
-
-    planned = _fit_on_layout(
-        contract,
-        layout_id,
-        text,
-        installed_fonts=installed_fonts,
-    )
-    if planned is None:
-        raise TitleFitPlanningError("title exceeds the selected master layout")
-    return planned[0]
-
-
 def fit_and_promote_title(
     contract: DeckMasterContract,
     text: str,
@@ -430,7 +410,6 @@ __all__ = [
     "TAILORING",
     "TitleFitPlanningError",
     "UAX14_VERSION",
-    "break_title",
     "fit_and_promote_title",
     "measure_line_px",
     "resolve_windows_font",

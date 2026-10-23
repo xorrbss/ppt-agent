@@ -22,12 +22,3 @@ export function renderMarkdown(content: string): string {
     return "";
   }
 }
-
-export function renderInlineMarkdown(content: string): string {
-  try {
-    const parsed = marked.parseInline(content || "");
-    return sanitizeMarkdownHtml(typeof parsed === "string" ? parsed : content || "");
-  } catch {
-    return sanitizeMarkdownHtml(content || "");
-  }
-}

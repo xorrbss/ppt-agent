@@ -216,13 +216,3 @@ export function presentationExportQualityAdvisory(
   }
   return "품질 검수 확인 필요 상태입니다. 원본 상태로 내보내며, 품질 결과는 이력에 유지됩니다.";
 }
-
-/** @deprecated Quality no longer withholds an original-source export. */
-export function presentationExportBlockReason(_presentation: unknown): undefined {
-  return undefined;
-}
-
-/** @deprecated Hybrid availability is now decided by its capability guards. */
-export function presentationHybridQualityBlockReason(_presentation: unknown): undefined {
-  return undefined;
-}

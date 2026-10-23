@@ -1,5 +1,4 @@
 import asyncio
-from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
@@ -9,8 +8,6 @@ from api.v1.ppt.endpoints.presentation_blank import create_blank_presentation
 from models.generate_presentation_request import GeneratePresentationRequest
 from models.sql.presentation import PresentationModel
 from services.compatibility_migration.admission import (
-    requested_driver_from_generation,
-    require_authored_generation_admission,
     require_legacy_creation_closed,
     stamp_new_authored_presentation,
 )
@@ -18,43 +15,6 @@ from services.compatibility_migration.feature_manifest import (
     build_authored_only_capability_manifest,
 )
 from models.presentation_profiles import resolve_presentation_profile
-
-
-@pytest.mark.parametrize(
-    ("strategy", "template", "expected"),
-    [
-        # Anything that is neither authored nor template-v2 is one name now.
-        # The retired ``standard`` and ``smart`` drivers went with the React
-        # templates they rendered, which this fork no longer ships.
-        (None, "adaptive", "legacy"),
-        ("legacy", "default", "legacy"),
-        ("template_v2", "adaptive", "template-v2"),
-        ("authored", "adaptive", "authored"),
-        (None, "authored", "authored"),
-    ],
-)
-def test_requested_driver_uses_compatibility_fields(strategy, template, expected):
-    request = SimpleNamespace(strategy=strategy, template=template)
-    assert requested_driver_from_generation(request) == expected
-
-
-@pytest.mark.parametrize("strategy", ["legacy", "adaptive", "template_v2"])
-def test_legacy_generation_is_blocked_when_full_rollout_is_enabled(monkeypatch, strategy):
-    monkeypatch.setenv("AUTHORED_ONLY_NEW_PRESENTATION_ADMISSION", "true")
-    monkeypatch.setenv("AUTHORED_ONLY_CANARY_STAGE", "100")
-    request = SimpleNamespace(strategy=strategy, template="adaptive")
-    with pytest.raises(HTTPException) as raised:
-        require_authored_generation_admission(request)
-    assert raised.value.status_code == 409
-    assert raised.value.detail["code"] == "legacy_generation_admission_closed"
-
-
-def test_authored_generation_is_admitted(monkeypatch):
-    monkeypatch.setenv("AUTHORED_ONLY_NEW_PRESENTATION_ADMISSION", "true")
-    monkeypatch.setenv("AUTHORED_ONLY_CANARY_STAGE", "100")
-    require_authored_generation_admission(
-        SimpleNamespace(strategy="authored", template="authored")
-    )
 
 
 def test_malformed_flag_fails_closed(monkeypatch):
@@ -73,25 +33,6 @@ def test_authored_only_admission_is_fail_closed_by_default(monkeypatch):
     manifest = build_authored_only_capability_manifest()
     assert manifest["authored_only"]["new_presentation_driver"] == "authored"
     assert manifest["ui"]["hide_legacy_create_actions"] is True
-
-
-@pytest.mark.parametrize(
-    "generation_request",
-    [
-        SimpleNamespace(strategy=None, template=None),
-        SimpleNamespace(strategy="legacy", template="adaptive"),
-        SimpleNamespace(strategy="adaptive", template="adaptive"),
-        SimpleNamespace(strategy="template_v2", template="adaptive"),
-    ],
-)
-def test_default_admission_rejects_every_non_authored_driver(
-    monkeypatch, generation_request
-):
-    monkeypatch.delenv("AUTHORED_ONLY_NEW_PRESENTATION_ADMISSION", raising=False)
-    monkeypatch.delenv("AUTHORED_ONLY_CANARY_STAGE", raising=False)
-    with pytest.raises(HTTPException) as raised:
-        require_authored_generation_admission(generation_request)
-    assert raised.value.detail["required_driver"] == "authored"
 
 
 def test_internal_canary_only_admits_allowlisted_owner(monkeypatch):

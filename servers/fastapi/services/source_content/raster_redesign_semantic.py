@@ -217,8 +217,7 @@ def _capture_floor(item: Item, width: float) -> float:
     return min(native, 0.3 * width * item.aspect) if native else 0.3 * width * item.aspect
 
 
-PIXEL_LINE_TEXT_RATIO = 1.36
-SCREENSHOT_MIN_SCALE = 0.35  # crop height per unit of font size (a text line box with its padding)
+SCREENSHOT_MIN_SCALE = 0.35
 
 
 def _split_heading(item: Item, cache):

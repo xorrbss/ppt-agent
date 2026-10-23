@@ -1,5 +1,13 @@
 # Authored-only migration 운영 런북
 
+> **Status (2026-10-23): closed.** The authored-only migration this runbook governed is complete; `legacy`/`adaptive`
+> and `template_v2` generation have since been removed outright. The read-only tools it invokes in §4 and §12.1 —
+> `scripts/authored_only_census.py`, `scripts/authored_only_canary.py` and the
+> `services/compatibility_migration/{inventory,rollout}.py` modules behind them — were deleted with the 2026-10-23
+> dead-code sweep. The document is kept as a record; recover the tools from commit `d6e9b4518` if a census is ever
+> needed again. `services/compatibility_migration/census.py` (`classify_presentation`) remains live for the
+> compatibility runtime and fork upgrade.
+
 문서 기준일: 2026-08-13  
 적용 범위: `legacy`, `adaptive`, `smart`, `template_v2`, `authored`, `mixed`, `invalid` presentation의 authored-only 전환  
 목표: 신규 작성 경로는 authored-only로 제한하면서 기존 presentation의 호환성, 소유자 격리, 원본 불변성 및 즉시 rollback 가능성을 보장한다.

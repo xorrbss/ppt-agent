@@ -72,10 +72,8 @@ from services.workspace_operation_handler_registry import (
     WorkspaceOperationExecutionContext,
     WorkspaceOperationExecutionError,
     WorkspaceOperationCancelled,
-    WorkspaceOperationHandlerRegistry,
     WorkspaceOperationLeaseLost,
     WorkspaceOperationResult,
-    workspace_operation_handler_registry,
 )
 from services.workspace_generation_timing_payload import (
     generation_timing_result_projection,
@@ -823,19 +821,3 @@ class PresentationGenerationOperationHandler:
             raise error_type(code) from error
         finally:
             await stop_authored_progress()
-
-
-def register_presentation_generation_operation_handler(
-    registry: WorkspaceOperationHandlerRegistry = workspace_operation_handler_registry,
-    *,
-    replace: bool = False,
-) -> PresentationGenerationOperationHandler:
-    """Register the canonical generation kind and return its handler."""
-
-    handler = PresentationGenerationOperationHandler()
-    registry.register(
-        PRESENTATION_GENERATION_OPERATION_KIND,
-        handler,
-        replace=replace,
-    )
-    return handler

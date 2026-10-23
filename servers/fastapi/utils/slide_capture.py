@@ -43,7 +43,6 @@ from utils.process_kill_on_parent_death import bind_to_parent_lifetime
 from utils.render_cache_budget import (
     capture_cache_resident_bytes,
     metrics_cache_resident_bytes,
-    metrics_payload_bytes,
     render_cache_resident_bytes,
 )
 from utils.renderer_internal_capability import issue_internal_render_capability
@@ -2056,12 +2055,6 @@ _render_sem: Optional[asyncio.Semaphore] = None
 
 def _render_cache_resident_bytes() -> int:
     return render_cache_resident_bytes(_render_cache)
-
-
-def _metrics_payload_bytes(value: Mapping[str, Any]) -> int:
-    return metrics_payload_bytes(
-        value, overflow_bytes=_dom_metrics_cache_limits()[1]
-    )
 
 
 def _metrics_cache_resident_bytes() -> int:

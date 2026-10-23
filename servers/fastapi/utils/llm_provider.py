@@ -186,30 +186,6 @@ def get_llm_provider(settings: RuntimeSettings | None = None):
         raise HTTPException(status_code=422, detail=error.code) from error
 
 
-def is_openai_selected(settings: RuntimeSettings | None = None):
-    return get_llm_provider(settings) == LLMProvider.OPENAI
-
-
-def is_google_selected(settings: RuntimeSettings | None = None):
-    return get_llm_provider(settings) == LLMProvider.GOOGLE
-
-
-def is_anthropic_selected(settings: RuntimeSettings | None = None):
-    return get_llm_provider(settings) == LLMProvider.ANTHROPIC
-
-
-def is_vertex_selected(settings: RuntimeSettings | None = None):
-    return get_llm_provider(settings) == LLMProvider.VERTEX
-
-
-def is_azure_selected(settings: RuntimeSettings | None = None):
-    return get_llm_provider(settings) == LLMProvider.AZURE
-
-
-def is_bedrock_selected(settings: RuntimeSettings | None = None):
-    return get_llm_provider(settings) == LLMProvider.BEDROCK
-
-
 def is_ollama_selected(settings: RuntimeSettings | None = None):
     return get_llm_provider(settings) == LLMProvider.OLLAMA
 
@@ -218,32 +194,8 @@ def is_custom_llm_selected(settings: RuntimeSettings | None = None):
     return get_llm_provider(settings) == LLMProvider.CUSTOM
 
 
-def is_cerebras_selected(settings: RuntimeSettings | None = None):
-    return get_llm_provider(settings) == LLMProvider.CEREBRAS
-
-
-def is_openrouter_selected(settings: RuntimeSettings | None = None):
-    return get_llm_provider(settings) == LLMProvider.OPENROUTER
-
-
-def is_fireworks_selected(settings: RuntimeSettings | None = None):
-    return get_llm_provider(settings) == LLMProvider.FIREWORKS
-
-
-def is_together_selected(settings: RuntimeSettings | None = None):
-    return get_llm_provider(settings) == LLMProvider.TOGETHER
-
-
 def is_codex_selected(settings: RuntimeSettings | None = None):
     return get_llm_provider(settings) == LLMProvider.CODEX
-
-
-def is_litellm_selected(settings: RuntimeSettings | None = None):
-    return get_llm_provider(settings) == LLMProvider.LITELLM
-
-
-def is_lmstudio_selected(settings: RuntimeSettings | None = None):
-    return get_llm_provider(settings) == LLMProvider.LMSTUDIO
 
 
 def get_model(settings: RuntimeSettings | None = None):
@@ -319,8 +271,3 @@ def get_model_for(task: str, settings: RuntimeSettings | None = None) -> str:
         if light_model:
             return light_model
     return get_model(snapshot)
-
-
-def get_large_model(settings: RuntimeSettings | None = None) -> str:
-    """Resolved model name for the configured LLM provider (same as runtime `get_model`)."""
-    return get_model(settings)

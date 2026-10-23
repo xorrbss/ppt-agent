@@ -227,6 +227,3 @@ def get_images_directory():
 
 def get_exports_directory():
     return _owned_directory("exports")
-
-def get_uploads_directory():
-    return _owned_directory("uploads")

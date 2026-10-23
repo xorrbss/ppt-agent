@@ -934,15 +934,6 @@
       "description": "Freeze a story kind and silhouette per slide and brief the author with it; off leaves composition to the model as before 2026-08-22."
     },
     {
-      "key": "AUTHORED_EXPORT_FALLBACK_LIMIT",
-      "type": "integer",
-      "default": 2,
-      "secret": false,
-      "targets": ["fastapi.runtime"],
-      "group": "authored.quality",
-      "description": "Raster fallback elements a hybrid-exported slide may keep before it is marked a quality failure."
-    },
-    {
       "key": "AUTHORED_PROVIDER_RATE_PROFILE",
       "type": "enum",
       "default": "auto",

@@ -272,10 +272,6 @@ export function isReviewRequiredDeck(theme: unknown): boolean {
   return theme.svg.qualityStatus === "review_required";
 }
 
-export function flaggedSlideCount(map: FlaggedSlideMap | null | undefined): number {
-  return map ? Object.keys(map).length : 0;
-}
-
 type FlaggedSlideReasonKey =
   | "reason.author"
   | "reason.gate"

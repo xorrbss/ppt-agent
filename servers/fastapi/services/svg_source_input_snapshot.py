@@ -232,14 +232,6 @@ def parent_statement(presentation_id):
     return select(M.id, M.owner_id, M.revision).where(M.id == presentation_id)
 
 
-def snapshot_statements_for_audit(presentation_id, operation_id, owner_id) -> tuple:
-    name = publication_name(operation_id)
-    return (job_statement(presentation_id), job_by_id_statement(operation_id), operation_statement(operation_id),
-            admission_statement(operation_id), publication_statement(operation_id, name),
-            derived_publication_statement(presentation_id, owner_id, name, operation_id),
-            parent_statement(presentation_id))
-
-
 async def _first(session, statement, counters):
     row = (await session.execute(statement)).first()
     counters.live_rows_read += 1

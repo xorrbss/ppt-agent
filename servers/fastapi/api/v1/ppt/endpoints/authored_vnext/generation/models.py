@@ -14,15 +14,11 @@ from models.authored_vnext.deck import (
     CandidateBundle,
     DeckGenerationSnapshot,
     GenerateDeckRequest,
-    GenerationResult,
     RegenerateBodyCommand,
-    RegenerationResult,
     ResumeGenerationRequest,
     RollbackDeckRequest,
-    RollbackResult,
     ReorderSlidesCommand,
     SceneMutationCommand,
-    SceneMutationResult,
 )
 from models.authored_vnext.master.base import Digest, StrictCamelModel
 
@@ -88,16 +84,6 @@ class DeckResponse(StrictCamelModel):
         "authored-vnext-deck-response/v1"
     )
     deck: DeckGenerationSnapshot
-
-
-GenerationPublicResult = (
-    GenerationResult | RegenerationResult | RollbackResult | SceneMutationResult
-)
-
-
-class CandidateReference(StrictCamelModel):
-    candidate_digest: Digest
-    operation_id: str
 
 
 class EditableHybridMvpStateV4(StrictCamelModel):

@@ -24,6 +24,16 @@ def _run(coro):
     return asyncio.run(coro)
 
 
+async def _source_local_manifest_proof(session, *, source_operation=None, verification=None, **kwargs):
+    """Prepare the flattened leaf and build the proof in one step, as isolated callers did."""
+    from services import svg_source_local_review_continuation as source_local
+
+    material = await source_local.prepare_source_local_leaf(
+        session, source_operation=source_operation, verification=verification, **kwargs
+    )
+    return source_local.build_source_local_proof(**kwargs, flattened_leaf=material)
+
+
 def _png(width: int = 1280, height: int = 720, colour: str = "white") -> bytes:
     from PIL import Image
 
@@ -960,7 +970,7 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
             flat_scope.setattr(owner_context, "get_current_tenant_id", lambda: "tenant")
             flat_scope.setattr(source_partial, "_hydrate_checkpoint_archive", flat_hydrate)
             flat_before = deepcopy(flat_execution)
-            flat_proof = _run(source_local.build_source_local_manifest_proof(None,
+            flat_proof = _run(_source_local_manifest_proof(None,
                 source_operation=flat_operation, **flat_args))
             assert flat_reads == ["one-leaf"]
             assert flat_execution == flat_before and source_local_execution == source_local_before
@@ -1258,7 +1268,7 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
             bad_operation.request_payload[source_partial.ARCHIVE_KEY]["job"]["id"] = "foreign"
             before_reads = len(flat_reads)
             with pytest.raises(FinalSelectedEvidenceError):
-                _run(source_local.build_source_local_manifest_proof(None, source_operation=bad_operation, **flat_args))
+                _run(_source_local_manifest_proof(None, source_operation=bad_operation, **flat_args))
             assert len(flat_reads) == before_reads
 
         # Resume an old final-selected parent with completed local/global groups.
