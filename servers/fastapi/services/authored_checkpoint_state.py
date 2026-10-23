@@ -54,6 +54,7 @@ from services.authored_slide_checkpoint_bundle import (
 )
 from services.authored_generation_observability import log_authored_slide_failure_observation
 from services.database import async_session_maker
+from services.workspace_public_generation_lifecycle import monotonic_svg_job_stage
 from utils.datetime_utils import get_current_utc_datetime
 from utils.get_env_programme import is_authored_checkpoint_batching_enabled
 from utils.get_env import get_environment_name
@@ -391,7 +392,13 @@ async def fail_stage(
         checkpoint.failed_at = get_current_utc_datetime()
         checkpoint.attempt_token = attempt_token
         checkpoint.updated_at = get_current_utc_datetime()
-        job.current_stage = stage
+        if (job.request_payload or {}).get("strategy") == "svg":
+            # Siblings may still render after this page fails. Read the latest
+            # deck stage under the owned_job lock before projecting the failure.
+            await mutation_session.refresh(job, attribute_names=["current_stage"])
+            job.current_stage = monotonic_svg_job_stage(job.current_stage, stage)
+        else:
+            job.current_stage = stage
         job.resume_allowed = error.retryable
         job.last_error = safe
         job.completed_slides = await _completed_count(mutation_session, job_id)

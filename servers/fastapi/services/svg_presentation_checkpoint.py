@@ -21,26 +21,11 @@ from services.authored_checkpoint_artifacts import atomic_write, checkpoint_root
 from services.authored_checkpoint_fence import owned_job
 from services.authored_presentation_artifacts import _save_slide_pngs
 from services.database import async_session_maker
+from services.workspace_public_generation_lifecycle import (
+    monotonic_svg_job_stage as _monotonic_authored_job_stage,
+)
 from utils.datetime_utils import as_utc, get_current_utc_datetime
 from utils.hashing import canonical_json_sha256, sha256_hex
-
-
-_AUTHORED_JOB_STAGE_ORDER = {
-    stage: index
-    for index, stage in enumerate((
-        "outline", "author", "illustrate", "render", "persist", "repair",
-        "checkpoint", "export", "publication",
-    ))
-}
-
-
-def _monotonic_authored_job_stage(current: str | None, candidate: str) -> str:
-    """Keep SVG page checkpoints from moving deck progress to an earlier stage."""
-    current_order = _AUTHORED_JOB_STAGE_ORDER.get(current)
-    candidate_order = _AUTHORED_JOB_STAGE_ORDER[candidate]
-    if current_order is None or current_order > candidate_order:
-        return current or candidate
-    return candidate
 
 
 def _digest(value: object) -> str:
@@ -70,7 +55,8 @@ def _preserve_provider_terminal_responses(saved: dict, payload: dict, *, job=Non
     terminal = records.get(str(payload.get("inflight"))) or {}
     if (job is not None and terminal.get("terminal_event") in {"response.completed", "dispatch.stopped"}
             and terminal.get("job_id") == str(job.id)
-            and terminal.get("operation_id") == (str(job.workspace_operation_id) if job.workspace_operation_id else None)
+            and terminal.get("operation_id") == (
+                str(job.workspace_operation_id) if job.workspace_operation_id else None)
             and terminal.get("attempt_token") == job.attempt_token
             and terminal.get("fencing_token") == getattr(job, "_workspace_fencing_token", None)
             and terminal.get("input_digest") == payload.get("input_digest")):
@@ -108,17 +94,30 @@ async def record_svg_provider_event(job, index: int, record: dict) -> dict:
     if job is None or type(index) is not int or index < 0 or (not isinstance(record, dict)):
         raise ValueError('svg_provider_terminal_binding_invalid')
     from utils.provider_overload import safe_provider_diagnostics
-    if set(record) - {'schema', 'ordinal', 'terminal_event', 'job_id', 'operation_id', 'attempt_token', 'fencing_token', 'input_digest', 'response_id', 'raw_response', 'output_digest', 'usage', 'diagnostics', 'canonical_text_source'}:
+    if set(record) - {
+        'schema', 'ordinal', 'terminal_event', 'job_id', 'operation_id', 'attempt_token', 'fencing_token',
+        'input_digest', 'response_id', 'raw_response', 'output_digest', 'usage', 'diagnostics', 'canonical_text_source',
+    }:
         raise ValueError('svg_provider_terminal_binding_invalid')
     ordinal = record.get('ordinal')
     event = record.get('terminal_event')
-    if 'canonical_text_source' in record and (event != 'response.completed' or record['canonical_text_source'] not in ('completed_body', 'completed_stream_deltas', 'completed_empty')):
+    if 'canonical_text_source' in record and (
+        event != 'response.completed'
+        or record['canonical_text_source'] not in ('completed_body', 'completed_stream_deltas', 'completed_empty')
+    ):
         raise ValueError('svg_provider_terminal_binding_invalid')
-    identity = dict(job_id=str(job.id), operation_id=str(job.workspace_operation_id) if job.workspace_operation_id is not None else None, attempt_token=job.attempt_token, fencing_token=getattr(job, '_workspace_fencing_token', None))
-    if record.get('schema') != 'svg-provider-terminal/v1' or type(ordinal) is not int or ordinal < 1 or (event not in {'response.created', 'response.completed', 'dispatch.stopped'}) or any((record.get(key) != value for key, value in identity.items())):
+    identity = dict(
+        job_id=str(job.id),
+        operation_id=str(job.workspace_operation_id) if job.workspace_operation_id is not None else None,
+        attempt_token=job.attempt_token, fencing_token=getattr(job, '_workspace_fencing_token', None),
+    )
+    if (record.get('schema') != 'svg-provider-terminal/v1' or type(ordinal) is not int or ordinal < 1
+            or event not in {'response.created', 'response.completed', 'dispatch.stopped'}
+            or any(record.get(key) != value for key, value in identity.items())):
         raise ValueError('svg_provider_terminal_binding_invalid')
     response_id = record.get('response_id')
-    if response_id is not None and safe_provider_diagnostics(diagnostics={'responseId': response_id}).get('responseId') != response_id:
+    if (response_id is not None
+            and safe_provider_diagnostics(diagnostics={'responseId': response_id}).get('responseId') != response_id):
         raise ValueError('svg_provider_terminal_binding_invalid')
     if event != 'response.completed' and any((key in record for key in ('raw_response', 'output_digest', 'usage'))):
         raise ValueError('svg_provider_terminal_binding_invalid')
@@ -126,7 +125,8 @@ async def record_svg_provider_event(job, index: int, record: dict) -> dict:
         raise ValueError('svg_provider_terminal_binding_invalid')
     if event == 'response.completed':
         raw = record.get('raw_response')
-        if not isinstance(raw, str) or record.get('output_digest') != sha256_hex(raw.encode('utf-8')) or (not isinstance(record.get('usage'), dict)):
+        if (not isinstance(raw, str) or record.get('output_digest') != sha256_hex(raw.encode('utf-8'))
+                or not isinstance(record.get('usage'), dict)):
             raise ValueError('svg_provider_terminal_output_invalid')
         if safe_provider_diagnostics(diagnostics={'usage': record['usage']}).get('usage', {}) != record['usage']:
             raise ValueError('svg_provider_terminal_output_invalid')
@@ -134,18 +134,22 @@ async def record_svg_provider_event(job, index: int, record: dict) -> dict:
     if 'diagnostics' in value:
         value['diagnostics'] = safe_provider_diagnostics(diagnostics=value['diagnostics'])
     async with async_session_maker() as session:
-        active = await owned_job(session, job.id, job.attempt_token, fencing_token=identity['fencing_token'], light=True)
+        active = await owned_job(
+            session, job.id, job.attempt_token, fencing_token=identity['fencing_token'], light=True)
         if active.workspace_operation_id != job.workspace_operation_id:
             raise ValueError('svg_provider_terminal_binding_invalid')
         if job.workspace_operation_id is not None:
             from services.authored_checkpoint_fence import public_checkpoint_binding
             from utils.owner_context import get_current_owner_id, get_current_tenant_id
-            binding = await public_checkpoint_binding(job.id, job.attempt_token, fencing_token=identity['fencing_token'], session=session)
-            if binding is None or binding[0] != get_current_owner_id() or binding[1] != get_current_tenant_id() or (binding[2] != job.workspace_operation_id):
+            binding = await public_checkpoint_binding(
+                job.id, job.attempt_token, fencing_token=identity['fencing_token'], session=session)
+            if (binding is None or binding[0] != get_current_owner_id() or binding[1] != get_current_tenant_id()
+                    or binding[2] != job.workspace_operation_id):
                 raise ValueError('svg_provider_terminal_binding_invalid')
             value.update(owner_id=str(binding[0]), tenant_id=binding[1])
         value['receipt_digest'] = canonical_json_sha256(value, allow_nan=False)
-        row = await session.scalar(select(AuthoredSlideCheckpoint).where(AuthoredSlideCheckpoint.job_id == job.id, AuthoredSlideCheckpoint.slide_index == index))
+        row = await session.scalar(select(AuthoredSlideCheckpoint).where(
+            AuthoredSlideCheckpoint.job_id == job.id, AuthoredSlideCheckpoint.slide_index == index))
         if row is None or row.attempt_token != job.attempt_token:
             raise RuntimeError('svg_checkpoint_missing')
         payload = deepcopy(row.svg_checkpoint or {})
@@ -166,7 +170,8 @@ async def record_svg_provider_event(job, index: int, record: dict) -> dict:
                 return deepcopy(previous)
             if event == 'dispatch.stopped':
                 raise ValueError('svg_provider_terminal_checkpoint_conflict')
-            if any((previous.get(key) != record.get(key) for key in (*identity, 'input_digest', 'ordinal'))) or (previous.get('response_id') is not None and previous.get('response_id') != response_id):
+            if (any(previous.get(key) != record.get(key) for key in (*identity, 'input_digest', 'ordinal'))
+                    or previous.get('response_id') is not None and previous.get('response_id') != response_id):
                 raise ValueError('svg_provider_terminal_checkpoint_conflict')
         if payload.get('inflight') != ordinal:
             raise ValueError('svg_provider_terminal_binding_invalid')
@@ -213,7 +218,10 @@ def _required_numeric_claims(content: str, *, quality_policy: dict | None = None
 
 def _provider_attempt_count(payload: dict) -> int:
     count = sum(attempt.get("kind") != "local" for attempt in payload.get("attempts", []))
-    if payload.get("recovery_revision") not in {'svg-provider-timeout-repurchase/v1', 'svg-provider-timeout-repurchase/v2', 'svg-provider-timeout-repurchase/v3'}:
+    if payload.get("recovery_revision") not in {
+        'svg-provider-timeout-repurchase/v1', 'svg-provider-timeout-repurchase/v2',
+        'svg-provider-timeout-repurchase/v3',
+    }:
         return count
     fence = payload.get("retained_provider_attempt_fence")
     if not isinstance(fence, dict):
@@ -607,13 +615,12 @@ async def _checkpoint(job, index, *, payload=None):
             row.attempt_token = job.attempt_token
             row.author_status = "completed" if payload.get("svg_content") else "running"
             row.illustrate_status = "skipped"
-            row.render_status = (
-                "completed" if payload.get("png_sha256")
-                else "running" if payload.get("svg_content")
-                else "pending"
-            )
-            row.author_started_at = author_started or now
-            row.render_started_at = render_started or (now if payload.get("svg_content") else None)
+            row.render_status = "completed" if payload.get("png_sha256") else "pending"
+            author_attempted = bool(payload.get("attempts") or payload.get("svg_content"))
+            row.author_started_at = author_started or (now if author_attempted else None)
+            # Author completion only makes a page ready for the render queue.
+            # A start timestamp must come from the actual render dispatch hook.
+            row.render_started_at = render_started
             row.author_completed_at = (authored_at or now) if payload.get("svg_content") else None
             row.render_completed_at = (rendered_at or now) if payload.get("png_sha256") else None
             row.failed_stage = None

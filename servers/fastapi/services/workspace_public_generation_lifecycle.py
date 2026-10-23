@@ -59,6 +59,23 @@ _PUBLIC_GENERATION_STAGE_STATES = {
     "authored_publication": "staging",
 }
 
+_SVG_JOB_STAGE_ORDER = {
+    stage: index
+    for index, stage in enumerate((
+        "outline", "author", "illustrate", "render", "persist", "repair",
+        "checkpoint", "export", "publication",
+    ))
+}
+
+
+def monotonic_svg_job_stage(current: str | None, candidate: str) -> str:
+    """Project a page-local SVG update without regressing deck progress."""
+    current_order = _SVG_JOB_STAGE_ORDER.get(current)
+    candidate_order = _SVG_JOB_STAGE_ORDER[candidate]
+    if current_order is None or current_order > candidate_order:
+        return current or candidate
+    return candidate
+
 
 def _public_generation_transition_allowed(current: str, target: str) -> bool:
     if current == target:
