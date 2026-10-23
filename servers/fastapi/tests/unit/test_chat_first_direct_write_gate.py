@@ -19,7 +19,6 @@ from services.workspace_legacy_write_gate import (
 
 
 _GUARDED_ENDPOINTS = (
-    "quality_review",
     "retemplate",
     "slide_edit",
     "slide_edit_html",
@@ -44,13 +43,6 @@ class _ProbeSession:
 async def _call_guarded_endpoint(name: str, session: _ProbeSession):
     entity_id = uuid.uuid4()
 
-    if name == "quality_review":
-        return await presentation_endpoints.quality_review_authored_presentation(
-            entity_id,
-            object(),
-            object(),
-            session,
-        )
     if name == "retemplate":
         return await presentation_endpoints.retemplate_authored_presentation(
             entity_id,
@@ -78,10 +70,6 @@ async def _call_guarded_endpoint(name: str, session: _ProbeSession):
     raise AssertionError(f"Unknown guarded endpoint: {name}")
 
 
-async def _legacy_quality_review(*_args, **_kwargs):
-    raise _LegacyPathReached
-
-
 async def _legacy_generation_path(*_args, **_kwargs):
     raise _LegacyPathReached
 
@@ -91,11 +79,6 @@ def test_direct_presentation_writes_fail_closed_before_side_effects(
     monkeypatch,
     endpoint_name,
 ):
-    monkeypatch.setattr(
-        presentation_endpoints,
-        "queue_authored_quality_review",
-        _legacy_quality_review,
-    )
     monkeypatch.setattr(
         generation_pipeline,
         "check_if_api_request_is_valid",

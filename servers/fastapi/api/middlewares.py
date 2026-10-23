@@ -36,7 +36,6 @@ from services.database import async_session_maker
 from services.provider_settings import import_legacy_file_to_provider_settings
 from services.provider_settings import save_provider_settings_record
 from utils.env_settings.public_service import (
-    RUNTIME_SETTINGS_REFRESH_TOKEN_ENV,
     get_public_artifact_store_backend,
     get_public_process_identity_settings,
     get_runtime_settings_refresh_token,
@@ -51,7 +50,6 @@ from utils.user_config import refresh_process_runtime_settings
 
 
 _RUNTIME_SETTINGS_REFRESH_PATH = "/_presenton/runtime-settings/refresh"
-_RUNTIME_SETTINGS_REFRESH_TOKEN_ENV = RUNTIME_SETTINGS_REFRESH_TOKEN_ENV
 _RUNTIME_SETTINGS_REFRESH_TOKEN_HEADER = (
     "x-presenton-runtime-settings-token"
 )

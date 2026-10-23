@@ -941,39 +941,6 @@ export class PresentationGenerationApi {
     }
   }
 
-  static async reviewAuthoredPresentation(
-    presentationId: string,
-    reviewData: {
-      scope: "all" | "current" | "subset";
-      slide_indices?: number[];
-      /** Explicit request gate; backend rollout flags and kill switch still win. */
-      slidespec_opt_in?: boolean;
-    },
-  ) {
-    try {
-      const response = await fetch(
-        getApiUrl(`/api/v1/ppt/presentation/${presentationId}/quality-review`),
-        {
-          method: "POST",
-          headers: getHeader(),
-          body: JSON.stringify({ ...reviewData, mode: "analyze_and_fix" }),
-          cache: "no-cache",
-        },
-      );
-
-      return await ApiResponseHandler.handleResponse(
-        response,
-        "Failed to start high-quality review",
-      );
-    } catch (error) {
-      console.error(
-        "error starting authored presentation quality review",
-        error,
-      );
-      throw error;
-    }
-  }
-
   static async previewAuthoredPageRemake(
     presentationId: string,
     slideIndex: number,

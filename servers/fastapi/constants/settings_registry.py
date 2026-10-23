@@ -114,13 +114,3 @@ def get_setting_default(key: str) -> Any:
 def get_setting_choices(key: str) -> tuple[str, ...]:
     choices = get_settings_by_key()[key].get("choices") or ()
     return tuple(choices)
-
-
-def get_setting_keys_for_target(target: str) -> tuple[str, ...]:
-    if target not in KNOWN_TARGETS:
-        raise SettingsRegistryError(f"unknown settings registry target: {target}")
-    return tuple(
-        entry["key"]
-        for entry in get_settings_registry()
-        if target in entry["targets"]
-    )

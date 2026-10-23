@@ -1,5 +1,3 @@
-import uuid
-from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -9,47 +7,5 @@ class ChatAttachment(BaseModel):
 
     name: str = Field(min_length=1, max_length=300)
     content: str = Field(min_length=1, max_length=50000)
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class ChatMessageRequest(BaseModel):
-    presentation_id: uuid.UUID
-    presentation_type: Literal["standard"] = "standard"
-    message: str = Field(min_length=1, max_length=8000)
-    conversation_id: Optional[uuid.UUID] = None
-    attachments: Optional[list[ChatAttachment]] = Field(default=None, max_length=8)
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class ChatMessageResponse(BaseModel):
-    conversation_id: uuid.UUID
-    response: str
-    tool_calls: list[str] = Field(default_factory=list)
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class ChatHistoryMessageItem(BaseModel):
-    role: str
-    content: str
-    created_at: Optional[str] = None
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class ChatHistoryResponse(BaseModel):
-    presentation_id: uuid.UUID
-    conversation_id: uuid.UUID
-    messages: list[ChatHistoryMessageItem]
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class ChatConversationListItem(BaseModel):
-    conversation_id: uuid.UUID
-    updated_at: Optional[str] = None
-    last_message_preview: Optional[str] = None
 
     model_config = ConfigDict(extra="forbid")

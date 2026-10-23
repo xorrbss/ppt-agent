@@ -70,9 +70,7 @@ def test_ocr_language_accepts_korean_codes_and_plain_label():
         assert ocr_service.ocr_language(language) == "kor+eng"
 
 
-def test_quality_review_readiness_route_precedes_dynamic_presentation_route(
-    monkeypatch,
-):
+def test_quality_review_readiness_route_serves_ocr_readiness(monkeypatch):
     payload = {"component": "authored_quality_ocr", "ready": True}
 
     async def fake_readiness():
@@ -83,11 +81,7 @@ def test_quality_review_readiness_route_precedes_dynamic_presentation_route(
     readiness_route = next(
         route for route in routes if route.path == "/presentation/quality-review/readiness"
     )
-    dynamic_route = next(
-        route for route in routes if route.path == "/presentation/{id}/quality-review"
-    )
 
-    assert routes.index(readiness_route) < routes.index(dynamic_route)
     assert _run(readiness_route.endpoint()) == payload
 
 

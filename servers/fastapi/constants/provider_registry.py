@@ -76,9 +76,3 @@ def get_public_provider_metadata() -> tuple[Mapping[str, Any], ...]:
     """Client-safe catalog with credential schemas and values removed."""
 
     return public_provider_metadata()
-
-
-def credential_setting_keys_for(provider_id: str) -> tuple[str, ...]:
-    """Server-only credential-reference resolver; never reads secret values."""
-
-    return resolve_provider(provider_id).credential_setting_keys

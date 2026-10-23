@@ -75,13 +75,6 @@ async def _call_deleted_mutation(
     presentation: PresentationModel,
     session: _TombstoneSession,
 ):
-    if name == "quality-review":
-        return await presentation_endpoint.quality_review_authored_presentation(
-            presentation.id,
-            object(),
-            object(),
-            session,
-        )
     if name == "retemplate":
         return await presentation_endpoint.retemplate_authored_presentation(
             presentation.id,
@@ -176,7 +169,6 @@ def test_legacy_delete_preserves_existing_durable_tombstone(monkeypatch):
 @pytest.mark.parametrize(
     "mutation",
     (
-        "quality-review",
         "retemplate",
         "restore",
     ),
