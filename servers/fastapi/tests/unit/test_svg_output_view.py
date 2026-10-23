@@ -116,6 +116,8 @@ def test_knob_typos_fail_loudly(value):
 def test_admission_reads_the_knob_only_for_source_restyle(monkeypatch):
     restyle = SimpleNamespace(source_mode="source_content_restyle")
     monkeypatch.delenv("SVG_SOURCE_OUTPUT_VIEW", raising=False)
+    assert admission_output_view(restyle) == V1
+    monkeypatch.setenv("SVG_SOURCE_OUTPUT_VIEW", "off")
     assert admission_output_view(restyle) is None
     monkeypatch.setenv("SVG_SOURCE_OUTPUT_VIEW", "v1")
     assert admission_output_view(restyle) == V1

@@ -4784,7 +4784,7 @@ def test_partial_recovery_replays_compact_output_view_raws_through_the_pinned_vi
             "services/generation_core/authoring/author_source_svg_layout.py"} <= set(recovery.CODE_FILES)
 
 
-def test_restyle_admission_pins_the_output_view_only_with_the_knob(monkeypatch):
+def test_restyle_admission_defaults_and_pins_explicit_output_view_opt_out(monkeypatch):
     from services.document_canvas import document_canvas_for_orientation
     from services.generation_core.authoring.author_slide_svg import svg_prompt_design
     from services.svg_generation_admission import pin_svg_style
@@ -4798,6 +4798,10 @@ def test_restyle_admission_pins_the_output_view_only_with_the_knob(monkeypatch):
         return request
 
     monkeypatch.delenv("SVG_SOURCE_OUTPUT_VIEW", raising=False)
+    default_view = pin_svg_style(restyle())
+    assert default_view["source_output_view"] == {"version": "svg-source-output-view/v1",
+        "stages": ["id_alias", "native_table_rows", "text_defaults:family_size"]}
+    monkeypatch.setenv("SVG_SOURCE_OUTPUT_VIEW", "off")
     off = pin_svg_style(restyle())
     assert "source_output_view" not in off
     monkeypatch.setenv("SVG_SOURCE_OUTPUT_VIEW", "v1")
