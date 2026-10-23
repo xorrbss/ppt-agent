@@ -94,9 +94,9 @@ from services.account_deletion_service import (
 from services.workspace_public_generation_lifecycle import (
     PUBLIC_GENERATION_LIFECYCLE_SCHEMA,
     PUBLIC_GENERATION_STATES,
-    _PUBLIC_GENERATION_STAGE_STATES,
     _public_generation_transition_allowed,
     _public_generation_transition_path,
+    public_generation_narration_path,
 )
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
@@ -4148,16 +4148,16 @@ class _ExecutionContext(WorkspaceOperationExecutionContext):
         percent: int | None = None,
         message: UserMessageLike = None,
     ) -> bool:
-        reported_progress = {
-            "stage": stage,
-            **({"current": current} if current is not None else {}),
-            **({"total": total} if total is not None else {}),
-            **({"percent": percent} if percent is not None else {}),
-        }
-        event_payload = {"state": "running", **reported_progress}
-        if message:
-            event_payload.update(message_fields(message))
         try:
+            reported_progress = {
+                "stage": stage,
+                **({"current": current} if current is not None else {}),
+                **({"total": total} if total is not None else {}),
+                **({"percent": percent} if percent is not None else {}),
+            }
+            event_payload = {"state": "running", **reported_progress}
+            if message:
+                event_payload.update(message_fields(message))
             async with self._session_factory() as session:
                 operation = await session.get(
                     WorkspaceOperation, self.claim.operation_id,
@@ -4175,14 +4175,7 @@ class _ExecutionContext(WorkspaceOperationExecutionContext):
                     current_public_state = str(
                         (operation.progress or {}).get("public_state") or "queued"
                     )
-                    target_public_state = _PUBLIC_GENERATION_STAGE_STATES.get(stage)
-                    path = (
-                        _public_generation_transition_path(
-                            current_public_state, target_public_state
-                        )
-                        if target_public_state is not None
-                        else (current_public_state,)
-                    )
+                    path = public_generation_narration_path(current_public_state, stage)
                     for public_state in path:
                         progress = _public_generation_progress(
                             operation.progress,
@@ -4222,7 +4215,10 @@ class _ExecutionContext(WorkspaceOperationExecutionContext):
                         )
                         if event is None:
                             await session.rollback()
-                            return False
+                            # A progress CAS can lose a version race without
+                            # losing the lease. Authoritative writes fence the
+                            # attempt independently; narration is best effort.
+                            return True
                         await session.refresh(operation, attribute_names=["progress", "version"])
                 else:
                     event = await append_operation_event(
@@ -4246,16 +4242,14 @@ class _ExecutionContext(WorkspaceOperationExecutionContext):
                     )
                     if event is None:
                         await session.rollback()
-                        return False
+                        return True
                 await session.commit()
                 return True
-        except OperationalError:
-            # Progress is advisory telemetry written from its own session, so a
-            # long-running handler that holds the write lock can time it out.
-            # Losing a progress row must not destroy an otherwise healthy
-            # attempt: only `event is None` means the lease was actually taken,
-            # and publication still enforces fencing on the attempt token.
-            LOGGER.warning(
+        except Exception:
+            # Narration cannot fail the attempt, even if projection or storage
+            # fails. Cancellation still propagates, and authoritative writes
+            # continue to enforce their own lifecycle and attempt fences.
+            LOGGER.debug(
                 "Progress not recorded for operation %s at stage %s",
                 self.claim.operation_id,
                 stage,

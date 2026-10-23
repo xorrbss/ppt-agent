@@ -180,10 +180,10 @@ async def mark_authored_generation_stage(
     changes the generation outcome.
     """
 
-    normalized = str(stage).strip().lower()
-    if normalized not in _STAGE_PROGRESS_BANDS:
-        raise ValueError("invalid_authored_generation_stage")
     try:
+        normalized = str(stage).strip().lower()
+        if normalized not in _STAGE_PROGRESS_BANDS:
+            raise ValueError("invalid_authored_generation_stage")
         now = get_current_utc_datetime()
         async with session_factory() as session:
             result = await session.execute(
@@ -201,7 +201,7 @@ async def mark_authored_generation_stage(
         LOGGER.debug(
             "Authored stage update failed for job %s stage=%s",
             job_id,
-            normalized,
+            stage,
             exc_info=True,
         )
         return False
