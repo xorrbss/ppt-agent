@@ -52,8 +52,10 @@ import json
 import logging
 import os
 import secrets
+from time import monotonic
 from typing import Any
 import uuid
+from weakref import WeakKeyDictionary
 
 from sqlalchemy import and_, case, exists, func, or_, select, text, update
 from sqlalchemy.exc import OperationalError
@@ -118,6 +120,7 @@ from services.workspace_operation_lease import (  # noqa: F401
     operation_cancel_requested as _operation_cancel_requested,
     run_attempt_heartbeat_loop,
 )
+from services.workspace_operation_heartbeat_thread import run_threaded_attempt_heartbeat
 from services.workspace_operation_retry_policy import (
     WorkspaceOperationRetryDecision,
     decide_workspace_operation_retry,
@@ -126,9 +129,9 @@ from services.workspace_operation_observability import (
     WorkspaceOperationObservationName,
     log_workspace_operation_observation,
 )
-from services.workspace_poll_backoff import IdleCycle
+from services.workspace_poll_backoff import IdleCycle, idle_ceiling_seconds
 from services.workspace_worker_lane_probe import workspace_operation_work_pending
-from utils.datetime_utils import get_current_utc_datetime
+from utils.datetime_utils import as_utc, get_current_utc_datetime
 from utils.get_env import (
     env_float,
     env_int,
@@ -3549,6 +3552,57 @@ async def request_workspace_operation_cancellation(
     return True
 
 
+@dataclass
+class _ReclaimSweep:
+    wall: datetime
+    monotonic: float
+    grace_until: float = 0.0
+    deferred_start: datetime | None = None
+    deferred_end: datetime | None = None
+
+
+_RECLAIM_SWEEPS: WeakKeyDictionary = WeakKeyDictionary()
+_RECLAIM_RESUME_MARGIN_SECONDS = 5.0
+
+
+def _reclaimable_lease_condition(session_factory, now: datetime):
+    """Give leases expiring during this reclaimer's own gap time to renew.
+
+    Monotonic clocks may include or exclude system suspend depending on the
+    platform. Compare both deltas; use monotonic time for the resume window so
+    wall-clock corrections cannot shorten it. State is scoped to the database
+    session factory, shared by all runners using it, and weakly retained.
+    """
+
+    wall = as_utc(now)
+    tick = monotonic()
+    previous = _RECLAIM_SWEEPS.get(session_factory)
+    heartbeat = _positive_int_env(
+        "WORKSPACE_OPERATION_HEARTBEAT_SECONDS", WORKSPACE_OPERATION_HEARTBEAT_SECONDS
+    )
+    idle = idle_ceiling_seconds(_positive_float_env(
+        "WORKSPACE_OPERATION_POLL_SECONDS", WORKSPACE_OPERATION_POLL_SECONDS
+    ))
+    if previous is None:
+        previous = _ReclaimSweep(wall, tick)
+        _RECLAIM_SWEEPS[session_factory] = previous
+    elif max((wall - previous.wall).total_seconds(), tick - previous.monotonic) > idle + heartbeat:
+        start = min(previous.wall, wall)
+        if tick < previous.grace_until and previous.deferred_start is not None:
+            start = min(start, previous.deferred_start)
+        previous.deferred_start = start
+        previous.deferred_end = wall
+        previous.grace_until = tick + heartbeat + _RECLAIM_RESUME_MARGIN_SECONDS
+    previous.wall, previous.monotonic = wall, tick
+    expired = WorkspaceOperation.lease_expires_at <= now
+    if tick < previous.grace_until:
+        expired = and_(expired, or_(
+            WorkspaceOperation.lease_expires_at <= previous.deferred_start,
+            WorkspaceOperation.lease_expires_at > previous.deferred_end,
+        ))
+    return or_(WorkspaceOperation.lease_expires_at.is_(None), expired)
+
+
 async def recover_expired_workspace_operations(
     *,
     session_factory: async_sessionmaker[AsyncSession] = async_session_maker,
@@ -3557,6 +3611,7 @@ async def recover_expired_workspace_operations(
     """Recover expired leases and terminalize expired Phase-1 admissions."""
 
     now = _utc_now()
+    reclaimable_lease = _reclaimable_lease_condition(session_factory, now)
     recovered = 0
     expired_phase1_partial = and_(
         WorkspaceOperation.kind == "presentation.generate",
@@ -3609,10 +3664,7 @@ async def recover_expired_workspace_operations(
                                 WorkspaceOperation.state.in_(
                                     tuple(_RUNNING_STATES)
                                 ),
-                                or_(
-                                    WorkspaceOperation.lease_expires_at.is_(None),
-                                    WorkspaceOperation.lease_expires_at <= now,
-                                ),
+                                reclaimable_lease,
                             ),
                             expired_phase1_partial,
                         )
@@ -4440,7 +4492,7 @@ class WorkspaceOperationRunner:
     async def _heartbeat_loop(
         self, claim: WorkspaceOperationClaim, context: _ExecutionContext
     ) -> None:
-        await run_attempt_heartbeat_loop(
+        await run_threaded_attempt_heartbeat(
             claim,
             session_factory=self.session_factory,
             heartbeat_seconds=self.heartbeat_seconds,

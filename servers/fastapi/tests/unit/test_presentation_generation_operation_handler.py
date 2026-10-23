@@ -164,14 +164,15 @@ async def _drain_once(runner: WorkspaceOperationRunner) -> int:
     return dispatched
 
 
-@pytest.mark.parametrize("mode", ["normal", "partial", "partial_rejected", "partial_bad_binding", "partial_missing_ext"])
+@pytest.mark.parametrize(
+    "mode", ["normal", "partial", "partial_rejected", "partial_bad_binding", "partial_missing_ext"]
+)
 def test_generation_progress_poller_runs_for_normal_and_partial_recovery(mode, monkeypatch):
     from unittest.mock import AsyncMock, Mock
     from copy import deepcopy
     from services import presentation_generation_operation_handler as adapter
     from services.svg_partial_recovery import LINEAGE_KEY, digest
     from services.workspace_operation_handler_registry import NonRetryableWorkspaceOperationError
-    from services.workspace_operation_lease import WorkspaceOperationLeaseLost
 
     operation_id, job_id, presentation_id, owner = (uuid.uuid4() for _ in range(4))
     payload = {"codex_generation_preset": None}
@@ -222,29 +223,25 @@ def test_generation_progress_poller_runs_for_normal_and_partial_recovery(mode, m
         raise_if_cancelled=AsyncMock(), progress=AsyncMock(return_value=True), extend_lease=extension)
     if mode == "partial_missing_ext":
         del context.extend_lease
-    if mode in {"partial_rejected", "partial_bad_binding", "partial_missing_ext"}:
-        expected = NonRetryableWorkspaceOperationError if mode == "partial_bad_binding" else WorkspaceOperationLeaseLost
-        with pytest.raises(expected):
+    if mode == "partial_bad_binding":
+        with pytest.raises(NonRetryableWorkspaceOperationError):
             asyncio.run(handler._execute_without_deadline(context))
         pipeline.assert_not_awaited()
         stage.assert_not_awaited()
         start.assert_not_called()
-        assert events == (["claim", "extend"] if mode == "partial_rejected" else ["claim"])
-        if mode != "partial_rejected":
-            extension.assert_not_awaited()
+        assert events == ["claim"]
+        extension.assert_not_awaited()
         return
     assert asyncio.run(handler._execute_without_deadline(context)) is result
     pipeline.assert_awaited_once_with(job_id, "fixture-task", None, context)
     stage.assert_awaited_once()
-    assert [call.kwargs["stage"] for call in context.progress.await_args_list] == ["generation_started", "authored_outline"]
+    assert [call.kwargs["stage"] for call in context.progress.await_args_list] == [
+        "generation_started", "authored_outline"
+    ]
     start.assert_called_once()
     stop.assert_awaited_once()
-    if mode == "partial":
-        extension.assert_awaited_once_with(seconds=900)
-        assert events == ["claim", "extend", "pipeline"]
-    else:
-        extension.assert_not_awaited()
-        assert events == ["claim", "pipeline"]
+    extension.assert_not_awaited()
+    assert events == ["claim", "pipeline"]
 
 
 @pytest.mark.parametrize(

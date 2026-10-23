@@ -83,7 +83,6 @@ from services.workspace_generation_timing_payload import (
 logger = logging.getLogger(__name__)
 
 PRESENTATION_GENERATION_OPERATION_KIND = "presentation.generate"
-_PARTIAL_RECOVERY_PREPARATION_LEASE_SECONDS = 900
 
 
 def _begin_upstream_outline_timing(request: object) -> None:
@@ -744,11 +743,6 @@ class PresentationGenerationOperationHandler:
                     or manifest.get("owner_id") != str(claim.owner_id)
                     or manifest.get("expected_page_count") != linked_job.total_slides):
                 raise NonRetryableWorkspaceOperationError("svg_partial_recovery_episode_unbound")
-            # Pure archive validation shares this loop with the regular heartbeat.
-            extend_preparation = getattr(context, "extend_lease", None)
-            if not callable(extend_preparation) or not await extend_preparation(
-                    seconds=_PARTIAL_RECOVERY_PREPARATION_LEASE_SECONDS):
-                raise WorkspaceOperationLeaseLost("presentation_generation_lifecycle_fenced")
         if claim.attempt_number > 1:
             async with self._session_factory() as session:
                 checkpoint_reuse_count = int(
