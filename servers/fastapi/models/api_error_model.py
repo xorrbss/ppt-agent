@@ -35,7 +35,7 @@ class APIErrorModel(BaseModel):
             self.code = (
                 detail_code
                 if isinstance(detail_code, str)
-                and _STRUCTURED_ERROR_CODE.fullmatch(detail_code)
+                and _STABLE_ERROR_CODE.fullmatch(detail_code)
                 else (
                     self.detail
                     if isinstance(self.detail, str)
@@ -75,6 +75,12 @@ class APIErrorModel(BaseModel):
         else:
             status_code = 500
             detail = str(e)
+
+        # Generation boundaries attach a classified code explicitly. Ordinary
+        # HTTP detail objects retain the historical lowercase-only inference.
+        exception_code = getattr(e, "code", None)
+        if code is None and isinstance(exception_code, str) and _STRUCTURED_ERROR_CODE.fullmatch(exception_code):
+            code = exception_code
 
         return APIErrorModel(
             status_code=status_code,

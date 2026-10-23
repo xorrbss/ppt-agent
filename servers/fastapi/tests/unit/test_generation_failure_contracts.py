@@ -117,8 +117,10 @@ def test_empty_job_error_restores_retry_after_checking_exhausted_page_evidence()
      "public_generation_transition_invalid:rendering:authoring"),
     ("invalid_code:a:b:c:d", "http_error_500"),
 ])
-def test_structured_api_codes_are_bounded(code, expected):
-    assert APIErrorModel.from_exception(HTTPException(500, {"code": code})).code == expected
+def test_explicit_generation_api_codes_are_bounded(code, expected):
+    error = HTTPException(500, "Presentation generation failed")
+    error.code = code
+    assert APIErrorModel.from_exception(error).code == expected
 
 
 def test_single_word_requires_an_explicit_code_attribute():

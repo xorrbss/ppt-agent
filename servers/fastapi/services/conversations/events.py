@@ -21,6 +21,7 @@ from services.conversation_event_contract import (
     build_conversation_event,
 )
 from services.conversations.service import _conversation_and_presentation
+from services.generation_failure_class import generation_operation_failure_class
 from services.workspace_error_registry import resolve_workspace_error
 from services.workspace_service import workspace_events
 
@@ -189,6 +190,11 @@ def _event_data(
                 "error_code": definition.code,
                 "safe_message": definition.safe_message,
                 "retryable": definition.retryable,
+                "failure_class": generation_operation_failure_class(
+                    kind=operation.kind,
+                    state=operation.state,
+                    error_code=operation.error_code,
+                ),
             }
         )
     return data, message_id
