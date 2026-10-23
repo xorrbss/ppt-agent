@@ -129,7 +129,7 @@ async def _generation_failure_decision(
     code, retryable = _safe_failure(status_error)
     if not retryable:
         return code, retryable
-    from services.generation_core.drivers.svg.terminal import EXHAUSTED_PAGE_CODES
+    from services.generation_core.quality.page_failure_kind import PAGE_QUALITY, page_error_class
 
     try:
         rows = (
@@ -156,7 +156,8 @@ async def _generation_failure_decision(
             # A failed row whose record cannot be read is not proof that no
             # page is exhausted.
             return code, False
-        if error["code"] in EXHAUSTED_PAGE_CODES and error["retryable"] is False:
+        # The page ended on its quality (``terminal.is_exhausted_page``'s rule).
+        if page_error_class(error["code"]) == PAGE_QUALITY and error["retryable"] is False:
             return code, False
     return code, retryable
 

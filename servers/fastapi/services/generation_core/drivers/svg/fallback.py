@@ -2,12 +2,13 @@
 
 This is the SVG driver's counterpart to the authored driver's placeholder page
 (``services/authored_author_stage_placeholder.py``): the page the terminal
-policy ``fallback`` (``services/generation_core/quality/terminal_policy.py``)
-selects once a slide's SVG has failed the contract on both ordinary attempts.
-The deck still has to publish, so this page reuses the authored placeholder's
-outline split (``_split_content``) rather than re-inventing how a bullet list
-is derived from a slide's own content -- the two drivers should show the same
-words for the same slide, only in a different markup family.
+rescue (``generation_core/drivers/svg/terminal.py``) publishes, flagged, once a
+slide's SVG failed the contract on every attempt and its last render either
+does not exist or lost content. The outline lines are read the way the
+authored placeholder reads them (``_lines``), but nothing is cut: every line
+is published, whole. Content that does not fit at the regular size is set
+smaller and, if needed, in more columns -- a flagged page that is hard to read
+is reviewable; a page that silently dropped part of the slide is not.
 
 Nothing here calls a model provider or a browser: the same inputs always
 produce the same bytes, so a flagged deck is reproducible from its receipt.
@@ -17,7 +18,8 @@ estimate, because that subset has no text wrapping or reflow of its own.
 
 The page carries no failure reason or error code -- that lives in receipts,
 not in customer-facing content. It only ever shows the slide's own outline
-text, truncated the same way the authored placeholder truncates it.
+text. A title longer than one line is shortened with "…" and repeated in full
+as the first body line, so the shortening loses nothing.
 """
 
 from __future__ import annotations
@@ -27,11 +29,7 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 import xml.etree.ElementTree as ET
 
-from services.authored_author_stage_placeholder import (
-    MAX_BODY_BULLETS,
-    MAX_BULLET_CHARS,
-    _split_content,
-)
+from services.authored_author_stage_placeholder import _lines
 from services.svg_contract import SVG_NS, SVG_CONTRACT_VERSION, finalize_svg
 
 FALLBACK_GROUP_ID = "svg-fallback-page"
@@ -44,11 +42,16 @@ _ACCENT_BAR_HEIGHT = 6
 _EYEBROW_FONT_PX = 14
 _EYEBROW_MAX_CHARS = 24
 _TITLE_FONT_PX = 34
-_BODY_FONT_PX = 20
-#: The authored placeholder's 1.6 line height at 20px. Tighter lines (28px was
-#: tried) make adjacent glyph boxes intersect, which the renderer measures as
+#: Body sizes tried in order, regular first. The tail is below any readability
+#: floor on purpose: the page is flagged either way, and a smaller complete page
+#: is the rescue's whole point.
+_BODY_FONT_STEPS_PX = (20, 18, 16, 14, 12, 11, 10, 9, 8, 7, 6, 5, 4)
+_BODY_COLUMNS = (1, 2, 3)
+_COLUMN_GAP_PX = 32
+#: The authored placeholder's 1.6 line height. Tighter lines (1.4 was tried)
+#: make adjacent glyph boxes intersect, which the renderer measures as
 #: ``text_overlap`` on every body line.
-_BODY_LINE_HEIGHT_PX = 32
+_BODY_LINE_HEIGHT = 1.6
 _GAP_BAR_TO_LABEL_PX = 24
 _GAP_EYEBROW_TO_TITLE_PX = 16
 _GAP_TITLE_TO_BODY_PX = 30
@@ -142,6 +145,51 @@ def _text_node(parent: ET.Element, *, x: float, y: float, text: str, font_px: in
     node.text = text
 
 
+def _complete_split(content: str, *, title_budget: int) -> tuple[str, list[str]]:
+    """``(title, body lines)``: every outline line, none shortened or dropped."""
+
+    lines = _lines(content)
+    if not lines:
+        return "", []
+    head, rest = lines[0], lines[1:]
+    if len(head) <= title_budget:
+        return head, rest
+    # The untruncated line is still the slide's own text; it leads the body.
+    return head[:title_budget].rstrip() + "…", [head, *rest]
+
+
+def _body_layout(bullets: Sequence[str], *, available_width: float,
+                 available_height: float) -> tuple[int, int, list[list[tuple[bool, str]]]]:
+    """``(font_px, columns, per-column [(is_first_line, text)])`` holding every line.
+
+    The first configuration (largest size, then fewest columns) whose lines fit
+    the body box wins; when none fits, the last one is used and its lines run
+    past the box -- still every word, measured by the renderer and flagged.
+    """
+
+    choice = None
+    for font_px in _BODY_FONT_STEPS_PX:
+        line_height = font_px * _BODY_LINE_HEIGHT
+        for columns in _BODY_COLUMNS:
+            column_width = (available_width - (columns - 1) * _COLUMN_GAP_PX) / columns
+            prefix_width_px = _text_em(_BULLET_PREFIX) * font_px
+            max_em = max(1.0, column_width - prefix_width_px) / font_px
+            physical = [(position == 0, line) for bullet in bullets
+                        for position, line in enumerate(_wrap(bullet, max_em=max_em))]
+            per_column = max(1, int((available_height - font_px) // line_height) + 1)
+            choice = (font_px, columns, physical, per_column)
+            if len(physical) <= per_column * columns:
+                break
+        else:
+            continue
+        break
+    font_px, columns, physical, per_column = choice
+    # Overflowing lines stay in the last column rather than being dropped.
+    split = [physical[i * per_column:(i + 1) * per_column] for i in range(columns - 1)]
+    split.append(physical[(columns - 1) * per_column:])
+    return font_px, columns, split
+
+
 def fallback_page_svg(*, content: str, role: str, index: int, count: int,
                        width: int, height: int, style_snapshot: dict | None) -> str:
     """Deterministic contract-valid SVG for one page, finalized (page number added).
@@ -150,6 +198,7 @@ def fallback_page_svg(*, content: str, role: str, index: int, count: int,
     provider or browser call. Raises nothing for any ``content`` -- including
     empty content, very long lines, CJK text, or ``<``/``&``/quote characters
     -- because the whole point of a fallback page is that it always publishes.
+    Every outline line appears in full (see the module docstring).
     """
 
     tokens = (style_snapshot or {}).get("tokens", {})
@@ -160,7 +209,7 @@ def fallback_page_svg(*, content: str, role: str, index: int, count: int,
 
     available_width = max(1, width - 2 * _MARGIN_X)
     title_budget = _title_budget(available_width_px=available_width, font_px=_TITLE_FONT_PX)
-    title, bullets = _split_content(content, title_budget=title_budget)
+    title, bullets = _complete_split(content, title_budget=title_budget)
     if not title:
         title = _EMPTY_TITLE_PLACEHOLDER
 
@@ -187,37 +236,61 @@ def fallback_page_svg(*, content: str, role: str, index: int, count: int,
                font_px=_TITLE_FONT_PX, font_family=title_font, fill=_BODY_COLOR, weight="700")
     cursor += _TITLE_FONT_PX + _GAP_TITLE_TO_BODY_PX
 
-    prefix_width_px = _text_em(_BULLET_PREFIX) * _BODY_FONT_PX
-    content_width_px = max(1.0, available_width - prefix_width_px)
-    max_em = content_width_px / _BODY_FONT_PX
-    continuation_x = _MARGIN_X + prefix_width_px
-
-    max_y = height - _BOTTOM_LIMIT_PX
-    emitted: list[tuple[float, float, str]] = []
-    truncated = False
-    y = cursor + _BODY_FONT_PX
-    for bullet in bullets:
-        for position, physical_line in enumerate(_wrap(bullet, max_em=max_em)):
-            if y > max_y:
-                truncated = True
-                break
-            text = (_BULLET_PREFIX if position == 0 else "") + physical_line
-            x = _MARGIN_X if position == 0 else continuation_x
-            emitted.append((x, y, text))
-            y += _BODY_LINE_HEIGHT_PX
-        if truncated:
-            break
-    if truncated and emitted:
-        x, y_last, text = emitted[-1]
-        emitted[-1] = (x, y_last, text.rstrip("…").rstrip() + "…")
-
-    for x, y_pos, text in emitted:
-        _text_node(group, x=x, y=y_pos, text=text, font_px=_BODY_FONT_PX,
-                   font_family=body_font, fill=_BODY_COLOR)
+    if bullets:
+        max_y = height - _BOTTOM_LIMIT_PX
+        font_px, columns, split = _body_layout(
+            bullets, available_width=available_width, available_height=max(1, max_y - cursor))
+        column_width = (available_width - (columns - 1) * _COLUMN_GAP_PX) / columns
+        prefix_width_px = _text_em(_BULLET_PREFIX) * font_px
+        for column, lines in enumerate(split):
+            left = _MARGIN_X + column * (column_width + _COLUMN_GAP_PX)
+            y = cursor + font_px
+            for first, line in lines:
+                _text_node(group, x=left if first else left + prefix_width_px, y=y,
+                           text=(_BULLET_PREFIX if first else "") + line, font_px=font_px,
+                           font_family=body_font, fill=_BODY_COLOR)
+                y += font_px * _BODY_LINE_HEIGHT
 
     raw = ET.tostring(root, encoding="unicode")
     return finalize_svg(raw, index=index, n=count, width=width, height=height,
                         style_snapshot=style_snapshot)
+
+
+def placeholder_page_svg(*, title: str, width: int, height: int, font_family: str,
+                         index: int | None = None, count: int | None = None,
+                         style_snapshot: dict | None = None) -> str:
+    """The last-resort page: the slide's title (or "—") on a plain page.
+
+    Published only when no complete-content page could be rendered; the flag
+    on the page, not its bytes, tells the reader what is missing. With
+    ``index``/``count`` the page is finalized (page number) like
+    :func:`fallback_page_svg`; without them it is validated as-is (a source
+    deck carries no system page number).
+    """
+
+    from services.svg_contract import validate_svg
+
+    available_width = max(1, width - 2 * _MARGIN_X)
+    lines = _lines(title)
+    text = lines[0] if lines else _EMPTY_TITLE_PLACEHOLDER
+    budget = _title_budget(available_width_px=available_width, font_px=_TITLE_FONT_PX)
+    if len(text) > budget:
+        text = text[:budget].rstrip() + "…"
+    root = ET.Element(f"{{{SVG_NS}}}svg", {
+        "width": str(width), "height": str(height), "viewBox": f"0 0 {width} {height}",
+    })
+    group = ET.SubElement(root, f"{{{SVG_NS}}}g", {"id": FALLBACK_GROUP_ID})
+    ET.SubElement(group, f"{{{SVG_NS}}}rect", {
+        "x": "0", "y": "0", "width": str(width), "height": str(height), "fill": "#FFFFFF",
+    })
+    _text_node(group, x=_MARGIN_X, y=_TOP_MARGIN + _TITLE_FONT_PX, text=text, font_px=_TITLE_FONT_PX,
+               font_family=font_family, fill=_BODY_COLOR, weight="700")
+    raw = ET.tostring(root, encoding="unicode")
+    if index is not None and count is not None:
+        return finalize_svg(raw, index=index, n=count, width=width, height=height,
+                            style_snapshot=style_snapshot)
+    validate_svg(raw, width=width, height=height, allow_system_page_number=False, source_manifest={})
+    return raw
 
 
 def _recovery_content_profile(content: str | Mapping) -> dict | None:
@@ -376,9 +449,8 @@ def select_validated_recovery_candidate(candidates: Sequence[Mapping], *, recent
 
 __all__ = [
     "FALLBACK_GROUP_ID",
-    "MAX_BODY_BULLETS",
-    "MAX_BULLET_CHARS",
     "fallback_page_svg",
+    "placeholder_page_svg",
     "validated_recovery_candidates",
     "select_validated_recovery_candidate",
 ]

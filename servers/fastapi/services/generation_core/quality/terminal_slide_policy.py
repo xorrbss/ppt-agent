@@ -63,8 +63,8 @@ def terminal_fallback_active(
     another would publish a deck with an unrepaired, unflagged slide.
 
     Exact reconstruction remains fail-closed, and a profile whose strict DOM
-    gate is off has no terminal slide to rescue. Source reflow has a separate,
-    default-off flag-only path because its verbatim text may not be re-authored.
+    gate is off has no terminal slide to rescue. Source reflow has a separate
+    (default-on) flag-only switch because its verbatim text may not be re-authored.
     """
 
     if not publish_flagged_allowed(
@@ -84,8 +84,8 @@ def publish_flagged_allowed(*, source_reflow: bool, exact_reconstruction: bool) 
 
     Whether this class of deck may publish a flagged page at all, read from the
     rollout switches every driver shares: an exact reconstruction never may, a
-    source-reflow deck only behind its own default-off switch, and any other
-    deck behind the default-on one. ``terminal_fallback_active`` adds the HTML
+    source-reflow deck behind its own switch, and any other deck behind the
+    general one (both default on: a page's quality never fails a deck). ``terminal_fallback_active`` adds the HTML
     driver's composition-profile switches on top; the SVG driver's
     ``TerminalPolicy`` resolves from this alone.
     """

@@ -370,14 +370,18 @@ def test_remake_preserves_measured_failure_and_other_page_review(monkeypatch):
     capture.return_value.quality.update(passed=False, failures=[{"kind": "small_body_text"}])
     other_quality = {"passed": True, "verified": True, "source_digest": "other-page"}
     presentation.theme["svg"]["quality"].append(other_quality)
-    result = asyncio.run(remake.publish_svg_candidate(session, presentation, [target], 0, task, snapshot=False))
+    # The deck's status fields are rebuilt from every published page's receipt.
+    other = SimpleNamespace(id=uuid.uuid4(), svg_content="<svg>other</svg>",
+                            content={"svgReceipt": {"quality": other_quality}})
+    result = asyncio.run(remake.publish_svg_candidate(session, presentation, [target, other], 0, task,
+                                                      snapshot=False))
     content = session.execute.await_args.args[0].compile(dialect=sqlite.dialect()).params["content"]
     assert content["svgReceipt"]["quality"]["verified"] is False
     assert content["svgReceipt"]["quality"]["classification"] == "review_required"
     assert content["svgReceipt"]["quality"]["failures"] == [{"kind": "small_body_text"}]
     assert result["quality_status"] == "review_required"
     assert presentation.theme["svg"]["reviewPages"] == [0]
-    assert presentation.theme["svg"]["quality"][1] is other_quality
+    assert presentation.theme["svg"]["quality"][1] == other_quality
 
 
 @pytest.mark.parametrize("change", [None, "svg", "image", "owner", "index", "native", "revision", "claim"])

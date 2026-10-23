@@ -12,6 +12,7 @@ import json
 from models.public_v2_contracts import QualityReceiptV3
 from models.authored_vnext.capability_registry import CAPABILITY_REGISTRY_DIGEST
 from services.svg_export_page_evidence import svg_authoring, svg_geometry_font
+from services.svg_export_source_preservation import page_svg_digest, source_receipts_present
 from services.svg_export_visual_review import release_readiness, svg_visual_review, page_measurement_current
 from utils.hashing import sha256_prefixed
 
@@ -59,7 +60,9 @@ def _native_ooxml_domain(*, required, worker_metrics, artifact_digest, operation
             or style_readback.get("schemaVersion") != "svg-source-export-style-readback/v1"
             or style_readback.get("passed") is not True
             or source_readback.get("passed") is not True
-            or proof.get("sourceDigests") != [receipt["svg_digest"] for receipt in source_preservation]
+            or len(slides) != len(source_preservation)
+            or proof.get("sourceDigests") != [page_svg_digest(receipt, slide.svg_content or "")
+                                              for receipt, slide in zip(source_preservation, slides, strict=True)]
             or not isinstance(measurements, dict) or measurements.get("verifiedPages") != len(source_preservation)
             or any(measurements.get(key) != 0 for key in ("unboundShapes", "unboundPrimitives", "geometryMismatches"))
             or type(measurements.get("verifiedShapes")) is not int or measurements["verifiedShapes"] < 1
@@ -292,11 +295,15 @@ def source_svg_public_quality_receipt(*, slides, source_preservation, worker_met
         source_revision, scene_digest, evaluated_at, exporter_version, advisory=None, source_preservation_parents=None,
         require_native_coverage=False, review_binding=None):
     qualities = [(slide.content or {}).get("svgReceipt", {}).get("quality", {}) for slide in slides]
-    templates = [r.get("template_application", {}) for r in source_preservation]
-    whole_page = bool(source_preservation) and all(
+    # A failure placeholder (``None`` receipt) exports as drawn: it is read back
+    # as a placeholder, and the authoring and geometry domains fail for it.
+    present = source_receipts_present(source_preservation)
+    placeholder = len(present) != len(source_preservation)
+    templates = [(r or {}).get("template_application", {}) for r in source_preservation]
+    whole_page = bool(present) and all(
         r.get("source_authoring_contract") == {"version": "svg-source-whole-page/v1"}
-        for r in source_preservation)
-    authoring = (all(r.get("rendering_verified") is True
+        for r in present)
+    authoring = not placeholder and (all(r.get("rendering_verified") is True
                      and isinstance(r.get("bindings"), list) and bool(r["bindings"])
                      for r in source_preservation) if whole_page else
         bool(source_preservation) and all(
@@ -307,7 +314,7 @@ def source_svg_public_quality_receipt(*, slides, source_preservation, worker_met
             for t, r in zip(templates, source_preservation, strict=True)))
     measured_preservation = source_preservation_parents or source_preservation
     geometry = bool(qualities) and len(qualities) == len(measured_preservation) and all(
-        q.get("passed") is True and q.get("geometry_passed") is True
+        r is not None and q.get("passed") is True and q.get("geometry_passed") is True
         and q.get("measurement_complete") is True and r.get("rendering_verified") is True
         and q.get("source_digest") == r["svg_digest"]
         and q.get("trusted_font_materialization", {}).get("worker_materialized") is True
@@ -329,20 +336,25 @@ def source_svg_public_quality_receipt(*, slides, source_preservation, worker_met
     worker = worker_metrics.get("public_export_worker_evidence", {})
     readback = worker.get("structuralReadback", {}).get("sourcePreservation", {})
     pages = readback.get("pages", [])
-    integrity = (bool(source_preservation) and readback.get("passed") is True
+    integrity = (bool(present) and readback.get("passed") is True
         and readback.get("schemaVersion") == "svg-source-preservation-export-readback/v1"
-        and readback.get("manifestDigest") == source_preservation[0]["manifest_digest"]
-        and readback.get("sourceDigest") == source_preservation[0]["source_digest"]
+        and readback.get("manifestDigest") == present[0]["manifest_digest"]
+        and readback.get("sourceDigest") == present[0]["source_digest"]
         and len(pages) == len(source_preservation))
     if integrity:
-        integrity = all(p.get("sourcePageIndex") == i
-            and p.get("sourcePageId") == r["source_page_id"] and p.get("svgDigest") == r["svg_digest"]
+        # A placeholder page is read back as one: it claims no source page.
+        integrity = all(p.get("sourcePageIndex") == i and (
+            p.get("failurePlaceholder") is True and p.get("sourcePageId") is None
+            and p.get("svgDigest", page_svg_digest(None, slides[i].svg_content or ""))
+            == page_svg_digest(None, slides[i].svg_content or "")
+            if r is None else
+            p.get("sourcePageId") == r["source_page_id"] and p.get("svgDigest") == r["svg_digest"]
             and p.get("text", {}).get("matchedBindingCount") == sum(
                 b["kind"] in {"text", "table_cell"} and bool(b.get("text")) for b in r["bindings"])
             and p.get("tables", {}).get("matchedCellValueCount") == sum(
                 b["kind"] == "table_cell" for b in r["bindings"])
             and p.get("images", {}).get("matchedOccurrenceCount") == sum(
-                b["kind"] == "image" for b in r["bindings"])
+                b["kind"] == "image" for b in r["bindings"]))
             for i, (p, r) in enumerate(zip(pages, source_preservation, strict=True)))
 
     def domain(passed, checker, inputs, outputs, measurements, reason):
@@ -356,11 +368,13 @@ def source_svg_public_quality_receipt(*, slides, source_preservation, worker_met
         content_brief=dict(required=False, status="not_required"),
         authoring=domain(authoring, "svg-source-whole-page-authoring/v1" if whole_page
             else "svg-source-template-authoring/v2", source_preservation,
-            templates if not whole_page else [r["source_authoring_contract"] for r in source_preservation],
+            templates if not whole_page else [(r or {}).get("source_authoring_contract")
+                                              for r in source_preservation],
             {"verifiedPages": len(templates), "sourcePreserved": True,
              **({"wholePageContractPassed": True} if whole_page else {"templateRulesPassed": True})},
             "svg_template_authoring_evidence_incomplete"),
-        geometry_font=domain(geometry, "svg-chromium/v1", [r["svg_digest"] for r in measured_preservation],
+        geometry_font=domain(geometry, "svg-chromium/v1", [page_svg_digest(r, slide.svg_content or "")
+            for r, slide in zip(measured_preservation, slides, strict=False)],
             qualities, {"verifiedPages": len(qualities), "browserMeasured": True, "fontBytesMaterialized": True},
             "svg_geometry_font_evidence_incomplete"),
         image_content_integrity=domain(integrity, "svg-source-preservation-export-readback/v1",
@@ -397,10 +411,11 @@ def svg_public_quality_receipt(*, slides, advisory, source_preservation, worker_
     evidence its generation persisted (``svg_export_page_evidence``).
     """
 
-    if source_preservation and (all(
-            r.get("layout_schema_version") == "svg-source-layout/v2" for r in source_preservation)
+    present = source_receipts_present(source_preservation)
+    if present and (all(
+            r.get("layout_schema_version") == "svg-source-layout/v2" for r in present)
             or all(r.get("source_authoring_contract") == {"version": "svg-source-whole-page/v1"}
-                   for r in source_preservation)):
+                   for r in present)):
         return source_svg_public_quality_receipt(slides=slides, source_preservation=source_preservation,
             source_preservation_parents=source_preservation_parents,
             worker_metrics=worker_metrics, exporter_version=exporter_version, advisory=advisory,

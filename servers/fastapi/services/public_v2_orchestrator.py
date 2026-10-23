@@ -1316,6 +1316,9 @@ class SqlPublicV2Orchestrator:
                     .order_by(SlideModel.index, SlideModel.id)
                 )).scalars().all()
                 from services.svg_export_operation import svg_export_admission_snapshot, require_quality_recovery_export_parent
+                # A flagged page exports interactively; release-v1 refuses a
+                # deck that is not passed here, before the export is admitted.
+                require_passed = request.quality_policy == "release-v1"
                 try:
                     if has_header_publication:
                         from services.svg_export_operation import require_header_revision_lineage_authority
@@ -1324,13 +1327,15 @@ class SqlPublicV2Orchestrator:
                         if header_revision_authority is None:
                             raise ValueError("svg_header_revision_export_authority_required")
                     if header_revision_authority is None:
-                        await require_quality_recovery_export_parent(session, presentation, slides)
-                        snapshot = svg_export_admission_snapshot(presentation, slides)
+                        await require_quality_recovery_export_parent(session, presentation, slides,
+                                                                     require_passed=require_passed)
+                        snapshot = svg_export_admission_snapshot(presentation, slides,
+                                                                 require_passed=require_passed)
                     else:
                         await require_quality_recovery_export_parent(session, presentation, slides,
-                            header_revision_authority=header_revision_authority)
+                            header_revision_authority=header_revision_authority, require_passed=require_passed)
                         snapshot = svg_export_admission_snapshot(presentation, slides,
-                            header_revision_authority=header_revision_authority)
+                            header_revision_authority=header_revision_authority, require_passed=require_passed)
                 except ValueError as error:
                     raise _public_error(409, str(error)) from error
                 svg_source_revision_binding = {

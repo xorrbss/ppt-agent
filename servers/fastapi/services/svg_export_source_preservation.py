@@ -5,6 +5,21 @@ from services.public_export_errors import PublicExportOperationError
 from services.svg_contract import source_digest as svg_source_digest
 
 
+def page_svg_digest(receipt, svg):
+    """The digest a source export reports for a page.
+
+    A page with a receipt reports the bytes its receipt binds; a failure
+    placeholder (``None`` receipt, see :func:`source_preservation_receipts`)
+    claims no source and reports its own bytes.
+    """
+    return receipt["svg_digest"] if receipt is not None else svg_source_digest(svg)
+
+
+def source_receipts_present(receipts):
+    """The receipts of a source deck without its failure placeholders."""
+    return [receipt for receipt in receipts or () if receipt is not None]
+
+
 def source_preservation_receipts(presentation, slides, canvas):
     theme = presentation.theme if isinstance(presentation.theme, dict) else {}
     svg_theme = theme.get("svg") if isinstance(theme.get("svg"), dict) else {}
@@ -21,11 +36,19 @@ def source_preservation_receipts(presentation, slides, canvas):
             or marker.get("schemaVersion") != "svg-source-preservation/v1"
             or marker.get("pageCount") != len(slides)):
         raise PublicExportOperationError("svg_source_export_marker_invalid")
+    from services.svg_page_publication import (
+        failure_placeholder_page, quality_failure_flagged, source_visibility_flagged)
     manifest_digest = marker.get("manifestDigest")
     source_digest = None
     for index, (slide, receipt) in enumerate(zip(slides, receipts, strict=True)):
+        page_receipt = (slide.content or {}).get("svgReceipt") or {}
+        if receipt is None and failure_placeholder_page(page_receipt):
+            continue  # not the source page: it claims no receipt and publishes flagged
         if not isinstance(receipt, dict):
             raise PublicExportOperationError("svg_source_export_receipt_required")
+        # A measured quality failure and an unverified browser readback are
+        # page flags; every receipt still binds these bytes to the source.
+        quality_flagged = quality_failure_flagged(page_receipt)
         expected = {
             "contract_version": "svg-source-preservation/v1",
             "manifest_digest": manifest_digest,
@@ -36,7 +59,7 @@ def source_preservation_receipts(presentation, slides, canvas):
         }
         if any(receipt.get(key) != value for key, value in expected.items()):
             raise PublicExportOperationError("svg_source_export_receipt_input_mismatch")
-        if receipt.get("rendering_verified") is not True:
+        if receipt.get("rendering_verified") is not True and not source_visibility_flagged(page_receipt):
             raise PublicExportOperationError("svg_source_export_rendering_unverified")
         pinned_template = svg_theme.get("styleSnapshot", {}).get("source_template")
         whole_page = receipt.get("source_authoring_contract") == {"version": "svg-source-whole-page/v1"}
@@ -51,7 +74,7 @@ def source_preservation_receipts(presentation, slides, canvas):
                     or receipt.get("style_digest") != snapshot.get("digest")
                     or receipt.get("layout_schema_version") is not None
                     or quality.get("source_digest") != receipt["svg_digest"]
-                    or quality.get("passed") is not True
+                    or (quality.get("passed") is not True and not quality_flagged)
                     or quality.get("measurement_complete") is not True):
                 raise PublicExportOperationError("svg_source_export_whole_page_evidence_invalid")
         if receipt.get("layout_schema_version") == "svg-source-layout/v2":
@@ -75,7 +98,8 @@ def source_preservation_receipts(presentation, slides, canvas):
                     or any(application.get("checks", {}).get(c) is not True for c in TEMPLATE_CHECKS)):
                 raise PublicExportOperationError("svg_source_export_template_evidence_invalid")
             if (quality.get("source_digest") != receipt["svg_digest"]
-                    or quality.get("passed") is not True or quality.get("measurement_complete") is not True):
+                    or (quality.get("passed") is not True and not quality_flagged)
+                    or quality.get("measurement_complete") is not True):
                 raise PublicExportOperationError("svg_source_export_geometry_evidence_invalid")
         checks = receipt.get("checks")
         if (not whole_page and (not isinstance(checks, dict)
@@ -111,15 +135,18 @@ def source_preservation_receipts(presentation, slides, canvas):
 
 async def sealed_whole_page_manifest(session, *, claim, presentation, slides, receipts):
     """Resolve the original owner-bound source record before authorizing export."""
+    # A failure placeholder is None in ``receipts`` (see
+    # ``source_preservation_receipts``): it claims no source page.
+    present = source_receipts_present(receipts)
     if receipts is None or not any(
             r.get("source_authoring_contract") == {"version": "svg-source-whole-page/v1"}
-            for r in receipts):
+            for r in present):
         return None
     if (presentation.owner_id != claim.owner_id
             or any(r.get("source_authoring_contract") != {"version": "svg-source-whole-page/v1"}
-                   for r in receipts)
-            or len({r.get("manifest_digest") for r in receipts}) != 1
-            or len({r.get("source_digest") for r in receipts}) != 1):
+                   for r in present)
+            or len({r.get("manifest_digest") for r in present}) != 1
+            or len({r.get("source_digest") for r in present}) != 1):
         raise PublicExportOperationError("svg_source_export_whole_page_binding_invalid")
     from sqlalchemy import select
     from models.sql.source_content import SourceContentManifestRecord
@@ -132,8 +159,8 @@ async def sealed_whole_page_manifest(session, *, claim, presentation, slides, re
     rows = (await session.scalars(select(SourceContentManifestRecord).where(
         SourceContentManifestRecord.owner_scope == claim.owner_scope,
         owner_predicate,
-        SourceContentManifestRecord.manifest_digest == receipts[0]["manifest_digest"],
-        SourceContentManifestRecord.source_digest == receipts[0]["source_digest"]))).all()
+        SourceContentManifestRecord.manifest_digest == present[0]["manifest_digest"],
+        SourceContentManifestRecord.source_digest == present[0]["source_digest"]))).all()
     if len(rows) != 1:
         raise PublicExportOperationError("svg_source_export_manifest_binding_invalid")
     try:
@@ -146,7 +173,8 @@ async def sealed_whole_page_manifest(session, *, claim, presentation, slides, re
         def verify_pages():
             verifier = ValidatedSourcePages(manifest)
             for index, (svg, receipt) in enumerate(zip(svgs, receipts, strict=True)):
-                verifier.verify_receipt(svg, receipt, index)
+                if receipt is not None:
+                    verifier.verify_receipt(svg, receipt, index)
 
         import asyncio
         await asyncio.to_thread(verify_pages)

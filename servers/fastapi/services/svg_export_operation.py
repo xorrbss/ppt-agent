@@ -92,6 +92,23 @@ def _classified_header_slides(slides):
     return result
 
 
+def _verified_apart_from_design_review(slide):
+    """The page's classification without a saved review's design verdict.
+
+    The header authority proves the header operation's own accepted bytes; a
+    later review's verdict on them is a page flag, not a revocation.
+    """
+    from services.svg_page_publication import REVIEW_FLAG_KEY, classify_svg_page_quality, without_design_reasons
+    receipt = (slide.content or {}).get("svgReceipt") or {}
+    quality = receipt.get("quality") or {}
+    if receipt.get(REVIEW_FLAG_KEY) is None:
+        return quality.get("verified") is True
+    classified = classify_svg_page_quality(svg_content=slide.svg_content or "", quality=quality,
+        index=getattr(slide, "index", 0) or 0, png_path=receipt.get("png_path"), receipt=receipt,
+        review_flag=without_design_reasons(receipt[REVIEW_FLAG_KEY]))
+    return classified.get("verified") is True
+
+
 def header_revision_review_slides(authority, presentation, slides):
     if not _header_authority_current(authority, presentation, slides):
         raise ValueError("svg_header_revision_authority_invalid")
@@ -267,7 +284,7 @@ async def require_current_header_revision_authority(session, presentation, slide
                     "input_digest", "system_furniture", "source_preservation", "png_sha256"))
                 or generated.get("contract") != header or generated.get("page") != outline.get("common_header")
                 or generated.get("selection") != selection or quality.get("passed") is not True or quality.get("failures")
-                or classified[index].content["svgReceipt"]["quality"].get("verified") is not True or not page_measurement_current(slide)
+                or not _verified_apart_from_design_review(classified[index]) or not page_measurement_current(slide)
                 or not _geometry_ok(slide, quality) or not _common_header_current(slide, quality)):
             raise ValueError("svg_header_revision_authority_pages_invalid")
         from services.generation_core.drivers.svg.native_declarations import bound_declarations
@@ -350,8 +367,13 @@ async def require_header_revision_lineage_authority(session, presentation, slide
     return current
 
 
-def svg_export_admission_snapshot(presentation, slides, *, header_revision_authority=None):
-    """Bind an edited SVG revision to its published canonical page evidence."""
+def svg_export_admission_snapshot(presentation, slides, *, header_revision_authority=None, require_passed=False):
+    """Bind an edited SVG revision to its published canonical page evidence.
+
+    Every page's measurement must describe its exported bytes (integrity). A
+    flagged page exports interactively -- the receipt reports it not passed --
+    and only ``require_passed`` (release-v1) still refuses one.
+    """
     from services.svg_contract import source_digest
     if _header_authority_current(header_revision_authority, presentation, slides):
         slides = header_revision_review_slides(header_revision_authority, presentation, slides)
@@ -363,18 +385,31 @@ def svg_export_admission_snapshot(presentation, slides, *, header_revision_autho
         content = slide.content or {}
         quality = (content.get("svgReceipt") or {}).get("quality") or {}
         if (slide.owner_id != presentation.owner_id or slide.source_format != "svg"
-                or not slide.svg_content or quality.get("passed") is not True
-                or quality.get("verified") is not True
+                or not slide.svg_content
+                or require_passed and (quality.get("passed") is not True or quality.get("verified") is not True)
                 or quality.get("source_digest") != source_digest(slide.svg_content)):
             raise ValueError("svg_export_published_source_required")
         pages.append({"id": str(slide.id), "index": slide.index, "svg": slide.svg_content,
                       "content": content, "notes": slide.speaker_note or ""})
-    _quality_recovery_export_gate(presentation, slides, header_revision_authority=header_revision_authority)
+    _quality_recovery_export_gate(presentation, slides, header_revision_authority=header_revision_authority,
+                                  require_passed=require_passed)
     return _digest({"presentationId": str(presentation.id), "ownerId": str(presentation.owner_id),
                     "revision": presentation.revision, "theme": presentation.theme, "pages": pages})
 
 
-def _quality_recovery_export_gate(presentation, slides, *, header_revision_authority=None):
+def _quality_recovery_export_gate(presentation, slides, *, header_revision_authority=None, require_passed=False):
+    """The deck's current design-review publication, or None when none binds it.
+
+    Integrity always refuses: a publication record that is malformed or does
+    not match its own digest, claims a revision the deck never had, or (at the
+    deck's current revision) is not bound to a current, intact gate for exactly
+    these pages, snapshot, owner, job and operation. What the review concluded
+    is a page flag: an interactive export proceeds whatever the gate status,
+    and with no current review at all (no publication, or one a later edit
+    superseded); its receipt reports the visual review not passed.
+    ``require_passed`` (release-v1) still requires a current, passed, fully
+    covered review.
+    """
     if _header_authority_current(header_revision_authority, presentation, slides):
         return None
     from services.svg_authoring_profile import read_quality_recovery_policy
@@ -386,10 +421,9 @@ def _quality_recovery_export_gate(presentation, slides, *, header_revision_autho
     from services.generation_core.drivers.svg.quality import _current_gate
     from services.generation_core.quality.advisory_record import content_digest
     from uuid import UUID
-    payloads = [({**((slide.content or {}).get("svgReceipt") or {}),
-                  "svg_content": slide.svg_content}, None) for slide in slides]
-    gate = _current_gate(meta.get("advisory"), payloads)
     publication = meta.get("qualityRecoveryPublication")
+    if publication is None and not require_passed:
+        return None
     if not isinstance(publication, dict):
         raise ValueError("svg_quality_recovery_export_review_required")
     body = {key: value for key, value in publication.items() if key != "digest"}
@@ -400,14 +434,24 @@ def _quality_recovery_export_gate(presentation, slides, *, header_revision_autho
             UUID(publication.get("reviewOperationId", ""))
     except (ValueError, TypeError, AttributeError) as error:
         raise ValueError("svg_quality_recovery_export_parent_invalid") from error
-    if (gate is None or gate.get("status") != "passed" or gate.get("policy") != policy
-            or gate.get("pageCoverageComplete") is not True
-            or gate.get("snapshotDigest") != content_digest(snapshot)
-            or publication.get("schema") not in {"svg-quality-recovery-publication/v1", "svg-quality-recovery-publication/v2"}
+    revision = publication.get("sourceRevision")
+    if (publication.get("schema") not in {"svg-quality-recovery-publication/v1", "svg-quality-recovery-publication/v2"}
             or publication.get("digest") != content_digest(body)
-            or publication.get("gateDigest") != gate.get("digest")
-            or publication.get("sourceRevision") != presentation.revision
+            or type(revision) is not int or revision > presentation.revision):
+        raise ValueError("svg_quality_recovery_export_review_required")
+    if revision < presentation.revision:
+        # An edit published after this review: the record is history, and
+        # nothing current reviewed the deck being exported.
+        if require_passed:
+            raise ValueError("svg_quality_recovery_export_review_required")
+        return None
+    payloads = [({**((slide.content or {}).get("svgReceipt") or {}),
+                  "svg_content": slide.svg_content}, None) for slide in slides]
+    gate = _current_gate(meta.get("advisory"), payloads)
+    if (gate is None or gate.get("policy") != policy
+            or gate.get("snapshotDigest") != content_digest(snapshot)
             or publication.get("snapshotDigest") != content_digest(snapshot)
+            or publication.get("gateDigest") != gate.get("digest")
             or publication.get("sourceContentDigests") != [content_digest((slide.content or {}).get("source")) for slide in slides]
             or publication.get("inputDigests") != [payload.get("input_digest") for payload, _ in payloads]
             or (gate.get("binding") or {}).get("presentationId") != str(presentation.id)
@@ -415,12 +459,16 @@ def _quality_recovery_export_gate(presentation, slides, *, header_revision_autho
             or (gate.get("binding") or {}).get("operationId") != publication.get("reviewOperationId", publication["parentOperationId"])
             or (gate.get("binding") or {}).get("jobId") != publication["parentJobId"]):
         raise ValueError("svg_quality_recovery_export_review_required")
+    if require_passed and (gate.get("status") != "passed" or gate.get("pageCoverageComplete") is not True):
+        raise ValueError("svg_quality_recovery_export_review_required")
     return publication
 
 
-async def require_quality_recovery_export_parent(session, presentation, slides, *, header_revision_authority=None):
+async def require_quality_recovery_export_parent(session, presentation, slides, *, header_revision_authority=None,
+                                                 require_passed=False):
     """The closed generation remains the parent; export has its own admission."""
-    publication = _quality_recovery_export_gate(presentation, slides, header_revision_authority=header_revision_authority)
+    publication = _quality_recovery_export_gate(presentation, slides, header_revision_authority=header_revision_authority,
+                                                require_passed=require_passed)
     if publication is None:
         return
     await require_quality_recovery_source_parent(session, presentation, publication)
@@ -706,7 +754,9 @@ async def svg_source_review_context(session, presentation, slides=None):
             slides = header_revision_review_slides(authority, presentation, slides)
         # Validate the newly evaluated gate itself, independently of the
         # header authority that permits artifact creation before visual QA.
-        _quality_recovery_export_gate(presentation, slides)
+        if _quality_recovery_export_gate(presentation, slides) is None:
+            # Superseded by a later edit: no producer reviewed these bytes.
+            return source_review
         await require_quality_recovery_source_parent(session, presentation, publication,
             header_revision_authority=authority, slides=slides)
         review = await session.get(WorkspaceOperation, uuid.UUID(publication["reviewOperationId"]))
@@ -1024,7 +1074,7 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
         async with session_factory() as session:
             header_authority = await require_current_header_revision_authority(session, presentation, slides)
             await require_quality_recovery_export_parent(session, presentation, slides,
-                header_revision_authority=header_authority)
+                header_revision_authority=header_authority, require_passed=quality_policy == "release-v1")
     except ValueError as error:
         raise NonRetryableWorkspaceOperationError(str(error)) from error
     stages.lap("preflight_authority_and_parent")
@@ -1034,7 +1084,8 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
     revision_binding = claim.request_payload.get("svg_source_revision_binding")
     if revision_binding is not None:
         try:
-            snapshot = svg_export_admission_snapshot(presentation, slides, header_revision_authority=header_authority)
+            snapshot = svg_export_admission_snapshot(presentation, slides, header_revision_authority=header_authority,
+                                                     require_passed=quality_policy == "release-v1")
         except ValueError as error:
             raise NonRetryableWorkspaceOperationError(str(error)) from error
         if (not isinstance(revision_binding, dict)
@@ -1072,7 +1123,10 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
     svgs = [slide.svg_content for slide in slides]
     notes = [slide.speaker_note or "" for slide in slides]
     source_assets = [(slide.content or {}).get("svgAssetManifest") for slide in slides]
-    source_preservation = ([(slide.content or {})["svgReceipt"]["source_preservation"] for slide in slides]
+    # A failure placeholder carries no receipt (``None``); the bundle and the
+    # worker export it as drawn (``_validate_source_preservation_entry``).
+    source_preservation = ([((slide.content or {}).get("svgReceipt") or {}).get("source_preservation")
+                            for slide in slides]
                            if measured_source_preservation is not None else None)
     native_objects = _native_object_entries(slides) if fmt == "pptx" else None
     # Canonical JSON + sha256 over every page's source is pure CPU on plain data.

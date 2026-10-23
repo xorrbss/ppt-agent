@@ -15,10 +15,10 @@ def is_authored_publish_flagged_slides_enabled(settings: RuntimeSettings | None 
 
 
 def is_authored_publish_flagged_slides_source_reflow_enabled(settings: RuntimeSettings | None = None) -> bool:
-    """Whether source-reflow decks may publish terminal slides flagged."""
+    """Whether source-reflow decks may publish terminal slides flagged (default on)."""
     from utils.get_env import get_setting_env
 
     parsed = parse_bool_or_none(
         get_setting_env("AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", settings)
     )
-    return False if parsed is None else parsed
+    return True if parsed is None else parsed

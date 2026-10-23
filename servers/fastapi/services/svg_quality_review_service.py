@@ -58,10 +58,17 @@ async def _prepare_quality_recovery_review(session, presentation, slides, reques
     header_authority = await require_current_header_revision_authority(session, presentation, slides)
     if header_authority is not None:
         slides = header_revision_review_slides(header_authority, presentation, slides)
+    source_parent = None
+    if header_authority is None and not ((presentation.theme or {}).get("svg") or {}).get(
+            "qualityRecoveryPublication"):
+        # Publication bound no current design review (none ran, or it was
+        # unavailable): review this deck under the generation that published it.
+        from services.svg_quality_recovery_review import generation_source_parent
+        source_parent = await generation_source_parent(session, presentation)
     prepared = prepare_saved_review(presentation, slides,
         _positions(request, len(slides)) if request.scope != "all" else [],
         [_review_png(slide) for slide in slides], operation_id=operation_id, owner_scope=owner_scope,
-        source_parent_authority=header_authority)
+        source_parent_authority=header_authority, source_parent=source_parent)
     await require_quality_recovery_source_parent(session, presentation, prepared["publication"],
         header_revision_authority=header_authority, slides=slides)
     if header_authority is not None:
@@ -303,6 +310,12 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
             vision = recovery_advisory["vision"]
             new_records = split_page_advisories(vision, current_slides, range(len(current_slides)))
             svg_theme["qualityRecoveryPublication"] = publication
+            # The review's verdict becomes each page's design flag; the page
+            # evidence sealed above excludes verdicts, so it stays current.
+            from services.svg_quality_recovery_review import apply_saved_review_flags
+            changed_pages, svg_theme["designReview"] = apply_saved_review_flags(current_slides, vision["designGate"])
+            for index in changed_pages:
+                session.add(current_slides[index])
         if final_inputs is not None:
             from services.svg_final_pptx_review import load_final_review_inputs, seal_final_review
             current_inputs = await load_final_review_inputs(session, request=request,
@@ -347,12 +360,16 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
         status_authority = await require_current_header_revision_authority(session, presentation, current_slides)
         status_slides = (header_revision_review_slides(status_authority, presentation, current_slides)
                          if status_authority is not None else current_slides)
-        svg_theme["qualityStatus"] = svg_quality_status(status_slides, svg_theme.get("advisory"), page_advisories=records)
+        review_status = svg_quality_status(status_slides, svg_theme.get("advisory"), page_advisories=records)
         if recovery_review is not None:
             gate = recovery_advisory["vision"]["designGate"]
-            svg_theme["qualityStatus"]["qualityRecovery"] = dict(status=gate["status"],
+            review_status["qualityRecovery"] = dict(status=gate["status"],
                 blockingPages=gate["blockingPages"], unreviewedPages=gate["unreviewedPages"])
-            svg_theme["reviewPages"] = sorted(set(gate["blockingPages"]) | set(gate["unreviewedPages"]))
+        svg_theme["lastReview"]["qualityStatus"] = review_status
+        # The deck's own status fields keep publication's one rule; the review
+        # changed them only through the page flags it wrote.
+        from services.svg_page_publication import svg_deck_quality_fields
+        svg_theme.update(svg_deck_quality_fields(status_slides, svg_theme))
         theme["svg"] = svg_theme
         presentation.theme = theme
         session.add(presentation)
@@ -372,7 +389,7 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
             slide_results=[dict(slide_index=index, attempted=False, applied=False,
                 remaining_issues=[issue for entry in findings if entry["index"] == index for issue in entry.get("issues", [])])
                 for index in indices],
-            advisory_only=True, qualityStatus=svg_theme["qualityStatus"], advisory_digest=subset["digest"])
+            advisory_only=True, qualityStatus=review_status, advisory_digest=subset["digest"])
         result["stage_timings_ms"] = {
             "preflight": (vqa_started_at - started_at) * 1000,
             "vqa": (vqa_finished_at - vqa_started_at) * 1000,

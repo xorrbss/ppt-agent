@@ -57,10 +57,16 @@ def test_empty_content_is_contract_valid():
     assert result["text"].strip() != ""
 
 
-def test_many_long_bullets_truncate_and_stay_within_height():
-    content = "긴 제목입니다\n" + "\n".join(
-        "- 이것은 매우 긴 불릿 항목입니다 " * 6 + str(i) for i in range(30)
-    )
+def _body_words(svg: str) -> str:
+    texts = [node.text or "" for node in _text_elements(svg) if node.get("id") != PAGE_NUMBER_ID]
+    return " ".join(text.removeprefix("• ") for text in texts)
+
+
+def test_many_long_bullets_keep_every_word_and_stay_within_height():
+    # The fallback used to cut this outline to ten 150-character bullets; it is
+    # the complete-content rescue now, so every line survives, set smaller.
+    bullets = ["이것은 매우 긴 불릿 항목입니다 " * 6 + str(i) for i in range(30)]
+    content = "긴 제목입니다\n" + "\n".join("- " + bullet for bullet in bullets)
     svg = fallback_page_svg(
         content=content, role="detail", index=2, count=10,
         width=WIDTH, height=HEIGHT, style_snapshot=None,
@@ -70,8 +76,17 @@ def test_many_long_bullets_truncate_and_stay_within_height():
     texts = [node for node in root.iter(_tag("text")) if node.get("id") != PAGE_NUMBER_ID]
     max_y = max(float(node.get("y")) for node in texts)
     assert max_y <= HEIGHT - 72
-    last_body_text = texts[-1].text or ""
-    assert last_body_text.endswith("…")
+    assert "…" not in _body_words(svg)
+    words = "".join(_body_words(svg).split())
+    for bullet in bullets:
+        assert "".join(bullet.split()) in words
+
+
+def test_a_long_title_is_repeated_in_full_in_the_body():
+    title = "제목 " * 40 + "끝"
+    svg = fallback_page_svg(content=title + "\n- 본문", role="", index=0, count=1,
+                            width=WIDTH, height=HEIGHT, style_snapshot=None)
+    assert "".join(title.split()) in "".join(_body_words(svg).split())
 
 
 def test_markup_hostile_characters_survive_round_trip():

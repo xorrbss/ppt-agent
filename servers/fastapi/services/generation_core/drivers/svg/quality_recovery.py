@@ -19,16 +19,29 @@ from services.generation_core.quality.vision_advisory_prompt import (
 from utils.hashing import sha256_hex
 
 
-_RETAINABLE_REPAIR_CODES = frozenset({"svg_validation_failed", "svg_source_quality_failed",
-                                      "svg_repair_budget_exhausted"})
+def _repair_candidate_retainable(error, index, state):
+    """Whether a failed redesign of an already-valid page keeps its archived prior.
+
+    The redesign is optional: any page-quality or provider failure of this page's
+    candidate, a timeout included, ends in the prior, which is intact and was
+    reviewed. Integrity, cancellation, a deferral, and another page's fatal
+    error re-raised here stay fatal (``page_failure_kind.absorbable_page_error``).
+    """
+    from services.generation_core.quality.page_failure_kind import absorbable_page_error
+    if error is state.fatal_error or not absorbable_page_error(error):
+        return False
+    # A stage error names its page; another page's error is not this candidate's.
+    return not isinstance(error, AuthoredStageError) or error.slide_index in {index, None}
 
 
-def _repair_candidate_retainable(code):
-    # A repair candidate that breaks the source's native table/chart structure is
-    # discarded in favour of the already-accepted prior. Deck-level source identity,
-    # digest and plan codes are not candidate rejections and stay fatal.
-    return code in _RETAINABLE_REPAIR_CODES or (
-        isinstance(code, str) and code.startswith("svg_source_native_"))
+#: Review markers an interruption left open. Reopening one buys nothing that may
+#: already have been bought: each saved group decides for itself.
+_REOPENABLE_REVIEW_STATUSES = frozenset({"review_inflight", "review_unknown"})
+
+
+def _retained_reason(error):
+    code = getattr(error, "code", None)
+    return code if isinstance(code, str) and code else type(error).__name__
 
 
 def _quality_json_value(value):
@@ -110,9 +123,34 @@ def reserved_recovery_candidate(ctx, index, content, payload):
     return candidate
 
 
+async def _rescue_or_raise(ctx, request, presentation_id, outline, job, index, payload, error, hooks):
+    """The terminal rescue ladder for a page recovery could not adapt.
+
+    The ``quality_recovery_fallback`` marker stays evidence of why the
+    validated adaptation did not rescue the page; the page itself is the
+    ladder's (flag-only, complete fallback or placeholder). ``error`` is
+    raised only when the ladder declines it.
+    """
+    from services.generation_core.drivers.svg.terminal import rescue_terminal_page
+
+    rescued = await rescue_terminal_page(ctx=ctx, request=request, index=index,
+        content=outline.slides[index].content, payload=payload, error=error, job=job,
+        checkpoint=hooks.checkpoint, write_png=hooks.write_png, read_png=hooks.read_png,
+        presentation_id=presentation_id, async_session_maker=hooks.async_session_maker)
+    if rescued is None:
+        raise error
+    return rescued
+
+
 async def recover_screen_pages(ctx, request, presentation_id, outline, job, pages, state, hooks, attempt_loop):
-    """Reserve verified candidates in page order, then use the existing workers."""
+    """Reserve verified candidates in page order, then use the existing workers.
+
+    A page with no validated candidate, or whose adaptation is exhausted,
+    falls through to the terminal rescue ladder like any exhausted page;
+    integrity errors (authority, reservation, provider uncertainty) stay fatal.
+    """
     from services.generation_core.drivers.svg.fallback import select_validated_recovery_candidate
+    from services.generation_core.drivers.svg.terminal import is_exhausted_page
     recent = [page for page in pages if not isinstance(page, ScreenRecoveryPending)]
     recent_ids = [page[0].get("quality_recovery_fallback", {}).get("candidate_id") for page in recent]
     reserved = []
@@ -128,7 +166,9 @@ async def recover_screen_pages(ctx, request, presentation_id, outline, job, page
         if candidate is None:
             payload["quality_recovery_fallback"] = {"status": "blocked", "reason": "validated_candidate_unavailable"}
             await hooks.checkpoint(job, index, payload=payload)
-            raise page.error
+            pages[index] = await _rescue_or_raise(ctx, request, presentation_id, outline, job, index,
+                                                  payload, page.error, hooks)
+            continue
         payload["quality_recovery_fallback"] = {"status": "reserved",
             "binding": ctx.quality_recovery_input_binding, "input_digest": payload.get("input_digest"),
             "consumed_attempt_count": 2,
@@ -146,8 +186,15 @@ async def recover_screen_pages(ctx, request, presentation_id, outline, job, page
 
     async def adapt(index, payload):
         async with ctx.semaphore:
-            result = await attempt_loop(ctx, request, presentation_id, index,
-                outline.slides[index].content, payload, job, state, hooks)
+            try:
+                result = await attempt_loop(ctx, request, presentation_id, index,
+                    outline.slides[index].content, payload, job, state, hooks)
+            except AuthoredStageError as error:
+                if error is state.fatal_error or not is_exhausted_page(error, index):
+                    raise
+                # Not "adapted": the rescue records the spent reservation.
+                return index, await _rescue_or_raise(ctx, request, presentation_id, outline, job, index,
+                                                     payload, error, hooks)
             result[0]["quality_recovery_fallback"]["status"] = "adapted"
             await hooks.checkpoint(job, index, payload=result[0])
             return index, result
@@ -356,13 +403,21 @@ async def recover_deck(ctx, request, presentation_id, outline, job, pages, state
         if prior:
             if prior.get("page_digests") != digests:
                 raise ValueError("svg_quality_recovery_review_conflict")
-            if prior.get("status") != "completed":
-                raise AuthoredStageError(slide_index=None, stage="render",
-                    code="public_provider_result_unknown", retryable=False)
-            return prior["advisory"]
-        if round_ordinal >= plan["review_round_limit"] or len(rounds) != round_ordinal:
-            raise ValueError("svg_quality_recovery_review_limit")
-        marker = {"status": "review_inflight", "page_digests": digests}
+            if prior.get("status") == "completed":
+                return prior["advisory"]
+            if prior.get("status") not in _REOPENABLE_REVIEW_STATUSES:
+                raise ValueError("svg_quality_recovery_review_conflict")
+            # A round an interruption left open is finished over its own saved
+            # groups: a sealed group is reused, and a group whose call may have
+            # been bought is never bought again -- its pages stay unreviewed
+            # (``quality._quality_first_deck_advisory``).
+            marker = prior
+            marker["status"] = "review_inflight"
+        else:
+            if round_ordinal >= plan["review_round_limit"] or len(rounds) != round_ordinal:
+                raise ValueError("svg_quality_recovery_review_limit")
+            marker = {"status": "review_inflight", "page_digests": digests}
+            rounds.append(marker)
         continuation_initial = round_ordinal == 0 and getattr(ctx, "quality_final_selected_source", None) is not None
         final_marker = None
         if continuation_initial:
@@ -375,7 +430,6 @@ async def recover_deck(ctx, request, presentation_id, outline, job, pages, state
             })
             marker["namespace"] = INITIAL_NAMESPACE
             marker["physical_purpose"] = "initial-continuation"
-        rounds.append(marker)
         await persist()
         async def group_checkpoint(group_ordinal, group_marker=None):
             async with group_checkpoint_lock:
@@ -459,19 +513,16 @@ async def recover_deck(ctx, request, presentation_id, outline, job, pages, state
                 try:
                     result = await attempt_loop(ctx, request, presentation_id, index,
                         outline.slides[index].content, payload, job, state, hooks)
-                except AuthoredStageError as error:
-                    if not _repair_candidate_retainable(error.code):
+                except BaseException as error:
+                    if not _repair_candidate_retainable(error, index, state):
                         state.fatal_error = state.fatal_error or error
                         raise
                     await ensure_recovery_authority(job, hooks)
                     restored = _restore_candidate(payload["quality_recovery"]["prior_candidate"], payload, job)
-                    restored["quality_recovery"].update(status="retained", reason=error.code)
+                    restored["quality_recovery"].update(status="retained", reason=_retained_reason(error))
                     await hooks.checkpoint(job, index, payload=restored)
                     await ensure_recovery_authority(job, hooks)
                     return index, (restored, hooks.read_png(restored))
-                except BaseException as error:
-                    state.fatal_error = state.fatal_error or error
-                    raise
                 result[0]["quality_recovery"]["status"] = "candidate_ready"
                 await hooks.checkpoint(job, index, payload=result[0])
                 return index, result
@@ -605,8 +656,10 @@ async def _review_final_selected(ctx, request, pages, job, hooks, run_advisory, 
             raise ValueError("svg_final_selected_review_source_changed")
         if marker.get("status") == "completed":
             return marker["advisory"]
-        if marker.get("status") != "review_inflight":
+        if marker.get("status") not in _REOPENABLE_REVIEW_STATUSES:
             raise ValueError("svg_final_selected_review_unavailable")
+        # Finished over its saved groups, as recover_deck's rounds are.
+        marker["status"] = "review_inflight"
     else:
         marker = dict(namespace=NAMESPACE, status="review_inflight",
                       source_proof_digest=proof["digest"], producer_proof=proof, groups={})
@@ -686,8 +739,9 @@ async def _review_live_final_selected(ctx, pages, job, hooks, run_advisory, exec
             if reused is None:
                 raise ValueError("svg_final_selected_review_source_changed")
             return reused
-        if marker.get("status") != "review_inflight":
+        if marker.get("status") not in _REOPENABLE_REVIEW_STATUSES:
             raise ValueError("svg_final_selected_review_unavailable")
+        marker["status"] = "review_inflight"
     else:
         marker = dict(namespace=NAMESPACE, status="review_inflight", source_proof_digest=source_digest,
                       live_producer_proofs=proofs, groups={})

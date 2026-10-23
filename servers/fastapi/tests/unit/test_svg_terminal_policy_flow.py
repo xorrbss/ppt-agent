@@ -138,17 +138,29 @@ def test_a_default_env_rescues_the_exhausted_page_with_a_fallback_and_publishes(
     assert len(advisory_mock.await_args.args[0]) == SLIDE_COUNT
 
 
-@pytest.mark.parametrize("authoring_version,flagged_enabled", [(None, False), (6, True), (7, True), (8, True)])
-def test_b_knob_disabled_keeps_the_deck_fail_closed(monkeypatch, authoring_version, flagged_enabled):
-    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES", "true" if flagged_enabled else "false")
+def test_b_knob_disabled_keeps_the_deck_fail_closed(monkeypatch):
+    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES", "false")
     profile = resolve_svg_runtime_profile(source_reflow=False)
     _author_mock, publish_mock, _advisory_mock, _saved = _install_harness(
-        monkeypatch, runtime_profile=profile, authoring_version=authoring_version)
+        monkeypatch, runtime_profile=profile)
 
     with pytest.raises(AuthoredStageError) as failed:
         _run()
     assert failed.value.code == "svg_validation_failed"
     publish_mock.assert_not_awaited()
+
+
+@pytest.mark.parametrize("authoring_version", [6, 7, 8])
+def test_b2_source_complete_profiles_are_rescued_by_the_complete_fallback(monkeypatch, authoring_version):
+    # These profiles used to refuse the fallback because it truncated the
+    # outline; it is complete now, so their exhausted page publishes flagged.
+    profile = resolve_svg_runtime_profile(source_reflow=False)
+    _author_mock, publish_mock, _advisory_mock, _saved = _install_harness(
+        monkeypatch, runtime_profile=profile, authoring_version=authoring_version)
+
+    assert _run() == "published"
+    flagged_payload, _png = publish_mock.await_args.args[-1][FAIL_INDEX]
+    assert flagged_payload["terminal"]["remakeOutcome"] == "svg_fallback_page"
 
 
 def test_c_a_skipped_advisory_still_publishes(monkeypatch):

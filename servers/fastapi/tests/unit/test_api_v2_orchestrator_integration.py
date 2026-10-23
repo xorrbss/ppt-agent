@@ -997,8 +997,9 @@ def test_public_export_requires_generation_authority_in_the_actor_tenant(
         parent_gate = AsyncMock()
         original_snapshot = svg_export.svg_export_admission_snapshot
 
-        def header_snapshot(presentation, slides, *, header_revision_authority=None):
+        def header_snapshot(presentation, slides, *, header_revision_authority=None, require_passed=False):
             assert header_revision_authority is verified_authority
+            assert require_passed is (request.quality_policy == 'release-v1')
             return original_snapshot(presentation, slides)
 
         with monkeypatch.context() as header_patch:
@@ -1021,7 +1022,8 @@ def test_public_export_requires_generation_authority_in_the_actor_tenant(
             receipt = await adapter.submit_export(actor=PublicRequestActor(owner, 'tenant-a', 'trace'),
                 presentation_id=str(presentation_id), idempotency_key='header-proven-current', request=request)
             assert [item.id for item in authority.await_args.kwargs['publication_operations']] == [publisher_id]
-            assert parent_gate.await_args.kwargs == {'header_revision_authority': verified_authority}
+            assert parent_gate.await_args.kwargs == {'header_revision_authority': verified_authority,
+                                                     'require_passed': request.quality_policy == 'release-v1'}
             async with maker() as session:
                 export = await session.get(WorkspaceOperation, uuid.UUID(receipt.operation_id))
                 assert export.request_payload['svg_source_revision_binding']['publicationOperationIds'] == [str(publisher_id)]

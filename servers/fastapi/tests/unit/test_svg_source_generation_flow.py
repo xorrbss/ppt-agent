@@ -14,6 +14,7 @@ from services import svg_presentation_service as generation
 from services.authored_checkpoint_errors import AuthoredStageError
 from services.svg_source_layout import assemble_source_svg
 from services.generation_core.authoring.author_slide_svg import SvgAuthorResult
+from services.generation_core.quality.flag_classification import FAILURE_PLACEHOLDER_OUTCOME
 from workers.public_render_worker import _admit_html
 from workers.public_worker_runtime import PublicWorkerExecutionError
 
@@ -124,21 +125,28 @@ async def test_source_generation_verifies_before_publish_and_bounds_repair(monke
         return SvgAuthorResult(result.svg_content, "", {
             "validation_error": None, "source_preservation": result.receipt})
     monkeypatch.setattr("services.svg_source_template_layout.try_template_source_layout", local)
-    def render(*args, **kwargs):
+    from services.svg_contract import source_digest
+
+    def render(svg, **kwargs):
         assert kwargs["minimum_font_px"] == 7
         assert kwargs["instructions"] is None
-        return SimpleNamespace(png=b"png", quality={"passed": geometry_passed, "verified": False, "failures": []})
+        return SimpleNamespace(png=b"png", quality={"passed": geometry_passed, "verified": False, "failures": [],
+                                                    "source_digest": source_digest(svg)})
     monkeypatch.setattr("services.svg_renderer.render_svg_with_metrics", AsyncMock(side_effect=render))
     # The real outline model: header preparation deep-copies it and reassigns
     # ``slides``, which a bare namespace cannot honor.
     outline = PresentationOutlineModel(slides=[SlideOutlineModel(content="source")])
 
     if not geometry_passed:
-        with pytest.raises(AuthoredStageError) as failed:
-            await generation._generate(request, uuid.uuid4(), outline, "ko", Session(), job)
-        assert failed.value.code == "svg_source_quality_failed"
+        # A page that never passes its quality check is a page flag, not a
+        # deck failure. This fixture's template-layout contract has no
+        # verbatim fallback, so the rescue ladder ends at the placeholder.
+        assert await generation._generate(request, uuid.uuid4(), outline, "ko", Session(), job) == "published"
         assert author_mock.await_count == 2
-        publish.assert_not_awaited()
+        payload, _png = publish.await_args.args[-1][0]
+        assert payload["terminal"]["reason"] == "author:placeholder"
+        assert payload["terminal"]["remakeOutcome"] == FAILURE_PLACEHOLDER_OUTCOME
+        assert payload["terminal_error"] == "svg_source_quality_failed"
         return
     assert await generation._generate(request, uuid.uuid4(), outline, "ko", Session(), job) == "published"
     assert author_mock.await_count == (0 if local_success and not free_composition else 1)

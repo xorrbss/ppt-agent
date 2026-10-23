@@ -29,12 +29,16 @@ def saved_review_runtime():
 def saved_page_render_input(slide):
     content = slide.content or {}
     receipt = content.get("svgReceipt") or {}
-    # Capture location and previous review operation are not rendering inputs.
+    # Capture location and previous review operation are not rendering inputs,
+    # and neither is a review's verdict on the page: the flag a review writes
+    # and the classification it derives must not invalidate the evidence that
+    # review sealed (or a header revision's proof of the same bytes).
     evidence = {key: value for key, value in receipt.items() if key not in {
         "png_path", "qualityRecoveryReview", "quality_recovery_execution", "quality_recovery",
-        "raw_response", "raw_response_sha256", "remake"}}
+        "raw_response", "raw_response_sha256", "remake", "review_flag", "flag"}}
     quality = dict(evidence.get("quality") or {})
-    quality.pop("compositionObservation", None)
+    for key in ("compositionObservation", "classification", "verified"):
+        quality.pop(key, None)
     evidence["quality"] = quality
     return dict(svg=slide.svg_content, source=content.get("source"),
         role=content.get("role"), assets=content.get("svgAssetManifest"),
@@ -63,14 +67,64 @@ def seal_saved_page_evidence(slides, snapshot, gate, *, runtime=None):
     return {**body, "digest": content_digest(body)}
 
 
-def prepare_saved_review(presentation, slides, indices, pngs, *, operation_id, owner_scope, source_parent_authority=None):
+def _measurement_current(payload, snapshot):
+    """The saved page's measurement and source receipt still describe its bytes.
+
+    Only staleness refuses a review; a page whose measurement failed, or whose
+    source readback did not verify it, is reviewed with its mandatory evidence
+    invalid (``_measurement_valid``) and stays flagged. A failure placeholder is
+    not the source page and claims no source receipt.
+    """
+    from services.generation_core.drivers.svg.quality import _failure_placeholder, _source_preservation_intact
+    from services.svg_contract import source_digest
+    quality = payload.get("quality") or {}
+    png = payload.get("png_sha256")
+    return (isinstance(png, str) and len(png) == 64 and bool(payload.get("svg_content"))
+            and quality.get("measurement_complete") is True
+            and quality.get("source_digest") == source_digest(payload["svg_content"])
+            and quality.get("png_digest") == "sha256:" + png
+            and (_failure_placeholder(payload)
+                 or _source_preservation_intact(payload, snapshot=snapshot, require_rendering=False)))
+
+
+async def generation_source_parent(session, presentation):
+    """The closed generation that published this deck, as a review parent.
+
+    For a deck publication left without ``qualityRecoveryPublication`` (no
+    current design review to bind): the identity alone, like
+    ``header_revision_source_parent``; ``require_quality_recovery_source_parent``
+    then proves its lineage exactly as for a recorded publication.
+    """
+    from sqlalchemy import select
+    from models.sql.presentation_generation_job import PresentationGenerationJob
+    from models.sql.workspace import WorkspaceOperation
+    rows = (await session.execute(select(PresentationGenerationJob, WorkspaceOperation).join(
+        WorkspaceOperation, WorkspaceOperation.id == PresentationGenerationJob.workspace_operation_id).where(
+            PresentationGenerationJob.presentation_id == presentation.id,
+            PresentationGenerationJob.state == "published",
+            WorkspaceOperation.presentation_id == presentation.id,
+            WorkspaceOperation.owner_id == presentation.owner_id,
+            WorkspaceOperation.kind == "presentation.generate",
+            WorkspaceOperation.state == "succeeded",
+            WorkspaceOperation.result_revision <= presentation.revision))).all()
+    revisions = [operation.result_revision for _, operation in rows if type(operation.result_revision) is int]
+    latest = [(job, operation) for job, operation in rows if revisions and operation.result_revision == max(revisions)]
+    if len(latest) != 1:
+        raise ValueError("svg_quality_recovery_review_parent_invalid")
+    job, operation = latest[0]
+    parent = dict(parentOperationId=str(operation.id), parentJobId=str(job.id),
+        sourceGenerationRevision=operation.result_revision, sourceRevision=operation.result_revision)
+    return {**parent, "digest": content_digest(parent)}
+
+
+def prepare_saved_review(presentation, slides, indices, pngs, *, operation_id, owner_scope,
+                         source_parent_authority=None, source_parent=None):
     from services.svg_authoring_profile import read_quality_recovery_plan
-    from services.generation_core.drivers.svg.quality import (
-        _design_context, _gate_intact, _candidate_local_valid, _render_resolution)
+    from services.generation_core.drivers.svg.quality import _design_context, _gate_intact, _render_resolution
     from utils.owner_context import get_current_owner_id, get_current_tenant_id
     meta = (presentation.theme or {}).get("svg") or {}
     snapshot = meta.get("styleSnapshot") or {}
-    publication = meta.get("qualityRecoveryPublication") or {}
+    publication = meta.get("qualityRecoveryPublication") or source_parent or {}
     if source_parent_authority is not None:
         from services.svg_export_operation import header_revision_source_parent
         publication = header_revision_source_parent(source_parent_authority, presentation, slides)
@@ -86,7 +140,7 @@ def prepare_saved_review(presentation, slides, indices, pngs, *, operation_id, o
         raise ValueError("svg_quality_review_owner_invalid")
     pages = [({**deepcopy((slide.content or {}).get("svgReceipt") or {}),
                "svg_content": slide.svg_content}, png) for slide, png in zip(slides, pngs, strict=True)]
-    if any(not _candidate_local_valid(payload, snapshot=snapshot) for payload, _ in pages):
+    if any(not _measurement_current(payload, snapshot) for payload, _ in pages):
         raise ValueError("svg_quality_review_measurement_stale")
     canvas = snapshot.get("canvas") or {}
     if any(not (resolution := _render_resolution(png, canvas)) or not resolution["sufficient"] for png in pngs):
@@ -137,7 +191,7 @@ def prepare_saved_review(presentation, slides, indices, pngs, *, operation_id, o
         quality_review_contents=[(slide.content or {}).get("source") for slide in slides],
         quality_recovery_runtime_binding=content_digest(runtime), header_pages=header_pages)
     context = _design_context(ctx, pages, job=job, read_png=lambda payload: None,
-                              review_principles_version=DESIGN_PRINCIPLES_VERSION)
+                              review_principles_version=DESIGN_PRINCIPLES_VERSION, measurement_evidence=True)
     baseline = baseline_review_active(context)
     capacity = plan["slide_count"] if baseline else plan["review_group_size"]
     if len(changed) > capacity or baseline and plan["slide_count"] != len(slides):
@@ -185,3 +239,43 @@ def seal_saved_review(prepared, slides, vision, claim):
         sourceContentDigests=[content_digest((slide.content or {}).get("source")) for slide in slides],
         inputDigests=[payload.get("input_digest") for payload, _ in prepared["pages"]])
     return record, {**publication, "digest": content_digest(publication)}
+
+
+def apply_saved_review_flags(slides, gate):
+    """Replace each page's design verdict with this review's and re-classify the deck.
+
+    Every page the gate judged gets publication's verdict for it
+    (``drivers/svg/quality._design_flag``): a passed page loses its design
+    reasons, a blocking or unreviewed page is flagged with the new ones. Other
+    reasons and the terminal record stay. A review that judged no page
+    (``gate_design_verdicts`` is None) changes no page's verdict. Classification
+    then runs over every page exactly as publication runs it
+    (``reclassify_pages``) and each slide whose receipt changed gets the new
+    receipt. Returns those slide positions and the deck's ``designReview``
+    (``gate_design_review``).
+    """
+    from services.generation_core.drivers.svg import quality as deck_quality
+    from services.svg_page_publication import REVIEW_FLAG_KEY, replace_design_verdict
+    payloads = [{**deepcopy((slide.content or {}).get("svgReceipt") or {}), "svg_content": slide.svg_content}
+                for slide in slides]
+    verdicts = deck_quality.gate_design_verdicts(gate, payloads)
+    design_review = deck_quality.gate_design_review(gate, verdicts)
+    if verdicts is None:
+        return [], design_review
+    pages = []
+    for payload, verdict in zip(payloads, verdicts, strict=True):
+        flag = replace_design_verdict(payload.get(REVIEW_FLAG_KEY), verdict)
+        if flag is None:
+            payload.pop(REVIEW_FLAG_KEY, None)
+        else:
+            payload[REVIEW_FLAG_KEY] = flag
+        payload.pop("flag", None)  # classification's copy; re-derived below
+        pages.append((payload, None))
+    deck_quality.reclassify_pages(pages)
+    changed = []
+    for index, (slide, (payload, _)) in enumerate(zip(slides, pages, strict=True)):
+        receipt = {key: value for key, value in payload.items() if key != "svg_content"}
+        if receipt != ((slide.content or {}).get("svgReceipt") or {}):
+            slide.content = {**deepcopy(slide.content or {}), "svgReceipt": receipt}
+            changed.append(index)
+    return changed, design_review

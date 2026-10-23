@@ -1264,7 +1264,6 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
         # Resume an old final-selected parent with completed local/global groups.
         # Its absent marker stays legacy even when the process defaults to v2.
         from services.generation_core.drivers.svg import quality_recovery as recovery
-        from services.authored_checkpoint_errors import AuthoredStageError
         resume_context = deepcopy(legacy_frozen_context)
         resume_context.update(runtimeBinding='current-runtime', mandatoryEvidence=[True],
             binding=dict(jobId='current-job', presentationId='current-presentation', ownerId='owner', tenantId='tenant'),
@@ -1332,10 +1331,13 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
             unknown = deepcopy(old_execution)
             unknown['final_selected_review']['groups']['0']['status'] = 'review_inflight'
             before_unknown_groups = deepcopy(unknown['final_selected_review']['groups'])
-            with pytest.raises(AuthoredStageError) as unknown_error:
-                _run(recovery._review_live_final_selected(resume_ctx, valid_pages, job,
-                    SimpleNamespace(read_png=lambda _: png), forbid_resume_provider, unknown, persist_resume))
-            assert unknown_error.value.code == 'public_provider_result_unknown'
+            # An unfinished group is never bought again: its pages publish
+            # unreviewed instead of failing the deck.
+            unknown_result = _run(recovery._review_live_final_selected(resume_ctx, valid_pages, job,
+                SimpleNamespace(read_png=lambda _: png), forbid_resume_provider, unknown, persist_resume))
+            assert unknown_result['vision']['designGate']['status'] == 'unreviewed'
+            assert unknown_result['vision']['designGate']['unreviewedPages'] == [0]
+            assert [group['groupId'] for group in unknown_result['vision']['unreviewedGroups']] == ['phase-0/group-0']
             assert unknown['final_selected_review']['groups'] == before_unknown_groups
             assert 'reviewPrinciplesVersion' not in unknown['final_selected_review']
             assert resume_calls == []

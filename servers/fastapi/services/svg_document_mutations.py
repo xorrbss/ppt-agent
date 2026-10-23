@@ -6,7 +6,7 @@ from models.sql.slide import SlideModel
 from services.authored_canvas import presentation_canvas_contract
 from services.authored_presentation_artifacts import _save_slide_pngs
 from services.svg_contract import finalize_svg
-from services.svg_page_publication import classify_svg_page_quality, set_svg_page
+from services.svg_page_publication import classify_svg_page_quality, reposition_flags, set_svg_page
 from services.svg_renderer import render_svg_with_metrics
 
 
@@ -34,8 +34,15 @@ def _preserve_source_pages(presentation, slides, canvas, *, source_manifest=None
             and getattr(source_manifest, "manifest_digest", None) != marker.get("manifestDigest")):
         raise SourcePublicationBindingRejected()
 
+    from services.svg_page_publication import failure_placeholder_page, source_visibility_flagged
     page_ids = set()
     for index, (slide, receipt) in enumerate(zip(slides, receipts, strict=True)):
+        page_receipt = (slide.content or {}).get("svgReceipt") or {}
+        if receipt is None and failure_placeholder_page(page_receipt):
+            # Not the source page: it claims no receipt and publishes flagged.
+            if not slide.is_svg() or slide.index != index:
+                raise SourcePublicationBindingRejected()
+            continue
         expected = {
             "contract_version": "svg-source-preservation/v1",
             "manifest_digest": marker.get("manifestDigest"),
@@ -43,10 +50,11 @@ def _preserve_source_pages(presentation, slides, canvas, *, source_manifest=None
             "page_count": len(slides),
             "svg_digest": source_digest(slide.svg_content or ""),
             "canvas": {"width": canvas.width_px, "height": canvas.height_px},
-            "rendering_verified": True,
         }
         if (not slide.is_svg() or slide.index != index or not isinstance(receipt, dict)
-                or any(receipt.get(key) != value for key, value in expected.items())):
+                or any(receipt.get(key) != value for key, value in expected.items())
+                # An unverified browser readback publishes flagged for review.
+                or (receipt.get("rendering_verified") is not True and not source_visibility_flagged(page_receipt))):
             raise SourcePublicationBindingRejected()
         page_id = receipt.get("source_page_id")
         checks = receipt.get("checks")
@@ -311,6 +319,11 @@ async def refresh_svg_page_numbers(session, presentation, *, operation_id=None, 
     for index, slide in enumerate(slides):
         if not slide.is_svg() or not slide.svg_content:
             raise ValueError("svg_document_mixed_source")
+        # The page's flags move with it; they are not part of its measured bytes.
+        receipt = (slide.content or {}).get("svgReceipt")
+        moved = reposition_flags(receipt, index)
+        if moved is not receipt:
+            slide.content = {**deepcopy(slide.content), "svgReceipt": moved}
         header_page = None
         if header_outline is not None:
             page = header_outline[index]
@@ -380,12 +393,11 @@ async def refresh_svg_page_numbers(session, presentation, *, operation_id=None, 
     # CAS. The local reuse never becomes a durable receipt or skips page assets.
     await source_verification.revalidate()
     presentation.n_slides = len(slides)
-    from services.generation_core.quality.page_outcome import review_page_indices
+    # The deck's page-quality fields follow the pages' new positions by the
+    # one rule publication writes them with (flaggedSlides included).
+    from services.svg_page_publication import svg_deck_quality_fields
     metadata = dict(presentation.theme.get("svg", {}))
-    qualities = [(slide.content.get("svgReceipt") or {}).get("quality", {}) for slide in slides]
-    review = review_page_indices(qualities)
-    metadata.update(quality=qualities, reviewPages=review,
-                    qualityStatus="review_required" if review else "passed")
+    metadata.update(svg_deck_quality_fields(slides, metadata))
     presentation.theme = {**presentation.theme, "svg": metadata}
     session.add(presentation)
 

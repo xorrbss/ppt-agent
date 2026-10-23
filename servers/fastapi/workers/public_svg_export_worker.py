@@ -9,6 +9,7 @@ from pathlib import Path
 
 from services.document_canvas import parse_canvas_metadata
 from services.isolated_worker_contracts import ArtifactRef
+from services.svg_export_source_preservation import page_svg_digest
 from workers.public_svg_pptx_convert import CONVERTER_VERSION, VENDOR_ROOT, convert_pptx, converter_digest
 from workers.public_svg_pptx_readback import source_preservation_readback as _source_preservation_readback
 from workers.public_worker_runtime import PublicWorkerExecutionError, WorkerOutput
@@ -41,10 +42,29 @@ def is_svg_export_bundle(job, store):
     return load_svg_export_bundle(job, store) is not None
 
 
+def _first_receipt(slides):
+    """The first page receipt of a source bundle; a placeholder carries none."""
+    return next((entry["sourcePreservation"] for entry in slides
+                 if isinstance(entry, dict) and isinstance(entry.get("sourcePreservation"), dict)), {})
+
+
 def _validate_source_preservation_entry(source, receipt, *, index, page_count, canvas,
                                         source_manifest=None, pages_resolver=None):
+    """The receipt that binds this page's bytes to the source, or ``None``.
+
+    ``None`` is a failure placeholder: admission
+    (``services/svg_export_source_preservation.py``) lets a page publish without
+    a receipt only when it is the terminal ladder's placeholder, so the page is
+    exported as drawn and claims no source content. A receipt is verified
+    exactly; a mismatch is fatal. ``rendering_verified`` is a measured page
+    outcome, not part of the binding: admission requires the page's
+    ``source_visibility`` flag when it is not true, and the export receipt
+    reports it (``svg_export_quality``).
+    """
     from services.svg_contract import SVG_NS, source_digest
     from xml.etree import ElementTree as ET
+    if receipt is None:
+        return None
     expected = {
         "contract_version": "svg-source-preservation/v1",
         "source_page_index": index,
@@ -54,8 +74,8 @@ def _validate_source_preservation_entry(source, receipt, *, index, page_count, c
     }
     if not isinstance(receipt, dict) or any(receipt.get(key) != value for key, value in expected.items()):
         raise PublicWorkerExecutionError("svg_source_export_receipt_input_mismatch")
-    if receipt.get("rendering_verified") is not True:
-        raise PublicWorkerExecutionError("svg_source_export_rendering_unverified")
+    if type(receipt.get("rendering_verified")) is not bool:
+        raise PublicWorkerExecutionError("svg_source_export_receipt_invalid")
     whole_page = source_manifest is not None
     if not all(isinstance(receipt.get(key), str) and receipt[key] for key in (
         "manifest_digest", "source_digest", "source_page_id", "page_digest", "style_digest"
@@ -217,7 +237,7 @@ async def execute_svg_export(job, store, *, bundle=None):
             if (source_manifest.manifest_digest != bound["manifestDigest"]
                     or source_manifest.source_digest != bound["sourceDigest"]
                     or digest_json(sealed) != bound["manifestDigest"]
-                    or len(pages_resolver.pages_for((slides[0]["sourcePreservation"] or {}).get(
+                    or len(pages_resolver.pages_for(_first_receipt(slides).get(
                         "source_chart_contract"))) != len(slides)):
                 raise ValueError("source_manifest_mismatch")
         except (ValueError, TypeError, KeyError) as error:
@@ -246,6 +266,8 @@ async def execute_svg_export(job, store, *, bundle=None):
                 page_count=len(slides), canvas=canvas, source_manifest=source_manifest,
                 pages_resolver=pages_resolver,
             ))
+        # A placeholder (no receipt) admits its assets as an ordinary page does.
+        page_receipt = entry["sourcePreservation"] if v3 or v4 else None
         assets = entry.get("assets")
         if assets is not None:
             from services.svg_export_assets import materialize_export_assets, verified_full_page_preserve_export
@@ -255,18 +277,19 @@ async def execute_svg_export(job, store, *, bundle=None):
                 assets, svg=source, job=job, store=store, presentation_id=value["presentationId"],
                 export_format=fmt, width=canvas.width_px, height=canvas.height_px,
                 source_cache=source_manifest_cache,
-                **({"source_preservation": entry["sourcePreservation"]} if v3 or v4 else {}))
+                **({"source_preservation": page_receipt} if page_receipt is not None else {}))
             admitted_assets.append(admit_authorized_svg_materialized(
                 canonical_source, source, source_manifest=source_contract, width_px=canvas.width_px,
                 height_px=canvas.height_px, allow_image_only=verified_full_page_preserve_export(
                     assets, canonical_svg=canonical_source, source_contract=source_contract),
-                **({"source_preservation": entry["sourcePreservation"]} if v3 or v4 else
+                **({"source_preservation": page_receipt} if page_receipt is not None else
                    {"system_furniture": assets["systemFurniture"]} if assets.get("systemFurniture") else {})))
         else:
             validate_svg(source, width=canvas.width_px, height=canvas.height_px)
             admitted_assets.append(None)
         if v3 or v4:
-            image_bindings = [binding for binding in source_preservation[-1]["bindings"]
+            # A placeholder binds no source image, so it may carry no derivative.
+            image_bindings = [binding for binding in (source_preservation[-1] or {}).get("bindings", [])
                               if binding["kind"] == "image"]
             derivatives = assets.get("derivatives", {}) if isinstance(assets, dict) else {}
             if set(derivatives) != {binding["slot_id"] for binding in image_bindings}:
@@ -277,8 +300,10 @@ async def execute_svg_export(job, store, *, bundle=None):
         sources.append(source)
         notes.append(entry["notes"])
         digests.append(ref.sha256)
-    if (v3 or v4) and (len({receipt["manifest_digest"] for receipt in source_preservation}) != 1
-               or len({receipt["source_digest"] for receipt in source_preservation}) != 1):
+    present = [receipt for receipt in source_preservation if receipt is not None]
+    if (v3 or v4) and (len({receipt["manifest_digest"] for receipt in present}) > 1
+               or len({receipt["source_digest"] for receipt in present}) > 1):
+        # Every page that claims the source claims the same one.
         raise PublicWorkerExecutionError("svg_source_export_deck_receipt_mismatch")
     if v4:
         from services.svg_export_bundle import digest as bundle_digest
@@ -345,7 +370,9 @@ async def execute_svg_export(job, store, *, bundle=None):
                 if (not isinstance(coverage, dict) or coverage.get("passed") is not True
                         or not isinstance(source_readback, dict) or source_readback.get("passed") is not True
                         or coverage.get("artifactDigest") != "sha256:" + hashlib.sha256(target.read_bytes()).hexdigest()
-                        or coverage.get("sourceDigests") != [receipt["svg_digest"] for receipt in source_preservation]
+                        or coverage.get("sourceDigests") != [
+                            page_svg_digest(receipt, source)
+                            for receipt, source in zip(source_preservation, canonical_sources, strict=True)]
                         or len(coverage.get("pages", [])) != len(source_readback.get("pages", []))
                         or any((proof["sourcePageId"], proof["svgDigest"]) != (bound["sourcePageId"], bound["svgDigest"])
                                for proof, bound in zip(coverage["pages"], source_readback["pages"], strict=True))):

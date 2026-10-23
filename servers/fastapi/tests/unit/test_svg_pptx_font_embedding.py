@@ -165,11 +165,14 @@ def test_whole_page_measured_symbol_runs_and_used_font_bytes(tmp_path):
         for family, slot, digest, payload in trusted_export_font_faces(usage):
             assert digest == "sha256:" + hashlib.sha256(payload).hexdigest()
             assert any(archive.read(name) == payload for name in archive.namelist() if name.endswith(".fntdata"))
-    for violation in ("missing_measurement", "digest", "not_verified", "unavailable"):
+    # A flagged page (its readback did not pass: ``rendering_verified`` false)
+    # still carries the measurement its render recorded for these bytes.
+    flagged = {**deepcopy(receipt), "rendering_verified": False}
+    _project_trusted_symbol_runs(Presentation(), [source], [flagged])
+    for violation in ("missing_measurement", "digest", "unavailable"):
         altered_source, altered = source, deepcopy(receipt)
         if violation == "missing_measurement": altered.pop("render_font_fallback")
         elif violation == "digest": altered["render_font_fallback"]["fallback_font_digest"] = "sha256:" + "0" * 64
-        elif violation == "not_verified": altered["rendering_verified"] = False
         else: altered_source = source.replace("끝", "\U0010ffff")
         with pytest.raises(ValueError):
             _project_trusted_symbol_runs(Presentation(), [altered_source], [altered])

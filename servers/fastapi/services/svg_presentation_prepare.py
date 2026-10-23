@@ -610,12 +610,9 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
                     AuthoredSlideCheckpoint.job_id == job.id,
                     AuthoredSlideCheckpoint.svg_checkpoint.is_not(None))))
                 from services.generation_core.drivers.svg.collect import _unknown_provider_checkpoint
-                def review_unknown(value):
-                    if isinstance(value, dict):
-                        return (value.get("status") in {"review_inflight", "review_unknown"}
-                                or any(review_unknown(item) for item in value.values()))
-                    return any(review_unknown(item) for item in value) if isinstance(value, list) else False
-                if any(_unknown_provider_checkpoint(saved) or review_unknown(saved) for saved in saved_pages):
+                # Only an author call is refused here; an unfinished design
+                # review resumes with its pages unreviewed, never bought again.
+                if any(_unknown_provider_checkpoint(saved) for saved in saved_pages):
                     raise AuthoredStageError(slide_index=None, stage="author",
                         code="public_provider_result_unknown", retryable=False)
         if existing and existing.get("trusted_stage_execution") and getattr(request, "_svg_stage_plan", None) is None:

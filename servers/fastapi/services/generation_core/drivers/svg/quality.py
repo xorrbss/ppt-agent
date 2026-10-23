@@ -29,6 +29,23 @@ from utils.hashing import sha256_hex
 from services.generation_core.drivers.svg.composition_observation import observe_svg_deck_composition
 
 
+#: Payload key of the flag publication's design review puts on a page
+#: (``terminal_slide_flag_only.flagged_entry`` shape). Only publication writes
+#: it; the receipt keeps it as it keeps ``terminal``.
+REVIEW_FLAG_KEY = "review_flag"
+DESIGN_REASON_PREFIX = "design:"
+DESIGN_UNREVIEWED_REASON = DESIGN_REASON_PREFIX + "unreviewed"
+
+
+def _page_flag(payload):
+    terminal, review = payload.get("terminal"), payload.get(REVIEW_FLAG_KEY)
+    if isinstance(terminal, Mapping) and isinstance(review, Mapping):
+        from services.generation_core.quality.flag_classification import merge_flag_reasons
+        # The terminal entry stays the page's record; the review adds its reason.
+        return merge_flag_reasons(terminal, *(review.get("reasons") or [review.get("reason")]))
+    return terminal or review
+
+
 def page_outcome(index: int, payload: dict) -> PageOutcome:
     quality = payload.get("quality") or {}
     return PageOutcome(
@@ -36,7 +53,7 @@ def page_outcome(index: int, payload: dict) -> PageOutcome:
         png_path=payload.get("png_path"), quality=quality,
         attempts=sum(a.get("kind") != "local" for a in payload.get("attempts", [])),
         failures=tuple(item for item in quality.get("failures", []) if isinstance(item, dict)),
-        verified=quality.get("verified") is True, flag=payload.get("terminal"))
+        verified=quality.get("verified") is True, flag=_page_flag(payload))
 
 
 def _quality_policy(snapshot):
@@ -44,19 +61,38 @@ def _quality_policy(snapshot):
     return read_quality_recovery_policy(snapshot or {})
 
 
+def _record_classification(pages, outcomes, composition=None):
+    for outcome, (payload, _) in zip(outcomes, pages, strict=True):
+        payload["quality"] = {**payload["quality"], "classification": outcome.classification,
+                              "verified": outcome.verified,
+                              **({"compositionObservation": composition["pages"][outcome.index]}
+                                 if composition is not None else {})}
+        if outcome.flag is not None:
+            payload["flag"] = dict(outcome.flag)
+
+
 async def classify_pages(pages, *, job, checkpoint, snapshot=None) -> dict[str, object]:
     """Classify every page in place and persist it; return the deck summary."""
 
     outcomes = classify_page_outcomes([page_outcome(i, payload) for i, (payload, _) in enumerate(pages)])
     composition = observe_svg_deck_composition(pages, **({"quality_policy": True} if snapshot and _quality_policy(snapshot) else {}))
+    _record_classification(pages, outcomes, composition)
     for outcome, (payload, _) in zip(outcomes, pages, strict=True):
-        payload["quality"] = {**payload["quality"], "classification": outcome.classification,
-                              "verified": outcome.verified,
-                              "compositionObservation": composition["pages"][outcome.index]}
-        if outcome.flag is not None:
-            payload["flag"] = dict(outcome.flag)
         await checkpoint(job, outcome.index, payload=payload)
     return {**deck_quality_summary(outcomes), "compositionObservation": composition}
+
+
+def reclassify_pages(pages, *, summary=None) -> dict[str, object]:
+    """``classify_pages`` again, in place, after publication added page flags.
+
+    The flags publication adds are derived from evidence the checkpoint already
+    holds, so nothing is persisted here; the composition observation the deck
+    pass recorded is kept as it was.
+    """
+
+    outcomes = classify_page_outcomes([page_outcome(i, payload) for i, (payload, _) in enumerate(pages)])
+    _record_classification(pages, outcomes)
+    return {**(summary or {}), **deck_quality_summary(outcomes)}
 
 
 async def deck_advisory(ctx, pages, *, job, read_png, run_advisory, round_ordinal: int | None = None, final_selected=False, source_evidence=None):
@@ -106,8 +142,13 @@ async def deck_advisory(ctx, pages, *, job, read_png, run_advisory, round_ordina
     return record
 
 
-def _design_context(ctx, pages, *, job, read_png, review_principles_version=None):
-    """Actual selected style/source evidence, without copying unrelated deck SVGs."""
+def _design_context(ctx, pages, *, job, read_png, review_principles_version=None, measurement_evidence=False):
+    """Actual selected style/source evidence, without copying unrelated deck SVGs.
+
+    ``measurement_evidence`` derives each page's mandatory evidence from its
+    measurement alone (``_measurement_valid``), as a saved review must.
+    """
+    mandatory = _measurement_valid if measurement_evidence else _candidate_local_valid
     from utils.owner_context import get_current_owner_id, get_current_tenant_id
     from services.generation_core.drivers.svg.quality_recovery import _quality_json_value
     from services.generation_core.drivers.svg.native_requirements import requested_native_data
@@ -200,7 +241,7 @@ def _design_context(ctx, pages, *, job, read_png, review_principles_version=None
     context = _quality_json_value(dict(policy=_quality_policy(snapshot), style=style, priorCandidates=prior_candidates,
         styleDigest=content_digest(style), snapshotDigest=content_digest(snapshot), examples=examples,
         runtimeBinding=getattr(ctx, "quality_recovery_runtime_binding", None),
-        mandatoryEvidence=[bool(_candidate_local_valid(payload, ctx=ctx, index=index))
+        mandatoryEvidence=[bool(mandatory(payload, ctx=ctx, index=index))
                            for index, (payload, _) in enumerate(pages)],
         exampleDigests=sorted(seen), pages=source_pages,
         roles=list(roles), deckComplete=len(pages) == getattr(ctx, "count", len(pages)),
@@ -325,9 +366,12 @@ def _render_resolution(png, canvas):
 
 
 async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisory, phase, final_selected=False, source_evidence=None):
-    """Bound physical review calls to the pre-admitted plan, keeping legacy calls intact."""
+    """Bound physical review calls to the pre-admitted plan, keeping legacy calls intact.
+
+    A group call that failed leaves the review incomplete, so the sealed gate
+    holds every page unreviewed; it never fails the deck (``request_group``).
+    """
     from services.svg_authoring_profile import read_quality_recovery_execution_plan
-    from services.authored_checkpoint_errors import AuthoredStageError
     from services.provider_usage_instrumentation import provider_usage_scope
     plan = read_quality_recovery_execution_plan(ctx.snapshot, manifest=getattr(ctx, "partial_recovery_manifest", None))
     if (plan is None or plan["slide_count"] != len(pages) or type(phase) is not int
@@ -418,13 +462,27 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
                                                           if target["axis"] in DESIGN_AXES[:-1]]
 
     async def request_group(ordinal, indices, group_context, group_renders):
+        """One sealed group review, or an unreviewed marker for its pages.
+
+        A call that fails on the provider side (a timeout, an unknown or failed
+        outcome, a budget refusal) leaves its pages unreviewed instead of failing
+        the deck; the sealed gate then judges no page, which publication reports
+        once for the deck (``gate_design_verdicts``). A saved group
+        that never completed is never bought again, for the same reason. Bound
+        evidence that does not match, cancellation and a quota deferral raise.
+        """
         input_digest = _group_review_input_digest(group_context, group_renders, phase, ordinal, indices)
         saved = await checkpoint(ordinal)
         if saved:
+            if saved.get("status") != "completed":
+                # A marker written before groups kept their input digest has
+                # none; it still names no other input, and buys nothing.
+                if saved.get("input_digest") not in {None, input_digest}:
+                    raise ValueError("svg_quality_recovery_review_group_conflict")
+                local_reserved(ordinal)
+                return _unreviewed_group(f"phase-{phase}/group-{ordinal}", indices, saved)
             if saved.get("input_digest") != input_digest:
                 raise ValueError("svg_quality_recovery_review_group_conflict")
-            if saved.get("status") != "completed":
-                raise AuthoredStageError(slide_index=None, stage="render", code="public_provider_result_unknown", retryable=False)
             sealed = saved.get("advisory")
             if (not isinstance(sealed, Mapping) or sealed.get("inputDigest") != input_digest
                     or sealed.get("digest") != content_digest({key: value for key, value in sealed.items() if key != "digest"})):
@@ -462,9 +520,19 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
             else:
                 vision = await dispatch()
         except BaseException as exc:
+            from services.generation_core.quality.page_failure_kind import absorbable_page_error
             from utils.provider_overload import safe_provider_diagnostics
-            await checkpoint(ordinal, {"status": "review_unknown", "failureDiagnostics": safe_provider_diagnostics(exc)})
-            raise
+            diagnostics = safe_provider_diagnostics(exc)
+            if not absorbable_page_error(exc):
+                await checkpoint(ordinal, {**marker, "status": "review_unknown", "failureDiagnostics": diagnostics})
+                raise
+            import logging
+            logging.getLogger(__name__).warning("[svg] design review call failed group=%s pages=%s code=%s",
+                marker["group_id"], indices, getattr(exc, "code", type(exc).__name__))
+            failed = {**marker, "status": "review_failed", "failureDiagnostics": diagnostics,
+                      "failureCode": str(getattr(exc, "code", None) or type(exc).__name__)}
+            await checkpoint(ordinal, failed)
+            return _unreviewed_group(marker["group_id"], indices, failed)
         sealed = dict(groupId=marker["group_id"], globalPageIndices=indices,
                       inputDigest=input_digest, reviewScope=group_context["reviewScope"], vision=vision)
         sealed["digest"] = content_digest(sealed)
@@ -490,8 +558,26 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
         raise
+    unreviewed_groups = []
+
+    def incomplete_review(reason):
+        # The deck-flow axis is part of every page's verdict, so a review
+        # missing any group or the global pass seals every page unreviewed.
+        vision = dict(promptVersion=DESIGN_REVIEW_PROMPT_VERSION, slideCount=len(pages),
+            reviewedPageIndices=list(range(len(pages))), reviewedPngDigests=png_digests, slides=[],
+            designReview=dict(pages=list(local_pages.values()), candidateComparisons=[],
+                              deckFlow={"evaluated": False}),
+            skipped="review_call_unavailable" if unreviewed_groups else reason, reviewGroups=records)
+        if unreviewed_groups:
+            vision["unreviewedGroups"] = unreviewed_groups
+        vision["designGate"] = _seal_design_gate(context, pages, renders, vision)
+        return advisory_record(vision, page_digests)
+
     for result in results:
         if result is None:
+            continue
+        if _UNREVIEWED_GROUP in result:
+            unreviewed_groups.append(result[_UNREVIEWED_GROUP])
             continue
         records.append(result)
         mapping = result["globalPageIndices"]
@@ -503,22 +589,21 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
             index = mapping[comparison["index"]]
             local_comparisons[index] = {**comparison, "index": index}
     if full_review:
+        if unreviewed_groups:
+            return incomplete_review("review_call_unavailable")
         vision = results[0]["vision"]
     else:
         if (len(local_pages) != len(pages) or any(page.get("evaluated") is not True
                 or set(page.get("axes", {})) != set(DESIGN_AXES[:-1]) for page in local_pages.values())):
-            vision = dict(promptVersion=DESIGN_REVIEW_PROMPT_VERSION, slideCount=len(pages),
-                reviewedPageIndices=list(range(len(pages))), reviewedPngDigests=png_digests, slides=[],
-                designReview=dict(pages=list(local_pages.values()), candidateComparisons=[],
-                                  deckFlow={"evaluated": False}), skipped="local_review_coverage_incomplete",
-                reviewGroups=records)
-            vision["designGate"] = _seal_design_gate(context, pages, renders, vision)
-            return advisory_record(vision, page_digests)
+            return incomplete_review("local_review_coverage_incomplete")
         # This call uses the entire contact sheet and observed family
         # representatives only for global flow; fine detail remains local.
         global_context = _global_review_context(ctx, context, pages, local_pages, records)
         for format_attempt in range(global_retry_limit + 1):
             global_result = await request_group(len(groups) + format_attempt, list(range(len(pages))), global_context, renders)
+            if _UNREVIEWED_GROUP in global_result:
+                unreviewed_groups.append(global_result[_UNREVIEWED_GROUP])
+                return incomplete_review("review_call_unavailable")
             records.append(global_result)
             rejected = global_result["vision"]
             if (rejected.get("skipped") != "design_review_schema_or_coverage_invalid"
@@ -573,6 +658,16 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
     vision["designGate"] = _seal_design_gate(context, pages, renders, vision)
     record = advisory_record(vision, page_digests)
     return record
+
+
+#: Key of the marker ``request_group`` returns for a group its review call left
+#: unreviewed; never a key of a sealed group record.
+_UNREVIEWED_GROUP = "unreviewedGroup"
+
+
+def _unreviewed_group(group_id, indices, saved):
+    return {_UNREVIEWED_GROUP: dict(groupId=group_id, globalPageIndices=list(indices),
+        status=saved.get("status"), failureCode=saved.get("failureCode"))}
 
 
 def _reusable_live_local_pages(context, pages, renders, producers):
@@ -837,22 +932,45 @@ def quality_recovery_decisions(ctx, pages, advisory):
 
 
 def _candidate_local_valid(payload, *, ctx=None, index=None, snapshot=None):
+    return ((payload.get("quality") or {}).get("verified") is True
+            and _measurement_valid(payload, ctx=ctx, index=index, snapshot=snapshot))
+
+
+def _measurement_valid(payload, *, ctx=None, index=None, snapshot=None):
+    """The page's own measurement passed on exactly its current bytes and render.
+
+    ``_candidate_local_valid`` without the classification: a saved review reads
+    this, because ``verified`` carries the previous review's verdict and would
+    keep a flagged page from ever being cleared by a new one.
+    """
     from services.svg_contract import source_digest
     quality = payload.get("quality") or {}
     png_digest = payload.get("png_sha256")
-    valid = (quality.get("passed") is True and quality.get("verified") is True and not quality.get("failures")
+    valid = (quality.get("passed") is True and not quality.get("failures")
             and quality.get("measurement_complete") is True and payload.get("svg_content")
             and isinstance(png_digest, str) and len(png_digest) == 64
             and quality.get("source_digest") == source_digest(payload["svg_content"])
-            and quality.get("png_digest") == "sha256:" + png_digest
-            and (payload.get("source_preservation") or {}).get("status") not in {"failed", "unverified"})
+            and quality.get("png_digest") == "sha256:" + png_digest)
     if not valid:
         return False
+    return _source_preservation_intact(payload, ctx=ctx, index=index, snapshot=snapshot)
+
+
+def _source_preservation_intact(payload, *, ctx=None, index=None, snapshot=None, require_rendering=True):
+    """The page's source-preservation receipt binds its bytes to the source.
+
+    ``require_rendering=False`` leaves out only the browser readback
+    (``rendering_verified``): publication flags that page for review instead.
+    """
+    from services.svg_contract import source_digest
     preservation = payload.get("source_preservation") or {}
+    if preservation.get("status") in {"failed", "unverified"}:
+        return False
     expected_source = bool(getattr(ctx, "source_reflow", False) or (snapshot or {}).get("source_authoring_contract"))
     if expected_source or preservation.get("contract_version") == "svg-source-preservation/v1":
         if (preservation.get("contract_version") != "svg-source-preservation/v1"
-                or preservation.get("rendering_verified") is not True
+                or not payload.get("svg_content")
+                or (require_rendering and preservation.get("rendering_verified") is not True)
                 or preservation.get("svg_digest") != source_digest(payload["svg_content"])
                 or not preservation.get("source_digest") or not preservation.get("manifest_digest")
                 or any(value is False for value in (preservation.get("checks") or {}).values())):
@@ -975,27 +1093,144 @@ def reusable_final_deck_advisory(ctx, pages, advisory, *, job, read_png):
     return deepcopy(advisory)
 
 
-def enforce_quality_recovery_publication(snapshot, pages, advisory, *, job=None):
-    if not _quality_policy(snapshot):
-        return
+def _publication_refused(code, index=None):
     from services.authored_checkpoint_errors import AuthoredStageError
-    gate = _current_gate(advisory, pages)
+    return AuthoredStageError(slide_index=index, stage="render", code=code, retryable=False)
+
+
+def _failure_placeholder(payload):
+    from services.generation_core.quality.flag_classification import FAILURE_PLACEHOLDER_OUTCOME
+    terminal = payload.get("terminal")
+    return isinstance(terminal, Mapping) and terminal.get("remakeOutcome") == FAILURE_PLACEHOLDER_OUTCOME
+
+
+#: Page issues ``_seal_design_gate`` blocks on without a failed axis.
+_CRITICAL_DESIGN_ISSUES = ("illegible", "broken_figure")
+
+
+def _design_flag(index, payload, page, *, blocking):
+    """The ``review_flag`` for one page the current gate did not pass, or None."""
+    from services.generation_core.quality.terminal_slide_flag_only import flagged_entry
+    recovery = (payload.get("quality_recovery") or {}).get("status")
+    if page is None:
+        return flagged_entry(index=index, reason=DESIGN_UNREVIEWED_REASON, attempted=False, outcome="not_attempted")
+    needed = page.get("designImprovementStatus") == "needed"
+    if not blocking and not needed:
+        return None
+    axes = {axis for axis in page.get("failedAxes") or [] if isinstance(axis, str)} if blocking else set()
+    if needed:
+        axes |= {target["axis"] for target in _blocking_design_targets(page)
+                 if isinstance(target, Mapping) and isinstance(target.get("axis"), str)}
+    tokens = sorted(axes) or sorted({issue for issue in page.get("issues") or []
+                                     if issue in _CRITICAL_DESIGN_ISSUES})
+    if not tokens:
+        # Blocking on mandatory evidence alone, or a target naming no axis.
+        tokens = ["mandatory_evidence" if blocking else "design_target"]
+    return flagged_entry(index=index, reason=DESIGN_REASON_PREFIX + ",".join(tokens),
+                         attempted=recovery in {"retained", "selected"},
+                         outcome="design_review_retained" if recovery == "retained" else "not_attempted")
+
+
+def gate_design_verdicts(gate, payloads):
+    """Each page's design verdict from a current, intact gate, or None.
+
+    The one rule from a sealed gate to page flags (publication and a saved
+    review both apply it): per page a ``review_flag`` entry (``_design_flag``)
+    or None for a page the gate passed. None when the gate attributes no page
+    verdict at all, because every page is unreviewed: a review group or the
+    global pass that did not complete leaves the deck-flow axis of every page
+    unjudged (``_quality_first_deck_advisory``), so the deck is reported once as
+    ``gate_design_review`` and no page carries ``design:unreviewed``.
+    """
+    by_index = {page["index"]: page for page in gate.get("pages") or []
+                if isinstance(page, Mapping) and type(page.get("index")) is int}
+    blocking = {index for index in gate.get("blockingPages") or [] if type(index) is int}
+    unreviewed = {index for index in gate.get("unreviewedPages") or [] if type(index) is int}
+    if payloads and unreviewed >= set(range(len(payloads))):
+        return None
+    return [_design_flag(index, payload, None if index in unreviewed else by_index.get(index),
+                         blocking=index in blocking)
+            for index, payload in enumerate(payloads)]
+
+
+def gate_design_review(gate, verdicts):
+    """``theme.svg.designReview`` for a current gate and its ``gate_design_verdicts``."""
+    if verdicts is None:
+        return {"status": "unavailable", "reason": str(gate.get("reason") or "review_incomplete"),
+                "gateDigest": gate["digest"]}
+    return {"status": "reviewed", "gateStatus": gate.get("status"), "gateDigest": gate["digest"],
+            "flaggedPages": [index for index, entry in enumerate(verdicts) if entry is not None]}
+
+
+def apply_quality_recovery_publication(snapshot, pages, advisory, *, job=None):
+    """Turn the deck's design review into page flags; refuse only on integrity.
+
+    Raises only when evidence is not what it claims to be: an advisory that
+    exists but is not intact (``svg_quality_recovery_review_unavailable``), or
+    an intact gate that is not current or not bound to this snapshot, policy and
+    job (``svg_quality_recovery_review_required``), or a page whose source
+    preservation receipt no longer binds its bytes to the source. Every quality
+    verdict instead becomes ``payload[REVIEW_FLAG_KEY]`` on that page: a blocking
+    page, a page whose design improvement is still needed, and an unreviewed
+    page (``gate_design_verdicts``; a gate that judged no page flags none and
+    reports ``designReview.status == "unavailable"``). Returns
+    ``theme.svg.designReview`` (None without the policy).
+    """
+    policy = _quality_policy(snapshot)
+    if not policy:
+        return None
+    for index, (payload, _) in enumerate(pages):
+        if not _failure_placeholder(payload) and not _source_preservation_intact(
+                payload, snapshot=snapshot, require_rendering=False):
+            raise _publication_refused("svg_quality_recovery_review_required", index)
+    if advisory is None:
+        # recover_deck holds no review that describes this mixed deck.
+        return {"status": "unavailable"}
+    digests = [sha256_hex((payload.get("svg_content") or "").encode()) for payload, _ in pages]
+    vision = advisory.get("vision") if isinstance(advisory, Mapping) else None
+    if not isinstance(vision, Mapping) or not record_matches(advisory, digests):
+        raise _publication_refused("svg_quality_recovery_review_unavailable")
+    if "designGate" not in vision:
+        if "skipped" in vision:
+            # A sealed record of a review that did not run on these pages.
+            return {"status": "unavailable", "reason": str(vision["skipped"])}
+        raise _publication_refused("svg_quality_recovery_review_unavailable")
+    gate = _gate_intact(advisory)
+    if gate is None:
+        raise _publication_refused("svg_quality_recovery_review_unavailable")
     expected_binding = dict(jobId=str(job.id) if job else None,
         operationId=str(job.workspace_operation_id) if job and getattr(job, "workspace_operation_id", None) else None,
         presentationId=str(job.presentation_id) if job and getattr(job, "presentation_id", None) else None)
-    if (gate is None or gate.get("policy") != _quality_policy(snapshot) or gate.get("status") != "passed"
-            or ((_quality_policy(snapshot) or {}).get("version") == 2
-                and gate.get("designImprovementStatus") != "satisfied")
+    if (_current_gate(advisory, pages) is None or gate.get("policy") != policy
             or gate.get("snapshotDigest") != content_digest(snapshot)
-            or any((gate.get("binding") or {}).get(key) != value for key, value in expected_binding.items())
-            or gate.get("pageCoverageComplete") is not True
-            or any(not _candidate_local_valid(payload, snapshot=snapshot) for payload, _ in pages)):
-        raise AuthoredStageError(slide_index=None, stage="render",
-            code="svg_quality_recovery_review_required" if gate else "svg_quality_recovery_review_unavailable", retryable=False)
+            or any((gate.get("binding") or {}).get(key) != value for key, value in expected_binding.items())):
+        raise _publication_refused("svg_quality_recovery_review_required")
+    verdicts = gate_design_verdicts(gate, [payload for payload, _ in pages])
+    for (payload, _), entry in zip(pages, verdicts or [None] * len(pages), strict=True):
+        if entry is not None:
+            existing = payload.get(REVIEW_FLAG_KEY)
+            if isinstance(existing, Mapping):
+                # A staged deck's own stage review flagged the page already
+                # (collect._flag_stage_review): both verdicts stand.
+                from services.generation_core.quality.flag_classification import merge_flag_reasons
+                entry = merge_flag_reasons(entry, *(existing.get("reasons") or [existing.get("reason")]))
+            payload[REVIEW_FLAG_KEY] = entry
+    return gate_design_review(gate, verdicts)
 
 
-__all__ = ["classify_pages", "deck_advisory", "page_outcome", "quality_recovery_decisions",
-           "compare_quality_recovery_candidates", "enforce_quality_recovery_publication"]
+def flag_source_visibility(payload, index):
+    """Flag a source page whose browser readback did not verify it."""
+    from services.generation_core.quality.flag_classification import SOURCE_VISIBILITY_REASON, merge_flag_reasons
+    from services.generation_core.quality.terminal_slide_flag_only import flagged_entry
+    existing = payload.get(REVIEW_FLAG_KEY)
+    payload[REVIEW_FLAG_KEY] = (merge_flag_reasons(existing, SOURCE_VISIBILITY_REASON) if isinstance(existing, Mapping)
+                                else flagged_entry(index=index, reason=SOURCE_VISIBILITY_REASON,
+                                                   attempted=False, outcome="not_attempted"))
+
+
+__all__ = ["REVIEW_FLAG_KEY", "apply_quality_recovery_publication", "classify_pages", "deck_advisory",
+           "flag_source_visibility", "page_outcome", "quality_recovery_decisions", "reclassify_pages",
+           "compare_quality_recovery_candidates"]
 
 
 def _group_review_input_digest(group_context, group_renders, phase, ordinal, indices):

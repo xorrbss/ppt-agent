@@ -6,13 +6,15 @@ the authored (HTML) driver has published a flagged page instead since D7
 (``terminal_slide_policy.terminal_fallback_active``). The decision of *whether*
 a deck class may publish a flagged page is the same rollout switch for both
 drivers (``terminal_slide_policy.publish_flagged_allowed``); this module turns
-it into the three outcomes a page collector can act on:
+it into the outcomes a page collector can act on:
 
-* ``fallback``  -- publish a deterministic page rendered from the slide's own
-  outline in place of the one that could not be authored, flagged;
-* ``flag_only`` -- publish the last page that rendered, unchanged, flagged
-  (a source-reflow deck: its verbatim text may not be re-authored);
-* ``fail``      -- today's fail-closed behaviour.
+* ``fallback``  -- rescue the page (``drivers/svg/terminal.py``): keep its last
+  render when only its layout failed, else publish a deterministic page with the
+  slide's whole outline, else a failure placeholder -- always flagged;
+* ``flag_only`` -- the same rescue for a source-reflow deck, whose verbatim text
+  may not be re-authored: keep the last verbatim render, else a plain verbatim
+  layout of the page's source units, else a failure placeholder;
+* ``fail``      -- fail-closed: an exact reconstruction, or a rollout switch off.
 
 The policy is resolved once per deck attempt into the runtime profile
 (``generation_core/runtime/profile.py``); the authored driver keeps its own
@@ -35,10 +37,10 @@ class TerminalPolicy(str, Enum):
 def resolve_terminal_policy(*, source_reflow: bool, exact_reconstruction: bool) -> TerminalPolicy:
     """The deck's terminal-page policy, from the shared rollout switches.
 
-    Mirrors the authored split: an ordinary deck rescues a terminal page with a
-    fallback page (authored: remake, then placeholder), a source-reflow deck
-    may only flag the page it has (authored: verbatim flag-only), and an exact
-    reconstruction never publishes a substitute.
+    Mirrors the authored split: an ordinary deck may re-lay a terminal page
+    from its outline (authored: remake, then placeholder), a source-reflow deck
+    only from its verbatim source units (authored: verbatim flag-only), and an
+    exact reconstruction never publishes a substitute.
     """
 
     if not publish_flagged_allowed(

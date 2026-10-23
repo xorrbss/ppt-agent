@@ -101,8 +101,16 @@ def _project_trusted_symbol_runs(deck, source_originals, receipts):
     measured = set()
     for source, receipt in zip(source_originals, receipts, strict=True):
         _, proof = materialize_template_fallbacks(source)
-        recorded = receipt.get("render_font_fallback")
-        if proof != recorded or proof is not None and receipt.get("rendering_verified") is not True:
+        if receipt is None:
+            # A failure placeholder has no receipt to record a measurement in:
+            # its fallback plan is the one its own bytes derive.
+            if proof is not None:
+                measured.add(proof["fallback_font_digest"])
+            continue
+        # The page's render recorded the plan its bytes derive (render.py
+        # records it with every measurement, passed or flagged); a different
+        # one does not describe these bytes.
+        if proof != receipt.get("render_font_fallback"):
             raise ValueError("svg_source_export_font_measurement_unbound")
         if proof is not None:
             measured.add(proof["fallback_font_digest"])
@@ -448,8 +456,11 @@ def _verified_final_native_ooxml(target, trace_path, source_originals, receipts,
         return (node.tag, tuple(sorted(node.attrib.items())), (node.text or "").strip(), tuple(signature(child) for child in node))
     pages = []
     total_shapes = total_events = total_groups = total_aliases = 0
+    from services.svg_export_source_preservation import page_svg_digest
     for index, (source, receipt) in enumerate(zip(source_originals, receipts, strict=True)):
-        if source_digest(source) != receipt["svg_digest"]:
+        # A failure placeholder (no receipt) is covered like every page; it is
+        # bound to its own bytes instead of a source page.
+        if source_digest(source) != page_svg_digest(receipt, source):
             raise ValueError("svg_native_ooxml_source_binding_mismatch")
         slide_name = f"ppt/slides/slide{index + 1}.xml"
         slide = ET.fromstring(parts[slide_name])
@@ -563,7 +574,9 @@ def _verified_final_native_ooxml(target, trace_path, source_originals, receipts,
             native_events.append({"tag": event.get("tag"), "shapeId": sid, "boundsEmu": expected})
         if set(shapes) != covered or backgrounds > 1:
             raise ValueError("svg_native_ooxml_shape_coverage_incomplete")
-        pages.append({"pageIndex": index, "sourcePageId": receipt["source_page_id"], "svgDigest": receipt["svg_digest"],
+        pages.append({"pageIndex": index,
+                      "sourcePageId": receipt["source_page_id"] if receipt is not None else None,
+                      "svgDigest": page_svg_digest(receipt, source),
                       "shapeCount": len(shapes), "nativePrimitiveCount": len(native_events),
                       "shapeInventoryDigest": "sha256:" + canonical_json_sha256(shapes),
                       "traceDigest": "sha256:" + canonical_json_sha256(native_events),
@@ -572,7 +585,8 @@ def _verified_final_native_ooxml(target, trace_path, source_originals, receipts,
         total_events += len(native_events)
     return {"schemaVersion": "svg-native-ooxml-coverage/v1", "passed": True,
             "artifactDigest": "sha256:" + hashlib.sha256(target.read_bytes()).hexdigest(),
-            "sourceDigests": [receipt["svg_digest"] for receipt in receipts], "pages": pages,
+            "sourceDigests": [page_svg_digest(receipt, source)
+                              for receipt, source in zip(receipts, source_originals, strict=True)], "pages": pages,
             "measurements": {"verifiedPages": len(pages), "verifiedShapes": total_shapes,
                              "verifiedGroups": total_groups, "verifiedGroupAliases": total_aliases, "nativePrimitives": total_events,
                              "verifiedRelationships": relationship_count, "unboundShapes": 0,
@@ -632,6 +646,14 @@ def convert_whole_page_pptx(paths, target, notes, canvas, *, receipts,
         raise ValueError("svg_source_export_overlay_input_invalid")
     projected_pages, table_alignment_claims = [], []
     for page, source, receipt in zip(native_objects, source_originals, receipts, strict=True):
+        if receipt is None:
+            # A failure placeholder claims no source: it converts as drawn and
+            # may carry no native object a source receipt would have declared.
+            if page.sidecar is not None:
+                raise ValueError("svg_source_export_placeholder_native_objects")
+            projected_pages.append(page)
+            table_alignment_claims.append([])
+            continue
         projected_page, alignments = project_source_table_end_alignment(source, receipt, page)
         projected_pages.append(projected_page)
         table_alignment_claims.append(alignments)
@@ -666,6 +688,9 @@ def convert_whole_page_pptx(paths, target, notes, canvas, *, receipts,
             scene = original_prepare(page_paths, pages, width=width, height=height,
                                      pt_per_px=pt_per_px)
             for page_index, path in enumerate(page_paths):
+                if receipts[page_index] is None:
+                    claims.append([])  # a failure placeholder claims no source text
+                    continue
                 claims.append(bind_chart_text_projection(
                     path, canonical_svg=source_originals[page_index],
                     receipt=receipts[page_index], native_page=pages[page_index],

@@ -592,6 +592,18 @@ def source_preservation_readback(deck, receipts, expected_image_digests, *,
     for index, (slide, receipt, image_digests) in enumerate(
         zip(deck.slides, receipts, expected_image_digests, strict=True)
     ):
+        if receipt is None:
+            from services.svg_contract import source_digest
+            # A failure placeholder claims no source content, so nothing of the
+            # source is read back from it -- and it may carry no source image.
+            if image_digests:
+                raise ValueError("svg_source_pptx_image_expectation_mismatch")
+            if whole_page and (native_objects[index].sidecar is not None or ownership_claims[index]
+                               or fragment_claims[index]):
+                raise ValueError("svg_source_pptx_placeholder_claims_source")
+            pages.append({"sourcePageId": None, "sourcePageIndex": index, "failurePlaceholder": True,
+                          **({"svgDigest": source_digest(source_svgs[index])} if whole_page else {})})
+            continue
         shapes = list(iter_shapes(slide.shapes))
         native_blocks, native_table_evidence = _source_native_tables(shapes, receipt, deck)
         native_role_ids, native_chart_evidence = (
@@ -708,10 +720,11 @@ def source_preservation_readback(deck, receipts, expected_image_digests, *,
                 "imageShapeCount": sum(furniture_images.values()),
                 "valuesVerified": True,
             }
+    first = next((receipt for receipt in receipts if receipt is not None), None)
     return {
         "schemaVersion": "svg-source-preservation-export-readback/v1",
         "passed": True,
-        "sourceDigest": receipts[0]["source_digest"],
-        "manifestDigest": receipts[0]["manifest_digest"],
+        "sourceDigest": first["source_digest"] if first is not None else None,
+        "manifestDigest": first["manifest_digest"] if first is not None else None,
         "pages": pages,
     }

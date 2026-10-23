@@ -20,7 +20,8 @@ async def revision_inputs(session, claim, presentation, rows, snapshot, admitted
     from services.svg_document_mutations import read_svg_slide_assets
     from services.svg_generation_assets import author_images
     from services.source_images.models import SourceImageCandidate
-    from services.svg_export_source_preservation import source_preservation_receipts, sealed_whole_page_manifest
+    from services.svg_export_source_preservation import (
+        sealed_whole_page_manifest, source_preservation_receipts, source_receipts_present)
     from utils.owner_context import get_current_tenant_id
 
     canvas = presentation_canvas_contract(presentation.theme)
@@ -82,21 +83,24 @@ async def revision_inputs(session, claim, presentation, rows, snapshot, admitted
         document = SourceContentManifest.model_validate(sealed["manifest"])
         units = source_pages(document, chart_contract=snapshot.get("source_chart_contract"))
         profile = source_font_profile(snapshot)
-    elif receipts:
+    elif source_receipts_present(receipts):
         from sqlalchemy import select
         from models.sql.source_content import SourceContentManifestRecord
         from services.source_content.manifest_store import _manifest_from_record
         from services.svg_source_layout import source_pages, verify_source_receipt
         from utils.svg_template_fonts import source_font_profile
+        present = source_receipts_present(receipts)
         records = list(await session.scalars(select(SourceContentManifestRecord).where(
             SourceContentManifestRecord.owner_id == claim.owner_id,
             SourceContentManifestRecord.owner_scope == claim.owner_scope,
-            SourceContentManifestRecord.manifest_digest == receipts[0]["manifest_digest"],
-            SourceContentManifestRecord.source_digest == receipts[0]["source_digest"])))
+            SourceContentManifestRecord.manifest_digest == present[0]["manifest_digest"],
+            SourceContentManifestRecord.source_digest == present[0]["source_digest"])))
         if len(records) != 1:
             raise ValueError("svg_common_header_source_manifest_binding_invalid")
         document = _manifest_from_record(records[0], owner_id=claim.owner_id)
         for index, (row, receipt) in enumerate(zip(rows, receipts, strict=True)):
+            if receipt is None:
+                continue  # a failure placeholder claims no source page to verify
             verify_source_receipt(row.svg_content, receipt, document, index)
         units = source_pages(document, chart_contract=snapshot.get("source_chart_contract"))
         profile = source_font_profile(snapshot)
@@ -158,12 +162,20 @@ def raw_body(row):
 
 
 def reusable_body(old, new, row):
+    """Whether a header revision keeps this page's body instead of re-authoring it.
+
+    The body is kept when the header frame it was laid out for is unchanged and
+    its own measurement still describes it. A page flag is a verdict on the
+    page's bytes, which the revision renders and classifies anew, so a flagged
+    page keeps its body like any other. A page the terminal ladder substituted
+    or kept (``terminal``) is re-authored: its body is not authored content.
+    """
     from services.svg_contract import source_digest
     receipt = (row.content or {}).get("svgReceipt") or {}
     quality = receipt.get("quality") or {}
     return (isinstance(old, dict) and old.get("body_box") == new.get("body_box")
             and old.get("shared_style", {}) == new.get("shared_style", {})
-            and not receipt.get("terminal") and not receipt.get("flag")
+            and not receipt.get("terminal")
             and quality.get("passed") is True and quality.get("geometry_passed") is True
             and quality.get("measurement_complete") is True
             and quality.get("source_digest") == source_digest(row.svg_content))

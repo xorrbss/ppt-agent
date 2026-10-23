@@ -1674,7 +1674,7 @@ def test_a_deck_with_no_exhausted_claim_is_unchanged():
     assert outcome.blocked is None
 
 
-def test_declaration_refuses_a_deck_that_may_not_publish_flagged():
+def test_declaration_refuses_a_deck_that_may_not_publish_flagged(monkeypatch):
     error = SimpleNamespace(repeated=True)
     ordinary = SimpleNamespace(
         profile_id="ordinary", strict_dom_gate=True, allow_summarization=True
@@ -1690,6 +1690,11 @@ def test_declaration_refuses_a_deck_that_may_not_publish_flagged():
         "reason": policy_mod.REPAIR_BUDGET_EXHAUSTED_REASON,
         "repeated": True,
     }
+    # Source reflow may publish flagged by default; switched off, it may not.
+    assert policy_mod.declare_exhausted_repair_budget(
+        3, error, profile=verbatim, reference_mode="style_reference", source_reflow=True
+    ) is not None
+    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", "false")
     assert (
         policy_mod.declare_exhausted_repair_budget(
             3,

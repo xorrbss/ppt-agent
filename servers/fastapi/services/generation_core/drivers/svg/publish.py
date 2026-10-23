@@ -10,6 +10,8 @@ for importers and tests; ``services/svg_presentation_service.py`` re-exports
 from __future__ import annotations
 
 import asyncio
+import uuid
+from collections.abc import Mapping
 
 from sqlalchemy import delete, select
 
@@ -23,6 +25,7 @@ from services.authored_presentation_artifacts import _save_slide_pngs, authored_
 from services.generation_core.drivers.svg.native_declarations import PAYLOAD_KEY as NATIVE_DECLARATIONS_KEY
 from services.generation_core.drivers.svg.native_publish import canvas_point_per_px, page_native_objects
 from services.generation_core.native_objects import SLIDE_CONTENT_KEY as NATIVE_OBJECTS_KEY
+from services.generation_core.quality.flag_classification import FAILURE_PLACEHOLDER_OUTCOME
 from services.generation_core.quality.page_outcome import review_page_indices
 from services.svg_presentation_checkpoint import _save_source_page_pngs
 from services.svg_page_publication import set_svg_page
@@ -85,9 +88,19 @@ def svg_slide_content(payload: dict, *, role, source, pt_per_px: float,
 async def _publish(request, presentation_id, outline, language, session, job, snapshot, roles, pages,
                    *, quality_summary=None, advisory=None):
     from services.svg_authoring_profile import read_quality_recovery_policy
-    if read_quality_recovery_policy(snapshot):
-        from services.generation_core.drivers.svg.quality import enforce_quality_recovery_publication
-        enforce_quality_recovery_publication(snapshot, pages, advisory, job=job)
+    from services.generation_core.drivers.svg import quality as deck_quality
+    # A review flag a page carries in is this run's own stage review
+    # (collect._flag_stage_review re-derives it from the persisted stage
+    # record on every run, and classify_pages already classified it): it is
+    # kept, and publication's verdicts merge onto it. Publication's own flags
+    # are never checkpointed, so none can arrive stale from an earlier attempt.
+    reclassify = False
+    design_review = (deck_quality.apply_quality_recovery_publication(snapshot, pages, advisory, job=job)
+                     if read_quality_recovery_policy(snapshot) else None)
+    # Producer evidence binds publication only to a current, intact gate
+    # (one that judged no page included: its record stays the deck's evidence).
+    gate = advisory["vision"]["designGate"] if (design_review or {}).get("gateDigest") else None
+    reclassify = reclassify or bool((design_review or {}).get("flaggedPages"))
     source_preservation = None
     if getattr(request, "_source_content_svg_reflow", False):
         from services.svg_source_layout import source_pages, verify_source_receipt
@@ -96,23 +109,34 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
             raise ValueError("svg_source_page_count_mismatch")
         for index, (payload, _) in enumerate(pages):
             if payload.get("cached_author_render"):
-                from services.document_canvas_generation import validate_svg_readability_publication
+                from services.svg_page_publication import validate_readability_publication
                 policy = payload.get("readability_policy") or {}
                 if (policy.get("version") != "svg-physical-readability/v2"
                         or policy.get("quality_target_font_pt", 0) < 9.5):
                     raise ValueError("svg_cached_author_render_quality_policy_invalid")
-                validate_svg_readability_publication(policy, payload.get("quality"))
+                validate_readability_publication(policy, payload.get("quality"))
+            terminal = payload.get("terminal")
+            if isinstance(terminal, Mapping) and terminal.get("remakeOutcome") == FAILURE_PLACEHOLDER_OUTCOME:
+                continue  # not the source page: it claims no source receipt, and is flagged
             if (payload.get("source_preservation") or {}).get("source_chart_contract") != (snapshot or {}).get("source_chart_contract"):
                 raise ValueError("svg_source_chart_snapshot_mismatch")
             verify_source_receipt(payload["svg_content"], payload.get("source_preservation"), manifest, index)
-            if payload.get("terminal"):
+            if terminal:
                 continue  # flag-only: verbatim (checked above), flagged, reviewed as unverified
-            if payload.get("quality", {}).get("passed") is not True:
-                raise ValueError("svg_source_quality_failed")
+            # A residual measured failure publishes flagged by classification.
             if payload["source_preservation"].get("rendering_verified") is not True:
-                raise ValueError("svg_source_quality_unverified")
+                deck_quality.flag_source_visibility(payload, index)
+                reclassify = True
         source_preservation = {"schemaVersion": "svg-source-preservation/v1",
             "manifestDigest": manifest.manifest_digest, "pageCount": len(pages)}
+    # Flags added above are classified exactly as the deck pass classifies.
+    if reclassify:
+        quality_summary = deck_quality.reclassify_pages(pages, summary=quality_summary)
+    # Decided here so each flag names the row it was generated for.
+    slide_ids = [uuid.uuid4() for _ in pages]
+    flagged_slides = [({**entry, "slideId": str(slide_ids[entry["index"]])}
+                       if type(entry.get("index")) is int and 0 <= entry["index"] < len(slide_ids) else entry)
+                      for entry in (quality_summary or {}).get("flaggedSlides", [])]
     from services.account_deletion_service import require_active_account_generation
     from services.compatibility_migration.admission import stamp_new_svg_presentation
     from services.presentation_publication_service import publish_presentation_revision
@@ -170,16 +194,16 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
                 "reviewPages": review, "quality": quality,
                 **({"qualitySummary": {key: value for key, value in quality_summary.items()
                                        if key != "flaggedSlides"},
-                    "flaggedSlides": quality_summary.get("flaggedSlides", [])}
+                    "flaggedSlides": flagged_slides}
                    if quality_summary else {}),
                 **({"advisory": advisory} if advisory else {}),
+                **({"designReview": design_review} if design_review else {}),
                 "initialQuality": initial_quality,
                 **({"renderAdvisoryCount": render_advisory_count} if render_advisory_count else {}),
                 "codexGenerationPreset": request.codex_generation_preset},
     }, request_canvas_metadata(request))
-    if read_quality_recovery_policy(snapshot):
+    if gate is not None:
         from services.generation_core.quality.advisory_record import content_digest
-        gate = advisory["vision"]["designGate"]
         publication = {"schema": "svg-quality-recovery-publication/v1", "gateDigest": gate["digest"],
             "parentOperationId": str(operation_id), "parentJobId": str(job_id),
             "sourceGenerationRevision": expected_revision + 1,
@@ -194,7 +218,7 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
     published_slides = []
     for index, (payload, png) in enumerate(pages):
         native_kwargs = {}
-        if source_preservation and payload.get("source_preservation", {}).get("native_tables"):
+        if source_preservation and (payload.get("source_preservation") or {}).get("native_tables"):
             from services.svg_source_native_tables import source_table_native_objects
             native_objects, native_summary = source_table_native_objects(payload["svg_content"],
                 payload["source_preservation"], manifest, index, pt_per_px=pt_per_px)
@@ -203,13 +227,13 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
                                           pt_per_px=pt_per_px, **native_kwargs)
         fields = {}
         set_svg_page(fields, svg_content=payload["svg_content"], content=slide_content, png=png)
-        saved_slide = SlideModel(presentation=presentation_id, owner_id=owner,
+        saved_slide = SlideModel(id=slide_ids[index], presentation=presentation_id, owner_id=owner,
                               layout_group="svg", layout="svg:content", index=index,
                               **fields, source_format="svg",
                               properties={"image": image_refs[index]}, speaker_note=outline.slides[index].content)
         published_slides.append(saved_slide)
         session.add(saved_slide)
-    if read_quality_recovery_policy(snapshot):
+    if gate is not None:
         from services.svg_quality_recovery_review import seal_saved_page_evidence
         from services.svg_export_visual_review import split_page_advisories, slide_page_digests
         from models.sql.workspace import WorkspaceOperation
@@ -231,7 +255,7 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
             pageRecordDigests=[record["digest"] for record in records])
         svg_theme["advisory"]["operationBinding"] = {**binding, "digest": content_digest(binding)}
         svg_theme["advisory"]["savedPageReviewEvidence"] = seal_saved_page_evidence(
-            published_slides, snapshot, advisory["vision"]["designGate"])
+            published_slides, snapshot, gate)
         presentation.theme = publication_theme
     session.add(presentation)
     await session.flush()

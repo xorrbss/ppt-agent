@@ -57,6 +57,16 @@ SUBSTITUTE_REASON_PREFIX = "author:"
 #: untouched. Every other outcome follows a remake, so a substitute shipped.
 ORIGINAL_PRESERVED_OUTCOMES = frozenset({"verbatim_flag_only", "not_attempted"})
 
+#: Reason prefixes that record a defect measured on the bytes that shipped,
+#: like a residual: ``design:`` is the publication design review's verdict on
+#: the page (a failed or blocking axis, or no usable review at all).
+MEASURED_REASON_PREFIXES = ("design:",)
+
+#: ``remakeOutcome`` of a terminal page that publishes an explicit failure
+#: placeholder: it does not claim to be the source page, so publication does
+#: not verify a source receipt on it.
+FAILURE_PLACEHOLDER_OUTCOME = "svg_failure_placeholder"
+
 
 def _reasons_of(entry: Mapping[str, object]) -> tuple[str, ...]:
     raw = entry.get("reasons")
@@ -75,6 +85,17 @@ def _residual_indices(residual_failures: Sequence[Mapping[str, object]]) -> froz
         if isinstance(index, int) and not isinstance(index, bool):
             indices.add(index)
     return frozenset(indices)
+
+
+def merge_flag_reasons(entry: Mapping[str, object], *reasons: str) -> dict[str, object]:
+    """``entry`` with ``reasons`` extended, its own reason first, without duplicates.
+
+    ``reason`` is left as it was, so a consumer reading the single reason keeps
+    reading what it read before; ``reasons`` is what classification reads.
+    """
+
+    merged = list(dict.fromkeys((*_reasons_of(entry), *(reason for reason in reasons if reason))))
+    return {**entry, "reasons": merged}
 
 
 def published_a_substitute(entry: Mapping[str, object]) -> bool:
@@ -108,8 +129,9 @@ def needs_review(
 
     Either the page that shipped is not the page the deck authored, or something
     was measured on the page that did ship: the final quality gate recorded a
-    residual issue for the slide, or the browser source readback could not see
-    one of its source text blocks. A flag with none of those is the record of a
+    residual issue for the slide, the publication design review did not pass it
+    (a ``MEASURED_REASON_PREFIXES`` reason), or the browser source readback could
+    not see one of its source text blocks. A flag with none of those is the record of a
     repair attempt that was rejected while the authored slide shipped unchanged
     and clean -- history, and nothing a reviewer can act on.
     """
@@ -121,7 +143,10 @@ def needs_review(
         return True
     if entry.get("sourceVisibilityBlockIds"):
         return True
-    return SOURCE_VISIBILITY_REASON in _reasons_of(entry)
+    reasons = _reasons_of(entry)
+    if any(reason.startswith(MEASURED_REASON_PREFIXES) for reason in reasons):
+        return True
+    return SOURCE_VISIBILITY_REASON in reasons
 
 
 def classify_flagged_slides(
@@ -191,6 +216,8 @@ def review_pages_for(
 
 __all__ = [
     "CLASSIFICATION_KEY",
+    "FAILURE_PLACEHOLDER_OUTCOME",
+    "MEASURED_REASON_PREFIXES",
     "REPAIR_NOT_ADMITTED",
     "REVIEW_REQUIRED",
     "ORIGINAL_PRESERVED_OUTCOMES",
@@ -198,6 +225,7 @@ __all__ = [
     "SUBSTITUTE_REASON_PREFIX",
     "classify_flagged_slides",
     "flag_pages",
+    "merge_flag_reasons",
     "needs_review",
     "published_a_substitute",
     "review_pages_for",

@@ -85,11 +85,19 @@ def _stage_error(code):
     return AuthoredStageError(slide_index=None, stage="author", code=code, retryable=False)
 
 
+#: Page-checkpoint key of the deck's design-review markers. A review call is
+#: never bought again on resume (its pages stay unreviewed,
+#: ``quality._quality_first_deck_advisory``), so its markers and the provider
+#: codes they record are not an unknown author call.
+_REVIEW_EXECUTION_KEY = "quality_recovery_execution"
+
+
 def _unknown_provider_checkpoint(value):
+    """Whether a checkpoint records an author call whose outcome is unknown."""
     if isinstance(value, dict):
         if value.get("inflight") is not None:
             return True
-        return any(_unknown_provider_checkpoint(v) for v in value.values())
+        return any(_unknown_provider_checkpoint(v) for k, v in value.items() if k != _REVIEW_EXECUTION_KEY)
     if isinstance(value, list):
         return any(_unknown_provider_checkpoint(v) for v in value)
     return value in {"public_provider_result_unknown", "public_provider_timeout", "provider_outcome:public_provider_result_unknown"} if isinstance(value, str) else False
@@ -144,6 +152,20 @@ async def _stage_preflight(plan, job, checkpoint, count):
     return progress
 
 
+def _flag_stage_review(payload, index, issues):
+    """Flag one page a stage review named issues on; the deck still publishes."""
+    from collections.abc import Mapping
+    from services.generation_core.quality.flag_classification import merge_flag_reasons
+    from services.generation_core.quality.terminal_slide_flag_only import flagged_entry
+
+    tokens = sorted({issue for issue in issues if isinstance(issue, str) and issue}) or ["stage_review"]
+    reason = deck_quality.DESIGN_REASON_PREFIX + ",".join(tokens)
+    existing = payload.get(deck_quality.REVIEW_FLAG_KEY)
+    payload[deck_quality.REVIEW_FLAG_KEY] = (
+        merge_flag_reasons(existing, reason) if isinstance(existing, Mapping)
+        else flagged_entry(index=index, reason=reason, attempted=False, outcome="not_attempted"))
+
+
 async def _stage_checkpoint(job, checkpoint, plan, stages):
     seed = deepcopy(await checkpoint(job, 0) or {})
     progress = {"schema": "svg-stage-execution/v1", "plan_digest": _digest(plan),
@@ -161,6 +183,10 @@ async def _collect_stages(ctx, plan, tracked_page, job, checkpoint, read_png, ru
     A page-local failure returns a marker, not an exception: it does not stop
     the partition's already approved siblings, and the partition then fails
     closed before any review, so the next partition never starts.
+
+    Page quality never stops a partition: a page that did not pass its gate
+    arrives here already rescued (``terminal``) or measured, and a page the
+    stage review names is flagged (``_flag_stage_review``), not refused.
     """
     progress = await _stage_preflight(plan, job, checkpoint, ctx.count)
     stages = deepcopy(progress.get("stages", []))
@@ -210,8 +236,6 @@ async def _collect_stages(ctx, plan, tracked_page, job, checkpoint, read_png, ru
         _raise_isolated_pages(results, page_failures)
         pages_by_index.update(zip(indices, results, strict=True))
         page_digests = [_digest({"svg": p.get("svg_content"), "png": p.get("png_sha256")}) for p, _ in results]
-        if any(p.get("quality", {}).get("passed") is not True for p, _ in results):
-            raise _stage_error("svg_stage_quality_failed")
         prior = stages[ordinal] if ordinal < len(stages) else None
         if prior and prior.get("status") == "accepted":
             if prior.get("indices") != indices or prior.get("page_digests") != page_digests:
@@ -227,8 +251,6 @@ async def _collect_stages(ctx, plan, tracked_page, job, checkpoint, read_png, ru
         else:
             stages.append(marker)
         await _stage_checkpoint(job, checkpoint, plan, stages)
-        if any(p.get("quality", {}).get("passed") is not True for p, _ in results):
-            raise _stage_error("svg_stage_quality_failed")
         advisory = marker.get("advisory")
         if advisory is None:
             marker["status"] = "review_inflight"
@@ -244,9 +266,6 @@ async def _collect_stages(ctx, plan, tracked_page, job, checkpoint, read_png, ru
                 raise
             marker.update(status="review_pending", advisory=advisory)
             await _stage_checkpoint(job, checkpoint, plan, stages)
-        from services.generation_core.quality.advisory_record import advisory_flagged_pages
-        if advisory_flagged_pages(advisory):
-            raise _stage_error("svg_stage_review_flagged")
         if review_stage is not None:
             decision = await review_stage(ordinal, tuple(indices), tuple(results), advisory)
             if decision is not True:
@@ -261,6 +280,10 @@ async def _collect_stages(ctx, plan, tracked_page, job, checkpoint, read_png, ru
             slide = deepcopy(slide)
             slide["index"] = stage["indices"][slide["index"]]
             vision_slides.append(slide)
+            if slide.get("issues"):
+                # Read from the persisted stage record, so an accepted stage
+                # flags its pages again on resume.
+                _flag_stage_review(pages[slide["index"]][0], slide["index"], slide["issues"])
     from services.generation_core.quality.advisory_record import advisory_record
     from services.svg_export_visual_review import split_page_advisories
     from types import SimpleNamespace
@@ -277,7 +300,9 @@ from services.generation_core.drivers.svg import author, render
 from services.generation_core.drivers.svg import quality as deck_quality
 from services.generation_core.drivers.svg import timing
 from services import svg_outline_spans
-from services.generation_core.drivers.svg.terminal import is_exhausted_page, rescue_terminal_page
+from services.generation_core.drivers.svg.terminal import (
+    PLACEHOLDER_OUTCOME, is_exhausted_page, rescue_terminal_page,
+)
 from services.svg_presentation_checkpoint import _collect_pages_or_fail, _digest, _provider_attempt_count as _legacy_provider_attempt_count, _provider_attempt_limit as _legacy_provider_attempt_limit
 from services.svg_presentation_prepare import _prepare_generation
 
@@ -924,16 +949,28 @@ async def _remeasure_partial_cached_page(ctx, request, presentation_id, index, c
             current_phase = marker.get("phase", "finalized")
         return await hooks.checkpoint(active_job, page_index, payload=payload)
 
-    with timing.observe_stage(request, "render"):
-        result = await render.attempt_render(ctx=ctx, request=request, presentation_id=presentation_id,
-            index=index, content=content, payload=payload, svg=payload["svg_content"],
-            ordinal=max(0, _provider_attempt_count(payload) - 1), job=job,
-            checkpoint=guarded_checkpoint, async_session_maker=hooks.async_session_maker,
-            write_png=hooks.write_png, allow_existing_common_header=True)
+    try:
+        with timing.observe_stage(request, "render"):
+            result = await render.attempt_render(ctx=ctx, request=request, presentation_id=presentation_id,
+                index=index, content=content, payload=payload, svg=payload["svg_content"],
+                ordinal=max(0, _provider_attempt_count(payload) - 1), job=job,
+                checkpoint=guarded_checkpoint, async_session_maker=hooks.async_session_maker,
+                write_png=hooks.write_png, allow_existing_common_header=True)
+    except AuthoredStageError as error:
+        flagged = await _flag_known_cached_page(ctx, index, payload, error, manifest, input_digest,
+                                                job, guarded_checkpoint, hooks)
+        if flagged is None:
+            raise
+        return flagged
     verify_cached_page(payload, manifest, index, input_digest)
     if result is render.RETRY or payload.get("quality", {}).get("passed") is not True:
-        raise AuthoredStageError(slide_index=index, stage="render",
-                                 code="svg_partial_recovery_cached_quality_failed", retryable=False)
+        error = AuthoredStageError(slide_index=index, stage="render",
+                                   code="svg_partial_recovery_cached_quality_failed", retryable=False)
+        flagged = (None if result is render.RETRY else await _flag_known_cached_page(
+            ctx, index, payload, error, manifest, input_digest, job, guarded_checkpoint, hooks))
+        if flagged is None:
+            raise error
+        return flagged
     _record_page_render_evidence(payload, render_environment if render_environment
         == _page_render_environment(ctx, request, index) else None)
     if getattr(ctx, "quality_recovery_input_binding", None):
@@ -946,9 +983,90 @@ async def _remeasure_partial_cached_page(ctx, request, presentation_id, index, c
     return result
 
 
-async def _page(ctx, request, presentation_id, outline, language, job, index, state, hooks):
+async def _flag_known_cached_page(ctx, index, payload, error, manifest, input_digest, job, checkpoint, hooks):
+    """Keep a partial recovery's known page, flagged, when it re-measures below its gate.
+
+    The recovery manifest binds a known page's bytes (``verify_cached_page`` on
+    every checkpoint), so no substitute page of the rescue ladder may replace
+    it: the page that was measured is kept whatever its failure kind, flagged
+    as the ladder's keep rung flags (``svg:<code>``, ``verbatim_flag_only``).
+    Returns ``(payload, png)``, or None when the error is not the page's
+    quality, the deck may not publish a flagged page, or no measured page is
+    left to keep.
+    """
+    from services.generation_core.drivers.svg.terminal import FLAG_ONLY_OUTCOME, terminal_policy_of
+    from services.generation_core.quality.terminal_policy import TerminalPolicy
+    from services.generation_core.quality.terminal_slide_flag_only import flagged_entry
+    from services.svg_partial_recovery import verify_cached_page
+    from utils.hashing import sha256_hex
+
+    if terminal_policy_of(ctx) is TerminalPolicy.FAIL or not is_exhausted_page(error, index):
+        return None
+    svg = payload.get("svg_content")
+    if (not svg or payload.get("source_digest") != sha256_hex(svg.encode())
+            or not isinstance(payload.get("quality"), dict) or not payload.get("png_sha256")):
+        return None
+    verify_cached_page(payload, manifest, index, input_digest)
+    png = None
+    if not ctx.source_reflow:
+        png = hooks.read_png(payload)
+        if png is None or sha256_hex(png) != payload["png_sha256"]:
+            return None
+    payload["terminal"] = flagged_entry(index=index, reason=f"svg:{error.code}", attempted=False,
+                                        outcome=FLAG_ONLY_OUTCOME)
+    if getattr(ctx, "quality_recovery_input_binding", None):
+        from services.generation_core.drivers.svg.quality_recovery import local_evidence_binding
+        payload["quality_recovery_local_evidence"] = local_evidence_binding(
+            ctx.quality_recovery_input_binding, payload)
+    await checkpoint(job, index, payload=payload)
+    import logging
+    logging.getLogger(__name__).warning("[svg] known cached page kept flagged slide=%d code=%s",
+                                        index + 1, error.code)
+    return payload, png
+
+
+def _saved_page_reusable(ctx, saved, index):
+    """Whether a saved, measured page is resumed exactly as saved.
+
+    Raises when the page's evidence binds something else, which is integrity:
+    its local evidence names another recovery binding (another operation or
+    runtime), the runtime refuses checkpoint reuse, or a source page is no
+    longer the verbatim source page. A page already flagged (rescued, or named
+    by a review) resumes as flagged. Returns False -- measure it again -- when
+    nothing is wrong with the binding but the saved measurement cannot stand:
+    its last attempt ended before its recovery evidence was written, or a
+    source page did not pass. A source page whose rendering was not verified
+    resumes as saved; publication flags it (``publish.py``).
+    """
     from services.svg_source_layout import verify_source_receipt
 
+    terminal = saved.get("terminal")
+    flagged = bool(terminal or saved.get(deck_quality.REVIEW_FLAG_KEY))
+    if getattr(ctx, "quality_recovery_input_binding", None):
+        from services.generation_core.drivers.svg.quality_recovery import local_evidence_binding
+        if getattr(ctx, "quality_recovery_checkpoint_reuse_eligible", False) is not True:
+            raise ValueError("svg_quality_recovery_local_evidence_stale")
+        evidence = saved.get("quality_recovery_local_evidence")
+        if evidence is None and not flagged:
+            # Evidence is written only after a render returns: the page's last
+            # attempt failed (render checkpoints a measured failure before it
+            # raises), or the run stopped in between. Nothing is bound to it.
+            return False
+        if evidence != local_evidence_binding(ctx.quality_recovery_input_binding, saved):
+            raise ValueError("svg_quality_recovery_local_evidence_stale")
+    if ctx.source_reflow:
+        if (terminal or {}).get("remakeOutcome") == PLACEHOLDER_OUTCOME:
+            return True  # a failure placeholder claims no source page: flagged
+        verify_source_receipt(saved["svg_content"], saved.get("source_preservation"),
+                             ctx.source_document, index)
+        if flagged:
+            return True  # a rescued or review-flagged page: verbatim, flagged
+        if saved["quality"].get("passed") is not True:
+            return False
+    return True
+
+
+async def _page(ctx, request, presentation_id, outline, language, job, index, state, hooks):
     async with ctx.semaphore:
         if state.fatal_error is not None:
             raise state.fatal_error
@@ -1008,6 +1126,15 @@ async def _page(ctx, request, presentation_id, outline, language, job, index, st
                     content, saved, input_digest, job, hooks)
             except _KnownCachedRepairRequired as repair:
                 saved = repair.payload
+            except _CachedRemeasureFailed as failed:
+                with timing.observe_stage(request, "render"):
+                    rescued = await rescue_terminal_page(ctx=ctx, request=request, index=index,
+                        content=content, payload=failed.payload, error=failed.error, job=job,
+                        checkpoint=hooks.checkpoint, write_png=hooks.write_png, read_png=hooks.read_png,
+                        presentation_id=presentation_id, async_session_maker=hooks.async_session_maker)
+                if rescued is None:
+                    raise
+                return rescued
         png = hooks.read_png(saved)
         if saved.get("cache_only_remeasurement") or state.cache_only_approval is not None:
             if state.cache_only_approval is None:
@@ -1072,23 +1199,12 @@ async def _page(ctx, request, presentation_id, outline, language, job, index, st
                     failed["cache_only_remeasurement"].update(status="failed", error_code=getattr(error, "code", type(error).__name__))
                     await hooks.checkpoint(job, index, payload=failed)
                 raise
-        if png is not None and saved.get("svg_content") and saved.get("quality"):
-            if getattr(ctx, "quality_recovery_input_binding", None):
-                from services.generation_core.drivers.svg.quality_recovery import local_evidence_binding
-                if (getattr(ctx, "quality_recovery_checkpoint_reuse_eligible", False) is not True
-                        or saved.get("quality_recovery_local_evidence") != local_evidence_binding(
-                        ctx.quality_recovery_input_binding, saved)):
-                    raise ValueError("svg_quality_recovery_local_evidence_stale")
-            if ctx.source_reflow:
-                verify_source_receipt(saved["svg_content"], saved.get("source_preservation"),
-                                     ctx.source_document, index)
-                if saved.get("terminal"):
-                    return saved, None  # a flag-only page: verbatim, flagged, not verified
-                if saved["quality"].get("passed") is not True:
-                    raise ValueError("svg_source_quality_failed")
-                if saved["source_preservation"].get("rendering_verified") is not True:
-                    raise ValueError("svg_source_quality_unverified")
+        if (png is not None and saved.get("svg_content") and saved.get("quality")
+                and _saved_page_reusable(ctx, saved, index)):
             return saved, None if ctx.source_reflow else png
+        # A saved page that is not reusable as saved falls through: the attempt
+        # loop below measures its SVG again (no provider call while the SVG is
+        # set) and, out of attempts, hands it to the rescue ladder.
         payload = saved or {"schema_version": "svg-slide-checkpoint/v1", "source_format": "svg",
                             "input_digest": input_digest, "attempts": []}
         payload.setdefault("attempts", [])
@@ -1134,13 +1250,14 @@ async def _page(ctx, request, presentation_id, outline, language, job, index, st
                 if (read_quality_recovery_plan(ctx.snapshot)["page_attempt_limit"] == 3
                         and actual_provider_attempt_count(payload) == 2
                         and not payload.get("provider_failures")
-                        and error.code in {"svg_validation_failed", "svg_source_quality_failed", "svg_repair_budget_exhausted"}
+                        and is_exhausted_page(error, index)
                         and not payload.get("quality_recovery_fallback")):
                     return ScreenRecoveryPending(payload, error)
             with timing.observe_stage(request, "render"):
                 rescued = await rescue_terminal_page(ctx=ctx, request=request, index=index, content=content,
                     payload=payload, error=error, job=job, checkpoint=hooks.checkpoint,
-                    write_png=hooks.write_png)
+                    write_png=hooks.write_png, read_png=hooks.read_png, presentation_id=presentation_id,
+                    async_session_maker=hooks.async_session_maker)
             if rescued is None:
                 raise
             return rescued
@@ -1279,7 +1396,10 @@ async def _remeasure_append_only_cache(ctx, request, presentation_id, index, con
         or input_digest != witness["input_digest"]
         or (marker.get("status") != "completed" and _digest(saved.get("nativeDeclarations")) != witness["native_digest"])):
         raise ValueError("svg_recovery_cache_changed")
-    if marker.get("status") == "completed" and saved.get("quality", {}).get("passed") is True:
+    if (marker.get("status") == "completed" and saved.get("quality", {}).get("passed") is True
+            or marker.get("status") == "failed" and saved.get("terminal")):
+        # Remeasured and passed, or remeasured, failed and already rescued
+        # in place (the ladder kept it flagged): either resumes as saved.
         png = hooks.read_png(saved)
         if png is not None:
             return saved, None if ctx.source_reflow else png
@@ -1304,18 +1424,31 @@ async def _remeasure_append_only_cache(ctx, request, presentation_id, index, con
                 else:
                     raise ValueError("svg_recovery_cache_changed")
         return await hooks.checkpoint(active_job, page_index, payload=payload)
-    result = await render.attempt_render(ctx=ctx, request=request, presentation_id=presentation_id,
-        index=index, content=content, payload=payload, svg=svg, ordinal=max(0, len(saved.get("attempts", []))-1),
-        job=job, checkpoint=guarded_checkpoint, async_session_maker=hooks.async_session_maker,
-        write_png=hooks.write_png, allow_existing_common_header=True)
-    if result is render.RETRY or payload.get("quality", {}).get("passed") is not True:
+    measured_error = None
+    try:
+        result = await render.attempt_render(ctx=ctx, request=request, presentation_id=presentation_id,
+            index=index, content=content, payload=payload, svg=svg, ordinal=max(0, len(saved.get("attempts", []))-1),
+            job=job, checkpoint=guarded_checkpoint, async_session_maker=hooks.async_session_maker,
+            write_png=hooks.write_png, allow_existing_common_header=True)
+    except AuthoredStageError as error:
+        if not is_exhausted_page(error, index):
+            raise
+        # The cached page measured below one of its gates: the same quality
+        # failure as a remeasured page that did not pass.
+        result, measured_error = None, error
+    if result is None or result is render.RETRY or payload.get("quality", {}).get("passed") is not True:
         payload["append_only_cache"]["status"] = "failed"
         await guarded_checkpoint(job, index, payload=payload)
         if witness.get("known_quality_repair_approved") and witness.get("max_additional_author_calls") == 1:
             payload["append_only_cached_repair"] = payload.pop("append_only_cache")
             await hooks.checkpoint(job, index, payload=payload)
             raise _KnownCachedRepairRequired(payload)
-        raise ValueError("svg_source_quality_failed")
+        # A RETRY leaves the earlier measurement in ``quality``; the ladder
+        # must not keep the page on it.
+        raise _CachedRemeasureFailed(
+            {key: value for key, value in payload.items() if key != "quality"} if result is render.RETRY
+            else payload, measured_error or AuthoredStageError(slide_index=index, stage="render",
+                code="svg_source_quality_failed", retryable=False))
     payload["append_only_cache"]["status"] = "completed"
     await guarded_checkpoint(job, index, payload=payload)
     return payload, result[1]
@@ -1325,3 +1458,17 @@ class _KnownCachedRepairRequired(Exception):
     def __init__(self, payload):
         self.payload = payload
         super().__init__("verified_cached_quality_requires_approved_repair")
+
+
+class _CachedRemeasureFailed(ValueError):
+    """An append-only cached page that remeasured below its gate.
+
+    Still the ``svg_source_quality_failed`` ``ValueError`` it always was, so a
+    caller that does not rescue fails as before; ``_page`` hands ``payload``
+    and the page-level ``error`` to the rescue ladder.
+    """
+
+    def __init__(self, payload, error):
+        self.payload = payload
+        self.error = error
+        super().__init__("svg_source_quality_failed")

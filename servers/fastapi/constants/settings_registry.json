@@ -870,11 +870,11 @@
     {
       "key": "AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW",
       "type": "boolean",
-      "default": false,
+      "default": true,
       "secret": false,
       "targets": ["fastapi.runtime"],
       "group": "authored.quality",
-      "description": "Publish a verbatim source-reflow deck with geometry-defective slides flagged after strict whole-deck source readback passes, without re-authoring those slides."
+      "description": "Publish a verbatim source-reflow deck with its out-of-attempts slides flagged instead of failing the deck: the last verbatim render when only its layout failed, else a plain verbatim layout of the slide's source units, never re-authored text. Shared by the authored and SVG drivers."
     },
     {
       "key": "AUTHORED_LOCAL_FIT_SOURCE_REFLOW",

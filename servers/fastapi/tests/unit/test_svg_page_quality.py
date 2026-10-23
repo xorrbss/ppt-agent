@@ -117,7 +117,13 @@ def test_resolve_terminal_policy_defaults_fallback_for_ordinary_decks():
     assert resolve_terminal_policy(source_reflow=False, exact_reconstruction=False) is TerminalPolicy.FALLBACK
 
 
-def test_resolve_terminal_policy_defaults_fail_for_source_reflow():
+def test_resolve_terminal_policy_defaults_flag_only_for_source_reflow():
+    # Default on since page quality stopped failing decks (2026-10-23).
+    assert resolve_terminal_policy(source_reflow=True, exact_reconstruction=False) is TerminalPolicy.FLAG_ONLY
+
+
+def test_resolve_terminal_policy_disabled_knob_fails_source_reflow(monkeypatch):
+    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", "false")
     assert resolve_terminal_policy(source_reflow=True, exact_reconstruction=False) is TerminalPolicy.FAIL
 
 
@@ -142,7 +148,7 @@ def test_runtime_profile_pins_terminal_policy_and_vision_advisory_by_class():
     assert ordinary.vision_advisory is True
 
     reflow = resolve_svg_runtime_profile(source_reflow=True)
-    assert reflow.terminal_policy is TerminalPolicy.FAIL
+    assert reflow.terminal_policy is TerminalPolicy.FLAG_ONLY
     assert reflow.vision_advisory is True
 
     raster = resolve_svg_runtime_profile(source_reflow=False, raster_reconstruction=True)

@@ -465,9 +465,6 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
         await version_service.snapshot_slides(session, presentation.id,
             [item.model_dump(mode="json") for item in slides],
             label=user_message(UserMessageKey.VERSION_LABEL_PAGE_REMAKE, page=index + 1), force=True)
-    from services.svg_page_publication import classify_svg_page_quality
-    measured_quality = classify_svg_page_quality(svg_content=svg, quality=rendered.quality,
-        index=index, png_path=image, receipt=((target.content or {}).get("svgReceipt") or {}) if local else {})
     content = deepcopy(target.content or {})
     from services.generation_core.native_objects import SLIDE_CONTENT_KEY as NATIVE_OBJECTS_KEY
     receipt = dict(content.get("svgReceipt") or {})
@@ -494,12 +491,23 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
     content["svgReceipt"] = receipt
     if envelope is not None:
         content["svgAssetManifest"] = envelope
-    from services.svg_page_publication import set_svg_page
-    fields = {}
-    set_svg_page(fields, svg_content=svg, content=content, quality=measured_quality, png=rendered.png)
-    fields["content"]["svgReceipt"].update(_write_png(rendered.png))
     from services.svg_authoring_profile import read_quality_recovery_policy
+    from services.svg_page_publication import classify_svg_page_quality, current_review_flag, set_svg_page
     recovery_policy = read_quality_recovery_policy(presentation.theme["svg"].get("styleSnapshot", {}))
+    # The design verdict on the old bytes is gone with them. Under a review
+    # policy the deck review cannot certify the new page: it is unreviewed
+    # (publication's vocabulary) until a saved review judges it.
+    review_flag = current_review_flag(receipt, svg)
+    if recovery_policy:
+        from services.generation_core.drivers.svg.quality import _design_flag
+        from services.svg_page_publication import replace_design_verdict
+        review_flag = replace_design_verdict(review_flag, _design_flag(index, receipt, None, blocking=False))
+    measured_quality = classify_svg_page_quality(svg_content=svg, quality=rendered.quality,
+        index=index, png_path=image, receipt=receipt, review_flag=review_flag)
+    fields = {}
+    set_svg_page(fields, svg_content=svg, content=content, quality=measured_quality, png=rendered.png,
+                 review_flag=review_flag)
+    fields["content"]["svgReceipt"].update(_write_png(rendered.png))
     if recovery_policy:
         fields["content"]["svgReceipt"]["qualityRecoveryReview"] = {"status": "unreviewed",
             "source_revision": presentation.revision, "prior_source_digest": source_digest(target.svg_content),
@@ -523,17 +531,12 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
     await session.refresh(target)
     theme = dict(presentation.theme)
     svg_meta = dict(theme["svg"])
-    qualities = list(svg_meta.get("quality", []))
-    if index < len(qualities):
-        qualities[index] = measured_quality
-    from services.generation_core.quality.page_outcome import review_page_indices
-    review = review_page_indices(qualities)
-    quality_status = "review_required" if review else "passed"
-    if recovery_policy:
-        # The old deck review cannot certify a newly changed page or its flow.
-        quality_status = "review_required"
-        review = sorted(set(review) | {index})
-    svg_meta.update(quality=qualities, reviewPages=review, qualityStatus=quality_status)
+    from types import SimpleNamespace
+    from services.svg_page_publication import svg_deck_quality_fields
+    published = SimpleNamespace(id=getattr(target, "id", None), svg_content=svg, content=fields["content"])
+    svg_meta.update(svg_deck_quality_fields([published if position == index else slide
+                                             for position, slide in enumerate(slides)], svg_meta))
+    quality_status = svg_meta["qualityStatus"]
     theme["svg"] = svg_meta
     presentation.theme = theme
     task.data = {**data, "phase": "published", "publish": {"status": "published", "rollback_available": True}}

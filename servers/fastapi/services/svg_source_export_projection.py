@@ -86,8 +86,10 @@ async def project_cached_source_tables(session, *, presentation, slides, receipt
     snapshot = ((presentation.theme or {}).get("svg") or {}).get("styleSnapshot") or {}
     if (snapshot.get("source_template") or {}).get("composition_mode") != "free-svg":
         return slides
-    if not receipts or not any(not r.get("native_tables") and any(b["kind"] == "table_cell" for b in r["bindings"])
-                               for r in receipts):
+    # A failure placeholder (``None`` receipt) has no source table to project.
+    present = [r for r in receipts or () if r is not None]
+    if not present or not any(not r.get("native_tables") and any(b["kind"] == "table_cell" for b in r["bindings"])
+                              for r in present):
         return slides
     if presentation.owner_id != owner_id:
         raise ValueError("svg_source_export_owner_mismatch")
@@ -100,8 +102,8 @@ async def project_cached_source_tables(session, *, presentation, slides, receipt
     records = (await session.scalars(select(SourceContentManifestRecord).where(
         SourceContentManifestRecord.owner_id == owner_id,
         SourceContentManifestRecord.owner_scope == str(owner_id),
-        SourceContentManifestRecord.manifest_digest == receipts[0]["manifest_digest"],
-        SourceContentManifestRecord.source_digest == receipts[0]["source_digest"]))).all()
+        SourceContentManifestRecord.manifest_digest == present[0]["manifest_digest"],
+        SourceContentManifestRecord.source_digest == present[0]["source_digest"]))).all()
     if len(records) != 1:
         raise ValueError("svg_source_export_manifest_binding_invalid")
     manifest = _manifest_from_record(records[0], owner_id=owner_id)
@@ -113,7 +115,8 @@ async def project_cached_source_tables(session, *, presentation, slides, receipt
         select(AuthoredSlideCheckpoint).where(AuthoredSlideCheckpoint.job_id == job.id))).all()}
     projected = []
     for slide, receipt in zip(slides, receipts, strict=True):
-        if receipt.get("native_tables") or not any(b["kind"] == "table_cell" for b in receipt["bindings"]):
+        if (receipt is None or receipt.get("native_tables")
+                or not any(b["kind"] == "table_cell" for b in receipt["bindings"])):
             projected.append(slide)
             continue
         projected.append(replay_source_table_projection(slide, receipt, checkpoints.get(slide.index) or {},
