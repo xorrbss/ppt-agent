@@ -1,4 +1,6 @@
+import asyncio
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -8,6 +10,53 @@ from utils.runtime_settings import (
     get_published_process_runtime_settings,
     replace_process_runtime_settings,
 )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def process_database_schema(tmp_path_factory):
+    """Give implicit process-DB users a private, initialized test database.
+
+    Never create tables in the configured workstation/CI database. Independent
+    engines (including empty migration databases) remain owned by their tests.
+    Keep the original maker object so captured function defaults are isolated too.
+    """
+    from sqlalchemy import event
+    from sqlalchemy.ext.asyncio import create_async_engine
+    from sqlmodel import SQLModel
+
+    from services import database
+
+    path = tmp_path_factory.mktemp("process-database") / "process.db"
+    engine = create_async_engine(f"sqlite+aiosqlite:///{path.as_posix()}")
+    @event.listens_for(engine.sync_engine, "connect")
+    def configure_connection(connection, _record):
+        database._configure_sqlite_connection(connection)
+
+    original_engine = database.sql_engine
+    maker = database.async_session_maker
+    original_bind = maker.kw.get("bind")
+
+    async def create_schema():
+        async with engine.begin() as connection:
+            await connection.run_sync(SQLModel.metadata.create_all)
+        await engine.dispose()
+
+    asyncio.run(create_schema())
+    with pytest.MonkeyPatch.context() as patch:
+        # Imports may have captured the process engine during collection. Match
+        # by identity so tests' own engines and unrelated bindings stay intact.
+        for module in list(sys.modules.values()):
+            if module is None:
+                continue
+            for name, value in list(vars(module).items()):
+                if value is original_engine:
+                    patch.setattr(module, name, engine)
+        maker.configure(bind=engine)
+        try:
+            yield engine
+        finally:
+            maker.configure(bind=original_bind)
+            asyncio.run(engine.dispose())
 
 
 class FakeAsyncSession:
