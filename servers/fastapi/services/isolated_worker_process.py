@@ -114,6 +114,10 @@ class IsolatedWorkerCrashedError(IsolatedWorkerProcessError):
         super().__init__("public_worker_crashed", resource_metrics=resource_metrics)
 
 
+class IsolatedWorkerTransportClosedError(IsolatedWorkerProcessError):
+    """The trusted transport shut down while this worker was active."""
+
+
 # Explicit OS crash statuses; normal Python failure (exit 1) is not a crash.
 _WINDOWS_CRASH_STATUSES = frozenset({
     0xC0000005,  # STATUS_ACCESS_VIOLATION
@@ -364,7 +368,11 @@ async def execute_isolated_worker_job(
             environment=environment,
         )
     except TrustedWorkerWireError as error:
-        raise IsolatedWorkerProcessError(
+        from services.trusted_executor.wire_transport import TrustedWorkerTransportClosedError
+
+        error_type = (IsolatedWorkerTransportClosedError
+                      if isinstance(error, TrustedWorkerTransportClosedError) else IsolatedWorkerProcessError)
+        raise error_type(
             error.code,
             resource_metrics=error.resource_metrics,
         ) from error

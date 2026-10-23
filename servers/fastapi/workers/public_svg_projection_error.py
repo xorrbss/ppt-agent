@@ -17,9 +17,12 @@ class SvgExportProjectionError(PublicWorkerExecutionError):
         candidate = getattr(error, "code", None)
         if candidate is None and isinstance(error, ValueError):
             candidate = str(error)
+        type_name = type(error).__name__
+        if not re.fullmatch(r"[A-Z][a-zA-Z0-9]{0,63}", type_name):
+            type_name = ("Exception" + re.sub(r"[^a-zA-Z0-9]", "", type_name))[:64]
         self.reason_code = (
             candidate if isinstance(candidate, str) and re.fullmatch(r"svg_[a-z0-9_]{1,100}", candidate)
-            else type(error).__name__
+            else type_name
         )
         self.detail = {"page_index": self.page_index, "reason_code": self.reason_code}
 

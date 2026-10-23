@@ -591,11 +591,16 @@ def test_a_losing_racer_joins_and_publishes_no_second_artifact(
     asyncio.run(scenario())
 
 
-def test_a_joiner_fails_with_the_leader_failure_code(
+@pytest.mark.parametrize("verdict", [
+    "public_export_hybrid_not_editable", "public_export_delivered_mode_mismatch",
+    "CancelledError", "public_worker_crashed", "OperationalError", "public_export_worker_timeout",
+])
+def test_a_joiner_propagates_content_verdicts_and_reclaims_failed_attempts(
     harness,
     monkeypatch: pytest.MonkeyPatch,
+    verdict: str,
 ) -> None:
-    """Failure propagates truthfully: no synthesized success, no artifact."""
+    """Only content verdicts propagate; failed attempts permit a new worker."""
 
     async def scenario() -> None:
         export = await harness()
@@ -639,21 +644,28 @@ def test_a_joiner_fails_with_the_leader_failure_code(
                 worker_id=leader.worker_id,
                 attempt_token=leader.singleflight.attempt_token or "",
                 fencing_token=leader.singleflight.fencing_token,
-                error_code="public_export_worker_timeout",
+                error_code=verdict,
             )
             await session.commit()
 
-        with pytest.raises(
-            PublicExportOperationError,
-            match="public_export_worker_timeout",
-        ):
-            await execute_canonical_export_execution(
+        if verdict in {"public_export_hybrid_not_editable", "public_export_delivered_mode_mismatch"}:
+            with pytest.raises(PublicExportOperationError, match=verdict):
+                await execute_canonical_export_execution(
+                    joiner_operation,
+                    execution=joiner,
+                    session_factory=export.sessions,
+                )
+            assert export.worker_calls == []
+            assert await export.published_artifact_count() == 0
+        else:
+            result = await execute_canonical_export_execution(
                 joiner_operation,
                 execution=joiner,
                 session_factory=export.sessions,
             )
-        assert export.worker_calls == []
-        assert await export.published_artifact_count() == 0
+            assert result.artifact.created_by_operation_id == joiner_operation.operation_id
+            assert len(export.worker_calls) == 1
+            assert await export.published_artifact_count() == 1
 
     asyncio.run(scenario())
 

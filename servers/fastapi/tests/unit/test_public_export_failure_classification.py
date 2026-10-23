@@ -93,6 +93,7 @@ def _sqlite_error(code):
     PublicExportOperationError("public_export_editability_evidence_pending"),
     PublicExportOperationError("public_export_worker_failed"),
     PublicExportOperationError("svg_export_worker_failed"),
+    PublicExportOperationError("svg_export_asset_lock_timeout"),
     IsolatedWorkerProcessError("deadline_exceeded"),
     IsolatedWorkerProcessError("public_worker_execution_failed"),
     TrustedWorkerWireError("trusted_worker_transport_closed"),
@@ -119,6 +120,7 @@ def test_svg_only_retries_explicit_infrastructure_and_readiness_types(error):
     ValueError("private_source_text"),
     RuntimeError("public_export_singleflight_in_flight"),
     ValueError("deadline_exceeded"),
+    ValueError("svg_export_asset_lock_timeout"),
     _postgres_error("42P01"),
     _postgres_error("28P01"),
     _sqlite_error(sqlite3.SQLITE_ERROR),
@@ -173,3 +175,17 @@ def test_authored_terminal_asset_policy_stays_identical():
     assert result.retryable is False
     assert result.code == "asset_not_found"
     assert result.detail == {}
+
+
+@pytest.mark.parametrize("error", [
+    _postgres_error("55P03"), _postgres_error("42P01"),
+    DBAPIError(None, None, Exception(), connection_invalidated=True),
+    DatabaseTimeoutError("private SQL", code="e3q8"),
+])
+def test_svg_database_reasons_use_types_without_changing_authored_reasons(error):
+    svg = classified_public_export_error(error, strategy="svg")
+    assert svg.detail["reason_code"] == type(error).__name__
+    authored = classified_public_export_error(error)
+    assert authored.retryable is True
+    assert authored.code == "presentation_export_failed"
+    assert authored.detail == {"reason_code": error.code}

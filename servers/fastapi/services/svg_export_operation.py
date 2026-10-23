@@ -985,7 +985,9 @@ async def _build_slide_asset_bindings(context, *, slides, service, session, tena
             attempt_token=claim.attempt_token, fencing_token=claim.fencing_token, operation_kind="export")
     except DBAPIError as error:
         await context.raise_if_cancelled()
-        raise ValueError("svg_export_asset_lock_timeout") from error
+        if (getattr(error.orig, "sqlstate", None) or getattr(error.orig, "pgcode", None)) != "55P03":
+            raise
+        raise PublicExportOperationError("svg_export_asset_lock_timeout") from error
     if current is not None:
         await session.refresh(current)
         await session.refresh(presentation, attribute_names=["owner_id", "revision"])

@@ -84,6 +84,9 @@ def _job():
 
 @pytest.mark.parametrize("error", [
     SvgExportProjectionError(2, ValueError("svg_source_export_fragment_duplicate")),
+    SvgExportProjectionError(2, type("_Private_Error", (ValueError,), {})("private source")),
+    SvgExportProjectionError(2, type("Error" * 30, (TypeError,), {})("private source")),
+    SvgExportProjectionError(2, type("lowercase_error", (TypeError,), {})("private source")),
     ValueError("private authored source"),
     PublicWorkerExecutionError("public_export_hybrid_not_editable"),
 ])
@@ -135,7 +138,8 @@ def test_projection_failure_crosses_real_worker_wire_and_authored_evidence_stays
         if expected:
             assert classified.code == "svg_source_export_projection_invalid"
             assert classified.detail["page_index"] == 2
-            assert classified.detail["reason_code"] == "svg_source_export_fragment_duplicate"
+            assert classified.detail["reason_code"] == error.reason_code
+            assert projection_failure_detail(error.detail) == error.detail
 
     asyncio.run(scenario())
 
