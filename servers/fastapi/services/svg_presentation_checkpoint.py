@@ -25,6 +25,24 @@ from utils.datetime_utils import as_utc, get_current_utc_datetime
 from utils.hashing import canonical_json_sha256, sha256_hex
 
 
+_AUTHORED_JOB_STAGE_ORDER = {
+    stage: index
+    for index, stage in enumerate((
+        "outline", "author", "illustrate", "render", "persist", "repair",
+        "checkpoint", "export", "publication",
+    ))
+}
+
+
+def _monotonic_authored_job_stage(current: str | None, candidate: str) -> str:
+    """Keep SVG page checkpoints from moving deck progress to an earlier stage."""
+    current_order = _AUTHORED_JOB_STAGE_ORDER.get(current)
+    candidate_order = _AUTHORED_JOB_STAGE_ORDER[candidate]
+    if current_order is None or current_order > candidate_order:
+        return current or candidate
+    return candidate
+
+
 def _digest(value: object) -> str:
     return canonical_json_sha256(value, allow_nan=True)
 
@@ -581,13 +599,21 @@ async def _checkpoint(job, index, *, payload=None):
             # clears it, so a re-entry stamps anew.
             now = get_current_utc_datetime()
             same_attempt = row.attempt_token == job.attempt_token
+            author_started = row.author_started_at if same_attempt else None
+            render_started = row.render_started_at if same_attempt else None
             authored_at = row.author_completed_at if same_attempt and row.author_status == "completed" else None
             rendered_at = row.render_completed_at if same_attempt and row.render_status == "completed" else None
             row.svg_checkpoint = payload
             row.attempt_token = job.attempt_token
             row.author_status = "completed" if payload.get("svg_content") else "running"
             row.illustrate_status = "skipped"
-            row.render_status = "completed" if payload.get("png_sha256") else "pending"
+            row.render_status = (
+                "completed" if payload.get("png_sha256")
+                else "running" if payload.get("svg_content")
+                else "pending"
+            )
+            row.author_started_at = author_started or now
+            row.render_started_at = render_started or (now if payload.get("svg_content") else None)
             row.author_completed_at = (authored_at or now) if payload.get("svg_content") else None
             row.render_completed_at = (rendered_at or now) if payload.get("png_sha256") else None
             row.failed_stage = None
@@ -597,7 +623,14 @@ async def _checkpoint(job, index, *, payload=None):
             states = await session.scalars(select(AuthoredSlideCheckpoint.render_status).where(
                 AuthoredSlideCheckpoint.job_id == job.id))
             active.completed_slides = sum(state == "completed" for state in states)
-            active.current_stage = "render" if payload.get("svg_content") else "author"
+            # owned_job serializes fenced checkpoint writes on the job row.
+            # Refresh after acquiring that lock so interleaved page writers
+            # project the latest deck stage rather than a stale ORM snapshot.
+            await session.refresh(active, attribute_names=["current_stage"])
+            candidate_stage = "render" if payload.get("svg_content") else "author"
+            active.current_stage = _monotonic_authored_job_stage(
+                active.current_stage, candidate_stage
+            )
             session.add(active)
         result = dict(row.svg_checkpoint or {})
         await session.commit()
