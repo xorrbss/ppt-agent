@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
@@ -86,6 +87,69 @@ PUBLIC_GENERATION_TIMING_STAGES = (
     "chromiumReview",
     "publication",
 )
+OPTIONAL_GENERATION_OBSERVATIONS = frozenset({
+    "setup.title", "setup.plan_llm", "setup.scenes", "setup.icon_sheets",
+    "setup.header_design", "setup.header_representative", "setup.header_selection",
+    "setup.prepare_local", "render.wait", "render.work", "render.post",
+    "render.checkpoint", "quality.vqa",
+})
+MAX_RENDER_ATTEMPT_OBSERVATIONS = 800
+MAX_RENDER_STAGE_WINDOWS = 32
+
+
+def _optional_observation_name(name: str) -> bool:
+    return name in OPTIONAL_GENERATION_OBSERVATIONS or bool(
+        re.fullmatch(r"publication\.[a-z][a-z0-9_]{0,63}", name)
+    )
+
+
+def _optional_observations(value: object) -> dict[str, dict[str, int]]:
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise ValueError("generation_optional_observations_invalid")
+    result = {}
+    for name, observation in value.items():
+        if not isinstance(name, str) or not _optional_observation_name(name) or not isinstance(observation, Mapping):
+            raise ValueError("generation_optional_observations_invalid")
+        entry = {key: _bounded_timing_ms(observation.get(key), name)
+                 for key in ("startMillis", "endMillis", "durationMillis")}
+        if entry["endMillis"] < entry["startMillis"]:
+            raise ValueError("generation_optional_observations_invalid")
+        result[name] = entry
+    return result
+
+
+def _render_attempt_observations(value: object) -> tuple[dict[str, object], ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, (list, tuple)) or len(value) > MAX_RENDER_ATTEMPT_OBSERVATIONS:
+        raise ValueError("generation_render_observations_invalid")
+    result = []
+    for attempt in value:
+        if (not isinstance(attempt, Mapping) or attempt.get("schema") != "svg-render-attempt-timing/v1"
+                or type(attempt.get("pageIndex")) is not int or attempt["pageIndex"] < 0
+                or type(attempt.get("attemptOrdinal")) is not int or attempt["attemptOrdinal"] < 1
+                or not isinstance(attempt.get("stages"), list)
+                or len(attempt["stages"]) > MAX_RENDER_STAGE_WINDOWS):
+            raise ValueError("generation_render_observations_invalid")
+        stages = []
+        for stage in attempt["stages"]:
+            if not isinstance(stage, Mapping) or stage.get("name") not in {"wait", "work", "post", "checkpoint"}:
+                raise ValueError("generation_render_observations_invalid")
+            clocks = [stage.get(key) for key in ("startMonotonic", "endMonotonic")]
+            if any(type(clock) not in (int, float) or not 0 <= clock < float("inf") for clock in clocks):
+                raise ValueError("generation_render_observations_invalid")
+            if clocks[1] < clocks[0]:
+                raise ValueError("generation_render_observations_invalid")
+            stages.append({"name": stage["name"], "startMonotonic": clocks[0], "endMonotonic": clocks[1],
+                           "durationMillis": _bounded_timing_ms(stage.get("durationMillis"), "render")})
+        dropped = _bounded_timing_ms(attempt.get("stageWindowsDropped", 0), "render_dropped")
+        result.append({"schema": attempt["schema"], "pageIndex": attempt["pageIndex"],
+                       "attemptOrdinal": attempt["attemptOrdinal"], "stages": stages,
+                       "eventLoopLagMillis": _bounded_timing_ms(attempt.get("eventLoopLagMillis"), "loop_lag"),
+                       **({"stageWindowsDropped": dropped} if dropped else {})})
+    return tuple(result)
 #: The writer is ``services/provider_operation_usage.py``; taking its tuple
 #: rather than restating it keeps the validator from drifting away from the
 #: snapshot it validates (the check below is an exact set match).
@@ -552,6 +616,9 @@ class GenerationAttemptTimingReceiptV2:
     vision_advisory: dict[str, object] | None = None
     provenance: dict[str, object] | None = None
     receipt_digest: str = ""
+    observations: dict[str, dict[str, int]] = field(default_factory=dict)
+    render_attempts: tuple[dict[str, object], ...] = ()
+    render_attempts_dropped: int = 0
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -584,6 +651,9 @@ class GenerationAttemptTimingReceiptV2:
             ),
             "receiptDigest": self.receipt_digest,
             **({"provenance": self.provenance} if self.provenance is not None else {}),
+            **({"observations": self.observations} if self.observations else {}),
+            **({"renderAttempts": list(self.render_attempts)} if self.render_attempts else {}),
+            **({"renderAttemptsDropped": self.render_attempts_dropped} if self.render_attempts_dropped else {}),
         }
 
 
@@ -596,6 +666,10 @@ def _attempt_receipt_digest(receipt: GenerationAttemptTimingReceipt) -> str:
 def _attempt_receipt_v2_digest(receipt: GenerationAttemptTimingReceiptV2) -> str:
     payload = receipt.to_dict()
     payload.pop("receiptDigest", None)
+    # Diagnostics never participate in reuse or attestation identity.
+    payload.pop("observations", None)
+    payload.pop("renderAttempts", None)
+    payload.pop("renderAttemptsDropped", None)
     return canonical_json_digest(payload, allow_nan=True)
 
 
@@ -755,6 +829,9 @@ def _attempt_receipt_v2_from_dict(
         deck_instruments=deck_instruments_field(_nested(value.get("instruments"), "deck")),
         vision_advisory=vision_advisory_field(_nested(value.get("advisory"), "vision")),
         provenance=speed_provenance(value.get("provenance")),
+        observations=_optional_observations(value.get("observations")),
+        render_attempts=_render_attempt_observations(value.get("renderAttempts")),
+        render_attempts_dropped=_bounded_timing_ms(value.get("renderAttemptsDropped", 0), "render_dropped"),
         receipt_digest=_required_sha256(value.get("receiptDigest"), "receipt_digest"),
     )
     if receipt.receipt_digest != _attempt_receipt_v2_digest(receipt):
@@ -902,6 +979,9 @@ def create_generation_attempt_timing_receipt_v2(
     deck_instruments: Mapping[str, object] | None = None,
     vision_advisory: Mapping[str, object] | None = None,
     provenance: Mapping[str, object] | None = None,
+    observations: Mapping[str, Mapping[str, object]] | None = None,
+    render_attempts: Sequence[Mapping[str, object]] = (),
+    render_attempts_dropped: int = 0,
 ) -> GenerationAttemptTimingReceiptV2:
     """Seal one v2 terminal receipt without prompt, content, or provider traces.
 
@@ -954,19 +1034,19 @@ def create_generation_attempt_timing_receipt_v2(
     public_stages: dict[str, dict[str, object]] = {}
     invalid_reasons: list[str] = []
     for public_name in PUBLIC_GENERATION_TIMING_STAGES:
-        observations = [
+        source_observations = [
             normalized_observations[source_name]
             for source_name in public_sources[public_name]
             if source_name in normalized_observations
         ]
-        if observations:
-            merged_start = min(item["startMillis"] for item in observations)
-            merged_end = max(item["endMillis"] for item in observations)
+        if source_observations:
+            merged_start = min(item["startMillis"] for item in source_observations)
+            merged_end = max(item["endMillis"] for item in source_observations)
             public_stages[public_name] = {
                 "state": "observed",
                 "startMillis": merged_start,
                 "endMillis": merged_end,
-                "durationMillis": sum(item["durationMillis"] for item in observations),
+                "durationMillis": sum(item["durationMillis"] for item in source_observations),
                 # D13: the merged window's real wall span, next to the summed
                 # per-source work above (authored_generation_timing_receipt_e4.py).
                 "wallMillis": merged_stage_wall_millis(merged_start, merged_end),
@@ -1048,6 +1128,9 @@ def create_generation_attempt_timing_receipt_v2(
         deck_instruments=deck_instruments_field(deck_instruments),
         vision_advisory=vision_advisory_field(vision_advisory),
         provenance=speed_provenance(provenance),
+        observations=_optional_observations(observations),
+        render_attempts=_render_attempt_observations(render_attempts),
+        render_attempts_dropped=_bounded_timing_ms(render_attempts_dropped, "render_dropped"),
     )
     if (outcome == "succeeded") != (receipt.terminal_error is None):
         raise ValueError("generation_attempt_timing_receipt_v2_invalid")
@@ -1095,6 +1178,47 @@ class GenerationTimingRecorder:
     _stage_timings_ms: dict[str, int] = field(default_factory=dict)
     _stage_observations: dict[str, dict[str, int]] = field(default_factory=dict)
     _checkpoint_signals: list[dict[str, object]] = field(default_factory=list)
+    _observations: dict[str, dict[str, int]] = field(default_factory=dict)
+    _render_attempts: list[dict[str, object]] = field(default_factory=list)
+    render_attempts_dropped: int = 0
+
+    def record_render_attempt(self, receipt: dict[str, object]) -> None:
+        """Keep bounded recent detail while all windows enter aggregate observations."""
+        if len(self._render_attempts) == MAX_RENDER_ATTEMPT_OBSERVATIONS:
+            self._render_attempts.pop(0)
+            self.render_attempts_dropped += 1
+        self._render_attempts.append(receipt)
+
+    def render_attempts(self) -> tuple[dict[str, object], ...]:
+        return _render_attempt_observations(self._render_attempts)
+
+    @contextmanager
+    def observe(self, name: str) -> Iterator[None]:
+        if not _optional_observation_name(name):
+            raise ValueError("generation_optional_observations_invalid")
+        started = monotonic()
+        try:
+            yield
+        finally:
+            self.record_observation(name, started, monotonic())
+
+    def record_observation(self, name: str, started: float, ended: float,
+                           *, duration_ms: float | None = None) -> None:
+        entry = _optional_observations({name: {
+            "startMillis": max(0.0, (started - self.started_at) * 1000),
+            "endMillis": max(0.0, (ended - self.started_at) * 1000),
+            "durationMillis": max(0.0, (ended - started) * 1000 if duration_ms is None else duration_ms),
+        }})[name]
+        previous = self._observations.get(name)
+        if previous is not None:
+            entry["startMillis"] = min(entry["startMillis"], previous["startMillis"])
+            entry["endMillis"] = max(entry["endMillis"], previous["endMillis"])
+            entry["durationMillis"] = min(MAX_GENERATION_STAGE_TIMING_MS,
+                entry["durationMillis"] + previous["durationMillis"])
+        self._observations[name] = entry
+
+    def observations(self) -> dict[str, dict[str, int]]:
+        return {name: dict(value) for name, value in self._observations.items()}
 
     @contextmanager
     def stage(self, name: str) -> Iterator[None]:

@@ -16,6 +16,7 @@ from models.sql.public_admission import AuthoredDeckPlanCheckpoint
 from services.authored_deck_plan_checkpoint import canonical_checkpoint_digest
 from services.ppt_writing_policy import ProtectedSpan, scan_visible_text
 from services.provider_usage_instrumentation import provider_usage_scope
+from services.generation_core.drivers.svg.timing import observe_setup
 from services.svg_common_header import common_header_source_digest
 from services.svg_common_header_title_budget import (
     INTERNAL_HEADER_TITLE_PLAN_KEY, require_header_title_plan, validate_header_title_plan,
@@ -237,7 +238,8 @@ async def prepare_missing_header_titles(request, job, outline, *, session_maker,
         result = _restore_result(result, payload)
     else:
         try:
-            with provider_usage_scope(job_id=job.id, operation="generate", stage="outline",
+            with observe_setup(request, "title"), provider_usage_scope(
+                    job_id=job.id, operation="generate", stage="outline",
                     attempt_number=job.attempt_number, public_only=bool(getattr(job, "public_only", False)),
                     workspace_operation_id=(getattr(job, "workspace_operation_id", None)
                         if (getattr(job, "request_payload", None) or {}).get("_svg_partial_recovery")

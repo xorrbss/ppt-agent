@@ -34,7 +34,10 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+import asyncio
 import time
+
+from services.authored_generation_timing_receipt import MAX_RENDER_STAGE_WINDOWS
 
 _RECORDER_ATTRIBUTE = "_authored_generation_timing_recorder"
 #: Recorder stages the page loop owns. A page resumed from a verified
@@ -45,6 +48,81 @@ _PAGE_LOOP_STAGES = ("author", "render")
 
 def _recorder(request: object):
     return getattr(request, _RECORDER_ATTRIBUTE, None)
+
+
+@contextmanager
+def observe_observation(request: object, name: str) -> Iterator[None]:
+    """Observe diagnostics without changing the executed-stage contract."""
+    recorder = _recorder(request)
+    if recorder is None:
+        yield
+        return
+    with recorder.observe(name):
+        yield
+
+
+def bind_outline_spans(request: object, spans) -> None:
+    spans.recorder = _recorder(request)
+
+
+@contextmanager
+def observe_setup(request: object, name: str) -> Iterator[None]:
+    from services import svg_outline_spans
+
+    with svg_outline_spans.span(name, recorder=_recorder(request)):
+        yield
+
+
+class RenderAttemptObservations:
+    """Render diagnostics outside the provider receipt and render evidence.
+
+    Detail lives only in the recorder's optional terminal receipt, so even a
+    whole-checkpoint digest cannot acquire timing-dependent identity.
+    """
+
+    def __init__(self, request: object, *, page_index: int, attempt_ordinal: int) -> None:
+        self.recorder = _recorder(request)
+        self.receipt = {"schema": "svg-render-attempt-timing/v1", "stages": [],
+                        "pageIndex": page_index, "attemptOrdinal": attempt_ordinal}
+        if self.recorder is not None:
+            self.recorder.record_render_attempt(self.receipt)
+        self.active = None
+        self.move("post")
+
+    def move(self, name: str | None) -> None:
+        if self.recorder is None:
+            return
+        ended = time.monotonic()
+        if self.active is not None:
+            stage = self.active
+            stage["endMonotonic"] = ended
+            stage["durationMillis"] = max(0.0, (ended - stage["startMonotonic"]) * 1000)
+            if self.recorder is not None:
+                self.recorder.record_observation(f"render.{stage['name']}", stage["startMonotonic"], ended)
+        self.active = None
+        if name is not None:
+            self.active = {"name": name, "startMonotonic": ended}
+            if len(self.receipt["stages"]) < MAX_RENDER_STAGE_WINDOWS:
+                self.receipt["stages"].append(self.active)
+            else:
+                self.receipt["stageWindowsDropped"] = self.receipt.get("stageWindowsDropped", 0) + 1
+
+    async def sample_loop_lag(self) -> None:
+        if self.recorder is None:
+            return
+        started = time.monotonic()
+        try:
+            await asyncio.sleep(0)
+        finally:
+            self.receipt["eventLoopLagMillis"] = max(0.0, (time.monotonic() - started) * 1000)
+
+    async def checkpoint(self, callback, *args, **kwargs):
+        previous = self.active["name"] if self.active is not None else None
+        self.move("checkpoint")
+        try:
+            return await callback(*args, **kwargs)
+        finally:
+            self.move(previous)
 
 
 @contextmanager
