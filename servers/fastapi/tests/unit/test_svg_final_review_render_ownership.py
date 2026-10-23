@@ -217,6 +217,10 @@ def test_render_timeout_terminates_the_job_and_reaps_the_child(tmp_path, monkeyp
     child.poll = lambda: None
     child.kill = lambda: events.append("kill")
     child.wait = lambda: events.append("wait")
+    monkeypatch.setitem(sys.modules, "win32event", SimpleNamespace(
+        CreateMutex=lambda *args: SimpleNamespace(Close=lambda: None),
+        WaitForSingleObject=lambda *args: 0, ReleaseMutex=lambda *args: None,
+        WAIT_OBJECT_0=0, WAIT_ABANDONED=128, WAIT_TIMEOUT=258))
     monkeypatch.setitem(sys.modules, "win32api", SimpleNamespace(OpenProcess=lambda *args: handle))
     monkeypatch.setitem(sys.modules, "win32job", SimpleNamespace(
         JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE=8192, JobObjectExtendedLimitInformation=9,

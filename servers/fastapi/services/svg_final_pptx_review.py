@@ -86,7 +86,9 @@ async def render_final_review_inputs(inputs, claim):
     """Only the admitted review executes Office, after its read transaction ends."""
     from workers.public_svg_pptx_render import render_final_pptx
     from workers.public_svg_pptx_convert import converter_digest
-    from services.workspace_operation_handler_registry import NonRetryableWorkspaceOperationError
+    from services.workspace_operation_handler_registry import (
+        NonRetryableWorkspaceOperationError, RetryableWorkspaceOperationError,
+    )
 
     def render():
         with tempfile.TemporaryDirectory(prefix="svg-final-review-") as temporary:
@@ -96,6 +98,8 @@ async def render_final_review_inputs(inputs, claim):
             proof = render_final_pptx(target, directory, page_count=len(inputs["sourceDigests"]),
                 width_px=inputs["widthPx"], height_px=inputs["heightPx"], timeout=120)
             if proof.get("status") != "measured":
+                if proof.get("retryable") is True:
+                    raise RetryableWorkspaceOperationError(proof["reasonCode"])
                 raise NonRetryableWorkspaceOperationError("svg_final_pptx_render_unavailable")
             proof.update(operationId=str(claim.operation_id), renderOperationId=str(claim.operation_id),
                 parentExportOperationId=inputs["parentExportOperationId"], converterDigest=converter_digest(),
