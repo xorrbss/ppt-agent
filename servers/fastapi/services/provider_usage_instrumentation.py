@@ -422,6 +422,8 @@ def _is_pre_sdk_dispatch_freeze(error: BaseException) -> bool:
 @dataclass
 class ProviderDispatchObservation:
     admission_entered: bool = False
+    # A committed reservation spends a review slot even before SDK entry.
+    ledger_reserved: bool = False
     sdk_may_have_started: bool = False
 
 
@@ -550,6 +552,8 @@ async def provider_call_admission(
                         expected_fencing_token=public_fence.fencing_token)
                    if scope.public_only or scope.workspace_operation_id is not None else {}),
             )
+            if observation is not None and durable_lease is not None:
+                observation.ledger_reserved = True
         if public_fence is not None:
             from services.public_operation_admission import (
                 reserve_public_provider_call_detached,
@@ -579,6 +583,8 @@ async def provider_call_admission(
                 pricing_revision=(pricing.revision if pricing else "unpriced-v1"),
                 provider_idempotency_capable=provider_idempotency_capable,
             )
+            if observation is not None and reserved_public_lease is not None:
+                observation.ledger_reserved = True
             if (
                 reserved_public_lease is not None
                 and reserved_public_lease.is_terminal_reuse

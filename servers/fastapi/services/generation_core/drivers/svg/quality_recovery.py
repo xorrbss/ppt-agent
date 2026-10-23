@@ -10,6 +10,7 @@ import json
 from pydantic import BaseModel
 
 from services.authored_checkpoint_errors import AuthoredStageError
+from services.generation_core.drivers.svg.quality import redispatchable_review_status
 from services.svg_authoring_profile import read_quality_recovery_plan
 from services.svg_authoring_profile import read_quality_recovery_execution_plan
 from services.svg_presentation_checkpoint import _digest, _provider_attempt_count, _provider_attempt_limit
@@ -32,11 +33,6 @@ def _repair_candidate_retainable(error, index, state):
         return False
     # A stage error names its page; another page's error is not this candidate's.
     return not isinstance(error, AuthoredStageError) or error.slide_index in {index, None}
-
-
-#: Review markers an interruption left open. Reopening one buys nothing that may
-#: already have been bought: each saved group decides for itself.
-_REOPENABLE_REVIEW_STATUSES = frozenset({"review_inflight", "review_unknown"})
 
 
 def _retained_reason(error):
@@ -178,7 +174,10 @@ async def recover_screen_pages(ctx, request, presentation_id, outline, job, page
         payload.update(svg_content=None, last_valid_svg=candidate["svg_content"],
             correction_mode="validated_svg_adaptation", repair_hint=json.dumps({
                 "kind": "validated_svg_adaptation", "screen_failure": page.error.code,
-                "instruction": "Adapt this verified SVG to every current source word, relation, image explanation group and native requirement. Preserve current content and validate the complete resulting page."}, ensure_ascii=False))
+                "instruction": "Adapt this verified SVG to every current source word, relation, "
+                    "image explanation group and native requirement. "
+                    "Preserve current content and validate the complete resulting page."
+                }, ensure_ascii=False))
         await hooks.checkpoint(job, index, payload=payload)
         reserved.append((index, payload))
         recent.append({"svg_content": candidate["svg_content"]})
@@ -326,7 +325,8 @@ def _archive_candidate(payload, job):
     path = Path("svg-candidates") / namespace / digest[:2] / f"{digest}.svg"
     atomic_write(checkpoint_root() / path, svg)
     evidence = {key: deepcopy(value) for key, value in payload.items()
-                if key not in {"svg_content", "last_valid_svg", "attempts", "quality_recovery", "quality_recovery_execution"}}
+                if key not in {"svg_content", "last_valid_svg", "attempts", "quality_recovery",
+                               "quality_recovery_execution"}}
     return {"svg_path": path.as_posix(), "svg_digest": digest, "namespace": namespace, "evidence": evidence}
 
 
@@ -357,7 +357,8 @@ def _restore_candidate(archive, current, job):
     restored = deepcopy(archive["evidence"])
     restored.update(svg_content=raw.decode("utf-8"), last_valid_svg=raw.decode("utf-8"))
     # Keep provider history and its correction authority when the older drawing wins.
-    for key in ("attempts", "model_attempt_count", "provider_failures", "provider_diagnostics", "quality_recovery_execution", "correction_mode"):
+    for key in ("attempts", "model_attempt_count", "provider_failures", "provider_diagnostics",
+                "quality_recovery_execution", "correction_mode"):
         if key in current:
             restored[key] = deepcopy(current[key])
     restored["quality_recovery"] = deepcopy(current.get("quality_recovery", {}))
@@ -405,7 +406,7 @@ async def recover_deck(ctx, request, presentation_id, outline, job, pages, state
                 raise ValueError("svg_quality_recovery_review_conflict")
             if prior.get("status") == "completed":
                 return prior["advisory"]
-            if prior.get("status") not in _REOPENABLE_REVIEW_STATUSES:
+            if prior.get("status") != "review_inflight" and not redispatchable_review_status(prior.get("status")):
                 raise ValueError("svg_quality_recovery_review_conflict")
             # A round an interruption left open is finished over its own saved
             # groups: a sealed group is reused, and a group whose call may have
@@ -506,7 +507,8 @@ async def recover_deck(ctx, request, presentation_id, outline, job, pages, state
                 payload["correction_mode"] = decision["repair_scope"]
                 payload["repair_hint"] = json.dumps({"kind": decision["repair_scope"],
                     "issues": decision.get("issues", []),
-                    **({"design_targets": decision["design_targets"]} if decision.get("design_targets") else {}), "instruction":
+                    **({"design_targets": decision["design_targets"]} if decision.get("design_targets") else {}),
+                    "instruction":
                     "Preserve every source word, number, relation, image group and native binding. "
                     "Improve the reported design axes without shrinking or hiding content."}, ensure_ascii=False)
                 await hooks.checkpoint(job, index, payload=payload)
@@ -575,13 +577,16 @@ async def recover_deck(ctx, request, presentation_id, outline, job, pages, state
             if reused is not None:
                 return pages, reused
         if plan.get("final_selected_review") is not None:
-            return pages, await _review_final_selected(ctx, request, pages, job, hooks, run_advisory, execution, seed, persist)
+            return pages, await _review_final_selected(
+                ctx, request, pages, job, hooks, run_advisory, execution, seed, persist)
         return pages, None
     if any(p.get("quality_recovery", {}).get("status") == "retained" for p, _ in pages):
-        if all((selection.get('selected') != 'candidate' for selection in [p.get('quality_recovery', {}).get('selection', {}) for p, _ in pages] if selection)):
+        if all((selection.get('selected') != 'candidate' for selection in [
+                p.get('quality_recovery', {}).get('selection', {}) for p, _ in pages] if selection)):
             return pages, first_advisory
         if plan.get("final_selected_review") is not None:
-            return pages, await _review_final_selected(ctx, request, pages, job, hooks, run_advisory, execution, seed, persist)
+            return pages, await _review_final_selected(
+                ctx, request, pages, job, hooks, run_advisory, execution, seed, persist)
         return pages, None
     return pages, candidate_advisory
 
@@ -608,7 +613,8 @@ async def _prepare_final_selected_source(ctx, job, hooks):
         await session.rollback()
     equivalent = (
         bool(getattr(ctx, "quality_recovery_checkpoint_reuse_eligible", False))
-        and _digest(frozen_episode_payload(job.request_payload, current)) == _digest(_frozen_payload(producer_job["request_payload"]))
+        and _digest(frozen_episode_payload(job.request_payload, current)) == _digest(
+            _frozen_payload(producer_job["request_payload"]))
         and _digest(job.svg_style_snapshot) == _digest(producer_job["svg_style_snapshot"])
     )
     from services.svg_final_selected_continuation import INITIAL_NAMESPACE
@@ -656,7 +662,7 @@ async def _review_final_selected(ctx, request, pages, job, hooks, run_advisory, 
             raise ValueError("svg_final_selected_review_source_changed")
         if marker.get("status") == "completed":
             return marker["advisory"]
-        if marker.get("status") not in _REOPENABLE_REVIEW_STATUSES:
+        if marker.get("status") != "review_inflight" and not redispatchable_review_status(marker.get("status")):
             raise ValueError("svg_final_selected_review_unavailable")
         # Finished over its saved groups, as recover_deck's rounds are.
         marker["status"] = "review_inflight"
@@ -739,7 +745,7 @@ async def _review_live_final_selected(ctx, pages, job, hooks, run_advisory, exec
             if reused is None:
                 raise ValueError("svg_final_selected_review_source_changed")
             return reused
-        if marker.get("status") not in _REOPENABLE_REVIEW_STATUSES:
+        if marker.get("status") != "review_inflight" and not redispatchable_review_status(marker.get("status")):
             raise ValueError("svg_final_selected_review_unavailable")
         marker["status"] = "review_inflight"
     else:
