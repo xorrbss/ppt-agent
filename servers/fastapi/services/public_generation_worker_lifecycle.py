@@ -155,7 +155,10 @@ def durable_generation_failure(error: BaseException) -> tuple[str, bool]:
     from fastapi import HTTPException
     from services.presentation_generation_attempt_timing import _generation_exception_failure
 
-    if not isinstance(error, HTTPException):
+    if not isinstance(error, HTTPException) or (
+        isinstance(getattr(error, "code", None), str)
+        and isinstance(getattr(error, "retryable", None), bool)
+    ):
         failure = _generation_exception_failure(error)
         return failure["code"], (
             failure["retryable"]

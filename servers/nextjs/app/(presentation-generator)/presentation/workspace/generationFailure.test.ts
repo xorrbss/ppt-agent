@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   GENERATION_FAILURE_CLASSES,
+  canResumeGenerationFailure,
   findResumedGeneration,
   generationFailureKey,
   isGenerationFailureStatus,
@@ -10,7 +11,7 @@ import {
   parseGenerationFailureClass,
 } from "./generationFailure.ts";
 
-test("accepts only the six contract classes", () => {
+test("accepts only the contract classes", () => {
   for (const value of GENERATION_FAILURE_CLASSES) {
     assert.equal(parseGenerationFailureClass(value), value);
     assert.equal(generationFailureKey(value), value);
@@ -21,7 +22,7 @@ test("accepts only the six contract classes", () => {
   }
 });
 
-test("resume is primary except for unusable input and reached limits", () => {
+test("resume is primary except for internal defects, unusable input and reached limits", () => {
   assert.equal(isResumePrimary("provider_unstable"), true);
   assert.equal(isResumePrimary("service_interrupted"), true);
   assert.equal(isResumePrimary("quality_not_passed"), true);
@@ -29,6 +30,14 @@ test("resume is primary except for unusable input and reached limits", () => {
   assert.equal(isResumePrimary(null), true);
   assert.equal(isResumePrimary("source_unprocessable"), false);
   assert.equal(isResumePrimary("limit_reached"), false);
+  assert.equal(isResumePrimary("internal_defect"), false);
+});
+
+test("internal defects cannot offer recovery, while other classes retain it", () => {
+  assert.equal(canResumeGenerationFailure("internal_defect"), false);
+  for (const value of [...GENERATION_FAILURE_CLASSES.filter((value) => value !== "internal_defect"), null]) {
+    assert.equal(canResumeGenerationFailure(value), true);
+  }
 });
 
 test("terminal failure statuses", () => {

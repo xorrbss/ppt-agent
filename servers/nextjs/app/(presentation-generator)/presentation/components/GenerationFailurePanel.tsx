@@ -9,6 +9,7 @@ import { refreshGenerationActivity } from "../../hooks/useGenerationActivity";
 import { presentationHref } from "../../services/api/generation-activity-view";
 import { postWorkspaceOperationAction } from "../../services/api/workspace-commands";
 import {
+  canResumeGenerationFailure,
   findResumedGeneration,
   generationFailureKey,
   isResumePrimary,
@@ -73,12 +74,12 @@ export default function GenerationFailurePanel({ operationId, failureClass, fall
 
   const classKey = generationFailureKey(failureClass);
   const key = classKey ?? "unknown";
-  const resumePrimary = key !== "internal_defect" && isResumePrimary(failureClass);
+  const resumePrimary = isResumePrimary(failureClass);
   const startNew = <Button key="new" type="button" size="sm"
     variant={resumePrimary ? "outline" : "default"} onClick={() => router.push("/upload")}>
     {t("panel.startNew")}
   </Button>;
-  const recovery = key !== "internal_defect" && resumable && <WorkspacePartialRecovery key="recovery" operationId={operationId}
+  const recovery = canResumeGenerationFailure(failureClass) && resumable && <WorkspacePartialRecovery key="recovery" operationId={operationId}
     disabled={phase !== "idle"} onAction={handleAction} />;
 
   return <div role="alert" aria-label={t("panel.aria")} data-testid="generation-failure-panel"

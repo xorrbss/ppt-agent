@@ -14,6 +14,7 @@ import uuid
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from models.workspace_operation_kinds import WORKSPACE_COMMAND_KINDS
+from models.workspace import GenerationFailureClass
 from models.presentation_profiles import (
     PresentationCapabilities,
     PresentationDriverId,
@@ -246,6 +247,7 @@ class AgentRunItem(BaseModel):
     progress: Optional[float] = None
     error: Optional[str] = None
     safe_error_message: Optional[str] = None
+    failure_class: Optional[GenerationFailureClass] = None
     retryable: Optional[bool] = None
     result: Any = None
     version: int = Field(ge=0)

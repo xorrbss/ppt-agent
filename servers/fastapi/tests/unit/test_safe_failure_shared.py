@@ -13,10 +13,10 @@ def test_single_implementation() -> None:
 
 
 def test_code_resolution_and_truncation() -> None:
-    assert _safe_failure({}) == ("presentation_generation_failed", False)
-    assert _safe_failure({"code": "x"}) == ("x", False)
-    assert _safe_failure({"detail": {"code": "nested"}}) == ("nested", False)
-    assert _safe_failure({"detail": "plain"}) == ("plain", False)
+    assert _safe_failure({}) == ("presentation_generation_failed", True)
+    assert _safe_failure({"code": "x"}) == ("x", True)
+    assert _safe_failure({"detail": {"code": "nested"}}) == ("nested", True)
+    assert _safe_failure({"detail": "plain"}) == ("plain", True)
     code, _ = _safe_failure({"code": "c" * 200})
     assert len(code) == 128
 
@@ -30,4 +30,4 @@ def test_retryable_resolution() -> None:
     assert _safe_failure({"code": "x", "status_code": 400}) == ("x", False)
     assert _safe_failure({"code": "x", "status_code": 429}) == ("x", True)
     assert _safe_failure({"code": "x", "status_code": "503"}) == ("x", True)
-    assert _safe_failure({"code": "x", "status_code": "bad"}) == ("x", False)
+    assert _safe_failure({"code": "x", "status_code": "bad"}) == ("x", True)

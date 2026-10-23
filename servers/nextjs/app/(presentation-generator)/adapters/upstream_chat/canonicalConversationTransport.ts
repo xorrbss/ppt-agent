@@ -14,6 +14,7 @@ import type {
 } from "../../presentation/conversation/types";
 import { isRecord } from "@/lib/guards";
 import { postWorkspaceOperationAction } from "../../services/api/workspace";
+import { parseGenerationFailureClass } from "../../presentation/workspace/generationFailure";
 
 const ROOT = "/api/v1/ppt/conversations";
 type RecordValue = Record<string, unknown>;
@@ -75,6 +76,7 @@ function run(value: unknown): AgentRun {
     return candidate.enabled === false ? [] : [text(candidate.id)];
   }).filter((action): action is ConversationRunAction => ["retry", "cancel", "approve", "reject", "undo"].includes(action));
   return { id: text(raw.id, text(raw.run_id)), operationId: text(raw.operation_id, text(raw.id, text(raw.run_id))),
+    failureClass: parseGenerationFailureClass(raw.failureClass ?? raw.failure_class) ?? undefined,
     ...(typeof raw.operation_type === "string" || typeof raw.run_type === "string"
       ? { operationType: text(raw.operation_type, text(raw.run_type)) } : {}),
     status: text(raw.status, "queued") as AgentRun["status"], title: typeof raw.title === "string" ? raw.title : typeof raw.run_type === "string" ? raw.run_type : undefined, version: number(raw.version), error: typeof raw.safe_error_message === "string" ? raw.safe_error_message : typeof raw.error === "string" ? raw.error : undefined, expectedRevision: number(raw.expected_revision) ?? number(revision.source_revision), resultRevision: number(raw.result_revision) ?? number(revision.result_revision), actions };
@@ -124,7 +126,9 @@ function event(value: unknown, sseId: string): ConversationEvent | undefined {
   const eventRun = data.run
     ? run(data.run)
     : envelope.run_id && typeof data.status === "string"
-      ? { id: envelope.run_id, status: data.status as AgentRun["status"], error: typeof data.safe_message === "string" ? data.safe_message : typeof data.error === "string" ? data.error : undefined }
+      ? { id: envelope.run_id, status: data.status as AgentRun["status"],
+        failureClass: parseGenerationFailureClass(data.failureClass ?? data.failure_class) ?? undefined,
+        error: typeof data.safe_message === "string" ? data.safe_message : typeof data.error === "string" ? data.error : undefined }
       : undefined;
   return {
     id: envelope.id || sseId,

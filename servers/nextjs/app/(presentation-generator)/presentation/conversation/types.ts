@@ -1,4 +1,5 @@
 import type { WorkspaceOperationActionOptions } from "../workspace/types";
+import type { GenerationFailureClass } from "../workspace/generationFailure";
 
 export type ConversationRole = "user" | "assistant" | "system";
 
@@ -66,6 +67,7 @@ export interface AgentRun {
   title?: string;
   version?: number;
   error?: string;
+  failureClass?: GenerationFailureClass;
   expectedRevision?: number;
   resultRevision?: number;
   actions?: ConversationRunAction[];

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { ConversationMessageFrame } from "../conversation/ConversationPrimitives";
 import { WorkspaceGenerationProgress } from "./WorkspaceGenerationProgress";
 import { activeGenerationStep, buildGenerationProgress, latestGenerationEventEvidence } from "./generationProgressSteps";
-import { generationFailureKey } from "./generationFailure";
+import { canResumeGenerationFailure, generationFailureKey } from "./generationFailure";
 import { operationFailureMessage, operationProgressEvidence, type WorkspaceOperationObservation } from "./WorkspaceOperationPresentation";
 import { useLocale, useTranslations } from "next-intl";
 import SvgQualityStatusSummary from "./SvgQualityStatusSummary";
@@ -1250,7 +1250,7 @@ export function WorkspaceOperationCard({
             );
           })}
       </div>
-      {isPresentationGeneration && failed && !resolvedByLaterSuccess && <WorkspacePartialRecovery
+      {isPresentationGeneration && failed && !resolvedByLaterSuccess && canResumeGenerationFailure(operation.failureClass) && <WorkspacePartialRecovery
         operationId={operation.operationId} operationVersion={operation.version} currentRevision={currentRevision}
         disabled={disabled || pendingAction !== undefined} onAction={onAction} />}
       </ConversationMessageFrame>

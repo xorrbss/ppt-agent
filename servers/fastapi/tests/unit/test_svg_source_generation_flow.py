@@ -31,7 +31,9 @@ def run_async(function):
 @pytest.mark.parametrize("local_success", [True, False])
 @pytest.mark.parametrize("free_composition", [True, False])
 @pytest.mark.parametrize("preparation_only_resume", [False, True])
-async def test_source_generation_verifies_before_publish_and_bounds_repair(monkeypatch, geometry_passed, local_success, free_composition, preparation_only_resume):
+async def test_source_generation_verifies_before_publish_and_bounds_repair(
+    monkeypatch, geometry_passed, local_success, free_composition, preparation_only_resume,
+):
     manifest = manifest_for([("text", {"text": "원본 내용 125%"})])
     request = SimpleNamespace(_source_content_svg_reflow=True, _source_content_manifest=manifest,
         _source_content_authored_reflow=False, _document_canvas=None, strategy="svg",
@@ -168,7 +170,9 @@ async def test_source_generation_verifies_before_publish_and_bounds_repair(monke
     ("legacy_source", 2), ("durable_source", 3),
     ("incremental_page_render_reuse", 0),
 ])
-async def test_source_structural_visual_repair_uses_existing_attempt_evidence(monkeypatch, tmp_path, scenario, expected_calls):
+async def test_source_structural_visual_repair_uses_existing_attempt_evidence(
+    monkeypatch, tmp_path, scenario, expected_calls,
+):
     from services.generation_core.drivers.svg import author, collect, render
 
     if scenario == "incremental_page_render_reuse":
@@ -192,7 +196,8 @@ async def test_source_structural_visual_repair_uses_existing_attempt_evidence(mo
         monkeypatch.setattr("services.public_render_runtime_identity.public_render_runtime_binding",
                             lambda: deepcopy(worker))
         images, rendered, authored, saved = {}, [], [], {}
-        reader = lambda value: images.get(value.get("png_sha256"))
+        def reader(value):
+            return images.get(value.get("png_sha256"))
         monkeypatch.setattr("services.svg_presentation_checkpoint._read_png", reader)
         monkeypatch.setattr(partial_quality_recovery, "current_quality_repair_authorized",
                             AsyncMock(return_value=False))
@@ -277,7 +282,9 @@ async def test_source_structural_visual_repair_uses_existing_attempt_evidence(mo
             return SimpleNamespace(manifest=manifest, manifest_hash=recovery.digest(manifest))
 
         def clone(value, plan, operation_id):
-            return recovery.cached_page_payload(SimpleNamespace(slide_index=0, svg_checkpoint=value), plan, operation_id)
+            return recovery.cached_page_payload(
+                SimpleNamespace(slide_index=0, svg_checkpoint=value), plan, operation_id,
+            )
 
         async def checkpoint(active_job, index, *, payload=None):
             if payload is not None:
@@ -320,7 +327,9 @@ async def test_source_structural_visual_repair_uses_existing_attempt_evidence(mo
         assert saved[0]["quality_recovery_local_evidence"] != source["quality_recovery_local_evidence"]
         assert source == original
         assert saved[0]["quality"] == source["quality"] and saved[0]["png_sha256"] == source["png_sha256"]
-        assert saved[0]["page_render_evidence"]["environment"]["physical"]["physical_canvas"] == physical_canvas.model_dump(mode="json")
+        assert saved[0]["page_render_evidence"]["environment"]["physical"]["physical_canvas"] == (
+            physical_canvas.model_dump(mode="json")
+        )
         assert recovery._verified_page_render_evidence(saved[1]) is not None
 
         # Full authority pin changes independently of measured-page equivalence.
@@ -352,7 +361,9 @@ async def test_source_structural_visual_repair_uses_existing_attempt_evidence(mo
                 if path == "services/generation_core/drivers/svg/quality.py":
                     assert reused_payload["quality_recovery_local_evidence"] == quality_recovery.local_evidence_binding(
                         ctx.quality_recovery_input_binding, reused_payload)
-                    assert reused_payload["quality_recovery_local_evidence"] != source["quality_recovery_local_evidence"]
+                    assert reused_payload["quality_recovery_local_evidence"] != (
+                        source["quality_recovery_local_evidence"]
+                    )
             code_changes.clear()
         ctx.partial_recovery_manifest = plan.manifest
 
@@ -599,7 +610,8 @@ async def test_source_structural_visual_repair_uses_existing_attempt_evidence(mo
         table = facts[0]
         raw = ('<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">'
             f'<g id="{table["element_id"]}"><rect x="20" y="20" width="200" height="100" fill="#ffffff"/>'
-            f'<text id="{table["cells"][0]["element_id"]}" x="30" y="60" font-family="Pretendard" font-size="20" fill="#111111">'
+            f'<text id="{table["cells"][0]["element_id"]}" x="30" y="60" '
+            'font-family="Pretendard" font-size="20" fill="#111111">'
             '<tspan x="30" y="60">A\n</tspan><tspan x="30" y="80">B</tspan></text></g></svg>')
         svg, bound_receipt = bind_whole_page_source_svg(raw, table_source, 0, facts=facts, width=1280, height=720,
             style_snapshot=snapshot, minimum_font_px=7)
@@ -620,7 +632,9 @@ async def test_source_structural_visual_repair_uses_existing_attempt_evidence(mo
         witness = diagnostic["witnesses"][0]
         assert (witness["row"], witness["column"]) == (0, 0)
         assert witness["measured_fragment_top_gap_px"] == 20
-        assert witness["suggested_minimum_line_pitch_px"] == math.ceil(21 + OVERLAP_THRESHOLD_PX + witness["breathing_room_px"])
+        assert witness["suggested_minimum_line_pitch_px"] == math.ceil(
+            21 + OVERLAP_THRESHOLD_PX + witness["breathing_room_px"]
+        )
         assert (quality, bound_receipt, svg) == before
         for change in ("source", "basis", "parent", "cell", "nonoverlap"):
             bad_quality, bad_receipt = deepcopy(quality), deepcopy(bound_receipt)
@@ -659,16 +673,26 @@ async def test_source_structural_visual_repair_uses_existing_attempt_evidence(mo
                 "font_unloaded", "font_untrusted", "fonts_not_ready", "wrapper", "different_cell"):
             altered = deepcopy(ink_quality)
             member = altered["browser_metrics"]["elements"][1]
-            if change == "line_box": member["text_ink_fragments"] = [None]
-            elif change == "mixed": altered["overlap_basis"]["pairs"][0]["basis"] = "mixed"
-            elif change == "glyph_incomplete": member["text_ink_fragments"][0]["glyphInkCoverage"]["complete"] = False
-            elif change == "paint_incomplete": member["text_ink_fragments"][0]["glyphPaintCoverage"]["complete"] = False
-            elif change == "missing_cluster": member["text_ink_fragments"][0]["glyphInkClusters"] = []
-            elif change == "font_unloaded": member["font_loaded"] = False
-            elif change == "font_untrusted": member["font_resolution_source"] = "system-fallback"
-            elif change == "fonts_not_ready": altered["browser_metrics"]["fonts_ready"] = False
-            elif change == "wrapper": altered["browser_metrics"]["source_digest"] = "sha256:" + "b" * 64
-            else: member["parent_qid"] = "another-cell-parent"
+            if change == "line_box":
+                member["text_ink_fragments"] = [None]
+            elif change == "mixed":
+                altered["overlap_basis"]["pairs"][0]["basis"] = "mixed"
+            elif change == "glyph_incomplete":
+                member["text_ink_fragments"][0]["glyphInkCoverage"]["complete"] = False
+            elif change == "paint_incomplete":
+                member["text_ink_fragments"][0]["glyphPaintCoverage"]["complete"] = False
+            elif change == "missing_cluster":
+                member["text_ink_fragments"][0]["glyphInkClusters"] = []
+            elif change == "font_unloaded":
+                member["font_loaded"] = False
+            elif change == "font_untrusted":
+                member["font_resolution_source"] = "system-fallback"
+            elif change == "fonts_not_ready":
+                altered["browser_metrics"]["fonts_ready"] = False
+            elif change == "wrapper":
+                altered["browser_metrics"]["source_digest"] = "sha256:" + "b" * 64
+            else:
+                member["parent_qid"] = "another-cell-parent"
             assert render.native_table_line_pitch_hint(altered, svg, bound_receipt) is None
         # Two distinct canonical cell bindings must also be excluded even if
         # forged sibling telemetry claims a common parent.
@@ -687,7 +711,8 @@ async def test_source_structural_visual_repair_uses_existing_attempt_evidence(mo
         diagnostic_hint = json.dumps({"kind": "svg_readability_repair", "native_table_line_pitch": diagnostic},
             ensure_ascii=False, separators=(",", ":"))
         page = {"slide_index": 0, "category": "known_failed_output", "row_digest": "sealed-row",
-            "completed_output_failure": {"reason": "completed_source_quality_failed", "diagnostic_hint": diagnostic_hint}}
+            "completed_output_failure": {
+                "reason": "completed_source_quality_failed", "diagnostic_hint": diagnostic_hint}}
         manifest = {"pages": [page]}
         recovery = SimpleNamespace(manifest=manifest, manifest_hash=digest(manifest))
         child = cached_page_payload(SimpleNamespace(slide_index=0), recovery, uuid.uuid4())
@@ -696,11 +721,13 @@ async def test_source_structural_visual_repair_uses_existing_attempt_evidence(mo
         legacy_manifest = deepcopy(manifest)
         legacy_manifest["pages"][0]["completed_output_failure"].pop("diagnostic_hint")
         legacy_recovery = SimpleNamespace(manifest=legacy_manifest, manifest_hash=digest(legacy_manifest))
-        assert set(cached_page_payload(SimpleNamespace(slide_index=0), legacy_recovery, uuid.uuid4())) == {"partial_recovery"}
+        assert set(cached_page_payload(SimpleNamespace(slide_index=0), legacy_recovery, uuid.uuid4())) == {
+            "partial_recovery"}
         unknown_manifest = deepcopy(manifest)
         unknown_manifest["pages"][0]["category"] = "unknown"
         assert set(cached_page_payload(SimpleNamespace(slide_index=0),
-            SimpleNamespace(manifest=unknown_manifest, manifest_hash=digest(unknown_manifest)), uuid.uuid4())) == {"partial_recovery"}
+            SimpleNamespace(manifest=unknown_manifest, manifest_hash=digest(unknown_manifest)), uuid.uuid4())) == {
+                "partial_recovery"}
 
         ctx.source_document, ctx.source_units = table_source, source_pages(table_source)
         table_calls, seen_hints = [], []
@@ -732,7 +759,9 @@ async def test_source_structural_visual_repair_uses_existing_attempt_evidence(mo
     if scenario == "visual_twice":
         import threading
         from datetime import datetime, timedelta, timezone
-        from utils.provider_overload import BoundedProviderCall, current_provider_call_remaining_seconds, ProviderOutcomeError
+        from utils.provider_overload import (
+            BoundedProviderCall, current_provider_call_remaining_seconds, ProviderOutcomeError,
+        )
         from utils.provider_terminal_outcome import ProviderTerminalOutcomeRecorder
         from utils.codex_stream_adapter import _ObservedResponses, _PROVIDER_EVENT_OBSERVER
 
@@ -822,7 +851,9 @@ async def test_source_structural_visual_repair_uses_existing_attempt_evidence(mo
                         assert waits == [0.0]
                     if mode == "operation_short":
                         assert 0.0 < waits[0] <= 45.0
-                    assert event_payload["provider_diagnostics"][-1]["diagnostics"]["causeExceptionType"] == "TimeoutError"
+                    assert event_payload["provider_diagnostics"][-1]["diagnostics"]["causeExceptionType"] == (
+                        "TimeoutError"
+                    )
             assert observed["context_cleared"]
 
         for observer_mode in ("success", "operation_short", "provider_expired", "operation_expired", "cause"):
@@ -1116,7 +1147,7 @@ async def test_terminal_page_failure_global_cancels_waiters_page_local_freezes_d
             assert "retryable" not in vars(database_error)
             assert [call.kwargs["slide_index"] for call in fail_stage_mock.await_args_list] == [failed_index]
             # Classified exactly like the same database error without lost
-            # evidence: no control error, the same generic status code ...
+            # evidence: no control error, the same typed service failure ...
             unmarked = connection_lost()
             for candidate in (database_error, unmarked):
                 assert _durable_generation_control_http_exception(candidate) is None
@@ -1124,7 +1155,10 @@ async def test_terminal_page_failure_global_cancels_waiters_page_local_freezes_d
             generic = HTTPException(status_code=500, detail="Presentation generation failed")
             status_error = _generic_generation_failure_payload(database_error, generic, request_id=None)
             unmarked_status = _generic_generation_failure_payload(unmarked, generic, request_id=None)
-            assert status_error["code"] == unmarked_status["code"] == "e3q8"
+            assert status_error["code"] == unmarked_status["code"] == "generation_service_interrupted"
+            from services.generation_failure_class import classify_generation_failure
+
+            assert classify_generation_failure(status_error["code"]) == "service_interrupted"
             assert status_error["detail"]["exception_type"] == "OperationalError"
             assert unmarked_status["detail"]["exception_type"] == "OperationalError"
             assert status_error["retryable"] is False and unmarked_status["retryable"] is True
@@ -1379,7 +1413,7 @@ def _measured_overlap_page(root, monkeypatch, *, compact):
     facts = _whole_page_facts(pages[0], {})
     body = ''.join(f'<text id="{fact["element_id"]}" x="80" y="100" font-family="Noto Sans KR" '
         f'font-size="40" font-weight="400" fill="#111111" text-anchor="start">{text}</text>'
-        for fact, text in zip(facts, ("A", "B")))
+        for fact, text in zip(facts, ("A", "B"), strict=False))
     raw = f'<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">{body}</svg>'
     raw, preservation = bind_whole_page_source_svg(raw, source, 0, facts=facts, width=1280,
         height=720, style_snapshot=snapshot, minimum_font_px=12)
@@ -1508,7 +1542,7 @@ def test_compact_metrics_reference_is_proven_by_the_real_recovery_row_check(tmp_
         elif name == "foreign_checkpoint_root":
             elsewhere = tmp_path / name / "elsewhere"
             case.place_png(elsewhere)  # only the metrics sidecar is absent there
-            monkeypatch.setattr(case.checkpoint, "checkpoint_root", lambda: elsewhere)
+            monkeypatch.setattr(case.checkpoint, "checkpoint_root", lambda elsewhere=elsewhere: elsewhere)
         else:
             override["owner"] = uuid.uuid4()
         with pytest.raises(PartialRecoveryRejected) as rejected:
