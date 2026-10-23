@@ -485,8 +485,8 @@ async def _start_server(app: FastAPI):
 def _bind_lane_database(monkeypatch: pytest.MonkeyPatch, *, engine, maker) -> None:
     """Rebind every module-level ``async_session_maker``/``sql_engine`` binding.
 
-    Function defaults captured at definition time are deliberately left alone:
-    they keep pointing at the process engine, which the harness seeds too.
+    Function defaults captured at definition time keep the original maker,
+    whose bind the harness redirects to its private sidecar engine.
     """
 
     original_maker = database.async_session_maker
@@ -665,10 +665,10 @@ async def _run_worker_lane(
     # Two SQLite databases, on purpose.  The lane itself (endpoint, runner,
     # generation handler, checkpoints, receipts -- every module that binds
     # ``services.database.async_session_maker`` by name) runs on a private
-    # engine.  The sidecar services that captured the session maker as a
+    # engine. The sidecar services that captured the session maker as a
     # function default at import time (progress pollers, account/asset
-    # maintenance, the account-deletion fence) can only ever reach the process
-    # engine, so that one is created and seeded as well.  Putting everything on
+    # maintenance, the account-deletion fence) get a separate private engine
+    # by rebinding that maker's bind for this test. Putting everything on
     # one SQLite file is not an option here: the generation job's own session
     # keeps SQLite's single writer lock across long stages, and with every
     # sidecar writer queued on the same file the runner's heartbeat loses its
@@ -681,8 +681,12 @@ async def _run_worker_lane(
         await connection.exec_driver_sql("PRAGMA journal_mode=WAL")
         await connection.run_sync(SQLModel.metadata.create_all)
     maker = async_sessionmaker(engine, expire_on_commit=False)
-    sidecar_engine = database.sql_engine
+    sidecar_engine = create_async_engine(
+        f"sqlite+aiosqlite:///{tmp_path / 'authored-worker-sidecar.db'}",
+        connect_args={"timeout": 30},
+    )
     sidecar_maker = database.async_session_maker
+    monkeypatch.setitem(sidecar_maker.kw, "bind", sidecar_engine)
     async with sidecar_engine.begin() as connection:
         await connection.run_sync(SQLModel.metadata.create_all)
     _bind_lane_database(monkeypatch, engine=engine, maker=maker)
@@ -912,6 +916,7 @@ async def _run_worker_lane(
             with suppress(asyncio.TimeoutError):
                 await asyncio.wait_for(server_task, timeout=5)
         await engine.dispose()
+        await sidecar_engine.dispose()
 
 
 def _utc(value: datetime) -> datetime:

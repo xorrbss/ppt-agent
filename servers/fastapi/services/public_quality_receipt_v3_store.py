@@ -33,6 +33,35 @@ _GENERATION_OPERATION_KINDS = frozenset({
 })
 
 
+async def _lock_receipt_operation(session: AsyncSession, operation_id: uuid.UUID):
+    from services.workspace_operation_runner import _public_admission_for_operation
+
+    # Match the shared event writer's admission -> operation lock order.
+    await _public_admission_for_operation(session, operation_id)
+    return await session.scalar(select(WorkspaceOperation).where(
+        WorkspaceOperation.id == operation_id).with_for_update().execution_options(populate_existing=True))
+
+
+async def _append_receipt_event(
+    session: AsyncSession, *, operation: WorkspaceOperation, attempt_token: str,
+    fencing_token: int, payload: Mapping[str, Any],
+) -> None:
+    from services.workspace_operation_runner import append_operation_event
+
+    event = await append_operation_event(
+        session, operation_id=operation.id, event_type=_EVENT_TYPE,
+        attempt_token=attempt_token, fencing_token=fencing_token,
+        allowed_states=("running",), enqueue_notification=False,
+    )
+    if event is None:
+        raise RuntimeError("quality_receipt_v3_operation_lease_lost")
+    # The shared allocator sanitizes public metadata. This private record keeps
+    # its exact digest-bound payload in the same transaction, without an outbox.
+    event.payload = dict(payload)
+    await session.flush()
+    await session.refresh(operation, attribute_names=["next_event_sequence", "version"])
+
+
 def quality_evidence_digest(payload: Mapping[str, object]) -> str:
     """Use the receipt ledger's exact JSON hashing, not NFC normalization."""
     return canonical_json_digest(dict(payload))
@@ -144,8 +173,7 @@ async def append_public_review_evidence(
     }
     if len(json.dumps(payload, ensure_ascii=False, allow_nan=False).encode("utf-8")) > _MAX_EVENT_BYTES:
         raise ValueError("quality_receipt_v3_event_too_large")
-    operation = await session.scalar(select(WorkspaceOperation).where(
-        WorkspaceOperation.id == operation_id).with_for_update().execution_options(populate_existing=True))
+    operation = await _lock_receipt_operation(session, operation_id)
     if (operation is None or operation.kind != "quality.review" or operation.state != "running"
         or operation.attempt_token != attempt_token or operation.fencing_token != fencing_token):
         raise RuntimeError("quality_receipt_v3_operation_lease_lost")
@@ -158,13 +186,10 @@ async def append_public_review_evidence(
             if previous == payload:
                 return
             raise RuntimeError("quality_receipt_v3_append_conflict")
-    sequence = operation.next_event_sequence
-    operation.next_event_sequence += 1
-    session.add(WorkspaceOperationEvent(
-        owner_id=operation.owner_id, operation_id=operation.id, sequence=sequence,
-        operation_version=operation.version, event_type=_EVENT_TYPE, payload=payload,
-    ))
-    await session.flush()
+    await _append_receipt_event(
+        session, operation=operation, attempt_token=attempt_token,
+        fencing_token=fencing_token, payload=payload,
+    )
 
 
 class PostgresOperationQualityReceiptV3Port:
@@ -212,12 +237,7 @@ class PostgresOperationQualityReceiptV3Port:
         if len(encoded) > _MAX_EVENT_BYTES:
             raise ValueError("quality_receipt_v3_event_too_large")
 
-        operation = await self._session.scalar(
-            select(WorkspaceOperation)
-            .where(WorkspaceOperation.id == self._operation_id)
-            .with_for_update()
-            .execution_options(populate_existing=True)
-        )
+        operation = await _lock_receipt_operation(self._session, self._operation_id)
         if (
             operation is None
             or operation.state != "running"
@@ -274,19 +294,10 @@ class PostgresOperationQualityReceiptV3Port:
             if not previous_found:
                 raise RuntimeError("quality_receipt_v3_chain_invalid")
 
-        sequence = operation.next_event_sequence
-        operation.next_event_sequence = sequence + 1
-        self._session.add(
-            WorkspaceOperationEvent(
-                owner_id=operation.owner_id,
-                operation_id=operation.id,
-                sequence=sequence,
-                operation_version=operation.version,
-                event_type=_EVENT_TYPE,
-                payload=payload,
-            )
+        await _append_receipt_event(
+            self._session, operation=operation, attempt_token=self._attempt_token,
+            fencing_token=self._fencing_token, payload=payload,
         )
-        await self._session.flush()
 
 
 __all__ = [
