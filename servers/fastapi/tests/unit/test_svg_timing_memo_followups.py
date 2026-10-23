@@ -3,6 +3,7 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from copy import copy, deepcopy
 from dataclasses import replace
+import json
 import pickle
 from threading import Barrier
 from types import SimpleNamespace
@@ -19,8 +20,11 @@ from services.workspace_generation_timing_payload import (
 )
 from tests.unit.test_author_slide_svg_asset_offer import _art_direction_style
 from services.presentation_generation_attempt_timing import _persist_terminal_attempt_timing
+from services.svg_cached_author_render_recovery import author_witness
+from services.svg_partial_recovery import _page_render_result_digest
 from tests.unit.test_svg_generation_timing_receipt import _context, _request, _seal_success, _usage
 from tests.unit.test_svg_source_layout import manifest_for
+from utils.hashing import canonical_json_sha256, sha256_hex
 from utils.llm_calls.author_prompt_split import author_messages
 
 
@@ -127,6 +131,22 @@ def test_prefix_settings_digest_covers_cache_partition_settings(changed):
         kwargs={**kwargs, changed: 2000 if changed == "max_tokens" else "different"})
     assert before["prefix_digest"] == after["prefix_digest"]
     assert before["prefix_cache_settings_digest"] != after["prefix_cache_settings_digest"]
+
+
+def test_legacy_checkpoint_without_prefix_settings_keeps_stored_witnesses():
+    # Persisted digest values were captured from d9bba77c5's digest functions.
+    payload = json.loads(json.dumps({"schema_version": "svg-page/v1", "svg_content": "<svg/>",
+        "input_digest": "legacy-input", "png_sha256": "legacy-png", "png_path": "legacy.png",
+        "quality": {"passed": True, "geometry_passed": True, "measurement_complete": True},
+        "attempts": [{"kind": "provider", "raw_response": "<svg/>", "receipt": {
+            "provider": "openai", "requested_model": "legacy-model",
+            "author_prompt_digest": "sha256:" + "a" * 64, "prefix_digest": "sha256:" + "b" * 64,
+            "raw_digest": sha256_hex(b"<svg/>"), "source_digest": sha256_hex(b"<svg/>")}}]}))
+    assert "prefix_cache_settings_digest" not in payload["attempts"][0]["receipt"]
+    assert author_witness(payload) == "14734e4661d723897798824375d9d89e245bfb74d0a70064fe0fbee72465b233"
+    assert _page_render_result_digest(payload) == "6473621aa97a5c23b30d7906d6a8da56939a8da8c98d543417a50896a2ee6bf4"
+    assert canonical_json_sha256(payload, allow_nan=False) == (
+        "a2793f23b6f77f3712edc3957bf854ccd5778dda291e2970902c283b2a31aa2d")
 
 
 @pytest.mark.parametrize("container", ["dict", "list"])
