@@ -16,6 +16,9 @@ here would form a cycle.
 
 from __future__ import annotations
 
+import logging
+
+LOGGER = logging.getLogger(__name__)
 
 PUBLIC_GENERATION_LIFECYCLE_SCHEMA = "public-generation-lifecycle/v1"
 PUBLIC_GENERATION_STATES = (
@@ -110,3 +113,25 @@ def _public_generation_transition_path(current: str, target: str) -> tuple[str, 
     if _public_generation_transition_allowed(current, target):
         return (target,)
     raise ValueError(f"public_generation_transition_invalid:{current}:{target}")
+
+
+def public_generation_narration_path(current: str, stage: str) -> tuple[str, ...]:
+    """Project advisory stage observations without authorizing state changes.
+
+    Retries and concurrent page writers can narrate earlier stages. Only
+    forward, nonterminal observations may advance the public lifecycle;
+    wait and terminal transitions remain the responsibility of the runner.
+    """
+    target = _PUBLIC_GENERATION_STAGE_STATES.get(stage)
+    if (
+        current not in _PUBLIC_GENERATION_TERMINAL_STATES
+        and current in _PUBLIC_GENERATION_FORWARD_STATES
+        and target in _PUBLIC_GENERATION_FORWARD_STATES
+        and target not in _PUBLIC_GENERATION_TERMINAL_STATES
+        and _PUBLIC_GENERATION_FORWARD_STATES.index(target)
+        > _PUBLIC_GENERATION_FORWARD_STATES.index(current)
+    ):
+        return _public_generation_transition_path(current, target)
+    if target is not None and target != current:
+        LOGGER.debug("Progress stage clamped: current=%s observed=%s", current, target)
+    return (current,)
