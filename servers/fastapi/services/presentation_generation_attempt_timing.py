@@ -76,14 +76,16 @@ def _generation_exception_failure(error: BaseException) -> dict[str, object]:
     import openai
     from google.genai.errors import ServerError
     from llmai.shared.errors import LLMConnectionError, LLMRateLimitError
-    from sqlalchemy.exc import DBAPIError, OperationalError, TimeoutError as PoolTimeoutError
+    from sqlalchemy.exc import DBAPIError, OperationalError, SQLAlchemyError, TimeoutError as PoolTimeoutError
 
     from services.provider_runtime_primitives import BackpressureError, BudgetExceededError, CircuitOpenError
 
     explicit_code = getattr(error, "code", None)
+    # SQLAlchemy's code identifies a documentation page, not a domain failure.
+    database_error = isinstance(error, SQLAlchemyError)
     explicit_shape = r"[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)*(?::[A-Za-z0-9]+(?:_[A-Za-z0-9]+)*){0,3}"
     has_code = (
-        isinstance(explicit_code, str) and len(explicit_code) <= 128
+        not database_error and isinstance(explicit_code, str) and len(explicit_code) <= 128
         and re.fullmatch(explicit_shape, explicit_code, flags=re.ASCII) is not None
     )
     explicit_retryable = getattr(error, "retryable", None)
@@ -95,7 +97,7 @@ def _generation_exception_failure(error: BaseException) -> dict[str, object]:
     shape = r"[a-z][a-z0-9]*(?:_[a-z0-9]+)+(?::[a-z0-9]+(?:_[a-z0-9]+)*){0,3}"
     message = str(error)
     code = explicit_code if has_code else "internal_defect"
-    if not has_code and len(message) <= 64 and re.fullmatch(shape, message, flags=re.ASCII):
+    if not has_code and not database_error and len(message) <= 64 and re.fullmatch(shape, message, flags=re.ASCII):
         code = message
 
     database_transient = isinstance(error, (

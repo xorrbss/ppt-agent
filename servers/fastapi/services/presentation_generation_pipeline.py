@@ -373,6 +373,7 @@ def _generic_generation_failure_payload(
         # The same exception is raised by synchronous generation and serialized
         # by asynchronous generation, so neither path can fall back to HTTP 500.
         safe_exception.detail = failure
+        safe_exception.code = failure["code"]
         return APIErrorModel.from_exception(
             safe_exception, request_id=request_id, code=failure["code"],
             retryable=failure["retryable"], message="Presentation generation failed",

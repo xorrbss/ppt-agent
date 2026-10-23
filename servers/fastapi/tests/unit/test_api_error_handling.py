@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, model_validator
+import pytest
 
 from api.error_handling import install_api_error_handling
 from models.api_error_model import APIErrorModel
@@ -185,3 +186,27 @@ def test_async_error_payload_can_retain_original_generation_request_id():
         "message": "template_v2_generation_invalid",
         "request_id": "generation-request-42",
     }
+
+
+@pytest.mark.parametrize("code", [
+    "WORKER_UNAVAILABLE",
+    "public_generation_transition_invalid:rendering:authoring",
+    "Worker_Unavailable:rendering",
+])
+@pytest.mark.parametrize("structured", [False, True])
+def test_ordinary_http_errors_keep_historical_code_inference(code, structured):
+    app = FastAPI()
+    install_api_error_handling(app)
+
+    @app.get("/ordinary-error")
+    async def ordinary_error():
+        raise HTTPException(409, {"code": code} if structured else code)
+
+    response = TestClient(app).get("/ordinary-error")
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "http_error_409"
+
+
+def test_ordinary_lowercase_structured_codes_retain_historical_shape():
+    code = "a" * 129
+    assert APIErrorModel.from_exception(HTTPException(500, {"code": code})).code == code
