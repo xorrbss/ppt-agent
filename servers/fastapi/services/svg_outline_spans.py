@@ -6,7 +6,8 @@ sub-steps of that window and emits ONE structured log line per deck::
 
     svg_outline_span presentation=<id> doc_load_ms=... mem0_pre_ms=... ...
 
-It never touches the receipt schema. A step that did not run in this attempt is
+Optional setup observations use the attempt's existing timing recorder.
+A step that did not run in this attempt is
 reported as ``na``. Spans travel in a ContextVar so the deep call sites (asset
 offer) need no extra parameters; every helper is a no-op outside a window.
 """
@@ -25,8 +26,11 @@ LOGGER = logging.getLogger(__name__)
 SPAN_KEYS = (
     "doc_load", "mem0_pre", "content_brief", "outline_first_chunk", "outline_total",
     "outline_post", "job_semaphore_wait", "prepare_total", "prepare_local",
-    "plan_llm", "scenes", "icon_sheets",
+    "title", "plan_llm", "scenes", "icon_sheets", "header_design",
+    "header_representative", "header_selection",
 )
+_SETUP_KEYS = frozenset({"title", "plan_llm", "scenes", "icon_sheets",
+                        "header_design", "header_representative", "header_selection"})
 
 
 class OutlineSpans:
@@ -34,6 +38,7 @@ class OutlineSpans:
         self.ms: dict[str, float] = {}
         self.bench_speed_arm = validate_speed_arm(bench_speed_arm)
         self._emitted = False
+        self.recorder = None
 
     def add(self, name: str, ms: float) -> None:
         self.ms[name] = self.ms.get(name, 0.0) + max(0.0, ms)
@@ -42,12 +47,23 @@ class OutlineSpans:
         self.ms[name] = max(0.0, ms)
 
     @contextmanager
-    def span(self, name: str) -> Iterator[None]:
+    def span(self, name: str, *, recorder=None) -> Iterator[None]:
         started = time.monotonic()
+        before = sum(self.ms.get(key, 0.0) for key in _SETUP_KEYS)
         try:
             yield
         finally:
-            self.add(name, (time.monotonic() - started) * 1000)
+            ended = time.monotonic()
+            elapsed = (ended - started) * 1000
+            self.add(name, elapsed)
+            recorder = recorder if recorder is not None else self.recorder
+            if name == "prepare_total":
+                elapsed = max(0.0, elapsed - (sum(self.ms.get(key, 0.0) for key in _SETUP_KEYS) - before))
+                self.add("prepare_local", elapsed)
+                if recorder is not None:
+                    recorder.record_observation("setup.prepare_local", started, ended, duration_ms=elapsed)
+            elif name in _SETUP_KEYS and recorder is not None:
+                recorder.record_observation(f"setup.{name}", started, ended)
 
     def emit(self, presentation_id: object) -> None:
         """Log the line once per deck; never raises."""
@@ -56,7 +72,7 @@ class OutlineSpans:
         self._emitted = True
         try:
             ms = dict(self.ms)
-            if "prepare_total" in ms:
+            if "prepare_total" in ms and "prepare_local" not in ms:
                 offer = sum(ms.get(k, 0.0) for k in ("plan_llm", "scenes", "icon_sheets"))
                 ms["prepare_local"] = max(0.0, ms["prepare_total"] - offer)
             parts = " ".join(
@@ -83,12 +99,16 @@ def current() -> OutlineSpans | None:
 
 
 @contextmanager
-def span(name: str) -> Iterator[None]:
+def span(name: str, *, recorder=None) -> Iterator[None]:
     spans = _CURRENT.get()
     if spans is None:
-        yield
+        if recorder is not None and name in _SETUP_KEYS:
+            with recorder.observe(f"setup.{name}"):
+                yield
+        else:
+            yield
         return
-    with spans.span(name):
+    with spans.span(name, recorder=recorder):
         yield
 
 

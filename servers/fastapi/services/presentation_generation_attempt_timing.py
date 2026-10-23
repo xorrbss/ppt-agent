@@ -224,6 +224,9 @@ async def _persist_terminal_attempt_timing(
             revision=max(0, int(context.claim.expected_revision or 0)),
             outcome=outcome,
             stage_observations=recorder.stage_observations(),
+            observations=recorder.observations(),
+            render_attempts=recorder.render_attempts(),
+            render_attempts_dropped=recorder.render_attempts_dropped,
             executed_stages=_public_executed_stages(
                 recorder,
                 logical_calls=logical_calls,

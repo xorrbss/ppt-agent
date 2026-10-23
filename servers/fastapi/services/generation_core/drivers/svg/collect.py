@@ -441,6 +441,11 @@ async def _generate_deck(request, presentation_id, outline, language, session, j
     read_png = _facade._read_png
     write_png = _facade._write_png
     publish = _facade._publish
+
+    async def observed_advisory(*args, **kwargs):
+        with timing.observe_observation(request, "quality.vqa"):
+            return await _facade.run_vision_advisory(*args, **kwargs)
+
     restored_plan = validate_svg_stage_plan(getattr(request, "_svg_stage_plan", None))
     stage_plan = validate_svg_stage_plan(stage_plan) if stage_plan is not None else restored_plan
     if restored_plan is not None and stage_plan != restored_plan:
@@ -451,6 +456,7 @@ async def _generate_deck(request, presentation_id, outline, language, session, j
             raise _stage_error("svg_stage_job_required")
         await _stage_preflight(stage_plan, job, checkpoint, len(outline.slides))
     spans = svg_outline_spans.current() or svg_outline_spans.begin()
+    timing.bind_outline_spans(request, spans)
     with spans.span("prepare_total"):
         ctx = await _prepare_generation(request, presentation_id, outline, session, job)
     if (ctx.snapshot.get("common_header_design_plan") or {}).get("schema") == "svg-common-header-design-plan/v2":
@@ -622,8 +628,9 @@ async def _generate_deck(request, presentation_id, outline, language, session, j
                 pages = await recover_screen_pages(ctx, request, presentation_id, outline, job,
                     pages, state, hooks, _attempt_loop)
         else:
-            pages, stage_advisory = await _collect_stages(ctx, stage_plan, tracked_page, job, checkpoint, read_png, _facade.run_vision_advisory, review_stage,
-                                                          page_failures=state.page_failures)
+            pages, stage_advisory = await _collect_stages(
+                ctx, stage_plan, tracked_page, job, checkpoint, read_png, observed_advisory, review_stage,
+                page_failures=state.page_failures)
         if state.fatal_error is not None:
             raise state.fatal_error
     except BaseException as error:
@@ -646,13 +653,14 @@ async def _generate_deck(request, presentation_id, outline, language, session, j
         if recovery_policy:
             from services.generation_core.drivers.svg.quality_recovery import recover_deck
             pages, advisory = await recover_deck(ctx, request, presentation_id, outline, job,
-                pages, state, hooks, _facade.run_vision_advisory, _attempt_loop, deck_quality)
+                pages, state, hooks, observed_advisory, _attempt_loop, deck_quality)
             summary = await deck_quality.classify_pages(pages, job=job, checkpoint=checkpoint,
                 snapshot=ctx.snapshot)
         if not recovery_policy:
-            advisory = stage_advisory if stage_plan is not None else await deck_quality.deck_advisory(ctx, pages, job=job, read_png=read_png, run_advisory=_facade.run_vision_advisory)
+            advisory = stage_advisory if stage_plan is not None else await deck_quality.deck_advisory(
+                ctx, pages, job=job, read_png=read_png, run_advisory=observed_advisory)
     timing.enter_deck_stage(request, "publication")
-    with timing.observe_stage(request, "publication"):
+    with timing.observe_stage(request, "publication"), timing.observe_observation(request, "publication.handoff"):
         return await publish(request, presentation_id, outline, language, session, job,
                              ctx.snapshot, ctx.roles, pages, quality_summary=summary, advisory=advisory)
 

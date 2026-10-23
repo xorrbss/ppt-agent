@@ -826,8 +826,20 @@ def svg_author_input_receipt(style_snapshot: dict, messages: Sequence, *, provid
     settings = {key: value for key, value in kwargs.items() if key != "messages"}
     payload = {"version": "svg-author-input/v1", "messages": assembled,
                "settings": {"provider": provider, "model": model, "max_tokens": budget, **settings}}
+    # author_messages hoists invariant parts into the system message when
+    # enabled. With hoisting disabled only the actual leading design block is
+    # invariant; never hash page text or images as a cacheable prefix.
+    prefix = [message for message in assembled if message["role"] == "SystemMessage"]
+    if len(assembled) > 1 and assembled[1]["content"]:
+        from utils.llm_calls.author_prompt_split import split_deck_invariant
+
+        text = assembled[1]["content"][0].get("text", "")
+        invariant, _ = split_deck_invariant(text, svg_design_text(style_snapshot))
+        if invariant:
+            prefix.append({"role": assembled[1]["role"], "content": [{"text": invariant}]})
     policy = read_quality_recovery_policy(style_snapshot)
     return {"authoring_profile": profile, "author_prompt_digest": canonical_json_digest(payload),
+            "prefix_digest": canonical_json_digest({"version": "svg-author-prefix/v1", "messages": prefix}),
             **({"quality_recovery_policy": policy} if policy is not None else {})}
 
 

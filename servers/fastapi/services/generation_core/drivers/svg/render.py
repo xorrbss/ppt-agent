@@ -360,6 +360,27 @@ def native_table_line_pitch_hint(quality, svg, preservation):
 async def attempt_render(*, ctx, request, presentation_id, index, content, payload, svg, ordinal,
                          job, checkpoint, async_session_maker, write_png,
                          recovery_readability_policy=None, allow_existing_common_header=False):
+    from services.generation_core.drivers.svg.timing import RenderAttemptObservations
+
+    observations = RenderAttemptObservations(request, page_index=index, attempt_ordinal=ordinal + 1)
+
+    async def observed_checkpoint(*args, **kwargs):
+        return await observations.checkpoint(checkpoint, *args, **kwargs)
+
+    try:
+        await observations.sample_loop_lag()
+        return await _attempt_render(ctx=ctx, request=request, presentation_id=presentation_id,
+            index=index, content=content, payload=payload, svg=svg, ordinal=ordinal,
+            job=job, checkpoint=observed_checkpoint, async_session_maker=async_session_maker,
+            write_png=write_png, recovery_readability_policy=recovery_readability_policy,
+            allow_existing_common_header=allow_existing_common_header, observations=observations)
+    finally:
+        observations.move(None)
+
+
+async def _attempt_render(*, ctx, request, presentation_id, index, content, payload, svg, ordinal,
+                         job, checkpoint, async_session_maker, write_png,
+                         recovery_readability_policy, allow_existing_common_header, observations):
     from services.svg_contract import finalize_svg
     from services.svg_renderer import render_svg_with_metrics
     from services.svg_source_layout import verify_source_receipt
@@ -514,7 +535,9 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
                 from services.raster_redesign_generation import raster_measurement_inputs
                 required_text, raster_authorized_measurement, font_profile = raster_measurement_inputs(
                     ctx.raster_analysis, ctx.raster_pin, index + 1, final)
+            observations.move("wait")
             async with ctx.render_semaphore:
+                observations.move("work")
                 source_font_kwargs = {}
                 if ctx.source_reflow:
                     from services.document_canvas_generation import source_restyle_font_floor
@@ -545,6 +568,7 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
                 render_timeout = getattr(ctx, "header_render_timeout_seconds", None)
                 rendered = (await asyncio.wait_for(render_request, timeout=render_timeout)
                             if render_timeout is not None else await render_request)
+                observations.move("post")
         except ValueError as error:
             if ctx.canonical_assets:
                 raise AuthoredStageError(slide_index=index, stage="render",
@@ -688,9 +712,10 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
                     "svg_digest": source_digest(candidate)}
             payload["svg_content"] = candidate
             await checkpoint(job, index, payload=payload)
-            result = await attempt_render(ctx=ctx, request=request, presentation_id=presentation_id,
+            result = await _attempt_render(ctx=ctx, request=request, presentation_id=presentation_id,
                 index=index, content=content, payload=payload, svg=candidate, ordinal=ordinal,
-                job=job, checkpoint=checkpoint, async_session_maker=async_session_maker, write_png=write_png)
+                job=job, checkpoint=checkpoint, async_session_maker=async_session_maker, write_png=write_png,
+                recovery_readability_policy=None, allow_existing_common_header=False, observations=observations)
             local["remeasured"] = True
             local["remeasurement_passed"] = bool(payload.get("quality", {}).get("passed")) if result is not RETRY else False
             await checkpoint(job, index, payload=payload)

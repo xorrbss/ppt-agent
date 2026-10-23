@@ -8,6 +8,7 @@ import struct
 import xml.etree.ElementTree as ET
 
 from services.provider_usage_instrumentation import provider_usage_scope
+from services.generation_core.drivers.svg.timing import observe_setup
 from services.svg_common_header import header_snapshot_base
 from services.svg_common_header_design_checkpoint import (
     candidate_page_checkpoint, publish_header_design, read_update_header_design,
@@ -464,8 +465,9 @@ async def prepare_document_header(ctx, request, presentation_id, outline, langua
         design_input["candidate_revision"] = revision
         reference_images = _design_reference_images(ctx, index)
         design_input["reference_images"] = [{"image_index": i, "digest": sha256_hex(png)} for i, png in enumerate(reference_images)]
-        response = await _paid_step(document, key=f"design-{revision}", stage="design", ordinal=revision,
-            payload=design_input, images=reference_images, plan=plan, job=job, save=save)
+        with observe_setup(request, "header_design"):
+            response = await _paid_step(document, key=f"design-{revision}", stage="design", ordinal=revision,
+                payload=design_input, images=reference_images, plan=plan, job=job, save=save)
         try:
             candidates = _checked_candidates(response, plan, revision)
             failures = []
@@ -518,7 +520,9 @@ async def prepare_document_header(ctx, request, presentation_id, outline, langua
                 "error": str(getattr(error, "code", type(error).__name__)),
                 "header_digest": candidate_ctx.snapshot["common_header"]["digest"]}
     # Both use the same already-admitted runtime semaphore; no new concurrency policy.
-    outcomes = await asyncio.gather(*(representative(candidate) for candidate in candidates), return_exceptions=True)
+    with observe_setup(request, "header_representative"):
+        outcomes = await asyncio.gather(
+            *(representative(candidate) for candidate in candidates), return_exceptions=True)
     for outcome in outcomes:
         if isinstance(outcome, BaseException):
             raise outcome
@@ -528,8 +532,10 @@ async def prepare_document_header(ctx, request, presentation_id, outline, langua
     selection_input, images = _selection_input(ctx, request, outline, plan, document, candidates, pages, index, read_png)
     await save()
     for ordinal in (1, 2):
-        selection_response = await _paid_step(document, key=f"selection-{ordinal}", stage="selection", ordinal=ordinal,
-            payload=selection_input, images=images, plan=plan, job=job, save=save)
+        with observe_setup(request, "header_selection"):
+            selection_response = await _paid_step(
+                document, key=f"selection-{ordinal}", stage="selection", ordinal=ordinal,
+                payload=selection_input, images=images, plan=plan, job=job, save=save)
         try:
             candidate_id, selection = _validated_selection(selection_response, selection_input,
                 document["display_mapping"], pages, candidates)
