@@ -82,12 +82,12 @@ class RenderAttemptObservations:
 
     def __init__(self, request: object, *, page_index: int, attempt_ordinal: int) -> None:
         self.recorder = _recorder(request)
-        self.receipt = {"schema": "svg-render-attempt-timing/v1", "stages": [],
+        self.receipt = {"schema": "svg-render-attempt-timing/v2", "stages": [],
                         "pageIndex": page_index, "attemptOrdinal": attempt_ordinal}
         if self.recorder is not None:
             self.recorder.record_render_attempt(self.receipt)
         self.active = None
-        self.move("post")
+        self.move("prepare")
 
     def move(self, name: str | None) -> None:
         if self.recorder is None:
@@ -95,26 +95,31 @@ class RenderAttemptObservations:
         ended = time.monotonic()
         if self.active is not None:
             stage = self.active
-            stage["endMonotonic"] = ended
-            stage["durationMillis"] = max(0.0, (ended - stage["startMonotonic"]) * 1000)
+            stage["endMillis"] = max(0.0, (ended - self.recorder.started_at) * 1000)
+            stage["durationMillis"] = max(0.0, (ended - self.active_started) * 1000)
             if self.recorder is not None:
-                self.recorder.record_observation(f"render.{stage['name']}", stage["startMonotonic"], ended)
+                self.recorder.record_observation(f"render.{stage['name']}", self.active_started, ended)
         self.active = None
         if name is not None:
-            self.active = {"name": name, "startMonotonic": ended}
+            self.active_started = ended
+            self.active = {"name": name, "startMillis": max(0.0, (ended - self.recorder.started_at) * 1000)}
             if len(self.receipt["stages"]) < MAX_RENDER_STAGE_WINDOWS:
                 self.receipt["stages"].append(self.active)
             else:
                 self.receipt["stageWindowsDropped"] = self.receipt.get("stageWindowsDropped", 0) + 1
+        else:
+            self.receipt["closed"] = True
 
-    async def sample_loop_lag(self) -> None:
+    def sample_loop_lag(self) -> None:
+        """Measure scheduling delay at the next real yield, without adding one."""
         if self.recorder is None:
             return
         started = time.monotonic()
-        try:
-            await asyncio.sleep(0)
-        finally:
+
+        def sampled():
             self.receipt["eventLoopLagMillis"] = max(0.0, (time.monotonic() - started) * 1000)
+
+        asyncio.get_running_loop().call_soon(sampled)
 
     async def checkpoint(self, callback, *args, **kwargs):
         previous = self.active["name"] if self.active is not None else None

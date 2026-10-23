@@ -368,7 +368,7 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
         return await observations.checkpoint(checkpoint, *args, **kwargs)
 
     try:
-        await observations.sample_loop_lag()
+        observations.sample_loop_lag()
         return await _attempt_render(ctx=ctx, request=request, presentation_id=presentation_id,
             index=index, content=content, payload=payload, svg=svg, ordinal=ordinal,
             job=job, checkpoint=observed_checkpoint, async_session_maker=async_session_maker,

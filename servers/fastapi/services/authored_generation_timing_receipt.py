@@ -90,7 +90,7 @@ PUBLIC_GENERATION_TIMING_STAGES = (
 OPTIONAL_GENERATION_OBSERVATIONS = frozenset({
     "setup.title", "setup.plan_llm", "setup.scenes", "setup.icon_sheets",
     "setup.header_design", "setup.header_representative", "setup.header_selection",
-    "setup.prepare_local", "render.wait", "render.work", "render.post",
+    "setup.prepare_local", "render.prepare", "render.wait", "render.work", "render.post",
     "render.checkpoint", "quality.vqa",
 })
 MAX_RENDER_ATTEMPT_OBSERVATIONS = 800
@@ -127,25 +127,32 @@ def _render_attempt_observations(value: object) -> tuple[dict[str, object], ...]
         raise ValueError("generation_render_observations_invalid")
     result = []
     for attempt in value:
-        if (not isinstance(attempt, Mapping) or attempt.get("schema") != "svg-render-attempt-timing/v1"
+        if (not isinstance(attempt, Mapping) or attempt.get("schema") not in {
+                "svg-render-attempt-timing/v1", "svg-render-attempt-timing/v2"}
                 or type(attempt.get("pageIndex")) is not int or attempt["pageIndex"] < 0
                 or type(attempt.get("attemptOrdinal")) is not int or attempt["attemptOrdinal"] < 1
                 or not isinstance(attempt.get("stages"), list)
                 or len(attempt["stages"]) > MAX_RENDER_STAGE_WINDOWS):
             raise ValueError("generation_render_observations_invalid")
         stages = []
+        legacy = attempt["schema"] == "svg-render-attempt-timing/v1"
+        first = attempt["stages"][0] if attempt["stages"] else {}
+        origin = first.get("startMonotonic", 0) if legacy and isinstance(first, Mapping) else 0
         for stage in attempt["stages"]:
-            if not isinstance(stage, Mapping) or stage.get("name") not in {"wait", "work", "post", "checkpoint"}:
+            if not isinstance(stage, Mapping) or stage.get("name") not in {"prepare", "wait", "work", "post", "checkpoint"}:
                 raise ValueError("generation_render_observations_invalid")
-            clocks = [stage.get(key) for key in ("startMonotonic", "endMonotonic")]
+            clocks = [stage.get(key) for key in (
+                ("startMonotonic", "endMonotonic") if legacy else ("startMillis", "endMillis"))]
             if any(type(clock) not in (int, float) or not 0 <= clock < float("inf") for clock in clocks):
                 raise ValueError("generation_render_observations_invalid")
             if clocks[1] < clocks[0]:
                 raise ValueError("generation_render_observations_invalid")
-            stages.append({"name": stage["name"], "startMonotonic": clocks[0], "endMonotonic": clocks[1],
+            offsets = [(clock - origin) * 1000 if legacy else clock for clock in clocks]
+            stages.append({"name": stage["name"], "startMillis": _bounded_timing_ms(offsets[0], "render_start"),
+                           "endMillis": _bounded_timing_ms(offsets[1], "render_end"),
                            "durationMillis": _bounded_timing_ms(stage.get("durationMillis"), "render")})
         dropped = _bounded_timing_ms(attempt.get("stageWindowsDropped", 0), "render_dropped")
-        result.append({"schema": attempt["schema"], "pageIndex": attempt["pageIndex"],
+        result.append({"schema": "svg-render-attempt-timing/v2", "pageIndex": attempt["pageIndex"],
                        "attemptOrdinal": attempt["attemptOrdinal"], "stages": stages,
                        "eventLoopLagMillis": _bounded_timing_ms(attempt.get("eventLoopLagMillis"), "loop_lag"),
                        **({"stageWindowsDropped": dropped} if dropped else {})})
@@ -1181,16 +1188,33 @@ class GenerationTimingRecorder:
     _observations: dict[str, dict[str, int]] = field(default_factory=dict)
     _render_attempts: list[dict[str, object]] = field(default_factory=list)
     render_attempts_dropped: int = 0
+    _render_attempts_evicted: int = 0
 
     def record_render_attempt(self, receipt: dict[str, object]) -> None:
         """Keep bounded recent detail while all windows enter aggregate observations."""
         if len(self._render_attempts) == MAX_RENDER_ATTEMPT_OBSERVATIONS:
             self._render_attempts.pop(0)
+            self._render_attempts_evicted += 1
             self.render_attempts_dropped += 1
         self._render_attempts.append(receipt)
 
     def render_attempts(self) -> tuple[dict[str, object], ...]:
-        return _render_attempt_observations(self._render_attempts)
+        """Snapshot closed, valid diagnostics; unfinished work cannot fail a receipt.
+
+        Recompute the rejected count so repeated snapshots neither double count
+        open attempts nor prevent them from appearing after they finish.
+        """
+        result = []
+        dropped = self._render_attempts_evicted
+        for attempt in self._render_attempts:
+            try:
+                if not isinstance(attempt, Mapping) or not attempt.get("closed"):
+                    raise ValueError("generation_render_attempt_open")
+                result.extend(_render_attempt_observations([attempt]))
+            except (TypeError, ValueError, OverflowError):
+                dropped += 1
+        self.render_attempts_dropped = dropped
+        return tuple(result)
 
     @contextmanager
     def observe(self, name: str) -> Iterator[None]:

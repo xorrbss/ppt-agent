@@ -112,8 +112,14 @@ class _FrozenSourceDict(dict):
 
     __setitem__ = __delitem__ = clear = pop = popitem = setdefault = update = __ior__ = _reject
 
+    def __copy__(self):
+        return dict(self)
+
     def __deepcopy__(self, memo):
         return deepcopy(dict(self), memo)
+
+    def __reduce__(self):
+        return dict, (dict(self),)
 
 
 class _FrozenSourceList(list):
@@ -123,8 +129,14 @@ class _FrozenSourceList(list):
     __setitem__ = __delitem__ = append = clear = extend = insert = pop = remove = reverse = sort = _reject
     __iadd__ = __imul__ = _reject
 
+    def __copy__(self):
+        return list(self)
+
     def __deepcopy__(self, memo):
         return deepcopy(list(self), memo)
+
+    def __reduce__(self):
+        return list, (list(self),)
 
 
 def _freeze_source_value(value):
@@ -151,7 +163,7 @@ def _evict_source_pages(reference, identity):
 
 
 def source_pages(manifest: SourceContentManifest, *, chart_contract=None):
-    """Validate once per live manifest identity and exact chart contract.
+    """Memoize validation per live manifest identity and exact chart contract.
 
     Pydantic's frozen source models are shallow: payload/projection dicts and
     lists remain mutable. After successful validation, detach and seal those
@@ -166,9 +178,15 @@ def source_pages(manifest: SourceContentManifest, *, chart_contract=None):
         entry = _SOURCE_PAGES_MEMO.get(identity)
         if key is not None and entry is not None and entry[0]() is manifest and key in entry[1]:
             return entry[1][key]
-        pages = _validate_source_pages(manifest, chart_contract=chart_contract)
-        if key is None:
-            return pages
+    # Whole-manifest validation can take seconds. Unrelated identities must
+    # never wait on that work under the global memo lock.
+    pages = _validate_source_pages(manifest, chart_contract=chart_contract)
+    if key is None:
+        return pages
+    with _SOURCE_PAGES_LOCK:
+        entry = _SOURCE_PAGES_MEMO.get(identity)
+        if entry is not None and entry[0]() is manifest and key in entry[1]:
+            return entry[1][key]
         for page in pages:
             for block in page.blocks:
                 object.__setattr__(block, "payload", _freeze_source_value(block.payload))
