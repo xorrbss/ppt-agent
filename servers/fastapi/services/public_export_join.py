@@ -11,7 +11,7 @@ same row the lease fences on -- and resolves to ``completed`` (bound to the
 leader's immutable result through a consumer-scoped reference), ``claimed``
 (the leader's lease died mid-wait, so this waiter was promoted by the existing
 re-claim path, fencing token incremented and the dead leader's late return
-still rejected as a stale fence), or an error: the leader's own failure code,
+still rejected as a stale fence), or an error: the leader's explicit verdict,
 the pinned deadline code, or the retryable in-flight code.
 
 Two bounds apply to the wait, neither an invented sleep.  The pinned admission
@@ -84,6 +84,11 @@ EXPORT_JOIN_POLL_SECONDS = float(WORKSPACE_OPERATION_HEARTBEAT_SECONDS)
 EXPORT_JOIN_SLOT_YIELD_SECONDS = float(WORKSPACE_OPERATION_LEASE_SECONDS)
 
 IN_FLIGHT_ERROR_CODE = "public_export_singleflight_in_flight"
+
+_SHARED_VERDICT_CODES = frozenset({
+    "public_export_hybrid_not_editable",
+    "public_export_delivered_mode_mismatch",
+})
 
 Clock = Callable[[], datetime]
 Sleeper = Callable[[float], Awaitable[None]]
@@ -306,13 +311,11 @@ async def resolve_export_join(
         poll_count += 1
         now = as_utc(clock())
         row = await _read_identity(session_factory, identity_id=identity_id)
-        if row.state == "failed":
-            # The leader's own verdict, never a synthesized success and never a
-            # second publication from the waiter.
-            raise PublicExportOperationError(
-                row.error_code or "public_export_singleflight_failed"
-            )
-        if row.state == "succeeded" or (
+        if row.state == "failed" and row.error_code in _SHARED_VERDICT_CODES:
+            # Content verdicts apply to every consumer of this identity;
+            # infrastructure failures belong only to the failed attempt.
+            raise PublicExportOperationError(row.error_code)
+        if row.state in {"succeeded", "failed"} or (
             row.lease_expires_at is not None
             and as_utc(row.lease_expires_at) <= now
         ):

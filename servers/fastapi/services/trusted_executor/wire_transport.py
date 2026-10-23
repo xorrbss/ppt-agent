@@ -58,6 +58,13 @@ DEFAULT_STAGING_CAPACITY_BYTES = 4 * 1024 * 1024 * 1024
 _CHUNK_BYTES = 1024 * 1024
 
 
+class TrustedWorkerTransportClosedError(TrustedWorkerWireError):
+    """An active worker was interrupted by transport shutdown."""
+
+    def __init__(self) -> None:
+        super().__init__("trusted_worker_transport_closed")
+
+
 class TrustedWorkerArtifactAuthority(Protocol):
     """Streaming byte authority used by the trusted transport."""
 
@@ -405,6 +412,8 @@ class SupervisedStdioWireTransport:
                 except BaseException:
                     pass
                 raise
+            if self._closed:
+                raise TrustedWorkerTransportClosedError()
             if not await asyncio.to_thread(supervisor.wait_for_zero, timeout=self._zero_timeout_seconds):
                 await asyncio.to_thread(supervisor.cancel, zero_timeout=self._zero_timeout_seconds)
                 raise TrustedWorkerWireError("trusted_worker_descendants_remained")

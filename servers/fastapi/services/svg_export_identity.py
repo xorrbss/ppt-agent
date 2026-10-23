@@ -210,12 +210,11 @@ async def _producer_readback(session_factory, *, producer_id, claim, tenant_id, 
                 or not isinstance(readback, dict)):
             raise PublicExportOperationError("svg_export_readback_binding_invalid")
         if producer_identity.canonical_digest != identity.canonical_digest:
-            render = readback.get("finalPptxRender")
             native = readback.get("genericNativeCoverageOoxml")
             # Cross-policy provenance comes directly from a physical worker,
-            # never from a previous consumer's already wrapped readback.
+            # never from a previous consumer's already wrapped readback. Final
+            # render proof belongs to the artifact-bound review, not export.
             if (evidence.get("reusedCompletedIdentity") is True or evidence.get("reuseProducerBinding")
-                    or not isinstance(render, dict) or render.get("operationId") != str(producer_id)
                     or (isinstance(native, dict) and native.get("operationId") != str(producer_id))):
                 raise PublicExportOperationError("svg_export_readback_binding_invalid")
         from utils.hashing import canonical_json_sha256

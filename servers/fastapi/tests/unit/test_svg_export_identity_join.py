@@ -210,7 +210,8 @@ def test_same_revision_and_format_reuses_the_completed_export_without_the_worker
         unchanged, unchanged_identity = await export.export(unchanged_claim, _request())
         assert export.worker_calls == [first_claim.operation_id, fresh_claim.operation_id]
         assert unchanged_identity.canonical_digest == fresh_identity.canonical_digest
-        assert unchanged.resource_metrics["public_export_worker_evidence"]["joinedOperationId"] == str(fresh_claim.operation_id)
+        assert unchanged.resource_metrics["public_export_worker_evidence"]["joinedOperationId"] == str(
+            fresh_claim.operation_id)
         rows = await export.identity_rows()
         assert len(rows) == 2
         original = next(row for row in rows if row.canonical_digest == identity.canonical_digest)
@@ -264,14 +265,16 @@ def test_every_pre_export_input_splits_the_identity(harness, change) -> None:
 
 
 @pytest.mark.parametrize("policy", ["interactive-v1", None])
-def test_release_predecessor_reuses_exact_bytes_and_keeps_both_identities(harness, policy) -> None:
+@pytest.mark.parametrize("historical_render", [False, True])
+def test_release_predecessor_reuses_exact_bytes_and_keeps_both_identities(harness, policy, historical_render) -> None:
     async def scenario() -> None:
         export = await harness()
         original_claim = await export.operation()
         original, original_identity = await export.export(original_claim, _request(quality_policy=policy))
-        original.resource_metrics["public_export_worker_evidence"]["structuralReadback"] = {
-            **READBACK, "finalPptxRender": {"operationId": str(original_claim.operation_id),
-                "pages": [{"pngSha256": "a" * 64}], "evidenceDigest": "sha256:" + "b" * 64}}
+        if historical_render:
+            original.resource_metrics["public_export_worker_evidence"]["structuralReadback"] = {
+                **READBACK, "finalPptxRender": {"operationId": str(original_claim.operation_id),
+                    "pages": [{"pngSha256": "a" * 64}], "evidenceDigest": "sha256:" + "b" * 64}}
         original.resource_metrics["quality_receipt"] = dict(operationId=str(original_claim.operation_id),
             presentationId=str(export.presentation_id), sourceRevision=3,
             artifactDigest="sha256:" + original.artifact.sha256, releaseReadiness="blocked")

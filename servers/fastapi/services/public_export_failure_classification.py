@@ -17,7 +17,9 @@ from sqlalchemy.exc import DBAPIError, TimeoutError as DatabaseTimeoutError
 
 from services.artifact_store import ArtifactKeyBusy, ArtifactStoreError
 from services.assets.contracts import AssetGatewayError
-from services.isolated_worker_process import IsolatedWorkerCrashedError, IsolatedWorkerProcessError
+from services.isolated_worker_process import (
+    IsolatedWorkerCrashedError, IsolatedWorkerProcessError, IsolatedWorkerTransportClosedError,
+)
 from services.public_export_errors import PublicExportOperationError
 from services.trusted_executor.worker_dispatcher import TrustedWorkerWireError
 
@@ -75,6 +77,7 @@ _TRANSIENT_EXPORT_CODES = frozenset({
     "public_export_editability_evidence_pending",
     "public_export_worker_failed",
     "svg_export_worker_failed",
+    "svg_export_asset_lock_timeout",
 })
 _TRANSIENT_WORKER_CODES = frozenset({
     "deadline_exceeded",
@@ -171,7 +174,8 @@ def classified_public_export_error(
         # Some source validators still raise ValueError with a namespaced code.
         # Keep that code without persisting arbitrary untyped message text.
         has_code = has_code or code.startswith(("svg_", "public_", "trusted_worker_", "artifact.", "legacy_"))
-        code = code if has_code and _SVG_CODE_SHAPE.fullmatch(code) else type(error).__name__
+        code = (code if has_code and _SVG_CODE_SHAPE.fullmatch(code)
+                and not isinstance(error, (DBAPIError, DatabaseTimeoutError)) else type(error).__name__)
         merged["reason_code"] = code
         if isinstance(error, SvgExportProjectionError):
             merged.update(error.detail)
@@ -185,8 +189,8 @@ def classified_public_export_error(
         return RetryableWorkspaceOperationError(
             RETRYABLE_PUBLIC_EXPORT_FAILURE_CODE, detail=merged,
         )
-    if isinstance(error, IsolatedWorkerCrashedError):
-        # Empty crash output previously reached the decoder as a generic process
+    if isinstance(error, (IsolatedWorkerCrashedError, IsolatedWorkerTransportClosedError)):
+        # Empty crash/shutdown output previously reached the decoder as a generic process
         # error. Preserve authored's exact classification and reason detail.
         merged["reason_code"] = "IsolatedWorkerProcessError"
         return RetryableWorkspaceOperationError(RETRYABLE_PUBLIC_EXPORT_FAILURE_CODE, detail=merged)
