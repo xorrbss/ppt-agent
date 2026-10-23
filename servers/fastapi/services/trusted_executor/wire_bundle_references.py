@@ -87,7 +87,9 @@ def _input_bundle_references(job: IsolatedWorkerJob, path: Path) -> tuple[Artifa
             if (
                 not isinstance(assets, Mapping)
                 or not required_asset_keys <= set(assets)
-                or set(assets) - required_asset_keys - {"fullPagePreserve", "systemFurniture", "sourceLineageRef", "sourceLineageDigest"}
+                or set(assets) - required_asset_keys - {
+                    "fullPagePreserve", "systemFurniture", "sourceLineageRef", "sourceLineageDigest",
+                }
                 or ("sourceLineageRef" in assets) != ("sourceLineageDigest" in assets)
                 or ("fullPagePreserve" in assets and type(assets["fullPagePreserve"]) is not bool)
                 or ("systemFurniture" in assets and not _furniture_metadata_valid(assets["systemFurniture"]))
@@ -162,46 +164,14 @@ def _staged_bundle_slides(
 
 
 def _final_pptx_render_references(job, *, output_reference, stdout):
-    """Validate Office render children before the authority publishes any output."""
+    """Only quality.review may produce final Office render evidence."""
     if job.role != "export" or output_reference.kind != "presentation-pptx":
         return ()
-    from utils.hashing import canonical_json_sha256
     result = json.loads(stdout)
-    proof = (result.get("executionEvidence", {}).get("structuralReadback", {})
-             .get("finalPptxRender", {}))
-    if not isinstance(proof, Mapping) or proof.get("status") != "measured":
-        return ()
-    unsigned = {key: value for key, value in proof.items() if key != "evidenceDigest"}
-    pages = proof.get("pages")
-    if (proof.get("schemaVersion") != "svg-final-pptx-office-render/v1"
-            or proof.get("artifactDigest") != "sha256:" + output_reference.sha256
-            or proof.get("artifactDigestAfter") != proof.get("artifactDigest")
-            or proof.get("hashInvariant") is not True or proof.get("openReadOnly") is not True
-            or proof.get("openWithWindow") is not False
-            or proof.get("operationId") != str(job.operation_id)
-            or proof.get("ownerId") != str(job.input_artifact.owner_id)
-            or proof.get("tenantId") != job.input_artifact.tenant_id
-            or proof.get("evidenceDigest") != "sha256:" + canonical_json_sha256(unsigned)
-            or not isinstance(pages, list) or not 1 <= len(pages) <= 100
-            or proof.get("pageCount") != len(pages)):
-        raise TrustedWorkerWireError("trusted_worker_final_pptx_render_binding_invalid")
-    references = []
-    for index, page in enumerate(pages):
-        if not isinstance(page, Mapping) or type(page.get("index")) is not int or page["index"] != index:
-            raise TrustedWorkerWireError("trusted_worker_final_pptx_render_page_invalid")
-        try:
-            reference = ArtifactRef.from_wire(page["artifactRef"])
-        except (KeyError, TypeError, ValueError) as error:
-            raise TrustedWorkerWireError("trusted_worker_final_pptx_render_page_invalid") from error
-        if (reference.owner_id != job.input_artifact.owner_id
-                or reference.tenant_id != job.input_artifact.tenant_id
-                or reference.created_by_operation_id != job.operation_id
-                or reference.kind != "slide-png" or reference.media_type != "image/png"
-                or reference.sha256 != page.get("pngSha256")
-                or reference.retention_class != "ephemeral"):
-            raise TrustedWorkerWireError("trusted_worker_final_pptx_render_page_binding_invalid")
-        references.append(reference)
-    return tuple(references)
+    structural = result.get("executionEvidence", {}).get("structuralReadback", {})
+    if "finalPptxRender" in structural:
+        raise TrustedWorkerWireError("trusted_worker_final_pptx_render_not_allowed")
+    return ()
 
 
 def _render_output_bundle_references(

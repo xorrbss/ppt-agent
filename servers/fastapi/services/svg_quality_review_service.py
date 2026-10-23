@@ -337,9 +337,10 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
                     or current_inputs["parentExportOperationId"] != final_inputs["parentExportOperationId"]):
                 raise NonRetryableWorkspaceOperationError("svg_final_pptx_review_source_changed")
             await persist_final_review_render(session, final_inputs, claim)
-            final_reviews = dict(svg_theme.get("finalPptxReviews") or {})
-            final_reviews[final_inputs["artifactDigest"][7:]] = seal_final_review(claim, final_inputs, vision)
-            svg_theme["finalPptxReviews"] = final_reviews
+            # The theme is a current-evidence projection, not an artifact history.
+            svg_theme["finalPptxReviews"] = {
+                final_inputs["artifactDigest"][7:]: seal_final_review(claim, final_inputs, vision),
+            }
         prior_advisory = svg_theme.get("advisory")
         prior = current_page_advisories(current_slides, svg_theme.get("pageAdvisories")
             or (prior_advisory or {}).get("pageAdvisories") or [])

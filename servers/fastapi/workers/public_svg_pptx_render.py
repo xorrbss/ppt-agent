@@ -8,10 +8,24 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+from time import monotonic
 import uuid
 
 SCHEMA = "svg-final-pptx-office-render/v1"
 MINIMUM_AVAILABLE_MEMORY = 8 * 1024**3
+RENDER_MUTEX_NAME = "Local\\PresentonSvgFinalPptxRender"
+SHARED_INSTANCE_REASON = "svg_final_pptx_office_instance_busy"
+
+
+class SharedPowerPointInstance(ValueError):
+    """A desktop, orphan or other worker owns the account's Office server."""
+
+
+def _unavailable(reason, *, retryable=False):
+    result = dict(schemaVersion=SCHEMA, status="unavailable", reasonCode=reason)
+    if retryable:
+        result["retryable"] = True
+    return result
 
 
 def _sha(path):
@@ -47,14 +61,19 @@ def _render(request):
     pythoncom.CoInitialize()
     document = application = None
     owns_application = False
+    # A desktop activation between this snapshot and DispatchEx cannot be
+    # distinguished from ours; renderer serialization does not close that window.
     existing_processes = set(win32process.EnumProcesses())
     try:
         application = win32com.client.DispatchEx("PowerPoint.Application")
         _, pid = win32process.GetWindowThreadProcessId(application.HWND)
         # DispatchEx can return a shared Office server. Never open, quit or kill it.
         if pid in existing_processes:
-            raise ValueError("svg_final_pptx_office_isolation_unavailable")
+            raise SharedPowerPointInstance(SHARED_INSTANCE_REASON)
         owns_application = True
+        # Accepted DCOM activation window: Office may start before HWND is
+        # returned and before it can join our job. A hung activation can leave
+        # an orphan; the next attempt defers rather than adopting or killing it.
         job = win32job.OpenJobObject(win32job.JOB_OBJECT_ASSIGN_PROCESS, False, request["jobName"])
         process = win32api.OpenProcess(0x0100 | 0x0001, False, pid)
         try:
@@ -101,11 +120,42 @@ def _render(request):
 
 
 def render_final_pptx(target, output_directory, *, page_count, width_px, height_px, timeout):
-    unavailable = dict(schemaVersion=SCHEMA, status="unavailable")
     if os.name != "nt":
-        return {**unavailable, "reasonCode": "svg_final_pptx_office_unavailable"}
+        return _unavailable("svg_final_pptx_office_unavailable")
     if timeout <= 0:
-        return {**unavailable, "reasonCode": "svg_final_pptx_render_deadline_exhausted"}
+        return _unavailable("svg_final_pptx_render_deadline_exhausted")
+    mutex = None
+    acquired = False
+    started = monotonic()
+    try:
+        import win32event
+        # One account/session Office server serves every API/controller process.
+        mutex = win32event.CreateMutex(None, False, RENDER_MUTEX_NAME)
+        state = win32event.WaitForSingleObject(mutex, min(int(timeout * 1000), 0xFFFFFFFE))
+        if state == win32event.WAIT_TIMEOUT:
+            return _unavailable("svg_final_pptx_render_busy", retryable=True)
+        if state not in (win32event.WAIT_OBJECT_0, win32event.WAIT_ABANDONED):
+            raise OSError("Office render mutex unavailable")
+        acquired = True
+        remaining = timeout - (monotonic() - started)
+        if remaining <= 0:
+            return _unavailable("svg_final_pptx_render_busy", retryable=True)
+        return _render_serialized(target, output_directory, page_count=page_count,
+            width_px=width_px, height_px=height_px, timeout=remaining)
+    except (ImportError, OSError):
+        return _unavailable("svg_final_pptx_office_isolation_unavailable")
+    finally:
+        if mutex is not None:
+            try:
+                if acquired:
+                    win32event.ReleaseMutex(mutex)
+            finally:
+                mutex.Close()
+
+
+def _render_serialized(target, output_directory, *, page_count, width_px, height_px, timeout):
+    unavailable = dict(schemaVersion=SCHEMA, status="unavailable")
+    output_directory = output_directory.resolve()
     output_directory.mkdir(parents=True, exist_ok=True)
     request = dict(pptx=str(target.resolve()), outputDirectory=str(output_directory.resolve()),
         pageCount=page_count, widthPx=width_px, heightPx=height_px,
@@ -123,6 +173,7 @@ def render_final_pptx(target, output_directory, *, page_count, width_px, height_
         child = subprocess.Popen([sys.executable, "-m", "workers.public_svg_pptx_render",
             str(request_path), str(result_path)], stdin=subprocess.PIPE,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            cwd=Path(__file__).resolve().parents[1],
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         process = win32api.OpenProcess(0x0100 | 0x0001, False, child.pid)
         try:
@@ -134,6 +185,8 @@ def render_final_pptx(target, output_directory, *, page_count, width_px, height_
         if child.returncode != 0 or not result_path.is_file():
             return {**unavailable, "reasonCode": "svg_final_pptx_render_failed"}
         result = json.loads(result_path.read_text(encoding="utf-8"))
+        if result.get("status") == "unavailable":
+            return result
         if result.get("artifactDigest") != "sha256:" + _sha(target):
             return {**unavailable, "reasonCode": "svg_final_pptx_render_binding_invalid"}
         return result
@@ -157,8 +210,15 @@ def render_final_pptx(target, output_directory, *, page_count, width_px, height_
                     child.stdin.close()
 
 
+def _render_child(request_path, result_path):
+    try:
+        result = _render(json.loads(Path(request_path).read_text(encoding="utf-8")))
+    except SharedPowerPointInstance:
+        result = _unavailable(SHARED_INSTANCE_REASON, retryable=True)
+    Path(result_path).write_text(json.dumps(result), encoding="utf-8")
+
+
 if __name__ == "__main__":
     if sys.stdin.buffer.readline() != b"render\n":
         raise SystemExit(1)
-    result = _render(json.loads(Path(sys.argv[1]).read_text(encoding="utf-8")))
-    Path(sys.argv[2]).write_text(json.dumps(result), encoding="utf-8")
+    _render_child(sys.argv[1], sys.argv[2])
