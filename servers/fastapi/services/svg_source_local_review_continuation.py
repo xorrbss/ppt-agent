@@ -24,13 +24,14 @@ def _source_local_vector(payloads):
                  and _sha(quality.get("source_digest")) == svg and _sha(quality.get("png_digest")) == png)
         _require(isinstance(payload.get("input_digest"), str) and bool(payload["input_digest"]))
         result.append(dict(index=index, svg_digest=svg, png_digest=png, input_digest=payload["input_digest"],
-            author_receipt_digest=author_witness(payload), native_digest=content_digest(payload.get("nativeDeclarations")),
+            author_receipt_digest=author_witness(payload),
+            native_digest=content_digest(payload.get("nativeDeclarations")),
             asset_digest=content_digest(payload.get("svgAssetManifest")),
             preservation_digest=content_digest(payload.get("source_preservation"))))
     return result
 
 
-def _source_local_records(execution, payloads, *, sealed_vector=None):
+def _source_local_records(execution, payloads, *, sealed_vector=None, snapshot=None):
     from services.generation_core.quality.vision_advisory_prompt import (
         DESIGN_LOCAL_AXES, DESIGN_PRINCIPLES_VERSION, DESIGN_REVIEW_PROMPT_VERSION,
     )
@@ -76,7 +77,8 @@ def _source_local_records(execution, payloads, *, sealed_vector=None):
                  and vision.get("promptVersion") == DESIGN_REVIEW_PROMPT_VERSION)
         _require(vision.get("reviewedPageIndices") == list(range(len(indices)))
                  and vision.get("reviewedPngDigests") == [
-                     _sha(sealed_vector[i]["png_digest"] if sealed_vector is not None else payloads[i].get("png_sha256"))
+                     _sha(sealed_vector[i]["png_digest"] if sealed_vector is not None
+                          else payloads[i].get("png_sha256"))
                      for i in indices])
         reviewed = (vision.get("designReview") or {}).get("pages")
         _require(isinstance(reviewed, list) and len(reviewed) == len(indices)
@@ -120,20 +122,21 @@ def _source_local_records(execution, payloads, *, sealed_vector=None):
                  and len(gate.get("pages", [])) == count
                  and all(page.get("mandatoryEvidenceValid") is True for page in gate["pages"]))
         for ordinal, marker in enumerate(records):
-            _checked_current_local_group(marker, ordinal, vector)
+            _checked_current_local_group(marker, ordinal, vector, snapshot=snapshot)
         _require(isinstance(unknown, Mapping) and unknown.get("status") == "completed"
                  and unknown.get("group_id") == f"phase-0/group-{group_count}"
                  and unknown.get("indices") == list(range(count))
                  and unknown.get("review_scope") == "global"
                  and unknown.get("namespace") == INITIAL_NAMESPACE
                  and unknown.get("physical_purpose") == "initial-continuation"
-                 and unknown.get("physical_ordinal") == group_count)
+                 and unknown.get("physical_ordinal") == _review_physical_ordinal(unknown, group_count, snapshot))
         global_record = unknown.get("advisory") or {}
         _require(global_record.get("groupId") == unknown["group_id"]
                  and global_record.get("globalPageIndices") == list(range(count))
                  and global_record.get("reviewScope") == "global"
                  and global_record.get("inputDigest") == unknown.get("input_digest")
-                 and global_record.get("digest") == content_digest({k: v for k, v in global_record.items() if k != "digest"})
+                 and global_record.get("digest") == content_digest(
+                     {k: v for k, v in global_record.items() if k != "digest"})
                  and (global_record.get("vision") or {}).get("skipped") == "design_review_schema_or_coverage_invalid")
         _sha(unknown.get("input_digest"))
         vision = original["advisory"]["vision"]
@@ -182,7 +185,8 @@ async def prepare_source_local_leaf(session, *, source_operation=None, verificat
                  ("source_presentation_id", "presentation_id"), ("owner_id", "owner_id"), ("tenant_id", "tenant_id"))))
     working = await _hydrate_checkpoint_archive(session, manifest, archive, verification=verification)
     leaf_job, leaf_pages = archived_source_local_payloads(archive, working, leaf, manifest_pages=manifest.get("pages"))
-    _require(content_digest(frozen_episode_payload(request, manifest)) == content_digest(_frozen_payload(leaf_job["request_payload"]))
+    _require(content_digest(frozen_episode_payload(request, manifest))
+             == content_digest(_frozen_payload(leaf_job["request_payload"]))
              and kwargs["source_job"]["svg_style_snapshot"] == leaf_job["svg_style_snapshot"])
     rounds = kwargs["execution"].get("rounds")
     if (isinstance(rounds, list) and len(rounds) == 2
@@ -207,11 +211,22 @@ async def prepare_source_local_leaf(session, *, source_operation=None, verificat
         return deepcopy(dict(original))
     # Keep the original sealed execution, not a fabricated completed/UNKNOWN gate.
     material = dict(proof=deepcopy(dict(leaf)), execution=deepcopy(leaf_pages[0]["quality_recovery_execution"]),
-        job={key: deepcopy(leaf_job[key]) for key in ("id", "workspace_operation_id", "presentation_id", "svg_style_snapshot")})
+        job={key: deepcopy(leaf_job[key])
+             for key in ("id", "workspace_operation_id", "presentation_id", "svg_style_snapshot")})
     return material
 
 
-def _checked_current_local_group(marker, ordinal, vector):
+def _review_physical_ordinal(marker, ordinal, snapshot):
+    from services.svg_authoring_profile import read_quality_recovery_execution_plan, review_physical_ordinal
+    plan = (snapshot or {}).get("quality_recovery_plan") or {}
+    if plan.get("schema") != "svg-quality-recovery-plan/v3":
+        return ordinal
+    execution = read_quality_recovery_execution_plan(snapshot)
+    return review_physical_ordinal(ordinal, phase_group_limit=execution["phase_group_limit"],
+        review_retry_limit=execution["review_retry_limit"], review_attempt=marker.get("review_attempt"))
+
+
+def _checked_current_local_group(marker, ordinal, vector, *, snapshot=None):
     """Same local-only evidence contract, independent of the global verdict."""
     from services.generation_core.quality.vision_advisory_prompt import DESIGN_LOCAL_AXES, DESIGN_REVIEW_PROMPT_VERSION
     indices = list(range(ordinal * 5, min(ordinal * 5 + 5, len(vector))))
@@ -220,7 +235,7 @@ def _checked_current_local_group(marker, ordinal, vector):
              and marker.get("group_id") == group_id and marker.get("indices") == indices
              and marker.get("review_scope") == "local" and marker.get("namespace") == INITIAL_NAMESPACE
              and marker.get("physical_purpose") == "initial-continuation"
-             and marker.get("physical_ordinal") == ordinal)
+             and marker.get("physical_ordinal") == _review_physical_ordinal(marker, ordinal, snapshot))
     record = marker.get("advisory")
     _require(isinstance(record, Mapping) and record.get("groupId") == group_id
              and record.get("globalPageIndices") == indices and record.get("reviewScope") == "local"
@@ -245,7 +260,8 @@ def _checked_current_local_group(marker, ordinal, vector):
                          ("passed","none","none"),("advisory","minor","none"),
                          ("failed","major","local_repair"),("failed","critical","local_repair"),
                          ("failed","major","design_rewrite"),("failed","critical","design_rewrite")})
-        _require(all(isinstance(target,Mapping) and target.get("axis") in DESIGN_LOCAL_AXES for target in page["designTargets"]))
+        _require(all(isinstance(target,Mapping) and target.get("axis") in DESIGN_LOCAL_AXES
+                     for target in page["designTargets"]))
     return marker
 
 
@@ -288,8 +304,10 @@ def _build_mixed_local_proof(*, operation_id, job_id, owner_id, tenant_id, archi
              and initial.get("namespace")==INITIAL_NAMESPACE and initial.get("initial_continuation") is True
              and initial.get("status")==original.get("status")=="completed"
              and initial.get("advisory")==original.get("advisory")
-             and original.get("page_digests")==[_digest({"svg":page.get("svg_content"),"png":page.get("png_sha256")}) for page in payloads])
-    binding = dict(operationId=operation_id,jobId=job_id,presentationId=str(source_job["presentation_id"]),ownerId=owner_id,tenantId=tenant_id)
+             and original.get("page_digests")==[
+                 _digest({"svg":page.get("svg_content"),"png":page.get("png_sha256")}) for page in payloads])
+    binding = dict(operationId=operation_id,jobId=job_id,presentationId=str(source_job["presentation_id"]),
+                   ownerId=owner_id,tenantId=tenant_id)
     gate = _gate_intact(original["advisory"])
     _require(gate is not None and gate.get("binding")==binding and gate.get("runtimeBinding")==execution["binding"]
              and gate.get("snapshotDigest")==leaf["source_snapshot_digest"]
@@ -299,12 +317,14 @@ def _build_mixed_local_proof(*, operation_id, job_id, owner_id, tenant_id, archi
              and all(page.get("mandatoryEvidenceValid") is True for page in gate["pages"]))
     # Global coverage/status is intentionally preserved, never used as local
     # coverage. Only twenty fully evaluated four-axis local records suffice.
-    leaf_records,_ = _source_local_records(leaf_execution,payloads,sealed_vector=leaf["source_pages"])
+    leaf_records,_ = _source_local_records(leaf_execution,payloads,sealed_vector=leaf["source_pages"],
+        snapshot=leaf_job.get("svg_style_snapshot"))
     _require([content_digest(marker) for marker in leaf_records]==leaf["source_local_group_digests"])
     fresh = prior.get("fresh_local_indices") or []
     fresh_groups = {index//5 for index in fresh}
     _require(set(fresh)=={i for group in fresh_groups for i in range(group*5,min(group*5+5,len(vector)))})
-    _require(prior.get("source_local_group_digests")==[content_digest(marker) for i,marker in enumerate(leaf_records) if i not in fresh_groups])
+    _require(prior.get("source_local_group_digests")==[
+        content_digest(marker) for i,marker in enumerate(leaf_records) if i not in fresh_groups])
     groups = original.get("groups") or {}
     _require(set(groups)=={str(i) for i in fresh_groups}|{str(len(leaf_records))})
     vision = original["advisory"]["vision"]
@@ -316,14 +336,16 @@ def _build_mixed_local_proof(*, operation_id, job_id, owner_id, tenant_id, archi
     records,origins = [],[]
     for ordinal,leaf_marker in enumerate(leaf_records):
         if ordinal in fresh_groups:
-            marker = _checked_current_local_group(groups[str(ordinal)],ordinal,vector)
+            marker = _checked_current_local_group(groups[str(ordinal)],ordinal,vector,
+                snapshot=source_job.get("svg_style_snapshot"))
             _require(marker["group_id"] not in by_group)
             origins.append("source")
         else:
             marker = leaf_marker
             consumer = by_group.get(marker["group_id"]) or {}
             _require(all(vector[i]==leaf["source_pages"][i] for i in marker["indices"])
-                     and consumer.get("schema")=="svg-local-review-consumer/v1" and consumer.get("namespace")==INITIAL_NAMESPACE
+                     and consumer.get("schema")=="svg-local-review-consumer/v1"
+                     and consumer.get("namespace")==INITIAL_NAMESPACE
                      and consumer.get("producer_operation_id")==leaf["source_operation_id"]
                      and consumer.get("producer_job_id")==leaf["source_job_id"]
                      and consumer.get("producer_record_digest")==content_digest(marker)
@@ -331,7 +353,8 @@ def _build_mixed_local_proof(*, operation_id, job_id, owner_id, tenant_id, archi
                      and consumer.get("producer_source_local_digest")==leaf["digest"]
                      and consumer.get("consumer_source_local_digest")==prior["digest"]
                      and consumer.get("consumer_binding")==binding and consumer.get("indices")==marker["indices"]
-                     and consumer.get("provider_response_reused") is False and consumer.get("original_verdict_preserved") is True)
+                     and consumer.get("provider_response_reused") is False
+                     and consumer.get("original_verdict_preserved") is True)
             origins.append("leaf")
         _require(returned[ordinal]==marker["advisory"])
         records.append(marker)
@@ -340,13 +363,16 @@ def _build_mixed_local_proof(*, operation_id, job_id, owner_id, tenant_id, archi
              and returned[-1].get("reviewScope")=="global"
              and returned[-1].get("digest")==content_digest({k:v for k,v in returned[-1].items() if k!="digest"}))
     value = dict(schema=SOURCE_LOCAL_SCHEMA,namespace=INITIAL_NAMESPACE,source_operation_id=operation_id,
-        source_job_id=job_id,source_presentation_id=str(source_job["presentation_id"]),owner_id=owner_id,tenant_id=tenant_id,
-        archive_digest=archive_digest,parent_manifest_hash=parent_manifest_hash,source_pages=vector,fresh_local_indices=[],
+        source_job_id=job_id,source_presentation_id=str(source_job["presentation_id"]),
+        owner_id=owner_id,tenant_id=tenant_id,archive_digest=archive_digest,
+        parent_manifest_hash=parent_manifest_hash,source_pages=vector,fresh_local_indices=[],
         source_snapshot_digest=leaf["source_snapshot_digest"],source_runtime_binding=execution["binding"],
         review_principles_version=leaf["review_principles_version"],source_execution_digest=content_digest(execution),
         source_local_group_digests=[content_digest(marker) for marker in records],source_local_group_origins=origins,
-        **{key: leaf[key] for key in ("preserved_unknown_global_digest", "preserved_rejected_global_digest") if key in leaf},source_consumer_digest=content_digest(consumers),
-        completed_global_digest=content_digest(global_group),completed_gate_digest=gate["digest"],flattened_local=deepcopy(dict(material)))
+        **{key: leaf[key] for key in ("preserved_unknown_global_digest", "preserved_rejected_global_digest")
+           if key in leaf},source_consumer_digest=content_digest(consumers),
+        completed_global_digest=content_digest(global_group),completed_gate_digest=gate["digest"],
+        flattened_local=deepcopy(dict(material)))
     return value|{"digest":content_digest(value)}
 
 
@@ -422,7 +448,8 @@ def _build_flattened_local_proof(*, operation_id, job_id, owner_id, tenant_id, a
                          and author_witness(payload) == witness.get("current_author_receipt_digest",
                                                                    witness.get("current_author_witness_digest"))
                          and payload.get("source_digest") is None
-                         and all(payload.get(key) is None for key in ("quality", "initial_quality", "png_path", "png_sha256")))
+                         and all(payload.get(key) is None
+                                 for key in ("quality", "initial_quality", "png_path", "png_sha256")))
             # On archive replay the raw row stays raw. This sentinel grants no
             # author/render/review authority; the prepared manifest owns that.
             vector.append(dict(index=index, phase="fresh-author-only",
@@ -455,7 +482,8 @@ def _build_flattened_local_proof(*, operation_id, job_id, owner_id, tenant_id, a
              and gate.get("pageCoverageComplete") is True
              and gate.get("pageDigests") == [p["svg_digest"] for p in leaf["source_pages"]]
              and gate.get("pngDigests") == [p["png_digest"] for p in leaf["source_pages"]])
-    records, _ = _source_local_records(leaf_execution, payloads, sealed_vector=leaf["source_pages"])
+    records, _ = _source_local_records(leaf_execution, payloads, sealed_vector=leaf["source_pages"],
+        snapshot=leaf_job.get("svg_style_snapshot"))
     _require([content_digest(marker) for marker in records] == leaf.get("source_local_group_digests"))
     vision = advisory["vision"]
     returned, consumers = vision.get("reviewGroups"), vision.get("localEvidenceConsumers")
@@ -466,14 +494,16 @@ def _build_flattened_local_proof(*, operation_id, job_id, owner_id, tenant_id, a
     for index, marker in enumerate(records):
         consumer = by_group.get(marker["group_id"])
         _require(returned[index] == marker["advisory"] and isinstance(consumer, Mapping)
-                 and consumer.get("schema") == "svg-local-review-consumer/v1" and consumer.get("namespace") == INITIAL_NAMESPACE
+                 and consumer.get("schema") == "svg-local-review-consumer/v1"
+                 and consumer.get("namespace") == INITIAL_NAMESPACE
                  and consumer.get("producer_operation_id") == leaf["source_operation_id"]
                  and consumer.get("producer_job_id") == leaf["source_job_id"]
                  and consumer.get("producer_record_digest") == content_digest(marker)
                  and consumer.get("producer_input_digest") == marker["input_digest"]
                  and consumer.get("producer_source_local_digest") == leaf["digest"]
                  and consumer.get("consumer_binding") == binding and consumer.get("indices") == marker["indices"]
-                 and consumer.get("provider_response_reused") is False and consumer.get("original_verdict_preserved") is True)
+                 and consumer.get("provider_response_reused") is False
+                 and consumer.get("original_verdict_preserved") is True)
     groups = round_zero.get("groups")
     _require(isinstance(groups, Mapping) and set(groups) == {str(len(records))})
     global_group = groups[str(len(records))]
@@ -522,13 +552,16 @@ def _build_flattened_local_proof(*, operation_id, job_id, owner_id, tenant_id, a
         else:
             reused_digests.append(content_digest(records[ordinal]))
     value = dict(schema=SOURCE_LOCAL_SCHEMA, namespace=INITIAL_NAMESPACE,
-        source_operation_id=operation_id, source_job_id=job_id, source_presentation_id=str(source_job["presentation_id"]),
-        owner_id=owner_id, tenant_id=tenant_id, archive_digest=archive_digest, parent_manifest_hash=parent_manifest_hash,
+        source_operation_id=operation_id, source_job_id=job_id,
+        source_presentation_id=str(source_job["presentation_id"]),
+        owner_id=owner_id, tenant_id=tenant_id, archive_digest=archive_digest,
+        parent_manifest_hash=parent_manifest_hash,
         source_pages=vector, fresh_local_indices=fresh,
         source_snapshot_digest=leaf["source_snapshot_digest"], source_runtime_binding=execution["binding"],
         review_principles_version=leaf["review_principles_version"], source_execution_digest=content_digest(execution),
         source_local_group_digests=reused_digests,
-        **{key: leaf[key] for key in ("preserved_unknown_global_digest", "preserved_rejected_global_digest") if key in leaf},
+        **{key: leaf[key] for key in ("preserved_unknown_global_digest", "preserved_rejected_global_digest")
+           if key in leaf},
         source_consumer_digest=content_digest(consumers), completed_global_digest=content_digest(global_group),
         completed_gate_digest=gate["digest"], flattened_local=deepcopy(dict(material)),
         **({"fresh_source_pages": deepcopy(dict(fresh_pages))} if fresh_pages else {}),
@@ -588,7 +621,7 @@ def build_source_local_proof(*, operation_id, job_id, owner_id, tenant_id, archi
             return None
         _require(not baseline_projections and not fresh_page_witnesses
                  and (raw_payloads is None or list(raw_payloads) == list(payloads)))
-    records, unknown = _source_local_records(execution, payloads)
+    records, unknown = _source_local_records(execution, payloads, snapshot=snapshot)
     if rounds[0]["status"] == "completed":
         from services.generation_core.drivers.svg.quality import _gate_intact
         gate = _gate_intact(rounds[0]["advisory"])
@@ -699,8 +732,10 @@ def _consume_source_local_producer(context, pages, renders, evidence, reused, co
     leaf = proof.get("flattened_local")
     record_proof = leaf["proof"] if leaf else proof
     record_execution = leaf["execution"] if leaf else evidence["execution"]
+    record_job = leaf["job"] if leaf else evidence["producer_job"]
     records, _ = _source_local_records(record_execution, payloads,
-        sealed_vector=record_proof["source_pages"] if leaf else None)
+        sealed_vector=record_proof["source_pages"] if leaf else None,
+        snapshot=record_job.get("svg_style_snapshot"))
     origins = proof.get("source_local_group_origins")
     producer_proofs = [record_proof] * len(records)
     if origins is not None:
@@ -708,8 +743,9 @@ def _consume_source_local_producer(context, pages, renders, evidence, reused, co
                  and set(origins)<={"leaf","source"})
         for ordinal, origin in enumerate(origins):
             if origin == "source":
-                records[ordinal] = _checked_current_local_group(evidence["execution"]["rounds"][0]["groups"][str(ordinal)],
-                    ordinal,proof["source_pages"])
+                records[ordinal] = _checked_current_local_group(
+                    evidence["execution"]["rounds"][0]["groups"][str(ordinal)],
+                    ordinal,proof["source_pages"],snapshot=evidence["producer_job"].get("svg_style_snapshot"))
                 producer_proofs[ordinal] = proof
         _require([content_digest(marker) for marker in records]==proof["source_local_group_digests"])
     projected_contexts = {}
@@ -729,7 +765,8 @@ def _consume_source_local_producer(context, pages, renders, evidence, reused, co
         if key not in projected_contexts:
             projected = deepcopy(dict(context))
             projected["binding"] = dict(jobId=record_proof["source_job_id"],operationId=key,
-                presentationId=record_proof["source_presentation_id"],ownerId=proof["owner_id"],tenantId=proof["tenant_id"])
+                presentationId=record_proof["source_presentation_id"],
+                ownerId=proof["owner_id"],tenantId=proof["tenant_id"])
             projected["runtimeBinding"] = record_proof["source_runtime_binding"]
             projected["priorCandidates"] = {}
             if "blindVariantLabel" in projected:
@@ -809,11 +846,13 @@ async def prepare_source_local_source(ctx, job, hooks):
                  and proof.get("source_presentation_id") == current.get("presentation_id"))
         archive = operation.request_payload[ARCHIVE_KEY]
         working = await _hydrate_checkpoint_archive(session, current, archive)
-        producer_job, payloads = archived_source_local_payloads(archive, working, proof, manifest_pages=current.get("pages"))
+        producer_job, payloads = archived_source_local_payloads(
+            archive, working, proof, manifest_pages=current.get("pages"))
         await session.rollback()
     equivalent = (
         bool(getattr(ctx, "quality_recovery_checkpoint_reuse_eligible", False))
-        and _digest(frozen_episode_payload(job.request_payload, current)) == _digest(_frozen_payload(producer_job["request_payload"]))
+        and _digest(frozen_episode_payload(job.request_payload, current))
+            == _digest(_frozen_payload(producer_job["request_payload"]))
         and _digest(job.svg_style_snapshot) == _digest(producer_job["svg_style_snapshot"]))
     request = SimpleNamespace(instructions=job.request_payload.get("instructions"))
     source_runtime = recovery_binding(ctx, request,
@@ -823,7 +862,8 @@ async def prepare_source_local_source(ctx, job, hooks):
     evidence = dict(proof=proof, consumer_namespace=INITIAL_NAMESPACE,
         execution=payloads[0]["quality_recovery_execution"], producer_job=producer_job,
         producer_payloads=payloads, consumer_runtime_equivalent=True,
-        producer_raw_payloads=[deepcopy(row["svg_checkpoint"]) for row in sorted(working["checkpoints"], key=lambda row: row["slide_index"])],
+        producer_raw_payloads=[deepcopy(row["svg_checkpoint"])
+            for row in sorted(working["checkpoints"], key=lambda row: row["slide_index"])],
         consumer_binding=dict(jobId=str(job.id), operationId=str(job.workspace_operation_id),
             presentationId=str(job.presentation_id), ownerId=current["owner_id"], tenantId=current["tenant_id"]),
         producer_presentation_id=producer_job["presentation_id"])
