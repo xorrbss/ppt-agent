@@ -98,6 +98,7 @@ def test_the_most_frequent_failures_are_never_unknown(code: str):
 
 def test_classes_are_the_wire_enum():
     assert set(GENERATION_FAILURE_CLASSES) == {
+        "internal_defect",
         "provider_unstable",
         "quality_not_passed",
         "service_interrupted",

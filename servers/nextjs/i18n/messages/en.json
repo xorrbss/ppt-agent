@@ -2888,6 +2888,10 @@
     "errorCancel": "Could not cancel the existing work. Nothing was started."
   },
   "generationFailure": {
+    "internal_defect": {
+      "title": "Generation stopped because of an internal defect",
+      "body": "An internal defect stopped generation. Resuming will not resolve it. Completed pages are preserved; contact your administrator to have the defect corrected."
+    },
     "provider_unstable": {
       "title": "Generation stopped because the AI service was unstable",
       "body": "Generation stopped because AI responses were delayed or unstable. Completed pages are preserved, so you can resume and build only the remaining ones."

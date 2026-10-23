@@ -126,6 +126,10 @@ _LIMIT_REACHED = frozenset(
 )
 
 _EXPLICIT: dict[str, GenerationFailureClass] = {
+    "internal_defect": "internal_defect",
+    "svg_checkpoint_missing": "internal_defect",
+    "svg_asset_revision_binding_invalid": "internal_defect",
+    "public_generation_transition_invalid": "internal_defect",
     **{code: "provider_unstable" for code in _PROVIDER_UNSTABLE},
     **{code: "quality_not_passed" for code in _QUALITY_NOT_PASSED},
     **{code: "service_interrupted" for code in _SERVICE_INTERRUPTED},
@@ -180,7 +184,7 @@ def classify_generation_failure(code: str | None) -> GenerationFailureClass | No
 
     if code is None:
         return None
-    normalized = code.strip()
+    normalized = code.strip().partition(":")[0]
     if not normalized:
         return None
     explicit = _EXPLICIT.get(normalized)

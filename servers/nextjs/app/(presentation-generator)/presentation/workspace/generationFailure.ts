@@ -2,6 +2,7 @@
 // imports so node:test can load it directly.
 
 export const GENERATION_FAILURE_CLASSES = [
+  "internal_defect",
   "provider_unstable",
   "quality_not_passed",
   "service_interrupted",
@@ -18,7 +19,7 @@ export const GENERATION_FAILURE_STATUSES = ["failed", "dead_letter", "deadline_e
 /** Failure states that the recovery plan endpoint accepts (matches the operation card). */
 export const GENERATION_RESUMABLE_STATUSES = ["failed", "dead_letter", "deadline_exceeded"] as const;
 
-/** Accepts only the six contract values; anything else is treated as unclassified. */
+/** Accepts only the contract values; anything else is treated as unclassified. */
 export function parseGenerationFailureClass(value: unknown): GenerationFailureClass | null {
   return typeof value === "string" && (GENERATION_FAILURE_CLASSES as readonly string[]).includes(value)
     ? (value as GenerationFailureClass)

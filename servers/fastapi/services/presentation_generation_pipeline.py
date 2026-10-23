@@ -362,13 +362,21 @@ def _generic_generation_failure_payload(
     *,
     request_id: str | None,
 ) -> dict:
-    """Status error of a generic generation failure, classified by ``safe_exception``.
-
-    A failure that propagated after a page's exhausted-page evidence could not
-    be written carries a private mark; it only denies the automatic retry.
-    """
+    """Preserve mapped errors; classify unmapped failures before losing their type."""
+    from services.presentation_generation_attempt_timing import _generation_exception_failure
     from services.public_generation_worker_lifecycle import exhausted_evidence_unrecorded
 
+    if _authored_vnext_generation_http_exception(error) is None:
+        failure = _generation_exception_failure(error)
+        if exhausted_evidence_unrecorded(error):
+            failure["retryable"] = False
+        # The same exception is raised by synchronous generation and serialized
+        # by asynchronous generation, so neither path can fall back to HTTP 500.
+        safe_exception.detail = failure
+        return APIErrorModel.from_exception(
+            safe_exception, request_id=request_id, code=failure["code"],
+            retryable=failure["retryable"], message="Presentation generation failed",
+        ).model_dump(mode="json")
     return APIErrorModel.from_exception(
         safe_exception, request_id=request_id,
         retryable=False if exhausted_evidence_unrecorded(error) else None,
@@ -384,9 +392,17 @@ def _durable_generation_control_http_exception(
     retryable = getattr(error, "retryable", None)
     if not isinstance(code, str) or not code or not isinstance(retryable, bool):
         return None
+    from services.presentation_generation_attempt_timing import _generation_exception_failure
+
+    failure = (
+        {"code": code, "retryable": retryable}
+        if isinstance(error, HTTPException)
+        else _generation_exception_failure(error)
+    )
+    code, retryable = failure["code"], failure["retryable"]
     exception = HTTPException(
         status_code=503 if retryable else 422,
-        detail={"code": code, "retryable": retryable},
+        detail=failure,
     )
     exception.code = code
     exception.retryable = retryable
