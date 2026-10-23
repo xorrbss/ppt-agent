@@ -113,10 +113,16 @@ def test_one_failed_read_retries_same_input_and_keeps_superseded_evidence(monkey
     prior = retried["superseded_attempts"][0]
     assert prior["physical_ordinal"] + 1 == retried["physical_ordinal"]
     assert prior["input_digest"] == retried["input_digest"]
-    attempts = [call for call in calls if call[0] == scope and call[1] == next(
-        call[1] for call in calls if call[0] == scope)]
+    first_context = next(call[1] for call in calls if call[0] == scope)
+    attempts = [call for call in calls if call[0] == scope
+                and call[1].get("globalPageIndices") == first_context.get("globalPageIndices")]
     assert len(attempts) == 2
-    assert attempts[0][1:3] == attempts[1][1:3]
+    if scope == "global" and kind == "schema":
+        assert attempts[1][1] == {**attempts[0][1], "formatRetry": {
+            "attempt": 1, "reason": "index_coverage", "fields": None}}
+        assert attempts[0][2] == attempts[1][2]
+    else:
+        assert attempts[0][1:3] == attempts[1][1:3]
     assert attempts[1][3] == attempts[0][3] + 1
     if kind == "schema":
         assert prior["advisory"]["vision"]["schemaRejectionReason"] == "index_coverage"

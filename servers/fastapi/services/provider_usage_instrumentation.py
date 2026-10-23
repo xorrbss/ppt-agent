@@ -419,6 +419,28 @@ def _is_pre_sdk_dispatch_freeze(error: BaseException) -> bool:
     )
 
 
+@dataclass
+class ProviderDispatchObservation:
+    admission_entered: bool = False
+    sdk_may_have_started: bool = False
+
+
+_DISPATCH_OBSERVATION: ContextVar[ProviderDispatchObservation | None] = ContextVar(
+    "provider_dispatch_observation", default=None
+)
+
+
+@contextmanager
+def observe_provider_dispatch() -> Iterator[ProviderDispatchObservation]:
+    """Prove a local admission stop without treating unobserved calls as free."""
+    observation = ProviderDispatchObservation()
+    token = _DISPATCH_OBSERVATION.set(observation)
+    try:
+        yield observation
+    finally:
+        _DISPATCH_OBSERVATION.reset(token)
+
+
 @asynccontextmanager
 async def provider_call_admission(
     *,
@@ -432,8 +454,13 @@ async def provider_call_admission(
 ) -> AsyncIterator[ProviderCallLease | None]:
     """Enforce queue, RPM, budget, cancellation, and breaker before SDK I/O."""
 
+    observation = _DISPATCH_OBSERVATION.get()
+    if observation is not None:
+        observation.admission_entered = True
     scope = _ACTIVE_SCOPE.get()
     if scope is None:
+        if observation is not None:
+            observation.sdk_may_have_started = True
         yield None
         return
     public_fence = _PUBLIC_OPERATION_FENCE.get()
@@ -464,6 +491,8 @@ async def provider_call_admission(
                 verified_initial_request_limit = episode.planned_request_limit
     active_lease = _ACTIVE_PROVIDER_ADMISSION.get()
     if active_lease is not None:
+        if observation is not None:
+            observation.sdk_may_have_started = True
         yield active_lease
         return
     job_id = await ensure_runtime_job(_runtime_state(), scope)
@@ -582,6 +611,8 @@ async def provider_call_admission(
                 estimated_cost_microunits=estimated,
             )
         sdk_started_at = monotonic()
+        if observation is not None:
+            observation.sdk_may_have_started = True
         yield lease
     except BaseException as error:
         dispatch_stopped = sdk_started_at is not None and _is_pre_sdk_dispatch_freeze(error)
