@@ -24,6 +24,7 @@ import { applyPresentationThemeToElement } from "@/app/(presentation-generator)/
 import { DeferredSlideThumbnail } from "./DeferredSlideThumbnail";
 import MarkdownRenderer from "@/components/MarkDownRender";
 import { SharePopover } from "./SharePopover";
+import { ReviewRequiredCardBadge } from "./ReviewRequiredCardBadge";
 import { getPresentationDisplayTitle } from "@/lib/presentation-display";
 import { tryResolveServerIssuedPresentationProfile } from "@/lib/presentation-profile";
 import { formatViewerDate } from "@/i18n/viewer-time";
@@ -180,6 +181,7 @@ export const PresentationCard = ({
               <p className="text-zinc-400 text-xs font-syne">
                 {formatViewerDate(presentation?.created_at, locale)}
               </p>
+              <ReviewRequiredCardBadge theme={presentation?.theme} />
 
             </div>
             <Popover>

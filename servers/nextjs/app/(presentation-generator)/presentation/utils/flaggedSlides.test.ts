@@ -7,6 +7,8 @@ import {
   flaggedSlideCategories,
   flaggedSlideCount,
   flaggedSlideKey,
+  flaggedSlidePositions,
+  isReviewRequiredDeck,
   flaggedSlideStage,
   readFlaggedSlideEntries,
 } from "./flaggedSlides.ts";
@@ -318,4 +320,51 @@ test("every category the backend gate can emit has a localized label", () => {
   );
   assert.ok(seen.includes("category.textEscapesCard"));
   assert.ok(seen.includes("category.textIntrudesFooterZone"));
+});
+
+function svgDeck(flaggedSlides: unknown, slides: unknown[] = defaultSlides()) {
+  return { theme: { svg: { qualityStatus: "review_required", flaggedSlides } }, slides };
+}
+
+test("SVG decks badge the pages listed on theme.svg.flaggedSlides", () => {
+  const presentation = svgDeck([
+    { index: 1, slideId: "s-b", reason: "design:information_structure", classification: "review_required" },
+    { index: 0, slideId: "s-a", reason: "svg:text_overlap", classification: "repair_not_admitted" },
+    { index: 2, slideId: "s-c", reason: "author:placeholder", classification: "review_required" },
+  ]);
+  const map = deriveFlaggedSlideMap(presentation);
+  assert.deepEqual(Object.keys(map).sort(), ["s-b", "s-c"]);
+  assert.deepEqual(flaggedSlidePositions(presentation), [1, 2]);
+});
+
+test("describeFlaggedSlideReason maps the page-quality reasons to specific labels", () => {
+  const calls: Array<[string, Record<string, string | number> | undefined]> = [];
+  const t = (key: string, values?: Record<string, string | number>) => {
+    calls.push([key, values]);
+    return key;
+  };
+  const describe = (reason: string) => {
+    const badge = deriveFlaggedSlideMap(svgDeck([{ index: 0, slideId: "s-a", reason }]))["s-a"];
+    return describeFlaggedSlideReason(t, badge);
+  };
+  assert.equal(describe("design:unreviewed"), "reason.designUnreviewed");
+  assert.equal(describe("author:placeholder"), "reason.placeholder");
+  assert.equal(describe("author:source_verbatim_fallback"), "reason.sourceVerbatimFallback");
+  assert.equal(describe("source_visibility"), "reason.sourceVisibility");
+  assert.equal(describe("svg:text_overlap"), "reason.svg");
+  assert.deepEqual(calls.at(-1), ["reason.svg", { code: "text_overlap" }]);
+  assert.equal(describe("design:information_structure,density_balance"), "reason.design");
+  assert.deepEqual(calls.at(-1), [
+    "reason.design",
+    { axes: "designAxis.informationStructure, designAxis.densityBalance" },
+  ]);
+  // A generic author reason keeps the generic placeholder text.
+  assert.equal(describe("author:attempts_exhausted"), "reason.author");
+});
+
+test("isReviewRequiredDeck reads only theme.svg.qualityStatus", () => {
+  assert.equal(isReviewRequiredDeck({ svg: { qualityStatus: "review_required" } }), true);
+  assert.equal(isReviewRequiredDeck({ svg: { qualityStatus: "passed" } }), false);
+  assert.equal(isReviewRequiredDeck({ authoredQualityGate: { flaggedSlides: [] } }), false);
+  assert.equal(isReviewRequiredDeck(null), false);
 });

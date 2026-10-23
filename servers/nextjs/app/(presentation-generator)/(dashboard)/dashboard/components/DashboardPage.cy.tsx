@@ -145,6 +145,24 @@ describe("DashboardPage", () => {
     );
   });
 
+  it("marks only decks whose svg quality status is review_required", () => {
+    const flagged = {
+      ...createDeck(0),
+      theme: { svg: { qualityStatus: "review_required", reviewPages: [2] } },
+    };
+    const passed = {
+      ...createDeck(1),
+      theme: { svg: { qualityStatus: "passed", reviewPages: [] } },
+    };
+    cy.stub(DashboardApi, "getPresentations").resolves(pageOf([flagged, passed] as never));
+
+    mountDashboard();
+
+    cy.get('[data-testid="review-required-card-badge"]')
+      .should("have.length", 1)
+      .and("contain.text", "검토 필요");
+  });
+
   it("reserves the mounted stage's exact box, so materialising a card cannot reflow the grid", () => {
     cy.stub(DashboardApi, "getPresentations").resolves(
       pageOf(Array.from({ length: DECK_COUNT }, (_, index) => createDeck(index)))

@@ -31,6 +31,8 @@ import { isSvgPresentation } from "../utils/presentationSource";
 import DashboardNavigationButton from "./header/DashboardNavigationButton";
 import PresentationTitleEditor from "./header/PresentationTitleEditor";
 import RegenerateConfirmDialog from "./header/RegenerateConfirmDialog";
+import ExportReviewConfirmDialog from "./header/ExportReviewConfirmDialog";
+import { flaggedSlidePositions } from "../utils/flaggedSlides";
 import type { PresentationHeaderFeatureSlots } from "./presentationHeaderTypes";
 export type { PresentationHeaderFeatureSlots } from "./presentationHeaderTypes";
 import type { PptxExportMode } from "./header/types";
@@ -226,7 +228,18 @@ const PresentationHeader = ({
     titleBlurIntentRef.current = "cancel";
   };
 
-  const handleExportPptx = async (
+  // Exports of a deck with pages still flagged for review ask first.
+  const reviewRequiredCount = flaggedSlidePositions(presentationData).length;
+  const [pendingExport, setPendingExport] = useState<(() => Promise<void>) | null>(null);
+  const requestExport = async (run: () => Promise<void>) => {
+    if (reviewRequiredCount > 0) {
+      setPendingExport(() => run);
+      return;
+    }
+    await run();
+  };
+
+  const runExportPptx = async (
     pptxMode?: PptxExportMode,
     fontEmbedding?: boolean,
   ) => {
@@ -255,7 +268,12 @@ const PresentationHeader = ({
     }
   };
 
-  const handleExportPdf = async () => {
+  const handleExportPptx = (pptxMode?: PptxExportMode, fontEmbedding?: boolean) =>
+    requestExport(() => runExportPptx(pptxMode, fontEmbedding));
+
+  const handleExportPdf = () => requestExport(runExportPdf);
+
+  const runExportPdf = async () => {
     if (isStreaming || !workspaceCommandsEnabled || !onWorkspaceCommand || sourcePreservingSvgPdfUnavailable(presentationData)) return;
     try {
       await onWorkspaceCommand("PDF로 내보내기", {
@@ -487,6 +505,16 @@ const PresentationHeader = ({
           setHybridExportHistory(null);
           setHybridExportHistoryError(null);
           setHybridExportHistoryLoading(false);
+        }}
+      />
+      <ExportReviewConfirmDialog
+        open={pendingExport !== null}
+        count={reviewRequiredCount}
+        onCancel={() => setPendingExport(null)}
+        onConfirm={() => {
+          const run = pendingExport;
+          setPendingExport(null);
+          if (run) void run();
         }}
       />
       <RegenerateConfirmDialog

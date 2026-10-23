@@ -200,9 +200,9 @@ export default function WorkspaceChatPanel({
   }, [commandDispatcher, onCommandDispatcherReady, writesEnabled]);
 
   const qualityReviewRequester = useCallback<WorkspaceQualityReviewRequester>(
-    (requestedSlide) => {
+    (requestedSlide, options) => {
       setPageRemakePrompt(null);
-      setQualityReviewScope("all");
+      setQualityReviewScope(options?.scope ?? "all");
       setQualityReviewRangeInput("");
       setQualityReviewRange(null);
       setQualityReviewRangeError(null);

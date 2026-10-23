@@ -353,6 +353,34 @@ describe("PresentationHeader workspace controls", () => {
     cy.get("@updatePresentationContent").should("not.have.been.called");
   });
 
+  it("asks before exporting a deck that still has pages flagged for review", () => {
+    const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
+    stubLegacyDirectExportRoute();
+    mountHeader(
+      true,
+      false,
+      { enabled: true, command: workspaceCommand },
+      undefined,
+      {
+        flaggedSlides: [
+          { index: 0, slideId: "slide-1", reason: "author:placeholder", classification: "review_required" },
+        ],
+      },
+    );
+
+    openExportOptions();
+    cy.get('[data-testid="export-pdf"]').click({ force: true });
+    cy.get('[data-testid="export-review-confirm"]')
+      .should("contain.text", "검토가 필요한 쪽 1개가 포함되어 있습니다. 그대로 내보낼까요?");
+    cy.wrap(null).then(() => expect(workspaceCommand).not.to.have.been.called);
+
+    cy.get('[data-testid="export-review-confirm-proceed"]').click();
+    cy.wrap(null).then(() => {
+      expect(workspaceCommand).to.have.been.calledOnce;
+      expect(workspaceCommand.getCall(0).args[1].commandType).to.equal("export.pdf");
+    });
+  });
+
   it("leaves a failed Authored export to the durable workspace operation", () => {
     const workspaceCommand = cy
       .stub()

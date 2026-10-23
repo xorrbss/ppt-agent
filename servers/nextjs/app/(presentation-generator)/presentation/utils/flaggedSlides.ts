@@ -77,6 +77,39 @@ export type FlaggedSlideMap = Record<string, FlaggedSlideBadge>;
 
 const AUTHOR_REASON_PREFIX = "author:";
 const GATE_REASON_PREFIX = "composition_safety:";
+const DESIGN_REASON_PREFIX = "design:";
+const SVG_REASON_PREFIX = "svg:";
+const DESIGN_UNREVIEWED_REASON = "design:unreviewed";
+const SOURCE_FALLBACK_REASON = "author:source_verbatim_fallback";
+const PLACEHOLDER_REASON = "author:placeholder";
+const SOURCE_VISIBILITY_REASON = "source_visibility";
+
+/**
+ * Design-review axes the publication review can fail on
+ * (``vision_advisory_prompt.DESIGN_AXES``).
+ */
+const DESIGN_AXIS_LABEL_KEYS: Record<string, FlaggedSlideDesignAxisKey> = {
+  hierarchy_emphasis: "designAxis.hierarchyEmphasis",
+  information_structure: "designAxis.informationStructure",
+  brand_expression: "designAxis.brandExpression",
+  density_balance: "designAxis.densityBalance",
+  repetition_deck_flow: "designAxis.repetitionDeckFlow",
+  // Blocking verdicts without a failed axis (publication ``design:`` reasons).
+  illegible: "designAxis.illegible",
+  broken_figure: "designAxis.brokenFigure",
+  mandatory_evidence: "designAxis.mandatoryEvidence",
+  design_target: "designAxis.designTarget",
+};
+
+/** Axis tokens after a ``design:`` reason, excluding ``unreviewed``. */
+export function flaggedSlideDesignAxes(reason: string): string[] {
+  if (!reason.startsWith(DESIGN_REASON_PREFIX) || reason === DESIGN_UNREVIEWED_REASON) return [];
+  return reason
+    .slice(DESIGN_REASON_PREFIX.length)
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
 
 /**
  * Raw category tokens the backend can put after ``composition_safety:``.
@@ -111,10 +144,17 @@ export function flaggedSlideKey(slide: SlideLike | null | undefined, position: n
 /** Read the receipt's flagged entries off a presentation theme, defensively. */
 export function readFlaggedSlideEntries(theme: unknown): AuthoredFlaggedSlideEntry[] {
   if (!isRecord(theme)) return [];
+  // Authored decks record the receipt on ``authoredQualityGate``; SVG decks
+  // record the same entry shape on ``theme.svg.flaggedSlides``. A deck only
+  // ever carries one of the two.
   const gate = theme.authoredQualityGate;
-  if (!isRecord(gate) || !Array.isArray(gate.flaggedSlides)) return [];
+  const svg = theme.svg;
+  const rawEntries: unknown[] = [
+    ...(isRecord(gate) && Array.isArray(gate.flaggedSlides) ? gate.flaggedSlides : []),
+    ...(isRecord(svg) && Array.isArray(svg.flaggedSlides) ? svg.flaggedSlides : []),
+  ];
   const entries: AuthoredFlaggedSlideEntry[] = [];
-  for (const raw of gate.flaggedSlides) {
+  for (const raw of rawEntries) {
     if (!isRecord(raw)) continue;
     const index = raw.index;
     const reason = raw.reason;
@@ -208,6 +248,30 @@ export function deriveFlaggedSlideMap(presentation: {
   return map;
 }
 
+/** 0-based positions of every slide that carries a review badge. */
+export function flaggedSlidePositions(presentation: {
+  theme?: unknown;
+  slides?: unknown;
+} | null | undefined): number[] {
+  const flags = deriveFlaggedSlideMap(presentation);
+  const slides: SlideLike[] = Array.isArray(presentation?.slides)
+    ? presentation.slides.filter(isRecord)
+    : [];
+  return slides.flatMap((slide, position) =>
+    flags[flaggedSlideKey(slide, position)] ? [position] : [],
+  );
+}
+
+/**
+ * Whether a dashboard list row is a deck the SVG pipeline published with
+ * pages that need review. Reads only ``theme.svg.qualityStatus``, which the
+ * list projection keeps (it strips the heavier quality receipts).
+ */
+export function isReviewRequiredDeck(theme: unknown): boolean {
+  if (!isRecord(theme) || !isRecord(theme.svg)) return false;
+  return theme.svg.qualityStatus === "review_required";
+}
+
 export function flaggedSlideCount(map: FlaggedSlideMap | null | undefined): number {
   return map ? Object.keys(map).length : 0;
 }
@@ -216,7 +280,24 @@ type FlaggedSlideReasonKey =
   | "reason.author"
   | "reason.gate"
   | "reason.gateUnknown"
+  | "reason.design"
+  | "reason.designUnreviewed"
+  | "reason.sourceVerbatimFallback"
+  | "reason.placeholder"
+  | "reason.svg"
+  | "reason.sourceVisibility"
   | "reason.other";
+
+type FlaggedSlideDesignAxisKey =
+  | "designAxis.hierarchyEmphasis"
+  | "designAxis.informationStructure"
+  | "designAxis.brandExpression"
+  | "designAxis.densityBalance"
+  | "designAxis.repetitionDeckFlow"
+  | "designAxis.illegible"
+  | "designAxis.brokenFigure"
+  | "designAxis.mandatoryEvidence"
+  | "designAxis.designTarget";
 
 type FlaggedSlideCategoryKey =
   | "category.overflow"
@@ -234,7 +315,7 @@ type FlaggedSlideCategoryKey =
  * superset) and a plain test stub both satisfy it.
  */
 type Translate = (
-  key: FlaggedSlideReasonKey | FlaggedSlideCategoryKey,
+  key: FlaggedSlideReasonKey | FlaggedSlideCategoryKey | FlaggedSlideDesignAxisKey,
   values?: Record<string, string | number>,
 ) => string;
 
@@ -249,6 +330,21 @@ function describeCategory(t: Translate, category: string): string {
 }
 
 function describeSingleReason(t: Translate, reason: string): string {
+  // Specific reasons first: ``author:`` alone is the generic placeholder text.
+  if (reason === SOURCE_FALLBACK_REASON) return t("reason.sourceVerbatimFallback");
+  if (reason === PLACEHOLDER_REASON) return t("reason.placeholder");
+  if (reason === DESIGN_UNREVIEWED_REASON) return t("reason.designUnreviewed");
+  if (reason === SOURCE_VISIBILITY_REASON) return t("reason.sourceVisibility");
+  if (reason.startsWith(DESIGN_REASON_PREFIX)) {
+    const axes = flaggedSlideDesignAxes(reason).map((axis) => {
+      const key = DESIGN_AXIS_LABEL_KEYS[axis];
+      return key ? t(key) : axis;
+    });
+    return axes.length > 0 ? t("reason.design", { axes: axes.join(", ") }) : t("reason.other", { reason });
+  }
+  if (reason.startsWith(SVG_REASON_PREFIX)) {
+    return t("reason.svg", { code: reason.slice(SVG_REASON_PREFIX.length) });
+  }
   if (flaggedSlideStage(reason) === "author") return t("reason.author");
   if (reason.startsWith(GATE_REASON_PREFIX)) {
     const categories = flaggedSlideCategories(reason);

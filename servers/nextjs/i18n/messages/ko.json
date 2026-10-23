@@ -2279,7 +2279,24 @@
       "author": "AI가 이 페이지를 작성하지 못해 자리표시자 페이지가 대신 들어갔습니다.",
       "gate": "자동 검사에서 해결되지 않은 문제가 남았습니다({categories}). 페이지를 확인해 주세요.",
       "gateUnknown": "자동 검사에서 해결되지 않은 문제가 남았습니다. 페이지를 확인해 주세요.",
+      "design": "디자인 검토에서 개선이 필요하다고 판단된 쪽입니다({axes}). 내용을 확인해 주세요.",
+      "designUnreviewed": "디자인 검토를 받지 못한 쪽입니다. 직접 확인해 주세요.",
+      "sourceVerbatimFallback": "원문을 그대로 단순 배치한 쪽입니다. 디자인을 확인해 주세요.",
+      "placeholder": "생성하지 못한 쪽입니다. 다시 만들거나 직접 채워 주세요.",
+      "svg": "자동 검사에서 해결되지 않은 문제가 남았습니다({code}). 쪽을 확인해 주세요.",
+      "sourceVisibility": "원문 텍스트가 화면에 보이는지 확인하지 못했습니다. 쪽을 확인해 주세요.",
       "other": "생성 과정에서 표시된 페이지입니다: {reason}"
+    },
+    "designAxis": {
+      "hierarchyEmphasis": "위계·강조",
+      "informationStructure": "정보 구조",
+      "brandExpression": "브랜드 표현",
+      "densityBalance": "밀도·균형",
+      "repetitionDeckFlow": "반복·덱 흐름",
+      "illegible": "읽기 어려움",
+      "brokenFigure": "깨진 도식",
+      "mandatoryEvidence": "필수 확인 항목 미충족",
+      "designTarget": "디자인 개선 필요"
     },
     "category": {
       "overflow": "내용 넘침",
@@ -2290,6 +2307,25 @@
       "textIntrudesFooterZone": "글이 쪽번호 여백을 침범함",
       "repairBudgetExhausted": "복구 예산 소진",
       "gateRepairNotAdmitted": "복구 미승인"
+    }
+  },
+  "pageQualityReview": {
+    "banner": {
+      "title": "검토가 필요한 쪽 {count}개",
+      "pagesLabel": "검토가 필요한 쪽",
+      "pageChip": "{page}쪽",
+      "pageChipAria": "{page}쪽으로 이동",
+      "review": "검토 시작"
+    },
+    "exportConfirm": {
+      "title": "검토가 필요한 쪽이 있습니다",
+      "description": "검토가 필요한 쪽 {count}개가 포함되어 있습니다. 그대로 내보낼까요?",
+      "confirm": "그대로 내보내기",
+      "cancel": "취소"
+    },
+    "dashboardBadge": {
+      "label": "검토 필요",
+      "title": "검토가 필요한 쪽이 있는 발표자료입니다"
     }
   },
   "notFound": {

@@ -48,6 +48,8 @@ import {
   type WorkspaceQualityReviewRequester,
 } from "../workspace";
 import { findMostVisibleSlideIndex } from "../utils/slideScrollSync";
+import { flaggedSlidePositions } from "../utils/flaggedSlides";
+import { ReviewRequiredBanner } from "./ReviewRequiredBanner";
 import {
   getSlideNavigationIntent,
   isEditorEditableTarget,
@@ -300,6 +302,15 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     },
     [handleSlideClick],
   );
+  const reviewRequiredPages = useMemo(
+    () => flaggedSlidePositions(presentationData),
+    [presentationData],
+  );
+  const handleReviewRequiredPages = useCallback(() => {
+    if (!workspaceQualityReviewRequester) return;
+    openWorkspaceOperation();
+    workspaceQualityReviewRequester(selectedSlide, { scope: "review_required" });
+  }, [openWorkspaceOperation, selectedSlide, workspaceQualityReviewRequester]);
   const dismissNavigationHint = useCallback(() => {
     setShowNavigationHint(false);
     navigationHintSlideRef.current = null;
@@ -664,6 +675,14 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
         <div className="shrink-0 bg-[#EFF4FF] border-y border-[#C7D7FE] px-6 py-2 text-center text-xs text-[#2D4E9A] font-medium">
           {tPage.rich("authoredNotice", { mode: (chunks) => <span className="font-bold">{chunks}</span>, edit: (chunks) => <span className="font-bold">{chunks}</span> })}
         </div>
+      )}
+      {showResult && (
+        <ReviewRequiredBanner
+          pages={reviewRequiredPages}
+          selectedSlide={selectedSlide}
+          onSelectPage={handleSlideClick}
+          onReview={workspaceQualityReviewRequester ? handleReviewRequiredPages : undefined}
+        />
       )}
       {showResult && rasterOriginalPreserveNoteId === presentation_id && (
         <div className="shrink-0 border-y border-blue-200 bg-blue-50 px-6 py-2 text-center text-xs font-medium text-blue-950" role="status" data-testid="raster-original-preserve-result-note">

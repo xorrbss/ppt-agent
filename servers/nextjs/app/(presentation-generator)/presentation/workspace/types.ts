@@ -323,6 +323,7 @@ export type WorkspacePresentationRefreshState =
 
 export type WorkspaceQualityReviewRequester = (
   currentSlide?: number,
+  options?: { scope?: "review_required" },
 ) => void;
 
 /** A number requests one page; an array requests the batch preview dialog. */

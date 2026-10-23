@@ -2279,7 +2279,24 @@
       "author": "The AI could not write this page, so a placeholder page was published in its place.",
       "gate": "Automatic checks left unresolved issues on this page ({categories}). Please review it.",
       "gateUnknown": "Automatic checks left unresolved issues on this page. Please review it.",
+      "design": "The design review found this page needs improvement ({axes}). Please check it.",
+      "designUnreviewed": "This page did not receive a design review. Please check it yourself.",
+      "sourceVerbatimFallback": "This page lays out the source text as-is in a plain layout. Please review its design.",
+      "placeholder": "This page could not be generated. Please remake it or fill it in yourself.",
+      "svg": "Automatic checks left an unresolved issue on this page ({code}). Please review it.",
+      "sourceVisibility": "Could not confirm the source text is visible on this page. Please review it.",
       "other": "This page was flagged during generation: {reason}"
+    },
+    "designAxis": {
+      "hierarchyEmphasis": "hierarchy and emphasis",
+      "informationStructure": "information structure",
+      "brandExpression": "brand expression",
+      "densityBalance": "density and balance",
+      "repetitionDeckFlow": "repetition and deck flow",
+      "illegible": "Hard to read",
+      "brokenFigure": "Broken figure",
+      "mandatoryEvidence": "Required checks not met",
+      "designTarget": "Design improvement needed"
     },
     "category": {
       "overflow": "content overflow",
@@ -2290,6 +2307,25 @@
       "textIntrudesFooterZone": "text in the page-number margin",
       "repairBudgetExhausted": "repair budget exhausted",
       "gateRepairNotAdmitted": "repair not admitted"
+    }
+  },
+  "pageQualityReview": {
+    "banner": {
+      "title": "{count, plural, one {# page needs review} other {# pages need review}}",
+      "pagesLabel": "Pages that need review",
+      "pageChip": "Page {page}",
+      "pageChipAria": "Go to page {page}",
+      "review": "Start review"
+    },
+    "exportConfirm": {
+      "title": "Some pages need review",
+      "description": "{count, plural, one {# page that needs review is included. Export anyway?} other {# pages that need review are included. Export anyway?}}",
+      "confirm": "Export anyway",
+      "cancel": "Cancel"
+    },
+    "dashboardBadge": {
+      "label": "Needs review",
+      "title": "This presentation has pages that need review"
     }
   },
   "notFound": {
