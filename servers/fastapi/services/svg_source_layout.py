@@ -10,6 +10,8 @@ from copy import deepcopy
 from collections import Counter
 import math
 import re
+from threading import RLock
+import weakref
 import xml.etree.ElementTree as ET
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -104,7 +106,82 @@ def _cells(block):
     return rows, result
 
 
+class _FrozenSourceDict(dict):
+    def _reject(self, *args, **kwargs):
+        raise TypeError("svg_source_manifest_immutable")
+
+    __setitem__ = __delitem__ = clear = pop = popitem = setdefault = update = __ior__ = _reject
+
+    def __deepcopy__(self, memo):
+        return deepcopy(dict(self), memo)
+
+
+class _FrozenSourceList(list):
+    def _reject(self, *args, **kwargs):
+        raise TypeError("svg_source_manifest_immutable")
+
+    __setitem__ = __delitem__ = append = clear = extend = insert = pop = remove = reverse = sort = _reject
+    __iadd__ = __imul__ = _reject
+
+    def __deepcopy__(self, memo):
+        return deepcopy(list(self), memo)
+
+
+def _freeze_source_value(value):
+    if isinstance(value, (_FrozenSourceDict, _FrozenSourceList)):
+        return value
+    if isinstance(value, dict):
+        return _FrozenSourceDict((key, _freeze_source_value(item)) for key, item in value.items())
+    if isinstance(value, list):
+        return _FrozenSourceList(_freeze_source_value(item) for item in value)
+    if isinstance(value, tuple):
+        return tuple(_freeze_source_value(item) for item in value)
+    return value
+
+
+_SOURCE_PAGES_MEMO = {}
+_SOURCE_PAGES_LOCK = RLock()
+
+
+def _evict_source_pages(reference, identity):
+    with _SOURCE_PAGES_LOCK:
+        entry = _SOURCE_PAGES_MEMO.get(identity)
+        if entry is not None and entry[0] is reference:
+            del _SOURCE_PAGES_MEMO[identity]
+
+
 def source_pages(manifest: SourceContentManifest, *, chart_contract=None):
+    """Validate once per live manifest identity and exact chart contract.
+
+    Pydantic's frozen source models are shallow: payload/projection dicts and
+    lists remain mutable. After successful validation, detach and seal those
+    containers before memoizing. JSON serialization and isinstance checks stay
+    compatible; deepcopy yields editable copies. A stored digest alone cannot
+    detect in-place payload edits. The weak reference prevents identity reuse
+    and releases entries even when a caller retains the returned page tuple.
+    """
+    key = _exact_json_key(chart_contract)
+    with _SOURCE_PAGES_LOCK:
+        identity = id(manifest)
+        entry = _SOURCE_PAGES_MEMO.get(identity)
+        if key is not None and entry is not None and entry[0]() is manifest and key in entry[1]:
+            return entry[1][key]
+        pages = _validate_source_pages(manifest, chart_contract=chart_contract)
+        if key is None:
+            return pages
+        for page in pages:
+            for block in page.blocks:
+                object.__setattr__(block, "payload", _freeze_source_value(block.payload))
+                object.__setattr__(block, "comparison_projection", _freeze_source_value(block.comparison_projection))
+        if entry is None or entry[0]() is not manifest:
+            reference = weakref.ref(manifest, lambda reference: _evict_source_pages(reference, identity))
+            entry = (reference, {})
+            _SOURCE_PAGES_MEMO[identity] = entry
+        entry[1][key] = pages
+        return pages
+
+
+def _validate_source_pages(manifest: SourceContentManifest, *, chart_contract=None):
     from services.svg_source_charts import validate_source_chart_contract, source_chart_payload
     validate_source_chart_contract(chart_contract)
     sealed = manifest.model_dump(mode="json", by_alias=True)
@@ -150,7 +227,8 @@ def source_pages(manifest: SourceContentManifest, *, chart_contract=None):
                 raise ValueError(
                     f"svg_source_connector_geometry_unsupported:page={index + 1}:block={block.source_block_id}")
             if block.kind == "shape" and block.payload.get(
-                "preset") not in {"rect", "roundRect", "ellipse", "line", "straightConnector1", "parallelogram", "diamond"}:
+                "preset") not in {"rect", "roundRect", "ellipse", "line", "straightConnector1",
+                                  "parallelogram", "diamond"}:
                 if block.payload.get("preset") is not None or not block.payload.get("customGeometry"):
                     raise ValueError(f"svg_source_shape_unsupported:page={index + 1}:block={block.source_block_id}")
                 validate_custom_geometry(block.payload["customGeometry"])
@@ -195,27 +273,13 @@ def _exact_json_key(value):
 
 
 class ValidatedSourcePages:
-    """One verification pass's memo of successful ``source_pages`` results for one manifest.
-
-    The whole-manifest validation depends only on the manifest and the chart contract, so it
-    runs once per exact chart contract. Failures raise and are never memoized; a contract
-    without an exact JSON key is always validated afresh. ``verify_source_receipt`` still
-    runs every per-page receipt, digest and binding check. Never share across passes.
-    """
+    """Compatibility delegate to the process-wide, weak-identity source memo."""
 
     def __init__(self, manifest):
         self._manifest = manifest
-        self._pages = {}
 
     def pages_for(self, chart_contract):
-        key = _exact_json_key(chart_contract)
-        if key is None:
-            return source_pages(self._manifest, chart_contract=chart_contract)
-        pages = self._pages.get(key)
-        if pages is None:
-            pages = source_pages(self._manifest, chart_contract=chart_contract)
-            self._pages[key] = pages
-        return pages
+        return source_pages(self._manifest, chart_contract=chart_contract)
 
     def verify_receipt(self, svg, receipt, page_index):
         return verify_source_receipt(svg, receipt, self._manifest, page_index,
@@ -359,7 +423,8 @@ def assemble_source_svg(manifest, page_index, plan, *, source_images, image_slot
             raise ValueError("svg_source_text_box_unfit")
         for line_index, (start, end) in enumerate(ranges):
             element_id = f"source-element-{len(bindings)}"
-            node = _node(parent if parent is not None else root, "text", id=element_id, x=x, y=y + placement.font_size * (ascent + advance * line_index),
+            node = _node(parent if parent is not None else root, "text", id=element_id, x=x,
+                y=y + placement.font_size * (ascent + advance * line_index),
                          font_family=placement.font_family, font_size=placement.font_size,
                          font_weight=placement.font_weight, fill=placement.fill)
             node.text = text[start:end]
@@ -773,7 +838,8 @@ def bind_whole_page_source_svg(svg, manifest, page_index, *, facts, width, heigh
                             if item.get("id") == fact["element_id"]]
             if len(declarations) != 1:
                 raise ValueError("svg_source_chart_declaration_missing")
-            source_native_charts.append(source_chart_record(svg, block, fact["element_id"], declarations[0], chart_contract))
+            source_native_charts.append(source_chart_record(
+                svg, block, fact["element_id"], declarations[0], chart_contract))
             group = elements.get(fact["element_id"])
             for ordinal, node in enumerate(group.iter()):
                 if node is not group:
@@ -820,7 +886,8 @@ def bind_whole_page_source_svg(svg, manifest, page_index, *, facts, width, heigh
         if node.tag not in {f"{{{SVG_NS}}}text", f"{{{SVG_NS}}}tspan"} and node.text and not node.text.strip():
             node.text = None
         parent = parents.get(node)
-        if (parent is None or parent.tag not in {f"{{{SVG_NS}}}text", f"{{{SVG_NS}}}tspan"}) and node.tail and not node.tail.strip():
+        if ((parent is None or parent.tag not in {f"{{{SVG_NS}}}text", f"{{{SVG_NS}}}tspan"})
+                and node.tail and not node.tail.strip()):
             node.tail = None
     svg = ET.tostring(root, encoding="unicode")
     template = style_snapshot.get("source_template") or {}
@@ -855,7 +922,8 @@ def bind_whole_page_source_svg(svg, manifest, page_index, *, facts, width, heigh
     if restoration is not None:
         receipt["source_lf_restoration"] = {**restoration, "canonical_svg_digest": source_digest(svg)}
     if empty_restoration is not None:
-        receipt["source_empty_table_text_restoration"] = {**empty_restoration, "canonical_svg_digest": source_digest(svg)}
+        receipt["source_empty_table_text_restoration"] = {
+            **empty_restoration, "canonical_svg_digest": source_digest(svg)}
     verify_source_receipt(svg, receipt, manifest, page_index, _validated_pages=pages)
     return svg, receipt
 
@@ -924,7 +992,8 @@ def verify_source_receipt(svg, receipt, manifest, page_index, *, _validated_page
     if isinstance(receipt, dict) and receipt.get("common_header_composition"):
         return _verify_source_header_composition(svg, receipt, manifest, page_index,
             _validated_pages=_validated_pages)
-    pages = source_pages(manifest, chart_contract=(receipt or {}).get("source_chart_contract")) if _validated_pages is None else _validated_pages
+    pages = (source_pages(manifest, chart_contract=(receipt or {}).get("source_chart_contract"))
+             if _validated_pages is None else _validated_pages)
     if type(page_index) is not int or not 0 <= page_index < len(pages):
         raise ValueError("svg_source_page_index_invalid")
     page = pages[page_index]
@@ -976,7 +1045,8 @@ def verify_source_receipt(svg, receipt, manifest, page_index, *, _validated_page
                 or any(not node_id.startswith("svg-system-") for node_id in furniture_ids)
                 or set(furniture_ids).intersection(bound_ids)):
             raise ValueError("svg_source_furniture_receipt_mismatch")
-    if len(set(bound_ids)) != len(bound_ids) or set(elements) != set(bound_ids) | set(furniture_ids) | table_group_ids | extra_ids | chart_owned_ids:
+    if (len(set(bound_ids)) != len(bound_ids)
+            or set(elements) != set(bound_ids) | set(furniture_ids) | table_group_ids | extra_ids | chart_owned_ids):
         raise ValueError("svg_source_receipt_binding_mismatch")
     expected_sources = {}
     for block in page.blocks:
