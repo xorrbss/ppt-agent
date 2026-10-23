@@ -9,6 +9,8 @@ from threading import Event
 from services.generation_core.quality.advisory_record import advisory_ran, content_digest
 from utils.hashing import canonical_json_sha256, sha256_hex
 
+FINAL_PPTX_RENDER_TIMEOUT_SECONDS = 120
+
 
 def final_render_current(proof, *, artifact_digest, operation_id, presentation_id,
                          source_revision, source_digests, owner_id=None, tenant_id=None):
@@ -98,7 +100,7 @@ async def render_final_review_inputs(inputs, claim):
             target = directory / "artifact.pptx"
             target.write_bytes(inputs["artifactBytes"])
             proof = render_final_pptx(target, directory, page_count=len(inputs["sourceDigests"]),
-                width_px=inputs["widthPx"], height_px=inputs["heightPx"], timeout=120,
+                width_px=inputs["widthPx"], height_px=inputs["heightPx"], timeout=FINAL_PPTX_RENDER_TIMEOUT_SECONDS,
                 cancellation_event=cancellation_event)
             if proof.get("status") != "measured":
                 if proof.get("retryable") is True:
