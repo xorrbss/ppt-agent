@@ -31,10 +31,15 @@ export function generationFailureKey(failureClass: unknown): GenerationFailureCl
   return parseGenerationFailureClass(failureClass);
 }
 
-/** Resuming is the recommended action unless the input or a usage ceiling is the cause. */
+/** An internal defect cannot be recovered by submitting the same generation again. */
+export function canResumeGenerationFailure(failureClass: unknown): boolean {
+  return parseGenerationFailureClass(failureClass) !== "internal_defect";
+}
+
+/** Resuming is recommended for recoverable failures other than input or usage limits. */
 export function isResumePrimary(failureClass: unknown): boolean {
   const parsed = parseGenerationFailureClass(failureClass);
-  return parsed !== "source_unprocessable" && parsed !== "limit_reached";
+  return canResumeGenerationFailure(parsed) && parsed !== "source_unprocessable" && parsed !== "limit_reached";
 }
 
 export function isGenerationFailureStatus(status: string | null | undefined): boolean {

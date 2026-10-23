@@ -317,6 +317,7 @@ async def conversation_timeline(
                 progress=item.get("progress"),
                 error=item.get("error"),
                 safe_error_message=item.get("error_message"),
+                failure_class=item.get("failure_class"),
                 retryable=item.get("retryable"),
                 result=item.get("result"),
                 version=item["version"],

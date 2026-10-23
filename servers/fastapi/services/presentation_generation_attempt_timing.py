@@ -57,67 +57,88 @@ def _safe_failure(payload: Mapping[str, object]) -> tuple[str, bool]:
     try:
         numeric_status = int(status_code)
     except (TypeError, ValueError):
-        return code, False
+        numeric_status = 500
     return code, numeric_status == 429 or numeric_status >= 500
 
 
 def _generation_exception_failure(error: BaseException) -> dict[str, object]:
     """Classify an unmapped exception once, before its type is lost on the wire.
 
-    Codes are at most 64 ASCII characters: a lower-case snake_case identifier,
-    optionally followed by one colon and a lower-case/numeric machine suffix.
-    Both segments forbid empty underscore components. Never truncate messages
-    into codes or inspect a database/provider message to decide retryability.
+    Explicit codes are bounded ASCII identifiers; message-derived codes require
+    snake_case and at most three machine suffixes within 64 characters. Never
+    inspect a database/provider message to decide retryability.
     """
     import re
 
     import asyncpg
+    import anthropic
+    import httpx
     import openai
     from google.genai.errors import ServerError
-    from sqlalchemy.exc import DBAPIError, OperationalError
+    from llmai.shared.errors import LLMConnectionError, LLMRateLimitError
+    from sqlalchemy.exc import DBAPIError, OperationalError, TimeoutError as PoolTimeoutError
 
-    from services.authored_checkpoint_errors import AuthoredStageError
-    from services.public_operation_admission_models import PublicAdmissionRejected
-    from services.provider_runtime_primitives import RetryAmplificationError
-    from services.workspace_operation_handler_registry import WorkspaceOperationExecutionError
-    from utils.provider_overload import ProviderOutcomeError
+    from services.provider_runtime_primitives import BackpressureError, BudgetExceededError, CircuitOpenError
 
-    # These existing, typed contracts own their retry decision. In particular,
-    # provider outcomes with unknown billing must never be automatically retried.
-    if isinstance(error, (AuthoredStageError, WorkspaceOperationExecutionError,
-                          PublicAdmissionRejected, ProviderOutcomeError,
-                          RetryAmplificationError)):
-        code = getattr(error, "code", None)
-        retryable = getattr(error, "retryable", None)
-        if isinstance(code, str) and isinstance(retryable, bool):
-            return {"code": code, "retryable": retryable}
+    explicit_code = getattr(error, "code", None)
+    explicit_shape = r"[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)*(?::[A-Za-z0-9]+(?:_[A-Za-z0-9]+)*){0,3}"
+    has_code = (
+        isinstance(explicit_code, str) and len(explicit_code) <= 128
+        and re.fullmatch(explicit_shape, explicit_code, flags=re.ASCII) is not None
+    )
+    explicit_retryable = getattr(error, "retryable", None)
+    # Every stable exception contract owns its retry decision, including a
+    # provider outcome whose uncertain billing explicitly forbids another call.
+    if has_code and isinstance(explicit_retryable, bool):
+        return {"code": explicit_code, "retryable": explicit_retryable}
 
-    shape = r"[a-z][a-z0-9]*(?:_[a-z0-9]+)*(?::[a-z0-9]+(?:_[a-z0-9]+)*)?"
-    code = "internal_defect"
-    for candidate in (getattr(error, "code", None), str(error)):
-        if (isinstance(candidate, str) and len(candidate) <= 64
-                and re.fullmatch(shape, candidate, flags=re.ASCII)):
-            code = candidate
-            break
+    shape = r"[a-z][a-z0-9]*(?:_[a-z0-9]+)+(?::[a-z0-9]+(?:_[a-z0-9]+)*){0,3}"
+    message = str(error)
+    code = explicit_code if has_code else "internal_defect"
+    if not has_code and len(message) <= 64 and re.fullmatch(shape, message, flags=re.ASCII):
+        code = message
 
-    retryable = isinstance(error, (
+    database_transient = isinstance(error, (
         OperationalError,
+        PoolTimeoutError,
         asyncpg.PostgresConnectionError,
         asyncpg.SerializationError,
         asyncpg.DeadlockDetectedError,
-        openai.APIConnectionError,
-        openai.RateLimitError,
-        openai.InternalServerError,
-        ServerError,
+        asyncpg.AdminShutdownError,
     ))
     if isinstance(error, DBAPIError):
         # Driver SQLSTATE is machine metadata, not exception-message matching.
         sqlstate = getattr(error.orig, "sqlstate", None) or getattr(error.orig, "pgcode", None)
-        retryable = retryable or error.connection_invalidated or (
+        database_transient = database_transient or error.connection_invalidated or (
             isinstance(sqlstate, str) and (
-                sqlstate in {"40001", "40P01"} or sqlstate.startswith("08")
+                sqlstate in {"40001", "40P01", "57P01"} or sqlstate.startswith("08")
             )
         )
+    provider_transient = isinstance(error, (
+        httpx.TransportError,
+        openai.APIConnectionError,
+        openai.RateLimitError,
+        openai.InternalServerError,
+        anthropic.APIConnectionError,
+        anthropic.RateLimitError,
+        anthropic.InternalServerError,
+        LLMConnectionError,
+        LLMRateLimitError,
+        ServerError,
+        CircuitOpenError,
+        BackpressureError,
+    ))
+    retryable = database_transient or provider_transient or isinstance(error, (TimeoutError, ConnectionError))
+    if isinstance(error, BudgetExceededError):
+        code = "provider_budget_exceeded"
+    elif isinstance(error, CircuitOpenError):
+        code = "provider_circuit_open"
+    elif isinstance(error, BackpressureError):
+        code = "provider_backpressure"
+    elif provider_transient:
+        code = "provider_transport_unavailable"
+    elif retryable:
+        code = "generation_service_interrupted"
     exception_type = type(error).__name__
     if len(exception_type) > 64 or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", exception_type):
         exception_type = "Exception"

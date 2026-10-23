@@ -6,7 +6,9 @@ from pydantic import BaseModel, model_validator
 
 
 _STABLE_ERROR_CODE = re.compile(r"^[a-z][a-z0-9_]*$")
-_STRUCTURED_ERROR_CODE = re.compile(r"^[a-z][a-z0-9_]*(?::[a-z0-9]+(?:_[a-z0-9]+)*)?$")
+_STRUCTURED_ERROR_CODE = re.compile(
+    r"(?=.{1,128}$)[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)*(?::[A-Za-z0-9]+(?:_[A-Za-z0-9]+)*){0,3}"
+)
 
 
 class APIErrorModel(BaseModel):

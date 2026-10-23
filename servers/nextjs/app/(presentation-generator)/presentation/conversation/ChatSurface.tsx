@@ -5,6 +5,7 @@ import { ClipboardEvent, DragEvent, FormEvent, useState } from "react";
 import { ArrowUp, Download, FileText, Loader2, Paperclip, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { WorkspacePartialRecovery } from "../workspace/WorkspacePartialRecovery";
+import { canResumeGenerationFailure } from "../workspace/generationFailure";
 import type { WorkspaceOperationActionOptions } from "../workspace/types";
 import { renderMarkdown } from "@/lib/safe-markdown";
 import type {
@@ -325,7 +326,7 @@ export function ChatSurface(props: {
                   {item.run.error}
                 </p>
               )}
-              {props.partialRecoveryEnabled && item.run.operationType === "presentation.generate" && ["failed", "dead_letter"].includes(item.run.status) && <WorkspacePartialRecovery
+              {props.partialRecoveryEnabled && item.run.operationType === "presentation.generate" && ["failed", "dead_letter"].includes(item.run.status) && canResumeGenerationFailure(item.run.failureClass) && <WorkspacePartialRecovery
                 operationId={item.run.operationId ?? item.run.id} operationVersion={item.run.version}
                 currentRevision={timeline.revision} disabled={submitting || loading}
                 onAction={(operationId, action, options) => onAction(operationId, action, options)} />}

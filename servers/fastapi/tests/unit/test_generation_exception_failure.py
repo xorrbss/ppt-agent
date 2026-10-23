@@ -32,11 +32,15 @@ from services.public_generation_worker_lifecycle import (
     (RuntimeError("svg_asset_revision_binding_invalid"), "svg_asset_revision_binding_invalid"),
     (ValueError("public_generation_transition_invalid:checkpoint_2"),
      "public_generation_transition_invalid:checkpoint_2"),
-    (ValueError("a" * 64), "a" * 64),
+    (ValueError("a_" + "b" * 62), "a_" + "b" * 62),
+    (ValueError("hello"), "internal_defect"),
     (ValueError("a" * 65), "internal_defect"),
     (ValueError("free text with spaces"), "internal_defect"),
     (ValueError("svg_checkpoint_missing: private input"), "internal_defect"),
-    (ValueError("svg_checkpoint_missing:abc:def"), "internal_defect"),
+    (ValueError("svg_checkpoint_missing:abc:def"), "svg_checkpoint_missing:abc:def"),
+    (ValueError("public_generation_transition_invalid:rendering:authoring"),
+     "public_generation_transition_invalid:rendering:authoring"),
+    (ValueError("svg_checkpoint_missing:a:b:c:d"), "internal_defect"),
     (ValueError("svg_checkpoint_missing:\n"), "internal_defect"),
     (ValueError("svg_체크포인트_missing"), "internal_defect"),
     (ValueError("svg__checkpoint_missing"), "internal_defect"),
@@ -60,16 +64,16 @@ def test_code_and_terminal_decision_survive_serialization_and_durable_paths(erro
         assert str(error) not in json.dumps(payload)
 
 
-def test_explicit_code_wins_and_untyped_retryable_cannot_bypass_policy():
+def test_stable_explicit_contract_wins_regardless_of_exception_type():
     error = RuntimeError("private message")
     error.code = "svg_checkpoint_missing"
     error.retryable = True
     mapped = _durable_generation_control_http_exception(error)
     assert mapped is not None
     assert _safe_failure(APIErrorModel.from_exception(mapped).model_dump()) == (
-        "svg_checkpoint_missing", False,
+        "svg_checkpoint_missing", True,
     )
-    assert durable_generation_failure(error) == ("svg_checkpoint_missing", False)
+    assert durable_generation_failure(error) == ("svg_checkpoint_missing", True)
     assert "private message" not in json.dumps(mapped.detail)
 
 
@@ -125,8 +129,8 @@ def test_lost_exhausted_page_evidence_still_denies_transient_retry():
     payload = _generic_generation_failure_payload(
         error, HTTPException(500, "Presentation generation failed"), request_id=None,
     )
-    assert _safe_failure(payload) == ("e3q8", False)
-    assert durable_generation_failure(error) == ("e3q8", False)
+    assert _safe_failure(payload) == ("generation_service_interrupted", False)
+    assert durable_generation_failure(error) == ("generation_service_interrupted", False)
 
 
 @pytest.mark.parametrize("retryable", [False, True])

@@ -30,6 +30,9 @@ GENERATION_FAILURE_STATES = frozenset(
 
 _PROVIDER_UNSTABLE = frozenset(
     {
+        "provider_circuit_open",
+        "provider_backpressure",
+        "provider_transport_unavailable",
         "public_provider_call_timeout",
         "public_provider_timeout",
         "public_provider_overload",
@@ -77,6 +80,7 @@ _QUALITY_NOT_PASSED = frozenset(
 
 _SERVICE_INTERRUPTED = frozenset(
     {
+        "generation_service_interrupted",
         "operation_worker_crashed",
         "operation_lease_lost",
         "operation_recovery_required",
@@ -109,6 +113,7 @@ _SOURCE_UNPROCESSABLE = frozenset(
 
 _LIMIT_REACHED = frozenset(
     {
+        "provider_budget_exceeded",
         "public_deadline_exceeded",
         "public_deadline_insufficient",
         "retry_amplification_ceiling_exceeded",
