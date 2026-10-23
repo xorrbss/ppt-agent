@@ -20,7 +20,8 @@ SVG_EXPORT_SCHEMA_V3 = "public-svg-export-bundle/v3"
 SVG_EXPORT_SCHEMA_V4 = "public-svg-export-bundle/v4"
 LOGGER = logging.getLogger(__name__)
 # Re-exported: callers and tests import the converter surface from this module.
-__all__ = ["CONVERTER_VERSION", "SVG_EXPORT_SCHEMA", "SVG_EXPORT_SCHEMA_V2", "SVG_EXPORT_SCHEMA_V3", "SVG_EXPORT_SCHEMA_V4",
+__all__ = ["CONVERTER_VERSION", "SVG_EXPORT_SCHEMA", "SVG_EXPORT_SCHEMA_V2", "SVG_EXPORT_SCHEMA_V3",
+           "SVG_EXPORT_SCHEMA_V4",
            "VENDOR_ROOT", "_source_preservation_readback", "convert_pptx", "converter_digest",
            "execute_svg_export", "is_svg_export_bundle"]
 
@@ -167,7 +168,7 @@ def _native_objects(value, fmt, slide_count):
         raise PublicWorkerExecutionError(str(error)) from error
 
 
-def _evidence(value, slides, digests, mode, readback):
+def _evidence(value, slides, digests, mode, readback, stage_timings):
     return {
         "sourceFormat": "svg", "requestedExportMode": mode, "deliveredExportMode": mode,
         "contractVersion": value["contractVersion"], "converterVersion": CONVERTER_VERSION,
@@ -177,10 +178,14 @@ def _evidence(value, slides, digests, mode, readback):
                                  if entry.get("assets") else None for entry in slides],
         "canvas": value["canvas"], "structuralReadback": readback, "visualQualityVerified": False,
         "fallbackReason": None,
+        # Diagnostic spans only; never included in structural or identity digests.
+        "stageTimingsSeconds": dict(stage_timings),
     }
 
 
 async def execute_svg_export(job, store, *, bundle=None):
+    stage_started = time.monotonic()
+    stage_timings = {}
     from services.svg_contract import SVG_CONTRACT_VERSION, validate_svg
     # ``bundle`` is this job's input already parsed by the caller (same process, same bytes).
     value = bundle if bundle is not None else json.loads(store.read(job.input_artifact))
@@ -325,6 +330,8 @@ async def execute_svg_export(job, store, *, bundle=None):
         if identity != value["canonicalExportIdentity"]:
             raise PublicWorkerExecutionError("svg_source_export_bundle_identity_mismatch")
     with tempfile.TemporaryDirectory(prefix="public-svg-export-") as temporary:
+        stage_timings["bundleRead"] = time.monotonic() - stage_started
+        stage_started = time.monotonic()
         scratch = Path(temporary)
         target = scratch / f"result.{fmt}"
         if time.time() >= job.deadline_epoch_seconds:
@@ -346,6 +353,8 @@ async def execute_svg_export(job, store, *, bundle=None):
                         source_originals=canonical_sources, font_embedding=font_embedding)
                 except (ValueError, TypeError, KeyError, IndexError) as error:
                     raise PublicWorkerExecutionError("svg_source_export_projection_invalid") from error
+                stage_timings["conversion"] = time.monotonic() - stage_started
+                stage_started = time.monotonic()
                 try:
                     readback["sourcePreservation"] = _source_preservation_readback(
                         Presentation(str(target)), source_preservation, expected_image_digests,
@@ -361,6 +370,9 @@ async def execute_svg_export(job, store, *, bundle=None):
                     expected_image_digests=expected_image_digests if v3 else None,
                     font_embedding=font_embedding, native_objects=native_objects,
                     **({"native_coverage_sources": canonical_sources} if v2 else {}))
+                # The converter call includes its own internal OOXML readback.
+                stage_timings["conversion"] = time.monotonic() - stage_started
+                stage_started = time.monotonic()
             if v4:
                 from services.svg_export_whole_page_verifier import whole_page_verifier_digest
                 from utils.hashing import canonical_json_sha256
@@ -374,7 +386,8 @@ async def execute_svg_export(job, store, *, bundle=None):
                             page_svg_digest(receipt, source)
                             for receipt, source in zip(source_preservation, canonical_sources, strict=True)]
                         or len(coverage.get("pages", [])) != len(source_readback.get("pages", []))
-                        or any((proof["sourcePageId"], proof["svgDigest"]) != (bound["sourcePageId"], bound["svgDigest"])
+                        or any((proof["sourcePageId"], proof["svgDigest"])
+                               != (bound["sourcePageId"], bound["svgDigest"])
                                for proof, bound in zip(coverage["pages"], source_readback["pages"], strict=True))):
                     raise PublicWorkerExecutionError("svg_native_ooxml_source_coverage_mismatch")
                 coverage.update(operationId=str(job.operation_id), presentationId=value["presentationId"],
@@ -394,35 +407,22 @@ async def execute_svg_export(job, store, *, bundle=None):
                                for index, page in enumerate(coverage["pages"]))
                         or readback.get("nativeObjects", {}).get("fellBack") != 0):
                     raise PublicWorkerExecutionError("svg_generic_native_ooxml_coverage_mismatch")
-            from workers.public_svg_pptx_render import render_final_pptx
-            final_render = render_final_pptx(target, scratch / "office-render", page_count=len(sources),
-                width_px=canvas.width_px, height_px=canvas.height_px,
-                timeout=max(0, min(120, job.deadline_epoch_seconds - time.time() - 5)))
-            if final_render.get("status") == "measured":
-                import hashlib
-                from utils.hashing import canonical_json_sha256
-                final_render.update(operationId=str(job.operation_id),
-                    ownerId=str(job.input_artifact.owner_id), tenantId=job.input_artifact.tenant_id,
-                    presentationId=value.get("presentationId"), sourceRevision=value.get("sourceRevision"),
-                    sourceDigests=digests, converterDigest=converter_digest())
-                for page in final_render["pages"]:
-                    page["artifactRef"] = store.put_path(
-                        scratch / "office-render" / f"page-{page['index']:03d}.png",
-                        source=job.input_artifact, operation_id=job.operation_id,
-                        kind="slide-png", media_type="image/png").to_wire()
-                final_render["evidenceDigest"] = "sha256:" + canonical_json_sha256(final_render)
-            readback["finalPptxRender"] = final_render
             mode = "editable-svg"
         else:
             # Vector PDF: native objects are a PPTX concept; drawn groups print as-is.
             from workers.public_svg_pdf_export import export_svg_pdf
             export_svg_pdf(sources, admitted_assets, canvas, target,
                            timeout=max(1, min(120, int(job.deadline_epoch_seconds - time.time()))))
+            stage_timings["conversion"] = time.monotonic() - stage_started
+            stage_started = time.monotonic()
             mode = "svg-vector-pdf"
             readback = {"slideCount": len(sources), "rasterized": False, "vectorText": True}
+        stage_timings["readback"] = time.monotonic() - stage_started
+        stage_started = time.monotonic()
         artifact = store.put_path(
             target, source=job.input_artifact, operation_id=job.operation_id, kind=f"presentation-{fmt}",
             media_type="application/pdf" if fmt == "pdf" else _PPTX_MEDIA_TYPE)
+        stage_timings["artifactPut"] = time.monotonic() - stage_started
         if fmt == "pptx" and v2:
             from services.svg_export_whole_page_verifier import whole_page_verifier_digest
             from utils.hashing import canonical_json_sha256
@@ -436,7 +436,7 @@ async def execute_svg_export(job, store, *, bundle=None):
                 verifierCodeDigest=whole_page_verifier_digest(), converterDigest=converter_digest(),
                 officeRenderMeasured=False)
             coverage["coverageDigest"] = "sha256:" + canonical_json_sha256(coverage)
-        evidence = _evidence(value, slides, digests, mode, readback)
+        evidence = _evidence(value, slides, digests, mode, readback, stage_timings)
         if fmt == "pdf":
             evidence["pdfTextLayer"] = "vector"
         LOGGER.info("svg_export_io phase=worker operation=%s cas_reads=%s cas_bytes_hashed=%s",

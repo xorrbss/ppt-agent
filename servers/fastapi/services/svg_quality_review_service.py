@@ -20,7 +20,9 @@ from services.generation_core.quality.advisory_record import advisory_record, ad
 from services.generation_core.quality.vision_advisory import run_vision_advisory, _DESIGN_SCHEMA_REJECTION_REASONS
 from services.presentation_access_service import require_live_presentation
 from services.presentation_publication_service import PresentationPublicationConflict, publish_presentation_revision
-from services.provider_usage_instrumentation import public_operation_scope, provider_usage_scope, provider_operation_usage_scope
+from services.provider_usage_instrumentation import (
+    public_operation_scope, provider_usage_scope, provider_operation_usage_scope,
+)
 from services.svg_contract import source_digest
 from services.svg_export_visual_review import (
     assemble_page_advisory, current_page_advisories,
@@ -166,7 +168,6 @@ async def _assert_fence(session, claim, *, lock=False):
 
 def _review_png(slide):
     receipt = (slide.content or {}).get("svgReceipt") or {}
-    quality = receipt.get("quality") or {}
     if not page_measurement_current(slide):
         raise NonRetryableWorkspaceOperationError("svg_quality_review_measurement_stale")
     try:
@@ -213,8 +214,9 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
         final_inputs = None
         if request.target == "final_pptx":
             from services.svg_final_pptx_review import load_final_review_inputs
-            final_inputs = await load_final_review_inputs(session, request=request, presentation=presentation, slides=rows)
-            pngs = final_inputs["pngs"]
+            final_inputs = await load_final_review_inputs(
+                session, request=request, presentation=presentation, slides=rows)
+            pngs = []
         else:
             pngs = [_review_png(slides[index]) for index in indices]
         recovery_review = None
@@ -229,11 +231,17 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
         digests = slide_page_digests(slides)
         png_digests = [(slide.content or {}).get("svgReceipt", {}).get("png_sha256") for slide in slides]
     await context.raise_if_cancelled()
+    if final_inputs is not None:
+        from services.svg_final_pptx_review import render_final_review_inputs
+        final_inputs = await render_final_review_inputs(final_inputs, claim)
+        pngs = final_inputs["pngs"]
+        await context.raise_if_cancelled()
     if await context.progress(stage="quality_review_analyzing", percent=30, total=len(indices)) is False:
         raise WorkspaceOperationLeaseLost("operation_lease_lost")
     vqa_started_at = monotonic()
     with provider_operation_usage_scope() as usage, \
-            public_operation_scope(claim.operation_id, attempt_token=claim.attempt_token, fencing_token=claim.fencing_token), \
+            public_operation_scope(claim.operation_id, attempt_token=claim.attempt_token,
+                                   fencing_token=claim.fencing_token), \
             provider_usage_scope(job_id=claim.operation_id, operation="quality_review", stage="vqa",
                                  attempt_number=claim.attempt_number, public_only=True):
         from utils.provider_idempotency import ProviderOutcomeError
@@ -251,7 +259,8 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
             "design_review_schema_or_coverage_invalid", "unparseable_response", "review_schema_invalid",
             "review_input_capacity_unavailable", "render_coverage_invalid", "no_renders"} else "unavailable"
         reason = vision.get("schemaRejectionReason")
-        safe_reason = reason if isinstance(reason, str) and reason in _DESIGN_SCHEMA_REJECTION_REASONS else "unspecified"
+        safe_reason = (reason if isinstance(reason, str) and reason in _DESIGN_SCHEMA_REJECTION_REASONS
+                       else "unspecified")
         counts = usage.terminal_snapshot().get("counts") or {}
         terminal = next((name for name in ("completed", "incomplete", "failed", "cancelled", "unknown")
             if counts.get(name)), "unmeasured")
@@ -289,7 +298,8 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
             receipt = (current_slides[index].content or {}).get("svgReceipt") or {}
             if (receipt.get("png_sha256") != png_digests[index]
                     or (receipt.get("quality") or {}).get("measurement_complete") is not True
-                    or (receipt.get("quality") or {}).get("source_digest") != source_digest(current_slides[index].svg_content or "")):
+                    or (receipt.get("quality") or {}).get("source_digest") != source_digest(
+                        current_slides[index].svg_content or "")):
                 raise NonRetryableWorkspaceOperationError("svg_quality_review_measurement_stale")
         theme = deepcopy(presentation.theme or {})
         svg_theme = dict(theme.get("svg") or {})
@@ -317,13 +327,16 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
             for index in changed_pages:
                 session.add(current_slides[index])
         if final_inputs is not None:
-            from services.svg_final_pptx_review import load_final_review_inputs, seal_final_review
+            from services.svg_final_pptx_review import (
+                load_final_review_inputs, persist_final_review_render, seal_final_review,
+            )
             current_inputs = await load_final_review_inputs(session, request=request,
                 presentation=presentation, slides=current_slides)
             if (current_inputs["artifactDigest"] != final_inputs["artifactDigest"]
-                    or current_inputs["proof"]["evidenceDigest"] != final_inputs["proof"]["evidenceDigest"]
+                    or current_inputs["sourceDigests"] != final_inputs["sourceDigests"]
                     or current_inputs["parentExportOperationId"] != final_inputs["parentExportOperationId"]):
                 raise NonRetryableWorkspaceOperationError("svg_final_pptx_review_source_changed")
+            await persist_final_review_render(session, final_inputs, claim)
             final_reviews = dict(svg_theme.get("finalPptxReviews") or {})
             final_reviews[final_inputs["artifactDigest"][7:]] = seal_final_review(claim, final_inputs, vision)
             svg_theme["finalPptxReviews"] = final_reviews
@@ -356,7 +369,9 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
             reviewedAt=get_current_utc_datetime().isoformat())
         # Status uses the same owned evidence projection as export and source
         # review; the stored historical page/receipt remains unchanged.
-        from services.svg_export_operation import require_current_header_revision_authority, header_revision_review_slides
+        from services.svg_export_operation import (
+            require_current_header_revision_authority, header_revision_review_slides,
+        )
         status_authority = await require_current_header_revision_authority(session, presentation, current_slides)
         status_slides = (header_revision_review_slides(status_authority, presentation, current_slides)
                          if status_authority is not None else current_slides)
@@ -387,7 +402,8 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
             fixed_count=0, fixed_slide_indices=[], remaining_slide_count=len(issue_indices),
             remaining_slide_indices=issue_indices, remaining_issue_count=detailed, version_saved=False,
             slide_results=[dict(slide_index=index, attempted=False, applied=False,
-                remaining_issues=[issue for entry in findings if entry["index"] == index for issue in entry.get("issues", [])])
+                remaining_issues=[issue for entry in findings if entry["index"] == index
+                                  for issue in entry.get("issues", [])])
                 for index in indices],
             advisory_only=True, qualityStatus=review_status, advisory_digest=subset["digest"])
         result["stage_timings_ms"] = {
@@ -410,7 +426,8 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
         task_id = f"workspace-quality-{claim.operation_id}"
         task = await session.get(AsyncPresentationGenerationTaskModel, task_id)
         if task is None:
-            task = AsyncPresentationGenerationTaskModel(id=task_id, owner_id=claim.owner_id, status="completed", data=result)
+            task = AsyncPresentationGenerationTaskModel(
+                id=task_id, owner_id=claim.owner_id, status="completed", data=result)
         else:
             task.status, task.data = "completed", result
         task.updated_at = get_current_utc_datetime()
@@ -418,7 +435,8 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
         try:
             revision = await publish_presentation_revision(session, presentation_id=claim.presentation_id,
                 expected_revision=claim.expected_revision, operation_id=claim.operation_id,
-                attempt_token=claim.attempt_token, result=safe_result, operation_kind="quality.review", advance_revision=False)
+                attempt_token=claim.attempt_token, result=safe_result, operation_kind="quality.review",
+                advance_revision=False)
             await session.commit()
         except PresentationPublicationConflict as error:
             await session.rollback()
