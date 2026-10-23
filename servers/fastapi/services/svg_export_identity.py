@@ -118,7 +118,8 @@ def build_svg_export_identity(claim, *, tenant_id, request: SvgExportRequest,
     quality_inputs = svg_quality_inputs(slides=request.slides, advisory=request.advisory,
                                         quality_policy=request.quality_policy)
     quality_inputs = {**quality_inputs, "wholePageVerifierDigest": whole_page_verifier_digest()}
-    header_bindings = [((slide.content or {}).get("svgReceipt") or {}).get("system_furniture") for slide in request.slides]
+    header_bindings = [
+        ((slide.content or {}).get("svgReceipt") or {}).get("system_furniture") for slide in request.slides]
     if any(isinstance(value, dict) and
            ((value.get("generated_common_header") or {}).get("contract") or {}).get("version") == "svg-common-header/v2"
            for value in header_bindings):
@@ -268,7 +269,8 @@ async def _release_predecessor(claim, *, tenant_id, request, checkpoints, identi
             artifact = await session.get(PublicArtifact, row.result_artifact_id) if row.result_artifact_id else None
         if checkpoint is None or artifact is None:
             raise PublicExportOperationError("svg_export_readback_binding_invalid")
-        restored = restore_canonical_export_identity(checkpoint.to_ref(), await service.read_ref_bytes(checkpoint.to_ref()))
+        restored = restore_canonical_export_identity(
+            checkpoint.to_ref(), await service.read_ref_bytes(checkpoint.to_ref()))
         if restored.canonical_wire() != predecessor.canonical_wire():
             raise PublicExportOperationError("svg_export_readback_binding_invalid")
         if consumer_artifact is not None and any(getattr(artifact, field) != getattr(consumer_artifact, field)
@@ -325,7 +327,8 @@ async def export_svg_through_identity(claim, *, tenant_id, request: SvgExportReq
             checkpoints=checkpoints, identity=identity, session_factory=session_factory, consumer_artifact=artifact)
         readback = (origin.resource_metrics["public_export_worker_evidence"] if origin is not None
             else await _producer_readback(
-                session_factory, producer_id=join.leading_operation_id, claim=claim, tenant_id=tenant_id, artifact=artifact,
+                session_factory, producer_id=join.leading_operation_id, claim=claim,
+                tenant_id=tenant_id, artifact=artifact,
                 required=request.source_preservation is not None or request.export_format == "pptx",
                 identity=identity, include_worker_evidence=request.export_format == "pptx"))
         if readback is not None:
@@ -351,11 +354,11 @@ async def export_svg_through_identity(claim, *, tenant_id, request: SvgExportReq
                 "svg_export_timing": {"identityAndReuseMs": (monotonic() - started_at) * 1000,
                                       "workerExecuted": False, "cacheReuse": True}}), identity
         result = await execute(slide_refs)
-    worker_finished_at = monotonic()
-    async with session_factory() as session:
-        await complete_canonical_export_identity(
-            session, execution=execution, operation_claim=claim, result_artifact=result.artifact)
-        await session.commit()
+        worker_finished_at = monotonic()
+        async with session_factory() as session:
+            await complete_canonical_export_identity(
+                session, execution=execution, operation_claim=claim, result_artifact=result.artifact)
+            await session.commit()
     evidence = dict(result.resource_metrics.get("public_export_worker_evidence") or {})
     evidence.update(join.evidence())
     return PublicWorkerArtifactResult(artifact=result.artifact, resource_metrics={

@@ -36,6 +36,7 @@ from workers.public_worker_store import (
     LocalContentAddressedStore,
     PublicWorkerExecutionError,
 )
+from workers.public_svg_projection_error import SvgExportProjectionError, projection_failure_detail
 
 # An execution evidence summary rides back with the artifact so the durable
 # receipt can say which path produced the file. It is a bounded, sanitized
@@ -308,7 +309,9 @@ async def run_worker(role: WorkerRole, executor: WorkerExecutor) -> int:
                     "ok": False,
                     "errorCode": code,
                     "outputArtifact": None,
-                    "executionEvidence": {},
+                    "executionEvidence": {
+                        "svgProjectionFailure": projection_failure_detail(error.detail),
+                    } if isinstance(error, SvgExportProjectionError) else {},
                 }
             )
         return 1

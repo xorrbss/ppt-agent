@@ -286,7 +286,8 @@ class WorkspaceExportOperationHandler:
                     # retryable internal error and lose the real code.
                     resource_detail = getattr(error, "resource_metrics", None)
                     raise classified_public_export_error(
-                        error, detail=resource_detail if isinstance(resource_detail, Mapping) else None
+                        error, detail=resource_detail if isinstance(resource_detail, Mapping) else None,
+                        strategy="svg",
                     ) from error
             if admission is not None and admission.state == "active":
                 public_tenant_id = admission.tenant_id

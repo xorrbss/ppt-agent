@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
@@ -50,6 +51,7 @@ from models.sql.public_artifact import ArtifactRef, PublicExportIdentity
 from models.sql.workspace import WorkspaceOperation
 from services.artifact_store import (
     configured_public_artifact_service,
+    fail_export_identity,
     heartbeat_export_identity,
 )
 
@@ -388,6 +390,39 @@ async def export_identity_lease_keeper(
     keeper = asyncio.create_task(renew())
     try:
         yield
+    except BaseException as error:
+        # Release only this attempt's fence, including on cancellation. A late
+        # result cannot complete a failed or subsequently reclaimed identity.
+        code = getattr(error, "code", None) or str(error)
+        if not isinstance(code, str) or not re.fullmatch(r"[a-z0-9][a-z0-9_.:-]{0,127}", code):
+            code = type(error).__name__
+
+        async def release() -> None:
+            async with session_factory() as session:
+                await fail_export_identity(
+                    session,
+                    identity_id=execution.singleflight.identity_id,
+                    worker_id=execution.worker_id,
+                    attempt_token=attempt_token,
+                    fencing_token=execution.singleflight.fencing_token,
+                    error_code=code,
+                )
+                await session.commit()
+
+        cleanup = asyncio.create_task(release())
+        while not cleanup.done():
+            try:
+                await asyncio.shield(cleanup)
+            except asyncio.CancelledError:
+                # Repeated cancellation must not detach the release transaction.
+                continue
+            except Exception:
+                break
+        try:
+            cleanup.result()
+        except Exception:  # noqa: BLE001 - preserve the original export failure
+            LOGGER.exception("Failed to release export identity after abnormal exit")
+        raise
     finally:
         keeper.cancel()
         try:
