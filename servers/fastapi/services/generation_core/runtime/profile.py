@@ -45,9 +45,9 @@ from utils.get_env import (
 )
 
 DEFAULT_AUTHOR_CONCURRENCY = 3
-DEFAULT_AUTHOR_CONCURRENCY_SOURCE_REFLOW = 2
+DEFAULT_AUTHOR_CONCURRENCY_SOURCE_REFLOW = 6
 DEFAULT_RENDER_CONCURRENCY = 3
-DEFAULT_RENDER_CONCURRENCY_SOURCE_REFLOW = 1
+DEFAULT_RENDER_CONCURRENCY_SOURCE_REFLOW = 2
 DEFAULT_ILLUSTRATION_BUDGET = 4
 
 
@@ -56,6 +56,7 @@ class GenerationRuntimeProfile:
     """One resolved set of concurrency/budget knobs for a generation attempt."""
 
     author_concurrency: int
+    author_concurrency_source: str
     render_concurrency: int
     illustration_budget: int
     illustration_timeout_seconds: int
@@ -88,8 +89,17 @@ def resolve_svg_runtime_profile(
         if source_reflow
         else DEFAULT_RENDER_CONCURRENCY
     )
+    configured_author = explicit_author or default_author
+    author_concurrency_source = "env" if explicit_author is not None else "default"
+    if source_reflow:
+        effective_author = min(configured_author, _author_executor_capacity())
+        if effective_author < configured_author:
+            author_concurrency_source = "clamped-to-executor"
+    else:
+        effective_author = configured_author
     return GenerationRuntimeProfile(
-        author_concurrency=explicit_author or default_author,
+        author_concurrency=effective_author,
+        author_concurrency_source=author_concurrency_source,
         render_concurrency=explicit_render or default_render,
         illustration_budget=(
             get_svg_illustration_budget_env() or DEFAULT_ILLUSTRATION_BUDGET
@@ -106,6 +116,13 @@ def resolve_svg_runtime_profile(
         ),
         vision_advisory=not raster_reconstruction,
     )
+
+
+def _author_executor_capacity() -> int:
+    """Return the authored slide executor's actual capacity for SVG admission."""
+    from services.generation_core.authoring.author_slide import _AUTHOR_EXECUTOR
+
+    return _AUTHOR_EXECUTOR._max_workers
 
 
 class ProviderPermits:

@@ -111,7 +111,7 @@ def get_svg_illustration_budget_env(settings: RuntimeSettings | None = None) -> 
 
 
 def get_svg_source_output_view_env(settings: RuntimeSettings | None = None) -> str | None:
-    """Raw ``SVG_SOURCE_OUTPUT_VIEW`` text (unset = off).
+    """Raw ``SVG_SOURCE_OUTPUT_VIEW`` text (unset = v1; explicit off disables it).
 
     Not a concurrency knob, but an SVG driver knob read the same way: only at admission of a
     whole-page source restyle job, whose frozen snapshot then pins the parsed view
@@ -119,7 +119,8 @@ def get_svg_source_output_view_env(settings: RuntimeSettings | None = None) -> s
     """
     from utils.get_env import get_setting_env
 
-    return get_setting_env("SVG_SOURCE_OUTPUT_VIEW", settings)
+    value = get_setting_env("SVG_SOURCE_OUTPUT_VIEW", settings)
+    return "v1" if value is None else value
 
 
 def get_svg_illustration_timeout_seconds_env(

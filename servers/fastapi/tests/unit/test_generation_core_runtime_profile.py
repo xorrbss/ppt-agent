@@ -8,7 +8,9 @@ from services.generation_core.runtime.profile import (
 )
 
 
-def test_defaults_match_the_previous_hard_coded_semaphores(monkeypatch):
+def test_defaults_match_the_source_reflow_runtime_defaults(monkeypatch):
+    import services.generation_core.runtime.profile as profile
+
     for key in (
         "SVG_AUTHOR_CONCURRENCY",
         "SVG_AUTHOR_CONCURRENCY_SOURCE_REFLOW",
@@ -19,14 +21,17 @@ def test_defaults_match_the_previous_hard_coded_semaphores(monkeypatch):
         "IMAGE_GENERATION_TIMEOUT_SECONDS",
     ):
         monkeypatch.delenv(key, raising=False)
+    # Check the source-reflow setting default independently of the provider pool cap.
+    monkeypatch.setattr(profile, "_author_executor_capacity", lambda: 8)
 
     ordinary = resolve_svg_runtime_profile(source_reflow=False)
     assert ordinary.author_concurrency == DEFAULT_AUTHOR_CONCURRENCY == 3
     assert ordinary.render_concurrency == DEFAULT_RENDER_CONCURRENCY == 3
 
     reflow = resolve_svg_runtime_profile(source_reflow=True)
-    assert reflow.author_concurrency == DEFAULT_AUTHOR_CONCURRENCY_SOURCE_REFLOW == 2
-    assert reflow.render_concurrency == DEFAULT_RENDER_CONCURRENCY_SOURCE_REFLOW == 1
+    assert reflow.author_concurrency == DEFAULT_AUTHOR_CONCURRENCY_SOURCE_REFLOW == 6
+    assert reflow.render_concurrency == DEFAULT_RENDER_CONCURRENCY_SOURCE_REFLOW == 2
+    assert reflow.author_concurrency_source == "default"
 
     assert ordinary.illustration_budget == DEFAULT_ILLUSTRATION_BUDGET
     # No svg override: the authored image knob's default (180 s) applies.
@@ -42,6 +47,9 @@ def test_illustration_timeout_follows_the_authored_image_knob(monkeypatch):
 
 
 def test_explicit_env_overrides_win_over_defaults(monkeypatch):
+    import services.generation_core.runtime.profile as profile
+
+    monkeypatch.setattr(profile, "_author_executor_capacity", lambda: 8)
     monkeypatch.setenv("SVG_AUTHOR_CONCURRENCY", "8")
     monkeypatch.setenv("SVG_RENDER_CONCURRENCY_SOURCE_REFLOW", "5")
     monkeypatch.setenv("SVG_ILLUSTRATION_BUDGET", "6")
@@ -54,3 +62,23 @@ def test_explicit_env_overrides_win_over_defaults(monkeypatch):
     assert reflow.render_concurrency == 5
     # The non-reflow override must not leak into the reflow branch.
     assert reflow.author_concurrency == DEFAULT_AUTHOR_CONCURRENCY_SOURCE_REFLOW
+
+
+def test_source_reflow_author_concurrency_clamps_to_executor(monkeypatch):
+    import services.generation_core.runtime.profile as profile
+
+    monkeypatch.delenv("SVG_AUTHOR_CONCURRENCY_SOURCE_REFLOW", raising=False)
+    monkeypatch.setattr(profile, "_author_executor_capacity", lambda: 4)
+    resolved = resolve_svg_runtime_profile(source_reflow=True)
+    assert resolved.author_concurrency == 4
+    assert resolved.author_concurrency_source == "clamped-to-executor"
+
+
+def test_source_reflow_author_concurrency_records_env_source(monkeypatch):
+    import services.generation_core.runtime.profile as profile
+
+    monkeypatch.setenv("SVG_AUTHOR_CONCURRENCY_SOURCE_REFLOW", "3")
+    monkeypatch.setattr(profile, "_author_executor_capacity", lambda: 8)
+    resolved = resolve_svg_runtime_profile(source_reflow=True)
+    assert resolved.author_concurrency == 3
+    assert resolved.author_concurrency_source == "env"
