@@ -14,6 +14,8 @@ import uuid
 SCHEMA = "svg-final-pptx-office-render/v1"
 MINIMUM_AVAILABLE_MEMORY = 8 * 1024**3
 RENDER_MUTEX_NAME = "Local\\PresentonSvgFinalPptxRender"
+MINIMUM_RENDER_BUDGET_SECONDS = 60
+LOCK_WAIT_SLICE_SECONDS = 0.1
 SHARED_INSTANCE_REASON = "svg_final_pptx_office_instance_busy"
 
 
@@ -119,7 +121,9 @@ def _render(request):
         pageCount=len(pages), pages=pages)
 
 
-def render_final_pptx(target, output_directory, *, page_count, width_px, height_px, timeout):
+def render_final_pptx(target, output_directory, *, page_count, width_px, height_px, timeout,
+                      lock_wait_timeout=None, cancellation_event=None):
+    """Bound lock admission separately within the total review render deadline."""
     if os.name != "nt":
         return _unavailable("svg_final_pptx_office_unavailable")
     if timeout <= 0:
@@ -127,21 +131,38 @@ def render_final_pptx(target, output_directory, *, page_count, width_px, height_
     mutex = None
     acquired = False
     started = monotonic()
+    render_deadline = started + timeout
+    lock_deadline = started + min(timeout, timeout if lock_wait_timeout is None else lock_wait_timeout)
     try:
         import win32event
         # One account/session Office server serves every API/controller process.
         mutex = win32event.CreateMutex(None, False, RENDER_MUTEX_NAME)
-        state = win32event.WaitForSingleObject(mutex, min(int(timeout * 1000), 0xFFFFFFFE))
-        if state == win32event.WAIT_TIMEOUT:
-            return _unavailable("svg_final_pptx_render_busy", retryable=True)
+        if cancellation_event is not None and cancellation_event.is_set():
+            return _unavailable("svg_final_pptx_render_cancelled", retryable=True)
+        state = win32event.WaitForSingleObject(mutex, 0)
+        contended = state == win32event.WAIT_TIMEOUT
+        while state == win32event.WAIT_TIMEOUT:
+            if cancellation_event is not None and cancellation_event.is_set():
+                return _unavailable("svg_final_pptx_render_cancelled", retryable=True)
+            lock_remaining = lock_deadline - monotonic()
+            if lock_remaining <= 0:
+                return _unavailable("svg_final_pptx_render_busy", retryable=True)
+            state = win32event.WaitForSingleObject(mutex,
+                max(1, int(min(lock_remaining, LOCK_WAIT_SLICE_SECONDS) * 1000)))
         if state not in (win32event.WAIT_OBJECT_0, win32event.WAIT_ABANDONED):
             raise OSError("Office render mutex unavailable")
         acquired = True
-        remaining = timeout - (monotonic() - started)
-        if remaining <= 0:
+        if cancellation_event is not None and cancellation_event.is_set():
+            return _unavailable("svg_final_pptx_render_cancelled", retryable=True)
+        remaining = render_deadline - monotonic()
+        # A contending review must defer rather than launch a starved render.
+        if remaining <= 0 or (contended and remaining < min(MINIMUM_RENDER_BUDGET_SECONDS, timeout)):
             return _unavailable("svg_final_pptx_render_busy", retryable=True)
-        return _render_serialized(target, output_directory, page_count=page_count,
+        result = _render_serialized(target, output_directory, page_count=page_count,
             width_px=width_px, height_px=height_px, timeout=remaining)
+        if contended and result.get("reasonCode") == "svg_final_pptx_render_timeout":
+            return {**result, "retryable": True}
+        return result
     except (ImportError, OSError):
         return _unavailable("svg_final_pptx_office_isolation_unavailable")
     finally:

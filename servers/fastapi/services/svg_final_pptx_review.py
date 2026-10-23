@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 import asyncio
 import tempfile
+from threading import Event
 
 from services.generation_core.quality.advisory_record import advisory_ran, content_digest
 from utils.hashing import canonical_json_sha256, sha256_hex
@@ -89,6 +90,7 @@ async def render_final_review_inputs(inputs, claim):
     from services.workspace_operation_handler_registry import (
         NonRetryableWorkspaceOperationError, RetryableWorkspaceOperationError,
     )
+    cancellation_event = Event()
 
     def render():
         with tempfile.TemporaryDirectory(prefix="svg-final-review-") as temporary:
@@ -96,7 +98,8 @@ async def render_final_review_inputs(inputs, claim):
             target = directory / "artifact.pptx"
             target.write_bytes(inputs["artifactBytes"])
             proof = render_final_pptx(target, directory, page_count=len(inputs["sourceDigests"]),
-                width_px=inputs["widthPx"], height_px=inputs["heightPx"], timeout=120)
+                width_px=inputs["widthPx"], height_px=inputs["heightPx"], timeout=120,
+                cancellation_event=cancellation_event)
             if proof.get("status") != "measured":
                 if proof.get("retryable") is True:
                     raise RetryableWorkspaceOperationError(proof["reasonCode"])
@@ -116,7 +119,11 @@ async def render_final_review_inputs(inputs, claim):
                 raise NonRetryableWorkspaceOperationError("svg_final_pptx_render_binding_invalid")
             return dict(inputs, proof=proof, pngs=pngs)
 
-    return await asyncio.to_thread(render)
+    try:
+        return await asyncio.to_thread(render)
+    except asyncio.CancelledError:
+        cancellation_event.set()
+        raise
 
 
 async def persist_final_review_render(session, inputs, claim):
