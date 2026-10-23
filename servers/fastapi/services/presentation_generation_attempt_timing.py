@@ -57,8 +57,71 @@ def _safe_failure(payload: Mapping[str, object]) -> tuple[str, bool]:
     try:
         numeric_status = int(status_code)
     except (TypeError, ValueError):
-        numeric_status = 500
+        return code, False
     return code, numeric_status == 429 or numeric_status >= 500
+
+
+def _generation_exception_failure(error: BaseException) -> dict[str, object]:
+    """Classify an unmapped exception once, before its type is lost on the wire.
+
+    Codes are at most 64 ASCII characters: a lower-case snake_case identifier,
+    optionally followed by one colon and a lower-case/numeric machine suffix.
+    Both segments forbid empty underscore components. Never truncate messages
+    into codes or inspect a database/provider message to decide retryability.
+    """
+    import re
+
+    import asyncpg
+    import openai
+    from google.genai.errors import ServerError
+    from sqlalchemy.exc import DBAPIError, OperationalError
+
+    from services.authored_checkpoint_errors import AuthoredStageError
+    from services.public_operation_admission_models import PublicAdmissionRejected
+    from services.provider_runtime_primitives import RetryAmplificationError
+    from services.workspace_operation_handler_registry import WorkspaceOperationExecutionError
+    from utils.provider_overload import ProviderOutcomeError
+
+    # These existing, typed contracts own their retry decision. In particular,
+    # provider outcomes with unknown billing must never be automatically retried.
+    if isinstance(error, (AuthoredStageError, WorkspaceOperationExecutionError,
+                          PublicAdmissionRejected, ProviderOutcomeError,
+                          RetryAmplificationError)):
+        code = getattr(error, "code", None)
+        retryable = getattr(error, "retryable", None)
+        if isinstance(code, str) and isinstance(retryable, bool):
+            return {"code": code, "retryable": retryable}
+
+    shape = r"[a-z][a-z0-9]*(?:_[a-z0-9]+)*(?::[a-z0-9]+(?:_[a-z0-9]+)*)?"
+    code = "internal_defect"
+    for candidate in (getattr(error, "code", None), str(error)):
+        if (isinstance(candidate, str) and len(candidate) <= 64
+                and re.fullmatch(shape, candidate, flags=re.ASCII)):
+            code = candidate
+            break
+
+    retryable = isinstance(error, (
+        OperationalError,
+        asyncpg.PostgresConnectionError,
+        asyncpg.SerializationError,
+        asyncpg.DeadlockDetectedError,
+        openai.APIConnectionError,
+        openai.RateLimitError,
+        openai.InternalServerError,
+        ServerError,
+    ))
+    if isinstance(error, DBAPIError):
+        # Driver SQLSTATE is machine metadata, not exception-message matching.
+        sqlstate = getattr(error.orig, "sqlstate", None) or getattr(error.orig, "pgcode", None)
+        retryable = retryable or error.connection_invalidated or (
+            isinstance(sqlstate, str) and (
+                sqlstate in {"40001", "40P01"} or sqlstate.startswith("08")
+            )
+        )
+    exception_type = type(error).__name__
+    if len(exception_type) > 64 or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", exception_type):
+        exception_type = "Exception"
+    return {"code": code, "retryable": bool(retryable), "exception_type": exception_type}
 
 
 def _attempt_failure_stage(

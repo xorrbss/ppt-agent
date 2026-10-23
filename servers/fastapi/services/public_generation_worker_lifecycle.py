@@ -152,6 +152,16 @@ def durable_generation_failure(error: BaseException) -> tuple[str, bool]:
 
     if isinstance(error, WorkspaceOperationExecutionError):
         return error.code, error.retryable
+    from fastapi import HTTPException
+    from services.presentation_generation_attempt_timing import _generation_exception_failure
+
+    if not isinstance(error, HTTPException):
+        failure = _generation_exception_failure(error)
+        return failure["code"], (
+            failure["retryable"]
+            and failure["code"] not in _TERMINAL_PROVIDER_FAILURE_CODES
+            and not exhausted_evidence_unrecorded(error)
+        )
     detail = getattr(error, "detail", None)
     if hasattr(detail, "model_dump"):
         detail = detail.model_dump(exclude_none=True)
@@ -170,6 +180,9 @@ def durable_generation_failure(error: BaseException) -> tuple[str, bool]:
     if isinstance(status_code, int) and not isinstance(status_code, bool):
         payload["status_code"] = status_code
     durable_code, durable_retryable = _safe_failure(payload)
+    if isinstance(detail, Mapping) and "exception_type" in detail:
+        # Already reduced at the generation boundary; keep its machine suffix.
+        return durable_code, durable_retryable and not exhausted_evidence_unrecorded(error)
     normalized_code = "".join(
         character
         if character in "abcdefghijklmnopqrstuvwxyz0123456789_"

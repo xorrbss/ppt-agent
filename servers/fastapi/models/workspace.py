@@ -658,6 +658,7 @@ class WorkspaceAllowedActionResponse(BaseModel):
 # Why a deck generation stopped, in the terms its guidance is written in.
 # ``services.generation_failure_class`` is the only place codes map onto it.
 GenerationFailureClass = Literal[
+    "internal_defect",
     "provider_unstable",
     "quality_not_passed",
     "service_interrupted",

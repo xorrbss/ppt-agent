@@ -1124,7 +1124,10 @@ async def test_terminal_page_failure_global_cancels_waiters_page_local_freezes_d
             generic = HTTPException(status_code=500, detail="Presentation generation failed")
             status_error = _generic_generation_failure_payload(database_error, generic, request_id=None)
             unmarked_status = _generic_generation_failure_payload(unmarked, generic, request_id=None)
-            assert {key: value for key, value in status_error.items() if key != "retryable"} == unmarked_status
+            assert status_error["code"] == unmarked_status["code"] == "e3q8"
+            assert status_error["detail"]["exception_type"] == "OperationalError"
+            assert unmarked_status["detail"]["exception_type"] == "OperationalError"
+            assert status_error["retryable"] is False and unmarked_status["retryable"] is True
             code = _safe_failure(unmarked_status)[0]
             assert durable_generation_failure(unmarked) == (durable_generation_failure(database_error)[0], True)
 
