@@ -77,6 +77,7 @@ class GenerationContext:
     semaphore: "asyncio.Semaphore"
     render_semaphore: "asyncio.Semaphore"
     runtime_profile: object = None
+    # Attempt-local diagnostics; never part of page checkpoints or identity.
     runtime_profile_provenance: dict | None = None
     asset_offer: object = None
     visual_intents: list | None = None
@@ -789,9 +790,6 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
     runtime_profile, runtime_profile_provenance, recovery_cached_first = await _pin_runtime_profile(
         session, job, source_reflow=source_reflow, raster_reconstruction=raster_reconstruction,
     )
-    seed = await _checkpoint(job, 0) or {}
-    seed["runtime_profile_provenance"] = runtime_profile_provenance
-    await _checkpoint(job, 0, payload=seed)
     # A fresh attempt pipelines its pages: up to author + render pages are in
     # flight, author attempts take a provider permit (capacity = the configured
     # author concurrency) and renders keep their own gate, so a page renders
