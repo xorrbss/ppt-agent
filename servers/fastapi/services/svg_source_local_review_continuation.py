@@ -6,6 +6,7 @@ from hashlib import sha256
 from typing import Mapping
 
 from services.generation_core.quality.advisory_record import content_digest
+from services.generation_core.drivers.svg.quality import redispatchable_review_status
 from services.svg_final_selected_continuation import (
     INITIAL_NAMESPACE, NAMESPACE, FinalSelectedEvidenceError, _require, _sha, _svg_sha,
 )
@@ -43,7 +44,7 @@ def _source_local_records(execution, payloads, *, sealed_vector=None, snapshot=N
     _require(isinstance(rounds, list) and len(rounds) == 1)
     original = rounds[0]
     _require(isinstance(original, Mapping))
-    _require(original.get("status") in {"review_unknown", "completed"})
+    _require(original.get("status") == "completed" or redispatchable_review_status(original.get("status")))
     _require(original.get("binding", execution["binding"]) == execution["binding"])
     if sealed_vector is None:
         _require(original.get("page_digests") == [
@@ -143,7 +144,7 @@ def _source_local_records(execution, payloads, *, sealed_vector=None, snapshot=N
         _require(vision.get("reviewGroups") == [marker["advisory"] for marker in records] + [global_record]
                  and not vision.get("localEvidenceConsumers"))
     else:
-        _require(isinstance(unknown, Mapping) and unknown.get("status") == "review_unknown"
+        _require(isinstance(unknown, Mapping) and redispatchable_review_status(unknown.get("status"))
                  and isinstance(unknown.get("failureDiagnostics"), Mapping))
     return records, unknown
 
@@ -598,7 +599,8 @@ def build_source_local_proof(*, operation_id, job_id, owner_id, tenant_id, archi
     rounds = execution.get("rounds") if isinstance(execution, Mapping) else None
     if (len(payloads) <= 5 or (snapshot.get("quality_recovery_policy") or {}).get("version") != 2
             or not isinstance(rounds, list) or len(rounds) != 1
-            or not isinstance(rounds[0], Mapping) or rounds[0].get("status") not in {"review_unknown", "completed"}
+            or not isinstance(rounds[0], Mapping)
+            or not (rounds[0].get("status") == "completed" or redispatchable_review_status(rounds[0].get("status")))
             or any(page.get("quality_recovery", {}).get("selection") for page in payloads)):
         return None
     groups = rounds[0].get("groups")
@@ -608,8 +610,8 @@ def build_source_local_proof(*, operation_id, job_id, owner_id, tenant_id, archi
             or any(not isinstance(groups.get(str(index)), Mapping)
                    or groups[str(index)].get("status") != "completed" for index in range(group_count))
             or not isinstance(groups.get(str(group_count)), Mapping)
-            or groups[str(group_count)].get("status") != (
-                "completed" if rounds[0]["status"] == "completed" else "review_unknown")):
+            or not (groups[str(group_count)].get("status") == "completed" if rounds[0]["status"] == "completed"
+                    else redispatchable_review_status(groups[str(group_count)].get("status")))):
         return None
     _require(str(source_job.get("id")) == job_id
              and str(source_job.get("workspace_operation_id")) == operation_id)

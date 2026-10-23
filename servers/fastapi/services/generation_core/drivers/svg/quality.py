@@ -518,8 +518,6 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
         async def dispatch():
             nonlocal dispatch_entered, dispatch_observation
             from services.provider_usage_instrumentation import observe_provider_dispatch
-            if review_attempt_limit > 1:
-                await checkpoint(ordinal, marker)
             dispatch_entered = True
             dispatch_context = group_context
             prior = saved
@@ -528,7 +526,7 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
                               if item.get("status") == "completed"), None)
             rejected = (prior.get("advisory") or {}).get("vision", {}) if prior else {}
             if (review_attempt_limit > 1 and group_context["reviewScope"] == "global"
-                    and rejected.get("skipped") == "design_review_schema_or_coverage_invalid"):
+                    and _global_format_retryable(rejected)):
                 dispatch_context = {**group_context, "formatRetry": {
                     "attempt": marker["review_attempt"],
                     "reason": rejected.get("schemaRejectionReason"),
@@ -559,13 +557,17 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
                                     if key != "superseded_attempts"})
                 marker.update(review_attempt=next_attempt, superseded_attempts=history,
                               physical_ordinal=physical_ordinal(next_attempt))
-            local_reserved(ordinal)
             delay = saved.get("retry_delay_seconds", 0) if saved else 0
             if delay:
                 await asyncio.sleep(delay)
             dispatch_entered = False
             dispatch_observation = None
             try:
+                if review_attempt_limit > 1:
+                    await checkpoint(ordinal, marker)
+                # Every local group is durably scheduled before any dispatch;
+                # checkpoint I/O and this barrier hold no provider permit.
+                local_reserved(ordinal)
                 if ordinal < len(groups):
                     await reservations_ready.wait()
                 # Backoff holds no provider permit; each dispatch uses the
@@ -584,6 +586,7 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
                 if not absorbable_page_error(exc):
                     never_dispatched = (not dispatch_entered or dispatch_observation is not None
                         and dispatch_observation.admission_entered
+                        and not dispatch_observation.ledger_reserved
                         and not dispatch_observation.sdk_may_have_started)
                     status = ("review_not_dispatched" if review_attempt_limit > 1 and never_dispatched
                               else "review_unknown")
@@ -674,11 +677,7 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
                 return incomplete_review("review_call_unavailable")
             records.append(global_result)
             rejected = global_result["vision"]
-            if (rejected.get("skipped") != "design_review_schema_or_coverage_invalid"
-                    or rejected.get("schemaRejectionReason") not in {
-                        "global_review_fields", "global_finding_fields", "global_group_fields",
-                        "axis_keys", "axis_semantics", "evidence_bounds", "index_coverage",
-                    }):
+            if not _global_format_retryable(rejected):
                 break
             if format_attempt < global_retry_limit:
                 global_context = {**global_context, "formatRetry": {
@@ -733,6 +732,22 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
 _UNREVIEWED_GROUP = "unreviewedGroup"
 
 
+def redispatchable_review_status(status):
+    """An interrupted review can reopen; its marker still decides slot consumption."""
+    return status in {"review_unknown", "review_not_dispatched"}
+
+
+_GLOBAL_FORMAT_RETRY_REASONS = frozenset({
+    "global_review_fields", "global_finding_fields", "global_group_fields",
+    "axis_keys", "axis_semantics", "evidence_bounds", "index_coverage",
+})
+
+
+def _global_format_retryable(vision):
+    return (vision.get("skipped") == "design_review_schema_or_coverage_invalid"
+            and vision.get("schemaRejectionReason") in _GLOBAL_FORMAT_RETRY_REASONS)
+
+
 def _retryable_review_result(vision):
     return vision.get("skipped") in {
         "design_review_schema_or_coverage_invalid", "review_schema_invalid",
@@ -759,8 +774,9 @@ def _validate_review_attempts(saved, marker, limit):
         if (not isinstance(prior, Mapping) or prior.get("review_attempt") != index
                 or prior.get("physical_ordinal") != marker["physical_ordinal"] + index
                 or prior.get("input_digest") != marker["input_digest"]
-                or (prior.get("status") not in {"review_inflight", "review_unknown", "review_failed", "completed"}
-                    and not (index == attempt and prior.get("status") == "review_not_dispatched"))):
+                or (prior.get("status") not in {"review_inflight", "review_failed", "completed"}
+                    and not redispatchable_review_status(prior.get("status")))
+                or (index != attempt and prior.get("status") == "review_not_dispatched")):
             raise ValueError("svg_quality_recovery_review_group_evidence_invalid")
 
 
