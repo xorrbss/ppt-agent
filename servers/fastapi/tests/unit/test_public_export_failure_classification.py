@@ -31,7 +31,6 @@ DETERMINISTIC_CODES = (
     "svg_source_export_projection_invalid",
     "svg_source_export_readback_invalid",
     "public_worker_unexpected_failure",
-    "svg_export_deadline_exhausted",
     "public_export_admission_deadline_exhausted",
     "an_unanticipated_future_invariant",
     "artifact.ref_not_found",
@@ -97,7 +96,9 @@ def _sqlite_error(code):
     IsolatedWorkerProcessError("deadline_exceeded"),
     IsolatedWorkerProcessError("public_worker_execution_failed"),
     TrustedWorkerWireError("trusted_worker_transport_closed"),
-    PublicWorkerExecutionError("public_worker_deadline_exceeded"),
+    PublicWorkerExecutionError("public_worker_job_expired"),
+    IsolatedWorkerProcessError("svg_export_deadline_exhausted"),
+    PublicExportOperationError("public_worker_job_expired"),
     AssetGatewayError("asset_not_ready", status_code=409, retryable=True),
 ])
 def test_svg_only_retries_explicit_infrastructure_and_readiness_types(error):

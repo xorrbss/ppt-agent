@@ -78,7 +78,8 @@ _TRANSIENT_EXPORT_CODES = frozenset({
 })
 _TRANSIENT_WORKER_CODES = frozenset({
     "deadline_exceeded",
-    "public_worker_deadline_exceeded",
+    "public_worker_job_expired",
+    "svg_export_deadline_exhausted",
     "public_worker_execution_failed",
     "trusted_worker_transport_closed",
     "trusted_worker_stdio_read_failed",
@@ -110,7 +111,7 @@ def _svg_export_failure_is_transient(error: BaseException) -> bool:
     if isinstance(error, AssetGatewayError):
         return error.retryable is True and error.code == "asset_not_ready"
     if isinstance(error, PublicExportOperationError):
-        return public_export_error_code(error) in _TRANSIENT_EXPORT_CODES
+        return public_export_error_code(error) in _TRANSIENT_EXPORT_CODES | _TRANSIENT_WORKER_CODES
     if isinstance(error, (IsolatedWorkerProcessError, TrustedWorkerWireError, PublicWorkerExecutionError)):
         return public_export_error_code(error) in _TRANSIENT_WORKER_CODES
     return False

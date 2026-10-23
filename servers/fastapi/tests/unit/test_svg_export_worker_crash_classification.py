@@ -1,6 +1,7 @@
 """Only proven OS crashes enter the retryable SVG crash category."""
 
 import asyncio
+from dataclasses import replace
 import sys
 import uuid
 
@@ -10,6 +11,8 @@ from services import isolated_worker_process as process
 from services.public_export_failure_classification import classified_public_export_error
 from services.trusted_executor.worker_dispatcher import TrustedWorkerWireResult
 from tests.unit.test_svg_export_projection_error import _job
+from workers.public_worker_runtime import _execute_before_job_deadline
+from workers.public_worker_store import PublicWorkerExecutionError
 
 
 @pytest.mark.parametrize(("exit_code", "stdout", "crashed"), [
@@ -55,5 +58,23 @@ def test_only_abnormal_os_exit_without_result_is_a_retryable_crash(
             assert (authored.retryable, authored.code, authored.detail) == (
                 legacy.retryable, legacy.code, legacy.detail,
             )
+
+    asyncio.run(scenario())
+
+
+def test_actual_worker_deadline_signal_is_transient_but_pinned_admission_is_terminal():
+    async def scenario():
+        async def execute(_job, _store):
+            pytest.fail("an expired job must not execute")
+
+        with pytest.raises(PublicWorkerExecutionError) as raised:
+            await _execute_before_job_deadline(
+                job=replace(_job(), deadline_epoch_seconds=0), executor=execute, store=None,
+            )
+        assert raised.value.code == "public_worker_job_expired"
+        for error in (raised.value, process.IsolatedWorkerProcessError(raised.value.code)):
+            assert classified_public_export_error(error, strategy="svg").retryable is True
+        admission = process.IsolatedWorkerProcessError("public_export_admission_deadline_exhausted")
+        assert classified_public_export_error(admission, strategy="svg").retryable is False
 
     asyncio.run(scenario())
