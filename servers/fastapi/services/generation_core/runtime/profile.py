@@ -56,7 +56,6 @@ class GenerationRuntimeProfile:
     """One resolved set of concurrency/budget knobs for a generation attempt."""
 
     author_concurrency: int
-    author_concurrency_source: str
     render_concurrency: int
     illustration_budget: int
     illustration_timeout_seconds: int
@@ -68,6 +67,17 @@ def resolve_svg_runtime_profile(
     *, source_reflow: bool, raster_reconstruction: bool = False
 ) -> GenerationRuntimeProfile:
     """Resolve the profile ``svg_presentation_prepare`` pins per deck job."""
+
+    profile, _ = resolve_svg_runtime_profile_with_provenance(
+        source_reflow=source_reflow, raster_reconstruction=raster_reconstruction,
+    )
+    return profile
+
+
+def resolve_svg_runtime_profile_with_provenance(
+    *, source_reflow: bool, raster_reconstruction: bool = False,
+) -> tuple[GenerationRuntimeProfile, dict]:
+    """Keep diagnostic provenance outside serialized runtime identity values."""
 
     explicit_author = (
         get_svg_author_concurrency_source_reflow_env()
@@ -90,16 +100,21 @@ def resolve_svg_runtime_profile(
         else DEFAULT_RENDER_CONCURRENCY
     )
     configured_author = explicit_author or default_author
-    author_concurrency_source = "env" if explicit_author is not None else "default"
-    if source_reflow:
-        effective_author = min(configured_author, _author_executor_capacity())
-        if effective_author < configured_author:
-            author_concurrency_source = "clamped-to-executor"
-    else:
-        effective_author = configured_author
-    return GenerationRuntimeProfile(
+    executor_capacity = _author_executor_capacity() if source_reflow else None
+    effective_author = (
+        min(configured_author, executor_capacity)
+        if executor_capacity is not None else configured_author
+    )
+    provenance = {"author_concurrency": {
+        "source": "env" if explicit_author is not None else "default",
+        "requested": configured_author,
+        "executor_capacity": executor_capacity,
+        "clamped_to_executor": effective_author < configured_author,
+        "resolved": effective_author,
+        "effective": effective_author,
+    }}
+    profile = GenerationRuntimeProfile(
         author_concurrency=effective_author,
-        author_concurrency_source=author_concurrency_source,
         render_concurrency=explicit_render or default_render,
         illustration_budget=(
             get_svg_illustration_budget_env() or DEFAULT_ILLUSTRATION_BUDGET
@@ -116,6 +131,7 @@ def resolve_svg_runtime_profile(
         ),
         vision_advisory=not raster_reconstruction,
     )
+    return profile, provenance
 
 
 def _author_executor_capacity() -> int:
@@ -196,4 +212,7 @@ class ProviderPermits:
             self._hand_off()
 
 
-__all__ = ["GenerationRuntimeProfile", "ProviderPermits", "resolve_svg_runtime_profile"]
+__all__ = [
+    "GenerationRuntimeProfile", "ProviderPermits", "resolve_svg_runtime_profile",
+    "resolve_svg_runtime_profile_with_provenance",
+]

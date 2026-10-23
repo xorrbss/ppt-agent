@@ -77,6 +77,7 @@ class GenerationContext:
     semaphore: "asyncio.Semaphore"
     render_semaphore: "asyncio.Semaphore"
     runtime_profile: object = None
+    runtime_profile_provenance: dict | None = None
     asset_offer: object = None
     visual_intents: list | None = None
     recovery_cached_first: list[int] | None = None
@@ -135,7 +136,7 @@ def _prepare_header_outline(snapshot, outline, canvas, *, mode, cover_exception)
     snapshot = {**snapshot, "common_header": contract}
     snapshot["digest"] = canonical_json_digest(
         {key: value for key, value in snapshot.items() if key != "digest"}, allow_nan=True)
-    for slide, binding in zip(prepared.slides, bindings):
+    for slide, binding in zip(prepared.slides, bindings, strict=False):
         slide.common_header = binding
     return snapshot, prepared
 
@@ -518,6 +519,21 @@ async def _verify_owned_partial_recovery(request, job, count, *, session_maker, 
     return manifest
 
 
+async def _pin_runtime_profile(session, job, *, source_reflow, raster_reconstruction):
+    from services.generation_core.runtime.profile import resolve_svg_runtime_profile_with_provenance
+    from services.svg_timeout_repurchase import sample_completion_runtime_profile
+
+    profile, provenance = resolve_svg_runtime_profile_with_provenance(
+        source_reflow=source_reflow, raster_reconstruction=raster_reconstruction,
+    )
+    profile, cached_first = await sample_completion_runtime_profile(session, job, profile)
+    author = provenance["author_concurrency"]
+    if profile.author_concurrency != author["resolved"]:
+        author["override"] = "repurchase"
+    author["effective"] = profile.author_concurrency
+    return profile, provenance, cached_first
+
+
 async def _prepare_generation(request, presentation_id, outline, session, job) -> GenerationContext:
     from services.authored_source_images import collect_source_image_candidates, plan_slide_source_images
     from services.svg_generation_assets import slot_writer_enabled
@@ -606,7 +622,8 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
                 AuthoredSlideCheckpoint.svg_checkpoint.is_not(None)).limit(1))
             from services.svg_authoring_profile import read_quality_recovery_policy
             if read_quality_recovery_policy(snapshot):
-                saved_pages = list(await checkpoint_session.scalars(select(AuthoredSlideCheckpoint.svg_checkpoint).where(
+                saved_pages = list(await checkpoint_session.scalars(select(
+                    AuthoredSlideCheckpoint.svg_checkpoint).where(
                     AuthoredSlideCheckpoint.job_id == job.id,
                     AuthoredSlideCheckpoint.svg_checkpoint.is_not(None))))
                 from services.generation_core.drivers.svg.collect import _unknown_provider_checkpoint
@@ -769,12 +786,12 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
                       for slot in source_manifest.slots if slot.slot_id in offered} for offered in planned]
     # Provider/render workers share the job-level gate with HTML; each page owns
     # separate transactions so concurrent calls never share an AsyncSession.
-    from services.generation_core.runtime.profile import resolve_svg_runtime_profile
-    runtime_profile = resolve_svg_runtime_profile(source_reflow=source_reflow,
-                                                  raster_reconstruction=raster_reconstruction)
-    from services.svg_timeout_repurchase import sample_completion_runtime_profile
-    runtime_profile, recovery_cached_first = await sample_completion_runtime_profile(
-        session, job, runtime_profile)
+    runtime_profile, runtime_profile_provenance, recovery_cached_first = await _pin_runtime_profile(
+        session, job, source_reflow=source_reflow, raster_reconstruction=raster_reconstruction,
+    )
+    seed = await _checkpoint(job, 0) or {}
+    seed["runtime_profile_provenance"] = runtime_profile_provenance
+    await _checkpoint(job, 0, payload=seed)
     # A fresh attempt pipelines its pages: up to author + render pages are in
     # flight, author attempts take a provider permit (capacity = the configured
     # author concurrency) and renders keep their own gate, so a page renders
@@ -795,6 +812,7 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
         source_pointer=source_pointer, asset_context=asset_context, asset_revision=asset_revision,
         service=service, semaphore=semaphore, render_semaphore=render_semaphore,
         runtime_profile=runtime_profile, provider_permits=provider_permits,
+        runtime_profile_provenance=runtime_profile_provenance,
         recovery_cached_first=recovery_cached_first,
         asset_offer=asset_offer,
         visual_intents=visual_intents,
@@ -821,7 +839,8 @@ async def _offer_assets(request, presentation_id, outline, roles, job, planned, 
     from services.generation_core.drivers.svg.collect import stage_runtime_profile
 
     offer = await resolve_offer(request, outline, roles, job,
-                                profile=stage_runtime_profile(request, resolve_svg_runtime_profile(source_reflow=False)),
+                                profile=stage_runtime_profile(
+                                    request, resolve_svg_runtime_profile(source_reflow=False)),
                                 checkpoint=_facade._checkpoint, durable=canonical_assets,
                                 style_snapshot=style_snapshot,
                                 has_source_assets=(any(planned) if source_assets_present is None

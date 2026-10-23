@@ -80,6 +80,13 @@ def _supports_fencing_token(callback: Callable[..., object]) -> bool:
     )
 
 
+def _renewed_lease_expiry(current, deadline, requested):
+    """Atomic, deadline-capped maximum on both SQLite and PostgreSQL."""
+
+    widened = case((current > requested, current), else_=requested)
+    return case((deadline < widened, deadline), else_=widened)
+
+
 async def heartbeat_workspace_operation(
     operation_id: uuid.UUID,
     attempt_token: str,
@@ -162,13 +169,10 @@ async def heartbeat_workspace_operation(
             )
             .values(
                 heartbeat_at=now,
-                lease_expires_at=case(
-                    (
-                        WorkspaceOperation.deadline_at.is_not(None)
-                        & (WorkspaceOperation.deadline_at < requested_expiry),
-                        WorkspaceOperation.deadline_at,
-                    ),
-                    else_=requested_expiry,
+                lease_expires_at=_renewed_lease_expiry(
+                    WorkspaceOperation.lease_expires_at,
+                    WorkspaceOperation.deadline_at,
+                    requested_expiry,
                 ),
                 updated_at=now,
             )
@@ -206,12 +210,10 @@ async def heartbeat_workspace_operation(
                 )
                 .values(
                     heartbeat_at=now,
-                    lease_expires_at=case(
-                        (
-                            PublicResourceLease.deadline_at < requested_expiry,
-                            PublicResourceLease.deadline_at,
-                        ),
-                        else_=requested_expiry,
+                    lease_expires_at=_renewed_lease_expiry(
+                        PublicResourceLease.lease_expires_at,
+                        PublicResourceLease.deadline_at,
+                        requested_expiry,
                     ),
                     version=PublicResourceLease.version + 1,
                 )
@@ -301,6 +303,7 @@ async def run_attempt_heartbeat_loop(
     heartbeat_seconds: float,
     poll_seconds: float,
     lease_seconds: Callable[[], int],
+    renewal_allowed: Callable[[], bool] | None = None,
 ) -> None:
     """Renew the lease until the attempt is cancelled or demonstrably lost.
 
@@ -344,6 +347,9 @@ async def run_attempt_heartbeat_loop(
                 ):
                     raise WorkspaceOperationCancelled("workspace_operation_cancelled")
             if not heartbeat_due:
+                continue
+            if renewal_allowed is not None and not renewal_allowed():
+                next_heartbeat_at = loop.time() + cancellation_poll_interval
                 continue
             heartbeat_kwargs = {
                 "session_factory": session_factory,

@@ -3596,10 +3596,11 @@ def _reclaimable_lease_condition(session_factory, now: datetime):
     previous.wall, previous.monotonic = wall, tick
     expired = WorkspaceOperation.lease_expires_at <= now
     if tick < previous.grace_until:
-        expired = and_(expired, or_(
-            WorkspaceOperation.lease_expires_at <= previous.deferred_start,
-            WorkspaceOperation.lease_expires_at > previous.deferred_end,
-        ))
+        # A holder may still be reconnecting when its lease expires just after
+        # resume. Protect every expiry since the gap until grace ends.
+        expired = and_(
+            expired, WorkspaceOperation.lease_expires_at <= previous.deferred_start,
+        )
     return or_(WorkspaceOperation.lease_expires_at.is_(None), expired)
 
 

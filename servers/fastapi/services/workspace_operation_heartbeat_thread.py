@@ -18,7 +18,6 @@ from services.database import (
 )
 from services.workspace_operation_handler_registry import (
     WorkspaceOperationClaim,
-    WorkspaceOperationLeaseLost,
 )
 from services.workspace_operation_lease import (
     WORKSPACE_OPERATION_HEARTBEAT_SECONDS,
@@ -59,10 +58,9 @@ class HandlerLoopWatchdog:
                         self._last_tick, tick - HANDLER_LIVENESS_SECONDS + resume_window
                     )
             previous_tick, previous_wall = tick, wall
-            remaining = self.remaining()
-            if remaining <= 0:
-                raise WorkspaceOperationLeaseLost("workspace_operation_handler_unresponsive")
-            await asyncio.sleep(min(HANDLER_TICK_SECONDS, remaining))
+            # Missing ticks suspend renewal, not cancellation polling. A later
+            # handler tick lets the renewal CAS decide whether we still own it.
+            await asyncio.sleep(HANDLER_TICK_SECONDS)
 
 
 def _heartbeat_session_factory(
@@ -104,12 +102,13 @@ async def run_threaded_attempt_heartbeat(
     """Bridge thread completion to the runner, including cancel/fence failures.
 
     Shutdown cancels the heartbeat on its own loop, disposes its engine there,
-    and joins the thread without blocking the handler loop. A daemon thread is
+    and awaits thread completion without borrowing the handler's executor. A daemon thread is
     a final safeguard against an unresponsive database driver during shutdown.
     """
 
     handler_loop = asyncio.get_running_loop()
     completed = handler_loop.create_future()
+    thread_finished = handler_loop.create_future()
     watchdog = HandlerLoopWatchdog()
     stopping = threading.Event()
     state_lock = threading.Lock()
@@ -123,6 +122,8 @@ async def run_threaded_attempt_heartbeat(
         tick_handle = handler_loop.call_later(HANDLER_TICK_SECONDS, tick)
 
     def finish(error: BaseException | None) -> None:
+        if not thread_finished.done():
+            thread_finished.set_result(None)
         if completed.done():
             return
         if error is None:
@@ -147,6 +148,7 @@ async def run_threaded_attempt_heartbeat(
                     heartbeat_seconds=heartbeat_seconds,
                     poll_seconds=poll_seconds,
                     lease_seconds=lease_seconds,
+                    renewal_allowed=lambda: watchdog.remaining() > 0,
                 )),
                 asyncio.create_task(watchdog.watch()),
             ]
@@ -205,6 +207,7 @@ async def run_threaded_attempt_heartbeat(
                     worker_loop.call_soon_threadsafe(worker_task.cancel)
                 except RuntimeError:
                     pass
-        await asyncio.to_thread(thread.join, HEARTBEAT_SHUTDOWN_SECONDS)
-        if thread.is_alive():
+        try:
+            await asyncio.wait_for(asyncio.shield(thread_finished), HEARTBEAT_SHUTDOWN_SECONDS)
+        except TimeoutError:
             LOGGER.error("Heartbeat shutdown timed out for operation %s", claim.operation_id)
