@@ -513,32 +513,58 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
                 _validate_review_attempts(saved, marker, review_attempt_limit)
         elif not saved:
             await checkpoint(ordinal, marker)
+        dispatch_entered = False
+        dispatch_observation = None
         async def dispatch():
+            nonlocal dispatch_entered, dispatch_observation
+            from services.provider_usage_instrumentation import observe_provider_dispatch
+            if review_attempt_limit > 1:
+                await checkpoint(ordinal, marker)
+            dispatch_entered = True
+            dispatch_context = group_context
+            prior = saved
+            if prior and prior.get("status") != "completed":
+                prior = next((item for item in reversed(marker.get("superseded_attempts", []))
+                              if item.get("status") == "completed"), None)
+            rejected = (prior.get("advisory") or {}).get("vision", {}) if prior else {}
+            if (review_attempt_limit > 1 and group_context["reviewScope"] == "global"
+                    and rejected.get("skipped") == "design_review_schema_or_coverage_invalid"):
+                dispatch_context = {**group_context, "formatRetry": {
+                    "attempt": marker["review_attempt"],
+                    "reason": rejected.get("schemaRejectionReason"),
+                    "fields": rejected.get("schemaRejectionFields"),
+                }}
             # Fresh generation inherits the public fence. Explicit workspace IDs
             # select the existing typed partial-recovery admission path.
-            with provider_usage_scope(job_id=job.id, operation="authored_generation", stage="vqa",
+            with observe_provider_dispatch() as observation, provider_usage_scope(
+                    job_id=job.id, operation="authored_generation", stage="vqa",
                     attempt_number=job.attempt_number, round_ordinal=marker["physical_ordinal"],
                     **({"workspace_operation_id": job.workspace_operation_id}
                        if (isinstance(getattr(job, "request_payload", None), dict)
                            and job.request_payload.get("_svg_partial_recovery")) else {})):
+                dispatch_observation = observation
                 return await run_advisory(group_renders, slide_count=len(group_renders),
-                                          required=True, design_context=group_context)
+                                          required=True, design_context=dispatch_context)
         while True:
             if saved:
-                if review_attempt_limit == 1 or saved["review_attempt"] + 1 >= review_attempt_limit:
+                not_dispatched = saved.get("status") == "review_not_dispatched"
+                next_attempt = saved.get("review_attempt", 0) + (not not_dispatched)
+                if review_attempt_limit == 1 or next_attempt >= review_attempt_limit:
                     local_reserved(ordinal)
                     return (saved["advisory"] if saved.get("status") == "completed" else
                             _unreviewed_group(marker["group_id"], indices, saved))
                 history = deepcopy(saved["superseded_attempts"])
-                history.append({key: deepcopy(value) for key, value in saved.items() if key != "superseded_attempts"})
-                marker.update(review_attempt=saved["review_attempt"] + 1, superseded_attempts=history,
-                              physical_ordinal=physical_ordinal(saved["review_attempt"] + 1))
-            if review_attempt_limit > 1:
-                await checkpoint(ordinal, marker)
+                if not not_dispatched:
+                    history.append({key: deepcopy(value) for key, value in saved.items()
+                                    if key != "superseded_attempts"})
+                marker.update(review_attempt=next_attempt, superseded_attempts=history,
+                              physical_ordinal=physical_ordinal(next_attempt))
             local_reserved(ordinal)
             delay = saved.get("retry_delay_seconds", 0) if saved else 0
             if delay:
                 await asyncio.sleep(delay)
+            dispatch_entered = False
+            dispatch_observation = None
             try:
                 if ordinal < len(groups):
                     await reservations_ready.wait()
@@ -556,7 +582,12 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
                 from utils.provider_overload import safe_provider_diagnostics
                 diagnostics = safe_provider_diagnostics(exc)
                 if not absorbable_page_error(exc):
-                    await checkpoint(ordinal, {**marker, "status": "review_unknown", "failureDiagnostics": diagnostics})
+                    never_dispatched = (not dispatch_entered or dispatch_observation is not None
+                        and dispatch_observation.admission_entered
+                        and not dispatch_observation.sdk_may_have_started)
+                    status = ("review_not_dispatched" if review_attempt_limit > 1 and never_dispatched
+                              else "review_unknown")
+                    await checkpoint(ordinal, {**marker, "status": status, "failureDiagnostics": diagnostics})
                     raise
                 import logging
                 logging.getLogger(__name__).warning("[svg] design review call failed group=%s pages=%s code=%s",
@@ -728,7 +759,8 @@ def _validate_review_attempts(saved, marker, limit):
         if (not isinstance(prior, Mapping) or prior.get("review_attempt") != index
                 or prior.get("physical_ordinal") != marker["physical_ordinal"] + index
                 or prior.get("input_digest") != marker["input_digest"]
-                or prior.get("status") not in {"review_inflight", "review_unknown", "review_failed", "completed"}):
+                or (prior.get("status") not in {"review_inflight", "review_unknown", "review_failed", "completed"}
+                    and not (index == attempt and prior.get("status") == "review_not_dispatched"))):
             raise ValueError("svg_quality_recovery_review_group_evidence_invalid")
 
 

@@ -221,9 +221,12 @@ def _review_physical_ordinal(marker, ordinal, snapshot):
     plan = (snapshot or {}).get("quality_recovery_plan") or {}
     if plan.get("schema") != "svg-quality-recovery-plan/v3":
         return ordinal
-    execution = read_quality_recovery_execution_plan(snapshot)
-    return review_physical_ordinal(ordinal, phase_group_limit=execution["phase_group_limit"],
-        review_retry_limit=execution["review_retry_limit"], review_attempt=marker.get("review_attempt"))
+    try:
+        execution = read_quality_recovery_execution_plan(snapshot)
+        return review_physical_ordinal(ordinal, phase_group_limit=execution["phase_group_limit"],
+            review_retry_limit=execution["review_retry_limit"], review_attempt=marker.get("review_attempt"))
+    except ValueError as error:
+        raise FinalSelectedEvidenceError() from error
 
 
 def _checked_current_local_group(marker, ordinal, vector, *, snapshot=None):
