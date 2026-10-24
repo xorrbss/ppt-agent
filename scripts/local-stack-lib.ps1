@@ -39,6 +39,54 @@ function Wait-ForListener([int]$Port, [int]$TimeoutSeconds = 120) {
     throw "local stack: nothing started listening on port $Port within ${TimeoutSeconds}s"
 }
 
+function Invoke-CapturedCommand([string]$FilePath, [string]$Arguments, [string]$WorkingDirectory, [int]$TimeoutMilliseconds = 0) {
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo.FileName = $FilePath
+    $process.StartInfo.Arguments = $Arguments
+    $process.StartInfo.WorkingDirectory = $WorkingDirectory
+    $process.StartInfo.UseShellExecute = $false
+    $process.StartInfo.CreateNoWindow = $true
+    $process.StartInfo.RedirectStandardOutput = $true
+    $process.StartInfo.RedirectStandardError = $true
+    try {
+        [void]$process.Start()
+        # Drain both pipes concurrently; native stderr is data, not a
+        # PowerShell ErrorRecord (including under Windows PowerShell 5.1).
+        $stdout = $process.StandardOutput.ReadToEndAsync()
+        $stderr = $process.StandardError.ReadToEndAsync()
+        $timedOut = $false
+        if ($TimeoutMilliseconds -gt 0) {
+            $timedOut = -not $process.WaitForExit($TimeoutMilliseconds)
+            if ($timedOut) { $process.Kill() }
+        }
+        $process.WaitForExit()
+        return @{
+            ExitCode = $(if ($timedOut) { -1 } else { $process.ExitCode })
+            Stdout = $stdout.GetAwaiter().GetResult()
+            Stderr = $stderr.GetAwaiter().GetResult()
+        }
+    } finally {
+        $process.Dispose()
+    }
+}
+
+function Wait-ForPostgresReady([string]$PostgresBin, [int]$Port, [int]$TimeoutSeconds = 60) {
+    $probe = Join-Path $PostgresBin "pg_isready.exe"
+    if (-not (Test-Path -LiteralPath $probe)) { throw "postgres_readiness_probe_missing: $probe" }
+    $timer = [System.Diagnostics.Stopwatch]::StartNew()
+    $lastExit = "not run"
+    while ($timer.Elapsed.TotalSeconds -lt $TimeoutSeconds) {
+        $remaining = [Math]::Max(1, [int]($TimeoutSeconds * 1000 - $timer.ElapsedMilliseconds))
+        $result = Invoke-CapturedCommand $probe "-q -h 127.0.0.1 -p $Port -t 1" $PostgresBin $remaining
+        $lastExit = $result.ExitCode
+        if ($lastExit -eq 0) { return }
+        $remaining = $TimeoutSeconds * 1000 - $timer.ElapsedMilliseconds
+        if ($remaining -gt 0) { Start-Sleep -Milliseconds ([int][Math]::Min(250, $remaining)) }
+    }
+    $lastStatus = if ($lastExit -eq -1) { "probe deadline exceeded" } else { "pg_isready exit $lastExit" }
+    throw "postgres_readiness_timeout: PostgreSQL on port $Port did not accept connections within ${TimeoutSeconds}s ($lastStatus)"
+}
+
 function Wait-ForHttp200([string]$Url, [int]$TimeoutSeconds = 180) {
     $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
     while ([DateTime]::UtcNow -lt $deadline) {

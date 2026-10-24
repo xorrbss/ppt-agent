@@ -175,7 +175,7 @@ function Show-MigrationDrift([hashtable]$ApiEnvironment) {
                 Pop-Location
             }
             if ($alembicExit -ne 0) {
-                Write-Warning "schema: drift check could not run (alembic exit $alembicExit). The database version is UNKNOWN."
+                Write-Warning "schema: drift check could not run (alembic exit $alembicExit). Run 'alembic current' in servers/fastapi for details. The database version is UNKNOWN."
                 return
             }
             # `history -r current:heads` is inclusive of the current revision,
@@ -267,6 +267,14 @@ function Invoke-Status {
         $description = "not running"
         if ($null -ne $live) {
             $description = "listening (PID $live)"
+            if ($component -eq "postgres") {
+                try {
+                    Wait-ForPostgresReady $postgresBin $DatabasePort 2
+                    $description = "accepting connections (PID $live)"
+                } catch {
+                    $description = "listening, not ready (PID $live)"
+                }
+            }
             # The recorded PID is the top of the launcher chain, which is what
             # -Stop needs; the listening PID is the leaf it spawned. Showing
             # both stops the difference from reading as a mismatch.
@@ -318,7 +326,10 @@ function Invoke-Adopt {
             Write-Warning "adopt: $component is not running; it will be started on the next run"
             continue
         }
-        if ($component -eq "postgres") { $state[$component] = $live }
+        if ($component -eq "postgres") {
+            Wait-ForPostgresReady $postgresBin $DatabasePort
+            $state[$component] = $live
+        }
         else { $state[$component] = Get-StackRootPid $live }
         Write-Host "  ${component}: adopted (PID $($state[$component]))"
     }
@@ -422,6 +433,7 @@ function Invoke-RestartComponents {
         $creationTimes[$component] = $process.CreationDate
     }
     $stamp = Get-Date -Format "yyyyMMdd-HHmmss-fff"
+    Wait-ForPostgresReady $postgresBin $DatabasePort
     foreach ($component in $targets) {
         if ([int]$owned[$component] -gt 0) {
             $process = Get-CimInstance Win32_Process -Filter "ProcessId=$($owned[$component])" -ErrorAction Stop
@@ -467,6 +479,8 @@ function Invoke-Start {
     Write-Host "starting local stack..."
     $postgres = Start-PersistentPostgres
     if ($postgres["Started"]) { $state["postgres"] = $postgres["ProcessId"] }
+    Wait-ForPostgresReady $postgresBin $DatabasePort
+    Write-Host "  postgres: accepting connections on $DatabasePort"
 
     Show-MigrationDrift $environments["api"]
 
