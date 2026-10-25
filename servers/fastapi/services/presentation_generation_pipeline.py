@@ -216,11 +216,6 @@ from utils.owner_context import get_current_owner_id, get_current_tenant_id
 logger = logging.getLogger(__name__)
 
 GenerationProgressReporter = Callable[..., Awaitable[bool]]
-#: A workspace operation attempt's ``extend_lease(seconds=...)``
-#: (``services.workspace_operation_runner._ExecutionContext.extend_lease``).
-#: Only a durable-operation caller offers one; direct/legacy callers leave it
-#: ``None`` and callees must treat that as "no lease to extend".
-GenerationLeaseExtender = Callable[..., Awaitable[bool]]
 
 AUTHORED_RESUME_MAX_ATTEMPTS_DEFAULT = 5
 _INTERNAL_EXACT_SNAPSHOT_KEY = "_internal_authored_exact_snapshot_id"
@@ -915,7 +910,6 @@ async def generate_presentation_handler(
     export_cookie_header: Optional[str] = None,
     generation_job: Optional[PresentationGenerationJob] = None,
     progress_reporter: GenerationProgressReporter | None = None,
-    extend_lease: GenerationLeaseExtender | None = None,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
     # Internal callers can bypass validation, so re-run owner, expiry, asset
@@ -2073,15 +2067,15 @@ async def _unused_terminal_generation_retry_budget(
         consumed = tuple(total + current for total, current in zip(consumed, (
             admission.initial_request_count, admission.retry_request_count,
             admission.estimated_consumed_microunits, admission.actual_consumed_microunits,
-        )))
+        ), strict=False))
         remaining = tuple(limit - used for limit, used in zip((
             admission.planned_request_limit, admission.retry_request_limit,
             admission.estimated_cost_limit_microunits, admission.actual_cost_limit_microunits,
-        ), consumed))
+        ), consumed, strict=False))
         if min(remaining) < 0 or any(remaining[index] == 0 for index in (0, 2, 3)):
             raise HTTPException(status_code=409, detail="generation_retry_provider_history_present")
         bounds = remaining if bounds is None else tuple(
-            min(current, inherited) for current, inherited in zip(bounds, remaining)
+            min(current, inherited) for current, inherited in zip(bounds, remaining, strict=False)
         )
         ancestor_id = ancestor.retry_of_operation_id
     return bounds
@@ -2235,6 +2229,7 @@ async def _admit_generation_operation_v2_compatible(
             ("planned_request_limit", "retry_request_limit",
              "estimated_cost_limit_microunits", "actual_cost_limit_microunits"),
             retry_bounds,
+            strict=False,
         ):
             setattr(admission, field, min(getattr(admission, field), bound))
         sql_session.add(admission)
