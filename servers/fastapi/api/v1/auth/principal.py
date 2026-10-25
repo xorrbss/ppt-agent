@@ -1,11 +1,9 @@
 from collections.abc import Mapping
-from dataclasses import dataclass
-import ipaddress
 import json
 import os
 from pathlib import Path
 import re
-from typing import Any, Literal
+from typing import Any
 from urllib.parse import urlsplit
 import uuid
 
@@ -24,23 +22,11 @@ from models.sql.public_principal_binding import (
 from models.sql.user import User
 from api.v1.auth.config import SESSION_COOKIE_NAME
 from utils.env_settings.public_service import get_public_process_identity_settings
-from utils.get_env import get_environment_name
-
-
-@dataclass(frozen=True, slots=True)
-class PrincipalEnvelope:
-    """Verified request identity; never constructed from command payload fields."""
-
-    user_id: uuid.UUID
-    username: str
-    is_admin: bool
-    method: Literal["jwt", "api_key", "oidc"]
-    tenant_id: str
-    trace_id: str
-    subject: str
-    issuer: str
-    audience: str
-    scopes: tuple[str, ...] = ()
+from models.principal import (
+    PrincipalEnvelope as PrincipalEnvelope,
+    is_loopback_development_request as is_loopback_development_request,
+    local_development_tenant_id as local_development_tenant_id,
+)
 
 
 class PrincipalBoundaryError(RuntimeError):
@@ -54,7 +40,6 @@ class PrincipalBoundaryError(RuntimeError):
 
 _SAFE_PRINCIPAL_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")
 _OIDC_ALLOWED_ALGORITHMS = frozenset({"RS256", "ES256", "EdDSA"})
-_LOCAL_DEVELOPMENT_TENANT = "local-development"
 _LOCAL_ISSUER = "presenton-local-session"
 _PUBLIC_API_PREFIX = "/api/v2/"
 _LOCAL_PUBLIC_SCOPES = (
@@ -74,29 +59,6 @@ def _trusted_tenant_id() -> str:
 
 def _is_public_api_request(request: Request) -> bool:
     return request.url.path.startswith(_PUBLIC_API_PREFIX)
-
-
-def is_loopback_development_request(request: Request) -> bool:
-    environment = get_environment_name("production")
-    if environment not in {"development", "dev", "local", "test"}:
-        return False
-    client = request.client
-    if client is None:
-        return False
-    try:
-        peer_loopback = ipaddress.ip_address(client.host).is_loopback
-    except ValueError:
-        return False
-    host = (request.url.hostname or "").strip().lower()
-    try:
-        host_loopback = ipaddress.ip_address(host).is_loopback
-    except ValueError:
-        host_loopback = host == "localhost"
-    return peer_loopback and host_loopback
-
-
-def local_development_tenant_id() -> str:
-    return _LOCAL_DEVELOPMENT_TENANT
 
 
 def _public_oidc_configuration() -> tuple[str, str, Path] | None:
@@ -278,7 +240,7 @@ async def resolve_request_principal(
         return None, None
 
     tenant_id = (
-        _LOCAL_DEVELOPMENT_TENANT if public_local_development else _trusted_tenant_id()
+        local_development_tenant_id() if public_local_development else _trusted_tenant_id()
     )
     issuer = _LOCAL_ISSUER
     audience = "presenton-public-api" if is_public_api else "presenton-api"

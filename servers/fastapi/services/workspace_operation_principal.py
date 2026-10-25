@@ -66,7 +66,7 @@ async def _sync_transaction_tenant(session: AsyncSession) -> None:
 
 def local_development_export_bridge(request) -> bool:
     """Only the middleware's selected local admin bypass may bridge old records."""
-    from api.v1.auth.principal import PrincipalEnvelope, is_loopback_development_request
+    from models.principal import PrincipalEnvelope, is_loopback_development_request
 
     principal = getattr(getattr(request, "state", None), "auth_principal", None)
     return (isinstance(principal, PrincipalEnvelope)
@@ -80,7 +80,7 @@ def local_development_export_bridge(request) -> bool:
 async def _export_admission_principal(session, *, sources, operation_kind,
                                       allow_local_development, legacy_ok,
                                       admission_states=("succeeded",)):
-    from api.v1.auth.principal import local_development_tenant_id
+    from models.principal import local_development_tenant_id
     from utils.env_settings.public_service import get_public_process_identity_settings
 
     owner = get_current_owner_id()
