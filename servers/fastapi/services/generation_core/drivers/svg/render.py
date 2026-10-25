@@ -537,7 +537,7 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
                     ctx.raster_analysis, ctx.raster_pin, index + 1, final)
             observations.move("wait")
             async with ctx.render_semaphore:
-                observations.move("work")
+                await observations.dispatched(checkpoint, job, index)
                 source_font_kwargs = {}
                 if ctx.source_reflow:
                     from services.document_canvas_generation import source_restyle_font_floor
