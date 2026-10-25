@@ -220,7 +220,7 @@ async def _design_revision(context, owner, request, outline, snapshot, rows, inp
         parent_revision=context.claim.expected_revision)
     inputs["header_design_public"] = {**deepcopy(admitted["design"]), **public_values}
     page_values_digest = canonical_json_digest(ctx.header_page_values)
-    from utils.llm_calls.svg_common_header_design import preflight_header_selector
+    from services.svg_common_header_design_calls import preflight_header_selector
     if preflight_header_selector() != admitted["selector_capability"]:
         raise ValueError("svg_common_header_selector_model_changed")
     document = await read_update_header_design(owner, session_maker=session_factory)
@@ -426,7 +426,7 @@ async def admit_svg_header_design_operation(session, *, operation, presentation,
         current_principal_context, plan_weighted_resources)
     from services.svg_common_header_design_plan import seal_new_header_design_plan, require_header_design_plan
     from services.svg_generation_admission import _common_header_preservation_conflict
-    from utils.llm_calls.svg_common_header_design import preflight_header_selector
+    from services.svg_common_header_design_calls import preflight_header_selector
 
     if not presentation.is_svg() or operation.expected_revision != presentation.revision:
         raise ValueError("svg_common_header_svg_required")

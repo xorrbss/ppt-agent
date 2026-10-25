@@ -13,7 +13,7 @@ from llmai.shared import (
 )
 
 from models.presentation_outline_model import PresentationOutlineModel
-from services.ppt_writing_policy import WRITING_POLICY_ID, writing_policy_prompt
+from utils.ppt_writing_prompt import WRITING_POLICY_ID, writing_policy_prompt
 from utils.get_dynamic_models import outline_model
 from utils.get_env_programme import (
     get_outline_density_floor_chars,

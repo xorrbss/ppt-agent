@@ -8,7 +8,7 @@ from copy import copy
 from llmai import get_client
 from llmai.shared import JSONSchemaResponse, SystemMessage, UserMessage
 
-from services.ppt_writing_policy import writing_policy_prompt
+from utils.ppt_writing_prompt import writing_policy_prompt
 from utils.llm_config import get_llm_config
 from utils.llm_provider import get_model
 from utils.structured_call_budget import StructuredProviderCallBudget

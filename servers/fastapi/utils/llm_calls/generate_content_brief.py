@@ -5,7 +5,7 @@ from llmai import get_client
 from llmai.shared import JSONSchemaResponse, Message, SystemMessage, UserMessage
 
 from models.content_brief_model import ContentBrief
-from services.ppt_writing_policy import WRITING_POLICY_ID, writing_policy_prompt
+from utils.ppt_writing_prompt import WRITING_POLICY_ID, writing_policy_prompt
 from utils.get_dynamic_models import get_content_brief_model
 from utils.llm_client_error_handler import handle_llm_client_exceptions
 from utils.llm_config import get_llm_config

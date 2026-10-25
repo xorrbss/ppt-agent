@@ -15,7 +15,7 @@ from services.svg_common_header_design_checkpoint import (
 )
 from services.svg_common_header_v2 import prepare_common_header_v2
 from utils.hashing import canonical_json_digest, sha256_hex
-from utils.llm_calls.svg_common_header_design import PROMPT_VERSION, build_header_call, preflight_header_selector
+from services.svg_common_header_design_calls import PROMPT_VERSION, build_header_call, preflight_header_selector
 
 VERSION = "svg-common-header-design-checkpoint/v2"
 

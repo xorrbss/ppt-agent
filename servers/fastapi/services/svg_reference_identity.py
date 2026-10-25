@@ -6,38 +6,20 @@ from collections import Counter
 import colorsys
 import io
 
+from utils.svg_color_identity import (
+    _rgb as _rgb,
+    _luminance as _luminance,
+    _contrast as _contrast,
+    contrast_foreground as contrast_foreground,
+    identity_border as identity_border,
+)
+
 
 def representative_page_indices(page_count: int) -> list[int]:
     """Bounded cover, early content, middle and ending samples, in source order."""
     if page_count <= 0:
         return []
     return sorted({0, min(1, page_count - 1), page_count // 2, page_count - 1})
-
-
-def _rgb(color: str) -> tuple[float, float, float]:
-    return tuple(int(color[index:index + 2], 16) / 255 for index in (1, 3, 5))
-
-
-def _luminance(color: str) -> float:
-    channels = [channel / 12.92 if channel <= .04045 else ((channel + .055) / 1.055) ** 2.4
-                for channel in _rgb(color)]
-    return sum(channel * weight for channel, weight in zip(channels, (.2126, .7152, .0722)))
-
-
-def _contrast(left: str, right: str) -> float:
-    values = sorted((_luminance(left), _luminance(right)))
-    return (values[1] + .05) / (values[0] + .05)
-
-
-def contrast_foreground(background: str, preferred: str) -> str:
-    if _contrast(background, preferred) >= 4.5:
-        return preferred
-    return max(("#FFFFFF", "#111827"), key=lambda color: _contrast(background, color))
-
-
-def identity_border(background: str, foreground: str) -> str:
-    return "#" + "".join(f"{round((back * .75 + front * .25) * 255):02X}"
-                          for back, front in zip(_rgb(background), _rgb(foreground)))
 
 
 def visual_palette(examples: list[dict]) -> tuple[list[str], str | None]:

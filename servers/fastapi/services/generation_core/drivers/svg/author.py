@@ -380,7 +380,11 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
                             "streamStage": "before_stream", "failureKind": "dispatch_stopped"})) from error
                 raise
 
-        observer_scope = observe_codex_provider_events(observe_event)
+        from services.generation_core.drivers.svg.partial_quality_recovery import is_current_provider_control_error
+
+        observer_scope = observe_codex_provider_events(
+            observe_event, is_control_error=is_current_provider_control_error,
+        )
 
     with provider_usage_scope(job_id=job.id if job else None,
                               operation="authored_generation",
