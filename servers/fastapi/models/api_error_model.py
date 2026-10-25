@@ -76,11 +76,18 @@ class APIErrorModel(BaseModel):
             status_code = 500
             detail = str(e)
 
-        # Generation boundaries attach a classified code explicitly. Ordinary
-        # HTTP detail objects retain the historical lowercase-only inference.
-        exception_code = getattr(e, "code", None)
+        # HTTP boundaries attach classified codes explicitly. Application-owned
+        # exception types also declare codes; driver/SDK attributes are private.
+        application_error = any(
+            base.__module__.split(".")[0] in {"api", "models", "services", "utils"}
+            for base in type(e).__mro__
+        )
+        exception_code = getattr(e, "code", None) if isinstance(e, HTTPException) or application_error else None
         if code is None and isinstance(exception_code, str) and _STRUCTURED_ERROR_CODE.fullmatch(exception_code):
             code = exception_code
+        if code is None and not isinstance(e, HTTPException):
+            # Do not let the model validator infer a code from raw exception text.
+            code = f"http_error_{status_code}"
 
         return APIErrorModel(
             status_code=status_code,
