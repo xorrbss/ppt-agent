@@ -501,7 +501,8 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
                 review_retry_limit=review_attempt_limit - 1, review_attempt=attempt,
                 phase=phase, physical_offset=physical_offset)
 
-        marker = dict(status="review_inflight", input_digest=input_digest,
+        marker = dict(status="review_not_dispatched" if review_attempt_limit > 1 else "review_inflight",
+            input_digest=input_digest,
             group_id=f"phase-{phase}/group-{ordinal}", indices=indices, review_scope=group_context["reviewScope"],
             physical_ordinal=physical_ordinal(0))
         if review_namespace:
@@ -518,6 +519,9 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
         async def dispatch():
             nonlocal dispatch_entered, dispatch_observation
             from services.provider_usage_instrumentation import observe_provider_dispatch
+            if review_attempt_limit > 1:
+                marker["status"] = "review_inflight"
+                await checkpoint(ordinal, marker)
             dispatch_entered = True
             dispatch_context = group_context
             prior = saved
@@ -564,9 +568,10 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
             dispatch_observation = None
             try:
                 if review_attempt_limit > 1:
-                    await checkpoint(ordinal, marker)
+                    marker["status"] = "review_not_dispatched"
+                    await checkpoint(ordinal, {**marker, "failureDiagnostics": {}})
                 # Every local group is durably scheduled before any dispatch;
-                # checkpoint I/O and this barrier hold no provider permit.
+                # scheduling checkpoint I/O and this barrier hold no permit.
                 local_reserved(ordinal)
                 if ordinal < len(groups):
                     await reservations_ready.wait()
