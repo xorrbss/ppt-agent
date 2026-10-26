@@ -29,8 +29,8 @@ def _seal_snapshot(snapshot):
 
 def _harness(monkeypatch, count):
     harness = _ReviewHarness(monkeypatch, count, version=2)
-    request = SimpleNamespace()
-    harness.snapshot["quality_recovery_plan"] = profiles.seal_new_quality_recovery_plan(request, count)
+    # These replay tests pin the admitted v3 retry contract.
+    harness.snapshot["quality_recovery_plan"] = profiles._read_only_review_plan(count)
     _seal_snapshot(harness.snapshot)
     harness.plan = READ_EXECUTION_PLAN(harness.snapshot)
     monkeypatch.setattr(profiles, "read_quality_recovery_execution_plan", READ_EXECUTION_PLAN)
@@ -71,7 +71,8 @@ def test_admission_seals_one_read_retry_for_each_group_and_final_pass(count):
     _seal_snapshot(snapshot)
     execution = READ_EXECUTION_PLAN(snapshot)
     groups = (count + 4) // 5 + (count > 5)
-    assert plan["schema"] == "svg-quality-recovery-plan/v3"
+    assert plan["schema"] == "svg-quality-recovery-plan/v4"
+    assert plan["review_contract_version"] == profiles.REVIEW_CONTRACT_VERSION
     assert plan["review_retry_limit"] == 1
     assert plan["review_call_limit"] == groups * 2 * (1 if count == 1 else 2)
     assert execution["phase_group_limit"] == groups * 2

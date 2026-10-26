@@ -21,6 +21,7 @@ from services.generation_core.quality.advisory_record import advisory_record, co
 from services.generation_core.quality.vision_advisory_prompt import (
     DESIGN_AXES, DESIGN_LOCAL_AXES, DESIGN_REVIEW_PROMPT_VERSION, DESIGN_PRINCIPLES_VERSION,
     baseline_review_active, baseline_design_principles_digest,
+    axis_review_active, review_prompt_version,
 )
 from services.generation_core.quality.page_outcome import (
     PageOutcome, classify_page_outcomes, deck_quality_summary,
@@ -262,6 +263,10 @@ def _design_context(ctx, pages, *, job, read_png, review_principles_version=None
         # Admitted user constraints, once per deck; never authored declarations.
         context["sourceDirectives"] = request["instructions"]
     if baseline_review_active(context):
+        from services.svg_authoring_profile import read_quality_recovery_plan
+        plan = read_quality_recovery_plan(snapshot) if "quality_recovery_plan" in snapshot else None
+        if plan and plan.get("review_contract_version"):
+            context["reviewContractVersion"] = plan["review_contract_version"]
         if review_principles_version is not None:
             baseline_design_principles_digest({"reviewPrinciplesVersion": review_principles_version})
             context["reviewPrinciplesVersion"] = review_principles_version
@@ -375,8 +380,8 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
                                        final_selected=False, source_evidence=None):
     """Bound physical review calls to the pre-admitted plan, keeping legacy calls intact.
 
-    A group call that failed leaves the review incomplete, so the sealed gate
-    holds every page unreviewed; it never fails the deck (``request_group``).
+    A failed group remains unavailable. The versioned sealer determines which
+    independent axes remain verified; request failures never fail the deck.
     """
     from services.svg_authoring_profile import read_quality_recovery_execution_plan, review_physical_ordinal
     from services.provider_usage_instrumentation import provider_usage_scope
@@ -474,6 +479,11 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
 
     async def request_group(ordinal, indices, group_context, group_renders):
         """Dispatch a sealed read budget; retain each superseded physical attempt."""
+        def retryable(vision):
+            if (axis_review_active(group_context) and group_context["reviewScope"] == "global"
+                    and vision.get("skipped") == "design_review_schema_or_coverage_invalid"):
+                return False
+            return _retryable_review_result(vision)
         input_digest = _group_review_input_digest(group_context, group_renders, phase, ordinal, indices)
         saved = await checkpoint(ordinal)
         if saved:
@@ -493,7 +503,7 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
                     or sealed.get("digest") != content_digest(
                         {key: value for key, value in sealed.items() if key != "digest"})):
                     raise ValueError("svg_quality_recovery_review_group_evidence_invalid")
-                if review_attempt_limit == 1 or not _retryable_review_result(sealed["vision"]):
+                if review_attempt_limit == 1 or not retryable(sealed["vision"]):
                     local_reserved(ordinal)
                     return sealed
         def physical_ordinal(attempt):
@@ -611,7 +621,7 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
             sealed["digest"] = content_digest(sealed)
             saved = {**marker, "status": "completed", "advisory": sealed}
             await checkpoint(ordinal, saved)
-            if review_attempt_limit == 1 or not _retryable_review_result(vision):
+            if review_attempt_limit == 1 or not retryable(vision):
                 return sealed
 
     async def local_group(ordinal, indices):
@@ -636,11 +646,12 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
     unreviewed_groups = []
 
     def incomplete_review(reason):
-        # The deck-flow axis is part of every page's verdict, so a review
-        # missing any group or the global pass seals every page unreviewed.
-        vision = dict(promptVersion=DESIGN_REVIEW_PROMPT_VERSION, slideCount=len(pages),
+        # The sealer alone decides which verified axes survive an incomplete review.
+        vision = dict(promptVersion=review_prompt_version(context), slideCount=len(pages),
             reviewedPageIndices=list(range(len(pages))), reviewedPngDigests=png_digests, slides=[],
-            designReview=dict(pages=list(local_pages.values()), candidateComparisons=[],
+            designReview=dict(pages=list(local_pages.values()),
+                              candidateComparisons=(list(local_comparisons.values())
+                                                    if axis_review_active(context) else []),
                               deckFlow={"evaluated": False}),
             skipped="review_call_unavailable" if unreviewed_groups else reason, reviewGroups=records)
         if unreviewed_groups:
@@ -667,6 +678,8 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
         if unreviewed_groups:
             return incomplete_review("review_call_unavailable")
         vision = results[0]["vision"]
+        if axis_review_active(context):
+            vision = {**vision, "promptVersion": review_prompt_version(context)}
     else:
         if (len(local_pages) != len(pages) or any(page.get("evaluated") is not True
                 or set(page.get("axes", {})) != set(DESIGN_AXES[:-1]) for page in local_pages.values())):
@@ -695,17 +708,26 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
         combined = []
         for index in range(len(pages)):
             local, global_page = local_pages.get(index), global_pages.get(index)
-            if not local or not global_page:
+            if not local or not global_page and not axis_review_active(context):
+                continue
+            if not global_page:
+                combined.append(deepcopy(local))
                 continue
             combined.append(dict(index=index, evaluated=local["evaluated"] and global_page["evaluated"],
                 axes={**local["axes"], **global_page["axes"]}, issues=local.get("issues", []),
                 localEvidenceReused=local.get("localEvidenceReused", False)))
+            if axis_review_active(context):
+                combined[-1]["localEvaluated"] = local["evaluated"]
             if baseline_review_active(context):
                 combined[-1]["designTargets"] = local.get("designTargets", []) + global_page.get("designTargets", [])
         global_comparisons = {item["index"]: item for item in global_review.get("candidateComparisons", [])}
         comparisons = []
         for index in sorted(changed):
             local, global_comparison = local_comparisons.get(index), global_comparisons.get(index)
+            if (local and axis_review_active(context)
+                    and (not global_comparison or global_comparison.get("evaluated") is not True)):
+                comparisons.append(deepcopy(local))
+                continue
             if local and global_comparison:
                 comparisons.append(dict(index=index, evaluated=local["evaluated"] and global_comparison["evaluated"],
                     priorAxes={**local["priorAxes"], **global_comparison["priorAxes"]},
@@ -716,7 +738,7 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
                     comparisons[-1].update(axisChanges={**local.get("axisChanges", {}),
                         **global_comparison.get("axisChanges", {})},
                         blindedPresentation=local.get("blindedPresentation"))
-        vision = dict(promptVersion=DESIGN_REVIEW_PROMPT_VERSION, slideCount=len(pages),
+        vision = dict(promptVersion=review_prompt_version(context), slideCount=len(pages),
             reviewedPageIndices=list(range(len(pages))), reviewedPngDigests=png_digests,
             model=";".join(sorted({str(record["vision"].get("model") or "") for record in records})),
             slides=[dict(index=page["index"], issues=page["issues"]) for page in combined if page["issues"]],
@@ -870,6 +892,7 @@ def _blocking_design_targets(page):
 
 
 def _seal_design_gate(context, pages, renders, vision):
+    independent_axes = axis_review_active(context)
     if baseline_review_active(context):
         baseline_design_principles_digest(context)
     page_digests = [sha256_hex((payload.get("svg_content") or "").encode()) for payload, _ in pages]
@@ -886,6 +909,9 @@ def _seal_design_gate(context, pages, renders, vision):
             **({"sourceDirectives": context["sourceDirectives"]} if "sourceDirectives" in context else {}))))
     if "reviewPrinciplesVersion" in context:
         base["reviewPrinciplesVersion"] = context["reviewPrinciplesVersion"]
+    if independent_axes:
+        base.update(schemaVersion="svg-quality-first-design-gate/v2",
+                    reviewContractVersion=context["reviewContractVersion"])
     review = vision.get("designReview") or {}
     reviewed = review.get("pages") or []
     review_by_index = {page.get("index"): page for page in reviewed if isinstance(page, Mapping)
@@ -896,7 +922,14 @@ def _seal_design_gate(context, pages, renders, vision):
                 and vision.get("reviewedPageIndices") == list(range(len(pages)))
                 and vision.get("reviewedPngDigests") == png_digests
                 and context["deckComplete"] and (review.get("deckFlow") or {}).get("evaluated") is True)
+    if independent_axes:
+        coverage = (len(reviewed) == len(review_by_index)
+                    and set(review_by_index) <= set(range(len(pages)))
+                    and vision.get("promptVersion") == review_prompt_version(context)
+                    and vision.get("reviewedPageIndices") == list(range(len(pages)))
+                    and vision.get("reviewedPngDigests") == png_digests and context["deckComplete"])
     results, blocking, incomplete, advisories = [], [], [], []
+    flow_unreviewed = []
     canvas = context["style"].get("canvas") or {}
     if pages:
         import json
@@ -924,6 +957,20 @@ def _seal_design_gate(context, pages, renders, vision):
                              and isinstance(axis.get("visibleEvidence"), str) and axis["visibleEvidence"].strip()
                              for axis in axes.values())
                      and resolution is not None and resolution["sufficient"])
+        if independent_axes:
+            def verified_axis(name, axes=axes):
+                axis = axes.get(name)
+                return (isinstance(axis, Mapping) and axis.get("verdict") in {"passed", "advisory", "failed"}
+                        and isinstance(axis.get("visibleEvidence"), str) and bool(axis["visibleEvidence"].strip()))
+            evaluated = (coverage and page.get("localEvaluated", page.get("evaluated")) is True
+                         and all(verified_axis(name) for name in DESIGN_LOCAL_AXES)
+                         and resolution is not None and resolution["sufficient"])
+            flow_evaluated = (coverage and verified_axis("repetition_deck_flow")
+                              and resolution is not None and resolution["sufficient"])
+            if not flow_evaluated:
+                flow_unreviewed.append(index)
+                axes = {**axes, "repetition_deck_flow": dict(verdict="unreviewed", severity="none",
+                    visibleEvidence="Deck flow review unavailable.", repairScope="none")}
         failed_axes = [name for name, axis in axes.items() if isinstance(axis, Mapping)
                        and (axis.get("verdict") == "failed" or axis.get("severity") in {"major", "critical"})]
         minor = [name for name, axis in axes.items() if isinstance(axis, Mapping) and axis.get("verdict") == "advisory"]
@@ -947,6 +994,9 @@ def _seal_design_gate(context, pages, renders, vision):
             localEvidenceDigest=_local_review_digest(context, payload, png, index),
             deckContextDigest=base["deckContextDigest"],
             comparisonContextDigest=SHA256_PREFIX + comparison_hash.hexdigest()))
+        if independent_axes:
+            results[-1]["unreviewedAxes"] = ([*DESIGN_LOCAL_AXES] if not evaluated else []) + (
+                ["repetition_deck_flow"] if not flow_evaluated else [])
         if baseline_review_active(context):
             results[-1]["designTargets"] = deepcopy(page.get("designTargets", []))
             results[-1]["designImprovementStatus"] = ("unjudged" if not evaluated else
@@ -967,6 +1017,8 @@ def _seal_design_gate(context, pages, renders, vision):
             targetAxes=prior["targetAxes"], priorInputDigest=prior["inputDigest"],
             priorMandatoryEvidenceValid=prior["mandatoryEvidenceValid"], deckContextDigest=base["deckContextDigest"],
             comparisonCohortDigest=comparison_cohort, comparisonMode="joint-targets-current-source-context/v1")
+        if independent_axes:
+            body["reviewedAxes"] = [name for name in DESIGN_AXES if name in comparison["priorAxes"]]
         if baseline_review_active(context):
             body.update(axisChanges=deepcopy(comparison.get("axisChanges", {})),
                         blindedPresentation=deepcopy(comparison.get("blindedPresentation")),
@@ -977,6 +1029,11 @@ def _seal_design_gate(context, pages, renders, vision):
         unreviewedPages=incomplete, advisoryPages=advisories, deckFlow=review.get("deckFlow"),
         reason=vision.get("skipped"), candidateComparisons=comparisons,
         reviewGroups=vision.get("reviewGroups", []))
+    if independent_axes:
+        base["flowUnreviewedPages"] = flow_unreviewed
+        base["pageCoverageComplete"] = coverage and not incomplete and not flow_unreviewed
+        if flow_unreviewed and not blocking:
+            base["status"] = "unreviewed"
     if baseline_review_active(context):
         base["designImprovementStatus"] = ("unjudged" if incomplete else
             "needed" if any(_blocking_design_targets(page) for page in results) else "satisfied")
@@ -993,7 +1050,8 @@ def _gate_intact(advisory):
     gate = (advisory.get("vision") or {}).get("designGate")
     if (not isinstance(gate, Mapping) or not isinstance(gate.get("pageDigests"), list)
             or not record_matches(advisory, gate["pageDigests"])
-            or gate.get("schemaVersion") != "svg-quality-first-design-gate/v1"
+            or gate.get("schemaVersion") != (
+                "svg-quality-first-design-gate/v2" if axis_review_active(gate) else "svg-quality-first-design-gate/v1")
             or len(gate.get("pngDigests", [])) != len(gate["pageDigests"])):
         return None
     body = {key: value for key, value in gate.items() if key != "digest"}
@@ -1165,6 +1223,12 @@ def compare_quality_recovery_candidates(ctx, prior, new, prior_advisory, new_adv
             or paired.get("priorInputDigest") != prior.get("input_digest")):
         return reject("comparison_binding_invalid")
     baseline_axes = paired["priorAxes"]
+    compared_axes = DESIGN_AXES
+    if axis_review_active(new_gate):
+        compared_axes = tuple(paired.get("reviewedAxes", []))
+        if (not set(DESIGN_LOCAL_AXES) <= set(compared_axes) <= set(DESIGN_AXES)
+                or not set(target_axes) <= set(compared_axes)):
+            return reject("comparison_review_incomplete")
     ranks = {"passed": 0, "advisory": 1, "failed": 2, "unreviewed": 3}
     if baseline_policy:
         presentation = paired.get("blindedPresentation") or {}
@@ -1174,7 +1238,7 @@ def compare_quality_recovery_candidates(ctx, prior, new, prior_advisory, new_adv
                 or presentation["candidateLabel"] == presentation["priorLabel"]
                 or presentation.get("displayOrder") != ["A", "B"]
                 or presentation.get("chronologyExposed") is not False or presentation.get("versionExposed") is not False
-                or set(changes) != set(DESIGN_AXES) or paired.get("targetGoals", []) != goals):
+                or set(changes) != set(compared_axes) or paired.get("targetGoals", []) != goals):
             return reject("blinded_comparison_evidence_invalid")
         if any(change.get("change") == "unjudged" for change in changes.values()):
             return reject("comparison_improvement_unjudged")
@@ -1183,14 +1247,14 @@ def compare_quality_recovery_candidates(ctx, prior, new, prior_advisory, new_adv
         if any(new_page["axes"][name]["verdict"] in {"failed", "unreviewed"} for name in target_axes):
             return reject("target_defect_not_resolved")
         if any(changes[name].get("change") == "worsened"
-               and new_page["axes"][name]["severity"] in {"major", "critical"} for name in DESIGN_AXES):
+               and new_page["axes"][name]["severity"] in {"major", "critical"} for name in compared_axes):
             return reject("candidate_major_regression")
     if any(new_page["axes"][name]["verdict"] in {"failed", "unreviewed"}
            or ranks[new_page["axes"][name]["verdict"]] >= ranks[baseline_axes[name]["verdict"]]
            for name in target_axes if not baseline_policy or name in (old_page.get("failedAxes") or [])):
         return reject("target_defect_not_resolved")
     if any(ranks[new_page["axes"][name]["verdict"]] > ranks[baseline_axes[name]["verdict"]]
-           and new_page["axes"][name]["severity"] in {"major", "critical"} for name in DESIGN_AXES):
+           and new_page["axes"][name]["severity"] in {"major", "critical"} for name in compared_axes):
         return reject("candidate_major_regression")
     return dict(selected="candidate", reason="target_improved_without_major_regression", targetAxes=target_axes)
 
@@ -1240,12 +1304,15 @@ def _design_flag(index, payload, page, *, blocking):
     if page is None:
         return flagged_entry(index=index, reason=DESIGN_UNREVIEWED_REASON, attempted=False, outcome="not_attempted")
     needed = page.get("designImprovementStatus") == "needed"
-    if not blocking and not needed:
+    flow_unreviewed = "repetition_deck_flow" in page.get("unreviewedAxes", [])
+    if not blocking and not needed and not flow_unreviewed:
         return None
     axes = {axis for axis in page.get("failedAxes") or [] if isinstance(axis, str)} if blocking else set()
     if needed:
         axes |= {target["axis"] for target in _blocking_design_targets(page)
                  if isinstance(target, Mapping) and isinstance(target.get("axis"), str)}
+    if flow_unreviewed:
+        axes.add("deck_flow_unreviewed")
     tokens = sorted(axes) or sorted({issue for issue in page.get("issues") or []
                                      if issue in _CRITICAL_DESIGN_ISSUES})
     if not tokens:
@@ -1262,16 +1329,17 @@ def gate_design_verdicts(gate, payloads):
     The one rule from a sealed gate to page flags (publication and a saved
     review both apply it): per page a ``review_flag`` entry (``_design_flag``)
     or None for a page the gate passed. None when the gate attributes no page
-    verdict at all, because every page is unreviewed: a review group or the
+    verdict at all for a legacy gate, because every page is unreviewed: a review group or the
     global pass that did not complete leaves the deck-flow axis of every page
     unjudged (``_quality_first_deck_advisory``), so the deck is reported once as
     ``gate_design_review`` and no page carries ``design:unreviewed``.
+    Versioned axis gates retain separate page-unreviewed and flow-unreviewed flags.
     """
     by_index = {page["index"]: page for page in gate.get("pages") or []
                 if isinstance(page, Mapping) and type(page.get("index")) is int}
     blocking = {index for index in gate.get("blockingPages") or [] if type(index) is int}
     unreviewed = {index for index in gate.get("unreviewedPages") or [] if type(index) is int}
-    if payloads and unreviewed >= set(range(len(payloads))):
+    if payloads and unreviewed >= set(range(len(payloads))) and not axis_review_active(gate):
         return None
     return [_design_flag(index, payload, None if index in unreviewed else by_index.get(index),
                          blocking=index in blocking)
@@ -1284,6 +1352,8 @@ def gate_design_review(gate, verdicts):
         return {"status": "unavailable", "reason": str(gate.get("reason") or "review_incomplete"),
                 "gateDigest": gate["digest"]}
     return {"status": "reviewed", "gateStatus": gate.get("status"), "gateDigest": gate["digest"],
+            **({"flowUnreviewedPages": gate["flowUnreviewedPages"],
+                "unreviewedPages": gate["unreviewedPages"]} if axis_review_active(gate) else {}),
             "flaggedPages": [index for index, entry in enumerate(verdicts) if entry is not None]}
 
 

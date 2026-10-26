@@ -32,7 +32,7 @@ import DashboardNavigationButton from "./header/DashboardNavigationButton";
 import PresentationTitleEditor from "./header/PresentationTitleEditor";
 import RegenerateConfirmDialog from "./header/RegenerateConfirmDialog";
 import ExportReviewConfirmDialog from "./header/ExportReviewConfirmDialog";
-import { flaggedSlidePositions } from "../utils/flaggedSlides";
+import { flaggedSlidePositions, hasUnreviewedDeckFlow } from "../utils/flaggedSlides";
 import type { PresentationHeaderFeatureSlots } from "./presentationHeaderTypes";
 export type { PresentationHeaderFeatureSlots } from "./presentationHeaderTypes";
 import type { PptxExportMode } from "./header/types";
@@ -510,6 +510,7 @@ const PresentationHeader = ({
       <ExportReviewConfirmDialog
         open={pendingExport !== null}
         count={reviewRequiredCount}
+        flowUnreviewed={hasUnreviewedDeckFlow(presentationData?.theme)}
         onCancel={() => setPendingExport(null)}
         onConfirm={() => {
           const run = pendingExport;

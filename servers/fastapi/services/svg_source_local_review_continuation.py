@@ -218,11 +218,12 @@ async def prepare_source_local_leaf(session, *, source_operation=None, verificat
 
 
 def _review_physical_ordinal(marker, ordinal, snapshot):
-    from services.svg_authoring_profile import read_quality_recovery_execution_plan, review_physical_ordinal
-    plan = (snapshot or {}).get("quality_recovery_plan") or {}
-    if plan.get("schema") != "svg-quality-recovery-plan/v3":
-        return ordinal
+    from services.svg_authoring_profile import (
+        has_versioned_review_retries, read_quality_recovery_execution_plan, review_physical_ordinal,
+    )
     try:
+        if not has_versioned_review_retries(snapshot or {}):
+            return ordinal
         execution = read_quality_recovery_execution_plan(snapshot)
         return review_physical_ordinal(ordinal, phase_group_limit=execution["phase_group_limit"],
             review_retry_limit=execution["review_retry_limit"], review_attempt=marker.get("review_attempt"))

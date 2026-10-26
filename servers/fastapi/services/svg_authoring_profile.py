@@ -24,6 +24,7 @@ ART_DIRECTION_PROFILE_V8: SvgAuthoringProfile = {"id": "art-direction-v1", "vers
 
 QUALITY_RECOVERY_POLICY = {"id": "svg-quality-first", "version": 1}
 QUALITY_RECOVERY_POLICY_V2 = {"id": "svg-quality-first", "version": 2}
+REVIEW_CONTRACT_VERSION = "svg-axis-review/v2"
 
 
 def _read_only_review_plan(slide_count: int) -> dict:
@@ -53,6 +54,11 @@ def review_physical_ordinal(ordinal: int, *, phase_group_limit: int, review_retr
             or type(review_attempt) is not int or not 0 <= review_attempt < attempts):
         raise ValueError("svg_quality_recovery_review_limit")
     return physical_offset + phase * phase_group_limit + ordinal * attempts + review_attempt
+
+
+def _axis_review_plan(slide_count: int) -> dict:
+    return {**_read_only_review_plan(slide_count), "schema": "svg-quality-recovery-plan/v4",
+            "review_contract_version": REVIEW_CONTRACT_VERSION}
 
 
 def validate_quality_recovery_policy(value: object) -> dict | None:
@@ -109,7 +115,7 @@ def seal_new_quality_recovery_plan(request: object, slide_count: int) -> dict | 
     single_page = slide_count == 1
     policy = request_quality_recovery_policy(request) or dict(QUALITY_RECOVERY_POLICY_V2)
     if policy["version"] == 2:
-        plan = _read_only_review_plan(slide_count)
+        plan = _axis_review_plan(slide_count)
         request._svg_quality_recovery_plan = plan
         request._svg_quality_recovery_policy = policy
         return plan
@@ -132,6 +138,13 @@ def read_quality_recovery_plan(snapshot: Mapping) -> dict | None:
     if policy is None:
         return None
     plan = snapshot.get("quality_recovery_plan")
+    if isinstance(plan, Mapping) and plan.get("schema") == "svg-quality-recovery-plan/v4":
+        count = plan.get("slide_count")
+        if (policy["version"] != 2 or type(count) is not int or count < 1
+                or canonical_json_digest(plan, allow_nan=True)
+                != canonical_json_digest(_axis_review_plan(count), allow_nan=True)):
+            raise ValueError("svg_quality_recovery_plan_invalid")
+        return dict(plan)
     if isinstance(plan, Mapping) and plan.get("schema") == "svg-quality-recovery-plan/v3":
         count = plan.get("slide_count")
         if (policy["version"] != 2 or type(count) is not int or count < 1
@@ -174,6 +187,13 @@ def read_quality_recovery_plan(snapshot: Mapping) -> dict | None:
         except ValueError as error:
             raise ValueError("svg_quality_recovery_plan_invalid") from error
     return dict(plan)
+
+
+def has_versioned_review_retries(snapshot: Mapping) -> bool:
+    plan = snapshot.get("quality_recovery_plan") or {}
+    if plan.get("schema") not in {"svg-quality-recovery-plan/v3", "svg-quality-recovery-plan/v4"}:
+        return False
+    return read_quality_recovery_plan(snapshot).get("review_retry_limit") is not None
 
 
 def global_format_retry_control(snapshot: Mapping) -> dict | None:

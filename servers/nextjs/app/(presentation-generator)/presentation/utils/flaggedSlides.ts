@@ -75,6 +75,12 @@ export interface FlaggedSlideBadge {
 
 export type FlaggedSlideMap = Record<string, FlaggedSlideBadge>;
 
+export function hasUnreviewedDeckFlow(theme: unknown): boolean {
+  if (!isRecord(theme) || !isRecord(theme.svg) || !isRecord(theme.svg.designReview)) return false;
+  const pages = theme.svg.designReview.flowUnreviewedPages;
+  return Array.isArray(pages) && pages.some((page) => Number.isInteger(page) && page >= 0);
+}
+
 const AUTHOR_REASON_PREFIX = "author:";
 const GATE_REASON_PREFIX = "composition_safety:";
 const DESIGN_REASON_PREFIX = "design:";
@@ -94,6 +100,7 @@ const DESIGN_AXIS_LABEL_KEYS: Record<string, FlaggedSlideDesignAxisKey> = {
   brand_expression: "designAxis.brandExpression",
   density_balance: "designAxis.densityBalance",
   repetition_deck_flow: "designAxis.repetitionDeckFlow",
+  deck_flow_unreviewed: "designAxis.deckFlowUnreviewed",
   // Blocking verdicts without a failed axis (publication ``design:`` reasons).
   illegible: "designAxis.illegible",
   broken_figure: "designAxis.brokenFigure",
@@ -290,6 +297,7 @@ type FlaggedSlideDesignAxisKey =
   | "designAxis.brandExpression"
   | "designAxis.densityBalance"
   | "designAxis.repetitionDeckFlow"
+  | "designAxis.deckFlowUnreviewed"
   | "designAxis.illegible"
   | "designAxis.brokenFigure"
   | "designAxis.mandatoryEvidence"

@@ -45,7 +45,6 @@ from services.authored_vision_advisory_prompt import (
     DESIGN_AXES,
     DESIGN_LOCAL_AXES,
     DESIGN_GLOBAL_FINDING_LIMIT,
-    DESIGN_REVIEW_PROMPT_VERSION,
     design_review_json_schema,
     design_global_json_schema,
     design_edited_json_schema,
@@ -53,6 +52,9 @@ from services.authored_vision_advisory_prompt import (
     build_advisory_messages,
 )
 from services.authored_vision_contact_sheet import compose_contact_sheet, compose_global_page_panels_sync
+from services.generation_core.quality.vision_advisory_prompt import (
+    axis_review_active, review_prompt_version, server_review_partition,
+)
 from services.provider_runtime_primitives import BudgetExceededError
 from utils.provider_idempotency import ProviderOutcomeError
 
@@ -60,6 +62,7 @@ LOGGER = logging.getLogger(__name__)
 
 _MAX_ISSUES_PER_SLIDE = 4
 _DESIGN_SCHEMA_REJECTION_REASONS = frozenset({
+    "server_partition_mismatch",
     "page_fields", "index_coverage", "axis_keys", "axis_semantics",
     "evidence_bounds", "issue_axis_consistency", "prior_coverage",
     "global_finding_fields",
@@ -122,12 +125,14 @@ def _design_input_limits(client=None):
         if capabilities is None:
             continue
         for flag in ("supports_images", "supports_vision"):
-            supported = capabilities.get(flag) if isinstance(capabilities, Mapping) else getattr(capabilities, flag, None)
+            supported = capabilities.get(flag) if isinstance(capabilities, Mapping) else getattr(capabilities,
+                flag, None)
             if supported is False:
                 raise DesignReviewInputCapacityError("review_vision_capability_unavailable")
         for key, aliases in names.items():
             for alias in aliases:
-                value = capabilities.get(alias) if isinstance(capabilities, Mapping) else getattr(capabilities, alias, None)
+                value = capabilities.get(alias) if isinstance(capabilities, Mapping) else getattr(capabilities,
+                    alias, None)
                 if type(value) is int and value > 0:
                     limits[key] = min(limits[key], value)
                     explicit = True
@@ -176,7 +181,8 @@ def _prepare_global_input(sheet, renders, context, *, client=None):
                         or not isinstance(images, list) or not isinstance(metadata, list)
                         or not images or len(images) != len(metadata)
                         or any(type(index) is not int for panel in metadata for index in panel["pageIndices"])
-                        or [index for panel in metadata for index in panel["pageIndices"]] != list(range(len(renders)))):
+                        or [index for panel in metadata for index in panel["pageIndices"]] !=
+                            list(range(len(renders)))):
                     raise ValueError("global_page_panel_unavailable")
                 for data, panel in zip(images, metadata, strict=True):
                     if (not isinstance(data, bytes) or not panel["pageIndices"]
@@ -217,7 +223,8 @@ def _prepare_global_input(sheet, renders, context, *, client=None):
         pngs=renders, design_context=working), schema, client=client)
     for index in candidates:
         trial = {**context, "representativeIndices": selected + [index],
-                 "omittedSupplementalRepresentativeIndices": [item for item in candidates if item not in selected + [index]]}
+                 "omittedSupplementalRepresentativeIndices": [item for item in candidates if item not in selected
+                     + [index]]}
         try:
             _check_design_input(build_advisory_messages(sheet, slide_count=len(renders), required=True,
                 pngs=renders, design_context=trial), schema, client=client)
@@ -505,6 +512,14 @@ def _parse_baseline_review(payload, *, slide_count, context, rejection_reasons=N
         return _reject_design_review(rejection_reasons, "comparison_change_fields")
     normalized = deepcopy(dict(payload))
     global_review = context.get("reviewScope") == "global"
+    if global_review and axis_review_active(context):
+        keys = {"variantReview", "designTargets"}
+        if context.get("priorCandidates"):
+            keys |= {"alternativeReview", "pairComparisons"}
+        metadata = {"_serverInputEnvelope", "_serverRepresentativeIndices", "_serverOmittedRepresentativeIndices",
+                    "_serverGlobalVisualEvidence"}
+        if set(payload) - metadata != keys:
+            return _reject_design_review(rejection_reasons, "server_partition_mismatch")
     names = (DESIGN_AXES[-1:] if global_review else
              DESIGN_LOCAL_AXES if context.get("reviewScope") == "local" else DESIGN_AXES)
     if global_review:
@@ -632,7 +647,8 @@ def _parse_design_review(payload, *, slide_count, context, rejection_reasons=Non
             return _reject_design_review(rejection_reasons, "page_fields")
         indices = sorted(index - 1 for index in group["pages"])
         if group["intentional"] and (not group["sourceEvidence"].strip()
-                or any(index >= len(observations) or not observations[index].get("comparisonBasis") for index in indices)):
+                or any(index >= len(observations) or not observations[index].get("comparisonBasis") for index in
+                    indices)):
             return _reject_design_review(rejection_reasons, "issue_axis_consistency")
         groups.append(dict(pages=indices, intentional=group["intentional"],
                            sourceEvidence=group["sourceEvidence"], visibleEvidence=group["visibleEvidence"]))
@@ -661,7 +677,8 @@ def _parse_design_review(payload, *, slide_count, context, rejection_reasons=Non
                 return _reject_design_review(rejection_reasons, "evidence_bounds")
             axes = _parse_design_axes(comparison.get("priorAxes"), axis_names,
                                       rejection_reasons=rejection_reasons)
-            if axes is None or comparison["evaluated"] and any(axis["verdict"] == "unreviewed" for axis in axes.values()):
+            if axes is None or comparison["evaluated"] and any(axis["verdict"] == "unreviewed" for axis in
+                axes.values()):
                 return _reject_design_review(rejection_reasons, "axis_semantics")
             seen.add(comparison["index"])
             comparisons.append(dict(index=comparison["index"] - 1, evaluated=comparison["evaluated"],
@@ -778,6 +795,9 @@ def _global_partition_diagnostics(review, *, expected):
 
 
 def _parse_global_review(payload, *, slide_count, context, rejection_reasons=None, rejection_fields=None):
+    if axis_review_active(context):
+        return _parse_server_global_review(payload, slide_count=slide_count, context=context,
+                                           rejection_reasons=rejection_reasons)
     if (not isinstance(payload, Mapping) or not isinstance(payload.get("findings"), list)
             or len(payload["findings"]) > DESIGN_GLOBAL_FINDING_LIMIT):
         _reject_design_review(rejection_reasons, "global_finding_fields")
@@ -790,7 +810,8 @@ def _parse_global_review(payload, *, slide_count, context, rejection_reasons=Non
                 or not isinstance(finding.get("sourceEvidence"), str) or len(finding["sourceEvidence"]) > 160):
             _reject_design_review(rejection_reasons, "global_finding_fields")
             return None
-        axes = _parse_design_axes({"repetition_deck_flow": finding.get("axis")}, ("repetition_deck_flow",), rejection_reasons=rejection_reasons)
+        axes = _parse_design_axes({"repetition_deck_flow": finding.get("axis")}, ("repetition_deck_flow",),
+            rejection_reasons=rejection_reasons)
         if axes is None:
             if (rejection_fields is not None and rejection_reasons
                     and rejection_reasons[-1] == "evidence_bounds"):
@@ -876,7 +897,8 @@ def _parse_global_review(payload, *, slide_count, context, rejection_reasons=Non
                 _reject_design_review(rejection_reasons, "global_intentional_evidence")
                 return None
             groups.append(dict(pages=indices, intentional=finding["intentional"],
-                retainedPages=retained, sourceEvidence=finding["sourceEvidence"], visibleEvidence=axis["visibleEvidence"]))
+                retainedPages=retained, sourceEvidence=finding["sourceEvidence"],
+                    visibleEvidence=axis["visibleEvidence"]))
         if set(assignments) != expected:
             reject_partition("coverage")
             return None
@@ -902,6 +924,57 @@ def _parse_global_review(payload, *, slide_count, context, rejection_reasons=Non
         prior = project(payload.get("priorReview"), prior_indices, prior=True, present="priorReview" in payload)
         if prior is None:
             _reject_design_review(rejection_reasons, "prior_coverage")
+            return None
+        result["candidateComparisons"] = [dict(index=page["index"], evaluated=page["evaluated"],
+            priorAxes=page["axes"], visibleEvidence=page["axes"]["repetition_deck_flow"]["visibleEvidence"])
+            for page in prior["pages"]]
+    return result
+
+
+def _parse_server_global_review(payload, *, slide_count, context, rejection_reasons):
+    """The response supplies judgments only; coverage belongs to the server."""
+    partition = server_review_partition(context, slide_count)
+
+    def project(raw, allowed):
+        expected = {group: [key for key in keys if int(key[5:]) - 1 in allowed]
+                    for group, keys in partition.items()}
+        expected = {group: keys for group, keys in expected.items() if keys}
+        if not isinstance(raw, Mapping) or set(raw) != set(expected):
+            return _reject_design_review(rejection_reasons, "server_partition_mismatch")
+        pages, repetitions = [], []
+        for group, keys in expected.items():
+            if not isinstance(raw[group], Mapping) or set(raw[group]) != set(keys):
+                return _reject_design_review(rejection_reasons, "server_partition_mismatch")
+            for key in keys:
+                index, item = int(key[5:]) - 1, raw[group][key]
+                if (not isinstance(item, Mapping) or set(item) != {"axis", "intentional", "sourceEvidence"}
+                        or type(item["intentional"]) is not bool
+                        or not isinstance(item["sourceEvidence"], str) or len(item["sourceEvidence"]) > 160):
+                    return _reject_design_review(rejection_reasons, "global_finding_fields")
+                axes = _parse_design_axes({"repetition_deck_flow": item["axis"]}, DESIGN_AXES[-1:],
+                                          rejection_reasons=rejection_reasons)
+                if axes is None:
+                    return None
+                if item["intentional"] and (not item["sourceEvidence"].strip()
+                        or not context["composition"]["pages"][index].get("comparisonBasis")):
+                    return _reject_design_review(rejection_reasons, "global_intentional_evidence")
+                axis = axes["repetition_deck_flow"]
+                pages.append(dict(index=index, evaluated=axis["verdict"] != "unreviewed", axes=axes, issues=[]))
+                repetitions.append(dict(pages=[index], intentional=item["intentional"],
+                    retainedPages=[index] if axis["verdict"] == "passed" else [],
+                    sourceEvidence=item["sourceEvidence"], visibleEvidence=axis["visibleEvidence"]))
+        return dict(pages=sorted(pages, key=lambda page: page["index"]),
+                    deckFlow=dict(evaluated=all(page["evaluated"] for page in pages), repetitionGroups=repetitions))
+
+    if not isinstance(payload, Mapping):
+        return _reject_design_review(rejection_reasons, "global_review_fields")
+    result = project(payload.get("deckReview"), set(range(slide_count)))
+    if result is None:
+        return None
+    prior_indices = set(context.get("priorCandidates", {}))
+    if prior_indices:
+        prior = project(payload.get("priorReview"), prior_indices)
+        if prior is None:
             return None
         result["candidateComparisons"] = [dict(index=page["index"], evaluated=page["evaluated"],
             priorAxes=page["axes"], visibleEvidence=page["axes"]["repetition_deck_flow"]["visibleEvidence"])
@@ -959,7 +1032,8 @@ async def run_vision_advisory(
             )
         try:
             sheet = (await compose_contact_sheet(renders)
-                     if not required or design_context is not None and design_context.get("reviewScope") in {"global", "edited"} else b"")
+                     if not required or design_context is not None and design_context.get("reviewScope") in
+                         {"global", "edited"} else b"")
         except Exception:
             LOGGER.warning("[authored] vision advisory sheet failed", exc_info=True)
             return {"skipped": "contact_sheet_failed"}
@@ -967,7 +1041,8 @@ async def run_vision_advisory(
             return {"skipped": "contact_sheet_unavailable"}
         if design_context is not None and design_context.get("reviewScope") in {"global", "edited"} and not sheet:
             return {"skipped": "contact_sheet_unavailable"}
-        if design_context is not None and design_context.get("reviewScope") == "global" and design_context.get("priorCandidates"):
+        if (design_context is not None
+                and design_context.get("reviewScope") == "global" and design_context.get("priorCandidates")):
             prior_renders = ([design_context["priorCandidates"].get(index, {}).get("png", png)
                               for index, png in enumerate(renders)] if baseline_review_active(design_context) else
                              [prior["png"] for _, prior in sorted(design_context["priorCandidates"].items())])
@@ -1004,9 +1079,11 @@ async def run_vision_advisory(
             rejection_fields = {} if design_context.get("reviewScope") == "global" else None
             design_review = (_parse_baseline_review(payload, slide_count=len(renders), context=design_context,
                 rejection_reasons=rejection_reasons, rejection_fields=rejection_fields)
-                if baseline_review_active(design_context) else _parse_edited_review(payload, slide_count=len(renders), context=design_context)
+                if baseline_review_active(design_context) else _parse_edited_review(payload,
+                    slide_count=len(renders), context=design_context)
                 if design_context.get("reviewScope") == "edited" else
-                _parse_global_review(payload, slide_count=len(renders), context=design_context, rejection_reasons=rejection_reasons, rejection_fields=rejection_fields)
+                _parse_global_review(payload, slide_count=len(renders), context=design_context,
+                    rejection_reasons=rejection_reasons, rejection_fields=rejection_fields)
                 if design_context.get("reviewScope") == "global" else
                 _parse_design_review(payload, slide_count=len(renders), context=design_context,
                                      rejection_reasons=rejection_reasons))
@@ -1018,19 +1095,22 @@ async def run_vision_advisory(
                         "evidence_bounds": ["visibleEvidence"], "index_coverage": ["index"],
                         "full_composition_coverage": ["deckFlow", "repetitionGroups", "pages"],
                         "issue_axis_consistency": ["issues", "axes", "intentional", "sourceEvidence"],
-                        "design_target_fields": ["designTargets", "axis", "evidenceRegion", "visibleEvidence", "sourceEvidence", "improvementGoal"],
+                        "design_target_fields": ["designTargets", "axis", "evidenceRegion", "visibleEvidence",
+                            "sourceEvidence", "improvementGoal"],
                         "comparison_change_fields": ["pairComparisons", "axisChanges", "preferred", "visibleEvidence"],
                         "prior_coverage": ["pairComparisons", "index"],
                         "page_fields": ["slides", "index", "evaluated", "issues", "deckFlow"],
                     }.get(reason, ["slides"])
                     rejection_fields = {"fieldNames": field_names}
                 parsed_pages = payload.get("slides") if isinstance(payload, Mapping) else None
-                parsed_indices = [page.get("index") for page in parsed_pages if isinstance(page, Mapping)] if isinstance(parsed_pages, list) else []
+                parsed_indices = [page.get("index") for page in parsed_pages if isinstance(page,
+                    Mapping)] if isinstance(parsed_pages, list) else []
                 parsed_coverage = (len(parsed_indices) == len(renders)
                     and all(type(index) is int for index in parsed_indices)
                     and set(parsed_indices) == set(range(1, len(renders) + 1)))
                 parsed_count = len(parsed_pages) if isinstance(parsed_pages, list) else 0
-                if baseline_review_active(design_context) and design_context.get("reviewScope") == "global":
+                if (baseline_review_active(design_context) and design_context.get("reviewScope") == "global"
+                        and not axis_review_active(design_context)):
                     partition = _global_partition_diagnostics(payload.get("variantReview")
                         if isinstance(payload, Mapping) else None, expected=set(range(len(renders))))
                     parsed_count, parsed_coverage = partition["assignedPageCount"], partition["exactCoverage"]
@@ -1039,7 +1119,8 @@ async def run_vision_advisory(
                 return {"skipped": "design_review_schema_or_coverage_invalid",
                         "parsedPageCount": parsed_count,
                         "parsedPageIndexCoverage": parsed_coverage,
-                        **({"schemaRejectionReason": rejection_reasons[0]} if rejection_reasons else {}), **({"schemaRejectionFields": rejection_fields} if rejection_fields else {})}
+                        **({"schemaRejectionReason": rejection_reasons[0]} if rejection_reasons else {}),
+                            **({"schemaRejectionFields": rejection_fields} if rejection_fields else {})}
         global_review = design_context is not None and design_context.get("reviewScope") in {"global", "edited"}
         if required and not global_review:
             findings = payload.get("slides") if isinstance(payload, Mapping) else None
@@ -1068,7 +1149,7 @@ async def run_vision_advisory(
             latency_ms,
         )
         return {
-            "promptVersion": (DESIGN_REVIEW_PROMPT_VERSION if design_context is not None else
+            "promptVersion": (review_prompt_version(design_context) if design_context is not None else
                               "svg-required-visual-review/v1" if required else ADVISORY_PROMPT_VERSION),
             **({"designReview": design_review} if design_review is not None else {}),
             **({"inputEnvelope": payload.get("_serverInputEnvelope"),
