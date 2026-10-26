@@ -359,7 +359,8 @@ def native_table_line_pitch_hint(quality, svg, preservation):
 
 async def attempt_render(*, ctx, request, presentation_id, index, content, payload, svg, ordinal,
                          job, checkpoint, async_session_maker, write_png,
-                         recovery_readability_policy=None, allow_existing_common_header=False):
+                         recovery_readability_policy=None, allow_existing_common_header=False,
+                         dispatch_hook=None):
     from services.generation_core.drivers.svg.timing import RenderAttemptObservations
 
     observations = RenderAttemptObservations(request, page_index=index, attempt_ordinal=ordinal + 1)
@@ -373,14 +374,16 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
             index=index, content=content, payload=payload, svg=svg, ordinal=ordinal,
             job=job, checkpoint=observed_checkpoint, async_session_maker=async_session_maker,
             write_png=write_png, recovery_readability_policy=recovery_readability_policy,
-            allow_existing_common_header=allow_existing_common_header, observations=observations)
+            allow_existing_common_header=allow_existing_common_header, observations=observations,
+            dispatch_hook=dispatch_hook)
     finally:
         observations.move(None)
 
 
 async def _attempt_render(*, ctx, request, presentation_id, index, content, payload, svg, ordinal,
                          job, checkpoint, async_session_maker, write_png,
-                         recovery_readability_policy, allow_existing_common_header, observations):
+                         recovery_readability_policy, allow_existing_common_header, observations,
+                         dispatch_hook=None):
     from services.svg_contract import finalize_svg
     from services.svg_renderer import render_svg_with_metrics
     from services.svg_source_layout import verify_source_receipt
@@ -537,7 +540,7 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
                     ctx.raster_analysis, ctx.raster_pin, index + 1, final)
             observations.move("wait")
             async with ctx.render_semaphore:
-                await observations.dispatched(checkpoint, job, index)
+                await observations.dispatched(dispatch_hook, job, index)
                 source_font_kwargs = {}
                 if ctx.source_reflow:
                     from services.document_canvas_generation import source_restyle_font_floor

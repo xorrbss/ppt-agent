@@ -61,6 +61,7 @@ def test_real_renderer_records_permit_wait_and_work_from_one_dispatch(monkeypatc
             if render_started_at is not None:
                 assert permit.locked()
                 dispatches.append(render_started_at)
+                now[0] += 1  # Dispatch persistence is checkpoint time, not Chromium work.
 
         async def capture(*_args, **_kwargs):
             assert dispatches == [dispatched_at]
@@ -76,7 +77,7 @@ def test_real_renderer_records_permit_wait_and_work_from_one_dispatch(monkeypatc
         task = asyncio.create_task(render.attempt_render(
             ctx=ctx, request=request, presentation_id=uuid.UUID(int=1), index=0,
             content="page", payload={"attempts": [{"kind": "local", "receipt": {}}]},
-            svg="<svg/>", ordinal=0, job=object(), checkpoint=checkpoint,
+            svg="<svg/>", ordinal=0, job=object(), checkpoint=checkpoint, dispatch_hook=checkpoint,
             async_session_maker=None, write_png=lambda _: {"png_sha256": "png", "png_path": "path"},
         ))
         await queued.wait()
@@ -146,8 +147,10 @@ def test_dispatch_updates_latest_row_timestamp_without_touching_payload_or_statu
             assert canonical_json_digest(row.svg_checkpoint) == digest
             job.attempt_token = "stale-attempt"
             with pytest.raises(AuthoredStageError) as lost:
-                await detail.dispatched(checkpoints._checkpoint, job, 0)
+                await checkpoints._checkpoint(job, 0, render_started_at=dispatched_at)
             assert lost.value.code == "authored_attempt_lost"
+            # A rejected optional diagnostic remains fenced but cannot fail rendering.
+            await detail.dispatched(checkpoints._checkpoint, job, 0)
             unchanged, = await _pages(maker, job)
             assert unchanged.render_started_at == row.render_started_at
         finally:

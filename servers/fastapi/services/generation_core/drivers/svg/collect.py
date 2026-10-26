@@ -562,7 +562,7 @@ async def _generate_deck(
                         != state.cached_author_render_manifest_hash):
                     raise _stage_error("svg_cached_author_render_marker_missing")
     hooks = _PageHooks(checkpoint=checkpoint, async_session_maker=async_session_maker,
-                       read_png=read_png, write_png=write_png)
+                       read_png=read_png, write_png=write_png, dispatch_hook=checkpoint)
     partial_manifest = getattr(ctx, "partial_recovery_manifest", None)
     if partial_manifest:
         original_checkpoint = checkpoint
@@ -730,6 +730,8 @@ class _PageHooks:
     async_session_maker: object
     read_png: object
     write_png: object
+    # Only the canonical page loop supplies this diagnostic row writer.
+    dispatch_hook: object = None
 
 
 def _cache_remeasurement_approval(ctx, job, saved):
@@ -1452,7 +1454,8 @@ async def _attempt_loop(ctx, request, presentation_id, index, content, payload, 
             render_result = await render.attempt_render(
                 ctx=ctx, request=request, presentation_id=presentation_id, index=index, content=content,
                 payload=payload, svg=svg, ordinal=ordinal, job=job, checkpoint=hooks.checkpoint,
-                async_session_maker=hooks.async_session_maker, write_png=hooks.write_png)
+                async_session_maker=hooks.async_session_maker, write_png=hooks.write_png,
+                dispatch_hook=getattr(hooks, "dispatch_hook", None))
         if render_result is render.RETRY:
             continue
         _record_page_render_evidence(payload, render_environment if render_environment

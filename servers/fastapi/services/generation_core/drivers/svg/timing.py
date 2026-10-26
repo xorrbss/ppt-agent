@@ -35,12 +35,14 @@ from __future__ import annotations
 from collections.abc import Iterator
 from contextlib import contextmanager
 import asyncio
+import logging
 import time
 
 from services.authored_generation_timing_receipt import MAX_RENDER_STAGE_WINDOWS
 from utils.datetime_utils import get_current_utc_datetime
 
 _RECORDER_ATTRIBUTE = "_authored_generation_timing_recorder"
+LOGGER = logging.getLogger(__name__)
 #: Recorder stages the page loop owns. A page resumed from a verified
 #: checkpoint neither authors nor renders in this attempt.
 #: Repair is optional and must remain unobserved when no correction ran.
@@ -130,11 +132,16 @@ class RenderAttemptObservations:
 
         asyncio.get_running_loop().call_soon(sampled)
 
-    async def dispatched(self, checkpoint, job, index: int) -> None:
+    async def dispatched(self, dispatch_hook, job, index: int) -> None:
         """One permit-acquired event owns work timing and the latest row dispatch."""
         self.move("work")
-        if self.recorder is not None and job is not None:
-            await checkpoint(job, index, render_started_at=get_current_utc_datetime())
+        if self.recorder is not None and dispatch_hook is not None and job is not None:
+            try:
+                await self.checkpoint(dispatch_hook, job, index,
+                                      render_started_at=get_current_utc_datetime())
+            except Exception:
+                # Diagnostics cannot reject a render; CancelledError still propagates.
+                LOGGER.warning("[svg] render dispatch diagnostic failed slide=%d", index + 1, exc_info=True)
 
     async def checkpoint(self, callback, *args, **kwargs):
         previous = self.active["name"] if self.active is not None else None
