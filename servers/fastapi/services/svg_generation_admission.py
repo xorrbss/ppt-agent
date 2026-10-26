@@ -206,7 +206,7 @@ def _resolve_design_reference(request: object, canvas: object) -> dict | None:
 async def prepare_private_svg_recovery_authority(request: object, session) -> list[dict]:
     """Keep live owner-bound source permission outside immutable style snapshots."""
     from services.svg_authoring_profile import request_quality_recovery_policy, read_quality_recovery_policy
-    from utils.authored_style_svg_recovery import verified_recovery_source_evidence
+    from services.svg_recovery_source_evidence import verified_recovery_source_evidence
 
     request._svg_recovery_source_evidence = []
     frozen = getattr(request, "_svg_style_snapshot", None)

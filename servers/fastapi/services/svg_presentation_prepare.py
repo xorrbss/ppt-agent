@@ -590,7 +590,7 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
         outline=outline, canvas=canvas,
     )
     if (snapshot.get("common_header_design_plan") or {}).get("schema") == "svg-common-header-design-plan/v2":
-        from utils.llm_calls.svg_common_header_design import preflight_header_selector
+        from services.svg_common_header_design_calls import preflight_header_selector
         preflight_header_selector()
     if source_reflow:
         from services.svg_source_layout import source_pages

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from contextvars import ContextVar
+from dataclasses import dataclass
 import time
 from typing import Any, Callable, Iterator, Mapping
 
@@ -20,14 +21,27 @@ from utils.provider_terminal_outcome import ProviderTerminalOutcomeRecorder
 from utils.hashing import sha256_hex
 
 
-_PROVIDER_EVENT_OBSERVER: ContextVar[Callable[[dict], None] | None] = ContextVar(
+@dataclass(frozen=True)
+class _ProviderEventObserver:
+    callback: Callable[[dict], None]
+    is_control_error: Callable[[BaseException], bool]
+
+    def __call__(self, event: dict) -> None:
+        self.callback(event)
+
+
+_PROVIDER_EVENT_OBSERVER: ContextVar[_ProviderEventObserver | None] = ContextVar(
     "svg_provider_event_observer", default=None)
 
 
 @contextmanager
-def observe_codex_provider_events(observer: Callable[[dict], None]):
+def observe_codex_provider_events(
+    observer: Callable[[dict], None],
+    *,
+    is_control_error: Callable[[BaseException], bool],
+):
     """Bind one SVG attempt's durable observer before its SDK client is made."""
-    token = _PROVIDER_EVENT_OBSERVER.set(observer)
+    token = _PROVIDER_EVENT_OBSERVER.set(_ProviderEventObserver(observer, is_control_error))
     try:
         yield
     finally:
@@ -204,10 +218,8 @@ class _ObservedResponses:
         except (ProviderOutcomeError, ProviderCallAborted, APIStatusError):
             raise
         except Exception as error:
-            if observer is not None:
-                from services.generation_core.drivers.svg.partial_quality_recovery import is_current_provider_control_error
-                if is_current_provider_control_error(error):
-                    raise
+            if isinstance(observer, _ProviderEventObserver) and observer.is_control_error(error):
+                raise
             if completed:
                 if observer is not None:
                     raise _postresponse_error(error, observation) from error
@@ -257,12 +269,11 @@ class RepositoryChatGPTClient(ChatGPTClient):
                 if id(cause) in seen:
                     continue
                 seen.add(id(cause))
-                if getattr(self._client, "_observer", None) is not None:
-                    from services.generation_core.drivers.svg.partial_quality_recovery import is_current_provider_control_error
-                    if is_current_provider_control_error(cause):
-                        if cause is error:
-                            raise
-                        raise cause from None
+                observer = getattr(self._client, "_observer", None)
+                if isinstance(observer, _ProviderEventObserver) and observer.is_control_error(cause):
+                    if cause is error:
+                        raise
+                    raise cause from None
                 if isinstance(cause, ProviderOutcomeError):
                     if cause is error:
                         raise

@@ -78,7 +78,7 @@ def reference_template_snapshot(style_spec: dict, width: int, height: int) -> di
         "text_wrap_policy": "latin-token/v1",
     }
     if style_spec.get("source_identity_policy") == "svg-source-identity/v2":
-        from services.svg_reference_identity import contrast_foreground, identity_border
+        from utils.svg_color_identity import contrast_foreground, identity_border
 
         identity = (style_spec.get("design_pack_template") or {}).get("identity", {})
         typography = identity.get("typography", {})

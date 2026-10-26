@@ -213,7 +213,7 @@ async def recover_screen_pages(ctx, request, presentation_id, outline, job, page
 
 async def refresh_recovery_source_authority(ctx, hooks):
     """Revalidate private source references after the caller checks its own fence."""
-    from utils.authored_style_svg_recovery import verified_recovery_source_evidence
+    from services.svg_recovery_source_evidence import verified_recovery_source_evidence
 
     candidates = ctx.snapshot.get("validated_recovery_candidates") or []
     if not candidates:

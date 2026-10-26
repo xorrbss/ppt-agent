@@ -399,7 +399,7 @@ def test_header_v2_durable_seed_roundtrip_and_caller_intent_replay(tmp_path, mon
                     await session.commit()
                     deck_id, page_id, job_id = deck.id, page.id, job.id
                 with monkeypatch.context() as local:
-                    local.setattr("utils.llm_calls.svg_common_header_design.preflight_header_selector", lambda: {
+                    local.setattr("services.svg_common_header_design_calls.preflight_header_selector", lambda: {
                         "provider": "openai", "model": "fixture", "registry_capabilities": {"structuredOutput": True, "vision": True},
                         "client_capabilities": {}})
                     local.setattr("services.workspace_operation_runner.notify_workspace_operation_state_change", lambda *a, **k: None)
@@ -891,7 +891,7 @@ def test_header_v2_metadata_preserves_exact_values_provenance_and_admitted_input
     from services.generation_core.quality.vision_advisory import _design_input_sizes
     from services.svg_common_header_generation import _design_input, _selection_input
     from utils.hashing import canonical_json_digest
-    from utils.llm_calls.svg_common_header_design import (
+    from services.svg_common_header_design_calls import (
         DESIGN_INPUT_PROJECTION_VERSION, DESIGN_RULES, HEADER_SVG_RULES, SELECTION_RULES,
         _design_prompt_payload, candidate_schema, selection_schema,
     )
@@ -1200,7 +1200,7 @@ def test_header_v2_metadata_preserves_exact_values_provenance_and_admitted_input
     from utils.codex_stream_adapter import _ObservedResponses, _PROVIDER_EVENT_OBSERVER
     from utils.hashing import sha256_hex
     from utils.provider_overload import ProviderOutcomeError
-    from utils.llm_calls import svg_common_header_design as header_calls
+    from services import svg_common_header_design_calls as header_calls
 
     raw = '{"selected_candidate_id":"candidate-a"}'
     event = SimpleNamespace(type="response.completed", response=SimpleNamespace(
@@ -4805,6 +4805,37 @@ def test_partial_recovery_replays_compact_output_view_raws_through_the_pinned_vi
     assert {"services/generation_core/authoring/source_id_alias.py",
             "services/svg_text_defaults.py",
             "services/generation_core/authoring/author_source_svg_layout.py"} <= set(recovery.CODE_FILES)
+
+
+def test_partial_recovery_fingerprints_extracted_runtime_modules():
+    import inspect
+
+    from services import svg_partial_recovery as recovery
+    from services.svg_recovery_source_evidence import verified_recovery_source_evidence
+    from utils.ppt_writing_prompt import writing_policy_prompt
+    from utils.svg_validation import (
+        _numbers,
+        normalize_svg_response,
+        source_digest,
+        validate_raster_data_url,
+        validate_svg,
+    )
+
+    symbols = (
+        _numbers,
+        normalize_svg_response,
+        source_digest,
+        validate_raster_data_url,
+        validate_svg,
+        writing_policy_prompt,
+        verified_recovery_source_evidence,
+    )
+    source_paths = {
+        str(inspect.getmodule(symbol).__file__).replace("\\", "/").split("/servers/fastapi/")[-1]
+        for symbol in symbols
+    }
+
+    assert source_paths <= set(recovery.CODE_FILES)
 
 
 def test_restyle_admission_defaults_and_pins_explicit_output_view_opt_out(monkeypatch):

@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 
 from services.svg_asset_manifest import ArtifactPointer, PlacementManifest, SourceManifest
 from services.svg_contract import source_digest, validate_svg
-from utils.hashing import sha256_hex
+from utils.hashing import sha256_hex, sha256_prefixed
 
 SOURCE_KIND = "source-manifest"
 PLACEMENT_KIND = "placement-manifest"
@@ -13,7 +13,6 @@ SOURCE_MIME = "application/json"
 PLACEMENT_MIME = "application/json"
 
 
-import hashlib
 import json
 from pydantic import BaseModel, ConfigDict
 from uuid import UUID
@@ -653,7 +652,7 @@ def materialize_export_assets(binding, *, svg, job, store, presentation_id,
         raise ValueError("svg_export_source_lineage_invalid")
     if "sourceLineageRef" in binding:
         lineage_artifact, lineage_bytes = read(binding["sourceLineageRef"], "svg-export-source-lineage", "application/json")
-        if binding["sourceLineageDigest"] not in {hashlib.sha256(lineage_bytes).hexdigest(), "sha256:" + hashlib.sha256(lineage_bytes).hexdigest()}:
+        if binding["sourceLineageDigest"] not in {sha256_hex(lineage_bytes), sha256_prefixed(lineage_bytes)}:
             raise ValueError("svg_export_source_lineage_invalid")
         source_lineage = _ExportSourceLineage.model_validate_json(lineage_bytes).model_dump(mode="json")
         _check_export_source_lineage(source_lineage, source, placement, presentation_id=presentation_id, svg=svg, page_index=binding["pageIndex"], operation_id=job.operation_id, owner_id=job.input_artifact.owner_id, tenant_id=job.input_artifact.tenant_id, fencing_token=job.fencing_token)

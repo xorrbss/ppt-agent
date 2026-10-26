@@ -12,7 +12,9 @@ from services.provider_usage_instrumentation import (
 )
 from utils.llm_config import enforce_llm_egress_policy, get_client, get_llm_config
 from utils.llm_provider import get_llm_provider, get_model
-from utils.llm_utils import _generate_structured_content, extract_text, get_generate_kwargs, serialize_structured_content
+from utils.llm_utils import (
+    _generate_structured_content, extract_text, get_generate_kwargs, serialize_structured_content,
+)
 from utils.provider_idempotency import supports_provider_idempotency
 from utils.hashing import canonical_json_digest
 from services.svg_common_header_transport import TRANSPORT_RULES, pack_header_transport
@@ -189,7 +191,11 @@ def build_header_call(payload, *, plan, stage, ordinal, images=(), on_terminal=N
         client = get_client(config=get_llm_config())
     else:
         from utils.codex_stream_adapter import observe_codex_provider_events
-        with observe_codex_provider_events(on_terminal):
+        from services.generation_core.drivers.svg.partial_quality_recovery import is_current_provider_control_error
+
+        with observe_codex_provider_events(
+            on_terminal, is_control_error=is_current_provider_control_error,
+        ):
             client = get_client(config=get_llm_config())
     model, provider = get_model(), str(get_llm_provider().value)
     if plan.get("model") not in {None, str(model)} or plan.get("provider") not in {None, provider}:
