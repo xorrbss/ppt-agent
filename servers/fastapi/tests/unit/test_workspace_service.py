@@ -124,7 +124,7 @@ async def _preview_principal_bridge(tmp_path,monkeypatch,kind):
     from services.workspace_operation_principal import operation_principal
     monkeypatch.setattr("utils.env_settings.public_service.get_public_process_identity_settings",
         lambda:SimpleNamespace(service_tenant_id="service-default"))
-    monkeypatch.setattr("api.v1.auth.principal.local_development_tenant_id",lambda:"local-development")
+    monkeypatch.setattr("models.principal.local_development_tenant_id",lambda:"local-development")
     engine,maker=await _database(tmp_path/"preview-principal.db")
     try:
         async with engine.begin() as c:
@@ -187,7 +187,7 @@ async def _generation_action_principal_bridge(tmp_path, monkeypatch):
 
     monkeypatch.setattr("utils.env_settings.public_service.get_public_process_identity_settings",
                         lambda: SimpleNamespace(service_tenant_id="service-default"))
-    monkeypatch.setattr("api.v1.auth.principal.local_development_tenant_id", lambda: "local-development")
+    monkeypatch.setattr("models.principal.local_development_tenant_id", lambda: "local-development")
     engine, maker = await _database(tmp_path / "generation-action-principal.db")
     try:
         async with engine.begin() as connection:

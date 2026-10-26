@@ -450,6 +450,7 @@ def test_svg_authoring_bench_header_requires_verified_local_admin(monkeypatch) -
     from dataclasses import replace
     from api.v1.auth import principal as principal_module
     from api.v2.router import API_V2_PUBLIC_ROUTER
+    from models import principal as principal_model
 
     owner = uuid.uuid4()
     actor = PublicRequestActor(owner_id=owner, tenant_id="local-development",
@@ -482,7 +483,7 @@ def test_svg_authoring_bench_header_requires_verified_local_admin(monkeypatch) -
     principal = verified
     environment = "development"
     monkeypatch.setattr(principal_module, "principal_from_request", lambda request: principal)
-    monkeypatch.setattr(principal_module, "get_environment_name", lambda default: environment)
+    monkeypatch.setattr(principal_model, "get_environment_name", lambda default: environment)
     monkeypatch.setenv("CANVAS_BENCH_ENABLED", "true")
     body = {"content": "A bounded profile comparison", "slideCount": 2, "strategy": "svg"}
     header = {"Idempotency-Key": "profile-contract",
