@@ -121,6 +121,7 @@ from services.workspace_operation_lease import (  # noqa: F401
     run_attempt_heartbeat_loop,
 )
 from services.workspace_operation_heartbeat_thread import run_threaded_attempt_heartbeat
+from services.workspace_operation_power import operation_power_hold
 from services.workspace_operation_retry_policy import (
     WorkspaceOperationRetryDecision,
     decide_workspace_operation_retry,
@@ -4419,13 +4420,21 @@ class WorkspaceOperationRunner:
             )
             if claim is None:
                 break
-            task = asyncio.create_task(
-                self._execute(claim),
-                name=f"workspace-operation-{claim.operation_id}",
-            )
+            operation_power_hold.acquire(claim)
+            try:
+                task = asyncio.create_task(
+                    self._execute(claim),
+                    name=f"workspace-operation-{claim.operation_id}",
+                )
+            except BaseException:
+                operation_power_hold.release(claim)
+                raise
             self._active[claim.operation_id] = task
 
-            def _discard(done: asyncio.Task[None], operation_id: uuid.UUID = claim.operation_id) -> None:
+            def _discard(done: asyncio.Task[None], claim: WorkspaceOperationClaim = claim) -> None:
+                operation_id = claim.operation_id
+                # Also covers cancellation before the coroutine starts.
+                operation_power_hold.release(claim)
                 if self._active.get(operation_id) is done:
                     self._active.pop(operation_id, None)
                 self._wake.set()
@@ -4566,8 +4575,12 @@ class WorkspaceOperationRunner:
                 )
 
     async def _execute(self, claim: WorkspaceOperationClaim) -> None:
-        await run_guarded(claim, lambda: self._execute_claim(claim), record_failure=lambda code: (
-            _transition_claim_failure(claim, code=code, retryable=False, session_factory=self.session_factory)))
+        operation_power_hold.acquire(claim)
+        try:
+            await run_guarded(claim, lambda: self._execute_claim(claim), record_failure=lambda code: (
+                _transition_claim_failure(claim, code=code, retryable=False, session_factory=self.session_factory)))
+        finally:
+            operation_power_hold.release(claim)
 
     async def _execute_claim(self, claim: WorkspaceOperationClaim) -> None:
         # asyncio tasks copy contextvars at creation time.  Establish the
@@ -4717,6 +4730,7 @@ class WorkspaceOperationRunner:
                 session_factory=self.session_factory,
             )
         finally:
+            operation_power_hold.release(claim)
             pending: list[asyncio.Task[Any]] = []
             if heartbeat is not None:
                 heartbeat.cancel()

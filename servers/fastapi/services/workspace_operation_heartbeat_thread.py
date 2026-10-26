@@ -24,6 +24,7 @@ from services.workspace_operation_lease import (
     WORKSPACE_OPERATION_HEARTBEAT_SECONDS,
     run_attempt_heartbeat_loop,
 )
+from services.workspace_operation_power import operation_power_hold
 
 LOGGER = logging.getLogger(__name__)
 HANDLER_LIVENESS_SECONDS = 900.0
@@ -154,6 +155,9 @@ async def run_threaded_attempt_heartbeat(
             for task in done:
                 task.result()
         finally:
+            # Lease loss must release even if the handler loop or DB disposal
+            # is stuck; the runner's eventual release is idempotent.
+            operation_power_hold.release(claim)
             for task in tasks:
                 task.cancel()
 
