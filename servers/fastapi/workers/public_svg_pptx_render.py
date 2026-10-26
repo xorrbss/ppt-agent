@@ -2,13 +2,15 @@
 from __future__ import annotations
 
 import ctypes
+from contextlib import contextmanager
 import hashlib
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
-from time import monotonic
+import threading
+from time import monotonic, sleep
 import uuid
 
 SCHEMA = "svg-final-pptx-office-render/v1"
@@ -17,10 +19,15 @@ RENDER_MUTEX_NAME = "Local\\PresentonSvgFinalPptxRender"
 MINIMUM_RENDER_BUDGET_SECONDS = 60
 LOCK_WAIT_SLICE_SECONDS = 0.1
 SHARED_INSTANCE_REASON = "svg_final_pptx_office_instance_busy"
+ACTIVATION_TIMEOUT_SECONDS = 30
 
 
 class SharedPowerPointInstance(ValueError):
     """A desktop, orphan or other worker owns the account's Office server."""
+
+
+class PowerPointActivationUnavailable(RuntimeError):
+    """The owned Office process did not become available for automation."""
 
 
 def _unavailable(reason, *, retryable=False):
@@ -47,12 +54,109 @@ def _available_memory():
     return status.availablePhysical
 
 
-def _render(request):
-    import pythoncom
-    import win32com.client
+def _powerpoint_pids():
+    import pywintypes
     import win32api
+    import win32process
+
+    pids = set()
+    for pid in win32process.EnumProcesses():
+        process = None
+        try:
+            process = win32api.OpenProcess(0x0400 | 0x0010, False, pid)
+            if Path(win32process.GetModuleFileNameEx(process, 0)).name.lower() == "powerpnt.exe":
+                pids.add(pid)
+        except (OSError, pywintypes.error):
+            # Protected/system processes may not be inspectable. Ownership is
+            # still proved by the retained launch handle and exact COM PID.
+            continue
+        finally:
+            if process is not None:
+                process.Close()
+    return pids
+
+
+def _powerpoint_executable():
+    import winreg
+
+    subkey = r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\POWERPNT.EXE"
+    for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+        for view in (winreg.KEY_WOW64_64KEY, winreg.KEY_WOW64_32KEY):
+            try:
+                with winreg.OpenKey(hive, subkey, 0, winreg.KEY_READ | view) as key:
+                    executable = Path(winreg.QueryValueEx(key, None)[0].strip('"'))
+                if executable.is_file():
+                    return str(executable)
+            except OSError:
+                continue
+    raise PowerPointActivationUnavailable("PowerPoint executable unavailable")
+
+
+@contextmanager
+def _owned_powerpoint(request):
+    """Contain the explicitly created process before its first instruction."""
+    import win32event
     import win32job
     import win32process
+
+    if _powerpoint_pids():
+        raise SharedPowerPointInstance(SHARED_INSTANCE_REASON)
+    executable = _powerpoint_executable()
+    job = win32job.OpenJobObject(win32job.JOB_OBJECT_ASSIGN_PROCESS | win32job.JOB_OBJECT_QUERY,
+        False, request["jobName"])
+    process = thread = None
+    try:
+        startup = win32process.STARTUPINFO()
+        startup.dwFlags |= 1  # STARTF_USESHOWWINDOW
+        startup.wShowWindow = 0
+        process, thread, pid, _ = win32process.CreateProcess(executable,
+            subprocess.list2cmdline([executable, "/automation"]), None, None, False,
+            0x00000004 | 0x08000000, None, None, startup)  # suspended, no console
+        # The renderer child normally passes its existing job to descendants.
+        if not win32job.IsProcessInJob(process, job):
+            win32job.AssignProcessToJobObject(job, process)
+        job.Close()
+        job = None
+        win32process.ResumeThread(thread)
+        yield pid
+    finally:
+        try:
+            if process is not None:
+                try:
+                    if win32event.WaitForSingleObject(process, 0) == win32event.WAIT_TIMEOUT:
+                        win32process.TerminateProcess(process, 1)
+                    win32event.WaitForSingleObject(process, 5000)
+                finally:
+                    process.Close()
+        finally:
+            if thread is not None:
+                thread.Close()
+            if job is not None:
+                job.Close()
+
+
+def _attach_powerpoint(pid, timeout):
+    import pythoncom
+    import win32com.client
+    import win32process
+
+    deadline = monotonic() + timeout
+    while monotonic() < deadline:
+        try:
+            # GetActiveObject cannot activate an unowned DCOM server. Never
+            # fall back to Dispatch/DispatchEx if registration is unavailable.
+            application = win32com.client.GetActiveObject("PowerPoint.Application")
+            _, attached_pid = win32process.GetWindowThreadProcessId(application.HWND)
+            if attached_pid != pid:
+                raise SharedPowerPointInstance(SHARED_INSTANCE_REASON)
+            return application
+        except pythoncom.com_error:
+            sleep(LOCK_WAIT_SLICE_SECONDS)
+    raise PowerPointActivationUnavailable("PowerPoint activation deadline exceeded")
+
+
+def _render(request):
+    import pythoncom
     from PIL import Image
 
     available = _available_memory()
@@ -61,54 +165,36 @@ def _render(request):
     target = Path(request["pptx"])
     before = _sha(target)
     pythoncom.CoInitialize()
-    document = application = None
-    owns_application = False
-    # A desktop activation between this snapshot and DispatchEx cannot be
-    # distinguished from ours; renderer serialization does not close that window.
-    existing_processes = set(win32process.EnumProcesses())
     try:
-        application = win32com.client.DispatchEx("PowerPoint.Application")
-        _, pid = win32process.GetWindowThreadProcessId(application.HWND)
-        # DispatchEx can return a shared Office server. Never open, quit or kill it.
-        if pid in existing_processes:
-            raise SharedPowerPointInstance(SHARED_INSTANCE_REASON)
-        owns_application = True
-        # Accepted DCOM activation window: Office may start before HWND is
-        # returned and before it can join our job. A hung activation can leave
-        # an orphan; the next attempt defers rather than adopting or killing it.
-        job = win32job.OpenJobObject(win32job.JOB_OBJECT_ASSIGN_PROCESS, False, request["jobName"])
-        process = win32api.OpenProcess(0x0100 | 0x0001, False, pid)
-        try:
-            win32job.AssignProcessToJobObject(job, process)
-        finally:
-            process.Close()
-            job.Close()
-        document = application.Presentations.Open(str(target.resolve()),
-            ReadOnly=True, Untitled=False, WithWindow=False)
-        office_version = str(application.Version)
-        if document.Slides.Count != request["pageCount"]:
-            raise ValueError("svg_final_pptx_page_count_mismatch")
-        width, height = request["widthPx"], request["heightPx"]
-        pages = []
-        for index in range(request["pageCount"]):
-            output = Path(request["outputDirectory"]) / f"page-{index:03d}.png"
-            document.Slides(index + 1).Export(str(output.resolve()), "PNG", width, height)
-            with Image.open(output) as rendered:
-                if rendered.format != "PNG" or rendered.size != (width, height):
-                    raise ValueError("svg_final_pptx_render_size_mismatch")
-                rendered.verify()
-            pages.append(dict(index=index, pngSha256=_sha(output), widthPx=width, heightPx=height))
-    finally:
-        try:
-            if document is not None:
-                document.Close()
-        finally:
+        with _owned_powerpoint(request) as pid:
+            application = _attach_powerpoint(pid, request["activationTimeout"])
+            document = None
             try:
-                if owns_application:
-                    application.Quit()
+                (Path(request["outputDirectory"]) / "activated").write_text(str(pid), encoding="ascii")
+                document = application.Presentations.Open(str(target.resolve()),
+                    ReadOnly=True, Untitled=False, WithWindow=False)
+                office_version = str(application.Version)
+                if document.Slides.Count != request["pageCount"]:
+                    raise ValueError("svg_final_pptx_page_count_mismatch")
+                width, height = request["widthPx"], request["heightPx"]
+                pages = []
+                for index in range(request["pageCount"]):
+                    output = Path(request["outputDirectory"]) / f"page-{index:03d}.png"
+                    document.Slides(index + 1).Export(str(output.resolve()), "PNG", width, height)
+                    with Image.open(output) as rendered:
+                        if rendered.format != "PNG" or rendered.size != (width, height):
+                            raise ValueError("svg_final_pptx_render_size_mismatch")
+                        rendered.verify()
+                    pages.append(dict(index=index, pngSha256=_sha(output), widthPx=width, heightPx=height))
             finally:
-                application = document = None
-                pythoncom.CoUninitialize()
+                try:
+                    if document is not None:
+                        document.Close()
+                finally:
+                    application.Quit()
+    finally:
+        application = document = None
+        pythoncom.CoUninitialize()
     after = _sha(target)
     if before != after:
         raise ValueError("svg_final_pptx_hash_changed")
@@ -180,10 +266,15 @@ def _render_serialized(target, output_directory, *, page_count, width_px, height
     output_directory.mkdir(parents=True, exist_ok=True)
     request = dict(pptx=str(target.resolve()), outputDirectory=str(output_directory.resolve()),
         pageCount=page_count, widthPx=width_px, heightPx=height_px,
+        activationTimeout=min(ACTIVATION_TIMEOUT_SECONDS, timeout),
         rendererVersion=_sha(__file__), jobName=f"Local\\svg-final-review-{uuid.uuid4()}")
     request_path, result_path = output_directory / "request.json", output_directory / "result.json"
     request_path.write_text(json.dumps(request), encoding="utf-8")
-    child = job = None
+    activated_path = output_directory / "activated"
+    activated_path.unlink(missing_ok=True)
+    result_path.unlink(missing_ok=True)
+    child = job = watchdog = None
+    activation_timed_out = threading.Event()
     try:
         import win32api
         import win32job
@@ -201,10 +292,21 @@ def _render_serialized(target, output_directory, *, page_count, width_px, height
             win32job.AssignProcessToJobObject(job, process)
         finally:
             process.Close()
+        def expire_activation():
+            if not activated_path.is_file():
+                activation_timed_out.set()
+                win32job.TerminateJobObject(job, 1)
+
+        # An out-of-process deadline covers even a hung COM property read.
+        watchdog = threading.Timer(request["activationTimeout"], expire_activation)
+        watchdog.daemon = True
+        watchdog.start()
         # Child cannot activate Office until both processes can join this job.
         child.communicate(input=b"render\n", timeout=timeout)
+        if activation_timed_out.is_set():
+            return _unavailable("svg_final_pptx_render_timeout", retryable=True)
         if child.returncode != 0 or not result_path.is_file():
-            return {**unavailable, "reasonCode": "svg_final_pptx_render_failed"}
+            return _unavailable("svg_final_pptx_render_failed", retryable=not activated_path.is_file())
         result = json.loads(result_path.read_text(encoding="utf-8"))
         if result.get("status") == "unavailable":
             return result
@@ -212,10 +314,13 @@ def _render_serialized(target, output_directory, *, page_count, width_px, height
             return {**unavailable, "reasonCode": "svg_final_pptx_render_binding_invalid"}
         return result
     except subprocess.TimeoutExpired:
-        return {**unavailable, "reasonCode": "svg_final_pptx_render_timeout"}
+        return _unavailable("svg_final_pptx_render_timeout", retryable=not activated_path.is_file())
     except (ImportError, OSError):
         return {**unavailable, "reasonCode": "svg_final_pptx_office_isolation_unavailable"}
     finally:
+        if watchdog is not None:
+            watchdog.cancel()
+            watchdog.join()
         try:
             if job is not None:
                 try:
@@ -236,6 +341,8 @@ def _render_child(request_path, result_path):
         result = _render(json.loads(Path(request_path).read_text(encoding="utf-8")))
     except SharedPowerPointInstance:
         result = _unavailable(SHARED_INSTANCE_REASON, retryable=True)
+    except (PowerPointActivationUnavailable, OSError):
+        result = _unavailable("svg_final_pptx_render_failed", retryable=True)
     Path(result_path).write_text(json.dumps(result), encoding="utf-8")
 
 

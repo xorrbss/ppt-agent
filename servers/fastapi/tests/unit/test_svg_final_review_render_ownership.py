@@ -240,6 +240,8 @@ def test_render_timeout_terminates_the_job_and_reaps_the_child(tmp_path, monkeyp
 
 @pytest.mark.parametrize("shared,fail", [(False, False), (False, True), (True, False)])
 def test_office_opens_only_after_containment_and_quits_only_owned_instance(tmp_path, monkeypatch, shared, fail):
+    from contextlib import contextmanager
+
     events = []
     handle = SimpleNamespace(Close=lambda: None)
     class Slides:
@@ -261,9 +263,10 @@ def test_office_opens_only_after_containment_and_quits_only_owned_instance(tmp_p
     app = SimpleNamespace(HWND=1, Version="test", Presentations=SimpleNamespace(Open=open_document),
         Quit=lambda: events.append("quit"))
     modules = {
-        "pythoncom": SimpleNamespace(CoInitialize=lambda: None, CoUninitialize=lambda: events.append("uninit")),
-        "win32com": SimpleNamespace(client=SimpleNamespace(DispatchEx=lambda _: app)),
-        "win32com.client": SimpleNamespace(DispatchEx=lambda _: app),
+        "pythoncom": SimpleNamespace(CoInitialize=lambda: None, CoUninitialize=lambda: events.append("uninit"),
+            com_error=OSError),
+        "win32com": SimpleNamespace(client=SimpleNamespace(GetActiveObject=lambda _: app)),
+        "win32com.client": SimpleNamespace(GetActiveObject=lambda _: app),
         "win32api": SimpleNamespace(OpenProcess=lambda *args: handle),
         "win32process": SimpleNamespace(EnumProcesses=lambda: [1],
             GetWindowThreadProcessId=lambda _: (0, 1 if shared else 2)),
@@ -272,17 +275,24 @@ def test_office_opens_only_after_containment_and_quits_only_owned_instance(tmp_p
     }
     for key, module in modules.items():
         monkeypatch.setitem(sys.modules, key, module)
+
+    @contextmanager
+    def owned_process(request):
+        events.append("assign")
+        yield 2
+
+    monkeypatch.setattr(office, "_owned_powerpoint", owned_process)
     monkeypatch.setattr(office, "_available_memory", lambda: office.MINIMUM_AVAILABLE_MEMORY)
     target = tmp_path / "artifact.pptx"
     target.write_bytes(b"pptx")
     request = dict(pptx=str(target), outputDirectory=str(tmp_path), widthPx=16, heightPx=9, pageCount=1,
-        jobName="test", rendererVersion="test")
+        jobName="test", rendererVersion="test", activationTimeout=1)
     if shared or fail:
         with pytest.raises(ValueError):
             office._render(request)
     else:
         assert office._render(request)["rendererQuit"] is True
     if shared:
-        assert events == ["uninit"]
+        assert events == ["assign", "uninit"]
     else:
         assert events == ["assign", "open", "close", "quit", "uninit"]
