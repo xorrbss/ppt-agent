@@ -849,6 +849,7 @@
       "brandExpression": "brand expression",
       "densityBalance": "density and balance",
       "repetitionDeckFlow": "repetition and deck flow",
+      "deckFlowUnreviewed": "Deck flow not reviewed",
       "illegible": "Hard to read",
       "brokenFigure": "Broken figure",
       "mandatoryEvidence": "Required checks not met",

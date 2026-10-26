@@ -8,6 +8,7 @@ import {
   flaggedSlideKey,
   flaggedSlidePositions,
   isReviewRequiredDeck,
+  hasUnreviewedDeckFlow,
   flaggedSlideStage,
   readFlaggedSlideEntries,
 } from "./flaggedSlides.ts";
@@ -345,6 +346,8 @@ test("describeFlaggedSlideReason maps the page-quality reasons to specific label
     return describeFlaggedSlideReason(t, badge);
   };
   assert.equal(describe("design:unreviewed"), "reason.designUnreviewed");
+  assert.equal(describe("design:deck_flow_unreviewed"), "reason.design");
+  assert.deepEqual(calls.at(-1), ["reason.design", { axes: "designAxis.deckFlowUnreviewed" }]);
   assert.equal(describe("author:placeholder"), "reason.placeholder");
   assert.equal(describe("author:source_verbatim_fallback"), "reason.sourceVerbatimFallback");
   assert.equal(describe("source_visibility"), "reason.sourceVisibility");
@@ -357,6 +360,14 @@ test("describeFlaggedSlideReason maps the page-quality reasons to specific label
   ]);
   // A generic author reason keeps the generic placeholder text.
   assert.equal(describe("author:attempts_exhausted"), "reason.author");
+});
+
+test("deck flow absence has its own receipt signal for dashboard and export", () => {
+  assert.equal(hasUnreviewedDeckFlow({ svg: { designReview: { flowUnreviewedPages: [0] } } }), true);
+  assert.equal(hasUnreviewedDeckFlow({ svg: { designReview: { unreviewedPages: [0] } } }), false);
+  assert.equal(hasUnreviewedDeckFlow({ svg: { designReview: { flowUnreviewedPages: [] } } }), false);
+  assert.equal(hasUnreviewedDeckFlow({ svg: { designReview: { flowUnreviewedPages: [null, -1, "0"] } } }), false);
+  assert.equal(hasUnreviewedDeckFlow({ authoredQualityGate: { flowUnreviewedPages: [0] } }), false);
 });
 
 test("isReviewRequiredDeck reads only theme.svg.qualityStatus", () => {

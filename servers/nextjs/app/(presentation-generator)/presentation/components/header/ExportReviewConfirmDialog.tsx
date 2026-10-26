@@ -19,15 +19,18 @@ import {
 const ExportReviewConfirmDialog = ({
   open,
   count,
+  flowUnreviewed = false,
   onConfirm,
   onCancel,
 }: {
   open: boolean;
   count: number;
+  flowUnreviewed?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) => {
   const t = useTranslations("pageQualityReview");
+  const flags = useTranslations("flaggedSlides");
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) onCancel(); }}>
       <DialogContent className="max-w-[400px] gap-0 p-0" data-testid="export-review-confirm">
@@ -40,6 +43,7 @@ const ExportReviewConfirmDialog = ({
           </DialogTitle>
           <DialogDescription className="text-sm leading-relaxed text-gray-500">
             {t("exportConfirm.description", { count })}
+            {flowUnreviewed && <> {flags("designAxis.deckFlowUnreviewed")}.</>}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="flex-row px-6 pb-6 pt-0 sm:px-8">
