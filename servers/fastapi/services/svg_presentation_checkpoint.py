@@ -309,6 +309,79 @@ async def _collect_pages_or_fail(tasks):
         raise
 
 
+def _verify_setup_accounting(usage, calls, admission):
+    """Reconcile every completed setup receipt with its admitted call and spend."""
+    if len(usage) != len(calls):
+        raise RuntimeError("svg_checkpoint_missing")
+    for receipt, call in zip(usage, calls, strict=True):
+        if (receipt.stage != call.stage or call.slide_index != -1
+                or call.admission_id != admission.id
+                or receipt.outcome != "succeeded" or receipt.request_count != 1
+                or receipt.usage_state != "reported"
+                or receipt.retry_class != call.retry_class
+                or receipt.provider != call.provider_id or receipt.model != call.model_id
+                or call.state != "reported" or call.outcome != "succeeded"
+                or call.reconciled_at is None or call.actual_cost_microunits is None
+                or receipt.reported_cost_microunits != call.actual_cost_microunits):
+            raise RuntimeError("svg_checkpoint_missing")
+    if (admission.initial_request_count != sum(call.retry_class != "retry" for call in calls)
+            or admission.retry_request_count != sum(call.retry_class == "retry" for call in calls)
+            or admission.estimated_reserved_microunits != 0
+            or admission.actual_reserved_microunits != 0
+            or admission.estimated_consumed_microunits != sum(call.estimated_cost_microunits for call in calls)
+            or admission.actual_consumed_microunits != sum(call.actual_cost_microunits for call in calls)
+            or admission.actual_cost_unavailable_count != 0):
+        raise RuntimeError("svg_checkpoint_missing")
+
+
+def _verified_outline_bootstrap(job, count, usage, operation, admission, calls):
+    """Bind ordinary deck setup to this job attempt and its durable admission."""
+    from services.provider_usage_instrumentation import ProviderUsageScope
+    from services.public_operation_admission_models import _logical_call_ordinal
+    from utils.structured_semantic_slots import structured_semantic_slot
+
+    if (operation.retry_of_operation_id is not None
+            or job.attempt_number < 1 or job.attempt_number != operation.attempt_number
+            or admission.planned_request_limit < count + admission.initial_request_count
+            or admission.retry_request_count > admission.retry_request_limit
+            or admission.estimated_consumed_microunits > admission.estimated_cost_limit_microunits
+            or admission.actual_consumed_microunits > admission.actual_cost_limit_microunits):
+        raise RuntimeError("svg_checkpoint_missing")
+    # These are the existing producer slots, independent of prompt/file/UI input.
+    slots = {"outline": [("stream.primary", False)], "content_brief": [
+        (structured_semantic_slot(validation_attempt=validation, parse_attempt=parse) + ".attempt-1",
+         validation > 0 or parse > 0)
+        for validation in range(2) for parse in range(2)
+    ]}
+    expected = {}
+    for stage, stage_slots in slots.items():
+        for slot, is_retry in stage_slots:
+            scope = ProviderUsageScope(job_id=job.id, operation="authored_generation",
+                stage=stage, attempt_number=job.attempt_number)
+            key = scope.public_logical_call_key(slot)
+            ordinal = _logical_call_ordinal(operation_id=operation.id, stage=stage,
+                slide_index=-1, logical_call_ordinal=None, logical_call_key=key)
+            preimage = (f"public-provider-call/v2:{operation.id}:{stage}:-1:{ordinal}:"
+                        f"{sha256_hex(key.encode('utf-8'))}")
+            request_id = scope.next_runtime_request_id(slot)
+            receipt_hash = sha256_hex(f"receipt-v2:{job.id}:{request_id}:provider".encode("utf-8"))
+            retry_class = "retry" if is_retry else ("resume" if job.attempt_number > 1 else "initial")
+            expected[(stage, ordinal, sha256_hex(preimage.encode("utf-8")))] = (receipt_hash, retry_class)
+    receipts = {receipt.receipt_key_hash: receipt for receipt in usage}
+    matched = []
+    for call in calls:
+        receipt_hash, retry_class = expected.get(
+            (call.stage, call.logical_call_ordinal, call.idempotency_key_hash), (None, None))
+        receipt = receipts.pop(receipt_hash, None)
+        if (receipt is None or receipt.job_id != job.id or receipt.operation != "authored_generation"
+                or call.retry_class != retry_class):
+            raise RuntimeError("svg_checkpoint_missing")
+        matched.append(receipt)
+    if receipts or len(matched) != len(usage):
+        raise RuntimeError("svg_checkpoint_missing")
+    _verify_setup_accounting(matched, calls, admission)
+
+
 async def _verified_header_title_bootstrap(session, job, roles, usage, operation, admission):
     """Permit one sealed title call before page checkpoints, with no other spend."""
     from models.presentation_outline_model import PresentationOutlineModel
@@ -391,20 +464,10 @@ async def _verified_header_title_bootstrap(session, job, roles, usage, operation
             or call.logical_call_ordinal != ordinal
             or call.idempotency_key_hash != expected_key_hash
             or call.retry_class not in {"initial", "resume"}
-            or receipt.retry_class != call.retry_class
-            or receipt.provider != call.provider_id
-            or receipt.model != call.model_id
-            or call.state != "reported" or call.outcome != "succeeded"
-            or call.reconciled_at is None or call.actual_cost_microunits is None
-            or receipt.reported_cost_microunits != call.actual_cost_microunits
             or source_admission.initial_request_count != 1
-            or source_admission.retry_request_count != 0
-            or source_admission.estimated_reserved_microunits != 0
-            or source_admission.actual_reserved_microunits != 0
-            or source_admission.estimated_consumed_microunits != call.estimated_cost_microunits
-            or source_admission.actual_consumed_microunits != call.actual_cost_microunits
-            or source_admission.actual_cost_unavailable_count != 0):
+            or source_admission.retry_request_count != 0):
         raise RuntimeError("svg_checkpoint_missing")
+    _verify_setup_accounting(usage, source_calls, source_admission)
     current = operation
     seen = set()
     while current.id != source_id:
@@ -441,6 +504,65 @@ async def _verified_header_title_bootstrap(session, job, roles, usage, operation
     return source_id
 
 
+async def verify_svg_checkpoint_bootstrap(session, job, count, *, fencing_token, before_preparation=False):
+    """The read-only authority shared by preparation and staged collection."""
+    from services.generation_core.drivers.svg.collect import _stage_error, _unknown_provider_checkpoint
+    from models.sql.provider_usage_receipt import ProviderUsageReceipt
+    from models.sql.public_admission import PublicOperationAdmission, PublicProviderLogicalCall
+    from models.sql.slide import SlideModel
+    from models.sql.workspace import WorkspaceOperation
+
+    existing = await session.scalar(select(func.count()).select_from(AuthoredSlideCheckpoint).where(
+        AuthoredSlideCheckpoint.job_id == job.id))
+    if existing:
+        raise RuntimeError("svg_checkpoint_missing")
+    if _unknown_provider_checkpoint(job.last_error or {}):
+        raise _stage_error("public_provider_result_unknown")
+    if (job.completed_slides or job.current_stage not in {None, "queued", "outline"}
+            or job.total_slides not in {0, count}):
+        raise RuntimeError("svg_checkpoint_missing")
+    usage = list(await session.scalars(select(ProviderUsageReceipt).where(
+        ProviderUsageReceipt.job_id == job.id)))
+    published = await session.scalar(select(func.count()).select_from(SlideModel).where(
+        SlideModel.presentation == job.presentation_id))
+    if published or (usage and job.workspace_operation_id is None):
+        raise RuntimeError("svg_checkpoint_missing")
+    if job.workspace_operation_id is not None:
+        from services.svg_generation_assets import publication_context
+
+        context_job = job.model_copy()
+        context_job._workspace_fencing_token = fencing_token
+        await publication_context(session, context_job)
+        operation = await session.get(WorkspaceOperation, job.workspace_operation_id)
+        admission = await session.scalar(select(PublicOperationAdmission).where(
+            PublicOperationAdmission.operation_id == job.workspace_operation_id))
+        if operation is None or admission is None:
+            raise RuntimeError("svg_checkpoint_missing")
+        calls = list(await session.scalars(select(PublicProviderLogicalCall).where(
+            PublicProviderLogicalCall.admission_id == admission.id)))
+        if _unknown_provider_checkpoint(operation.error_detail or {}):
+            raise _stage_error("public_provider_result_unknown")
+        counters = ("initial_request_count", "retry_request_count", "estimated_reserved_microunits",
+                    "estimated_consumed_microunits", "actual_reserved_microunits",
+                    "actual_consumed_microunits", "actual_cost_unavailable_count")
+        if (admission.planned_request_limit < count
+                or admission.slide_count != count
+                or as_utc(admission.deadline_at) <= get_current_utc_datetime()
+                or operation.presentation_id != job.presentation_id
+                or operation.result_revision is not None):
+            raise RuntimeError("svg_checkpoint_missing")
+        from services.svg_common_header_title_budget import INTERNAL_HEADER_TITLE_PLAN_KEY
+
+        has_spend = usage or calls or any(getattr(admission, key) for key in counters)
+        # Staged preflight runs before the sealed title call; the initializer
+        # runs after preparation and must require its completed evidence.
+        if ((job.request_payload or {}).get(INTERNAL_HEADER_TITLE_PLAN_KEY) is not None
+                and (has_spend or not before_preparation)):
+            await _verified_header_title_bootstrap(session, job, range(count), usage, operation, admission)
+        elif has_spend:
+            _verified_outline_bootstrap(job, count, usage, operation, admission, calls)
+
+
 async def initialize_svg_checkpoints(*, job_id, attempt_token, roles, fencing_token=None):
     """Seed only a wholly unstarted job, under the canonical checkpoint CAS.
 
@@ -450,10 +572,6 @@ async def initialize_svg_checkpoints(*, job_id, attempt_token, roles, fencing_to
     """
     from services import authored_checkpoint_state, svg_presentation_service as facade
     from services.generation_core.drivers.svg.collect import _stage_error, _unknown_provider_checkpoint
-    from models.sql.provider_usage_receipt import ProviderUsageReceipt
-    from models.sql.public_admission import PublicOperationAdmission, PublicProviderLogicalCall
-    from models.sql.slide import SlideModel
-    from models.sql.workspace import WorkspaceOperation
 
     async with facade.async_session_maker() as session:
         job = await facade.owned_job(session, job_id, attempt_token, fencing_token=fencing_token)
@@ -467,47 +585,7 @@ async def initialize_svg_checkpoints(*, job_id, attempt_token, roles, fencing_to
             if any(_unknown_provider_checkpoint(row.svg_checkpoint or {}) for row in rows):
                 raise _stage_error("public_provider_result_unknown")
             return
-        if _unknown_provider_checkpoint(job.last_error or {}):
-            raise _stage_error("public_provider_result_unknown")
-        if (job.completed_slides or job.current_stage not in {None, "queued", "outline"}
-                or job.total_slides not in {0, len(roles)}):
-            raise RuntimeError("svg_checkpoint_missing")
-        usage = list(await session.scalars(select(ProviderUsageReceipt).where(
-            ProviderUsageReceipt.job_id == job.id)))
-        published = await session.scalar(select(func.count()).select_from(SlideModel).where(
-            SlideModel.presentation == job.presentation_id))
-        if published or (usage and job.workspace_operation_id is None):
-            raise RuntimeError("svg_checkpoint_missing")
-        if job.workspace_operation_id is not None:
-            from services.svg_generation_assets import publication_context
-
-            context_job = job.model_copy()
-            context_job._workspace_fencing_token = fencing_token
-            await publication_context(session, context_job)
-            operation = await session.get(WorkspaceOperation, job.workspace_operation_id)
-            admission = await session.scalar(select(PublicOperationAdmission).where(
-                PublicOperationAdmission.operation_id == job.workspace_operation_id))
-            if operation is None or admission is None:
-                raise RuntimeError("svg_checkpoint_missing")
-            calls = list(await session.scalars(select(PublicProviderLogicalCall).where(
-                PublicProviderLogicalCall.admission_id == admission.id)))
-            if _unknown_provider_checkpoint(operation.error_detail or {}):
-                raise _stage_error("public_provider_result_unknown")
-            counters = ("initial_request_count", "retry_request_count", "estimated_reserved_microunits",
-                        "estimated_consumed_microunits", "actual_reserved_microunits",
-                        "actual_consumed_microunits", "actual_cost_unavailable_count")
-            if (admission.planned_request_limit < len(roles)
-                    or admission.slide_count != len(roles)
-                    or as_utc(admission.deadline_at) <= get_current_utc_datetime()
-                    or operation.presentation_id != job.presentation_id
-                    or operation.result_revision is not None):
-                raise RuntimeError("svg_checkpoint_missing")
-            from services.svg_common_header_title_budget import INTERNAL_HEADER_TITLE_PLAN_KEY
-
-            if (job.request_payload or {}).get(INTERNAL_HEADER_TITLE_PLAN_KEY) is not None:
-                await _verified_header_title_bootstrap(session, job, roles, usage, operation, admission)
-            elif usage or calls or any(getattr(admission, key) for key in counters):
-                raise RuntimeError("svg_checkpoint_missing")
+        await verify_svg_checkpoint_bootstrap(session, job, len(roles), fencing_token=fencing_token)
         # Reuse the canonical initializer in this same fenced transaction. It
         # inserts only absent rows and does not clear old checkpoint outcomes.
         await authored_checkpoint_state.initialize_checkpoints(

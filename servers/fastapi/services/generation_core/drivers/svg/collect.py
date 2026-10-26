@@ -26,6 +26,22 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
+from services.authored_checkpoint_errors import AuthoredStageError
+from services.generation_core.drivers.svg import author, render
+from services.generation_core.drivers.svg import quality as deck_quality
+from services.generation_core.drivers.svg import timing
+from services import svg_outline_spans
+from services.generation_core.drivers.svg.terminal import (
+    PLACEHOLDER_OUTCOME, is_exhausted_page, rescue_terminal_page,
+)
+from services.svg_presentation_checkpoint import (
+    _collect_pages_or_fail,
+    _digest,
+    _provider_attempt_count as _legacy_provider_attempt_count,
+    _provider_attempt_limit as _legacy_provider_attempt_limit,
+)
+from services.svg_presentation_prepare import _prepare_generation
+
 INTERNAL_SVG_STAGE_PLAN_KEY = "_internal_svg_stage_plan"
 
 
@@ -44,11 +60,15 @@ def validate_svg_stage_plan(value):
     if any(type(i) is not int or i < 0 for i in indices) or sorted(indices) != list(range(len(indices))):
         raise ValueError("svg_stage_plan_invalid")
     intents = value.get("visual_intents")
-    if intents is not None and (not isinstance(intents, list) or len(intents) != len(indices) or any(not isinstance(i, dict) for i in intents)):
+    if intents is not None and (
+        not isinstance(intents, list) or len(intents) != len(indices) or any(not isinstance(i, dict) for i in intents)
+    ):
         raise ValueError("svg_stage_plan_invalid")
     if "source_lineage" in value and not isinstance(value["source_lineage"], dict):
         raise ValueError("svg_stage_plan_invalid")
-    if "illustration_budget" in value and (type(value["illustration_budget"]) is not int or value["illustration_budget"] < 0):
+    if "illustration_budget" in value and (
+        type(value["illustration_budget"]) is not int or value["illustration_budget"] < 0
+    ):
         raise ValueError("svg_stage_plan_invalid")
     return deepcopy(value)
 
@@ -72,9 +92,17 @@ def select_svg_stage_plan(request, value):
 
 def validate_stage_authority(plan, *, owner_id, tenant_id, request_digest=None):
     authority = plan.get("source_lineage", {}).get("execution_authority") or {}
-    if not owner_id or not tenant_id or str(authority.get("owner_id")) != str(owner_id) or str(authority.get("tenant_id")) != str(tenant_id):
+    if (
+        not owner_id
+        or not tenant_id
+        or str(authority.get("owner_id")) != str(owner_id)
+        or str(authority.get("tenant_id")) != str(tenant_id)
+    ):
         raise ValueError("svg_stage_authority_mismatch")
-    if not all(isinstance(authority.get(key), str) and authority[key].startswith("sha256:") and len(authority[key]) == 71 for key in ["manifest_digest", "request_digest"]):
+    if not all(
+        isinstance(authority.get(key), str) and authority[key].startswith("sha256:") and len(authority[key]) == 71
+        for key in ["manifest_digest", "request_digest"]
+    ):
         raise ValueError("svg_stage_authority_missing")
     if request_digest is not None and authority["request_digest"] != request_digest:
         raise ValueError("svg_stage_request_binding_mismatch")
@@ -100,7 +128,16 @@ def _unknown_provider_checkpoint(value):
         return any(_unknown_provider_checkpoint(v) for k, v in value.items() if k != _REVIEW_EXECUTION_KEY)
     if isinstance(value, list):
         return any(_unknown_provider_checkpoint(v) for v in value)
-    return value in {"public_provider_result_unknown", "public_provider_timeout", "provider_outcome:public_provider_result_unknown"} if isinstance(value, str) else False
+    return (
+        value
+        in {
+            "public_provider_result_unknown",
+            "public_provider_timeout",
+            "provider_outcome:public_provider_result_unknown",
+        }
+        if isinstance(value, str)
+        else False
+    )
 
 
 async def _stage_preflight(plan, job, checkpoint, count):
@@ -123,22 +160,27 @@ async def _stage_preflight(plan, job, checkpoint, count):
             saved = None
         saved_pages.append(saved or {})
     if missing:
-        if any(saved_pages) or job is None or getattr(job, "attempt_number", 0) != 1 or getattr(job, "resume_count", 0) or getattr(job, "completed_slides", 0):
+        if (
+            any(saved_pages)
+            or job is None
+            or getattr(job, "attempt_number", 0) != 1
+            or getattr(job, "resume_count", 0)
+            or getattr(job, "completed_slides", 0)
+        ):
             raise RuntimeError("svg_checkpoint_missing")
-        from sqlalchemy import func, select
-        from models.sql.public_admission import PublicOperationAdmission, PublicProviderLogicalCall
-        from models.sql.provider_usage_receipt import ProviderUsageReceipt
-        from models.sql.slide import SlideModel
-        from models.sql.workspace import WorkspaceOperation
         from services.database import async_session_maker
+        from models.sql.presentation_generation_job import PresentationGenerationJob
+        from services.svg_presentation_checkpoint import (
+            _require_read_authority, verify_svg_checkpoint_bootstrap,
+        )
 
         async with async_session_maker() as session:
-            calls = await session.scalar(select(func.count()).select_from(PublicProviderLogicalCall).join(PublicOperationAdmission, PublicOperationAdmission.id == PublicProviderLogicalCall.admission_id).where(PublicOperationAdmission.operation_id == operation_id))
-            usage = await session.scalar(select(func.count()).select_from(ProviderUsageReceipt).where(ProviderUsageReceipt.job_id == job.id))
-            published_svg = await session.scalar(select(func.count()).select_from(SlideModel).where(SlideModel.presentation == job.presentation_id, SlideModel.svg_content.is_not(None), SlideModel.svg_content != ""))
-            operation = await session.get(WorkspaceOperation, operation_id)
+            await _require_read_authority(session, job)
+            current = await session.get(PresentationGenerationJob, job.id)
+            await verify_svg_checkpoint_bootstrap(session, current, count,
+                fencing_token=getattr(job, "_workspace_fencing_token", None), before_preparation=True)
         source_id = (plan.get("source_lineage") or {}).get("source_presentation_id")
-        if calls or usage or published_svg or operation is None or operation.result_revision is not None or (source_id and str(job.presentation_id) == str(source_id)):
+        if source_id and str(job.presentation_id) == str(source_id):
             raise RuntimeError("svg_checkpoint_missing")
     if any(_unknown_provider_checkpoint(payload) for payload in saved_pages):
         raise _stage_error("public_provider_result_unknown")
@@ -168,9 +210,13 @@ def _flag_stage_review(payload, index, issues):
 
 async def _stage_checkpoint(job, checkpoint, plan, stages):
     seed = deepcopy(await checkpoint(job, 0) or {})
-    progress = {"schema": "svg-stage-execution/v1", "plan_digest": _digest(plan),
-                "operation_id": str(job.workspace_operation_id), "authority": deepcopy(plan["source_lineage"]["execution_authority"]),
-                "stages": deepcopy(stages)}
+    progress = {
+        "schema": "svg-stage-execution/v1",
+        "plan_digest": _digest(plan),
+        "operation_id": str(job.workspace_operation_id),
+        "authority": deepcopy(plan["source_lineage"]["execution_authority"]),
+        "stages": deepcopy(stages),
+    }
     seed["trusted_stage_execution"] = progress
     await checkpoint(job, 0, payload=seed)
     return progress
@@ -197,21 +243,21 @@ async def _collect_stages(ctx, plan, tracked_page, job, checkpoint, read_png, ru
         original_semaphore = ctx.semaphore
 
         class StageAdmissionSemaphore:
-            async def __aenter__(self):
-                await original_semaphore.acquire()
-                if stopped.is_set():
-                    original_semaphore.release()
+            async def __aenter__(self, semaphore=original_semaphore, stop=stopped):
+                await semaphore.acquire()
+                if stop.is_set():
+                    semaphore.release()
                     raise _stage_error("svg_stage_stopped_after_page_failure")
                 return self
 
-            async def __aexit__(self, *exc):
-                original_semaphore.release()
+            async def __aexit__(self, *exc, semaphore=original_semaphore):
+                semaphore.release()
 
-        async def settle_page(index):
+        async def settle_page(index, stop=stopped):
             try:
                 return await tracked_page(index)
             except BaseException:
-                stopped.set()
+                stop.set()
                 raise
 
         ctx.semaphore = StageAdmissionSemaphore()
@@ -256,7 +302,9 @@ async def _collect_stages(ctx, plan, tracked_page, job, checkpoint, read_png, ru
             marker["status"] = "review_inflight"
             await _stage_checkpoint(job, checkpoint, plan, stages)
             try:
-                advisory = await deck_quality.deck_advisory(ctx, results, job=job, read_png=read_png, run_advisory=run_advisory, round_ordinal=ordinal)
+                advisory = await deck_quality.deck_advisory(
+                    ctx, results, job=job, read_png=read_png, run_advisory=run_advisory, round_ordinal=ordinal
+                )
                 vision = advisory.get("vision") if isinstance(advisory, dict) else None
                 if not isinstance(vision, dict) or vision.get("skipped"):
                     raise _stage_error("svg_stage_review_unavailable")
@@ -295,16 +343,7 @@ async def _collect_stages(ctx, plan, tracked_page, job, checkpoint, read_png, ru
     record["pageAdvisories"] = split_page_advisories(vision, slides, range(ctx.count))
     return pages, record
 
-from services.authored_checkpoint_errors import AuthoredStageError
-from services.generation_core.drivers.svg import author, render
-from services.generation_core.drivers.svg import quality as deck_quality
-from services.generation_core.drivers.svg import timing
-from services import svg_outline_spans
-from services.generation_core.drivers.svg.terminal import (
-    PLACEHOLDER_OUTCOME, is_exhausted_page, rescue_terminal_page,
-)
-from services.svg_presentation_checkpoint import _collect_pages_or_fail, _digest, _provider_attempt_count as _legacy_provider_attempt_count, _provider_attempt_limit as _legacy_provider_attempt_limit
-from services.svg_presentation_prepare import _prepare_generation
+
 
 
 @dataclass
@@ -434,7 +473,9 @@ async def _generate(request, presentation_id, outline, language, session, job, *
                                     stage_plan=stage_plan, review_stage=review_stage)
 
 
-async def _generate_deck(request, presentation_id, outline, language, session, job, *, stage_plan=None, review_stage=None):
+async def _generate_deck(
+    request, presentation_id, outline, language, session, job, *, stage_plan=None, review_stage=None
+):
     from services import svg_presentation_service as _facade
     async_session_maker = _facade.async_session_maker
     checkpoint = _facade._checkpoint
@@ -527,7 +568,10 @@ async def _generate_deck(request, presentation_id, outline, language, session, j
         async def partial_checkpoint(active_job, page_index, *, payload=None):
             if payload is not None and page_index in partial_manifest["known_indices"]:
                 from services.svg_partial_recovery import verify_cached_page
-                if (payload.get("partial_recovery") or {}).get("operation_id") != str(active_job.workspace_operation_id):
+
+                if (payload.get("partial_recovery") or {}).get("operation_id") != str(
+                    active_job.workspace_operation_id
+                ):
                     raise ValueError("svg_partial_recovery_page_unbound")
                 witness = partial_manifest["pages"][page_index]
                 if witness.get("phase") == "author-only":
@@ -536,8 +580,13 @@ async def _generate_deck(request, presentation_id, outline, language, session, j
                     next_phase = (payload.get("partial_recovery") or {}).get("phase")
                     if prior_phase == "finalized" and next_phase != "finalized":
                         raise ValueError("svg_partial_recovery_cached_phase_rollback")
-                from services.generation_core.drivers.svg.partial_quality_recovery import current_quality_repair_authorized
-                if not await current_quality_repair_authorized(ctx, payload, page_index, active_job, original_checkpoint):
+                from services.generation_core.drivers.svg.partial_quality_recovery import (
+                    current_quality_repair_authorized,
+                )
+
+                if not await current_quality_repair_authorized(
+                    ctx, payload, page_index, active_job, original_checkpoint
+                ):
                     verify_cached_page(payload, partial_manifest, page_index, witness["input_digest"])
             return await original_checkpoint(active_job, page_index, payload=payload)
 
@@ -545,7 +594,12 @@ async def _generate_deck(request, presentation_id, outline, language, session, j
     if recovery_policy:
         hooks.recovery_snapshot = ctx.snapshot
     from services.svg_authoring_profile import read_authoring_profile
-    if job is not None and ctx.count in (2, 4) and read_authoring_profile(ctx.snapshot) == {"id": "art-direction-v1", "version": 7}:
+
+    if (
+        job is not None
+        and ctx.count in (2, 4)
+        and read_authoring_profile(ctx.snapshot) == {"id": "art-direction-v1", "version": 7}
+    ):
         saved_target = await checkpoint(job, 1) or {}
         if saved_target.get("cache_only_remeasurement"):
             state.cache_only_approval = _cache_remeasurement_approval(ctx, job, saved_target)
@@ -621,7 +675,9 @@ async def _generate_deck(request, presentation_id, outline, language, session, j
     tasks = [tasks_by_index[i] for i in range(ctx.count)] if stage_plan is None else []
     try:
         if stage_plan is None:
-            pages = await asyncio.gather(*tasks) if state.terminal_drain_enabled else await _collect_pages_or_fail(tasks)
+            pages = (
+                await asyncio.gather(*tasks) if state.terminal_drain_enabled else await _collect_pages_or_fail(tasks)
+            )
             _raise_isolated_pages(pages, state.page_failures)
             if recovery_policy:
                 from services.generation_core.drivers.svg.quality_recovery import recover_screen_pages
@@ -681,24 +737,30 @@ def _cache_remeasurement_approval(ctx, job, saved):
     marker = saved.get("cache_only_remeasurement") or {}
     archive = saved.get("classification_remeasurement_archive") or {}
     manifest = archive.get("approval_manifest") or {}
-    if not (job is not None and ctx.count in (2, 4)
-            and read_authoring_profile(ctx.snapshot) == {"id": "art-direction-v1", "version": 7}
-            and marker.get("schema") == REMEASUREMENT_SCHEMA
-            and marker.get("revision") == SVG_CLASSIFICATION_REMEASUREMENT
-            and marker.get("slide_index") == 1
-            and marker.get("operation_id") == str(job.workspace_operation_id)
-            and marker.get("source_operation_id") == manifest.get("operation_id")
-            and marker.get("approval_manifest_hash") == archive.get("approval_manifest_hash") == _digest(manifest)
-            and marker.get("style_digest") == manifest.get("style_digest") == _digest(ctx.snapshot)
-            and marker.get("reference_digest") == manifest.get("reference_digest") == _digest(ctx.snapshot.get("references"))
-            and manifest.get("target_indices") == [1]
-            and marker.get("expected_page_count") == manifest.get("expected_page_count") == ctx.count
-            and marker.get("recovery_reason") == manifest.get("recovery_reason")
-            and marker.get("recovery_reason") in {"classification_legend_paint", "native_single_series_title_unit"}
-            and ctx.count == {"classification_legend_paint": 4, "native_single_series_title_unit": 2}[marker["recovery_reason"]]
-            and manifest.get("max_additional_author_calls") == 0
-            and manifest.get("source_and_png_must_remain_identical") is True
-            and sorted(page.get("slide_index") for page in manifest.get("pages", [])) == list(range(ctx.count))):
+    if not (
+        job is not None
+        and ctx.count in (2, 4)
+        and read_authoring_profile(ctx.snapshot) == {"id": "art-direction-v1", "version": 7}
+        and marker.get("schema") == REMEASUREMENT_SCHEMA
+        and marker.get("revision") == SVG_CLASSIFICATION_REMEASUREMENT
+        and marker.get("slide_index") == 1
+        and marker.get("operation_id") == str(job.workspace_operation_id)
+        and marker.get("source_operation_id") == manifest.get("operation_id")
+        and marker.get("approval_manifest_hash") == archive.get("approval_manifest_hash") == _digest(manifest)
+        and marker.get("style_digest") == manifest.get("style_digest") == _digest(ctx.snapshot)
+        and marker.get("reference_digest")
+        == manifest.get("reference_digest")
+        == _digest(ctx.snapshot.get("references"))
+        and manifest.get("target_indices") == [1]
+        and marker.get("expected_page_count") == manifest.get("expected_page_count") == ctx.count
+        and marker.get("recovery_reason") == manifest.get("recovery_reason")
+        and marker.get("recovery_reason") in {"classification_legend_paint", "native_single_series_title_unit"}
+        and ctx.count
+        == {"classification_legend_paint": 4, "native_single_series_title_unit": 2}[marker["recovery_reason"]]
+        and manifest.get("max_additional_author_calls") == 0
+        and manifest.get("source_and_png_must_remain_identical") is True
+        and sorted(page.get("slide_index") for page in manifest.get("pages", [])) == list(range(ctx.count))
+    ):
         raise AuthoredStageError(slide_index=1, stage="render", code="svg_cache_remeasurement_invalid", retryable=False)
     return manifest
 
@@ -719,7 +781,9 @@ def _verify_protected_cache(saved, png, witness, input_digest, index, *, metrics
             and quality.get("measurement_complete") is True and quality.get("geometry_passed") is True
             and _digest(quality_browser_metrics(quality)) == (metrics_digest or witness.get("browser_metrics_digest"))
             and not saved.get("inflight")):
-        raise AuthoredStageError(slide_index=index, stage="render", code="svg_cache_remeasurement_invalid", retryable=False)
+        raise AuthoredStageError(
+            slide_index=index, stage="render", code="svg_cache_remeasurement_invalid", retryable=False
+        )
 
 
 async def _cached_author_render_page(ctx, request, presentation_id, index, content,
@@ -1154,34 +1218,59 @@ async def _page(ctx, request, presentation_id, outline, language, job, index, st
                 metrics_digest=marker.get("remeasured_metrics_digest") if marker.get("status") == "completed" else None)
             if index != 1:
                 if saved["quality"].get("passed") is not True:
-                    raise AuthoredStageError(slide_index=index, stage="render", code="svg_cache_remeasurement_invalid", retryable=False)
+                    raise AuthoredStageError(
+                        slide_index=index, stage="render", code="svg_cache_remeasurement_invalid", retryable=False
+                    )
                 return saved, png
             _cache_remeasurement_approval(ctx, job, saved)
             if marker.get("status") == "completed" and saved["quality"].get("passed") is True:
                 return saved, png
-            archived = (saved.get("classification_remeasurement_archive") or {}).get("checkpoint_row", {}).get("svg_checkpoint") or {}
-            failure_kind = {"classification_legend_paint": "source_classification_unproven",
-                            "native_single_series_title_unit": "native_requested_chart_missing"}[marker["recovery_reason"]]
-            if not (marker.get("status") == "pending" and _provider_attempt_count(saved) == 2
-                    and archived.get("svg_content") == saved["svg_content"]
-                    and archived.get("quality") == saved["quality"]
-                    and all(marker.get(key) == witness.get(key) for key in (
-                        "source_sha256", "png_sha256", "input_digest", "author_receipt_digest", "browser_metrics_digest"))
-                    and saved["quality"].get("passed") is False and saved["quality"].get("failures")
-                    and all(failure.get("kind") == failure_kind for failure in saved["quality"]["failures"])
-                    and not saved["attempts"][-1].get("receipt", {}).get("validation_error")):
-                raise AuthoredStageError(slide_index=index, stage="render", code="svg_cache_remeasurement_invalid", retryable=False)
+            archived = (saved.get("classification_remeasurement_archive") or {}).get("checkpoint_row", {}).get(
+                "svg_checkpoint"
+            ) or {}
+            failure_kind = {
+                "classification_legend_paint": "source_classification_unproven",
+                "native_single_series_title_unit": "native_requested_chart_missing",
+            }[marker["recovery_reason"]]
+            if not (
+                marker.get("status") == "pending"
+                and _provider_attempt_count(saved) == 2
+                and archived.get("svg_content") == saved["svg_content"]
+                and archived.get("quality") == saved["quality"]
+                and all(
+                    marker.get(key) == witness.get(key)
+                    for key in (
+                        "source_sha256",
+                        "png_sha256",
+                        "input_digest",
+                        "author_receipt_digest",
+                        "browser_metrics_digest",
+                    )
+                )
+                and saved["quality"].get("passed") is False
+                and saved["quality"].get("failures")
+                and all(failure.get("kind") == failure_kind for failure in saved["quality"]["failures"])
+                and not saved["attempts"][-1].get("receipt", {}).get("validation_error")
+            ):
+                raise AuthoredStageError(
+                    slide_index=index, stage="render", code="svg_cache_remeasurement_invalid", retryable=False
+                )
             payload = deepcopy(saved)
 
             async def guarded_checkpoint(active_job, page_index, *, payload=None):
                 if payload is not None:
                     from services.svg_classification_remeasurement import author_witness_digest
-                    if (payload.get("svg_content") != saved["svg_content"]
-                            or payload.get("input_digest") != input_digest
-                            or author_witness_digest(payload) != witness["author_receipt_digest"]
-                            or payload.get("png_sha256") != witness["png_sha256"]
-                            or payload.get("classification_remeasurement_archive") != saved["classification_remeasurement_archive"]):
-                        raise AuthoredStageError(slide_index=index, stage="render", code="svg_cache_remeasurement_changed", retryable=False)
+                    if (
+                        payload.get("svg_content") != saved["svg_content"]
+                        or payload.get("input_digest") != input_digest
+                        or author_witness_digest(payload) != witness["author_receipt_digest"]
+                        or payload.get("png_sha256") != witness["png_sha256"]
+                        or payload.get("classification_remeasurement_archive")
+                        != saved["classification_remeasurement_archive"]
+                    ):
+                        raise AuthoredStageError(
+                            slide_index=index, stage="render", code="svg_cache_remeasurement_changed", retryable=False
+                        )
                 return await hooks.checkpoint(active_job, page_index, payload=payload)
 
             try:
@@ -1191,20 +1280,35 @@ async def _page(ctx, request, presentation_id, outline, language, job, index, st
                         job=job, checkpoint=guarded_checkpoint,
                         async_session_maker=hooks.async_session_maker, write_png=hooks.write_png)
                 if result is render.RETRY:
-                    raise AuthoredStageError(slide_index=index, stage="render", code="svg_cache_remeasurement_retry_forbidden", retryable=False)
-                if payload.get("quality", {}).get("passed") is not True or payload["cache_only_remeasurement"].get("status") != "completed":
-                    raise AuthoredStageError(slide_index=index, stage="render", code="svg_cache_remeasurement_invalid", retryable=False)
+                    raise AuthoredStageError(
+                        slide_index=index,
+                        stage="render",
+                        code="svg_cache_remeasurement_retry_forbidden",
+                        retryable=False,
+                    )
+                if (
+                    payload.get("quality", {}).get("passed") is not True
+                    or payload["cache_only_remeasurement"].get("status") != "completed"
+                ):
+                    raise AuthoredStageError(
+                        slide_index=index, stage="render", code="svg_cache_remeasurement_invalid", retryable=False
+                    )
                 return result
             except Exception as error:
                 if getattr(error, "code", None) != "authored_attempt_lost":
                     from services.svg_classification_remeasurement import author_witness_digest
-                    unchanged = (payload.get("svg_content") == saved["svg_content"]
+                    unchanged = (
+                        payload.get("svg_content") == saved["svg_content"]
                         and payload.get("input_digest") == input_digest
                         and author_witness_digest(payload) == witness["author_receipt_digest"]
                         and payload.get("png_sha256") == witness["png_sha256"]
-                        and payload.get("classification_remeasurement_archive") == saved["classification_remeasurement_archive"])
+                        and payload.get("classification_remeasurement_archive")
+                        == saved["classification_remeasurement_archive"]
+                    )
                     failed = deepcopy(payload if unchanged else saved)
-                    failed["cache_only_remeasurement"].update(status="failed", error_code=getattr(error, "code", type(error).__name__))
+                    failed["cache_only_remeasurement"].update(
+                        status="failed", error_code=getattr(error, "code", type(error).__name__)
+                    )
                     await hooks.checkpoint(job, index, payload=failed)
                 raise
         if (png is not None and saved.get("svg_content") and saved.get("quality")
@@ -1252,9 +1356,15 @@ async def _page(ctx, request, presentation_id, outline, language, job, index, st
         except AuthoredStageError as error:
             if error is state.fatal_error:
                 raise
-            if getattr(ctx, "quality_recovery_input_binding", None) and not (ctx.source_reflow or ctx.raster_reconstruction):
+            if getattr(ctx, "quality_recovery_input_binding", None) and not (
+                ctx.source_reflow or ctx.raster_reconstruction
+            ):
                 from services.svg_authoring_profile import read_quality_recovery_plan
-                from services.generation_core.drivers.svg.quality_recovery import ScreenRecoveryPending, actual_provider_attempt_count
+                from services.generation_core.drivers.svg.quality_recovery import (
+                    ScreenRecoveryPending,
+                    actual_provider_attempt_count,
+                )
+
                 if (read_quality_recovery_plan(ctx.snapshot)["page_attempt_limit"] == 3
                         and actual_provider_attempt_count(payload) == 2
                         and not payload.get("provider_failures")
@@ -1276,11 +1386,16 @@ async def _attempt_loop(ctx, request, presentation_id, index, content, payload, 
     role = ctx.roles[index]
     attempt_limit = _provider_attempt_limit(payload, index=index, job=job)
     if getattr(ctx, "header_author_attempt_identity", None) is not None:
-        attempt_limit = min(attempt_limit, ctx.snapshot["common_header_design_plan"]["representative_body_attempt_limit"])
+        attempt_limit = min(
+            attempt_limit, ctx.snapshot["common_header_design_plan"]["representative_body_attempt_limit"]
+        )
     from services.generation_core.drivers.svg.partial_quality_recovery import current_episode_attempt_count
     partial_manifest = getattr(ctx, "partial_recovery_manifest", None)
     partial_known = bool(partial_manifest and index in partial_manifest["known_indices"])
-    if getattr(ctx, "quality_recovery_input_binding", None) and payload.get("quality_recovery_fallback", {}).get("status") == "reserved":
+    if (
+        getattr(ctx, "quality_recovery_input_binding", None)
+        and payload.get("quality_recovery_fallback", {}).get("status") == "reserved"
+    ):
         from services.generation_core.drivers.svg.quality_recovery import reserved_recovery_candidate
         reserved_recovery_candidate(ctx, index, content, payload)
         attempt_limit = 3
@@ -1356,7 +1471,9 @@ async def _attempt_loop(ctx, request, presentation_id, index, content, payload, 
 
 
 def _append_only_checkpoint_marker(payload):
-    markers = [payload[k] for k in ("append_only_cache", "append_only_replacement", "append_only_unstarted") if k in payload]
+    markers = [
+        payload[k] for k in ("append_only_cache", "append_only_replacement", "append_only_unstarted") if k in payload
+    ]
     if len(markers) > 1:
         raise ValueError("svg_timeout_repurchase_attempt_fence_invalid")
     return markers[0] if markers else None
@@ -1367,7 +1484,11 @@ def _provider_attempt_count(payload):
     if marker is None:
         return _legacy_provider_attempt_count(payload)
     consumed = marker["witness"]["consumed_attempt_count"] if payload.get("append_only_replacement") else 0
-    return consumed + sum(a.get("kind") != "local" for a in payload.get("attempts", [])) + len(payload.get("provider_failures", []))
+    return (
+        consumed
+        + sum(a.get("kind") != "local" for a in payload.get("attempts", []))
+        + len(payload.get("provider_failures", []))
+    )
 
 
 def _provider_attempt_limit(payload, *, index=None, job=None):
@@ -1399,10 +1520,15 @@ async def _remeasure_append_only_cache(ctx, request, presentation_id, index, con
     witness = marker["witness"]
     _provider_attempt_limit(saved, index=index, job=job)
     svg = saved.get("svg_content")
-    if (not svg or sha256_hex(svg.encode("utf-8")) != witness["source_digest"]
+    if (
+        not svg
+        or sha256_hex(svg.encode("utf-8")) != witness["source_digest"]
         or _digest(saved.get("attempts", [])) != witness["author_digest"]
         or input_digest != witness["input_digest"]
-        or (marker.get("status") != "completed" and _digest(saved.get("nativeDeclarations")) != witness["native_digest"])):
+        or (
+            marker.get("status") != "completed" and _digest(saved.get("nativeDeclarations")) != witness["native_digest"]
+        )
+    ):
         raise ValueError("svg_recovery_cache_changed")
     if (marker.get("status") == "completed" and saved.get("quality", {}).get("passed") is True
             or marker.get("status") == "failed" and saved.get("terminal")):
