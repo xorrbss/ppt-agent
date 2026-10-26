@@ -38,6 +38,7 @@ import asyncio
 import time
 
 from services.authored_generation_timing_receipt import MAX_RENDER_STAGE_WINDOWS
+from utils.datetime_utils import get_current_utc_datetime
 
 _RECORDER_ATTRIBUTE = "_authored_generation_timing_recorder"
 #: Recorder stages the page loop owns. A page resumed from a verified
@@ -63,6 +64,14 @@ def observe_observation(request: object, name: str) -> Iterator[None]:
 
 def bind_outline_spans(request: object, spans) -> None:
     spans.recorder = _recorder(request)
+
+
+def bind_runtime_provenance(request: object, ctx: object) -> None:
+    recorder = _recorder(request)
+    if recorder is not None and recorder.runtime_provenance() is None:
+        from services.generation_core.drivers.svg.runtime_provenance import runtime_provenance_snapshot
+
+        recorder.record_runtime_provenance(runtime_provenance_snapshot(ctx))
 
 
 @contextmanager
@@ -120,6 +129,12 @@ class RenderAttemptObservations:
             self.receipt["eventLoopLagMillis"] = max(0.0, (time.monotonic() - started) * 1000)
 
         asyncio.get_running_loop().call_soon(sampled)
+
+    async def dispatched(self, checkpoint, job, index: int) -> None:
+        """One permit-acquired event owns work timing and the latest row dispatch."""
+        self.move("work")
+        if self.recorder is not None and job is not None:
+            await checkpoint(job, index, render_started_at=get_current_utc_datetime())
 
     async def checkpoint(self, callback, *args, **kwargs):
         previous = self.active["name"] if self.active is not None else None

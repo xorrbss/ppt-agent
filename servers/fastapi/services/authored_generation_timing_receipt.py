@@ -50,6 +50,7 @@ from services.authored_quality_receipt_v2 import (
 )
 from utils.hashing import canonical_json_digest
 from services.canvas_bench_speed import speed_provenance
+from services.generation_core.drivers.svg.runtime_provenance import runtime_provenance_field
 
 
 GENERATION_TIMING_STAGES = (
@@ -626,6 +627,7 @@ class GenerationAttemptTimingReceiptV2:
     observations: dict[str, dict[str, int]] = field(default_factory=dict)
     render_attempts: tuple[dict[str, object], ...] = ()
     render_attempts_dropped: int = 0
+    runtime_provenance: dict[str, object] | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -661,6 +663,7 @@ class GenerationAttemptTimingReceiptV2:
             **({"observations": self.observations} if self.observations else {}),
             **({"renderAttempts": list(self.render_attempts)} if self.render_attempts else {}),
             **({"renderAttemptsDropped": self.render_attempts_dropped} if self.render_attempts_dropped else {}),
+            **({"runtimeProvenance": self.runtime_provenance} if self.runtime_provenance is not None else {}),
         }
 
 
@@ -677,6 +680,7 @@ def _attempt_receipt_v2_digest(receipt: GenerationAttemptTimingReceiptV2) -> str
     payload.pop("observations", None)
     payload.pop("renderAttempts", None)
     payload.pop("renderAttemptsDropped", None)
+    payload.pop("runtimeProvenance", None)
     return canonical_json_digest(payload, allow_nan=True)
 
 
@@ -836,6 +840,7 @@ def _attempt_receipt_v2_from_dict(
         deck_instruments=deck_instruments_field(_nested(value.get("instruments"), "deck")),
         vision_advisory=vision_advisory_field(_nested(value.get("advisory"), "vision")),
         provenance=speed_provenance(value.get("provenance")),
+        runtime_provenance=runtime_provenance_field(value.get("runtimeProvenance")),
         observations=_optional_observations(value.get("observations")),
         render_attempts=_render_attempt_observations(value.get("renderAttempts")),
         render_attempts_dropped=_bounded_timing_ms(value.get("renderAttemptsDropped", 0), "render_dropped"),
@@ -989,6 +994,7 @@ def create_generation_attempt_timing_receipt_v2(
     observations: Mapping[str, Mapping[str, object]] | None = None,
     render_attempts: Sequence[Mapping[str, object]] = (),
     render_attempts_dropped: int = 0,
+    runtime_provenance: Mapping[str, object] | None = None,
 ) -> GenerationAttemptTimingReceiptV2:
     """Seal one v2 terminal receipt without prompt, content, or provider traces.
 
@@ -1135,6 +1141,7 @@ def create_generation_attempt_timing_receipt_v2(
         deck_instruments=deck_instruments_field(deck_instruments),
         vision_advisory=vision_advisory_field(vision_advisory),
         provenance=speed_provenance(provenance),
+        runtime_provenance=runtime_provenance_field(runtime_provenance),
         observations=_optional_observations(observations),
         render_attempts=_render_attempt_observations(render_attempts),
         render_attempts_dropped=_bounded_timing_ms(render_attempts_dropped, "render_dropped"),
@@ -1189,6 +1196,14 @@ class GenerationTimingRecorder:
     _render_attempts: list[dict[str, object]] = field(default_factory=list)
     render_attempts_dropped: int = 0
     _render_attempts_evicted: int = 0
+    _runtime_provenance: dict[str, object] | None = None
+
+    def record_runtime_provenance(self, value: object) -> None:
+        if self._runtime_provenance is None:
+            self._runtime_provenance = runtime_provenance_field(value)
+
+    def runtime_provenance(self) -> dict[str, object] | None:
+        return runtime_provenance_field(self._runtime_provenance)
 
     def record_render_attempt(self, receipt: dict[str, object]) -> None:
         """Keep bounded recent detail while all windows enter aggregate observations."""

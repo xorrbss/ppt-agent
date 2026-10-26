@@ -653,11 +653,11 @@ async def _fence_checkpoint_authority(job, index: int) -> None:
         await session.commit()
 
 
-async def _checkpoint(job, index, *, payload=None):
+async def _checkpoint(job, index, *, payload=None, render_started_at=None):
     if job is None:
         return None
     async with async_session_maker() as session:
-        if payload is None:
+        if payload is None and render_started_at is None:
             # Read first, then assert the fence, so a takeover cannot slip in
             # between a passed check and the returned page. A lost fence still
             # takes precedence over a missing row.
@@ -677,6 +677,11 @@ async def _checkpoint(job, index, *, payload=None):
         ))
         if row is None:
             raise RuntimeError("svg_checkpoint_missing")
+        if render_started_at is not None:
+            # Recorder dispatch follows permit acquisition; retries replace the
+            # previous dispatch without changing the checkpoint payload identity.
+            row.render_started_at = render_started_at
+            session.add(row)
         if payload is not None:
             payload = _preserve_provider_terminal_responses(row.svg_checkpoint or {}, payload, job=job)
             # Completion times record the first transition into completed; a
