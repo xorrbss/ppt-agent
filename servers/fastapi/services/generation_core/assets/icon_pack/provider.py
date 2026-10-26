@@ -5,8 +5,8 @@ come back opaque, letterboxed to a slide slot. Icons and scene cutouts are a
 different product: an alpha-masked PNG the slide composes over its own
 background. Verified OpenAI ``gpt-image-*`` models and Codex OAuth images
 support alpha output. This module owns their capability and transport decision;
-other providers report "unsupported" before spending. Codex output is resampled
-to the requested canvas; callers retain their transparency and grid checks.
+other providers report "unsupported" before spending. Codex output passes through
+unchanged; callers use its actual dimensions for transparency and grid checks.
 
 The request goes through the same admission, receipt and rate-limit handling
 the primary illustration call uses; nothing here bypasses provider fencing.
@@ -21,7 +21,6 @@ import uuid
 from typing import Literal, Optional
 
 from openai import AsyncOpenAI, RateLimitError
-from PIL import Image
 
 from enums.image_provider import ImageProvider
 from services.image_generation_codex_adapter import (
@@ -130,7 +129,7 @@ class TransparentPngProvider:
             # The OAuth adapter owns the single admission/receipt boundary and
             # never retries an uncertain request or falls back to an API key.
             os.makedirs(output_directory, exist_ok=True)
-            path = await generate_codex_image(
+            return await generate_codex_image(
                 prompt,
                 output_directory,
                 self.settings,
@@ -139,8 +138,6 @@ class TransparentPngProvider:
                 output_format="png",
                 semantic_slot=f"{semantic_slot}.codex",
             )
-            await asyncio.to_thread(_normalize_dimensions, path, size)
-            return path
         api_key = get_openai_api_key_env(self.settings)
         if not api_key:
             raise ValueError("OPENAI_API_KEY is not configured")
@@ -192,16 +189,6 @@ class TransparentPngProvider:
             _write_bytes, path, base64.b64decode(result.data[0].b64_json)
         )
         return path
-
-
-def _normalize_dimensions(path: str, size: str) -> None:
-    """Codex may return another canvas size; preserve its whole grid and alpha."""
-    expected = tuple(int(value) for value in size.split("x"))
-    with Image.open(path) as image:
-        if image.size == expected:
-            return
-        normalized = image.resize(expected, Image.Resampling.LANCZOS)
-    normalized.save(path, format="PNG")
 
 
 def _write_bytes(path: str, payload: bytes) -> None:

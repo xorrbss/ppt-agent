@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock
 
 import httpx
 import pytest
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 
 from services import image_generation_codex_adapter as adapter
 from services import image_generation_service as image_service
@@ -243,10 +243,10 @@ def test_openai_request_is_unchanged(transport, monkeypatch, tmp_path, model):
 
 @pytest.mark.parametrize("provider", ["codex_image", "gpt-image-2"])
 @pytest.mark.parametrize("parallel", ["true", "false"])
-def test_codex_normalization_preserves_openai_and_lock_modes(
+def test_transparent_provider_preserves_output_bytes_and_lock_modes(
     transport, monkeypatch, tmp_path, provider, parallel,
 ):
-    # Only transparent Codex assets are resampled; OpenAI keeps its old bytes.
+    # Both providers keep their output bytes even for a different requested size.
     generate = AsyncMock(return_value=SimpleNamespace(data=[SimpleNamespace(
         b64_json=base64.b64encode(transport.png).decode("ascii"),
     )]))
@@ -265,9 +265,8 @@ def test_codex_normalization_preserves_openai_and_lock_modes(
     settings = _settings(provider, ENABLE_PARALLEL_IMAGE_GENERATION=parallel)
     path = asyncio.run(provider_mod.TransparentPngProvider(settings).generate("icons", str(tmp_path)))
     with Image.open(path) as image:
-        assert image.size == ((1024, 1024) if provider == "codex_image" else (1536, 1024))
-    if provider == "gpt-image-2":
-        assert Path(path).read_bytes() == transport.png
+        assert image.size == (1536, 1024)
+    assert Path(path).read_bytes() == transport.png
     assert len(entered) == (0 if parallel == "true" else 1)
     assert len(transport.admissions) == len(transport.receipts) == 1
     assert transport.receipts[0]["outcome"] == "succeeded"
@@ -303,7 +302,7 @@ def test_codex_nonrequested_dimensions_preserve_a_valid_grid(transport, tmp_path
 
 
 @pytest.mark.parametrize("size", [(1287, 1222), (1312, 1199)])
-def test_codex_wrong_grid_is_not_cached_after_resampling(transport, tmp_path, size):
+def test_codex_wrong_grid_is_not_cached_at_actual_dimensions(transport, tmp_path, size):
     transport.png = _png(size, columns=2, radii=(200, 200))
     result = asyncio.run(resolve_icons(["alpha", "beta", "gamma"], pack_key="test",
                                       settings=_settings(), app_data=str(tmp_path)))
@@ -315,14 +314,54 @@ def test_codex_wrong_grid_is_not_cached_after_resampling(transport, tmp_path, si
 
 @pytest.mark.parametrize("fixture", ["codex-adapter.png", "codex-explicit.png"])
 def test_img1_real_codex_cutout_is_accepted(transport, tmp_path, fixture):
-    # Offline PNG evidence from the two IMG-1 OAuth calls; no live request.
+    # Reduced real IMG-1 OAuth PNGs retain their native alpha; no live request.
     source = Path(__file__).parent / "fixtures" / "codex_transparency" / fixture
     transport.png = source.read_bytes()
+    with Image.open(source) as image:
+        source_size = image.size
     cutout = asyncio.run(generate_scene_cutout(
         takeaway="document", nodes=["document"], output_directory=str(tmp_path), settings=_settings(),
     ))
-    assert cutout is not None and (cutout.width, cutout.height) == (1024, 1024)
+    assert cutout is not None and (cutout.width, cutout.height) == source_size
+    assert Path(cutout.path).read_bytes() == transport.png
     assert cutout.checks["transparency"]["passed"]
+    assert len(transport.requests) == len(transport.admissions) == len(transport.receipts) == 1
+
+
+@pytest.mark.parametrize("fixture,size", [
+    ("codex-adapter.png", (1287, 1222)),
+    ("codex-explicit.png", (1312, 1199)),
+])
+def test_img1_real_alpha_sheet_preserves_each_icon_aspect(transport, tmp_path, fixture, size):
+    source = Path(__file__).parent / "fixtures" / "codex_transparency" / fixture
+    assert source.stat().st_size < 100_000
+    with Image.open(source) as image:
+        icon = image.convert("RGBA")
+    alpha = icon.getchannel("A")
+    histogram = alpha.histogram()
+    assert histogram[0] > 0 and sum(histogram[1:255]) > 0 and histogram[255] > 0
+
+    def content_aspect(image):
+        box = image.getchannel("A").point(lambda value: 255 if value >= 24 else 0).getbbox()
+        assert box is not None
+        return (box[2] - box[0]) / (box[3] - box[1])
+
+    source_aspect = content_aspect(icon)
+    cell_width = size[0] // 3
+    icon = ImageOps.contain(icon, (cell_width - 64, size[1] - 64))
+    sheet = Image.new("RGBA", size, (0, 0, 0, 0))
+    for column in range(3):
+        sheet.paste(icon, (column * cell_width + (cell_width - icon.width) // 2,
+                           (size[1] - icon.height) // 2))
+    buffer = io.BytesIO()
+    sheet.save(buffer, format="PNG")
+    transport.png = buffer.getvalue()
+    result = asyncio.run(resolve_icons(["alpha", "beta", "gamma"], pack_key="test",
+                                      settings=_settings(), app_data=str(tmp_path)))
+    assert len(result.icons) == 3 and result.missing == []
+    for entry in result.icons.values():
+        with Image.open(entry.path) as output:
+            assert content_aspect(output) == pytest.approx(source_aspect, rel=0.02)
     assert len(transport.requests) == len(transport.admissions) == len(transport.receipts) == 1
 
 
