@@ -4807,6 +4807,37 @@ def test_partial_recovery_replays_compact_output_view_raws_through_the_pinned_vi
             "services/generation_core/authoring/author_source_svg_layout.py"} <= set(recovery.CODE_FILES)
 
 
+def test_partial_recovery_fingerprints_extracted_runtime_modules():
+    import inspect
+
+    from services import svg_partial_recovery as recovery
+    from services.svg_recovery_source_evidence import verified_recovery_source_evidence
+    from utils.ppt_writing_prompt import writing_policy_prompt
+    from utils.svg_validation import (
+        _numbers,
+        normalize_svg_response,
+        source_digest,
+        validate_raster_data_url,
+        validate_svg,
+    )
+
+    symbols = (
+        _numbers,
+        normalize_svg_response,
+        source_digest,
+        validate_raster_data_url,
+        validate_svg,
+        writing_policy_prompt,
+        verified_recovery_source_evidence,
+    )
+    source_paths = {
+        str(inspect.getmodule(symbol).__file__).replace("\\", "/").split("/servers/fastapi/")[-1]
+        for symbol in symbols
+    }
+
+    assert source_paths <= set(recovery.CODE_FILES)
+
+
 def test_restyle_admission_defaults_and_pins_explicit_output_view_opt_out(monkeypatch):
     from services.document_canvas import document_canvas_for_orientation
     from services.generation_core.authoring.author_slide_svg import svg_prompt_design
