@@ -304,13 +304,16 @@ def test_generate_scene_cutout_without_provider_is_none(tmp_path):
     [
         ("gpt-image-2", "gpt-image-2"),
         ("gpt-image-1.5", "gpt-image-1.5"),
+        ("gpt-image-2.5-flare", "gpt-image-2.5-flare"),
+        ("gpt-image-2.5-sunburst", "gpt-image-2.5-sunburst"),
+        ("codex_image", "gpt-image-2.5-sunburst"),
         ("dall-e-3", None),
         ("gemini_flash", None),
         ("pexels", None),
         ("unknown-model", None),
     ],
 )
-def test_transparent_model_for_only_names_gpt_image_models(monkeypatch, provider, expected):
+def test_transparent_model_for_names_supported_routes(monkeypatch, provider, expected):
     monkeypatch.setenv("IMAGE_PROVIDER", provider)
     monkeypatch.delenv("DISABLE_IMAGE_GENERATION", raising=False)
     assert transparent_model_for() == expected

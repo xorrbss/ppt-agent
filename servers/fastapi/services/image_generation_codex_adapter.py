@@ -10,6 +10,7 @@ import base64
 import binascii
 import json
 from pathlib import Path
+from typing import Literal
 import uuid
 
 import httpx
@@ -27,7 +28,14 @@ CODEX_IMAGE_ENDPOINT = "https://chatgpt.com/backend-api/codex/images/generations
 
 
 async def generate_codex_image(
-    prompt: str, output_directory: str, settings: RuntimeSettings | None = None
+    prompt: str,
+    output_directory: str,
+    settings: RuntimeSettings | None = None,
+    *,
+    size: str = "1536x1024",
+    background: Literal["transparent", "opaque", "auto"] | None = None,
+    output_format: Literal["png"] | None = None,
+    semantic_slot: str = "image.primary.codex",
 ) -> str:
     from services.image_generation_service import _metered_image_provider_call
 
@@ -47,17 +55,21 @@ async def generate_codex_image(
         "model": CODEX_IMAGE_REQUESTED_MODEL,
         "prompt": prompt,
         "n": 1,
-        "size": "1536x1024",
+        "size": size,
         "quality": get_gpt_image_2_5_quality_env(snapshot) or "medium",
         "stream": True,
     }
+    if background is not None:
+        payload["background"] = background
+    if output_format is not None:
+        payload["output_format"] = output_format
     completed = None
     # A disconnected stream may already have spent subscription allowance.
     # Do not retry it or fall back to a separately billed OpenAI API request.
     async with _metered_image_provider_call(
         provider="codex",
         model="codex-image-default",
-        semantic_slot="image.primary.codex",
+        semantic_slot=semantic_slot,
     ):
         async with httpx.AsyncClient(
             timeout=get_image_generation_timeout_seconds(snapshot),
