@@ -3,11 +3,10 @@
 The deck's ordinary illustrations go through ``ImageGenerationService`` and
 come back opaque, letterboxed to a slide slot. Icons and scene cutouts are a
 different product: an alpha-masked PNG the slide composes over its own
-background. Only the OpenAI ``gpt-image-*`` models expose a transparent
-background, and only those were verified to draw a clean sprite sheet
-(``artifacts/icon-pack-verification-20260903/manifest.json``), so this module
-is deliberately narrow: the selected provider must be one of them, and every
-other provider reports "unsupported" so the caller falls back before spending.
+background. Verified OpenAI ``gpt-image-*`` models and Codex OAuth images
+support alpha output. This module owns their capability and transport decision;
+other providers report "unsupported" before spending. Codex output is resampled
+to the requested canvas; callers retain their transparency and grid checks.
 
 The request goes through the same admission, receipt and rate-limit handling
 the primary illustration call uses; nothing here bypasses provider fencing.
@@ -22,8 +21,13 @@ import uuid
 from typing import Literal, Optional
 
 from openai import AsyncOpenAI, RateLimitError
+from PIL import Image
 
 from enums.image_provider import ImageProvider
+from services.image_generation_codex_adapter import (
+    CODEX_IMAGE_REQUESTED_MODEL,
+    generate_codex_image,
+)
 from services.image_generation_service import (
     OPENAI_IMAGE_MAX_ATTEMPTS,
     OPENAI_IMAGE_MAX_WAIT_SECONDS,
@@ -56,6 +60,7 @@ _TRANSPARENT_MODELS: dict[ImageProvider, str] = {
     ImageProvider.GPT_IMAGE_2_5_FLARE: "gpt-image-2.5-flare",
     ImageProvider.GPT_IMAGE_2_5_SUNBURST: "gpt-image-2.5-sunburst",
     ImageProvider.GPT_IMAGE_1_5: "gpt-image-1.5",
+    ImageProvider.CODEX_IMAGE: CODEX_IMAGE_REQUESTED_MODEL,
 }
 
 
@@ -121,6 +126,21 @@ class TransparentPngProvider:
     async def _generate(
         self, prompt: str, output_directory: str, size: str, semantic_slot: str
     ) -> str:
+        if get_selected_image_provider(self.settings) == ImageProvider.CODEX_IMAGE:
+            # The OAuth adapter owns the single admission/receipt boundary and
+            # never retries an uncertain request or falls back to an API key.
+            os.makedirs(output_directory, exist_ok=True)
+            path = await generate_codex_image(
+                prompt,
+                output_directory,
+                self.settings,
+                size=size,
+                background="transparent",
+                output_format="png",
+                semantic_slot=f"{semantic_slot}.codex",
+            )
+            await asyncio.to_thread(_normalize_dimensions, path, size)
+            return path
         api_key = get_openai_api_key_env(self.settings)
         if not api_key:
             raise ValueError("OPENAI_API_KEY is not configured")
@@ -172,6 +192,16 @@ class TransparentPngProvider:
             _write_bytes, path, base64.b64decode(result.data[0].b64_json)
         )
         return path
+
+
+def _normalize_dimensions(path: str, size: str) -> None:
+    """Codex may return another canvas size; preserve its whole grid and alpha."""
+    expected = tuple(int(value) for value in size.split("x"))
+    with Image.open(path) as image:
+        if image.size == expected:
+            return
+        normalized = image.resize(expected, Image.Resampling.LANCZOS)
+    normalized.save(path, format="PNG")
 
 
 def _write_bytes(path: str, payload: bytes) -> None:
