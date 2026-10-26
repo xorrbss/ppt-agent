@@ -459,7 +459,8 @@ async def _generate_deck(request, presentation_id, outline, language, session, j
     timing.bind_outline_spans(request, spans)
     with spans.span("prepare_total"):
         ctx = await _prepare_generation(request, presentation_id, outline, session, job)
-    if (ctx.snapshot.get("common_header_design_plan") or {}).get("schema") == "svg-common-header-design-plan/v2":
+    from services.svg_common_header_design_plan import uses_header_design
+    if uses_header_design(ctx.snapshot.get("common_header_design_plan")):
         from services.svg_common_header_generation import prepare_document_header
         ctx = await prepare_document_header(ctx, request, presentation_id, outline, language, job,
             checkpoint=checkpoint, async_session_maker=async_session_maker,

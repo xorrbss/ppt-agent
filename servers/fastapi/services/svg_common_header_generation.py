@@ -390,7 +390,63 @@ def _validated_selection(response, selection_input, mapping, pages, candidates):
     return candidate_id, result
 
 
-async def prepare_document_header(ctx, request, presentation_id, outline, language, job, *,
+async def prepare_document_header(ctx, request, presentation_id, outline, language, job, **hooks):
+    from services.svg_common_header_design_plan import (
+        HEADER_DESIGN_PLAN_VERSION, permits_header_fallback, reduced_header_outcome, require_header_design_plan,
+    )
+    plan = ctx.snapshot["common_header_design_plan"]
+    if plan.get("schema") != HEADER_DESIGN_PLAN_VERSION:
+        return await _prepare_designed_document_header(
+            ctx, request, presentation_id, outline, language, job, **hooks)
+    if require_header_design_plan(request) != plan:
+        raise ValueError("svg_common_header_design_plan_conflict")
+    from services import svg_presentation_service as facade
+    storage = {"session_maker": hooks["async_session_maker"], "owned_job": facade.owned_job}
+    document = await read_update_header_design(job, **storage)
+    if document.get("fallback") is not None:
+        return await _publish_reduced_header(ctx, request, outline, job, document, storage)
+    # Prove the alternative on every page before starting a design or body call.
+    reduced_header_outcome(plan, request, ctx.snapshot, outline, ctx.canvas)
+    try:
+        return await _prepare_designed_document_header(
+            ctx, request, presentation_id, outline, language, job, **hooks)
+    except ValueError as error:
+        document = await read_update_header_design(job, **storage)
+        if not permits_header_fallback(plan, str(error), document):
+            raise
+        outcome = reduced_header_outcome(plan, request, ctx.snapshot, outline, ctx.canvas)
+        selection = {"version": "svg-common-header-fallback/v1", "plan_digest": plan["plan_digest"],
+            "input_digest": plan["input_digest"], "reason": str(error), "mode": outcome["mode"],
+            "notice": "svg_common_header_reduced" if outcome["mode"] == "reduced" else "svg_common_header_free",
+            "outcome": outcome}
+        selection["digest"] = _digest(selection)
+        document.update(fallback=selection, status="reduced", plan_digest=plan["plan_digest"],
+                        input_digest=plan["input_digest"], version=VERSION)
+        await read_update_header_design(job, payload=document, **storage)
+        return await _publish_reduced_header(ctx, request, outline, job, document, storage)
+
+
+async def _publish_reduced_header(ctx, request, outline, job, document, storage):
+    from services.svg_common_header_design_checkpoint import publish_header_fallback
+    selection = document["fallback"]
+    proposed = header_snapshot_base(ctx.snapshot)
+    proposed = {**proposed, "common_header_selection": selection}
+    outcome = selection["outcome"]
+    if outcome["contract"] is not None:
+        proposed["common_header"] = outcome["contract"]
+    proposed["digest"] = _digest({key: value for key, value in proposed.items() if key != "digest"})
+    prepared = outline.model_copy(deep=True)
+    for slide, binding in zip(prepared.slides, outcome["bindings"], strict=True):
+        slide.common_header = deepcopy(binding)
+    await publish_header_fallback(job, snapshot=proposed, outline=prepared, **storage)
+    request._svg_style_snapshot = proposed
+    outline.slides = prepared.slides
+    ctx.snapshot = proposed
+    ctx.header_pages = outcome["bindings"] if outcome["contract"] is not None else None
+    return ctx
+
+
+async def _prepare_designed_document_header(ctx, request, presentation_id, outline, language, job, *,
         checkpoint, async_session_maker, read_png, write_png, page_runner, page_hooks_factory, state_factory):
     """Two isolated real page attempts, one independent screen decision, exact body reuse."""
     plan = ctx.snapshot["common_header_design_plan"]
@@ -483,10 +539,16 @@ async def prepare_document_header(ctx, request, presentation_id, outline, langua
                         "candidate_id": candidate["candidate_id"], "page_id": outline.slides[index].page_id}
                     candidate_contexts[candidate["candidate_id"]] = candidate_ctx
                 except (ValueError, ET.ParseError) as error:
+                    from services.svg_common_header_design_plan import known_header_design_rejection
+                    if not known_header_design_rejection(plan, error):
+                        raise
                     failures.append({"candidate_id": candidate["candidate_id"], "error": str(error)})
             if candidate_contexts:
                 break
         except (ValueError, ET.ParseError) as error:
+            from services.svg_common_header_design_plan import known_header_design_rejection
+            if not known_header_design_rejection(plan, error):
+                raise
             failures = [{"error": str(error)}]
         if revision == 2:
             raise ValueError("svg_common_header_candidates_ineligible")
@@ -511,6 +573,9 @@ async def prepare_document_header(ctx, request, presentation_id, outline, langua
                     and not (result.get("attempts", [{}])[-1].get("receipt") or {}).get("validation_error")),
                 "payload": result, "header_digest": candidate_ctx.snapshot["common_header"]["digest"]}
         except Exception as error:
+            from services.svg_common_header_design_plan import HEADER_DESIGN_PLAN_VERSION
+            if plan.get("schema") == HEADER_DESIGN_PLAN_VERSION:
+                raise
             saved = await candidate_checkpoint(job, index) or {}
             if saved.get("inflight") or "unknown" in str(getattr(error, "code", error)).lower() or "uncertain" in str(error).lower():
                 raise

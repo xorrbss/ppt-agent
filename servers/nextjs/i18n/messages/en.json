@@ -526,6 +526,8 @@
     "keyboardHint": "Enter to send · Shift+Enter for a new line"
   },
   "presentationPage": {
+    "headerReducedNotice": "A simpler shared header was used. The required titles have been preserved.",
+    "headerFreeNotice": "The shared header could not fit. Page-specific headers were used instead.",
     "pptPane": "PPT",
     "authoredNotice": "This presentation uses <mode>AI authored (high quality)</mode> mode — you can safely edit supported data-qid elements through <edit>Edit elements</edit> above. Complex CSS and unsupported elements are read only.",
     "rasterPreserveNotice": "The original screen was preserved as an image on each A4 page. Text in the image cannot be edited, and small text may be difficult to read.",

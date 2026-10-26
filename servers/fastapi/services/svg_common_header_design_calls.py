@@ -214,9 +214,16 @@ def build_header_call(payload, *, plan, stage, ordinal, images=(), on_terminal=N
     messages = [SystemMessage(content=(SELECTION_RULES if stage == "selection" else DESIGN_RULES) + TRANSPORT_RULES),
                 UserMessage(content=parts if images else parts[0].text)]
     from services.generation_core.quality.vision_advisory import _check_design_input
-    envelope = _check_design_input(messages, schema, client=client)
-    if envelope["serializedContextBytes"] + 1024 > plan["input_token_limit"]:
-        raise ValueError("svg_common_header_input_capacity_exceeded")
+    from services.svg_common_header_design_plan import HEADER_DESIGN_PLAN_VERSION, evaluate_header_capacity
+    from services.generation_core.quality.vision_advisory import DesignReviewInputCapacityError
+    try:
+        envelope = _check_design_input(messages, schema, client=client)
+    except DesignReviewInputCapacityError as error:
+        if plan.get("schema") == HEADER_DESIGN_PLAN_VERSION:
+            raise ValueError("svg_common_header_input_capacity_exceeded") from error
+        raise
+    envelope = evaluate_header_capacity(plan, text=messages[0].content + "\n" + parts[0].text,
+        schema=schema, images=images, envelope=envelope)
     preflight_header_selector()
     kwargs = get_generate_kwargs(model=model, messages=messages,
         max_tokens=plan["output_token_limit"],

@@ -2156,7 +2156,7 @@ def test_authoring_profile_staging_preserves_legacy_and_frozen_new_identity(monk
         from services.svg_common_header_design_plan import validate_header_design_plan
 
         assert validate_svg_readability_policy(snapshot["readability_policy"])["minimum_font_pt"] == 9
-        assert validate_header_design_plan(snapshot["common_header_design_plan"])["schema"] == "svg-common-header-design-plan/v2"
+        assert validate_header_design_plan(snapshot["common_header_design_plan"])["schema"] == "svg-common-header-design-plan/v3"
     else:
         assert "readability_policy" not in snapshot
     assert {key: value for key, value in snapshot.items() if key not in {"authoring_profile", "digest"} | new_contract_keys} == {

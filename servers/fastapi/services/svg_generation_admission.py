@@ -45,7 +45,8 @@ def pin_fresh_common_header_mode(request: object) -> None:
             or getattr(request, "_svg_style_snapshot", None) is not None
             or getattr(request, "_svg_authoring_profile_selected", False)):
         return
-    request.common_header_mode = "uniform"
+    from services.svg_common_header_design_plan import fresh_header_mode
+    request.common_header_mode = fresh_header_mode(request)
     request._common_header_defaulted = True
 
 
@@ -117,8 +118,9 @@ def svg_creation_admission_violation(request: object) -> str | None:
 
 
 def require_svg_creation_admission(request: object) -> None:
+    from services.svg_common_header_design_plan import fresh_header_mode_conflict
     if (getattr(request, "strategy", None) in (None, "svg")
-            and _common_header_preservation_conflict(request)):
+            and (_common_header_preservation_conflict(request) or fresh_header_mode_conflict(request))):
         # This is a conflicting user choice, not a reason to silently select
         # another generation strategy through the capability predicate.
         raise HTTPException(status_code=422, detail="svg_common_header_source_preservation_conflict")
@@ -312,6 +314,8 @@ def pin_svg_style(request: object) -> dict:
                 frozen["digest"] = canonical_json_digest(
                     {key: value for key, value in frozen.items() if key != "digest"}, allow_nan=True,
                 )
+                from services.svg_common_header_design_plan import preflight_admitted_header
+                preflight_admitted_header(frozen, request, canvas)
             if fresh_readability:
                 from services.authored_canvas import request_canvas_metadata
                 from services.document_canvas_generation import svg_readability_policy
