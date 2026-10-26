@@ -12,7 +12,6 @@ from typing import Any
 
 from sqlalchemy import update
 
-from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.workspace import WorkspaceOperation
 from utils.datetime_utils import get_current_utc_datetime
 from utils.hashing import canonical_json_digest
@@ -79,6 +78,10 @@ def _preserve_terminal(previous: dict, replacement: dict) -> dict:
     """Never erase observed provider attempts when a local stage is replayed."""
     if previous.get("state") == "unknown" and replacement != previous:
         raise ValueError("svg_header_design_outcome_unresolved")
+    fallback = previous.get("fallback")
+    if (isinstance(fallback, dict) and fallback.get("version") == "svg-common-header-fallback/v1"
+            and replacement.get("fallback") != fallback):
+        raise ValueError("svg_header_design_fallback_conflict")
     for key in ("provider_attempts", "provider_responses", "terminal_responses"):
         if key in previous and key not in replacement:
             replacement[key] = deepcopy(previous[key])
@@ -137,9 +140,11 @@ def _style_base(snapshot: dict) -> dict:
 async def publish_header_design(job, *, snapshot, outline, session_maker=None, owned_job=None):
     if isinstance(job, WorkspaceOperation):
         raise ValueError("svg_header_design_operation_requires_workspace_publication")
-    if not isinstance(snapshot, dict) or not isinstance(snapshot.get("common_header"), dict):
+    fallback = (isinstance(snapshot, dict) and
+        (snapshot.get("common_header_selection") or {}).get("version") == "svg-common-header-fallback/v1")
+    if not isinstance(snapshot, dict) or (not fallback and not isinstance(snapshot.get("common_header"), dict)):
         raise ValueError("svg_header_design_publication_invalid")
-    if snapshot["common_header"].get("version") != "svg-common-header/v2":
+    if not fallback and snapshot["common_header"].get("version") != "svg-common-header/v2":
         raise ValueError("svg_header_design_publication_invalid")
     raw_outline = outline.model_dump(mode="json") if hasattr(outline, "model_dump") else deepcopy(outline)
     if not isinstance(raw_outline, dict) or not isinstance(raw_outline.get("slides"), list):
@@ -161,11 +166,21 @@ async def publish_header_design(job, *, snapshot, outline, session_maker=None, o
                 if previous.get("page_id") is not None and previous["page_id"] != proposed.get("page_id"):
                     raise ValueError("svg_header_design_page_identity_conflict")
         from services.svg_common_header import validate_common_header_binding
-        header = snapshot["common_header"]
+        header = snapshot.get("common_header")
         selection = snapshot.get("common_header_selection")
         document = envelope["document"]
         plan = snapshot.get("common_header_design_plan", {})
-        if (not isinstance(selection, dict) or document.get("status") != "selected"
+        if fallback:
+            from services.svg_common_header_design_plan import validate_header_fallback
+            outcome = validate_header_fallback(plan, selection, document, envelope["candidate_pages"])
+            if document["status"] == "published" and envelope.get("published_inputs") != {
+                    "snapshot_digest": (current.svg_style_snapshot or {}).get("digest"),
+                    "outline_digest": canonical_json_digest(current.authored_outline)}:
+                raise ValueError("svg_common_header_publication_conflict")
+            if (header != outcome["contract"]
+                    or [slide.get("common_header") for slide in raw_outline["slides"]] != outcome["bindings"]):
+                raise ValueError("svg_header_design_fallback_conflict")
+        elif (not isinstance(selection, dict) or document.get("status") != "selected"
                 or document.get("selection") != selection
                 or selection.get("plan_digest") != plan.get("plan_digest")
                 or selection.get("selected_candidate_id") != header.get("candidate_id")
@@ -180,20 +195,23 @@ async def publish_header_design(job, *, snapshot, outline, session_maker=None, o
         page_ids = [slide.get("page_id") for slide in raw_outline["slides"]]
         if any(not isinstance(value, str) or not value for value in page_ids) or len(set(page_ids)) != len(page_ids):
             raise ValueError("svg_header_design_page_identity_conflict")
-        representative_id = selection.get("representative_page_id")
-        if representative_id not in page_ids:
-            raise ValueError("svg_header_design_representative_conflict")
-        representative_index = page_ids.index(representative_id)
-        candidate_key = _candidate_key(representative_index, {
-            "candidate_revision": str(header["revision"]),
-            "candidate_id": header["candidate_id"], "page_id": representative_id,
-        })
-        if not envelope["candidate_pages"].get(candidate_key, {}).get("author_body_svg"):
-            raise ValueError("svg_header_design_selected_body_missing")
+        if not fallback:
+            representative_id = selection.get("representative_page_id")
+            if representative_id not in page_ids:
+                raise ValueError("svg_header_design_representative_conflict")
+            representative_index = page_ids.index(representative_id)
+            candidate_key = _candidate_key(representative_index, {
+                "candidate_revision": str(header["revision"]),
+                "candidate_id": header["candidate_id"], "page_id": representative_id,
+            })
+            if not envelope["candidate_pages"].get(candidate_key, {}).get("author_body_svg"):
+                raise ValueError("svg_header_design_selected_body_missing")
         for index, slide in enumerate(raw_outline["slides"]):
             binding = slide.get("common_header")
+            if fallback and header is None:
+                continue
             if (not isinstance(binding, dict) or binding.get("page_index") != index
-                    or binding.get("page_id") != slide["page_id"]):
+                    or (not fallback and binding.get("page_id") != slide["page_id"])):
                 raise ValueError("svg_header_design_binding_incomplete")
             validate_common_header_binding(header, binding, index=index,
                 count=len(raw_outline["slides"]), content=slide["content"], title=slide.get("title"),
@@ -202,6 +220,8 @@ async def publish_header_design(job, *, snapshot, outline, session_maker=None, o
         current.authored_outline = raw_outline
         envelope["published_inputs"] = {"snapshot_digest": snapshot.get("digest"),
             "outline_digest": canonical_json_digest(raw_outline)}
+        if fallback:
+            document["status"] = "published"
         current.svg_header_design_checkpoint = envelope
         session.add(current)
         await session.commit()
@@ -209,3 +229,6 @@ async def publish_header_design(job, *, snapshot, outline, session_maker=None, o
         job.authored_outline = deepcopy(raw_outline)
         job.svg_header_design_checkpoint = deepcopy(envelope)
     return snapshot
+
+
+publish_header_fallback = publish_header_design

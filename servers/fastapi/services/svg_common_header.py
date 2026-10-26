@@ -33,7 +33,8 @@ def _digest(value: object) -> str:
 
 def header_snapshot_base(snapshot: dict | None) -> dict | None:
     """Remove only the new header extension; absent legacy snapshots are exact."""
-    if not isinstance(snapshot, dict) or "common_header" not in snapshot:
+    if not isinstance(snapshot, dict) or ("common_header" not in snapshot
+            and (snapshot.get("common_header_selection") or {}).get("version") != "svg-common-header-fallback/v1"):
         return snapshot
     base = {key: value for key, value in snapshot.items() if key not in {"common_header", "common_header_selection"}}
     base["digest"] = canonical_json_digest({key: value for key, value in base.items() if key != "digest"},

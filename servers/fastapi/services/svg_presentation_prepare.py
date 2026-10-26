@@ -23,6 +23,7 @@ from sqlalchemy import select
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from services.authored_checkpoint_errors import AuthoredStageError
 from services.svg_presentation_legacy_assets import _legacy_source_image_manifest
+from services.svg_common_header_design_plan import uses_header_design
 
 
 def _restore_pinned_source_image_plan(manifest, candidates, planned):
@@ -303,8 +304,7 @@ async def _verify_frozen_title_result(session, job, outline, plan):
             or set(stored) != {"version", "identity", "state", "result"}):
         raise ValueError("svg_common_header_title_checkpoint_conflict")
     from services.svg_common_header import common_header_source_digest
-    preparing_v2 = ((job.svg_style_snapshot or {}).get("common_header_design_plan", {}).get("schema")
-                    == "svg-common-header-design-plan/v2"
+    preparing_v2 = (uses_header_design((job.svg_style_snapshot or {}).get("common_header_design_plan"))
                     and "common_header" not in (job.svg_style_snapshot or {}))
     pages = [{"page_index": index,
               "source_digest": (common_header_source_digest(slide.content) if preparing_v2
@@ -365,8 +365,7 @@ async def _pin_owned_svg_style(request, job, *, pin_style, session_maker, owned_
         saved_outline = getattr(current, "authored_outline", None)
         if (outline is not None and getattr(request, "common_header_mode", None) == "uniform"
                 and (frozen is not None or saved_outline is not None)
-                and (frozen or {}).get("common_header_design_plan", {}).get("schema")
-                    != "svg-common-header-design-plan/v2"
+                and not uses_header_design((frozen or {}).get("common_header_design_plan"))
                 and not (isinstance(frozen, dict) and "common_header" in frozen
                          and saved_outline is not None)):
             raise ValueError("svg_common_header_binding_incomplete")
@@ -391,7 +390,16 @@ async def _pin_owned_svg_style(request, job, *, pin_style, session_maker, owned_
             raise RuntimeError("svg_style_snapshot_conflict")
         if outline is not None:
             design_plan = snapshot.get("common_header_design_plan") or {}
-            if (design_plan.get("schema") == "svg-common-header-design-plan/v2"
+            selection = snapshot.get("common_header_selection") or {}
+            if selection.get("version") == "svg-common-header-fallback/v1" and selection.get("mode") == "free":
+                if saved_outline != outline.model_dump(mode="json"):
+                    raise ValueError("svg_common_header_outline_conflict")
+                prepared = outline.model_copy(deep=True)
+                if (getattr(request, "_svg_header_title_plan", None) is not None
+                        and not (current.request_payload or {}).get("_svg_partial_recovery")):
+                    from services.svg_common_header_title_budget import validate_header_title_plan
+                    frozen_title_plan = validate_header_title_plan(request._svg_header_title_plan)
+            elif (uses_header_design(design_plan)
                     and "common_header" not in snapshot):
                 # The v2 document design owns the later CAS that publishes all
                 # bindings together. Never create a provisional v1 header.
@@ -589,9 +597,9 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
         request, job, pin_style=pin_svg_style, session_maker=async_session_maker, owned_job=owned_job,
         outline=outline, canvas=canvas,
     )
-    if (snapshot.get("common_header_design_plan") or {}).get("schema") == "svg-common-header-design-plan/v2":
-        from services.svg_common_header_design_calls import preflight_header_selector
-        preflight_header_selector()
+    if uses_header_design(snapshot.get("common_header_design_plan")):
+        from services.svg_common_header_design_plan import preflight_header_policy
+        preflight_header_policy(snapshot, request, outline, canvas)
     if source_reflow:
         from services.svg_source_layout import source_pages
         source_units = source_pages(source_document, chart_contract=snapshot.get("source_chart_contract"))

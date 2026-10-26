@@ -16,6 +16,7 @@ import SlideContent from "./SlideContent";
 import { Button } from "@/components/ui/button";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import HeaderPolicyNotice from "./HeaderPolicyNotice";
 import { AlertCircle, Keyboard, Layers, X } from "lucide-react";
 import { ConversationWorkspaceToolbar } from "./ConversationWorkspaceToolbar";
 import { ConversationResultNotice } from "./ConversationResultNotice";
@@ -783,6 +784,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
                   </div>
                 ) : null}
                 <div className="w-full max-w-[1280px] min-h-full mx-auto flex flex-col items-center pb-8">
+                  {showResult && <HeaderPolicyNotice theme={presentationData?.theme} />}
                   {!presentationData ||
                   loading ||
                   (previewArtifactRequired && previewSlides === null) ||

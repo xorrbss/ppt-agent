@@ -34,6 +34,7 @@ from services import svg_outline_spans
 from services.generation_core.drivers.svg.terminal import (
     PLACEHOLDER_OUTCOME, is_exhausted_page, rescue_terminal_page,
 )
+from services.svg_common_header_design_plan import uses_header_design
 from services.svg_presentation_checkpoint import (
     _collect_pages_or_fail,
     _digest,
@@ -501,7 +502,7 @@ async def _generate_deck(
     with spans.span("prepare_total"):
         ctx = await _prepare_generation(request, presentation_id, outline, session, job)
     timing.bind_runtime_provenance(request, ctx)
-    if (ctx.snapshot.get("common_header_design_plan") or {}).get("schema") == "svg-common-header-design-plan/v2":
+    if uses_header_design(ctx.snapshot.get("common_header_design_plan")):
         from services.svg_common_header_generation import prepare_document_header
         ctx = await prepare_document_header(ctx, request, presentation_id, outline, language, job,
             checkpoint=checkpoint, async_session_maker=async_session_maker,

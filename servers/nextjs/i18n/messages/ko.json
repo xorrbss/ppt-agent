@@ -526,6 +526,8 @@
     "keyboardHint": "Enter 전송 · Shift+Enter 줄바꿈"
   },
   "presentationPage": {
+    "headerReducedNotice": "더 간단한 공통 헤더를 적용했습니다. 필수 제목은 그대로 유지했습니다.",
+    "headerFreeNotice": "공통 헤더가 맞지 않아 페이지별 헤더를 적용했습니다.",
     "pptPane": "PPT",
     "authoredNotice": "이 발표자료는 <mode>AI 저작(고품질)</mode> 모드입니다 — 상단 <edit>요소 편집</edit>에서 지원되는 data-qid 요소만 안전하게 수정할 수 있으며, 복합 CSS와 지원 불가 요소는 읽기 전용입니다.",
     "rasterPreserveNotice": "원본 화면을 각 페이지의 이미지로 A4에 보존했습니다. 화면 안의 텍스트는 편집할 수 없으며 작은 글자는 읽기 어려울 수 있습니다.",
