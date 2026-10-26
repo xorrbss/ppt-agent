@@ -129,7 +129,7 @@ def test_local_export_bridge_uses_selected_authentication_not_forwarded_headers(
     from api.v1.auth.principal import PrincipalEnvelope
     from services.workspace_operation_principal import local_development_export_bridge
 
-    monkeypatch.setattr("api.v1.auth.principal.get_environment_name", lambda *_: environment)
+    monkeypatch.setattr("models.principal.get_environment_name", lambda *_: environment)
     request = Request({"type": "http", "scheme": "http", "method": "GET", "path": "/api/v1/ppt/workspace",
                        "client": (peer, 1234), "server": (host, 8000),
                        "headers": [(b"host", host.encode()), (b"x-forwarded-for", b"127.0.0.1")]})
@@ -181,7 +181,7 @@ def test_ui_export_admission_and_worker_payload_share_generation_tenant(
 
     monkeypatch.setattr("utils.env_settings.public_service.get_public_process_identity_settings",
                         lambda: SimpleNamespace(service_tenant_id="default"))
-    monkeypatch.setattr("api.v1.auth.principal.get_environment_name",
+    monkeypatch.setattr("models.principal.get_environment_name",
                         lambda *_: "production" if bridge == "production" else "development")
     seen = []
 
@@ -228,7 +228,8 @@ def test_ui_export_admission_and_worker_payload_share_generation_tenant(
             try:
                 bridge_kwargs = {}
                 if bridge != "default":
-                    request = Request({"type": "http", "scheme": "http", "method": "POST", "path": "/api/v1/ppt/workspace",
+                    request = Request({"type": "http", "scheme": "http", "method": "POST",
+                                       "path": "/api/v1/ppt/workspace",
                                        "client": ("203.0.113.1" if bridge == "remote" else "127.0.0.1", 1234),
                                        "server": ("localhost", 8000),
                                        "headers": [(b"host", b"localhost"), (b"x-forwarded-for", b"127.0.0.1")]})

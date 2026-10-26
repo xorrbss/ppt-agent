@@ -99,21 +99,24 @@ def test_local_reservation_barrier_is_durable_and_outside_provider_permits(monke
     checkpoint = harness.ctx.quality_recovery_review_group_checkpoint
     reviewed = _provider(harness)
     held = False
+    lock = asyncio.Lock()
 
     class Permit:
         async def __aenter__(self):
             nonlocal held
+            await lock.acquire()
             assert not held
             held = True
 
         async def __aexit__(self, *args):
             nonlocal held
             held = False
+            lock.release()
 
     harness.ctx.semaphore = Permit()
 
     async def persist(ordinal, marker=None):
-        assert not held
+        assert held is (marker is not None and marker.get("status") == "review_inflight")
         await asyncio.sleep(0)
         return await checkpoint(ordinal, marker)
 

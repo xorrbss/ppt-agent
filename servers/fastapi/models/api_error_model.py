@@ -1,4 +1,6 @@
 import re
+import sys
+from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import HTTPException
@@ -9,6 +11,28 @@ _STABLE_ERROR_CODE = re.compile(r"^[a-z][a-z0-9_]*$")
 _STRUCTURED_ERROR_CODE = re.compile(
     r"(?=.{1,128}$)[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)*(?::[A-Za-z0-9]+(?:_[A-Za-z0-9]+)*){0,3}"
 )
+_APPLICATION_SOURCE_ROOT = Path(__file__).resolve().parents[1]
+_VENDORED_SOURCE_ROOT = _APPLICATION_SOURCE_ROOT / "vendor"
+
+
+def _is_application_exception(e: Exception) -> bool:
+    for exception_class in type(e).__mro__:
+        module = sys.modules.get(exception_class.__module__)
+        module_file = getattr(module, "__file__", None)
+        if not module_file:
+            continue
+        try:
+            source_file = Path(module_file).resolve()
+            source_file.relative_to(_APPLICATION_SOURCE_ROOT)
+        except (OSError, ValueError):
+            continue
+        if not source_file.is_file():
+            continue
+        try:
+            source_file.relative_to(_VENDORED_SOURCE_ROOT)
+        except ValueError:
+            return True
+    return False
 
 
 class APIErrorModel(BaseModel):
@@ -76,11 +100,15 @@ class APIErrorModel(BaseModel):
             status_code = 500
             detail = str(e)
 
-        # Generation boundaries attach a classified code explicitly. Ordinary
-        # HTTP detail objects retain the historical lowercase-only inference.
-        exception_code = getattr(e, "code", None)
+        # HTTP boundaries attach classified codes explicitly. Application-owned
+        # exception types also declare codes; driver/SDK attributes are private.
+        application_error = _is_application_exception(e)
+        exception_code = getattr(e, "code", None) if isinstance(e, HTTPException) or application_error else None
         if code is None and isinstance(exception_code, str) and _STRUCTURED_ERROR_CODE.fullmatch(exception_code):
             code = exception_code
+        if code is None and not isinstance(e, HTTPException):
+            # Do not let the model validator infer a code from raw exception text.
+            code = f"http_error_{status_code}"
 
         return APIErrorModel(
             status_code=status_code,
