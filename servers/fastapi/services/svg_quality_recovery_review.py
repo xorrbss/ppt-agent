@@ -11,18 +11,18 @@ from services.generation_core.quality.vision_advisory_prompt import (
 from utils.hashing import sha256_hex
 
 
-def saved_review_runtime(context=None):
+def saved_review_runtime():
     from services import svg_renderer
     from services.svg_trusted_fonts import FONT_DIRECTORY, BUNDLED_FACES
     from utils.svg_template_fonts import FONT_PATH
     from services.public_render_runtime_identity import public_render_runtime_binding
-    from services.generation_core.quality.vision_advisory_prompt import review_prompt_version
+    from services.generation_core.quality.vision_advisory_prompt import DESIGN_REVIEW_PROMPT_VERSION
     from services.generation_core.quality import vision_advisory, vision_advisory_prompt
     return dict(rendererVersion=svg_renderer.SVG_RENDERER_VERSION,
         rendererDigest=sha256_hex(Path(svg_renderer.__file__).read_bytes()),
         fontDigests=[sha256_hex(path.read_bytes()) for path in
             [FONT_PATH, *[FONT_DIRECTORY / filename for _, _, filename in BUNDLED_FACES]]],
-        worker=public_render_runtime_binding(), promptVersion=review_prompt_version(context or {}),
+        worker=public_render_runtime_binding(), promptVersion=DESIGN_REVIEW_PROMPT_VERSION,
         reviewerDigests=[sha256_hex(Path(module.__file__).read_bytes())
                          for module in (vision_advisory, vision_advisory_prompt)])
 
@@ -191,12 +191,6 @@ def prepare_saved_review(presentation, slides, indices, pngs, *, operation_id, o
         roles=[(slide.content or {}).get("role") or "content" for slide in slides],
         quality_review_contents=[(slide.content or {}).get("source") for slide in slides],
         quality_recovery_runtime_binding=content_digest(runtime), header_pages=header_pages)
-    context = _design_context(ctx, pages, job=job, read_png=lambda payload: None,
-                              review_principles_version=DESIGN_PRINCIPLES_VERSION, measurement_evidence=True)
-    baseline = baseline_review_active(context)
-    context["reviewScope"] = "full" if baseline else "edited"
-    runtime = saved_review_runtime(context)
-    ctx.quality_recovery_runtime_binding = content_digest(runtime)
     context = _design_context(ctx, pages, job=job, read_png=lambda payload: None,
                               review_principles_version=DESIGN_PRINCIPLES_VERSION, measurement_evidence=True)
     baseline = baseline_review_active(context)
