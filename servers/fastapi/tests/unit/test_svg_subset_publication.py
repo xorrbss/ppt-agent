@@ -6,6 +6,9 @@ import pytest
 
 from models.sql.presentation import PresentationModel
 from services.generation_core.drivers.svg import publish, quality
+from services.generation_core.quality.vision_advisory_prompt import (
+    AXIS_REVIEW_PROMPT_VERSION, DESIGN_REVIEW_PROMPT_VERSION,
+)
 from services.svg_export_visual_review import release_readiness, svg_visual_review, svg_quality_status
 from tests.unit.test_svg_axis_review import _fresh
 from tests.unit.test_svg_page_quality_publication import (
@@ -13,6 +16,19 @@ from tests.unit.test_svg_page_quality_publication import (
 )
 from tests.unit.test_svg_review_read_retries import _harness, _provider
 from utils.hashing import sha256_hex
+
+
+def _export_binding(presentation, session, svg):
+    """Mirror svg_source_review_context plus the export's identity binding."""
+    publication = svg["qualityRecoveryPublication"]
+    parent = session.get.return_value
+    source_context = dict(snapshot=svg["styleSnapshot"], publication=publication,
+        producer=dict(operationId=str(parent.id), presentationId=str(parent.presentation_id),
+            ownerId=str(parent.owner_id), ownerScope=str(parent.owner_scope),
+            sourceRevision=publication["sourceGenerationRevision"], state=parent.state, kind=parent.kind))
+    identity = dict(presentationId=str(presentation.id), ownerId=str(presentation.owner_id),
+        ownerScope=str(parent.owner_scope), sourceRevision=publication["sourceRevision"])
+    return {**identity, "_generationSourceReview": source_context}
 
 
 @pytest.mark.parametrize(("invalid", "axis_review"), [([1, 4], True), ([1], True), ([], True), ([], False)])
@@ -48,16 +64,20 @@ def test_subset_publication_and_export_keep_original_page_identity(monkeypatch, 
     harness.job.attempt_token = "attempt"
     presentation = PresentationModel(id=harness.job.presentation_id, owner_id=harness.owner,
         content="deck", n_slides=5, mode="svg", revision=0)
-    session = _Session(presentation, SimpleNamespace(owner_id=harness.owner,
-        presentation_id=harness.job.presentation_id, owner_scope=harness.owner))
+    parent = SimpleNamespace(id=harness.job.workspace_operation_id, owner_id=harness.owner,
+        presentation_id=harness.job.presentation_id, owner_scope=harness.owner,
+        state="succeeded", kind="presentation.generate", result_revision=1)
+    session = _Session(presentation, parent)
     asyncio.run(publish._publish(_request(), harness.job.presentation_id, _outline(5), "ko", session,
         harness.job, harness.snapshot, ["content"] * 5, harness.pages,
         quality_summary=quality.reclassify_pages(harness.pages), advisory=advisory))
     session.commit.assert_awaited_once()
     svg, slides = _published(session)
     assert len(slides) == 5
+    assert advisory["vision"]["promptVersion"] == (
+        AXIS_REVIEW_PROMPT_VERSION if axis_review else DESIGN_REVIEW_PROMPT_VERSION)
     assert svg["reviewPages"] == invalid
-    assert svg["designReview"]["unreviewedPages"] == invalid
+    assert svg["designReview"].get("unreviewedPages", []) == invalid
     assert svg["advisory"]["operationBinding"]["reviewedPageIndices"] == expected
     records = {record["index"]: record for record in svg["pageAdvisories"]}
     assert set(records) == set(range(5))
@@ -73,7 +93,7 @@ def test_subset_publication_and_export_keep_original_page_identity(monkeypatch, 
     assert status["reviewedPages"] == expected
     assert status["semanticCurrent"]["status"] == ("partial" if invalid else "current")
     exported = svg_visual_review(slides=slides, advisory=svg["advisory"],
-        expected_binding=svg["advisory"]["operationBinding"])
+        expected_binding=_export_binding(presentation, session, svg))
     if invalid:
         assert exported == dict(required=True, status="failed",
             reasonCode="svg_visual_advisory_review_coverage_incomplete")
