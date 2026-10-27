@@ -1,6 +1,7 @@
 """Real subset producer -> publication -> export evidence, with storage isolated."""
 import asyncio
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -12,6 +13,7 @@ from services.generation_core.quality.vision_advisory_prompt import (
     AXIS_REVIEW_PROMPT_VERSION, DESIGN_REVIEW_PROMPT_VERSION,
 )
 from services.svg_export_visual_review import release_readiness, svg_visual_review, svg_quality_status
+from services.svg_export_quality import svg_public_quality_receipt
 from tests.unit.test_svg_axis_review import _fresh
 from tests.unit.test_svg_page_quality_publication import (
     PNG, _Session, _outline, _published, _request, _storage,
@@ -92,6 +94,8 @@ def test_subset_publication_and_export_keep_original_page_identity(monkeypatch, 
         AXIS_REVIEW_PROMPT_VERSION if axis_review else DESIGN_REVIEW_PROMPT_VERSION)
     assert svg["reviewPages"] == invalid
     assert svg["designReview"].get("unreviewedPages", []) == invalid
+    if invalid:
+        assert svg["advisory"]["vision"]["designReview"]["deckFlow"]["evaluated"] is False
     assert svg["advisory"]["operationBinding"]["reviewedPageIndices"] == expected
     records = {record["index"]: record for record in svg["pageAdvisories"]}
     assert set(records) == set(range(count))
@@ -111,6 +115,15 @@ def test_subset_publication_and_export_keep_original_page_identity(monkeypatch, 
     if invalid:
         assert exported == dict(required=True, status="failed",
             reasonCode="svg_visual_advisory_review_coverage_incomplete")
+        receipt = svg_public_quality_receipt(slides=slides, advisory=svg["advisory"],
+            source_preservation=None, worker_metrics={}, review_binding=_export_binding(presentation, session, svg),
+            exporter_version="test-exporter/v1", quality_receipt_id="quality-replay",
+            operation_id="operation-replay", presentation_id=str(presentation.id),
+            artifact_digest="sha256:" + "a" * 64, source_revision=1,
+            scene_digest="sha256:" + "b" * 64, evaluated_at=datetime.now(timezone.utc))
+        assert receipt["visualReview"]["status"] == exported["status"]
+        assert receipt["visualReview"]["reasonCode"] == exported["reasonCode"]
+        assert receipt["releaseReadiness"] == "blocked"
     else:
         assert exported["status"] == "passed" and "reasonCode" not in exported
         assert release_readiness([exported]) == "ready"
