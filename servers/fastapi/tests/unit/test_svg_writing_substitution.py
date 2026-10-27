@@ -74,23 +74,31 @@ def test_spaced_middle_dots_across_runs_are_counted_and_normalized():
     assert not assess_visible_nodes(svg_text_nodes(repaired))["hard_violation_counts"]
 
 
-@pytest.mark.parametrize("page_text", [
-    "270대·월",  # LIVE-4 page 14 failed attempt
-    "270대·월\n480대·월",  # LIVE-4 page 20 failed attempt text values
-    "배송 품질 | 최상위 지표",  # LIVE-4 page 25 failed attempt
+@pytest.mark.parametrize(("page_text", "expected_symbol", "expected_count", "expected_protected"), [
+    ("270대·월", None, 0, 1),  # LIVE-4 page 14 failed attempt
+    ("270대·월\n480대·월", None, 0, 2),  # LIVE-4 page 20 failed attempt text values
+    ("배송 품질 | 최상위 지표", "|", 1, 0),  # LIVE-4 page 25 failed attempt
 ])
-def test_live_r30_failed_attempt_contexts_repair_before_quality_without_correction(monkeypatch, page_text):
+def test_live_r30_failed_attempt_contexts_pass_before_quality_without_correction(
+    monkeypatch, page_text, expected_symbol, expected_count, expected_protected,
+):
     page, provider, renderer, _ = _page_flow(monkeypatch, page_text)
     payload = page[0]
     assert provider.await_count == renderer.await_count == 1
     assert payload["quality"]["passed"] is True
     assert not payload["quality"]["writing_policy"]["hard_violation_counts"]
-    receipt = payload["quality"]["writing_policy"]["local_substitution"]
-    assert receipt["substitutions"] == [{
-        "symbol": "|" if "|" in page_text else "·",
-        "count": page_text.count("|") + page_text.count("·"),
-        "replacement": ", ",
-    }]
+    if expected_symbol is None:
+        assert "local_substitution" not in payload["quality"]["writing_policy"]
+        assert payload["quality"]["writing_policy"]["protected_symbol_counts"] == {
+            "middle_dot": expected_protected,
+        }
+    else:
+        receipt = payload["quality"]["writing_policy"]["local_substitution"]
+        assert receipt["substitutions"] == [{
+            "symbol": expected_symbol,
+            "count": expected_count,
+            "replacement": ", ",
+        }]
 
 
 @pytest.mark.parametrize("text", ["30%·20%", "2건·3건", "1분기·2분기", "매출 30%·이익 20%", "10만·20만"])
@@ -103,6 +111,26 @@ def test_complete_korean_quantity_tokens_are_mapped(text):
     start, end, replacement = edits[0]
     repaired = text[:start] + replacement + text[end:]
     assert not scan_visible_text(repaired).violations
+
+
+def test_two_korean_counters_are_a_list_and_substitute():
+    from services.ppt_writing_policy import scan_visible_text, visible_symbol_substitutions
+
+    text = "2건·3건"
+    scan = scan_visible_text(text)
+    start, end, replacement = visible_symbol_substitutions(text, scan)[0]
+    assert text[:start] + replacement + text[end:] == "2건, 3건"
+    assert not scan_visible_text("2건, 3건").violations
+
+
+def test_korean_vehicle_month_product_is_protected_from_mapping_and_violation():
+    from services.ppt_writing_policy import scan_visible_text, visible_symbol_substitutions
+
+    text = "270대·월"
+    scan = scan_visible_text(text)
+    assert not scan.violations
+    assert scan.protected_counts == {"middle_dot": 1}
+    assert visible_symbol_substitutions(text, scan) == ()
 
 
 def test_complete_korean_body_phrases_map_pipe_but_not_cell_literals_or_header():
@@ -121,11 +149,14 @@ def test_complete_korean_body_phrases_map_pipe_but_not_cell_literals_or_header()
 
 
 def test_numeric_and_si_products_remain_untouched():
+    from services.ppt_writing_policy import scan_visible_text, visible_symbol_substitutions
     from services.ppt_writing_visible import substitute_svg_visible_symbols
 
     for text in ("3·4", "kg·m"):
         svg = f"<svg><text>{text}</text></svg>"
         assert substitute_svg_visible_symbols(svg) == (svg, [])
+        scan = scan_visible_text(text)
+        assert not visible_symbol_substitutions(text, scan)
 
 
 def test_required_numeric_literal_remains_untouched():

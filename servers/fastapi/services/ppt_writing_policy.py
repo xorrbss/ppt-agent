@@ -140,6 +140,19 @@ _UNIT_PRODUCT = re.compile(
     r"(?<![A-Za-z0-9가-힣])(?:kN[·⋅]m|N[·⋅]m|kg[·⋅]m|Pa[·⋅]s|J[·⋅]s|"
     r"W[·⋅]s|V[·⋅]A|A[·⋅]s|m[·⋅]s)(?![A-Za-z0-9가-힣])"
 )
+# Korean vehicle-month and similar measures use a quantity followed by a
+# counter/unit, then a bare time/unit word. Right-side tokens stay explicit:
+# these common calendar, duration and count units are meaningful products,
+# while arbitrary Korean words after a dot remain eligible for list review.
+_KOREAN_QUANTITY_SUFFIXES = ("시간", "분", "대", "건", "명", "인", "회", "월", "일", "년", "주", "km")
+_KOREAN_BARE_UNIT_WORDS = ("시간", "분", "월", "일", "년", "주", "회", "명", "인", "대", "건", "km")
+_KOREAN_UNIT_PRODUCT = re.compile(
+    r"(?<![A-Za-z0-9가-힣])\d+(?:[.,]\d+)?(?:"
+    + "|".join(map(re.escape, _KOREAN_QUANTITY_SUFFIXES))
+    + r")[·ㆍ‧∙⋅](?:"
+    + "|".join(map(re.escape, _KOREAN_BARE_UNIT_WORDS))
+    + r")(?![A-Za-z0-9가-힣])"
+)
 _NUMERIC_PRODUCT = re.compile(
     r"(?<![A-Za-z0-9가-힣])\d+(?:[.,]\d+)?\s*[·ㆍ‧∙⋅]\s*\d+(?:[.,]\d+)?(?![A-Za-z0-9가-힣])"
 )
@@ -206,6 +219,7 @@ def scan_visible_text(
             _PERIOD_RANGE,
             _UNIT_SLASH,
             _UNIT_PRODUCT,
+            _KOREAN_UNIT_PRODUCT,
             _NUMERIC_PRODUCT,
             _VARIABLE_PRODUCT,
         )
