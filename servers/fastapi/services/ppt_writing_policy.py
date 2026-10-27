@@ -1,7 +1,7 @@
 """Versioned instructions and content-free diagnostics for slide display text.
 
 Callers supply text that will actually be visible. This module does not parse
-SVG/HTML, edit source material, or decide whether a rewrite preserves meaning.
+SVG/HTML or edit source material. Safe local replacements live with their rules.
 """
 
 from __future__ import annotations
@@ -85,14 +85,28 @@ class WritingScan:
         return dict(Counter(hit.category.value for hit in self.protected_symbols))
 
 
-_SINGLE_SYMBOLS: tuple[tuple[SymbolCategory, str], ...] = (
-    (SymbolCategory.MIDDLE_DOT, "·ㆍ‧∙⋅"),
-    (SymbolCategory.INLINE_BULLET, "•●◦▪‣"),
-    (SymbolCategory.LONG_DASH, "–—―"),
-    (SymbolCategory.TEXT_ARROW, "→⇒➜➔⟶←↔↑↓⇢⟵"),
-    (SymbolCategory.PIPE_SEPARATOR, "|｜│"),
-    (SymbolCategory.DECORATIVE_MARK, "※★☆◆◇▶"),
-    (SymbolCategory.DECORATIVE_CHECK, "✓✔☑✅"),
+@dataclass(frozen=True)
+class SymbolRule:
+    category: SymbolCategory
+    characters: str
+    replacement: str | None = None
+    # The writing prompt prefers ordinary punctuation for newly written lists;
+    # this is a style rule, not a font/editability repair. Restrict the mechanical
+    # replacement to adjacent Korean words; formulas, names and values are not lists.
+    left_context: str = r"(?<!\w)[가-힣]+[ \t]*$"
+    right_context: str = r"^[ \t]*[가-힣]+(?!\w)"
+
+
+_SINGLE_SYMBOLS: tuple[SymbolRule, ...] = (
+    SymbolRule(SymbolCategory.MIDDLE_DOT, "·ㆍ‧∙⋅", ", "),
+    # These can encode grouping, relation, omission or emphasis. No mechanical
+    # replacement proves the intended meaning; retain the ordinary correction.
+    SymbolRule(SymbolCategory.INLINE_BULLET, "•●◦▪‣"),
+    SymbolRule(SymbolCategory.LONG_DASH, "–—―"),
+    SymbolRule(SymbolCategory.TEXT_ARROW, "→⇒➜➔⟶←↔↑↓⇢⟵"),
+    SymbolRule(SymbolCategory.PIPE_SEPARATOR, "|｜│"),
+    SymbolRule(SymbolCategory.DECORATIVE_MARK, "※★☆◆◇▶"),
+    SymbolRule(SymbolCategory.DECORATIVE_CHECK, "✓✔☑✅"),
 )
 _MULTI_SYMBOLS: tuple[tuple[SymbolCategory, re.Pattern[str]], ...] = (
     (SymbolCategory.TEXT_ARROW, re.compile(r"->|=>")),
@@ -190,12 +204,12 @@ def scan_visible_text(
         for match in pattern.finditer(text)
     ]
     candidates: list[tuple[int, int, SymbolCategory]] = []
-    for category, characters in _SINGLE_SYMBOLS:
+    for rule in _SINGLE_SYMBOLS:
         candidates.extend(
-            (index, index + 1, category)
+            (index, index + 1, rule.category)
             for index, char in enumerate(text)
-            if char in characters
-            and (category is not SymbolCategory.INLINE_BULLET or _is_inline_bullet(text, index))
+            if char in rule.characters
+            and (rule.category is not SymbolCategory.INLINE_BULLET or _is_inline_bullet(text, index))
         )
     for category, pattern in _MULTI_SYMBOLS:
         candidates.extend((match.start(), match.end(), category) for match in pattern.finditer(text))
@@ -234,3 +248,17 @@ def scan_visible_text(
         protected_symbols=tuple(protected),
         style_signals=tuple(sorted(signals, key=lambda item: item.start)),
     )
+
+
+def visible_symbol_substitutions(text: str, scan: WritingScan) -> tuple[tuple[int, int, str], ...]:
+    """Return edits only for unprotected findings with a policy-owned safe mapping."""
+    edits = []
+    for hit in scan.violations:
+        rule = next((rule for rule in _SINGLE_SYMBOLS if rule.category == hit.category), None)
+        if (rule is not None and rule.replacement is not None
+                and re.search(rule.left_context, text[:hit.start])
+                and re.search(rule.right_context, text[hit.end:])):
+            start = len(text[:hit.start].rstrip(" \t"))
+            end = hit.end + len(text[hit.end:]) - len(text[hit.end:].lstrip(" \t"))
+            edits.append((start, end, rule.replacement))
+    return tuple(edits)

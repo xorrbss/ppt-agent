@@ -450,6 +450,39 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
                                  allow_image_only=allow_image_only, header_page=header_page,
                                  allow_existing_common_header=bool(cache_remeasurement
                                      or payload.get("cached_author_render") or allow_existing_common_header))
+        required_text = (
+            [binding["text"] for binding in payload["source_preservation"]["bindings"]
+             if binding.get("kind") in {"text", "table_cell"} and binding.get("text", "").strip()]
+            if ctx.source_reflow else _required_numeric_claims(
+                content, quality_policy=read_quality_recovery_policy(ctx.snapshot))
+        )
+        source_values = ()
+        if getattr(request, "writing_policy", None) is not None:
+            from services.ppt_writing_visible import literal_source_values, substitute_svg_visible_symbols
+            from services.svg_common_header import GROUP_ID
+
+            source_values = literal_source_values(
+                getattr(request, "content", None), payload.get("nativeRequirements"),
+                (payload.get("source_preservation") or {}).get("bindings") or (),
+                payload.get("rasterContentLedger"), header_contract=ctx.snapshot.get("common_header"),
+                header_binding=header_page,
+            ) + tuple(required_text)
+            # Verbatim and immutable replay paths retain their exact candidate.
+            if (not ctx.source_reflow and not ctx.raster_reconstruction
+                    and not any(payload.get(key) for key in (
+                        "cache_only_remeasurement", "cached_author_render", "append_only_cache"))
+                    and (payload.get("partial_recovery") or {}).get("category") != "known"):
+                before = final
+                final, substitutions = substitute_svg_visible_symbols(
+                    final, source_values=source_values, required_text=required_text,
+                    protected_element_ids=(GROUP_ID,))
+                if substitutions:
+                    payload["attempts"][-1]["writing_policy_substitution"] = {
+                        "version": "svg-visible-symbol-substitution/v1",
+                        "input_digest": sha256_hex(before.encode()),
+                        "output_digest": sha256_hex(final.encode()),
+                        "substitutions": substitutions,
+                    }
         if cache_remeasurement and sha256_hex(final.encode()) != cache_remeasurement.get("source_sha256"):
             raise AuthoredStageError(slide_index=index, stage="render", code="svg_cache_remeasurement_changed", retryable=False)
         if ctx.source_reflow:
@@ -526,12 +559,6 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
                 raise AuthoredStageError(slide_index=index, stage="render",
                     code="svg_asset_screen_derivative_failed", retryable=False) from error
         try:
-            required_text = (
-                [binding["text"] for binding in payload["source_preservation"]["bindings"]
-                 if binding.get("kind") in {"text", "table_cell"} and binding.get("text", "").strip()]
-                if ctx.source_reflow else _required_numeric_claims(
-                    content, quality_policy=read_quality_recovery_policy(ctx.snapshot))
-            )
             font_profile = ctx.source_font_profile if ctx.source_reflow else None
             raster_authorized_measurement = False
             if ctx.raster_reconstruction:
@@ -649,19 +676,13 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
     writing_hint = None
     if getattr(request, "writing_policy", None) is not None:
         from services.ppt_writing_visible import (
-            assess_visible_nodes, literal_source_values, svg_text_nodes, svg_writing_repair_witnesses,
+            assess_visible_nodes, svg_text_nodes, svg_writing_repair_witnesses,
         )
 
-        preservation = payload.get("source_preservation") or {}
-        source_values = literal_source_values(
-            getattr(request, "content", None),
-            payload.get("nativeRequirements"),
-            preservation.get("bindings") or (),
-            payload.get("rasterContentLedger"),
-            header_contract=ctx.snapshot.get("common_header"),
-            header_binding=header_page,
-        )
         writing = assess_visible_nodes(svg_text_nodes(final), source_values=source_values)
+        substitution = payload["attempts"][-1].get("writing_policy_substitution")
+        if substitution:
+            writing["local_substitution"] = substitution
         rendered.quality["writing_policy"] = writing
         if writing["hard_violation_counts"]:
             rendered.quality["passed"] = False

@@ -190,6 +190,8 @@ CODE_FILES = (
     "utils/codex_stream_adapter.py",
     "utils/llm_calls/prepare_svg_common_header_titles.py",
     "utils/ppt_writing_prompt.py",
+    "services/ppt_writing_policy.py",
+    "services/ppt_writing_visible.py",
     "services/svg_recovery_source_evidence.py",
     "services/generation_core/authoring/author_slide_svg.py",
     "services/svg_author_output_view.py",
