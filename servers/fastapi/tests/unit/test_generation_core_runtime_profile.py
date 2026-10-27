@@ -65,6 +65,22 @@ def test_explicit_env_overrides_win_over_defaults(monkeypatch):
     assert reflow.author_concurrency == DEFAULT_AUTHOR_CONCURRENCY_SOURCE_REFLOW
 
 
+def test_free_design_uses_ordinary_knobs_not_source_reflow_knobs(monkeypatch):
+    import services.generation_core.runtime.profile as profile
+
+    monkeypatch.setattr(profile, "_author_executor_capacity", lambda: 8)
+    monkeypatch.setenv("SVG_AUTHOR_CONCURRENCY", "3")
+    monkeypatch.setenv("SVG_RENDER_CONCURRENCY", "3")
+    monkeypatch.setenv("SVG_AUTHOR_CONCURRENCY_SOURCE_REFLOW", "6")
+    monkeypatch.setenv("SVG_RENDER_CONCURRENCY_SOURCE_REFLOW", "2")
+
+    free_design = resolve_svg_runtime_profile(source_reflow=False)
+    source_reflow = resolve_svg_runtime_profile(source_reflow=True)
+
+    assert (free_design.author_concurrency, free_design.render_concurrency) == (3, 3)
+    assert (source_reflow.author_concurrency, source_reflow.render_concurrency) == (6, 2)
+
+
 def test_source_reflow_author_concurrency_clamps_to_executor(monkeypatch):
     import services.generation_core.runtime.profile as profile
 
