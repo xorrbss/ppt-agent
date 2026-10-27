@@ -677,7 +677,7 @@ def test_wrong_declared_value_drops_the_native_annotation():
     name = declaration["series"][0]["name"]
     source = "차트: " + ", ".join(
         f"{category} {value}"
-        for category, value in zip(declaration["categories"], declaration["series"][0]["values"])
+        for category, value in zip(declaration["categories"], declaration["series"][0]["values"], strict=True)
     ) + ". 단위: 건"
 
     def candidate(unit, *, qualifier="", multiple=False, duplicate=False):
@@ -720,7 +720,7 @@ def test_wrong_declared_value_drops_the_native_annotation():
         bars = [x for x in root if x.tag == "rect" and float(x.get("width", "0")) >= 40]
         assert len(bars) == 4
         values = raw["series"][0]["values"]
-        for bar, value in zip(sorted(bars, key=lambda x: float(x.get("x", "0"))), values):
+        for bar, value in zip(sorted(bars, key=lambda x: float(x.get("x", "0"))), values, strict=True):
             height = value * 0.52
             top = 300 - height
             bar.set("y", str(top))

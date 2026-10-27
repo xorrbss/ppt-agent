@@ -150,11 +150,11 @@ async def header_retry_source(session, *, source, expected_revision):
         limits = tuple(getattr(admission, name) for name in _BUDGET_FIELDS)
         if any(type(value) is not int or value < 0 for value in (*limits, *used)):
             raise ValueError("svg_common_header_retry_admission_conflict")
-        consumed = tuple(a + b for a, b in zip(consumed, used))
-        remaining = tuple(limit - amount for limit, amount in zip(limits, consumed))
+        consumed = tuple(a + b for a, b in zip(consumed, used, strict=True))
+        remaining = tuple(limit - amount for limit, amount in zip(limits, consumed, strict=True))
         if min(remaining) < 0:
             raise ValueError("svg_common_header_retry_budget_exhausted")
-        bounds = remaining if bounds is None else tuple(min(a, b) for a, b in zip(bounds, remaining))
+        bounds = remaining if bounds is None else tuple(min(a, b) for a, b in zip(bounds, remaining, strict=True))
         checkpoint = current.svg_header_design_checkpoint
         if checkpoint is not None:
             if (not isinstance(checkpoint, dict) or checkpoint.get("version") != "svg-common-header-design-checkpoint/v2"
@@ -269,9 +269,9 @@ async def header_retry_source(session, *, source, expected_revision):
                 if sum(witness["stage"] == stage for witness in root_steps.values()) > cap:
                     raise ValueError("svg_common_header_retry_budget_exhausted")
             return {"version": HEADER_RETRY_VERSION, "source_operation_id": str(source.id),
-                "ancestors": pins, "limits": dict(zip(_BUDGET_FIELDS, bounds)),
+                "ancestors": pins, "limits": dict(zip(_BUDGET_FIELDS, bounds, strict=True)),
                 "policy_version": policy[0], "policy_digest": policy[1], "resource_units": policy[2],
-                "slide_count": policy[3], "consumed": dict(zip(_BUDGET_FIELDS, consumed)),
+                "slide_count": policy[3], "consumed": dict(zip(_BUDGET_FIELDS, consumed, strict=True)),
                 "runtime_cost_limits": {"estimated": runtime_bounds[0], "actual": runtime_bounds[1]}}
         if current.request_payload.get("svg_header_retry", {}).get("version") != HEADER_RETRY_VERSION:
             raise ValueError("svg_common_header_retry_lineage_conflict")

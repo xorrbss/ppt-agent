@@ -274,9 +274,6 @@ def _fresh_local_review_required(context, pages, renders, evidence):
 
 def reusable_local_groups(context: Mapping[str, Any], pages: Sequence, renders: Sequence[bytes],
                           evidence: Mapping[str, Any]) -> tuple[dict[int, dict], list[dict]]:
-    from services.generation_core.drivers.svg.quality import (
-        _gate_intact, _group_review_input_digest, _local_group_context,
-    )
     if _fresh_local_review_required(context, pages, renders, evidence):
         return {}, []
     reused, consumers = {}, []

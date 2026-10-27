@@ -1,11 +1,13 @@
 """Owner-only, read-only views of unsubmitted SVG checkpoint renders."""
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import os
 from pathlib import Path
 import re
 import tempfile
+from typing import Annotated
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -55,9 +57,27 @@ async def _context(session: AsyncSession, presentation_id: uuid.UUID):
     return row
 
 
+def _checkpoint_png_location(digest: str) -> tuple[Path, Path]:
+    # Match the existing checkpoint PNG store without its mkdir-on-read helper.
+    root = Path(
+        get_authored_checkpoint_directory()
+        or (
+            Path(get_app_data_directory_env() or os.path.join(tempfile.gettempdir(), "presenton"))
+            / "authored-checkpoints"
+        )
+    ).resolve()
+    return root, (root / "svg" / digest[:2] / f"{digest}.png").resolve()
+
+
+def _read_checkpoint_png(root: Path, path: Path) -> bytes:
+    if not path.is_relative_to(root) or path.stat().st_size > 64 * 1024 * 1024:
+        raise OSError("invalid_checkpoint_image")
+    return path.read_bytes()
+
+
 @PRESENTATION_DRAFT_PREVIEW_ROUTER.get("/{presentation_id}/draft-preview")
 async def draft_preview(presentation_id: uuid.UUID, response: Response,
-                        session: AsyncSession = Depends(get_async_session)):
+                        session: Annotated[AsyncSession, Depends(get_async_session)]):
     job = await _context(session, presentation_id)
     # Read physical metadata columns only: no JSON extraction or TOAST decoding.
     rows = (await session.execute(select(
@@ -86,9 +106,10 @@ async def draft_preview(presentation_id: uuid.UUID, response: Response,
 
 @PRESENTATION_DRAFT_PREVIEW_ROUTER.get("/{presentation_id}/draft-preview/{page_index}/image")
 async def draft_preview_image(presentation_id: uuid.UUID, page_index: int,
-                              job_id: uuid.UUID, revision: str | None = None,
-                              page_version: str | None = None,
-                              session: AsyncSession = Depends(get_async_session)):
+                              job_id: uuid.UUID,
+                              session: Annotated[AsyncSession, Depends(get_async_session)],
+                              revision: str | None = None,
+                              page_version: str | None = None):
     job = await _context(session, presentation_id)
     if job.id != job_id or page_index < 0:
         raise HTTPException(404, "draft_preview_unavailable")
@@ -106,14 +127,9 @@ async def draft_preview_image(presentation_id: uuid.UUID, page_index: int,
         raise HTTPException(404, "draft_preview_unavailable")
     if revision is not None and revision != digest:
         raise HTTPException(409, "draft_preview_revision_changed")
-    # Match the existing checkpoint PNG store without its mkdir-on-read helper.
-    root = Path(get_authored_checkpoint_directory() or
-                Path(get_app_data_directory_env() or os.path.join(tempfile.gettempdir(), "presenton")) / "authored-checkpoints").resolve()
-    path = (root / "svg" / digest[:2] / f"{digest}.png").resolve()
+    root, path = await asyncio.to_thread(_checkpoint_png_location, digest)
     try:
-        if not path.is_relative_to(root) or path.stat().st_size > 64 * 1024 * 1024:
-            raise OSError("invalid_checkpoint_image")
-        payload = path.read_bytes()
+        payload = await asyncio.to_thread(_read_checkpoint_png, root, path)
     except OSError as error:
         raise HTTPException(404, "draft_preview_unavailable") from error
     if hashlib.sha256(payload).hexdigest() != digest or not payload.startswith(b"\x89PNG\r\n\x1a\n"):

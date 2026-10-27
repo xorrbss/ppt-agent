@@ -269,7 +269,7 @@ def test_source_binding_correction_bounds_excerpts_and_reports_total_counts():
 def test_source_binding_correction_explains_exact_native_table_grid(monkeypatch, axis):
     from test_svg_source_layout import manifest_for
     from services.generation_core.authoring.author_source_svg_layout import (
-        _whole_page_element_id, _whole_page_facts, author_source_svg_layout, source_binding_correction_hint,
+        _whole_page_facts, author_source_svg_layout, source_binding_correction_hint,
     )
 
     source = manifest_for([("table", {"rows": [
@@ -667,7 +667,8 @@ def test_new_intent_seed_replays_exactly_and_historical_checkpoint_keeps_context
         import os
         evidence_path = os.environ.get("SVG_INTENT_REPLAY_EVIDENCE_DB")
         if evidence_path:
-            evidence = json.loads(Path(evidence_path).read_text(encoding="utf-8-sig"))
+            evidence_text = await asyncio.to_thread(Path(evidence_path).read_text, encoding="utf-8-sig")
+            evidence = json.loads(evidence_text)
             checkpoints = {row["slide_index"]: row for row in evidence["checkpoints"]}
             actual = checkpoints[0]["svg_checkpoint"]["deck_visual_intents"]
             actual_contents = [slide["content"] for slide in evidence["job"]["authored_outline"]["slides"]]
@@ -1153,7 +1154,7 @@ def test_v2_author_changes_only_reference_input_and_records_actual_reference_dig
     assert module.SVG_SOURCE_PRESERVATION_RULES_V4 not in module.svg_author_rules(_reference_style(3), 18)
 
     aligned = ''
-    for x, line in zip((61, 417, 773), diagram.splitlines()[1:4]):
+    for x, line in zip((61, 417, 773), diagram.splitlines()[1:4], strict=True):
         category, members = line.split(': ', 1)
         first_member, second_member = members.split(', ')
         aligned += (f'<text x="{x}" y="171" font-family="Inter" font-size="18" fill="#FFFFFF">'
@@ -1191,7 +1192,7 @@ def test_v2_author_changes_only_reference_input_and_records_actual_reference_dig
     assert module.SVG_SOURCE_PRESERVATION_RULES_V5 not in module.svg_author_rules(_reference_style(4), 18)
 
     split_aligned = ''
-    for x, line in zip((64, 436, 808), diagram.splitlines()[1:4]):
+    for x, line in zip((64, 436, 808), diagram.splitlines()[1:4], strict=True):
         category, members = line.split(': ', 1)
         first_member, second_member = members.split(', ')
         split_aligned += (f'<text x="{x}" y="168" font-family="Inter" font-size="17" fill="#111111">'
@@ -1277,7 +1278,7 @@ def test_v2_author_changes_only_reference_input_and_records_actual_reference_dig
     groups = source_classifications(diagram)
     colors = ("#0088AA", "#CC5500", "#7755AA")
     legend_svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720">'
-    for index, (group, color) in enumerate(zip(groups, colors)):
+    for index, (group, color) in enumerate(zip(groups, colors, strict=True)):
         x = 50 + index * 350
         legend_svg += f'<text x="{x}" y="30" fill="{color}">{group["label"]}</text>'
         for row, member in enumerate(reversed(group["members"])):
@@ -1357,7 +1358,7 @@ def test_v2_author_changes_only_reference_input_and_records_actual_reference_dig
     assert association(_svg(nodes_only))["source_classification_association"]["missing_count"] == 3
 
     panels = legend_svg
-    for index, group in enumerate(groups):
+    for index, _group in enumerate(groups):
         x = 50 + index * 350
         panels = panels.replace(f'<text x="{x}" y="30"',
             f'<rect x="{x - 10}" y="0" width="230" height="220" fill="#EEEEEE"/><text x="{x}" y="30"')

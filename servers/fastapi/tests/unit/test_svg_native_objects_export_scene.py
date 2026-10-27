@@ -51,7 +51,7 @@ def test_native_capture_alias_requires_one_actual_child_and_identical_return(tmp
         events = []
         converter = SimpleNamespace(_extract_background_candidate=lambda root, context: (None, None))
 
-        def convert(element, context):
+        def convert(element, context, converter=converter, mode=mode, native_shapes=native_shapes, events=events):
             tag = element.tag.rsplit("}", 1)[-1]
             if tag == "g":
                 children = [converter.convert_element(child, context) for child in element]
@@ -368,7 +368,10 @@ def test_raster_grid_projects_to_the_converter_payload_the_grid_draws(monkeypatc
     def padding_attrs(*, conversion_context, pptx_structure="flat"):
         return _table_padding_attrs(projected['rows'][1][0], {})
 
-    attrs = padding_attrs(conversion_context=ConversionContext(1280, 320, 14400000, 3600000, legacy=False), pptx_structure="flat")
+    padding_attrs(
+        conversion_context=ConversionContext(1280, 320, 14400000, 3600000, legacy=False),
+        pptx_structure="flat",
+    )
     assert custom_item.payload == frozen_payload
 
     # Real source paragraph baselines survive the projection and serializer,

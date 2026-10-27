@@ -134,7 +134,7 @@ def test_whole_page_measured_symbol_runs_and_used_font_bytes(tmp_path):
     run.font.name, run.font.bold, run.font.size = NOTO, True, Pt(20)
     run.font.color.rgb = RGBColor(0x12, 0x34, 0x56)
     table_shape = slide.shapes.add_table(1, 2, Inches(1), Inches(3), Inches(7), Inches(1))
-    for cell, value in zip(table_shape.table.rows[0].cells, ("표 ▸ 항목", "일반 한글")):
+    for cell, value in zip(table_shape.table.rows[0].cells, ("표 ▸ 항목", "일반 한글"), strict=True):
         cell.text = value
         cell_run = cell.text_frame.paragraphs[0].runs[0]
         cell_run.font.name, cell_run.font.bold, cell_run.font.size = NOTO, False, Pt(16)
@@ -162,7 +162,7 @@ def test_whole_page_measured_symbol_runs_and_used_font_bytes(tmp_path):
     assert verified["ooxmlVerified"] is True and verified["fallbackRunCount"] == 5
     with zipfile.ZipFile(target) as archive:
         assert archive.read("ppt/slides/slide1.xml") == original_slide
-        for family, slot, digest, payload in trusted_export_font_faces(usage):
+        for _family, _slot, digest, payload in trusted_export_font_faces(usage):
             assert digest == "sha256:" + hashlib.sha256(payload).hexdigest()
             assert any(archive.read(name) == payload for name in archive.namelist() if name.endswith(".fntdata"))
     # A flagged page (its readback did not pass: ``rendering_verified`` false)
@@ -171,9 +171,12 @@ def test_whole_page_measured_symbol_runs_and_used_font_bytes(tmp_path):
     _project_trusted_symbol_runs(Presentation(), [source], [flagged])
     for violation in ("missing_measurement", "digest", "unavailable"):
         altered_source, altered = source, deepcopy(receipt)
-        if violation == "missing_measurement": altered.pop("render_font_fallback")
-        elif violation == "digest": altered["render_font_fallback"]["fallback_font_digest"] = "sha256:" + "0" * 64
-        else: altered_source = source.replace("끝", "\U0010ffff")
+        if violation == "missing_measurement":
+            altered.pop("render_font_fallback")
+        elif violation == "digest":
+            altered["render_font_fallback"]["fallback_font_digest"] = "sha256:" + "0" * 64
+        else:
+            altered_source = source.replace("끝", "\U0010ffff")
         with pytest.raises(ValueError):
             _project_trusted_symbol_runs(Presentation(), [altered_source], [altered])
     for violation in ("ordinary_as_symbol", "symbol_as_primary"):

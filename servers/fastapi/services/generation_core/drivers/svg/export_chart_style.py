@@ -43,9 +43,9 @@ def _source_grid_box(lines, plots, baseline, horizontal):
     distances = sorted({box.x0 - baseline if horizontal else baseline - box.y0 for box in matching})
     if len(distances) < 3 or abs(distances[0]) > 1:
         return None
-    step = median(right - left for left, right in zip(distances, distances[1:]))
+    step = median(right - left for left, right in zip(distances, distances[1:], strict=False))
     if step <= 0 or any(abs(right - left - step) > max(1, step * .01)
-                        for left, right in zip(distances, distances[1:])):
+                        for left, right in zip(distances, distances[1:], strict=False)):
         return None
     if horizontal:
         box = Box(baseline, base.y0, baseline + distances[-1], base.y1)
@@ -72,8 +72,8 @@ def _proportional_bar_plot(projected, item, plots, categories, axes, grid_lines=
         return
     centers = sorted((text.box().y0 + text.box().y1) / 2 if horizontal else text.points[0][0]
                      for text in categories)
-    spacing = median(right - left for left, right in zip(centers, centers[1:]))
-    if spacing <= 0 or any(abs(right - left - spacing) > 1 for left, right in zip(centers, centers[1:])):
+    spacing = median(right - left for left, right in zip(centers, centers[1:], strict=False))
+    if spacing <= 0 or any(abs(right - left - spacing) > 1 for left, right in zip(centers, centers[1:], strict=False)):
         return
     thickness = median(shape.box.height if horizontal else shape.box.width for shape in plots)
     if thickness <= 0 or thickness > spacing:
@@ -211,10 +211,10 @@ def _retained_axis_plot(projected, item, root, plots, categories, axes, grid_lin
     if any(abs(left - right) > 1 for left, right in zip(centers, label_centers, strict=True)):
         return None
     ordered = sorted(centers)
-    spacing = median(right - left for left, right in zip(ordered, ordered[1:]))
+    spacing = median(right - left for left, right in zip(ordered, ordered[1:], strict=False))
     thickness = median(shape.box.height if horizontal else shape.box.width for shape in plots)
     if (spacing <= 0 or not 0 < thickness <= spacing or any(abs(right - left - spacing) > 1
-            for left, right in zip(ordered, ordered[1:]))):
+            for left, right in zip(ordered, ordered[1:], strict=False))):
         return None
     # Exclude all chart/table drawings, and unsupported decorative primitives,
     # while retaining sibling group transforms and inherited line/text paint.

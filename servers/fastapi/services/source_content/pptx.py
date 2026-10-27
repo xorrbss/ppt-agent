@@ -265,7 +265,11 @@ def _extract_unit(
             new_block: SourceContentBlock | None = None
             group_transform: AffineTransform | None = None
 
-            def source_payload(shape_id=shape_id, current_shape_index=current_shape_index) -> dict[str, Any]:
+            def source_payload(
+                shape_id=shape_id,
+                current_shape_index=current_shape_index,
+                element=element,
+            ) -> dict[str, Any]:
                 return {
                     "shapeId": shape_id,
                     "sourceSlideIndex": source_index,

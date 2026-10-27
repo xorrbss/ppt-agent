@@ -244,7 +244,6 @@ def test_visual_review_unavailable_without_an_advisory():
 @pytest.mark.parametrize("policy_version", [None, 1, 2])
 def test_visual_review_passes_with_a_matching_clean_advisory(policy_version, monkeypatch):
     slides = [_slide("<svg>a</svg>"), _slide("<svg>b</svg>")]
-    digests = slide_page_digests(slides)
     vision = {"slides": [{"index": 0, "issues": []}, {"index": 1, "issues": []}],
               "promptVersion": "v1", "model": "m"}
     advisory = _bound_advisory(vision, slides)
@@ -347,6 +346,7 @@ def test_visual_review_passes_with_a_matching_clean_advisory(policy_version, mon
         expected = dict(presentationId=presentation, ownerId=owner, ownerScope=owner, sourceRevision=1,
             _generationSourceReview=dict(snapshot=snapshot, publication=publication, producer=producer))
         bound = _bound_advisory(vision, slides)
+        digests = slide_page_digests(slides)
         binding = dict(schemaVersion="svg-visual-review-operation-binding/v1", presentationId=presentation,
             ownerId=owner, ownerScope=owner, sourceRevision=1, operationId=operation, reviewedPageIndices=[0, 1],
             sourceDigests=digests, pngDigests=[png_digest, png_digest], pageRecordDigests=[record["digest"] for record in bound["pageAdvisories"]])
@@ -606,7 +606,6 @@ def test_visual_review_records_but_does_not_flag_on_an_advisory_issue():
     # The advisory is advisory by contract: generation reports this deck as
     # 0 flagged pages, and the export review must agree.
     slides = [_slide("<svg>a</svg>")]
-    digests = slide_page_digests(slides)
     vision = {"slides": [{"index": 0, "issues": ["off-brand color"]}], "promptVersion": "v1", "model": "m"}
     advisory = _bound_advisory(vision, slides)
 
@@ -620,7 +619,6 @@ def test_visual_review_records_but_does_not_flag_on_an_advisory_issue():
 
 def test_visual_review_stale_when_a_page_svg_changed_after_the_advisory():
     slides = [_slide("<svg>a</svg>")]
-    digests = slide_page_digests(slides)
     advisory = _bound_advisory({"slides": [], "promptVersion": "v1", "model": "m"}, slides)
     slides[0].svg_content = "<svg>changed</svg>"
 
@@ -632,7 +630,6 @@ def test_visual_review_stale_when_a_page_svg_changed_after_the_advisory():
 
 def test_visual_review_flags_a_page_whose_quality_is_not_verified():
     slides = [_slide("<svg>a</svg>", verified=False)]
-    digests = slide_page_digests(slides)
     vision = {"slides": [{"index": 0, "issues": []}], "promptVersion": "v1", "model": "m"}
     advisory = _bound_advisory(vision, slides)
 
@@ -648,7 +645,6 @@ def test_visual_review_flags_a_page_whose_quality_is_not_verified():
 
 
 def _clean_advisory(slides):
-    digests = slide_page_digests(slides)
     vision = {"slides": [{"index": i, "issues": []} for i in range(len(slides))],
               "promptVersion": "v1", "model": "test-model"}
     return _bound_advisory(vision, slides)

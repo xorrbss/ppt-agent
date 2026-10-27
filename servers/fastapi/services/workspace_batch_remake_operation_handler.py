@@ -244,7 +244,7 @@ class WorkspaceBatchRemakeOperationHandler:
             # The batch is a single transaction with a single revision bump, so a
             # single restore point is what actually matches it.
             await snapshot_slides_for_batch(session, claim.presentation_id)
-            for done, (slide_index, preview_task_id) in enumerate(previews, start=1):
+            for slide_index, preview_task_id in previews:
                 await context.raise_if_cancelled()
                 try:
                     # The savepoint is what makes partial failure survivable: one

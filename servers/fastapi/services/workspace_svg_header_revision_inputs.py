@@ -1,6 +1,7 @@
 """Read-only source adapters and operation-fenced SVG asset inputs for header edits."""
 from __future__ import annotations
 
+import asyncio
 from copy import deepcopy
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -8,6 +9,10 @@ import uuid
 
 from services.svg_common_header_generation import header_revision_context
 from utils.hashing import canonical_json_digest, sha256_hex
+
+
+def _source_image_matches(path: Path, expected_sha256: str) -> bool:
+    return path.stat().st_size <= 32 * 1024 * 1024 and sha256_hex(path.read_bytes()) == expected_sha256
 
 
 async def revision_inputs(session, claim, presentation, rows, snapshot, admitted):
@@ -54,7 +59,7 @@ async def revision_inputs(session, claim, presentation, rows, snapshot, admitted
                 if asset_row is None or asset_row.owner_id != claim.owner_id:
                     raise ValueError("svg_common_header_source_asset_owner_invalid")
                 path = Path(asset_row.path)
-                if path.stat().st_size > 32 * 1024 * 1024 or sha256_hex(path.read_bytes()) != slot.source_sha256:
+                if not await asyncio.to_thread(_source_image_matches, path, slot.source_sha256):
                     raise ValueError("svg_source_image_digest_mismatch")
                 planned[index][slot.slot_id] = SourceImageCandidate(asset_id=str(slot.source_asset_id), path=path,
                     mime_type=(asset_row.extras or {}).get("mime_type", "image/png"), width=slot.source_width,

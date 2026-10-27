@@ -418,17 +418,29 @@ def test_native_literal_offer_requires_complete_data_and_explicit_source_absence
     if change in {"prose", "partial_chart"}:
         request.slides_markdown[0] += "\n독립된 사실은 별도로 보존해야 한다." if change == "prose" else "\n차트: A 10, B 20. 추가 내용"
         outline.slides[0].content = request.slides_markdown[0]
-    elif change == "imagery": request.instructions += " 사진을 추가한다."
-    elif change == "relation": request.instructions += " 관계도를 추가한다."
-    elif change == "master": request.master_pin = {"id": "master"}
-    elif change == "reference": request.reference_snapshot_ids = [uuid.uuid4()]
-    elif change == "style": request.authored_style = "iso-blueprint"
-    elif change == "source": has_source_assets = True
-    elif change == "source_unknown": has_source_assets = None
-    elif change == "outline_changed": outline.slides[0].content += "\n새 항목"
-    elif change == "implicit_svg": request.strategy = None
-    elif change == "registered": request.generation_mode = "registered-template"
-    elif change == "not_free": snapshot["composition_mode"] = "template-layout"
-    elif change == "frozen_ref": snapshot["design_pack_template"] = {"version": "v1"}
+    elif change == "imagery":
+        request.instructions += " 사진을 추가한다."
+    elif change == "relation":
+        request.instructions += " 관계도를 추가한다."
+    elif change == "master":
+        request.master_pin = {"id": "master"}
+    elif change == "reference":
+        request.reference_snapshot_ids = [uuid.uuid4()]
+    elif change == "style":
+        request.authored_style = "iso-blueprint"
+    elif change == "source":
+        has_source_assets = True
+    elif change == "source_unknown":
+        has_source_assets = None
+    elif change == "outline_changed":
+        outline.slides[0].content += "\n새 항목"
+    elif change == "implicit_svg":
+        request.strategy = None
+    elif change == "registered":
+        request.generation_mode = "registered-template"
+    elif change == "not_free":
+        snapshot["composition_mode"] = "template-layout"
+    elif change == "frozen_ref":
+        snapshot["design_pack_template"] = {"version": "v1"}
     assert asset_slots._native_literal_pages(request, outline, style_snapshot=snapshot,
                                              has_source_assets=has_source_assets) is None

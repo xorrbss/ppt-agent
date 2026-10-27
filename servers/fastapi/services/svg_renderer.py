@@ -352,7 +352,6 @@ async def render_svg_with_metrics(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH
                 width_px=width, height_px=height, deck_scope=deck_scope, fit=False)
     # Probe cache keys contain NUL separators, which PostgreSQL JSON operators
     # cannot decode. They are diagnostic keys, never source text.
-    import json
     metrics = json.loads(json.dumps(capture.browser_metrics or {}).replace("\\u0000", "\\u241f"))
     elements = metrics.get("elements") or []
     text = [item for item in elements if item.get("has_owned_text")]

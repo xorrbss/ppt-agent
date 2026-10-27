@@ -394,15 +394,21 @@ def test_published_current_candidate_metadata_refresh_requires_exact_proofs(monk
     target.properties["image"] = task.data["candidate_image"]
     old_source, old_properties = target.svg_content, deepcopy(target.properties)
     args = {"operation_id": uuid.uuid4(), "attempt_token": "claim", "expected_revision": presentation.revision}
-    if change == "svg": target.svg_content = "<svg>changed</svg>"
-    elif change == "image": target.properties["image"] = "changed.png"
-    elif change == "owner": task.owner_id = uuid.uuid4()
-    elif change == "index": task.data["slide_index"] = 1
+    if change == "svg":
+        target.svg_content = "<svg>changed</svg>"
+    elif change == "image":
+        target.properties["image"] = "changed.png"
+    elif change == "owner":
+        task.owner_id = uuid.uuid4()
+    elif change == "index":
+        task.data["slide_index"] = 1
     elif change == "native":
         native["svgDigest"] = "sha256:" + "0" * 64
         task.data["candidate_digest"] = remake._candidate_digest(task.data["candidate_svg"], task.data["candidate_image"], native)
-    elif change == "revision": args["expected_revision"] -= 1
-    elif change == "claim": args["operation_id"] = None
+    elif change == "revision":
+        args["expected_revision"] -= 1
+    elif change == "claim":
+        args["operation_id"] = None
     if change is not None:
         with pytest.raises((AuthoredPageRemakeError, ValueError)):
             asyncio.run(remake.publish_svg_candidate(session, presentation, [target], 0, task, snapshot=False, **args))

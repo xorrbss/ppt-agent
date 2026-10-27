@@ -80,7 +80,6 @@ def _previous_quality_support_matches(saved, expected, contents, *, quality_poli
 def _expected_intents(contents, roles, trusted_plan, *, quality_policy=None):
     from copy import deepcopy
     from services.generation_core.drivers.svg.collect import validate_svg_stage_plan
-    from services.generation_core.drivers.svg.visual_intent import build_deck_visual_intents
     expected = (build_deck_visual_intents(contents, roles, quality_policy=quality_policy)
                 if isinstance(quality_policy, dict) and quality_policy.get("version") == 2
                 else build_deck_visual_intents(contents, roles))

@@ -1692,7 +1692,7 @@ async def build_append_only_svg_recovery_manifest(session, operation, *, present
     reservations = list(await session.scalars(locked(select(ProviderRuntimeReservation).join(
         ProviderRuntimeBudget, ProviderRuntimeBudget.id == ProviderRuntimeReservation.budget_id).where(
         ProviderRuntimeBudget.job_id == job.id).order_by(ProviderRuntimeReservation.id))))
-    if any(l.state not in {"released", "cancelled", "expired"} for l in leases):
+    if any(lease.state not in {"released", "cancelled", "expired"} for lease in leases):
         _reject("svg_timeout_repurchase_active_lease")
     if (any(c.state == "reserved" or c.reconciled_at is None or c.outcome not in {"succeeded", "failed", "cancelled"} for c in calls)
         or any(r.state in {"reserved", "uncertain"} for r in reservations)
@@ -1768,7 +1768,7 @@ async def build_append_only_svg_recovery_manifest(session, operation, *, present
         "unknown_checkpoints": unknown, "completed_checkpoints": cached, "unstarted_checkpoints": unstarted,
         "old_admission": admission.model_dump(mode="json"),
         "old_logical_calls": [c.model_dump(mode="json") for c in calls],
-        "old_resource_leases": [l.model_dump(mode="json") for l in leases],
+        "old_resource_leases": [lease.model_dump(mode="json") for lease in leases],
         "old_runtime_budgets": [b.model_dump(mode="json") for b in budgets],
         "old_runtime_reservations": [r.model_dump(mode="json") for r in reservations],
         "previous_consumed_author_calls": sum(c.stage in {"author", "repair"} for c in calls),
@@ -1901,7 +1901,7 @@ async def build_zero_dispatch_append_only_manifest(session, operation, *, presen
             _reject("svg_timeout_repurchase_active_call")
     elif calls or reservations or any(b.estimated_reserved or b.actual_consumed for b in budgets):
         _reject("svg_timeout_repurchase_active_call")
-    if any(l.state not in {"released", "cancelled", "expired"} for l in leases):
+    if any(lease.state not in {"released", "cancelled", "expired"} for lease in leases):
         _reject("svg_timeout_repurchase_active_call")
     if await session.scalar(select(WorkspaceOperation.id).where(WorkspaceOperation.retry_of_operation_id == operation.id)):
         _reject("svg_timeout_repurchase_purchase_already_consumed")
@@ -1966,7 +1966,7 @@ async def build_zero_dispatch_append_only_manifest(session, operation, *, presen
         "job_id": str(job.id), "job_digest": _digest(job.model_dump(mode="json")),
         "frozen_request_digest": _digest(job.request_payload), "admitted_request_digest": job.request_sha256,
         "old_admission": admission.model_dump(mode="json"), "old_logical_calls": [c.model_dump(mode="json") for c in calls],
-        "old_resource_leases": [l.model_dump(mode="json") for l in leases],
+        "old_resource_leases": [lease.model_dump(mode="json") for lease in leases],
         "old_runtime_budgets": [b.model_dump(mode="json") for b in budgets], "old_runtime_reservations": [r.model_dump(mode="json") for r in reservations],
         "initial_remaining": admission.planned_request_limit - admission.initial_request_count, "retry_remaining": admission.retry_request_limit - admission.retry_request_count,
         "remaining_logical_call_limit": admission.planned_request_limit + admission.retry_request_limit - admission.initial_request_count - admission.retry_request_count,
@@ -2038,7 +2038,6 @@ async def verified_append_only_consumption_baseline(session, operation):
 
 def _bind_completed_stage_receipts(previous, operation, job, rows, calls):
     from services.generation_core.quality.advisory_record import record_matches, advisory_flagged_pages
-    from utils.llm_config import get_llm_config
     from utils.llm_provider import get_llm_provider, get_model
     plan = job.request_payload.get("_internal_svg_stage_plan") or {}
     seed = next(r for r in rows if r.slide_index == 0)
@@ -2215,7 +2214,9 @@ async def _bind_reviewed_stage_receipts(session, previous, operation, job, rows,
         or len([call for call in calls if call.stage == "vqa"]) != 1):
         _reject("svg_timeout_repurchase_manifest_conflict")
     png_bindings = advisory.get("pageAdvisories") or []
-    if len(png_bindings) != len(pages) or any(b.get("pngDigest") != p.get("png_sha256") for b, p in zip(png_bindings, pages)):
+    if len(png_bindings) != len(pages) or any(
+        b.get("pngDigest") != p.get("png_sha256") for b, p in zip(png_bindings, pages, strict=True)
+    ):
         _reject("svg_timeout_repurchase_manifest_conflict")
     accepted_review = {**deepcopy(review), "actorOwnerId": str(operation.owner_id), "tenantId": str(get_current_tenant_id()),
                        "frozenStyleDigest": previous["frozen_style_digest"], "frozenRequestDigest": previous["frozen_request_digest"],

@@ -180,7 +180,7 @@ def measure_svg_readability(policy: object, *, width: int, height: int,
     # Exact rectangle union avoids double counting parent/tspan line boxes.
     edges = sorted({edge for rect in rectangles for edge in (rect[0], rect[2])})
     area = 0.0
-    for left, right in zip(edges, edges[1:]):
+    for left, right in zip(edges, edges[1:], strict=False):
         spans = sorted((top, bottom) for x, top, end, bottom in rectangles
                        if x < right and end > left and bottom > top)
         end, covered = 0.0, 0.0

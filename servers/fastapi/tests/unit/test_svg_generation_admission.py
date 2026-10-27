@@ -1215,7 +1215,7 @@ def test_header_v2_metadata_preserves_exact_values_provenance_and_admitted_input
         terminal_document, saved, dispatched, usage_calls = {"steps": {}}, [], [], []
         save_failed = False
 
-        async def save_terminal_document():
+        async def save_terminal_document(terminal_document=terminal_document, failure=failure, saved=saved):
             nonlocal save_failed
             step = terminal_document["steps"]["selection-1"]
             if failure == "terminal_save" and "terminal_evidence" in step and not save_failed:
@@ -1228,7 +1228,7 @@ def test_header_v2_metadata_preserves_exact_values_provenance_and_admitted_input
                 self.observer = _PROVIDER_EVENT_OBSERVER.get()
                 self._client = SimpleNamespace(with_options=lambda **kwargs: self._client)
 
-        async def generate_header(client, **kwargs):
+        async def generate_header(client, dispatched=dispatched, **kwargs):
             assert client.observer is not None
             assert kwargs["call_timeout_seconds"] == 180
             dispatched.append("physical")
@@ -1238,17 +1238,17 @@ def test_header_v2_metadata_preserves_exact_values_provenance_and_admitted_input
                 response=SimpleNamespace(content=raw))
 
         @asynccontextmanager
-        async def admit_header(**kwargs):
+        async def admit_header(failure=failure, **kwargs):
             yield
             if failure == "admission":
                 raise RuntimeError("private admission failure")
 
-        async def record_header_usage(**kwargs):
+        async def record_header_usage(failure=failure, usage_calls=usage_calls, **kwargs):
             usage_calls.append(kwargs)
             if failure == "usage":
                 raise RuntimeError("private usage failure")
 
-        async def terminal_call():
+        async def terminal_call(terminal_document=terminal_document, save_terminal_document=save_terminal_document):
             return await _paid_step(terminal_document, key="selection-1", stage="selection", ordinal=1,
                 payload=selection, images=screens, plan=bounded_plan,
                 job=SimpleNamespace(id=uuid.uuid4(), attempt_number=1, public_only=False),
@@ -1410,7 +1410,7 @@ def test_partial_recovery_page_input_digest_matches_new_and_legacy_svg_inputs():
         request_payload={"common_header_mode": "uniform"},
         authored_outline={"slides": [
             {"content": slide.content, "title": slide.title, "common_header": binding}
-            for slide, binding in zip(outline.slides, bindings)
+            for slide, binding in zip(outline.slides, bindings, strict=True)
         ]})
     for index, binding in enumerate(bindings):
         initial = svg_page_input_digest(content=outline.slides[index].content, style=style,
@@ -1629,10 +1629,11 @@ def test_external_header_titles_checkpoint_one_call_resume_unknown_and_source_gu
         request_payload={INTERNAL_HEADER_TITLE_PLAN_KEY: plan},
         _workspace_fencing_token=None, public_only=False,
     )
-    run = lambda source, callback: asyncio.run(prepare_missing_header_titles(
-        request, job, source, session_maker=lambda: session,
-        owned_job=owned_job, provider_callback=callback,
-    ))
+    def run(source, callback):
+        return asyncio.run(prepare_missing_header_titles(
+            request, job, source, session_maker=lambda: session,
+            owned_job=owned_job, provider_callback=callback,
+        ))
     assert calls == [] and session.row is None
     prepared = run(outline, prepared_title)
     assert len(calls) == 1
@@ -1683,7 +1684,7 @@ def test_external_header_titles_checkpoint_one_call_resume_unknown_and_source_gu
     response = {"source_digest": batch["source_digest"], "page_count": batch["page_count"],
         "titles": [{"page_index": page["page_index"], "source_digest": page["source_digest"],
                     "title": title, "source_quote": title}
-                   for page, title in zip(batch["pages"], ["운영 계획", "서비스 구성"])]}
+                   for page, title in zip(batch["pages"], ["운영 계획", "서비스 구성"], strict=True)]}
     validator = Draft202012Validator(header_title_response_schema(batch))
     validator.validate(response)
     assert len(_validated_result(response, batch)["titles"]) == 2
@@ -2714,7 +2715,8 @@ def test_partial_recovery_live_heartbeat_preserves_authority_and_history(monkeyp
             assert recovery._same_json_value(value, value) is None
         assert recovery._same_json_snapshot([1], (1,), recovery._marshal_json_bytes([1])) is False
         assert recovery._same_json_snapshot("x", b"x", recovery._marshal_json_bytes("x")) is False
-        cyclic = {}; cyclic["self"] = cyclic
+        cyclic = {}
+        cyclic["self"] = cyclic
         assert recovery._marshal_json_bytes(cyclic) is None
         assert recovery._same_json_value(cyclic, cyclic) is None
         assert recovery._same_json_snapshot({}, cyclic, recovery._marshal_json_bytes({})) is False
@@ -3074,7 +3076,8 @@ def test_partial_recovery_live_heartbeat_preserves_authority_and_history(monkeyp
                 checkpoints.append(checkpoint)
             history_admissions.append(HistoryRow(id=uuid.uuid4(), operation_id=op_id,
                 owner_id=owner, tenant_id="fixture", state="released"))
-            operations.append(historical_op); jobs.append(historical_job)
+            operations.append(historical_op)
+            jobs.append(historical_job)
             tasks.append(task)
 
         database_history = {
@@ -3544,7 +3547,8 @@ def test_partial_recovery_live_heartbeat_preserves_authority_and_history(monkeyp
             await hydration.finish()
             unchanged_database = deepcopy(database_history)
             for mode in ("missing", "extra", "tampered"):
-                database_history.clear(); database_history.update(deepcopy(unchanged_database))
+                database_history.clear()
+                database_history.update(deepcopy(unchanged_database))
                 isolated = recovery._EpisodeVerification(history_session)
                 await recovery._hydrate_checkpoint_archive(history_session, manifest_v3, raw_v3,
                     verification=isolated)
@@ -3553,7 +3557,8 @@ def test_partial_recovery_live_heartbeat_preserves_authority_and_history(monkeyp
                 if mode == "missing":
                     database_history[AuthoredSlideCheckpoint].remove(producer)
                 elif mode == "extra":
-                    extra = deepcopy(producer); extra.id = uuid.uuid4()
+                    extra = deepcopy(producer)
+                    extra.id = uuid.uuid4()
                     database_history[AuthoredSlideCheckpoint].append(extra)
                 else:
                     producer.svg_checkpoint["nested"]["quality"][0] = 999
@@ -3563,7 +3568,8 @@ def test_partial_recovery_live_heartbeat_preserves_authority_and_history(monkeyp
                 assert len(checkpoint_reads) == before_reuse
                 with pytest.raises(recovery.PartialRecoveryRejected):
                     await isolated.finish()
-            database_history.clear(); database_history.update(deepcopy(unchanged_database))
+            database_history.clear()
+            database_history.update(deepcopy(unchanged_database))
             working["checkpoints"][0]["svg_checkpoint"]["nested"]["quality"][0] = 999
             with pytest.raises(recovery.PartialRecoveryRejected):
                 hydration.expect(AuthoredSlideCheckpoint, working["checkpoints"][0])
@@ -3574,50 +3580,73 @@ def test_partial_recovery_live_heartbeat_preserves_authority_and_history(monkeyp
             producer_row.svg_checkpoint["nested"]["quality"][0] = 99
             with pytest.raises(recovery.PartialRecoveryRejected):
                 await hydration.finish()
-            database_history.clear(); database_history.update(deepcopy(stored_before))
+            database_history.clear()
+            database_history.update(deepcopy(stored_before))
             for mode in ("duplicate_id", "duplicate_page", "missing", "foreign_job", "foreign_owner",
                          "foreign_tenant", "swapped_page", "swapped_id", "bad_digest", "extra_field",
                          "bool_page", "inline_rows", "raw_archive_digest", "missing_row", "extra_row", "row_tamper",
                          "parent_owner", "parent_scope", "parent_tenant", "parent_job", "parent_presentation"):
-                database_history.clear(); database_history.update(deepcopy(stored_before))
+                database_history.clear()
+                database_history.update(deepcopy(stored_before))
                 candidate_archive, candidate_manifest = deepcopy(raw_v3), deepcopy(manifest_v3)
                 refs = candidate_archive["checkpoint_refs"]
-                if mode == "duplicate_id": refs[1]["id"] = refs[0]["id"]
-                elif mode == "duplicate_page": refs[1]["slide_index"] = refs[0]["slide_index"]
-                elif mode == "missing": refs.pop()
-                elif mode == "foreign_job": refs[0]["job_id"] = str(uuid.uuid4())
-                elif mode == "foreign_owner": refs[0]["owner_id"] = str(uuid.uuid4())
-                elif mode == "foreign_tenant": refs[0]["tenant_id"] = "foreign"
+                if mode == "duplicate_id":
+                    refs[1]["id"] = refs[0]["id"]
+                elif mode == "duplicate_page":
+                    refs[1]["slide_index"] = refs[0]["slide_index"]
+                elif mode == "missing":
+                    refs.pop()
+                elif mode == "foreign_job":
+                    refs[0]["job_id"] = str(uuid.uuid4())
+                elif mode == "foreign_owner":
+                    refs[0]["owner_id"] = str(uuid.uuid4())
+                elif mode == "foreign_tenant":
+                    refs[0]["tenant_id"] = "foreign"
                 elif mode == "swapped_page":
                     refs[0]["slide_index"], refs[1]["slide_index"] = refs[1]["slide_index"], refs[0]["slide_index"]
-                elif mode == "swapped_id": refs[0]["id"], refs[1]["id"] = refs[1]["id"], refs[0]["id"]
-                elif mode == "bad_digest": refs[0]["row_digest"] = "0" * 64
-                elif mode == "extra_field": refs[0]["undeclared"] = "value"
-                elif mode == "bool_page": refs[0]["slide_index"] = False
-                elif mode == "inline_rows": candidate_archive["checkpoints"] = producer_snapshots
-                elif mode == "raw_archive_digest": candidate_archive["undeclared"] = "tamper"
+                elif mode == "swapped_id":
+                    refs[0]["id"], refs[1]["id"] = refs[1]["id"], refs[0]["id"]
+                elif mode == "bad_digest":
+                    refs[0]["row_digest"] = "0" * 64
+                elif mode == "extra_field":
+                    refs[0]["undeclared"] = "value"
+                elif mode == "bool_page":
+                    refs[0]["slide_index"] = False
+                elif mode == "inline_rows":
+                    candidate_archive["checkpoints"] = producer_snapshots
+                elif mode == "raw_archive_digest":
+                    candidate_archive["undeclared"] = "tamper"
                 else:
                     parent = next(row for row in database_history[WorkspaceOperation] if row.id == operations[-2].id)
                     producer = next(row for row in database_history[PresentationGenerationJob] if row.id == jobs[-2].id)
                     admission = next(row for row in database_history[PublicOperationAdmission]
                         if row.operation_id == parent.id)
                     row = next(row for row in database_history[AuthoredSlideCheckpoint] if row.job_id == producer.id)
-                    if mode == "missing_row": database_history[AuthoredSlideCheckpoint].remove(row)
+                    if mode == "missing_row":
+                        database_history[AuthoredSlideCheckpoint].remove(row)
                     elif mode == "extra_row":
-                        extra = deepcopy(row); extra.id = uuid.uuid4()
+                        extra = deepcopy(row)
+                        extra.id = uuid.uuid4()
                         database_history[AuthoredSlideCheckpoint].append(extra)
-                    elif mode == "row_tamper": row.svg_checkpoint["nested"]["quality"][0] = 9
-                    elif mode == "parent_owner": parent.owner_id = uuid.uuid4()
-                    elif mode == "parent_scope": parent.owner_scope = str(uuid.uuid4())
-                    elif mode == "parent_tenant": admission.tenant_id = "foreign"
-                    elif mode == "parent_job": producer.workspace_operation_id = uuid.uuid4()
-                    else: producer.presentation_id = uuid.uuid4()
+                    elif mode == "row_tamper":
+                        row.svg_checkpoint["nested"]["quality"][0] = 9
+                    elif mode == "parent_owner":
+                        parent.owner_id = uuid.uuid4()
+                    elif mode == "parent_scope":
+                        parent.owner_scope = str(uuid.uuid4())
+                    elif mode == "parent_tenant":
+                        admission.tenant_id = "foreign"
+                    elif mode == "parent_job":
+                        producer.workspace_operation_id = uuid.uuid4()
+                    else:
+                        producer.presentation_id = uuid.uuid4()
                 if mode != "raw_archive_digest":
                     candidate_manifest["archive_digest"] = real_digest(candidate_archive)
                 with pytest.raises(recovery.PartialRecoveryRejected):
                     await recovery._hydrate_checkpoint_archive(history_session, candidate_manifest,
                         candidate_archive, verification=recovery._EpisodeVerification(history_session))
-            database_history.clear(); database_history.update(deepcopy(stored_before))
+            database_history.clear()
+            database_history.update(deepcopy(stored_before))
             for historical in operations[1:3]:
                 legacy = historical.request_payload[recovery.ARCHIVE_KEY]
                 assert await recovery._hydrate_checkpoint_archive(history_session,
@@ -3689,7 +3718,8 @@ def test_partial_recovery_live_heartbeat_preserves_authority_and_history(monkeyp
         assert recovery._same_json_value(float("nan"), float("nan")) is None
         assert recovery._same_json_value(float("inf"), float("inf")) is None
         assert recovery._same_json_value(object(), object()) is None
-        cyclic = {}; cyclic["self"] = cyclic
+        cyclic = {}
+        cyclic["self"] = cyclic
         assert recovery._same_json_value(cyclic, cyclic) is None
 
     asyncio.run(exercise_real_historical_recursion())
@@ -4533,8 +4563,10 @@ def test_partial_recovery_proves_completed_invalid_source_for_new_child(with_svg
                     "string_usage", "different_error", "raw_changed", "declarations_changed", "currently_valid"):
                 candidate, current_calls, current_usage = deepcopy(base_payload), deepcopy(calls), deepcopy(usage)
                 current_terminal = deepcopy(sealed)
-                if violation == "own_actual_unknown": current_calls[-1].actual_cost_microunits = None
-                elif violation == "ghost_usage": current_usage[0].request_count = 3
+                if violation == "own_actual_unknown":
+                    current_calls[-1].actual_cost_microunits = None
+                elif violation == "ghost_usage":
+                    current_usage[0].request_count = 3
                 elif violation in {"zero_usage", "bool_usage", "float_usage", "string_usage"}:
                     current_usage[0].request_count = {"zero_usage": 0, "bool_usage": True,
                         "float_usage": 2.0, "string_usage": "2"}[violation]
@@ -4542,7 +4574,8 @@ def test_partial_recovery_proves_completed_invalid_source_for_new_child(with_svg
                     candidate["attempts"][-1]["receipt"]["validation_error"] = (
                         "svg_source_native_table_group_invalid" if base_payload is membership
                         else "svg_source_native_table_membership_mismatch")
-                elif violation == "raw_changed": candidate["attempts"][-1]["raw_response"] += " "
+                elif violation == "raw_changed":
+                    candidate["attempts"][-1]["raw_response"] += " "
                 elif violation == "declarations_changed":
                     candidate["attempts"][-1]["receipt"]["native_declarations"] = {"unproven": True}
                 else:
@@ -4922,7 +4955,7 @@ def test_partial_recovery_failed_source_overlap_requires_bound_evidence(tmp_path
     facts = _whole_page_facts(pages[0], {})
     body = ''.join(f'<text id="{fact["element_id"]}" x="80" y="100" font-family="Noto Sans KR" '
         f'font-size="40" font-weight="400" fill="#111111" text-anchor="start">{text}</text>'
-        for fact, text in zip(facts, ("A", "B")))
+        for fact, text in zip(facts, ("A", "B"), strict=True))
     raw = f'<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">{body}</svg>'
     raw, preservation = bind_whole_page_source_svg(raw, source, 0, facts=facts, width=1280,
         height=720, style_snapshot=snapshot, minimum_font_px=12)
@@ -5009,18 +5042,28 @@ def test_partial_recovery_failed_source_overlap_requires_bound_evidence(tmp_path
         if violation == "own_unknown":
             altered_calls[0].state, altered_calls[0].outcome = "unavailable", "failed"
             altered_calls[0].actual_cost_microunits = None
-        elif violation == "missing_known_usage": altered_usage[0].request_count = 1
-        elif violation == "overreported": altered_usage[0].request_count = 3
-        elif violation == "overunsettled": altered_usage[-1].request_count = 2
+        elif violation == "missing_known_usage":
+            altered_usage[0].request_count = 1
+        elif violation == "overreported":
+            altered_usage[0].request_count = 3
+        elif violation == "overunsettled":
+            altered_usage[-1].request_count = 2
         elif violation in {"zero", "bool", "float", "string"}:
             altered_usage[-1].request_count = {"zero": 0, "bool": True, "float": 1.0, "string": "1"}[violation]
-        elif violation == "foreign_job": altered_usage[-1].job_id = uuid.uuid4()
-        elif violation == "wrong_stage": altered_usage[-1].stage = "review"
-        elif violation == "wrong_provider": altered_usage[-1].provider = "unmapped-provider"
-        elif violation == "wrong_model": altered_usage[-1].model = "unmapped-model"
-        elif violation == "malformed_page": altered_calls[-1].slide_index = 2
-        elif violation == "malformed_model": altered_calls[-1].model_id = ""
-        elif violation == "header_unknown": altered_calls[-1].stage = "review"
+        elif violation == "foreign_job":
+            altered_usage[-1].job_id = uuid.uuid4()
+        elif violation == "wrong_stage":
+            altered_usage[-1].stage = "review"
+        elif violation == "wrong_provider":
+            altered_usage[-1].provider = "unmapped-provider"
+        elif violation == "wrong_model":
+            altered_usage[-1].model = "unmapped-model"
+        elif violation == "malformed_page":
+            altered_calls[-1].slide_index = 2
+        elif violation == "malformed_model":
+            altered_calls[-1].model_id = ""
+        elif violation == "header_unknown":
+            altered_calls[-1].stage = "review"
         else:
             unmatched = deepcopy(other_known)
             unmatched.stage = "repair_remake"
@@ -5052,9 +5095,12 @@ def test_partial_recovery_failed_source_overlap_requires_bound_evidence(tmp_path
     for tampered in ("absent", "equal", "beyond", "bool", "string", "no_stop"):
         candidate = deepcopy(stopped)
         candidate_receipt = candidate["attempts"][-1]["receipt"]
-        if tampered == "absent": candidate_receipt.pop("terminal_ordinal")
-        elif tampered == "no_stop": candidate["provider_terminal_responses"].pop("2")
-        else: candidate_receipt["terminal_ordinal"] = {"equal": 2, "beyond": 4, "bool": True, "string": "3"}[tampered]
+        if tampered == "absent":
+            candidate_receipt.pop("terminal_ordinal")
+        elif tampered == "no_stop":
+            candidate["provider_terminal_responses"].pop("2")
+        else:
+            candidate_receipt["terminal_ordinal"] = {"equal": 2, "beyond": 4, "bool": True, "string": "3"}[tampered]
         with pytest.raises(recovery.PartialRecoveryRejected, match="svg_partial_recovery_failed_source_quality_unproven"):
             recovery._completed_failed_source_quality(candidate, row, **stopped_options)
     for violation in ("unknown", "inflight", "owner", "terminal", "style", "input", "source", "preservation",
@@ -5063,28 +5109,50 @@ def test_partial_recovery_failed_source_overlap_requires_bound_evidence(tmp_path
         candidate, changed_row = deepcopy(payload), deepcopy(row)
         changed_calls, changed_usage = deepcopy(calls), deepcopy(usage)
         options = {**kwargs, "episode_calls": changed_calls, "usage": changed_usage}
-        if violation == "unknown": candidate["provider_failures"] = [{"code": "public_provider_result_unknown"}]
-        elif violation == "inflight": candidate["inflight"] = 3
-        elif violation == "owner": options["owner"] = uuid.uuid4()
-        elif violation == "terminal": candidate["provider_terminal_responses"]["2"]["receipt_digest"] = "0" * 64
-        elif violation == "style": candidate["attempts"][-1]["receipt"]["style_digest"] = "changed"
-        elif violation == "input": candidate["input_digest"] = "changed"
-        elif violation == "source": candidate["source_digest"] = "changed"
-        elif violation == "preservation": candidate["source_preservation"]["manifest_digest"] = "changed"
-        elif violation == "measurement": candidate["quality"]["measurement_complete"] = False
-        elif violation == "physical": candidate["quality"]["physical_readability"]["passed"] = False
-        elif violation == "metrics": candidate["quality"]["metrics_digest"] = "0" * 64
-        elif violation == "pairs": candidate["quality"]["failures"][0]["pairs"] = []
-        elif violation == "basis": candidate["quality"]["overlap_basis"] = {}
-        elif violation == "png": candidate["quality"]["png_digest"] = "0" * 64
-        elif violation == "images": candidate["quality"]["sourceImages"]["omitted"] = ["missing"]
-        elif violation == "call": changed_calls[-1].state = "reserved"
+        if violation == "unknown":
+            candidate["provider_failures"] = [{"code": "public_provider_result_unknown"}]
+        elif violation == "inflight":
+            candidate["inflight"] = 3
+        elif violation == "owner":
+            options["owner"] = uuid.uuid4()
+        elif violation == "terminal":
+            candidate["provider_terminal_responses"]["2"]["receipt_digest"] = "0" * 64
+        elif violation == "style":
+            candidate["attempts"][-1]["receipt"]["style_digest"] = "changed"
+        elif violation == "input":
+            candidate["input_digest"] = "changed"
+        elif violation == "source":
+            candidate["source_digest"] = "changed"
+        elif violation == "preservation":
+            candidate["source_preservation"]["manifest_digest"] = "changed"
+        elif violation == "measurement":
+            candidate["quality"]["measurement_complete"] = False
+        elif violation == "physical":
+            candidate["quality"]["physical_readability"]["passed"] = False
+        elif violation == "metrics":
+            candidate["quality"]["metrics_digest"] = "0" * 64
+        elif violation == "pairs":
+            candidate["quality"]["failures"][0]["pairs"] = []
+        elif violation == "basis":
+            candidate["quality"]["overlap_basis"] = {}
+        elif violation == "png":
+            candidate["quality"]["png_digest"] = "0" * 64
+        elif violation == "images":
+            candidate["quality"]["sourceImages"]["omitted"] = ["missing"]
+        elif violation == "call":
+            changed_calls[-1].state = "reserved"
         elif violation == "other_page":
-            other = deepcopy(changed_calls[-1]); other.slide_index, other.outcome = 2, "unknown"; changed_calls.append(other)
-        elif violation == "actual": changed_calls[-1].actual_cost_microunits = None
-        elif violation == "usage": changed_usage[0].usage_state = "unavailable"
-        elif violation == "usage_count": changed_usage[0].request_count = 1
-        elif violation == "render": changed_row.render_status = "completed"
+            other = deepcopy(changed_calls[-1])
+            other.slide_index, other.outcome = 2, "unknown"
+            changed_calls.append(other)
+        elif violation == "actual":
+            changed_calls[-1].actual_cost_microunits = None
+        elif violation == "usage":
+            changed_usage[0].usage_state = "unavailable"
+        elif violation == "usage_count":
+            changed_usage[0].request_count = 1
+        elif violation == "render":
+            changed_row.render_status = "completed"
         with pytest.raises(recovery.PartialRecoveryRejected):
             recovery._completed_failed_source_quality(candidate, changed_row, **options)
     unsupported = deepcopy(payload)
@@ -5596,8 +5664,10 @@ def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflic
                         fresh_target["attempts"].extend([{"kind": "provider"}, {"kind": "provider"}])
                     with pytest.raises(recovery.PartialRecoveryRejected, match="cached_provider_forbidden"):
                         await admit()
-                    fresh_target.clear(); fresh_target.update(saved_target)
-                    execution.clear(); execution.update(saved_execution)
+                    fresh_target.clear()
+                    fresh_target.update(saved_target)
+                    execution.clear()
+                    execution.update(saved_execution)
                     admitted_ctx.quality_recovery_runtime_binding = admitted_ctx.quality_recovery_input_binding = runtime
                     admission.retry_request_limit = 5
                 live_operation.owner_id = uuid.uuid4()

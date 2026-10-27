@@ -70,7 +70,7 @@ def _apply_common_header_quality(quality, svg, contract, binding, furniture_rece
         from services.svg_common_header_export_evidence import apply_common_header_v2_quality
         return apply_common_header_v2_quality(quality, svg, contract, binding, furniture_receipt)
     import xml.etree.ElementTree as ET
-    from services.svg_common_header import GROUP_ID, TITLE_ID
+    from services.svg_common_header import TITLE_ID
     from services.svg_text_overlap import _ink_rect, comparison_fragments
 
     root = ET.fromstring(svg)

@@ -251,7 +251,7 @@ def _whole_page_native_charts(shapes, receipt, source, native_page, claims,
             raise ValueError("svg_source_pptx_chart_source_geometry_missing")
         source_group, source_offset, source_inherited = found
         source_nodes = [node for node in source_group.iter()
-                        if node.tag == f"{{http://www.w3.org/2000/svg}}text"]
+                        if node.tag == "{http://www.w3.org/2000/svg}text"]
         source_texts = collect_primitives(
             source_group, source_offset, source_inherited, CHART_ELEMENTS).texts
         if len(source_nodes) != len(source_texts):

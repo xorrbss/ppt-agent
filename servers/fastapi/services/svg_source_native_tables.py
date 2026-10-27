@@ -52,7 +52,7 @@ def _authored_grid(rows, cells, rects, frame=None):
     xs, ys = [None] * (len(rows[0]) + 1), [None] * (len(rows) + 1)
     xs[0], xs[-1] = frame["x"], frame["x"] + frame["width"]
     ys[0], ys[-1] = frame["y"], frame["y"] + frame["height"]
-    for (row, column, rs, cs, cell), box in zip(cells, boxes, strict=True):
+    for (row, column, rs, cs, _cell), box in zip(cells, boxes, strict=True):
         x, y, width, height = box
         for axis, bounds, index, value in (("x", xs, column, x), ("x", xs, column + cs, x + width),
                                           ("y", ys, row, y), ("y", ys, row + rs, y + height)):
@@ -60,7 +60,7 @@ def _authored_grid(rows, cells, rects, frame=None):
                 raise _GridMismatch({**detail, "problem": "inconsistent_grid_boundary",
                     "axis": axis, "boundary_index": index, "expected_edge": bounds[index], "actual_edge": value,
                     "first_mismatch": dict(row=row, column=column, row_span=rs, column_span=cs,
-                        actual_bbox=dict(zip(("x", "y", "width", "height"), box)))})
+                        actual_bbox=dict(zip(("x", "y", "width", "height"), box, strict=True)))})
             if bounds[index] is None:
                 bounds[index] = value
     for axis, bounds in (("x", xs), ("y", ys)):
@@ -68,15 +68,15 @@ def _authored_grid(rows, cells, rects, frame=None):
         if missing:
             raise _GridMismatch({**detail, "problem": "unproven_grid_boundary", "axis": axis,
                                  "missing_boundary_indices": missing})
-        if any(right <= left for left, right in zip(bounds, bounds[1:])):
+        if any(right <= left for left, right in zip(bounds, bounds[1:], strict=False)):
             raise _GridMismatch({**detail, "problem": "non_increasing_grid_boundary", "axis": axis})
-    for (row, column, rs, cs, cell), actual in zip(cells, boxes, strict=True):
+    for (row, column, rs, cs, _cell), actual in zip(cells, boxes, strict=True):
         expected = _grid_cell_box(xs, ys, row, column, rs, cs)
         if any(abs(value - target) > .000001 for value, target in zip(actual, expected, strict=True)):
             raise _GridMismatch({**detail, "problem": "inconsistent_cell_rectangle",
                 "first_mismatch": dict(row=row, column=column, row_span=rs, column_span=cs,
-                    actual_bbox=dict(zip(("x", "y", "width", "height"), actual)),
-                    expected_bbox=dict(zip(("x", "y", "width", "height"), expected)))})
+                    actual_bbox=dict(zip(("x", "y", "width", "height"), actual, strict=True)),
+                    expected_bbox=dict(zip(("x", "y", "width", "height"), expected, strict=True)))})
     return xs, ys
 
 
@@ -135,7 +135,7 @@ def _evidence(root, receipt, page):
         rows, cells = _cells(tables[block_id])
         rects = [node for node in group if node.tag == _NS + "rect"]
         xs, ys = _authored_grid(rows, cells, rects, frame)
-        for (row, column, rs, cs, cell), rect in zip(cells, rects, strict=True):
+        for (row, column, rs, cs, cell), _rect in zip(cells, rects, strict=True):
             expected = _grid_cell_box(xs, ys, row, column, rs, cs)
             cell_id = cell.get("sourceCellId", f"{block_id}:row:{row}:column:{column}")
             bindings = [binding for binding in owned if binding["source_id"] == cell_id]
@@ -191,7 +191,7 @@ def _mixed_cell_borders(strokes, cell, *, under, pt_per_px):
         bounds = sorted({start, end, *(max(start, stroke.start) for stroke in candidates),
                          *(min(end, stroke.end) for stroke in candidates)})
         styles = set()
-        for left, right in zip(bounds, bounds[1:]):
+        for left, right in zip(bounds, bounds[1:], strict=False):
             if right - left <= epsilon:
                 continue
             midpoint = (left + right) / 2
@@ -220,7 +220,7 @@ def source_table_native_objects(svg, receipt, manifest, page_index, *, pt_per_px
     root = ET.fromstring(svg)
     evidence = _evidence(root, receipt, pages[page_index])
     objects = []
-    for record, group, rows, cells, rects, owned, xs, ys in evidence:
+    for record, group, rows, cells, _rects, owned, xs, ys in evidence:
         primitives = collect_primitives(group, (0., 0.), {}, TABLE_ELEMENTS)
         text_nodes = [node for node in group if node.tag == _NS + "text" and normalize_cell("".join(node.itertext()))]
         if len(text_nodes) != len(primitives.texts):
@@ -257,8 +257,9 @@ def source_table_native_objects(svg, receipt, manifest, page_index, *, pt_per_px
             if rs > 1 or cs > 1:
                 merged.append(dict(row=row, column=column, rowSpan=rs, columnSpan=cs))
         payload = dict(rows=payload_rows, cellStyles=cell_styles,
-                       columnWidths=[round(right-left, 6) for left, right in zip(xs, xs[1:])],
-                       rowHeightsPt=[round((bottom-top) * pt_per_px, 6) for top, bottom in zip(ys, ys[1:])])
+                       columnWidths=[round(right-left, 6) for left, right in zip(xs, xs[1:], strict=False)],
+                       rowHeightsPt=[round((bottom-top) * pt_per_px, 6)
+                                     for top, bottom in zip(ys, ys[1:], strict=False)])
         if merged:
             payload["mergedCells"] = merged
         objects.append(NativeObject.build(id=record["element_id"], kind="table", anchor=frame, payload=payload))

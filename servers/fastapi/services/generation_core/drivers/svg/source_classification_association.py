@@ -74,8 +74,14 @@ def _measured_axes(item):
             (min(point[1] for point in points), box["y"]),
             (max(point[1] for point in points), box["y"] + box["height"]))):
         return False
-    horizontal = [abs(first[1] - second[1]) <= 1e-6 for first, second in zip(points, points[1:] + points[:1])]
-    vertical = [abs(first[0] - second[0]) <= 1e-6 for first, second in zip(points, points[1:] + points[:1])]
+    horizontal = [
+        abs(first[1] - second[1]) <= 1e-6
+        for first, second in zip(points, points[1:] + points[:1], strict=True)
+    ]
+    vertical = [
+        abs(first[0] - second[0]) <= 1e-6
+        for first, second in zip(points, points[1:] + points[:1], strict=True)
+    ]
     return all(horizontal[i] and vertical[(i + 1) % 4] for i in (0, 2)) or all(
         vertical[i] and horizontal[(i + 1) % 4] for i in (0, 2))
 

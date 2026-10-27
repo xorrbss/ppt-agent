@@ -949,12 +949,18 @@ def test_durable_review_job_rejects_invalid_claim(monkeypatch, violation):
         operation = SimpleNamespace(kind="quality.review", owner_id=owner, owner_scope=str(owner), state="running",
             max_attempts=1, attempt_number=1, cancel_requested_at=None, expected_revision=1,
             lease_expires_at=get_current_utc_datetime() + timedelta(seconds=60), request_payload={"context": {}})
-        if violation == "cancel": operation.cancel_requested_at = get_current_utc_datetime()
-        if violation == "owner": operation.owner_scope = str(uuid.uuid4())
-        if violation == "lease": operation.lease_expires_at = get_current_utc_datetime() - timedelta(seconds=1)
-        if violation == "attempt": operation.attempt_number = 2
-        if violation == "mode": operation.request_payload = {"context": {"mode": "analyze_and_fix"}}
-        if violation == "retry": row.retry_request_limit = 1
+        if violation == "cancel":
+            operation.cancel_requested_at = get_current_utc_datetime()
+        if violation == "owner":
+            operation.owner_scope = str(uuid.uuid4())
+        if violation == "lease":
+            operation.lease_expires_at = get_current_utc_datetime() - timedelta(seconds=1)
+        if violation == "attempt":
+            operation.attempt_number = 2
+        if violation == "mode":
+            operation.request_payload = {"context": {"mode": "analyze_and_fix"}}
+        if violation == "retry":
+            row.retry_request_limit = 1
         session = SimpleNamespace(scalar=AsyncMock(side_effect=[None if violation == "tenant" else row, operation]))
         authority = AsyncMock()
         monkeypatch.setattr("services.public_operation_admission._require_phase2_provider_contract", authority)
