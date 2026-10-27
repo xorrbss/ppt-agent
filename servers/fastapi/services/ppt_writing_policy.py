@@ -90,24 +90,32 @@ class SymbolRule:
     category: SymbolCategory
     characters: str
     replacement: str | None = None
+    context: str | None = None
     # The writing prompt prefers ordinary punctuation for newly written lists;
-    # this is a style rule, not a font/editability repair. Restrict the mechanical
-    # replacement to adjacent Korean words; formulas, names and values are not lists.
-    left_context: str = r"(?<!\w)[가-힣]+[ \t]*$"
-    right_context: str = r"^[ \t]*[가-힣]+(?!\w)"
+    # this is a style rule, not a font/editability repair. Each mapping names
+    # its bounded Korean prose context; semantic values are protected first.
+    left_context: str = r"(?<![A-Za-z0-9가-힣])[가-힣]+[ \t]*$"
+    right_context: str = r"^[ \t]*[가-힣]+(?![A-Za-z0-9가-힣])"
 
 
 _SINGLE_SYMBOLS: tuple[SymbolRule, ...] = (
-    SymbolRule(SymbolCategory.MIDDLE_DOT, "·ㆍ‧∙⋅", ", "),
+    SymbolRule(SymbolCategory.MIDDLE_DOT, "·ㆍ‧∙⋅", ", ", "korean_list"),
     # These can encode grouping, relation, omission or emphasis. No mechanical
     # replacement proves the intended meaning; retain the ordinary correction.
     SymbolRule(SymbolCategory.INLINE_BULLET, "•●◦▪‣"),
     SymbolRule(SymbolCategory.LONG_DASH, "–—―"),
     SymbolRule(SymbolCategory.TEXT_ARROW, "→⇒➜➔⟶←↔↑↓⇢⟵"),
-    SymbolRule(SymbolCategory.PIPE_SEPARATOR, "|｜│"),
+    SymbolRule(SymbolCategory.PIPE_SEPARATOR, "|｜│", ", ", "complete_korean_phrases"),
     SymbolRule(SymbolCategory.DECORATIVE_MARK, "※★☆◆◇▶"),
     SymbolRule(SymbolCategory.DECORATIVE_CHECK, "✓✔☑✅"),
 )
+# List tokens are complete Korean phrases or quantities with a Korean unit/
+# counter or percent sign. A bare numeric pair is deliberately excluded; the
+# scanner also protects known numeric and Latin/SI products before mapping.
+_KOREAN_LIST_LEFT = re.compile(r"(?<![A-Za-z0-9가-힣])[가-힣0-9.,% \t]*[가-힣%][가-힣0-9.,% \t]*$")
+_KOREAN_LIST_RIGHT = re.compile(r"^[가-힣0-9.,% \t]*[가-힣%][가-힣0-9.,% \t]*(?![A-Za-z0-9가-힣])")
+_KOREAN_PHRASE_LEFT = re.compile(r"(?<![A-Za-z0-9가-힣])[가-힣]+(?:[ \t]+[가-힣]+)+[ \t]*$")
+_KOREAN_PHRASE_RIGHT = re.compile(r"^[ \t]*[가-힣]+(?:[ \t]+[가-힣]+)+(?![A-Za-z0-9가-힣])")
 _MULTI_SYMBOLS: tuple[tuple[SymbolCategory, re.Pattern[str]], ...] = (
     (SymbolCategory.TEXT_ARROW, re.compile(r"->|=>")),
     (SymbolCategory.ELLIPSIS, re.compile(r"…|\.{3,}")),
@@ -255,9 +263,17 @@ def visible_symbol_substitutions(text: str, scan: WritingScan) -> tuple[tuple[in
     edits = []
     for hit in scan.violations:
         rule = next((rule for rule in _SINGLE_SYMBOLS if rule.category == hit.category), None)
-        if (rule is not None and rule.replacement is not None
-                and re.search(rule.left_context, text[:hit.start])
-                and re.search(rule.right_context, text[hit.end:])):
+        left, right = text[:hit.start], text[hit.end:]
+        if rule is not None and rule.context == "korean_list":
+            safe_context = bool(_KOREAN_LIST_LEFT.search(left) and _KOREAN_LIST_RIGHT.search(right))
+        elif rule is not None and rule.context == "complete_korean_phrases":
+            # Pipes are prose-style violations, but only complete Korean
+            # multiword phrases provide enough context for comma substitution.
+            safe_context = bool(_KOREAN_PHRASE_LEFT.search(left) and _KOREAN_PHRASE_RIGHT.search(right))
+        else:
+            safe_context = bool(rule is not None and re.search(rule.left_context, left)
+                                and re.search(rule.right_context, right))
+        if rule is not None and rule.replacement is not None and safe_context:
             start = len(text[:hit.start].rstrip(" \t"))
             end = hit.end + len(text[hit.end:]) - len(text[hit.end:].lstrip(" \t"))
             edits.append((start, end, rule.replacement))
