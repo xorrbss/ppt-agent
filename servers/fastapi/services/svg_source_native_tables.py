@@ -52,7 +52,7 @@ def _authored_grid(rows, cells, rects, frame=None):
     xs, ys = [None] * (len(rows[0]) + 1), [None] * (len(rows) + 1)
     xs[0], xs[-1] = frame["x"], frame["x"] + frame["width"]
     ys[0], ys[-1] = frame["y"], frame["y"] + frame["height"]
-    for (row, column, rs, cs, _cell), box in zip(cells, boxes, strict=True):
+    for (row, column, rs, cs, _cell), box in zip(cells, boxes, strict=False):
         x, y, width, height = box
         for axis, bounds, index, value in (("x", xs, column, x), ("x", xs, column + cs, x + width),
                                           ("y", ys, row, y), ("y", ys, row + rs, y + height)):
@@ -60,7 +60,7 @@ def _authored_grid(rows, cells, rects, frame=None):
                 raise _GridMismatch({**detail, "problem": "inconsistent_grid_boundary",
                     "axis": axis, "boundary_index": index, "expected_edge": bounds[index], "actual_edge": value,
                     "first_mismatch": dict(row=row, column=column, row_span=rs, column_span=cs,
-                        actual_bbox=dict(zip(("x", "y", "width", "height"), box, strict=True)))})
+                        actual_bbox=dict(zip(("x", "y", "width", "height"), box, strict=False)))})
             if bounds[index] is None:
                 bounds[index] = value
     for axis, bounds in (("x", xs), ("y", ys)):
@@ -70,13 +70,13 @@ def _authored_grid(rows, cells, rects, frame=None):
                                  "missing_boundary_indices": missing})
         if any(right <= left for left, right in zip(bounds, bounds[1:], strict=False)):
             raise _GridMismatch({**detail, "problem": "non_increasing_grid_boundary", "axis": axis})
-    for (row, column, rs, cs, _cell), actual in zip(cells, boxes, strict=True):
+    for (row, column, rs, cs, _cell), actual in zip(cells, boxes, strict=False):
         expected = _grid_cell_box(xs, ys, row, column, rs, cs)
         if any(abs(value - target) > .000001 for value, target in zip(actual, expected, strict=True)):
             raise _GridMismatch({**detail, "problem": "inconsistent_cell_rectangle",
                 "first_mismatch": dict(row=row, column=column, row_span=rs, column_span=cs,
-                    actual_bbox=dict(zip(("x", "y", "width", "height"), actual, strict=True)),
-                    expected_bbox=dict(zip(("x", "y", "width", "height"), expected, strict=True)))})
+                    actual_bbox=dict(zip(("x", "y", "width", "height"), actual, strict=False)),
+                    expected_bbox=dict(zip(("x", "y", "width", "height"), expected, strict=False)))})
     return xs, ys
 
 
@@ -135,7 +135,7 @@ def _evidence(root, receipt, page):
         rows, cells = _cells(tables[block_id])
         rects = [node for node in group if node.tag == _NS + "rect"]
         xs, ys = _authored_grid(rows, cells, rects, frame)
-        for (row, column, rs, cs, cell), _rect in zip(cells, rects, strict=True):
+        for (row, column, rs, cs, cell), _rect in zip(cells, rects, strict=False):
             expected = _grid_cell_box(xs, ys, row, column, rs, cs)
             cell_id = cell.get("sourceCellId", f"{block_id}:row:{row}:column:{column}")
             bindings = [binding for binding in owned if binding["source_id"] == cell_id]

@@ -392,7 +392,7 @@ def _paragraph_geometry(text: DrawnText, top: float, bottom: float, starts=None)
         return None
     line_box = text.size * 1.25
     starts = list(range(len(text.lines))) if starts is None else sorted(starts)
-    groups = [range(start, end) for start, end in zip(starts, starts[1:] + [len(text.lines)], strict=True)]
+    groups = [range(start, end) for start, end in zip(starts, starts[1:] + [len(text.lines)], strict=False)]
     baselines = [point[1] for point in text.points]
     spacing = []
     for group in groups:

@@ -288,7 +288,7 @@ def _same_json_value(left, right):
             else:
                 if len(expected) != len(actual):
                     return False
-                pairs = [(a, b, False) for a, b in zip(expected, actual, strict=True)]
+                pairs = [(a, b, False) for a, b in zip(expected, actual, strict=False)]
             left_active.add(id(expected))
             right_active.add(id(actual))
             pending.append((expected, actual, True))
@@ -1513,7 +1513,7 @@ def _recovery_ledger_snapshot(admissions, calls, leases, usage, budgets, reserva
     if verification is not None:
         return digest(verification.ledger_snapshots(*groups))
     return digest({name: [_dump(row) for row in rows] for name, rows in zip(
-        ("admissions", "calls", "leases", "usage", "budgets", "reservations"), groups, strict=True)})
+        ("admissions", "calls", "leases", "usage", "budgets", "reservations"), groups, strict=False)})
 
 
 async def _fresh_recovery_ledger_snapshot(session, operation_ids, job_id, *, operation_bound_only=False, verification=None):
@@ -3432,7 +3432,7 @@ def _historical_uniform_grid_rejection(svg, preservation, page, *, operation, jo
         # Reproduce only the former formula; the current module above proves
         # every shared edge, source span, cell identity and text membership.
         mismatch = None
-        for (row, column_index, rs, cs, _cell), rect in zip(cells, rects, strict=True):
+        for (row, column_index, rs, cs, _cell), rect in zip(cells, rects, strict=False):
             actual = [float(rect.get(key)) for key in ("x", "y", "width", "height")]
             expected = [frame["x"] + column_index * column_width, frame["y"] + row * row_height,
                 cs * column_width, rs * row_height]

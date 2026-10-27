@@ -132,7 +132,7 @@ def _contrast(first, second):
     def luminance(color):
         channels = [int(color[index:index + 2], 16) / 255 for index in (1, 3, 5)]
         linear = [value / 12.92 if value <= .04045 else ((value + .055) / 1.055) ** 2.4 for value in channels]
-        return sum(value * factor for value, factor in zip(linear, (.2126, .7152, .0722), strict=True))
+        return sum(value * factor for value, factor in zip(linear, (.2126, .7152, .0722), strict=False))
     low, high = sorted((luminance(first), luminance(second)))
     return (high + .05) / (low + .05)
 
@@ -192,7 +192,7 @@ def _wrap(title, font, width, max_lines=2):
 @lru_cache(maxsize=4096)
 def _measured_lines(lines, family, weight, size, box_values, baseline, line_height, alignment):
     font = {"family": family, "weight": weight, "size_px": size}
-    box = dict(zip(("x", "y", "width", "height"), box_values, strict=True))
+    box = dict(zip(("x", "y", "width", "height"), box_values, strict=False))
     face = measure_font(family, weight, 1000)
     scale = size / 1000
     widths, boxes = [], []
@@ -216,7 +216,7 @@ def _measured_lines(lines, family, weight, size, box_values, baseline, line_heig
 def _line_evidence(lines, font, box, baseline, line_height, alignment):
     widths, boxes = _measured_lines(tuple(lines), font["family"], font["weight"], font["size_px"],
         tuple(box[key] for key in ("x", "y", "width", "height")), baseline, line_height, alignment)
-    return list(widths), [dict(zip(("x", "y", "width", "height"), values, strict=True)) for values in boxes]
+    return list(widths), [dict(zip(("x", "y", "width", "height"), values, strict=False)) for values in boxes]
 
 
 def prepare_common_header(snapshot: dict, outline, canvas, *, mode="uniform", cover_exception=False):
@@ -283,7 +283,7 @@ def prepare_common_header(snapshot: dict, outline, canvas, *, mode="uniform", co
     titles = [_value(slide, "title") for slide in slides]
     applied = [not (cover_exception and index == 0) for index in range(len(slides))]
     page_lines = [_wrap(title, font, title_width) if applies else []
-                  for title, applies in zip(titles, applied, strict=True)]
+                  for title, applies in zip(titles, applied, strict=False)]
     slots = max((len(lines) for lines in page_lines), default=1) or 1
     optional = {}
     y = top
@@ -349,7 +349,7 @@ def prepare_common_header(snapshot: dict, outline, canvas, *, mode="uniform", co
                 "cover_exception": bool(cover_exception), "brand_reservations": reservations, **optional}
     contract["digest"] = common_header_digest(contract)
     bindings = []
-    for index, (slide, title, lines, applies) in enumerate(zip(slides, titles, page_lines, applied, strict=True)):
+    for index, (slide, title, lines, applies) in enumerate(zip(slides, titles, page_lines, applied, strict=False)):
         if not isinstance(title, str) or not title.strip():
             raise ValueError("svg_common_header_title_missing")
         widths, boxes = _line_evidence(lines, font, title_box, baseline, line_height, alignment)

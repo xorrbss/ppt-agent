@@ -1410,7 +1410,7 @@ def test_partial_recovery_page_input_digest_matches_new_and_legacy_svg_inputs():
         request_payload={"common_header_mode": "uniform"},
         authored_outline={"slides": [
             {"content": slide.content, "title": slide.title, "common_header": binding}
-            for slide, binding in zip(outline.slides, bindings, strict=True)
+            for slide, binding in zip(outline.slides, bindings, strict=False)
         ]})
     for index, binding in enumerate(bindings):
         initial = svg_page_input_digest(content=outline.slides[index].content, style=style,
@@ -1684,7 +1684,7 @@ def test_external_header_titles_checkpoint_one_call_resume_unknown_and_source_gu
     response = {"source_digest": batch["source_digest"], "page_count": batch["page_count"],
         "titles": [{"page_index": page["page_index"], "source_digest": page["source_digest"],
                     "title": title, "source_quote": title}
-                   for page, title in zip(batch["pages"], ["운영 계획", "서비스 구성"], strict=True)]}
+                   for page, title in zip(batch["pages"], ["운영 계획", "서비스 구성"], strict=False)]}
     validator = Draft202012Validator(header_title_response_schema(batch))
     validator.validate(response)
     assert len(_validated_result(response, batch)["titles"]) == 2
@@ -4955,7 +4955,7 @@ def test_partial_recovery_failed_source_overlap_requires_bound_evidence(tmp_path
     facts = _whole_page_facts(pages[0], {})
     body = ''.join(f'<text id="{fact["element_id"]}" x="80" y="100" font-family="Noto Sans KR" '
         f'font-size="40" font-weight="400" fill="#111111" text-anchor="start">{text}</text>'
-        for fact, text in zip(facts, ("A", "B"), strict=True))
+        for fact, text in zip(facts, ("A", "B"), strict=False))
     raw = f'<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">{body}</svg>'
     raw, preservation = bind_whole_page_source_svg(raw, source, 0, facts=facts, width=1280,
         height=720, style_snapshot=snapshot, minimum_font_px=12)

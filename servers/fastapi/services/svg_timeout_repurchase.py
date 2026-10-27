@@ -2215,7 +2215,7 @@ async def _bind_reviewed_stage_receipts(session, previous, operation, job, rows,
         _reject("svg_timeout_repurchase_manifest_conflict")
     png_bindings = advisory.get("pageAdvisories") or []
     if len(png_bindings) != len(pages) or any(
-        b.get("pngDigest") != p.get("png_sha256") for b, p in zip(png_bindings, pages, strict=True)
+        b.get("pngDigest") != p.get("png_sha256") for b, p in zip(png_bindings, pages, strict=False)
     ):
         _reject("svg_timeout_repurchase_manifest_conflict")
     accepted_review = {**deepcopy(review), "actorOwnerId": str(operation.owner_id), "tenantId": str(get_current_tenant_id()),

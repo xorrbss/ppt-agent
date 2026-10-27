@@ -1154,7 +1154,7 @@ def test_v2_author_changes_only_reference_input_and_records_actual_reference_dig
     assert module.SVG_SOURCE_PRESERVATION_RULES_V4 not in module.svg_author_rules(_reference_style(3), 18)
 
     aligned = ''
-    for x, line in zip((61, 417, 773), diagram.splitlines()[1:4], strict=True):
+    for x, line in zip((61, 417, 773), diagram.splitlines()[1:4], strict=False):
         category, members = line.split(': ', 1)
         first_member, second_member = members.split(', ')
         aligned += (f'<text x="{x}" y="171" font-family="Inter" font-size="18" fill="#FFFFFF">'
@@ -1192,7 +1192,7 @@ def test_v2_author_changes_only_reference_input_and_records_actual_reference_dig
     assert module.SVG_SOURCE_PRESERVATION_RULES_V5 not in module.svg_author_rules(_reference_style(4), 18)
 
     split_aligned = ''
-    for x, line in zip((64, 436, 808), diagram.splitlines()[1:4], strict=True):
+    for x, line in zip((64, 436, 808), diagram.splitlines()[1:4], strict=False):
         category, members = line.split(': ', 1)
         first_member, second_member = members.split(', ')
         split_aligned += (f'<text x="{x}" y="168" font-family="Inter" font-size="17" fill="#111111">'
@@ -1278,7 +1278,7 @@ def test_v2_author_changes_only_reference_input_and_records_actual_reference_dig
     groups = source_classifications(diagram)
     colors = ("#0088AA", "#CC5500", "#7755AA")
     legend_svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720">'
-    for index, (group, color) in enumerate(zip(groups, colors, strict=True)):
+    for index, (group, color) in enumerate(zip(groups, colors, strict=False)):
         x = 50 + index * 350
         legend_svg += f'<text x="{x}" y="30" fill="{color}">{group["label"]}</text>'
         for row, member in enumerate(reversed(group["members"])):

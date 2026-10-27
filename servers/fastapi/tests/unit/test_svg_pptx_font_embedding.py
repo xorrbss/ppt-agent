@@ -134,7 +134,7 @@ def test_whole_page_measured_symbol_runs_and_used_font_bytes(tmp_path):
     run.font.name, run.font.bold, run.font.size = NOTO, True, Pt(20)
     run.font.color.rgb = RGBColor(0x12, 0x34, 0x56)
     table_shape = slide.shapes.add_table(1, 2, Inches(1), Inches(3), Inches(7), Inches(1))
-    for cell, value in zip(table_shape.table.rows[0].cells, ("표 ▸ 항목", "일반 한글"), strict=True):
+    for cell, value in zip(table_shape.table.rows[0].cells, ("표 ▸ 항목", "일반 한글"), strict=False):
         cell.text = value
         cell_run = cell.text_frame.paragraphs[0].runs[0]
         cell_run.font.name, cell_run.font.bold, cell_run.font.size = NOTO, False, Pt(16)

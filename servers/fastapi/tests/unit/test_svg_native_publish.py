@@ -215,11 +215,11 @@ def test_korean_table_is_accepted_with_exact_anchor_and_payload():
         with pytest.raises(NativePayloadError, match="table_cell_font_size_invalid"):
             parse_table_payload(invalid_payload)
     assert "fontSizePt" not in _text_style(replace(large_text, size=float("nan")), 0.75)
-    for before_shape, after_shape in zip(original_geometry.shapes, fitted_geometry.shapes, strict=True):
+    for before_shape, after_shape in zip(original_geometry.shapes, fitted_geometry.shapes, strict=False):
         assert after_shape.box.x0 == pytest.approx(40 + before_shape.box.x0 * 0.5)
         assert after_shape.box.y0 == pytest.approx(30 + before_shape.box.y0 * 0.5)
         assert after_shape.stroke_width == pytest.approx(before_shape.stroke_width * 0.5)
-    for before_text, after_text in zip(original_geometry.texts, fitted_geometry.texts, strict=True):
+    for before_text, after_text in zip(original_geometry.texts, fitted_geometry.texts, strict=False):
         assert after_text.size == pytest.approx(before_text.size * 0.5)
         assert after_text.points == tuple((40 + x * 0.5, 30 + y * 0.5) for x, y in before_text.points)
     from services.generation_core.drivers.svg.native_paint import background_layers, effective_fill

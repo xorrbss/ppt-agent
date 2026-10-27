@@ -7,7 +7,6 @@ import os
 from pathlib import Path
 import re
 import tempfile
-from typing import Annotated
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -28,6 +27,7 @@ from utils.owner_context import get_current_owner_id, get_current_tenant_id
 
 
 PRESENTATION_DRAFT_PREVIEW_ROUTER = APIRouter()
+_DRAFT_PREVIEW_SESSION_DEPENDENCY = Depends(get_async_session)
 _PRIVATE_HEADERS = {"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"}
 
 
@@ -77,7 +77,7 @@ def _read_checkpoint_png(root: Path, path: Path) -> bytes:
 
 @PRESENTATION_DRAFT_PREVIEW_ROUTER.get("/{presentation_id}/draft-preview")
 async def draft_preview(presentation_id: uuid.UUID, response: Response,
-                        session: Annotated[AsyncSession, Depends(get_async_session)]):
+                        session: AsyncSession = _DRAFT_PREVIEW_SESSION_DEPENDENCY):
     job = await _context(session, presentation_id)
     # Read physical metadata columns only: no JSON extraction or TOAST decoding.
     rows = (await session.execute(select(
@@ -106,10 +106,9 @@ async def draft_preview(presentation_id: uuid.UUID, response: Response,
 
 @PRESENTATION_DRAFT_PREVIEW_ROUTER.get("/{presentation_id}/draft-preview/{page_index}/image")
 async def draft_preview_image(presentation_id: uuid.UUID, page_index: int,
-                              job_id: uuid.UUID,
-                              session: Annotated[AsyncSession, Depends(get_async_session)],
-                              revision: str | None = None,
-                              page_version: str | None = None):
+                              job_id: uuid.UUID, revision: str | None = None,
+                              page_version: str | None = None,
+                              session: AsyncSession = _DRAFT_PREVIEW_SESSION_DEPENDENCY):
     job = await _context(session, presentation_id)
     if job.id != job_id or page_index < 0:
         raise HTTPException(404, "draft_preview_unavailable")
