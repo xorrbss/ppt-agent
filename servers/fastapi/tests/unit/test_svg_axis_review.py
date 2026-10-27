@@ -108,16 +108,128 @@ def test_one_unreviewed_flow_axis_does_not_invalidate_other_pages(monkeypatch):
     assert flags == {**dict.fromkeys(range(6)), 6: "design:deck_flow_unreviewed"}
 
 
+@pytest.mark.parametrize("count,invalid", [(2, [0]), (5, [3]), (6, [5]), (7, [3]), (12, list(range(5)))])
+@pytest.mark.parametrize("evidence", ["page", "png", "prior"])
+def test_invalid_mandatory_evidence_only_excludes_its_pages(monkeypatch, count, invalid, evidence):
+    harness = _fresh(monkeypatch, count)
+    original = quality._design_context
+    for index in invalid:
+        harness.pages[index][0]["quality"]["passed"] = False
+        harness.pages[index][0]["terminal"] = dict(index=index, reason="svg:svg_source_quality_failed",
+                                                  remakeOutcome="verbatim_flag_only")
+        if evidence == "png":
+            harness.pages[index][0]["png_sha256"] = "0" * 64
+
+    def context(*args, **kwargs):
+        result = original(*args, **kwargs)
+        result["examples"] = [dict(role="content", roles=["content"], digest="fixture-style-reference")]
+        result["exampleDigests"] = ["fixture-style-reference"]
+        for index in invalid:
+            if evidence == "page":
+                result["mandatoryEvidence"][index] = False
+            elif evidence == "prior":
+                result["priorCandidates"][index] = dict(png=PNG, mandatoryEvidenceValid=False)
+        return result
+
+    monkeypatch.setattr(quality, "_design_context", context)
+    valid = [index for index in range(count) if index not in invalid]
+    reviewed = _provider(harness)
+    calls = []
+
+    async def provider(renders, **kwargs):
+        request = kwargs["design_context"]
+        indices = request["globalPageIndices"]
+        calls.append((request["reviewScope"], indices))
+        assert not set(indices) & set(invalid)
+        assert kwargs["slide_count"] == len(renders) == len(indices)
+        assert len(request["mandatoryEvidence"]) == len(indices)
+        assert all(request["mandatoryEvidence"])
+        assert [page["deckIndex"] for page in request["pages"]] == indices
+        assert not request["priorCandidates"]
+        # Exercise the actual fixed-partition request/parser on the global subset.
+        if request["reviewScope"] == "global":
+            assert request["examples"] == request["exampleDigests"] == []
+            parsed = vision._parse_baseline_review(_global_payload(request, len(indices)),
+                                                  slide_count=len(indices), context=request)
+            assert parsed is not None
+        result = await reviewed(renders, **kwargs)
+        result["designReview"]["deckFlow"]["repetitionGroups"] = [dict(pages=list(range(len(indices))))]
+        return result
+
+    before = deepcopy(harness.pages)
+    advisory = _run(harness, provider)
+    gate = advisory["vision"]["designGate"]
+    assert harness.pages == before
+    assert advisory["vision"]["reviewedPageIndices"] == valid
+    assert advisory["vision"]["unreviewedPages"] == invalid
+    assert gate["schemaVersion"] == "svg-quality-first-design-gate/v2"
+    assert gate["unreviewedPages"] == gate["flowUnreviewedPages"] == invalid
+    assert gate["reason"] == "mandatory_evidence_invalid"
+    assert gate["status"] == "unreviewed" and not gate["pageCoverageComplete"]
+    assert gate["blockingPages"] == []
+    assert gate["deckFlow"]["evaluated"] is False
+    assert gate["deckFlow"]["reason"] == "mandatory_evidence_invalid"
+    assert gate["deckFlow"]["repetitionGroups"][0]["pages"] == valid
+    assert {index for scope, indices in calls if scope != "global" for index in indices} == set(valid)
+    if count > 5:
+        assert calls[-1] == ("global", valid)
+    for page in gate["pages"]:
+        if page["index"] in invalid:
+            assert page["reason"] == "mandatory_evidence_invalid"
+            assert not page["evaluated"] and not page["mandatoryEvidenceValid"]
+            assert page["unreviewedAxes"] == list(prompt.DESIGN_AXES)
+        else:
+            assert page["evaluated"] and page["status"] == "passed"
+            assert page["unreviewedAxes"] == []
+    assert quality.quality_recovery_decisions(harness.ctx, harness.pages, advisory) == {}
+    assert _run(harness, AsyncMock(side_effect=AssertionError("sealed review dispatched again"))) == advisory
+    if evidence == "png":
+        # Review isolation does not weaken publication's original render-integrity fence.
+        from services.authored_checkpoint_errors import AuthoredStageError
+        with pytest.raises(AuthoredStageError) as raised:
+            _publish_flags(harness, advisory)
+        assert raised.value.code == "svg_quality_recovery_review_required"
+        return
+    review, summary, flags = _publish_flags(harness, advisory)
+    assert review["status"] == "reviewed" and review["gateStatus"] == "unreviewed"
+    assert review["unreviewedPages"] == review["flowUnreviewedPages"] == invalid
+    assert review["flaggedPages"] == invalid
+    assert summary["status"] == "review_required"
+    assert flags == {index: "design:unreviewed" if index in invalid else None for index in range(count)}
+    for index in invalid:
+        assert harness.pages[index][0]["terminal"] == before[index][0]["terminal"]
+        assert harness.pages[index][0]["quality"]["passed"] is False
+
+
+@pytest.mark.parametrize("count", [1, 3, 7])
+def test_all_mandatory_evidence_invalid_still_skips_review(monkeypatch, count):
+    harness = _fresh(monkeypatch, count)
+    original = quality._design_context
+
+    def context(*args, **kwargs):
+        return {**original(*args, **kwargs), "mandatoryEvidence": [False] * count}
+
+    monkeypatch.setattr(quality, "_design_context", context)
+    provider = AsyncMock(side_effect=AssertionError("invalid evidence dispatched"))
+    advisory = _run(harness, provider)
+    assert advisory["vision"] == {"skipped": "mandatory_evidence_invalid"}
+    provider.assert_not_awaited()
+    assert harness.groups == {}
+    review, _, flags = _publish_flags(harness, advisory)
+    assert review == {"status": "unavailable", "reason": "mandatory_evidence_invalid"}
+    assert not any(flags.values())
+
+
 def _global_context():
     return dict(policy=profiles.QUALITY_RECOVERY_POLICY_V2, reviewScope="global",
         reviewContractVersion=profiles.REVIEW_CONTRACT_VERSION, priorCandidates={},
         composition={"groups": [{"pages": [0, 2]}], "pages": [{}, {}, {}]}, pages=[], examples=[])
 
 
-def _global_payload(context):
+def _global_payload(context, count=3):
     axis = dict(verdict="passed", severity="none", repairScope="none", visibleEvidence="Clear progression.")
     return {"variantReview": {group: {key: dict(axis=deepcopy(axis), intentional=False, sourceEvidence="")
-            for key in keys} for group, keys in prompt.server_review_partition(context, 3).items()},
+            for key in keys} for group, keys in prompt.server_review_partition(context, count).items()},
             "designTargets": []}
 
 
