@@ -25,6 +25,7 @@ from services.generation_core.assets.icon_pack.provider import (
     TransparentPngUnsupported,
 )
 from utils.runtime_settings import RuntimeSettings
+from utils.hashing import sha256_hex
 
 LOGGER = logging.getLogger(__name__)
 
@@ -105,7 +106,8 @@ async def generate_scene_cutout(
     started = time.perf_counter()
     try:
         path = await provider.generate(
-            prompt, output_directory, size="1024x1024", semantic_slot="image.cutout"
+            prompt, output_directory, size="1024x1024",
+            semantic_slot=f"image.cutout.{sha256_hex(prompt.encode('utf-8'))}",
         )
     except Exception as error:  # noqa: BLE001 - degrade, never break the deck
         LOGGER.warning("[authored] scene cutout generation failed: %s", error)

@@ -4,8 +4,10 @@ import json
 import logging
 import os
 import re
-from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from contextlib import asynccontextmanager, contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass
+from typing import AsyncIterator, Iterator
 from weakref import WeakKeyDictionary
 
 import aiohttp
@@ -31,6 +33,7 @@ from utils.get_env import (
 )
 from utils.get_env_programme import get_image_generation_concurrency
 from utils.runtime_settings import RuntimeSettings, resolve_runtime_settings
+from utils.hashing import sha256_hex
 from utils.get_env import get_pixabay_api_key_env
 from utils.get_env import get_comfyui_url_env
 from utils.get_env import get_comfyui_workflow_env
@@ -83,6 +86,36 @@ _IMAGE_GENERATION_GATES: WeakKeyDictionary[
 LOGGER = logging.getLogger(__name__)
 
 
+@dataclass
+class ImageProviderCalls:
+    entered: int = 0
+
+
+_IMAGE_REQUEST_SLOT: ContextVar[str | None] = ContextVar("image_request_slot", default=None)
+_IMAGE_PROVIDER_CALLS: ContextVar[ImageProviderCalls | None] = ContextVar("image_provider_calls", default=None)
+
+
+@contextmanager
+def image_request_scope(slot: str) -> Iterator[None]:
+    """Give a fan-out request its own stable identity, including provider suffixes."""
+    token = _IMAGE_REQUEST_SLOT.set(slot)
+    try:
+        yield
+    finally:
+        _IMAGE_REQUEST_SLOT.reset(token)
+
+
+@contextmanager
+def observe_image_provider_calls() -> Iterator[ImageProviderCalls]:
+    """Count actual admission-boundary entries, including concurrent child tasks."""
+    calls = ImageProviderCalls()
+    token = _IMAGE_PROVIDER_CALLS.set(calls)
+    try:
+        yield calls
+    finally:
+        _IMAGE_PROVIDER_CALLS.reset(token)
+
+
 def _get_image_generation_gate() -> asyncio.Semaphore:
     """Bounded image-request gate, sized by ``IMAGE_GENERATION_CONCURRENCY``
     (F2: was a strict-serialization ``asyncio.Lock``; parallel mode still
@@ -110,6 +143,9 @@ async def _metered_image_provider_call(
 ) -> AsyncIterator[None]:
     """Fence and receipt one physical, potentially billable image request."""
 
+    request_slot = _IMAGE_REQUEST_SLOT.get()
+    if request_slot is not None:
+        semantic_slot = f"{request_slot}.{semantic_slot}"
     timer = ProviderCallTimer()
     entered_provider_boundary = False
     outcome = "succeeded"
@@ -122,6 +158,9 @@ async def _metered_image_provider_call(
             provider_idempotency_capable=provider_idempotency_capable,
         ):
             entered_provider_boundary = True
+            calls = _IMAGE_PROVIDER_CALLS.get()
+            if calls is not None:
+                calls.entered += 1
             yield
     except BaseException as error:
         outcome = "cancelled" if isinstance(error, asyncio.CancelledError) else "failed"
@@ -238,6 +277,10 @@ class ImageGenerationService:
         # Never log a user/model-authored image prompt. Receipt telemetry carries
         # only safe provider/model/timing scalars at the call boundary below.
         LOGGER.info("Starting image generation request")
+        # Keep the caller's page identity and bind the actual provider prompt.
+        # A changed request is a new logical call; an exact replay retains it.
+        digest = sha256_hex(image_prompt.encode("utf-8"))
+        request_token = _IMAGE_REQUEST_SLOT.set(f"{_IMAGE_REQUEST_SLOT.get() or 'image'}.{digest}")
         try:
             if is_parallel_image_generation_enabled(self.settings):
                 image_path = await self._call_image_provider(image_prompt)
@@ -266,6 +309,8 @@ class ImageGenerationService:
             # keep this user-visible fallback content-free.
             LOGGER.warning("Image generation request failed")
             return absolute_fastapi_asset_url("/static/images/placeholder.jpg")
+        finally:
+            _IMAGE_REQUEST_SLOT.reset(request_token)
 
     async def _call_image_provider(self, image_prompt: str) -> str:
         if self.is_stock_provider_selected():

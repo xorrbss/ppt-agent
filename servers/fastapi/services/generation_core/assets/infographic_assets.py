@@ -31,6 +31,7 @@ from services.generation_core.assets.icon_pack import (
 )
 from utils.asset_directory_utils import get_images_directory
 from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION, normalize_reference_mode
+from services.image_generation_service import image_request_scope
 
 LOGGER = logging.getLogger(__name__)
 
@@ -188,14 +189,15 @@ async def fill_scene_cutout(
     labels = [node.label for node in slide.nodes]
     subject = slide.takeaway or (labels[0] if labels else "")
     try:
-        cutout = await generate_scene_cutout(
-            takeaway=subject,
-            nodes=labels,
-            output_directory=context.output_directory,
-            style_prompt=context.style_prompt,
-            settings=context.settings,
-            provider=context.provider,
-        )
+        with image_request_scope(f"scene-{slide_index}"):
+            cutout = await generate_scene_cutout(
+                takeaway=subject,
+                nodes=labels,
+                output_directory=context.output_directory,
+                style_prompt=context.style_prompt,
+                settings=context.settings,
+                provider=context.provider,
+            )
     except Exception as error:  # noqa: BLE001 - the ordinary path still applies
         LOGGER.warning(
             "[authored] scene cutout failed on slide %d: %s", slide_index + 1, error

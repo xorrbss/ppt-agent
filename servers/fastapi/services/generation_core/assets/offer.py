@@ -172,6 +172,7 @@ async def _icon_slots(pages, *, pack_key, context, color, spend, receipt):
     """One icon slot per planned node, resolved through the icon pack."""
     from services.generation_core.assets.icon_pack import resolve_icons
     from services.generation_core.assets.icon_pack.sheet import MAX_CONCEPTS_PER_SHEET
+    from services.generation_core.assets.icon_pack.service import IconResolution
     from services.generation_core.assets.icon_pack.store import concept_key
 
     labels = list(dict.fromkeys(label for _index, nodes in pages for label in nodes))
@@ -186,13 +187,16 @@ async def _icon_slots(pages, *, pack_key, context, color, spend, receipt):
     missing = list(resolution.missing)
     sheets = -(-len(missing) // MAX_CONCEPTS_PER_SHEET) if missing else 0
     affordable = min(sheets, spend.left) if context is not None else 0
+    generated = IconResolution()
     if affordable and spend.take(affordable):
         wanted = missing[: affordable * MAX_CONCEPTS_PER_SHEET]
-        generated = await spend.bounded(resolve_icons(wanted, generate=True, **common))
-        if generated is not None:
-            resolution.icons.update(generated.icons)
+        await spend.bounded(resolve_icons(wanted, generate=True, result=generated, **common))
+        resolution.icons.update(generated.icons)
     receipt.update(requested=len(labels), resolved=len(resolution.icons),
-                   sheetsSpent=affordable,
+                   sheetsAllocated=affordable,
+                   sheetsAttempted=generated.sheets_attempted,
+                   sheetsSucceeded=generated.sheets_generated, sheetsFailed=generated.sheets_failed,
+                   failures=sorted(generated.sheet_failures, key=lambda failure: failure["sheet"]),
                    origins=sorted({icon.source for icon in resolution.icons.values()}))
     slots = []
     for index, nodes in pages:
@@ -217,6 +221,7 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
     )
     from services.generation_core.assets.infographic_plan import resolve_infographic_plan
     from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION, normalize_reference_mode
+    from services.image_generation_service import image_request_scope, observe_image_provider_calls
 
     receipt: dict = {"budget": budget, "timeoutSeconds": timeout_seconds}
     if illustrations_are_prohibited(instructions):
@@ -239,30 +244,36 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
     # Scenes spend first, in page order; the icon sheets take what is left.
     async def scene(slide):
         try:
-            return await _scene_slot(slide.index, slide, contents[slide.index], style=style,
-                                     context=context, image_service=image_service, spend=spend,
-                                     failures=failures)
+            with image_request_scope(f"scene-{slide.index}"):
+                return await _scene_slot(slide.index, slide, contents[slide.index], style=style,
+                                         context=context, image_service=image_service, spend=spend,
+                                         failures=failures)
         except Exception as error:  # noqa: BLE001 - a picture is optional
             failures.append({"page": slide.index, "reason": type(error).__name__})
             return None
 
-    with svg_outline_spans.span("scenes"):
+    with observe_image_provider_calls() as scene_calls, svg_outline_spans.span("scenes"):
         scene_slots = await asyncio.gather(*(scene(slide) for slide in scenes))
     icon_receipt: dict = {}
     style_id = (getattr(style, "id", None) or "").strip() or DEFAULT_PACK_KEY
     try:
-        with svg_outline_spans.span("icon_sheets"):
+        with observe_image_provider_calls() as icon_calls, svg_outline_spans.span("icon_sheets"):
             icon_slots = await _icon_slots(figures, pack_key=getattr(context, "pack_key", style_id),
                                            context=context, spend=spend, receipt=icon_receipt,
                                            color=getattr(brand, "primary", None) or "#1E5EFF")
     except Exception as error:  # noqa: BLE001 - icons are optional
         LOGGER.warning("[svg] asset offer icon resolution failed: %s", type(error).__name__)
         icon_slots, icon_receipt = [], {"error": type(error).__name__}
+        failures.append({"kind": "icon_resolution", "reason": type(error).__name__})
+    if icon_receipt:
+        icon_receipt.update(sheetsSpent=icon_calls.entered, providerCalls=icon_calls.entered)
+    failures.extend({"kind": "icon_sheet", **failure} for failure in icon_receipt.get("failures", []))
     slots = tuple(slot for slot in scene_slots if slot is not None) + tuple(icon_slots)
     receipt.update(status="resolved", scenesPlanned=len(scenes), figurePages=len(figures),
                    illustrations=sum(slot.kind == "illustration" for slot in slots),
                    icons=sum(slot.kind == "icon" for slot in slots), icon=icon_receipt,
-                   providerCalls=spend.calls, timeouts=spend.timeouts, failures=failures,
+                   providerCalls=scene_calls.entered + icon_calls.entered,
+                   budgetAllocatedCalls=spend.calls, timeouts=spend.timeouts, failures=failures,
                    transparentProvider=context is not None)
     return AssetOffer(slots=slots, receipt=receipt)
 

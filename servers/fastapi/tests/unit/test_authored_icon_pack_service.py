@@ -151,7 +151,7 @@ def test_resolve_icons_generates_missing_then_serves_from_cache(tmp_path):
     )
     assert len(provider.calls) == 1
     assert provider.calls[0]["size"] == "1536x1024"
-    assert provider.calls[0]["slot"] == "image.icon_sheet"
+    assert provider.calls[0]["slot"].startswith("image.icon_sheet.")
     assert first.sheets_generated == 1 and first.missing == []
     assert {icon.source for icon in first.icons.values()} == {"generated"}
     path = first.path_for("감지")
@@ -179,6 +179,43 @@ def test_resolve_icons_batches_more_than_nine_concepts_into_sheets(tmp_path):
     assert len(provider.calls) == 2
     assert sorted(c["size"] for c in provider.calls) == ["1024x1024", "1536x1024"]
     assert len(result.icons) == 12 and result.missing == []
+
+
+def test_parallel_sheets_have_distinct_durable_slots_and_replay_keeps_slot(tmp_path):
+    from services.provider_usage_instrumentation import ProviderUsageScope
+
+    scope = ProviderUsageScope(uuid.uuid4(), "generate", "illustration", 1, -1)
+
+    class AdmissionProvider(FakeProvider):
+        def __init__(self):
+            super().__init__()
+            self.active = set()
+            self.peak = 0
+
+        async def generate(self, prompt, output_directory, *, size, semantic_slot):
+            ordinal = scope.public_logical_call_ordinal(semantic_slot)
+            if ordinal in self.active:
+                raise RuntimeError("public_provider_inflight_replay_unsupported")
+            self.active.add(ordinal)
+            self.peak = max(self.peak, len(self.active))
+            try:
+                await asyncio.sleep(0.01)
+                return await super().generate(prompt, output_directory, size=size, semantic_slot=semantic_slot)
+            finally:
+                self.active.remove(ordinal)
+
+    provider = AdmissionProvider()
+    concepts = [f"concept-{index}" for index in range(33)]
+    result = _run(resolve_icons(concepts, pack_key="t/s", provider=provider, app_data=str(tmp_path)))
+    assert len(provider.calls) == 4 and provider.peak == 2
+    slots = [call["slot"] for call in provider.calls]
+    assert len(set(slots)) == len({scope.public_logical_call_ordinal(slot) for slot in slots}) == 4
+    assert len(result.icons) == 33 and result.sheets_failed == 0
+    replay = _run(resolve_icons(concepts[:9], pack_key="t/s", provider=provider,
+                               app_data=str(tmp_path / "replay")))
+    assert len(replay.icons) == 9 and provider.calls[-1]["slot"] == slots[0]
+    resumed = ProviderUsageScope(scope.job_id, "generate", "illustration", 2, -1)
+    assert resumed.public_logical_call_ordinal(slots[0]) == scope.public_logical_call_ordinal(slots[0])
 
 
 def test_resolve_icons_without_generation_or_provider_reports_missing(tmp_path):
@@ -258,7 +295,7 @@ def test_generate_scene_cutout_returns_inlined_transparent_png(tmp_path):
     prompt = provider.calls[0]["prompt"]
     assert "'프레스 3호 라인 센서 배치'" in prompt and "'크랭크 베어링'" in prompt
     assert provider.calls[0]["size"] == "1024x1024"
-    assert provider.calls[0]["slot"] == "image.cutout"
+    assert provider.calls[0]["slot"].startswith("image.cutout.")
 
 
 def test_generate_scene_cutout_discards_a_failed_picture(tmp_path):

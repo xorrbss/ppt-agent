@@ -1,10 +1,49 @@
 import asyncio
+from contextlib import asynccontextmanager
 
 import pytest
 
 from models.image_prompt import ImagePrompt
 from services.image_generation_service import ImageGenerationService
 from utils.get_env import is_parallel_image_generation_enabled
+
+
+def test_image_request_identity_binds_page_and_prompt_and_replays_stably(monkeypatch):
+    from services import image_generation_service as image_mod
+
+    monkeypatch.setenv("ENABLE_PARALLEL_IMAGE_GENERATION", "true")
+    slots = []
+
+    @asynccontextmanager
+    async def admission(*, semantic_slot, **_kwargs):
+        slots.append(semantic_slot)
+        await asyncio.sleep(0)
+        yield
+
+    async def provider(_prompt, _output_directory):
+        async with image_mod._metered_image_provider_call(
+            provider="fake", model="test", semantic_slot="image.primary.codex",
+        ):
+            return "https://example.com/image.png"
+
+    monkeypatch.setattr(image_mod, "provider_call_admission", admission)
+    service = object.__new__(ImageGenerationService)
+    service.output_directory = "/tmp"
+    service.is_image_generation_disabled = False
+    service.is_stock_provider_selected = lambda: False
+    service.image_gen_func = provider
+
+    async def generate(page, prompt):
+        with image_mod.image_request_scope(f"scene-{page}"):
+            return await service.generate_image(ImagePrompt(prompt=prompt))
+
+    async def scenario():
+        await asyncio.gather(generate(0, "same scene"), generate(1, "same scene"))
+        await generate(0, "same scene")
+        await generate(0, "changed scene")
+
+    asyncio.run(scenario())
+    assert slots[0] != slots[1] and slots[0] == slots[2] and slots[0] != slots[3]
 
 
 @pytest.mark.parametrize(

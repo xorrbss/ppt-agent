@@ -21,6 +21,7 @@ from services.generation_core.assets import offer as offer_mod
 from services.generation_core.assets.icon_pack.service import IconResolution, ResolvedIcon
 from services.generation_core.assets.icon_pack.store import concept_key
 from services.generation_core.drivers.svg import asset_slots
+from services.image_generation_service import _metered_image_provider_call
 
 LIBRARY = Path(infographic_assets.__file__).resolve().parents[5] / "assets" / "infographics" / "monochrome-v1"
 ICON_SVG = LIBRARY / "originals" / "ai-01-neural-network.svg"
@@ -61,11 +62,16 @@ def fakes(monkeypatch, tmp_path):
 
     async def cutout(**kwargs):
         calls["cutout"] += 1
-        return SimpleNamespace(path=str(_png(tmp_path / f"cutout-{calls['cutout']}.png")))
+        async with _metered_image_provider_call(provider="fake", model="test", semantic_slot="image.cutout"):
+            return SimpleNamespace(path=str(_png(tmp_path / f"cutout-{calls['cutout']}.png")))
 
-    async def resolve(labels, *, generate, **_kwargs):
+    async def resolve(labels, *, generate, result=None, **_kwargs):
         calls["generate"].append((list(labels), generate))
-        result = IconResolution()
+        result = result if result is not None else IconResolution()
+        if generate:
+            async with _metered_image_provider_call(provider="fake", model="test", semantic_slot="image.icon_sheet"):
+                result.sheets_attempted += 1
+                result.sheets_generated += 1
         for label in labels:
             if label == "수집":
                 # the real resolver serves a tinted copy from the pack directory
@@ -115,6 +121,118 @@ def test_budget_bounds_provider_calls(fakes):
     # the sheet was not affordable: only the free library icon remains
     assert [slot.concept for slot in offer.slots if slot.kind == "icon"] == ["수집"]
     assert all(generate is False for _labels, generate in fakes["generate"])
+
+
+def test_offer_reports_sheet_failure_and_observed_calls_separately(fakes, monkeypatch, tmp_path):
+    from services.generation_core.assets.icon_pack import service
+    from services.generation_core.assets.icon_pack.store import IconEntry
+
+    labels = [f"concept-{index}" for index in range(12)]
+
+    async def plan(*_args, **_kwargs):
+        return AuthoredInfographicPlan(slides=tuple(AuthoredSlideInfographic(
+            index=index, archetype="process", weight="hero", nodes=_nodes(*labels[index * 6:(index + 1) * 6]))
+            for index in range(2)))
+
+    async def sheet(pack, provider, concepts, **_kwargs):
+        if len(concepts) < 9:
+            raise RuntimeError("failed before provider entry")
+        async with _metered_image_provider_call(provider="fake", model="test", semantic_slot="image.icon_sheet"):
+            pack.directory.mkdir(parents=True, exist_ok=True)
+            entries = {}
+            for concept in concepts:
+                path = _png(pack.directory / f"{concept}.png")
+                entries[concept_key(concept)] = IconEntry(concept, path.name, 64, 48)
+            return entries, []
+
+    context = infographic_assets.InfographicAssetContext(
+        pack_key="p", output_directory=str(tmp_path), app_data=str(tmp_path),
+        provider=SimpleNamespace(available=True))
+    monkeypatch.setattr(infographic_plan, "resolve_infographic_plan", plan)
+    monkeypatch.setattr(icon_pack, "resolve_icons", service.resolve_icons)
+    monkeypatch.setattr(service, "lookup_reusable_icons", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(service, "_generate_sheet", sheet)
+    monkeypatch.setattr(infographic_assets, "build_infographic_asset_context", lambda **_: context)
+    offer = _build()
+    receipt = offer.receipt["icon"]
+    assert receipt["requested"] == 12 and receipt["resolved"] == 9
+    assert receipt["sheetsAllocated"] == receipt["sheetsAttempted"] == 2
+    assert receipt["sheetsSpent"] == receipt["providerCalls"] == 1
+    assert receipt["sheetsSucceeded"] == receipt["sheetsFailed"] == 1
+    assert receipt["failures"] == [{"sheet": 1, "reason": "RuntimeError"}]
+    assert offer.receipt["failures"] == [{"kind": "icon_sheet", "sheet": 1, "reason": "RuntimeError"}]
+    assert offer.receipt["providerCalls"] == 1 and offer.receipt["budgetAllocatedCalls"] == 2
+
+
+def test_icon_sheet_timeout_keeps_observed_outcomes(fakes, monkeypatch, tmp_path):
+    from services.generation_core.assets.icon_pack import service
+
+    async def plan(*_args, **_kwargs):
+        return AuthoredInfographicPlan(slides=tuple(AuthoredSlideInfographic(
+            index=index, archetype="process", weight="hero",
+            nodes=_nodes(*(f"concept-{index}-{node}" for node in range(6)))) for index in range(2)))
+
+    async def sheet(*_args, **_kwargs):
+        async with _metered_image_provider_call(provider="fake", model="test", semantic_slot="image.icon_sheet"):
+            await asyncio.sleep(5)
+
+    context = infographic_assets.InfographicAssetContext(
+        pack_key="p", output_directory=str(tmp_path), app_data=str(tmp_path),
+        provider=SimpleNamespace(available=True))
+    monkeypatch.setattr(infographic_plan, "resolve_infographic_plan", plan)
+    monkeypatch.setattr(icon_pack, "resolve_icons", service.resolve_icons)
+    monkeypatch.setattr(service, "lookup_reusable_icons", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(service, "_generate_sheet", sheet)
+    monkeypatch.setattr(infographic_assets, "build_infographic_asset_context", lambda **_: context)
+    offer = _build(timeout_seconds=0.05)
+    receipt = offer.receipt["icon"]
+    assert receipt["sheetsAttempted"] == receipt["sheetsFailed"] == 2
+    assert receipt["sheetsSucceeded"] == receipt["resolved"] == 0
+    assert receipt["failures"] == [{"sheet": 0, "reason": "cancelled"}, {"sheet": 1, "reason": "cancelled"}]
+    assert offer.receipt["providerCalls"] == 2 and offer.receipt["timeouts"] == 1
+
+
+@pytest.mark.parametrize("cutouts", [True, False])
+def test_parallel_scenes_get_distinct_provider_slots_and_stable_replay(fakes, monkeypatch, tmp_path, cutouts):
+    from contextlib import asynccontextmanager
+    from services import image_generation_service
+
+    slots, active, reached = [], set(), []
+
+    @asynccontextmanager
+    async def admission(*, semantic_slot, **_kwargs):
+        slots.append(semantic_slot)
+        if semantic_slot in active:
+            raise RuntimeError("public_provider_inflight_replay_unsupported")
+        active.add(semantic_slot)
+        try:
+            reached.append(semantic_slot)
+            await asyncio.sleep(0.01)
+            yield
+        finally:
+            active.remove(semantic_slot)
+
+    async def plan(*_args, **_kwargs):
+        return AuthoredInfographicPlan(slides=(AuthoredSlideInfographic(index=0), *tuple(AuthoredSlideInfographic(
+            index=index, archetype="scene", weight="hero", takeaway="same object",
+            nodes=_nodes("part1", "part2", "part3")) for index in (1, 2))))
+
+    async def image(_prompt):
+        async with _metered_image_provider_call(provider="fake", model="test", semantic_slot="image.primary.codex"):
+            return SimpleNamespace(path=str(_png(tmp_path / f"scene-{len(slots)}.png")))
+
+    monkeypatch.setattr(infographic_plan, "resolve_infographic_plan", plan)
+    monkeypatch.setattr(image_generation_service, "provider_call_admission", admission)
+    if not cutouts:
+        monkeypatch.setattr(infographic_assets, "build_infographic_asset_context", lambda **_: None)
+    kwargs = dict(image_service=SimpleNamespace(generate_image=image),
+                  style=SimpleNamespace(id="s", illustration_prompt="flat", reference_mode="style_reference"))
+    offer = _build(**kwargs)
+    assert len(offer.slots) == len(reached) == len(set(slots)) == 2
+    assert offer.receipt["providerCalls"] == 2
+    original_slots = list(slots)
+    replay = _build(**kwargs)
+    assert len(replay.slots) == 2 and slots[2:] == original_slots
 
 
 def test_timeout_drops_the_slot_and_is_recorded(fakes, monkeypatch):
