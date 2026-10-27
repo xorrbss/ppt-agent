@@ -511,6 +511,7 @@
     "cancel": "Cancel",
     "startReview": "Start review and automatic correction",
     "startSvgReview": "Start quality review",
+    "finalPptxReviewCommand": "Review the final PPTX",
     "reloadHistory": "Reload history",
     "unknownContractVersion": "The contract version of this record cannot be confirmed, so new requests and task changes are temporarily unavailable. You can still view existing records and downloads.",
     "retryLatest": "Retry against the latest version",
@@ -763,7 +764,16 @@
     "approvalDeadlineExpired": "The approval deadline has expired. Please retry the task.",
     "retryUnavailable": "This error cannot be retried. Review it and send a new command.",
     "currentPptxReview": "Current PPTX review",
-    "svgStatusCheckRequired": "Needs review"
+    "svgStatusCheckRequired": "Needs review",
+    "finalPptxReview": "Review final PPTX",
+    "finalPptxReviewAria": "Review the final PPTX artifact",
+    "finalPptxReviewRunning": "Reviewing…",
+    "finalPptxReviewDeferred": "Waiting for PowerPoint…",
+    "finalPptxReviewPassed": "Final PPTX reviewed",
+    "finalPptxReviewRequiredNotice": "This deck needs a final PPTX review; the export receipt is historical.",
+    "finalPptxReviewFailedNotice": "The final PPTX review found an issue; review the result before relying on this deck.",
+    "finalPptxReviewDeferredNotice": "PowerPoint is open. The final PPTX review will retry automatically after it closes.",
+    "finalPptxReviewPassedNotice": "The current PPTX artifact passed final review."
   },
   "presentationCapability": {
     "gradient": "Gradient",

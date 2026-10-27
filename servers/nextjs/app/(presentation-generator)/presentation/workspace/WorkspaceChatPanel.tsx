@@ -54,11 +54,37 @@ import { useWorkspaceScrollContinuity } from "./useWorkspaceScrollContinuity";
 import { useWorkspaceGenerationState } from "./useWorkspaceGenerationState";
 import { TERMINAL } from "./WorkspaceOperationLabels";
 import { isSvgPresentation } from "../utils/presentationSource";
+import { isRecord } from "@/lib/guards";
 
 export { parseQualityReviewSlideRange } from "./workspaceChatPanelUtils";
 const SLIDESPEC_WORKSPACE_REPAIR_ENABLED =
   process.env.NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI !== "false" &&
   process.env.NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES !== "false";
+
+type FinalPptxReviewStatus = "running" | "deferred" | "passed" | "failed";
+
+function finalPptxReviewStatusFor(
+  items: WorkspaceOperationAnchor[],
+  artifactId: string,
+): FinalPptxReviewStatus | undefined {
+  const matches = items.flatMap((item) => {
+    if (item.operationType !== "quality.review") return [];
+    const targetArtifactId = typeof item.target?.artifact_id === "string" ? item.target.artifact_id : undefined;
+    const qualityStatus = isRecord(item.result?.qualityStatus) ? item.result.qualityStatus : undefined;
+    const fidelity = qualityStatus && isRecord(qualityStatus.currentArtifactFidelity)
+      ? qualityStatus.currentArtifactFidelity : undefined;
+    const fidelityArtifactId = fidelity && typeof fidelity.artifactId === "string" ? fidelity.artifactId : undefined;
+    if (targetArtifactId !== artifactId && fidelityArtifactId !== artifactId) return [];
+    const fidelityStatus = fidelity && typeof fidelity.status === "string" ? fidelity.status : undefined;
+    const status: FinalPptxReviewStatus = item.status === "succeeded"
+      ? fidelityStatus === "passed" ? "passed" : "failed"
+      : item.status === "queued" && item.capacityWaiting && item.waitReason === "svg_final_pptx_office_instance_busy"
+        ? "deferred"
+        : item.status === "queued" || item.status === "running" ? "running" : "failed";
+    return [{ status, updatedAt: item.updatedAt ?? "" }];
+  });
+  return matches.sort((left, right) => left.updatedAt.localeCompare(right.updatedAt)).at(-1)?.status;
+}
 
 
 export default function WorkspaceChatPanel({
@@ -157,6 +183,13 @@ export default function WorkspaceChatPanel({
         withGenerationContext(presentationId, generationInfo, projection.items),
       ),
     [generationInfo, presentationId, projection.items],
+  );
+  const finalPptxReviewStatus = useCallback(
+    (artifactId: string) => finalPptxReviewStatusFor(
+      timelineItems.filter((item): item is WorkspaceOperationAnchor => item.anchorType === "operation"),
+      artifactId,
+    ),
+    [timelineItems],
   );
 
   const { state: generationState, mutationActive } = useWorkspaceGenerationState({
@@ -588,6 +621,30 @@ export default function WorkspaceChatPanel({
                       },
                     );
                   }}
+                  isSvgDeck={svgReviewOnly}
+                  finalPptxReviewStatus={
+                    item.operationType === "export.pptx"
+                      ? finalPptxReviewStatus(
+                        typeof item.result?.artifact_id === "string"
+                          ? item.result.artifact_id
+                          : typeof item.result?.artifactId === "string"
+                            ? item.result.artifactId
+                            : "",
+                      )
+                      : undefined
+                  }
+                  onFinalPptxReview={(artifactId) => commandDispatcher(
+                    t("finalPptxReviewCommand"),
+                    {
+                      commandType: "quality.review",
+                      context: {
+                        mode: "analyze_only",
+                        scope: "all",
+                        target: "final_pptx",
+                        artifact_id: artifactId,
+                      },
+                    },
+                  )}
                   onFocusSlide={onSlideFocus}
                   // The same prompt the header button opens. A chat request the
                   // tools had to refuse now ends at the flow that can serve it

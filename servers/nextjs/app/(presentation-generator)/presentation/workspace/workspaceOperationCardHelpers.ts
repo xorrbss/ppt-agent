@@ -11,6 +11,9 @@ export interface WorkspaceOperationCardProps {
   disabled?: boolean;
   onAction: (operationId: string, action: "retry" | "cancel" | "approve" | "reject" | "undo", options?: WorkspaceOperationActionOptions) => void | Promise<void>;
   onReExport?: (operationType: "export.pptx" | "export.pdf") => void | Promise<void>;
+  isSvgDeck?: boolean;
+  finalPptxReviewStatus?: "running" | "deferred" | "passed" | "failed";
+  onFinalPptxReview?: (artifactId: string) => void | Promise<void>;
   onFocusSlide?: (slideIndex: number) => void;
   onRemakePage?: WorkspacePageRemakeRequester;
   presentationRefreshState?: WorkspacePresentationRefreshState;

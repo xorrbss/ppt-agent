@@ -285,6 +285,7 @@ _SAFE_PAYLOAD_KEYS = frozenset(
         "fencing_token",
         "queue_position",
         "wait_reason",
+        "review_target",
         "provider_quota_reset_at",
         "provider_quota_resume_semantics",
         "worker_peak_memory_bytes",
@@ -1989,6 +1990,7 @@ async def claim_next_workspace_operation(
             attempt_token=token,
             fencing_token=next_fencing_token,
             claimed_at=now,
+            progress=dict(candidate.progress or {}),
         )
         claim_duration_ms = _elapsed_ms(candidate.created_at, now)
         if next_attempt_number == 1 and candidate.retry_count == 0:
@@ -4148,6 +4150,7 @@ class _ExecutionContext(WorkspaceOperationExecutionContext):
         total: int | None = None,
         percent: int | None = None,
         message: UserMessageLike = None,
+        details: Mapping[str, Any] | None = None,
     ) -> bool:
         try:
             reported_progress = {
@@ -4155,6 +4158,7 @@ class _ExecutionContext(WorkspaceOperationExecutionContext):
                 **({"current": current} if current is not None else {}),
                 **({"total": total} if total is not None else {}),
                 **({"percent": percent} if percent is not None else {}),
+                **(dict(details) if details else {}),
             }
             event_payload = {"state": "running", **reported_progress}
             if message:

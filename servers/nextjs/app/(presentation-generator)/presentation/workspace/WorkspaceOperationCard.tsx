@@ -68,6 +68,9 @@ export function WorkspaceOperationCard({
   disabled = false,
   onAction,
   onReExport,
+  isSvgDeck = false,
+  finalPptxReviewStatus,
+  onFinalPptxReview,
   onFocusSlide,
   onRemakePage,
   presentationRefreshState,
@@ -558,6 +561,22 @@ export function WorkspaceOperationCard({
     }
   };
 
+  const finalPptxReviewVisible =
+    isSvgDeck && isPptxExport && operation.status === "succeeded" && Boolean(artifactId);
+  const handleFinalPptxReview = async () => {
+    if (!artifactId || !onFinalPptxReview || pendingAction ||
+      finalPptxReviewStatus === "running" || finalPptxReviewStatus === "deferred") return;
+    setPendingAction("final-pptx-review");
+    setActionError(undefined);
+    try {
+      await onFinalPptxReview(artifactId);
+    } catch (error) {
+      setActionError(safeRequestError(error, tOperation("actionFailed")));
+    } finally {
+      setPendingAction(undefined);
+    }
+  };
+
   const handleOperationAction = async (
     action: "retry" | "cancel" | "approve" | "reject" | "undo",
   ) => {
@@ -1021,24 +1040,59 @@ export function WorkspaceOperationCard({
                 </p>
               )}
             </div>
-            {allowedAction("download") && (
-              <button
-                type="button"
-                data-testid="artifact-download"
-                disabled={
-                  downloading ||
-                  downloadExpired ||
-                  !artifactId ||
-                  allowedAction("download")?.enabled !== true
-                }
-                onClick={() => void handleArtifactDownload()}
-                className="shrink-0 rounded-lg bg-emerald-700 px-3 py-1.5 font-semibold text-white hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2"
-                aria-label={tOperation("downloadFileAria", { format: artifactFormat?.toUpperCase() ?? tOperation("exported") })}
-              >
-                {tOperation("download")}
-              </button>
-            )}
+            <div className="flex shrink-0 flex-wrap justify-end gap-2">
+              {allowedAction("download") && (
+                <button
+                  type="button"
+                  data-testid="artifact-download"
+                  disabled={
+                    downloading ||
+                    downloadExpired ||
+                    !artifactId ||
+                    allowedAction("download")?.enabled !== true
+                  }
+                  onClick={() => void handleArtifactDownload()}
+                  className="rounded-lg bg-emerald-700 px-3 py-1.5 font-semibold text-white hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2"
+                  aria-label={tOperation("downloadFileAria", { format: artifactFormat?.toUpperCase() ?? tOperation("exported") })}
+                >
+                  {tOperation("download")}
+                </button>
+              )}
+              {finalPptxReviewVisible && onFinalPptxReview && (
+                <button
+                  type="button"
+                  data-testid="final-pptx-review"
+                  disabled={disabled || pendingAction !== undefined || finalPptxReviewStatus === "running" || finalPptxReviewStatus === "deferred"}
+                  onClick={() => void handleFinalPptxReview()}
+                  className="rounded-lg border border-indigo-700 bg-white px-3 py-1.5 font-semibold text-indigo-800 hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-700 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                  aria-label={tOperation("finalPptxReviewAria")}
+                >
+                  {finalPptxReviewStatus === "running"
+                    ? tOperation("finalPptxReviewRunning")
+                    : finalPptxReviewStatus === "deferred"
+                      ? tOperation("finalPptxReviewDeferred")
+                      : finalPptxReviewStatus === "passed"
+                        ? tOperation("finalPptxReviewPassed")
+                        : tOperation("finalPptxReview")}
+                </button>
+              )}
+            </div>
           </div>
+          {finalPptxReviewVisible && (
+            <p
+              className={`mt-2 rounded-md px-2 py-1.5 ${finalPptxReviewStatus === "passed" ? "bg-emerald-100 text-emerald-900" : finalPptxReviewStatus === "failed" ? "bg-red-100 text-red-900" : "bg-indigo-50 text-indigo-900"}`}
+              role="status"
+              data-testid="final-pptx-review-status"
+            >
+              {finalPptxReviewStatus === "passed"
+                ? tOperation("finalPptxReviewPassedNotice")
+                : finalPptxReviewStatus === "failed"
+                  ? tOperation("finalPptxReviewFailedNotice")
+                  : finalPptxReviewStatus === "deferred"
+                    ? tOperation("finalPptxReviewDeferredNotice")
+                    : tOperation("finalPptxReviewRequiredNotice")}
+            </p>
+          )}
           {(exportEditabilitySlides.length > 0 ||
             exportImageFallbackPages.length > 0 ||
             exportEditabilityReasons.length > 0) && (

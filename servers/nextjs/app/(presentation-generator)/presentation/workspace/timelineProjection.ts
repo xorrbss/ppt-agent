@@ -535,6 +535,12 @@ function normalizeOperation(
         events[events.length - 1]?.queuePosition,
       1,
     ),
+    waitReason: stringValue(
+      raw.waitReason,
+      raw.wait_reason,
+      asRecord(raw.progress).wait_reason,
+      events[events.length - 1]?.waitReason,
+    ),
     result: objectValue(raw.result),
     actor: normalizeOperationActor(raw),
     target: objectValue(raw.target),
