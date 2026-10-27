@@ -39,6 +39,7 @@ from services.generation_core.assets.icon_pack.store import (
     pack_lock,
 )
 from utils.runtime_settings import RuntimeSettings
+from utils.hashing import sha256_hex
 
 LOGGER = logging.getLogger(__name__)
 
@@ -66,6 +67,8 @@ class IconResolution:
     missing: list[str] = field(default_factory=list)
     sheets_generated: int = 0
     sheets_failed: int = 0
+    sheets_attempted: int = 0
+    sheet_failures: list[dict] = field(default_factory=list)
 
     def path_for(self, concept: str) -> Optional[str]:
         icon = self.icons.get(concept_key(concept))
@@ -105,8 +108,12 @@ async def _generate_sheet(
     """One provider call; returns (accepted entries, rejected concepts)."""
     layout = layout_for(len(concepts))
     prompt = build_sheet_prompt(concepts, layout, style_prompt=style_prompt, color=color)
+    # Content, rather than the missing-list position, survives cache hits and
+    # completion order changes on resume. Style, color and layout are in prompt.
+    digest = sha256_hex(f"{pack.pack_key}\0{layout.size}\0{prompt}".encode("utf-8"))
+    slot = f"image.icon_sheet.{digest}"
     path = await provider.generate(
-        prompt, str(pack.directory / "sheets"), size=layout.size, semantic_slot="image.icon_sheet"
+        prompt, str(pack.directory / "sheets"), size=layout.size, semantic_slot=slot
     )
     payload = await asyncio.to_thread(_take_file, Path(path))
     analysis = analyze_sheet(payload, layout, len(concepts))
@@ -163,6 +170,7 @@ async def resolve_icons(
     provider: Optional[TransparentPngProvider] = None,
     app_data: Optional[str] = None,
     generate: bool = True,
+    result: IconResolution | None = None,
 ) -> IconResolution:
     """Icons for ``concepts`` from the pack, generating the missing ones.
 
@@ -176,7 +184,7 @@ async def resolve_icons(
     """
     wanted = _dedupe(concepts)
     pack = IconPack(pack_key, app_data=app_data)
-    result = IconResolution()
+    result = result if result is not None else IconResolution()
     if not wanted:
         return result
 
@@ -200,26 +208,37 @@ async def resolve_icons(
 
         semaphore = asyncio.Semaphore(SHEET_CONCURRENCY)
 
-        async def one(chunk: list[str]) -> tuple[dict[str, IconEntry], list[str]]:
+        async def one(index: int, chunk: list[str]) -> tuple[dict[str, IconEntry], list[str]]:
             async with semaphore:
+                result.sheets_attempted += 1
                 try:
-                    return await _generate_sheet(
+                    entries, rejected = await _generate_sheet(
                         pack, provider, chunk, style_prompt=style_prompt, color=color
                     )
-                except Exception as error:  # noqa: BLE001 - degrade per sheet
-                    LOGGER.warning("[authored] icon sheet generation failed: %s", error)
+                    if entries:
+                        result.sheets_generated += 1
+                    else:
+                        result.sheets_failed += 1
+                        result.sheet_failures.append({"sheet": index, "reason": "sheet_acceptance_failed"})
+                    return entries, rejected
+                except asyncio.CancelledError:
                     result.sheets_failed += 1
+                    result.sheet_failures.append({"sheet": index, "reason": "cancelled"})
+                    raise
+                except Exception as error:  # noqa: BLE001 - degrade per sheet
+                    reason = getattr(error, "code", None) or type(error).__name__
+                    LOGGER.warning("[authored] icon sheet generation failed: %s", reason)
+                    result.sheets_failed += 1
+                    result.sheet_failures.append({"sheet": index, "reason": reason})
                     return {}, list(chunk)
 
         outcomes = await asyncio.gather(
-            *(one(chunk) for chunk in _chunks(missing, MAX_CONCEPTS_PER_SHEET))
+            *(one(index, chunk) for index, chunk in enumerate(_chunks(missing, MAX_CONCEPTS_PER_SHEET)))
         )
         accepted: dict[str, IconEntry] = {}
         for entries, rejected in outcomes:
             accepted.update(entries)
             result.missing.extend(rejected)
-            if entries:
-                result.sheets_generated += 1
         if accepted:
             merged = pack.append(accepted)
             for key in accepted:

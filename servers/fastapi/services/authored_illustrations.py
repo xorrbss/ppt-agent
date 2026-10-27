@@ -39,6 +39,7 @@ from typing import (
 )
 
 from models.image_prompt import ImagePrompt
+from services.image_generation_service import image_request_scope
 from services.source_images.models import (
     SUPPORTED_SOURCE_IMAGE_MIME_TYPES,
     SourceImageCandidate,
@@ -598,10 +599,11 @@ async def _generate_slot_image(
     content = clean_slide_content(slide_content)
     prompt = build_illustration_prompt(scene, content, image_service)
     try:
-        async with _get_illustration_sem():
-            asset = await image_service.generate_image(
-                ImagePrompt(prompt=prompt, theme_prompt=style_prompt)
-            )
+        with image_request_scope(f"authored-slide-{slide_index}"):
+            async with _get_illustration_sem():
+                asset = await image_service.generate_image(
+                    ImagePrompt(prompt=prompt, theme_prompt=style_prompt)
+                )
         data_uri = _data_uri_from_asset(asset)
     except Exception as exc:  # degrade, never break the deck
         LOGGER.warning(

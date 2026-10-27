@@ -197,7 +197,7 @@ def test_pack_icons_replace_the_built_in_svg_and_keep_the_slot_qids(tmp_path):
     assert "<svg" not in replaced.split("ig-icon-list", 1)[1]
     for position in range(4):
         assert f'data-qid="ig.s3.n{position + 1}.ic"><img' in replaced
-    assert provider.calls and provider.calls[0]["slot"] == "image.icon_sheet"
+    assert provider.calls and provider.calls[0]["slot"].startswith("image.icon_sheet.")
     validate_authored_slide_html(replaced, finalized=True)
     # A second slide of the same deck reads the pack rather than generating.
     again = _run(substitute_figure_icons(html, slide=slide, context=_context(tmp_path, provider)))
@@ -252,7 +252,7 @@ def test_the_scene_cutout_fills_the_art_slot_and_drops_the_prompt(tmp_path):
     assert '<img src="data:image/png;base64,' in filled
     assert 'data-qid="ig.s3.art.img"' in filled
     assert 'style="width:720px;height:405px"' in filled
-    assert provider.calls[0]["slot"] == "image.cutout"
+    assert provider.calls[0]["slot"].startswith("image.cutout.")
     assert "센서를 단다" in provider.calls[0]["prompt"]
     assert "'주 모터'" in provider.calls[0]["prompt"]
 
@@ -332,7 +332,7 @@ def test_the_stage_places_icons_on_a_figure_without_a_picture(tmp_path):
         _doc(slide), slide, _context(tmp_path, provider), _RefusingImageService()
     )
     assert finalized.count('<img src="data:image/png;base64,') == 4
-    assert provider.calls[0]["slot"] == "image.icon_sheet"
+    assert provider.calls[0]["slot"].startswith("image.icon_sheet.")
     untouched, _checkpoint, _work = _illustrate(_doc(slide), slide, None, _RefusingImageService())
     assert "<img" not in untouched
 
@@ -376,4 +376,4 @@ def test_a_reauthored_figure_gets_its_pack_icons_again(tmp_path, monkeypatch):
     )
     assert fixed == [0] and pngs == [b"revised-png"]
     assert htmls[0].count('<img src="data:image/png;base64,') == 4
-    assert provider.calls[0]["slot"] == "image.icon_sheet"
+    assert provider.calls[0]["slot"].startswith("image.icon_sheet.")
