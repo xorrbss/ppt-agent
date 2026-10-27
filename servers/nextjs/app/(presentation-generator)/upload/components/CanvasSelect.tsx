@@ -145,7 +145,7 @@ export function CanvasSelect({
         switch (id) {
             case "a4-landscape": return { title: tA2b("landscape"), description: tA2b("canvasA4LandscapeDescription") };
             case "a4-portrait": return { title: tA2b("portrait"), description: tA2b("canvasA4PortraitDescription") };
-            case "standard-4x3": return { title: "4:3", description: "표준 프레젠테이션" };
+            case "standard-4x3": return { title: "4:3", description: tA2b("canvasStandardDescription") };
             case "tall-9x16": return { title: "9:16", description: tA2b("canvasTallDescription") };
             case "tall-9x13": return { title: "9:13", description: tA2b("canvasLegacyRowDescription") };
             case "square-1x1": return { title: "1:1", description: tA2b("canvasSquareDescription") };
@@ -300,18 +300,18 @@ export function CanvasSelect({
                     </Command>
                     {svgMode ? (
                         <div className="border-t p-3 space-y-2">
-                            <p className="text-xs text-slate-600">사용자 지정 크기 (mm)</p>
+                            <p className="text-xs text-slate-600">{tA2b("canvasCustomSize")}</p>
                             <div className="flex gap-2">
-                                <input aria-label="캔버스 너비 (mm)" data-testid="canvas-custom-width" type="number" min="50" max="1000" step="0.01" value={customWidth} onChange={(event) => setCustomWidth(event.target.value)} className="w-1/2 rounded border p-2 text-sm" />
-                                <input aria-label="캔버스 높이 (mm)" data-testid="canvas-custom-height" type="number" min="50" max="1000" step="0.01" value={customHeight} onChange={(event) => setCustomHeight(event.target.value)} className="w-1/2 rounded border p-2 text-sm" />
+                                <input aria-label={tA2b("canvasWidthMm")} data-testid="canvas-custom-width" type="number" min="50" max="1000" step="0.01" value={customWidth} onChange={(event) => setCustomWidth(event.target.value)} className="w-1/2 rounded border p-2 text-sm" />
+                                <input aria-label={tA2b("canvasHeightMm")} data-testid="canvas-custom-height" type="number" min="50" max="1000" step="0.01" value={customHeight} onChange={(event) => setCustomHeight(event.target.value)} className="w-1/2 rounded border p-2 text-sm" />
                             </div>
                             <button type="button" data-testid="canvas-custom-apply" className="rounded bg-violet-100 px-3 py-1 text-xs" onClick={() => {
                                 const width_mm = Number(customWidth); const height_mm = Number(customHeight);
                                 const valid = [width_mm, height_mm].every((value) => Number.isFinite(value) && value >= 50 && value <= 1000 && Math.abs(value * 100 - Math.round(value * 100)) < 1e-7) && width_mm / height_mm >= 0.25 && width_mm / height_mm <= 4;
                                 setCustomError(!valid); if (!valid) return;
                                 setIsAutoCanvas(false); onConfigChange("sourceCanvas", undefined); onConfigChange("pageSize", undefined); onConfigChange("orientation", undefined); onConfigChange("svgCanvas", { width_mm, height_mm }); setOpen(false);
-                            }}>크기 적용</button>
-                            {customError ? <p role="alert" className="text-xs text-amber-700">각 변은 50–1000 mm, 소수 둘째 자리까지 입력하고 비율은 1:4–4:1로 설정해 주세요.</p> : null}
+                            }}>{tA2b("canvasApplySize")}</button>
+                            {customError ? <p role="alert" className="text-xs text-amber-700">{tA2b("canvasCustomSizeError")}</p> : null}
                         </div>
                     ) : null}
                 </PopoverContent>

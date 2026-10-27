@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { isRecord } from "@/lib/guards";
@@ -8,14 +9,14 @@ import { POLL_INTERVAL_MS } from "@/lib/timeouts";
 import { getWorkspaceTimeline, postWorkspaceCommand, WorkspaceApiError } from "../../../services/api/workspace";
 import type { WorkspaceOperationAnchor } from "../../workspace/types";
 
-function messageFor(error: unknown): string {
+function messageFor(error: unknown, t: ReturnType<typeof useTranslations>): string {
   if (error instanceof WorkspaceApiError && ["revision_conflict", "workspace_expected_revision_required"].includes(error.code ?? "")) {
-    return "자료가 변경되었습니다. 최신 자료를 불러온 뒤 다시 요청해 주세요.";
+    return t("commonHeaderRevisionConflict");
   }
-  if (error instanceof WorkspaceApiError && error.code === "svg_common_header_design_reference_admission_required") return "현재 자료에 등록된 디자인 참고 자료만 사용할 수 있습니다.";
-  if (error instanceof WorkspaceApiError && error.code === "svg_common_header_terminal_retry_unsupported") return "완료된 상단 수정 작업의 재시도는 지원하지 않습니다. 기존 결과와 비용 기록은 보존됩니다.";
+  if (error instanceof WorkspaceApiError && error.code === "svg_common_header_design_reference_admission_required") return t("commonHeaderReferenceUnavailable");
+  if (error instanceof WorkspaceApiError && error.code === "svg_common_header_terminal_retry_unsupported") return t("commonHeaderRetryUnsupported");
   if (error instanceof Error && !/^[a-z][a-z0-9_:.]*$/.test(error.message) && !error.message.startsWith("Workspace request failed")) return error.message;
-  return "상단 디자인 변경 상태를 확인할 수 없습니다. 작업 내역을 확인해 주세요.";
+  return t("commonHeaderStatusUnavailable");
 }
 
 export function fullPageHeaderLocked(presentation: unknown): boolean {
@@ -76,6 +77,7 @@ export default function CommonHeaderDesignChanger({ presentationId, expectedRevi
   documentValues?: Record<string, string>;
   onSaved?: () => void | Promise<void>;
 }) {
+  const t = useTranslations("presentationHeader");
   const [open, setOpen] = useState(false);
   const [instructions, setInstructions] = useState("");
   const [documentLabel, setDocumentLabel] = useState(documentValues.document_label ?? "");
@@ -87,7 +89,7 @@ export default function CommonHeaderDesignChanger({ presentationId, expectedRevi
   const retryKeys = useRef(new Map<string, string>());
   const busy = useRef(false);
   const saved = useRef(onSaved);
-  saved.current = onSaved;
+  useEffect(() => { saved.current = onSaved; }, [onSaved]);
 
   useEffect(() => {
     if (!operationId) return;
@@ -104,19 +106,19 @@ export default function CommonHeaderDesignChanger({ presentationId, expectedRevi
           return;
         }
         if (operation && ["failed", "cancelled", "rejected", "blocked", "dead_letter"].includes(operation.status)) {
-          setError(operation.error ? messageFor(new Error(operation.error)) : "상단 디자인 변경을 완료하지 못했습니다. 작업 내역을 확인해 주세요.");
+          setError(operation.error ? messageFor(new Error(operation.error), t) : t("commonHeaderOperationFailed"));
           setPending(false); setOperationId(null); busy.current = false;
           return;
         }
       } catch (failure) {
         if (controller.signal.aborted) return;
-        setError(messageFor(failure));
+        setError(messageFor(failure, t));
       }
       if (!controller.signal.aborted) timer = setTimeout(() => void inspect(), POLL_INTERVAL_MS);
     };
     void inspect();
     return () => { controller.abort(); if (timer) clearTimeout(timer); };
-  }, [operationId, presentationId]);
+  }, [operationId, presentationId, t]);
 
   useEffect(() => {
     if (!open && !pending) {
@@ -148,20 +150,20 @@ export default function CommonHeaderDesignChanger({ presentationId, expectedRevi
       if (!receipt.operationId) throw new Error("상단 디자인 작업 접수를 확인할 수 없습니다. 작업 내역을 확인해 주세요.");
       setOperationId(receipt.operationId);
     } catch (failure) {
-      setError(messageFor(failure)); setPending(false); busy.current = false;
+      setError(messageFor(failure, t)); setPending(false); busy.current = false;
     }
   };
 
   return <Dialog open={open} onOpenChange={setOpen}>
-    <span title={unavailableReason}><DialogTrigger asChild><Button type="button" variant="outline" size="sm" disabled={disabled || expectedRevision === undefined || pending}>상단 디자인 수정</Button></DialogTrigger></span>
+    <span title={unavailableReason}><DialogTrigger asChild><Button type="button" variant="outline" size="sm" disabled={disabled || expectedRevision === undefined || pending}>{t("commonHeaderEdit")}</Button></DialogTrigger></span>
     <DialogContent>
-      <DialogHeader><DialogTitle>상단 디자인 수정</DialogTitle><DialogDescription>원하는 분위기나 브랜드 표현을 자유롭게 적어 주세요. LLM이 완성 슬라이드 두 안을 비교해 자동으로 선택합니다.</DialogDescription></DialogHeader>
-      <label className="text-sm">상단 디자인 설명 (선택)<textarea aria-label="상단 디자인 설명" className="mt-2 w-full rounded border p-3" rows={4} value={instructions} onChange={(event) => setInstructions(event.target.value)} disabled={pending} /></label>
-      <label className="text-sm">상단 보조 문구 (선택)<input aria-label="상단 보조 문구" className="mt-2 w-full rounded border p-3" value={documentLabel} onChange={(event) => { setDocumentLabel(event.target.value); setDocumentLabelChanged(true); }} disabled={pending} placeholder="문서명이나 상단에 표시할 고정 문구" /></label>
-      {referenceSnapshotIds.length > 0 ? <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={useReference} onChange={(event) => setUseReference(event.target.checked)} disabled={pending} />기존에 등록한 디자인 참고 자료 사용</label> : null}
-      {pending ? <p role="status" className="text-sm text-slate-600">상단 디자인을 수정하고 있습니다. 작업 내역에서도 진행 상황을 확인할 수 있습니다.</p> : null}
+      <DialogHeader><DialogTitle>{t("commonHeaderEdit")}</DialogTitle><DialogDescription>{t("commonHeaderEditDescription")}</DialogDescription></DialogHeader>
+      <label className="text-sm">{t("commonHeaderInstructionsLabel")}<textarea aria-label={t("commonHeaderInstructionsLabel")} className="mt-2 w-full rounded border p-3" rows={4} value={instructions} onChange={(event) => setInstructions(event.target.value)} disabled={pending} /></label>
+      <label className="text-sm">{t("commonHeaderDocumentLabel")}<input aria-label={t("commonHeaderDocumentLabel")} className="mt-2 w-full rounded border p-3" value={documentLabel} onChange={(event) => { setDocumentLabel(event.target.value); setDocumentLabelChanged(true); }} disabled={pending} placeholder={t("commonHeaderDocumentPlaceholder")} /></label>
+      {referenceSnapshotIds.length > 0 ? <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={useReference} onChange={(event) => setUseReference(event.target.checked)} disabled={pending} />{t("commonHeaderUseReference")}</label> : null}
+      {pending ? <p role="status" className="text-sm text-slate-600">{t("commonHeaderEditingStatus")}</p> : null}
       {error ? <p role="alert" className="text-sm text-red-600">{error}</p> : null}
-      <DialogFooter><Button type="button" variant="ghost" onClick={() => setOpen(false)}>닫기</Button><Button type="button" disabled={disabled || pending || expectedRevision === undefined} onClick={() => void submit()}>{pending ? "수정 중…" : "상단 수정"}</Button></DialogFooter>
+      <DialogFooter><Button type="button" variant="ghost" onClick={() => setOpen(false)}>{t("commonHeaderClose")}</Button><Button type="button" disabled={disabled || pending || expectedRevision === undefined} onClick={() => void submit()}>{pending ? t("commonHeaderEditing") : t("commonHeaderEditAction")}</Button></DialogFooter>
     </DialogContent>
   </Dialog>;
 }

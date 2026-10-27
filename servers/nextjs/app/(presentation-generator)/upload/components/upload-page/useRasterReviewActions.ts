@@ -76,7 +76,7 @@ export const useRasterReviewActions = ({
     } finally {
       setIsRasterPageLoading(false);
     }
-  }, [rasterOperation]);
+  }, [rasterOperation, tA2b]);
 
   const saveRasterReview = useCallback(async (request: RasterReviewSaveRequest) => {
     if (!rasterOperation || request.operationId !== rasterOperation.operation_id ||
@@ -188,11 +188,11 @@ export const useRasterReviewActions = ({
     if (!operation || !recovery || !snapshotId || recovery.analysisMode === "auto_preserve" ||
         startInFlightRef.current) return;
     if ((config.commonHeaderMode ?? "uniform") === "uniform") {
-      notify.warning("상단 구성 선택 필요", "원본 화면을 그대로 보존하려면 페이지별 자유 구성을 선택해 주세요.");
+      notify.warning(tA2b("commonHeaderModeRequired"), tA2b("commonHeaderRasterPreservationRequired"));
       return;
     }
     if ((recovery.authoredStyle && recovery.authoredStyle !== "screenshot-blue") || recovery.svgDesignReferenceSnapshotId || recovery.svgDesignReferencePin) {
-      notify.warning("선택한 디자인으로 재구성 필요", "선택한 스타일이나 디자인 참고를 적용하려면 원본 화면을 재구성해 주세요. 현재 선택과 검토 내용은 유지됩니다.");
+      notify.warning(tA2b("commonHeaderRedesignRequired"), tA2b("commonHeaderRedesignRequiredBody"));
       return;
     }
     startInFlightRef.current = true;

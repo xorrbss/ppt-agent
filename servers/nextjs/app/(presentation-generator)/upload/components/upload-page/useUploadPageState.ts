@@ -345,14 +345,14 @@ export const useUploadPageState = ({
    */
   const validateConfiguration = (selectedFiles: File[]): boolean => {
     if (sourceContentMode && generationStrategy === "svg" && (config.commonHeaderMode ?? "uniform") === "uniform") {
-      notify.warning("상단 구성 선택 필요", "원본 보존은 기존 상단을 유지합니다. 페이지별 자유 구성으로 변경하거나 내용 재배치 모드를 선택하세요.");
+      notify.warning(tA2b("commonHeaderModeRequired"), tA2b("commonHeaderSourcePreservationNote"));
       return false;
     }
     if (generationStrategy === "svg" && config.svgDesignReferencePending) {
-      notify.warning("디자인 참고 등록 필요", "선택한 디자인 참고 파일을 등록하거나 선택을 해제해 주세요."); return false;
+      notify.warning(tA2b("svgReferenceRegistrationRequired"), tA2b("svgReferenceRegistrationRequiredBody")); return false;
     }
     if (generationStrategy === "svg" && config.svgDesignReferenceSnapshotId && (config.svgDesignReferencePin || companyStandard)) {
-      notify.warning("디자인 참고 선택 확인", "디자인 참고 파일, 등록 디자인, 회사 표준 중 하나만 선택해 주세요."); return false;
+      notify.warning(tA2b("svgReferenceSelectionConflict"), tA2b("svgReferenceSelectionConflictBody")); return false;
     }
         if (
             generationStrategy === "authored" &&

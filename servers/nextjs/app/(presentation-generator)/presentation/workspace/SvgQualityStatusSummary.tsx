@@ -30,8 +30,8 @@ export default function SvgQualityStatusSummary({ status }: { status: unknown })
       <dt>{t("svgSemanticStatus")}</dt><dd>{value("semanticCurrent")}</dd>
       <dt>{t("svgDesignStatus")}</dt><dd>{value("designFindings")}</dd>
       {(fidelityStatus === "passed" || fidelityStatus === "failed") && <>
-        <dt>현재 PPTX 검토</dt>
-        <dd>{fidelityStatus === "passed" ? "통과" : "확인 필요"}</dd>
+        <dt>{t("currentPptxReview")}</dt>
+        <dd>{fidelityStatus === "passed" ? t("svgStatusPassed") : t("svgStatusCheckRequired")}</dd>
       </>}
     </dl>
   );
