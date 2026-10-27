@@ -352,14 +352,14 @@ def svg_visual_review(*, slides, advisory: Mapping | None, expected_binding: Map
     coverage = review_coverage(vision)
     if coverage.explicit and coverage.unreviewed(range(len(slides))):
         return dict(required=True, status="failed", reasonCode="svg_visual_advisory_review_coverage_incomplete")
-    from services.generation_core.quality.vision_advisory_prompt import DESIGN_REVIEW_PROMPT_VERSION
-    design_review = vision.get("promptVersion") == DESIGN_REVIEW_PROMPT_VERSION
+    from services.generation_core.quality.vision_advisory_prompt import is_design_review_version
+    design_review = is_design_review_version(vision.get("promptVersion"))
     producer_gate = _generation_source_review(slides, advisory, expected_binding, source_context) if design_review else None
     if "pageAdvisories" not in advisory:
         if producer_gate is None or producer_gate["policy"]["version"] != 2:
             return dict(required=True, status="failed", reasonCode="svg_visual_advisory_png_evidence_missing")
         flagged, review = advisory_flagged_pages(advisory), _review_pages(slides)
-        evidence = dict(checkerVersion=DESIGN_REVIEW_PROMPT_VERSION,
+        evidence = dict(checkerVersion=str(vision.get("promptVersion") or ADVISORY_RECORD_SCHEMA),
             inputDigest=content_digest({"svgDigests": digests, "pngDigests": producer_gate["pngDigests"]}),
             outputDigest=content_digest({"producerAdvisoryDigest": advisory["digest"], "producerGateDigest": producer_gate["digest"]}),
             measurements=dict(advisoryDigest=advisory["digest"], pageCount=len(slides),
@@ -408,8 +408,9 @@ def svg_visual_review(*, slides, advisory: Mapping | None, expected_binding: Map
             return dict(required=True, status="failed", reasonCode="svg_visual_advisory_operation_binding_invalid")
         if design_review and (gate.get("binding") or {}).get("operationId") != binding.get("operationId"):
             return dict(required=True, status="failed", reasonCode="svg_visual_advisory_operation_binding_invalid")
-        if any(current[index]["vision"].get("promptVersion") != (
-                    DESIGN_REVIEW_PROMPT_VERSION if design_review else "svg-required-visual-review/v1")
+        expected_page_version = (vision.get("promptVersion") if design_review
+                                 else "svg-required-visual-review/v1")
+        if any(current[index]["vision"].get("promptVersion") != expected_page_version
                or not review_coverage(current[index]["vision"]).matches(
                    [index], [_receipt(slides[index]).get("png_sha256")])
                for index in range(len(slides))):

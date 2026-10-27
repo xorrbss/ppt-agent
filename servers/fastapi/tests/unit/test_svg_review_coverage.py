@@ -5,9 +5,23 @@ from types import SimpleNamespace
 import pytest
 
 from services.generation_core.quality.review_coverage import review_coverage
+from services.generation_core.quality.vision_advisory_prompt import (
+    AXIS_REVIEW_PROMPT_VERSION, DESIGN_REVIEW_PROMPT_VERSION,
+    DESIGN_REVIEW_PROMPT_VERSIONS, is_design_review_version,
+)
 from services.svg_export_visual_review import split_page_advisories, current_page_advisories
 from tests.unit.test_svg_page_quality_publication import _measured, PNG
 from utils.hashing import sha256_hex
+
+
+def test_design_review_version_predicate_accepts_only_producer_versions():
+    assert DESIGN_REVIEW_PROMPT_VERSIONS == {
+        DESIGN_REVIEW_PROMPT_VERSION, AXIS_REVIEW_PROMPT_VERSION,
+    }
+    assert is_design_review_version(DESIGN_REVIEW_PROMPT_VERSION)
+    assert is_design_review_version(AXIS_REVIEW_PROMPT_VERSION)
+    assert not is_design_review_version("svg-quality-first-design-review/v3")
+    assert not is_design_review_version(None)
 
 
 def test_noncontiguous_and_reordered_coverage_uses_identity():

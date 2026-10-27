@@ -20,7 +20,7 @@ from collections.abc import Mapping
 from services.generation_core.quality.advisory_record import advisory_record, content_digest, record_matches
 from services.generation_core.quality.review_coverage import review_coverage
 from services.generation_core.quality.vision_advisory_prompt import (
-    DESIGN_AXES, DESIGN_LOCAL_AXES, DESIGN_REVIEW_PROMPT_VERSION, DESIGN_PRINCIPLES_VERSION,
+    DESIGN_AXES, DESIGN_LOCAL_AXES, DESIGN_PRINCIPLES_VERSION, is_design_review_version,
     baseline_review_active, baseline_design_principles_digest,
     axis_review_active, review_prompt_version,
 )
@@ -961,7 +961,7 @@ def _seal_design_gate(context, pages, renders, vision):
                        and type(page.get("index")) is int}
     coverage = (len(reviewed) == len(pages) == len(review_by_index)
                 and set(review_by_index) == set(range(len(pages)))
-                and vision.get("promptVersion") == DESIGN_REVIEW_PROMPT_VERSION
+                and is_design_review_version(vision.get("promptVersion"))
                 and reviewed_coverage.matches(range(len(pages)), png_digests)
                 and context["deckComplete"] and (review.get("deckFlow") or {}).get("evaluated") is True)
     if independent_axes:
@@ -969,6 +969,7 @@ def _seal_design_gate(context, pages, renders, vision):
         reviewable = [index for index in range(len(pages)) if index not in excluded]
         coverage = (len(reviewed) == len(review_by_index)
                     and set(review_by_index) <= set(range(len(pages)))
+                    and is_design_review_version(vision.get("promptVersion"))
                     and vision.get("promptVersion") == review_prompt_version(context)
                     and reviewed_coverage.matches(reviewable, [png_digests[index] for index in reviewable])
                     and context["deckComplete"])

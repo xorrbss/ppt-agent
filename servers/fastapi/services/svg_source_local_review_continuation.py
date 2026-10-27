@@ -35,7 +35,7 @@ def _source_local_vector(payloads):
 
 def _source_local_records(execution, payloads, *, sealed_vector=None, snapshot=None):
     from services.generation_core.quality.vision_advisory_prompt import (
-        DESIGN_LOCAL_AXES, DESIGN_PRINCIPLES_VERSION, DESIGN_REVIEW_PROMPT_VERSION,
+        DESIGN_LOCAL_AXES, DESIGN_PRINCIPLES_VERSION, is_design_review_version, review_prompt_version,
     )
     from services.svg_presentation_checkpoint import _digest
     _require(execution.get("schema") == "svg-quality-recovery-execution/v1")
@@ -76,7 +76,8 @@ def _source_local_records(execution, payloads, *, sealed_vector=None, snapshot=N
         _require(record.get("digest") == content_digest({k: v for k, v in record.items() if k != "digest"}))
         vision = record.get("vision")
         _require(isinstance(vision, Mapping) and not vision.get("skipped")
-                 and vision.get("promptVersion") == DESIGN_REVIEW_PROMPT_VERSION)
+                 and is_design_review_version(vision.get("promptVersion"))
+                 and vision.get("promptVersion") == review_prompt_version({"reviewScope": "local"}))
         _require(review_coverage(vision).matches(range(len(indices)), [
                      _sha(sealed_vector[i]["png_digest"] if sealed_vector is not None
                           else payloads[i].get("png_sha256"))
@@ -233,7 +234,9 @@ def _review_physical_ordinal(marker, ordinal, snapshot):
 
 def _checked_current_local_group(marker, ordinal, vector, *, snapshot=None):
     """Same local-only evidence contract, independent of the global verdict."""
-    from services.generation_core.quality.vision_advisory_prompt import DESIGN_LOCAL_AXES, DESIGN_REVIEW_PROMPT_VERSION
+    from services.generation_core.quality.vision_advisory_prompt import (
+        DESIGN_LOCAL_AXES, is_design_review_version, review_prompt_version,
+    )
     indices = list(range(ordinal * 5, min(ordinal * 5 + 5, len(vector))))
     group_id = f"phase-0/group-{ordinal}"
     _require(isinstance(marker, Mapping) and marker.get("status") == "completed"
@@ -248,7 +251,8 @@ def _checked_current_local_group(marker, ordinal, vector, *, snapshot=None):
              and record.get("digest") == content_digest({k:v for k,v in record.items() if k != "digest"}))
     _sha(marker.get("input_digest"))
     vision = record.get("vision") or {}
-    _require(not vision.get("skipped") and vision.get("promptVersion") == DESIGN_REVIEW_PROMPT_VERSION
+    _require(not vision.get("skipped") and is_design_review_version(vision.get("promptVersion"))
+             and vision.get("promptVersion") == review_prompt_version({"reviewScope": "local"})
              and review_coverage(vision).matches(range(len(indices)), [vector[i]["png_digest"] for i in indices]))
     pages = review_coverage(vision).pages
     _require(isinstance(pages, list) and len(pages) == len(indices)

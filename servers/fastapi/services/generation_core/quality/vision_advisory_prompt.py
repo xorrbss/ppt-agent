@@ -28,6 +28,15 @@ from typing import Any
 
 DESIGN_REVIEW_PROMPT_VERSION = "svg-quality-first-design-review/v1"
 AXIS_REVIEW_PROMPT_VERSION = "svg-quality-first-design-review/v2"
+DESIGN_REVIEW_PROMPT_VERSIONS = frozenset({
+    DESIGN_REVIEW_PROMPT_VERSION,
+    AXIS_REVIEW_PROMPT_VERSION,
+})
+
+
+def is_design_review_version(version):
+    """Whether a prompt version is one emitted by the design review producer."""
+    return isinstance(version, str) and version in DESIGN_REVIEW_PROMPT_VERSIONS
 
 
 def axis_review_active(context):
@@ -1436,5 +1445,6 @@ __all__ = [
     "advisory_json_schema",
     "build_advisory_messages",
     "DESIGN_AXES", "DESIGN_LOCAL_AXES", "DESIGN_GLOBAL_FINDING_LIMIT", "DESIGN_REVIEW_PROMPT_VERSION",
+    "DESIGN_REVIEW_PROMPT_VERSIONS", "is_design_review_version",
     "design_review_json_schema", "design_global_json_schema",
 ]

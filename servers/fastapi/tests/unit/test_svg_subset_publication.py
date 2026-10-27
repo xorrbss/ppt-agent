@@ -6,18 +6,18 @@ import pytest
 
 from models.sql.presentation import PresentationModel
 from services.generation_core.drivers.svg import publish, quality
-from services.svg_export_visual_review import svg_visual_review, svg_quality_status
+from services.svg_export_visual_review import release_readiness, svg_visual_review, svg_quality_status
 from tests.unit.test_svg_axis_review import _fresh
 from tests.unit.test_svg_page_quality_publication import (
     PNG, _Session, _outline, _published, _request, _storage,
 )
-from tests.unit.test_svg_review_read_retries import _provider
+from tests.unit.test_svg_review_read_retries import _harness, _provider
 from utils.hashing import sha256_hex
 
 
-@pytest.mark.parametrize("invalid", [[1, 4], [1], []])
-def test_subset_publication_and_export_keep_original_page_identity(monkeypatch, invalid):
-    harness = _fresh(monkeypatch, 5)
+@pytest.mark.parametrize(("invalid", "axis_review"), [([1, 4], True), ([1], True), ([], True), ([], False)])
+def test_subset_publication_and_export_keep_original_page_identity(monkeypatch, invalid, axis_review):
+    harness = _fresh(monkeypatch, 5) if axis_review else _harness(monkeypatch, 5)
     original_context = quality._design_context
     pngs = [PNG + str(index).encode() for index in range(5)]
     for index, (payload, _) in enumerate(harness.pages):
@@ -72,9 +72,11 @@ def test_subset_publication_and_export_keep_original_page_identity(monkeypatch, 
     status = svg_quality_status(slides, svg["advisory"])
     assert status["reviewedPages"] == expected
     assert status["semanticCurrent"]["status"] == ("partial" if invalid else "current")
-    exported = svg_visual_review(slides=slides, advisory=svg["advisory"])
+    exported = svg_visual_review(slides=slides, advisory=svg["advisory"],
+        expected_binding=svg["advisory"]["operationBinding"])
     if invalid:
         assert exported == dict(required=True, status="failed",
             reasonCode="svg_visual_advisory_review_coverage_incomplete")
     else:
         assert exported["status"] == "passed" and "reasonCode" not in exported
+        assert release_readiness([exported]) == "ready"
