@@ -15,6 +15,7 @@ from services.ppt_writing_policy import (
     SymbolCategory,
     WRITING_POLICY_ID,
     scan_visible_text,
+    visible_symbol_substitutions,
 )
 
 
@@ -57,6 +58,78 @@ def _svg_text_records(svg: str) -> tuple[dict, ...]:
 def svg_text_nodes(svg: str) -> tuple[str, ...]:
     """Read only displayed SVG text elements, never attributes or path data."""
     return tuple(record["text"] for record in _svg_text_records(svg))
+
+
+def substitute_svg_visible_symbols(
+    svg: str, *, source_values: Sequence[str] = (), required_text: Sequence[str] = (),
+    protected_element_ids: Sequence[str] = (),
+) -> tuple[str, list[dict]]:
+    """Repair policy-approved visible text only, preserving literal provenance.
+
+    Scan each text owner together with its tspans so a literal split across runs
+    cannot lose protection. Map offsets back to text/tail slots; never touch XML
+    attributes, ids, URLs or source/native values. No-op returns the original bytes.
+    """
+    root = ET.fromstring(svg)
+    counts: Counter[tuple[str, str]] = Counter()
+    values = tuple(source_values) + tuple(required_text)
+
+    def blocked(node: ET.Element) -> bool:
+        style = re.sub(r"\s+", "", node.get("style", "")).lower()
+        return (_tag(node.tag) in _SVG_EXCLUDED or node.get("id") in protected_element_ids
+                or node.get("display") == "none" or "display:none" in style
+                or node.get("visibility") in {"hidden", "collapse"}
+                or "visibility:hidden" in style or "visibility:collapse" in style
+                or node.get("opacity") == "0" or "opacity:0;" in style + ";")
+
+    def visit(node: ET.Element) -> None:
+        if blocked(node):
+            return
+        if _tag(node.tag) != "text":
+            for child in node:
+                visit(child)
+            return
+        # Mixed hidden/unsupported content is not a provably safe text owner.
+        if any(blocked(child) or _tag(child.tag) not in {"tspan", "textpath"}
+               for child in node.iter() if child is not node):
+            return
+        slots = []
+
+        def collect(element: ET.Element) -> None:
+            if element.text:
+                slots.append((element, "text", element.text))
+            for child in element:
+                collect(child)
+                if child.tail:
+                    slots.append((child, "tail", child.tail))
+
+        collect(node)
+        text = "".join(value for _, _, value in slots)
+        spans = _provenance_spans(text, values)
+        scan = (scan_visible_text(text, source_text=text)
+                if len(spans) == 1 and spans[0].start == 0 and spans[0].end == len(text)
+                else scan_visible_text(text, protected_spans=spans))
+        edits = [(start, end, replacement)
+                 for start, end, replacement in visible_symbol_substitutions(text, scan)
+                 if not any(start < span.end and span.start < end for span in spans)]
+        for start, end, replacement in edits:
+            counts[(text[start:end].strip(" \t"), replacement)] += 1
+        offset = 0
+        for element, field, value in slots:
+            local = [(max(start - offset, 0), min(end - offset, len(value)),
+                      replacement if offset <= start else "")
+                     for start, end, replacement in edits
+                     if offset < end and start < offset + len(value)]
+            for start, end, replacement in reversed(local):
+                value = value[:start] + replacement + value[end:]
+            offset += len(getattr(element, field))
+            if local:
+                setattr(element, field, value)
+
+    visit(root)
+    receipts = [{"symbol": symbol, "count": count, "replacement": replacement}
+                for (symbol, replacement), count in sorted(counts.items())]
+    return (ET.tostring(root, encoding="unicode") if receipts else svg), receipts
 
 
 class _VisibleHtmlParser(HTMLParser):
