@@ -422,16 +422,13 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
         reused_groups, evidence_consumers = reusable_local_groups(context, pages, renders, evidence)
     page_digests = [sha256_hex((payload.get("svg_content") or "").encode()) for payload, _ in pages]
     png_digests = [sha256_hex(png) for png in renders]
-    excluded = [index for index, ((payload, _), png_digest) in enumerate(zip(pages, png_digests, strict=True))
-                if (not context["mandatoryEvidence"][index] or payload.get("png_sha256") != png_digest
-                    or index in context["priorCandidates"]
-                    and context["priorCandidates"][index]["mandatoryEvidenceValid"] is not True)]
-    reviewable = [index for index in range(len(pages)) if index not in excluded]
-    if excluded and (not axis_review_active(context) or not reviewable):
+    if (not all(context["mandatoryEvidence"])
+            or any(payload.get("png_sha256") != png_digest
+                   for (payload, _), png_digest in zip(pages, png_digests, strict=True))
+            or any(prior["mandatoryEvidenceValid"] is not True for prior in context["priorCandidates"].values())):
         return advisory_record({"skipped": "mandatory_evidence_invalid"}, page_digests)
     canvas = context["style"].get("canvas") or {}
-    all_review_images = [renders[index] for index in reviewable] + [prior["png"]
-        for index, prior in context["priorCandidates"].items() if index in reviewable]
+    all_review_images = renders + [prior["png"] for prior in context["priorCandidates"].values()]
     if any(not (resolution := _render_resolution(png, canvas)) or not resolution["sufficient"]
            for png in all_review_images):
         return advisory_record({"skipped": "render_resolution_insufficient"}, page_digests)
@@ -456,7 +453,6 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
     if live_producers is not None:
         context["priorCandidates"] = {}
         local_pages, evidence_consumers = _reusable_live_local_pages(context, pages, renders, live_producers)
-        local_pages = {index: page for index, page in local_pages.items() if index in reviewable}
     reservations_ready = asyncio.Event()
     reserved_ordinals = set()
     def local_reserved(ordinal):
@@ -468,8 +464,6 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
     changed = set(context["priorCandidates"])
     if phase and prior_gate is not None and not full_review:
         for index, (payload, _) in enumerate(pages):
-            if index in excluded:
-                continue
             old = next((page for page in prior_gate["pages"] if page["index"] == index), None)
             group_changed = baseline_review_active(context) and any(
                 member in changed for member in groups[index // group_size])
@@ -631,17 +625,14 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
                 return sealed
 
     async def local_group(ordinal, indices):
-        if ordinal in reused_groups and not set(indices) & set(excluded):
+        if ordinal in reused_groups:
             local_reserved(ordinal)
             return deepcopy(reused_groups[ordinal])
-        to_review = [index for index in indices if index in reviewable
-                     and (full_review or index not in local_pages)]
+        to_review = [index for index in indices if index not in local_pages] if not full_review else indices
         if not to_review:
             local_reserved(ordinal)
             return None
         group_context = _local_group_context(context, to_review, full_review)
-        if excluded:
-            group_context = _reviewable_group_context(group_context, context, pages, to_review)
         return await request_group(ordinal, to_review, group_context, [renders[index] for index in to_review])
 
     tasks = [asyncio.create_task(local_group(ordinal, indices)) for ordinal, indices in enumerate(groups)]
@@ -654,32 +645,6 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
         raise
     unreviewed_groups = []
 
-    def seal_review(vision):
-        if excluded:
-            # Provider indices are local to the supplied subset; this envelope
-            # and the gate describe the original deck without claiming full flow.
-            vision = {**vision, "slideCount": len(pages), "reviewedPageIndices": reviewable,
-                "reviewedPngDigests": [png_digests[index] for index in reviewable],
-                "unreviewedPages": excluded, "reason": "mandatory_evidence_invalid"}
-            review = vision.get("designReview") or {}
-            vision["designReview"] = {**review, "pages": [*review.get("pages", []),
-                *[dict(index=index, evaluated=False, axes={}, issues=[], reason="mandatory_evidence_invalid")
-                  for index in excluded]],
-                "deckFlow": {**(review.get("deckFlow") or {}), "evaluated": False,
-                             "reason": "mandatory_evidence_invalid"}}
-        vision["designGate"] = _seal_design_gate(context, pages, renders, vision)
-        return advisory_record(vision, page_digests)
-
-    def deck_flow(review):
-        flow = review.get("deckFlow") or {"evaluated": False}
-        if excluded:
-            flow = {**flow, "repetitionGroups": [
-                {**group, "pages": [reviewable[index] for index in group["pages"]],
-                 **({"retainedPages": [reviewable[index] for index in group["retainedPages"]]}
-                    if "retainedPages" in group else {})}
-                for group in flow.get("repetitionGroups", [])]}
-        return flow
-
     def incomplete_review(reason):
         # The sealer alone decides which verified axes survive an incomplete review.
         vision = dict(promptVersion=review_prompt_version(context), slideCount=len(pages),
@@ -691,7 +656,8 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
             skipped="review_call_unavailable" if unreviewed_groups else reason, reviewGroups=records)
         if unreviewed_groups:
             vision["unreviewedGroups"] = unreviewed_groups
-        return seal_review(vision)
+        vision["designGate"] = _seal_design_gate(context, pages, renders, vision)
+        return advisory_record(vision, page_digests)
 
     for result in results:
         if result is None:
@@ -712,25 +678,18 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
         if unreviewed_groups:
             return incomplete_review("review_call_unavailable")
         vision = results[0]["vision"]
-        if excluded:
-            vision = {**vision, "designReview": {**(vision.get("designReview") or {}),
-                "pages": list(local_pages.values()), "candidateComparisons": list(local_comparisons.values()),
-                "deckFlow": deck_flow(vision.get("designReview") or {})},
-                "slides": [{**slide, "index": reviewable[slide["index"]]} for slide in vision.get("slides", [])]}
         if axis_review_active(context):
             vision = {**vision, "promptVersion": review_prompt_version(context)}
     else:
-        if (set(local_pages) != set(reviewable) or any(page.get("evaluated") is not True
+        if (len(local_pages) != len(pages) or any(page.get("evaluated") is not True
                 or set(page.get("axes", {})) != set(DESIGN_AXES[:-1]) for page in local_pages.values())):
             return incomplete_review("local_review_coverage_incomplete")
         # This call uses the entire contact sheet and observed family
         # representatives only for global flow; fine detail remains local.
         global_context = _global_review_context(ctx, context, pages, local_pages, records)
-        if excluded:
-            global_context = _reviewable_group_context(global_context, context, pages, reviewable)
         for format_attempt in range(global_retry_limit + 1):
             global_result = await request_group(
-                len(groups) + format_attempt, reviewable, global_context, [renders[index] for index in reviewable])
+                len(groups) + format_attempt, list(range(len(pages))), global_context, renders)
             if _UNREVIEWED_GROUP in global_result:
                 unreviewed_groups.append(global_result[_UNREVIEWED_GROUP])
                 return incomplete_review("review_call_unavailable")
@@ -745,7 +704,7 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
                     "fields": rejected.get("schemaRejectionFields"),
                 }}
         global_review = global_result["vision"].get("designReview") or {}
-        global_pages = {reviewable[page["index"]]: page for page in global_review.get("pages", [])}
+        global_pages = {page["index"]: page for page in global_review.get("pages", [])}
         combined = []
         for index in range(len(pages)):
             local, global_page = local_pages.get(index), global_pages.get(index)
@@ -761,8 +720,7 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
                 combined[-1]["localEvaluated"] = local["evaluated"]
             if baseline_review_active(context):
                 combined[-1]["designTargets"] = local.get("designTargets", []) + global_page.get("designTargets", [])
-        global_comparisons = {reviewable[item["index"]]: item
-                              for item in global_review.get("candidateComparisons", [])}
+        global_comparisons = {item["index"]: item for item in global_review.get("candidateComparisons", [])}
         comparisons = []
         for index in sorted(changed):
             local, global_comparison = local_comparisons.get(index), global_comparisons.get(index)
@@ -785,13 +743,15 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
             model=";".join(sorted({str(record["vision"].get("model") or "") for record in records})),
             slides=[dict(index=page["index"], issues=page["issues"]) for page in combined if page["issues"]],
             designReview=dict(pages=combined, candidateComparisons=comparisons,
-                              deckFlow=deck_flow(global_review)))
+                              deckFlow=global_review.get("deckFlow") or {"evaluated": False}))
     vision = {**vision, "reviewGroups": records}
     if evidence_consumers:
         vision["localEvidenceConsumers"] = evidence_consumers
     if review_namespace:
         vision["reviewNamespace"] = review_namespace
-    return seal_review(vision)
+    vision["designGate"] = _seal_design_gate(context, pages, renders, vision)
+    record = advisory_record(vision, page_digests)
+    return record
 
 
 #: Key of the marker ``request_group`` returns for a group its review call left
@@ -963,14 +923,11 @@ def _seal_design_gate(context, pages, renders, vision):
                 and vision.get("reviewedPngDigests") == png_digests
                 and context["deckComplete"] and (review.get("deckFlow") or {}).get("evaluated") is True)
     if independent_axes:
-        excluded = {page["index"] for page in reviewed if page.get("reason") == "mandatory_evidence_invalid"}
-        reviewable = [index for index in range(len(pages)) if index not in excluded]
         coverage = (len(reviewed) == len(review_by_index)
                     and set(review_by_index) <= set(range(len(pages)))
                     and vision.get("promptVersion") == review_prompt_version(context)
-                    and vision.get("reviewedPageIndices") == reviewable
-                    and vision.get("reviewedPngDigests") == [png_digests[index] for index in reviewable]
-                    and context["deckComplete"])
+                    and vision.get("reviewedPageIndices") == list(range(len(pages)))
+                    and vision.get("reviewedPngDigests") == png_digests and context["deckComplete"])
     results, blocking, incomplete, advisories = [], [], [], []
     flow_unreviewed = []
     canvas = context["style"].get("canvas") or {}
@@ -1020,8 +977,6 @@ def _seal_design_gate(context, pages, renders, vision):
         critical_issues = [issue for issue in page.get("issues", []) if issue in {"illegible", "broken_figure"}]
         mandatory_valid = (context["mandatoryEvidence"][index] and not critical_issues
                            and payload.get("png_sha256") == png_digests[index])
-        if independent_axes and index in excluded:
-            mandatory_valid = False
         status = "unreviewed" if not evaluated else "failed" if failed_axes or not mandatory_valid else "passed"
         if status == "unreviewed":
             incomplete.append(index)
@@ -1040,8 +995,6 @@ def _seal_design_gate(context, pages, renders, vision):
             deckContextDigest=base["deckContextDigest"],
             comparisonContextDigest=SHA256_PREFIX + comparison_hash.hexdigest()))
         if independent_axes:
-            if index in excluded:
-                results[-1]["reason"] = "mandatory_evidence_invalid"
             results[-1]["unreviewedAxes"] = ([*DESIGN_LOCAL_AXES] if not evaluated else []) + (
                 ["repetition_deck_flow"] if not flow_evaluated else [])
         if baseline_review_active(context):
@@ -1074,7 +1027,7 @@ def _seal_design_gate(context, pages, renders, vision):
     base.update(status="unreviewed" if incomplete else "failed" if blocking else "passed",
         pageCoverageComplete=coverage and not incomplete, pages=results, blockingPages=blocking,
         unreviewedPages=incomplete, advisoryPages=advisories, deckFlow=review.get("deckFlow"),
-        reason=vision.get("skipped") or vision.get("reason"), candidateComparisons=comparisons,
+        reason=vision.get("skipped"), candidateComparisons=comparisons,
         reviewGroups=vision.get("reviewGroups", []))
     if independent_axes:
         base["flowUnreviewedPages"] = flow_unreviewed
@@ -1503,19 +1456,4 @@ def _local_group_context(context, to_review, full_review=False):
             else bool(set(example.get('roles') or [example['role']]) & relevant_roles))]
     group_context['exampleDigests'] = sorted((example['digest'] for example in group_context['examples']))
     return group_context
-
-
-def _reviewable_group_context(group_context, context, pages, indices):
-    """Project a review request onto valid evidence, keeping durable deck IDs."""
-    projected = _local_group_context(context, indices, group_context["reviewScope"] == "full")
-    composition = (observe_svg_deck_composition([pages[index] for index in indices], quality_policy=True)
-                   if group_context["reviewScope"] != "local" else {})
-    result = {**group_context, "pages": projected["pages"], "roles": projected["roles"],
-        "priorCandidates": projected["priorCandidates"], "composition": composition,
-        "mandatoryEvidence": [context["mandatoryEvidence"][index] for index in indices],
-        "globalPageIndices": indices,
-        "flowUnreviewedPages": [index for index in range(len(pages)) if index not in indices]}
-    if group_context["reviewScope"] == "global":
-        result["representativeIndices"] = sorted({group["representative"] for group in composition["groups"]})
-    return result
 
