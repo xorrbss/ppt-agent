@@ -6,6 +6,7 @@ from hashlib import sha256
 from typing import Mapping
 
 from services.generation_core.quality.advisory_record import content_digest
+from services.generation_core.quality.review_coverage import review_coverage
 from services.generation_core.drivers.svg.quality import redispatchable_review_status
 from services.svg_final_selected_continuation import (
     INITIAL_NAMESPACE, NAMESPACE, FinalSelectedEvidenceError, _require, _sha, _svg_sha,
@@ -76,12 +77,11 @@ def _source_local_records(execution, payloads, *, sealed_vector=None, snapshot=N
         vision = record.get("vision")
         _require(isinstance(vision, Mapping) and not vision.get("skipped")
                  and vision.get("promptVersion") == DESIGN_REVIEW_PROMPT_VERSION)
-        _require(vision.get("reviewedPageIndices") == list(range(len(indices)))
-                 and vision.get("reviewedPngDigests") == [
+        _require(review_coverage(vision).matches(range(len(indices)), [
                      _sha(sealed_vector[i]["png_digest"] if sealed_vector is not None
                           else payloads[i].get("png_sha256"))
-                     for i in indices])
-        reviewed = (vision.get("designReview") or {}).get("pages")
+                     for i in indices]))
+        reviewed = review_coverage(vision).pages
         _require(isinstance(reviewed, list) and len(reviewed) == len(indices)
                  and all(isinstance(page, Mapping) for page in reviewed)
                  and {page.get("index") for page in reviewed} == set(range(len(indices))))
@@ -249,9 +249,8 @@ def _checked_current_local_group(marker, ordinal, vector, *, snapshot=None):
     _sha(marker.get("input_digest"))
     vision = record.get("vision") or {}
     _require(not vision.get("skipped") and vision.get("promptVersion") == DESIGN_REVIEW_PROMPT_VERSION
-             and vision.get("reviewedPageIndices") == list(range(len(indices)))
-             and vision.get("reviewedPngDigests") == [vector[i]["png_digest"] for i in indices])
-    pages = (vision.get("designReview") or {}).get("pages")
+             and review_coverage(vision).matches(range(len(indices)), [vector[i]["png_digest"] for i in indices]))
+    pages = review_coverage(vision).pages
     _require(isinstance(pages, list) and len(pages) == len(indices)
              and all(isinstance(page, Mapping) for page in pages)
              and {page.get("index") for page in pages} == set(range(len(indices))))

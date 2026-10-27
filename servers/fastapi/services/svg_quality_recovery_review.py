@@ -4,6 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from services.generation_core.quality.advisory_record import content_digest
+from services.generation_core.quality.review_coverage import review_coverage
 from services.generation_core.quality.vision_advisory_prompt import (
     DESIGN_LOCAL_AXES, DESIGN_PRINCIPLES_VERSION, baseline_review_active,
 )
@@ -207,7 +208,7 @@ def prepare_saved_review(presentation, slides, indices, pngs, *, operation_id, o
 def seal_saved_review(prepared, slides, vision, claim):
     from services.generation_core.drivers.svg.quality import _seal_design_gate
     from services.generation_core.quality.advisory_record import advisory_record
-    review = vision.get("designReview") or {}
+    review = review_coverage(vision).design_review
     local = {page["index"]: page for page in review.get("localPages", [])}
     global_pages = {page["index"]: page for page in review.get("pages", [])}
     combined = []

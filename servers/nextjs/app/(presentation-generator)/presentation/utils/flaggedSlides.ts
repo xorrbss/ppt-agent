@@ -1,4 +1,5 @@
 import { isRecord } from "@/lib/guards";
+import { svgReviewCoverage } from "./svgReviewCoverage";
 /**
  * Flagged-slide badges for the editor.
  *
@@ -76,9 +77,7 @@ export interface FlaggedSlideBadge {
 export type FlaggedSlideMap = Record<string, FlaggedSlideBadge>;
 
 export function hasUnreviewedDeckFlow(theme: unknown): boolean {
-  if (!isRecord(theme) || !isRecord(theme.svg) || !isRecord(theme.svg.designReview)) return false;
-  const pages = theme.svg.designReview.flowUnreviewedPages;
-  return Array.isArray(pages) && pages.some((page) => Number.isInteger(page) && page >= 0);
+  return svgReviewCoverage(theme).flowUnreviewedPages.length > 0;
 }
 
 const AUTHOR_REASON_PREFIX = "author:";

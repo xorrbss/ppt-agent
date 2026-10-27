@@ -27,6 +27,7 @@ from services.generation_core.drivers.svg.native_publish import canvas_point_per
 from services.generation_core.native_objects import SLIDE_CONTENT_KEY as NATIVE_OBJECTS_KEY
 from services.generation_core.quality.flag_classification import FAILURE_PLACEHOLDER_OUTCOME
 from services.generation_core.quality.page_outcome import review_page_indices
+from services.generation_core.quality.review_coverage import review_coverage
 from services.svg_presentation_checkpoint import _save_source_page_pngs
 from services.svg_page_publication import set_svg_page
 
@@ -244,13 +245,17 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
         # new JSON value so the final producer evidence remains dirty afterward.
         publication_theme = deepcopy(presentation.theme)
         svg_theme = publication_theme["svg"]
+        coverage = review_coverage(advisory["vision"])
+        if coverage.unreviewed(range(len(published_slides))):
+            svg_theme["reviewCoverage"] = coverage.projection(range(len(published_slides)))
         records = split_page_advisories(advisory["vision"], published_slides, range(len(published_slides)))
         svg_theme["pageAdvisories"] = records
         svg_theme["advisory"]["pageAdvisories"] = records
         binding = dict(schemaVersion="svg-visual-review-operation-binding/v1",
             presentationId=str(presentation_id), ownerId=str(owner), ownerScope=str(parent.owner_scope),
             sourceRevision=expected_revision + 1, operationId=str(operation_id),
-            reviewedPageIndices=list(range(len(published_slides))), sourceDigests=slide_page_digests(published_slides),
+            reviewedPageIndices=coverage.indices,
+            sourceDigests=slide_page_digests(published_slides),
             pngDigests=[(slide.content["svgReceipt"]).get("png_sha256") for slide in published_slides],
             pageRecordDigests=[record["digest"] for record in records])
         svg_theme["advisory"]["operationBinding"] = {**binding, "digest": content_digest(binding)}

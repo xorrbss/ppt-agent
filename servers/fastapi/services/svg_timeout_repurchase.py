@@ -6,6 +6,7 @@ claims the original purchase stopped. The service action still owns owner/CAS,
 idempotency, admission, and the transaction that rebinds the generation job.
 """
 from __future__ import annotations
+from services.generation_core.quality.review_coverage import review_coverage
 
 from copy import deepcopy
 from dataclasses import dataclass
@@ -2193,7 +2194,7 @@ async def _bind_reviewed_stage_receipts(session, previous, operation, job, rows,
         or any(page.get("quality", {}).get("passed") is not True for page in pages)):
         _reject("svg_timeout_repurchase_manifest_conflict")
     flags = advisory_flagged_pages(advisory)
-    findings = advisory.get("vision", {}).get("slides") or []
+    findings = review_coverage(advisory.get("vision")).findings()
     expected = []
     for local_index in flags:
         issues = next((item.get("issues") for item in findings if item.get("index") == local_index), None)

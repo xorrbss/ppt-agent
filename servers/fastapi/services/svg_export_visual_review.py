@@ -45,6 +45,7 @@ from services.generation_core.quality.advisory_record import (
     record_matches,
 )
 from services.generation_core.quality.page_outcome import review_page_indices
+from services.generation_core.quality.review_coverage import review_coverage
 from utils.hashing import sha256_hex
 from services.svg_contract import source_digest
 
@@ -80,19 +81,24 @@ def split_page_advisories(vision: Mapping, slides, indices) -> list[dict]:
     if not advisory_ran({"vision": vision}):
         return []
     records = []
+    coverage = review_coverage(vision)
     for local, index in enumerate(indices):
-        findings = [{**entry, "index": index} for entry in vision.get("slides", [])
-                    if isinstance(entry, Mapping) and entry.get("index") == local]
+        digest = coverage.digest(local)
+        findings = [{**entry, "index": index} for entry in coverage.findings(local)]
         answer = {key: value for key, value in vision.items() if key != "slides"}
         if "designGate" in answer:
-            answer["designGateDigest"] = answer["designGate"]["digest"]
+            answer["designGateDigest"] = coverage.gate["digest"]
             for key in ("designGate", "designReview", "reviewGroups"):
                 answer.pop(key, None)
         answer.update(slideCount=1, slides=findings)
         if "reviewedPageIndices" in vision:
-            answer["reviewedPageIndices"] = [index]
+            answer["reviewedPageIndices"] = [index] if digest is not None else []
         if "reviewedPngDigests" in vision:
-            answer["reviewedPngDigests"] = [vision["reviewedPngDigests"][local]]
+            answer["reviewedPngDigests"] = [digest] if digest is not None else []
+        if coverage.explicit and digest is None:
+            answer.update(skipped="page_not_reviewed", unreviewedPages=[index], slides=[])
+        elif "unreviewedPages" in answer:
+            answer["unreviewedPages"] = []
         records.append(page_advisory_record(answer, page_index=index,
             page_digest=sha256_hex((slides[index].svg_content or "").encode()),
             png_digest=_receipt(slides[index]).get("png_sha256") or ""))
@@ -123,7 +129,10 @@ def current_page_advisories(slides, records) -> dict[int, dict]:
                 or not advisory_ran(record)):
             continue
         if any(not isinstance(entry, Mapping) or isinstance(entry.get("index"), bool)
-               or entry.get("index") != index for entry in record["vision"]["slides"]):
+               or entry.get("index") != index for entry in review_coverage(record["vision"]).findings()):
+            continue
+        coverage = review_coverage(record["vision"])
+        if coverage.explicit and not coverage.matches([index], [png_digest]):
             continue
         # Duplicate records are ambiguous rather than evidence to be merged.
         if index in current:
@@ -148,7 +157,7 @@ def assemble_page_advisory(slides, records) -> dict | None:
         return None
     visions = [current[index]["vision"] for index in range(len(slides))]
     vision = dict(promptVersion=PAGE_ADVISORY_SCHEMA, model=";".join(sorted({str(v.get("model") or "") for v in visions})),
-                  slideCount=len(slides), slides=[entry for v in visions for entry in v.get("slides", [])],
+                  slideCount=len(slides), slides=[entry for v in visions for entry in review_coverage(v).findings()],
                   pageRecordDigests=[current[index]["digest"] for index in range(len(slides))])
     result = advisory_record(vision, slide_page_digests(slides))
     result["pageAdvisories"] = [current[index] for index in range(len(slides))]
@@ -249,8 +258,7 @@ def _generation_source_review(slides, advisory, expected_binding, context):
             or producer.get("sourceRevision") != expected_binding.get("sourceRevision")
             or any(producer.get(key) != expected_binding.get(key) for key in ("presentationId", "ownerId", "ownerScope"))
             or any(binding.get(key) != expected_binding.get(key) for key in ("presentationId", "ownerId"))
-            or vision.get("reviewedPageIndices") != list(range(len(slides)))
-            or vision.get("reviewedPngDigests") != pngs):
+            or not review_coverage(vision).matches(range(len(slides)), pngs)):
         return None
     return gate
 
@@ -312,8 +320,7 @@ def _quality_review_source_review(slides, advisory, expected_binding, context):
                 or any(type(producer.get(key)) is not int or producer[key] != value
                        for key, value in (("maxAttempts", 1), ("plannedRequestLimit", 1), ("retryRequestLimit", 0)))
                 or producer.get("mode") != "analyze_only" or producer.get("target") != "source_svg"
-                or vision.get("reviewedPageIndices") != list(range(len(slides)))
-                or vision.get("reviewedPngDigests") != pngs):
+                or not review_coverage(vision).matches(range(len(slides)), pngs)):
             return None
         current = current_page_advisories(slides, advisory.get("pageAdvisories"))
         if len(current) != len(slides) or any(
@@ -342,6 +349,9 @@ def svg_visual_review(*, slides, advisory: Mapping | None, expected_binding: Map
     if not record_matches(advisory, digests):
         return dict(required=True, status="failed", reasonCode="svg_visual_advisory_stale")
     vision = advisory["vision"]
+    coverage = review_coverage(vision)
+    if coverage.explicit and coverage.unreviewed(range(len(slides))):
+        return dict(required=True, status="failed", reasonCode="svg_visual_advisory_review_coverage_incomplete")
     from services.generation_core.quality.vision_advisory_prompt import DESIGN_REVIEW_PROMPT_VERSION
     design_review = vision.get("promptVersion") == DESIGN_REVIEW_PROMPT_VERSION
     producer_gate = _generation_source_review(slides, advisory, expected_binding, source_context) if design_review else None
@@ -376,10 +386,11 @@ def svg_visual_review(*, slides, advisory: Mapping | None, expected_binding: Map
                 or (gate.get("binding") or {}).get("presentationId") != (expected_binding or {}).get("presentationId", (gate.get("binding") or {}).get("presentationId"))
                 or any(current[index]["vision"].get("designGateDigest") != gate["digest"] for index in range(len(slides)))):
             return dict(required=True, status="failed", reasonCode="svg_quality_recovery_review_required")
-    page_findings = [entry for index in range(len(slides)) for entry in current[index]["vision"]["slides"]]
+    page_findings = [entry for index in range(len(slides))
+                     for entry in review_coverage(current[index]["vision"]).findings()]
     models = ";".join(sorted({str(current[index]["vision"].get("model") or "") for index in range(len(slides))}))
     page_records = [current[index]["digest"] for index in range(len(slides))]
-    if (vision.get("slides") != page_findings or str(vision.get("model") or "") != models
+    if (coverage.findings() != page_findings or str(vision.get("model") or "") != models
             or ("pageRecordDigests" in vision and vision["pageRecordDigests"] != page_records)):
         return dict(required=True, status="failed", reasonCode="svg_visual_advisory_stale")
     if expected_binding is not None:
@@ -399,8 +410,8 @@ def svg_visual_review(*, slides, advisory: Mapping | None, expected_binding: Map
             return dict(required=True, status="failed", reasonCode="svg_visual_advisory_operation_binding_invalid")
         if any(current[index]["vision"].get("promptVersion") != (
                     DESIGN_REVIEW_PROMPT_VERSION if design_review else "svg-required-visual-review/v1")
-               or current[index]["vision"].get("reviewedPageIndices") != [index]
-               or current[index]["vision"].get("reviewedPngDigests") != [_receipt(slides[index]).get("png_sha256")]
+               or not review_coverage(current[index]["vision"]).matches(
+                   [index], [_receipt(slides[index]).get("png_sha256")])
                for index in range(len(slides))):
             return dict(required=True, status="failed", reasonCode="svg_visual_advisory_review_coverage_incomplete")
     flagged, review = advisory_flagged_pages(advisory), _review_pages(slides)
