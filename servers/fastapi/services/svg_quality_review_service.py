@@ -1,5 +1,6 @@
 """Fenced advisory review of saved SVG renders, with no slide replacement."""
 from __future__ import annotations
+from services.generation_core.quality.review_coverage import review_coverage
 
 from copy import deepcopy
 from types import SimpleNamespace
@@ -323,7 +324,13 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
             # The review's verdict becomes each page's design flag; the page
             # evidence sealed above excludes verdicts, so it stays current.
             from services.svg_quality_recovery_review import apply_saved_review_flags
-            changed_pages, svg_theme["designReview"] = apply_saved_review_flags(current_slides, vision["designGate"])
+            changed_pages, svg_theme["designReview"] = apply_saved_review_flags(
+                current_slides, review_coverage(vision).gate)
+            coverage = review_coverage(vision)
+            if coverage.unreviewed(range(len(current_slides))):
+                svg_theme["reviewCoverage"] = coverage.projection(range(len(current_slides)))
+            else:
+                svg_theme.pop("reviewCoverage", None)
             for index in changed_pages:
                 session.add(current_slides[index])
         if final_inputs is not None:
@@ -359,7 +366,8 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
                 presentationId=str(claim.presentation_id), ownerId=str(claim.owner_id),
                 ownerScope=str(getattr(claim, "owner_scope", "")),
                 sourceRevision=claim.expected_revision, operationId=str(claim.operation_id),
-                reviewedPageIndices=list(range(len(current_slides))) if recovery_review is not None else indices,
+                reviewedPageIndices=(review_coverage(vision).indices if recovery_review is not None
+                    else [indices[local] for local in review_coverage(vision).indices if local < len(indices)]),
                 sourceDigests=digests, pngDigests=png_digests,
                 pageRecordDigests=[record["digest"] for record in records])
             assembled["operationBinding"] = {**binding, "digest": content_digest(binding)}
@@ -378,7 +386,7 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
                          if status_authority is not None else current_slides)
         review_status = svg_quality_status(status_slides, svg_theme.get("advisory"), page_advisories=records)
         if recovery_review is not None:
-            gate = recovery_advisory["vision"]["designGate"]
+            gate = review_coverage(recovery_advisory["vision"]).gate
             review_status["qualityRecovery"] = dict(status=gate["status"],
                 blockingPages=gate["blockingPages"], unreviewedPages=gate["unreviewedPages"])
         svg_theme["lastReview"]["qualityStatus"] = review_status
@@ -389,8 +397,8 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
         theme["svg"] = svg_theme
         presentation.theme = theme
         session.add(presentation)
-        findings = ([entry for record in new_records for entry in record["vision"].get("slides", [])]
-                    if request.target == "source_svg" else vision.get("slides", []))
+        findings = ([entry for record in new_records for entry in review_coverage(record["vision"]).findings()]
+                    if request.target == "source_svg" else review_coverage(vision).findings())
         issue_indices = sorted({entry["index"] for entry in findings if entry.get("issues")})
         detailed = sum(len(entry.get("issues") or []) for entry in findings)
         if recovery_review is not None:

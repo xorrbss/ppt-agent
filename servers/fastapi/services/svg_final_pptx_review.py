@@ -1,5 +1,6 @@
 """Server-owned final artifact review; clients cannot submit review outcomes."""
 from __future__ import annotations
+from services.generation_core.quality.review_coverage import review_coverage
 
 from pathlib import Path
 import asyncio
@@ -197,11 +198,11 @@ def final_pptx_visual_domain(source_domain, *, worker_metrics, artifact_digest,
     if expected_binding is not None and any(review.get(key) != value for key, value in expected_binding.items()):
         return dict(required=True, status="failed", reasonCode="svg_final_pptx_visual_review_owner_stale")
     if (review["vision"].get("promptVersion") != "svg-required-visual-review/v1"
-            or review["vision"].get("slideCount") != len(proof["pages"])
-            or review["vision"].get("reviewedPngDigests") != [page["pngSha256"] for page in proof["pages"]]
-            or review["vision"].get("reviewedPageIndices") != list(range(len(proof["pages"])) )):
+            or review_coverage(review["vision"]).slide_count != len(proof["pages"])
+            or not review_coverage(review["vision"]).matches(
+                range(len(proof["pages"])), [page["pngSha256"] for page in proof["pages"]])):
         return dict(required=True, status="failed", reasonCode="svg_final_pptx_visual_review_coverage_incomplete")
-    if any(entry.get("issues") for entry in review["vision"]["slides"]):
+    if any(entry.get("issues") for entry in review_coverage(review["vision"]).findings()):
         return dict(required=True, status="failed", reasonCode="svg_final_pptx_visual_review_flagged")
     evidence = dict(source_domain["evidence"])
     evidence["outputDigest"] = content_digest({"sourceReview": evidence["outputDigest"],

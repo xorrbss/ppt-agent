@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { svgReviewCoverage } from "./svgReviewCoverage.ts";
 
 import {
   deriveFlaggedSlideMap,
@@ -28,6 +29,13 @@ const authorEntry = {
   remakeAttempted: true,
   remakeOutcome: "placeholder",
 };
+
+test("subset review uses server page identities and reports middle exclusions", () => {
+  const theme = { svg: { reviewCoverage: { reviewedPages: [0, 2, 3], unreviewedPages: [1, 4], totalPages: 5 } } };
+  assert.deepEqual(svgReviewCoverage(theme), { unreviewedPages: [1, 4], flowUnreviewedPages: [1, 4] });
+  assert.equal(hasUnreviewedDeckFlow(theme), true);
+  assert.equal(hasUnreviewedDeckFlow({ svg: { reviewCoverage: { unreviewedPages: [] } } }), false);
+});
 
 function deck(flaggedSlides: unknown, slides: unknown[] = defaultSlides()) {
   return {

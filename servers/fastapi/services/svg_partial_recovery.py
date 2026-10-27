@@ -151,6 +151,7 @@ CODE_FILES = (
     "services/generation_core/drivers/svg/quality_recovery.py",
     "services/generation_core/quality/vision_advisory.py",
     "services/generation_core/quality/vision_advisory_prompt.py",
+    "services/generation_core/quality/review_coverage.py",
     "services/svg_source_layout.py",
     "services/svg_source_native_tables.py",
     "services/document_canvas_generation.py",
@@ -1850,6 +1851,7 @@ def _base_code_digest(files=None):
 # only recovery/operation/provider authority, retaining every other CODE_FILES
 # dependency and the final-selected continuation outside that original list.
 _PAGE_RENDER_AUTHORITY_FILES = frozenset({
+    "services/generation_core/quality/review_coverage.py",
     "services/svg_partial_recovery.py",
     "services/svg_source_local_review_continuation.py",
     "services/workspace_service.py",

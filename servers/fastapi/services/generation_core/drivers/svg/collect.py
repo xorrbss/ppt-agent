@@ -19,6 +19,7 @@ module still reaches every one of them -- exactly as it would if this were
 still one file.
 """
 from __future__ import annotations
+from services.generation_core.quality.review_coverage import review_coverage
 
 import asyncio
 from contextlib import nullcontext
@@ -325,7 +326,7 @@ async def _collect_stages(ctx, plan, tracked_page, job, checkpoint, read_png, ru
     # Rebind stage-local advisory indices to the final document without another purchase.
     vision_slides = []
     for stage in stages:
-        for slide in stage["advisory"]["vision"].get("slides", []):
+        for slide in review_coverage(stage["advisory"]["vision"]).findings():
             slide = deepcopy(slide)
             slide["index"] = stage["indices"][slide["index"]]
             vision_slides.append(slide)

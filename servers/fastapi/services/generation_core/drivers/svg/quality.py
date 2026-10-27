@@ -18,6 +18,7 @@ import struct
 from collections.abc import Mapping
 
 from services.generation_core.quality.advisory_record import advisory_record, content_digest, record_matches
+from services.generation_core.quality.review_coverage import review_coverage
 from services.generation_core.quality.vision_advisory_prompt import (
     DESIGN_AXES, DESIGN_LOCAL_AXES, DESIGN_REVIEW_PROMPT_VERSION, DESIGN_PRINCIPLES_VERSION,
     baseline_review_active, baseline_design_principles_digest,
@@ -661,7 +662,7 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
             vision = {**vision, "slideCount": len(pages), "reviewedPageIndices": reviewable,
                 "reviewedPngDigests": [png_digests[index] for index in reviewable],
                 "unreviewedPages": excluded, "reason": "mandatory_evidence_invalid"}
-            review = vision.get("designReview") or {}
+            review = review_coverage(vision).design_review
             vision["designReview"] = {**review, "pages": [*review.get("pages", []),
                 *[dict(index=index, evaluated=False, axes={}, issues=[], reason="mandatory_evidence_invalid")
                   for index in excluded]],
@@ -701,7 +702,7 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
             continue
         records.append(result)
         mapping = result["globalPageIndices"]
-        review = result["vision"].get("designReview") or {}
+        review = review_coverage(result["vision"]).design_review
         for page in review.get("pages", []):
             index = mapping[page["index"]]
             local_pages[index] = {**page, "index": index}
@@ -713,10 +714,11 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
             return incomplete_review("review_call_unavailable")
         vision = results[0]["vision"]
         if excluded:
-            vision = {**vision, "designReview": {**(vision.get("designReview") or {}),
+            vision = {**vision, "designReview": {**(review_coverage(vision).design_review),
                 "pages": list(local_pages.values()), "candidateComparisons": list(local_comparisons.values()),
-                "deckFlow": deck_flow(vision.get("designReview") or {})},
-                "slides": [{**slide, "index": reviewable[slide["index"]]} for slide in vision.get("slides", [])]}
+                "deckFlow": deck_flow(review_coverage(vision).design_review)},
+                "slides": [{**slide, "index": reviewable[slide["index"]]}
+                           for slide in review_coverage(vision).findings()]}
         if axis_review_active(context):
             vision = {**vision, "promptVersion": review_prompt_version(context)}
     else:
@@ -744,7 +746,7 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
                     "reason": rejected.get("schemaRejectionReason"),
                     "fields": rejected.get("schemaRejectionFields"),
                 }}
-        global_review = global_result["vision"].get("designReview") or {}
+        global_review = review_coverage(global_result["vision"]).design_review
         global_pages = {reviewable[page["index"]]: page for page in global_review.get("pages", [])}
         combined = []
         for index in range(len(pages)):
@@ -952,15 +954,15 @@ def _seal_design_gate(context, pages, renders, vision):
     if independent_axes:
         base.update(schemaVersion="svg-quality-first-design-gate/v2",
                     reviewContractVersion=context["reviewContractVersion"])
-    review = vision.get("designReview") or {}
-    reviewed = review.get("pages") or []
+    reviewed_coverage = review_coverage(vision)
+    review = reviewed_coverage.design_review
+    reviewed = reviewed_coverage.pages
     review_by_index = {page.get("index"): page for page in reviewed if isinstance(page, Mapping)
                        and type(page.get("index")) is int}
     coverage = (len(reviewed) == len(pages) == len(review_by_index)
                 and set(review_by_index) == set(range(len(pages)))
                 and vision.get("promptVersion") == DESIGN_REVIEW_PROMPT_VERSION
-                and vision.get("reviewedPageIndices") == list(range(len(pages)))
-                and vision.get("reviewedPngDigests") == png_digests
+                and reviewed_coverage.matches(range(len(pages)), png_digests)
                 and context["deckComplete"] and (review.get("deckFlow") or {}).get("evaluated") is True)
     if independent_axes:
         excluded = {page["index"] for page in reviewed if page.get("reason") == "mandatory_evidence_invalid"}
@@ -968,8 +970,7 @@ def _seal_design_gate(context, pages, renders, vision):
         coverage = (len(reviewed) == len(review_by_index)
                     and set(review_by_index) <= set(range(len(pages)))
                     and vision.get("promptVersion") == review_prompt_version(context)
-                    and vision.get("reviewedPageIndices") == reviewable
-                    and vision.get("reviewedPngDigests") == [png_digests[index] for index in reviewable]
+                    and reviewed_coverage.matches(reviewable, [png_digests[index] for index in reviewable])
                     and context["deckComplete"])
     results, blocking, incomplete, advisories = [], [], [], []
     flow_unreviewed = []
@@ -1094,7 +1095,7 @@ def _seal_design_gate(context, pages, renders, vision):
 def _gate_intact(advisory):
     if not isinstance(advisory, Mapping):
         return None
-    gate = (advisory.get("vision") or {}).get("designGate")
+    gate = review_coverage(advisory.get("vision")).gate
     if (not isinstance(gate, Mapping) or not isinstance(gate.get("pageDigests"), list)
             or not record_matches(advisory, gate["pageDigests"])
             or gate.get("schemaVersion") != (
