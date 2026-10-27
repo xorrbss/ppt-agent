@@ -13,6 +13,7 @@ from typing import Any
 from sqlalchemy import update
 
 from models.sql.workspace import WorkspaceOperation
+from services.svg_generation_session import mirror_detached_checkpoint
 from utils.datetime_utils import get_current_utc_datetime
 from utils.hashing import canonical_json_digest
 
@@ -100,7 +101,7 @@ async def read_update_header_design(owner, *, payload=None, session_maker=None, 
             session.add(current)
         result = deepcopy(envelope["document"])
         await session.commit()
-        owner.svg_header_design_checkpoint = deepcopy(envelope)
+        mirror_detached_checkpoint(owner, svg_header_design_checkpoint=envelope)
         return result
 
 
@@ -128,7 +129,7 @@ async def candidate_page_checkpoint(owner, index, *, identity, payload=None,
             session.add(current)
         result = deepcopy(envelope["candidate_pages"].get(key, {}))
         await session.commit()
-        owner.svg_header_design_checkpoint = deepcopy(envelope)
+        mirror_detached_checkpoint(owner, svg_header_design_checkpoint=envelope)
         return result
 
 
@@ -225,9 +226,8 @@ async def publish_header_design(job, *, snapshot, outline, session_maker=None, o
         current.svg_header_design_checkpoint = envelope
         session.add(current)
         await session.commit()
-        job.svg_style_snapshot = deepcopy(snapshot)
-        job.authored_outline = deepcopy(raw_outline)
-        job.svg_header_design_checkpoint = deepcopy(envelope)
+        mirror_detached_checkpoint(job, svg_style_snapshot=snapshot,
+            authored_outline=raw_outline, svg_header_design_checkpoint=envelope)
     return snapshot
 
 

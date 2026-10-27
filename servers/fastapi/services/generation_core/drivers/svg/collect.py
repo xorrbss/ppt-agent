@@ -478,15 +478,7 @@ async def _generate_deck(
     request, presentation_id, outline, language, session, job, *, stage_plan=None, review_stage=None
 ):
     from services import svg_presentation_service as _facade
-    async_session_maker = _facade.async_session_maker
     checkpoint = _facade._checkpoint
-    read_png = _facade._read_png
-    write_png = _facade._write_png
-    publish = _facade._publish
-
-    async def observed_advisory(*args, **kwargs):
-        with timing.observe_observation(request, "quality.vqa"):
-            return await _facade.run_vision_advisory(*args, **kwargs)
 
     restored_plan = validate_svg_stage_plan(getattr(request, "_svg_stage_plan", None))
     stage_plan = validate_svg_stage_plan(stage_plan) if stage_plan is not None else restored_plan
@@ -502,6 +494,31 @@ async def _generate_deck(
     with spans.span("prepare_total"):
         ctx = await _prepare_generation(request, presentation_id, outline, session, job)
     timing.bind_runtime_provenance(request, ctx)
+    from services.svg_generation_session import independent_generation
+
+    async with independent_generation(session, job) as page_job:
+        ctx, pages, summary, advisory = await _generate_prepared_deck(
+            request, presentation_id, outline, language, page_job, ctx, spans,
+            stage_plan=stage_plan, review_stage=review_stage)
+    timing.enter_deck_stage(request, "publication")
+    with timing.observe_stage(request, "publication"), timing.observe_observation(request, "publication.handoff"):
+        return await _facade._publish(request, presentation_id, outline, language, session, page_job,
+            ctx.snapshot, ctx.roles, pages, quality_summary=summary, advisory=advisory)
+
+
+async def _generate_prepared_deck(
+    request, presentation_id, outline, language, job, ctx, spans, *, stage_plan, review_stage
+):
+    from services import svg_presentation_service as _facade
+    async_session_maker = _facade.async_session_maker
+    checkpoint = _facade._checkpoint
+    read_png = _facade._read_png
+    write_png = _facade._write_png
+
+    async def observed_advisory(*args, **kwargs):
+        with timing.observe_observation(request, "quality.vqa"):
+            return await _facade.run_vision_advisory(*args, **kwargs)
+
     if uses_header_design(ctx.snapshot.get("common_header_design_plan")):
         from services.svg_common_header_generation import prepare_document_header
         ctx = await prepare_document_header(ctx, request, presentation_id, outline, language, job,
@@ -533,12 +550,13 @@ async def _generate_deck(
 
         # Metadata only: project the two payload keys read below instead of
         # decoding the operation's whole (possibly archival) request payload.
-        operation = (await session.execute(select(
-            WorkspaceOperation.deadline_at,
-            WorkspaceOperation.request_payload["recovery_revision"].label("recovery_revision"),
-            WorkspaceOperation.request_payload["svg_cached_author_render_manifest_hash"].label(
-                "svg_cached_author_render_manifest_hash"),
-        ).where(WorkspaceOperation.id == job.workspace_operation_id))).mappings().one_or_none()
+        async with async_session_maker() as metadata_session:
+            operation = (await metadata_session.execute(select(
+                WorkspaceOperation.deadline_at,
+                WorkspaceOperation.request_payload["recovery_revision"].label("recovery_revision"),
+                WorkspaceOperation.request_payload["svg_cached_author_render_manifest_hash"].label(
+                    "svg_cached_author_render_manifest_hash"),
+            ).where(WorkspaceOperation.id == job.workspace_operation_id))).mappings().one_or_none()
         if state.terminal_drain_enabled and operation is not None:
             from utils.datetime_utils import as_utc
             state.hard_deadline_at = as_utc(operation["deadline_at"])
@@ -717,10 +735,7 @@ async def _generate_deck(
         if not recovery_policy:
             advisory = stage_advisory if stage_plan is not None else await deck_quality.deck_advisory(
                 ctx, pages, job=job, read_png=read_png, run_advisory=observed_advisory)
-    timing.enter_deck_stage(request, "publication")
-    with timing.observe_stage(request, "publication"), timing.observe_observation(request, "publication.handoff"):
-        return await publish(request, presentation_id, outline, language, session, job,
-                             ctx.snapshot, ctx.roles, pages, quality_summary=summary, advisory=advisory)
+    return ctx, pages, summary, advisory
 
 
 @dataclass
