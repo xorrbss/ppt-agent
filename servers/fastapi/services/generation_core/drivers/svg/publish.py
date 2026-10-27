@@ -235,7 +235,9 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
         published_slides.append(saved_slide)
         session.add(saved_slide)
     if gate is not None:
-        from services.svg_quality_recovery_review import seal_saved_page_evidence
+        from services.svg_quality_recovery_review import (
+            labelled_review_runtime, saved_review_runtime, seal_saved_page_evidence,
+        )
         from services.svg_export_visual_review import split_page_advisories, slide_page_digests
         from models.sql.workspace import WorkspaceOperation
         parent = await session.get(WorkspaceOperation, operation_id)
@@ -260,7 +262,8 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
             pageRecordDigests=[record["digest"] for record in records])
         svg_theme["advisory"]["operationBinding"] = {**binding, "digest": content_digest(binding)}
         svg_theme["advisory"]["savedPageReviewEvidence"] = seal_saved_page_evidence(
-            published_slides, snapshot, gate)
+            published_slides, snapshot, gate,
+            runtime=labelled_review_runtime(saved_review_runtime(), advisory["vision"].get("promptVersion")))
         presentation.theme = publication_theme
     session.add(presentation)
     await session.flush()

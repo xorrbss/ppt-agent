@@ -10,6 +10,9 @@ from services.generation_core.quality.vision_advisory_prompt import (
     DESIGN_REVIEW_PROMPT_VERSIONS, is_design_review_version,
 )
 from services.svg_export_visual_review import split_page_advisories, current_page_advisories
+from services.svg_quality_recovery_review import (
+    LEGACY_SAVED_REVIEW_PROMPT_LABEL, labelled_review_runtime, saved_review_runtime_identity,
+)
 from tests.unit.test_svg_page_quality_publication import _measured, PNG
 from utils.hashing import sha256_hex
 
@@ -22,6 +25,24 @@ def test_design_review_version_predicate_accepts_only_producer_versions():
     assert is_design_review_version(AXIS_REVIEW_PROMPT_VERSION)
     assert not is_design_review_version("svg-quality-first-design-review/v3")
     assert not is_design_review_version(None)
+
+
+def test_saved_review_runtime_identity_binds_legacy_or_true_prompt_once():
+    code = {"renderer": "fixture", "worker": {"checkpointReuseEligible": True}}
+    v1 = labelled_review_runtime(code, DESIGN_REVIEW_PROMPT_VERSION)
+    v2 = labelled_review_runtime(code, AXIS_REVIEW_PROMPT_VERSION)
+
+    assert saved_review_runtime_identity(v1, DESIGN_REVIEW_PROMPT_VERSION, code=code) == "true"
+    assert saved_review_runtime_identity(v1, AXIS_REVIEW_PROMPT_VERSION, code=code) == "legacy"
+    assert saved_review_runtime_identity(v2, AXIS_REVIEW_PROMPT_VERSION, code=code) == "true"
+    assert saved_review_runtime_identity(v2, DESIGN_REVIEW_PROMPT_VERSION, code=code) is None
+    assert saved_review_runtime_identity(
+        {**v1, "promptVersion": LEGACY_SAVED_REVIEW_PROMPT_LABEL},
+        AXIS_REVIEW_PROMPT_VERSION,
+        code=code,
+    ) == "legacy"
+    assert saved_review_runtime_identity(v1, AXIS_REVIEW_PROMPT_VERSION,
+                                         code={"renderer": "changed"}) is None
 
 
 def test_noncontiguous_and_reordered_coverage_uses_identity():
