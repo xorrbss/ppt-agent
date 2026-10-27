@@ -9,6 +9,7 @@ the trigger raises it, after the counter rows were changed in the session.
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import uuid
 
@@ -31,10 +32,12 @@ from services.public_operation_admission import (
     PrincipalContext,
     activate_public_operation_v2,
     admit_public_operation_compatible_v2,
+    plan_provider_requests,
     requeue_public_operation_v2,
 )
 from services.workspace_operation_handler_registry import (
     WorkspaceOperationClaim,
+    WorkspaceOperationDeferred,
     WorkspaceOperationHandlerRegistry,
 )
 from services.workspace_requeue_guard import requeue_rejection_code
@@ -61,8 +64,8 @@ async def _database(path: Path):
     return engine, maker
 
 
-async def _active_export(maker) -> tuple[WorkspaceOperationClaim, uuid.UUID]:
-    """An export whose admission is active and whose attempt is running."""
+async def _active_export(maker, *, review: bool = False) -> tuple[WorkspaceOperationClaim, uuid.UUID]:
+    """An admitted operation whose attempt is running."""
 
     owner_id = uuid.uuid4()
     async with maker() as session, session.begin():
@@ -71,11 +74,12 @@ async def _active_export(maker) -> tuple[WorkspaceOperationClaim, uuid.UUID]:
     operation_id = await policy_test._seed_operation(maker, owner_id, key="e")
     async with maker() as session, session.begin():
         operation = await session.get(WorkspaceOperation, operation_id)
-        operation.kind = "export.pptx"
+        operation.kind = "quality.review" if review else "export.pptx"
         admitted = await admit_public_operation_compatible_v2(
             session, principal=PrincipalContext(owner_id, TENANT, "trace-requeue"),
-            operation_id=operation_id, operation_kind="export",
-            request_plan=None,
+            operation_id=operation_id, operation_kind="generation" if review else "export",
+            request_plan=(plan_provider_requests(slide_count=1, image_budget=0,
+                repair_budget=0, vqa_budget=1) if review else None),
             resource_plan=policy_test._RESOURCE_PLAN,
         )
         active = await activate_public_operation_v2(
@@ -189,6 +193,58 @@ def test_lease_recovery_terminalizes_when_the_requeue_is_rejected(tmp_path: Path
                 admission = await session.get(PublicOperationAdmission, admission_id)
             assert (operation.state, operation.error_code) == ("failed", CAPACITY_CODE)
             assert admission.state == "failed"
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_final_review_deferral_preserves_public_budget_and_deadline(tmp_path: Path, monkeypatch) -> None:
+    async def scenario() -> None:
+        engine, maker = await _database(tmp_path / "review-budget-deferral.db")
+        try:
+            claim, admission_id = await _active_export(maker, review=True)
+            base = datetime.now(timezone.utc).replace(microsecond=0)
+            clock = [base]
+            monkeypatch.setattr(runner, "_utc_now", lambda: clock[0])
+            before_counters = await _counters(maker, claim.owner_id)
+            async with maker() as session:
+                initial = await session.get(PublicOperationAdmission, admission_id)
+                assert initial is not None
+                admission_deadline = initial.deadline_at
+                if admission_deadline.tzinfo is None:
+                    admission_deadline = admission_deadline.replace(tzinfo=timezone.utc)
+                assert admission_deadline > base + timedelta(minutes=30)
+                initial_requests = (initial.initial_request_count, initial.retry_request_count)
+
+            for offset in (0, 60, 29 * 60):
+                clock[0] = base + timedelta(seconds=offset)
+                if offset:
+                    claim = await runner.claim_next_workspace_operation(session_factory=maker)
+                    assert claim is not None
+                    assert claim.attempt_number == 1
+                deferred = WorkspaceOperationDeferred(
+                    "svg_final_pptx_office_instance_busy",
+                    retry_after_seconds=60,
+                    detail={"artifact_id": "review-artifact", "svg_final_pptx_busy_since": base.isoformat()},
+                )
+                assert await runner.defer_workspace_operation_claim(
+                    claim, deferred, session_factory=maker
+                )
+                async with maker() as session:
+                    admission = await session.get(PublicOperationAdmission, admission_id)
+                    operation = await session.get(WorkspaceOperation, claim.operation_id)
+                    assert admission.state == "queued"
+                    assert (admission.initial_request_count, admission.retry_request_count) == initial_requests
+                    assert operation.attempt_number == 0
+                    assert operation.retry_count == 0
+                    assert operation.error_code is None
+
+            after_counters = await _counters(maker, claim.owner_id)
+            for scope, before in before_counters.items():
+                after = after_counters[scope]
+                assert sum(before[2:]) == sum(after[2:])
+                assert sum(before[:2]) == sum(after[:2])
         finally:
             await engine.dispose()
 

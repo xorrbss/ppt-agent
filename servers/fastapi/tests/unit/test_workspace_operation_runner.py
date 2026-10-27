@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import replace
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 from pathlib import Path
 import uuid
+import pytest
 
 from sqlalchemy import event, select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -30,17 +31,23 @@ from models.sql.workspace import (
 )
 from services.account_deletion_service import mark_account_deleting
 from services.workspace_operation_handler_registry import (
+    NonRetryableWorkspaceOperationError,
+    WorkspaceOperationDeferred,
     WorkspaceOperationHandlerRegistry,
     WorkspaceOperationResult,
 )
+from services import svg_final_pptx_review
+from workers import public_svg_pptx_render as office
 from services.workspace_operation_runner import (
     WorkspaceOperationRunner,
     claim_next_workspace_operation,
+    defer_workspace_operation_claim,
     finalize_workspace_operation_success,
     heartbeat_workspace_operation,
     recover_expired_workspace_operations,
     request_workspace_operation_cancellation,
 )
+from services import workspace_operation_runner as runner_service
 from utils.datetime_utils import get_current_utc_datetime
 from utils.owner_context import (
     get_current_owner_id,
@@ -175,6 +182,100 @@ async def _drain_once(runner: WorkspaceOperationRunner) -> int:
         await asyncio.gather(*tasks)
         await asyncio.sleep(0)
     return dispatched
+
+
+def test_final_pptx_busy_bound_survives_real_runner_deferrals(tmp_path: Path, monkeypatch):
+    async def scenario():
+        engine, maker = await _database(tmp_path / "final-review-deferral.db")
+        try:
+            _, (operation_id,) = await _seed_operations(maker, kind="quality.review")
+            base = datetime.now(timezone.utc).replace(microsecond=0)
+            clock = [base]
+
+            class ClockDateTime:
+                @classmethod
+                def now(cls, tz=None):
+                    return clock[0]
+
+                @classmethod
+                def fromisoformat(cls, value):
+                    return datetime.fromisoformat(value)
+
+            monkeypatch.setattr(runner_service, "_utc_now", lambda: clock[0])
+            monkeypatch.setattr(svg_final_pptx_review, "datetime", ClockDateTime)
+            monkeypatch.setattr(
+                office,
+                "render_final_pptx",
+                lambda *args, **kwargs: {
+                    "status": "unavailable",
+                    "reasonCode": office.SHARED_INSTANCE_REASON,
+                },
+            )
+            inputs = {
+                "artifactId": str(uuid.uuid4()),
+                "artifactBytes": b"pptx",
+                "sourceDigests": ["source"],
+                "widthPx": 16,
+                "heightPx": 9,
+            }
+            for offset in (0, 60):
+                clock[0] = base + timedelta(seconds=offset)
+                claim = await claim_next_workspace_operation(session_factory=maker)
+                assert claim is not None
+                with pytest.raises(WorkspaceOperationDeferred) as caught:
+                    await svg_final_pptx_review.render_final_review_inputs(inputs, claim)
+                assert await defer_workspace_operation_claim(
+                    claim, caught.value, session_factory=maker
+                )
+                operation = await _operation(maker, operation_id)
+                assert operation.attempt_number == 0
+                assert operation.retry_count == 0
+                assert operation.progress[svg_final_pptx_review.FINAL_PPTX_OFFICE_BUSY_SINCE_KEY] == base.isoformat()
+
+            clock[0] = base + timedelta(seconds=svg_final_pptx_review.FINAL_PPTX_OFFICE_BUSY_MAX_WAIT_SECONDS)
+            claim = await claim_next_workspace_operation(session_factory=maker)
+            assert claim is not None
+            with pytest.raises(NonRetryableWorkspaceOperationError) as caught:
+                await svg_final_pptx_review.render_final_review_inputs(inputs, claim)
+            assert caught.value.code == office.SHARED_INSTANCE_REASON
+            assert caught.value.retryable is False
+            assert claim.progress[svg_final_pptx_review.FINAL_PPTX_OFFICE_BUSY_SINCE_KEY] == base.isoformat()
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_progress_details_cannot_override_reserved_projection_keys(tmp_path: Path):
+    async def scenario():
+        engine, maker = await _database(tmp_path / "progress-details.db")
+        try:
+            _, (operation_id,) = await _seed_operations(maker)
+            claim = await claim_next_workspace_operation(session_factory=maker)
+            assert claim is not None
+            context = runner_service._ExecutionContext(claim, maker)
+            assert await context.progress(
+                stage="quality_review_waiting_for_powerpoint",
+                current=2,
+                total=3,
+                percent=40,
+                details={
+                    "stage": "spoofed", "current": 99, "total": 99,
+                    "percent": 99, "state": "failed", "status": "failed",
+                    "wait_reason": "spoofed", "capacity_waiting": False,
+                    "artifact_id": "artifact",
+                },
+            )
+            operation = await _operation(maker, operation_id)
+            assert operation.progress == {
+                "stage": "quality_review_waiting_for_powerpoint",
+                "current": 2, "total": 3, "percent": 40,
+                "artifact_id": "artifact",
+            }
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
 
 
 def test_sqlite_claims_serialize_operations_for_the_same_presentation(
