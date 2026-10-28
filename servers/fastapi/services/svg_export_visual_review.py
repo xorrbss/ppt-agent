@@ -267,7 +267,7 @@ def _quality_review_source_review(slides, advisory, expected_binding, context):
     """Consume the independently admitted source review and its actual saved evidence."""
     from services.generation_core.drivers.svg.quality import _current_gate
     from services.svg_authoring_profile import read_quality_recovery_policy
-    from services.svg_quality_recovery_review import seal_saved_page_evidence
+    from services.svg_quality_recovery_review import seal_saved_page_evidence, saved_review_runtime_identity
     if not isinstance(expected_binding, Mapping) or not slides:
         return None
     snapshot, publication, producer = (context.get(key) for key in ("snapshot", "publication", "producer"))
@@ -329,6 +329,7 @@ def _quality_review_source_review(slides, advisory, expected_binding, context):
         saved = advisory.get("savedPageReviewEvidence")
         if (not isinstance(saved, Mapping) or not isinstance(saved.get("runtime"), Mapping)
                 or not saved["runtime"]
+                or saved_review_runtime_identity(saved["runtime"], vision.get("promptVersion")) is None
                 or saved != seal_saved_page_evidence(slides, snapshot, gate, runtime=saved["runtime"])):
             return None
         return gate

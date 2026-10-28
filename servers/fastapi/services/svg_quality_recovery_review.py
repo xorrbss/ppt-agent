@@ -1,4 +1,5 @@
 """Exact saved-page evidence for the one-call, owner-bound edited SVG review."""
+from collections.abc import Mapping
 from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
@@ -6,25 +7,63 @@ from types import SimpleNamespace
 from services.generation_core.quality.advisory_record import content_digest
 from services.generation_core.quality.review_coverage import review_coverage
 from services.generation_core.quality.vision_advisory_prompt import (
-    DESIGN_LOCAL_AXES, DESIGN_PRINCIPLES_VERSION, baseline_review_active,
+    DESIGN_LOCAL_AXES, DESIGN_PRINCIPLES_VERSION, baseline_review_active, is_design_review_version,
+    review_prompt_version,
 )
 from utils.hashing import sha256_hex
 
 
+#: Every saved-review runtime sealed before 2026-10-28 carried this label,
+#: whatever prompt the review it sealed had run.
+LEGACY_SAVED_REVIEW_PROMPT_LABEL = "svg-quality-first-design-review/v1"
+
+
 def saved_review_runtime():
+    """The reviewer code identity: renderer, fonts, worker and reviewer modules.
+
+    It names no prompt: one reviewer emits several design-review prompt
+    versions, and a sealed runtime records the one its review ran
+    (``labelled_review_runtime``).
+    """
     from services import svg_renderer
     from services.svg_trusted_fonts import FONT_DIRECTORY, BUNDLED_FACES
     from utils.svg_template_fonts import FONT_PATH
     from services.public_render_runtime_identity import public_render_runtime_binding
-    from services.generation_core.quality.vision_advisory_prompt import DESIGN_REVIEW_PROMPT_VERSION
     from services.generation_core.quality import vision_advisory, vision_advisory_prompt
     return dict(rendererVersion=svg_renderer.SVG_RENDERER_VERSION,
         rendererDigest=sha256_hex(Path(svg_renderer.__file__).read_bytes()),
         fontDigests=[sha256_hex(path.read_bytes()) for path in
             [FONT_PATH, *[FONT_DIRECTORY / filename for _, _, filename in BUNDLED_FACES]]],
-        worker=public_render_runtime_binding(), promptVersion=DESIGN_REVIEW_PROMPT_VERSION,
+        worker=public_render_runtime_binding(),
         reviewerDigests=[sha256_hex(Path(module.__file__).read_bytes())
                          for module in (vision_advisory, vision_advisory_prompt)])
+
+
+def labelled_review_runtime(code, prompt_version):
+    """The runtime a review seals: its reviewer code and the prompt version it ran."""
+    if not is_design_review_version(prompt_version):
+        raise ValueError("svg_quality_review_prompt_version_invalid")
+    return {**code, "promptVersion": prompt_version}
+
+
+def saved_review_runtime_identity(runtime, prompt_version, *, code=None):
+    """Which one runtime identity a sealed runtime is for a review that ran ``prompt_version``.
+
+    ``"true"`` when it records that version, ``"legacy"`` when it carries the
+    pre-2026-10-28 constant label for a review that ran another version; any
+    other label is neither (None). The two coincide for a v1 review, which is
+    therefore only ``"true"``. With ``code`` (``saved_review_runtime()``)
+    every other runtime field must equal it exactly.
+    """
+    if not isinstance(runtime, Mapping) or not is_design_review_version(prompt_version):
+        return None
+    label = runtime.get("promptVersion")
+    identity = ("true" if label == prompt_version
+                else "legacy" if label == LEGACY_SAVED_REVIEW_PROMPT_LABEL else None)
+    if identity is None or code is not None and {
+            key: value for key, value in runtime.items() if key != "promptVersion"} != dict(code):
+        return None
+    return identity
 
 
 def saved_page_render_input(slide):
@@ -52,8 +91,7 @@ def saved_page_digest(slide, snapshot, runtime, binding):
     return content_digest(dict(**saved_page_render_input(slide), snapshot=snapshot, runtime=runtime, binding=binding))
 
 
-def seal_saved_page_evidence(slides, snapshot, gate, *, runtime=None):
-    runtime = runtime if runtime is not None else saved_review_runtime()
+def seal_saved_page_evidence(slides, snapshot, gate, *, runtime):
     binding = {key: gate["binding"].get(key) for key in
         ("presentationId", "ownerId", "tenantId", "jobId")}
     records = []
@@ -134,7 +172,7 @@ def prepare_saved_review(presentation, slides, indices, pngs, *, operation_id, o
             or not publication.get("parentOperationId") or not publication.get("parentJobId")
             or publication.get("digest") != content_digest({key: value for key, value in publication.items() if key != "digest"})):
         raise ValueError("svg_quality_recovery_review_parent_invalid")
-    runtime = saved_review_runtime()
+    code = saved_review_runtime()
     binding = dict(presentationId=str(presentation.id), ownerId=str(get_current_owner_id()),
         tenantId=str(get_current_tenant_id()), jobId=publication["parentJobId"])
     if binding["ownerId"] != str(presentation.owner_id):
@@ -148,12 +186,16 @@ def prepare_saved_review(presentation, slides, indices, pngs, *, operation_id, o
         raise ValueError("svg_quality_review_resolution_insufficient")
     prior_gate = _gate_intact(meta.get("advisory"))
     saved = (meta.get("advisory") or {}).get("savedPageReviewEvidence") or {}
+    prior_version = ((meta.get("advisory") or {}).get("vision") or {}).get("promptVersion")
     reusable = {}
+    # The prior review's evidence is reusable under this reviewer code
+    # whichever prompt that review ran.
     if (prior_gate is not None and saved.get("schema") == "svg-saved-page-review-evidence/v1"
             and saved.get("gateDigest") == prior_gate["digest"]
             and saved.get("digest") == content_digest({key: value for key, value in saved.items() if key != "digest"})
-            and saved.get("binding") == binding and saved.get("runtime") == runtime
-            and runtime["worker"].get("checkpointReuseEligible") is True
+            and saved.get("binding") == binding
+            and saved_review_runtime_identity(saved.get("runtime"), prior_version, code=code) is not None
+            and code["worker"].get("checkpointReuseEligible") is True
             and isinstance(saved.get("pages"), list)):
         seen = set()
         for page in saved["pages"]:
@@ -166,7 +208,8 @@ def prepare_saved_review(presentation, slides, indices, pngs, *, operation_id, o
                     and gate_page is not None and gate_page.get("evaluated") is True
                     and page["axes"] == {name: gate_page.get("axes", {}).get(name) for name in DESIGN_LOCAL_AXES}
                     and page.get("issues") == gate_page.get("issues", [])
-                    and page.get("inputDigest") == saved_page_digest(slides[index], snapshot, runtime, binding)):
+                    and page.get("inputDigest") == saved_page_digest(
+                        slides[index], snapshot, saved["runtime"], binding)):
                 reusable[index] = deepcopy(page)
     # Explicit subset pages refresh locally; every deck page refreshes globally.
     changed = sorted(set(indices) | (set(range(len(slides))) - set(reusable)))
@@ -190,7 +233,7 @@ def prepare_saved_review(presentation, slides, indices, pngs, *, operation_id, o
     ctx = SimpleNamespace(snapshot=snapshot, count=len(slides),
         roles=[(slide.content or {}).get("role") or "content" for slide in slides],
         quality_review_contents=[(slide.content or {}).get("source") for slide in slides],
-        quality_recovery_runtime_binding=content_digest(runtime), header_pages=header_pages)
+        header_pages=header_pages)
     context = _design_context(ctx, pages, job=job, read_png=lambda payload: None,
                               review_principles_version=DESIGN_PRINCIPLES_VERSION, measurement_evidence=True)
     baseline = baseline_review_active(context)
@@ -199,6 +242,10 @@ def prepare_saved_review(presentation, slides, indices, pngs, *, operation_id, o
         raise ValueError("svg_quality_review_single_call_capacity_exceeded")
     context.update(reviewScope="full" if baseline else "edited", deckComplete=True, changedPageIndices=changed,
                    representativeIndices=[], priorCandidates={})
+    # The scope fixes the prompt this review runs, so its runtime binding is
+    # set only now.
+    runtime = labelled_review_runtime(code, review_prompt_version(context))
+    context["runtimeBinding"] = content_digest(runtime)
     return dict(context=context, snapshot=snapshot, pages=pages, pngs=pngs, changed=changed,
         reusable=reusable, runtime=runtime, publication=publication,
         currentInputDigests=[saved_page_digest(slide, snapshot, runtime, binding) for slide in slides],
