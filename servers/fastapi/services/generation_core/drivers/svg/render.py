@@ -15,6 +15,7 @@ import json
 import math
 
 from services.authored_checkpoint_errors import AuthoredStageError
+from services.generation_core.drivers.svg.attempt_cause import static_cause
 from services.svg_presentation_checkpoint import _required_numeric_claims
 from utils.hashing import sha256_hex
 
@@ -606,6 +607,7 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
             raise
     except ValueError as error:
         hint = str(error)[:600]
+        payload["next_attempt_cause"] = static_cause(validation_error=hint)
         payload["repair_hint"] = hint
         payload["attempts"][-1]["validation_error"] = hint
         if ordinal == 0:
@@ -746,6 +748,7 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
             return result
     if (rendered.quality.get("passed") is False and not payload.get("repair_unavailable")
             and (ordinal == 0 or ordinal == 1 and source_structural_visual_retry(ctx, payload, index=index))):
+        repair_cause = static_cause(rendered.quality.get("failures", []))
         header_body_hint = _common_header_body_repair_hint(measured(), ctx.snapshot.get("common_header"))
         table_pitch = native_table_line_pitch_hint(measured(), final, payload.get("source_preservation"))
         timeline_collisions = rendered.quality.get("timeline_caption_ink", {}).get("collisions")
@@ -778,6 +781,7 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
                 "witnesses": timeline_collisions[:3]}, ensure_ascii=False)[:3000]
         elif header_body_hint:
             hint = header_body_hint
+            repair_cause = static_cause(validation_error="svg_common_header_body_intrusion")
         elif table_pitch:
             hint = json.dumps({"kind": "svg_readability_repair", "native_table_line_pitch": table_pitch},
                 ensure_ascii=False, separators=(",", ":"))[:3000]
@@ -794,6 +798,7 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
             hint = (writing_hint + "\n" + hint)[:3000]
         payload["repair_hint"] = hint
         payload["svg_content"] = None
+        payload["next_attempt_cause"] = repair_cause
         await checkpoint(job, index, payload=payload)
         return RETRY
     if payload.get("repair_unavailable") and not ctx.raster_reconstruction:
