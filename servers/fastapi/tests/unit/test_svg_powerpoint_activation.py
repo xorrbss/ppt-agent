@@ -14,20 +14,18 @@ from tests.unit.test_svg_final_review_render_availability import _inputs, office
 from workers import public_svg_pptx_render as office
 
 
-@pytest.mark.parametrize("value,expected", [
-    (101, 101),
-    (-2147483648, 2147483648),
-    (0xFFFFFFFF, 0xFFFFFFFF),
-    (0x100000000, 0x100000000),
-])
-def test_hwnd_normalization_preserves_handle_bits(value, expected):
-    assert office._normalize_hwnd(value) == expected
-
-
-@pytest.mark.parametrize("value", [None, object()])
-def test_hwnd_normalization_fails_closed_for_unconvertible_values(value):
-    with pytest.raises(ValueError, match="svg_final_pptx_hwnd_unavailable"):
-        office._normalize_hwnd(value)
+@pytest.mark.parametrize(
+    "existing,in_job,owned",
+    [([20], True, True), ([20, 30], True, False), ([30], True, False), ([20], False, False)],
+)
+def test_attach_proves_single_owned_pid(activation_host, existing, in_job, owned):
+    activation_host.state.existing = existing
+    activation_host.state.in_job = in_job
+    if owned:
+        assert office._attach_powerpoint(20, 1, job_name="test") is activation_host.app
+    else:
+        with pytest.raises(office.SharedPowerPointInstance):
+            office._attach_powerpoint(20, 1, job_name="test")
 
 
 @pytest.mark.parametrize("error_factory", [
@@ -78,14 +76,15 @@ def _child_result(tmp_path):
 
 
 def test_real_render_records_attach_stage(activation_host, tmp_path):
-    activation_host.app.HWND = object()
+    activation_host.state.in_job = False
     result = _child_result(tmp_path)
     assert result["diagnostic"]["stage"] == "hwnd_pid_match"
-    assert result["reasonCode"] == "svg_final_pptx_render_failed"
+    assert result["reasonCode"] == office.SHARED_INSTANCE_REASON
     assert result["retryable"] is True
 
 
 def test_real_render_records_open_stage_after_activation(activation_host, tmp_path):
+    activation_host.state.in_job = True
     activation_host.app.Presentations.Open.side_effect = ValueError(
         "C:\\private\\deck.pptx"
     )
@@ -93,28 +92,6 @@ def test_real_render_records_open_stage_after_activation(activation_host, tmp_pa
     assert result["diagnostic"]["stage"] == "open"
     assert result["reasonCode"] == "svg_final_pptx_render_failed"
     assert result.get("retryable", False) is False
-
-
-def test_attach_uses_explicit_property_get_for_dynamic_hwnd(activation_host):
-    activation_host.app.HWND = Mock(side_effect=AssertionError("bound HWND method must not be called"))
-    activation_host.app._oleobj_.Invoke = Mock(return_value=1)
-
-    assert office._attach_powerpoint(20, 1) is activation_host.app
-    activation_host.app.HWND.assert_not_called()
-    activation_host.app._oleobj_.GetIDsOfNames.assert_called_once_with(0, "HWND")
-    activation_host.app._oleobj_.Invoke.assert_called_once_with(
-        42, 0,
-        sys.modules["pythoncom"].DISPATCH_METHOD | sys.modules["pythoncom"].DISPATCH_PROPERTYGET,
-        True,
-    )
-
-
-def test_attach_fails_closed_for_non_integer_hwnd_property(activation_host):
-    activation_host.app.HWND = Mock()
-    activation_host.app._oleobj_.Invoke = Mock(return_value=object())
-
-    with pytest.raises(ValueError, match="svg_final_pptx_hwnd_unavailable"):
-        office._attach_powerpoint(20, 1)
 
 
 @pytest.mark.parametrize(
@@ -154,7 +131,8 @@ __all__ = ["office_host"]
 @pytest.fixture
 def activation_host(monkeypatch):
     events = []
-    state = SimpleNamespace(existing=[], attached_pid=20, alive={10, 20}, inherited=False)
+    state = SimpleNamespace(existing=[], alive={10, 20}, inherited=False,
+        in_job=True, checking_attach=False, foreign_on_attach=False)
 
     def handle(pid):
         return SimpleNamespace(pid=pid, Close=lambda: events.append(("close", pid)))
@@ -164,6 +142,7 @@ def activation_host(monkeypatch):
         assert "/automation" in command
         assert startup.wShowWindow == 0
         events.append(("create-suspended", 20))
+        state.existing.append(20)
         return handle(20), handle(21), 20, 21
 
     def assign(job, process):
@@ -173,28 +152,31 @@ def activation_host(monkeypatch):
         events.append(("terminate", process.pid))
         state.alive.discard(process.pid)
 
-    app = SimpleNamespace(HWND=1, Presentations=SimpleNamespace(Open=Mock()), Quit=Mock())
-    app._oleobj_ = SimpleNamespace(
-        GetIDsOfNames=Mock(return_value=42),
-        Invoke=Mock(side_effect=lambda *_args: app.HWND),
-    )
-    client = SimpleNamespace(GetActiveObject=Mock(return_value=app),
+    app = SimpleNamespace(Presentations=SimpleNamespace(Open=Mock()), Quit=Mock())
+    def get_active_object(_):
+        state.checking_attach = True
+        if state.foreign_on_attach:
+            state.existing.append(10)
+        return app
+
+    client = SimpleNamespace(GetActiveObject=Mock(side_effect=get_active_object),
         Dispatch=Mock(side_effect=AssertionError("DCOM activation forbidden")),
         DispatchEx=Mock(side_effect=AssertionError("DCOM activation forbidden")))
     modules = {
         "pythoncom": SimpleNamespace(CoInitialize=lambda: None, CoUninitialize=lambda: None,
-            com_error=OSError, DISPATCH_METHOD=1, DISPATCH_PROPERTYGET=2),
+            com_error=OSError),
         "win32com": SimpleNamespace(client=client), "win32com.client": client,
         "pywintypes": SimpleNamespace(error=OSError, HANDLE=lambda value: value),
         "win32api": SimpleNamespace(OpenProcess=lambda rights, inherit, pid: handle(pid)),
         "win32process": SimpleNamespace(EnumProcesses=lambda: state.existing,
             GetModuleFileNameEx=lambda *_: "POWERPNT.EXE",
-            GetWindowThreadProcessId=lambda _: (0, state.attached_pid), STARTUPINFO=lambda: SimpleNamespace(dwFlags=0),
+            STARTUPINFO=lambda: SimpleNamespace(dwFlags=0),
             CreateProcess=create, ResumeThread=lambda _: events.append(("resume", 20)), TerminateProcess=terminate),
         "win32event": SimpleNamespace(WAIT_TIMEOUT=258,
             WaitForSingleObject=lambda process, _: 258 if process.pid in state.alive else 0),
         "win32job": SimpleNamespace(JOB_OBJECT_ASSIGN_PROCESS=1, JOB_OBJECT_QUERY=4,
-            OpenJobObject=lambda *_: handle("job"), IsProcessInJob=lambda *_: state.inherited,
+            OpenJobObject=lambda *_: handle("job"),
+            IsProcessInJob=lambda _process, _job: state.in_job if state.checking_attach else state.inherited,
             AssignProcessToJobObject=assign),
     }
     for name, module in modules.items():
@@ -230,7 +212,7 @@ def test_preexisting_user_powerpoint_defers_without_launch(activation_host):
 
 def test_rot_race_never_opens_quits_or_terminates_foreign_application(activation_host, tmp_path):
     host = activation_host
-    host.state.attached_pid = 10  # User opened Office after the preflight snapshot.
+    host.state.foreign_on_attach = True  # User opened Office after the preflight snapshot.
     target = tmp_path / "artifact.pptx"
     target.write_bytes(b"pptx")
     with pytest.raises(office.SharedPowerPointInstance):

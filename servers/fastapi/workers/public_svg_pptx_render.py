@@ -97,24 +97,6 @@ def _powerpoint_executable():
     raise PowerPointActivationUnavailable("PowerPoint executable unavailable")
 
 
-def _normalize_hwnd(value):
-    """Convert PowerPoint's signed 32-bit COM HWND to a pywin32 handle."""
-
-    import pywintypes
-
-    try:
-        hwnd = int(value)
-    except (TypeError, ValueError, OverflowError) as error:
-        raise ValueError("svg_final_pptx_hwnd_unavailable") from error
-    # Application.HWND is exposed by Office as a 32-bit signed Long.  A valid
-    # handle whose high bit is set therefore arrives sign-extended as negative.
-    hwnd = hwnd & 0xFFFFFFFF if hwnd < 0 else hwnd
-    try:
-        return pywintypes.HANDLE(hwnd)
-    except (TypeError, ValueError, OverflowError) as error:
-        raise ValueError("svg_final_pptx_hwnd_unavailable") from error
-
-
 def _mark_render_stage(stage, callback=None):
     callback = callback or _RENDER_STAGE_CALLBACK.get()
     if callback is not None:
@@ -167,10 +149,35 @@ def _owned_powerpoint(request, *, stage_callback=None):
                 job.Close()
 
 
-def _attach_powerpoint(pid, timeout, *, stage_callback=None):
+def _assert_owned_powerpoint(pid, job_name):
+    import pywintypes
+    import win32api
+    import win32job
+
+    if not job_name:
+        raise ValueError("svg_final_pptx_ownership_unavailable")
+    if _powerpoint_pids() != {pid}:
+        raise SharedPowerPointInstance(SHARED_INSTANCE_REASON)
+    job = process = None
+    try:
+        job = win32job.OpenJobObject(win32job.JOB_OBJECT_QUERY, False, job_name)
+        process = win32api.OpenProcess(0x0400 | 0x0010, False, pid)
+        if not win32job.IsProcessInJob(process, job):
+            raise SharedPowerPointInstance(SHARED_INSTANCE_REASON)
+    except SharedPowerPointInstance:
+        raise
+    except (OSError, pywintypes.error) as error:
+        raise ValueError("svg_final_pptx_ownership_unavailable") from error
+    finally:
+        if process is not None:
+            process.Close()
+        if job is not None:
+            job.Close()
+
+
+def _attach_powerpoint(pid, timeout, *, job_name=None, stage_callback=None):
     import pythoncom
     import win32com.client
-    import win32process
 
     deadline = monotonic() + timeout
     while monotonic() < deadline:
@@ -183,23 +190,7 @@ def _attach_powerpoint(pid, timeout, *, stage_callback=None):
             sleep(LOCK_WAIT_SLICE_SECONDS)
             continue
         _mark_render_stage("hwnd_pid_match", stage_callback)
-        # Dynamic CDispatch exposes PowerPoint's HWND as a method object after
-        # its implicit property-get reports a bad context.  Resolve the
-        # property explicitly so the value passed to win32process is the COM
-        # scalar, never the bound method object.
-        hwnd_dispid = application._oleobj_.GetIDsOfNames(0, "HWND")
-        hwnd_value = application._oleobj_.Invoke(
-            hwnd_dispid,
-            0,
-            # Dynamic CDispatch resolves an unknown member with the same
-            # METHOD|PROPERTYGET flags used by its fallback lookup.
-            pythoncom.DISPATCH_METHOD | pythoncom.DISPATCH_PROPERTYGET,
-            True,
-        )
-        hwnd = _normalize_hwnd(hwnd_value)
-        _, attached_pid = win32process.GetWindowThreadProcessId(hwnd)
-        if attached_pid != pid:
-            raise SharedPowerPointInstance(SHARED_INSTANCE_REASON)
+        _assert_owned_powerpoint(pid, job_name)
         return application
     raise PowerPointActivationUnavailable("PowerPoint activation deadline exceeded")
 
@@ -219,7 +210,11 @@ def _render(request, *, stage_callback=None):
     pythoncom.CoInitialize()
     try:
         with _owned_powerpoint(request) as pid:
-            application = _attach_powerpoint(pid, request["activationTimeout"])
+            application = _attach_powerpoint(
+                pid,
+                request["activationTimeout"],
+                job_name=request["jobName"],
+            )
             document = None
             render_failed = False
             try:

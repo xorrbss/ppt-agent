@@ -260,21 +260,18 @@ def test_office_opens_only_after_containment_and_quits_only_owned_instance(tmp_p
         assert "assign" in events
         events.append("open")
         return document
-    app = SimpleNamespace(HWND=1, Version="test", Presentations=SimpleNamespace(Open=open_document),
+    app = SimpleNamespace(Version="test", Presentations=SimpleNamespace(Open=open_document),
         Quit=lambda: events.append("quit"))
-    app._oleobj_ = SimpleNamespace(
-        GetIDsOfNames=lambda _lcid, name: 42,
-        Invoke=lambda *_args: app.HWND,
-    )
     modules = {
         "pythoncom": SimpleNamespace(CoInitialize=lambda: None, CoUninitialize=lambda: events.append("uninit"),
-            com_error=OSError, DISPATCH_METHOD=1, DISPATCH_PROPERTYGET=2),
+            com_error=OSError),
         "win32com": SimpleNamespace(client=SimpleNamespace(GetActiveObject=lambda _: app)),
         "win32com.client": SimpleNamespace(GetActiveObject=lambda _: app),
         "win32api": SimpleNamespace(OpenProcess=lambda *args: handle),
-        "win32process": SimpleNamespace(EnumProcesses=lambda: [1],
-            GetWindowThreadProcessId=lambda _: (0, 1 if shared else 2)),
-        "win32job": SimpleNamespace(JOB_OBJECT_ASSIGN_PROCESS=1, OpenJobObject=lambda *args: handle,
+        "win32process": SimpleNamespace(EnumProcesses=lambda: [1, 2] if shared else [2],
+            GetModuleFileNameEx=lambda *_: "POWERPNT.EXE"),
+        "win32job": SimpleNamespace(JOB_OBJECT_ASSIGN_PROCESS=1, JOB_OBJECT_QUERY=4,
+            OpenJobObject=lambda *args: handle, IsProcessInJob=lambda *args: True,
             AssignProcessToJobObject=lambda *args: events.append("assign")),
     }
     for key, module in modules.items():
