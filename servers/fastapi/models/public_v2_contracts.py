@@ -31,6 +31,8 @@ from models.common_header_design import CommonHeaderDesignInput
 
 from models.generate_presentation_request import (
     AuthoredMasterPinInput,
+    SvgTemplatePinInput,
+    validate_svg_template_selection,
     SourceContentManifestPinInput,
     SourceContentPolicy,
     RasterApprovalPinInput,
@@ -142,6 +144,9 @@ class PresentationGenerationRequestV2(PublicWireModel):
     svg_canvas: SvgCanvasInput | None = Field(default=None, exclude_if=lambda value: value is None)
     svg_design_reference_snapshot_id: UUID | None = Field(default=None, exclude_if=lambda value: value is None)
     svg_design_reference_pin: DesignPackPinV1 | None = Field(default=None, exclude_if=lambda value: value is None)
+    svg_template_pin: SvgTemplatePinInput | None = Field(default=None, exclude_if=lambda value: value is None)
+    svg_template_mode: Literal["free-design", "template-redesign"] | None = Field(default=None, exclude_if=lambda value: value is None)
+    svg_template_frame_map: dict[str, str] | None = Field(default=None, exclude_if=lambda value: value is None)
     page_size: Literal["A4"] | None = None
     orientation: Literal["landscape", "portrait"] | None = None
 
@@ -161,6 +166,9 @@ class PresentationGenerationRequestV2(PublicWireModel):
     @model_serializer(mode="wrap")
     def serialize_canvas_selectors(self, handler):
         payload = handler(self)
+        if self.svg_template_pin is not None and self.source_mode == "raster_reconstruction":
+            payload.pop("authored_style", None)
+            payload.pop("authoredStyle", None)
         if self.common_header_mode is None:
             payload.pop("commonHeaderMode", None)
             payload.pop("common_header_mode", None)
@@ -198,6 +206,7 @@ class PresentationGenerationRequestV2(PublicWireModel):
 
     @model_validator(mode="after")
     def validate_generation_mode(self) -> "PresentationGenerationRequestV2":
+        validate_svg_template_selection(self)
         if self.common_header_design is not None and (
             self.strategy == "authored" or self.common_header_mode == "free"
         ):

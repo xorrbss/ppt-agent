@@ -163,6 +163,8 @@ def prepare_saved_review(presentation, slides, indices, pngs, *, operation_id, o
     from utils.owner_context import get_current_owner_id, get_current_tenant_id
     meta = (presentation.theme or {}).get("svg") or {}
     snapshot = meta.get("styleSnapshot") or {}
+    from services.svg_document_mutations import validate_saved_template_pages
+    validate_saved_template_pages(snapshot, slides)
     publication = meta.get("qualityRecoveryPublication") or source_parent or {}
     if source_parent_authority is not None:
         from services.svg_export_operation import header_revision_source_parent

@@ -338,6 +338,9 @@ async def _pin_owned_svg_style(request, job, *, pin_style, session_maker, owned_
 
             await prepare_private_svg_recovery_authority(request, authority_session)
         snapshot = pin_style(request)
+        if outline is not None and snapshot.get("svg_template") is not None:
+            from services.svg_templates.generation import preflight_template_outline
+            preflight_template_outline(snapshot, outline)
         if outline is not None:
             snapshot, prepared = _prepare_header_outline(snapshot, outline, canvas,
                 mode=getattr(request, "common_header_mode", "free"),
@@ -384,6 +387,9 @@ async def _pin_owned_svg_style(request, job, *, pin_style, session_maker, owned_
 
         await prepare_private_svg_recovery_authority(request, checkpoint_session)
         snapshot = pin_style(request)
+        if outline is not None and snapshot.get("svg_template") is not None:
+            from services.svg_templates.generation import preflight_template_outline
+            preflight_template_outline(snapshot, outline)
         validate_profile_agreement(request, snapshot)
         validate_quality_recovery_agreement(request, snapshot)
         if frozen is not None and frozen != snapshot:

@@ -17,6 +17,7 @@ from services.assets.policies import (
     AssetPolicyRegistry,
 )
 from services.workspace_asset_service import resolve_workspace_asset_download
+from services.svg_templates.retention import asset_is_retained
 from services.workspace_service import WorkspaceServiceError
 from utils.datetime_utils import get_current_utc_datetime
 
@@ -150,6 +151,7 @@ class AssetGateway:
         if (
             policy.retention_seconds is not None
             and asset.conversation_id is None
+            and not await asset_is_retained(session, asset.id)
             and asset.created_at + timedelta(seconds=policy.retention_seconds)
             <= _comparable_asset_time(current, asset.created_at)
         ):

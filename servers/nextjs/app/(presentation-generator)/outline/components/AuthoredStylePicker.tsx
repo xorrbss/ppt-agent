@@ -154,7 +154,7 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
 
   const handleStyleSelect = useCallback(
     (styleId: string) => {
-      dispatch(setPptGenUploadState({ authoredStyle: styleId }));
+      dispatch(setPptGenUploadState({ authoredStyle: styleId, svgTemplateSelection: null }));
       onActivate();
     },
     [dispatch, onActivate]

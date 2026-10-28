@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useDispatch } from "react-redux";
+import { setPptGenUploadState, invalidateSvgTemplateSession } from "@/store/slices/presentationGenUpload";
+import { SvgTemplatesApi } from "../../../services/api/svg-templates";
+import { savedSvgTemplateSelection, savedSvgTemplateCanvas } from "../../../services/api/svg-template-restore";
+import { AUTH_SESSION_EXPIRED_EVENT } from "../../../services/api/api-error-handler";
 import { useSearchParams } from "next/navigation";
 import { DashboardApi, type PresentationGenerationInfo } from "../../../services/api/dashboard";
 import { LanguageType, ToneType, VerbosityType, type PresentationConfig } from "../../type";
@@ -61,6 +66,13 @@ export function usePreviousGenerationAttempt(
   recoveringAdmission: boolean,
 ) {
   const params = useSearchParams();
+  const dispatch = useDispatch();
+  const ownerInvalidated = useRef(false);
+  useEffect(() => {
+    const invalidate = () => { ownerInvalidated.current = true; dispatch(invalidateSvgTemplateSession()); };
+    window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, invalidate); window.addEventListener("presenton:auth-logout", invalidate);
+    return () => { window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, invalidate); window.removeEventListener("presenton:auth-logout", invalidate); };
+  }, [dispatch]);
   const requestedId = params?.get("previous") ?? null;
   const prefilledId = useRef<string | null>(null);
   const [state, setState] = useState<{
@@ -70,7 +82,7 @@ export function usePreviousGenerationAttempt(
   }>({ id: null, info: null, error: null });
   const [refresh, setRefresh] = useState(0);
   useEffect(() => {
-    if (!requestedId) return;
+    if (!requestedId || ownerInvalidated.current) return;
     if (recoveringAdmission) {
       // Admission recovery owns the already edited, immutable configuration.
       prefilledId.current = requestedId;
@@ -78,8 +90,11 @@ export function usePreviousGenerationAttempt(
     }
     let disposed = false;
     setState({ id: requestedId, info: null, error: null });
-    void DashboardApi.getPresentationGenerationInfo(requestedId).then((info) => {
-      if (disposed) return;
+    const controller = new AbortController();
+    const invalidate = () => { disposed = true; controller.abort(); };
+    window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, invalidate); window.addEventListener("presenton:auth-logout", invalidate);
+    void Promise.all([DashboardApi.getPresentationGenerationInfo(requestedId, controller.signal), DashboardApi.getPresentation(requestedId, controller.signal)]).then(async ([info, presentation]) => {
+      if (disposed || ownerInvalidated.current) return;
       if (!info.can_start_new_attempt) {
         setState({ id: requestedId, info: null, error: "이전 작업이 종료되었는지 확인한 뒤 요청을 수정할 수 있습니다." });
         return;
@@ -88,8 +103,22 @@ export function usePreviousGenerationAttempt(
       if (prefilledId.current !== requestedId) {
         prefilledId.current = requestedId;
         const editedPrompt = consumePreviousAttemptPromptEdit(requestedId);
+        const selection = savedSvgTemplateSelection(settings, presentation?.theme);
+        const restoredCanvas = selection.svgTemplatePin ? savedSvgTemplateCanvas(presentation?.theme) : {};
+        const version = selection.svgTemplatePin ? await SvgTemplatesApi.version(selection.svgTemplatePin) : null;
+        if (disposed || ownerInvalidated.current) return;
+        if (version && version.template.pin?.digest !== selection.svgTemplatePin?.digest) throw new Error("svg_template_pin_mismatch");
+        dispatch(setPptGenUploadState({ svgTemplateSelection: selection.svgTemplatePin && selection.svgTemplateMode ? { pin: selection.svgTemplatePin, mode: selection.svgTemplateMode, name: version?.template.name ?? "이전 요청의 내 템플릿", kind: version?.template.kind ?? "framed" } : null,
+          ...(selection.authoredStyle ? { authoredStyle: selection.authoredStyle } : {}) }));
         setConfig((current) => ({
         ...current,
+        ...restoredCanvas,
+        svgTemplateName: version?.template.name,
+        svgTemplateKind: version?.template.kind,
+        svgTemplatePin: selection.svgTemplatePin,
+        svgTemplateMode: selection.svgTemplateMode,
+        svgTemplateFrameMap: selection.svgTemplateFrameMap,
+        ...(selection.svgTemplateMode === "template-redesign" ? { commonHeaderMode: "free" as const } : {}),
         prompt: editedPrompt ?? info.prompt,
         slides: settings.n_slides > 0 ? String(settings.n_slides) : current.slides,
         language: Object.values(LanguageType).includes(settings.language as LanguageType) ? settings.language as LanguageType : current.language,
@@ -105,8 +134,8 @@ export function usePreviousGenerationAttempt(
     }).catch(() => {
       if (!disposed) setState({ id: requestedId, info: null, error: "이전 요청을 불러오지 못했습니다. 접근 권한과 연결 상태를 확인해 주세요." });
     });
-    return () => { disposed = true; };
-  }, [requestedId, recoveringAdmission, refresh, setConfig]);
+    return () => { invalidate(); window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, invalidate); window.removeEventListener("presenton:auth-logout", invalidate); };
+  }, [requestedId, recoveringAdmission, refresh, setConfig, dispatch]);
   const info = state.id === requestedId ? state.info : null;
   const error = state.id === requestedId ? state.error : null;
   return {

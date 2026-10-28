@@ -52,6 +52,7 @@ from models.sql.access_token import AccessToken
 from models.sql.public_principal_binding import PublicPrincipalBinding
 from models.sql.provider_settings import ProviderSettings
 from models.sql.reference_snapshot import ReferenceSnapshot
+from models.sql.svg_template import (SvgTemplate, SvgTemplateVersion, SvgTemplateFrameAdaptation, SvgTemplateAssetBinding)
 from models.sql.asset_gateway_idempotency_receipt import (
     AssetGatewayIdempotencyReceipt,
 )
@@ -374,6 +375,8 @@ async def create_db_and_tables():
                         AccessToken.__table__,
                         ProviderSettings.__table__,
                         ReferenceSnapshot.__table__,
+                        SvgTemplate.__table__, SvgTemplateVersion.__table__,
+                        SvgTemplateFrameAdaptation.__table__, SvgTemplateAssetBinding.__table__,
                         AssetGatewayIdempotencyReceipt.__table__,
                         ProviderUsageReceipt.__table__,
                         ProviderRuntimeBudget.__table__,

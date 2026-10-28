@@ -70,6 +70,7 @@ from models.sql.account_deletion_request import AccountDeletionRequest  # noqa: 
 from models.sql.access_token import AccessToken  # noqa: F401, E402
 from models.sql.provider_settings import ProviderSettings  # noqa: F401, E402
 from models.sql.reference_snapshot import ReferenceSnapshot  # noqa: F401, E402
+from models.sql.svg_template import (SvgTemplate, SvgTemplateVersion, SvgTemplateFrameAdaptation, SvgTemplateAssetBinding)
 from models.sql.asset_gateway_idempotency_receipt import (  # noqa: F401, E402
     AssetGatewayIdempotencyReceipt,
 )

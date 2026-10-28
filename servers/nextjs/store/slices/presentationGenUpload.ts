@@ -27,6 +27,8 @@ export type PresentationGenerationStrategy = "authored" | "svg";
 
 interface PresentationGenUploadState {
   config: PresentationConfig | null;
+  svgTemplateSelectionExplicit: boolean;
+  svgTemplateSelection: { pin: import("@/app/(presentation-generator)/services/api/svg-templates").SvgTemplatePin; mode: import("@/app/(presentation-generator)/services/api/svg-templates").SvgTemplateMode; name: string; kind: "style" | "framed" } | null;
 
   files: any;
 
@@ -61,6 +63,8 @@ interface PresentationGenUploadState {
 
 const initialState: PresentationGenUploadState = {
   config: null,
+  svgTemplateSelectionExplicit: false,
+  svgTemplateSelection: null,
   files: [],
   selectedTheme: null, // null = no preset; deck keeps the default (theme picked later in the editor)
   authoredVisionQa: false,
@@ -75,6 +79,11 @@ export const presentationGenUploadSlice = createSlice({
   name: "pptGenUpload",
   initialState,
   reducers: {
+    invalidateSvgTemplateSession: (state) => {
+      state.svgTemplateSelection = null;
+      state.svgTemplateSelectionExplicit = false;
+      state.config = null;
+    },
     setPptGenUploadState: (
       state,
       action: PayloadAction<Partial<PresentationGenUploadState>>
@@ -83,6 +92,7 @@ export const presentationGenUploadSlice = createSlice({
       // clearing the independently selected company standard.
       const {
         config,
+        svgTemplateSelection,
         files,
         selectedTheme,
         authoredVisionQa,
@@ -93,6 +103,15 @@ export const presentationGenUploadSlice = createSlice({
         sourceContentAdmission,
       } = action.payload;
       if (config !== undefined) state.config = config;
+      if (svgTemplateSelection !== undefined) {
+        state.svgTemplateSelection = svgTemplateSelection;
+        state.svgTemplateSelectionExplicit = true;
+        if (state.config) {
+          state.config.svgTemplatePin = svgTemplateSelection?.pin;
+          state.config.svgTemplateMode = svgTemplateSelection?.mode;
+          state.config.svgTemplateFrameMap = undefined;
+        }
+      }
       if (files !== undefined) state.files = files;
       if (selectedTheme !== undefined) state.selectedTheme = selectedTheme;
       if (authoredVisionQa !== undefined) state.authoredVisionQa = authoredVisionQa;
@@ -117,6 +136,7 @@ export const presentationGenUploadSlice = createSlice({
 });
 
 export const {
+  invalidateSvgTemplateSession,
   setPptGenUploadState,
   setSourceContentMode,
 } =

@@ -19,7 +19,7 @@ EMU_PER_POINT = 12_700
 _PAGE_SIZE_TOLERANCE_PT = 1.0
 
 
-def _slide_wrappers(sources, admitted_assets, canvas):
+def _slide_wrappers(sources, admitted_assets, canvas, *, font_manifest=None, canonical_sources=None):
     from services.svg_renderer import svg_preview_html
     from workers.public_render_worker import _admit_html
 
@@ -27,12 +27,16 @@ def _slide_wrappers(sources, admitted_assets, canvas):
     # manifest/decoder check. Never feed expanded base64 through the
     # legacy canonical-source size limit a second time.
     wrappers = []
-    for source, admitted in zip(sources, admitted_assets, strict=True):
-        if admitted is not None:
-            wrappers.append(admitted)
-        else:
-            wrapper = svg_preview_html(source, width=canvas.width_px, height=canvas.height_px)
-            wrappers.append(_admit_html(wrapper))
+    for index, (source, admitted) in enumerate(zip(sources, admitted_assets, strict=True)):
+        if admitted is None:
+            wrapper = svg_preview_html(source, width=canvas.width_px, height=canvas.height_px,
+                                       font_manifest=font_manifest)
+            admitted = _admit_html(wrapper)
+        if font_manifest is not None:
+            from services.svg_renderer import materialize_template_manifest_admitted
+            canonical = canonical_sources[index] if canonical_sources is not None else source
+            admitted = materialize_template_manifest_admitted(admitted, font_manifest, canonical)
+        wrappers.append(admitted)
     return wrappers
 
 
@@ -66,11 +70,13 @@ def merge_single_page_pdfs(pdfs, target: Path, *, page_size_pt) -> None:
         merged.close()
 
 
-def export_svg_pdf(sources, admitted_assets, canvas, target: Path, *, timeout: int) -> None:
+def export_svg_pdf(sources, admitted_assets, canvas, target: Path, *, timeout: int,
+                   font_manifest=None, canonical_sources=None) -> None:
     """Print every slide to vector PDF and write the merged deck to ``target``."""
     from utils.authored_renderer_session import print_admitted_htmls_to_pdf_over_pipe
 
-    wrappers = _slide_wrappers(sources, admitted_assets, canvas)
+    wrappers = _slide_wrappers(sources, admitted_assets, canvas, font_manifest=font_manifest,
+                               canonical_sources=canonical_sources)
     width_emu, height_emu = canvas_physical_size(canvas)
     pdfs = print_admitted_htmls_to_pdf_over_pipe(
         wrappers, timeout, width_px=canvas.width_px, height_px=canvas.height_px,

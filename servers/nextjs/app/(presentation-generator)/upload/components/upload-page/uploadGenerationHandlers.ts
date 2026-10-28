@@ -111,6 +111,7 @@ export function createUploadGenerationHandlers({
         authoredStyle,
         ...(generationStrategy === "svg" && config.svgDesignReferenceSnapshotId ? { svgDesignReferenceSnapshotId: config.svgDesignReferenceSnapshotId } : {}),
       ...(generationStrategy === "svg" && config.svgDesignReferencePin ? { svgDesignReferencePin: config.svgDesignReferencePin } : {}),
+      ...(generationStrategy === "svg" && config.svgTemplatePin ? { svgTemplatePin: config.svgTemplatePin, svgTemplateMode: config.svgTemplateMode, svgTemplateFrameMap: config.svgTemplateFrameMap } : {}),
         ...(sourceContentCanvas
           ? { documentCanvas: sourceContentCanvas }
           : {}),
@@ -310,6 +311,7 @@ export function createUploadGenerationHandlers({
       } : {}),
       ...(generationStrategy === "svg" && config.svgDesignReferenceSnapshotId ? { svg_design_reference_snapshot_id: config.svgDesignReferenceSnapshotId } : {}),
       ...(generationStrategy === "svg" && config.svgDesignReferencePin ? { svg_design_reference_pin: config.svgDesignReferencePin } : {}),
+      ...(generationStrategy === "svg" && config.svgTemplatePin ? { svgTemplatePin: config.svgTemplatePin, svgTemplateMode: config.svgTemplateMode, svgTemplateFrameMap: config.svgTemplateFrameMap } : {}),
       ...documentCanvasRequestForConfig(config),
       theme: selectedTheme,
       strategy: generationStrategy,
@@ -388,6 +390,7 @@ export function createUploadGenerationHandlers({
       } : {}),
       ...(generationStrategy === "svg" && config.svgDesignReferenceSnapshotId ? { svg_design_reference_snapshot_id: config.svgDesignReferenceSnapshotId } : {}),
       ...(generationStrategy === "svg" && config.svgDesignReferencePin ? { svg_design_reference_pin: config.svgDesignReferencePin } : {}),
+      ...(generationStrategy === "svg" && config.svgTemplatePin ? { svgTemplatePin: config.svgTemplatePin, svgTemplateMode: config.svgTemplateMode, svgTemplateFrameMap: config.svgTemplateFrameMap } : {}),
       ...documentCanvasRequestForConfig(config),
       theme: selectedTheme,
       strategy: generationStrategy,

@@ -26,6 +26,7 @@ _PROJECTION_ADAPTER_FILES = tuple(
         "workers/svg_common_header_export.py",
         "workers/svg_common_header_export_v2.py",
         "services/svg_common_header_export_evidence.py",
+        "services/svg_pptx_font_embedding.py",
     )
 )
 
@@ -48,7 +49,7 @@ def converter_digest():
 
 def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
                  expected_image_digests=None, font_embedding=False, native_objects=None,
-                 native_coverage_sources=None):
+                 native_coverage_sources=None, font_manifest=None, font_usage=None):
     """Convert page files to an editable PPTX and read the result back.
 
     ``native_objects`` is one ``PageNativeObjects`` per page (``None``: no
@@ -146,8 +147,9 @@ def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
     if font_embedding:
         from services.svg_pptx_font_embedding import embed_trusted_fonts
         from services.svg_trusted_fonts import FONT_FAMILY
-        digests = embed_trusted_fonts(target)
-        readback["fontEmbedding"] = {"embedded": True, "family": FONT_FAMILY, "faceDigests": list(digests)}
+        digests = embed_trusted_fonts(target, font_manifest=font_manifest, font_usage=font_usage)
+        readback["fontEmbedding"] = {"embedded": True, "family": FONT_FAMILY if font_manifest is None else None,
+                                     "faceDigests": list(digests)}
     if capture is not None:
         from services.svg_contract import source_digest
         from utils.hashing import canonical_json_sha256

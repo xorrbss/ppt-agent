@@ -290,6 +290,111 @@ class _PublicationSourceVerification:
         return written
 
 
+def validate_saved_template_pages(snapshot, slides):
+    """Preserve each frozen page binding on edits, reorder and saved review."""
+    if (snapshot.get("svg_template") or {}).get("mode") != "template-redesign":
+        return
+    from types import SimpleNamespace
+    from services.svg_templates.generation import validate_template_publication
+    pages, outline = [], []
+    for index, slide in enumerate(slides):
+        content = slide.content or {}
+        source = content.get("source")
+        if slide.index != index or not isinstance(source, str) or not slide.svg_content:
+            raise ValueError("svg_template_page_change_requires_new_generation")
+        pages.append(({**deepcopy(content.get("svgReceipt") or {}), "svg_content": slide.svg_content}, None))
+        outline.append(SimpleNamespace(content=source))
+    try:
+        validate_template_publication(snapshot, pages, SimpleNamespace(slides=outline))
+    except (ValueError, KeyError, TypeError) as error:
+        raise ValueError("svg_template_page_change_requires_new_generation") from error
+
+
+async def _refresh_template_pages(session, presentation, slides, snapshot):
+    """Rebind page numbers only when each original frame remains the same."""
+    import xml.etree.ElementTree as ET
+    from services.svg_templates.generation import template_page_context, compose_template_page, apply_template_body_quality
+    from services.svg_master_furniture import master_furniture_receipt
+    from services.svg_contract import source_digest
+    from services.document_canvas import DocumentCanvasMetadata, parse_canvas_metadata
+    from services.authored_canvas import presentation_canvas_metadata
+    from utils.hashing import canonical_json_digest
+    from services.generation_core.native_objects import SLIDE_CONTENT_KEY
+    from services.svg_page_publication import svg_deck_quality_fields
+
+    canvas = presentation_canvas_contract(presentation.theme)
+    physical = parse_canvas_metadata(presentation_canvas_metadata(presentation.theme))
+    for index, slide in enumerate(slides):
+        content = deepcopy(slide.content or {})
+        receipt = content.get("svgReceipt") or {}
+        old = receipt.get("svg_template_page")
+        source = content.get("source")
+        if not isinstance(old, dict) or not isinstance(source, str) or not slide.svg_content:
+            raise ValueError("svg_template_page_change_requires_new_generation")
+        old_index, old_count = old.get("page_index"), old.get("page_count")
+        if type(old_index) is not int or type(old_count) is not int:
+            raise ValueError("svg_template_page_change_requires_new_generation")
+        try:
+            if template_page_context(snapshot, old_index, old_count, source) != old:
+                raise ValueError("svg_template_page_context_changed")
+            old_manifest = {node.get("href"): {"required": True} for node in ET.fromstring(slide.svg_content).iter()
+                if node.tag.rsplit("}", 1)[-1] == "image" and node.get("href", "").startswith("source-slot-")}
+            old_receipt = master_furniture_receipt(slide.svg_content, snapshot, index=old_index, n=old_count,
+                width=canvas.width_px, height=canvas.height_px, source_manifest=old_manifest or None,
+                template_page_context=old)
+            proof = (receipt.get("quality") or {}).get("template_preservation") or {}
+            if (receipt.get("system_furniture") != old_receipt
+                    or proof.get("page_context_digest") != old.get("digest")
+                    or proof.get("frame_digest") != old.get("frame_digest")
+                    or proof.get("adaptation_digest") != old.get("adaptation_digest")
+                    or proof.get("svg_digest") != canonical_json_digest({"svg": slide.svg_content})
+                    or proof.get("body_paint_measured") is not True
+                    or (receipt.get("quality") or {}).get("measurement_complete") is not True):
+                raise ValueError("svg_template_preservation_unverified")
+            new = template_page_context(snapshot, index, len(slides), source)
+            if new["frame_id"] != old["frame_id"] or new["frame_digest"] != old["frame_digest"]:
+                raise ValueError("svg_template_page_frame_changed")
+            if new == old:
+                slide.index = index
+                continue
+            if content.get("svgAssetManifest") is not None or content.get(SLIDE_CONTENT_KEY) is not None:
+                raise ValueError("svg_template_page_rebind_assets_unsupported")
+            compose_template_page(snapshot, slide.svg_content, old, allow_existing=True,
+                                  source_manifest=old_manifest or None)
+            root = ET.fromstring(slide.svg_content)
+            body = next(node for node in root if node.get("id") == "svg-system-template-body")
+            stripped = ET.Element(root.tag, dict(root.attrib))
+            stripped.extend(deepcopy(list(body)))
+            final = compose_template_page(snapshot, ET.tostring(stripped, encoding="unicode"), new)
+            furniture = master_furniture_receipt(final, snapshot, index=index, n=len(slides),
+                width=canvas.width_px, height=canvas.height_px, template_page_context=new)
+            capture = await render_svg_with_metrics(final, width=canvas.width_px, height=canvas.height_px,
+                font_manifest=snapshot["svg_template"]["package"]["font_manifest"],
+                readability_policy=receipt.get("readability_policy"), instructions=presentation.instructions,
+                **({"physical_canvas": physical} if isinstance(physical, DocumentCanvasMetadata) else {}))
+            apply_template_body_quality(capture.quality, final, snapshot, new)
+            if capture.quality.get("passed") is not True or capture.quality.get("measurement_complete") is not True:
+                raise ValueError("svg_template_preservation_unverified")
+            image = _save_slide_pngs(presentation.id, [capture.png], "svg-template-numbering")[0]
+            receipt["svg_template_page"] = new
+            receipt["system_furniture"] = furniture
+            content["svgReceipt"] = receipt
+            quality = classify_svg_page_quality(svg_content=final, quality=capture.quality,
+                index=index, png_path=image, receipt=receipt)
+            set_svg_page(slide, svg_content=final, content=content, quality=quality, png=capture.png)
+            slide.properties = {**(slide.properties or {}), "image": image}
+            slide.index = index
+            session.add(slide)
+        except (ValueError, KeyError, TypeError, StopIteration) as error:
+            raise ValueError("svg_template_page_change_requires_new_generation") from error
+    validate_saved_template_pages(snapshot, slides)
+    presentation.n_slides = len(slides)
+    metadata = dict(presentation.theme.get("svg", {}))
+    metadata.update(svg_deck_quality_fields(slides, metadata))
+    presentation.theme = {**presentation.theme, "svg": metadata}
+    session.add(presentation)
+
+
 async def refresh_svg_page_numbers(session, presentation, *, operation_id=None, attempt_token=None,
                                    expected_revision=None, source_manifest=None):
     if not presentation.is_svg():
@@ -299,6 +404,10 @@ async def refresh_svg_page_numbers(session, presentation, *, operation_id=None, 
         SlideModel.presentation == presentation.id).order_by(SlideModel.index, SlideModel.id)))
     if not slides:
         raise ValueError("svg_document_requires_slide")
+    snapshot = presentation.theme.get("svg", {}).get("styleSnapshot") or {}
+    if (snapshot.get("svg_template") or {}).get("mode") == "template-redesign":
+        await _refresh_template_pages(session, presentation, slides, snapshot)
+        return
     canvas = presentation_canvas_contract(presentation.theme)
     if _preserve_source_pages(presentation, slides, canvas,
                               source_manifest=source_manifest):

@@ -68,6 +68,7 @@ def source_content_admission_carrier(
             "content_policy", "authored_style", "generation_mode",
             "generation_engine", "design_pack_pin", "master_pin",
             "svg_design_reference_pin", "svg_design_reference_snapshot_id",
+            "svg_template_pin", "svg_template_mode", "svg_template_frame_map",
         ):
             setattr(carrier, name, getattr(generation_request, name, None))
         carrier.model_fields_set = set(generation_request.model_fields_set)

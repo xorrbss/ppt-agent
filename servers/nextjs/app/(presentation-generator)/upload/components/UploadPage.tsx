@@ -32,6 +32,7 @@ import { ConfigurationSelects } from "./ConfigurationSelects";
 import { PromptInput } from "./PromptInput";
 import SupportingDoc from "./SupportingDoc";
 import SvgDesignReferenceInput from "./SvgDesignReferenceInput";
+import SvgTemplatePicker from "./SvgTemplatePicker";
 import { abortDocumentProcessing } from "./upload-page/abortDocumentProcessing";
 import { useSupportingFiles } from "./upload-page/useSupportingFiles";
 import SourceContentLossDialog from "./upload-page/SourceContentLossDialog";
@@ -392,12 +393,14 @@ const UploadPage = ({
                 reviewBeforeGeneration={reviewBeforeGeneration}
                 onReviewBeforeGenerationChange={setReviewBeforeGeneration}
                 onGenerate={handlePrimaryGenerate}
-                disabled={generationBusy || previousGenerationAttempt.blocked}
+                disabled={generationBusy || previousGenerationAttempt.blocked || (generationStrategy === "svg" && Boolean(config.svgTemplatePin) && config.svgTemplateCapabilityState !== "available")}
                 generating={loadingState.isLoading}
               />
             </div>
 
-            {generationStrategy === "svg" ? <SvgDesignReferenceInput config={config} onConfigChange={handleConfigChange} disabled={Boolean(config.svgDesignReferencePin || companyStandard)} /> : null}
+            {generationStrategy === "svg" ? <SvgTemplatePicker config={config} onConfigChange={handleConfigChange} sourceContentMode={sourceContentMode} hasCompanyMaster={Boolean(companyStandard)} /> : null}
+
+            {generationStrategy === "svg" ? <SvgDesignReferenceInput config={config} onConfigChange={handleConfigChange} disabled={Boolean(config.svgTemplatePin || config.svgDesignReferencePin || companyStandard)} /> : null}
 
             {generationStrategy === "authored" && masterAdmissionError ? (
               <div

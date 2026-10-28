@@ -703,6 +703,9 @@ def svg_author_rules(style_snapshot: dict, body_floor: float, *, new_copy: bool 
             + reference_caveat(width, height) + spatial_rules + native_grid_rules)
     if header_page is not None and header_page.get("applied"):
         rules = _common_header_author_rules(rules, style_snapshot, header_page)
+    if style_snapshot.get("svg_template") is not None:
+        from services.svg_templates.generation import body_author_rules
+        rules = body_author_rules(rules, style_snapshot)
     return rules
 
 
@@ -791,7 +794,9 @@ def svg_prompt_design(style_snapshot: dict) -> dict:
         return public({key: value for key, value in legacy.items() if key not in {"references", "diagnostics"}})
     # The pinned author output view is server-side transport, not design identity:
     # the model learns the compact form from its rules, never from this key.
-    excluded = {"references", "diagnostics", "source_output_view"}
+    excluded = {"references", "diagnostics", "source_output_view", "svg_template"}
+    if style_snapshot.get("svg_template") is not None:
+        excluded.add("design_pack_template")
     if read_quality_recovery_policy(style_snapshot) is not None:
         # Recovery candidates belong to fallback admission, not the invariant
         # first-author prompt. Avoid sending unrelated SVG/example data on
@@ -938,6 +943,10 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
     from services.svg_common_header import validate_common_header_binding
     validate_common_header_binding(style_snapshot.get("common_header"), header_page, index=index, count=n,
                                    **({} if source_preserved else {"content": content}))
+    template_page = None
+    if style_snapshot.get("svg_template") is not None:
+        from services.svg_templates.generation import template_page_context
+        template_page = template_page_context(style_snapshot, index, n, content, role)
     if source_grounded:
         visual_intent = enrich_visual_intent(content, role, index, visual_intent)
     previous_render_part = None
@@ -982,6 +991,7 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
                                            "instructions": instructions or "", "source_content": prompt_source,
                                            "correction": outbound_correction_hint(correction_hint, view_plan) or "",
                                            "source_images": offered,
+                                           **({"template_page": template_page} if template_page else {}),
                                            **({"common_header": {"page": header_page,
                                                "body_box": style_snapshot["common_header"]["body_box"],
                                                "content_top_px": style_snapshot["common_header"].get(

@@ -29,6 +29,7 @@ import hashlib
 import os
 import re
 import signal
+import stat
 import shutil
 import subprocess
 import sys
@@ -73,7 +74,10 @@ def _read_request(prefix: bytes = b"") -> tuple[bytes, int]:
         request: Any = json.loads(raw)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise RequestError("invalid-request-json") from exc
-    if not isinstance(request, dict) or set(request) != {"schema_version", "html", "timeout"}:
+    required = {"schema_version", "html", "timeout"}
+    optional = {"width_px", "height_px", "preserved_raster_svg", "system_furniture",
+                "font_manifest", "font_manifest_ref", "canonical_svg", "image_bindings"}
+    if not isinstance(request, dict) or not required <= set(request) or set(request) - required - optional:
         raise RequestError("invalid-request-shape")
     if request["schema_version"] != REQUEST_SCHEMA:
         raise RequestError("unsupported-request-schema")
@@ -87,7 +91,7 @@ def _read_request(prefix: bytes = b"") -> tuple[bytes, int]:
     if not 0 < timeout <= MAX_TIMEOUT_SECONDS:
         raise RequestError("timeout-out-of-range")
     normalized = json.dumps(
-        {"schema_version": REQUEST_SCHEMA, "html": request["html"], "timeout": timeout},
+        request,
         ensure_ascii=False,
         separators=(",", ":"),
     ).encode("utf-8") + b"\n"
@@ -310,7 +314,7 @@ def _policy_error() -> str | None:
     return None
 
 
-def _prepare_container(container_name: str) -> tuple[str, dict[str, str], list[str]] | str:
+def _prepare_container(container_name: str, assets_root: Path | None = None) -> tuple[str, dict[str, str], list[str]] | str:
     """Resolve docker, verify the image attestation, and build the run command."""
 
     docker = shutil.which("docker")
@@ -329,8 +333,16 @@ def _prepare_container(container_name: str) -> tuple[str, dict[str, str], list[s
         signal.signal(signal.SIGTERM, terminate_handler)
     command = [
         docker, "compose", "--ansi", "never", "-f", str(COMPOSE_FILE),
-        "run", "--rm", "--no-deps", "-T", "--name", container_name, SERVICE,
+        "run", "--rm", "--no-deps", "-T", "--name", container_name,
     ]
+    if assets_root is not None:
+        manifest = assets_root / "font-manifest.json"
+        if "," in str(manifest):
+            return "renderer-font-asset-path-invalid"
+        command.extend(["--mount", f"type=bind,source={manifest},target=/tmp/font-manifest.json,readonly"])
+    command.append(SERVICE)
+    if assets_root is not None:
+        command.extend(["--request-assets-root", "/tmp"])
     return docker, docker_environment, command
 
 
@@ -421,22 +433,43 @@ def main(argv: list[str] | None = None) -> int:
     arguments = sys.argv[1:] if argv is None else argv
     if arguments == ["serve"]:
         return _serve_frames(None)
+    assets_root = None
     if arguments:
-        return _emit_error("unsupported-argument")
+        if len(arguments) != 2 or arguments[0] != "--request-assets-root":
+            return _emit_error("unsupported-argument")
+        try:
+            candidate = Path(arguments[1])
+            if not candidate.is_absolute() or candidate.is_symlink():
+                return _emit_error("renderer-font-asset-path-invalid")
+            assets_root = candidate.resolve(strict=True)
+            asset = assets_root / "font-manifest.json"
+            info = asset.lstat()
+            if not assets_root.is_dir() or not stat.S_ISREG(info.st_mode) or info.st_size > 90 * 1024 * 1024:
+                return _emit_error("renderer-font-asset-path-invalid")
+        except OSError:
+            return _emit_error("renderer-font-asset-path-invalid")
     prefix = sys.stdin.buffer.read(FRAME_HEADER_BYTES)
     if _header_is_frame(prefix):
+        if assets_root is not None:
+            return _emit_error("renderer-font-assets-require-single-shot")
         return _serve_frames(prefix)
     try:
         request, render_timeout = _read_request(prefix)
     except RequestError as exc:
         return _emit_error(str(exc))
 
+    try:
+        parsed_request = json.loads(request)
+        if (parsed_request.get("font_manifest_ref") is None) != (assets_root is None):
+            return _emit_error("renderer-font-asset-binding-invalid")
+    except (ValueError, UnicodeDecodeError):
+        return _emit_error("invalid-request-json")
     policy = _policy_error()
     if policy is not None:
         return _emit_error(policy)
 
     container_name = f"authored-render-worker-{uuid.uuid4().hex}"
-    prepared = _prepare_container(container_name)
+    prepared = _prepare_container(container_name, assets_root)
     if isinstance(prepared, str):
         return _emit_error(prepared)
     docker, docker_environment, command = prepared

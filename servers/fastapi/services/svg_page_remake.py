@@ -42,6 +42,22 @@ def _common_header_page(presentation, slides, index):
     return deepcopy(binding)
 
 
+def _template_context(presentation, slides, index):
+    snapshot = (presentation.theme.get("svg", {}) or {}).get("styleSnapshot") or {}
+    if (snapshot.get("svg_template") or {}).get("mode") != "template-redesign":
+        return snapshot, None
+    from services.svg_templates.generation import template_page_context
+    target = slides[index]
+    source = (target.content or {}).get("source")
+    if not isinstance(source, str):
+        raise ValueError("svg_template_page_context_missing")
+    context = template_page_context(snapshot, index, len(slides), source)
+    receipt = (target.content or {}).get("svgReceipt") or {}
+    if context != receipt.get("svg_template_page"):
+        raise ValueError("svg_template_page_context_changed")
+    return snapshot, context
+
+
 def _local_svg_supported(presentation, target):
     from services.svg_document_mutations import _raster_pin
 
@@ -164,6 +180,7 @@ async def preview_svg(presentation, slides, index, request, task, session):
         raise ValueError("svg_page_remake_source_changed")
     if local_edit:
         _local_svg_supported(presentation, target)
+    snapshot, template_page = _template_context(presentation, slides, index)
     from services.svg_document_mutations import read_svg_slide_assets, rebound_placement, materialize_rebound_svg
     assets = await read_svg_slide_assets(session, presentation, target)
     canvas = presentation_canvas_contract(presentation.theme)
@@ -185,7 +202,7 @@ async def preview_svg(presentation, slides, index, request, task, session):
     contract = None
     if assets is not None:
         source_index = target.content["svgAssetManifest"].get("sourcePageIndex", index)
-    if assets is not None and local_edit:
+    if assets is not None and local:
         from services.svg_asset_resolver import _contract_manifest
         offered = next(page.slot_ids for page in assets[0].offered_pages if page.page_index == source_index)
         contract = {slot: policy for slot, policy in _contract_manifest(assets[0]).items() if slot in offered}
@@ -240,15 +257,30 @@ async def preview_svg(presentation, slides, index, request, task, session):
 
     if local_measurement:
         final, native = target.svg_content, None
+        if template_page is not None:
+            from services.svg_templates.generation import compose_template_page
+            try:
+                compose_template_page(snapshot, final, template_page, allow_existing=True, source_manifest=contract)
+            except ValueError as error:
+                reject(ValueError("svg_template_frame_change_requires_new_revision"), "template_frame_validation")
     elif local_edit:
         try:
             from services.generation_core.drivers.svg.native_declarations import extract_native_declarations
             root = _local_svg_content(request.svg_content, target.svg_content)
             declarations = extract_native_declarations(root)
             clean = ET.tostring(root, encoding="unicode")
-            final = finalize_svg(clean, index=index, n=len(slides), width=canvas.width_px,
-                height=canvas.height_px, style_snapshot=snapshot, source_manifest=contract,
-                **({**header_kwargs, "allow_existing_common_header": True} if header_kwargs else {}))
+            if template_page is not None:
+                from services.svg_templates.generation import compose_template_page
+                try:
+                    final = compose_template_page(snapshot, clean, template_page, allow_existing=True, source_manifest=contract)
+                except ValueError as error:
+                    if str(error) == "svg_template_frame_changed":
+                        raise ValueError("svg_template_frame_change_requires_new_revision") from error
+                    raise
+            else:
+                final = finalize_svg(clean, index=index, n=len(slides), width=canvas.width_px,
+                    height=canvas.height_px, style_snapshot=snapshot, source_manifest=contract,
+                    **({**header_kwargs, "allow_existing_common_header": True} if header_kwargs else {}))
             native = _native_candidate(final, clean, declarations)
             _local_native_projection(final, native, presentation, target)
         except Exception as error:
@@ -258,15 +290,19 @@ async def preview_svg(presentation, slides, index, request, task, session):
             with generation_model_context(presentation.theme["svg"].get("codexGenerationPreset")):
                 result = await author_slide_svg(source, snapshot, target.content.get("role", "content"), index, len(slides),
                                                 instructions=instruction, source_images=manifest,
-                                                **({"previous_svg": target.svg_content} if recovery_policy else {}),
+                                                **({"previous_svg": target.svg_content} if recovery_policy or template_page is not None else {}),
                                                 canonical_source_images=assets is not None, **physical_kwargs, **header_kwargs)
         except Exception as error:
             reject(error, "generation")
         if result.receipt.get("validation_error"):
             reject(ValueError(result.receipt["validation_error"]), "author_validation")
         try:
-            final = finalize_svg(result.svg_content, index=index, n=len(slides), width=canvas.width_px,
-                                 height=canvas.height_px, style_snapshot=snapshot, source_manifest=contract, **header_kwargs)
+            if template_page is not None:
+                from services.svg_templates.generation import compose_template_page
+                final = compose_template_page(snapshot, result.svg_content, template_page, source_manifest=contract)
+            else:
+                final = finalize_svg(result.svg_content, index=index, n=len(slides), width=canvas.width_px,
+                                     height=canvas.height_px, style_snapshot=snapshot, source_manifest=contract, **header_kwargs)
         except Exception as error:
             reject(error, "canonical_validation")
         try:
@@ -281,16 +317,25 @@ async def preview_svg(presentation, slides, index, request, task, session):
         furniture = (master_furniture_receipt(final, snapshot, index=index, n=len(slides),
             width=canvas.width_px, height=canvas.height_px, source_manifest=contract, header_page=header_page)
             if header_page is not None else None)
+        if template_page is not None:
+            furniture = master_furniture_receipt(final, snapshot, index=index, n=len(slides),
+                width=canvas.width_px, height=canvas.height_px, source_manifest=contract,
+                template_page_context=template_page)
         if assets is not None:
             placement = rebound_placement(final, assets[0], assets[1], revision=presentation.revision + 1)
             render_source = await materialize_rebound_svg(session, presentation, final, assets[0], placement, source_index)
         render = await render_svg_with_metrics(final, width=canvas.width_px, height=canvas.height_px,
             readability_policy=readability_policy,
             materialized_svg=render_source if render_source != final else None,
-            instructions=instruction, **({"timeline_ink_probe": True} if v7_source else {}),
+            instructions=instruction,
+            **({"font_manifest": snapshot["svg_template"]["package"]["font_manifest"]} if template_page is not None else {}),
+            **({"timeline_ink_probe": True} if v7_source else {}),
             **({"required_text": _required_numeric_claims(source)} if local_edit else {}),
             **({"system_furniture": furniture} if furniture is not None else {}),
             **physical_kwargs)
+        if template_page is not None:
+            from services.svg_templates.generation import apply_template_body_quality
+            apply_template_body_quality(render.quality, final, snapshot, template_page)
         if header_page is not None:
             from services.generation_core.drivers.svg.render import _apply_common_header_quality
             _apply_common_header_quality(render.quality, final, snapshot["common_header"], header_page, furniture)
@@ -303,6 +348,9 @@ async def preview_svg(presentation, slides, index, request, task, session):
     except Exception as error:
         reject(error, "source_quality", candidate_svg=final, candidate_native=native,
                candidate_quality=render.quality)
+    if not failure and template_page is not None and (render.quality.get("passed") is not True
+            or render.quality.get("measurement_complete") is not True):
+        failure = "svg_template_preservation_unverified"
     if not failure and local and (render.quality.get("passed") is not True
             or render.quality.get("measurement_complete") is not True
             or render.quality.get("source_digest") != source_digest(final)):
@@ -358,6 +406,7 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
         _json_cas_predicate, version_service,
     )
     target = slides[index]
+    frozen_snapshot, template_page = _template_context(presentation, slides, index)
     header_page = _common_header_page(presentation, slides, index)
     data = task.data or {}
     from services.svg_document_mutations import read_svg_slide_assets, rebind_svg_assets
@@ -409,6 +458,18 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
         if not isinstance(native, dict) or (target.content or {}).get(NATIVE_OBJECTS_KEY) != native_objects:
             raise AuthoredPageRemakeError("svg_page_remake_candidate_invalid", stage="publish_validation")
     canvas = presentation_canvas_contract(presentation.theme)
+    if template_page is not None:
+        from services.svg_templates.generation import compose_template_page
+        try:
+            source_contract = None
+            if assets is not None:
+                from services.svg_asset_resolver import _contract_manifest
+                source_index = target.content["svgAssetManifest"].get("sourcePageIndex", index)
+                offered = next(page.slot_ids for page in assets[0].offered_pages if page.page_index == source_index)
+                source_contract = {slot: policy for slot, policy in _contract_manifest(assets[0]).items() if slot in offered}
+            compose_template_page(frozen_snapshot, svg, template_page, allow_existing=True, source_manifest=source_contract)
+        except (ValueError, TypeError, ET.ParseError) as error:
+            raise AuthoredPageRemakeError("svg_template_frame_change_requires_new_revision", stage="publish_validation") from error
     envelope = None
     render_source = svg
     if assets is not None:
@@ -435,15 +496,25 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
         index=index, n=len(slides), width=canvas.width_px, height=canvas.height_px,
         source_manifest=furniture_manifest, header_page=header_page)
         if header_page is not None else None)
+    if template_page is not None:
+        furniture = master_furniture_receipt(svg, frozen_snapshot, index=index, n=len(slides),
+            width=canvas.width_px, height=canvas.height_px, source_manifest=source_contract,
+            template_page_context=template_page)
     from services.svg_presentation_checkpoint import _required_numeric_claims
     rendered = await render_svg_with_metrics(svg, width=canvas.width_px, height=canvas.height_px,
         readability_policy=readability_policy,
         materialized_svg=render_source if render_source != svg else None,
         instructions=data.get("instruction"),
+        **({"font_manifest": frozen_snapshot["svg_template"]["package"]["font_manifest"]} if template_page is not None else {}),
         **({"required_text": _required_numeric_claims((target.content or {}).get("source", ""))} if local_edit else {}),
         **({"timeline_ink_probe": True} if _v7_source_profile(presentation.theme.get("svg", {}).get("styleSnapshot", {})) else {}),
         **({"system_furniture": furniture} if furniture is not None else {}),
         **physical_kwargs)
+    if template_page is not None:
+        from services.svg_templates.generation import apply_template_body_quality
+        apply_template_body_quality(rendered.quality, svg, frozen_snapshot, template_page)
+        if rendered.quality.get("passed") is not True or rendered.quality.get("measurement_complete") is not True:
+            raise AuthoredPageRemakeError("svg_template_preservation_unverified", stage="publish_validation")
     if header_page is not None:
         from services.generation_core.drivers.svg.render import _apply_common_header_quality
         _apply_common_header_quality(rendered.quality, svg, presentation.theme["svg"]["styleSnapshot"].get("common_header"),

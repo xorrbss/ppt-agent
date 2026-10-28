@@ -25,6 +25,10 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import hashlib
+import re
+import stat
+from pathlib import Path
 import os
 import sys
 from typing import Any, Mapping
@@ -66,6 +70,10 @@ def _validate_request(value: Any) -> Mapping[str, Any]:
         "height_px",
         "preserved_raster_svg",
         "system_furniture",
+        "font_manifest",
+        "font_manifest_ref",
+        "canonical_svg",
+        "image_bindings",
     }:
         raise RendererPolicyError("renderer request has an invalid shape")
     if value.get("schema_version") != "authored-render-request/v1":
@@ -73,8 +81,31 @@ def _validate_request(value: Any) -> Mapping[str, Any]:
     html = value.get("html")
     if not isinstance(html, str) or len(html.encode("utf-8")) > MAX_HTML_BYTES:
         raise RendererPolicyError("renderer HTML limit exceeded")
-    if "system_furniture" in fields and ("preserved_raster_svg" not in fields or not isinstance(value["system_furniture"], dict)):
-        raise RendererPolicyError("renderer furniture attestation requires a raster derivative")
+    has_font = "font_manifest" in fields or "font_manifest_ref" in fields
+    if ("font_manifest" in fields and "font_manifest_ref" in fields
+            or has_font and "preserved_raster_svg" in fields
+            or "font_manifest" in fields and not isinstance(value["font_manifest"], dict)):
+        raise RendererPolicyError("renderer font manifest invalid")
+    if "font_manifest_ref" in fields:
+        ref = value["font_manifest_ref"]
+        if (not isinstance(ref, dict) or set(ref) != {"name", "sha256"}
+                or ref.get("name") != "font-manifest.json"
+                or not isinstance(ref.get("sha256"), str)
+                or re.fullmatch(r"sha256:[0-9a-f]{64}", ref["sha256"]) is None):
+            raise RendererPolicyError("renderer font manifest reference invalid")
+    if "system_furniture" in fields:
+        if not isinstance(value["system_furniture"], dict) or not (
+                "preserved_raster_svg" in fields or has_font and {"canonical_svg", "image_bindings"} <= fields):
+            raise RendererPolicyError("renderer furniture attestation requires an authorized SVG")
+    if "canonical_svg" in fields:
+        if (not has_font or not {"system_furniture", "image_bindings"} <= fields or "preserved_raster_svg" in fields
+                or not isinstance(value["canonical_svg"], str)
+                or len(value["canonical_svg"].encode("utf-8")) > 2 * 1024 * 1024):
+            raise RendererPolicyError("renderer canonical SVG binding invalid")
+    if "image_bindings" in fields and (not has_font or not {"system_furniture", "canonical_svg"} <= fields
+            or not isinstance(value["image_bindings"], dict)
+            or any(not isinstance(k, str) or not isinstance(v, str) for k, v in value["image_bindings"].items())):
+        raise RendererPolicyError("renderer image bindings invalid")
     if "preserved_raster_svg" in fields:
         raster = value["preserved_raster_svg"]
         if not isinstance(raster, str) or len(raster.encode("utf-8")) > MAX_REQUEST_BYTES:
@@ -113,8 +144,41 @@ def _read_legacy_request(prefix: bytes) -> Mapping[str, Any]:
     return request
 
 
+def _read_font_manifest(ref: dict, assets_root: Path | None) -> dict:
+    if assets_root is None or not assets_root.is_absolute() or not assets_root.is_dir():
+        raise RendererPolicyError("renderer font assets root unavailable")
+    root = assets_root.resolve(strict=True)
+    path = root / "font-manifest.json"
+    try:
+        info = path.lstat()
+        if not stat.S_ISREG(info.st_mode) or info.st_size > 90 * 1024 * 1024:
+            raise RendererPolicyError("renderer font manifest asset invalid")
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+        fd = os.open(path, flags)
+        with os.fdopen(fd, "rb") as stream:
+            opened = os.fstat(stream.fileno())
+            if not stat.S_ISREG(opened.st_mode) or opened.st_size != info.st_size:
+                raise RendererPolicyError("renderer font manifest asset invalid")
+            payload = stream.read(90 * 1024 * 1024 + 1)
+    except OSError as error:
+        raise RendererPolicyError("renderer font manifest asset unavailable") from error
+    if len(payload) > 90 * 1024 * 1024 or "sha256:" + hashlib.sha256(payload).hexdigest() != ref["sha256"]:
+        raise RendererPolicyError("renderer font manifest digest mismatch")
+    try:
+        result = json.loads(payload)
+    except (ValueError, UnicodeDecodeError) as error:
+        raise RendererPolicyError("renderer font manifest asset invalid") from error
+    if not isinstance(result, dict):
+        raise RendererPolicyError("renderer font manifest asset invalid")
+    from services.svg_templates.frame_fonts import MAX_FONT_BYTES, resolve_font_manifest
+    if sum(len(content) for _asset, content in resolve_font_manifest(result)) > MAX_FONT_BYTES:
+        raise RendererPolicyError("renderer font manifest byte limit exceeded")
+    return result
+
+
 async def _render(
-    request: Mapping[str, Any], session: Any = None, *, ordinal: int | None = None
+    request: Mapping[str, Any], session: Any = None, *, ordinal: int | None = None,
+    assets_root: Path | None = None,
 ) -> Mapping[str, Any]:
     # Import only after the worker environment and wire request are validated.  This
     # also prevents importing the network author/provider layer in the renderer.
@@ -135,7 +199,17 @@ async def _render(
         except RendererPolicyError:
             admitted = admit_static_output_html(source)
         from services.svg_renderer import materialize_trusted_svg_fonts
-        admitted = materialize_trusted_svg_fonts(source, admitted)
+        font_manifest = (request.get("font_manifest") if request.get("font_manifest_ref") is None
+                         else _read_font_manifest(request["font_manifest_ref"], assets_root))
+        if font_manifest is not None:
+            from services.svg_renderer import materialize_template_manifest_fonts, validate_template_render_furniture
+            if request.get("system_furniture") is not None:
+                validate_template_render_furniture(source, request["canonical_svg"], request["system_furniture"],
+                                                   width=width_px, height=height_px,
+                                                   image_bindings=request["image_bindings"])
+            admitted = materialize_template_manifest_fonts(source, admitted, font_manifest)
+        else:
+            admitted = materialize_trusted_svg_fonts(source, admitted)
     if session is None:
         png, metrics = await slide_capture._render_admitted_html_in_worker(
             admitted, timeout=timeout, width_px=width_px, height_px=height_px
@@ -233,7 +307,13 @@ def _serve_framed(first_header: bytes) -> int:
             pass
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    arguments = sys.argv[1:] if argv is None else argv
+    assets_root = None
+    if arguments:
+        if len(arguments) != 2 or arguments[0] != "--request-assets-root":
+            raise RendererPolicyError("renderer worker argument invalid")
+        assets_root = Path(arguments[1])
     framed = False
     try:
         if not is_authored_renderer_worker_process():
@@ -241,10 +321,12 @@ def main() -> int:
         assert_no_provider_secrets(os.environ)
         header = sys.stdin.buffer.read(FRAME_HEADER_BYTES)
         if header_is_frame(header, limit=MAX_REQUEST_BYTES):
+            if assets_root is not None:
+                raise RendererPolicyError("renderer font assets require single-shot worker")
             framed = True
             return _serve_framed(header)
         request = _read_legacy_request(header)
-        _write_response(asyncio.run(_render(request)))
+        _write_response(asyncio.run(_render(request, assets_root=assets_root)))
         return 0
     except Exception as exc:
         _write_response(_failure_response(exc, None), framed=framed)

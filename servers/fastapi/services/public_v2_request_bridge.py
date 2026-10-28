@@ -68,20 +68,23 @@ def build_internal_generation_request(
         language=request.language,
         template="authored",
         strategy=request.strategy,
-        common_header_mode=request.common_header_mode,
-        common_header_cover_exception=request.common_header_cover_exception,
-        common_header_design=request.common_header_design,
+        **({"common_header_mode": request.common_header_mode} if "common_header_mode" in request.model_fields_set else {}),
+        **({"common_header_cover_exception": request.common_header_cover_exception} if "common_header_cover_exception" in request.model_fields_set else {}),
+        **({"common_header_design": request.common_header_design} if "common_header_design" in request.model_fields_set else {}),
         qualityProfile=(
             "release" if request.quality_policy == "release-v1" else "development"
         ),
         visionQa=request.quality_policy == "release-v1",
         reference_snapshot_ids=reference_ids,
-        authored_style=request.authored_style,
+        **({"authored_style": request.authored_style} if "authored_style" in request.model_fields_set and request.svg_template_pin is None else {}),
         **({"svg_canvas": request.svg_canvas} if request.svg_canvas is not None
            else {"page_size": request.page_size, "orientation": request.orientation}
            if request.page_size is not None
            else {"aspect_ratio": request.aspect_ratio} if "aspect_ratio" in request.model_fields_set
            else {}),
+        svg_template_pin=request.svg_template_pin,
+        svg_template_mode=request.svg_template_mode,
+        svg_template_frame_map=request.svg_template_frame_map,
         svg_design_reference_snapshot_id=request.svg_design_reference_snapshot_id,
         svg_design_reference_pin=(request.svg_design_reference_pin.model_dump(mode="json", by_alias=True)
                                   if request.svg_design_reference_pin is not None else None),

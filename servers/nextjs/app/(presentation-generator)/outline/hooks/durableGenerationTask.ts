@@ -43,6 +43,9 @@ export interface DurableGenerationTask {
     authoredStyle: string;
     /** Legacy selector, omitted for common physical-canvas documents. */
     aspectRatio?: "16:9" | "9:16" | "9:13" | "1:1" | "21:9" | "4:3";
+    svgTemplatePin?: import("@/app/(presentation-generator)/services/api/svg-templates").SvgTemplatePin;
+    svgTemplateMode?: import("@/app/(presentation-generator)/services/api/svg-templates").SvgTemplateMode;
+    svgTemplateFrameMap?: Record<string, string>;
     svgDesignReferenceSnapshotId?: string;
     svgDesignReferencePin?: { design_pack_id: string; version: number; digest: string };
     svgCanvas?: { width_mm: number; height_mm: number };

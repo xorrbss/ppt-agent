@@ -941,6 +941,10 @@ async def transition_workspace_asset(
 ) -> WorkspaceAsset:
     await _require_active_asset_owner(session)
     asset = await get_workspace_asset(session, asset_id=asset_id)
+    if request.state in {"expired", "deleted"}:
+        from services.svg_templates.retention import asset_is_retained
+        if await asset_is_retained(session, asset.id):
+            raise WorkspaceServiceError("workspace_asset_retained_by_template", status_code=409)
     if asset.version != request.expected_version:
         raise WorkspaceServiceError("workspace_asset_version_conflict", status_code=409)
     if request.state not in _ASSET_TRANSITIONS[asset.state]:
@@ -1022,6 +1026,8 @@ async def expire_orphan_workspace_assets(
     limit: int = 100,
     commit: bool = True,
 ) -> int:
+    from services.svg_templates.retention import asset_unretained, retention_schema_available
+    template_retention = await retention_schema_available(session)
     now = now or get_current_utc_datetime()
     older_than = older_than or now
     eligible_expiry = or_(
@@ -1037,6 +1043,7 @@ async def expire_orphan_workspace_assets(
                 select(WorkspaceAsset)
                 .where(
                     WorkspaceAsset.conversation_id.is_(None),
+                    asset_unretained(WorkspaceAsset.id, schema_available=template_retention),
                     WorkspaceAsset.state.notin_({"expired", "deleted"}),
                     eligible_expiry,
                 )
@@ -1052,6 +1059,7 @@ async def expire_orphan_workspace_assets(
                 update(WorkspaceAsset)
                 .where(
                     WorkspaceAsset.id == asset.id,
+                    asset_unretained(WorkspaceAsset.id, schema_available=template_retention),
                     WorkspaceAsset.conversation_id.is_(None),
                     WorkspaceAsset.state.notin_({"expired", "deleted"}),
                     WorkspaceAsset.version == asset.version,
@@ -1084,12 +1092,14 @@ async def cleanup_expired_workspace_assets(
     limit: int = 100,
     commit: bool = True,
 ) -> int:
+    from services.svg_templates.retention import asset_unretained, retention_schema_available
+    template_retention = await retention_schema_available(session)
     root = (storage_root or Path(get_writable_path("workspace_assets"))).resolve()
     assets = list(
         (
             await session.scalars(
                 select(WorkspaceAsset)
-                .where(WorkspaceAsset.state == "expired")
+                .where(WorkspaceAsset.state == "expired", asset_unretained(WorkspaceAsset.id, schema_available=template_retention))
                 .order_by(WorkspaceAsset.updated_at, WorkspaceAsset.id)
                 .limit(max(1, min(limit, 1000)))
             )

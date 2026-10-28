@@ -953,6 +953,14 @@ class SqlPublicV2Orchestrator:
                     )
                 except SourceContentError as error:
                     raise _public_error(error.status_code, error.code) from error
+            if internal_request.svg_template_pin is not None:
+                from services.presentation_generation_pipeline import _admit_svg_template
+                from fastapi import HTTPException
+
+                try:
+                    await _admit_svg_template(internal_request, session)
+                except HTTPException as error:
+                    raise _public_error(error.status_code, str(error.detail)) from error
             if internal_request.svg_design_reference_snapshot_id is not None:
                 from services.presentation_generation_pipeline import _admit_svg_design_reference
                 from fastapi import HTTPException
@@ -1689,7 +1697,9 @@ class SqlPublicV2Orchestrator:
                         if request.output.mode == "editable-hybrid"
                         else "fidelity"
                     ),
-                    "font_embedding": request.output.font_embedding == "subset",
+                    **({"font_embedding": request.output.font_embedding == "subset"}
+                       if "font_embedding" in request.output.model_fields_set
+                       or request.output.font_embedding == "subset" else {}),
                     "fallback_policy": request.output.fallback_policy,
                     "required_capabilities": request.output.required_capabilities,
                 },

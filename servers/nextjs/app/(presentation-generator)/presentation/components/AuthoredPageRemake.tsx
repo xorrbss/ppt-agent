@@ -15,6 +15,7 @@ import { notify } from "@/components/ui/sonner";
 import type { RootState } from "@/store/store";
 import { ReactReduxContext } from "react-redux";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
+import SvgTemplateEditScopeNotice from "./SvgTemplateEditScopeNotice";
 import { PageRemakePreviewImage } from "./PageRemakePreviewImage";
 import type { WorkspaceCommandDispatcher } from "../workspace";
 import {
@@ -229,6 +230,7 @@ function PageRemakeFlow({
 
   return (
     <>
+      <SvgTemplateEditScopeNotice theme={reduxContext ? (reduxContext.store.getState() as RootState).presentationGeneration.presentationData?.theme : null} />
       {!preview ? (
         <section className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-5">
           <div className="flex items-start gap-3">

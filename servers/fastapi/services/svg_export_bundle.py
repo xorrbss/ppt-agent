@@ -158,7 +158,7 @@ def _manifest_digests(assets):
 
 def build_svg_export_bundle(*, claim, slide_refs, source_digests, notes, canvas, export_format, font_embedding,
                             assets, source_preservation=None, native_objects=None,
-                            source_manifest=None, source_manifest_encoding=None) -> dict:
+                            source_manifest=None, source_manifest_encoding=None, font_manifest=None, system_furniture=None) -> dict:
     """Assemble the bundle payload plus its ``canonicalExportIdentity``.
 
     ``slide_refs`` are the per-slide worker artifact-ref wires, ``source_digests``
@@ -182,6 +182,21 @@ def build_svg_export_bundle(*, claim, slide_refs, source_digests, notes, canvas,
         "canvas": canvas, "format": export_format, "converter": payload["converterDigest"],
         "contract": SVG_CONTRACT_VERSION, "fontEmbedding": payload["fontEmbedding"],
     })
+    if font_manifest is not None:
+        from services.svg_templates.frame_fonts import resolve_font_manifest
+        from models.svg_template_frame import SvgTemplateFontManifest
+        manifest = SvgTemplateFontManifest.model_validate(font_manifest)
+        resolve_font_manifest(manifest)
+        payload["fontManifest"] = manifest.model_dump(mode="json")
+        payload["canonicalExportIdentity"] = digest({"legacyIdentity": payload["canonicalExportIdentity"],
+                                                     "fontManifestDigest": manifest.digest})
+    if system_furniture is not None:
+        if len(system_furniture) != len(payload["slides"]):
+            raise ValueError("svg_template_furniture_count_invalid")
+        for entry, receipt in zip(payload["slides"], system_furniture, strict=True):
+            entry["systemFurniture"] = receipt
+        payload["canonicalExportIdentity"] = digest({"legacyIdentity": payload["canonicalExportIdentity"],
+                                                     "systemFurniture": system_furniture})
     if source_preservation is not None:
         payload.update(schemaVersion=(SVG_EXPORT_SCHEMA_V4 if source_manifest is not None else SVG_EXPORT_SCHEMA_V3),
                        contractVersion="svg-static/v2",

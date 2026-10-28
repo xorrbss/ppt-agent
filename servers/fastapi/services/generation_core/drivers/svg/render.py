@@ -409,11 +409,29 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
         payload["readability_policy"] = readability_policy
     cache_remeasurement = payload.get("cache_only_remeasurement")
     timeline_source = content if profile and profile["version"] in (5, 6, 7, 8) and source_timeline_rows(content) else None
+    template_page = None
+    if ctx.snapshot.get("svg_template") is not None:
+        from services.svg_templates.generation import template_page_context
+        template_page = template_page_context(ctx.snapshot, index, ctx.count, content)
+        saved_template_page = payload.get("svg_template_page")
+        if saved_template_page is not None and saved_template_page != template_page:
+            raise ValueError("svg_template_page_context_changed")
+        if template_page is not None:
+            payload["svg_template_page"] = template_page
 
     try:
         if payload["attempts"][-1]["receipt"].get("validation_error"):
             raise ValueError(payload["attempts"][-1]["receipt"]["validation_error"])
-        if ctx.source_reflow and (ctx.snapshot.get("common_header") or {}).get("version") == "svg-common-header/v2":
+        if template_page is not None:
+            from services.svg_templates.generation import compose_template_page
+            template_source_manifest = ({slot: {"required": item["policy"]["required"],
+                "allowOmit": item["policy"]["allowOmit"]} for slot, item in ctx.manifests[index].items()}
+                if ctx.canonical_assets else None)
+            final = compose_template_page(ctx.snapshot, svg, template_page,
+                source_manifest=template_source_manifest,
+                allow_existing=bool(cache_remeasurement or payload.get("cached_author_render")
+                                    or allow_existing_common_header))
+        elif ctx.source_reflow and (ctx.snapshot.get("common_header") or {}).get("version") == "svg-common-header/v2":
             from services.svg_source_layout import compose_source_common_header
             final, source_receipt = compose_source_common_header(
                 svg, payload.get("source_preservation"), ctx.source_document, index,
@@ -475,7 +493,7 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
                 before = final
                 final, substitutions = substitute_svg_visible_symbols(
                     final, source_values=source_values, required_text=required_text,
-                    protected_element_ids=(GROUP_ID,))
+                    protected_element_ids=(GROUP_ID, "svg-system-template-background", "svg-system-template-foreground"))
                 if substitutions:
                     payload["attempts"][-1]["writing_policy_substitution"] = {
                         "version": "svg-visible-symbol-substitution/v1",
@@ -501,7 +519,8 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
                                   if binding.get("kind") == "image"}
         furniture_receipt = (None if preserved_raster else master_furniture_receipt(final, ctx.snapshot,
             index=index, n=ctx.count, width=ctx.canvas.width_px, height=ctx.canvas.height_px,
-            source_manifest=furniture_contract, header_page=header_page))
+            source_manifest=furniture_contract, header_page=header_page,
+            **({"template_page_context": template_page} if template_page is not None else {})))
         if furniture_receipt is not None:
             payload["system_furniture"] = furniture_receipt
         materialized = None
@@ -592,6 +611,8 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
                                                         if raster_authorized_measurement else {}),
                                                      **({"source_font_profile": font_profile}
                                                         if font_profile else {}),
+                                                     **({"font_manifest": ctx.snapshot["svg_template"]["package"]["font_manifest"]}
+                                                        if template_page is not None else {}),
                                                      **({"system_furniture": furniture_receipt} if furniture_receipt is not None else {}),
                                                       **({"timeline_ink_probe": True} if timeline_source or profile and profile["version"] in (7, 8) else {}),
                                                      materialized_svg=materialized, **ctx.physical_kwargs)
@@ -641,6 +662,9 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
         raise AuthoredStageError(slide_index=index, stage="render", code="svg_cache_remeasurement_changed", retryable=False)
     _apply_common_header_quality(rendered.quality, final, ctx.snapshot.get("common_header"),
                                  header_page, furniture_receipt)
+    if template_page is not None:
+        from services.svg_templates.generation import apply_template_body_quality
+        apply_template_body_quality(rendered.quality, final, ctx.snapshot, template_page)
     if not (ctx.source_reflow or ctx.raster_reconstruction):
         from services.authored_canvas import request_canvas_metadata
         from services.generation_core.drivers.svg.native_publish import canvas_point_per_px

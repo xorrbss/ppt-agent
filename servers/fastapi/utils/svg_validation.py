@@ -110,6 +110,7 @@ def validate_svg(
     source_manifest: dict | None = None,
     allow_image_only: bool = False,
     trusted_furniture_images: dict[str, str] | None = None,
+    _allow_textless_frame_review: bool = False,
 ) -> dict:
     if not isinstance(svg, str) or len(svg.encode("utf-8")) > 2 * 1024 * 1024:
         raise ValueError("svg_contract_size_limit")
@@ -245,7 +246,7 @@ def validate_svg(
         for slot, item in source_manifest.items()
     ):
         raise ValueError("svg_required_source_image_missing")
-    if not any(t.strip() for t in text_runs) and not (
+    if not _allow_textless_frame_review and not any(t.strip() for t in text_runs) and not (
         allow_image_only and any(str(node.tag).endswith("}image") or str(node.tag) == "image" for node in root.iter())
     ):
         raise ValueError("svg_contract_visible_text_required")

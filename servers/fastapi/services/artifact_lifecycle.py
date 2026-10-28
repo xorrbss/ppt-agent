@@ -25,6 +25,8 @@ from models.sql.public_artifact import (
     PublicSlideCheckpoint,
 )
 from models.sql.workspace import WorkspaceArtifact
+from models.sql.svg_template import SvgTemplateAssetBinding
+from services.svg_templates.retention import retention_schema_available
 from services.artifact_store import (
     ArtifactObjectStore,
     ArtifactStoreError,
@@ -116,8 +118,9 @@ class ArtifactLifecycleAuthority(Protocol):
     # freshly exclude every live sibling/pointer, and preserve sibling grace.
 
 
-def _live_artifact_pointer():
+def _live_artifact_pointer(*, template_retention=True):
     return or_(
+        exists().where(SvgTemplateAssetBinding.artifact_id == PublicArtifact.id) if template_retention else False,
         exists().where(PublicArtifactPublication.artifact_id == PublicArtifact.id),
         exists().where(PublicSlideCheckpoint.artifact_id == PublicArtifact.id),
         exists().where(
@@ -207,7 +210,7 @@ class SqlArtifactLifecycleAuthority:
             predicates.append(PublicArtifact.refcount >= -ref_count_delta)
         if next_state in {"tombstoned", "deleted"}:
             predicates.append(PublicArtifact.refcount == 0)
-            predicates.append(~_live_artifact_pointer())
+            predicates.append(~_live_artifact_pointer(template_retention=await retention_schema_available(self._session)))
         values: dict[str, object] = {
             "lifecycle_state": next_state,
             "refcount": PublicArtifact.refcount + ref_count_delta,
@@ -259,7 +262,7 @@ class SqlArtifactLifecycleAuthority:
                 PublicArtifact.refcount == 0,
                 PublicArtifact.updated_at <= older_than,
                 or_(PublicArtifact.expires_at.is_(None), PublicArtifact.expires_at <= older_than),
-                ~_live_artifact_pointer(),
+                ~_live_artifact_pointer(template_retention=await retention_schema_available(self._session)),
             )
             .with_for_update(skip_locked=True)
             .execution_options(populate_existing=True, autoflush=False)
@@ -273,7 +276,7 @@ class SqlArtifactLifecycleAuthority:
             .where(
                 PublicArtifact.storage_key == reference.storage_key,
                 or_(
-                    _live_artifact_pointer(),
+                    _live_artifact_pointer(template_retention=await retention_schema_available(self._session)),
                     PublicArtifact.refcount > 0,
                     PublicArtifact.lifecycle_state.not_in(("tombstoned", "deleted")),
                     and_(
@@ -316,7 +319,7 @@ class SqlArtifactLifecycleAuthority:
                         PublicArtifact.expires_at.is_(None),
                         PublicArtifact.expires_at <= older_than,
                     ),
-                    ~_live_artifact_pointer(),
+                    ~_live_artifact_pointer(template_retention=await retention_schema_available(self._session)),
                 )
                 .order_by(PublicArtifact.updated_at, PublicArtifact.id)
                 .limit(limit)
@@ -341,7 +344,7 @@ class SqlArtifactLifecycleAuthority:
                     PublicArtifact.refcount == 0,
                     PublicArtifact.expires_at.is_not(None),
                     PublicArtifact.expires_at <= expires_at_or_before,
-                    ~_live_artifact_pointer(),
+                    ~_live_artifact_pointer(template_retention=await retention_schema_available(self._session)),
                 )
                 .order_by(PublicArtifact.expires_at, PublicArtifact.id)
                 .limit(limit)

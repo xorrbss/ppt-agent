@@ -68,8 +68,37 @@ def _insert_embedded_font_list(presentation_root: ET.Element, embedded_font_lst:
     presentation_root.set("embedTrueTypeFonts", "1")
 
 
-def trusted_export_font_faces(font_usage=None):
+def trusted_export_font_faces(font_usage=None, *, font_manifest=None):
     """Return only bounded trusted faces, keyed by actual OOXML family/slot."""
+    if font_manifest is not None:
+        from services.svg_templates.frame_fonts import resolve_font_manifest
+        entries = resolve_font_manifest(font_manifest)
+        if not entries:
+            raise ValueError("svg_template_font_manifest_invalid")
+        lookup = {}
+        for asset, payload in entries:
+            if asset.collection_index != 0 or asset.weight not in _WEIGHT_SLOT:
+                raise ValueError("svg_template_export_font_face_unsupported")
+            for name in (asset.family, *asset.family_aliases):
+                key = (name.casefold(), asset.weight)
+                if key in lookup and lookup[key][0].digest != asset.digest:
+                    raise ValueError("svg_template_font_face_conflict")
+                lookup[key] = (asset, payload)
+        result = []
+        seen = set()
+        requested = ([(family, weight) for family, weights in font_usage.items() for weight in weights]
+                     if font_usage is not None else
+                     [(name, asset.weight) for asset, _ in entries for name in (asset.family, *asset.family_aliases)])
+        for family, weight in sorted(requested):
+            key = (family.casefold(), weight)
+            if key in seen:
+                continue
+            if key not in lookup:
+                raise ValueError("svg_template_font_unavailable")
+            asset, payload = lookup[key]
+            seen.add(key)
+            result.append((family, _WEIGHT_SLOT[weight], asset.digest, payload))
+        return tuple(result)
     if font_usage is None:
         return tuple((FONT_FAMILY, _WEIGHT_SLOT[weight], digest, payload)
             for weight, digest, payload in read_trusted_pretendard_faces())
@@ -96,7 +125,7 @@ def trusted_export_font_faces(font_usage=None):
     return tuple(result)
 
 
-def embed_trusted_fonts(target: Path, *, font_usage=None) -> tuple[str, ...]:
+def embed_trusted_fonts(target: Path, *, font_usage=None, font_manifest=None) -> tuple[str, ...]:
     """Embed the bundled Pretendard faces into the pptx at ``target``, in place.
 
     The default preserves the historical Pretendard contract. Whole-page
@@ -104,7 +133,7 @@ def embed_trusted_fonts(target: Path, *, font_usage=None) -> tuple[str, ...]:
     Returns each embedded face's digest for the export receipt to bind to.
     """
 
-    faces = trusted_export_font_faces(font_usage)
+    faces = trusted_export_font_faces(font_usage, font_manifest=font_manifest)
     with zipfile.ZipFile(target) as archive:
         entries = {name: archive.read(name) for name in archive.namelist()}
 

@@ -53,6 +53,9 @@ export type PublicV2GenerationRequest = {
   commonHeaderDesign?: import("@/lib/common-header-design").CommonHeaderDesign;
   commonHeaderMode?: "uniform" | "free";
   commonHeaderCoverException?: boolean;
+  svgTemplatePin?: import("@/app/(presentation-generator)/services/api/svg-templates").SvgTemplatePin;
+  svgTemplateMode?: import("@/app/(presentation-generator)/services/api/svg-templates").SvgTemplateMode;
+  svgTemplateFrameMap?: Record<string, string>;
   svgDesignReferenceSnapshotId?: string;
   svgDesignReferencePin?: PublicV2DesignPackPin;
   aspectRatio?: "16:9" | "9:16" | "9:13" | "4:3" | "1:1" | "21:9";

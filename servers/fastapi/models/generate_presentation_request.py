@@ -101,6 +101,39 @@ class DesignPackPinInput(StrictCamelModel):
     digest: Digest
 
 
+class SvgTemplatePinInput(StrictCamelModel):
+    template_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+    revision: int = Field(ge=1)
+    digest: Digest
+
+
+def validate_svg_template_selection(request: Any) -> None:
+    pin = request.svg_template_pin
+    mode = request.svg_template_mode
+    frame_map = request.svg_template_frame_map
+    if (pin is None) != (mode is None):
+        raise ValueError("svg_template_pin_mode_required")
+    if frame_map is not None and mode != "template-redesign":
+        raise ValueError("svg_template_frame_map_requires_redesign")
+    if pin is None:
+        return
+    if request.strategy != "svg" or request.generation_mode not in {"auto", "free-design"}:
+        raise ValueError("svg_template_strategy_required")
+    if any(value is not None for value in (request.master_pin, request.design_pack_pin,
+            request.svg_design_reference_pin, request.svg_design_reference_snapshot_id)):
+        raise ValueError("svg_template_selection_conflict")
+    if "authored_style" in request.model_fields_set and request.authored_style is not None:
+        raise ValueError("svg_template_authored_style_conflict")
+    if request.source_mode == "source_content_restyle":
+        raise ValueError("svg_template_source_mode_unsupported")
+    if mode == "template-redesign":
+        if request.source_mode is not None:
+            raise ValueError("svg_template_source_mode_unsupported")
+        if (request.common_header_mode == "uniform" or request.common_header_design is not None
+                or request.common_header_cover_exception):
+            raise ValueError("svg_template_common_header_conflict")
+
+
 class GeneratePresentationRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -137,6 +170,7 @@ class GeneratePresentationRequest(BaseModel):
     _authored_composition_profile: Any = PrivateAttr(default=None)
     _authored_canvas: Any = PrivateAttr(default=None)
     _document_canvas: Any = PrivateAttr(default=None)
+    _svg_template_selection: Any = PrivateAttr(default=None)
     _svg_style_snapshot: Any = PrivateAttr(default=None)
     _svg_header_title_plan: Any = PrivateAttr(default=None)
     _svg_header_design_plan: Any = PrivateAttr(default=None)
@@ -206,6 +240,9 @@ class GeneratePresentationRequest(BaseModel):
     svg_canvas: Optional[SvgCanvasInput] = Field(default=None, alias="svgCanvas", exclude_if=lambda value: value is None)
     svg_design_reference_snapshot_id: Optional[uuid.UUID] = Field(default=None, alias="svgDesignReferenceSnapshotId", exclude_if=lambda value: value is None)
     svg_design_reference_pin: Optional[DesignPackPinInput] = Field(default=None, alias="svgDesignReferencePin", exclude_if=lambda value: value is None)
+    svg_template_pin: Optional[SvgTemplatePinInput] = Field(default=None, alias="svgTemplatePin", exclude_if=lambda value: value is None)
+    svg_template_mode: Optional[Literal["free-design", "template-redesign"]] = Field(default=None, alias="svgTemplateMode", exclude_if=lambda value: value is None)
+    svg_template_frame_map: Optional[dict[str, str]] = Field(default=None, alias="svgTemplateFrameMap", exclude_if=lambda value: value is None)
     page_size: Optional[Literal["A4"]] = None
     orientation: Optional[Literal["landscape", "portrait"]] = None
 
@@ -233,6 +270,9 @@ class GeneratePresentationRequest(BaseModel):
     @model_serializer(mode="wrap")
     def serialize_canvas_selectors(self, handler):
         payload = handler(self)
+        if self.svg_template_pin is not None and self.source_mode == "raster_reconstruction":
+            payload.pop("authored_style", None)
+            payload.pop("authoredStyle", None)
         if self.common_header_mode is None:
             payload.pop("common_header_mode", None)
             payload.pop("common_header_cover_exception", None)
@@ -378,6 +418,7 @@ class GeneratePresentationRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_generation_mode(self) -> "GeneratePresentationRequest":
+        validate_svg_template_selection(self)
         if self.common_header_design is not None and (
             self.strategy == "authored" or self.common_header_mode == "free"
         ):

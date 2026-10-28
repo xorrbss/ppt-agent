@@ -46,7 +46,8 @@ def pin_fresh_common_header_mode(request: object) -> None:
             or getattr(request, "_svg_authoring_profile_selected", False)):
         return
     from services.svg_common_header_design_plan import fresh_header_mode
-    request.common_header_mode = fresh_header_mode(request)
+    request.common_header_mode = ("free" if getattr(request, "svg_template_mode", None) == "template-redesign"
+                                  else fresh_header_mode(request))
     request._common_header_defaulted = True
 
 
@@ -82,6 +83,7 @@ def svg_creation_admission_violation(request: object) -> str | None:
         if condition:
             return code() if callable(code) else code
     references = (
+        getattr(request, "svg_template_pin", None),
         getattr(request, "svg_design_reference_pin", None),
         getattr(request, "svg_design_reference_snapshot_id", None),
         getattr(request, "master_pin", None),
@@ -181,6 +183,11 @@ def _resolve_master_rules(request: object, canvas: object) -> tuple[dict | None,
 
 def _resolve_design_reference(request: object, canvas: object) -> dict | None:
     """Resolve a new SVG design reference once under the request's owner."""
+    if getattr(request, "svg_template_pin", None) is not None:
+        selection = getattr(request, "_svg_template_selection", None)
+        if not isinstance(selection, dict):
+            raise HTTPException(status_code=422, detail="svg_template_admission_required")
+        return selection.get("style_projection") or None
     pin = getattr(request, "svg_design_reference_pin", None)
     if pin is None:
         if getattr(request, "svg_design_reference_snapshot_id", None) is not None:
@@ -346,8 +353,16 @@ def pin_svg_style(request: object) -> dict:
                 )
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
+        if getattr(request, "svg_template_pin", None) is not None:
+            from services.svg_templates.generation import apply_template_snapshot
+            apply_template_snapshot(frozen, request)
         request._svg_style_snapshot = frozen
     try:
+        if getattr(request, "svg_template_pin", None) is not None:
+            from services.svg_templates.generation import template_selection
+            selected = template_selection(frozen)
+            if selected is None or selected != getattr(request, "_svg_template_selection", None):
+                raise ValueError("svg_template_execution_snapshot_conflict")
         validate_profile_agreement(request, frozen)
         validate_quality_recovery_agreement(request, frozen)
         from services.svg_common_header_design_plan import require_header_design_plan, validate_header_design_plan

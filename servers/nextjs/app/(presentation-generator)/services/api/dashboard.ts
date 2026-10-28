@@ -66,6 +66,10 @@ export interface PresentationGenerationSettings {
   web_search: boolean;
   mode: string | null;
   version: string;
+  authored_style?: string;
+  svg_template_pin?: import("./svg-templates").SvgTemplatePin | null;
+  svg_template_mode?: import("./svg-templates").SvgTemplateMode | null;
+  svg_template_frame_map?: Record<string, string> | null;
 }
 
 export interface PresentationGenerationInfo {
@@ -165,7 +169,7 @@ export class DashboardApi {
   }
 
   static async getPresentationGenerationInfo(
-    id: string
+    id: string, signal?: AbortSignal
   ): Promise<PresentationGenerationInfo> {
     try {
       const response = await fetch(
@@ -173,6 +177,7 @@ export class DashboardApi {
         {
           method: "GET",
           credentials: "include",
+          signal,
         }
       );
 

@@ -40,6 +40,7 @@ from models.sql.workspace import (
     WorkspaceOutbox,
 )
 from models.sql.reference_snapshot import ReferenceSnapshot
+from models.sql.svg_template import (SvgTemplate, SvgTemplateVersion, SvgTemplateFrameAdaptation, SvgTemplateAssetBinding)
 from models.sql.asset_gateway_idempotency_receipt import (
     AssetGatewayIdempotencyReceipt,
 )
@@ -57,6 +58,7 @@ from utils.owner_context import (
 
 
 _STRICT_OWNER_MODELS = (
+    SvgTemplate, SvgTemplateVersion, SvgTemplateFrameAdaptation, SvgTemplateAssetBinding,
     PresentationModel,
     SlideModel,
     PresentationLayoutCodeModel,
@@ -90,6 +92,7 @@ _STRICT_OWNER_MODELS = (
 # insufficient because an external issuer may legitimately reuse the same
 # subject UUID in more than one tenant.
 _STRICT_TENANT_MODELS = (
+    SvgTemplate, SvgTemplateVersion, SvgTemplateFrameAdaptation, SvgTemplateAssetBinding,
     PublicOperationAdmission,
     PublicArtifact,
     PublicExportIdentity,

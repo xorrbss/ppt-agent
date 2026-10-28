@@ -404,6 +404,9 @@ def _request_from_durable_payload(payload: dict) -> GeneratePresentationRequest:
     request._svg_header_design_plan = header_design_plan
     request._generation_strategy_reason = strategy_reason
     request._svg_style_snapshot = svg_style_snapshot
+    if isinstance(svg_style_snapshot, dict) and "svg_template" in svg_style_snapshot:
+        from services.svg_templates.generation import template_selection
+        request._svg_template_selection = template_selection(svg_style_snapshot)
     if (svg_style_snapshot or {}).get("common_header_design_plan") != header_design_plan:
         raise ValueError("svg_common_header_design_plan_conflict")
     if svg_style_snapshot is not None:

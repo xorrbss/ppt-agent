@@ -192,7 +192,7 @@ async def execute_svg_export(job, store, *, bundle=None):
     v2 = value.get("schemaVersion") == SVG_EXPORT_SCHEMA_V2
     v3 = value.get("schemaVersion") == SVG_EXPORT_SCHEMA_V3
     v4 = value.get("schemaVersion") == SVG_EXPORT_SCHEMA_V4
-    expected_keys = _BUNDLE_KEYS | ({"nativeObjects"} & set(value))
+    expected_keys = _BUNDLE_KEYS | ({"nativeObjects", "fontManifest"} & set(value))
     if v2 or v3 or v4:
         expected_keys |= {"presentationId", "sourceRevision"}
         if v4:
@@ -214,6 +214,12 @@ async def execute_svg_export(job, store, *, bundle=None):
     font_embedding = value["fontEmbedding"]
     if type(font_embedding) is not bool or (font_embedding and fmt != "pptx"):
         raise PublicWorkerExecutionError("svg_export_font_embedding_invalid")
+    font_manifest = value.get("fontManifest")
+    if font_manifest is not None:
+        if (fmt == "pptx" and not font_embedding) or v3 or v4:
+            raise PublicWorkerExecutionError("svg_template_font_export_unsupported")
+        from services.svg_templates.frame_fonts import resolve_font_manifest
+        resolve_font_manifest(font_manifest)
     if (fmt not in {"pptx", "pdf"} or ((v3 or v4) and fmt != "pptx") or not isinstance(slides, list)
             or not 1 <= len(slides) <= 100):
         raise PublicWorkerExecutionError("svg_export_slide_count_invalid")
@@ -255,6 +261,8 @@ async def execute_svg_export(job, store, *, bundle=None):
         expected_slide_keys = ({"slideIndex", "artifactRef", "notes", "assets", "sourcePreservation"}
                                if v3 or v4 else {"slideIndex", "artifactRef", "notes", "assets"}
                                if v2 else {"slideIndex", "artifactRef", "notes"})
+        if "systemFurniture" in entry:
+            expected_slide_keys.add("systemFurniture")
         if (set(entry) != expected_slide_keys or entry["slideIndex"] != index
                 or not isinstance(entry["notes"], str) or len(entry["notes"]) > 100000):
             raise PublicWorkerExecutionError("svg_export_slide_invalid")
@@ -291,7 +299,16 @@ async def execute_svg_export(job, store, *, bundle=None):
                    {"system_furniture": assets["systemFurniture"]} if assets.get("systemFurniture") else {})))
         else:
             validate_svg(source, width=canvas.width_px, height=canvas.height_px)
+            source_contract = None
             admitted_assets.append(None)
+        if "systemFurniture" in entry:
+            from services.svg_master_furniture import attested_svg_furniture
+            if font_manifest is None:
+                raise PublicWorkerExecutionError("svg_template_font_manifest_missing")
+            attested_svg_furniture(canonical_sources[-1], entry["systemFurniture"],
+                source_manifest=source_contract, width=canvas.width_px, height=canvas.height_px)
+        elif font_manifest is not None:
+            raise PublicWorkerExecutionError("svg_template_furniture_binding_missing")
         if v3 or v4:
             # A placeholder binds no source image, so it may carry no derivative.
             image_bindings = [binding for binding in (source_preservation[-1] or {}).get("bindings", [])
@@ -329,6 +346,14 @@ async def execute_svg_export(job, store, *, bundle=None):
                                       "nativeObjects": value["nativeObjects"]})
         if identity != value["canonicalExportIdentity"]:
             raise PublicWorkerExecutionError("svg_source_export_bundle_identity_mismatch")
+    template_font_usage = None
+    if font_manifest is not None:
+        from services.svg_renderer import _template_manifest_materials
+        template_font_usage = {}
+        for source in canonical_sources:
+            _manifest, _entries, used = _template_manifest_materials(font_manifest, source)
+            for family, weight, _asset in used:
+                template_font_usage.setdefault(family, set()).add(weight)
     with tempfile.TemporaryDirectory(prefix="public-svg-export-") as temporary:
         stage_timings["bundleRead"] = time.monotonic() - stage_started
         stage_started = time.monotonic()
@@ -373,6 +398,8 @@ async def execute_svg_export(job, store, *, bundle=None):
                     source_preservation=source_preservation if v3 else None,
                     expected_image_digests=expected_image_digests if v3 else None,
                     font_embedding=font_embedding, native_objects=native_objects,
+                    **({"font_manifest": font_manifest, "font_usage": template_font_usage}
+                       if font_manifest is not None else {}),
                     **({"native_coverage_sources": canonical_sources} if v2 else {}))
                 # The converter call includes its own internal OOXML readback.
                 stage_timings["conversion"] = time.monotonic() - stage_started
@@ -416,11 +443,16 @@ async def execute_svg_export(job, store, *, bundle=None):
             # Vector PDF: native objects are a PPTX concept; drawn groups print as-is.
             from workers.public_svg_pdf_export import export_svg_pdf
             export_svg_pdf(sources, admitted_assets, canvas, target,
-                           timeout=max(1, min(120, int(job.deadline_epoch_seconds - time.time()))))
+                           timeout=max(1, min(120, int(job.deadline_epoch_seconds - time.time()))),
+                           **({"font_manifest": font_manifest, "canonical_sources": canonical_sources}
+                              if font_manifest is not None else {}))
             stage_timings["conversion"] = time.monotonic() - stage_started
             stage_started = time.monotonic()
             mode = "svg-vector-pdf"
             readback = {"slideCount": len(sources), "rasterized": False, "vectorText": True}
+        if font_manifest is not None:
+            from services.svg_export_bundle import digest as bundle_digest
+            readback["templateFurnitureDigests"] = [bundle_digest(entry["systemFurniture"]) for entry in slides]
         stage_timings["readback"] = time.monotonic() - stage_started
         stage_started = time.monotonic()
         artifact = store.put_path(

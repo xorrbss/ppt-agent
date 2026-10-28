@@ -439,6 +439,8 @@ async def admit_svg_header_design_operation(session, *, operation, presentation,
         raise ValueError("svg_common_header_page_inputs_invalid")
     job = await _source_job(session, presentation)
     snapshot = ((presentation.theme or {}).get("svg") or {}).get("styleSnapshot") or {}
+    if (snapshot.get("svg_template") or {}).get("mode") == "template-redesign":
+        raise ValueError("svg_template_frame_change_requires_new_revision")
     if not snapshot or not snapshot.get("digest"):
         raise ValueError("svg_common_header_style_snapshot_required")
     design = _admitted_design(operation.request_payload["context"]["common_header_design"], snapshot)
@@ -518,6 +520,9 @@ class WorkspaceSvgHeaderDesignOperationHandler:
                     or owner.fencing_token != claim.fencing_token or owner.cancel_requested_at is not None
                     or presentation.revision != claim.expected_revision):
                 raise ValueError("svg_header_design_operation_fence_lost")
+            frozen_snapshot = ((presentation.theme or {}).get("svg") or {}).get("styleSnapshot") or {}
+            if (frozen_snapshot.get("svg_template") or {}).get("mode") == "template-redesign":
+                raise ValueError("svg_template_frame_change_requires_new_revision")
             rows = await _rows(session, presentation.id)
             admitted = claim.request_payload.get("svg_header_revision") or {}
             if admitted.get("base_digest") != _base_digest(presentation, rows):

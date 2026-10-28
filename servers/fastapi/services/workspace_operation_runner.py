@@ -2695,6 +2695,15 @@ async def finalize_workspace_operation_success(
         operation_before = await session.get(WorkspaceOperation, claim.operation_id)
         projection_values["result"] = {**safe_result, ATTEMPT_TIMING_KEY: attempt_timing(
             claim, queued_at=getattr(operation_before, "created_at", None), finished_at=now)}
+        if claim.kind in {"svg.template.analyze", "svg.template.prepare"}:
+            # Registration checkpoints contain server-owned source/frame/font
+            # evidence. Keep them on the existing durable operation, while the
+            # public timeline event above remains strictly sanitized.
+            checkpoint = dict(getattr(operation_before, "result", None) or {})
+            required = "source_snapshot_id" if claim.kind == "svg.template.analyze" else "adaptations"
+            if required not in checkpoint:
+                raise NonRetryableWorkspaceOperationError("svg_template_checkpoint_missing")
+            projection_values["result"] = {**checkpoint, **projection_values["result"]}
         admission = await _public_admission_for_operation(
             session,
             claim.operation_id,

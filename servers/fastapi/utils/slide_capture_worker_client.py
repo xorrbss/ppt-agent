@@ -5,6 +5,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import hashlib
+import tempfile
+from pathlib import Path
 import os
 import signal
 import subprocess
@@ -35,8 +38,46 @@ from constants.timeouts import CAPTURE_WORKER_TERMINATE_GRACE_SECONDS
 
 async def _render_html_in_isolated_worker(  # noqa: ASYNC109
     html: str, timeout: int, *, width_px: int = DEFAULT_CANVAS_WIDTH_PX, height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
+    preserved_raster_svg: str | None = None, system_furniture: dict | None = None,
+    font_manifest: dict | None = None, canonical_svg: str | None = None,
+    image_bindings: dict[str, str] | None = None,
+) -> tuple[bytes, Mapping[str, Any] | None]:
+    if font_manifest is None:
+        return await _render_html_in_isolated_worker_impl(html, timeout, width_px=width_px, height_px=height_px,
+            preserved_raster_svg=preserved_raster_svg, system_furniture=system_furniture,
+            canonical_svg=canonical_svg, image_bindings=image_bindings)
+    from models.svg_template_frame import SvgTemplateFontManifest
+    from services.svg_templates.frame_fonts import MAX_FONT_BYTES, resolve_font_manifest
+    manifest = SvgTemplateFontManifest.model_validate(font_manifest)
+    entries = resolve_font_manifest(manifest)
+    if sum(len(payload) for _asset, payload in entries) > MAX_FONT_BYTES:
+        raise ValueError("svg_template_font_manifest_bytes_exceeded")
+    encoded = json.dumps(manifest.model_dump(mode="json"), ensure_ascii=False,
+                         separators=(",", ":")).encode("utf-8")
+    if len(encoded) > 90 * 1024 * 1024:
+        raise ValueError("svg_template_font_manifest_bytes_exceeded")
+    with tempfile.TemporaryDirectory(prefix="presenton-render-font-") as temporary:
+        root = Path(temporary).resolve()
+        path = root / "font-manifest.json"
+        path.write_bytes(encoded)
+        if os.name != "nt":
+            os.chmod(path, 0o444)
+        reference = {"name": "font-manifest.json", "sha256": "sha256:" + hashlib.sha256(encoded).hexdigest()}
+        return await _render_html_in_isolated_worker_impl(html, timeout, width_px=width_px, height_px=height_px,
+            preserved_raster_svg=preserved_raster_svg, system_furniture=system_furniture,
+            canonical_svg=canonical_svg, image_bindings=image_bindings,
+            font_manifest_ref=reference, request_assets_root=str(root))
+
+
+async def _render_html_in_isolated_worker_impl(  # noqa: ASYNC109
+    html: str, timeout: int, *, width_px: int = DEFAULT_CANVAS_WIDTH_PX, height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
     preserved_raster_svg: str | None = None,
     system_furniture: dict | None = None,
+    font_manifest: dict | None = None,
+    canonical_svg: str | None = None,
+    image_bindings: dict[str, str] | None = None,
+    font_manifest_ref: dict | None = None,
+    request_assets_root: str | None = None,
 ) -> tuple[bytes, Mapping[str, Any] | None]:
     if preserved_raster_svg is not None:
         from services.svg_renderer import admit_preserved_raster_preview
@@ -47,10 +88,16 @@ async def _render_html_in_isolated_worker(  # noqa: ASYNC109
         admitted = _admit_render_source(html)
         measured_html = html
     command = worker_command()
+    if request_assets_root is not None:
+        command = [*command, "--request-assets-root", request_assets_root]
     request = encode_request(
         html, timeout, width_px=width_px, height_px=height_px,
         **({"preserved_raster_svg": preserved_raster_svg} if preserved_raster_svg is not None else {}),
         **({"system_furniture": system_furniture} if system_furniture is not None else {}),
+        **({"font_manifest": font_manifest} if font_manifest is not None else {}),
+        **({"font_manifest_ref": font_manifest_ref} if font_manifest_ref is not None else {}),
+        **({"canonical_svg": canonical_svg} if canonical_svg is not None else {}),
+        **({"image_bindings": image_bindings} if image_bindings is not None else {}),
     )
     environment = build_worker_environment()
     kwargs: dict[str, Any] = {

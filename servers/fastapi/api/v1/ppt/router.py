@@ -53,11 +53,13 @@ from api.v1.ppt.endpoints.source_content import SOURCE_CONTENT_ROUTER
 from api.v1.ppt.endpoints.raster_reconstruction import RASTER_RECONSTRUCTION_ROUTER
 from api.v1.ppt.endpoints.presentation_slide_order import PRESENTATION_SLIDE_ORDER_ROUTER
 from api.v1.ppt.endpoints.design_packs import DESIGN_PACKS_ROUTER
+from api.v1.ppt.endpoints.svg_templates import SVG_TEMPLATES_ROUTER
 
 
 # This tuple is intentionally static.  Feature discovery through settings or
 # module-path imports would make the deployed API depend on unreviewed input.
 PPT_FEATURE_MODULES = (
+    FeatureModule("svg-templates", SVG_TEMPLATES_ROUTER, frozenset({"ppt-api", "assets", "templates"})),
     FeatureModule("files", FILES_ROUTER, frozenset({"ppt-api", "assets"})),
     FeatureModule("asset-gateway", ASSET_GATEWAY_ROUTER, frozenset({"ppt-api", "assets"})),
     FeatureModule("file-decompose-jobs", FILE_DECOMPOSE_JOBS_ROUTER, frozenset({"ppt-api", "assets"})),

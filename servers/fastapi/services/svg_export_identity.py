@@ -78,6 +78,8 @@ class SvgExportRequest:
     source_manifest_encoding: Any = None
     native_objects: Sequence[Any] | None = None
     font_embedding: bool = False
+    font_manifest: Any = None
+    system_furniture: Any = None
     advisory: Any = None
     quality_policy: str | None = None
 
@@ -118,6 +120,16 @@ def build_svg_export_identity(claim, *, tenant_id, request: SvgExportRequest,
     quality_inputs = svg_quality_inputs(slides=request.slides, advisory=request.advisory,
                                         quality_policy=request.quality_policy)
     quality_inputs = {**quality_inputs, "wholePageVerifierDigest": whole_page_verifier_digest()}
+    if request.font_manifest is not None:
+        from models.svg_template_frame import SvgTemplateFontManifest
+        from services.svg_templates.frame_fonts import resolve_font_manifest
+        manifest = SvgTemplateFontManifest.model_validate(request.font_manifest)
+        resolve_font_manifest(manifest)
+        quality_inputs["svgTemplateFontManifestDigest"] = manifest.digest
+        from services.svg_templates.export_evidence import template_export_verifier_digest
+        quality_inputs["svgTemplateVerifierDigest"] = template_export_verifier_digest()
+    if request.system_furniture is not None:
+        quality_inputs["templateSystemFurniture"] = request.system_furniture
     header_bindings = [
         ((slide.content or {}).get("svgReceipt") or {}).get("system_furniture") for slide in request.slides]
     if any(isinstance(value, dict) and

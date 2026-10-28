@@ -611,6 +611,7 @@ async def _load_document_context(
 async def _admit_svg_design_reference(
     request: GeneratePresentationRequest, sql_session: AsyncSession,
 ) -> None:
+    await _admit_svg_template(request, sql_session)
     if getattr(request, "svg_design_reference_snapshot_id", None) is None:
         return
     from services.svg_uploaded_design_reference import prepare_svg_uploaded_design_reference
@@ -630,6 +631,11 @@ async def _admit_svg_design_reference(
         expected = frozen.get("design_pack_template")
         if not isinstance(expected, dict) or expected.get("digest") != projected.get("digest"):
             raise HTTPException(status_code=409, detail="svg_uploaded_design_reference_snapshot_conflict")
+
+
+async def _admit_svg_template(request: GeneratePresentationRequest, sql_session: AsyncSession) -> None:
+    from services.svg_templates.generation import prepare_template_request
+    await prepare_template_request(request, sql_session)
 
 
 async def _admit_generation_references(

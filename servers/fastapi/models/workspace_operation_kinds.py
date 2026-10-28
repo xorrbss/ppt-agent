@@ -18,6 +18,8 @@ class WorkspaceOperationKindSpec:
 
 
 _SPECS = (
+    WorkspaceOperationKindSpec("svg.template.analyze", False, True, False, "Analyze SVG template", "Template source", "Template registration"),
+    WorkspaceOperationKindSpec("svg.template.prepare", False, True, False, "Prepare SVG template", "Template canvas", "Template preparation"),
     WorkspaceOperationKindSpec(
         "presentation.generate", False, True, False,
         "Generate presentation", "Entire presentation", "Presentation generation",

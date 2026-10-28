@@ -13,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 from sqlmodel import select
-from models.generate_presentation_request import DesignPackPinInput
+from models.generate_presentation_request import DesignPackPinInput, SvgTemplatePinInput
 from models.svg_canvas import SvgCanvasInput
 from models.common_header_design import CommonHeaderDesignInput
 
@@ -409,6 +409,9 @@ async def create_presentation(
     svg_canvas: Annotated[Optional[SvgCanvasInput], Body()] = None,
     svg_design_reference_pin: Annotated[Optional[DesignPackPinInput], Body()] = None,
     svg_design_reference_snapshot_id: Annotated[Optional[uuid.UUID], Body()] = None,
+    svg_template_pin: Annotated[Optional[SvgTemplatePinInput], Body()] = None,
+    svg_template_mode: Annotated[Optional[Literal["free-design", "template-redesign"]], Body()] = None,
+    svg_template_frame_map: Annotated[Optional[dict[str, str]], Body()] = None,
     http_request: Request = None,
     idempotency_key: Annotated[
         Optional[str], Header(alias="Idempotency-Key")
@@ -421,6 +424,20 @@ async def create_presentation(
         http_request, page_size, orientation, aspect_ratio,
         strategy=strategy, svg_canvas=svg_canvas,
     )
+    if (svg_template_pin is None) != (svg_template_mode is None):
+        raise HTTPException(status_code=422, detail="svg_template_pin_mode_required")
+    if svg_template_frame_map is not None and svg_template_mode != "template-redesign":
+        raise HTTPException(status_code=422, detail="svg_template_frame_map_requires_redesign")
+    if svg_template_pin is not None:
+        body = await http_request.json()
+        if strategy != "svg" or body.get("strategy") != "svg":
+            raise HTTPException(status_code=422, detail="svg_template_strategy_required")
+        if svg_design_reference_pin is not None or svg_design_reference_snapshot_id is not None:
+            raise HTTPException(status_code=422, detail="svg_template_selection_conflict")
+        if svg_template_mode == "template-redesign" and (
+            common_header_mode == "uniform" or common_header_design is not None or common_header_cover_exception
+        ):
+            raise HTTPException(status_code=422, detail="svg_template_common_header_conflict")
     if (svg_design_reference_pin is not None or svg_design_reference_snapshot_id is not None) and strategy != "svg":
         raise HTTPException(status_code=422, detail="svg_design_reference_strategy_required")
     if common_header_mode is not None and strategy != "svg":
@@ -562,6 +579,12 @@ async def create_presentation(
         presentation.theme,
         create_canvas,
     )
+    if svg_template_pin is not None:
+        presentation.theme = {**(presentation.theme or {}),
+                              "svgTemplatePin": svg_template_pin.model_dump(mode="json", by_alias=True),
+                              "svgTemplateMode": svg_template_mode}
+        if svg_template_frame_map is not None:
+            presentation.theme["svgTemplateFrameMap"] = svg_template_frame_map
     if svg_design_reference_pin is not None:
         presentation.theme = {**(presentation.theme or {}), "svgDesignReferencePin":
                               svg_design_reference_pin.model_dump(mode="json", by_alias=True)}
@@ -598,6 +621,11 @@ async def create_presentation(
         if svg_canvas is not None:
             settings.pop("aspect_ratio", None)
             settings["svg_canvas"] = svg_canvas.model_dump(mode="json", by_alias=True)
+        if svg_template_pin is not None:
+            settings["svg_template_pin"] = svg_template_pin.model_dump(mode="json", by_alias=True)
+            settings["svg_template_mode"] = svg_template_mode
+            if svg_template_frame_map is not None:
+                settings["svg_template_frame_map"] = svg_template_frame_map
         if svg_design_reference_pin is not None:
             settings["svg_design_reference_pin"] = svg_design_reference_pin.model_dump(mode="json", by_alias=True)
         if svg_design_reference_snapshot_id is not None:

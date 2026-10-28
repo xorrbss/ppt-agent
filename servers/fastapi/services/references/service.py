@@ -461,6 +461,8 @@ async def cleanup_expired_reference_snapshots(
     their conversation cascade instead.
     """
 
+    from services.svg_templates.retention import snapshot_unretained, retention_schema_available
+    template_retention = await retention_schema_available(session)
     current = now or get_current_utc_datetime()
     snapshot_ids = list(
         (
@@ -468,6 +470,7 @@ async def cleanup_expired_reference_snapshots(
                 select(ReferenceSnapshot.id)
                 .where(
                     ReferenceSnapshot.conversation_id.is_(None),
+                    snapshot_unretained(ReferenceSnapshot.id, schema_available=template_retention),
                     ReferenceSnapshot.expires_at.is_not(None),
                     ReferenceSnapshot.expires_at <= current,
                 )
@@ -478,7 +481,7 @@ async def cleanup_expired_reference_snapshots(
     )
     if snapshot_ids:
         await session.execute(
-            delete(ReferenceSnapshot).where(ReferenceSnapshot.id.in_(snapshot_ids))
+            delete(ReferenceSnapshot).where(ReferenceSnapshot.id.in_(snapshot_ids), snapshot_unretained(ReferenceSnapshot.id, schema_available=template_retention))
         )
     await session.flush()
     if commit:

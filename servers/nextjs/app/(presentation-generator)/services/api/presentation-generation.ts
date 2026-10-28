@@ -371,6 +371,9 @@ export class PresentationGenerationApi {
     orientation,
     svg_canvas,
     svg_design_reference_pin,
+    svgTemplatePin,
+    svgTemplateMode,
+    svgTemplateFrameMap,
     svg_design_reference_snapshot_id,
     theme,
     strategy = "svg",
@@ -396,6 +399,9 @@ export class PresentationGenerationApi {
     svg_canvas?: { width_mm: number; height_mm: number };
     svg_design_reference_snapshot_id?: string;
     svg_design_reference_pin?: { design_pack_id: string; version: number; digest: string };
+    svgTemplatePin?: import("./svg-templates").SvgTemplatePin;
+    svgTemplateMode?: import("./svg-templates").SvgTemplateMode;
+    svgTemplateFrameMap?: Record<string, string>;
     page_size?: "A4";
     orientation?: "landscape" | "portrait";
     theme?: PresentationThemePayload | null;
@@ -432,6 +438,7 @@ export class PresentationGenerationApi {
               : { aspect_ratio }),
             ...(svg_design_reference_snapshot_id ? { svg_design_reference_snapshot_id } : {}),
             ...(svg_design_reference_pin ? { svg_design_reference_pin } : {}),
+            ...(svgTemplatePin ? { svgTemplatePin, svgTemplateMode, svgTemplateFrameMap } : {}),
             theme,
             strategy,
           }),
@@ -757,6 +764,9 @@ export class PresentationGenerationApi {
       svg_canvas?: { width_mm: number; height_mm: number };
     svg_design_reference_snapshot_id?: string;
     svg_design_reference_pin?: { design_pack_id: string; version: number; digest: string };
+    svgTemplatePin?: import("./svg-templates").SvgTemplatePin;
+    svgTemplateMode?: import("./svg-templates").SvgTemplateMode;
+    svgTemplateFrameMap?: Record<string, string>;
     page_size?: "A4";
       orientation?: "landscape" | "portrait";
       masterPin?: {
@@ -808,9 +818,10 @@ export class PresentationGenerationApi {
             // design-system hardening already prevents most overflow/overlap. Opt in for
             // a max-quality, slower pass.
             vision_qa: resolvedStrategy === "svg" ? false : (body.vision_qa ?? false),
-            authored_style: body.authored_style ?? "default",
+            ...(body.svgTemplatePin ? {} : { authored_style: body.authored_style ?? "default" }),
             ...(body.svg_design_reference_snapshot_id ? { svg_design_reference_snapshot_id: body.svg_design_reference_snapshot_id } : {}),
             ...(body.svg_design_reference_pin ? { svg_design_reference_pin: body.svg_design_reference_pin } : {}),
+            ...(body.svgTemplatePin ? { svgTemplatePin: body.svgTemplatePin, svgTemplateMode: body.svgTemplateMode, svgTemplateFrameMap: body.svgTemplateFrameMap } : {}),
             ...(body.svg_canvas ? { svg_canvas: body.svg_canvas }
               : body.page_size && body.orientation
                 ? { page_size: body.page_size, orientation: body.orientation }

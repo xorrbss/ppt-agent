@@ -464,6 +464,10 @@ def encode_request(
     html: str, timeout: int, *, width_px: int = DEFAULT_CANVAS_WIDTH_PX, height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
     preserved_raster_svg: str | None = None,
     system_furniture: dict | None = None,
+    font_manifest: dict | None = None,
+    canonical_svg: str | None = None,
+    image_bindings: dict[str, str] | None = None,
+    font_manifest_ref: dict | None = None,
 ) -> bytes:
     wire = json.dumps(
         {
@@ -474,8 +478,12 @@ def encode_request(
             "height_px": int(height_px),
             **({"preserved_raster_svg": preserved_raster_svg} if preserved_raster_svg is not None else {}),
             **({"system_furniture": system_furniture} if system_furniture is not None else {}),
+            **({"font_manifest": font_manifest} if font_manifest is not None else {}),
+            **({"font_manifest_ref": font_manifest_ref} if font_manifest_ref is not None else {}),
+            **({"canonical_svg": canonical_svg} if canonical_svg is not None else {}),
+            **({"image_bindings": image_bindings} if image_bindings is not None else {}),
         },
-        ensure_ascii=True,
+        ensure_ascii=font_manifest is None and font_manifest_ref is None,
         separators=(",", ":"),
     ).encode("utf-8") + b"\n"
     if len(wire) > MAX_REQUEST_BYTES:

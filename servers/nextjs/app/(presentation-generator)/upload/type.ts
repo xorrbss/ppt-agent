@@ -133,6 +133,12 @@ export interface PresentationConfig {
   commonHeaderMode: "uniform" | "free";
   commonHeaderCoverException: boolean;
   aspectRatio: "16:9" | "9:16" | "9:13" | "1:1" | "21:9" | "4:3";
+  svgTemplatePin?: import("../services/api/svg-templates").SvgTemplatePin;
+  svgTemplateMode?: import("../services/api/svg-templates").SvgTemplateMode;
+  svgTemplateFrameMap?: Record<string, string>;
+  svgTemplateName?: string;
+  svgTemplateKind?: "style" | "framed";
+  svgTemplateCapabilityState?: "checking" | "available" | "preparation-required" | "blocked";
   svgDesignReferenceSnapshotId?: string;
   svgDesignReferencePending?: boolean;
   svgDesignReferencePin?: { design_pack_id: string; version: number; digest: string };

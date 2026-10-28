@@ -20,6 +20,9 @@ def furniture_image_manifest(snapshot: dict | None) -> dict[str, str]:
     header = (snapshot or {}).get("common_header") or {}
     if header.get("version") == "svg-common-header/v2":
         images.update(header.get("assets", {}))
+    if (snapshot or {}).get("svg_template", {}).get("mode") == "template-redesign":
+        from services.svg_templates.frame_attestation import template_image_manifest
+        images.update(template_image_manifest(snapshot))
     return images
 
 
@@ -39,6 +42,11 @@ def attested_svg_furniture(svg: str, furniture_receipt: dict, *, source_manifest
     furniture_ids = furniture.get("element_ids", [])
     generated = furniture.get("generated_common_header")
     group_ids = [GROUP_ID] if furniture.get("master_digest", furniture.get("digest")) else []
+    if furniture.get("generated_template_frame"):
+        from services.svg_templates.frame_attestation import validate_template_furniture_binding
+        if generated or furniture.get("master_digest"):
+            raise ValueError("svg_template_furniture_owner_conflict")
+        group_ids = validate_template_furniture_binding(root, furniture)
     if generated:
         from services.svg_common_header import GROUP_ID as HEADER_ID, render_common_header
         expected = render_common_header(generated.get("contract"), generated.get("page"),
@@ -94,9 +102,18 @@ def attested_source_furniture(svg: str, receipt: dict) -> dict[str, ET.Element]:
 
 def master_furniture_receipt(svg: str, snapshot: dict, *, width: int, height: int,
                              index: int, n: int, source_manifest=None,
-                             header_page: dict | None = None) -> dict | None:
+                             header_page: dict | None = None,
+                             template_page_context: dict | None = None) -> dict | None:
     """Attest only deterministic furniture actually stamped from an admitted snapshot."""
     furniture = master_furniture(snapshot)
+    if snapshot.get("svg_template", {}).get("mode") == "template-redesign":
+        from services.svg_templates.frame_attestation import template_furniture_receipt
+        if furniture or snapshot.get("common_header"):
+            raise ValueError("svg_template_furniture_owner_conflict")
+        receipt = template_furniture_receipt(svg, snapshot, width=width, height=height,
+            index=index, count=n, page_context=template_page_context)
+        attested_svg_furniture(svg, receipt, source_manifest=source_manifest, width=width, height=height)
+        return receipt
     from services.svg_common_header import render_common_header
     header = render_common_header(snapshot.get("common_header"), header_page, index=index, count=n)
     if not furniture and header is None:

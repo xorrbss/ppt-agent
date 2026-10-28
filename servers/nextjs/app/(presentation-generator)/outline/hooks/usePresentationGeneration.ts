@@ -1,3 +1,5 @@
+import { useSavedSvgTemplate } from "./useSavedSvgTemplate";
+import { AUTH_SESSION_EXPIRED_EVENT } from "../../services/api/api-error-handler";
 import { commonHeaderDesignForConfig } from "@/lib/common-header-design";
 import { isAmbiguousGenerationTransportError, isRetryableGenerationStartError, hasRecoverableChatFirstWorkspace, isCompanyStandardAdmissionError } from "./generationStartErrors";
 import { useTranslations as useA2bTranslations } from "next-intl";
@@ -50,6 +52,7 @@ export const usePresentationGeneration = (
   const t = useTranslations("generation");
   const dispatch = useDispatch();
   const router = useRouter();
+  const templateRestoreState = useSavedSvgTemplate(presentationId);
   const authoredVisionQa = useSelector(
     (s: RootState) => s.pptGenUpload.authoredVisionQa
   );
@@ -80,6 +83,7 @@ export const usePresentationGeneration = (
   );
   const [startRecovery, setStartRecovery] = useState<"receipt" | "retry" | null>(null);
   const generationRunRef = useRef(0);
+  const ownerInvalidatedRef = useRef(false);
   const retrySubmitRef = useRef<(() => void) | null>(null);
   const activeDurableTaskRef = useRef<string | null>(null);
   // Keep the pre-response task identity in memory as well as localStorage. Two
@@ -88,6 +92,11 @@ export const usePresentationGeneration = (
   const startingDurableTaskRef = useRef<DurableGenerationTask | null>(null);
   const submittingDurableTaskRef = useRef<string | null>(null);
 
+  useEffect(() => {
+    const invalidate = () => { ownerInvalidatedRef.current = true; generationRunRef.current += 1; startingDurableTaskRef.current = null; submittingDurableTaskRef.current = null; };
+    window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, invalidate); window.addEventListener("presenton:auth-logout", invalidate);
+    return () => { window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, invalidate); window.removeEventListener("presenton:auth-logout", invalidate); };
+  }, []);
   useEffect(
     () => () => {
       generationRunRef.current += 1;
@@ -216,7 +225,10 @@ export const usePresentationGeneration = (
   }, [presentationId]);
 
   const handleSubmit = useCallback(async () => {
-    if (submittingDurableTaskRef.current) return;
+    if (submittingDurableTaskRef.current || ownerInvalidatedRef.current) return;
+    if (templateRestoreState !== "ready") {
+      notify.warning("템플릿 설정 확인이 필요합니다", templateRestoreState === "loading" ? "저장된 템플릿 설정을 확인하고 있습니다." : "저장된 템플릿 설정을 불러오지 못했습니다. 페이지를 새로고침해 주세요."); return;
+    }
     if (!presentationId) {
       notify.error(
         t("presentationUnavailableTitle"),
@@ -300,6 +312,7 @@ export const usePresentationGeneration = (
       } : {}),
       ...(generationStrategy === "svg" && generationConfig?.svgDesignReferenceSnapshotId ? { svgDesignReferenceSnapshotId: generationConfig.svgDesignReferenceSnapshotId } : {}),
       ...(generationStrategy === "svg" && generationConfig?.svgDesignReferencePin ? { svgDesignReferencePin: generationConfig.svgDesignReferencePin } : {}),
+      ...(generationStrategy === "svg" && generationConfig?.svgTemplatePin ? { svgTemplatePin: generationConfig.svgTemplatePin, svgTemplateMode: generationConfig.svgTemplateMode, svgTemplateFrameMap: generationConfig.svgTemplateFrameMap } : {}),
       authoredStyle:
         generationStrategy === "authored" && generationConfig?.pageSize !== "A4" && generationConfig?.aspectRatio === "9:16"
           ? DEFAULT_AUTHORED_STYLE.id
@@ -374,9 +387,12 @@ export const usePresentationGeneration = (
         common_header_mode: "commonHeaderMode" in authoredRequest ? authoredRequest.commonHeaderMode : undefined,
         common_header_design: "commonHeaderDesign" in authoredRequest ? authoredRequest.commonHeaderDesign : undefined,
         common_header_cover_exception: "commonHeaderCoverException" in authoredRequest ? authoredRequest.commonHeaderCoverException : undefined,
-        authored_style: authoredRequest.authoredStyle,
+        ...("svgTemplatePin" in authoredRequest && authoredRequest.svgTemplatePin ? {} : { authored_style: authoredRequest.authoredStyle }),
         svg_design_reference_snapshot_id: "svgDesignReferenceSnapshotId" in authoredRequest ? authoredRequest.svgDesignReferenceSnapshotId : undefined,
         svg_design_reference_pin: "svgDesignReferencePin" in authoredRequest ? authoredRequest.svgDesignReferencePin : undefined,
+        svgTemplatePin: "svgTemplatePin" in authoredRequest ? authoredRequest.svgTemplatePin : undefined,
+        svgTemplateMode: "svgTemplateMode" in authoredRequest ? authoredRequest.svgTemplateMode : undefined,
+        svgTemplateFrameMap: "svgTemplateFrameMap" in authoredRequest ? authoredRequest.svgTemplateFrameMap : undefined,
         ...(requestSourceCanvas ? {}
           : requestSvgCanvas ? { svg_canvas: requestSvgCanvas }
           : requestPageSize === "A4" && requestOrientation
@@ -432,6 +448,7 @@ export const usePresentationGeneration = (
     }
   }, [
     validateInputs,
+    templateRestoreState,
     presentationId,
     outlines,
     authoredVisionQa,

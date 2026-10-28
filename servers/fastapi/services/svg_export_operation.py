@@ -625,7 +625,7 @@ async def render_and_export_svgs(claim, *, tenant_id, svgs, notes, export_format
                                  asset_bindings=None, source_preservation=None, deadline_grant=None,
                                  font_embedding=False, native_objects=None, slide_refs=None,
                                  source_manifest=None, source_manifest_encoding=None, io_memo=None,
-                                 _stages=None):
+                                 _stages=None, font_manifest=None, system_furniture=None):
     """Run the svg worker; ``slide_refs`` are pre-persisted slide svg checkpoints
     (``services.svg_export_identity``), otherwise the sources persist ephemeral."""
     if (claim.owner_id is None or claim.kind != f"export.{export_format}"
@@ -688,7 +688,8 @@ async def render_and_export_svgs(claim, *, tenant_id, svgs, notes, export_format
             source_digests=[ref.sha256 for ref in refs], notes=notes, canvas=canvas,
             export_format=export_format, font_embedding=font_embedding, assets=assets,
             source_preservation=source_preservation, native_objects=native_objects,
-            source_manifest=source_manifest, source_manifest_encoding=source_manifest_encoding)
+            source_manifest=source_manifest, source_manifest_encoding=source_manifest_encoding,
+            font_manifest=font_manifest, system_furniture=system_furniture)
         bundle = await service.persist_bytes(
             session, owner_id=claim.owner_id, tenant_id=tenant_id, kind="export-bundle",
             payload=json.dumps(payload).encode(), media_type="application/vnd.presenton.export-bundle+json",
@@ -1175,6 +1176,35 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
         await context.progress(stage="export_rendering", percent=10)
         svg_meta = ((presentation.theme or {}).get("svg") or {})
         advisory = svg_meta.get("advisory")
+        template_selection = (svg_meta.get("styleSnapshot") or {}).get("svg_template")
+        font_manifest = None
+        system_furniture = None
+        if isinstance(template_selection, dict) and template_selection.get("mode") == "template-redesign":
+            if not isinstance(template_selection, dict) or not isinstance(template_selection.get("package"), dict):
+                raise PublicExportOperationError("svg_template_font_manifest_missing")
+            font_manifest = template_selection["package"].get("font_manifest")
+            if font_manifest is None:
+                raise PublicExportOperationError("svg_template_font_manifest_missing")
+            if source_preservation is not None:
+                raise PublicExportOperationError("svg_template_font_export_unsupported")
+            from services.svg_templates.frame_attestation import template_furniture_receipt
+            snapshot = svg_meta["styleSnapshot"]
+            resolved = parse_canvas_metadata(canvas)
+            system_furniture = []
+            for index, (slide, source) in enumerate(zip(slides, svgs, strict=True)):
+                receipt = (slide.content or {}).get("svgReceipt") or {}
+                page = receipt.get("svg_template_page")
+                expected = template_furniture_receipt(source, snapshot, width=resolved.width_px,
+                    height=resolved.height_px, index=index, count=len(slides), page_context=page)
+                if receipt.get("system_furniture") != expected:
+                    raise PublicExportOperationError("svg_template_furniture_binding_mismatch")
+                system_furniture.append(expected)
+            if fmt == "pptx" and not font_embedding:
+                explicitly_disabled = (command_context.get("font_embedding") is False
+                    or claim.request_payload.get("font_embedding") is False)
+                if explicitly_disabled:
+                    raise PublicExportOperationError("svg_template_font_embedding_required")
+                font_embedding = True
         async with session_factory() as producer_session:
             source_review = await svg_source_review_context(producer_session, presentation, slides)
         stages.lap("grant_lease_source_review")
@@ -1201,7 +1231,7 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
                 source_preservation=source_preservation, deadline_grant=grant, font_embedding=font_embedding,
                 native_objects=native_objects, slide_refs=slide_refs,
                 source_manifest=source_manifest, source_manifest_encoding=manifest_encoding,
-                io_memo=io_memo, _stages=stages)
+                io_memo=io_memo, _stages=stages, font_manifest=font_manifest, system_furniture=system_furniture)
 
         # One export per identity: a completed identity is reused without the
         # worker or asset derivation; only a claimed one runs ``run_worker``.
@@ -1213,7 +1243,7 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
                 source_assets=source_assets if any(asset is not None for asset in source_assets) else None,
                 source_preservation=source_preservation, native_objects=native_objects,
                 source_manifest=source_manifest, source_manifest_encoding=manifest_encoding,
-                font_embedding=font_embedding, advisory=advisory, quality_policy=quality_policy),
+                font_embedding=font_embedding, font_manifest=font_manifest, system_furniture=system_furniture, advisory=advisory, quality_policy=quality_policy),
             session_factory=session_factory, grant=grant, execute=run_worker)
         # Inclusive of identity lookup/checkpoint persistence and run_worker (nested spans above).
         stages.lap("identity_export_incl_worker")

@@ -1,12 +1,14 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import SvgTemplateEditScopeNotice, { isTemplateRedesignTheme } from "./SvgTemplateEditScopeNotice";
 import { isRecord } from "@/lib/guards";
 
 export default function HeaderPolicyNotice({ theme }: { theme: unknown }) {
   const t = useTranslations("presentationPage");
   const svg = isRecord(theme) ? theme.svg : null;
   const snapshot = isRecord(svg) ? svg.styleSnapshot : null;
+  if (isTemplateRedesignTheme(theme)) return <SvgTemplateEditScopeNotice theme={theme} />;
   const selection = isRecord(snapshot) ? snapshot.common_header_selection : null;
   if (!isRecord(selection) || selection.version !== "svg-common-header-fallback/v1") return null;
   const key = selection.mode === "reduced" ? "headerReducedNotice"

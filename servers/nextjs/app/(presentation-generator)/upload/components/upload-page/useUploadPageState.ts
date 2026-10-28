@@ -113,6 +113,7 @@ export const useUploadPageState = ({
   const companyStandard = useSelector(
     (state: RootState) => state.pptGenUpload.companyStandard,
   );
+  const svgTemplateSelection = useSelector((state: RootState) => state.pptGenUpload.svgTemplateSelection);
   const authoredStyle = useSelector(
     (state: RootState) => state.pptGenUpload.authoredStyle,
   );
@@ -152,6 +153,16 @@ export const useUploadPageState = ({
       ? "sol6-medium"
       : null,
   });
+  useEffect(() => {
+    setConfig(previous => ({ ...previous,
+      svgTemplatePin: svgTemplateSelection?.pin,
+      svgTemplateMode: svgTemplateSelection?.mode,
+      svgTemplateFrameMap: svgTemplateSelection?.pin.digest === previous.svgTemplatePin?.digest ? previous.svgTemplateFrameMap : undefined,
+      svgTemplateName: svgTemplateSelection?.name,
+      svgTemplateKind: svgTemplateSelection?.kind,
+      svgTemplateCapabilityState: svgTemplateSelection ? "checking" : undefined,
+    }));
+  }, [svgTemplateSelection]);
   const previousGenerationAttempt = usePreviousGenerationAttempt(setConfig, Boolean(workspace?.pendingAdmission));
 
   const handoffRasterGeneration = useRasterHandoff(router, setRasterRecovery);
@@ -347,6 +358,9 @@ export const useUploadPageState = ({
     if (sourceContentMode && generationStrategy === "svg" && (config.commonHeaderMode ?? "uniform") === "uniform") {
       notify.warning(tA2b("commonHeaderModeRequired"), tA2b("commonHeaderSourcePreservationNote"));
       return false;
+    }
+    if (generationStrategy === "svg" && config.svgTemplatePin && config.svgTemplateCapabilityState !== "available") {
+      notify.warning("템플릿 준비가 필요합니다", "선택한 크기와 생성 방식의 사용 가능 여부를 확인해 주세요."); return false;
     }
     if (generationStrategy === "svg" && config.svgDesignReferencePending) {
       notify.warning(tA2b("svgReferenceRegistrationRequired"), tA2b("svgReferenceRegistrationRequiredBody")); return false;

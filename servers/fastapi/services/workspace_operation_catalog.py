@@ -36,6 +36,8 @@ def _spec(
 
 
 OPERATION_SPECS = (
+    _spec("svg.template.analyze", "svg_templates.registration.SvgTemplateOperationHandler", "generation"),
+    _spec("svg.template.prepare", "svg_templates.registration.SvgTemplateOperationHandler", "generation"),
     _spec(
         "presentation.generate",
         "presentation_generation_operation_handler.PresentationGenerationOperationHandler",

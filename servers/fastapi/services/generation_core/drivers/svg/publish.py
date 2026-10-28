@@ -88,6 +88,9 @@ def svg_slide_content(payload: dict, *, role, source, pt_per_px: float,
 
 async def _publish(request, presentation_id, outline, language, session, job, snapshot, roles, pages,
                    *, quality_summary=None, advisory=None):
+    if snapshot.get("svg_template") is not None:
+        from services.svg_templates.generation import validate_template_publication
+        validate_template_publication(snapshot, pages, outline)
     from services.svg_authoring_profile import read_quality_recovery_policy
     from services.generation_core.drivers.svg import quality as deck_quality
     # A review flag a page carries in is this run's own stage review
