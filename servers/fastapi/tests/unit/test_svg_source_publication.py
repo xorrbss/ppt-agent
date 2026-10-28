@@ -262,7 +262,7 @@ def test_source_publication_preserves_verified_svg_and_rejects_mutations(monkeyp
             pointer = {"ref": "ancestor-source", "sha256": "a" * 64}
             source = SimpleNamespace(presentation_id=uuid.uuid4(), digest="sha256:" + "a" * 64,
                 slots=[], offered_pages=[SimpleNamespace(page_index=i, slot_ids=[]) for i in range(12)])
-            for scenario in ("unchanged", "placement_changed", "producer_changed", "ledger_changed"):
+            async def _case_scenario(scenario):
                 state = {"producer_unchanged": True, "ledger_unchanged": True}
                 snapshot = {"tokens": {}}
                 target = SimpleNamespace(id=uuid.uuid4(), owner_id=owner, revision=0,
@@ -327,6 +327,9 @@ def test_source_publication_preserves_verified_svg_and_rejects_mutations(monkeyp
                     assert full_check.await_count == 2
                     assert resolved_indices == list(range(12))
 
+            for scenario in ("unchanged", "placement_changed", "producer_changed", "ledger_changed"):
+                await _case_scenario(scenario)
+
         asyncio.run(check_publication_source_reuse())
 
         async def check_export_source_reuse():
@@ -339,7 +342,7 @@ def test_source_publication_preserves_verified_svg_and_rejects_mutations(monkeyp
             owner = uuid4()
             pointer = {"ref": "ancestor-source", "sha256": "a" * 64}
             source = SimpleNamespace(presentation_id=uuid4(), digest="sha256:" + "a" * 64)
-            for scenario in ("unchanged", "producer_changed", "fence_lost", "lease_expired", "deadline_expired"):
+            async def _case_scenario(scenario):
                 state = {"producer_valid": True, "deadline_valid": True}
                 target = SimpleNamespace(id=uuid4(), owner_id=owner, revision=3)
                 claim = SimpleNamespace(operation_id=uuid4(), presentation_id=target.id,
@@ -407,6 +410,9 @@ def test_source_publication_preserves_verified_svg_and_rejects_mutations(monkeyp
                         fencing_token=2, operation_kind="export")
                 else:
                     fence.assert_not_awaited()
+
+            for scenario in ("unchanged", "producer_changed", "fence_lost", "lease_expired", "deadline_expired"):
+                await _case_scenario(scenario)
 
         asyncio.run(check_export_source_reuse())
         from uuid import uuid4

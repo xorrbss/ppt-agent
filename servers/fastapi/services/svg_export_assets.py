@@ -1,7 +1,12 @@
 """Versioned SVG export transport, using only authenticated artifact authority."""
 from __future__ import annotations
 
+import json
 import xml.etree.ElementTree as ET
+from typing import Literal
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict
 
 from services.svg_asset_manifest import ArtifactPointer, PlacementManifest, SourceManifest
 from services.svg_contract import source_digest, validate_svg
@@ -11,12 +16,6 @@ SOURCE_KIND = "source-manifest"
 PLACEMENT_KIND = "placement-manifest"
 SOURCE_MIME = "application/json"
 PLACEMENT_MIME = "application/json"
-
-
-import json
-from pydantic import BaseModel, ConfigDict
-from uuid import UUID
-from typing import Literal
 
 
 class _ExportSourceLineage(BaseModel):

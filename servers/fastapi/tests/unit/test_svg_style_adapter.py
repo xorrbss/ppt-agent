@@ -312,7 +312,7 @@ def test_uploaded_design_reference_admits_real_owner_snapshot_and_rejects_change
                     replay_evidence = os.environ.get("HEADER_UPLOADED_REFERENCE_REPLAY_EVIDENCE")
                     if replay_evidence:
                         evidence_path = Path(replay_evidence)
-                        evidence_bytes = evidence_path.read_bytes()
+                        evidence_bytes = await asyncio.to_thread(evidence_path.read_bytes)
                         evidence = json.loads(evidence_bytes.decode("utf-8-sig"))
                         frozen_evidence = evidence["request_payload"]["_internal_svg_style_snapshot"]
                         inner_evidence = frozen_evidence["design_pack_template"]
@@ -320,7 +320,7 @@ def test_uploaded_design_reference_admits_real_owner_snapshot_and_rejects_change
                         uploaded_module.validate_uploaded_design_reference(restored,
                             snapshot_id=uuid.UUID(restored["provenance"]["snapshot_id"]), **restored["canvas"])
                         assert restored["digest"] == inner_evidence["digest"]
-                        assert evidence_path.read_bytes() == evidence_bytes
+                        assert await asyncio.to_thread(evidence_path.read_bytes) == evidence_bytes
                     from datetime import timedelta
                     from models.sql.reference_snapshot import ReferenceSnapshot
                     from utils.datetime_utils import get_current_utc_datetime

@@ -370,7 +370,8 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
                     binding=dict(jobId="current-job", presentationId="current-presentation", ownerId="owner", tenantId="tenant"),
                     roles=["content"], pages=[dict(index=0, referenceRoles=["content"])],
                     composition={}, examples=[], exampleDigests=[])
-                monkeypatch.setattr(deck_quality, "_design_context", lambda *args, **kwargs: review_context)
+                monkeypatch.setattr(deck_quality, "_design_context",
+                                    lambda *args, _review_context=review_context, **kwargs: _review_context)
                 ctx = SimpleNamespace(snapshot={}, quality_recovery_review_group_checkpoint=checkpoint)
                 job = SimpleNamespace(id="current-job", workspace_operation_id=operation_id,
                                       attempt_number=1, request_payload={"_svg_partial_recovery": partial})
@@ -827,7 +828,7 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
         # A structural rejection may use slot21 once, with no LOCAL recall.
         original_local_calls, original_local_saved = list(source_local_calls), deepcopy(source_local_saved)
         for retry_reason in ("index_coverage", "global_review_fields"):
-            for fail_both in (False, True):
+            def _case_fail_both(fail_both, retry_reason=retry_reason):
                 source_local_calls.clear()
                 source_local_saved.clear()
                 async def bounded_global(images, **kwargs):
@@ -865,6 +866,9 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
                 else:
                     assert len(retry_record["vision"]["designReview"]["pages"]) == 100
                 assert source_local_execution == source_local_before
+
+            for fail_both in (False, True):
+                _case_fail_both(fail_both)
         source_local_calls[:] = original_local_calls
         source_local_saved.clear()
         source_local_saved.update(original_local_saved)
@@ -1896,7 +1900,7 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
                 def update(self, value):
                     self.hash.update(value)
                     self.parts += (value,)
-                def hexdigest(self):
+                def hexdigest(self, streams=streams):
                     streams.append(b"".join(self.parts))
                     return self.hash.hexdigest()
 
@@ -1905,7 +1909,8 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
                     return ComparisonHash(value)
                 return real_sha256(value, *args, **kwargs)
 
-            def count_fixed_sources(value, *args, **kwargs):
+            def count_fixed_sources(value, *args, include_directives=include_directives,
+                                    hash_context=hash_context, fixed_source_encodings=fixed_source_encodings, **kwargs):
                 suffix_keys = {"policy", "roles", "sources", "style"} | ({"sourceDirectives"} if include_directives else set())
                 if isinstance(value, dict) and set(value) == suffix_keys and value.get("sources") is hash_context["pages"]:
                     fixed_source_encodings.append(1)
@@ -1933,7 +1938,8 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
             assert page["comparisonContextDigest"] != gate["pages"][index]["comparisonContextDigest"]
         # The same content_digest defaults remain in force, including strict
         # UTF-8 and rejection of unsupported/circular/mixed-key JSON inputs.
-        cyclic = {}; cyclic["self"] = cyclic
+        cyclic = {}
+        cyclic["self"] = cyclic
         for invalid in (object(), cyclic, "\ud800", {1: "number", "1": "string"}):
             invalid_context = deepcopy(hash_context)
             invalid_context["pages"][0]["invalid"] = invalid

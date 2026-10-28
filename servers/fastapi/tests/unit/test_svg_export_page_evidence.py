@@ -181,7 +181,7 @@ def test_saved_common_header_candidates_use_allocated_fields_and_measured_collis
     if not directory:
         pytest.skip("Set SVG_HEADER_OVERFLOW_REPLAY_DIRECTORY to the saved candidate evidence directory")
 
-    for number in (1, 2):
+    def _case_number(number):
         page = json.loads((Path(directory) / f"candidate-page-{number}.json").read_text(encoding="utf-8-sig"))
         furniture = page["system_furniture"]
         header = furniture["generated_common_header"]
@@ -237,7 +237,7 @@ def test_saved_common_header_candidates_use_allocated_fields_and_measured_collis
 
         for property_name, value in (("glyph_clipped", True), ("font_loaded", False),
                                      ("resolved_font_family", "untrusted-font"), ("effective_opacity", .5)):
-            def mismatch(quality):
+            def mismatch(quality, property_name=property_name, value=value):
                 items(quality)[0][property_name] = value
 
             assert any(item["kind"] == "svg_common_header_font_mismatch"
@@ -247,3 +247,6 @@ def test_saved_common_header_candidates_use_allocated_fields_and_measured_collis
         next(node for node in changed.iter() if node.get("id", "").endswith("-document-line-1")).text += "changed"
         assert any(item["kind"] == "svg_common_header_digest_mismatch"
                    for item in measure(svg=ET.tostring(changed, encoding="unicode"))["failures"])
+
+    for number in (1, 2):
+        _case_number(number)

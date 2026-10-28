@@ -99,6 +99,57 @@ def trusted_font_fallback_plan(text: str, family: str = FONT_FAMILY, weight: int
         fallback_font_digest=fallback[2] if fallback else None)
 
 
+def _rebuild_text_node(text_index: int, text_node, namespace: str, runs: list) -> None:
+    """Split one <text> node into fallback-font tspans, appending each run to ``runs``."""
+    offset = 0
+    original_text = "".join(text_node.itertext())
+
+    def piece(value, family, weight):
+        nonlocal offset
+        if not value:
+            return value, []
+        plan = trusted_font_fallback_plan(value, family, weight)
+        prefix, added = None, []
+        for segment in plan["segments"]:
+            if segment["family"] == FONT_FAMILY:
+                if added:
+                    added[-1].tail = (added[-1].tail or "") + segment["text"]
+                else:
+                    prefix = (prefix or "") + segment["text"]
+            else:
+                node = ET.Element(namespace + "tspan", {
+                    "font-family": segment["family"], "font-weight": str(segment["weight"])})
+                node.text = segment["text"]
+                added.append(node)
+                runs.append(dict(text_index=text_index, element_id=text_node.get("id"),
+                    start=offset + segment["start"], end=offset + segment["end"],
+                    codepoints=[ord(char) for char in segment["text"]],
+                    **{key: segment[key] for key in ("family", "weight", "requested_weight",
+                        "face_weight", "font_digest", "synthetic_bold")}))
+        offset += len(value)
+        return prefix, added
+
+    def visit(node, inherited_family, inherited_weight):
+        family = node.get("font-family", inherited_family).strip("'\"")
+        weight = node.get("font-weight", inherited_weight)
+        font_material(family, weight)
+        children = list(node)
+        node.text, rebuilt = piece(node.text, family, weight)
+        for child in children:
+            if child.tag != namespace + "tspan":
+                raise ValueError("svg_template_font_mixed_families")
+            tail = child.tail
+            visit(child, family, weight)
+            child.tail, tail_nodes = piece(tail, family, weight)
+            rebuilt.append(child)
+            rebuilt.extend(tail_nodes)
+        node[:] = rebuilt
+
+    visit(text_node, "", "400")
+    if "".join(text_node.itertext()) != original_text:
+        raise ValueError("svg_template_fallback_text_changed")
+
+
 def materialize_template_fallbacks(svg: str) -> tuple[str, dict | None]:
     """Make a font-only derivative; preserve original nodes, positions and text."""
     root = ET.fromstring(svg)
@@ -106,53 +157,7 @@ def materialize_template_fallbacks(svg: str) -> tuple[str, dict | None]:
     texts = [node for node in root.iter() if node.tag == namespace + "text"]
     runs = []
     for text_index, text_node in enumerate(texts):
-        offset = 0
-        original_text = "".join(text_node.itertext())
-
-        def piece(value, family, weight):
-            nonlocal offset
-            if not value:
-                return value, []
-            plan = trusted_font_fallback_plan(value, family, weight)
-            prefix, added = None, []
-            for segment in plan["segments"]:
-                if segment["family"] == FONT_FAMILY:
-                    if added:
-                        added[-1].tail = (added[-1].tail or "") + segment["text"]
-                    else:
-                        prefix = (prefix or "") + segment["text"]
-                else:
-                    node = ET.Element(namespace + "tspan", {
-                        "font-family": segment["family"], "font-weight": str(segment["weight"])})
-                    node.text = segment["text"]
-                    added.append(node)
-                    runs.append(dict(text_index=text_index, element_id=text_node.get("id"),
-                        start=offset + segment["start"], end=offset + segment["end"],
-                        codepoints=[ord(char) for char in segment["text"]],
-                        **{key: segment[key] for key in ("family", "weight", "requested_weight",
-                            "face_weight", "font_digest", "synthetic_bold")}))
-            offset += len(value)
-            return prefix, added
-
-        def visit(node, inherited_family, inherited_weight):
-            family = node.get("font-family", inherited_family).strip("'\"")
-            weight = node.get("font-weight", inherited_weight)
-            font_material(family, weight)
-            children = list(node)
-            node.text, rebuilt = piece(node.text, family, weight)
-            for child in children:
-                if child.tag != namespace + "tspan":
-                    raise ValueError("svg_template_font_mixed_families")
-                tail = child.tail
-                visit(child, family, weight)
-                child.tail, tail_nodes = piece(tail, family, weight)
-                rebuilt.append(child)
-                rebuilt.extend(tail_nodes)
-            node[:] = rebuilt
-
-        visit(text_node, "", "400")
-        if "".join(text_node.itertext()) != original_text:
-            raise ValueError("svg_template_fallback_text_changed")
+        _rebuild_text_node(text_index, text_node, namespace, runs)
     if not runs:
         return svg, None
     derived = ET.tostring(root, encoding="unicode")

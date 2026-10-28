@@ -435,7 +435,7 @@ async def _prior_child_witnesses(session, parent, *, now, lock: bool):
                 or len(parent_rows) != job.total_slides):
             _reject("svg_cached_author_render_prior_checkpoint_unproven")
         recovery = CachedAuthorRenderRecovery(parent_rows, child_manifest)
-        for row, original in zip(rows, parent_rows):
+        for row, original in zip(rows, parent_rows, strict=False):
             if (row.role != original.role
                     or row.author_status != "completed"
                     or row.illustrate_status != "pending"
@@ -583,7 +583,7 @@ async def _rendered_v2_child_witness(session, parent, prior_v1: dict, *, now, lo
     ).order_by(AuthoredSlideCheckpoint.slide_index))))
     if [row.slide_index for row in rows] != list(range(job.total_slides)):
         _reject("svg_cached_author_render_prior_checkpoint_unproven")
-    for row, page in zip(rows, prior_manifest.get("pages") or []):
+    for row, page in zip(rows, prior_manifest.get("pages") or [], strict=False):
         payload = row.svg_checkpoint or {}
         marker = payload.get("cached_author_render") or {}
         archive = payload.get("cached_author_render_archive") or {}

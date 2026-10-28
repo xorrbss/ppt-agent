@@ -315,9 +315,11 @@ def _source_plot_geometry(payload: dict, prims: GroupPrimitives, frame, *,
     horizontal = chart_type == "bar"
     centers = [((text.box().y0 + text.box().y1) / 2 if horizontal
                 else (text.box().x0 + text.box().x1) / 2) for text in category_texts]
-    if any(not math.isfinite(value) for value in centers) or any(b <= a for a, b in zip(centers, centers[1:])):
+    if any(not math.isfinite(value) for value in centers) or any(
+        b <= a for a, b in zip(centers, centers[1:], strict=False)
+    ):
         return None
-    category_pitches = [b - a for a, b in zip(centers, centers[1:])]
+    category_pitches = [b - a for a, b in zip(centers, centers[1:], strict=False)]
     category_pitch = sum(category_pitches) / len(category_pitches)
     category_pitch_proven = (math.isfinite(category_pitch) and category_pitch > 0
                              and max(category_pitches) - min(category_pitches)
@@ -356,7 +358,7 @@ def _source_plot_geometry(payload: dict, prims: GroupPrimitives, frame, *,
                     return (box.y0 + box.y1) / 2 if horizontal else (box.x0 + box.x1) / 2
                 nearby = [shape for shape in candidates
                           if abs(category_center(shape) - center) <= 0.30 * min(
-                              [abs(b - a) for a, b in zip(centers, centers[1:])] or [float("inf")])]
+                              [abs(b - a) for a, b in zip(centers, centers[1:], strict=False)] or [float("inf")])]
                 if len(nearby) != 1:
                     return None
                 matched.append(nearby[0])
@@ -374,7 +376,7 @@ def _source_plot_geometry(payload: dict, prims: GroupPrimitives, frame, *,
         if len(bars) != len(series):
             return None
         ordered = sorted(bars, key=lambda box: box.y0 if horizontal else box.x0)
-        for first, second in zip(ordered, ordered[1:]):
+        for first, second in zip(ordered, ordered[1:], strict=False):
             gap = (second.y0 - first.y1) if horizontal else (second.x0 - first.x1)
             overlaps.append(-100.0 * gap / thickness)
     if (not overlaps or max(overlaps) - min(overlaps) > 1.0

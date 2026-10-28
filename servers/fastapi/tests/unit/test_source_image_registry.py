@@ -529,7 +529,7 @@ async def test_manifest_occurrences_keep_repeated_bytes_as_distinct_required_slo
     for asset_id, (path, extras, asset_owner) in original_rows.items():
         row = session._by_id[asset_id]
         assert (row.path, row.extras, row.owner_id) == (path, extras, asset_owner)
-        assert Path(path).read_bytes() == original_bytes
+        assert await asyncio.to_thread(Path(path).read_bytes) == original_bytes
     first_id = uuid.UUID(candidates[0].asset_id)
     first = session._by_id[first_id]
     for violation in ("owner", "metadata", "bytes", "missing"):
@@ -538,7 +538,7 @@ async def test_manifest_occurrences_keep_repeated_bytes_as_distinct_required_slo
         elif violation == "metadata":
             first.extras = {**first.extras, "source_occurrence_id": "another-occurrence"}
         elif violation == "bytes":
-            Path(first.path).write_bytes(b"changed source bytes")
+            await asyncio.to_thread(Path(first.path).write_bytes, b"changed source bytes")
         else:
             session._by_id.pop(first_id)
         with pytest.raises(ValueError, match="source_content_image_identity_unproven|source_content_image_digest_mismatch"):
@@ -546,7 +546,7 @@ async def test_manifest_occurrences_keep_repeated_bytes_as_distinct_required_slo
                 occurrences=occurrences, source_identity_presentation_id=presentation_id)
         first.owner_id = original_rows[first_id][2]
         first.extras = deepcopy(original_rows[first_id][1])
-        Path(first.path).write_bytes(original_bytes)
+        await asyncio.to_thread(Path(first.path).write_bytes, original_bytes)
         session._by_id[first_id] = first
 
 

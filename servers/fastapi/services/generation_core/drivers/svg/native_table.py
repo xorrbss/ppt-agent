@@ -37,7 +37,9 @@ _EDGE_TOLERANCE = 1.5
 
 def table_path_segments(node, attrs):
     """Read a stroke-only orthogonal grid without changing its source path."""
-    reject = lambda: NativeRejection("native_table_path_unsupported")
+    def reject():
+        return NativeRejection("native_table_path_unsupported")
+
     if (attrs.get("_table_path_unsupported_paint")
             or attrs.get("fill", "black") != "none" or not attrs.get("stroke")
             or attrs.get("stroke") == "none"
@@ -297,7 +299,7 @@ def _horizontal_spans(prims, xs, ys, cells):
     spans = {}
     for r, row in enumerate(cells):
         separators = [c for c, x in enumerate(xs) if covered(False, x, ys[r], ys[r + 1])]
-        for left, right in zip(separators, separators[1:]):
+        for left, right in zip(separators, separators[1:], strict=False):
             if right - left <= 1 or not row[left] or any(row[left + 1:right]):
                 continue
             if not all(covered(True, y, xs[left], xs[right]) for y in (ys[r], ys[r + 1])):
@@ -390,7 +392,7 @@ def _paragraph_geometry(text: DrawnText, top: float, bottom: float, starts=None)
         return None
     line_box = text.size * 1.25
     starts = list(range(len(text.lines))) if starts is None else sorted(starts)
-    groups = [range(start, end) for start, end in zip(starts, starts[1:] + [len(text.lines)])]
+    groups = [range(start, end) for start, end in zip(starts, starts[1:] + [len(text.lines)], strict=False)]
     baselines = [point[1] for point in text.points]
     spacing = []
     for group in groups:

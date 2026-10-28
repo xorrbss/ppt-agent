@@ -941,7 +941,8 @@ def test_public_export_requires_generation_authority_in_the_actor_tenant(
         publisher_id = uuid.uuid4()
         async with maker() as session,session.begin():
             presentation=await session.get(PresentationModel,presentation_id)
-            presentation.mode='svg'; presentation.revision=2
+            presentation.mode = "svg"
+            presentation.revision = 2
             generation=await session.get(WorkspaceOperation,generation_id)
             generation.result_revision=1
             session.add(SlideModel(presentation=presentation_id,owner_id=owner,index=0,

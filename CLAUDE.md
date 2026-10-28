@@ -101,7 +101,7 @@ uv run pytest --cov                             # coverage config exists in pypr
 ```
 Tests are organized as `tests/unit/`, `tests/integration/`, `tests/edge_cases/`, `tests/regression/`, with shared fixtures in `tests/conftest.py` and LLM/image stubs in `tests/mocks/`. CI runs with `DISABLE_IMAGE_GENERATION=true`, `DATABASE_URL=sqlite+aiosqlite:///./test.db`, and `APP_DATA_DIRECTORY=/tmp/app_data`.
 
-Ruff is locked in `servers/fastapi/uv.lock` and configured in `pyproject.toml` for `E`, `F`, `B`, and `ASYNC`. Bitbucket runs `uv run ruff check .` as a required Python lint gate. The per-file ignores are the audited legacy baseline and should be reduced when a touched file can be fixed safely. There is still no required mypy or Black gate.
+Ruff is locked in `servers/fastapi/uv.lock` and configured in `pyproject.toml` for `E`, `F`, `B`, and `ASYNC`. Bitbucket runs `uv run ruff check .` as a required Python lint gate. By decision on 2026-10-28, E501 is ignored globally because line length carries no defect signal and kept the gate permanently red. The remaining per-file ignores are the audited legacy baseline and should be reduced when a touched file can be fixed safely. There is still no required mypy or Black gate.
 
 **Next.js** (`servers/nextjs`):
 ```bash

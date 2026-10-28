@@ -3356,8 +3356,11 @@ async def _svg_partial_append_only_contract(tmp_path, monkeypatch, *, source_rou
                         # The earlier contract in this parameterized node
                         # substitutes these getters; vary that same boundary.
                         with scoped.context() as principal_scope:
-                            principal_scope.setattr("utils.owner_context.get_current_owner_id",lambda:owner)
-                            principal_scope.setattr("utils.owner_context.get_current_tenant_id",lambda:tenant)
+                            principal_scope.setattr("utils.owner_context.get_current_owner_id",lambda owner=owner:owner)
+                            principal_scope.setattr(
+                                "utils.owner_context.get_current_tenant_id",
+                                lambda tenant=tenant: tenant,
+                            )
                             with pytest.raises(recovery.PartialRecoveryRejected,match="snapshot_changed"):
                                 verification.check(session)
                     verification.active.add(str(next_operation_id))
@@ -3382,7 +3385,7 @@ async def _svg_partial_append_only_contract(tmp_path, monkeypatch, *, source_rou
                         (AuthoredSlideCheckpoint, rows[1].id, "svg_checkpoint",
                          {**rows[1].svg_checkpoint,"inflight":None}, rows[1].svg_checkpoint),
                     ]
-                    for model, row_id, field, changed, original in changes:
+                    for model, row_id, field, changed, _original in changes:
                         verification = recovery._EpisodeVerification(session)
                         await recovery.verify_episode(session,next_operation,next_job,
                             verification=verification)
@@ -3500,13 +3503,21 @@ async def _svg_append_only_recovery_contract(tmp_path, monkeypatch):
         now = get_current_utc_datetime()
         async with maker() as s:
             user = User(username="append-only-owner", hashed_password="unused")
-            s.add(user); await s.flush()
+            s.add(user)
+            await s.flush()
             _, _, source, _ = await bootstrap_workspace(s, presentation_id=presentation.id, request=_bootstrap_request(key="append-only-source"))
             (await s.get(PresentationModel,presentation.id)).owner_id=user.id
-            source.owner_id=user.id;source.kind="presentation.generate";source.state="failed"
-            source.error_code="svg_source_quality_failed";source.error_detail={"retryable":False};source.version=4;source.fencing_token=2
+            source.owner_id = user.id
+            source.kind = "presentation.generate"
+            source.state = "failed"
+            source.error_code = "svg_source_quality_failed"
+            source.error_detail = {"retryable": False}
+            source.version = 4
+            source.fencing_token = 2
             source.request_payload={**source.request_payload,"principal_tenant_id":"test"}
-            task=AsyncPresentationGenerationTaskModel(status="failed");s.add(task);await s.flush()
+            task = AsyncPresentationGenerationTaskModel(status="failed")
+            s.add(task)
+            await s.flush()
             frozen_style={"authoring_profile":{"id":"art-direction-v1","version":8}}
             frozen_style["digest"]=canonical_json_digest(frozen_style,allow_nan=True)
             job=PresentationGenerationJob(task_id=task.id,presentation_id=presentation.id,workspace_operation_id=source.id,
@@ -3514,21 +3525,31 @@ async def _svg_append_only_recovery_contract(tmp_path, monkeypatch):
                 "_internal_svg_stage_plan":{"schema":"svg-stage-plan/v1","partitions":[[0,5,8,11],[1,2,3,4,6,7,9,10]]}},
                 svg_style_snapshot=frozen_style,
                 authored_outline={"slides":[{"content":str(i)} for i in range(12)]},state="failed",total_slides=12)
-            s.add(job);await s.flush();source.request_payload={**source.request_payload,"job_id":str(job.id)}
+            s.add(job)
+            await s.flush()
+            source.request_payload = {**source.request_payload, "job_id": str(job.id)}
             values={c.name:100 for c in PublicPolicyProfile.__table__.columns if not c.nullable and c.default is None and c.server_default is None}
-            values['version']='append-only-policy';policy=PublicPolicyProfile(**values);s.add(policy);await s.flush()
+            values["version"] = "append-only-policy"
+            policy = PublicPolicyProfile(**values)
+            s.add(policy)
+            await s.flush()
             adm=PublicOperationAdmission(operation_id=source.id,policy_version=policy.version,owner_id=user.id,tenant_id="test",trace_id_hash="b"*64,
                 operation_kind="generation",resource_units=1,policy_digest="c"*64,deadline_at=now,state="failed",terminal_at=now,slide_count=12,
                 planned_request_limit=14,retry_request_limit=12,initial_request_count=4,retry_request_count=1,
                 estimated_cost_limit_microunits=100,actual_cost_limit_microunits=100)
-            s.add(adm);await s.flush()
+            s.add(adm)
+            await s.flush()
             for i in range(12):
                 payload={"input_digest":f"input-{i}","attempts":[],"inflight":1 if i==8 else None}
-                cached=i in {0,5,11};n=2 if i==5 else 1
+                cached = i in {0, 5, 11}
+                n = 2 if i == 5 else 1
                 if cached:
                     payload.update(svg_content=f"<svg>cache-{i}</svg>",attempts=[{"kind":"provider","receipt":{"attempt":j}} for j in range(n)],
                         quality={"passed":False,"failures":[{"kind":"required_text_missing"}]} if i==5 else {"passed":True})
-                if i==0:payload.update(source_manifest_ref={"digest":"frozen-pointer"},source_manifest_digest="frozen-manifest")
+                if i == 0:
+                    payload.update(
+                        source_manifest_ref={"digest": "frozen-pointer"}, source_manifest_digest="frozen-manifest"
+                    )
                 s.add(AuthoredSlideCheckpoint(job_id=job.id,slide_index=i,author_status="completed" if cached else "pending",svg_checkpoint=payload))
                 if cached or i==8:
                     for j in range(n if cached else 1):
@@ -3536,7 +3557,12 @@ async def _svg_append_only_recovery_contract(tmp_path, monkeypatch):
                             logical_call_ordinal=j+1,retry_class="retry" if j else "initial",idempotency_key_hash=str(i*10+j).zfill(64),
                             state="reported" if cached else "unavailable",outcome="succeeded" if cached else "cancelled",
                             reconciled_at=now,estimated_cost_microunits=0,provider_id="codex",model_id="gpt-6.1-sol"))
-            await s.commit();source_id=source.id;job_id=job.id;owner=user.id;scope=source.owner_scope;policy_version=policy.version
+            await s.commit()
+            source_id = source.id
+            job_id = job.id
+            owner = user.id
+            scope = source.owner_scope
+            policy_version = policy.version
         monkeypatch.setattr("utils.owner_context.get_current_owner_id",lambda:owner)
         monkeypatch.setattr("utils.owner_context.get_current_tenant_id",lambda:"test")
         monkeypatch.setattr("services.workspace_service.get_workspace_owner_scope",lambda:scope)
@@ -3546,7 +3572,8 @@ async def _svg_append_only_recovery_contract(tmp_path, monkeypatch):
         monkeypatch.setattr("services.workspace_service._lock_workspace_mutation_admission",lock)
         deny=True
         async def admit(s,**kw):
-            if deny:raise HTTPException(status_code=429,detail="public_owner_queue_full")
+            if deny:
+                raise HTTPException(status_code=429, detail="public_owner_queue_full")
             s.add(PublicOperationAdmission(operation_id=kw['operation'].id,policy_version=policy_version,owner_id=owner,tenant_id="test",
                 trace_id_hash="d"*64,operation_kind="generation",resource_units=1,policy_digest="e"*64,deadline_at=now+timedelta(minutes=10),
                 state="active",slide_count=12,planned_request_limit=14,retry_request_limit=12,
@@ -3565,7 +3592,8 @@ async def _svg_append_only_recovery_contract(tmp_path, monkeypatch):
         request=WorkspaceOperationActionRequest(action="retry",idempotency_key="append-only-retry",expected_operation_version=4,
             expected_revision=0,recovery_revision=SVG_TIMEOUT_REPURCHASE_V3,action_id=APPROVAL_ACTION_PREFIX+recovery.manifest_hash)
         async with maker() as s:
-            with pytest.raises(WorkspaceServiceError) as e:await apply_workspace_action(s,operation_id=source_id,request=request)
+            with pytest.raises(WorkspaceServiceError) as e:
+                await apply_workspace_action(s, operation_id=source_id, request=request)
             assert e.value.code=='public_owner_queue_full'
         deny=False
         async with maker() as s:
@@ -3582,22 +3610,46 @@ async def _svg_append_only_recovery_contract(tmp_path, monkeypatch):
             assert next(r.svg_checkpoint for r in rows if r.slide_index==5)['quality']['passed'] is False
             await verify_repurchase_provider_target(s,child,child_adm,stage="repair",slide_index=8,
                 logical_call_key="svg-author-8-2",provider_id="codex",model_id="gpt-6.1-sol")
-            with pytest.raises(TimeoutRepurchaseRejected):await verify_repurchase_provider_target(s,child,child_adm,stage="repair",slide_index=5,
-                logical_call_key="svg-author-5-3",provider_id="codex",model_id="gpt-6.1-sol")
+            with pytest.raises(TimeoutRepurchaseRejected):
+                await verify_repurchase_provider_target(
+                    s,
+                    child,
+                    child_adm,
+                    stage="repair",
+                    slide_index=5,
+                    logical_call_key="svg-author-5-3",
+                    provider_id="codex",
+                    model_id="gpt-6.1-sol",
+                )
             from services.svg_generation_assets import _verify_inherited_source_manifest
             context=SimpleNamespace(owner_id=owner,tenant_id="test")
             inherited=SimpleNamespace(presentation_id=presentation.id,source_revision=1,digest="frozen-manifest")
             await _verify_inherited_source_manifest(s,inherited,{"digest":"frozen-pointer"},context=context,
                 presentation_id=child.presentation_id,operation_id=child.id)
-            with pytest.raises(ValueError):await _verify_inherited_source_manifest(s,inherited,{"digest":"frozen-pointer"},
-                context=SimpleNamespace(owner_id=owner,tenant_id="foreign"),presentation_id=child.presentation_id,operation_id=child.id)
-            with pytest.raises(ValueError):await _verify_inherited_source_manifest(s,inherited,{"digest":"changed-pointer"},
-                context=context,presentation_id=child.presentation_id,operation_id=child.id)
+            with pytest.raises(ValueError):
+                await _verify_inherited_source_manifest(
+                    s,
+                    inherited,
+                    {"digest": "frozen-pointer"},
+                    context=SimpleNamespace(owner_id=owner, tenant_id="foreign"),
+                    presentation_id=child.presentation_id,
+                    operation_id=child.id,
+                )
+            with pytest.raises(ValueError):
+                await _verify_inherited_source_manifest(
+                    s,
+                    inherited,
+                    {"digest": "changed-pointer"},
+                    context=context,
+                    presentation_id=child.presentation_id,
+                    operation_id=child.id,
+                )
             from services.generation_core.drivers.svg import collect
             cached=next(r.svg_checkpoint for r in rows if r.slide_index==5)
             written=[]
             async def checkpoint(job,index,*,payload=None):
-                if payload is not None:written.append(deepcopy(payload))
+                if payload is not None:
+                    written.append(deepcopy(payload))
                 return payload
             async def failed_render(**kw):
                 kw["payload"]["attempts"][-1]["quality"] = {"passed":False,"remeasurement":True}
@@ -3609,10 +3661,32 @@ async def _svg_append_only_recovery_contract(tmp_path, monkeypatch):
                 await collect._remeasure_append_only_cache(SimpleNamespace(source_reflow=False),None,child.presentation_id,
                     5,"source",cached,"input-5",child_job,hooks)
             assert written[-1]['quality']['passed'] is False and written[-1]['svg_content']==cached['svg_content']
-            s.add(PublicProviderLogicalCall(admission_id=child_adm.id,stage='repair',slide_index=8,logical_call_ordinal=2,retry_class='retry',
-                idempotency_key_hash='f'*64,estimated_cost_microunits=0,state='unavailable',outcome='cancelled',reconciled_at=now));await s.flush()
-            with pytest.raises(TimeoutRepurchaseRejected):await verify_repurchase_provider_target(s,child,child_adm,stage="repair",slide_index=8,
-                logical_call_key="svg-author-8-2",provider_id="codex",model_id="gpt-6.1-sol")
+            s.add(
+                PublicProviderLogicalCall(
+                    admission_id=child_adm.id,
+                    stage="repair",
+                    slide_index=8,
+                    logical_call_ordinal=2,
+                    retry_class="retry",
+                    idempotency_key_hash="f" * 64,
+                    estimated_cost_microunits=0,
+                    state="unavailable",
+                    outcome="cancelled",
+                    reconciled_at=now,
+                )
+            )
+            await s.flush()
+            with pytest.raises(TimeoutRepurchaseRejected):
+                await verify_repurchase_provider_target(
+                    s,
+                    child,
+                    child_adm,
+                    stage="repair",
+                    slide_index=8,
+                    logical_call_key="svg-author-8-2",
+                    provider_id="codex",
+                    model_id="gpt-6.1-sol",
+                )
             await s.rollback()
         async with maker() as s:
             _,replay,replayed=await apply_workspace_action(s,operation_id=source_id,request=request)
@@ -3623,11 +3697,14 @@ async def _svg_append_only_recovery_contract(tmp_path, monkeypatch):
                 assert canonical_json_sha256(after)==canonical_json_sha256(before[model.__tablename__])
         async with maker() as s:
             failed=await s.get(WorkspaceOperation,child_id)
-            failed.state="dead_letter";failed.error_code="http_error_500";failed.version+=1
+            failed.state = "dead_letter"
+            failed.error_code = "http_error_500"
+            failed.version += 1
             failed_job=await s.scalar(select(PresentationGenerationJob).where(PresentationGenerationJob.workspace_operation_id==child_id))
             failed_job.state="failed"
             failed_adm=await s.scalar(select(PublicOperationAdmission).where(PublicOperationAdmission.operation_id==child_id))
-            failed_adm.state="failed";failed_adm.terminal_at=now
+            failed_adm.state = "failed"
+            failed_adm.terminal_at = now
             await s.commit()
         async with maker() as s:
             failed=await s.get(WorkspaceOperation,child_id)
@@ -3660,7 +3737,10 @@ async def _svg_append_only_recovery_contract(tmp_path, monkeypatch):
             child_admission = await s.scalar(select(PublicOperationAdmission).where(PublicOperationAdmission.operation_id==failed.id))
             child_admission.retry_request_count = 1
             s.add(PublicProviderLogicalCall(admission_id=child_admission.id,stage='repair',slide_index=8,logical_call_ordinal=2,retry_class='retry',idempotency_key_hash=hashlib.sha256(f"public-provider-call/v2:{failed.id}:repair:8:2:{hashlib.sha256(b'svg-author-8-2').hexdigest()}".encode()).hexdigest(),state='reported',outcome='succeeded',reconciled_at=now,estimated_cost_microunits=0,provider_id='codex',model_id='gpt-6.1-sol'))
-            s.add(known_row);s.add(failed);s.add(child_admission);await s.commit()
+            s.add(known_row)
+            s.add(failed)
+            s.add(child_admission)
+            await s.commit()
             known_manifest = await build_timeout_repurchase_manifest(s,failed,presentation_revision=0,recovery_revision=SVG_TIMEOUT_REPURCHASE_V3)
             assert known_manifest.manifest['previous_consumed_logical_calls'] == 6
             assert known_manifest.manifest['remaining_logical_call_limit'] == 20
@@ -3668,7 +3748,8 @@ async def _svg_append_only_recovery_contract(tmp_path, monkeypatch):
             assert known_manifest.manifest['unknown_checkpoints'] == []
             assert next(w for w in known_manifest.manifest['completed_checkpoints'] if w['slide_index']==8)['max_additional_author_calls'] == 0
             assert next(w for w in known_manifest.manifest['completed_checkpoints'] if w['slide_index']==5)['known_quality_repair_approved'] is True
-    finally:await engine.dispose()
+    finally:
+        await engine.dispose()
     # A confirmed author result becomes an immutable cache, retaining its old marker only as audit evidence.
     from services.svg_checkpoint_recovery import append_only_svg_checkpoint_payload
     from utils.hashing import canonical_json_sha256

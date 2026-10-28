@@ -6,6 +6,7 @@ import re
 import math
 import threading
 import time
+from contextvars import ContextVar
 from typing import Any, Callable, Mapping, Protocol
 
 from services.authored_batch_policy import (
@@ -90,8 +91,6 @@ _SAFE_REQUEST_ID = re.compile(r"(?:req[_-])?(?:[0-9a-fA-F]{16,64}|[0-9a-fA-F]{8}
 _SAFE_RESPONSE_ID = re.compile(r"resp_[A-Za-z0-9_-]{1,128}\Z")
 _USAGE_FIELDS = frozenset({"input_tokens", "output_tokens", "total_tokens", "reasoning_tokens", "cached_tokens"})
 
-
-from contextvars import ContextVar
 
 _PROVIDER_CALL_DEADLINE = ContextVar("provider_call_absolute_deadline", default=None)
 

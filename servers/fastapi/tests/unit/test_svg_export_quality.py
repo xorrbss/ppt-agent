@@ -128,7 +128,7 @@ def test_persisted_domains_are_connected_without_claiming_visual_or_native_accep
     from models.sql.presentation import PresentationModel
     from models.sql.slide import SlideModel
     from models.sql.workspace import WorkspaceArtifact, WorkspaceOperation
-    from services.generation_core.quality.advisory_record import advisory_record, content_digest
+    from services.generation_core.quality.advisory_record import content_digest
     from services.svg_export_operation import current_svg_artifact_fidelity, svg_source_review_context
     from services.svg_export_visual_review import split_page_advisories, assemble_page_advisory
     from services.svg_final_pptx_review import seal_final_review
@@ -240,21 +240,36 @@ def test_persisted_domains_are_connected_without_claiming_visual_or_native_accep
                 assert rejected["visualReview"]["status"] == "failed"
         assert current.theme == before_current and export.result == before_export
         for violation in ("review_unknown", "owner", "tenant", "review_tenant", "export_tenant", "target", "artifact", "revision", "count", "slide_owner", "index", "format", "svg", "png", "parent"):
-            if violation == "review_unknown": review_operation.state = "running"
-            elif violation == "owner": public.owner_id = uuid.uuid4()
-            elif violation == "tenant": public.tenant_id = "different-tenant"
-            elif violation == "review_tenant": review_request["principal_tenant_id"] = "different-tenant"
-            elif violation == "export_tenant": export_request["principal_tenant_id"] = "different-tenant"
-            elif violation == "target": review_request["context"]["target"] = "source_svg"
-            elif violation == "artifact": binding.public_artifact_id = uuid.uuid4()
-            elif violation == "revision": current.revision = 2
-            elif violation == "count": current.n_slides = 2
-            elif violation == "slide_owner": current_slide.owner_id = uuid.uuid4()
-            elif violation == "index": current_slide.index = 1
-            elif violation == "format": current_slide.source_format = "html"
-            elif violation == "svg": current_slide.svg_content = svg + " "
-            elif violation == "png": current_slide.content["svgReceipt"]["png_sha256"] = "4" * 64
-            else: binding.operation_id = uuid.uuid4()
+            if violation == "review_unknown":
+                review_operation.state = "running"
+            elif violation == "owner":
+                public.owner_id = uuid.uuid4()
+            elif violation == "tenant":
+                public.tenant_id = "different-tenant"
+            elif violation == "review_tenant":
+                review_request["principal_tenant_id"] = "different-tenant"
+            elif violation == "export_tenant":
+                export_request["principal_tenant_id"] = "different-tenant"
+            elif violation == "target":
+                review_request["context"]["target"] = "source_svg"
+            elif violation == "artifact":
+                binding.public_artifact_id = uuid.uuid4()
+            elif violation == "revision":
+                current.revision = 2
+            elif violation == "count":
+                current.n_slides = 2
+            elif violation == "slide_owner":
+                current_slide.owner_id = uuid.uuid4()
+            elif violation == "index":
+                current_slide.index = 1
+            elif violation == "format":
+                current_slide.source_format = "html"
+            elif violation == "svg":
+                current_slide.svg_content = svg + " "
+            elif violation == "png":
+                current_slide.content["svgReceipt"]["png_sha256"] = "4" * 64
+            else:
+                binding.operation_id = uuid.uuid4()
             assert asyncio.run(consume())["status"] == "failed"
             review_operation.state = "succeeded"
             public.owner_id, public.tenant_id = owner, tenant

@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from threading import RLock
 from types import SimpleNamespace
-from typing import get_args
+from typing import Any, get_args
 from weakref import ReferenceType, ref
 import hashlib
 import time
@@ -288,7 +288,7 @@ def _same_json_value(left, right):
             else:
                 if len(expected) != len(actual):
                     return False
-                pairs = [(a, b, False) for a, b in zip(expected, actual)]
+                pairs = [(a, b, False) for a, b in zip(expected, actual, strict=False)]
             left_active.add(id(expected))
             right_active.add(id(actual))
             pending.append((expected, actual, True))
@@ -1513,7 +1513,7 @@ def _recovery_ledger_snapshot(admissions, calls, leases, usage, budgets, reserva
     if verification is not None:
         return digest(verification.ledger_snapshots(*groups))
     return digest({name: [_dump(row) for row in rows] for name, rows in zip(
-        ("admissions", "calls", "leases", "usage", "budgets", "reservations"), groups)})
+        ("admissions", "calls", "leases", "usage", "budgets", "reservations"), groups, strict=False)})
 
 
 async def _fresh_recovery_ledger_snapshot(session, operation_ids, job_id, *, operation_bound_only=False, verification=None):
@@ -1725,7 +1725,7 @@ async def _verify_operation_references_once(session, operation, manifest, refere
                 or any(seal.get(key) != ref.get(key) for key in (
                     "payload_sha256", "archive_storage_sha256", "archive_schema", "archive_canonical_sha256"))):
             reject("svg_partial_recovery_history_changed")
-    for newer, older in zip(ids, ids[1:]):
+    for newer, older in zip(ids, ids[1:], strict=False):
         child, parent = originals[newer], originals[older]
         if (child.presentation_id, child.conversation_id) != (parent.presentation_id, parent.conversation_id):
             verification.check(session)
@@ -2311,7 +2311,7 @@ def _author_render_chain(payload, raw, receipt, *, request, job, asset, index,
             reject("svg_partial_recovery_author_asset_unproven")
     author_svg = ET.tostring(root, encoding="unicode")
     if request.source_mode == "source_content_restyle":
-        from services.svg_source_layout import source_pages, bind_whole_page_source_svg
+        from services.svg_source_layout import bind_whole_page_source_svg
         from services.generation_core.authoring.author_source_svg_layout import _whole_page_facts
         from services.document_canvas_generation import source_restyle_font_floor, svg_quality_font_floor
         try:
@@ -2607,12 +2607,11 @@ def _replay_sealed_author_transform(payload, raw, *, request, job, asset, index,
         reject("svg_partial_recovery_completed_raw_invalid")
     receipt = {}
     'Replay the existing local transforms; hashes alone never authorize bytes.'
-    import json
     import xml.etree.ElementTree as ET
     from services.authored_canvas import request_canvas_contract
     from services.svg_contract import normalize_svg_response, finalize_svg
     from services.svg_default_fonts import normalize_model_font_families
-    from services.generation_core.drivers.svg.native_declarations import extract_native_declarations, declaration_receipt
+    from services.generation_core.drivers.svg.native_declarations import extract_native_declarations
     canvas = request_canvas_contract(request)
     offered = next((page.slot_ids for page in asset.offered_pages if page.page_index == index), ())
     slots = {slot.slot_id: slot for slot in asset.slots if slot.slot_id in offered}
@@ -2755,7 +2754,7 @@ async def _completed_repair_author_projection(payload, row, *, job, operation, s
         raise
     except (OSError, ValueError, TypeError, KeyError, IndexError) as error:
         raise PartialRecoveryRejected('svg_partial_recovery_completed_repair_unproven') from error
-    from services.generation_core.drivers.svg.native_declarations import bound_declarations, extract_native_declarations, declaration_receipt
+    from services.generation_core.drivers.svg.native_declarations import bound_declarations, extract_native_declarations
     from services.svg_author_output_view import parse_author_response
     view, view_facts = _replay_output_view(job, source, row.slide_index, _source_validation)
     native = extract_native_declarations(parse_author_response(
@@ -2788,20 +2787,10 @@ async def _terminal_repair_author_projection(payload, row, *, job, operation, se
     owner, tenant = (get_current_owner_id(), get_current_tenant_id())
     if not owner or not tenant:
         reject('svg_partial_recovery_completed_owner_unproven')
-    from models.sql.async_presentation_generation_status import AsyncPresentationGenerationTaskModel
-    from models.sql.presentation import PresentationModel
-    from models.sql.source_content import SourceContentManifestRecord
-    from services.presentation_generation_staging import _request_from_durable_payload
-    from services.source_content.manifest_store import admit_source_content_manifest_pin
     from services.svg_asset_persistence import load_source_manifest_pointer
     from services.artifact_store import configured_public_artifact_service
-    from services.svg_source_layout import verify_source_receipt
-    from services.authored_canvas import request_canvas_metadata
     from services.svg_presentation_checkpoint import _read_png
     from services.svg_asset_manifest import ArtifactPointer
-    from services.public_operation_admission import load_public_policy, _policy_digest
-    from services.svg_authoring_profile import read_quality_recovery_plan, svg_quality_review_admission_budget
-    from services.svg_authoring_profile import global_format_retry_control
     marker = payload.get('quality_recovery') or {}
     if not isinstance(marker, dict) or marker.get('status') != 'repair_pending' or row.author_status not in ('running', 'failed') or (row.render_status != 'completed') or (row.persist_status != 'pending') or (payload.get('svg_content') is not None) or (not isinstance(completed, dict)):
         return None
@@ -2811,7 +2800,6 @@ async def _terminal_repair_author_projection(payload, row, *, job, operation, se
     from services.generation_core.drivers.svg.partial_quality_recovery import current_quality_repair_authorized, _history_prefix
     from services.generation_core.drivers.svg.quality_recovery import _restore_candidate
     from services.generation_core.drivers.svg.quality import _gate_intact
-    from services.svg_presentation_checkpoint import _read_png
     prior_manifest = operation.request_payload.get('svg_partial_recovery_manifest')
     execution = seed.get('quality_recovery_execution') or {}
     if not isinstance(prior_manifest, dict):
@@ -3198,10 +3186,14 @@ def _v2_retained_comparison_matches(selection, decision, prior_gate, candidate_g
             or not paired.get("comparisonCohortDigest")
             or paired.get("deckContextDigest") != candidate_gate.get("deckContextDigest")):
         return False
-    for field, gate, key in (("priorPageDigest", prior_gate, "pageDigests"), ("priorPngDigest", prior_gate, "pngDigests"),
-                             ("candidatePageDigest", candidate_gate, "pageDigests"), ("candidatePngDigest", candidate_gate, "pngDigests")):
+    for digest_field, gate, key in (
+        ("priorPageDigest", prior_gate, "pageDigests"),
+        ("priorPngDigest", prior_gate, "pngDigests"),
+        ("candidatePageDigest", candidate_gate, "pageDigests"),
+        ("candidatePngDigest", candidate_gate, "pngDigests"),
+    ):
         values = gate.get(key) or []
-        if not 0 <= index < len(values) or paired.get(field) != values[index]:
+        if not 0 <= index < len(values) or paired.get(digest_field) != values[index]:
             return False
     presentation = paired.get("blindedPresentation") or {}
     changes = paired.get("axisChanges") or {}
@@ -3428,24 +3420,24 @@ def _historical_uniform_grid_rejection(svg, preservation, page, *, operation, jo
     from services.svg_source_native_tables import _evidence
 
     tables = []
-    for record, group, rows, cells, rects, owned, xs, ys in _evidence(ET.fromstring(svg), preservation, page):
+    for record, _group, rows, cells, rects, _owned, xs, ys in _evidence(ET.fromstring(svg), preservation, page):
         frame = record["frame"]
         column_width = frame["width"] / len(rows[0])
         row_height = frame["height"] / len(rows)
-        widths = [right - left for left, right in zip(xs, xs[1:])]
-        heights = [bottom - top for top, bottom in zip(ys, ys[1:])]
+        widths = [right - left for left, right in zip(xs, xs[1:], strict=False)]
+        heights = [bottom - top for top, bottom in zip(ys, ys[1:], strict=False)]
         if not (any(abs(value - column_width) > .000001 for value in widths)
                 or any(abs(value - row_height) > .000001 for value in heights)):
             continue
         # Reproduce only the former formula; the current module above proves
         # every shared edge, source span, cell identity and text membership.
         mismatch = None
-        for (row, column, rs, cs, cell), rect in zip(cells, rects, strict=True):
+        for (row, column_index, rs, cs, _cell), rect in zip(cells, rects, strict=False):
             actual = [float(rect.get(key)) for key in ("x", "y", "width", "height")]
-            expected = [frame["x"] + column * column_width, frame["y"] + row * row_height,
+            expected = [frame["x"] + column_index * column_width, frame["y"] + row * row_height,
                 cs * column_width, rs * row_height]
             if any(abs(value - target) > .000001 for value, target in zip(actual, expected, strict=True)):
-                mismatch = {"row": row, "column": column, "row_span": rs, "column_span": cs,
+                mismatch = {"row": row, "column": column_index, "row_span": rs, "column_span": cs,
                     "actual": actual, "uniform_expected": expected}
                 break
         if mismatch is not None:
@@ -3636,7 +3628,7 @@ async def _completed_invalid_source_output(payload, row, *, completed, job, oper
         origin_operation_id=str(reference.created_by_operation_id))
     if asset.digest != payload.get("source_manifest_digest") or binding not in (None, current_binding):
         reject("svg_partial_recovery_asset_binding_changed")
-    from services.svg_source_layout import source_pages, bind_whole_page_source_svg
+    from services.svg_source_layout import bind_whole_page_source_svg
     from services.generation_core.authoring.author_source_svg_layout import _whole_page_facts
     from services.generation_core.drivers.svg.native_declarations import extract_native_declarations, declaration_receipt
     from services.svg_contract import normalize_svg_response
@@ -3758,7 +3750,7 @@ def _completed_failed_source_quality(payload, row, *, completed, job, operation,
         reject(code)
     _require_known_source_page_accounting(episode_calls=episode_calls, usage=usage, job=job,
         index=row.slide_index, receipt=receipt, code=code)
-    from services.svg_source_layout import source_pages, verify_source_receipt
+    from services.svg_source_layout import verify_source_receipt
     from utils.svg_template_fonts import source_font_profile
     pages = _recovery_source_pages(source, job, _source_validation)
     offered = next((page.slot_ids for page in asset.offered_pages if page.page_index == row.slide_index), ())
@@ -3896,7 +3888,6 @@ async def build_manifest(session, operation, *, presentation_revision):
     from models.sql.source_content import SourceContentManifestRecord
     from services.presentation_generation_staging import _request_from_durable_payload
     from services.source_content.manifest_store import admit_source_content_manifest_pin
-    from services.svg_asset_persistence import load_source_manifest_pointer
     from services.artifact_store import configured_public_artifact_service
     from services.svg_source_layout import verify_source_receipt
     from services.authored_canvas import request_canvas_metadata
@@ -4575,21 +4566,22 @@ async def _hydrate_checkpoint_archive(session, manifest, archive, *, verificatio
         reject("svg_partial_recovery_checkpoint_reference_unbound")
     expected_keys = {"schema", "id", "job_id", "slide_index", "owner_id", "tenant_id", "row_digest"}
     ids, pages = set(), set()
-    for ref in refs:
-        if (not isinstance(ref, dict) or set(ref) != expected_keys
-                or ref.get("schema") != CHECKPOINT_REFERENCE or type(ref.get("id")) is not str
-                or ref.get("job_id") != manifest["job_id"] or ref.get("owner_id") != str(owner)
-                or ref.get("tenant_id") != tenant or type(ref.get("slide_index")) is not int
-                or not 0 <= ref["slide_index"] < count or ref["id"] in ids or ref["slide_index"] in pages
-                or not _sha256_hex_valid(ref.get("row_digest"))):
+    for reference in refs:
+        if (not isinstance(reference, dict) or set(reference) != expected_keys
+                or reference.get("schema") != CHECKPOINT_REFERENCE or type(reference.get("id")) is not str
+                or reference.get("job_id") != manifest["job_id"] or reference.get("owner_id") != str(owner)
+                or reference.get("tenant_id") != tenant or type(reference.get("slide_index")) is not int
+                or not 0 <= reference["slide_index"] < count or reference["id"] in ids
+                or reference["slide_index"] in pages
+                or not _sha256_hex_valid(reference.get("row_digest"))):
             reject("svg_partial_recovery_checkpoint_reference_unbound")
         try:
-            if str(uuid.UUID(ref["id"])) != ref["id"]:
+            if str(uuid.UUID(reference["id"])) != reference["id"]:
                 raise ValueError()
         except (ValueError, TypeError, AttributeError):
             reject("svg_partial_recovery_checkpoint_reference_unbound")
-        ids.add(ref["id"])
-        pages.add(ref["slide_index"])
+        ids.add(reference["id"])
+        pages.add(reference["slide_index"])
     try:
         parent_id, job_id = uuid.UUID(manifest["operation_id"]), uuid.UUID(manifest["job_id"])
     except (ValueError, TypeError, AttributeError, KeyError):

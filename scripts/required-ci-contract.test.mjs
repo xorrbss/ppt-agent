@@ -48,7 +48,7 @@ test("Ruff is a required locked Python lint gate on Bitbucket", () => {
 
   assert.match(pyproject, /"ruff>=0\.16\.2"/u);
   assert.match(pyproject, /select\s*=\s*\["E",\s*"F",\s*"B",\s*"ASYNC"\]/u);
-  assert.doesNotMatch(pyproject, /^ignore\s*=/mu);
+  assert.match(pyproject, /^ignore\s*=\s*\["E501"\]/mu);
   assert.match(lockfile, /name = "ruff"\s*\nversion = "0\.16\.2"/u);
   assert.match(
     pipeline,

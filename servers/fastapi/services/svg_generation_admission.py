@@ -107,13 +107,13 @@ def svg_creation_admission_violation(request: object) -> str | None:
         if not style_id:
             return "svg_source_template_selection_required"
         try:
-            style = resolve_source_template_style(style_id)
+            resolve_source_template_style(style_id)
         except ValueError as error:
             return str(error).split(":", 1)[0]
     else:
         from utils.authored_styles import resolve_authored_style
 
-        style = resolve_authored_style(getattr(request, "authored_style", None))
+        resolve_authored_style(getattr(request, "authored_style", None))
     return None
 
 
@@ -232,8 +232,7 @@ def pin_svg_style(request: object) -> dict:
     from services.authored_canvas import request_canvas_contract
     from services.generation_core.drivers.svg.svg_style_adapter import adapt_svg_style
     from services.svg_authoring_profile import (
-        new_svg_admission_profile, request_authoring_profile,
-        seal_new_quality_recovery_plan,
+        new_svg_admission_profile, seal_new_quality_recovery_plan,
         validate_profile_agreement, validate_quality_recovery_agreement,
     )
 

@@ -910,10 +910,14 @@ async def test_svg_preview_rejects_cross_owner_and_tenant_before_provider(monkey
 
     handler, context, task, _, admission = _svg_preview_handler_fixture(monkeypatch)
     owner, tenant = context.claim.owner_id, "tenant-preview"
-    if conflict == "owner": owner = uuid.uuid4()
-    if conflict == "tenant": tenant = "other-tenant"
-    if conflict == "admission": admission.tenant_id = "other-tenant"
-    if conflict == "task_owner": task.owner_id = uuid.uuid4()
+    if conflict == "owner":
+        owner = uuid.uuid4()
+    if conflict == "tenant":
+        tenant = "other-tenant"
+    if conflict == "admission":
+        admission.tenant_id = "other-tenant"
+    if conflict == "task_owner":
+        task.owner_id = uuid.uuid4()
     run_preview = AsyncMock()
     monkeypatch.setattr(handler, "_run_preview_background", run_preview)
     with operation_principal(owner, tenant):

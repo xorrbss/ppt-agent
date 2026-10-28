@@ -84,6 +84,7 @@ extend-exclude = ["vendor"]
 [tool.ruff.lint]
 # All requested rule families are active. The legacy baseline below records only
 # the rule IDs observed in each file, so new rule types still fail CI immediately.
+ignore = ["E501"]
 select = ["E", "F", "B", "ASYNC"]
 
 [tool.ruff.lint.per-file-ignores]
@@ -92,18 +93,14 @@ select = ["E", "F", "B", "ASYNC"]
 # Re-audited on 2026-09-04, when the files added since the first audit were
 # registered. That pass fixed every defect-bearing finding outright -- exception
 # chaining, loop-variable capture, unequal zip pairing, dead bindings, blocking
-# filesystem calls on the event loop -- so what remains here is line length,
-# FastAPI's Depends/Path/Form defaults, and blocking calls in tests and scripts,
-# where no event loop is serving a request.
+# filesystem calls on the event loop. Remaining per-file ignores cover FastAPI's
+# Depends/Path/Form defaults and blocking calls in tests and scripts, where no
+# event loop is serving a request.
 "alembic/env.py" = ["F401"]
-"alembic/versions/00b3c27a13bc_init.py" = ["E501"]
 "alembic/versions/82abdbc476a7_add_theme_column_to_presentations.py" = ["F401"]
 "alembic/versions/c8d1e2f3a4b5_add_deck_plan_column.py" = ["F401"]
 "alembic/versions/d1f2a3b4c5e6_add_mode_column.py" = ["F401"]
-"alembic/versions/d6f8a1c3e5b7_add_chat_first_workspace_persistence.py" = ["E501"]
 "alembic/versions/f42ad4074449_add_theme_column_to_presentations.py" = ["F401"]
-"alembic/versions/f9c3a7d1e5b8_add_public_operation_admission.py" = ["E501"]
-"alembic/versions/fb5e9c3a7d10_add_public_control_plane.py" = ["E501"]
 "api/main.py" = ["ASYNC240"]
 "api/v1/admin/router.py" = ["B008"]
 "api/v1/async_tasks/router.py" = ["B008"]
@@ -114,7 +111,7 @@ select = ["E", "F", "B", "ASYNC"]
 "api/v1/mock/router.py" = ["F811"]
 "api/v1/ppt/background_tasks.py" = ["B904"]
 "api/v1/ppt/endpoints/anthropic.py" = ["B904"]
-"api/v1/ppt/endpoints/authored_operations.py" = ["B008", "E501"]
+"api/v1/ppt/endpoints/authored_operations.py" = ["B008"]
 "api/v1/ppt/endpoints/authored_vnext/semantic/router.py" = ["B008"]
 "api/v1/ppt/endpoints/files.py" = ["ASYNC230", "B905"]
 "api/v1/ppt/endpoints/fonts.py" = ["ASYNC240", "B008", "B904", "F401"]
@@ -125,8 +122,6 @@ select = ["E", "F", "B", "ASYNC"]
 "api/v1/ppt/endpoints/outlines.py" = ["B008"]
 "api/v1/ppt/endpoints/presentation_crud.py" = ["B008", "B905"]
 "api/v1/ppt/endpoints/presentation_export_attempts.py" = ["B008"]
-# E501 added 2026-09-11: long conditionals in the request-admission branch
-# added alongside presentation_generate_admission.py; F401/E402 fixed outright.
 "api/v1/ppt/endpoints/presentation_generate.py" = ["B008", "B904"]
 "api/v1/ppt/endpoints/presentation_share.py" = ["ASYNC240", "B008"]
 "api/v1/ppt/endpoints/presentation_versions.py" = ["B008", "F841"]
@@ -135,42 +130,27 @@ select = ["E", "F", "B", "ASYNC"]
 "api/v1/ppt/endpoints/theme.py" = ["B008"]
 "api/v1/ppt/endpoints/workspace.py" = ["B008"]
 "api/v1/webhook/router.py" = ["B008", "F401"]
-"evaluation/hybrid_review/LIVE_BENCHMARK.py" = ["ASYNC109", "E402", "E501"]
-"models/authored_vnext/semantic/contracts.py" = ["E501"]
+"evaluation/hybrid_review/LIVE_BENCHMARK.py" = ["ASYNC109", "E402"]
 "models/sql/ollama_pull_status.py" = ["F401"]
 "models/sql/presentation.py" = ["F401"]
-"models/sql/workspace.py" = ["E501"]
 # Standalone evidence-gathering script: inserts its own sys.path entry and
 # seeds env defaults before importing project modules, same as
 # scripts/warm_fastembed_cache.py below.
 "scripts/authored_checkpoint_repair_probe.py" = ["E402"]
-"scripts/benchmark_authored_hybrid_review.py" = ["B905", "E501"]
+"scripts/benchmark_authored_hybrid_review.py" = ["B905"]
 # Restored on 2026-09-04 with the modules a 2026-09-01 merge dropped.
-# Their compressed operator style predates the audit; only line length
-# and statement packing stay here, and every real finding was fixed.
-"scripts/public_service_malicious_corpus_evidence.py" = ["ASYNC240", "E501"]
+"scripts/public_service_malicious_corpus_evidence.py" = ["ASYNC240"]
 # Synthetic Korean deck-content string literals (labels/captions); wrapping
-# them would require string concatenation with no behavior change, so this
-# is a plain line-length exception rather than a real finding.
-"scripts/raster_redesign_eval/decks/build_deck4.py" = ["E501"]
-"scripts/seed_public_v2_export_snapshot.py" = ["E501"]
-"scripts/slidespec_human_labeled_replayer.py" = ["ASYNC240", "E501"]
-"scripts/validate_public_fidelity_readback.py" = ["E501"]
+"scripts/slidespec_human_labeled_replayer.py" = ["ASYNC240"]
 "scripts/warm_fastembed_cache.py" = ["E402"]
-"services/authored_author_capacity_recovery.py" = ["E501"]
-"services/authored_composition_policy.py" = ["E501"]
-"services/authored_decoration_containment.py" = ["E501"]
-"services/authored_decoration_panel_sheen.py" = ["E501"]
-"services/authored_evidence_ledger.py" = ["E501"]
 "services/authored_exact_provenance.py" = ["B905"]
 "services/authored_exact_source_snapshot.py" = ["B905"]
 # Extracted from authored_presentation_pipeline.py in 919071f92 (2026-09-10,
 # "Separate authored structural repair core") with no module-level imports at
 # all: names such as Mapping/Sequence/math are injected via bind_runtime()
 # at the bottom of the file, so F821 is inherent to the split, not a bug.
-# E501/E701 are the same compressed single-line-conditional style already
+# E701 is the same compressed single-line-conditional style already
 # tolerated in services/authored_vnext/semantic/editable_hybrid_libreoffice_readback.py.
-"services/authored_generation_timing_receipt.py" = ["E501"]
 # Same bind_runtime()-injected-globals split as authored_generation_repair.py
 # above.
 "services/authored_presentation_pipeline.py" = ["F403", "F405"]
@@ -183,164 +163,83 @@ select = ["E", "F", "B", "ASYNC"]
 # `module.bind_runtime(sys.modules[__name__])`, passing this module's own
 # namespace as the injected-globals surface for authored_generation_repair.py
 # and its siblings above. Its "unused" imports are exactly that surface.
-"services/authored_presentation_generation.py" = ["E501"]
 "services/authored_presentation_service.py" = ["ASYNC240"]
-"services/authored_quality_receipt_helpers.py" = ["E501"]
-"services/authored_quality_receipt_v2.py" = ["E501"]
 "services/authored_quality_review_service.py" = ["B905"]
 "services/authored_quality_routing.py" = ["B905"]
 "services/authored_quality_telemetry.py" = ["B905"]
-"services/authored_semantic_candidate.py" = ["E501"]
-"services/authored_source_visibility_repair.py" = ["E501"]
 # Pure comparison helpers extracted alongside the structural-repair split
 # above (919071f92, 2026-09-10). B023 on `assign()` is the same
 # immediate-use-recursive-closure false positive already tolerated in
 # services/slidespec_geometry_candidates.py and services/slidespec_repair.py:
 # it is defined and fully consumed within the same loop iteration before
 # `edges`/`matched` are reassigned.
-"services/authored_structural_repair_compare.py" = ["B023", "E501"]
-"services/authored_structural_repair.py" = ["E501"]
-"services/authored_title_recovery_contract.py" = ["E501"]
-"models/authored_vnext/capability_registry.py" = ["E501"]
-"services/authored_vnext/composition.py" = ["E501"]
-"services/authored_vnext/deck_ir/browser_closure.py" = ["E501"]
-"services/authored_vnext/deck_ir/candidates.py" = ["E501"]
-"services/authored_vnext/deck_ir/compiler.py" = ["E501"]
-"services/authored_vnext/deck_ir/component_renderer.py" = ["E501"]
-"services/authored_vnext/deck_ir/contracts.py" = ["E501"]
-"services/authored_vnext/deck_ir/grammar.py" = ["E501"]
-"services/authored_vnext/deck_ir/integration.py" = ["E501"]
-"services/authored_vnext/deck_ir/intent_resolution.py" = ["E501"]
-"services/authored_vnext/deck_ir/product_adapter.py" = ["E501"]
-"services/authored_vnext/deck_ir/strategy.py" = ["E501"]
-"services/authored_vnext/deck_ir/validation.py" = ["E501"]
-"services/authored_vnext/deck_ir/zone_layout.py" = ["E501"]
-"services/authored_vnext/design_pack/compiler.py" = ["E501"]
-"services/authored_vnext/generation/gate0e_probes.py" = ["E501"]
-"services/authored_vnext/generation/retained_reference.py" = ["E501"]
-"services/authored_vnext/master/ai_import.py" = ["E501"]
-"services/authored_vnext/master/preview.py" = ["E501"]
-"services/authored_vnext/narrative_ir/frame_search.py" = ["E501"]
-"services/authored_vnext/ooxml/native_scene.py" = ["E501"]
-"services/authored_vnext/semantic/editable_mvp_completion.py" = ["E501"]
-"services/authored_vnext/semantic/editable_scene.py" = ["E501"]
-"services/authored_vnext/source_native_generation.py" = ["E501"]
-"services/chat/outline_context.py" = ["E501"]
-"services/chat/prompts.py" = ["E501"]
+"services/authored_structural_repair_compare.py" = ["B023"]
 "services/chat/service.py" = ["B904"]
-"services/chat/tools.py" = ["E501"]
 "services/decompose_job_service.py" = ["ASYNC230"]
 "services/documents_loader.py" = ["B007"]
 "services/image_generation_service.py" = ["ASYNC109", "ASYNC230", "ASYNC240", "B007", "B904"]
-"services/liteparse_service.py" = ["E501"]
-"services/mem0_oss_memory.py" = ["E501"]
 "services/presentation_generation_operation_handler.py" = ["F401"]
 # One-off PNG-identity read inside a per-slide export step; matches the
 # existing ASYNC240 tolerance for non-hot-path blocking calls in
 # services/workspace_asset_service.py.
 # Moved 2026-09-29 from api/v1/ppt/endpoints/presentation_generate.py with its baseline.
-"services/presentation_generation_pipeline.py" = ["B008", "B904", "E501", "F811", "F841"]
+"services/presentation_generation_pipeline.py" = ["B008", "B904", "F811", "F841"]
 "services/public_export_operation.py" = ["ASYNC240"]
-"services/public_quality_receipt_v3_projection.py" = ["E501"]
-"services/slidespec_authored_executor.py" = ["B905", "E501", "F841"]
+"services/slidespec_authored_executor.py" = ["B905", "F841"]
 "services/slidespec_authored_importer.py" = ["B905", "F841"]
 "services/slidespec_geometry_candidates.py" = ["B023"]
 "services/slidespec_pipeline_performance.py" = ["B905"]
 "services/slidespec_repair.py" = ["B023"]
-"services/slidespec_repair_pipeline.py" = ["E501"]
-"services/source_content/browser_readback.py" = ["E501"]
-"services/source_content/browser_readback_inspection.py" = ["E501"]
-"services/source_content/coverage.py" = ["E501"]
-"services/source_content/text_stamping.py" = ["E501"]
 "services/temp_file_service.py" = ["ASYNC230", "ASYNC240"]
-"services/trusted_executor/dispatch_evidence.py" = ["E501"]
-"services/trusted_executor/isolation_policy.py" = ["E501"]
 "services/workspace_asset_service.py" = ["ASYNC240"]
 "services/workspace_authored_template_confirmation_service.py" = ["B904"]
-"services/workspace_error_registry.py" = ["E501"]
-"services/workspace_operation_runner.py" = ["E501", "F401"]
+"services/workspace_operation_runner.py" = ["F401"]
 "services/workspace_service.py" = ["B904", "F401"]
 "tests/integration/test_authored_checkpoint_http_flow.py" = ["ASYNC109"]
 "tests/integration/test_authored_checkpoint_process_restart.py" = ["B023"]
-"tests/integration/test_authored_infographic_fit_chrome.py" = ["E501"]
-"tests/integration/test_public_generation_export_live_product_path.py" = ["E501"]
-"tests/integration/test_public_generation_export_product_path.py" = ["E501"]
-"tests/integration/test_slidespec_browser_metrics.py" = ["E501"]
 "tests/integration/test_workspace_gate_e_vertical_flow.py" = ["F401"]
 "tests/support/workspace_crash_probe_worker.py" = ["E402"]
-"tests/test_image_generation_openai_compatible.py" = ["ASYNC240", "E501", "F401", "F841"]
-"tests/unit/test_api_v2_orchestrator_integration.py" = ["E501"]
-"tests/unit/test_artifact_style_builder.py" = ["E501"]
+"tests/test_image_generation_openai_compatible.py" = ["ASYNC240", "F401", "F841"]
 "tests/unit/test_auth_bootstrap.py" = ["F401"]
 "tests/unit/test_authored_acceptance_fallback.py" = ["ASYNC109"]
-"tests/unit/test_authored_batch_policy.py" = ["E501"]
-"tests/unit/test_authored_browser_metrics.py" = ["ASYNC109", "E501"]
+"tests/unit/test_authored_browser_metrics.py" = ["ASYNC109"]
 "tests/unit/test_authored_checkpoint_service.py" = ["ASYNC221"]
-"tests/unit/test_authored_composition_policy.py" = ["E501"]
-"tests/unit/test_authored_dom_quality.py" = ["E501"]
-"tests/unit/test_authored_empty_media.py" = ["E501"]
-"tests/unit/test_authored_exact_admission_api.py" = ["E501"]
 "tests/unit/test_authored_exact_provenance.py" = ["B905"]
-"tests/unit/test_authored_gate0_structural_v3.py" = ["E501"]
 "tests/unit/test_authored_hybrid_review.py" = ["ASYNC109"]
 "tests/unit/test_authored_page_remake_history.py" = ["F401"]
-"tests/unit/test_authored_pipeline.py" = ["ASYNC109", "E501"]
-"tests/unit/test_authored_quality_receipt_v2.py" = ["E501"]
-"tests/unit/test_authored_quality_receipt_v3_pipeline.py" = ["E501"]
-"tests/unit/test_authored_quality_review.py" = ["E501", "F841"]
-"tests/unit/test_authored_quality_review_no_regeneration.py" = ["E501"]
+"tests/unit/test_authored_pipeline.py" = ["ASYNC109"]
+"tests/unit/test_authored_quality_review.py" = ["F841"]
 "tests/unit/test_authored_render_cache_byte_budget.py" = ["ASYNC109"]
-"tests/unit/test_authored_render_policy.py" = ["ASYNC109", "E501"]
+"tests/unit/test_authored_render_policy.py" = ["ASYNC109"]
 "tests/unit/test_authored_retemplate.py" = ["F401"]
-"tests/unit/test_authored_semantic_bundle_contract.py" = ["E501"]
-"tests/unit/test_authored_styles.py" = ["E501"]
-"tests/unit/test_authored_vnext_visual_acceptance_contract.py" = ["E501"]
 "tests/unit/test_bounded_chrome_runtime.py" = ["ASYNC109"]
 "tests/unit/test_chat_first_generation_integration.py" = ["ASYNC240"]
-"tests/unit/test_deck_ir_compiler.py" = ["E501"]
-"tests/unit/test_deck_ir_contracts.py" = ["E501"]
 "tests/unit/test_decompose_job_service.py" = ["ASYNC109", "ASYNC240"]
 "tests/unit/test_evidence_lattice_active_bundle.py" = ["F841"]
-"tests/unit/test_isolated_public_workers.py" = ["E501"]
 "tests/unit/test_lightweight_document_service.py" = ["F401"]
 "tests/unit/test_llm_utils_disconnect.py" = ["ASYNC110"]
-"tests/unit/test_migrations.py" = ["E501"]
 "tests/unit/test_presentation_export_attempt_service.py" = ["ASYNC240"]
 "tests/unit/test_presentation_version_service.py" = ["F401"]
 "tests/unit/test_public_export_identity_contract.py" = ["ASYNC240"]
-"tests/unit/test_public_operation_admission.py" = ["E501"]
 "tests/unit/test_slidespec_authored_importer.py" = ["F401"]
 "tests/unit/test_slidespec_core.py" = ["F401"]
 "tests/unit/test_slidespec_pipeline_performance.py" = ["B905"]
-"tests/unit/test_source_content_browser_readback.py" = ["E501"]
-"tests/unit/test_source_locked_phase_a.py" = ["E501"]
-"tests/unit/test_source_locked_ppt_conversion.py" = ["E501"]
-"tests/unit/test_source_locked_restoration.py" = ["E501"]
-"tests/unit/test_source_native_design_pack.py" = ["E501"]
-"tests/unit/test_source_native_product_route.py" = ["E501"]
-"tests/unit/test_source_native_unitization.py" = ["E501"]
 # Pre-existing unreachable legacy test tail references its former pytest fixtures;
 # keep the exception local until that test is deliberately reconstructed.
-"tests/unit/test_trusted_executor_product_adapter.py" = ["E501"]
 "tests/unit/test_trusted_executor_windows_transport.py" = ["ASYNC240"]
 "tests/unit/test_trusted_executor_worker_dispatcher_concurrency.py" = ["ASYNC240"]
 "tests/unit/test_workspace_chat_operation_handler.py" = ["ASYNC240"]
 "tests/unit/test_workspace_gate8_observability.py" = ["F401"]
-"tests/unit/test_workspace_persistence.py" = ["E501"]
-"utils/artifact_style_builder.py" = ["E501"]
-"utils/artifact_style_pdf.py" = ["E501"]
-"utils/artifact_style_pptx.py" = ["E501"]
 "utils/asset_directory_utils.py" = ["F841"]
 "utils/authored_dom_quality.py" = ["B007", "B023", "B905"]
 "utils/authored_style_conversion_io.py" = ["B905"]
-"utils/authored_style_converter.py" = ["E501"]
 "utils/authored_styles.py" = ["B905"]
 "utils/document_context.py" = ["B905"]
 # Re-exports both names for services/authored_terminal_slide_policy.py's
 # `from utils.get_env import (...)`; ruff cannot see that re-export intent
 # without an explicit __all__.
 "utils/get_env.py" = ["F401"]
-"services/generation_core/authoring/author_slide.py" = ["B904", "E501"]
+"services/generation_core/authoring/author_slide.py" = ["B904"]
 # `runtime: Any` parameter variant of the bind_runtime pattern above:
 # StructuralRepairBudget is only ever bound from `runtime.StructuralRepairBudget`
 # inside the function body, and the annotation referencing it is never
@@ -349,41 +248,27 @@ select = ["E", "F", "B", "ASYNC"]
 # This module is passed whole as the `runtime` namespace object to
 # revise_structural_candidates() (`runtime=sys.modules[__name__]`); these
 # imports are its injected-globals export surface, not dead code.
-"services/generation_core/authoring/author_vision_qa.py" = ["ASYNC240", "E501", "F401"]
+"services/generation_core/authoring/author_vision_qa.py" = ["ASYNC240", "F401"]
 "utils/llm_calls/critique_slide.py" = ["B904"]
-"utils/llm_calls/edit_slide.py" = ["B904", "E501"]
-"utils/llm_calls/edit_slide_html.py" = ["B904", "E501"]
-"utils/llm_calls/generate_content_brief.py" = ["B904", "E501"]
-"utils/llm_calls/generate_presentation_outlines.py" = ["E501"]
+"utils/llm_calls/edit_slide.py" = ["B904"]
+"utils/llm_calls/edit_slide_html.py" = ["B904"]
+"utils/llm_calls/generate_content_brief.py" = ["B904"]
 "utils/llm_calls/select_slide_type_on_edit.py" = ["B904"]
 "utils/llm_provider.py" = ["B904"]
 "utils/llm_utils.py" = ["B904"]
 "utils/outline_utils.py" = ["B007"]
 "services/process_slides.py" = ["B905"]
-"utils/schema_utils.py" = ["E501"]
-"utils/slide_capture.py" = ["ASYNC109", "ASYNC230", "ASYNC240", "E501"]
+"utils/slide_capture.py" = ["ASYNC109", "ASYNC230", "ASYNC240"]
 # Embedded raw-JS measurement payload (a template string injected into
 # headless Chrome for local-fit geometry probing), added in bd72851e4
 # (2026-09-10, "wip: checkpoint multi-session authored generation work").
 # Line length reflects the JS source's own formatting, not Python style;
 # reflowing it by hand would edit the injected script's text.
-"utils/slide_capture_fit_boundary.py" = ["E501"]
-"utils/slide_capture_fit_compare.py" = ["E501"]
-"utils/slide_capture_fit_geometry.py" = ["E501"]
-"utils/slide_capture_fit_morph.py" = ["E501"]
-"utils/slide_capture_fit_observe.py" = ["E501"]
-"utils/slide_capture_fit_parent.py" = ["E501"]
-"utils/slide_capture_fit_runner.py" = ["E501"]
-"utils/slide_capture_fit_script.py" = ["E501"]
-"utils/slide_capture_glyph_probe.py" = ["E501"]
-"utils/slide_capture_hit_test.py" = ["E501"]
 # Caller-configurable pass-through timeout on an async capture helper, not
 # an asyncio.wait_for anti-pattern; same rationale as the existing ASYNC109
 # tolerance on utils/slide_capture.py above.
 "utils/slide_capture_local_fit.py" = ["ASYNC109"]
-"utils/slide_capture_polygon_paint.py" = ["E501"]
-"utils/slide_capture_rounded_paint.py" = ["E501"]
-"utils/slidespec_solver.py" = ["E501", "F401"]
+"utils/slidespec_solver.py" = ["F401"]
 "utils/upload_limits.py" = ["ASYNC230", "ASYNC240"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]

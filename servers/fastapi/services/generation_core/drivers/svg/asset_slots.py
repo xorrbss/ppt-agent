@@ -194,8 +194,9 @@ def _native_literal_pages(request, outline, *, style_snapshot, has_source_assets
             else:
                 return None
         required_rows = [row for table in wanted.get("tables", []) for row in table["rows"]]
-        chart_data = lambda items: [{key: value for key, value in item.items() if key != "id"}
-                                    for item in items]
+        def chart_data(items):
+            return [{key: value for key, value in item.items() if key != "id"} for item in items]
+
         if (rows != required_rows or chart_data(charts) != chart_data(wanted.get("charts", []))
                 or len(rows) > 64 or any(len(chart["categories"]) > 32 for chart in charts)):
             return None

@@ -34,9 +34,6 @@ from services.generation_core.drivers.svg.fixed_axis_migration import (
 from services.generation_core.drivers.svg.native_geometry import (
     NativeRejection, collect_primitives, find_group, paint,
 )
-from services.generation_core.drivers.svg.native_geometry import (
-    NativeRejection, collect_primitives, find_group, paint,
-)
 from services.generation_core.drivers.svg.native_paint import background_layers
 from services.generation_core.drivers.svg.native_table import TABLE_ELEMENTS, table_object
 from services.generation_core.native_objects import NativeObject, NativeObjects, NativeObjectsError

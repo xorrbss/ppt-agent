@@ -432,48 +432,56 @@ def _aligned_classification_pairs(required, rendered, text_nodes, parents, *, al
         except ValueError:
             return None
 
-    normalize = lambda value: re.sub(r"[\s,:：，、·•]+", "", value)
+    def normalize(value):
+        return re.sub(r"[\s,:：，、·•]+", "", value)
+
     source_headers = {normalize(line.split(": ", 1)[0]) for line in required}
     headers = [i for i, text in enumerate(rendered) if text in source_headers]
     geo = {i: geometry(node) for i, node in enumerate(text_nodes)}
+
+    def split_list_candidates(h, members):
+        found = []
+        hg = geo[h]
+        if hg is None:
+            return found
+        aligned = [i for i, mg in geo.items() if i != h and mg is not None and rendered[i]
+            and parents.get(text_nodes[i]) is parents.get(text_nodes[h])
+            and text_nodes[i].get("transform", "") == text_nodes[h].get("transform", "")
+            and mg[4] == hg[4] and abs(mg[0] - hg[0]) <= max(1., min(hg[3], mg[3]) * .25)]
+
+        def extend(previous, prefix, sequence):
+            pg = geo[previous]
+            following = [i for i in aligned if i not in sequence
+                and max(pg[3], geo[i][3]) <= geo[i][1] - pg[2] <= max(pg[3], geo[i][3]) * 3.5]
+            if not following:
+                return
+            nearest = min(geo[i][1] for i in following)
+            for i in (i for i in following if abs(geo[i][1] - nearest) <= .1):
+                combined = prefix + rendered[i]
+                if not members.startswith(combined):
+                    continue
+                next_sequence = (*sequence, i)
+                if combined == members:
+                    crossed = any(k != h and geo[k] is not None
+                        and parents.get(text_nodes[k]) is parents.get(text_nodes[h])
+                        and text_nodes[k].get("transform", "") == text_nodes[h].get("transform", "")
+                        and geo[k][4] == hg[4]
+                        and abs(geo[k][0] - hg[0]) <= max(1., min(hg[3], geo[k][3]) * .25)
+                        and hg[1] < geo[k][1] <= geo[i][2] + geo[i][3] * .25 for k in headers)
+                    if not crossed:
+                        found.append((h, next_sequence))
+                else:
+                    extend(i, combined, next_sequence)
+        extend(h, "", ())
+        return found
+
     pairs = []
     for line in required:
         category, members = map(normalize, line.split(": ", 1))
         candidates = []
         if allow_split_lists:
             for h in (i for i in headers if rendered[i] == category):
-                hg = geo[h]
-                if hg is None:
-                    continue
-                aligned = [i for i, mg in geo.items() if i != h and mg is not None and rendered[i]
-                    and parents.get(text_nodes[i]) is parents.get(text_nodes[h])
-                    and text_nodes[i].get("transform", "") == text_nodes[h].get("transform", "")
-                    and mg[4] == hg[4] and abs(mg[0] - hg[0]) <= max(1., min(hg[3], mg[3]) * .25)]
-
-                def extend(previous, prefix, sequence):
-                    pg = geo[previous]
-                    following = [i for i in aligned if i not in sequence
-                        and max(pg[3], geo[i][3]) <= geo[i][1] - pg[2] <= max(pg[3], geo[i][3]) * 3.5]
-                    if not following:
-                        return
-                    nearest = min(geo[i][1] for i in following)
-                    for i in (i for i in following if abs(geo[i][1] - nearest) <= .1):
-                        combined = prefix + rendered[i]
-                        if not members.startswith(combined):
-                            continue
-                        next_sequence = (*sequence, i)
-                        if combined == members:
-                            crossed = any(k != h and geo[k] is not None
-                                and parents.get(text_nodes[k]) is parents.get(text_nodes[h])
-                                and text_nodes[k].get("transform", "") == text_nodes[h].get("transform", "")
-                                and geo[k][4] == hg[4]
-                                and abs(geo[k][0] - hg[0]) <= max(1., min(hg[3], geo[k][3]) * .25)
-                                and hg[1] < geo[k][1] <= geo[i][2] + geo[i][3] * .25 for k in headers)
-                            if not crossed:
-                                candidates.append((h, next_sequence))
-                        else:
-                            extend(i, combined, next_sequence)
-                extend(h, "", ())
+                candidates.extend(split_list_candidates(h, members))
             pairs.append(candidates)
             continue
         for h in (i for i in headers if rendered[i] == category):
@@ -506,7 +514,9 @@ def source_classification_coverage(content: str, root, *, allow_associated_block
                                    allow_split_list_blocks: bool = False) -> dict:
     """Check explicit lists of source relationship nodes, not inferred categories."""
     edges = re.findall(r"^\s*(.*?)\s*(?:→|->)\s*(.*?)\s*[:：]", content, re.M)
-    compact = lambda value: re.sub(r"\s+", "", value)
+    def compact(value):
+        return re.sub(r"\s+", "", value)
+
     nodes = {compact(node) for edge in edges for node in edge}
     required = []
     for line in content.splitlines():
@@ -540,7 +550,9 @@ def source_classification_coverage(content: str, root, *, allow_associated_block
     collect(root)
     # Natural line breaks and presentation separators may change while the
     # supplied words and member order remain intact.
-    normalize = lambda value: re.sub(r"[\s,:：，、·•]+", "", value)
+    def normalize(value):
+        return re.sub(r"[\s,:：，、·•]+", "", value)
+
     rendered = [normalize(" ".join(block)) for block in text_blocks]
     single = [any(normalize(line) in block for block in rendered) for line in required]
     associated = ([False] * len(required) if not (allow_associated_blocks or allow_split_list_blocks) else
@@ -719,19 +731,6 @@ def _common_header_author_rules(rules: str, snapshot: dict, binding: dict) -> st
         "or scale the whole body group, shrink text, clip, or hide content to fit. Fixed header "
         "geometry, font, title wording, and line breaks cannot be rewritten during correction.\n"
     )
-
-
-def free_composition_canvas_clause(width: int, height: int) -> str:
-    """Canvas constraints for SVG composition without prescribing arrangements."""
-    proportion = ("tall" if height > width else "wide" if width > height else "square")
-    return (f"Compose natively for the {width}x{height}px {proportion} canvas. "
-            "Use its available space deliberately; adapt grouping, line lengths and image proportions "
-            "to this shape. Do not rotate or scale a landscape composition to fit. "
-            "Choose positions freely, keep readable type and margins, and preserve a clear reading order. "
-            "For free-svg design references, this composition policy takes priority over reference "
-            "archetype wording: card or column counts, positions and proportions are advisory, even "
-            "when a reference says must or exactly. Preserve its colors, fonts and signature imagery; "
-            "choose the arrangement from this page's content.\n")
 
 
 def free_composition_canvas_clause(width: int, height: int) -> str:
