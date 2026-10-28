@@ -3,14 +3,30 @@ from __future__ import annotations
 from services.generation_core.quality.review_coverage import review_coverage
 
 from pathlib import Path
+from collections.abc import Mapping
 import asyncio
 import tempfile
 from threading import Event
+from datetime import datetime, timezone
 
 from services.generation_core.quality.advisory_record import advisory_ran, content_digest
 from utils.hashing import canonical_json_sha256, sha256_hex
 
 FINAL_PPTX_RENDER_TIMEOUT_SECONDS = 120
+FINAL_PPTX_OFFICE_BUSY_RETRY_AFTER_SECONDS = 60
+FINAL_PPTX_OFFICE_BUSY_MAX_WAIT_SECONDS = 30 * 60
+FINAL_PPTX_OFFICE_BUSY_SINCE_KEY = "svg_final_pptx_busy_since"
+
+
+def _busy_since(progress):
+    value = progress.get(FINAL_PPTX_OFFICE_BUSY_SINCE_KEY) if isinstance(progress, Mapping) else None
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
 
 
 def final_render_current(proof, *, artifact_digest, operation_id, presentation_id,
@@ -86,12 +102,14 @@ async def load_final_review_inputs(session, *, request, presentation, slides):
                 widthPx=canvas.width_px, heightPx=canvas.height_px)
 
 
-async def render_final_review_inputs(inputs, claim):
+async def render_final_review_inputs(inputs, claim, *, record_busy=None):
     """Only the admitted review executes Office, after its read transaction ends."""
+    import workers.public_svg_pptx_render as public_svg_pptx_render
     from workers.public_svg_pptx_render import render_final_pptx
     from workers.public_svg_pptx_convert import converter_digest
     from services.workspace_operation_handler_registry import (
         NonRetryableWorkspaceOperationError, RetryableWorkspaceOperationError,
+        WorkspaceOperationDeferred,
     )
     cancellation_event = Event()
 
@@ -104,6 +122,26 @@ async def render_final_review_inputs(inputs, claim):
                 width_px=inputs["widthPx"], height_px=inputs["heightPx"], timeout=FINAL_PPTX_RENDER_TIMEOUT_SECONDS,
                 cancellation_event=cancellation_event)
             if proof.get("status") != "measured":
+                if proof.get("reasonCode") == public_svg_pptx_render.SHARED_INSTANCE_REASON:
+                    now = datetime.now(timezone.utc)
+                    first_busy = _busy_since(getattr(claim, "progress", None)) or now
+                    if (now - first_busy).total_seconds() >= FINAL_PPTX_OFFICE_BUSY_MAX_WAIT_SECONDS:
+                        raise NonRetryableWorkspaceOperationError(
+                            public_svg_pptx_render.SHARED_INSTANCE_REASON,
+                            detail={
+                                "busy_since": first_busy.isoformat(),
+                                "busy_wait_seconds": int((now - first_busy).total_seconds()),
+                            },
+                        )
+                    raise WorkspaceOperationDeferred(
+                        public_svg_pptx_render.SHARED_INSTANCE_REASON,
+                        retry_after_seconds=FINAL_PPTX_OFFICE_BUSY_RETRY_AFTER_SECONDS,
+                        detail={
+                            "review_target": "final_pptx",
+                            "artifact_id": inputs["artifactId"],
+                            FINAL_PPTX_OFFICE_BUSY_SINCE_KEY: first_busy.isoformat(),
+                        },
+                    )
                 if proof.get("retryable") is True:
                     raise RetryableWorkspaceOperationError(proof["reasonCode"])
                 raise NonRetryableWorkspaceOperationError("svg_final_pptx_render_unavailable")
@@ -124,6 +162,10 @@ async def render_final_review_inputs(inputs, claim):
 
     try:
         return await asyncio.to_thread(render)
+    except WorkspaceOperationDeferred as deferred:
+        if record_busy is not None:
+            await record_busy(deferred.detail)
+        raise
     except asyncio.CancelledError:
         cancellation_event.set()
         raise

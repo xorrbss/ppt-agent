@@ -1,5 +1,6 @@
 """Review render admission serializes Office and bounds the stored projection."""
 import asyncio
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import sys
@@ -12,9 +13,12 @@ from PIL import Image
 import pytest
 
 from services.svg_final_pptx_review import render_final_review_inputs
+from services.svg_final_pptx_review import FINAL_PPTX_OFFICE_BUSY_MAX_WAIT_SECONDS
 from services.trusted_executor.wire_bundle_references import _final_pptx_render_references
 from services.trusted_executor.worker_dispatcher import TrustedWorkerWireError
-from services.workspace_operation_handler_registry import RetryableWorkspaceOperationError
+from services.workspace_operation_handler_registry import (
+    RetryableWorkspaceOperationError, WorkspaceOperationDeferred,
+)
 from utils.hashing import canonical_json_sha256, sha256_hex
 from workers import public_svg_pptx_render as office
 
@@ -129,14 +133,30 @@ def test_concurrent_final_reviews_wait_for_cleanup_and_both_succeed(office_host)
     assert events == ["launch", "terminate", "job-close", "reap", "unlock"] * 2
 
 
-def test_shared_instance_survives_child_boundary_as_retryable_review(office_host, monkeypatch):
+def test_shared_instance_survives_child_boundary_as_deferred_review(office_host, monkeypatch):
     monkeypatch.setattr(office, "_render", Mock(side_effect=office.SharedPowerPointInstance()))
     claim, inputs = _inputs()
-    with pytest.raises(RetryableWorkspaceOperationError) as caught:
+    with pytest.raises(WorkspaceOperationDeferred) as caught:
         asyncio.run(render_final_review_inputs(inputs, claim))
     assert caught.value.code == office.SHARED_INSTANCE_REASON
-    assert caught.value.retryable is True
+    assert caught.value.retry_after_seconds == 60
     assert office_host.launches == 1 and not office_host.mutex.locked()
+
+
+def test_shared_instance_busy_past_bound_is_terminal(office_host, monkeypatch):
+    monkeypatch.setattr(office, "_render", Mock(side_effect=office.SharedPowerPointInstance()))
+    claim, inputs = _inputs()
+    claim.progress = {
+        "svg_final_pptx_busy_since": (
+            datetime.now(timezone.utc)
+            - timedelta(seconds=FINAL_PPTX_OFFICE_BUSY_MAX_WAIT_SECONDS + 1)
+        ).isoformat(),
+    }
+    from services.workspace_operation_handler_registry import NonRetryableWorkspaceOperationError
+    with pytest.raises(NonRetryableWorkspaceOperationError) as caught:
+        asyncio.run(render_final_review_inputs(inputs, claim))
+    assert caught.value.code == office.SHARED_INSTANCE_REASON
+    assert caught.value.retryable is False
 
 
 def test_render_lock_timeout_defers_without_launching_office(office_host, tmp_path):

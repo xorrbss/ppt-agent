@@ -9,6 +9,7 @@ import pytest
 from services.svg_final_pptx_review import render_final_review_inputs
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError, RetryableWorkspaceOperationError,
+    WorkspaceOperationDeferred,
 )
 from tests.unit import test_svg_final_review_render_availability as availability
 from workers import public_svg_pptx_render as office
@@ -67,9 +68,13 @@ def test_slow_contending_reviews_defer_or_render_with_enough_budget(
     if reason is None:
         assert second["proof"]["status"] == "measured"
     else:
-        assert isinstance(second, RetryableWorkspaceOperationError)
-        assert not isinstance(second, NonRetryableWorkspaceOperationError)
-        assert second.code == reason and second.retryable is True
+        expected = WorkspaceOperationDeferred if reason == office.SHARED_INSTANCE_REASON else RetryableWorkspaceOperationError
+        assert isinstance(second, expected)
+        if reason == office.SHARED_INSTANCE_REASON:
+            assert second.retry_after_seconds == 60
+        else:
+            assert not isinstance(second, NonRetryableWorkspaceOperationError)
+            assert second.code == reason and second.retryable is True
     assert office_host.launches == (1 if reason == "svg_final_pptx_render_busy" else 2)
     assert office_host.max_inflight == 1
     assert not office_host.mutex.locked()

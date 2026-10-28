@@ -31,6 +31,9 @@ interface Props {
   onReExport?: (
     operationType: "export.pptx" | "export.pdf",
   ) => void | Promise<void>;
+  isSvgDeck?: boolean;
+  finalPptxReviewStatus?: "running" | "deferred" | "passed" | "failed";
+  onFinalPptxReview?: (artifactId: string) => void | Promise<void>;
   onFocusSlide?: (slideIndex: number) => void;
   onRemakePage?: WorkspacePageRemakeRequester;
   presentationRefreshState?: WorkspacePresentationRefreshState;

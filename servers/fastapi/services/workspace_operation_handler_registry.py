@@ -26,6 +26,9 @@ class WorkspaceOperationClaim:
     fencing_token: int
     # When this attempt was claimed; per attempt, unlike operation.started_at.
     claimed_at: datetime | None = None
+    # Durable operation progress from the claim projection. Handlers may use
+    # this to carry bounded waits across a deferred re-claim.
+    progress: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +48,7 @@ class WorkspaceOperationExecutionContext(Protocol):
         total: int | None = None,
         percent: int | None = None,
         message: UserMessageLike = None,
+        details: Mapping[str, Any] | None = None,
     ) -> bool: ...
 
     async def emit_durable_event(

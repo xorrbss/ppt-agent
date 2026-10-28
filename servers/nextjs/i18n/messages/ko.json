@@ -511,6 +511,7 @@
     "cancel": "취소",
     "startReview": "검수 및 자동 수정 시작",
     "startSvgReview": "품질 검토 시작",
+    "finalPptxReviewCommand": "최종 PPTX 검토",
     "reloadHistory": "기록 다시 불러오기",
     "unknownContractVersion": "이 기록의 계약 버전을 확인할 수 없어 새 요청과 작업 변경을 잠시 사용할 수 없습니다. 기존 기록과 다운로드는 계속 확인할 수 있습니다.",
     "retryLatest": "최신 버전 기준으로 다시 시도",
@@ -763,7 +764,16 @@
     "approvalDeadlineExpired": "승인 기한이 만료되었습니다. 작업을 다시 시도해 주세요.",
     "retryUnavailable": "이 오류는 재시도할 수 없습니다. 내용을 확인한 뒤 새 명령을 보내 주세요.",
     "currentPptxReview": "현재 PPTX 검토",
-    "svgStatusCheckRequired": "확인 필요"
+    "svgStatusCheckRequired": "확인 필요",
+    "finalPptxReview": "최종 PPTX 검토",
+    "finalPptxReviewAria": "최종 PPTX 아티팩트 검토",
+    "finalPptxReviewRunning": "검토 중…",
+    "finalPptxReviewDeferred": "PowerPoint 종료 대기 중…",
+    "finalPptxReviewPassed": "최종 PPTX 검토 완료",
+    "finalPptxReviewRequiredNotice": "이 덱은 최종 PPTX 검토가 필요합니다. 내보내기 receipt는 과거 기록으로 유지됩니다.",
+    "finalPptxReviewFailedNotice": "최종 PPTX 검토에서 문제가 확인되었습니다. 덱을 사용하기 전에 결과를 확인해 주세요.",
+    "finalPptxReviewDeferredNotice": "PowerPoint가 열려 있습니다. 종료되면 최종 PPTX 검토를 자동으로 다시 시도합니다.",
+    "finalPptxReviewPassedNotice": "현재 PPTX 아티팩트가 최종 검토를 통과했습니다."
   },
   "presentationCapability": {
     "gradient": "그라데이션",

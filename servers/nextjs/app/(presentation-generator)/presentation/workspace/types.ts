@@ -111,6 +111,7 @@ export interface WorkspaceOperationEvent {
   capacityWaiting?: boolean;
   /** Best-effort position among capacity-waiting operations. */
   queuePosition?: number;
+  waitReason?: string;
   result?: Record<string, unknown>;
   createdAt?: string;
 }
@@ -155,6 +156,7 @@ export interface WorkspaceOperationAnchor {
   retryable?: boolean;
   capacityWaiting?: boolean;
   queuePosition?: number;
+  waitReason?: string;
   result?: Record<string, unknown>;
   actor?: WorkspaceOperationActor;
   target?: Record<string, unknown>;

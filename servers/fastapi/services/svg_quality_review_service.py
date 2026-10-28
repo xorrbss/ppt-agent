@@ -190,7 +190,14 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
     except (ValueError, ValidationError) as error:
         raise NonRetryableWorkspaceOperationError("quality_review_request_invalid") from error
     await context.raise_if_cancelled()
-    if await context.progress(stage="quality_review_preparing", percent=5) is False:
+    if await context.progress(
+        stage="quality_review_preparing",
+        percent=5,
+        details={
+            "review_target": request.target,
+            **({"artifact_id": str(request.artifact_id)} if request.artifact_id else {}),
+        },
+    ) is False:
         raise WorkspaceOperationLeaseLost("operation_lease_lost")
     # End this read transaction before provider I/O. Publication re-reads and
     # locks the current deck rather than committing an earlier ORM snapshot.
@@ -234,7 +241,17 @@ async def execute_svg_quality_review(context, session_factory) -> WorkspaceOpera
     await context.raise_if_cancelled()
     if final_inputs is not None:
         from services.svg_final_pptx_review import render_final_review_inputs
-        final_inputs = await render_final_review_inputs(final_inputs, claim)
+        async def record_final_pptx_busy(details):
+            await context.progress(
+                stage="quality_review_waiting_for_powerpoint",
+                percent=30,
+                details=details,
+            )
+        final_inputs = await render_final_review_inputs(
+            final_inputs,
+            claim,
+            record_busy=record_final_pptx_busy,
+        )
         pngs = final_inputs["pngs"]
         await context.raise_if_cancelled()
     if await context.progress(stage="quality_review_analyzing", percent=30, total=len(indices)) is False:

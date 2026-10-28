@@ -285,6 +285,11 @@ _SAFE_PAYLOAD_KEYS = frozenset(
         "fencing_token",
         "queue_position",
         "wait_reason",
+        "review_target",
+        # A final-PPTX Office deferral carries its first-observed timestamp
+        # through the durable queued projection so a re-claim cannot reset
+        # the bounded wait window.
+        "svg_final_pptx_busy_since",
         "provider_quota_reset_at",
         "provider_quota_resume_semantics",
         "worker_peak_memory_bytes",
@@ -308,6 +313,12 @@ _SAFE_PAYLOAD_KEYS = frozenset(
         "reclaimed_attempt_token_sha256",
         ATTEMPT_TIMING_KEY,
         REQUEUE_REJECTED_DETAIL_KEY,
+    }
+)
+_RESERVED_PROGRESS_KEYS = frozenset(
+    {
+        "stage", "current", "total", "percent", "state", "status",
+        "wait_reason", "capacity_waiting",
     }
 )
 
@@ -1989,6 +2000,7 @@ async def claim_next_workspace_operation(
             attempt_token=token,
             fencing_token=next_fencing_token,
             claimed_at=now,
+            progress=dict(candidate.progress or {}),
         )
         claim_duration_ms = _elapsed_ms(candidate.created_at, now)
         if next_attempt_number == 1 and candidate.retry_count == 0:
@@ -4148,13 +4160,20 @@ class _ExecutionContext(WorkspaceOperationExecutionContext):
         total: int | None = None,
         percent: int | None = None,
         message: UserMessageLike = None,
+        details: Mapping[str, Any] | None = None,
     ) -> bool:
         try:
+            safe_details = {
+                key: value
+                for key, value in (details or {}).items()
+                if key not in _RESERVED_PROGRESS_KEYS
+            }
             reported_progress = {
                 "stage": stage,
                 **({"current": current} if current is not None else {}),
                 **({"total": total} if total is not None else {}),
                 **({"percent": percent} if percent is not None else {}),
+                **safe_details,
             }
             event_payload = {"state": "running", **reported_progress}
             if message:
