@@ -384,7 +384,7 @@ async def attempt_render(*, ctx, request, presentation_id, index, content, paylo
 async def _attempt_render(*, ctx, request, presentation_id, index, content, payload, svg, ordinal,
                          job, checkpoint, async_session_maker, write_png,
                          recovery_readability_policy, allow_existing_common_header, observations,
-                         dispatch_hook=None):
+                         dispatch_hook=None, allow_existing_template=False):
     from services.svg_contract import finalize_svg
     from services.svg_renderer import render_svg_with_metrics
     from services.svg_source_layout import verify_source_receipt
@@ -413,10 +413,20 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
     template_page = None
     if ctx.snapshot.get("svg_template") is not None:
         from services.svg_templates.generation import template_page_context
-        template_page = template_page_context(ctx.snapshot, index, ctx.count, content)
-        saved_template_page = payload.get("svg_template_page")
-        if saved_template_page is not None and saved_template_page != template_page:
-            raise ValueError("svg_template_page_context_changed")
+        try:
+            template_page = template_page_context(ctx.snapshot, index, ctx.count, content)
+            saved_template_page = payload.get("svg_template_page")
+            if saved_template_page is not None and saved_template_page != template_page:
+                raise ValueError("svg_template_page_context_changed")
+        except (ValueError, TypeError, KeyError, IndexError) as error:
+            code = ("svg_template_page_context_changed" if str(error) == "svg_template_page_context_changed"
+                    else "svg_template_page_context_invalid")
+            payload["next_attempt_cause"] = static_cause(validation_error=code)
+            attempts = payload.get("attempts")
+            if isinstance(attempts, list) and attempts and isinstance(attempts[-1], dict):
+                attempts[-1]["validation_error"] = code
+            await checkpoint(job, index, payload=payload)
+            raise AuthoredStageError(slide_index=index, stage="render", code=code, retryable=False) from error
         if template_page is not None:
             payload["svg_template_page"] = template_page
 
@@ -431,7 +441,7 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
             final = compose_template_page(ctx.snapshot, svg, template_page,
                 source_manifest=template_source_manifest,
                 allow_existing=bool(cache_remeasurement or payload.get("cached_author_render")
-                                    or allow_existing_common_header))
+                                    or allow_existing_common_header or allow_existing_template))
         elif ctx.source_reflow and (ctx.snapshot.get("common_header") or {}).get("version") == "svg-common-header/v2":
             from services.svg_source_layout import compose_source_common_header
             final, source_receipt = compose_source_common_header(
@@ -751,6 +761,16 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
         else:
             local = minimal_svg_readability_repair(final, measured())
         candidate = local.pop("svg", None)
+        if candidate is not None and template_page is not None:
+            import xml.etree.ElementTree as ET
+            from services.svg_templates.generation import compose_template_page
+            try:
+                compose_template_page(ctx.snapshot, candidate, template_page, allow_existing=True,
+                                      source_manifest=template_source_manifest)
+            except (ValueError, ET.ParseError):
+                candidate = None
+                local = {**local, "status": "page_recomposition_required",
+                         "reason": "template_fixed_frame_protected", "provider_call_authorized": False}
         payload["local_readability_repair"] = local
         if candidate is not None:
             if ctx.source_reflow:
@@ -765,7 +785,8 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
             result = await _attempt_render(ctx=ctx, request=request, presentation_id=presentation_id,
                 index=index, content=content, payload=payload, svg=candidate, ordinal=ordinal,
                 job=job, checkpoint=checkpoint, async_session_maker=async_session_maker, write_png=write_png,
-                recovery_readability_policy=None, allow_existing_common_header=False, observations=observations)
+                recovery_readability_policy=None, allow_existing_common_header=False, observations=observations,
+                allow_existing_template=template_page is not None)
             local["remeasured"] = True
             local["remeasurement_passed"] = bool(payload.get("quality", {}).get("passed")) if result is not RETRY else False
             await checkpoint(job, index, payload=payload)
