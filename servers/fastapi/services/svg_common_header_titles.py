@@ -263,6 +263,6 @@ async def prepare_missing_header_titles(request, job, outline, *, session_maker,
     for item in result["titles"]:
         prepared.slides[item["page_index"]].title = item["title"]
         prepared.slides[item["page_index"]].title_source_digest = canonical_json_digest(item)
-    if any(before.content != after.content for before, after in zip(outline.slides, prepared.slides)):
+    if any(before.content != after.content for before, after in zip(outline.slides, prepared.slides, strict=False)):
         raise ValueError("svg_common_header_title_source_mismatch")
     return prepared

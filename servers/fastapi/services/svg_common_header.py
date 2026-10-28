@@ -20,7 +20,13 @@ from utils.svg_template_fonts import FONT_FAMILY, font_material, measure_font
 
 VERSION = "svg-common-header/v1"
 PAGE_VERSION = "svg-common-header-page/v1"
-MEASUREMENT_VERSION = "svg-common-header-glyph/v1"
+MEASUREMENT_VERSION = "svg-common-header-glyph/v2"
+_V1_MEASUREMENT_VERSIONS = (MEASUREMENT_VERSION, "svg-common-header-glyph/v1")
+CHROMIUM_SPACE_ADVANCE_EM = 9.515625 / 34
+_CHROMIUM_SPACE_ADVANCE_EM_BY_FONT_DIGEST = {
+    "sha256:194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252":
+        CHROMIUM_SPACE_ADVANCE_EM,
+}
 GROUP_ID = "svg-system-common-header"
 TITLE_ID = GROUP_ID + "-title"
 SVG_NS = "http://www.w3.org/2000/svg"
@@ -149,14 +155,29 @@ def _font(family, weight, size):
     return {"family": family, "weight": weight, "size_px": size, "digest": digest}
 
 
-def _advance(text, font):
-    width = text_advance(text, font["size_px"], str(font["weight"]), font["family"])
+def _chromium_space_advance(font, measurement_version):
+    if measurement_version in ("svg-common-header-glyph/v1", "svg-common-header-glyph-paint/v2"):
+        return None
+    if measurement_version not in (MEASUREMENT_VERSION, "svg-common-header-glyph-paint/v3"):
+        raise ValueError("svg_common_header_digest_mismatch")
+    try:
+        return _CHROMIUM_SPACE_ADVANCE_EM_BY_FONT_DIGEST[font["digest"]]
+    except (KeyError, TypeError):
+        raise ValueError("svg_common_header_font_material_invalid") from None
+
+
+def _advance(text, font, measurement_version="svg-common-header-glyph/v1"):
+    space_advance = _chromium_space_advance(font, measurement_version)
+    measured_text = text.replace(" ", "") if space_advance is not None else text
+    width = text_advance(measured_text, font["size_px"], str(font["weight"]), font["family"])
     if width is None:
         raise ValueError("svg_common_header_font_glyph_unavailable")
+    if space_advance is not None:
+        width += text.count(" ") * space_advance * font["size_px"]
     return width
 
 
-def _wrap(title, font, width, max_lines=2):
+def _wrap(title, font, width, max_lines=2, measurement_version="svg-common-header-glyph/v1"):
     """Prefer whitespace boundaries; retain every character and explicit break."""
     if not isinstance(title, str) or not title.strip():
         raise ValueError("svg_common_header_title_missing")
@@ -166,12 +187,12 @@ def _wrap(title, font, width, max_lines=2):
             raise ValueError("svg_common_header_title_invalid")
         remaining = paragraph
         while remaining:
-            if _advance(remaining, font) <= width:
+            if _advance(remaining, font, measurement_version) <= width:
                 lines.append(remaining)
                 break
             fit = 0
             for end in range(1, len(remaining) + 1):
-                if _advance(remaining[:end], font) > width:
+                if _advance(remaining[:end], font, measurement_version) > width:
                     break
                 fit = end
             if not fit:
@@ -190,20 +211,33 @@ def _wrap(title, font, width, max_lines=2):
 
 
 @lru_cache(maxsize=4096)
-def _measured_lines(lines, family, weight, size, box_values, baseline, line_height, alignment):
-    font = {"family": family, "weight": weight, "size_px": size}
+def _measured_lines(lines, family, weight, size, box_values, baseline, line_height, alignment,
+                    measurement_version="svg-common-header-glyph/v1"):
+    font = _font(family, weight, size)
     box = dict(zip(("x", "y", "width", "height"), box_values, strict=False))
     face = measure_font(family, weight, 1000)
     scale = size / 1000
+    space_advance = _chromium_space_advance(font, measurement_version)
     widths, boxes = [], []
     for index, text in enumerate(lines):
-        width = _advance(text, font)
-        x = box["x"] + ({"left": 0, "center": (box["width"] - width) / 2,
-                        "right": box["width"] - width}[alignment])
+        width = _advance(text.strip(" ") if space_advance is not None else text, font, measurement_version)
+        layout_width = _advance(text, font, measurement_version)
+        x = box["x"] + ({"left": 0, "center": (box["width"] - layout_width) / 2,
+                        "right": box["width"] - layout_width}[alignment])
         y = box["y"] + baseline + index * line_height
-        left, top, right, bottom = face.getbbox(text, anchor="ls")
-        glyph = {"x": x + left * scale, "y": y + top * scale,
-                 "width": (right - left) * scale, "height": (bottom - top) * scale}
+        if space_advance is None:
+            left, top, right, bottom = face.getbbox(text, anchor="ls")
+            glyph = {"x": x + left * scale, "y": y + top * scale,
+                     "width": (right - left) * scale, "height": (bottom - top) * scale}
+        else:
+            leading = len(text) - len(text.lstrip(" "))
+            inner = text.strip(" ").count(" ")
+            ink_text = text.replace(" ", "")
+            left, top, right, bottom = face.getbbox(ink_text, anchor="ls")
+            glyph = {"x": x + left * scale + space_advance * size * leading,
+                     "y": y + top * scale,
+                     "width": (right - left) * scale + space_advance * size * inner,
+                     "height": (bottom - top) * scale}
         if (glyph["x"] < box["x"] - .5 or glyph["y"] < box["y"] - .5
                 or glyph["x"] + glyph["width"] > box["x"] + box["width"] + .5
                 or glyph["y"] + glyph["height"] > box["y"] + box["height"] + .5):
@@ -213,9 +247,11 @@ def _measured_lines(lines, family, weight, size, box_values, baseline, line_heig
     return tuple(widths), tuple(boxes)
 
 
-def _line_evidence(lines, font, box, baseline, line_height, alignment):
+def _line_evidence(lines, font, box, baseline, line_height, alignment,
+                   measurement_version="svg-common-header-glyph/v1"):
     widths, boxes = _measured_lines(tuple(lines), font["family"], font["weight"], font["size_px"],
-        tuple(box[key] for key in ("x", "y", "width", "height")), baseline, line_height, alignment)
+        tuple(box[key] for key in ("x", "y", "width", "height")), baseline, line_height, alignment,
+        measurement_version)
     return list(widths), [dict(zip(("x", "y", "width", "height"), values, strict=False)) for values in boxes]
 
 
@@ -282,7 +318,7 @@ def prepare_common_header(snapshot: dict, outline, canvas, *, mode="uniform", co
         raise ValueError("svg_common_header_alignment_invalid")
     titles = [_value(slide, "title") for slide in slides]
     applied = [not (cover_exception and index == 0) for index in range(len(slides))]
-    page_lines = [_wrap(title, font, title_width) if applies else []
+    page_lines = [_wrap(title, font, title_width, measurement_version=MEASUREMENT_VERSION) if applies else []
                   for title, applies in zip(titles, applied, strict=False)]
     slots = max((len(lines) for lines in page_lines), default=1) or 1
     optional = {}
@@ -352,7 +388,8 @@ def prepare_common_header(snapshot: dict, outline, canvas, *, mode="uniform", co
     for index, (slide, title, lines, applies) in enumerate(zip(slides, titles, page_lines, applied, strict=False)):
         if not isinstance(title, str) or not title.strip():
             raise ValueError("svg_common_header_title_missing")
-        widths, boxes = _line_evidence(lines, font, title_box, baseline, line_height, alignment)
+        widths, boxes = _line_evidence(lines, font, title_box, baseline, line_height, alignment,
+                                       MEASUREMENT_VERSION)
         binding = {"version": PAGE_VERSION, "header_digest": contract["digest"],
                    "page_index": index, "applied": applies, "title": title, "lines": lines,
                    "title_digest": _digest(title), "content_digest": common_header_source_digest(_value(slide, "content", "")),
@@ -364,7 +401,8 @@ def prepare_common_header(snapshot: dict, outline, canvas, *, mode="uniform", co
             if contract[name]["enabled"]:
                 text = _value(slide, name, "") or ""
                 part = contract[name]
-                if not isinstance(text, str) or "\n" in text or _advance(text, part["font"]) > part["box"]["width"]:
+                if (not isinstance(text, str) or "\n" in text
+                        or _advance(text, part["font"], MEASUREMENT_VERSION) > part["box"]["width"]):
                     raise ValueError("svg_common_header_label_overflow")
                 binding[name] = text
         binding["digest"] = _digest(binding)
@@ -386,7 +424,7 @@ def validate_common_header_binding(contract: dict | None, page_binding: dict | N
                     "content_top_px", "body_box", "cover_exception", "alignment", "eyebrow", "subline", "divider",
                     "color", "background", "origin"} <= contract.keys()
             or contract.get("digest") != common_header_digest(contract)
-            or contract.get("measurement_version") != MEASUREMENT_VERSION
+            or contract.get("measurement_version") not in _V1_MEASUREMENT_VERSIONS
             or not isinstance(page_binding, dict) or page_binding.get("version") != PAGE_VERSION
             or page_binding.get("header_digest") != contract["digest"]
             or page_binding.get("digest") != _digest({k: v for k, v in page_binding.items() if k != "digest"})):
@@ -416,7 +454,8 @@ def validate_common_header_binding(contract: dict | None, page_binding: dict | N
     if _font(font["family"], font["weight"], font["size_px"]) != font:
         raise ValueError("svg_common_header_font_identity_invalid")
     widths, boxes = _line_evidence(lines, font, contract["title_box"], contract["baseline_offset_px"],
-                                   contract["line_height_px"], contract["alignment"])
+                                   contract["line_height_px"], contract["alignment"],
+                                   contract["measurement_version"])
     if page_binding.get("line_widths") != widths or page_binding.get("glyph_boxes") != boxes:
         raise ValueError("svg_common_header_measurement_mismatch")
 
