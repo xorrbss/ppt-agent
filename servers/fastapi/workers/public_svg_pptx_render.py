@@ -195,6 +195,18 @@ def _attach_powerpoint(pid, timeout, *, job_name=None, stage_callback=None):
     raise PowerPointActivationUnavailable("PowerPoint activation deadline exceeded")
 
 
+def _cleanup_powerpoint(document, application, pid, job_name):
+    """Best-effort COM cleanup; the enclosing Job Object is the fallback."""
+    try:
+        _assert_owned_powerpoint(pid, job_name)
+        if document is not None:
+            document.Close()
+        application.Quit()
+    except BaseException:
+        return True
+    return False
+
+
 def _render(request, *, stage_callback=None):
     import pythoncom
     from PIL import Image
@@ -208,6 +220,7 @@ def _render(request, *, stage_callback=None):
     token = _RENDER_STAGE_CALLBACK.set(stage) if stage_callback is not None else None
     _mark_render_stage("create")
     pythoncom.CoInitialize()
+    cleanup_fallback = False
     try:
         with _owned_powerpoint(request) as pid:
             application = _attach_powerpoint(
@@ -242,11 +255,9 @@ def _render(request, *, stage_callback=None):
             finally:
                 if not render_failed:
                     _mark_render_stage("close")
-                try:
-                    if document is not None:
-                        document.Close()
-                finally:
-                    application.Quit()
+                cleanup_fallback = _cleanup_powerpoint(
+                    document, application, pid, request["jobName"]
+                )
     finally:
         application = document = None
         pythoncom.CoUninitialize()
@@ -259,6 +270,7 @@ def _render(request, *, stage_callback=None):
         artifactDigestAfter="sha256:" + after, hashInvariant=True,
         openReadOnly=True, openWithWindow=False, availablePhysicalMemoryBytes=available,
         renderIsolation="windows-job-object", rendererQuit=True,
+        cleanupMethod="job_termination" if cleanup_fallback else "application_quit",
         renderer="Microsoft.PowerPoint", rendererVersion=office_version,
         checkerCodeDigest=str(request["rendererVersion"]),
         pageCount=len(pages), pages=pages)

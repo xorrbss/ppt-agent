@@ -238,8 +238,21 @@ def test_render_timeout_terminates_the_job_and_reaps_the_child(tmp_path, monkeyp
     assert events.index("terminate-job") < events.index("job-close") < events.index("wait")
 
 
-@pytest.mark.parametrize("shared,fail", [(False, False), (False, True), (True, False)])
-def test_office_opens_only_after_containment_and_quits_only_owned_instance(tmp_path, monkeypatch, shared, fail):
+@pytest.mark.parametrize(
+    "shared,fail,cleanup_error",
+    [
+        (False, False, None),
+        (False, False, "document_attribute"),
+        (False, False, "document_com"),
+        (False, False, "quit_attribute"),
+        (False, False, "quit_com"),
+        (False, True, None),
+        (True, False, None),
+    ],
+)
+def test_office_opens_only_after_containment_and_quits_only_owned_instance(
+    tmp_path, monkeypatch, shared, fail, cleanup_error
+):
     from contextlib import contextmanager
 
     events = []
@@ -255,13 +268,27 @@ def test_office_opens_only_after_containment_and_quits_only_owned_instance(tmp_p
                 raise ValueError("render failed")
             Image.new("RGB", (width, height)).save(path)
 
-    document = SimpleNamespace(Slides=Slides(), Close=lambda: events.append("close"))
+    def close_document():
+        if cleanup_error == "document_attribute":
+            raise AttributeError("close unavailable")
+        if cleanup_error == "document_com":
+            raise OSError("close unavailable")
+        events.append("close")
+
+    document = SimpleNamespace(Slides=Slides(), Close=close_document)
     def open_document(*args, **kwargs):
         assert "assign" in events
         events.append("open")
         return document
+    def quit_application():
+        if cleanup_error == "quit_attribute":
+            raise AttributeError("quit unavailable")
+        if cleanup_error == "quit_com":
+            raise OSError("quit unavailable")
+        events.append("quit")
+
     app = SimpleNamespace(Version="test", Presentations=SimpleNamespace(Open=open_document),
-        Quit=lambda: events.append("quit"))
+        Quit=quit_application)
     modules = {
         "pythoncom": SimpleNamespace(CoInitialize=lambda: None, CoUninitialize=lambda: events.append("uninit"),
             com_error=OSError),
@@ -280,7 +307,10 @@ def test_office_opens_only_after_containment_and_quits_only_owned_instance(tmp_p
     @contextmanager
     def owned_process(request):
         events.append("assign")
-        yield 2
+        try:
+            yield 2
+        finally:
+            events.append("job-terminate")
 
     monkeypatch.setattr(office, "_owned_powerpoint", owned_process)
     monkeypatch.setattr(office, "_available_memory", lambda: office.MINIMUM_AVAILABLE_MEMORY)
@@ -292,8 +322,15 @@ def test_office_opens_only_after_containment_and_quits_only_owned_instance(tmp_p
         with pytest.raises(ValueError):
             office._render(request)
     else:
-        assert office._render(request)["rendererQuit"] is True
+        result = office._render(request)
+        assert result["rendererQuit"] is True
+        expected_cleanup = "job_termination" if cleanup_error else "application_quit"
+        assert result["cleanupMethod"] == expected_cleanup
     if shared:
-        assert events == ["assign", "uninit"]
+        assert events == ["assign", "job-terminate", "uninit"]
+    elif cleanup_error in {"document_attribute", "document_com"}:
+        assert events == ["assign", "open", "job-terminate", "uninit"]
+    elif cleanup_error in {"quit_attribute", "quit_com"}:
+        assert events == ["assign", "open", "close", "job-terminate", "uninit"]
     else:
-        assert events == ["assign", "open", "close", "quit", "uninit"]
+        assert events == ["assign", "open", "close", "quit", "job-terminate", "uninit"]
