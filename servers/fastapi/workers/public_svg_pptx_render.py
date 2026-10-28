@@ -179,14 +179,28 @@ def _attach_powerpoint(pid, timeout, *, stage_callback=None):
             # fall back to Dispatch/DispatchEx if registration is unavailable.
             _mark_render_stage("get_active_object", stage_callback)
             application = win32com.client.GetActiveObject("PowerPoint.Application")
-            _mark_render_stage("hwnd_pid_match", stage_callback)
-            hwnd = _normalize_hwnd(application.HWND)
-            _, attached_pid = win32process.GetWindowThreadProcessId(hwnd)
-            if attached_pid != pid:
-                raise SharedPowerPointInstance(SHARED_INSTANCE_REASON)
-            return application
         except pythoncom.com_error:
             sleep(LOCK_WAIT_SLICE_SECONDS)
+            continue
+        _mark_render_stage("hwnd_pid_match", stage_callback)
+        # Dynamic CDispatch exposes PowerPoint's HWND as a method object after
+        # its implicit property-get reports a bad context.  Resolve the
+        # property explicitly so the value passed to win32process is the COM
+        # scalar, never the bound method object.
+        hwnd_dispid = application._oleobj_.GetIDsOfNames(0, "HWND")
+        hwnd_value = application._oleobj_.Invoke(
+            hwnd_dispid,
+            0,
+            # Dynamic CDispatch resolves an unknown member with the same
+            # METHOD|PROPERTYGET flags used by its fallback lookup.
+            pythoncom.DISPATCH_METHOD | pythoncom.DISPATCH_PROPERTYGET,
+            True,
+        )
+        hwnd = _normalize_hwnd(hwnd_value)
+        _, attached_pid = win32process.GetWindowThreadProcessId(hwnd)
+        if attached_pid != pid:
+            raise SharedPowerPointInstance(SHARED_INSTANCE_REASON)
+        return application
     raise PowerPointActivationUnavailable("PowerPoint activation deadline exceeded")
 
 

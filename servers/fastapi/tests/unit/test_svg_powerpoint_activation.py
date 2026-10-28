@@ -95,6 +95,28 @@ def test_real_render_records_open_stage_after_activation(activation_host, tmp_pa
     assert result.get("retryable", False) is False
 
 
+def test_attach_uses_explicit_property_get_for_dynamic_hwnd(activation_host):
+    activation_host.app.HWND = Mock(side_effect=AssertionError("bound HWND method must not be called"))
+    activation_host.app._oleobj_.Invoke = Mock(return_value=1)
+
+    assert office._attach_powerpoint(20, 1) is activation_host.app
+    activation_host.app.HWND.assert_not_called()
+    activation_host.app._oleobj_.GetIDsOfNames.assert_called_once_with(0, "HWND")
+    activation_host.app._oleobj_.Invoke.assert_called_once_with(
+        42, 0,
+        sys.modules["pythoncom"].DISPATCH_METHOD | sys.modules["pythoncom"].DISPATCH_PROPERTYGET,
+        True,
+    )
+
+
+def test_attach_fails_closed_for_non_integer_hwnd_property(activation_host):
+    activation_host.app.HWND = Mock()
+    activation_host.app._oleobj_.Invoke = Mock(return_value=object())
+
+    with pytest.raises(ValueError, match="svg_final_pptx_hwnd_unavailable"):
+        office._attach_powerpoint(20, 1)
+
+
 @pytest.mark.parametrize(
     "case,stage,error,activated,reason,retryable",
     [
@@ -152,11 +174,16 @@ def activation_host(monkeypatch):
         state.alive.discard(process.pid)
 
     app = SimpleNamespace(HWND=1, Presentations=SimpleNamespace(Open=Mock()), Quit=Mock())
+    app._oleobj_ = SimpleNamespace(
+        GetIDsOfNames=Mock(return_value=42),
+        Invoke=Mock(side_effect=lambda *_args: app.HWND),
+    )
     client = SimpleNamespace(GetActiveObject=Mock(return_value=app),
         Dispatch=Mock(side_effect=AssertionError("DCOM activation forbidden")),
         DispatchEx=Mock(side_effect=AssertionError("DCOM activation forbidden")))
     modules = {
-        "pythoncom": SimpleNamespace(CoInitialize=lambda: None, CoUninitialize=lambda: None, com_error=OSError),
+        "pythoncom": SimpleNamespace(CoInitialize=lambda: None, CoUninitialize=lambda: None,
+            com_error=OSError, DISPATCH_METHOD=1, DISPATCH_PROPERTYGET=2),
         "win32com": SimpleNamespace(client=client), "win32com.client": client,
         "pywintypes": SimpleNamespace(error=OSError, HANDLE=lambda value: value),
         "win32api": SimpleNamespace(OpenProcess=lambda rights, inherit, pid: handle(pid)),

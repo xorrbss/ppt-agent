@@ -262,9 +262,13 @@ def test_office_opens_only_after_containment_and_quits_only_owned_instance(tmp_p
         return document
     app = SimpleNamespace(HWND=1, Version="test", Presentations=SimpleNamespace(Open=open_document),
         Quit=lambda: events.append("quit"))
+    app._oleobj_ = SimpleNamespace(
+        GetIDsOfNames=lambda _lcid, name: 42,
+        Invoke=lambda *_args: app.HWND,
+    )
     modules = {
         "pythoncom": SimpleNamespace(CoInitialize=lambda: None, CoUninitialize=lambda: events.append("uninit"),
-            com_error=OSError),
+            com_error=OSError, DISPATCH_METHOD=1, DISPATCH_PROPERTYGET=2),
         "win32com": SimpleNamespace(client=SimpleNamespace(GetActiveObject=lambda _: app)),
         "win32com.client": SimpleNamespace(GetActiveObject=lambda _: app),
         "win32api": SimpleNamespace(OpenProcess=lambda *args: handle),
