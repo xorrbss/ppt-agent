@@ -438,7 +438,11 @@ export class PresentationGenerationApi {
               : { aspect_ratio }),
             ...(svg_design_reference_snapshot_id ? { svg_design_reference_snapshot_id } : {}),
             ...(svg_design_reference_pin ? { svg_design_reference_pin } : {}),
-            ...(svgTemplatePin ? { svgTemplatePin, svgTemplateMode, svgTemplateFrameMap } : {}),
+            ...(svgTemplatePin ? {
+              svg_template_pin: svgTemplatePin,
+              svg_template_mode: svgTemplateMode,
+              svg_template_frame_map: svgTemplateFrameMap,
+            } : {}),
             theme,
             strategy,
           }),
