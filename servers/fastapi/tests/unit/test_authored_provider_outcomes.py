@@ -1324,7 +1324,18 @@ def test_svg_author_checkpoints_safe_diagnostics_without_changing_recovery_count
     assert raised.value is outcome
     assert len(snapshots) == 2
     saved = snapshots[-1]
-    assert saved["provider_diagnostics"][-1] == {"ordinal": 3, "code": code, "diagnostics": safe_provider_diagnostics(outcome)}
+    attempt_cause = {"code": "provider_retry:public_provider_overload"}
+    assert saved["provider_diagnostics"][-1] == {
+        "ordinal": 3,
+        "code": code,
+        "diagnostics": safe_provider_diagnostics(outcome),
+        "attempt_cause": attempt_cause,
+        "receipt": {
+            "attempt_ordinal": 3,
+            "terminal_ordinal": 3,
+            "attempt_cause": attempt_cause,
+        },
+    }
     assert saved["model_attempt_count"] == 2
     assert saved["recovery_revision"] == "unchanged"
     assert saved["attempts"] == []
