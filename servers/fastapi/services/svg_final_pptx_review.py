@@ -122,6 +122,12 @@ async def render_final_review_inputs(inputs, claim, *, record_busy=None):
                 width_px=inputs["widthPx"], height_px=inputs["heightPx"], timeout=FINAL_PPTX_RENDER_TIMEOUT_SECONDS,
                 cancellation_event=cancellation_event)
             if proof.get("status") != "measured":
+                diagnostic = proof.get("diagnostic")
+                diagnostic_detail = (
+                    {"diagnostic": diagnostic}
+                    if isinstance(diagnostic, dict)
+                    else None
+                )
                 if proof.get("reasonCode") == public_svg_pptx_render.SHARED_INSTANCE_REASON:
                     now = datetime.now(timezone.utc)
                     first_busy = _busy_since(getattr(claim, "progress", None)) or now
@@ -131,6 +137,7 @@ async def render_final_review_inputs(inputs, claim, *, record_busy=None):
                             detail={
                                 "busy_since": first_busy.isoformat(),
                                 "busy_wait_seconds": int((now - first_busy).total_seconds()),
+                                **(diagnostic_detail or {}),
                             },
                         )
                     raise WorkspaceOperationDeferred(
@@ -140,11 +147,16 @@ async def render_final_review_inputs(inputs, claim, *, record_busy=None):
                             "review_target": "final_pptx",
                             "artifact_id": inputs["artifactId"],
                             FINAL_PPTX_OFFICE_BUSY_SINCE_KEY: first_busy.isoformat(),
+                            **(diagnostic_detail or {}),
                         },
                     )
                 if proof.get("retryable") is True:
-                    raise RetryableWorkspaceOperationError(proof["reasonCode"])
-                raise NonRetryableWorkspaceOperationError("svg_final_pptx_render_unavailable")
+                    raise RetryableWorkspaceOperationError(
+                        proof["reasonCode"], detail=diagnostic_detail
+                    )
+                raise NonRetryableWorkspaceOperationError(
+                    "svg_final_pptx_render_unavailable", detail=diagnostic_detail
+                )
             proof.update(operationId=str(claim.operation_id), renderOperationId=str(claim.operation_id),
                 parentExportOperationId=inputs["parentExportOperationId"], converterDigest=converter_digest(),
                 **{key: inputs[key] for key in (

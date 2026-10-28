@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import ctypes
 from contextlib import contextmanager
+from contextvars import ContextVar
 import hashlib
 import json
 import os
@@ -20,6 +21,10 @@ MINIMUM_RENDER_BUDGET_SECONDS = 60
 LOCK_WAIT_SLICE_SECONDS = 0.1
 SHARED_INSTANCE_REASON = "svg_final_pptx_office_instance_busy"
 ACTIVATION_TIMEOUT_SECONDS = 30
+_RENDER_STAGES = frozenset(
+    {"create", "assign_job", "resume", "get_active_object", "hwnd_pid_match", "open", "export", "close"}
+)
+_RENDER_STAGE_CALLBACK = ContextVar("svg_render_stage_callback", default=None)
 
 
 class SharedPowerPointInstance(ValueError):
@@ -92,8 +97,26 @@ def _powerpoint_executable():
     raise PowerPointActivationUnavailable("PowerPoint executable unavailable")
 
 
+def _normalize_hwnd(value):
+    """Convert PowerPoint's signed 32-bit COM HWND value to a Python int."""
+
+    try:
+        hwnd = int(value)
+    except (TypeError, ValueError, OverflowError) as error:
+        raise ValueError("svg_final_pptx_hwnd_unavailable") from error
+    # Application.HWND is exposed by Office as a 32-bit signed Long.  A valid
+    # handle whose high bit is set therefore arrives sign-extended as negative.
+    return hwnd & 0xFFFFFFFF if hwnd < 0 else hwnd
+
+
+def _mark_render_stage(stage, callback=None):
+    callback = callback or _RENDER_STAGE_CALLBACK.get()
+    if callback is not None:
+        callback(stage)
+
+
 @contextmanager
-def _owned_powerpoint(request):
+def _owned_powerpoint(request, *, stage_callback=None):
     """Contain the explicitly created process before its first instruction."""
     import win32event
     import win32job
@@ -109,14 +132,17 @@ def _owned_powerpoint(request):
         startup = win32process.STARTUPINFO()
         startup.dwFlags |= 1  # STARTF_USESHOWWINDOW
         startup.wShowWindow = 0
+        _mark_render_stage("create", stage_callback)
         process, thread, pid, _ = win32process.CreateProcess(executable,
             subprocess.list2cmdline([executable, "/automation"]), None, None, False,
             0x00000004 | 0x08000000, None, None, startup)  # suspended, no console
         # The renderer child normally passes its existing job to descendants.
         if not win32job.IsProcessInJob(process, job):
+            _mark_render_stage("assign_job", stage_callback)
             win32job.AssignProcessToJobObject(job, process)
         job.Close()
         job = None
+        _mark_render_stage("resume", stage_callback)
         win32process.ResumeThread(thread)
         yield pid
     finally:
@@ -135,7 +161,7 @@ def _owned_powerpoint(request):
                 job.Close()
 
 
-def _attach_powerpoint(pid, timeout):
+def _attach_powerpoint(pid, timeout, *, stage_callback=None):
     import pythoncom
     import win32com.client
     import win32process
@@ -145,8 +171,11 @@ def _attach_powerpoint(pid, timeout):
         try:
             # GetActiveObject cannot activate an unowned DCOM server. Never
             # fall back to Dispatch/DispatchEx if registration is unavailable.
+            _mark_render_stage("get_active_object", stage_callback)
             application = win32com.client.GetActiveObject("PowerPoint.Application")
-            _, attached_pid = win32process.GetWindowThreadProcessId(application.HWND)
+            _mark_render_stage("hwnd_pid_match", stage_callback)
+            hwnd = _normalize_hwnd(application.HWND)
+            _, attached_pid = win32process.GetWindowThreadProcessId(hwnd)
             if attached_pid != pid:
                 raise SharedPowerPointInstance(SHARED_INSTANCE_REASON)
             return application
@@ -155,7 +184,7 @@ def _attach_powerpoint(pid, timeout):
     raise PowerPointActivationUnavailable("PowerPoint activation deadline exceeded")
 
 
-def _render(request):
+def _render(request, *, stage_callback=None):
     import pythoncom
     from PIL import Image
 
@@ -164,6 +193,9 @@ def _render(request):
         raise ValueError("svg_final_pptx_memory_insufficient")
     target = Path(request["pptx"])
     before = _sha(target)
+    stage = stage_callback or (lambda _name: None)
+    token = _RENDER_STAGE_CALLBACK.set(stage)
+    _mark_render_stage("create")
     pythoncom.CoInitialize()
     try:
         with _owned_powerpoint(request) as pid:
@@ -171,6 +203,7 @@ def _render(request):
             document = None
             try:
                 (Path(request["outputDirectory"]) / "activated").write_text(str(pid), encoding="ascii")
+                _mark_render_stage("open")
                 document = application.Presentations.Open(str(target.resolve()),
                     ReadOnly=True, Untitled=False, WithWindow=False)
                 office_version = str(application.Version)
@@ -180,6 +213,7 @@ def _render(request):
                 pages = []
                 for index in range(request["pageCount"]):
                     output = Path(request["outputDirectory"]) / f"page-{index:03d}.png"
+                    _mark_render_stage("export")
                     document.Slides(index + 1).Export(str(output.resolve()), "PNG", width, height)
                     with Image.open(output) as rendered:
                         if rendered.format != "PNG" or rendered.size != (width, height):
@@ -187,6 +221,7 @@ def _render(request):
                         rendered.verify()
                     pages.append(dict(index=index, pngSha256=_sha(output), widthPx=width, heightPx=height))
             finally:
+                _mark_render_stage("close")
                 try:
                     if document is not None:
                         document.Close()
@@ -195,6 +230,7 @@ def _render(request):
     finally:
         application = document = None
         pythoncom.CoUninitialize()
+        _RENDER_STAGE_CALLBACK.reset(token)
     after = _sha(target)
     if before != after:
         raise ValueError("svg_final_pptx_hash_changed")
@@ -336,13 +372,46 @@ def _render_serialized(target, output_directory, *, page_count, width_px, height
                     child.stdin.close()
 
 
+def _child_diagnostic(stage, error):
+    diagnostic = {"stage": stage, "exceptionClass": type(error).__name__}
+    for name in ("hresult", "winerror"):
+        value = getattr(error, name, None)
+        if type(value) is int:
+            diagnostic[name] = value
+    return diagnostic
+
+
+def _child_failure(reason, error, *, stage, retryable=True):
+    result = _unavailable(reason, retryable=retryable)
+    result["diagnostic"] = _child_diagnostic(stage, error)
+    return result
+
+
 def _render_child(request_path, result_path):
+    import pythoncom
+
+    stage_holder = ["create"]
+
+    def mark_stage(stage):
+        if stage in _RENDER_STAGES:
+            stage_holder[0] = stage
+
     try:
-        result = _render(json.loads(Path(request_path).read_text(encoding="utf-8")))
-    except SharedPowerPointInstance:
-        result = _unavailable(SHARED_INSTANCE_REASON, retryable=True)
-    except (PowerPointActivationUnavailable, OSError):
-        result = _unavailable("svg_final_pptx_render_failed", retryable=True)
+        token = _RENDER_STAGE_CALLBACK.set(mark_stage)
+        try:
+            result = _render(json.loads(Path(request_path).read_text(encoding="utf-8")))
+        finally:
+            _RENDER_STAGE_CALLBACK.reset(token)
+    except SharedPowerPointInstance as error:
+        result = _child_failure(SHARED_INSTANCE_REASON, error, stage=stage_holder[0])
+    except pythoncom.com_error as error:
+        result = _child_failure("svg_final_pptx_render_failed", error, stage=stage_holder[0])
+    except (PowerPointActivationUnavailable, OSError, TypeError, ValueError) as error:
+        result = _child_failure("svg_final_pptx_render_failed", error, stage=stage_holder[0])
+    except Exception as error:
+        # Keep the child result boundary total: a future COM/pywin32 exception
+        # must not disappear as a nonzero child exit with no diagnostic.
+        result = _child_failure("svg_final_pptx_render_failed", error, stage=stage_holder[0])
     Path(result_path).write_text(json.dumps(result), encoding="utf-8")
 
 

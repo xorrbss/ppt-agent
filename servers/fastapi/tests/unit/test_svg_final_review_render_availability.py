@@ -143,6 +143,31 @@ def test_shared_instance_survives_child_boundary_as_deferred_review(office_host,
     assert office_host.launches == 1 and not office_host.mutex.locked()
 
 
+def test_render_failure_diagnostic_reaches_internal_operation_detail(monkeypatch):
+    claim, inputs = _inputs()
+    diagnostic = {"stage": "hwnd_pid_match", "exceptionClass": "TypeError"}
+    monkeypatch.setattr(office, "render_final_pptx", lambda *args, **kwargs: {
+        "schemaVersion": office.SCHEMA,
+        "status": "unavailable",
+        "reasonCode": "svg_final_pptx_render_failed",
+        "retryable": True,
+        "diagnostic": diagnostic,
+    })
+    from services.workspace_operation_handler_registry import RetryableWorkspaceOperationError
+
+    with pytest.raises(RetryableWorkspaceOperationError) as caught:
+        asyncio.run(render_final_review_inputs(inputs, claim))
+    assert caught.value.code == "svg_final_pptx_render_failed"
+    assert caught.value.retryable is True
+    assert caught.value.detail == {"diagnostic": diagnostic}
+    from services.workspace_operation_runner import sanitize_workspace_event_payload
+
+    assert sanitize_workspace_event_payload({
+        "diagnostic": {**diagnostic, "message": "private path C:\\secret\\deck.pptx"},
+        "commandLine": "private command",
+    }) == {"diagnostic": diagnostic}
+
+
 def test_shared_instance_busy_past_bound_is_terminal(office_host, monkeypatch):
     monkeypatch.setattr(office, "_render", Mock(side_effect=office.SharedPowerPointInstance()))
     claim, inputs = _inputs()

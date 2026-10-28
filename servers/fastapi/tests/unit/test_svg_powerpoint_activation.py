@@ -1,6 +1,7 @@
 """Office ownership is established before execution, never inferred from a ROT result."""
 
 import asyncio
+import json
 import sys
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -11,6 +12,52 @@ from services.workspace_operation_handler_registry import RetryableWorkspaceOper
 from services.svg_final_pptx_review import render_final_review_inputs
 from tests.unit.test_svg_final_review_render_availability import _inputs, office_host
 from workers import public_svg_pptx_render as office
+
+
+@pytest.mark.parametrize("value,expected", [
+    (101, 101),
+    (-2147483648, 2147483648),
+    (0xFFFFFFFF, 0xFFFFFFFF),
+    (0x100000000, 0x100000000),
+])
+def test_hwnd_normalization_preserves_handle_bits(value, expected):
+    assert office._normalize_hwnd(value) == expected
+
+
+@pytest.mark.parametrize("value", [None, object()])
+def test_hwnd_normalization_fails_closed_for_unconvertible_values(value):
+    with pytest.raises(ValueError, match="svg_final_pptx_hwnd_unavailable"):
+        office._normalize_hwnd(value)
+
+
+@pytest.mark.parametrize("error_factory", [
+    lambda: TypeError("C:\\private\\deck.pptx leaked message"),
+    lambda: __import__("pythoncom").com_error(
+        -2147220992, "C:\\private\\deck.pptx leaked message", None, 5
+    ),
+])
+def test_attach_failure_writes_bounded_diagnostic_without_message_or_path(
+    tmp_path, monkeypatch, error_factory
+):
+    error = error_factory()
+
+    def failed_attach(_request):
+        office._mark_render_stage("hwnd_pid_match")
+        raise error
+
+    monkeypatch.setattr(office, "_render", failed_attach)
+    request_path = tmp_path / "request.json"
+    result_path = tmp_path / "result.json"
+    request_path.write_text("{}", encoding="utf-8")
+    office._render_child(request_path, result_path)
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    assert result["reasonCode"] == "svg_final_pptx_render_failed"
+    assert result["retryable"] is True
+    assert result["diagnostic"]["stage"] == "hwnd_pid_match"
+    assert result["diagnostic"]["exceptionClass"] == type(error).__name__
+    assert set(result["diagnostic"]) <= {"stage", "exceptionClass", "hresult", "winerror"}
+    assert "private" not in json.dumps(result)
+    assert "deck.pptx" not in json.dumps(result)
 
 __all__ = ["office_host"]
 

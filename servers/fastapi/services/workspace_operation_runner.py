@@ -286,6 +286,7 @@ _SAFE_PAYLOAD_KEYS = frozenset(
         "queue_position",
         "wait_reason",
         "review_target",
+        "diagnostic",
         # A final-PPTX Office deferral carries its first-observed timestamp
         # through the durable queued projection so a re-claim cannot reset
         # the bounded wait window.
@@ -826,6 +827,22 @@ def sanitize_workspace_event_payload(
             safe[normalized] = sanitize_worker_resource_samples(value)
         elif normalized == ATTEMPT_TIMING_KEY and isinstance(value, Mapping):
             safe[normalized] = sanitize_attempt_timing(value)
+        elif normalized == "diagnostic" and isinstance(value, Mapping):
+            stage = value.get("stage")
+            exception_class = value.get("exceptionClass")
+            if stage in {
+                "create", "assign_job", "resume", "get_active_object",
+                "hwnd_pid_match", "open", "export", "close",
+            } and isinstance(exception_class, str) and exception_class.isidentifier():
+                safe[normalized] = {
+                    "stage": stage,
+                    "exceptionClass": exception_class[:128],
+                    **{
+                        name: value[name]
+                        for name in ("hresult", "winerror")
+                        if type(value.get(name)) is int
+                    },
+                }
         elif value is None or isinstance(value, (str, int, float, bool)):
             if isinstance(value, str):
                 if normalized == "assistant_text":
