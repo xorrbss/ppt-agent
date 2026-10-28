@@ -146,6 +146,7 @@ CODE_FILES = (
     "services/svg_source_local_review_continuation.py",
     "services/generation_core/drivers/svg/collect.py",
     "services/generation_core/drivers/svg/author.py",
+    "services/generation_core/drivers/svg/attempt_cause.py",
     "services/generation_core/drivers/svg/render.py",
     "services/generation_core/drivers/svg/quality.py",
     "services/generation_core/drivers/svg/quality_recovery.py",

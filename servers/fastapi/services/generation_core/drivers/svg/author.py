@@ -18,9 +18,11 @@ from contextvars import copy_context
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
+import logging
 import re
 
 from services.authored_checkpoint_errors import AuthoredStageError
+from services.generation_core.drivers.svg.attempt_cause import cause, dispatch_cause
 from services.generation_core.drivers.svg.native_declarations import bind_native_declarations
 from services.provider_usage_instrumentation import provider_usage_scope
 from services.svg_presentation_checkpoint import _provider_attempt_count
@@ -30,6 +32,7 @@ _LOCAL_ESCALATION_REASONS = {
     "layout_candidate_unavailable", "layout_overflow_unresolved",
     "layout_collision_unresolved", "layout_search_budget_exhausted",
 }
+_LOGGER = logging.getLogger(__name__)
 
 
 async def raster_reconstruct_svg(raster_analysis, raster_pin, request, index):
@@ -281,9 +284,11 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
             and index not in getattr(state, "dispatch_approved", ())):
         raise PageDispatchFrozen(index)
     observer_ready = False
+    pending_attempt = None
+    attempt_cause = None
 
     async def before_dispatch(provider_ordinal=provider_ordinal):
-        nonlocal observer_ready
+        nonlocal observer_ready, pending_attempt, attempt_cause
         # Dispatch freeze first, after the permit wait and before any inflight
         # witness or the drain check: no dispatch is approved after a freeze
         # unless this page was approved before it.
@@ -312,6 +317,19 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
             stopped.pre_sdk_dispatch_stop = True
             raise stopped
         raise_if_fatal()
+        # This is the one dispatch boundary for plain, source and raster SVG.
+        # Append only after prompt construction (which reads attempts[-1]) and
+        # dispatch approval; a stopped admission is not a provider attempt.
+        attempt_cause = dispatch_cause(payload, ordinal=ordinal)
+        if attempt_cause["code"] == "unclassified":
+            _LOGGER.warning("SVG attempt cause unclassified stage=%s page_index=%s",
+                            "author" if ordinal == 0 else "repair", index)
+        pending_attempt = {"kind": "provider", "status": "pending",
+            "attempt_cause": dict(attempt_cause), "receipt": {
+                "attempt_ordinal": receipt_attempt_ordinal,
+                "terminal_ordinal": provider_ordinal, "attempt_cause": dict(attempt_cause)}}
+        payload.setdefault("attempts", []).append(pending_attempt)
+        payload.pop("next_attempt_cause", None)
         payload["inflight"] = provider_ordinal
         await checkpoint(job, index, payload=payload)
         observer_ready = True
@@ -464,10 +482,16 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
                     **repair_kwargs,
                 )
         except ProviderOutcomeError as error:
+            # Transport failures already have their own purchase-count record.
+            # Keep its cause in diagnostics without counting it twice.
+            if pending_attempt is not None:
+                payload["attempts"].remove(pending_attempt)
             diagnostics = safe_provider_diagnostics(error)
             payload.setdefault("provider_diagnostics", []).append({
                 "ordinal": provider_ordinal, "code": error.code,
                 "diagnostics": diagnostics,
+                **({"attempt_cause": dict(attempt_cause),
+                    "receipt": dict(pending_attempt["receipt"])} if pending_attempt is not None else {}),
             })
             if not is_page_recoverable_overload(error):
                 await checkpoint(job, index, payload=payload)
@@ -485,6 +509,7 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
                 failure["run_timeout_retry"] = run_timeout_retry
             failures = payload.setdefault("provider_failures", [])
             failures.append(failure)
+            payload["next_attempt_cause"] = cause("provider_retry:" + error.code)
             payload["inflight"] = None
             if payload.get("last_valid_svg"):
                 payload["svg_content"] = payload["last_valid_svg"]
@@ -531,13 +556,27 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
         else:
             payload.pop("fontAdvisories", None)
     receipt = authored.receipt
+    if local_authored is None:
+        if pending_attempt is None:
+            # Defensive compatibility for an adapter that omitted its hook;
+            # cause instrumentation itself must never fail a generation.
+            attempt_cause = cause("unclassified")
+            _LOGGER.warning("SVG attempt cause unclassified stage=%s page_index=%s",
+                            "author" if ordinal == 0 else "repair", index)
+        receipt = {**receipt, "attempt_cause": dict(attempt_cause)}
     if local_authored is None and provider_ordinal != receipt_attempt_ordinal:
         # Sealed ``dispatch.stopped`` records moved this call's terminal
         # ordinal past its attempt index; recovery proves the response by it.
         receipt = {**receipt, "terminal_ordinal": provider_ordinal}
-    payload["attempts"].append({"raw_response": authored.raw_response,
-                                "receipt": receipt,
-                                "kind": "local" if local_authored is not None else "provider"})
+    record = {"raw_response": authored.raw_response, "receipt": receipt,
+              "kind": "local" if local_authored is not None else "provider"}
+    if pending_attempt is not None:
+        pending_attempt.clear()
+        pending_attempt.update(record, attempt_cause=dict(attempt_cause))
+    else:
+        if local_authored is None:
+            record["attempt_cause"] = dict(attempt_cause)
+        payload["attempts"].append(record)
     payload["model_attempt_count"] = _provider_attempt_count(payload)
     payload["inflight"] = None
     payload["svg_content"] = svg
