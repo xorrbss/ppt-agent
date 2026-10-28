@@ -141,6 +141,26 @@ _STATUS_SUMMARIES = {
     "dead_letter": "stopped after repeated failures",
 }
 
+_REVIEW_TARGETS = frozenset({"source_svg", "final_pptx"})
+
+
+def _review_target_context(operation: Mapping[str, Any]) -> dict[str, str]:
+    """Project only validated quality-review selectors into the public target."""
+
+    if operation.get("operation_type") != "quality.review":
+        return {}
+    context: dict[str, str] = {}
+    review_target = operation.get("_review_target")
+    if isinstance(review_target, str) and review_target in _REVIEW_TARGETS:
+        context["review_target"] = review_target
+    artifact_id = operation.get("_artifact_id")
+    if artifact_id is not None:
+        try:
+            context["artifact_id"] = str(uuid.UUID(str(artifact_id)))
+        except (AttributeError, TypeError, ValueError):
+            pass
+    return context
+
 
 def _operation_card_context(
     operation: Mapping[str, Any],
@@ -158,7 +178,7 @@ def _operation_card_context(
         "summary": spec.target_summary if spec is not None else "Unsupported operation",
         # Target selectors live in private request payloads.  Until each
         # command has an explicit allow-list, do not reflect arbitrary context.
-        "context": {},
+        "context": _review_target_context(operation),
     }
     activity = spec.activity_label if spec is not None else "Unsupported workspace operation"
     status_summary = _STATUS_SUMMARIES.get(status, "updated")
@@ -244,6 +264,11 @@ def _operation_observability(operation: Mapping[str, Any]) -> dict[str, Any]:
         "retryCount": retry_count,
         "recoveryReason": reason,
         "recoveryStatus": recovery_status,
+        # Preserve the capacity wait classification through the public boundary;
+        # it is consumed by the UI alongside capacity_waiting.
+        "wait_reason": operation.get("wait_reason")
+        if isinstance(operation.get("wait_reason"), str)
+        else None,
     }
 
 
@@ -336,6 +361,8 @@ def project_workspace_timeline(
             )
             item["actor"] = actor
             item["target"] = target
+            item.pop("_review_target", None)
+            item.pop("_artifact_id", None)
             item["activity_summary"] = activity_summary
             item["allowed_actions"] = allowed_workspace_actions(item)
             item.update(_operation_observability(item))

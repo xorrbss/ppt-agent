@@ -64,6 +64,7 @@
         "recoveryReason": null,
         "recoveryStatus": "unavailable",
         "capacity_waiting": false,
+        "wait_reason": null,
         "queue_position": null,
         "result": {
           "outline_sections": 8

@@ -1422,13 +1422,13 @@ async def workspace_timeline(
             progress = row.progress or {}
             capacity_waiting, queue_position = _capacity_wait_projection(row)
             result = _safe_payload(row.result)
-            target = (
-                {
-                    "target": progress.get("review_target"),
-                    "artifact_id": progress.get("artifact_id"),
-                }
-                if row.kind == "quality.review" and progress.get("review_target")
+            review_target = (
+                progress.get("review_target")
+                if row.kind == "quality.review"
                 else None
+            )
+            artifact_id = (
+                progress.get("artifact_id") if row.kind == "quality.review" else None
             )
             if row.kind == "quality.review" and isinstance(result, dict) and presentation.is_svg():
                 from services.svg_export_operation import current_svg_artifact_fidelity
@@ -1458,7 +1458,8 @@ async def workspace_timeline(
                     "retryable": _operation_retryable(row),
                     "retry_count": row.retry_count,
                     "result": result,
-                    "target": target,
+                    "_review_target": review_target,
+                    "_artifact_id": artifact_id,
                     "version": row.version,
                     "expected_revision": row.expected_revision,
                     "result_revision": row.result_revision,

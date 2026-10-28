@@ -10,6 +10,7 @@ import type {
   WorkspaceOperationActor,
   WorkspaceOperationAnchor,
   WorkspaceOperationEvent,
+  WorkspaceOperationTarget,
   WorkspaceProjection,
   WorkspaceTimelineAnchor,
   WorkspaceTimelinePage,
@@ -451,6 +452,13 @@ function normalizeMessage(
   };
 }
 
+function normalizeOperationTarget(value: unknown): WorkspaceOperationTarget | undefined {
+  const target = objectValue(value);
+  if (!target) return undefined;
+  const context = objectValue(target.context);
+  return context ? { ...target, context } : target;
+}
+
 function normalizeOperation(
   raw: UnknownRecord,
   id: string,
@@ -543,7 +551,7 @@ function normalizeOperation(
     ),
     result: objectValue(raw.result),
     actor: normalizeOperationActor(raw),
-    target: objectValue(raw.target),
+    target: normalizeOperationTarget(raw.target),
     expectedRevision: numberValue(raw.expectedRevision, raw.expected_revision),
     resultRevision: numberValue(
       raw.resultRevision,

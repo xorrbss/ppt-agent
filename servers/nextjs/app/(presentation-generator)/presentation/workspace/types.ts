@@ -133,6 +133,15 @@ export interface WorkspaceOperationActor {
   label?: string;
 }
 
+export interface WorkspaceOperationTargetContext extends Record<string, unknown> {
+  artifact_id?: string;
+  review_target?: "source_svg" | "final_pptx";
+}
+
+export interface WorkspaceOperationTarget extends Record<string, unknown> {
+  context?: WorkspaceOperationTargetContext;
+}
+
 export interface WorkspaceOperationAnchor {
   anchorType: "operation";
   id: string;
@@ -159,7 +168,7 @@ export interface WorkspaceOperationAnchor {
   waitReason?: string;
   result?: Record<string, unknown>;
   actor?: WorkspaceOperationActor;
-  target?: Record<string, unknown>;
+  target?: WorkspaceOperationTarget;
   expectedRevision?: number;
   resultRevision?: number;
   /** Derived UI-only audit state. The immutable operation status is preserved. */

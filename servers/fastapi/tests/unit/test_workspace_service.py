@@ -1091,6 +1091,72 @@ async def _bootstrap_durably_projects_first_message_attachment_and_settings(
         await engine.dispose()
 
 
+def test_deferred_final_pptx_review_projects_target_context_and_wait_reason(
+    tmp_path: Path,
+):
+    asyncio.run(
+        _deferred_final_pptx_review_projects_target_context_and_wait_reason(tmp_path)
+    )
+
+
+async def _deferred_final_pptx_review_projects_target_context_and_wait_reason(
+    tmp_path: Path,
+):
+    engine, maker = await _database(tmp_path / "deferred-review.db")
+    try:
+        presentation = await _create_presentation(maker)
+        artifact_id = uuid.uuid4()
+        async with maker() as session:
+            _, _, operation, _ = await bootstrap_workspace(
+                session,
+                presentation_id=presentation.id,
+                request=_bootstrap_request(key="deferred-review"),
+            )
+            operation.kind = "quality.review"
+            operation.progress = {
+                "stage": "waiting_for_capacity",
+                "capacity_waiting": True,
+                "wait_reason": "svg_final_pptx_office_instance_busy",
+                "review_target": "final_pptx",
+                "artifact_id": str(artifact_id),
+            }
+            session.add(operation)
+            await session.commit()
+
+        async with maker() as session:
+            private_timeline = await workspace_timeline(
+                session,
+                presentation_id=presentation.id,
+            )
+            private_operation = next(
+                item
+                for item in private_timeline["items"]
+                if item["anchor_type"] == "operation"
+            )
+            assert "target" not in private_operation
+
+            projected = project_workspace_timeline(
+                private_timeline,
+                presentation_id=presentation.id,
+            ).model_dump(mode="json")
+            operation_item = next(
+                item
+                for item in projected["items"]
+                if item["anchor_type"] == "operation"
+            )
+            assert operation_item["target"]["context"] == {
+                "review_target": "final_pptx",
+                "artifact_id": str(artifact_id),
+            }
+            assert operation_item["capacity_waiting"] is True
+            assert (
+                operation_item["wait_reason"]
+                == "svg_final_pptx_office_instance_busy"
+            )
+    finally:
+        await engine.dispose()
+
+
 def test_timeline_attachment_snapshot_survives_live_mutation_and_delete(
     tmp_path: Path,
 ):
