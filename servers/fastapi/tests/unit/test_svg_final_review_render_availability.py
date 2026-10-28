@@ -17,7 +17,7 @@ from services.svg_final_pptx_review import FINAL_PPTX_OFFICE_BUSY_MAX_WAIT_SECON
 from services.trusted_executor.wire_bundle_references import _final_pptx_render_references
 from services.trusted_executor.worker_dispatcher import TrustedWorkerWireError
 from services.workspace_operation_handler_registry import (
-    RetryableWorkspaceOperationError, WorkspaceOperationDeferred,
+    WorkspaceOperationDeferred,
 )
 from utils.hashing import canonical_json_sha256, sha256_hex
 from workers import public_svg_pptx_render as office
