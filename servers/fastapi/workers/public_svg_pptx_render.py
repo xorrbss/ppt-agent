@@ -98,7 +98,9 @@ def _powerpoint_executable():
 
 
 def _normalize_hwnd(value):
-    """Convert PowerPoint's signed 32-bit COM HWND value to a Python int."""
+    """Convert PowerPoint's signed 32-bit COM HWND to a pywin32 handle."""
+
+    import pywintypes
 
     try:
         hwnd = int(value)
@@ -106,7 +108,11 @@ def _normalize_hwnd(value):
         raise ValueError("svg_final_pptx_hwnd_unavailable") from error
     # Application.HWND is exposed by Office as a 32-bit signed Long.  A valid
     # handle whose high bit is set therefore arrives sign-extended as negative.
-    return hwnd & 0xFFFFFFFF if hwnd < 0 else hwnd
+    hwnd = hwnd & 0xFFFFFFFF if hwnd < 0 else hwnd
+    try:
+        return pywintypes.HANDLE(hwnd)
+    except (TypeError, ValueError, OverflowError) as error:
+        raise ValueError("svg_final_pptx_hwnd_unavailable") from error
 
 
 def _mark_render_stage(stage, callback=None):
@@ -193,14 +199,15 @@ def _render(request, *, stage_callback=None):
         raise ValueError("svg_final_pptx_memory_insufficient")
     target = Path(request["pptx"])
     before = _sha(target)
-    stage = stage_callback or (lambda _name: None)
-    token = _RENDER_STAGE_CALLBACK.set(stage)
+    stage = stage_callback or _RENDER_STAGE_CALLBACK.get() or (lambda _name: None)
+    token = _RENDER_STAGE_CALLBACK.set(stage) if stage_callback is not None else None
     _mark_render_stage("create")
     pythoncom.CoInitialize()
     try:
         with _owned_powerpoint(request) as pid:
             application = _attach_powerpoint(pid, request["activationTimeout"])
             document = None
+            render_failed = False
             try:
                 (Path(request["outputDirectory"]) / "activated").write_text(str(pid), encoding="ascii")
                 _mark_render_stage("open")
@@ -220,8 +227,12 @@ def _render(request, *, stage_callback=None):
                             raise ValueError("svg_final_pptx_render_size_mismatch")
                         rendered.verify()
                     pages.append(dict(index=index, pngSha256=_sha(output), widthPx=width, heightPx=height))
+            except BaseException:
+                render_failed = True
+                raise
             finally:
-                _mark_render_stage("close")
+                if not render_failed:
+                    _mark_render_stage("close")
                 try:
                     if document is not None:
                         document.Close()
@@ -230,7 +241,8 @@ def _render(request, *, stage_callback=None):
     finally:
         application = document = None
         pythoncom.CoUninitialize()
-        _RENDER_STAGE_CALLBACK.reset(token)
+        if token is not None:
+            _RENDER_STAGE_CALLBACK.reset(token)
     after = _sha(target)
     if before != after:
         raise ValueError("svg_final_pptx_hash_changed")
@@ -381,7 +393,7 @@ def _child_diagnostic(stage, error):
     return diagnostic
 
 
-def _child_failure(reason, error, *, stage, retryable=True):
+def _child_failure(reason, error, *, stage, retryable):
     result = _unavailable(reason, retryable=retryable)
     result["diagnostic"] = _child_diagnostic(stage, error)
     return result
@@ -396,6 +408,9 @@ def _render_child(request_path, result_path):
         if stage in _RENDER_STAGES:
             stage_holder[0] = stage
 
+    def child_retryable():
+        return not (Path(result_path).parent / "activated").is_file()
+
     try:
         token = _RENDER_STAGE_CALLBACK.set(mark_stage)
         try:
@@ -403,15 +418,15 @@ def _render_child(request_path, result_path):
         finally:
             _RENDER_STAGE_CALLBACK.reset(token)
     except SharedPowerPointInstance as error:
-        result = _child_failure(SHARED_INSTANCE_REASON, error, stage=stage_holder[0])
+        result = _child_failure(SHARED_INSTANCE_REASON, error, stage=stage_holder[0], retryable=True)
     except pythoncom.com_error as error:
-        result = _child_failure("svg_final_pptx_render_failed", error, stage=stage_holder[0])
+        result = _child_failure("svg_final_pptx_render_failed", error, stage=stage_holder[0], retryable=child_retryable())
     except (PowerPointActivationUnavailable, OSError, TypeError, ValueError) as error:
-        result = _child_failure("svg_final_pptx_render_failed", error, stage=stage_holder[0])
+        result = _child_failure("svg_final_pptx_render_failed", error, stage=stage_holder[0], retryable=child_retryable())
     except Exception as error:
         # Keep the child result boundary total: a future COM/pywin32 exception
         # must not disappear as a nonzero child exit with no diagnostic.
-        result = _child_failure("svg_final_pptx_render_failed", error, stage=stage_holder[0])
+        result = _child_failure("svg_final_pptx_render_failed", error, stage=stage_holder[0], retryable=child_retryable())
     Path(result_path).write_text(json.dumps(result), encoding="utf-8")
 
 

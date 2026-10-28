@@ -59,6 +59,73 @@ def test_attach_failure_writes_bounded_diagnostic_without_message_or_path(
     assert "private" not in json.dumps(result)
     assert "deck.pptx" not in json.dumps(result)
 
+
+def _renderer_request(tmp_path):
+    target = tmp_path / "artifact.pptx"
+    target.write_bytes(b"pptx")
+    return dict(
+        pptx=str(target), outputDirectory=str(tmp_path), widthPx=16, heightPx=9,
+        pageCount=1, jobName="test", rendererVersion="test", activationTimeout=1,
+    )
+
+
+def _child_result(tmp_path):
+    request_path = tmp_path / "request.json"
+    result_path = tmp_path / "result.json"
+    request_path.write_text(json.dumps(_renderer_request(tmp_path)), encoding="utf-8")
+    office._render_child(request_path, result_path)
+    return json.loads(result_path.read_text(encoding="utf-8"))
+
+
+def test_real_render_records_attach_stage(activation_host, tmp_path):
+    activation_host.app.HWND = object()
+    result = _child_result(tmp_path)
+    assert result["diagnostic"]["stage"] == "hwnd_pid_match"
+    assert result["reasonCode"] == "svg_final_pptx_render_failed"
+    assert result["retryable"] is True
+
+
+def test_real_render_records_open_stage_after_activation(activation_host, tmp_path):
+    activation_host.app.Presentations.Open.side_effect = ValueError(
+        "C:\\private\\deck.pptx"
+    )
+    result = _child_result(tmp_path)
+    assert result["diagnostic"]["stage"] == "open"
+    assert result["reasonCode"] == "svg_final_pptx_render_failed"
+    assert result.get("retryable", False) is False
+
+
+@pytest.mark.parametrize(
+    "case,stage,error,activated,reason,retryable",
+    [
+        ("create", "create", OSError("create"), False, "svg_final_pptx_render_failed", True),
+        ("assign_job", "assign_job", OSError("assign"), False, "svg_final_pptx_render_failed", True),
+        ("resume", "resume", OSError("resume"), False, "svg_final_pptx_render_failed", True),
+        ("get_active_object", "get_active_object", __import__("pythoncom").com_error(-1, "private", None, 1), False, "svg_final_pptx_render_failed", True),
+        ("hwnd_pid_match", "hwnd_pid_match", TypeError("private path"), False, "svg_final_pptx_render_failed", True),
+        ("open", "open", ValueError("open"), True, "svg_final_pptx_render_failed", False),
+        ("export", "export", OSError("export"), True, "svg_final_pptx_render_failed", False),
+        ("close", "close", OSError("close"), True, "svg_final_pptx_render_failed", False),
+        ("hash_changed", "close", ValueError("svg_final_pptx_hash_changed"), True, "svg_final_pptx_render_failed", False),
+        ("memory_insufficient", "create", ValueError("svg_final_pptx_memory_insufficient"), False, "svg_final_pptx_render_failed", True),
+        ("SharedPowerPointInstance", "create", office.SharedPowerPointInstance(), False, office.SHARED_INSTANCE_REASON, True),
+    ],
+)
+def test_child_failure_table_preserves_baseline_retryability(
+    tmp_path, monkeypatch, case, stage, error, activated, reason, retryable
+):
+    def failed_render(_request):
+        office._mark_render_stage(stage)
+        if activated:
+            (tmp_path / "activated").write_text("20", encoding="ascii")
+        raise error
+
+    monkeypatch.setattr(office, "_render", failed_render)
+    result = _child_result(tmp_path)
+    assert result["reasonCode"] == reason, case
+    assert result.get("retryable", False) is retryable, case
+    assert result["diagnostic"]["stage"] == stage
+
 __all__ = ["office_host"]
 
 
@@ -91,7 +158,7 @@ def activation_host(monkeypatch):
     modules = {
         "pythoncom": SimpleNamespace(CoInitialize=lambda: None, CoUninitialize=lambda: None, com_error=OSError),
         "win32com": SimpleNamespace(client=client), "win32com.client": client,
-        "pywintypes": SimpleNamespace(error=OSError),
+        "pywintypes": SimpleNamespace(error=OSError, HANDLE=lambda value: value),
         "win32api": SimpleNamespace(OpenProcess=lambda rights, inherit, pid: handle(pid)),
         "win32process": SimpleNamespace(EnumProcesses=lambda: state.existing,
             GetModuleFileNameEx=lambda *_: "POWERPNT.EXE",
