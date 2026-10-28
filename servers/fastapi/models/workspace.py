@@ -700,6 +700,7 @@ class WorkspaceOperationTimelineItem(BaseModel):
         "unavailable",
     ] = "unavailable"
     capacity_waiting: bool = False
+    wait_reason: Optional[str] = None
     queue_position: Optional[int] = Field(default=None, ge=1)
     result: Any = None
     # ``version`` is retained for v1 clients; ``operation_version`` makes the
