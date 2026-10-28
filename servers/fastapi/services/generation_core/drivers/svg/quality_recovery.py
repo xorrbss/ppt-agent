@@ -10,6 +10,7 @@ import json
 from pydantic import BaseModel
 
 from services.authored_checkpoint_errors import AuthoredStageError
+from services.generation_core.drivers.svg.attempt_cause import advisory_cause, cause
 from services.generation_core.drivers.svg.quality import redispatchable_review_status
 from services.svg_authoring_profile import read_quality_recovery_plan
 from services.svg_authoring_profile import read_quality_recovery_execution_plan
@@ -178,6 +179,7 @@ async def recover_screen_pages(ctx, request, presentation_id, outline, job, page
                     "image explanation group and native requirement. "
                     "Preserve current content and validate the complete resulting page."
                 }, ensure_ascii=False))
+        payload["next_attempt_cause"] = cause("static_quality:validated_svg_adaptation")
         await hooks.checkpoint(job, index, payload=payload)
         reserved.append((index, payload))
         recent.append({"svg_content": candidate["svg_content"]})
@@ -505,6 +507,7 @@ async def recover_deck(ctx, request, presentation_id, outline, job, pages, state
                     priors[index].get("png_sha256"), sha256_hex(priors[index]["svg_content"].encode()))
                 payload["svg_content"] = None
                 payload["correction_mode"] = decision["repair_scope"]
+                payload["next_attempt_cause"] = advisory_cause(decision)
                 payload["repair_hint"] = json.dumps({"kind": decision["repair_scope"],
                     "issues": decision.get("issues", []),
                     **({"design_targets": decision["design_targets"]} if decision.get("design_targets") else {}),

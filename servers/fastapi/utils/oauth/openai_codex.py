@@ -539,7 +539,7 @@ def refresh_access_token(refresh_token: str) -> TokenResult:
 
         body = response.json()
         access = body.get("access_token")
-        refresh = body.get("refresh_token")
+        refresh = body.get("refresh_token") or refresh_token
         expires_in = body.get("expires_in")
 
         if not access or not refresh or not isinstance(expires_in, (int, float)):

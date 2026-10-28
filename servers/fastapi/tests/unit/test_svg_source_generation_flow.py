@@ -788,6 +788,7 @@ async def test_source_structural_visual_repair_uses_existing_attempt_evidence(
 
             async def sdk(source_document, page_index, style_snapshot, **kwargs):
                 await kwargs["before_dispatch"]()
+                assert event_payload["attempts"][-1]["attempt_cause"]["code"] != "unclassified"
                 observer = _PROVIDER_EVENT_OBSERVER.get()
                 assert observer is not None
                 raw = '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720"/>'
@@ -819,7 +820,10 @@ async def test_source_structural_visual_repair_uses_existing_attempt_evidence(
             event_state = SimpleNamespace(fatal_error=None, terminal_drain_enabled=True,
                 hard_deadline_at=datetime.now(timezone.utc) + timedelta(
                     seconds=-1 if mode == "operation_expired" else 45 if mode == "operation_short" else 900))
-            event_payload = {"attempts": []}
+            # This isolated observer fixture enters a repair directly, so it
+            # supplies the transition witness normally set by the renderer.
+            event_payload = {"attempts": [],
+                "next_attempt_cause": {"code": "static_quality:text_overlap"}}
             with monkeypatch.context() as events_scope:
                 events_scope.setattr(asyncio, "run_coroutine_threadsafe", schedule)
                 events_scope.setattr(
@@ -1042,6 +1046,7 @@ async def test_terminal_page_failure_global_cancels_waiters_page_local_freezes_d
             # Entered admission before the freeze; still waiting when it lands.
             await sibling_release.wait()
         await before_dispatch()
+        assert saved[index]["attempts"][-1]["attempt_cause"]["code"] != "unclassified"
         events.append(("approved", index))
         if index == sibling_index:
             sibling_approved.set()
@@ -1068,6 +1073,9 @@ async def test_terminal_page_failure_global_cancels_waiters_page_local_freezes_d
         # measurement asks for one repair, the second exhausts the page.
         if kwargs["ordinal"] == 0:
             kwargs["payload"]["svg_content"] = None
+            # Match the real renderer's pre-retry checkpoint contract without
+            # weakening the dispatch-freeze and terminal-write assertions.
+            kwargs["payload"]["next_attempt_cause"] = {"code": "static_quality:validation_failed"}
             await kwargs["checkpoint"](kwargs["job"], failed_index, payload=kwargs["payload"])
             return svg_render.RETRY
         raise AuthoredStageError(slide_index=failed_index, stage="render",

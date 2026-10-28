@@ -51,7 +51,7 @@ def handle_llm_client_exceptions(e: Exception) -> Exception:
     code = getattr(e, "code", None)
     if (
         isinstance(code, str)
-        and code.startswith("public_provider_")
+        and (code.startswith("public_provider_") or code == "codex_auth_reauth_required")
         and getattr(e, "retryable", None) is False
     ):
         return e

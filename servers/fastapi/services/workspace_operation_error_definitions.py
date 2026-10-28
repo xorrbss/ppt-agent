@@ -4,6 +4,9 @@ from services.workspace_error_types import definition
 
 
 _GROUPS = (
+    (409, False, "ChatGPT login is required. Reconnect ChatGPT in Settings.", (
+        "codex_auth_reauth_required",
+    )),
     (409, False, "The presentation quality review is incomplete. Continue the review before finishing.", (
         "svg_quality_recovery_review_required",
         "svg_quality_recovery_review_unavailable",
