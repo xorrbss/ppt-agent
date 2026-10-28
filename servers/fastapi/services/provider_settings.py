@@ -468,9 +468,9 @@ async def import_legacy_file_to_provider_settings(
     return committed
 
 
-def sync_legacy_file_to_provider_settings(*, managed_updates=None):
+def sync_legacy_file_to_provider_settings(*, managed_updates=None, expected_revision=None):
     from services.provider_settings_sync import (
         sync_legacy_file_to_provider_settings as sync_bridge,
     )
 
-    return sync_bridge(managed_updates=managed_updates)
+    return sync_bridge(managed_updates=managed_updates, expected_revision=expected_revision)

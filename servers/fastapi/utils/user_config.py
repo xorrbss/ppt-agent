@@ -93,7 +93,9 @@ def refresh_process_runtime_settings(
         return snapshot
 
 
-def save_codex_tokens_to_user_config(values: Mapping[str, object]) -> None:
+def save_codex_tokens_to_user_config(
+    values: Mapping[str, object], *, expected_revision: int | None = None,
+) -> None:
     """Persist managed Codex fields without staging them in ``os.environ``."""
     unknown = set(values) - _CODEX_MANAGED_KEYS
     if unknown:
@@ -101,6 +103,8 @@ def save_codex_tokens_to_user_config(values: Mapping[str, object]) -> None:
 
     path = get_user_config_path_env()
     if not path:
+        if expected_revision is not None:
+            raise RuntimeError("managed credential persistence unavailable")
         return
 
     def merge_codex_tokens(existing: dict[str, Any]) -> dict[str, Any]:
@@ -113,10 +117,16 @@ def save_codex_tokens_to_user_config(values: Mapping[str, object]) -> None:
                     existing[key] = value
         return existing
 
-    update_user_config_file(path, merge_codex_tokens)
+    if expected_revision is None:
+        update_user_config_file(path, merge_codex_tokens)
     from services.provider_settings import sync_legacy_file_to_provider_settings
 
-    committed = sync_legacy_file_to_provider_settings(managed_updates=values)
+    committed = sync_legacy_file_to_provider_settings(
+        managed_updates=values,
+        **({"expected_revision": expected_revision} if expected_revision is not None else {}),
+    )
+    if committed is None and expected_revision is not None:
+        raise RuntimeError("managed credential persistence unavailable")
     if committed is not None:
         refresh_process_runtime_settings(
             persisted_config=committed.config,

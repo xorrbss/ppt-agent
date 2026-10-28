@@ -58,6 +58,7 @@ def _raw_file_config_for_divergence_check(path: str) -> dict | None:
 def sync_legacy_file_to_provider_settings(
     *,
     managed_updates: Mapping[str, object] | None = None,
+    expected_revision: int | None = None,
 ):
     """Persist changes made by remaining synchronous userConfig writers."""
     # Imported lazily so the public service can re-export this bridge without a
@@ -74,8 +75,12 @@ def sync_legacy_file_to_provider_settings(
     path = get_provider_credential_settings().config_import_path or get_user_config_path_env()
     if not path:
         return None
-    raw_legacy_config = read_user_config_file(path)
-    if not raw_legacy_config:
+    # A credential refresh must commit against the revision that supplied its
+    # refresh token. It must never stage stale tokens into the legacy file.
+    if expected_revision is not None and managed_updates is None:
+        raise ValueError("conditional settings writes require managed updates")
+    raw_legacy_config = read_user_config_file(path) if expected_revision is None else {}
+    if not raw_legacy_config and expected_revision is None:
         # A genuinely missing/empty config is a normal bootstrap state. But a
         # file that plainly has content on disk yet read back empty means a
         # read failure was silently swallowed somewhere upstream (this is
@@ -109,6 +114,10 @@ def sync_legacy_file_to_provider_settings(
                             table.c.id == 1
                         )
                     ).one_or_none()
+                    if expected_revision is not None and (
+                        row is None or int(row.revision) != expected_revision
+                    ):
+                        raise ProviderSettingsConcurrencyError() from None
                     if row is None:
                         connection.execute(
                             insert(table).values(
@@ -178,6 +187,8 @@ def sync_legacy_file_to_provider_settings(
                             type(error).__name__,
                         )
                     return committed
+                if expected_revision is not None:
+                    raise ProviderSettingsConcurrencyError() from None
             except (IntegrityError, OperationalError) as error:
                 if attempt + 1 == PROVIDER_SETTINGS_CAS_MAX_ATTEMPTS:
                     logger.warning(

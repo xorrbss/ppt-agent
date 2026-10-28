@@ -19,6 +19,7 @@ from utils.provider_overload import ProviderOutcomeError, safe_provider_diagnost
 from utils.provider_stream_guard import ProviderCallAborted, close_quietly
 from utils.provider_terminal_outcome import ProviderTerminalOutcomeRecorder
 from utils.hashing import sha256_hex
+from utils.codex_token_refresh import refresh_codex_access_token_after_unauthorized
 
 
 @dataclass(frozen=True)
@@ -111,9 +112,10 @@ def _stream_failure_diagnostics(error: BaseException) -> dict[str, object]:
 
 
 class _ObservedResponses:
-    def __init__(self, resource: Any, observer=None) -> None:
+    def __init__(self, resource: Any, observer=None, unauthorized_refresh=None) -> None:
         self._resource = resource
         self._observer = observer
+        self._unauthorized_refresh = unauthorized_refresh
         self.observation: dict = {}
 
     def __getattr__(self, name: str) -> Any:
@@ -124,17 +126,42 @@ class _ObservedResponses:
         # exception. In particular an actual HTTP 429/503 is not a stream drop.
         started_at = time.monotonic()
         self.observation = {"streamStage": "before_stream"}
-        try:
-            if self._observer is not None:
-                self._observer({"terminal_event": "dispatch_ready"})
-            response = self._resource.create(*args, **kwargs)
-        except Exception as error:
+        raw_client = getattr(self._resource, "_client", None)
+        for attempt in range(2):
+            # Capture the credential that this request actually sent. A sibling
+            # call can update the SDK client while this request is in flight.
+            failed_token = getattr(raw_client, "api_key", "")
             try:
-                error.diagnostics = safe_provider_diagnostics(error,
-                    diagnostics={"streamStage": "before_stream"})
-            except Exception:
-                pass
-            raise
+                if self._observer is not None and attempt == 0:
+                    self._observer({"terminal_event": "dispatch_ready"})
+                response = self._resource.create(*args, **kwargs)
+                break
+            except Exception as error:
+                if (isinstance(error, APIStatusError) and error.status_code == 401
+                        and self._unauthorized_refresh is not None):
+                    refreshed_token = None
+                    if attempt == 0 and failed_token:
+                        try:
+                            refreshed_token = self._unauthorized_refresh(failed_token)
+                        except Exception:
+                            pass
+                    if not refreshed_token or raw_client is None:
+                        # Never expose the upstream body or a refresh exception
+                        # through a chained traceback or a paid recovery loop.
+                        raise ProviderOutcomeError(
+                            "codex_auth_reauth_required",
+                            recovery_allowed=False,
+                            diagnostics={"httpStatus": 401, "statusOrigin": "http_response",
+                                         "streamStage": "before_stream"},
+                        ) from None
+                    raw_client.api_key = refreshed_token
+                    continue
+                try:
+                    error.diagnostics = safe_provider_diagnostics(
+                        error, diagnostics={"streamStage": "before_stream"})
+                except Exception:
+                    pass
+                raise
         if not kwargs.get("stream"):
             return response
         self.observation = safe_provider_diagnostics(diagnostics={
@@ -235,10 +262,11 @@ class _ObservedResponses:
 class _ObservedClient:
     """Keep observation installed when the bounded-call layer clones the SDK."""
 
-    def __init__(self, client: Any, *, observer=None) -> None:
+    def __init__(self, client: Any, *, observer=None, unauthorized_refresh=None) -> None:
         self._client = client
         self._observer = observer
-        self.responses = _ObservedResponses(client.responses, observer)
+        self._unauthorized_refresh = unauthorized_refresh
+        self.responses = _ObservedResponses(client.responses, observer, unauthorized_refresh)
 
     @property
     def provider_terminal_observation(self):
@@ -248,13 +276,21 @@ class _ObservedClient:
         return getattr(self._client, name)
 
     def with_options(self, **kwargs: Any) -> _ObservedClient:
-        return type(self)(self._client.with_options(**kwargs), observer=self._observer)
+        return type(self)(
+            self._client.with_options(**kwargs),
+            observer=self._observer,
+            unauthorized_refresh=self._unauthorized_refresh,
+        )
 
 
 class RepositoryChatGPTClient(ChatGPTClient):
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        self._client = _ObservedClient(self._client, observer=_PROVIDER_EVENT_OBSERVER.get())
+        self._client = _ObservedClient(
+            self._client,
+            observer=_PROVIDER_EVENT_OBSERVER.get(),
+            unauthorized_refresh=refresh_codex_access_token_after_unauthorized,
+        )
 
     def _generate_responses_stream(self, **kwargs: Any) -> Iterator[Any]:
         try:
