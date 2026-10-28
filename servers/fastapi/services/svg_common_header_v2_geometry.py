@@ -33,7 +33,8 @@ def paint_boxes(root: ET.Element, text_boxes: dict[str, list[dict]]) -> dict[str
             dx += values[0]
             dy += values[1] if len(values) == 2 else 0
         name = node.tag.removeprefix("{" + SVG_NS + "}")
-        number = lambda key, default=0: float(node.get(key, default))
+        def number(key, default=0):
+            return float(node.get(key, default))
         boxes = []
         if name == "text":
             boxes = text_boxes[node.get("id")]
@@ -49,7 +50,7 @@ def paint_boxes(root: ET.Element, text_boxes: dict[str, list[dict]]) -> dict[str
             points = []
             if name != "path":
                 values = _numbers(node.get("points", ""))
-                points = list(zip(values[::2], values[1::2]))
+                points = list(zip(values[::2], values[1::2], strict=False))
             else:
                 x = y = 0.
                 start = (x, y)
@@ -75,7 +76,7 @@ def paint_boxes(root: ET.Element, text_boxes: dict[str, list[dict]]) -> dict[str
                                 y = y + value if relative else value
                             points.append((x, y))
             if points:
-                xs, ys = zip(*points)
+                xs, ys = zip(*points, strict=False)
                 boxes = [{"x": min(xs), "y": min(ys), "width": max(xs) - min(xs), "height": max(ys) - min(ys)}]
         stroke = float(inherited.get("stroke-width", 1)) / 2 if inherited.get("stroke", "none") != "none" else 0
         if name in {"polygon", "polyline", "path", "rect", "text"}:

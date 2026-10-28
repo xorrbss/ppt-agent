@@ -18,7 +18,9 @@ from utils.hashing import sha256_prefixed
 
 VERSION = "svg-common-header/v2"
 PAGE_VERSION = "svg-common-header-page/v2"
-MEASUREMENT_VERSION = "svg-common-header-glyph-paint/v2"
+MEASUREMENT_VERSION = "svg-common-header-glyph-paint/v3"
+# Frozen contracts sealed before the browser-space correction keep face measurement.
+_RECOGNIZED_MEASUREMENT_VERSIONS = (MEASUREMENT_VERSION, "svg-common-header-glyph-paint/v2")
 MARKER_ID = GROUP_ID + "-v2-contract"
 _BOX_KEYS = ("x", "y", "width", "height")
 
@@ -311,10 +313,11 @@ def prepare_common_header_v2(candidate, outline, canvas, *, snapshot, cover_exce
                 if not field["optional"] and applied:
                     raise ValueError("svg_common_header_value_missing")
                 actual = {"value": "", "source_ref": "absent:" + field["value_ref"], "user_fixed": False}
-            lines = (_wrap(actual["value"], field["font"], field["box"]["width"], field["max_lines"])
+            lines = (_wrap(actual["value"], field["font"], field["box"]["width"], field["max_lines"],
+                           MEASUREMENT_VERSION)
                      if actual["value"] and applied else [])
             widths, boxes = _line_evidence(lines, field["font"], field["box"], field["baseline_offset_px"],
-                                         field["line_height_px"], field["alignment"])
+                                         field["line_height_px"], field["alignment"], MEASUREMENT_VERSION)
             bound_fields.append({"node_id": field["node_id"], "role": field["role"], "value_ref": field["value_ref"],
                                  **actual, "lines": lines, "line_widths": widths, "glyph_boxes": boxes, "font": field["font"]})
         title = _value(slide, "title")
@@ -333,7 +336,7 @@ def prepare_common_header_v2(candidate, outline, canvas, *, snapshot, cover_exce
 def validate_common_header_binding_v2(contract, binding, *, index=None, count=None, content=_MISSING, title=_MISSING,
                                      page_id=_MISSING):
     if (not isinstance(contract, dict) or contract.get("version") != VERSION
-            or contract.get("measurement_version") != MEASUREMENT_VERSION
+            or contract.get("measurement_version") not in _RECOGNIZED_MEASUREMENT_VERSIONS
             or contract.get("digest") != _digest({k: v for k, v in contract.items() if k != "digest"})
             or not isinstance(binding, dict) or binding.get("version") != PAGE_VERSION
             or binding.get("header_digest") != contract["digest"]
@@ -354,7 +357,7 @@ def validate_common_header_binding_v2(contract, binding, *, index=None, count=No
         raise ValueError("svg_common_header_page_id_mismatch")
     if len(binding["fields"]) != len(contract["fields"]):
         raise ValueError("svg_common_header_binding_invalid")
-    for field, bound in zip(contract["fields"], binding["fields"]):
+    for field, bound in zip(contract["fields"], binding["fields"], strict=False):
         font = field["font"]
         if _font(font["family"], font["weight"], font["size_px"]) != font:
             raise ValueError("svg_common_header_font_identity_invalid")
@@ -367,8 +370,11 @@ def validate_common_header_binding_v2(contract, binding, *, index=None, count=No
         expected_value = {"title": binding["title"], "page_number": str(page_index + 1), "page_count": str(page_count)}.get(field["value_ref"])
         if expected_value is not None and value != expected_value:
             raise ValueError("svg_common_header_value_source_mismatch")
-        lines = _wrap(value, font, field["box"]["width"], field["max_lines"]) if value and binding["applied"] else []
-        widths, boxes = _line_evidence(lines, font, field["box"], field["baseline_offset_px"], field["line_height_px"], field["alignment"])
+        lines = (_wrap(value, font, field["box"]["width"], field["max_lines"], contract["measurement_version"])
+                 if value and binding["applied"] else [])
+        widths, boxes = _line_evidence(lines, font, field["box"], field["baseline_offset_px"],
+                                       field["line_height_px"], field["alignment"],
+                                       contract["measurement_version"])
         if bound.get("lines") != lines or bound.get("line_widths") != widths or bound.get("glyph_boxes") != boxes:
             raise ValueError("svg_common_header_measurement_mismatch")
     boxes, digest = _measure(contract, binding)
