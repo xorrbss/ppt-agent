@@ -273,11 +273,13 @@ def test_office_opens_only_after_containment_and_quits_only_owned_instance(
             raise AttributeError("close unavailable")
         if cleanup_error == "document_com":
             raise OSError("close unavailable")
+        app.Presentations.Count = 0
         events.append("close")
 
     document = SimpleNamespace(Slides=Slides(), Close=close_document)
     def open_document(*args, **kwargs):
         assert "assign" in events
+        app.Presentations.Count = 1
         events.append("open")
         return document
     def quit_application():
@@ -287,7 +289,7 @@ def test_office_opens_only_after_containment_and_quits_only_owned_instance(
             raise OSError("quit unavailable")
         events.append("quit")
 
-    app = SimpleNamespace(Version="test", Presentations=SimpleNamespace(Open=open_document),
+    app = SimpleNamespace(Caption="original", Version="test", Presentations=SimpleNamespace(Count=0, Open=open_document),
         Quit=quit_application)
     modules = {
         "pythoncom": SimpleNamespace(CoInitialize=lambda: None, CoUninitialize=lambda: events.append("uninit"),
@@ -296,7 +298,10 @@ def test_office_opens_only_after_containment_and_quits_only_owned_instance(
         "win32com.client": SimpleNamespace(GetActiveObject=lambda _: app),
         "win32api": SimpleNamespace(OpenProcess=lambda *args: handle),
         "win32process": SimpleNamespace(EnumProcesses=lambda: [1, 2] if shared else [2],
+            GetWindowThreadProcessId=lambda _: (0, 2),
             GetModuleFileNameEx=lambda *_: "POWERPNT.EXE"),
+        "win32gui": SimpleNamespace(EnumWindows=lambda visit, context: visit(100, context),
+            GetClassName=lambda _: "PPTFrameClass", GetWindowText=lambda _: app.Caption),
         "win32job": SimpleNamespace(JOB_OBJECT_ASSIGN_PROCESS=1, JOB_OBJECT_QUERY=4,
             OpenJobObject=lambda *args: handle, IsProcessInJob=lambda *args: True,
             AssignProcessToJobObject=lambda *args: events.append("assign")),
@@ -313,6 +318,7 @@ def test_office_opens_only_after_containment_and_quits_only_owned_instance(
             events.append("job-terminate")
 
     monkeypatch.setattr(office, "_owned_powerpoint", owned_process)
+    monkeypatch.setattr(office, "_process_identity", lambda pid: dict(pid=pid, creation=100))
     monkeypatch.setattr(office, "_available_memory", lambda: office.MINIMUM_AVAILABLE_MEMORY)
     target = tmp_path / "artifact.pptx"
     target.write_bytes(b"pptx")
@@ -334,3 +340,149 @@ def test_office_opens_only_after_containment_and_quits_only_owned_instance(
         assert events == ["assign", "open", "close", "job-terminate", "uninit"]
     else:
         assert events == ["assign", "open", "close", "quit", "job-terminate", "uninit"]
+
+
+@pytest.mark.parametrize("fault", [
+    None, "foreign_window", "duplicate_window", "missing_window", "restore", "nonempty",
+    "before_open_creation", "before_export_window", "before_export_job", "before_close_window",
+    "before_quit_window",
+])
+def test_com_window_binding_guards_every_document_action(tmp_path, monkeypatch, fault):
+    from contextlib import contextmanager
+    from services.svg_templates import source_review
+    from utils import powerpoint_ownership as ownership
+
+    events = []
+    state = SimpleNamespace(pid=2, creation=100, reads=0, in_job=True, caption="original", foreign_alive=True)
+
+    class Application:
+        Version = "test"
+
+        @property
+        def Caption(self):
+            return state.caption
+
+        @Caption.setter
+        def Caption(self, value):
+            if fault == "restore" and value == "original":
+                raise ValueError("restore refused")
+            state.caption = value
+
+        def Quit(self):
+            events.append("quit")
+
+    app = Application()
+
+    def open_document(*args, **kwargs):
+        assert state.caption == "original" and kwargs["ReadOnly"] is True
+        events.append("open")
+        app.Presentations.Count = 1
+        if fault == "before_export_window":
+            state.pid = 30
+        if fault == "before_export_job":
+            state.in_job = False
+        return document
+
+    def export(path, fmt, width, height):
+        events.append("export")
+        Image.new("RGB", (width, height)).save(path)
+        if fault == "before_close_window":
+            state.pid = 30
+
+    def close():
+        events.append("close")
+        app.Presentations.Count = 0
+        if fault == "before_quit_window":
+            state.pid = 30
+
+    app.Presentations = SimpleNamespace(Count=1 if fault == "nonempty" else 0, Open=open_document)
+    document = SimpleNamespace(Slides=SimpleNamespace(Count=1), Close=close)
+
+    class Slides:
+        Count = 1
+
+        def __call__(self, index):
+            return SimpleNamespace(Export=export)
+
+    document.Slides = Slides()
+
+    def identity(pid):
+        state.reads += 1
+        if fault == "before_open_creation" and state.reads == 3:
+            state.creation += 1
+        return dict(pid=pid, creation=state.creation)
+
+    def windows(visit, context):
+        if fault != "missing_window":
+            visit(100, context)
+        if fault == "duplicate_window":
+            visit(101, context)
+
+    handle = SimpleNamespace(Close=lambda: None)
+    client = SimpleNamespace(GetActiveObject=lambda _: app)
+    modules = {
+        "pythoncom": SimpleNamespace(CoInitialize=lambda: None, CoUninitialize=lambda: events.append("uninit"),
+            PumpWaitingMessages=lambda: None, com_error=OSError),
+        "win32com": SimpleNamespace(client=client), "win32com.client": client,
+        "win32api": SimpleNamespace(OpenProcess=lambda *args: handle),
+        "win32process": SimpleNamespace(EnumProcesses=lambda: [2], GetModuleFileNameEx=lambda *_: "POWERPNT.EXE",
+            GetWindowThreadProcessId=lambda _: (0, 30 if fault == "foreign_window" else state.pid)),
+        "win32gui": SimpleNamespace(EnumWindows=windows, GetClassName=lambda _: "PPTFrameClass",
+            GetWindowText=lambda _: app.Caption),
+        "win32job": SimpleNamespace(JOB_OBJECT_QUERY=4, OpenJobObject=lambda *_: handle,
+            IsProcessInJob=lambda *_: state.in_job),
+    }
+    for name, module in modules.items():
+        monkeypatch.setitem(sys.modules, name, module)
+    monkeypatch.setattr(ownership, "time", SimpleNamespace(sleep=lambda _: None))
+    monkeypatch.setattr(office, "_process_identity", identity)
+    monkeypatch.setattr(source_review, "_process_identity", identity)
+    monkeypatch.setattr(office, "_available_memory", lambda: office.MINIMUM_AVAILABLE_MEMORY)
+
+    @contextmanager
+    def owned_process(request):
+        events.append("owned-launch")
+        try:
+            yield 2
+        finally:
+            events.append("terminate-own-job")
+
+    monkeypatch.setattr(office, "_owned_powerpoint", owned_process)
+    if fault is None:
+        assert source_review._claim_empty_powerpoint(app, started_at=100) == {"pid": 2, "creation": 100}
+        assert app.Caption == "original"
+        state.reads = 0
+        binding = {}
+        office._assert_com_owned(app, 2, "test", binding)
+        alien = Application()
+        alien.Presentations = app.Presentations
+        with pytest.raises(office.SharedPowerPointInstance):
+            office._assert_com_owned(alien, 2, "test", binding)
+        assert office._cleanup_powerpoint(None, alien, 2, "test", binding) is True
+        assert "quit" not in events
+        state.reads = 0
+    target = tmp_path / "immutable.pptx"
+    target.write_bytes(b"immutable")
+    request = dict(pptx=str(target), outputDirectory=str(tmp_path), widthPx=16, heightPx=9, pageCount=1,
+        jobName="test", rendererVersion="test", activationTimeout=1)
+    if fault in {"foreign_window", "duplicate_window", "missing_window", "restore", "nonempty",
+                 "before_open_creation", "before_export_window", "before_export_job"}:
+        with pytest.raises(ValueError):
+            office._render(request)
+    else:
+        result = office._render(request)
+        assert result["hashInvariant"] is True
+        assert result["cleanupMethod"] == ("application_quit" if fault is None else "job_termination")
+    expected = ["owned-launch"]
+    if fault is None or fault.startswith("before_export") or fault.startswith("before_close") or fault.startswith("before_quit"):
+        expected.append("open")
+    if fault is None or fault in {"before_close_window", "before_quit_window"}:
+        expected.append("export")
+    if fault is None or fault == "before_quit_window":
+        expected.append("close")
+    if fault is None:
+        expected.append("quit")
+    assert events == expected + ["terminate-own-job", "uninit"]
+    assert state.foreign_alive is True and target.read_bytes() == b"immutable"
+    if fault != "restore":
+        assert state.caption == "original"

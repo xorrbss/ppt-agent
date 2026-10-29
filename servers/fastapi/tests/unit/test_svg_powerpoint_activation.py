@@ -152,7 +152,7 @@ def activation_host(monkeypatch):
         events.append(("terminate", process.pid))
         state.alive.discard(process.pid)
 
-    app = SimpleNamespace(Presentations=SimpleNamespace(Open=Mock()), Quit=Mock())
+    app = SimpleNamespace(Caption="original", Presentations=SimpleNamespace(Count=0, Open=Mock()), Quit=Mock())
     def get_active_object(_):
         state.checking_attach = True
         if state.foreign_on_attach:
@@ -169,9 +169,12 @@ def activation_host(monkeypatch):
         "pywintypes": SimpleNamespace(error=OSError, HANDLE=lambda value: value),
         "win32api": SimpleNamespace(OpenProcess=lambda rights, inherit, pid: handle(pid)),
         "win32process": SimpleNamespace(EnumProcesses=lambda: state.existing,
+            GetWindowThreadProcessId=lambda _: (0, 20),
             GetModuleFileNameEx=lambda *_: "POWERPNT.EXE",
             STARTUPINFO=lambda: SimpleNamespace(dwFlags=0),
             CreateProcess=create, ResumeThread=lambda _: events.append(("resume", 20)), TerminateProcess=terminate),
+        "win32gui": SimpleNamespace(EnumWindows=lambda visit, context: visit(100, context),
+            GetClassName=lambda _: "PPTFrameClass", GetWindowText=lambda _: app.Caption),
         "win32event": SimpleNamespace(WAIT_TIMEOUT=258,
             WaitForSingleObject=lambda process, _: 258 if process.pid in state.alive else 0),
         "win32job": SimpleNamespace(JOB_OBJECT_ASSIGN_PROCESS=1, JOB_OBJECT_QUERY=4,
@@ -182,6 +185,7 @@ def activation_host(monkeypatch):
     for name, module in modules.items():
         monkeypatch.setitem(sys.modules, name, module)
     monkeypatch.setattr(office, "_powerpoint_executable", lambda: "POWERPNT.EXE")
+    monkeypatch.setattr(office, "_process_identity", lambda pid: dict(pid=pid, creation=100))
     monkeypatch.setattr(office, "_available_memory", lambda: office.MINIMUM_AVAILABLE_MEMORY)
     return SimpleNamespace(events=events, state=state, app=app, client=client)
 

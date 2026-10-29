@@ -17,6 +17,8 @@ from io import BytesIO
 
 from PIL import Image, ImageChops, ImageStat
 
+from utils.powerpoint_ownership import claim_empty_powerpoint, process_identity as _process_identity
+
 from services.svg_templates.frame_fonts import artifact_digest, bytes_digest, resolve_font_manifest
 
 
@@ -84,44 +86,8 @@ def _existing_powerpoint_processes():
 
 
 def _claim_empty_powerpoint(application, *, started_at):
-    """Bind the exact COM application to its hidden window before opening files.
-
-    PowerPoint's documented Caption property is usable on versions whose
-    late-bound HWND member and IOleWindow interface are unavailable.
-    """
-    import pythoncom
-    import win32gui
-    import win32process
-    if int(application.Presentations.Count) != 0:
-        raise ValueError("svg_template_powerpoint_ownership_unproven")
-    original = application.Caption
-    marker = "Presenton-source-" + uuid.uuid4().hex
-    try:
-        application.Caption = marker
-        if application.Caption != marker:
-            raise ValueError("svg_template_powerpoint_ownership_unproven")
-        for _ in range(20):
-            matches = []
-            def visit(hwnd, _context):
-                if win32gui.GetClassName(hwnd) == "PPTFrameClass" and marker in win32gui.GetWindowText(hwnd):
-                    matches.append(hwnd)
-                return True
-            win32gui.EnumWindows(visit, None)
-            if len(matches) > 1:
-                break
-            if len(matches) == 1:
-                _, pid = win32process.GetWindowThreadProcessId(matches[0])
-                identity = _process_identity(int(pid))
-                if identity is not None and identity["creation"] >= started_at:
-                    return identity
-                break
-            pythoncom.PumpWaitingMessages()
-            time.sleep(.05)
-        raise ValueError("svg_template_powerpoint_ownership_unproven")
-    finally:
-        application.Caption = original
-        if application.Caption != original:
-            raise ValueError("svg_template_powerpoint_ownership_unproven")
+    # Preserve the existing source-worker identity payload and injectable reader.
+    return claim_empty_powerpoint(application, started_at=started_at, identity_reader=_process_identity)
 
 
 def _render_source(path: Path, package, *, ownership_path=None):
@@ -177,32 +143,6 @@ def _render_source(path: Path, package, *, ownership_path=None):
             except Exception:
                 pass
         pythoncom.CoUninitialize()
-
-
-
-def _process_identity(pid: int):
-    if os.name != "nt" or pid <= 0:
-        return None
-    import ctypes
-    from ctypes import wintypes
-    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
-    kernel.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
-    kernel.OpenProcess.restype = wintypes.HANDLE
-    kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
-    kernel.CloseHandle.restype = wintypes.BOOL
-    kernel.GetProcessTimes.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.FILETIME),
-        ctypes.POINTER(wintypes.FILETIME), ctypes.POINTER(wintypes.FILETIME), ctypes.POINTER(wintypes.FILETIME))
-    handle = kernel.OpenProcess(0x1000, False, pid)
-    if not handle:
-        return None
-    try:
-        created, exited, kernel_time, user_time = (wintypes.FILETIME() for _ in range(4))
-        if not kernel.GetProcessTimes(handle, ctypes.byref(created), ctypes.byref(exited),
-                                      ctypes.byref(kernel_time), ctypes.byref(user_time)):
-            return None
-        return {"pid": pid, "creation": (created.dwHighDateTime << 32) | created.dwLowDateTime}
-    finally:
-        kernel.CloseHandle(handle)
 
 
 def _terminate_owned_powerpoint(identity):

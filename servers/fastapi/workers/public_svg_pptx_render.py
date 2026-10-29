@@ -14,6 +14,8 @@ import threading
 from time import monotonic, sleep
 import uuid
 
+from utils.powerpoint_ownership import claim_empty_powerpoint, process_identity as _process_identity
+
 SCHEMA = "svg-final-pptx-office-render/v1"
 MINIMUM_AVAILABLE_MEMORY = 8 * 1024**3
 RENDER_MUTEX_NAME = "Local\\PresentonSvgFinalPptxRender"
@@ -175,10 +177,33 @@ def _assert_owned_powerpoint(pid, job_name):
             job.Close()
 
 
-def _attach_powerpoint(pid, timeout, *, job_name=None, stage_callback=None):
+def _assert_com_owned(application, pid, job_name, binding):
+    """Bind a blank COM application once, then recheck its exact owned window."""
+    import win32process
+
+    _assert_owned_powerpoint(pid, job_name)
+    identity = _process_identity(pid)
+    if identity is None:
+        raise ValueError("svg_final_pptx_ownership_unavailable")
+    if not binding:
+        claimed = claim_empty_powerpoint(application, started_at=identity["creation"],
+            identity_reader=_process_identity, include_window=True)
+        if ({key: claimed[key] for key in ("pid", "creation")} != identity
+                or int(application.Presentations.Count) != 0):
+            raise SharedPowerPointInstance(SHARED_INSTANCE_REASON)
+        binding.update(application=application, identity=dict(identity), hwnd=claimed["hwnd"])
+    _, window_pid = win32process.GetWindowThreadProcessId(binding["hwnd"])
+    if (binding["application"] is not application or binding["hwnd"] <= 0
+            or window_pid != pid or binding["identity"] != identity):
+        raise SharedPowerPointInstance(SHARED_INSTANCE_REASON)
+    _assert_owned_powerpoint(pid, job_name)
+
+
+def _attach_powerpoint(pid, timeout, *, job_name=None, stage_callback=None, binding=None):
     import pythoncom
     import win32com.client
 
+    binding = {} if binding is None else binding
     deadline = monotonic() + timeout
     while monotonic() < deadline:
         try:
@@ -190,17 +215,23 @@ def _attach_powerpoint(pid, timeout, *, job_name=None, stage_callback=None):
             sleep(LOCK_WAIT_SLICE_SECONDS)
             continue
         _mark_render_stage("hwnd_pid_match", stage_callback)
-        _assert_owned_powerpoint(pid, job_name)
+        _assert_com_owned(application, pid, job_name, binding)
         return application
     raise PowerPointActivationUnavailable("PowerPoint activation deadline exceeded")
 
 
-def _cleanup_powerpoint(document, application, pid, job_name):
+def _cleanup_powerpoint(document, application, pid, job_name, binding=None):
     """Best-effort COM cleanup; the enclosing Job Object is the fallback."""
     try:
-        _assert_owned_powerpoint(pid, job_name)
+        # Cleanup must never establish a new claim on an unknown application.
+        if not binding:
+            return True
+        _assert_com_owned(application, pid, job_name, binding)
         if document is not None:
             document.Close()
+        _assert_com_owned(application, pid, job_name, binding)
+        if int(application.Presentations.Count) != 0:
+            raise SharedPowerPointInstance(SHARED_INSTANCE_REASON)
         application.Quit()
     except BaseException:
         return True
@@ -223,15 +254,20 @@ def _render(request, *, stage_callback=None):
     cleanup_fallback = False
     try:
         with _owned_powerpoint(request) as pid:
+            binding = {}
             application = _attach_powerpoint(
                 pid,
                 request["activationTimeout"],
                 job_name=request["jobName"],
+                binding=binding,
             )
             document = None
             render_failed = False
             try:
                 (Path(request["outputDirectory"]) / "activated").write_text(str(pid), encoding="ascii")
+                _assert_com_owned(application, pid, request["jobName"], binding)
+                if int(application.Presentations.Count) != 0:
+                    raise SharedPowerPointInstance(SHARED_INSTANCE_REASON)
                 _mark_render_stage("open")
                 document = application.Presentations.Open(str(target.resolve()),
                     ReadOnly=True, Untitled=False, WithWindow=False)
@@ -242,6 +278,7 @@ def _render(request, *, stage_callback=None):
                 pages = []
                 for index in range(request["pageCount"]):
                     output = Path(request["outputDirectory"]) / f"page-{index:03d}.png"
+                    _assert_com_owned(application, pid, request["jobName"], binding)
                     _mark_render_stage("export")
                     document.Slides(index + 1).Export(str(output.resolve()), "PNG", width, height)
                     with Image.open(output) as rendered:
@@ -256,7 +293,7 @@ def _render(request, *, stage_callback=None):
                 if not render_failed:
                     _mark_render_stage("close")
                 cleanup_fallback = _cleanup_powerpoint(
-                    document, application, pid, request["jobName"]
+                    document, application, pid, request["jobName"], binding
                 )
     finally:
         application = document = None
