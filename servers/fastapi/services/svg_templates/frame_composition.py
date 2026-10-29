@@ -40,6 +40,8 @@ def _verify_frame(frame):
 def adapt_frame(frame: SvgTemplateFrame, target_canvas: DocumentCanvasMetadata | dict) -> SvgTemplateFrameAdaptation:
     _verify_frame(frame)
     target = DocumentCanvasMetadata.model_validate(target_canvas)
+    if frame.schema_version == "svg-template-frame/v2" and target != frame.source_canvas:
+        raise ValueError("svg_template_native_layout_canvas_adaptation_unsupported")
     physical = target.physical_size
     if not (50 * 36000 <= physical.width_emu <= 1000 * 36000
             and 50 * 36000 <= physical.height_emu <= 1000 * 36000
@@ -48,6 +50,16 @@ def adapt_frame(frame: SvgTemplateFrame, target_canvas: DocumentCanvasMetadata |
     if any(issue.severity == "blocked" for issue in frame.issues):
         raise ValueError("svg_template_frame_unsupported")
     resolve_font_manifest(frame.font_manifest)
+    if frame.schema_version == "svg-template-frame/v2":
+        from services.svg_templates.frame_native_text import native_frame_mapping
+        native_frame_mapping(frame)
+        policy = {**_POLICY, "version": "physical-frame-native-identity/v2"}
+        key = artifact_digest({"frame": frame.digest, "canvas": target.model_dump(mode="json"),
+                               "fonts": frame.font_manifest.digest, "policy": policy})
+        result = SvgTemplateFrameAdaptation(schema_version="svg-template-frame-adaptation/v2",
+            adaptation_id="adapt-" + key[7:31], source_frame_digest=frame.digest,
+            target_canvas=target, policy_digest=artifact_digest(policy), frame=frame, digest="")
+        return result.model_copy(update={"digest": artifact_digest(result)})
     source = frame.source_canvas
     scale = source.emu_per_unit / target.emu_per_unit
     dw, dh = target.width_px - source.width_px * scale, target.height_px - source.height_px * scale
@@ -148,7 +160,9 @@ def adapt_frame(frame: SvgTemplateFrame, target_canvas: DocumentCanvasMetadata |
     adapted = adapted.model_copy(update={"digest": artifact_digest(adapted)})
     key = artifact_digest({"frame": frame.digest, "canvas": target.model_dump(mode="json"),
         "fonts": frame.font_manifest.digest, "policy": _POLICY})
-    result = SvgTemplateFrameAdaptation(adaptation_id="adapt-" + key[7:31], source_frame_digest=frame.digest,
+    result = SvgTemplateFrameAdaptation(
+        schema_version="svg-template-frame-adaptation/v2" if frame.schema_version.endswith("/v2") else "svg-template-frame-adaptation/v1",
+        adaptation_id="adapt-" + key[7:31], source_frame_digest=frame.digest,
         target_canvas=target, policy_digest=artifact_digest(_POLICY), frame=adapted, digest="")
     return result.model_copy(update={"digest": artifact_digest(result)})
 

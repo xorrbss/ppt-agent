@@ -27,12 +27,16 @@ class ConversionContext:
     # Exact font metrics supplied by the caller. Without it, single-line text
     # frames are sized from the per-character estimate alone.
     text_advance: TextAdvance | None = field(default=None, compare=False)
+    # Trusted invocation-local source-layout adapter; SVG attributes cannot enable it.
+    native_fixed_text: Callable | None = field(default=None, compare=False)
 
     def __post_init__(self):
         values = (self.width_units, self.height_units, self.width_emu, self.height_emu)
         if any(type(value) is not int or value <= 0 for value in values):
             raise ValueError("svg_conversion_context_invalid")
         if self.text_advance is not None and not callable(self.text_advance):
+            raise ValueError("svg_conversion_context_invalid")
+        if self.native_fixed_text is not None and (self.legacy or not callable(self.native_fixed_text)):
             raise ValueError("svg_conversion_context_invalid")
         aspect_error = abs(
             self.width_emu * self.height_units - self.height_emu * self.width_units

@@ -57,6 +57,21 @@ class SvgTemplateFontManifest(FrameModel):
     digest: str
 
 
+class SvgTemplateNativeFixedText(FrameModel):
+    schema_version: Literal["svg-template-native-fixed-text/v1"] = "svg-template-native-fixed-text/v1"
+    source_digest: str
+    source_xml_digest: str
+    source_canvas_digest: str
+    svg_text_id: str
+    svg_text_digest: str
+    text_digest: str
+    font_asset_ids: tuple[str, ...]
+    font_digests: tuple[str, ...]
+    sp_pr_xml: str = Field(max_length=16384)
+    tx_body_xml: str = Field(max_length=32768)
+    digest: str
+
+
 class SvgTemplateFrameElement(FrameModel):
     element_id: str
     source_part: str
@@ -73,6 +88,14 @@ class SvgTemplateFrameElement(FrameModel):
     font_asset_ids: tuple[str, ...] = ()
     text_region: FrameRect | None = None
     text_align: Literal["l", "ctr", "r"] = "l"
+    native_fixed_text: SvgTemplateNativeFixedText | None = None
+
+    @model_serializer(mode="wrap")
+    def serialize_native_layout(self, handler):
+        value = handler(self)
+        if self.native_fixed_text is None:
+            value.pop("native_fixed_text", None)
+        return value
 
 
 class SvgTemplateBodyEvidence(FrameModel):
@@ -87,7 +110,7 @@ class SvgTemplateBodyEvidence(FrameModel):
 
 
 class SvgTemplateFrame(FrameModel):
-    schema_version: Literal["svg-template-frame/v1"] = "svg-template-frame/v1"
+    schema_version: Literal["svg-template-frame/v1", "svg-template-frame/v2"] = "svg-template-frame/v1"
     frame_id: str
     source_page: int = Field(ge=0)
     source_digest: str
@@ -101,10 +124,20 @@ class SvgTemplateFrame(FrameModel):
     issues: tuple[FrameIssue, ...] = ()
     digest: str
 
+    @model_validator(mode="after")
+    def validate_native_version(self):
+        for element in self.elements:
+            owned = element.native_fixed_text is not None
+            if (self.schema_version.endswith("/v1") and owned) or (
+                self.schema_version.endswith("/v2") and owned != (element.kind == "text")
+            ):
+                raise ValueError("svg_template_native_layout_version_mismatch")
+        return self
+
 
 class SvgTemplatePackage(FrameModel):
-    schema_version: Literal["svg-template-package/v1"] = "svg-template-package/v1"
-    compiler_version: Literal["ooxml-frame/1"] = "ooxml-frame/1"
+    schema_version: Literal["svg-template-package/v1", "svg-template-package/v2"] = "svg-template-package/v1"
+    compiler_version: Literal["ooxml-frame/1", "ooxml-frame/2"] = "ooxml-frame/1"
     source_digest: str
     source_canvas: DocumentCanvasMetadata
     frames: tuple[SvgTemplateFrame, ...]
@@ -114,6 +147,15 @@ class SvgTemplatePackage(FrameModel):
     issues: tuple[FrameIssue, ...] = ()
     registration_state: Literal["review-required", "failed"] = "review-required"
     digest: str
+
+    @model_validator(mode="after")
+    def validate_native_version(self):
+        version = "2" if self.schema_version.endswith("/v2") else "1"
+        if self.compiler_version != "ooxml-frame/" + version or any(
+            frame.schema_version != "svg-template-frame/v" + version for frame in self.frames
+        ):
+            raise ValueError("svg_template_native_layout_version_mismatch")
+        return self
 
     @model_validator(mode="before")
     @classmethod
@@ -133,7 +175,7 @@ class SvgTemplatePackage(FrameModel):
 
 
 class SvgTemplateFrameAdaptation(FrameModel):
-    schema_version: Literal["svg-template-frame-adaptation/v1"] = "svg-template-frame-adaptation/v1"
+    schema_version: Literal["svg-template-frame-adaptation/v1", "svg-template-frame-adaptation/v2"] = "svg-template-frame-adaptation/v1"
     adaptation_id: str
     revision: int = 1
     source_frame_digest: str
@@ -141,3 +183,10 @@ class SvgTemplateFrameAdaptation(FrameModel):
     policy_digest: str
     frame: SvgTemplateFrame
     digest: str
+
+    @model_validator(mode="after")
+    def validate_native_version(self):
+        native = self.frame.schema_version == "svg-template-frame/v2"
+        if native != self.schema_version.endswith("/v2") or (native and self.target_canvas != self.frame.source_canvas):
+            raise ValueError("svg_template_native_layout_version_mismatch")
+        return self

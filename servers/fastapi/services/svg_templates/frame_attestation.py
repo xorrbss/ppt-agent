@@ -40,6 +40,11 @@ def template_furniture_receipt(svg, snapshot, *, width, height, index, count, pa
                "font_manifest_digest": frame.font_manifest.digest,
                "page_context": deepcopy(page_context),
                "groups": [ET.tostring(group, encoding="unicode") for group in expected]}
+    if frame.schema_version == "svg-template-frame/v2":
+        from services.svg_templates.frame_native_text import native_frame_mapping, validate_mapping
+        mapping = native_frame_mapping(frame)
+        validate_mapping(root, mapping, frame.source_canvas, frame.font_manifest)
+        binding.update(schema_version="svg-template-furniture/v2", compiler_version="ooxml-frame/2", native_fixed_text=mapping)
     binding["binding_digest"] = artifact_digest(binding)
     return {"version": "svg-system-furniture/v1", "svg_digest": source_digest(svg),
             "canvas": {"width": width, "height": height}, "digest": frame.digest,
@@ -50,7 +55,7 @@ def template_furniture_receipt(svg, snapshot, *, width, height, index, count, pa
 
 def validate_template_furniture_binding(root, receipt):
     binding = receipt.get("generated_template_frame", {})
-    if (binding.get("schema_version") != "svg-template-furniture/v1"
+    if (binding.get("schema_version") not in {"svg-template-furniture/v1", "svg-template-furniture/v2"}
             or binding.get("frame_digest") != receipt.get("digest")
             or artifact_digest({k: v for k, v in binding.items() if k != "binding_digest"}) != binding.get("binding_digest")
             or not binding.get("page_context") or len(binding.get("groups", [])) != 2):
@@ -63,6 +68,23 @@ def validate_template_furniture_binding(root, receipt):
         if (expected.get("id") != group_id or len(matches) != 1 or matches[0] not in list(root)
                 or _structure(matches[0]) != _structure(expected)):
             raise ValueError("svg_template_furniture_binding_mismatch")
+    owned_text_ids = {node.get("id") for xml in binding["groups"] for node in ET.fromstring(xml).iter()
+                      if node.tag == "{http://www.w3.org/2000/svg}text"}
+    mapping = binding.get("native_fixed_text")
+    if binding["schema_version"].endswith("/v2"):
+        from models.svg_template_frame import SvgTemplateNativeFixedText
+        from services.svg_templates.frame_native_text import _structure as native_structure
+        if (binding.get("compiler_version") != "ooxml-frame/2"
+                or not isinstance(mapping, dict) or not mapping or set(mapping) != owned_text_ids):
+            raise ValueError("svg_template_native_layout_binding_mismatch")
+        for identity, value in mapping.items():
+            record = SvgTemplateNativeFixedText.model_validate(value)
+            matches = [node for node in root.iter() if node.get("id") == identity]
+            if (record.svg_text_id != identity or artifact_digest(record) != record.digest or len(matches) != 1
+                    or artifact_digest(native_structure(matches[0])) != record.svg_text_digest):
+                raise ValueError("svg_template_native_layout_binding_mismatch")
+    elif mapping is not None:
+        raise ValueError("svg_template_native_layout_version_mismatch")
     children = list(root)
     body_indices = [i for i, node in enumerate(children) if node.get("id") == "svg-system-template-body"]
     if (len(body_indices) != 1 or len(children) != 3 or children[0].get("id") != BACKGROUND_ID

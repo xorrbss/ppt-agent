@@ -58,6 +58,8 @@ class OoxmlFrameContext:
         self.font_manifest = font_manifest
         self.assets: dict[str, SvgTemplateAsset] = {}
         self.required_families: set[str] = set()
+        self.native_fixed_text_layout = False
+        self.source_digest = ""
 
     def root(self, part):
         return secure_xml(self.package.read(part), part_name=part)
@@ -337,7 +339,7 @@ class OoxmlFrameContext:
         node.set("id", element_id)
         for index, child in enumerate(node.iterdescendants()):
             child.set("id", f"{element_id}-child-{index}")
-        return SvgTemplateFrameElement(element_id=element_id, source_part=part,
+        element = SvgTemplateFrameElement(element_id=element_id, source_part=part,
             source_shape_id=shape_id(shape), source_xml_digest=xml_digest(shape), kind=output_kind,
             bounds=bounds, svg=etree.tostring(node, encoding="unicode"), dynamic_key=dynamic_key,
             font_asset_ids=used, text_region=text_region, text_align=text_align,
@@ -345,3 +347,8 @@ class OoxmlFrameContext:
             anchor_y="bottom" if bounds.y >= self.canvas.height_px * .7 else "top",
             size_policy="span-between-anchors" if output_kind in {"rect", "line"} and bounds.width >= self.canvas.width_px * .65
                 else "aspect-locked" if output_kind == "image" else "physical-fixed")
+        if self.native_fixed_text_layout and output_kind == "text":
+            from services.svg_templates.frame_native_text import extract_native_fixed_text
+            native = extract_native_fixed_text(shape, element, self.canvas, self.font_manifest, self.source_digest)
+            element = element.model_copy(update={"native_fixed_text": native})
+        return element

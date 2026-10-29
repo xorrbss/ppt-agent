@@ -63,7 +63,10 @@ async def new_operation(session, *, kind: str, payload: dict, name: str, convers
 
 
 async def register_template(session, *, name, snapshot_id, registration_mode,
-                            template_id=None, expected_head_revision=0, conversation_id=None):
+                            template_id=None, expected_head_revision=0, conversation_id=None,
+                            native_fixed_text_layout=False):
+    if type(native_fixed_text_layout) is not bool or (native_fixed_text_layout and registration_mode != "framed"):
+        raise ValueError("svg_template_native_layout_selector_invalid")
     require_new_template_admission()
     owner, tenant = principal()
     admitted = await admit_reference_snapshot(session, snapshot_id=snapshot_id)
@@ -118,6 +121,8 @@ async def register_template(session, *, name, snapshot_id, registration_mode,
         asset.expires_at = None
         payload = {"template_id": str(template.id), "source_snapshot_id": str(snapshot.id),
                    "registration_mode": registration_mode, "expected_head_revision": expected_head_revision}
+        if native_fixed_text_layout:
+            payload["native_fixed_text_layout"] = True
         conversation, operation = await new_operation(session, kind="svg.template.analyze", payload=payload,
             name=name, conversation_id=conversation_id)
         changed = (await session.execute(update(SvgTemplate).where(SvgTemplate.id == template.id,
@@ -355,7 +360,8 @@ class SvgTemplateOperationHandler:
             if payload["registration_mode"] == "framed":
                 from services.svg_templates.frame import extract_template_package
                 package_model = await asyncio.to_thread(extract_template_package, source_path,
-                    frame_reviews=payload.get("frame_reviews"))
+                    frame_reviews=payload.get("frame_reviews"),
+                    native_fixed_text_layout=payload.get("native_fixed_text_layout", False))
                 package = package_model.model_dump(mode="json", by_alias=True)
                 if len(canonical_json_bytes(package)) > MAX_DRAFT_PACKAGE_BYTES:
                     raise ValueError("svg_template_package_size_limit")

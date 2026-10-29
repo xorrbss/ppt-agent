@@ -12,7 +12,7 @@ from services.authored_canvas import AuthoredCanvasMetadata
 from services.document_canvas import canvas_physical_size
 from workers.public_svg_pptx_readback import iter_shapes, source_preservation_readback
 
-CONVERTER_VERSION = "slide-master/166472bd2a22de9aa9fb6c8cdf8b0cdfc6b698ef+document-canvas.2+text-advance.1+chart-furniture.16"
+CONVERTER_VERSION = "slide-master/166472bd2a22de9aa9fb6c8cdf8b0cdfc6b698ef+document-canvas.2+text-advance.1+chart-furniture.16+native-fixed-text.1"
 VENDOR_ROOT = Path(__file__).resolve().parents[1] / "vendor" / "slide_master"
 
 
@@ -27,6 +27,7 @@ _PROJECTION_ADAPTER_FILES = tuple(
         "workers/svg_common_header_export_v2.py",
         "services/svg_common_header_export_evidence.py",
         "services/svg_pptx_font_embedding.py",
+        "services/svg_templates/frame_native_text.py",
     )
 )
 
@@ -49,7 +50,7 @@ def converter_digest():
 
 def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
                  expected_image_digests=None, font_embedding=False, native_objects=None,
-                 native_coverage_sources=None, font_manifest=None, font_usage=None):
+                 native_coverage_sources=None, font_manifest=None, font_usage=None, system_furniture=None):
     """Convert page files to an editable PPTX and read the result back.
 
     ``native_objects`` is one ``PageNativeObjects`` per page (``None``: no
@@ -58,6 +59,16 @@ def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
     """
     converter_digest()
     capture = None
+    fixed_text = None
+    if system_furniture is not None:
+        from services.svg_templates.frame_native_text import NativeFixedTextExport
+        from models.svg_template_frame import SvgTemplateFontManifest
+        if font_manifest is None or source_preservation is not None:
+            raise ValueError("svg_template_native_layout_context_missing")
+        fixed_text = NativeFixedTextExport(
+            native_coverage_sources if native_coverage_sources is not None else
+            [path.read_text(encoding="utf-8") for path in paths], system_furniture, canvas,
+            SvgTemplateFontManifest.model_validate(font_manifest))
     from workers.svg_common_header_export import CommonHeaderExport
     width_emu, height_emu = canvas_physical_size(canvas)
     source_pt_per_px = (0.75 if isinstance(canvas, AuthoredCanvasMetadata)
@@ -87,6 +98,7 @@ def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
         context = ConversionContext(
             canvas.width_px, canvas.height_px, width_emu, height_emu,
             legacy=isinstance(canvas, AuthoredCanvasMetadata), text_advance=text_advance,
+            native_fixed_text=fixed_text.convert if fixed_text is not None else None,
         )
         from svg_to_pptx.drawingml import converter as drawing_converter
         header_export.install(drawing_converter)
@@ -115,6 +127,8 @@ def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
                 raise
             success, fallback_reason = False, str(error)
         if not success and scene.native_requested:
+            if fixed_text is not None:
+                raise ValueError("svg_template_native_layout_fallback_forbidden")
             # The converter rejected the native run: convert every drawn group
             # instead and record the reason on each object (never silently).
             target.unlink(missing_ok=True)
@@ -135,6 +149,9 @@ def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
         len(p.runs) for slide in deck.slides for shape in iter_shapes(slide.shapes)
         if shape.has_text_frame for p in shape.text_frame.paragraphs
     ), "nativeObjects": scene.receipt()}
+    if fixed_text is not None:
+        readback["nativeFixedText"] = {"schemaVersion": "svg-template-native-fixed-text-readback/v1",
+                                      "converted": len(fixed_text.used), "complete": True}
     if scene.redesign_active:
         readback["rasterRedesign"] = scene.raster_evidence()
     if source_preservation is not None:
@@ -150,6 +167,8 @@ def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
         digests = embed_trusted_fonts(target, font_manifest=font_manifest, font_usage=font_usage)
         readback["fontEmbedding"] = {"embedded": True, "family": FONT_FAMILY if font_manifest is None else None,
                                      "faceDigests": list(digests)}
+    if fixed_text is not None:
+        fixed_text.verify(target)
     if capture is not None:
         from services.svg_contract import source_digest
         from utils.hashing import canonical_json_sha256

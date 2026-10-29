@@ -42,6 +42,7 @@ class RegistrationRequest(Wire):
     template_id: uuid.UUID | None = Field(default=None, alias="templateId")
     expected_head_revision: int = Field(default=0, ge=0, alias="expectedHeadRevision")
     conversation_id: uuid.UUID | None = Field(default=None, alias="conversationId")
+    native_fixed_text_layout: bool = Field(default=False, alias="nativeFixedTextLayout", strict=True)
 
     @field_validator("name")
     @classmethod
@@ -114,7 +115,8 @@ async def register(request: RegistrationRequest, session=Depends(get_async_sessi
     try:
         return await register_template(session, name=request.name.strip(), snapshot_id=request.reference_snapshot_id,
             registration_mode=request.registration_mode, template_id=request.template_id,
-            expected_head_revision=request.expected_head_revision, conversation_id=request.conversation_id)
+            expected_head_revision=request.expected_head_revision, conversation_id=request.conversation_id,
+            native_fixed_text_layout=request.native_fixed_text_layout)
     except (ReferenceProviderError, AssetGatewayError, WorkspaceServiceError, ValueError) as error:
         raise public_error(error) from error
 

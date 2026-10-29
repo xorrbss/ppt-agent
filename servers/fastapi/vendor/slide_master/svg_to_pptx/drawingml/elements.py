@@ -2226,6 +2226,11 @@ def _build_run_xml(
 
 def convert_text(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | None:
     """Convert SVG <text> to DrawingML text shape with multi-run support."""
+    native = current_conversion_context().native_fixed_text
+    if native is not None:
+        owned = native(elem, ctx)
+        if owned is not None:
+            return owned
     x = ctx_x(svg_length_x(elem.get('x'), ctx), ctx)
     y = ctx_y(svg_length_y(elem.get('y'), ctx), ctx)
     font_size = (

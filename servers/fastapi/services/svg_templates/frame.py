@@ -137,7 +137,10 @@ def _background(context, ancestry, frame_id):
 
 @font_validation_scope()
 def extract_template_package(pptx_path: str | Path, *, font_assets=None,
-                             frame_reviews: dict[str, dict] | None = None) -> SvgTemplatePackage:
+                             frame_reviews: dict[str, dict] | None = None,
+                             native_fixed_text_layout: bool = False) -> SvgTemplatePackage:
+    if type(native_fixed_text_layout) is not bool:
+        raise ValueError("svg_template_native_layout_selector_invalid")
     path = Path(pptx_path)
     report = admit_pptx_package(path)
     if report.slide_count > MAX_TEMPLATE_PAGES:
@@ -154,6 +157,8 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
         candidates = tuple(bundled_font_assets() if font_assets is None else font_assets)
         font_manifest = build_font_manifest(candidates)
         context = OoxmlFrameContext(package, typography, canvas, font_manifest)
+        context.native_fixed_text_layout = native_fixed_text_layout
+        context.source_digest = source_digest
         observed = {}
         for part in slides:
             faces = set()
@@ -326,7 +331,8 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
                 issues.append(FrameIssue(reason_code="svg_template_fixed_furniture_missing", severity="blocked"))
             issues.extend((FrameIssue(reason_code="source_render_review_required", source_part=slide_part),
                            FrameIssue(reason_code="classification_review_required", source_part=slide_part)))
-            frame = SvgTemplateFrame(frame_id=frame_id, source_page=page_index, source_digest=source_digest,
+            frame = SvgTemplateFrame(schema_version="svg-template-frame/v2" if native_fixed_text_layout else "svg-template-frame/v1",
+                frame_id=frame_id, source_page=page_index, source_digest=source_digest,
                 source_canvas=canvas, role=review.get("role", "cover" if page_index == 0 else "body"), elements=tuple(elements),
                 body_region=body_region, forbidden_regions=tuple(forbidden),
                 dynamic_fields=tuple(sorted({e.dynamic_key for e in elements if e.dynamic_key})),
@@ -350,7 +356,9 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
         raise ValueError("svg_template_frames_missing")
     if set(frame_reviews or {}) - {frame.frame_id for frame in frames}:
         raise ValueError("svg_template_frame_review_unknown")
-    result = SvgTemplatePackage(source_digest=source_digest, source_canvas=canvas, frames=tuple(frames),
+    result = SvgTemplatePackage(schema_version="svg-template-package/v2" if native_fixed_text_layout else "svg-template-package/v1",
+        compiler_version="ooxml-frame/2" if native_fixed_text_layout else "ooxml-frame/1",
+        source_digest=source_digest, source_canvas=canvas, frames=tuple(frames),
         body_evidence=tuple(evidence), assets=assets, font_manifest=font_manifest,
         issues=tuple(package_issues), registration_state="review-required", digest="")
     total_bytes = 0
