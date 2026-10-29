@@ -2433,6 +2433,20 @@ async def _apply_workspace_action(
             # SQLAlchemy cannot infer object ordering from UUID values alone,
             # and SQLite enforces the receipt FK immediately.
             await session.flush()
+            if (operation.kind == "quality.review"
+                    and (operation.request_payload.get("context") or {}).get("mode") == "analyze_only"
+                    and presentation.is_svg()):
+                from services.svg_quality_review_service import admit_svg_quality_review_operation
+                from services.workspace_operation_handler_registry import NonRetryableWorkspaceOperationError
+                try:
+                    await admit_svg_quality_review_operation(session, operation=operation, presentation=presentation)
+                except (ValueError, NonRetryableWorkspaceOperationError) as error:
+                    await session.rollback()
+                    raise WorkspaceServiceError("svg_quality_review_input_invalid", status_code=400, retryable=False) from error
+                except PublicAdmissionRejected as error:
+                    await session.rollback()
+                    raise WorkspaceServiceError(error.code, status_code=429, retryable=True,
+                        retry_after_seconds=error.retry_after_seconds or 15) from error
             if header_retry is not None:
                 from services.workspace_svg_header_design_operation_handler import admit_svg_header_design_operation
                 try:

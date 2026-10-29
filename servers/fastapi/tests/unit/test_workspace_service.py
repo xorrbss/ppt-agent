@@ -2658,6 +2658,123 @@ def test_terminal_export_retry_creates_admission_before_queueing(
     asyncio.run(_terminal_export_retry_creates_admission_before_queueing(tmp_path, monkeypatch))
 
 
+def test_terminal_svg_review_retry_admits_child_once_and_preserves_guards(tmp_path, monkeypatch):
+    asyncio.run(_terminal_svg_review_retry_admits_child_once_and_preserves_guards(tmp_path, monkeypatch))
+
+
+async def _terminal_svg_review_retry_admits_child_once_and_preserves_guards(tmp_path, monkeypatch):
+    from utils.datetime_utils import as_utc
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from models.sql.public_admission import PublicPolicyProfile, PublicOperationAdmission, PublicQuotaCounter, PublicResourceLease
+    from services.public_operation_admission import PUBLIC_PHASE2_DEFAULT_POLICY_VERSION, PUBLIC_DEFAULT_MAX_SLIDES
+    from services.workspace_operation_principal import operation_principal
+
+    engine, maker = await _database(tmp_path / "terminal-svg-review-retry.db")
+    # Saved-render/artifact validation is outside this action test. Keep the
+    # canonical review helper and complete SQLite admission/leases real.
+    monkeypatch.setattr("services.svg_quality_review_service._slides", AsyncMock(return_value=[SimpleNamespace()]))
+    monkeypatch.setattr("services.svg_quality_review_service._review_png", lambda slide: b"saved-render")
+    monkeypatch.setattr("services.svg_final_pptx_review.load_final_review_inputs", AsyncMock())
+    policy = PublicPolicyProfile(version=PUBLIC_PHASE2_DEFAULT_POLICY_VERSION,
+        max_slides=PUBLIC_DEFAULT_MAX_SLIDES, retry_request_limit=8, estimated_cost_limit_microunits=10000,
+        actual_cost_limit_microunits=10000, generation_deadline_seconds=900, export_deadline_seconds=600,
+        **{f"{scope}_{state}_{kind}": 64 for scope in ("global", "owner", "tenant")
+           for state in ("active", "queued") for kind in ("generation", "export")},
+        **{f"{scope}_{state}_resource_units": 10000 for scope in ("global", "owner", "tenant")
+           for state in ("active", "queued")})
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(lambda sync: SQLModel.metadata.create_all(sync, tables=[
+                model.__table__ for model in (PublicPolicyProfile, PublicOperationAdmission,
+                    PublicQuotaCounter, PublicResourceLease)]))
+        async with maker() as session:
+            owner = User(username="review-retry-owner", hashed_password="unused")
+            session.add_all([owner, policy])
+            await session.commit()
+        with operation_principal(owner.id, "review-retry-test"):
+            presentation = await _create_presentation(maker)
+            artifact_id = str(uuid.uuid4())
+
+            async def source_operation(key, *, svg=True, mode="analyze_only"):
+                async with maker() as session:
+                    deck = await session.get(PresentationModel, presentation.id)
+                    deck.mode = "svg" if svg else "authored"
+                    _, _, source, _ = await bootstrap_workspace(session,
+                        presentation_id=deck.id, request=_bootstrap_request(key=key))
+                    source.kind = "quality.review"
+                    source.state = "dead_letter"
+                    source.error_code = "svg_final_pptx_render_failed"
+                    source.error_detail = {"retryable": True}
+                    source.version = 4
+                    source.request_payload = {**source.request_payload, "context": {
+                        "mode": mode, "target": "final_pptx", "scope": "all", "artifact_id": artifact_id}}
+                    await session.commit()
+                    return source
+
+            source = await source_operation("svg-review-retry")
+            request = WorkspaceOperationActionRequest(action="retry", idempotency_key="svg-review-retry-once",
+                expected_operation_version=4, expected_revision=0)
+            async with maker() as session:
+                with pytest.raises(WorkspaceServiceError) as stale:
+                    await apply_workspace_action(session, operation_id=source.id,
+                        request=request.model_copy(update={"expected_operation_version": 3}))
+                assert stale.value.code == "operation_state_conflict"
+            async with maker() as session:
+                receipt, child, duplicate = await apply_workspace_action(session, operation_id=source.id, request=request)
+                assert not duplicate and child.retry_of_operation_id == source.id
+                assert child.kind == "quality.review" and child.state == "queued"
+                assert child.expected_revision == 0 and child.max_attempts == 1
+                assert child.request_payload["context"] == source.request_payload["context"]
+                admitted = await session.scalar(select(PublicOperationAdmission).where(
+                    PublicOperationAdmission.operation_id == child.id))
+                assert admitted is not None and admitted.owner_id == owner.id
+                assert admitted.tenant_id == "review-retry-test" and admitted.state == "queued"
+                assert admitted.operation_kind == "generation" and admitted.planned_request_limit == 1
+                assert admitted.retry_request_limit == 0 and admitted.slide_count == 1
+                assert as_utc(child.deadline_at) == as_utc(admitted.deadline_at)
+                assert child.fencing_token == admitted.fence
+                assert await session.scalar(select(func.count()).select_from(PublicResourceLease).where(
+                    PublicResourceLease.admission_id == admitted.id)) == 3
+                child_id, receipt_id = child.id, receipt.id
+            async with maker() as session:
+                replay_receipt, replay, duplicate = await apply_workspace_action(session, operation_id=source.id, request=request)
+                assert duplicate and replay.id == child_id and replay_receipt.id == receipt_id
+                assert await session.scalar(select(func.count()).select_from(PublicOperationAdmission)) == 1
+                unchanged = await session.get(WorkspaceOperation, source.id)
+                assert unchanged.state == "dead_letter" and unchanged.version == 4
+                assert unchanged.error_detail == {"retryable": True}
+            async with maker() as session:
+                with pytest.raises(WorkspaceServiceError) as second:
+                    await apply_workspace_action(session, operation_id=source.id,
+                        request=request.model_copy(update={"idempotency_key": "svg-review-second-key"}))
+                assert second.value.code == "operation_state_conflict"
+            # Ordinary non-SVG and non-analyze retries retain their previous path.
+            for key, svg, mode in (("ordinary-review", False, "analyze_only"), ("other-mode", True, "other")):
+                other = await source_operation(key, svg=svg, mode=mode)
+                async with maker() as session:
+                    _, child, duplicate = await apply_workspace_action(session, operation_id=other.id,
+                        request=request.model_copy(update={"idempotency_key": key + "-retry"}))
+                    assert not duplicate and child.retry_of_operation_id == other.id
+                    assert await session.scalar(select(func.count()).select_from(PublicOperationAdmission)) == 1
+            denied_source = await source_operation("denied-review")
+            async with maker() as session:
+                current_policy = await session.get(PublicPolicyProfile, policy.version)
+                current_policy.global_queued_generation = 0
+                await session.commit()
+            async with maker() as session:
+                with pytest.raises(WorkspaceServiceError) as denied:
+                    await apply_workspace_action(session, operation_id=denied_source.id,
+                        request=request.model_copy(update={"idempotency_key": "denied-review-retry"}))
+                assert denied.value.status_code == 429 and denied.value.retryable is True
+            async with maker() as session:
+                assert await session.scalar(select(func.count()).select_from(WorkspaceOperation).where(
+                    WorkspaceOperation.retry_of_operation_id == denied_source.id)) == 0
+                assert await session.scalar(select(func.count()).select_from(PublicOperationAdmission)) == 1
+    finally:
+        await engine.dispose()
+
+
 async def _terminal_export_retry_creates_admission_before_queueing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ):
