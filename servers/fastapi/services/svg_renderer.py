@@ -344,6 +344,16 @@ def materialize_template_manifest_admitted(admitted, font_manifest, svg: str):
     csp = "font-src &#x27;none&#x27;"
     if admitted.html.count(csp) != 1 or "</head>" not in admitted.html:
         raise ValueError("svg_trusted_font_csp_invalid")
+    faces = _font_face_css(entries, used)
+    html = admitted.html.replace(csp, "font-src data:", 1).replace(
+        "</head>", f'<style data-presenton-trusted-font-profile="{TEMPLATE_FONT_PROFILE}">'
+        + faces + "</style></head>", 1)
+    return replace(admitted, html=html,
+        asset_digests=tuple(dict.fromkeys((*admitted.asset_digests, *(a.digest for a, _ in entries)))),
+        node_count=admitted.node_count + 1)
+
+
+def _font_face_css(entries, used) -> str:
     faces = []
     payloads = {asset.digest: payload for asset, payload in entries}
     for declared_family, weight, asset in used:
@@ -351,12 +361,31 @@ def materialize_template_manifest_admitted(admitted, font_manifest, svg: str):
         encoded = base64.b64encode(payloads[asset.digest]).decode("ascii")
         faces.append(f"@font-face{{font-family:{family};font-style:normal;font-weight:{weight};"
                      f"src:url(data:font/ttf;base64,{encoded}) format('truetype');}}")
-    html = admitted.html.replace(csp, "font-src data:", 1).replace(
-        "</head>", f'<style data-presenton-trusted-font-profile="{TEMPLATE_FONT_PROFILE}">'
-        + "".join(faces) + "</style></head>", 1)
+    return "".join(faces)
+
+
+def template_manifest_font_css(font_manifest, svg: str) -> str:
+    _manifest, entries, used = _template_manifest_materials(font_manifest, svg)
+    css = _font_face_css(entries, used)
+    if not css:
+        raise ValueError("svg_template_glyph_font_css_missing")
+    return css
+
+
+def materialize_template_fixed_glyphs(admitted, canonical_svg: str, authority, *,
+                                      expected_display_digest: str, font_manifest):
+    """Replace admitted fixed text only from a sealed source-PDF authority."""
+    from utils.svg_template_glyph_materialization import materialize_fixed_glyph_svg
+
+    match = _svg_fragment(admitted.html)
+    result = materialize_fixed_glyph_svg(canonical_svg, match.group(1), authority,
+        trusted_font_css=template_manifest_font_css(font_manifest, match.group(1)))
+    if result.display_digest != expected_display_digest:
+        raise ValueError("svg_template_glyph_display_digest_mismatch")
+    html = admitted.html[:match.start(1)] + result.svg + admitted.html[match.end(1):]
     return replace(admitted, html=html,
-        asset_digests=tuple(dict.fromkeys((*admitted.asset_digests, *(a.digest for a, _ in entries)))),
-        node_count=admitted.node_count + 1)
+                   asset_digests=tuple(dict.fromkeys((*admitted.asset_digests,
+                       result.authority_digest, result.materializer_code_digest)))), result
 
 def svg_preview_html(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH_PX, height: int = DEFAULT_CANVAS_HEIGHT_PX,
                      materialized_svg: str | None = None,
@@ -431,14 +460,33 @@ async def render_template_frame_for_review(frame) -> bytes:
     canvas = frame.source_canvas
     wrapper = svg_preview_html(svg, width=canvas.width_px, height=canvas.height_px,
                                font_manifest=frame.font_manifest, _frame_review=True)
+    fixed_glyph_preview = frame.fixed_glyph_preview.model_dump(mode="json") if frame.fixed_glyph_preview else None
+    glyph_projection = None
+    if fixed_glyph_preview is not None:
+        from utils.svg_template_glyph_materialization import materialize_fixed_glyph_svg
+        glyph_projection = materialize_fixed_glyph_svg(
+            svg, _svg_fragment(wrapper).group(1), fixed_glyph_preview,
+            trusted_font_css=template_manifest_font_css(frame.font_manifest, _svg_fragment(wrapper).group(1)))
     ensure_renderer_enabled()
     async with _get_render_sem():
         png, metrics = await _render_html_in_isolated_worker(wrapper, 60,
             width_px=canvas.width_px, height_px=canvas.height_px,
-            font_manifest=frame.font_manifest.model_dump(mode="json"))
+            font_manifest=frame.font_manifest.model_dump(mode="json"),
+            **({"canonical_svg": svg, "fixed_glyph_preview": fixed_glyph_preview,
+                "fixed_glyph_display_digest": glyph_projection.display_digest,
+                "fixed_glyph_render_digest": glyph_projection.render_digest,
+                "fixed_glyph_projection_digest": glyph_projection.projection_digest,
+                "fixed_glyph_font_css_digest": glyph_projection.trusted_font_css_digest}
+               if fixed_glyph_preview else {}))
     has_text = any(node.tag.rsplit("}", 1)[-1] in {"text", "tspan"}
                    and (node.text or "").strip() for node in ET.fromstring(svg).iter())
-    if has_text:
+    if fixed_glyph_preview is not None:
+        if ((metrics or {}).get("fixedGlyphPreview", {}).get("displayDigest") != glyph_projection.display_digest
+                or (metrics or {}).get("fixedGlyphPreview", {}).get("renderDigest") != glyph_projection.render_digest
+                or (metrics or {}).get("fixedGlyphPreview", {}).get("projectionDigest") != glyph_projection.projection_digest
+                or (metrics or {}).get("fixedGlyphPreview", {}).get("fontCssDigest") != glyph_projection.trusted_font_css_digest):
+            raise ValueError("svg_template_review_glyph_unresolved")
+    elif has_text:
         text_metrics = [item for item in (metrics or {}).get("elements", []) if item.get("has_owned_text")]
         if not (metrics or {}).get("fonts_ready") or not text_metrics or any(
                 item.get("font_loaded") is not True for item in text_metrics):
@@ -489,7 +537,8 @@ async def render_svg_with_metrics(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH
                                   allow_image_only: bool = False,
                                   system_furniture: dict | None = None,
                                   timeline_ink_probe: bool | None = None,
-                                  font_manifest: dict | None = None) -> SvgRenderResult:
+                                  font_manifest: dict | None = None,
+                                  fixed_glyph_preview: dict | None = None) -> SvgRenderResult:
     from utils.authored_font_policy import requested_font_floor_px
     from utils.slide_capture import render_html_to_png_with_metrics
     if readability_policy is not None and physical_canvas is not None:
@@ -503,6 +552,14 @@ async def render_svg_with_metrics(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH
                                materialized_svg=materialized_svg, source_font_profile=source_font_profile,
                                allow_image_only=allow_image_only, font_manifest=font_manifest,
                                **({"system_furniture": system_furniture} if system_furniture else {}))
+    glyph_projection = None
+    if fixed_glyph_preview is not None:
+        if font_manifest is None or system_furniture is None:
+            raise ValueError("svg_template_glyph_render_binding_missing")
+        from utils.svg_template_glyph_materialization import materialize_fixed_glyph_svg
+        glyph_projection = materialize_fixed_glyph_svg(
+            svg, _svg_fragment(wrapper).group(1), fixed_glyph_preview,
+            trusted_font_css=template_manifest_font_css(font_manifest, _svg_fragment(wrapper).group(1)))
     if timeline_ink_probe is True:
         # Internal measurement option belongs to the derivative HTML, never SVG.
         wrapper = wrapper.replace("<body>", '<body class="codex-timeline-ink-v1">', 1)
@@ -520,6 +577,12 @@ async def render_svg_with_metrics(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH
                 **({"canonical_svg": svg,
                     "image_bindings": template_image_bindings(svg, materialized_svg or svg)}
                    if font_manifest is not None and system_furniture else {}),
+                **({"fixed_glyph_preview": fixed_glyph_preview,
+                    "fixed_glyph_display_digest": glyph_projection.display_digest,
+                    "fixed_glyph_render_digest": glyph_projection.render_digest,
+                    "fixed_glyph_projection_digest": glyph_projection.projection_digest,
+                    "fixed_glyph_font_css_digest": glyph_projection.trusted_font_css_digest}
+                   if fixed_glyph_preview is not None else {}),
             )
         capture = RenderCapture.from_payload(
             html_digest=source_digest(wrapper), png=png, browser_metrics=browser_metrics,
@@ -645,6 +708,24 @@ async def render_svg_with_metrics(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH
                "body_font_floor_px": floor, "browser_metrics": metrics,
                "overlap_basis": overlap_basis,
                "trusted_font_materialization": font_profile}
+    if fixed_glyph_preview is not None:
+        glyph_metrics = metrics.get("fixedGlyphPreview", {})
+        if (glyph_metrics.get("displayDigest") != glyph_projection.display_digest
+                or glyph_metrics.get("renderDigest") != glyph_projection.render_digest
+                or glyph_metrics.get("projectionDigest") != glyph_projection.projection_digest
+                or glyph_metrics.get("fontCssDigest") != glyph_projection.trusted_font_css_digest):
+            raise ValueError("svg_template_glyph_render_identity_mismatch")
+        quality["fixed_glyph_preview"] = {
+            "version": "svg-fixed-glyph-preview/v1",
+            "authorityDigest": glyph_metrics["authorityDigest"],
+            "materializerCodeDigest": glyph_metrics["materializerCodeDigest"],
+            "screenDisplaySvgDigest": glyph_metrics["displayDigest"],
+            "screenRenderSvgDigest": glyph_metrics["renderDigest"],
+            "qidProjectionDigest": glyph_metrics["projectionDigest"],
+            "trustedFontCssDigest": glyph_metrics["fontCssDigest"],
+            "canonicalSvgDigest": source_digest(svg),
+            "pngDigest": capture.png_digest,
+        }
     if readability_policy is not None:
         from services.document_canvas_generation import measure_svg_readability
 

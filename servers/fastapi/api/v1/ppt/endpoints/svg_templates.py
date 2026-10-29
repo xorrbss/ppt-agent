@@ -6,7 +6,7 @@ import base64
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import select, update
 
 from models.sql.svg_template import SvgTemplate, SvgTemplateVersion
@@ -43,6 +43,13 @@ class RegistrationRequest(Wire):
     expected_head_revision: int = Field(default=0, ge=0, alias="expectedHeadRevision")
     conversation_id: uuid.UUID | None = Field(default=None, alias="conversationId")
     native_fixed_text_layout: bool = Field(default=False, alias="nativeFixedTextLayout", strict=True)
+    fixed_glyph_preview: bool = Field(default=False, alias="fixedGlyphPreview", strict=True)
+
+    @model_validator(mode="after")
+    def validate_fixed_glyph_selector(self):
+        if self.fixed_glyph_preview and (self.registration_mode != "framed" or not self.native_fixed_text_layout):
+            raise ValueError("svg_template_fixed_glyph_selector_invalid")
+        return self
 
     @field_validator("name")
     @classmethod
@@ -116,7 +123,7 @@ async def register(request: RegistrationRequest, session=Depends(get_async_sessi
         return await register_template(session, name=request.name.strip(), snapshot_id=request.reference_snapshot_id,
             registration_mode=request.registration_mode, template_id=request.template_id,
             expected_head_revision=request.expected_head_revision, conversation_id=request.conversation_id,
-            native_fixed_text_layout=request.native_fixed_text_layout)
+            native_fixed_text_layout=request.native_fixed_text_layout, fixed_glyph_preview=request.fixed_glyph_preview)
     except (ReferenceProviderError, AssetGatewayError, WorkspaceServiceError, ValueError) as error:
         raise public_error(error) from error
 

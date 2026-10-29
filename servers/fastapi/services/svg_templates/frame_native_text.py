@@ -169,7 +169,7 @@ class NativeFixedTextExport:
         for source, receipt in zip(sources, receipts, strict=True):
             binding = (receipt or {}).get("generated_template_frame", {})
             mapping = binding.get("native_fixed_text", {})
-            if binding.get("schema_version") == "svg-template-furniture/v2":
+            if binding.get("schema_version") in {"svg-template-furniture/v2", "svg-template-furniture/v3"}:
                 from services.svg_master_furniture import attested_svg_furniture
                 attested_svg_furniture(source, receipt, width=canvas.width_px, height=canvas.height_px)
                 _require(binding.get("font_manifest_digest") == manifest.digest and bool(mapping))

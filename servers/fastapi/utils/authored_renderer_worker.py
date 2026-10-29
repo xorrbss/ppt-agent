@@ -26,6 +26,7 @@ import asyncio
 import base64
 import json
 import hashlib
+import math
 import re
 import stat
 from pathlib import Path
@@ -74,6 +75,9 @@ def _validate_request(value: Any) -> Mapping[str, Any]:
         "font_manifest_ref",
         "canonical_svg",
         "image_bindings",
+        "fixed_glyph_preview_ref",
+        "fixed_glyph_display_digest",
+        "private_diagnostic_profile",
     }:
         raise RendererPolicyError("renderer request has an invalid shape")
     if value.get("schema_version") != "authored-render-request/v1":
@@ -82,6 +86,25 @@ def _validate_request(value: Any) -> Mapping[str, Any]:
     if not isinstance(html, str) or len(html.encode("utf-8")) > MAX_HTML_BYTES:
         raise RendererPolicyError("renderer HTML limit exceeded")
     has_font = "font_manifest" in fields or "font_manifest_ref" in fields
+    has_glyph = "fixed_glyph_preview_ref" in fields or "fixed_glyph_display_digest" in fields
+    if "private_diagnostic_profile" in fields and (
+        value["private_diagnostic_profile"] != "fixed-glyph-dpr2/v1"
+        or not has_glyph or "font_manifest_ref" not in fields
+        or value.get("width_px") != 1280 or value.get("height_px") != 720
+        or "preserved_raster_svg" in fields or "max_requests" in fields
+    ):
+        raise RendererPolicyError("renderer private diagnostic profile invalid")
+    if has_glyph:
+        ref = value.get("fixed_glyph_preview_ref")
+        display = value.get("fixed_glyph_display_digest")
+        if (not has_font or "canonical_svg" not in fields or "preserved_raster_svg" in fields
+                or not isinstance(ref, dict) or set(ref) != {"name", "sha256"}
+                or ref.get("name") != "fixed-glyph-preview.json"
+                or not isinstance(ref.get("sha256"), str)
+                or re.fullmatch(r"sha256:[0-9a-f]{64}", ref["sha256"]) is None
+                or not isinstance(display, str)
+                or re.fullmatch(r"sha256:[0-9a-f]{64}", display) is None):
+            raise RendererPolicyError("renderer fixed glyph binding invalid")
     if ("font_manifest" in fields and "font_manifest_ref" in fields
             or has_font and "preserved_raster_svg" in fields
             or "font_manifest" in fields and not isinstance(value["font_manifest"], dict)):
@@ -98,7 +121,8 @@ def _validate_request(value: Any) -> Mapping[str, Any]:
                 "preserved_raster_svg" in fields or has_font and {"canonical_svg", "image_bindings"} <= fields):
             raise RendererPolicyError("renderer furniture attestation requires an authorized SVG")
     if "canonical_svg" in fields:
-        if (not has_font or not {"system_furniture", "image_bindings"} <= fields or "preserved_raster_svg" in fields
+        if (not has_font or not ({"system_furniture", "image_bindings"} <= fields or has_glyph)
+                or "preserved_raster_svg" in fields
                 or not isinstance(value["canonical_svg"], str)
                 or len(value["canonical_svg"].encode("utf-8")) > 2 * 1024 * 1024):
             raise RendererPolicyError("renderer canonical SVG binding invalid")
@@ -176,6 +200,103 @@ def _read_font_manifest(ref: dict, assets_root: Path | None) -> dict:
     return result
 
 
+def _read_fixed_glyph_preview(ref: dict, assets_root: Path | None) -> dict:
+    if assets_root is None or not assets_root.is_absolute() or not assets_root.is_dir():
+        raise RendererPolicyError("renderer glyph assets root unavailable")
+    root = assets_root.resolve(strict=True)
+    path = root / "fixed-glyph-preview.json"
+    try:
+        info = path.lstat()
+        if not stat.S_ISREG(info.st_mode) or info.st_size > 16 * 1024 * 1024:
+            raise RendererPolicyError("renderer glyph asset invalid")
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+        fd = os.open(path, flags)
+        with os.fdopen(fd, "rb") as stream:
+            opened = os.fstat(stream.fileno())
+            if not stat.S_ISREG(opened.st_mode) or opened.st_size != info.st_size:
+                raise RendererPolicyError("renderer glyph asset invalid")
+            payload = stream.read(16 * 1024 * 1024 + 1)
+    except OSError as error:
+        raise RendererPolicyError("renderer glyph asset unavailable") from error
+    if len(payload) > 16 * 1024 * 1024 or "sha256:" + hashlib.sha256(payload).hexdigest() != ref["sha256"]:
+        raise RendererPolicyError("renderer glyph asset digest mismatch")
+    try:
+        value = json.loads(payload)
+        from models.svg_template_glyph import SvgTemplateFixedGlyphPreview
+        return SvgTemplateFixedGlyphPreview.model_validate(value).model_dump(mode="json")
+    except (ValueError, UnicodeDecodeError) as error:
+        raise RendererPolicyError("renderer glyph asset invalid") from error
+
+
+def _verify_fixed_glyph_dom(metrics: dict, projected_svg: str, width: int, height: int) -> dict:
+    """Compare Chromium's actual inert path DOM with the sealed projection."""
+    from lxml import etree
+
+    raw = metrics.pop("fixed_glyph_dom", None)
+    if (not isinstance(raw, list) or not raw or len(raw) > 200
+            or len(json.dumps(raw, separators=(",", ":"))) > 4 * 1024 * 1024):
+        raise RendererPolicyError("renderer glyph DOM evidence missing")
+    root = etree.fromstring(projected_svg.encode(), parser=etree.XMLParser(
+        resolve_entities=False, load_dtd=False, no_network=True))
+    expected = [node for node in root.iter()
+                if node.get("data-presenton-fixed-glyph") == "v1"]
+    if len(expected) != len(raw):
+        raise RendererPolicyError("renderer glyph DOM group mismatch")
+    total_paths = 0
+    bounded = []
+    for group, observed in zip(expected, raw, strict=True):
+        if (not isinstance(observed, dict) or observed.get("id") != group.get("id")
+                or observed.get("qid") != group.get("data-qid")
+                or observed.get("childCount") != len(group)
+                or not isinstance(observed.get("paths"), list)
+                or len(observed["paths"]) != len(group)):
+            raise RendererPolicyError("renderer glyph DOM group mismatch")
+        chain = observed.get("chain")
+        if not isinstance(chain, list) or len(chain) < 3 or len(chain) > 20:
+            raise RendererPolicyError("renderer glyph DOM context invalid")
+        for state in chain:
+            if (not isinstance(state, dict) or state.get("display") == "none"
+                    or state.get("visibility") != "visible"
+                    or state.get("opacity") != "1"
+                    or state.get("transform") != "none"
+                    or state.get("filter") != "none"
+                    or state.get("clipPath") != "none"
+                    or state.get("maskImage") != "none"
+                    or state.get("mixBlendMode") != "normal"):
+                raise RendererPolicyError("renderer glyph DOM effect unsupported")
+        bounds = observed.get("bounds")
+        if (not isinstance(bounds, dict) or any(not isinstance(bounds.get(k), (int, float))
+                or not math.isfinite(bounds[k]) for k in ("x", "y", "width", "height"))
+                or bounds["width"] <= 0 or bounds["height"] <= 0
+                or bounds["x"] < 0 or bounds["y"] < 0
+                or bounds["x"] + bounds["width"] > width
+                or bounds["y"] + bounds["height"] > height):
+            raise RendererPolicyError("renderer glyph DOM geometry invalid")
+        for path, dom in zip(group, observed["paths"], strict=True):
+            if (not isinstance(dom, dict) or path.tag != "{http://www.w3.org/2000/svg}path"
+                    or dom.get("tag") != "path" or dom.get("id") != path.get("id")
+                    or dom.get("d") != path.get("d") or dom.get("fill") != path.get("fill")
+                    or dom.get("computedStroke") != "none"
+                    or dom.get("computedOpacity") != "1"
+                    or dom.get("computedVisibility") != "visible"):
+                raise RendererPolicyError("renderer glyph DOM path mismatch")
+            rgb = tuple(bytes.fromhex(path.get("fill", "")[1:]))
+            if dom.get("computedFill") != f"rgb({rgb[0]}, {rgb[1]}, {rgb[2]})":
+                raise RendererPolicyError("renderer glyph DOM paint mismatch")
+            box = dom.get("bbox")
+            if (not isinstance(box, dict) or any(not isinstance(box.get(k), (int, float))
+                    or not math.isfinite(box[k]) for k in ("x", "y", "width", "height"))
+                    or box["width"] <= 0 or box["height"] <= 0):
+                raise RendererPolicyError("renderer glyph DOM path geometry invalid")
+            total_paths += 1
+        bounded.append({"id": group.get("id"), "qid": group.get("data-qid"),
+                        "pathCount": len(group), "bounds": bounds})
+    proof = json.dumps(raw, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    return {"groupCount": len(expected), "pathCount": total_paths,
+            "domEvidenceDigest": "sha256:" + hashlib.sha256(proof).hexdigest(),
+            "groups": bounded}
+
+
 async def _render(
     request: Mapping[str, Any], session: Any = None, *, ordinal: int | None = None,
     assets_root: Path | None = None,
@@ -188,6 +309,8 @@ async def _render(
     timeout = int(request["timeout"])
     width_px = int(request.get("width_px", DEFAULT_CANVAS_WIDTH_PX))
     height_px = int(request.get("height_px", DEFAULT_CANVAS_HEIGHT_PX))
+    diagnostic_profile = request.get("private_diagnostic_profile")
+    glyph_result = None
     if request.get("preserved_raster_svg") is not None:
         from services.svg_renderer import admit_preserved_raster_preview
         admitted, _ = admit_preserved_raster_preview(
@@ -208,17 +331,51 @@ async def _render(
                                                    width=width_px, height=height_px,
                                                    image_bindings=request["image_bindings"])
             admitted = materialize_template_manifest_fonts(source, admitted, font_manifest)
+            if request.get("fixed_glyph_preview_ref") is not None:
+                from services.svg_renderer import materialize_template_fixed_glyphs
+                authority = _read_fixed_glyph_preview(request["fixed_glyph_preview_ref"], assets_root)
+                admitted, glyph_result = materialize_template_fixed_glyphs(
+                    admitted, request["canonical_svg"], authority,
+                    expected_display_digest=request["fixed_glyph_display_digest"],
+                    font_manifest=font_manifest)
         else:
             admitted = materialize_trusted_svg_fonts(source, admitted)
     if session is None:
         png, metrics = await slide_capture._render_admitted_html_in_worker(
-            admitted, timeout=timeout, width_px=width_px, height_px=height_px
+            admitted, timeout=timeout, width_px=width_px, height_px=height_px,
+            private_diagnostic_profile=diagnostic_profile,
         )
     else:
         png, metrics = session.render(
-            admitted, timeout, width_px=width_px, height_px=height_px
+            admitted, timeout, width_px=width_px, height_px=height_px,
+            private_diagnostic_profile=diagnostic_profile,
         )
     metrics = dict(metrics)
+    if glyph_result is not None:
+        dom_proof = _verify_fixed_glyph_dom(metrics, glyph_result.svg, width_px, height_px)
+        metrics["fixedGlyphPreview"] = {
+            "displayDigest": glyph_result.display_digest,
+            "renderDigest": glyph_result.render_digest,
+            "projectionDigest": glyph_result.projection_digest,
+            "fontCssDigest": glyph_result.trusted_font_css_digest,
+            "authorityDigest": glyph_result.authority_digest,
+            "materializerCodeDigest": glyph_result.materializer_code_digest,
+            **dom_proof,
+        }
+        if diagnostic_profile is not None:
+            raster = metrics.get("privateDiagnosticRaster")
+            if not isinstance(raster, dict):
+                raise RendererPolicyError("renderer private diagnostic raster missing")
+            raster.update({
+                "canonicalDigest": glyph_result.canonical_digest,
+                "displayDigest": glyph_result.display_digest,
+                "renderDigest": glyph_result.render_digest,
+                "projectionDigest": glyph_result.projection_digest,
+                "fontCssDigest": glyph_result.trusted_font_css_digest,
+                "authorityDigest": glyph_result.authority_digest,
+                "materializerCodeDigest": glyph_result.materializer_code_digest,
+                "pngDigest": "sha256:" + hashlib.sha256(png).hexdigest(),
+            })
     metrics["capabilityRegistry"] = capability_metadata(consumer="chromium")
     response: dict[str, Any] = {
         "schema_version": RESPONSE_SCHEMA,

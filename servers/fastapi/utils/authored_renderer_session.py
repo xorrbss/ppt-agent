@@ -48,6 +48,7 @@ def _pipe_bindings() -> dict[str, Any]:
 def render_admitted_html_over_pipe(
     admitted: AdmittedHtml, timeout: int, *,
     width_px: int = DEFAULT_CANVAS_WIDTH_PX, height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
+    private_diagnostic_profile: str | None = None,
 ) -> tuple[bytes, Mapping[str, Any] | None]:
     """Render one admitted document in a private, single-use Chrome process."""
 
@@ -55,6 +56,7 @@ def render_admitted_html_over_pipe(
 
     return render_one(
         admitted, timeout, width_px=width_px, height_px=height_px,
+        private_diagnostic_profile=private_diagnostic_profile,
         **_pipe_bindings(),
     )
 
@@ -127,6 +129,7 @@ class RendererChromiumSession:
     def render(
         self, admitted: AdmittedHtml, timeout: int, *,
         width_px: int = DEFAULT_CANVAS_WIDTH_PX, height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
+        private_diagnostic_profile: str | None = None,
     ) -> tuple[bytes, Mapping[str, Any] | None]:
         from utils.slide_capture_pipe_render import render_admitted_html_over_pipe as render_one
 
@@ -134,6 +137,7 @@ class RendererChromiumSession:
         bindings["chrome_pipe"] = self._chrome_pipe
         result = render_one(
             admitted, timeout, width_px=width_px, height_px=height_px,
+            private_diagnostic_profile=private_diagnostic_profile,
             **bindings,
         )
         self._renders += 1

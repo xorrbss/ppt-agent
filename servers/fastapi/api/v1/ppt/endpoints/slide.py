@@ -26,11 +26,12 @@ SLIDE_ROUTER = APIRouter(prefix="/slide", tags=["Slide"])
 
 @SLIDE_ROUTER.get("/{id}/svg-preview")
 async def get_svg_preview(id: uuid.UUID,
+                          revision: str | None = None,
                           sql_session: AsyncSession = Depends(get_async_session)):
     from services.artifact_store import ArtifactStoreError
     from services.authored_canvas import presentation_canvas_contract
     from services.presentation_access_service import require_live_presentation
-    from services.svg_asset_resolver import resolve_slide_svg_preview
+    from services.svg_asset_resolver import resolve_fixed_glyph_slide_preview, resolve_slide_svg_preview
     from utils.owner_context import get_current_owner_id, get_current_tenant_id
     owner_id, tenant_id = get_current_owner_id(), get_current_tenant_id()
     if owner_id is None or not tenant_id:
@@ -42,14 +43,27 @@ async def get_svg_preview(id: uuid.UUID,
     if presentation.owner_id != owner_id:
         raise HTTPException(status_code=404, detail="Presentation not found")
     canvas = presentation_canvas_contract(presentation.theme)
+    fixed_glyph_marker = ((slide.content or {}).get("svgReceipt") or {}).get("fixedGlyphPreview")
     try:
-        svg = await resolve_slide_svg_preview(slide, session=sql_session,
-            owner_id=owner_id, tenant_id=tenant_id, width=canvas.width_px, height=canvas.height_px)
+        if fixed_glyph_marker is not None:
+            svg = await resolve_fixed_glyph_slide_preview(slide, presentation, session=sql_session,
+                owner_id=owner_id, tenant_id=tenant_id, width=canvas.width_px, height=canvas.height_px,
+                revision=revision)
+        else:
+            svg = await resolve_slide_svg_preview(slide, session=sql_session,
+                owner_id=owner_id, tenant_id=tenant_id, width=canvas.width_px, height=canvas.height_px)
     except (ValueError, KeyError, ArtifactStoreError) as error:
+        raise HTTPException(status_code=409, detail="svg_preview_unavailable") from error
+    except HTTPException as error:
+        if fixed_glyph_marker is None:
+            raise
         raise HTTPException(status_code=409, detail="svg_preview_unavailable") from error
     return Response(svg, media_type="image/svg+xml", headers={
         "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff",
-        "Content-Security-Policy": "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'",
+        "Content-Security-Policy": "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'"
+            + ("; font-src data:" if fixed_glyph_marker is not None else ""),
+        **({"X-Presenton-Display-Digest": fixed_glyph_marker["screenDisplaySvgDigest"]}
+           if fixed_glyph_marker is not None else {}),
     })
 
 # Authored decks are model-authored images (no React layout), so per-slide LLM editing

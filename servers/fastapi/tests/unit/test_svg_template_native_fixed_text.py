@@ -51,11 +51,14 @@ def _portable_source(path, family):
     deck.save(path)
 
 
-def _case(source_path, assets, output, actual_svg=None, frame_reviews=None):
+def _case(source_path, assets, output, actual_svg=None, frame_reviews=None,
+          package_transform=None, composed_check=None):
     before = source_path.read_bytes()
     package = extract_template_package(source_path, font_assets=assets, native_fixed_text_layout=True,
                                        frame_reviews=frame_reviews)
     assert package.schema_version.endswith("/v2") and package.compiler_version == "ooxml-frame/2"
+    if package_transform is not None:
+        package = package_transform(package)
     frame = package.frames[0]
     assert not any(issue.severity == "blocked" for issue in frame.issues)
     fixed = [element for element in frame.elements if element.kind == "text"]
@@ -69,6 +72,9 @@ def _case(source_path, assets, output, actual_svg=None, frame_reviews=None):
     selection = {"schema_version": "svg-template-selection/v1", "mode": "template-redesign",
                  "package": package.model_dump(mode="json"), "frame_map": {"1": frame.frame_id},
                  "adaptations": {frame.frame_id: adaptation.model_dump(mode="json")}}
+    if frame.schema_version.endswith("/v3"):
+        selection["template_pin"] = {"templateId": "00000000-0000-0000-0000-000000000001",
+                                     "revision": 1, "digest": package.digest}
     selection["digest"] = canonical_json_digest(selection)
     snapshot = {"svg_template": selection}
     page = template_page_context(snapshot, 0, 1, "Slide title")
@@ -91,7 +97,9 @@ def _case(source_path, assets, output, actual_svg=None, frame_reviews=None):
         assert source != actual_svg
     receipt = template_furniture_receipt(source, snapshot, width=1280, height=720, index=0, count=1, page_context=page)
     binding = receipt["generated_template_frame"]
-    assert binding["schema_version"] == "svg-template-furniture/v2"
+    assert binding["schema_version"] == "svg-template-furniture/v" + frame.schema_version.rsplit("/v", 1)[1]
+    if composed_check is not None:
+        composed_check(package, source, snapshot, page, receipt)
     mapping = binding["native_fixed_text"]
     assert len(mapping) == 2
     claim = SimpleNamespace(expected_revision=1, presentation_id="offline-fixture")
@@ -249,3 +257,169 @@ def test_native_fixed_text_versioned_contract(tmp_path):
             with Path(proof_path).open("x", encoding="utf-8") as stream:
                 json.dump({"schema_version": "native-fixed-text-offline-contract-proof/v1", "cases": results,
                            "old_pin_reinterpreted": False, "live_execution": False}, stream, indent=2)
+
+
+def test_fixed_glyph_preview_versioned_contract(tmp_path, monkeypatch):
+    """Existing immutable PDF, pure geometry and editable native export; no raster/Office."""
+    pdf_path = os.environ.get("PPT_AGENT_FIXED_GLYPH_CAPTURED_PDF")
+    source_path = os.environ.get("PPT_AGENT_NATIVE_FIXED_TEXT_CAPTURED_SOURCE")
+    baseline_path = os.environ.get("PPT_AGENT_NATIVE_FIXED_TEXT_CAPTURED_BASELINE")
+    if not (pdf_path and source_path and baseline_path):
+        pytest.skip("immutable source/PDF inputs were not supplied")
+    from services.svg_templates.frame_glyphs import (
+        build_preview_package, source_frame_projection_digest, validate_frame_glyph_authority)
+    from services.svg_templates.frame_composition import render_frame_svg
+    from services.svg_templates.generation import validate_template_publication, validate_template_publication_page
+    from services.svg_templates.frame_fonts import bytes_digest
+    from models.svg_template_glyph import SvgTemplateFixedGlyphPreview, glyph_authority_digest
+    from utils.svg_template_glyph_materialization import materialize_fixed_glyph_svg
+    from utils.svg_validation import validate_svg
+    source_path, pdf_path = Path(source_path), Path(pdf_path)
+    source_bytes, pdf_bytes = source_path.read_bytes(), pdf_path.read_bytes()
+    assert hashlib.sha256(source_bytes).hexdigest() == "e30208cf62b6ffcdb2d5e70e57bc41e49361493441355e4a6619c7b5a3a12618"
+    assert hashlib.sha256(pdf_bytes).hexdigest() == "54e7bd53d1ded86ada7f1f178228b30d0795e8b391d17fd2bd2d810bfcdf5ea5"
+    baseline_bytes = Path(baseline_path).read_bytes()
+    assert hashlib.sha256(baseline_bytes).hexdigest() == "b1442cfb9574c94a2948e17364f96572ce897c829f2a56e8ef2f0ff3346b2edb"
+    baseline = json.loads(baseline_bytes)
+    pinned = baseline["presentation"]["theme"]["svg"]["styleSnapshot"]["svg_template"]["package"]
+    assets = tuple(SvgTemplateFontAsset.model_validate(a) for a in pinned["font_manifest"]["assets"])
+    source_frame = pinned["frames"][0]
+    reviews = {source_frame["frame_id"]: {"fixed_shape_ids": [e["source_part"] + "#" + e["source_shape_id"]
+        for e in source_frame["elements"] if e["kind"] == "text"],
+        "body_region": source_frame["body_region"], "role": source_frame["role"]}}
+    authority_result = {}
+    def transform(package):
+        before = _bytes(package.model_dump(mode="json"))
+        from services.svg_templates.source_pdf_worker import capture_source_pdf
+        from services.svg_templates import source_review
+        from utils import get_env
+        from utils.renderer_worker_policy import build_worker_environment, assert_no_provider_secrets
+        from workers import public_svg_pptx_render as renderer
+        environment = build_worker_environment({"PATH": "synthetic-path", "DATABASE_URL": "synthetic-db",
+            "OPENAI_API_KEY": "synthetic-key", "USER_CONFIG_PATH": "synthetic-config"})
+        assert_no_provider_secrets(environment)
+        assert environment["PATH"] == "synthetic-path"
+        assert not {"DATABASE_URL", "OPENAI_API_KEY", "USER_CONFIG_PATH"} & environment.keys()
+        # Fail before Win32 imports/activation, then prove durable fencing survives a fresh call.
+        with monkeypatch.context() as patch:
+            patch.setattr(get_env, "get_app_data_directory_env", lambda: str(tmp_path / "capture-store"))
+            patch.setattr(source_review, "_require_installed_fonts", lambda _manifest: None)
+            patch.setattr(renderer, "_available_memory", lambda: 0)
+            scope = dict(operation_id="00000000-0000-0000-0000-000000000001",
+                         owner_id="00000000-0000-0000-0000-000000000002", tenant_id="test-tenant")
+            with pytest.raises(ValueError, match="capture_failed"):
+                capture_source_pdf(source_path, package, **scope)
+            markers = list((tmp_path / "capture-store").rglob("once.json"))
+            assert len(markers) == 1
+            once = markers[0].read_bytes()
+            failed = json.loads(markers[0].with_name("receipt.json").read_text())
+            assert failed["status"] == "failed_no_retry" and failed["export_calls"] == 0
+            assert failed["failure"]["stage"] == "capability_preconditions"
+            with pytest.raises(ValueError, match="already_attempted"):
+                capture_source_pdf(source_path, package, **scope)
+            assert markers[0].read_bytes() == once
+            for delta in ({"tenant_id": "different-tenant"},
+                          {"owner_id": "00000000-0000-0000-0000-000000000003"},
+                          {"operation_id": "00000000-0000-0000-0000-000000000004"}):
+                with pytest.raises(ValueError, match="capture_failed"):
+                    capture_source_pdf(source_path, package, **{**scope, **delta})
+            assert len(list((tmp_path / "capture-store").rglob("once.json"))) == 4
+        from pdfminer.pdftypes import PDFStream
+        from pdfminer.psparser import LIT
+        from services.svg_templates.frame_glyphs import _bounded_stream
+        import zlib
+        with pytest.raises(ValueError, match="decoded_stream_limit"):
+            _bounded_stream(PDFStream({"Filter": LIT("FlateDecode")}, zlib.compress(b"x" * 100)), 32)
+        # Deliberate mocked owned-capture boundary. Historical failed receipts are never changed.
+        receipt = {"status": "captured", "source_digest": package.source_digest,
+            "package_digest": package.digest, "pdf_digest": bytes_digest(pdf_bytes),
+            "source_unchanged": True, "owned_job_closed": True, "export_calls": 1,
+            "producer_version": "16.0", "producer_build": "20326", "test_capture_boundary": True}
+        result = build_preview_package(package, source_path, pdf_bytes, receipt)
+        assert _bytes(package.model_dump(mode="json")) == before
+        old, frame = package.frames[0], result.frames[0]
+        authority = validate_frame_glyph_authority(frame)
+        authority_result["value"] = authority
+        assert source_frame_projection_digest(frame) == old.digest
+        assert render_frame_svg(frame) == render_frame_svg(old)
+        assert len(authority.text_objects) == 2
+        chars = [c for obj in authority.text_objects for c in obj.characters]
+        assert len(chars) == 20 and len({c.unicode for c in chars}) == 16
+        assert sum(len(c.path_pdf) for c in chars) == 665
+        assert authority.approved_font_digest == "sha256:0086c19e81d293a542e7d75564c645fb58070cc850aefebf8fa1c397858e510c"
+        invalid = authority.model_dump(mode="json")
+        invalid["text_objects"][0]["characters"][0]["path_pdf"][0][1] = 0
+        invalid["authority_digest"] = glyph_authority_digest(invalid)
+        with pytest.raises(ValueError, match="clip_not_inert"):
+            SvgTemplateFixedGlyphPreview.model_validate(invalid)
+        changed = deepcopy(receipt)
+        changed["pdf_digest"] = "sha256:" + "0" * 64
+        with pytest.raises(ValueError):
+            build_preview_package(package, source_path, pdf_bytes, changed)
+        with pytest.raises(ValueError, match="version_mismatch"):
+            SvgTemplatePackage.model_validate({**result.model_dump(mode="json"), "schema_version": "svg-template-package/v2"})
+        return result
+    def composed(package, source, snapshot, page, furniture):
+        frame = package.frames[0]
+        authority = frame.fixed_glyph_preview
+        validate_svg(source, width=1280, height=720)
+        from services.svg_renderer import svg_preview_html, _svg_fragment, template_manifest_font_css
+        resolved = _svg_fragment(svg_preview_html(source, width=1280, height=720,
+            font_manifest=frame.font_manifest)).group(1)
+        css = template_manifest_font_css(frame.font_manifest, resolved)
+        materialized = materialize_fixed_glyph_svg(source, resolved, authority, trusted_font_css=css)
+        assert materialized.svg != source and materialized.canonical_digest == bytes_digest(source.encode())
+        assert materialized.authority_digest == authority.authority_digest
+        assert materialized.svg.count("data-fixed-glyph") >= 1 or "<path" in materialized.svg
+        with pytest.raises(ValueError):
+            validate_svg(materialized.svg, width=1280, height=720)
+        changed = authority.model_copy(update={"authority_digest": "sha256:" + "0" * 64})
+        with pytest.raises(ValueError):
+            materialize_fixed_glyph_svg(source, resolved, changed, trusted_font_css=css)
+        # Actual PNG bytes here are a mock render witness, not a raster fidelity claim.
+        png = b"mock-render-witness"
+        shared = {"version": "svg-fixed-glyph-preview/v1", "authorityDigest": authority.authority_digest,
+            "materializerCodeDigest": authority.materializer_code_digest, "canonicalSvgDigest": bytes_digest(source.encode()),
+            "screenDisplaySvgDigest": materialized.display_digest, "screenRenderSvgDigest": materialized.render_digest,
+            "qidProjectionDigest": materialized.projection_digest,
+            "trustedFontCssDigest": materialized.trusted_font_css_digest, "pngDigest": bytes_digest(png)}
+        marker = {**shared, "fontManifestDigest": frame.font_manifest.digest, "screenPlacementDigest": "a" * 64,
+            "slideRevision": "test-revision", "templatePin": snapshot["svg_template"]["template_pin"], "frameId": frame.frame_id,
+            "frameDigest": frame.digest, "adaptationDigest": page["adaptation_digest"]}
+        quality = {"measurement_complete": True, "source_digest": bytes_digest(source.encode()),
+            "png_digest": bytes_digest(png), "fixed_glyph_preview": shared,
+            "trusted_font_materialization": {"manifest_digest": frame.font_manifest.digest},
+            "template_preservation": {"page_context_digest": page["digest"], "frame_digest": frame.digest,
+                "adaptation_digest": page["adaptation_digest"], "svg_digest": canonical_json_digest({"svg": source}),
+                "body_paint_measured": True}}
+        payload = {"svg_content": source, "svg_template_page": page, "system_furniture": furniture,
+            "quality": quality, "fixedGlyphPreview": marker, "png_sha256": hashlib.sha256(png).hexdigest(),
+            "svgAssetManifest": {"slideRevision": "test-revision", "screenPlacement": {"sha256": "a" * 64}}}
+        validate_template_publication_page(snapshot, payload, index=0, count=1, content="Slide title")
+        outline = SimpleNamespace(slides=[SimpleNamespace(content="Slide title")])
+        validate_template_publication(snapshot, [(payload, png)], outline)
+        with pytest.raises(ValueError, match="png_mismatch"):
+            validate_template_publication(snapshot, [(payload, png + b"wrong")], outline)
+        for key in ("authorityDigest", "materializerCodeDigest", "canonicalSvgDigest", "pngDigest",
+                    "screenPlacementDigest", "screenRenderSvgDigest", "qidProjectionDigest", "trustedFontCssDigest",
+                    "slideRevision", "frameDigest", "adaptationDigest"):
+            changed = deepcopy(payload)
+            changed["fixedGlyphPreview"][key] = "invalid"
+            with pytest.raises(ValueError, match="identity_mismatch"):
+                validate_template_publication_page(snapshot, changed, index=0, count=1, content="Slide title")
+        missing = deepcopy(payload)
+        missing.pop("fixedGlyphPreview")
+        with pytest.raises(ValueError, match="identity_mismatch"):
+            validate_template_publication_page(snapshot, missing, index=0, count=1, content="Slide title")
+    with font_validation_scope():
+        result = _case(source_path, assets, tmp_path / "future-v3", frame_reviews=reviews,
+                       package_transform=transform, composed_check=composed)
+    assert source_path.read_bytes() == source_bytes and pdf_path.read_bytes() == pdf_bytes
+    proof_path = os.environ.get("PPT_AGENT_FIXED_GLYPH_PROOF_OUTPUT")
+    if proof_path:
+        with Path(proof_path).open("x", encoding="utf-8") as stream:
+            json.dump({"schema_version": "fixed-glyph-preview-offline-contract-proof/v1", "case": result,
+                "authority_digest": authority_result["value"].authority_digest, "selected_characters": 20,
+                "selected_control_points": 665, "mocked_capture_and_png": True,
+                "office_calls": 0, "browser_calls": 0, "pdf_raster_calls": 0,
+                "preview_precision_accepted": False}, stream, indent=2)

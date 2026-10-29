@@ -64,9 +64,12 @@ async def new_operation(session, *, kind: str, payload: dict, name: str, convers
 
 async def register_template(session, *, name, snapshot_id, registration_mode,
                             template_id=None, expected_head_revision=0, conversation_id=None,
-                            native_fixed_text_layout=False):
+                            native_fixed_text_layout=False, fixed_glyph_preview=False):
     if type(native_fixed_text_layout) is not bool or (native_fixed_text_layout and registration_mode != "framed"):
         raise ValueError("svg_template_native_layout_selector_invalid")
+    if type(fixed_glyph_preview) is not bool or (fixed_glyph_preview and
+            (registration_mode != "framed" or not native_fixed_text_layout)):
+        raise ValueError("svg_template_fixed_glyph_selector_invalid")
     require_new_template_admission()
     owner, tenant = principal()
     admitted = await admit_reference_snapshot(session, snapshot_id=snapshot_id)
@@ -123,6 +126,8 @@ async def register_template(session, *, name, snapshot_id, registration_mode,
                    "registration_mode": registration_mode, "expected_head_revision": expected_head_revision}
         if native_fixed_text_layout:
             payload["native_fixed_text_layout"] = True
+        if fixed_glyph_preview:
+            payload["fixed_glyph_preview"] = True
         conversation, operation = await new_operation(session, kind="svg.template.analyze", payload=payload,
             name=name, conversation_id=conversation_id)
         changed = (await session.execute(update(SvgTemplate).where(SvgTemplate.id == template.id,
@@ -213,7 +218,7 @@ async def publish_template(session, *, template_id, operation_id, expected_head_
     kind = "style" if style_only or original.get("registration_mode") == "style-only" else "framed"
     if kind == "framed":
         from models.svg_template_frame import SvgTemplatePackage
-        from services.svg_templates.frame_review import validate_frame_review
+        from services.svg_templates.frame_review import validate_frame_review, review_image_pair_digest
         validated = SvgTemplatePackage.model_validate(package)
         from services.svg_templates.font_admission import validate_template_export_fonts
         selected = set(selected_frame_ids)
@@ -230,9 +235,7 @@ async def publish_template(session, *, template_id, operation_id, expected_head_
                 continue
             entry["review"] = {"method": "human-source-frame-comparison",
                 "classification_approved": True, "preservation_approved": True,
-                "reviewed_image_pair_digest": artifact_digest({
-                    "source_image_digest": entry.get("source_image_digest"),
-                    "frame_image_digest": entry.get("frame_image_digest")}),
+                "reviewed_image_pair_digest": review_image_pair_digest(evidence, entry),
                 "decision_id": str(uuid.uuid4()), "reviewed_by_owner_id": str(owner),
                 "reviewed_at": get_current_utc_datetime().isoformat()}
         evidence["digest"] = artifact_digest({key: value for key, value in evidence.items() if key != "digest"})
@@ -362,6 +365,18 @@ class SvgTemplateOperationHandler:
                 package_model = await asyncio.to_thread(extract_template_package, source_path,
                     frame_reviews=payload.get("frame_reviews"),
                     native_fixed_text_layout=payload.get("native_fixed_text_layout", False))
+                captured_pdf = capture_receipt = None
+                if payload.get("fixed_glyph_preview"):
+                    if payload.get("fixed_glyph_preview") is not True or payload.get("native_fixed_text_layout") is not True:
+                        raise ValueError("svg_template_fixed_glyph_selector_invalid")
+                    from services.svg_templates.source_pdf_worker import capture_source_pdf
+                    from services.svg_templates.frame_glyphs import build_preview_package
+                    owner_id, tenant_id = principal()
+                    captured_pdf, capture_receipt = await asyncio.to_thread(capture_source_pdf,
+                        source_path, package_model, operation_id=claim.operation_id,
+                        owner_id=owner_id, tenant_id=tenant_id)
+                    package_model = await asyncio.to_thread(build_preview_package,
+                        package_model, source_path, captured_pdf, capture_receipt)
                 package = package_model.model_dump(mode="json", by_alias=True)
                 if len(canonical_json_bytes(package)) > MAX_DRAFT_PACKAGE_BYTES:
                     raise ValueError("svg_template_package_size_limit")
@@ -375,7 +390,7 @@ class SvgTemplateOperationHandler:
             if package:
                 from services.svg_templates.source_review import prepare_source_review
                 evidence, previews = await prepare_source_review(session, package_model, source_path,
-                    operation_id=claim.operation_id)
+                    operation_id=claim.operation_id, captured_pdf=captured_pdf, capture_receipt=capture_receipt)
             after = await gateway.bind(session, asset_id=binding.asset_id, kind=binding.kind)
             if before != after:
                 raise ValueError("svg_template_source_changed")

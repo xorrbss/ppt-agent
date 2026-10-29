@@ -169,6 +169,10 @@ async def resolve_template_selection(session, *, pin: dict, mode: str, canvas,
         from services.svg_templates.frame_fonts import resolve_font_manifest
         from services.svg_templates.font_admission import validate_template_export_fonts
         validated = SvgTemplatePackage.model_validate(package)
+        if validated.schema_version.endswith("/v3"):
+            from services.svg_templates.frame_glyphs import validate_frame_glyph_authority
+            for frame in validated.frames:
+                validate_frame_glyph_authority(frame)
         resolve_font_manifest(validated.font_manifest)
         validate_template_export_fonts(validated.font_manifest)
         rows = (await session.scalars(select(SvgTemplateFrameAdaptation).where(
@@ -189,6 +193,11 @@ async def resolve_template_selection(session, *, pin: dict, mode: str, canvas,
                     or adaptation.frame.frame_id != row.frame_id or original is None
                     or adaptation.source_frame_digest != original.digest):
                 raise HTTPException(409, "svg_template_adaptation_conflict")
+            if adaptation.schema_version.endswith("/v3"):
+                from services.svg_templates.frame_glyphs import validate_frame_glyph_authority
+                validate_frame_glyph_authority(adaptation.frame)
+                if adaptation.frame != original or adaptation.target_canvas != original.source_canvas:
+                    raise HTTPException(409, "svg_template_adaptation_conflict")
             adaptations[row.frame_id] = pack_adaptation_fonts(
                 adaptation.model_dump(mode="json", by_alias=True), package)
         allowed = {frame.frame_id for frame in validated.frames}

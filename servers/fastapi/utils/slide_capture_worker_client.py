@@ -41,8 +41,21 @@ async def _render_html_in_isolated_worker(  # noqa: ASYNC109
     preserved_raster_svg: str | None = None, system_furniture: dict | None = None,
     font_manifest: dict | None = None, canonical_svg: str | None = None,
     image_bindings: dict[str, str] | None = None,
+    fixed_glyph_preview: dict | None = None,
+    fixed_glyph_display_digest: str | None = None,
+    fixed_glyph_render_digest: str | None = None,
+    fixed_glyph_projection_digest: str | None = None,
+    fixed_glyph_font_css_digest: str | None = None,
+    private_diagnostic_profile: str | None = None,
 ) -> tuple[bytes, Mapping[str, Any] | None]:
+    if private_diagnostic_profile is not None:
+        if (private_diagnostic_profile != "fixed-glyph-dpr2/v1"
+                or fixed_glyph_preview is None or canonical_svg is None
+                or (width_px, height_px) != (1280, 720)):
+            raise ValueError("svg_template_glyph_diagnostic_profile_invalid")
     if font_manifest is None:
+        if fixed_glyph_preview is not None:
+            raise ValueError("svg_template_glyph_font_manifest_missing")
         return await _render_html_in_isolated_worker_impl(html, timeout, width_px=width_px, height_px=height_px,
             preserved_raster_svg=preserved_raster_svg, system_furniture=system_furniture,
             canonical_svg=canonical_svg, image_bindings=image_bindings)
@@ -63,10 +76,44 @@ async def _render_html_in_isolated_worker(  # noqa: ASYNC109
         if os.name != "nt":
             os.chmod(path, 0o444)
         reference = {"name": "font-manifest.json", "sha256": "sha256:" + hashlib.sha256(encoded).hexdigest()}
+        glyph_reference = None
+        if fixed_glyph_preview is not None:
+            from models.svg_template_glyph import SvgTemplateFixedGlyphPreview
+            from utils.svg_template_glyph_materialization import materializer_code_digest
+            glyph = SvgTemplateFixedGlyphPreview.model_validate(fixed_glyph_preview)
+            if (glyph.materializer_code_digest != materializer_code_digest()
+                    or not isinstance(fixed_glyph_display_digest, str)
+                    or len(fixed_glyph_display_digest) != 71
+                    or not fixed_glyph_display_digest.startswith("sha256:")
+                    or not isinstance(fixed_glyph_render_digest, str)
+                    or not isinstance(fixed_glyph_projection_digest, str)
+                    or not isinstance(fixed_glyph_font_css_digest, str)
+                    or any(len(value) != 71 or not value.startswith("sha256:") for value in
+                           (fixed_glyph_render_digest, fixed_glyph_projection_digest,
+                            fixed_glyph_font_css_digest))):
+                raise ValueError("svg_template_glyph_render_binding_invalid")
+            glyph_payload = json.dumps(glyph.model_dump(mode="json"), ensure_ascii=False,
+                                       sort_keys=True, separators=(",", ":")).encode()
+            if len(glyph_payload) > 16 * 1024 * 1024:
+                raise ValueError("svg_template_glyph_authority_size_invalid")
+            glyph_path = root / "fixed-glyph-preview.json"
+            glyph_path.write_bytes(glyph_payload)
+            if os.name != "nt":
+                os.chmod(glyph_path, 0o444)
+            glyph_reference = {"name": "fixed-glyph-preview.json",
+                               "sha256": "sha256:" + hashlib.sha256(glyph_payload).hexdigest()}
         return await _render_html_in_isolated_worker_impl(html, timeout, width_px=width_px, height_px=height_px,
             preserved_raster_svg=preserved_raster_svg, system_furniture=system_furniture,
             canonical_svg=canonical_svg, image_bindings=image_bindings,
-            font_manifest_ref=reference, request_assets_root=str(root))
+            font_manifest_ref=reference, request_assets_root=str(root),
+            fixed_glyph_preview_ref=glyph_reference,
+            fixed_glyph_display_digest=fixed_glyph_display_digest,
+            fixed_glyph_render_digest=fixed_glyph_render_digest,
+            fixed_glyph_projection_digest=fixed_glyph_projection_digest,
+            fixed_glyph_font_css_digest=fixed_glyph_font_css_digest,
+            private_diagnostic_profile=private_diagnostic_profile,
+            fixed_glyph_authority_digest=glyph.authority_digest if fixed_glyph_preview is not None else None,
+            fixed_glyph_code_digest=glyph.materializer_code_digest if fixed_glyph_preview is not None else None)
 
 
 async def _render_html_in_isolated_worker_impl(  # noqa: ASYNC109
@@ -78,6 +125,14 @@ async def _render_html_in_isolated_worker_impl(  # noqa: ASYNC109
     image_bindings: dict[str, str] | None = None,
     font_manifest_ref: dict | None = None,
     request_assets_root: str | None = None,
+    fixed_glyph_preview_ref: dict | None = None,
+    fixed_glyph_display_digest: str | None = None,
+    fixed_glyph_render_digest: str | None = None,
+    fixed_glyph_projection_digest: str | None = None,
+    fixed_glyph_font_css_digest: str | None = None,
+    private_diagnostic_profile: str | None = None,
+    fixed_glyph_authority_digest: str | None = None,
+    fixed_glyph_code_digest: str | None = None,
 ) -> tuple[bytes, Mapping[str, Any] | None]:
     if preserved_raster_svg is not None:
         from services.svg_renderer import admit_preserved_raster_preview
@@ -98,6 +153,9 @@ async def _render_html_in_isolated_worker_impl(  # noqa: ASYNC109
         **({"font_manifest_ref": font_manifest_ref} if font_manifest_ref is not None else {}),
         **({"canonical_svg": canonical_svg} if canonical_svg is not None else {}),
         **({"image_bindings": image_bindings} if image_bindings is not None else {}),
+        **({"fixed_glyph_preview_ref": fixed_glyph_preview_ref} if fixed_glyph_preview_ref is not None else {}),
+        **({"fixed_glyph_display_digest": fixed_glyph_display_digest} if fixed_glyph_display_digest is not None else {}),
+        **({"private_diagnostic_profile": private_diagnostic_profile} if private_diagnostic_profile is not None else {}),
     )
     environment = build_worker_environment()
     kwargs: dict[str, Any] = {
@@ -173,7 +231,42 @@ async def _render_html_in_isolated_worker_impl(  # noqa: ASYNC109
         raise RendererIsolationError("authored renderer response identity mismatch")
     if process.returncode != 0:
         raise RendererIsolationError("authored renderer worker failed")
-    if metrics is not None:
+    if fixed_glyph_preview_ref is not None:
+        fixed = (metrics or {}).get("fixedGlyphPreview")
+        if (not isinstance(fixed, dict)
+                or fixed.get("displayDigest") != fixed_glyph_display_digest
+                or fixed.get("renderDigest") != fixed_glyph_render_digest
+                or fixed.get("projectionDigest") != fixed_glyph_projection_digest
+                or fixed.get("fontCssDigest") != fixed_glyph_font_css_digest
+                or fixed.get("authorityDigest") != fixed_glyph_authority_digest
+                or fixed.get("materializerCodeDigest") != fixed_glyph_code_digest):
+            raise RendererIsolationError("svg template glyph renderer identity mismatch")
+    if private_diagnostic_profile is not None:
+        from PIL import Image
+        import io
+        from utils.slide_capture_pipe_render import private_diagnostic_pipe_code_digest
+
+        diagnostic = (metrics or {}).get("privateDiagnosticRaster")
+        with Image.open(io.BytesIO(png)) as raster:
+            raster_size = raster.size
+        if (private_diagnostic_profile != "fixed-glyph-dpr2/v1"
+                or not isinstance(diagnostic, dict)
+                or diagnostic.get("profile") != private_diagnostic_profile
+                or diagnostic.get("logicalCanvasPx") != [1280, 720]
+                or diagnostic.get("rasterCanvasPx") != [2560, 1440]
+                or diagnostic.get("devicePixelRatio") != 2
+                or diagnostic.get("pipeCodeDigest") != private_diagnostic_pipe_code_digest()
+                or diagnostic.get("canonicalDigest") != "sha256:" + hashlib.sha256(canonical_svg.encode()).hexdigest()
+                or diagnostic.get("displayDigest") != fixed_glyph_display_digest
+                or diagnostic.get("renderDigest") != fixed_glyph_render_digest
+                or diagnostic.get("projectionDigest") != fixed_glyph_projection_digest
+                or diagnostic.get("fontCssDigest") != fixed_glyph_font_css_digest
+                or diagnostic.get("authorityDigest") != fixed_glyph_authority_digest
+                or diagnostic.get("materializerCodeDigest") != fixed_glyph_code_digest
+                or diagnostic.get("pngDigest") != "sha256:" + hashlib.sha256(png).hexdigest()
+                or raster_size != (2560, 1440)):
+            raise RendererIsolationError("svg template glyph diagnostic raster mismatch")
+    if metrics is not None and fixed_glyph_preview_ref is None:
         _cache_browser_metrics(
             measured_html, metrics, width_px=width_px, height_px=height_px
         )

@@ -960,6 +960,34 @@ def _instrument_authored_html(
       ordered_owned_text: orderedOwnedText(),
       observation_state: pass, source_viewport_normalization: freezeSourceViewport()
     }};
+    const fixedGlyphGroups = Array.from(document.querySelectorAll('g[data-presenton-fixed-glyph="v1"]'));
+    if (fixedGlyphGroups.length) {{
+      payload.fixed_glyph_dom = fixedGlyphGroups.map(group => {{
+        const chain = [];
+        for (let node = group; node && node !== document; node = node.parentElement) {{
+          const style = getComputedStyle(node);
+          chain.push({{tag: node.tagName.toLowerCase(), id: node.id || null,
+            display: style.display, visibility: style.visibility, opacity: style.opacity,
+            transform: style.transform, filter: style.filter, clipPath: style.clipPath,
+            maskImage: style.maskImage || style.webkitMaskImage || 'none',
+            mixBlendMode: style.mixBlendMode}});
+        }}
+        const bounds = group.getBoundingClientRect();
+        return {{id: group.id, qid: group.getAttribute('data-qid'),
+          childCount: group.children.length,
+          bounds: {{x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height}},
+          chain,
+          paths: Array.from(group.children).map(path => {{
+            const style = getComputedStyle(path);
+            const box = path.getBoundingClientRect();
+            return {{tag: path.tagName.toLowerCase(), id: path.id,
+              d: path.getAttribute('d'), fill: path.getAttribute('fill'),
+              computedFill: style.fill, computedStroke: style.stroke,
+              computedOpacity: style.opacity, computedVisibility: style.visibility,
+              bbox: {{x: box.x, y: box.y, width: box.width, height: box.height}}}};
+          }})}};
+      }});
+    }}
     let marker = document.getElementById('{_METRICS_ELEMENT_ID}');
     if (!marker) {{ marker = document.createElement('meta'); marker.id = '{_METRICS_ELEMENT_ID}'; document.head.appendChild(marker); }}
     marker.setAttribute('content', encodeURIComponent(JSON.stringify(payload)));
@@ -1803,6 +1831,7 @@ def __getattr__(name: str):
 async def _render_admitted_html_in_worker(
     admitted: AdmittedHtml, *, timeout: int,
     width_px: int = SLIDE_W, height_px: int = SLIDE_H,
+    private_diagnostic_profile: str | None = None,
 ) -> tuple[bytes, Mapping[str, Any] | None]:
     """Low-level worker-only CDP entry; never starts another worker or file render."""
 
@@ -1815,7 +1844,8 @@ async def _render_admitted_html_in_worker(
     # avoids threaded spawn hazards.  A framed worker instead renders through
     # its own long-lived session (utils/authored_renderer_session.py).
     return _render_admitted_html_over_pipe(
-        admitted, timeout, width_px=width_px, height_px=height_px
+        admitted, timeout, width_px=width_px, height_px=height_px,
+        private_diagnostic_profile=private_diagnostic_profile,
     )
 
 

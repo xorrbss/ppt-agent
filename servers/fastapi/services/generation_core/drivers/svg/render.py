@@ -590,6 +590,18 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
                     code="svg_asset_screen_derivative_failed", retryable=False) from error
         try:
             font_profile = ctx.source_font_profile if ctx.source_reflow else None
+            fixed_glyph_preview = None
+            if template_page is not None:
+                from services.svg_templates.generation import page_frame
+                template_frame = page_frame(ctx.snapshot, index, ctx.count)
+                if template_frame.schema_version == "svg-template-frame/v3":
+                    if template_frame.fixed_glyph_preview is None:
+                        raise ValueError("svg_template_glyph_authority_missing")
+                    fixed_glyph_preview = template_frame.fixed_glyph_preview.model_dump(mode="json")
+                elif template_frame.fixed_glyph_preview is not None:
+                    raise ValueError("svg_template_glyph_version_mismatch")
+            if cache_remeasurement and fixed_glyph_preview is not None:
+                raise ValueError("svg_template_glyph_cache_witness_unsupported")
             raster_authorized_measurement = False
             if ctx.raster_reconstruction:
                 from services.raster_redesign_generation import raster_measurement_inputs
@@ -624,6 +636,8 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
                                                         if font_profile else {}),
                                                      **({"font_manifest": ctx.snapshot["svg_template"]["package"]["font_manifest"]}
                                                         if template_page is not None else {}),
+                                                     **({"fixed_glyph_preview": fixed_glyph_preview}
+                                                        if fixed_glyph_preview is not None else {}),
                                                      **({"system_furniture": furniture_receipt} if furniture_receipt is not None else {}),
                                                       **({"timeline_ink_probe": True} if timeline_source or profile and profile["version"] in (7, 8) else {}),
                                                      materialized_svg=materialized, **ctx.physical_kwargs)
@@ -873,6 +887,30 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
             })
     payload.update(svg_content=final, source_digest=sha256_hex(final.encode()),
                    quality=rendered.quality, **write_png(rendered.png))
+    glyph_quality = rendered.quality.get("fixed_glyph_preview")
+    if glyph_quality is not None:
+        envelope = payload.get("svgAssetManifest") or {}
+        placement = envelope.get("screenPlacement") or {}
+        selection = ctx.snapshot.get("svg_template") or {}
+        if (template_page is None or not isinstance(placement.get("sha256"), str)
+                or envelope.get("slideRevision") is None
+                or glyph_quality.get("pngDigest") != rendered.quality.get("png_digest")
+                or glyph_quality.get("canonicalSvgDigest") != rendered.quality.get("source_digest")):
+            raise AuthoredStageError(slide_index=index, stage="render",
+                code="svg_template_glyph_receipt_invalid", retryable=False)
+        payload["fixedGlyphPreview"] = {
+            **glyph_quality,
+            "fontManifestDigest": (rendered.quality.get("trusted_font_materialization") or {}).get("manifest_digest"),
+            "screenPlacementDigest": placement["sha256"],
+            "slideRevision": envelope["slideRevision"],
+            "templatePin": selection.get("template_pin"),
+            "frameId": template_page["frame_id"],
+            "frameDigest": template_page["frame_digest"],
+            "adaptationDigest": template_page["adaptation_digest"],
+        }
+    elif payload.get("fixedGlyphPreview") is not None:
+        raise AuthoredStageError(slide_index=index, stage="render",
+            code="svg_template_glyph_receipt_stale", retryable=False)
     header_failures = [failure for failure in rendered.quality.get("failures", [])
                        if str(failure.get("kind", "")).startswith("svg_common_header_")]
     if header_failures:

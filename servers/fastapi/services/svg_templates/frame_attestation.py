@@ -40,11 +40,16 @@ def template_furniture_receipt(svg, snapshot, *, width, height, index, count, pa
                "font_manifest_digest": frame.font_manifest.digest,
                "page_context": deepcopy(page_context),
                "groups": [ET.tostring(group, encoding="unicode") for group in expected]}
-    if frame.schema_version == "svg-template-frame/v2":
+    if frame.schema_version in {"svg-template-frame/v2", "svg-template-frame/v3"}:
         from services.svg_templates.frame_native_text import native_frame_mapping, validate_mapping
         mapping = native_frame_mapping(frame)
         validate_mapping(root, mapping, frame.source_canvas, frame.font_manifest)
         binding.update(schema_version="svg-template-furniture/v2", compiler_version="ooxml-frame/2", native_fixed_text=mapping)
+        if frame.schema_version.endswith("/v3"):
+            from services.svg_templates.frame_glyphs import validate_frame_glyph_authority
+            authority = validate_frame_glyph_authority(frame)
+            binding.update(schema_version="svg-template-furniture/v3", compiler_version="ooxml-frame/3",
+                           fixed_glyph_preview_digest=authority.authority_digest)
     binding["binding_digest"] = artifact_digest(binding)
     return {"version": "svg-system-furniture/v1", "svg_digest": source_digest(svg),
             "canvas": {"width": width, "height": height}, "digest": frame.digest,
@@ -55,7 +60,7 @@ def template_furniture_receipt(svg, snapshot, *, width, height, index, count, pa
 
 def validate_template_furniture_binding(root, receipt):
     binding = receipt.get("generated_template_frame", {})
-    if (binding.get("schema_version") not in {"svg-template-furniture/v1", "svg-template-furniture/v2"}
+    if (binding.get("schema_version") not in {"svg-template-furniture/v1", "svg-template-furniture/v2", "svg-template-furniture/v3"}
             or binding.get("frame_digest") != receipt.get("digest")
             or artifact_digest({k: v for k, v in binding.items() if k != "binding_digest"}) != binding.get("binding_digest")
             or not binding.get("page_context") or len(binding.get("groups", [])) != 2):
@@ -71,10 +76,11 @@ def validate_template_furniture_binding(root, receipt):
     owned_text_ids = {node.get("id") for xml in binding["groups"] for node in ET.fromstring(xml).iter()
                       if node.tag == "{http://www.w3.org/2000/svg}text"}
     mapping = binding.get("native_fixed_text")
-    if binding["schema_version"].endswith("/v2"):
+    if binding["schema_version"].endswith(("/v2", "/v3")):
         from models.svg_template_frame import SvgTemplateNativeFixedText
         from services.svg_templates.frame_native_text import _structure as native_structure
-        if (binding.get("compiler_version") != "ooxml-frame/2"
+        version = binding["schema_version"].rsplit("/v", 1)[1]
+        if (binding.get("compiler_version") != "ooxml-frame/" + version
                 or not isinstance(mapping, dict) or not mapping or set(mapping) != owned_text_ids):
             raise ValueError("svg_template_native_layout_binding_mismatch")
         for identity, value in mapping.items():
@@ -83,6 +89,13 @@ def validate_template_furniture_binding(root, receipt):
             if (record.svg_text_id != identity or artifact_digest(record) != record.digest or len(matches) != 1
                     or artifact_digest(native_structure(matches[0])) != record.svg_text_digest):
                 raise ValueError("svg_template_native_layout_binding_mismatch")
+        glyph_digest = binding.get("fixed_glyph_preview_digest")
+        if version == "3":
+            import re
+            if not isinstance(glyph_digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", glyph_digest):
+                raise ValueError("svg_template_glyph_binding_mismatch")
+        elif glyph_digest is not None:
+            raise ValueError("svg_template_glyph_version_mismatch")
     elif mapping is not None:
         raise ValueError("svg_template_native_layout_version_mismatch")
     children = list(root)

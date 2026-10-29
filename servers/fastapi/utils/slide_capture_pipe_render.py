@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import html as html_lib
 import io
 import json
@@ -28,9 +29,14 @@ METRICS_ELEMENT_ID = "__codex_authored_dom_metrics"
 T = TypeVar("T")
 PageCommand = Callable[..., Mapping[str, Any]]
 
+
+def private_diagnostic_pipe_code_digest() -> str:
+    return "sha256:" + hashlib.sha256(pathlib.Path(__file__).read_bytes()).hexdigest()
+
 def render_admitted_html_over_pipe(
     admitted: AdmittedHtml, timeout: int, *,
     width_px: int = SLIDE_W, height_px: int = SLIDE_H,
+    private_diagnostic_profile: str | None = None,
     blocked_urls: Sequence[str],
     chrome_pipe: Callable[[str, pathlib.Path], Any],
     find_chrome: Callable[[], str | None],
@@ -42,6 +48,7 @@ def render_admitted_html_over_pipe(
         timeout,
         width_px=width_px,
         height_px=height_px,
+        private_diagnostic_profile=private_diagnostic_profile,
         blocked_urls=blocked_urls,
         chrome_pipe=chrome_pipe,
         find_chrome=find_chrome,
@@ -56,6 +63,7 @@ def render_admitted_htmls_over_pipe(
     *,
     width_px: int = SLIDE_W,
     height_px: int = SLIDE_H,
+    private_diagnostic_profile: str | None = None,
     blocked_urls: Sequence[str],
     chrome_pipe: Callable[[str, pathlib.Path], Any],
     find_chrome: Callable[[], str | None],
@@ -70,6 +78,12 @@ def render_admitted_htmls_over_pipe(
     """
 
     from PIL import Image
+
+    if private_diagnostic_profile not in (None, "fixed-glyph-dpr2/v1"):
+        raise ValueError("renderer private diagnostic profile invalid")
+    if private_diagnostic_profile is not None and (width_px, height_px) != (1280, 720):
+        raise ValueError("renderer private diagnostic canvas invalid")
+    raster_scale = 2 if private_diagnostic_profile is not None else 1
 
     def capture(
         page_command: PageCommand,
@@ -87,6 +101,24 @@ def render_admitted_htmls_over_pipe(
                 metrics = parsed if isinstance(parsed, Mapping) else None
             except (TypeError, ValueError):
                 metrics = None
+        if private_diagnostic_profile is not None:
+            if metrics is None or any(
+                isinstance(item, Mapping) and item.get("range_clip_suspect") is True
+                for item in metrics.get("elements", ())
+            ):
+                raise RuntimeError("diagnostic raster requires complete logical metrics without glyph probe")
+            # Keep the CSS viewport unchanged. A prior internal probe can reset
+            # emulation, so set and read back DPR directly before final capture.
+            page_command("Emulation.setDeviceMetricsOverride", {
+                "width": width_px, "height": height_px,
+                "deviceScaleFactor": raster_scale, "mobile": False,
+            })
+            state = page_command("Runtime.evaluate", {
+                "expression": "({dpr:window.devicePixelRatio,width:window.innerWidth,height:window.innerHeight})",
+                "returnByValue": True,
+            }).get("result", {}).get("value")
+            if state != {"dpr": 2, "width": width_px, "height": height_px}:
+                raise RuntimeError("diagnostic raster device metrics mismatch")
         shot = page_command(
             "Page.captureScreenshot",
             {
@@ -96,25 +128,37 @@ def render_admitted_htmls_over_pipe(
             },
         )
         image_bytes = base64.b64decode(str(shot.get("data") or ""), validate=True)
-        image = Image.open(io.BytesIO(image_bytes)).convert("RGB").crop(
-            (0, 0, width_px, height_px)
-        )
+        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        if private_diagnostic_profile is not None:
+            if image.size != (width_px * raster_scale, height_px * raster_scale):
+                raise RuntimeError("diagnostic raster screenshot size mismatch")
+        else:
+            image = image.crop((0, 0, width_px, height_px))
         output = io.BytesIO()
         image.save(output, format="PNG")
-        if metrics is not None:
+        if metrics is not None and private_diagnostic_profile is None:
             from utils.slide_capture_local_fit import measured_html
             metrics = probe_glyph_clipping_sync(
                 measured_html(admitted.html, metrics), metrics, output.getvalue(),
                 command=page_command, frame_id=frame_id,
                 width_px=width_px, height_px=height_px,
             )
+        elif metrics is not None:
+            metrics = dict(metrics)
+            metrics["privateDiagnosticRaster"] = {
+                "profile": private_diagnostic_profile,
+                "logicalCanvasPx": [width_px, height_px],
+                "rasterCanvasPx": [image.width, image.height],
+                "devicePixelRatio": raster_scale,
+                "pipeCodeDigest": private_diagnostic_pipe_code_digest(),
+            }
         return output.getvalue(), metrics
 
     return drive_admitted_htmls_over_pipe(
         admitted_htmls, timeout, width_px=width_px, height_px=height_px,
         blocked_urls=blocked_urls, chrome_pipe=chrome_pipe,
         find_chrome=find_chrome, instrument_html=instrument_html,
-        capture=capture,
+        capture=capture, device_scale_factor=raster_scale,
     )
 
 
@@ -129,6 +173,7 @@ def drive_admitted_htmls_over_pipe(
     find_chrome: Callable[[], str | None],
     instrument_html: Callable[..., tuple[str, str]],
     capture: Callable[[PageCommand, str, AdmittedHtml, Mapping[str, Any]], T],
+    device_scale_factor: int = 1,
 ) -> list[T]:
     """Load each admitted document in its own isolated page, then ``capture``.
 
@@ -213,7 +258,7 @@ def drive_admitted_htmls_over_pipe(
                     {
                         "width": width_px,
                         "height": height_px,
-                        "deviceScaleFactor": 1,
+                        "deviceScaleFactor": device_scale_factor,
                         "mobile": False,
                     },
                 )

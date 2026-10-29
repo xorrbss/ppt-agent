@@ -10,6 +10,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
 from models.document_canvas import DocumentCanvasMetadata
+from models.svg_template_glyph import SvgTemplateFixedGlyphPreview
 
 
 class FrameModel(BaseModel):
@@ -110,7 +111,7 @@ class SvgTemplateBodyEvidence(FrameModel):
 
 
 class SvgTemplateFrame(FrameModel):
-    schema_version: Literal["svg-template-frame/v1", "svg-template-frame/v2"] = "svg-template-frame/v1"
+    schema_version: Literal["svg-template-frame/v1", "svg-template-frame/v2", "svg-template-frame/v3"] = "svg-template-frame/v1"
     frame_id: str
     source_page: int = Field(ge=0)
     source_digest: str
@@ -123,21 +124,33 @@ class SvgTemplateFrame(FrameModel):
     font_manifest: SvgTemplateFontManifest
     issues: tuple[FrameIssue, ...] = ()
     digest: str
+    fixed_glyph_preview: SvgTemplateFixedGlyphPreview | None = None
+
+    @model_serializer(mode="wrap")
+    def serialize_glyph_authority(self, handler):
+        value = handler(self)
+        if self.fixed_glyph_preview is None:
+            value.pop("fixed_glyph_preview", None)
+        return value
 
     @model_validator(mode="after")
     def validate_native_version(self):
         for element in self.elements:
             owned = element.native_fixed_text is not None
             if (self.schema_version.endswith("/v1") and owned) or (
-                self.schema_version.endswith("/v2") and owned != (element.kind == "text")
+                self.schema_version.endswith(("/v2", "/v3")) and owned != (element.kind == "text")
             ):
                 raise ValueError("svg_template_native_layout_version_mismatch")
+        if (self.schema_version.endswith("/v3")) != (self.fixed_glyph_preview is not None):
+            raise ValueError("svg_template_glyph_version_mismatch")
+        if self.fixed_glyph_preview is not None and (self.dynamic_fields or any(e.dynamic_key for e in self.elements)):
+            raise ValueError("svg_template_glyph_dynamic_text_unsupported")
         return self
 
 
 class SvgTemplatePackage(FrameModel):
-    schema_version: Literal["svg-template-package/v1", "svg-template-package/v2"] = "svg-template-package/v1"
-    compiler_version: Literal["ooxml-frame/1", "ooxml-frame/2"] = "ooxml-frame/1"
+    schema_version: Literal["svg-template-package/v1", "svg-template-package/v2", "svg-template-package/v3"] = "svg-template-package/v1"
+    compiler_version: Literal["ooxml-frame/1", "ooxml-frame/2", "ooxml-frame/3"] = "ooxml-frame/1"
     source_digest: str
     source_canvas: DocumentCanvasMetadata
     frames: tuple[SvgTemplateFrame, ...]
@@ -150,7 +163,7 @@ class SvgTemplatePackage(FrameModel):
 
     @model_validator(mode="after")
     def validate_native_version(self):
-        version = "2" if self.schema_version.endswith("/v2") else "1"
+        version = self.schema_version.rsplit("/v", 1)[1]
         if self.compiler_version != "ooxml-frame/" + version or any(
             frame.schema_version != "svg-template-frame/v" + version for frame in self.frames
         ):
@@ -175,7 +188,7 @@ class SvgTemplatePackage(FrameModel):
 
 
 class SvgTemplateFrameAdaptation(FrameModel):
-    schema_version: Literal["svg-template-frame-adaptation/v1", "svg-template-frame-adaptation/v2"] = "svg-template-frame-adaptation/v1"
+    schema_version: Literal["svg-template-frame-adaptation/v1", "svg-template-frame-adaptation/v2", "svg-template-frame-adaptation/v3"] = "svg-template-frame-adaptation/v1"
     adaptation_id: str
     revision: int = 1
     source_frame_digest: str
@@ -186,7 +199,8 @@ class SvgTemplateFrameAdaptation(FrameModel):
 
     @model_validator(mode="after")
     def validate_native_version(self):
-        native = self.frame.schema_version == "svg-template-frame/v2"
-        if native != self.schema_version.endswith("/v2") or (native and self.target_canvas != self.frame.source_canvas):
+        version = self.frame.schema_version.rsplit("/v", 1)[1]
+        native = version in {"2", "3"}
+        if not self.schema_version.endswith("/v" + version) or (native and self.target_canvas != self.frame.source_canvas):
             raise ValueError("svg_template_native_layout_version_mismatch")
         return self

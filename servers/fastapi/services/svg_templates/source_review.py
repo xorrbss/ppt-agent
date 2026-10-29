@@ -237,7 +237,68 @@ def _compare_fixed_regions(source: bytes, rendered: bytes, frame):
     return {"method": "fixed-region-pixel-diff/v1", "regions": results}
 
 
-async def prepare_source_review(session, package, source_path, operation_id):
+def _pdf_rasterizer_identity():
+    import inspect
+    import pypdfium2 as pdfium
+    import pypdfium2_raw.bindings as raw_bindings
+    import PIL
+    from PIL import ImageFile, PngImagePlugin, _imaging
+    library = Path(raw_bindings.__file__).resolve().parent / "pdfium.dll"
+    if not library.is_file():
+        raise ValueError("svg_template_source_pdf_rasterizer_unavailable")
+    return {"kind": "pdfium", "version": str(pdfium.PDFIUM_INFO.version),
+            "helper_version": str(pdfium.PYPDFIUM_INFO.version),
+            "pillow_version": PIL.__version__,
+            "library_digest": bytes_digest(library.read_bytes()),
+            "helper_digest": bytes_digest(Path(inspect.getfile(pdfium.PdfPage)).read_bytes()),
+            "bitmap_helper_digest": bytes_digest(Path(inspect.getfile(pdfium.PdfBitmap)).read_bytes()),
+            "raw_binding_digest": bytes_digest(Path(raw_bindings.__file__).read_bytes()),
+            "png_encoder_digest": bytes_digest(Path(PngImagePlugin.__file__).read_bytes()),
+            "image_file_digest": bytes_digest(Path(ImageFile.__file__).read_bytes()),
+            "image_core_digest": bytes_digest(Path(_imaging.__file__).read_bytes()),
+            "flags": {"rotation": 0, "crop": [0, 0, 0, 0], "may_draw_forms": False,
+                "fill_color": [255, 255, 255, 255], "grayscale": False, "draw_annots": False,
+                "optimize_mode": None, "no_smoothtext": False, "no_smoothimage": False,
+                "no_smoothpath": False, "force_halftone": False, "limit_image_cache": False,
+                "rev_byteorder": False, "prefer_bgrx": False, "maybe_alpha": False,
+                "color_scheme": None, "fill_to_stroke": False,
+                "extra_flags": 0, "force_bitmap_format": int(pdfium.raw.FPDFBitmap_BGRA)},
+            "png_encoder": {"format": "PNG", "optimize": False, "compress_level": 6,
+                            "icc_profile": None, "pnginfo": None},
+            "code_digest": bytes_digest(Path(__file__).read_bytes())}
+
+
+def _render_pdf_source(pdf_bytes, frame):
+    import pypdfium2 as pdfium
+    from services.svg_templates.frame_glyphs import validate_frame_glyph_authority
+    authority = validate_frame_glyph_authority(frame)
+    if bytes_digest(pdf_bytes) != authority.source_pdf_digest:
+        raise ValueError("svg_template_source_pdf_digest_mismatch")
+    identity = _pdf_rasterizer_identity()
+    pdf = pdfium.PdfDocument(pdf_bytes)
+    try:
+        page = pdf[frame.source_page]
+        bitmap = image = None
+        try:
+            bitmap = page.render(scale=frame.source_canvas.width_px / authority.physical_canvas_pt[0],
+                                 bitmap_maker=pdfium.PdfBitmap.new_native, **identity["flags"])
+            image = bitmap.to_pil()
+            if image.size != (frame.source_canvas.width_px, frame.source_canvas.height_px):
+                raise ValueError("svg_template_review_image_size_mismatch")
+            output = BytesIO()
+            image.save(output, **identity["png_encoder"])
+            return output.getvalue(), identity
+        finally:
+            if image is not None:
+                image.close()
+            if bitmap is not None:
+                bitmap.close()
+            page.close()
+    finally:
+        pdf.close()
+
+
+async def prepare_source_review(session, package, source_path, operation_id, *, captured_pdf=None, capture_receipt=None):
     """Render exact source and frame pairs; only a later human decision can approve them."""
     from services.svg_templates.catalog import principal
     from services.artifact_store import configured_public_artifact_service
@@ -247,9 +308,29 @@ async def prepare_source_review(session, package, source_path, operation_id):
     blocked = []
     source_images = {}
     versions = set()
+    glyph_preview = package.schema_version == "svg-template-package/v3"
+    rasterizer = None
+    if glyph_preview:
+        if (not isinstance(captured_pdf, bytes) or not isinstance(capture_receipt, dict)
+                or capture_receipt.get("status") != "captured"
+                or capture_receipt.get("source_digest") != package.source_digest
+                or capture_receipt.get("pdf_digest") != bytes_digest(captured_pdf)
+                or str(capture_receipt.get("operation_id")) != str(operation_id)):
+            raise ValueError("svg_template_source_pdf_capture_binding_mismatch")
     for frame in package.frames:
         try:
-            version, source_image = await _render_source_isolated(Path(source_path), package, frame)
+            if glyph_preview:
+                from services.svg_templates.frame_glyphs import validate_frame_glyph_authority
+                authority = validate_frame_glyph_authority(frame)
+                if authority.capture_receipt_digest != artifact_digest(capture_receipt):
+                    raise ValueError("svg_template_source_pdf_capture_binding_mismatch")
+                source_image, current_rasterizer = await asyncio.to_thread(_render_pdf_source, captured_pdf, frame)
+                if rasterizer is not None and rasterizer != current_rasterizer:
+                    raise ValueError("svg_template_review_environment_changed")
+                rasterizer = current_rasterizer
+                version = capture_receipt["producer_version"]
+            else:
+                version, source_image = await _render_source_isolated(Path(source_path), package, frame)
             image = await render_template_frame_for_review(frame)
             comparison = _compare_fixed_regions(source_image, image, frame)
             source_images[frame.frame_id] = source_image
@@ -290,7 +371,7 @@ async def prepare_source_review(session, package, source_path, operation_id):
         region_digest = artifact_digest({"frame_digest": frame.digest,
             "regions": [e.bounds.model_dump(mode="json") for e in frame.elements if e.layer == "foreground"],
             "source_image_digest": source_digest, "frame_image_digest": frame_digest})
-        frames.append({"frame_id": frame.frame_id, "frame_digest": frame.digest,
+        entry = {"frame_id": frame.frame_id, "frame_digest": frame.digest,
             "font_manifest_digest": frame.font_manifest.digest,
             "source_environment_digest": artifact_digest({"system": platform.platform(),
                 "powerpoint_version": version, "font_manifest_digest": frame.font_manifest.digest}),
@@ -301,12 +382,34 @@ async def prepare_source_review(session, package, source_path, operation_id):
             "comparison": comparison, "review": {"method": "human-source-frame-comparison",
                 "classification_approved": False, "preservation_approved": False,
                 "reviewed_image_pair_digest": artifact_digest({"source_image_digest": source_digest,
-                    "frame_image_digest": frame_digest}), "decision_id": ""}})
+                    "frame_image_digest": frame_digest}), "decision_id": ""}}
+        if glyph_preview:
+            authority = frame.fixed_glyph_preview
+            entry.update(source_image_origin="captured-source-pdf", source_page=frame.source_page,
+                source_pdf_digest=authority.source_pdf_digest, capture_receipt_digest=authority.capture_receipt_digest,
+                fixed_glyph_preview_digest=authority.authority_digest,
+                source_canvas_digest=authority.source_canvas_digest, rasterizer_digest=artifact_digest(rasterizer),
+                raster_scale=frame.source_canvas.width_px / authority.physical_canvas_pt[0])
+        frames.append(entry)
     evidence = {"schema_version": "svg-template-review/v1", "source_digest": package.source_digest,
         "package_digest": package.digest, "renderer": {"kind": "powerpoint", "version": version,
         "environment_digest": artifact_digest({"system": platform.platform(), "powerpoint_version": version,
             "font_manifest_digest": package.font_manifest.digest}),
         "font_manifest_digest": package.font_manifest.digest}, "frames": frames}
+    if glyph_preview:
+        authority = package.frames[0].fixed_glyph_preview
+        evidence.update(schema_version="svg-template-review/v3", source_review_domain="powerpoint-pdf/pdfium/v1")
+        evidence["renderer"] = {"kind": "powerpoint-pdf", "version": version,
+            "producer_build": capture_receipt["producer_build"], "source_pdf_digest": authority.source_pdf_digest,
+            "capture_receipt_digest": authority.capture_receipt_digest, "capture_operation_id": str(operation_id),
+            "rasterizer": rasterizer, "font_manifest_digest": package.font_manifest.digest,
+            "source_canvas_digest": artifact_digest(package.source_canvas)}
+        evidence["renderer"]["environment_digest"] = artifact_digest(evidence["renderer"])
+        from services.svg_templates.frame_review import review_image_pair_digest
+        for entry in frames:
+            if entry.get("status") != "blocked":
+                entry["source_environment_digest"] = evidence["renderer"]["environment_digest"]
+                entry["review"]["reviewed_image_pair_digest"] = review_image_pair_digest(evidence, entry)
     evidence["digest"] = artifact_digest(evidence)
     return evidence, previews
 
@@ -317,6 +420,19 @@ async def verify_source_review_assets(session, evidence):
     from services.artifact_store import configured_public_artifact_service
 
     owner_id, tenant_id = principal()
+    if evidence.get("schema_version") == "svg-template-review/v3":
+        from services.svg_templates.frame_review import validate_pdf_review_provenance
+        from services.svg_templates.source_pdf_worker import verify_capture_receipt
+        for entry in evidence.get("frames", []):
+            if isinstance(entry, dict) and entry.get("status") != "blocked":
+                validate_pdf_review_provenance(evidence, entry)
+        renderer = evidence.get("renderer", {})
+        receipt = verify_capture_receipt(renderer.get("capture_operation_id"), owner_id=owner_id, tenant_id=tenant_id,
+            expected_digest=renderer.get("capture_receipt_digest"),
+            expected_pdf_digest=renderer.get("source_pdf_digest"), expected_source_digest=evidence.get("source_digest"))
+        if (renderer.get("version") != receipt.get("producer_version")
+                or renderer.get("producer_build") != receipt.get("producer_build")):
+            raise ValueError("svg_template_source_pdf_review_producer_mismatch")
     service = configured_public_artifact_service()
     frames = evidence.get("frames") if isinstance(evidence, dict) else None
     if not isinstance(frames, list) or not frames:
@@ -342,6 +458,9 @@ async def verify_source_review_assets(session, evidence):
                 continue
             ref = await service.resolve_ref(session, artifact_id=artifact_id, owner_id=owner_id,
                 tenant_id=tenant_id, expected_digest=image_ref["sha256"], check_object=False)
+            if (evidence.get("schema_version") == "svg-template-review/v3"
+                    and str(ref.created_by_operation_id) != str(evidence["renderer"]["capture_operation_id"])):
+                raise ValueError("svg_template_source_pdf_review_artifact_lineage_mismatch")
             if ref.kind != "image-derivative" or ref.media_type != "image/png":
                 raise ValueError("svg_template_review_image_evidence_missing")
             payload, _proof = await service.read_verified_ref_bytes(ref, max_bytes=32 * 1024 * 1024)

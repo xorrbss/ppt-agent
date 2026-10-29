@@ -307,6 +307,12 @@ def validate_template_publication(snapshot: dict, pages, outline) -> None:
     for index, (payload, _png) in enumerate(pages):
         validate_template_publication_page(snapshot, payload, index=index, count=len(pages),
                                            content=outline.slides[index].content)
+        if page_frame(snapshot, index, len(pages)).schema_version == "svg-template-frame/v3":
+            from services.svg_presentation_checkpoint import _read_png
+            from services.svg_templates.frame_fonts import bytes_digest
+            png = _png if _png is not None else _read_png(payload)
+            if not isinstance(png, bytes) or bytes_digest(png) != payload["fixedGlyphPreview"]["pngDigest"]:
+                raise ValueError("svg_template_glyph_publication_png_mismatch")
 
 
 def validate_template_publication_page(snapshot: dict, payload: dict, *, index: int, count: int,
@@ -332,3 +338,52 @@ def validate_template_publication_page(snapshot: dict, payload: dict, *, index: 
             or proof.get("body_paint_measured") is not True
             or (payload.get("quality") or {}).get("measurement_complete") is not True):
         raise ValueError("svg_template_preservation_unverified")
+    frame = page_frame(snapshot, index, count)
+    marker = payload.get("fixedGlyphPreview")
+    quality = payload.get("quality") or {}
+    glyph_quality = quality.get("fixed_glyph_preview")
+    if frame.schema_version == "svg-template-frame/v3":
+        from services.svg_contract import source_digest
+        from services.svg_templates.frame_glyphs import validate_frame_glyph_authority
+        authority = validate_frame_glyph_authority(frame)
+        selection = template_selection(snapshot)
+        pin = selection.get("template_pin")
+        envelope = payload.get("svgAssetManifest") or {}
+        placement = envelope.get("screenPlacement") or {}
+        required = {"version", "authorityDigest", "materializerCodeDigest", "canonicalSvgDigest",
+                    "screenDisplaySvgDigest", "screenRenderSvgDigest", "qidProjectionDigest", "trustedFontCssDigest",
+                    "pngDigest", "fontManifestDigest", "screenPlacementDigest",
+                    "slideRevision", "templatePin", "frameId", "frameDigest", "adaptationDigest"}
+        shared = {"version", "authorityDigest", "materializerCodeDigest", "canonicalSvgDigest",
+                  "screenDisplaySvgDigest", "screenRenderSvgDigest", "qidProjectionDigest", "trustedFontCssDigest", "pngDigest"}
+        if (not isinstance(marker, dict) or set(marker) != required or not isinstance(glyph_quality, dict)
+                or {k: marker[k] for k in shared} != glyph_quality
+                or marker["version"] != "svg-fixed-glyph-preview/v1"
+                or marker["authorityDigest"] != authority.authority_digest
+                or marker["materializerCodeDigest"] != authority.materializer_code_digest
+                or marker["canonicalSvgDigest"] != source_digest(svg)
+                or quality.get("source_digest") != marker["canonicalSvgDigest"]
+                or not isinstance(pin, dict) or set(pin) != {"templateId", "revision", "digest"}
+                or not isinstance(pin.get("templateId"), str) or not pin["templateId"]
+                or type(pin.get("revision")) is not int or pin["revision"] < 1
+                or not isinstance(pin.get("digest"), str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", pin["digest"])
+                or marker["templatePin"] != pin
+                or marker["frameId"] != frame.frame_id or marker["frameDigest"] != frame.digest
+                or marker["adaptationDigest"] != expected["adaptation_digest"]
+                or marker["fontManifestDigest"] != frame.font_manifest.digest
+                or (quality.get("trusted_font_materialization") or {}).get("manifest_digest") != frame.font_manifest.digest
+                or not isinstance(marker["screenDisplaySvgDigest"], str)
+                or not re.fullmatch(r"sha256:[0-9a-f]{64}", marker["screenDisplaySvgDigest"])
+                or any(not isinstance(marker[k], str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", marker[k])
+                       for k in ("screenRenderSvgDigest", "qidProjectionDigest", "trustedFontCssDigest"))
+                or not isinstance(placement.get("sha256"), str)
+                or not re.fullmatch(r"[0-9a-f]{64}", placement["sha256"])
+                or marker["screenPlacementDigest"] != placement["sha256"]
+                or envelope.get("slideRevision") is None or marker["slideRevision"] != envelope["slideRevision"]
+                or not isinstance(payload.get("png_sha256"), str)
+                or not re.fullmatch(r"[0-9a-f]{64}", payload["png_sha256"])
+                or marker["pngDigest"] != "sha256:" + payload["png_sha256"]
+                or quality.get("png_digest") != marker["pngDigest"]):
+            raise ValueError("svg_template_glyph_publication_identity_mismatch")
+    elif marker is not None or glyph_quality is not None:
+        raise ValueError("svg_template_glyph_version_mismatch")

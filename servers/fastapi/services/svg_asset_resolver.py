@@ -76,6 +76,103 @@ async def resolve_slide_svg_preview(
     )
 
 
+async def resolve_fixed_glyph_slide_preview(
+    slide, presentation, *, session, owner_id, tenant_id: str, width: int, height: int,
+    revision: str | None,
+) -> str:
+    """Return only a display derivative of a persisted, pinned v3 slide."""
+    from models.svg_template_frame import SvgTemplateFrameAdaptation
+    from models.svg_template_codec import unpack_adaptation_fonts
+    from services.svg_contract import source_digest
+    from services.svg_master_furniture import attested_svg_furniture
+    from services.svg_templates.catalog import resolve_template_selection
+    from services.svg_templates.frame_glyphs import validate_frame_glyph_authority
+    from services.svg_templates.generation import template_selection
+    from services.svg_renderer import _svg_fragment, svg_preview_html, template_manifest_font_css
+    from utils.svg_template_glyph_materialization import materialize_fixed_glyph_svg
+
+    content = slide.content or {}
+    receipt = content.get("svgReceipt") or {}
+    marker = receipt.get("fixedGlyphPreview")
+    if not isinstance(marker, dict) or marker.get("version") != "svg-fixed-glyph-preview/v1":
+        raise ValueError("svg_template_glyph_marker_invalid")
+    canonical_svg = slide.svg_content or ""
+    canonical_digest = source_digest(canonical_svg)
+    envelope = content.get("svgAssetManifest")
+    expected_revision = (str(envelope.get("slideRevision")) if isinstance(envelope, dict)
+                         else canonical_digest)
+    if (revision != expected_revision or marker.get("slideRevision") != (
+            envelope.get("slideRevision") if isinstance(envelope, dict) else canonical_digest)
+            or marker.get("canonicalSvgDigest") != canonical_digest
+            or (receipt.get("quality") or {}).get("fixed_glyph_preview", {}).get("pngDigest")
+            != marker.get("pngDigest")
+            or (receipt.get("quality") or {}).get("png_digest") != marker.get("pngDigest")):
+        raise ValueError("svg_template_glyph_revision_mismatch")
+    if marker.get("pngDigest") != "sha256:" + str(receipt.get("png_sha256", "")):
+        raise ValueError("svg_template_glyph_png_binding_mismatch")
+    if isinstance(envelope, dict):
+        placement = envelope.get("screenPlacement") or {}
+        if marker.get("screenPlacementDigest") != placement.get("sha256"):
+            raise ValueError("svg_template_glyph_placement_mismatch")
+    snapshot = ((presentation.theme or {}).get("svg") or {}).get("styleSnapshot")
+    selection = template_selection(snapshot)
+    if (selection is None or selection.get("mode") != "template-redesign"
+            or selection.get("template_pin") != marker.get("templatePin")):
+        raise ValueError("svg_template_glyph_template_pin_mismatch")
+    # A published presentation's frozen snapshot is the same archived-pin
+    # authority used by generation recovery. Recheck the owner-scoped version.
+    current = await resolve_template_selection(session, pin=selection["template_pin"],
+        mode="template-redesign", canvas=selection["canvas"], allow_archived=True)
+    if (current.get("version_id") != selection.get("version_id")
+            or current.get("package") != selection.get("package")
+            or current.get("adaptations") != selection.get("adaptations")):
+        raise ValueError("svg_template_glyph_frozen_pin_mismatch")
+    frame_id = marker.get("frameId")
+    raw_adaptation = selection["adaptations"].get(frame_id)
+    if not isinstance(raw_adaptation, dict):
+        raise ValueError("svg_template_glyph_frame_missing")
+    adaptation = SvgTemplateFrameAdaptation.model_validate(unpack_adaptation_fonts(
+        raw_adaptation, selection["package"]))
+    frame = adaptation.frame
+    authority = frame.fixed_glyph_preview
+    if (authority is None or frame.frame_id != frame_id
+            or frame.digest != marker.get("frameDigest")
+            or adaptation.digest != marker.get("adaptationDigest")
+            or authority.authority_digest != marker.get("authorityDigest")
+            or authority.materializer_code_digest != marker.get("materializerCodeDigest")
+            or frame.font_manifest.digest != marker.get("fontManifestDigest")
+            or frame.source_canvas.width_px != width or frame.source_canvas.height_px != height):
+        raise ValueError("svg_template_glyph_authority_mismatch")
+    validate_frame_glyph_authority(frame)
+    furniture = receipt.get("system_furniture")
+    if not isinstance(furniture, dict):
+        raise ValueError("svg_template_glyph_furniture_missing")
+    contract = {node.get("href"): {"required": True} for node in ET.fromstring(canonical_svg).iter()
+                if node.tag.rsplit("}", 1)[-1] == "image"
+                and node.get("href", "").startswith("source-slot-")}
+    attested_svg_furniture(canonical_svg, furniture,
+        source_manifest=contract if envelope is not None else None, width=width, height=height)
+    binding = furniture.get("generated_template_frame") or {}
+    if binding.get("fixed_glyph_preview_digest") != authority.authority_digest:
+        raise ValueError("svg_template_glyph_furniture_authority_mismatch")
+    resolved = await resolve_slide_svg_preview(slide, session=session, owner_id=owner_id,
+        tenant_id=tenant_id, width=width, height=height)
+    render_wrapper = svg_preview_html(canonical_svg, width=width, height=height,
+        materialized_svg=resolved, font_manifest=frame.font_manifest,
+        system_furniture=furniture)
+    result = materialize_fixed_glyph_svg(
+        canonical_svg, _svg_fragment(render_wrapper).group(1), authority,
+        trusted_font_css=template_manifest_font_css(
+            frame.font_manifest, _svg_fragment(render_wrapper).group(1)))
+    if (result.display_digest != marker.get("screenDisplaySvgDigest")
+            or result.render_digest != marker.get("screenRenderSvgDigest")
+            or result.projection_digest != marker.get("qidProjectionDigest")
+            or result.trusted_font_css_digest != marker.get("trustedFontCssDigest")
+            or result.canonical_digest != marker.get("canonicalSvgDigest")):
+        raise ValueError("svg_template_glyph_display_digest_mismatch")
+    return result.display_svg
+
+
 def _contract_manifest(manifest: SourceManifest) -> dict[str, dict]:
     return {
         slot.slot_id: {
