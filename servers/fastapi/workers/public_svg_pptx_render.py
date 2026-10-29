@@ -15,6 +15,7 @@ from time import monotonic, sleep
 import uuid
 
 from utils.powerpoint_ownership import claim_empty_powerpoint, process_identity as _process_identity
+from utils import powerpoint_ownership
 
 SCHEMA = "svg-final-pptx-office-render/v1"
 MINIMUM_AVAILABLE_MEMORY = 8 * 1024**3
@@ -46,6 +47,14 @@ def _unavailable(reason, *, retryable=False):
 
 def _sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def checker_digest():
+    """Bind render evidence to the renderer and its shared ownership authority."""
+    digest = hashlib.sha256(b"svg-final-pptx-render-checker/v2\0")
+    for name, path in ((b"renderer", __file__), (b"ownership", powerpoint_ownership.__file__)):
+        digest.update(name + b"\0" + hashlib.sha256(Path(path).read_bytes()).digest())
+    return digest.hexdigest()
 
 
 def _available_memory():
@@ -373,7 +382,7 @@ def _render_serialized(target, output_directory, *, page_count, width_px, height
     request = dict(pptx=str(target.resolve()), outputDirectory=str(output_directory.resolve()),
         pageCount=page_count, widthPx=width_px, heightPx=height_px,
         activationTimeout=min(ACTIVATION_TIMEOUT_SECONDS, timeout),
-        rendererVersion=_sha(__file__), jobName=f"Local\\svg-final-review-{uuid.uuid4()}")
+        rendererVersion=checker_digest(), jobName=f"Local\\svg-final-review-{uuid.uuid4()}")
     request_path, result_path = output_directory / "request.json", output_directory / "result.json"
     request_path.write_text(json.dumps(request), encoding="utf-8")
     activated_path = output_directory / "activated"

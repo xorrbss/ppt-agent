@@ -64,7 +64,7 @@ def office_host(monkeypatch):
         return dict(schemaVersion=office.SCHEMA, status="measured", artifactDigest=digest,
             artifactDigestAfter=digest, hashInvariant=True, openReadOnly=True, openWithWindow=False,
             availablePhysicalMemoryBytes=office.MINIMUM_AVAILABLE_MEMORY, pageCount=1,
-            checkerCodeDigest=sha256_hex(Path(office.__file__).read_bytes()),
+            checkerCodeDigest=office.checker_digest(),
             renderIsolation="windows-job-object", rendererQuit=True,
             pages=[dict(index=0, pngSha256=sha256_hex(png.read_bytes()), widthPx=16, heightPx=9)])
 

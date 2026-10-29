@@ -164,7 +164,7 @@ def test_persisted_domains_are_connected_without_claiming_visual_or_native_accep
                  artifactDigestAfter="sha256:" + artifact_digest, hashInvariant=True, openReadOnly=True, openWithWindow=False,
                  operationId=str(export_id), presentationId=str(presentation_id), sourceRevision=1,
                  sourceDigests=[svg_digest], ownerId=str(owner), tenantId=tenant, pageCount=1,
-                 converterDigest=converter_digest(), checkerCodeDigest=sha256_hex(Path(public_svg_pptx_render.__file__).read_bytes()),
+                 converterDigest=converter_digest(), checkerCodeDigest=public_svg_pptx_render.checker_digest(),
                  availablePhysicalMemoryBytes=2**40, pages=[dict(index=0, pngSha256=png_digest)])
     proof["evidenceDigest"] = canonical_json_digest(proof)
     producer = seal_final_review(SimpleNamespace(operation_id=review_id, owner_id=owner, owner_scope="synthetic-owner",

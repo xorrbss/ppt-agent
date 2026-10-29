@@ -65,7 +65,7 @@ def rendered_review(monkeypatch):
         return dict(schemaVersion=office.SCHEMA, status="measured", artifactDigest=inputs["artifactDigest"],
             artifactDigestAfter=inputs["artifactDigest"], hashInvariant=True, openReadOnly=True, openWithWindow=False,
             availablePhysicalMemoryBytes=office.MINIMUM_AVAILABLE_MEMORY, pageCount=1,
-            checkerCodeDigest=sha256_hex(Path(office.__file__).read_bytes()), renderIsolation="windows-job-object",
+            checkerCodeDigest=office.checker_digest(), renderIsolation="windows-job-object",
             rendererQuit=True, pages=[dict(index=0, pngSha256=sha256_hex(png.read_bytes()), widthPx=16, heightPx=9)])
 
     monkeypatch.setattr(office, "render_final_pptx", render)
@@ -110,6 +110,78 @@ def test_review_render_is_bound_to_review_and_current_artifact(rendered_review):
     changed = dict(inputs, artifactDigest="sha256:" + "f" * 64)
     assert not _current(claim, changed, inputs["proof"])
     assert _domain(claim, changed, review)["reasonCode"] == "svg_final_pptx_render_unavailable"
+
+
+def test_checker_dependency_digest_binds_producer_validator_and_ownership(
+    rendered_review, tmp_path, monkeypatch
+):
+    import hashlib
+    import json
+    from utils import powerpoint_ownership
+
+    claim, inputs, _ = rendered_review
+    baseline = office.checker_digest()
+    assert inputs["proof"]["checkerCodeDigest"] == baseline
+    assert _current(claim, inputs, inputs["proof"])
+    worker = Path(office.__file__).resolve()
+    helper = Path(powerpoint_ownership.__file__).resolve()
+    expected = hashlib.sha256(b"svg-final-pptx-render-checker/v2\0")
+    for name, path in ((b"renderer", worker), (b"ownership", helper)):
+        expected.update(name + b"\0" + hashlib.sha256(path.read_bytes()).digest())
+    assert baseline == expected.hexdigest()
+
+    captured = []
+    handle = SimpleNamespace(Close=lambda: None)
+    monkeypatch.setitem(sys.modules, "win32api", SimpleNamespace(OpenProcess=lambda *_: handle))
+    monkeypatch.setitem(sys.modules, "win32job", SimpleNamespace(
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE=8192, JobObjectExtendedLimitInformation=9,
+        CreateJobObject=lambda *_: handle,
+        QueryInformationJobObject=lambda *_: {"BasicLimitInformation": {"LimitFlags": 0}},
+        SetInformationJobObject=lambda *_: None, AssignProcessToJobObject=lambda *_: None,
+        TerminateJobObject=lambda *_: None))
+
+    class Child:
+        pid = 20
+        returncode = 0
+        stdin = SimpleNamespace(close=lambda: None)
+
+        def __init__(self, args, **kwargs):
+            self.request_path, self.result_path = map(Path, args[-2:])
+
+        def communicate(self, **kwargs):
+            request = json.loads(self.request_path.read_text())
+            captured.append(request["rendererVersion"])
+            self.result_path.write_text(json.dumps(dict(status="measured",
+                artifactDigest="sha256:" + office._sha(request["pptx"]),
+                checkerCodeDigest=request["rendererVersion"])))
+
+        def poll(self):
+            return 0
+
+        def wait(self):
+            return 0
+
+    monkeypatch.setattr(office.subprocess, "Popen", Child)
+    target = tmp_path / "immutable.pptx"
+    target.write_bytes(b"immutable")
+    result = office._render_serialized(target, tmp_path / "render", page_count=1,
+        width_px=16, height_px=9, timeout=1)
+    assert captured == [baseline] and result["checkerCodeDigest"] == baseline
+
+    historical = deepcopy(inputs["proof"])
+    historical["checkerCodeDigest"] = sha256_hex(worker.read_bytes())
+    historical.pop("evidenceDigest")
+    historical["evidenceDigest"] = "sha256:" + canonical_json_sha256(historical)
+    assert not _current(claim, inputs, historical)
+    original_read = Path.read_bytes
+    for dependency in (worker, helper):
+        with monkeypatch.context() as changed:
+            changed.setattr(Path, "read_bytes", lambda path: original_read(path)
+                + (b"\n# changed dependency\n" if path.resolve() == dependency else b""))
+            assert office.checker_digest() != baseline
+            assert not _current(claim, inputs, inputs["proof"])
+    assert office.checker_digest() == baseline
+    assert inputs["proof"]["checkerCodeDigest"] == baseline
 
 
 @pytest.mark.parametrize("field,value", [

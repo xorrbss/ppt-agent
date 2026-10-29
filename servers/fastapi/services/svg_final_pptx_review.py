@@ -54,7 +54,7 @@ def final_render_current(proof, *, artifact_digest, operation_id, presentation_i
         and (owner_id is None or proof.get("ownerId") == str(owner_id))
         and (tenant_id is None or proof.get("tenantId") == tenant_id)
         and proof.get("converterDigest") == converter_digest()
-        and proof.get("checkerCodeDigest") == sha256_hex(Path(public_svg_pptx_render.__file__).read_bytes())
+        and proof.get("checkerCodeDigest") == public_svg_pptx_render.checker_digest()
         and proof.get("evidenceDigest") == "sha256:" + canonical_json_sha256(unsigned)
         and isinstance(proof.get("availablePhysicalMemoryBytes"), int)
         and proof["availablePhysicalMemoryBytes"] >= public_svg_pptx_render.MINIMUM_AVAILABLE_MEMORY
