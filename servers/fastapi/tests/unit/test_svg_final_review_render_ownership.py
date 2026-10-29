@@ -430,15 +430,15 @@ def test_com_window_binding_guards_every_document_action(tmp_path, monkeypatch, 
     class Application:
         Version = "test"
 
-        @property
-        def Caption(self):
+        def get_caption(self):
             return state.caption
 
-        @Caption.setter
-        def Caption(self, value):
+        def set_caption(self, value):
             if fault == "restore" and value == "original":
                 raise ValueError("restore refused")
             state.caption = value
+
+        Caption = property(get_caption, set_caption)
 
         def Quit(self):
             events.append("quit")
