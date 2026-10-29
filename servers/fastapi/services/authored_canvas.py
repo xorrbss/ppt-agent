@@ -232,7 +232,9 @@ def restore_request_canvas_metadata(request: Any, payload: object, *, present: b
                 and getattr(request, "source_mode", None) in {"source_content_restyle", "raster_reconstruction"}
                 and getattr(request, "page_size", None) is None
             )
-            if getattr(request, "svg_canvas", None) is not None or request.aspect_ratio == "4:3":
+            if (getattr(request, "svg_canvas", None) is not None or request.aspect_ratio == "4:3"
+                    or (getattr(request, "strategy", None) == "svg"
+                        and getattr(request, "svg_template_pin", None) is not None)):
                 if metadata != selected_svg_canvas(request):
                     raise ValueError("document_canvas_request_mismatch")
             elif source_manifest_canvas:

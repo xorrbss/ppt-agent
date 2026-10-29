@@ -140,6 +140,57 @@ def test_svg_template_canvas_matches_create_without_changing_legacy_selectors():
         )
 
 
+def test_svg_template_canvas_durable_roundtrip_preserves_strict_contract_and_legacy():
+    from services.presentation_generation_staging import (
+        INTERNAL_CANVAS_KEY, _durable_request_payload, _request_from_durable_payload,
+    )
+    from utils.hashing import canonical_json_digest
+
+    request = GeneratePresentationRequest(
+        content="canvas fixture", strategy="svg", template="authored", aspect_ratio="16:9",
+        n_slides=1, common_header_mode="free",
+        svgTemplatePin={"templateId": "canvas-test", "revision": 1, "digest": "sha256:" + "a" * 64},
+        svgTemplateMode="template-redesign", svgTemplateFrameMap={"1": "frame-1"},
+    )
+    canvas = request_canvas_metadata(request)
+    selection = {
+        "schema_version": "svg-template-selection/v1",
+        "template_pin": request.svg_template_pin.model_dump(mode="json", by_alias=True),
+        "mode": request.svg_template_mode, "frame_map": request.svg_template_frame_map,
+        "canvas": canvas,
+    }
+    selection["digest"] = canonical_json_digest(selection)
+    request._svg_template_selection = copy.deepcopy(selection)
+    request._svg_style_snapshot = {"svg_template": copy.deepcopy(selection)}
+    payload = _durable_request_payload(request)
+    restored = _request_from_durable_payload(payload)
+    assert restored.svg_template_pin == request.svg_template_pin
+    assert restored.svg_template_mode == request.svg_template_mode
+    assert restored.svg_template_frame_map == {"1": "frame-1"}
+    assert restored._svg_template_selection == selection
+    assert request_canvas_metadata(restored) == payload[INTERNAL_CANVAS_KEY] == canvas
+    assert payload["_internal_canvas_digest"] == canvas_digest(canvas)
+    assert canvas["physicalSize"] == {"widthEmu": 12192000, "heightEmu": 6858000}
+
+    tampered = copy.deepcopy(payload)
+    tampered[INTERNAL_CANVAS_KEY]["safeArea"]["x"] += 1
+    with pytest.raises(ValueError, match="authored_canvas_contract_invalid"):
+        _request_from_durable_payload(tampered)
+    tampered = copy.deepcopy(payload)
+    tampered["_internal_canvas_digest"] = "sha256:" + "0" * 64
+    with pytest.raises(ValueError, match="document_canvas_digest_mismatch"):
+        _request_from_durable_payload(tampered)
+
+    legacy = GeneratePresentationRequest(content="legacy fixture", strategy="authored", template="authored")
+    legacy_payload = _durable_request_payload(legacy)
+    legacy_payload.pop("strategy")
+    legacy_payload.pop("_internal_generation_strategy_reason")
+    legacy_restored = _request_from_durable_payload(legacy_payload)
+    assert legacy_restored.strategy == "authored"
+    assert request_canvas_metadata(legacy_restored) == legacy_payload[INTERNAL_CANVAS_KEY]
+    assert "_internal_canvas_digest" not in legacy_payload
+
+
 @pytest.mark.parametrize(
     "selectors",
     [
