@@ -104,6 +104,42 @@ def test_source_canvas_preserves_exact_pptx_emu_with_bounded_raster_projection()
     }
 
 
+def test_svg_template_canvas_matches_create_without_changing_legacy_selectors():
+    import asyncio
+
+    from api.v1.ppt.endpoints.presentation_create_canvas import admitted_create_canvas
+    from services.authored_canvas import canvas_metadata_for_aspect_ratio
+    from services.svg_canvas import svg_canvas_for_aspect_ratio
+
+    template = {
+        "svgTemplatePin": {"templateId": "canvas-test", "revision": 1, "digest": "sha256:" + "a" * 64},
+        "svgTemplateMode": "template-redesign", "svgTemplateFrameMap": {"1": "frame-1"},
+    }
+    request = GeneratePresentationRequest(
+        content="canvas fixture", strategy="svg", aspect_ratio="16:9", **template,
+    )
+    created = asyncio.run(admitted_create_canvas(None, None, None, "16:9", strategy="svg"))
+    assert request_canvas_metadata(request) == created
+    assert created["contractVersion"] == "document-canvas/v1"
+    assert created["physicalSize"] == {"widthEmu": 12192000, "heightEmu": 6858000}
+
+    legacy = GeneratePresentationRequest(content="legacy fixture", strategy="svg", aspect_ratio="16:9")
+    assert request_canvas_metadata(legacy) == canvas_metadata_for_aspect_ratio("16:9").model_dump(
+        mode="json", by_alias=True,
+    )
+    frozen_mismatch = GeneratePresentationRequest(
+        content="canvas fixture", strategy="svg", aspect_ratio="16:9", **template,
+    )
+    frozen_mismatch._document_canvas = svg_canvas_for_aspect_ratio("4:3")
+    with pytest.raises(ValueError, match="document_canvas_request_mismatch"):
+        request_canvas_metadata(frozen_mismatch)
+    with pytest.raises(ValidationError, match="document_canvas_selectors_conflict"):
+        GeneratePresentationRequest(
+            content="conflicting fixture", strategy="svg", aspect_ratio="16:9",
+            svgCanvas={"widthMm": 300, "heightMm": 200}, **template,
+        )
+
+
 @pytest.mark.parametrize(
     "selectors",
     [

@@ -146,7 +146,8 @@ def request_canvas_contract(request: Any) -> CanvasContract:
     from services.svg_canvas import selected_svg_canvas
 
     svg = resolve_generation_strategy(request) == "svg"
-    if svg and (getattr(request, "svg_canvas", None) is not None or request.aspect_ratio == "4:3"):
+    if svg and (getattr(request, "svg_canvas", None) is not None or request.aspect_ratio == "4:3"
+                or getattr(request, "svg_template_pin", None) is not None):
         metadata = selected_svg_canvas(request)
         frozen = getattr(request, "_document_canvas", None)
         if frozen is not None and frozen != metadata:
