@@ -407,6 +407,49 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
         validate(full_payload, full_schema)
         full_messages = prompt_mod.build_advisory_messages(b"", slide_count=1, required=True,
             pngs=[png], design_context=full_context)
+        assert "FULL protocol single-current-deck/v1" in full_messages[0].content
+        assert "complete singleton composition on all five axes" in full_messages[0].content
+        assert "completeness never implies passed" in full_messages[0].content
+        assert "anonymous A/B variants together" not in full_messages[0].content
+        assert "the alternative is" not in full_messages[0].content
+        assert "alternativeAxes describes its paired alternative" not in full_messages[0].content
+        assert "For each compared axis record preferred" not in full_messages[0].content
+        full_labels = [part.text for part in full_messages[1].content if type(part).__name__ == "TextContentPart"]
+        assert full_labels[1:] == ["Current deck evaluation page 1."]
+        assert [part.data for part in full_messages[1].content if type(part).__name__ == "ImageContentPart"] == [png]
+        for label in ("A", "B"):
+            current_messages = prompt_mod.build_advisory_messages(b"", slide_count=1, required=True,
+                pngs=[png], design_context={**full_context, "blindVariantLabel": label})
+            assert current_messages[0].content == full_messages[0].content
+        two_page_context = {**full_context, "pages": [full_context["pages"][0], dict(index=1, content="Second page.")]}
+        two_page_messages = prompt_mod.build_advisory_messages(b"", slide_count=2, required=True,
+            pngs=[png, png], design_context=two_page_context)
+        assert "FULL protocol single-current-deck/v1" in two_page_messages[0].content
+        assert json.loads(two_page_messages[1].content[0].text)["deckComplete"] is True
+        assert [part.text for part in two_page_messages[1].content
+                if type(part).__name__ == "TextContentPart"][1:] == [
+                    "Current deck evaluation page 1.", "Current deck evaluation page 2."]
+        incomplete_context = {**full_context, "deckComplete": False}
+        incomplete_messages = prompt_mod.build_advisory_messages(b"", slide_count=1, required=True,
+            pngs=[png], design_context=incomplete_context)
+        assert json.loads(incomplete_messages[1].content[0].text)["deckComplete"] is False
+        assert shared_advisory._parse_baseline_review(full_payload, slide_count=1,
+            context=incomplete_context) is None
+        uncertain_payload = deepcopy(full_payload)
+        uncertain_payload["slides"][0]["evaluated"] = False
+        uncertain_payload["slides"][0]["axes"]["repetition_deck_flow"].update(
+            verdict="unreviewed", visibleEvidence="Material source relationship evidence remains uncertain.")
+        uncertain_payload["deckFlow"].update(evaluated=False, repetitionGroups=[])
+        uncertain_review = shared_advisory._parse_baseline_review(uncertain_payload,
+            slide_count=1, context=full_context)
+        assert uncertain_review["pages"][0]["evaluated"] is False
+        assert uncertain_review["pages"][0]["axes"]["repetition_deck_flow"]["verdict"] == "unreviewed"
+        legacy_full_context = {key: value for key, value in full_context.items() if key != "reviewPrinciplesVersion"}
+        legacy_messages = prompt_mod.build_advisory_messages(b"", slide_count=1, required=True,
+            pngs=[png], design_context=legacy_full_context)
+        assert "FULL protocol single-current-deck/v1" not in legacy_messages[0].content
+        assert "anonymous A/B variants together" in legacy_messages[0].content
+        assert "FULL protocol single-current-deck/v1" not in messages[0].content
         assert "every supplied composition.groups.pages cluster" in full_messages[0].content
         assert "including harmless clusters and well-designed diverse pages" in full_messages[0].content
         async def completed_review(*args, **kwargs):
@@ -450,7 +493,14 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
         legacy_principles_digest = "sha256:6e16d5429931c880019fa8346543acd5fd3a126f4172a57ec7635f0ba8c5d9ce"
         assert sha256_prefixed(legacy_principles.encode("utf-8")) == legacy_principles_digest
         assert prompt_mod.baseline_design_principles_digest() == legacy_principles_digest
-        assert prompt_mod.baseline_design_principles_digest(full_context) == sha256_prefixed(principles.encode("utf-8"))
+        full_principles = principles + prompt_mod.FULL_BASELINE_CURRENT_DECK_RULES
+        assert prompt_mod.baseline_design_principles_digest(full_context) == sha256_prefixed(
+            full_principles.encode("utf-8"))
+        with monkeypatch.context() as prior_full_protocol:
+            prior_full_protocol.setattr(prompt_mod, "FULL_BASELINE_CURRENT_DECK_RULES", "")
+            assert prompt_mod.baseline_design_principles_digest(full_context) != sha256_prefixed(
+                full_principles.encode("utf-8"))
+            assert prompt_mod.baseline_design_principles_digest(legacy_full_context) == legacy_principles_digest
         for cue in ("actual painted distribution", "large empty bands", "Intentional whitespace",
                     "low occupancy alone is not a defect", "grounded designTarget", "Do not invent an issue"):
             assert cue in full_messages[0].content
