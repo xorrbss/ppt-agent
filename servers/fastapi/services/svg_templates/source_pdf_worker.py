@@ -99,6 +99,13 @@ def _pdf_metadata(data, package):
         pdf.close()
 
 
+def _require_normal_com_cleanup(receipt):
+    _require(isinstance(receipt, dict) and receipt.get("status") == "captured"
+             and receipt.get("com_cleanup") == "owned_application_quit"
+             and not any(key in receipt for key in
+                         ("failure", "failure_class", "cleanup_failure", "cleanup_failures")))
+
+
 def verify_capture_receipt(operation_id, *, owner_id, tenant_id, expected_digest,
                            expected_pdf_digest, expected_source_digest):
     """Read the exact operation-owned immutable receipt; no caller-selected paths."""
@@ -111,6 +118,9 @@ def verify_capture_receipt(operation_id, *, owner_id, tenant_id, expected_digest
     _require(path.is_file() and path.stat().st_size <= 2 * 1024**2)
     receipt = json.loads(path.read_text(encoding="utf-8"))
     _require(artifact_digest(receipt) == expected_digest and receipt.get("status") == "captured")
+    _require(not any(key in receipt for key in
+                     ("failure", "failure_class", "cleanup_failure", "cleanup_failures")))
+    _require_normal_com_cleanup(receipt.get("child_receipt"))
     _require(receipt.get("operation_id") == operation and receipt.get("owner_id") == owner
              and receipt.get("tenant_digest") == bytes_digest(str(tenant_id).encode())
              and receipt.get("source_digest") == expected_source_digest
@@ -193,7 +203,8 @@ def capture_source_pdf(source_path, package, *, operation_id, owner_id, tenant_i
         receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
         result["child_receipt"] = receipt
         result["export_calls"] = receipt.get("export_calls", 0)
-        _require(receipt.get("status") == "captured" and receipt.get("export_calls") == 1)
+        _require_normal_com_cleanup(receipt)
+        _require(receipt.get("export_calls") == 1)
         _require(all(receipt.get(k) == marker[k] for k in marker))
         _require(0 < (directory / "source.pdf").stat().st_size <= MAX_PDF_BYTES)
         pdf_bytes = (directory / "source.pdf").read_bytes()
@@ -346,15 +357,21 @@ def _child(request_path, receipt_path):
             finally:
                 result["com_cleanup"] = "owned_job_fallback"
                 try:
-                    guard("before_close")
-                    if document is not None:
-                        document.Close()
+                    guard("before_quit_source")
+                    _require(document is not None and int(application.Presentations.Count) == 1)
+                    _require(application.Presentations.Item(1)._oleobj_ == document._oleobj_)
+                    _require(int(document.ReadOnly) == -1 and int(document.Saved) == -1
+                             and Path(document.FullName).resolve() == path.resolve())
+                    _require(bytes_digest(path.read_bytes()) == package.source_digest)
+                    # Closing the last document can destroy the originally bound
+                    # HWND. Quit closes this sole unmodified read-only document
+                    # while that exact application window is still verifiable.
                     guard("before_quit")
-                    _require(int(application.Presentations.Count) == 0)
                     application.Quit()
-                    result["com_cleanup"] = "owned_close_quit"
+                    result["com_cleanup"] = "owned_application_quit"
                 except BaseException as error:
-                    result["cleanup_failure"] = _diagnostic(error, "guarded_close_quit")
+                    result.update(status="failed_no_retry", failure_class=type(error).__name__)
+                    result["cleanup_failure"] = _diagnostic(error, "guarded_application_quit")
     except BaseException as error:
         result.update(status="failed_no_retry", failure_class=type(error).__name__)
         result["failure"] = _diagnostic(error, stage)
