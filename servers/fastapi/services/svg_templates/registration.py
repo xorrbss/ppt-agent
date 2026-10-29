@@ -51,7 +51,7 @@ async def new_operation(session, *, kind: str, payload: dict, name: str, convers
     else:
         now = get_current_utc_datetime()
         presentation = PresentationModel(owner_id=owner, content=name, title=name, n_slides=0,
-            language="ko", created_at=now, updated_at=now, lifecycle_status="staging")
+            language="ko", mode="svg", created_at=now, updated_at=now, lifecycle_status="staging")
         session.add(presentation)
         await session.flush()
         presentation_id = presentation.id
