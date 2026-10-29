@@ -103,7 +103,7 @@ _BLOCKED_RENDERER_URL_PATTERNS = [
 # is insufficient: local font/image/CSS files and the resolved Chromium binary
 # may change without changing the authored Scene payload.
 CACHE_IDENTITY_VERSION = "authored-render-cache-identity/v2-capability-registry"
-MEASUREMENT_CACHE_VERSION = "authored-measurement/v18-preserved-svg-whitespace"
+MEASUREMENT_CACHE_VERSION = "authored-measurement/v19-exclude-trusted-font-resource-text"
 _SCENE_DIGEST_PATTERN = re.compile(
     r'(?:data-scene-digest|data-scene-hash|name\s*=\s*["\']scene-digest["\'])'
     r'\s*=\s*["\']([^"\']+)["\']',
@@ -792,7 +792,19 @@ def _instrument_authored_html(
         evidence: evidence('measured', null, {{sampled, known, covered, known_occluded_fraction: fraction, covered_alpha_weight: coveredWeight, owned_paint_source: ownedPaintSource}})
       }};
     }};
-    const elements = allQids.map((node, domIndex) => {{
+      const renderedTextWithoutTrustedFontResources = (node) => {{
+        const ordinaryText = node.innerText || node.textContent || '';
+        if (!node.querySelector?.('style[data-presenton-trusted-font-css]')) return ordinaryText;
+        const parts = [];
+        let excluded = false;
+        const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+        for (let text = walker.nextNode(); text; text = walker.nextNode()) {{
+          if (isTrustedFontResourceText(text)) excluded = true;
+          else parts.push(text.textContent || '');
+        }}
+        return excluded ? parts.join('') : ordinaryText;
+      }};
+      const elements = allQids.map((node, domIndex) => {{
       const rect = node.getBoundingClientRect();
       const style = getComputedStyle(node);
       const offsetParent = node.offsetParent;
@@ -835,7 +847,8 @@ def _instrument_authored_html(
         naturalWidth: Number(node.naturalWidth || 0), naturalHeight: Number(node.naturalHeight || 0),
         cssVisible, effectiveOpacity, viewportIntersectionRatio
       }} : undefined;
-      const resolvedFont = fontEvidence(style, node.innerText || node.textContent || '');
+      const renderedText = renderedTextWithoutTrustedFontResources(node);
+      const resolvedFont = fontEvidence(style, renderedText);
       return {{
         qid: node.getAttribute('data-qid'), tag: node.tagName.toLowerCase(),
         semantic_role: node.getAttribute('data-semantic-role') || node.getAttribute('data-role') || node.getAttribute('role') || null,
@@ -848,7 +861,7 @@ def _instrument_authored_html(
         bbox: {{x: rect.x, y: rect.y, width: rect.width, height: rect.height}},
         clientWidth: node.clientWidth, clientHeight: node.clientHeight,
         scrollWidth: node.scrollWidth, scrollHeight: node.scrollHeight,
-        rendered_text: node.innerText || node.textContent || '',
+        rendered_text: renderedText,
         owned_text: ownedTextNodes(node).map((text) => text.textContent || '').join(''),
         parent_qid: node.parentElement?.closest('[data-qid]')?.getAttribute('data-qid') || null,
         offset_parent_qid: offsetParentQid,
@@ -946,6 +959,7 @@ def _instrument_authored_html(
       const result = [];
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       for (let text = walker.nextNode(); text; text = walker.nextNode()) {{
+        if (isTrustedFontResourceText(text)) continue;
         const owner = text.parentElement?.closest('[data-qid]');
         if (owner) result.push({{qid: owner.getAttribute('data-qid'), text: text.textContent || ''}});
       }}
@@ -2043,7 +2057,7 @@ CAPTURE_CACHE_BYTE_BUDGET = _env_nonnegative_int(
 _capture_cache: "OrderedDict[tuple[str, str, str], RenderCapture]" = OrderedDict()
 OCCLUSION_PROBE_CONTRACT_VERSION = "owned-paint-v3"
 OCCLUSION_SENSOR_VERSION = "owned-paint-v14-source-image-alpha"
-DOM_METRICS_VERSION = "authored-dom-metrics-v30-preserved-svg-whitespace"
+DOM_METRICS_VERSION = "authored-dom-metrics-v31-exclude-trusted-font-resource-text"
 DOM_METRICS_CACHE_SIZE = max(1, RENDER_CACHE_SIZE)
 DOM_METRICS_CACHE_BYTE_BUDGET = _env_nonnegative_int(
     "AUTHORED_DOM_METRICS_CACHE_BYTE_BUDGET", 32 * 1024 * 1024

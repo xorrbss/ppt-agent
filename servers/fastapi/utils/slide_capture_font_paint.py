@@ -100,11 +100,20 @@ r"""value + .055) / 1.055, 2.4); };
       const first = luminance(paintedForeground), second = luminance(background);
       return (Math.max(first, second) + .05) / (Math.min(first, second) + .05);
     };
+    const isTrustedFontResourceText = (text) => {
+      const style = text.parentElement?.closest?.('style[data-presenton-trusted-font-css]');
+      return style?.namespaceURI === 'http://www.w3.org/2000/svg' &&
+        style.localName === 'style' &&
+        style.parentElement?.namespaceURI === 'http://www.w3.org/2000/svg' &&
+        style.parentElement.localName === 'svg' &&
+        /^sha256:[0-9a-f]{64}$/.test(style.getAttribute('data-presenton-trusted-font-css') || '');
+    };
     const ownedTextNodes = (node) => {
       const result = [];
       const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
       for (let text = walker.nextNode(); text; text = walker.nextNode()) {
         if (!String(text.textContent || '').trim()) continue;
+        if (isTrustedFontResourceText(text)) continue;
         if (text.parentElement?.closest('[data-qid]') !== node) continue;
         result.push(text);
       }
