@@ -189,7 +189,7 @@ async def version(template_id: uuid.UUID, revision: int, session=Depends(get_asy
             "reviewEvidence": version.review_evidence}
 
 
-@SVG_TEMPLATES_ROUTER.get("/{template_id}/versions/{revision}/preview")
+@SVG_TEMPLATES_ROUTER.get("/{template_id}/versions/{revision}/preview", name="svg_template_preview")
 async def preview(template_id: uuid.UUID, revision: int, session=Depends(get_async_session)):
     template = await get_template(session, template_id)
     version = await session.scalar(select(SvgTemplateVersion).where(SvgTemplateVersion.template_id == template.id,
