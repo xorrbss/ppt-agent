@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from io import BytesIO
 from pathlib import Path
+import re
 from typing import Any, Iterable
 from xml.etree import ElementTree
 from zipfile import BadZipFile, ZipFile, is_zipfile
@@ -166,8 +167,13 @@ def _theme_values(package: ZipFile) -> tuple[list[str], list[str]]:
             continue
         for node in root.findall(f".//{{{_DRAWING_NS}}}clrScheme/*"):
             for color_node in node:
-                value = color_node.attrib.get("val") or color_node.attrib.get("lastClr")
-                if value and len(value) == 6:
+                if color_node.tag == f"{{{_DRAWING_NS}}}sysClr":
+                    value = color_node.attrib.get("lastClr")
+                elif color_node.tag == f"{{{_DRAWING_NS}}}srgbClr":
+                    value = color_node.attrib.get("val")
+                else:
+                    continue
+                if value and re.fullmatch(r"[0-9A-Fa-f]{6}", value):
                     candidate = f"#{value.upper()}"
                     if candidate not in colors:
                         colors.append(candidate)

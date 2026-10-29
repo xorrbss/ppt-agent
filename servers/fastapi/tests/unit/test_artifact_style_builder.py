@@ -335,6 +335,51 @@ def test_pptx_analysis_is_deterministic_and_extracts_design_signals(
     assert first["security"]["external_relationship_count"] == 0
 
 
+def test_pptx_theme_system_colors_resolve_rgb_for_svg_identity(tmp_path: Path) -> None:
+    from io import BytesIO
+    from xml.etree import ElementTree
+
+    from services.svg_reference_identity import color_identity
+
+    presentation = Presentation()
+    presentation.slides.add_slide(presentation.slide_layouts[6])
+    original = BytesIO()
+    presentation.save(original)
+    source = tmp_path / "theme-colors.pptx"
+    drawing = "http://schemas.openxmlformats.org/drawingml/2006/main"
+    with ZipFile(original) as package, ZipFile(source, "w", ZIP_DEFLATED) as modified:
+        for name in package.namelist():
+            payload = package.read(name)
+            if name == "ppt/theme/theme1.xml":
+                theme = ElementTree.fromstring(payload)
+                scheme = theme.find(f".//{{{drawing}}}clrScheme")
+                # Keep the standard window/windowText system colors intact.
+                replacements = {
+                    "accent1": ("srgbClr", {"val": "12aBeF"}),
+                    "accent2": ("srgbClr", {"val": "GGGGGG"}),
+                    "accent3": ("schemeClr", {"val": "ABCDEF"}),
+                    "accent4": ("sysClr", {"val": "ABCDEF", "lastClr": "window"}),
+                    "accent5": ("sysClr", {"val": "ABCDEF"}),
+                }
+                for slot, (kind, attributes) in replacements.items():
+                    node = scheme.find(f"{{{drawing}}}{slot}")
+                    node.clear()
+                    ElementTree.SubElement(node, f"{{{drawing}}}{kind}", attributes)
+                payload = ElementTree.tostring(theme)
+            modified.writestr(name, payload)
+
+    analysis = analyze_artifact(source)
+    values = analysis["signals"]["colors"]["values"]
+    colors = {item["value"] for item in values}
+    assert {"#000000", "#FFFFFF", "#12ABEF"}.issubset(colors)
+    assert not colors.intersection({"#WINDOW", "#GGGGGG", "#ABCDEF"})
+    assert all(re.fullmatch(r"#[0-9A-F]{6}", color) for color in colors)
+    palette, roles = color_identity(values, [])
+    assert set(palette) == colors
+    assert all(re.fullmatch(r"#[0-9A-F]{6}", roles[key])
+               for key in ("background", "foreground", "accent"))
+
+
 def test_pdf_analysis_is_deterministic_and_strips_subset_independent_fonts(
     tmp_path: Path,
 ) -> None:
