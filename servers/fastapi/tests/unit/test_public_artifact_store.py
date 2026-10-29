@@ -84,6 +84,59 @@ def test_artifact_ref_rejects_unbound_or_path_like_storage_keys() -> None:
         )
 
 
+def test_template_review_resolves_raw_artifact_digest_and_rejects_mismatch(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    from copy import deepcopy
+
+    from PIL import Image
+    from services.svg_templates import catalog
+    from services.svg_templates.source_review import verify_source_review_assets
+
+    monkeypatch.setenv("ENVIRONMENT", "test")
+    owner = uuid.uuid4()
+    monkeypatch.setattr(catalog, "principal", lambda: (owner, "tenant-review"))
+
+    async def scenario():
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        try:
+            async with engine.begin() as connection:
+                await connection.run_sync(PublicArtifact.__table__.create)
+            sessions = async_sessionmaker(engine, expire_on_commit=False)
+            service = DurableArtifactService(LocalDevelopmentArtifactObjectStore(tmp_path / "objects"))
+            monkeypatch.setattr("services.artifact_store.configured_public_artifact_service", lambda: service)
+            png = io.BytesIO()
+            Image.new("RGB", (2, 2), "white").save(png, format="PNG")
+            async with sessions() as session:
+                ref = await service.persist_bytes(
+                    session, owner_id=owner, tenant_id="tenant-review", kind="image-derivative",
+                    payload=png.getvalue(), media_type="image/png", created_by_operation_id=uuid.uuid4(),
+                    retention_class="published",
+                )
+                await session.commit()
+                image_ref = {"artifact_id": str(ref.artifact_id), "sha256": ref.sha256}
+                evidence = {"frames": [{
+                    "source_image_ref": image_ref, "frame_image_ref": image_ref,
+                    "source_image_digest": "sha256:" + ref.sha256,
+                    "frame_image_digest": "sha256:" + ref.sha256,
+                }]}
+                await verify_source_review_assets(session, evidence)
+
+                mismatched = deepcopy(evidence)
+                mismatched["frames"][0]["source_image_digest"] = "sha256:" + "0" * 64
+                with pytest.raises(ValueError, match="svg_template_review_image_evidence_missing"):
+                    await verify_source_review_assets(session, mismatched)
+
+                wrong_digest = deepcopy(mismatched)
+                wrong_digest["frames"][0]["source_image_ref"]["sha256"] = "0" * 64
+                with pytest.raises(ArtifactNotFound, match="artifact.ref_not_found"):
+                    await verify_source_review_assets(session, wrong_digest)
+        finally:
+            await engine.dispose()
+
+    _run(scenario())
+
+
 def test_s3_adapter_commits_owner_digest_metadata_and_readback() -> None:
     class MissingObject(Exception):
         response = {"Error": {"Code": "404"}}

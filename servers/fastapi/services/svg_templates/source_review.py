@@ -401,7 +401,7 @@ async def verify_source_review_assets(session, evidence):
             if key in checked:
                 continue
             ref = await service.resolve_ref(session, artifact_id=artifact_id, owner_id=owner_id,
-                tenant_id=tenant_id, expected_digest=expected, check_object=False)
+                tenant_id=tenant_id, expected_digest=image_ref["sha256"], check_object=False)
             if ref.kind != "image-derivative" or ref.media_type != "image/png":
                 raise ValueError("svg_template_review_image_evidence_missing")
             payload, _proof = await service.read_verified_ref_bytes(ref, max_bytes=32 * 1024 * 1024)
