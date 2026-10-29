@@ -303,24 +303,32 @@ def validate_template_publication(snapshot: dict, pages, outline) -> None:
     selection = template_selection(snapshot)
     if not selection or selection["mode"] != "template-redesign":
         return
-    from services.svg_master_furniture import master_furniture_receipt
-    canvas = page_frame(snapshot, 0, len(pages)).source_canvas
+    page_frame(snapshot, 0, len(pages))
     for index, (payload, _png) in enumerate(pages):
-        expected = template_page_context(snapshot, index, len(pages), outline.slides[index].content)
-        if expected != payload.get("svg_template_page"):
-            raise ValueError("svg_template_publication_context_mismatch")
-        svg = payload["svg_content"]
-        source_manifest = {node.get("href"): {"required": True} for node in ET.fromstring(svg).iter()
-                           if node.tag.rsplit("}", 1)[-1] == "image" and node.get("href", "").startswith("source-slot-")}
-        receipt = master_furniture_receipt(svg, snapshot, index=index, n=len(pages),
-            width=canvas.width_px, height=canvas.height_px, template_page_context=expected,
-            source_manifest=source_manifest or None)
-        proof = (payload.get("quality") or {}).get("template_preservation") or {}
-        if (payload.get("system_furniture") != receipt
-                or proof.get("page_context_digest") != expected["digest"]
-                or proof.get("frame_digest") != expected["frame_digest"]
-                or proof.get("adaptation_digest") != expected["adaptation_digest"]
-                or proof.get("svg_digest") != canonical_json_digest({"svg": svg})
-                or proof.get("body_paint_measured") is not True
-                or (payload.get("quality") or {}).get("measurement_complete") is not True):
-            raise ValueError("svg_template_preservation_unverified")
+        validate_template_publication_page(snapshot, payload, index=index, count=len(pages),
+                                           content=outline.slides[index].content)
+
+
+def validate_template_publication_page(snapshot: dict, payload: dict, *, index: int, count: int,
+                                       content: str) -> None:
+    """Share the intact page proof between terminal keep and deck publication."""
+    from services.svg_master_furniture import master_furniture_receipt
+    canvas = page_frame(snapshot, 0, count).source_canvas
+    expected = template_page_context(snapshot, index, count, content)
+    if expected != payload.get("svg_template_page"):
+        raise ValueError("svg_template_publication_context_mismatch")
+    svg = payload["svg_content"]
+    source_manifest = {node.get("href"): {"required": True} for node in ET.fromstring(svg).iter()
+                       if node.tag.rsplit("}", 1)[-1] == "image" and node.get("href", "").startswith("source-slot-")}
+    receipt = master_furniture_receipt(svg, snapshot, index=index, n=count,
+        width=canvas.width_px, height=canvas.height_px, template_page_context=expected,
+        source_manifest=source_manifest or None)
+    proof = (payload.get("quality") or {}).get("template_preservation") or {}
+    if (payload.get("system_furniture") != receipt
+            or proof.get("page_context_digest") != expected["digest"]
+            or proof.get("frame_digest") != expected["frame_digest"]
+            or proof.get("adaptation_digest") != expected["adaptation_digest"]
+            or proof.get("svg_digest") != canonical_json_digest({"svg": svg})
+            or proof.get("body_paint_measured") is not True
+            or (payload.get("quality") or {}).get("measurement_complete") is not True):
+        raise ValueError("svg_template_preservation_unverified")

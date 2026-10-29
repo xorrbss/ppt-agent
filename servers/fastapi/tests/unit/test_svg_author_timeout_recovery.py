@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 import asyncio
+from hashlib import sha256
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -105,6 +106,49 @@ def test_one_timeout_retries_and_records_failure_second_timeout_raises(harness):
     assert "run_timeout_retry" not in payload["provider_failures"][1]
     assert harness.sleeps == [30.0]
     assert state.timeout_retries == 1
+
+
+def test_template_author_keeps_captured_admitted_fonts_and_strict_faces(monkeypatch):
+    import xml.etree.ElementTree as ET
+
+    from models.svg_template_frame import SvgTemplateFontAsset, SvgTemplateFontManifest
+    from services.svg_default_fonts import normalize_model_font_families
+    from services.svg_templates.frame_fonts import font_asset_for
+
+    captured = (Path(__file__).resolve().parents[1] / "fixtures/svg_template_fonts/captured-malgun-body.svg").read_bytes()
+    assert sha256(captured).hexdigest() == "3c3be9f0323e21f0c79e4c63ae1615731ae77768a4d7a4e9d69c73a7a7226c82"
+    svg = captured.decode("utf-8")
+    ordinary, advisories = normalize_model_font_families(svg)
+    assert advisories and ordinary != svg and "Noto Sans KR" in ordinary
+
+    async def provider(**_kwargs):
+        return SimpleNamespace(svg_content=svg, raw_response=svg, receipt={}, native_declarations=None)
+
+    monkeypatch.setattr("services.generation_core.authoring.author_slide_svg.author_slide_svg", provider)
+
+    async def run(snapshot):
+        ctx = _ctx()
+        ctx.snapshot = snapshot
+        payload = {"attempts": [], "fontAdvisories": [{"code": "stale"}]}
+        result = await author.attempt_author(
+            ctx=ctx, request=SimpleNamespace(instructions=None, _document_canvas=None), index=0,
+            content="synthetic fixture", role="content", count=6, payload=payload, ordinal=0,
+            provider_ordinal=1, job=None, state=_RunState(), checkpoint=AsyncMock(), async_session_maker=None)
+        return result, payload
+
+    result, payload = asyncio.run(run({"svg_template": {"mode": "template-redesign"}}))
+    assert result.svg == svg and payload["svg_content"] == svg
+    assert "fontAdvisories" not in payload
+    asset = SvgTemplateFontAsset(asset_id="admitted-malgun", digest="sha256:" + "a" * 64,
+        family="Malgun Gothic", face="Regular", weight=400, data_base64="")
+    manifest = SvgTemplateFontManifest(assets=(asset,), digest="sha256:" + "b" * 64)
+    for text in ET.fromstring(result.svg).iter("{http://www.w3.org/2000/svg}text"):
+        assert font_asset_for(manifest, text.get("font-family"), int(text.get("font-weight"))) == asset
+    for family, weight in (("Noto Sans KR", 400), ("Malgun Gothic", 700)):
+        with pytest.raises(ValueError, match="svg_template_font_unavailable"):
+            font_asset_for(manifest, family, weight)
+    legacy, legacy_payload = asyncio.run(run({}))
+    assert legacy.svg == ordinary and legacy_payload["fontAdvisories"] == advisories
 
 
 def test_deadline_exhausted_timeout_is_terminal(harness):

@@ -8,6 +8,8 @@ real source render step (``render.attempt_render``); only the browser
 from __future__ import annotations
 
 import asyncio
+import base64
+from copy import deepcopy
 from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -182,6 +184,84 @@ def test_a_a_page_whose_png_is_gone_is_not_kept(monkeypatch):
     rescued, _png = _rescue(_ctx(), stores, payload)
 
     assert rescued["terminal"]["remakeOutcome"] == "svg_fallback_page"
+
+
+def test_framed_template_rescue_keeps_only_an_existing_intact_page(monkeypatch):
+    from models.svg_template_frame import FrameRect, SvgTemplateFrame, SvgTemplateFrameElement, SvgTemplateFontAsset
+    from services.svg_canvas import svg_canvas_for_aspect_ratio
+    from services.svg_master_furniture import master_furniture_receipt
+    from services.svg_templates.frame_composition import adapt_frame
+    from services.svg_templates.frame_fonts import artifact_digest, build_font_manifest, bytes_digest
+    from services.svg_trusted_fonts import FONT_DIRECTORY
+    from services.svg_templates.generation import (
+        compose_template_page, template_page_context, validate_template_publication,
+    )
+    from utils.hashing import canonical_json_digest
+
+    renderer = _renderer(monkeypatch)
+    stores = _Stores()
+    canvas = svg_canvas_for_aspect_ratio("16:9")
+    font_bytes = (FONT_DIRECTORY / "Pretendard-Regular.ttf").read_bytes()
+    font = SvgTemplateFontAsset(asset_id="pretendard", digest=bytes_digest(font_bytes),
+        family="Pretendard", face="Regular", weight=400, data_base64=base64.b64encode(font_bytes).decode())
+    element = SvgTemplateFrameElement(
+        element_id="header", source_part="slide1.xml", source_shape_id="1",
+        source_xml_digest="sha256:" + "a" * 64, kind="rect", layer="foreground",
+        bounds=FrameRect(x=0, y=0, width=1280, height=20),
+        svg=f'<rect xmlns="{SVG_NS}" id="svg-system-template-header" x="0" y="0" width="1280" height="20" fill="#123456"/>',
+    )
+    frame = SvgTemplateFrame(
+        frame_id="frame-1", source_page=0, source_digest="sha256:" + "b" * 64,
+        source_canvas=canvas, elements=(element,),
+        body_region=FrameRect(x=64, y=64, width=1152, height=592),
+        font_manifest=build_font_manifest((font,)), digest="",
+    )
+    frame = frame.model_copy(update={"digest": artifact_digest(frame)})
+    adapted = adapt_frame(frame, canvas)
+    selection = {
+        "schema_version": "svg-template-selection/v1", "mode": "template-redesign",
+        "template_pin": {"templateId": "test", "revision": 1, "digest": "sha256:" + "c" * 64},
+        "frame_map": {"2": "frame-1"}, "package": {"frames": [frame.model_dump(mode="json")], "body_evidence": [],
+                                                 "font_manifest": frame.font_manifest.model_dump(mode="json")},
+        "adaptations": {"frame-1": adapted.model_dump(mode="json")},
+    }
+    selection["digest"] = canonical_json_digest(selection)
+    snapshot = {"svg_template": selection}
+    ctx = _ctx(snapshot=snapshot)
+    content = "template body"
+    context = template_page_context(snapshot, 1, 3, content)
+    svg = compose_template_page(snapshot, f'<svg xmlns="{SVG_NS}" width="1280" height="720" viewBox="0 0 1280 720"><rect id="body-rect" x="128" y="128" width="200" height="100" fill="#123456"/><text id="body-text" x="140" y="180" font-family="Pretendard" font-weight="400" font-size="20" fill="#FFFFFF">body</text></svg>', context)
+    quality = _quality(svg, passed=False, failures=[{"kind": "text_overlap"}])
+    quality.update(measurement_complete=True, template_preservation={
+        "page_context_digest": context["digest"], "frame_digest": context["frame_digest"],
+        "adaptation_digest": context["adaptation_digest"],
+        "svg_digest": canonical_json_digest({"svg": svg}), "body_paint_measured": True,
+    })
+    payload = _rendered_payload(stores, svg, quality, cleared=True)
+    payload.update(svg_template_page=context, system_furniture=master_furniture_receipt(
+        svg, snapshot, index=1, n=3, width=1280, height=720, template_page_context=context))
+    rescued, png = _rescue(ctx, stores, payload, content=content)
+    assert rescued["terminal"]["remakeOutcome"] == "verbatim_flag_only"
+    assert rescued["svg_content"] == svg and png == b"png:" + svg.encode()
+    assert rescued["svg_template_page"] == context
+    assert rescued["quality"]["template_preservation"] == quality["template_preservation"]
+    renderer.assert_not_awaited()
+
+    for key in ("svg_template_page", "system_furniture", "quality"):
+        invalid = deepcopy(payload)
+        invalid.pop(key)
+        assert _rescue(ctx, stores, invalid, content=content) is None
+    invalid = deepcopy(payload)
+    invalid["svg_template_page"]["page_count"] = 4
+    assert _rescue(ctx, stores, invalid, content=content) is None
+    assert _rescue(ctx, stores, {"attempts": []}, content=content) is None
+    renderer.assert_not_awaited()
+    with pytest.raises(ValueError):
+        validate_template_publication(snapshot, [], SimpleNamespace(slides=[]))
+
+    ordinary, _png = _rescue(_ctx(), stores, {"attempts": []}, content=content)
+    assert ordinary["terminal"]["remakeOutcome"] == "svg_fallback_page"
+    assert renderer.await_count == 1
 
 
 @pytest.mark.parametrize("payload_kind", ["content_failure", "never_rendered", "unbound_digest"])

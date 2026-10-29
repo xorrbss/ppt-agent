@@ -91,6 +91,18 @@ async def rescue_terminal_page(*, ctx, request, index, content, payload, error, 
     policy = terminal_policy_of(ctx)
     if policy is TerminalPolicy.FAIL or not is_exhausted_page(error, index):
         return None
+    from services.svg_templates.generation import template_selection, validate_template_publication_page
+    selection = template_selection(getattr(ctx, "snapshot", {}) or {})
+    template_redesign = bool(selection and selection["mode"] == "template-redesign")
+    if template_redesign:
+        svg = _last_rendered_svg(payload)
+        if svg is None:
+            return None
+        try:
+            validate_template_publication_page(ctx.snapshot, {**payload, "svg_content": svg},
+                                               index=index, count=ctx.count, content=content)
+        except (ValueError, TypeError, KeyError, IndexError):
+            return None
     from services.svg_authoring_profile import read_quality_recovery_policy
     if read_quality_recovery_policy(getattr(ctx, "snapshot", {}) or {}):
         # Evidence only: the validated adaptation (reserved by collect in page
@@ -108,6 +120,9 @@ async def rescue_terminal_page(*, ctx, request, index, content, payload, error, 
                             checkpoint=checkpoint, read_png=read_png)
     if kept is not None:
         return kept
+    if template_redesign:
+        # Generic substitutes have no framed body/furniture preservation proof.
+        return None
     if ctx.source_reflow:
         rescued = await _source_fallback(ctx=ctx, request=request, presentation_id=presentation_id,
             index=index, content=content, payload=payload, error=error, job=job, checkpoint=checkpoint,

@@ -547,7 +547,8 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
             raise AuthoredStageError(slide_index=index, stage="author",
                 code="svg_provider_terminal_output_mismatch", retryable=False)
     svg = authored.svg_content
-    if not (ctx.source_reflow or ctx.raster_reconstruction):
+    template_redesign = (ctx.snapshot.get("svg_template") or {}).get("mode") == "template-redesign"
+    if not (ctx.source_reflow or ctx.raster_reconstruction or template_redesign):
         from services.svg_default_fonts import normalize_model_font_families
 
         svg, font_advisories = normalize_model_font_families(svg)
@@ -555,6 +556,9 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
             payload["fontAdvisories"] = font_advisories
         else:
             payload.pop("fontAdvisories", None)
+    elif template_redesign:
+        # The admitted frame owns exact font bytes/faces; composition verifies them.
+        payload.pop("fontAdvisories", None)
     receipt = authored.receipt
     if local_authored is None:
         if pending_attempt is None:
