@@ -165,6 +165,10 @@ def _set_postgres_transaction_principal(_session, _transaction, connection) -> N
     owner_id = get_current_owner_id()
     tenant_id = get_current_tenant_id()
     connection.execute(text("SET LOCAL row_security = on"))
+    # The lineage migration rejects old application writers after its commit.
+    # This stamp is transaction-local and is present for ORM and Core writes
+    # issued through an application Session, including activation CAS updates.
+    connection.execute(text("SET LOCAL presenton.generation_lineage_writer_revision = 'e4b7c9d2a1f0'"))
     # ``presenton.request_scope`` lets the owner-table policies deny an
     # authenticated request that carries no identity while process-owned
     # workers and maintenance loops (which never set it) keep their
