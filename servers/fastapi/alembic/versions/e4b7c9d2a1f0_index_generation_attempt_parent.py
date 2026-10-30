@@ -33,7 +33,6 @@ def upgrade():
         "workspace_operations",
         sa.Column("previous_presentation_id", sa.Uuid(), nullable=True),
     )
-    total, projected, scopes, anonymous = backfill_global_generation_lineage(connection)
     op.create_index(
         "ix_workspace_operations_generation_parent_owner",
         "workspace_operations",
@@ -45,6 +44,7 @@ def upgrade():
             "kind = 'presentation.generate' AND previous_presentation_id IS NOT NULL"
         ),
     )
+    total, projected, scopes, anonymous = backfill_global_generation_lineage(connection)
     op.create_table(
         "workspace_generation_lineage_state",
         sa.Column("id", sa.Integer(), primary_key=True),
