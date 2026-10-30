@@ -142,12 +142,14 @@ def backfill_global_generation_lineage(connection) -> tuple[int, int, int, int]:
                 changed = connection.execute(sa.text(
                     "UPDATE workspace_operations SET previous_presentation_id = :parent "
                     "WHERE id = :operation_id AND kind = 'presentation.generate' "
-                    "AND previous_presentation_id IS NULL"
+                    "AND previous_presentation_id IS NULL "
+                    "RETURNING previous_presentation_id"
                 ).bindparams(
                     sa.bindparam("parent", type_=sa.Uuid()),
                     sa.bindparam("operation_id", type_=sa.Uuid()),
                 ), {"parent": parent, "operation_id": uuid.UUID(str(operation_id))})
-                if changed.rowcount != 1:
+                stored_parent = changed.scalar_one_or_none()
+                if stored_parent is None or uuid.UUID(str(stored_parent)) != parent:
                     raise RuntimeError("generation_lineage_migration_projection_changed")
                 projected[key] += 1
             last_id = uuid.UUID(str(operation_id))
