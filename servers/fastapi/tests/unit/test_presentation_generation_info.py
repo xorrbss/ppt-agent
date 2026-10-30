@@ -1,8 +1,10 @@
 import asyncio
+import json
 import uuid
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import SQLModel
 
@@ -12,6 +14,7 @@ from api.v1.ppt.endpoints.presentation_crud import (
 from models.sql.presentation import PresentationModel
 from models.sql.workspace import WorkspaceConversation, WorkspaceOperation
 from models.sql.workspace import WorkspaceMessage
+from models.workspace_generation_lineage import previous_attempt_from_raw_payload
 from templates.native_ui.constants import LEGACY_PRESENTATION_VERSION
 
 
@@ -318,6 +321,7 @@ def test_new_attempt_link_is_durable_idempotent_and_owner_filtered(tmp_path, mon
             info = await get_presentation_generation_info(next_id, session)
             assert info.previous_presentation_id == previous.id
             assert info.first_user_message_id is not None
+            assert (await session.get(WorkspaceOperation, info.operation_id)).previous_presentation_id == previous.id
             parent_info = await get_presentation_generation_info(previous.id, session)
             assert parent_info.next_presentation_ids == [next_id]
             _, _, _, unrelated_operation = await _seed_generation_attempt(session)
@@ -345,6 +349,47 @@ def test_new_attempt_link_is_durable_idempotent_and_owner_filtered(tmp_path, mon
             session.add(previous)
             await session.commit()
             assert (await get_presentation_generation_info(next_id, session)).previous_presentation_id is None
+        await engine.dispose()
+
+    _run(runner())
+
+
+def test_generation_lineage_index_preserves_legacy_raw_visibility(tmp_path):
+    async def runner():
+        engine = await _make_engine(tmp_path / "lineage-index.db")
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            parent, _, _, _ = await _seed_generation_attempt(session)
+            child, _, _, child_operation = await _seed_generation_attempt(session)
+            canonical = str(parent.id)
+            escaped = "".join(f"\\u{ord(char):04x}" for char in canonical)
+            raw = '{"previous_presentation_id":"' + escaped + '","prompt":"legacy"}'
+            assert previous_attempt_from_raw_payload("presentation.generate", raw) is None
+            assert previous_attempt_from_raw_payload(
+                "presentation.generate", raw[:-1] + ',"other":"' + canonical + '"}'
+            ) == parent.id
+            assert previous_attempt_from_raw_payload(
+                "presentation.generate",
+                json.dumps({"previous_presentation_id": canonical, "prompt": "unrelated \x00"}),
+            ) == parent.id
+            await session.execute(
+                text(
+                    "UPDATE workspace_operations SET request_payload = :raw, "
+                    "previous_presentation_id = NULL WHERE id = :operation_id"
+                ),
+                {"raw": raw, "operation_id": child_operation.id.hex},
+            )
+            await session.commit()
+            await session.refresh(child_operation)
+            child_operation.state = "succeeded"  # status-only flush preserves stored raw eligibility
+            await session.commit()
+            assert child_operation.previous_presentation_id is None
+            assert (await get_presentation_generation_info(parent.id, session)).next_presentation_ids == []
+            child_operation.request_payload = {
+                **child_operation.request_payload, "prompt": "newly serialized",
+            }
+            await session.commit()
+            assert child_operation.previous_presentation_id == parent.id
+            assert (await get_presentation_generation_info(parent.id, session)).next_presentation_ids == [child.id]
         await engine.dispose()
 
     _run(runner())

@@ -3,7 +3,7 @@
 import uuid
 
 from fastapi import HTTPException
-from sqlalchemy import String, cast
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -92,6 +92,14 @@ async def generation_context_fields(
     presentation_id: uuid.UUID,
     operation: WorkspaceOperation | None,
 ) -> dict:
+    # The schema revision alone is insufficient: the owner-scoped historical
+    # backfill must be certified before indexed reads can replace the old scan.
+    if session.bind.dialect.name == "postgresql":
+        ready = await session.scalar(
+            text("SELECT complete FROM workspace_generation_lineage_state WHERE id = 1")
+        )
+        if ready is not True:
+            raise HTTPException(status_code=503, detail="generation_lineage_backfill_incomplete")
     fields = {
         "conversation_id": None,
         "operation_id": None,
@@ -155,10 +163,7 @@ async def generation_context_fields(
                 WorkspaceOperation.owner_scope == get_workspace_owner_scope(),
                 _owner(WorkspaceOperation.owner_id),
                 WorkspaceOperation.kind == "presentation.generate",
-                # Casting the JSON document to text avoids decoding unrelated strings.
-                # PostgreSQL can reject a JSON string containing an escaped NUL during
-                # ->> extraction, even when that operation belongs to another deck.
-                cast(WorkspaceOperation.request_payload, String).contains(str(presentation_id)),
+                WorkspaceOperation.previous_presentation_id == presentation_id,
             )
             .order_by(WorkspaceOperation.created_at, WorkspaceOperation.id)
         )
