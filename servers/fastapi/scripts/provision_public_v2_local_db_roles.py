@@ -135,6 +135,20 @@ def main() -> None:
                     "account_deletion_requests TO {}"
                 ).format(sql.Identifier(API_GROUP))
             )
+            # The migration's global inventory is private. A fresh local-role
+            # provisioning pass must narrow the preceding ALL TABLES grants.
+            cursor.execute(
+                sql.SQL(
+                    "REVOKE ALL PRIVILEGES ON TABLE "
+                    "workspace_generation_lineage_state FROM {}, {}"
+                ).format(sql.Identifier(API_GROUP), sql.Identifier(CONTROLLER_GROUP))
+            )
+            cursor.execute(
+                sql.SQL(
+                    "GRANT SELECT (id, complete) ON TABLE "
+                    "workspace_generation_lineage_state TO {}"
+                ).format(sql.Identifier(API_GROUP))
+            )
             _configure_login(
                 cursor,
                 login_role=API_LOGIN,

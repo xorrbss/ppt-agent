@@ -10,6 +10,7 @@ import sqlalchemy as sa
 from migration_generation_lineage import (
     assert_global_migration_visibility,
     backfill_global_generation_lineage,
+    grant_readiness_only,
     install_writer_gate,
 )
 
@@ -65,11 +66,7 @@ def upgrade():
     )
     if postgres:
         install_writer_gate(connection)
-        op.execute(
-            sa.text(
-                "GRANT SELECT ON TABLE workspace_generation_lineage_state TO presenton_public_api"
-            )
-        )
+        grant_readiness_only(connection)
 
 
 def downgrade():

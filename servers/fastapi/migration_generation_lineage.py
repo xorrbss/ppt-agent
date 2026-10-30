@@ -22,8 +22,6 @@ def assert_global_migration_visibility(connection) -> None:
         "SELECT current_user, current_setting('presenton.owner_id', true), "
         "current_setting('presenton.request_scope', true), "
         "current_setting('row_security'), current_setting('transaction_read_only'), "
-        "pg_has_role(current_user, 'presenton_public_api', 'MEMBER'), "
-        "pg_has_role(current_user, 'presenton_public_controller', 'MEMBER'), "
         "has_table_privilege(current_user, 'public.workspace_operations', 'SELECT'), "
         "has_table_privilege(current_user, 'public.workspace_operations', 'UPDATE'), "
         "has_schema_privilege(current_user, 'public', 'CREATE')"
@@ -34,11 +32,9 @@ def assert_global_migration_visibility(connection) -> None:
         or identity[2] not in {None, ""}
         or identity[3] != "on"
         or identity[4] != "off"
-        or identity[5] is not False
-        or identity[6] is not False
+        or identity[5] is not True
+        or identity[6] is not True
         or identity[7] is not True
-        or identity[8] is not True
-        or identity[9] is not True
     ):
         raise RuntimeError("generation_lineage_migration_principal_invalid")
 
@@ -93,7 +89,7 @@ def assert_global_migration_visibility(connection) -> None:
         function[0] is not True or function[1] != "s"
         or function[3] is None or "search_path=pg_catalog" not in function[3]
         or hashlib.sha256(body.encode()).hexdigest()
-        != "5802d926ad3458117d4de527aacb25cd0eea6a7e5e789c5aabff194031f32a2d"
+        != "43b491824644f644501dcef02c75a7d4a73fbf8d075462c7b455efede6b71385"
     ):
         raise RuntimeError("generation_lineage_migration_visibility_function_invalid")
     # The known bootstrap owner has rolsuper/rolbypassrls. If a different
@@ -202,3 +198,40 @@ def install_writer_gate(connection) -> None:
             previous_presentation_id ON workspace_operations
         FOR EACH ROW EXECUTE FUNCTION presenton_generation_lineage_writer_gate()
     """))
+
+
+def grant_readiness_only(connection) -> None:
+    """Keep global inventory counts private to the migration owner."""
+    connection.execute(sa.text(
+        "REVOKE ALL ON TABLE workspace_generation_lineage_state "
+        "FROM PUBLIC, presenton_public_api, presenton_public_controller"
+    ))
+    connection.execute(sa.text(
+        "GRANT SELECT (id, complete) ON TABLE workspace_generation_lineage_state "
+        "TO presenton_public_api"
+    ))
+    rights = connection.execute(sa.text(
+        "SELECT has_table_privilege('presenton_public_api', "
+        "'public.workspace_generation_lineage_state', 'SELECT'), "
+        "has_column_privilege('presenton_public_api', "
+        "'public.workspace_generation_lineage_state', 'id', 'SELECT'), "
+        "has_column_privilege('presenton_public_api', "
+        "'public.workspace_generation_lineage_state', 'complete', 'SELECT'), "
+        "has_column_privilege('presenton_public_api', "
+        "'public.workspace_generation_lineage_state', 'generation_rows', 'SELECT'), "
+        "has_column_privilege('presenton_public_api', "
+        "'public.workspace_generation_lineage_state', 'projected_rows', 'SELECT'), "
+        "has_column_privilege('presenton_public_api', "
+        "'public.workspace_generation_lineage_state', 'owner_scope_count', 'SELECT'), "
+        "has_column_privilege('presenton_public_api', "
+        "'public.workspace_generation_lineage_state', 'anonymous_rows', 'SELECT'), "
+        "has_column_privilege('presenton_public_api', "
+        "'public.workspace_generation_lineage_state', 'completed_at', 'SELECT'), "
+        "has_table_privilege('presenton_public_controller', "
+        "'public.workspace_generation_lineage_state', 'SELECT'), "
+        "has_column_privilege('presenton_public_controller', "
+        "'public.workspace_generation_lineage_state', 'generation_rows', 'SELECT')"
+    )).one()
+    if tuple(rights) != (False, True, True, False, False, False, False, False,
+                         False, False):
+        raise RuntimeError("generation_lineage_migration_readiness_privileges_invalid")
