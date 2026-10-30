@@ -302,7 +302,9 @@ def validate_saved_template_pages(snapshot, slides):
         source = content.get("source")
         if slide.index != index or not isinstance(source, str) or not slide.svg_content:
             raise ValueError("svg_template_page_change_requires_new_generation")
-        pages.append(({**deepcopy(content.get("svgReceipt") or {}), "svg_content": slide.svg_content}, None))
+        pages.append(({**deepcopy(content.get("svgReceipt") or {}), "svg_content": slide.svg_content,
+                       **({"svgAssetManifest": deepcopy(content["svgAssetManifest"])}
+                          if "svgAssetManifest" in content else {})}, None))
         outline.append(SimpleNamespace(content=source))
     try:
         validate_template_publication(snapshot, pages, SimpleNamespace(slides=outline))

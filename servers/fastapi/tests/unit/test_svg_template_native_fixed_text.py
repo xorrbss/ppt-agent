@@ -28,6 +28,27 @@ def _bytes(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
 
 
+def test_saved_template_page_rejoins_publication_manifest(monkeypatch):
+    from services.generation_core.drivers.svg.publish import svg_slide_content
+    from services.svg_document_mutations import validate_saved_template_pages
+    from services.svg_templates import generation
+
+    svg = '<svg xmlns="http://www.w3.org/2000/svg"/>'
+    manifest = {"screenPlacement": {"sha256": "a" * 64}, "slideRevision": "revision-1"}
+    payload = {"svg_content": svg, "quality": {}, "svgAssetManifest": manifest}
+    content = svg_slide_content(payload, role="content", source="Slide title", pt_per_px=0.75)
+    assert "svgAssetManifest" not in content["svgReceipt"]
+    observed = []
+
+    def validate(_snapshot, pages, outline):
+        observed.append((pages[0][0]["svgAssetManifest"], outline.slides[0].content))
+
+    monkeypatch.setattr(generation, "validate_template_publication", validate)
+    slide = SimpleNamespace(index=0, content=content, svg_content=svg)
+    validate_saved_template_pages({"svg_template": {"mode": "template-redesign"}}, [slide])
+    assert observed == [(manifest, "Slide title")]
+
+
 def _portable_source(path, family):
     deck = Presentation()
     deck.slide_width, deck.slide_height = 12192000, 6858000
