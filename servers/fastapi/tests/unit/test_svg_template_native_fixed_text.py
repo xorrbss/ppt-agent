@@ -444,3 +444,76 @@ def test_fixed_glyph_preview_versioned_contract(tmp_path, monkeypatch):
                 "selected_control_points": 665, "mocked_capture_and_png": True,
                 "office_calls": 0, "browser_calls": 0, "pdf_raster_calls": 0,
                 "preview_precision_accepted": False}, stream, indent=2)
+
+
+def test_v3_furniture_public_worker_keeps_source_native_fixed_shapes(tmp_path):
+    """A v3 template must reach the source-owned native adapter in the public worker."""
+    import asyncio
+    import time
+    import uuid
+
+    from services.svg_master_furniture import attested_svg_furniture
+    from tests.unit.test_svg_vector_pdf_export import MemoryStore
+    from workers.public_svg_export_worker import execute_svg_export
+
+    assets = tuple(asset for asset in bundled_font_assets() if asset.weight == 400)
+    assert len(assets) == 1
+    source_path = tmp_path / "source.pptx"
+    _portable_source(source_path, assets[0].family)
+    with font_validation_scope():
+        package = extract_template_package(source_path, font_assets=assets, native_fixed_text_layout=True)
+        frame = package.frames[0]
+        adaptation = adapt_frame(frame, frame.source_canvas)
+        selection = {"schema_version": "svg-template-selection/v1", "mode": "template-redesign",
+                     "package": package.model_dump(mode="json"), "frame_map": {"1": frame.frame_id},
+                     "adaptations": {frame.frame_id: adaptation.model_dump(mode="json")}}
+        selection["digest"] = canonical_json_digest(selection)
+        page = template_page_context({"svg_template": selection}, 0, 1, "Slide title")
+        body = (f'<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" '
+                f'viewBox="0 0 1280 720"><text id="body-test" x="300" y="300" '
+                f'font-family="{assets[0].family}" font-size="24" fill="#202020">Body content</text></svg>')
+        svg = compose_frame_svg(adaptation, body, dynamic_values={})
+        receipt = template_furniture_receipt(
+            svg, {"svg_template": selection}, width=1280, height=720,
+            index=0, count=1, page_context=page)
+        binding = receipt["generated_template_frame"]
+        assert binding["schema_version"] == "svg-template-furniture/v2"
+        # The worker routes on the attested furniture version. This synthetic
+        # v3 routing fixture retains the complete v2 source-native XML authority.
+        binding.update(schema_version="svg-template-furniture/v3", compiler_version="ooxml-frame/3",
+                       fixed_glyph_preview_digest="sha256:" + hashlib.sha256(b"offline-v3-routing").hexdigest())
+        binding["binding_digest"] = artifact_digest({k: v for k, v in binding.items() if k != "binding_digest"})
+        attested_svg_furniture(svg, receipt, width=1280, height=720)
+
+        store, operation_id = MemoryStore(tmp_path), uuid.uuid4()
+        svg_ref = store.put(svg.encode(), operation_id=operation_id,
+                            kind="slide-svg", media_type="image/svg+xml")
+        claim = SimpleNamespace(expected_revision=1, presentation_id=uuid.uuid4())
+        bundle = build_svg_export_bundle(
+            claim=claim, slide_refs=[svg_ref.to_wire()],
+            source_digests=[hashlib.sha256(svg.encode()).hexdigest()], notes=[""],
+            canvas=frame.source_canvas.model_dump(mode="json"), export_format="pptx",
+            font_embedding=True, assets=[None], font_manifest=frame.font_manifest,
+            system_furniture=[receipt])
+        bundle_ref = store.put(_bytes(bundle), operation_id=operation_id,
+                               kind="export-bundle", media_type="application/json")
+        job = SimpleNamespace(input_artifact=bundle_ref, operation_id=operation_id,
+                              deadline_epoch_seconds=time.time() + 300)
+        output = asyncio.run(execute_svg_export(job, store))
+
+    with ZipFile(source_path) as original, ZipFile(BytesIO(store.read(output.artifact))) as exported:
+        source_xml = etree.fromstring(original.read("ppt/slides/slide1.xml"))
+        result_xml = etree.fromstring(exported.read("ppt/slides/slide1.xml"))
+    fixed_count = 0
+    for element in frame.elements:
+        if element.native_fixed_text is None:
+            continue
+        fixed_count += 1
+        source_shape = next(shape for shape in source_xml.iter(f"{{{P}}}sp")
+                            if shape.find("p:nvSpPr/p:cNvPr", NS).get("id") == element.source_shape_id)
+        exact = [shape for shape in result_xml.iter(f"{{{P}}}sp")
+                 if shape.find("p:spPr", NS) is not None and shape.find("p:txBody", NS) is not None
+                 and _structure(shape.find("p:spPr", NS)) == _structure(source_shape.find("p:spPr", NS))
+                 and _structure(shape.find("p:txBody", NS)) == _structure(source_shape.find("p:txBody", NS))]
+        assert len(exact) == 1
+    assert fixed_count == 2

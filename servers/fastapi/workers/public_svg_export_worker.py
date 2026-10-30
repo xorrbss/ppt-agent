@@ -402,7 +402,7 @@ async def execute_svg_export(job, store, *, bundle=None):
                        if font_manifest is not None else {}),
                     **({"system_furniture": [entry.get("systemFurniture") for entry in slides]}
                        if any(entry.get("systemFurniture", {}).get("generated_template_frame", {}).get("schema_version")
-                              == "svg-template-furniture/v2" for entry in slides) else {}),
+                              in {"svg-template-furniture/v2", "svg-template-furniture/v3"} for entry in slides) else {}),
                     **({"native_coverage_sources": canonical_sources} if v2 else {}))
                 # The converter call includes its own internal OOXML readback.
                 stage_timings["conversion"] = time.monotonic() - stage_started
