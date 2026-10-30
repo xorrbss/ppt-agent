@@ -1,6 +1,9 @@
 """Historical lineage projection includes every owner scope and raw JSON form."""
 
 import json
+import importlib.util
+from pathlib import Path
+from types import SimpleNamespace
 import uuid
 
 from sqlalchemy import create_engine, event, text
@@ -59,3 +62,57 @@ def test_global_generation_lineage_inventory_and_projection():
         by_id = {operation_id: projected for operation_id, projected in stored}
         assert all(by_id[rows[i][0].hex] == parent.hex for i in (0, 2, 3))
         assert all(by_id[rows[i][0].hex] is None for i in (1, 4, 5))
+
+
+def test_upgrade_builds_parent_index_before_deferred_backfill_events(monkeypatch):
+    migration_path = (
+        Path(__file__).resolve().parents[2]
+        / "alembic/versions/e4b7c9d2a1f0_index_generation_attempt_parent.py"
+    )
+    spec = importlib.util.spec_from_file_location("generation_lineage_migration", migration_path)
+    assert spec is not None and spec.loader is not None
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+
+    events = []
+
+    class DeferredTriggerConnection:
+        dialect = SimpleNamespace(name="postgresql")
+        pending_trigger_events = False
+
+        def execute(self, _statement):
+            return None
+
+    connection = DeferredTriggerConnection()
+
+    class Operations:
+        def get_bind(self):
+            return connection
+
+        def add_column(self, *_args, **_kwargs):
+            events.append("column")
+
+        def create_index(self, *_args, **_kwargs):
+            if connection.pending_trigger_events:
+                raise RuntimeError("cannot create index with pending trigger events")
+            events.append("index")
+
+        def create_table(self, *_args, **_kwargs):
+            events.append("marker_table")
+
+        def execute(self, *_args, **_kwargs):
+            events.append("marker_row")
+
+    def backfill(_connection):
+        connection.pending_trigger_events = True
+        events.append("backfill")
+        return 5, 3, 3, 2
+
+    monkeypatch.setattr(migration, "op", Operations())
+    monkeypatch.setattr(migration, "assert_global_migration_visibility", lambda _connection: None)
+    monkeypatch.setattr(migration, "backfill_global_generation_lineage", backfill)
+    monkeypatch.setattr(migration, "install_writer_gate", lambda _connection: events.append("gate"))
+    monkeypatch.setattr(migration, "grant_readiness_only", lambda _connection: events.append("acl"))
+
+    migration.upgrade()
+    assert events == ["column", "index", "backfill", "marker_table", "marker_row", "gate", "acl"]
