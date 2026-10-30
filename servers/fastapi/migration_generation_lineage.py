@@ -203,35 +203,52 @@ def install_writer_gate(connection) -> None:
 def grant_readiness_only(connection) -> None:
     """Keep global inventory counts private to the migration owner."""
     connection.execute(sa.text(
-        "REVOKE ALL ON TABLE workspace_generation_lineage_state "
-        "FROM PUBLIC, presenton_public_api, presenton_public_controller"
+        "REVOKE ALL ON TABLE workspace_generation_lineage_state FROM PUBLIC"
     ))
+    roles = (
+        "presenton_public_api",
+        "presenton_public_api_login",
+        "presenton_public_controller",
+        "presenton_public_controller_login",
+    )
+    present_roles = set(connection.execute(sa.text(
+        "SELECT rolname FROM pg_roles WHERE rolname IN "
+        "('presenton_public_api', 'presenton_public_api_login', "
+        "'presenton_public_controller', 'presenton_public_controller_login')"
+    )).scalars())
+    if not {"presenton_public_api", "presenton_public_controller"} <= present_roles:
+        raise RuntimeError("generation_lineage_migration_runtime_roles_missing")
+    for role in roles:
+        if role in present_roles:
+            connection.execute(sa.text(
+                "REVOKE ALL ON TABLE workspace_generation_lineage_state FROM " + role
+            ))
     connection.execute(sa.text(
         "GRANT SELECT (id, complete) ON TABLE workspace_generation_lineage_state "
         "TO presenton_public_api"
     ))
-    rights = connection.execute(sa.text(
-        "SELECT has_table_privilege('presenton_public_api', "
+    rights_query = sa.text(
+        "SELECT has_table_privilege(CAST(:role AS name), "
         "'public.workspace_generation_lineage_state', 'SELECT'), "
-        "has_column_privilege('presenton_public_api', "
+        "has_column_privilege(CAST(:role AS name), "
         "'public.workspace_generation_lineage_state', 'id', 'SELECT'), "
-        "has_column_privilege('presenton_public_api', "
+        "has_column_privilege(CAST(:role AS name), "
         "'public.workspace_generation_lineage_state', 'complete', 'SELECT'), "
-        "has_column_privilege('presenton_public_api', "
+        "has_column_privilege(CAST(:role AS name), "
         "'public.workspace_generation_lineage_state', 'generation_rows', 'SELECT'), "
-        "has_column_privilege('presenton_public_api', "
+        "has_column_privilege(CAST(:role AS name), "
         "'public.workspace_generation_lineage_state', 'projected_rows', 'SELECT'), "
-        "has_column_privilege('presenton_public_api', "
+        "has_column_privilege(CAST(:role AS name), "
         "'public.workspace_generation_lineage_state', 'owner_scope_count', 'SELECT'), "
-        "has_column_privilege('presenton_public_api', "
+        "has_column_privilege(CAST(:role AS name), "
         "'public.workspace_generation_lineage_state', 'anonymous_rows', 'SELECT'), "
-        "has_column_privilege('presenton_public_api', "
-        "'public.workspace_generation_lineage_state', 'completed_at', 'SELECT'), "
-        "has_table_privilege('presenton_public_controller', "
-        "'public.workspace_generation_lineage_state', 'SELECT'), "
-        "has_column_privilege('presenton_public_controller', "
-        "'public.workspace_generation_lineage_state', 'generation_rows', 'SELECT')"
-    )).one()
-    if tuple(rights) != (False, True, True, False, False, False, False, False,
-                         False, False):
-        raise RuntimeError("generation_lineage_migration_readiness_privileges_invalid")
+        "has_column_privilege(CAST(:role AS name), "
+        "'public.workspace_generation_lineage_state', 'completed_at', 'SELECT')"
+    )
+    api_rights = (False, True, True, False, False, False, False, False)
+    controller_rights = (False,) * 8
+    for role in present_roles:
+        rights = tuple(connection.execute(rights_query, {"role": role}).one())
+        expected = api_rights if role.startswith("presenton_public_api") else controller_rights
+        if rights != expected:
+            raise RuntimeError("generation_lineage_migration_readiness_privileges_invalid")
