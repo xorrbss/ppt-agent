@@ -50,6 +50,7 @@ from models.sql.workspace import (
     WorkspaceOutbox,
     get_workspace_owner_scope,
 )
+from models.workspace_generation_lineage import previous_attempt_from_payload
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from services.workspace_db_adapter import (
@@ -990,6 +991,7 @@ async def activate_workspace_operation(
                 state="queued",
                 request_hash=request_hash,
                 request_payload=merged_payload,
+                previous_presentation_id=previous_attempt_from_payload(operation.kind, merged_payload),
                 expected_revision=expected_revision,
                 next_attempt_at=now,
                 error_code=None,

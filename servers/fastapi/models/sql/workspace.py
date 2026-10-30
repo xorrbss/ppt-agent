@@ -19,8 +19,12 @@ from sqlalchemy import (
     Uuid,
     func,
     text,
+    event,
 )
+from sqlalchemy import inspect
+from sqlalchemy.orm import Session
 from sqlmodel import Field, SQLModel
+from models.workspace_generation_lineage import previous_attempt_from_payload
 
 from utils.datetime_utils import get_current_utc_datetime
 from utils.owner_context import get_current_owner_id
@@ -286,6 +290,12 @@ class WorkspaceOperation(SQLModel, table=True):
         ),
         Index("ix_workspace_operations_dispatch", "state", "next_attempt_at", "lease_expires_at"),
         Index("ix_workspace_operations_owner_created", "owner_id", "created_at"),
+        Index(
+            "ix_workspace_operations_generation_parent_owner",
+            "owner_scope", "owner_id", "previous_presentation_id", "created_at", "id",
+            postgresql_where=text("kind = 'presentation.generate' AND previous_presentation_id IS NOT NULL"),
+            sqlite_where=text("kind = 'presentation.generate' AND previous_presentation_id IS NOT NULL"),
+        ),
     )
 
     id: uuid.UUID = Field(primary_key=True, default_factory=uuid.uuid4)
@@ -326,6 +336,9 @@ class WorkspaceOperation(SQLModel, table=True):
         default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
     )
     request_payload: dict = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    previous_presentation_id: Optional[uuid.UUID] = Field(
+        default=None, sa_column=Column(Uuid, nullable=True)
+    )
     expected_revision: Optional[int] = Field(default=None, sa_column=Column(BigInteger, nullable=True))
     result_revision: Optional[int] = Field(default=None, sa_column=Column(BigInteger, nullable=True))
     approval_expires_at: Optional[datetime] = Field(
@@ -690,3 +703,20 @@ class WorkspaceCleanupJournal(SQLModel, table=True):
             server_default=func.now(),
         ),
     )
+
+
+@event.listens_for(Session, "before_flush")
+def _sync_generation_attempt_parent(session: Session, _flush_context, _instances) -> None:
+    """Keep the derived key aligned for every ORM create and payload writer."""
+    for operation in session.new.union(session.dirty):
+        if not isinstance(operation, WorkspaceOperation):
+            continue
+        state = inspect(operation)
+        if operation not in session.new and not any(
+            state.attrs[name].history.has_changes()
+            for name in ("kind", "request_payload", "previous_presentation_id")
+        ):
+            continue
+        operation.previous_presentation_id = previous_attempt_from_payload(
+            operation.kind, operation.request_payload
+        )

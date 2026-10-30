@@ -135,6 +135,23 @@ def main() -> None:
                     "account_deletion_requests TO {}"
                 ).format(sql.Identifier(API_GROUP))
             )
+            # The migration's global inventory is private. A fresh local-role
+            # provisioning pass must narrow the preceding ALL TABLES grants.
+            cursor.execute(
+                sql.SQL(
+                    "REVOKE ALL PRIVILEGES ON TABLE "
+                    "workspace_generation_lineage_state FROM PUBLIC, {}, {}, {}, {}"
+                ).format(
+                    sql.Identifier(API_GROUP), sql.Identifier(CONTROLLER_GROUP),
+                    sql.Identifier(API_LOGIN), sql.Identifier(CONTROLLER_LOGIN),
+                )
+            )
+            cursor.execute(
+                sql.SQL(
+                    "GRANT SELECT (id, complete) ON TABLE "
+                    "workspace_generation_lineage_state TO {}"
+                ).format(sql.Identifier(API_GROUP))
+            )
             _configure_login(
                 cursor,
                 login_role=API_LOGIN,
@@ -149,6 +166,32 @@ def main() -> None:
                 member_group=CONTROLLER_GROUP,
                 opposite_group=API_GROUP,
             )
+            cursor.execute(
+                "SELECT has_table_privilege('presenton_public_api_login', "
+                "'public.workspace_generation_lineage_state', 'SELECT'), "
+                "has_column_privilege('presenton_public_api_login', "
+                "'public.workspace_generation_lineage_state', 'id', 'SELECT'), "
+                "has_column_privilege('presenton_public_api_login', "
+                "'public.workspace_generation_lineage_state', 'complete', 'SELECT'), "
+                "has_column_privilege('presenton_public_api_login', "
+                "'public.workspace_generation_lineage_state', 'generation_rows', 'SELECT'), "
+                "has_column_privilege('presenton_public_api_login', "
+                "'public.workspace_generation_lineage_state', 'projected_rows', 'SELECT'), "
+                "has_column_privilege('presenton_public_api_login', "
+                "'public.workspace_generation_lineage_state', 'owner_scope_count', 'SELECT'), "
+                "has_column_privilege('presenton_public_api_login', "
+                "'public.workspace_generation_lineage_state', 'anonymous_rows', 'SELECT'), "
+                "has_column_privilege('presenton_public_api_login', "
+                "'public.workspace_generation_lineage_state', 'completed_at', 'SELECT'), "
+                "has_table_privilege('presenton_public_controller_login', "
+                "'public.workspace_generation_lineage_state', 'SELECT'), "
+                "has_column_privilege('presenton_public_controller_login', "
+                "'public.workspace_generation_lineage_state', 'generation_rows', 'SELECT')"
+            )
+            if tuple(cursor.fetchone()) != (
+                False, True, True, False, False, False, False, False, False, False
+            ):
+                raise RuntimeError("generation_lineage_readiness_login_privileges_invalid")
 
 
 if __name__ == "__main__":
