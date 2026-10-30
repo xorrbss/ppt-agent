@@ -110,17 +110,20 @@ def _scope_counts(connection):
 
 def backfill_global_generation_lineage(connection) -> tuple[int, int, int, int]:
     """Scan every owner/scope pair, including anonymous, under the DDL lock."""
+    # A historical request_payload can be hundreds of MiB. Keep the metadata
+    # page small and materialize at most one raw JSON value in Python at once.
+    max_raw_payload_bytes = 768 * 1024 * 1024
+    deadline = time.monotonic() + 120
     before = _scope_counts(connection)
     expected = sum(count for count, _ in before.values())
     observed: Counter = Counter()
     projected: Counter = Counter()
     last_id = None
-    deadline = time.monotonic() + 120
     while True:
         if time.monotonic() > deadline:
             raise RuntimeError("generation_lineage_migration_backfill_timeout")
         statement = (
-            "SELECT id, owner_scope, owner_id, CAST(request_payload AS TEXT) "
+            "SELECT id, owner_scope, owner_id "
             "FROM workspace_operations WHERE kind = 'presentation.generate' "
         )
         if last_id is not None:
@@ -132,12 +135,36 @@ def backfill_global_generation_lineage(connection) -> tuple[int, int, int, int]:
         rows = connection.execute(query, {"last_id": last_id} if last_id else {}).all()
         if not rows:
             break
-        for operation_id, owner_scope, owner_id, raw_payload in rows:
+        for operation_id, owner_scope, owner_id in rows:
+            if time.monotonic() > deadline:
+                raise RuntimeError("generation_lineage_migration_backfill_timeout")
             key = (owner_scope, owner_id)
             observed[key] += 1
+            raw_bytes = connection.execute(sa.text(
+                "SELECT octet_length(CAST(request_payload AS TEXT)) "
+                "FROM workspace_operations WHERE id = :operation_id"
+            ).bindparams(sa.bindparam("operation_id", type_=sa.Uuid())),
+                {"operation_id": uuid.UUID(str(operation_id))}).scalar_one()
+            if not isinstance(raw_bytes, int) or not 0 < raw_bytes <= max_raw_payload_bytes:
+                raise RuntimeError("generation_lineage_migration_payload_over_budget")
+            raw_result = connection.execute(sa.text(
+                "SELECT CAST(request_payload AS TEXT) "
+                "FROM workspace_operations WHERE id = :operation_id"
+            ).bindparams(sa.bindparam("operation_id", type_=sa.Uuid())),
+                {"operation_id": uuid.UUID(str(operation_id))})
+            try:
+                raw_payload = raw_result.scalar_one()
+            finally:
+                raw_result.close()
+                del raw_result
             # This matches the old raw LIKE prefilter plus decoded exact key;
             # unrelated UUIDs and escaped NULs do not alter the result.
-            parent = previous_attempt_from_raw_payload("presentation.generate", raw_payload)
+            try:
+                parent = previous_attempt_from_raw_payload("presentation.generate", raw_payload)
+            finally:
+                del raw_payload
+            if time.monotonic() > deadline:
+                raise RuntimeError("generation_lineage_migration_backfill_timeout")
             if parent is not None:
                 changed = connection.execute(sa.text(
                     "UPDATE workspace_operations SET previous_presentation_id = :parent "

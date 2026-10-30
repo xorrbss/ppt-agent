@@ -3,13 +3,19 @@
 import json
 import uuid
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 
 from migration_generation_lineage import backfill_global_generation_lineage
 
 
 def test_global_generation_lineage_inventory_and_projection():
     engine = create_engine("sqlite://")
+    @event.listens_for(engine, "connect")
+    def _sqlite_octet_length(dbapi_connection, _record):
+        dbapi_connection.create_function(
+            "octet_length", 1, lambda value: len(value.encode("utf-8"))
+        )
+
     parent = uuid.uuid4()
     owner_a, owner_b = uuid.uuid4(), uuid.uuid4()
     canonical = str(parent)
