@@ -112,8 +112,8 @@ def backfill_global_generation_lineage(connection) -> tuple[int, int, int, int]:
     """Scan every owner/scope pair, including anonymous, under the DDL lock."""
     # A historical request_payload can be hundreds of MiB. Keep the metadata
     # page small and materialize at most one raw JSON value in Python at once.
-    max_raw_payload_bytes = 768 * 1024 * 1024
-    deadline = time.monotonic() + 120
+    max_raw_payload_bytes = 896 * 1024 * 1024
+    deadline = time.monotonic() + 300
     before = _scope_counts(connection)
     expected = sum(count for count, _ in before.values())
     observed: Counter = Counter()
@@ -133,6 +133,8 @@ def backfill_global_generation_lineage(connection) -> tuple[int, int, int, int]:
         if last_id is not None:
             query = query.bindparams(sa.bindparam("last_id", type_=sa.Uuid()))
         rows = connection.execute(query, {"last_id": last_id} if last_id else {}).all()
+        if time.monotonic() > deadline:
+            raise RuntimeError("generation_lineage_migration_backfill_timeout")
         if not rows:
             break
         for operation_id, owner_scope, owner_id in rows:
@@ -147,6 +149,8 @@ def backfill_global_generation_lineage(connection) -> tuple[int, int, int, int]:
                 {"operation_id": uuid.UUID(str(operation_id))}).scalar_one()
             if not isinstance(raw_bytes, int) or not 0 < raw_bytes <= max_raw_payload_bytes:
                 raise RuntimeError("generation_lineage_migration_payload_over_budget")
+            if time.monotonic() > deadline:
+                raise RuntimeError("generation_lineage_migration_backfill_timeout")
             raw_result = connection.execute(sa.text(
                 "SELECT CAST(request_payload AS TEXT) "
                 "FROM workspace_operations WHERE id = :operation_id"
@@ -157,6 +161,9 @@ def backfill_global_generation_lineage(connection) -> tuple[int, int, int, int]:
             finally:
                 raw_result.close()
                 del raw_result
+            if time.monotonic() > deadline:
+                del raw_payload
+                raise RuntimeError("generation_lineage_migration_backfill_timeout")
             # This matches the old raw LIKE prefilter plus decoded exact key;
             # unrelated UUIDs and escaped NULs do not alter the result.
             try:
@@ -186,7 +193,11 @@ def backfill_global_generation_lineage(connection) -> tuple[int, int, int, int]:
         != {key: count for key, (count, _) in before.items()}
     ):
         raise RuntimeError("generation_lineage_migration_inventory_mismatch")
+    if time.monotonic() > deadline:
+        raise RuntimeError("generation_lineage_migration_backfill_timeout")
     after = _scope_counts(connection)
+    if time.monotonic() > deadline:
+        raise RuntimeError("generation_lineage_migration_backfill_timeout")
     if after != {key: (observed[key], projected[key]) for key in before}:
         raise RuntimeError("generation_lineage_migration_projection_mismatch")
     anonymous = sum(count for (_, owner), (count, _) in before.items() if owner is None)
