@@ -428,3 +428,18 @@ def test_legacy_publication_still_requires_and_reuses_selected_body(tmp_path, mo
         finally:
             await engine.dispose()
     asyncio.run(scenario())
+
+
+def test_candidate_schema_pins_the_operation_revision():
+    # A live run returned revision 3 for design call 2, which the identity
+    # check then treated as an integrity breach and failed the deck.
+    from services.svg_common_header_design_calls import candidate_schema
+
+    schema = candidate_schema({"candidate_revision": 2})
+    candidate = schema["properties"]["candidates"]["items"]
+    assert candidate["properties"]["revision"] == {"type": "integer", "enum": [2]}
+    field = candidate["properties"]["fields"]["items"]["properties"]
+    assert field["font_family"]["enum"] == ["Noto Sans KR", "Pretendard"]
+    assert field["font_weight"]["enum"] == [400, 700]
+    unpinned = candidate_schema({})["properties"]["candidates"]["items"]["properties"]["revision"]
+    assert unpinned == {"type": "integer", "minimum": 1}

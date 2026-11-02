@@ -121,7 +121,13 @@ def candidate_schema(payload=None):
         for branch in branches:
             branch["properties"]["box"] = {"$ref": "#/$defs/box"}
         field = {"anyOf": branches}
-    candidate = _object({"candidate_id": text, "revision": {"type": "integer", "minimum": 1},
+    # The operation, not the model, owns the revision; _checked_candidates
+    # rejects any other value as an identity breach, so pin it when known.
+    supplied_revision = payload.get("candidate_revision") if isinstance(payload, dict) else None
+    revision = ({"type": "integer", "enum": [supplied_revision]}
+                if type(supplied_revision) is int and supplied_revision >= 1
+                else {"type": "integer", "minimum": 1})
+    candidate = _object({"candidate_id": text, "revision": revision,
         "svg": text, "fields": {"type": "array", "items": field},
         "body_box": {"$ref": "#/$defs/box"} if allowed_refs else box,
         "design_intent": text, "shared_style": _object({"body_typography": text,
