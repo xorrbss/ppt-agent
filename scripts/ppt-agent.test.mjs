@@ -104,6 +104,30 @@ function json(res, payload, status = 200) {
   res.end(JSON.stringify(payload));
 }
 
+test("keeps polling when status completes before the chained export is recorded", async (t) => {
+  let polls = 0;
+  const mock = await startMockServer({
+    [ASYNC_URL]: (res) => json(res, { id: TASK_ID, status: "pending" }, 202),
+    "/api/v1/ppt/presentation/status/": (res) => {
+      polls += 1;
+      const data = polls === 1
+        ? generateResponse({ export_operation_id: null, export_error: null })
+        : generateResponse();
+      json(res, { id: TASK_ID, status: "completed", data });
+    },
+  });
+  t.after(() => mock.server.close());
+
+  const result = await runCli([
+    "--content", "svg deck",
+    "--base", mock.base,
+  ]);
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(polls, 2);
+  assert.match(result.stdout, new RegExp(`export op: +${OPERATION_ID}`));
+});
+
 test("forwards --style to the local generation API", async (t) => {
   const mock = await startMockServer(asyncGeneration());
   t.after(() => mock.server.close());

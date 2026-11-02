@@ -214,6 +214,13 @@ export async function generateOneAsync(content, opts) {
   // 2) Poll status until completed/error or the --timeout budget runs out.
   const statusUrl = `${opts.base}/api/v1/ppt/presentation/status/${encodeURIComponent(taskId)}`;
   const pollIntervalMs = 5000;
+  // The server commits status "completed" before it annotates the task with the
+  // chained export (presentation_generation_export_chain.py), so a poll can land
+  // in between. When an export was requested and neither outcome is there yet,
+  // keep polling briefly instead of reporting that no export was chained.
+  const exportGraceMs = 60000;
+  const exportPollMs = 1000;
+  let exportGraceUntil = null;
   const stopHeartbeat = startHeartbeat("generating (async)");
   try {
     while (true) {
@@ -239,7 +246,16 @@ export async function generateOneAsync(content, opts) {
             `async task completed but had no result data: ${(poll.text || "").slice(0, 500)}`
           );
         }
-        return data; // { presentation_id, path, edit_path }
+        const exportPending =
+          body.export_as && data.export_operation_id == null && data.export_error == null;
+        if (exportPending) {
+          if (exportGraceUntil === null) exportGraceUntil = Date.now() + exportGraceMs;
+          if (Date.now() < exportGraceUntil && remaining() > 0) {
+            await new Promise((r) => setTimeout(r, Math.min(exportPollMs, Math.max(1, remaining()))));
+            continue;
+          }
+        }
+        return data; // { presentation_id, path, edit_path, export_operation_id?, export_error? }
       }
       if (status === "error") {
         const errDetail =
