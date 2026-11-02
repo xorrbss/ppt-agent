@@ -1006,7 +1006,12 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
     profile = read_authoring_profile(style_snapshot)
     repair_receipt = {}
     # The model sees previous_svg in the output view; receipts keep the canonical digest.
-    prompt_previous_svg, previous_svg_compacted = outbound_previous_svg(previous_svg, view_plan)
+    shown_previous_svg = previous_svg
+    if previous_svg and header_page is not None and header_page.get("applied"):
+        from services.svg_common_header import strip_system_common_header
+
+        shown_previous_svg = strip_system_common_header(previous_svg)
+    prompt_previous_svg, previous_svg_compacted = outbound_previous_svg(shown_previous_svg, view_plan)
     previous_svg_shown = False
     if quality_policy is not None and active_correction:
         prompt += "\n\n" + json.dumps({"correction_mode": active_correction,

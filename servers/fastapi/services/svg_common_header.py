@@ -460,6 +460,29 @@ def validate_common_header_binding(contract: dict | None, page_binding: dict | N
         raise ValueError("svg_common_header_measurement_mismatch")
 
 
+def strip_system_common_header(svg: str) -> str:
+    """``svg`` without the server-composed header, for showing a page back to the author.
+
+    A repair prompt shows the model its previous page, which the server has
+    already composed with the system header. Shown as-is, the model copies the
+    reserved ``svg-system-common-header`` group back into its body and the
+    page fails as svg_common_header_forged. Unparseable input is returned
+    unchanged.
+    """
+
+    try:
+        root = ET.fromstring(svg)
+    except ET.ParseError:
+        return svg
+    removed = False
+    for parent in list(root.iter()):
+        for child in list(parent):
+            if child.get("id", "").startswith(GROUP_ID):
+                parent.remove(child)
+                removed = True
+    return ET.tostring(root, encoding="unicode") if removed else svg
+
+
 def render_common_header(contract: dict | None, page_binding: dict | None, *, index: int, count: int):
     """Return a system-owned editable SVG group, or None for legacy/explicit cover."""
     if isinstance(contract, dict) and contract.get("version") == "svg-common-header/v2":

@@ -70,3 +70,17 @@ def test_a_page_failing_its_applied_header_is_not_kept_flag_only(monkeypatch):
     kept = asyncio.run(terminal._flag_only(ctx=ctx, index=0, payload=payload, error=error, job=None,
                                            checkpoint=checkpoint, read_png=lambda _payload: b""))
     assert kept is None
+
+
+def test_repair_prompts_never_show_the_server_header_back_to_the_author():
+    """A real run's repairs copied the composed header back and failed as forged."""
+    from services.svg_common_header import strip_system_common_header
+
+    snapshot, bindings, _header = _deck()
+    page = placeholder_page_svg(title="기대 효과", width=1280, height=720, font_family="Noto Sans KR",
+                                index=1, count=2, style_snapshot=snapshot, header_page=bindings[1])
+    assert GROUP_ID in page
+    stripped = strip_system_common_header(page)
+    assert GROUP_ID not in stripped
+    assert "기대 효과" in stripped
+    assert strip_system_common_header("<svg") == "<svg"
