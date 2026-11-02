@@ -5,9 +5,16 @@ provider and render semaphores (``asyncio.Semaphore(2 if source_reflow else
 3)`` / ``asyncio.Semaphore(1 if source_reflow else 3)``). Those constants move
 here so an operator can override them without a code change, following the
 same env-knob pattern ``authored_rollout_profile``'s five switches use for the
-authored driver (``utils/get_env_concurrency.py``). The defaults below are
-exactly the values the hard-coded semaphores used, so resolving with no
-overrides set is behaviour-identical to before this module existed.
+authored driver (``utils/get_env_concurrency.py``). The defaults below started
+as exactly the values the hard-coded semaphores used; only the ordinary author
+default has changed since (see below).
+
+The ordinary (non-reflow) author default was raised from 3 to 5: with 3 permits
+a 10-page deck needed four sequential author waves while the shared authoring
+executor (``author_slide._AUTHOR_EXECUTOR``, sized per provider) already
+admitted five concurrent calls. Both branches now clamp to that executor's
+capacity, because every SVG author call runs on it; asking for more permits
+than it has threads only queues calls inside the pool.
 
 ``illustration_budget`` caps the image-provider calls one deck's AssetOffer
 may spend (a scene illustration or an icon sprite sheet is one call).
@@ -44,7 +51,7 @@ from utils.get_env import (
     get_svg_render_concurrency_source_reflow_env,
 )
 
-DEFAULT_AUTHOR_CONCURRENCY = 3
+DEFAULT_AUTHOR_CONCURRENCY = 5
 DEFAULT_AUTHOR_CONCURRENCY_SOURCE_REFLOW = 6
 DEFAULT_RENDER_CONCURRENCY = 3
 DEFAULT_RENDER_CONCURRENCY_SOURCE_REFLOW = 2
@@ -100,11 +107,8 @@ def resolve_svg_runtime_profile_with_provenance(
         else DEFAULT_RENDER_CONCURRENCY
     )
     configured_author = explicit_author or default_author
-    executor_capacity = _author_executor_capacity() if source_reflow else None
-    effective_author = (
-        min(configured_author, executor_capacity)
-        if executor_capacity is not None else configured_author
-    )
+    executor_capacity = _author_executor_capacity()
+    effective_author = min(configured_author, executor_capacity)
     provenance = {"author_concurrency": {
         "source": "env" if explicit_author is not None else "default",
         "requested": configured_author,
