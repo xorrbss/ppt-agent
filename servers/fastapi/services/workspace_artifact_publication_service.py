@@ -46,7 +46,7 @@ from services.account_deletion_service import (
 from services.presentation_export_attempt_service import (
     terminalize_export_attempt_succeeded,
 )
-from services.presentation_export_direct_attempt_service import (
+from services.presentation_export_direct_attempt_semantic import (
     bind_completed_semantic_export_attempt,
 )
 from services.workspace_artifact_publication_paths import (

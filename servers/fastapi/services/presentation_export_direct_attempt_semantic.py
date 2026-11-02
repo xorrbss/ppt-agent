@@ -1,4 +1,4 @@
-"""Semantic sealing helpers for direct presentation export attempts."""
+"""Semantic sealing helpers for completed presentation export attempts."""
 
 from __future__ import annotations
 
@@ -19,9 +19,7 @@ from models.authored_vnext.semantic.readiness import (
 from models.authored_vnext.semantic.release_profile_v3 import (
     WorkbenchCapabilityProjectionV3,
 )
-from models.sql.presentation import PresentationModel
 from models.sql.presentation_export_attempt import PresentationExportAttempt
-from models.sql.slide import SlideModel
 from services.authored_vnext.semantic.canonical import (
     canonical_digest as semantic_canonical_digest,
 )
@@ -38,7 +36,6 @@ from services.authored_vnext.semantic.readiness_v3 import (
     get_workbench_capability_projection_v3,
     validate_export_authority_claim_v3,
 )
-from services.presentation_export_attempt_service import build_export_source_snapshot_sha256
 from services.presentation_export_capabilities import (
     PresentationExportContractError,
     PresentationExportFreshnessError,
@@ -175,42 +172,6 @@ def completed_export_binding(
     )
 
 
-async def active_semantic_emission(
-    session: AsyncSession,
-    presentation_id: uuid.UUID,
-):
-    owner_id = get_current_owner_id()
-    if owner_id is None:
-        return None
-    return await get_active_authored_emission(
-        session,
-        presentation_id=presentation_id,
-        owner_id=owner_id,
-        tenant_id=get_vnext_tenant_id(),
-    )
-
-
-async def current_export_canonical_digest(
-    session: AsyncSession,
-    *,
-    presentation: PresentationModel,
-    slides: list[SlideModel],
-) -> str:
-    """Resolve the same canonical source selected by the begin boundary."""
-
-    active = await active_semantic_emission(session, presentation.id)
-    if active is not None and active.canonical_mode == "bundleGraph":
-        if (
-            active.presentation_revision != presentation.revision
-            or active.canonical_digest is None
-        ):
-            raise PresentationExportFreshnessError(
-                "authored_semantic_export_stale_manifest"
-            )
-        return active.canonical_digest.removeprefix("sha256:")
-    return build_export_source_snapshot_sha256(presentation, slides)
-
-
 async def bind_completed_semantic_export_attempt(
     session: AsyncSession,
     *,
@@ -336,10 +297,8 @@ async def bind_completed_semantic_export_attempt(
 
 
 __all__ = [
-    "active_semantic_emission",
     "bind_completed_semantic_export_attempt",
     "completed_export_binding",
-    "current_export_canonical_digest",
     "prefixed_digest",
     "release_authority_pin_from_projection",
     "validate_v3_release_authority_claim",

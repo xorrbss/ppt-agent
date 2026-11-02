@@ -66,15 +66,6 @@ def test_trusted_powerpoint_qa_threads_theme_into_the_worker_call():
     assert "theme," in call or "theme)" in call
 
 
-def test_direct_attempt_service_passes_presentation_theme_to_powerpoint_qa():
-    from services import presentation_export_direct_attempt_service as service
-
-    source = inspect.getsource(service)
-    anchor = source.index("await trusted_powerpoint_qa(")
-    call = source[anchor : source.index(")", source.index("release_required=", anchor))]
-    assert "theme=presentation.theme" in call
-
-
 class _FakeImage:
     def __init__(self, size, box=None):
         self.size = size

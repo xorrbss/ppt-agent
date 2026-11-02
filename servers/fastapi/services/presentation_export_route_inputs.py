@@ -4,8 +4,7 @@ These helpers own the deterministic, side-effect-free parts of preparing an
 export: hashing a finished artifact, reading template provenance off a
 presentation theme, and pairing persisted slides with their template layouts.
 They are kept apart from the async orchestration that consumes them
-(``services/presentation_export_direct_attempt_service.py`` and
-``services/public_export_operation.py``); each helper here is synchronous,
+(``services/public_export_operation.py``); each helper here is synchronous,
 owns no state, and is therefore unit-testable on its own.
 """
 
