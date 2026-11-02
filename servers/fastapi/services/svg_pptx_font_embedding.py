@@ -42,6 +42,35 @@ def _next_relationship_id(rels_root: ET.Element) -> int:
     return (max(existing) + 1) if existing else 1
 
 
+def _serialize_package_part(root: ET.Element, namespace: str) -> bytes:
+    """Write a flat OPC part ([Content_Types].xml, .rels) in its default namespace.
+
+    ElementTree emits these namespaces with a prefix (``<ct:Types>``) and its
+    ``default_namespace`` option rejects their unqualified attributes, so the
+    two flat structures (a root whose children carry only attributes) are
+    written directly.
+    """
+
+    from xml.sax.saxutils import quoteattr
+
+    def local(tag: str) -> str:
+        if not tag.startswith(f"{{{namespace}}}"):
+            raise ValueError("svg_pptx_package_part_namespace_invalid")
+        return tag.split("}", 1)[1]
+
+    children = []
+    for child in root:
+        if len(child) or (child.text or "").strip():
+            raise ValueError("svg_pptx_package_part_not_flat")
+        attributes = "".join(f" {name}={quoteattr(value)}" for name, value in child.attrib.items())
+        children.append(f"<{local(child.tag)}{attributes}/>")
+    text = (
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+        f"<{local(root.tag)} xmlns=\"{namespace}\">{''.join(children)}</{local(root.tag)}>"
+    )
+    return text.encode("utf-8")
+
+
 def _ensure_fntdata_content_type(content_types_root: ET.Element) -> None:
     for element in content_types_root.findall(f"{{{NS_CT}}}Default"):
         if element.get("Extension") == "fntdata":
@@ -219,8 +248,11 @@ def embed_trusted_fonts(
     _ensure_fntdata_content_type(content_types_root)
 
     entries["ppt/presentation.xml"] = ET.tostring(presentation_root, encoding="utf-8", xml_declaration=True)
-    entries[rels_path] = ET.tostring(rels_root, encoding="utf-8", xml_declaration=True)
-    entries["[Content_Types].xml"] = ET.tostring(content_types_root, encoding="utf-8", xml_declaration=True)
+    # The package parts must keep the default (unprefixed) namespace: LibreOffice
+    # refuses a package whose [Content_Types].xml or .rels uses a prefix
+    # (``<ct:Types>``), which ElementTree otherwise emits for these namespaces.
+    entries[rels_path] = _serialize_package_part(rels_root, NS_RELS)
+    entries["[Content_Types].xml"] = _serialize_package_part(content_types_root, NS_CT)
 
     target.unlink()
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:

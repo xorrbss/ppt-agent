@@ -99,3 +99,14 @@ def test_ooxml_usage_names_the_trusted_families_the_runs_use(tmp_path):
     assert ooxml_trusted_font_usage(target) == {NOTO: {400, 700}}
     faces = export_font_faces(target, ooxml_trusted_font_usage(target))
     assert sorted((family, slot) for family, slot, _d, _p in faces) == [(NOTO, "bold"), (NOTO, "regular")]
+
+
+def test_embedding_keeps_package_parts_in_the_default_namespace(tmp_path):
+    """A prefixed [Content_Types].xml or .rels (``<ct:Types>``) makes LibreOffice refuse the file."""
+    target = _deck(tmp_path)
+    embed_trusted_fonts(target)
+    with zipfile.ZipFile(target) as archive:
+        content_types = archive.read("[Content_Types].xml").decode("utf-8")
+        relationships = archive.read("ppt/_rels/presentation.xml.rels").decode("utf-8")
+    assert "<Types xmlns=" in content_types and "<ct:" not in content_types
+    assert "<Relationships xmlns=" in relationships and ":Relationship " not in relationships
