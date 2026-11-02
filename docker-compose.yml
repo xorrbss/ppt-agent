@@ -427,6 +427,97 @@ services:
       NEXT_INTERNAL_URL: http://api
       WORKSPACE_OPERATION_METRICS_HOST: 127.0.0.1
       WORKSPACE_OPERATION_METRICS_PORT: "9464"
+      # svg generation binds each render checkpoint to the pinned worker
+      # runtime; without both digests it fails with
+      # public_render_worker_runtime_pins_required. Produced by
+      # scripts/build-public-worker-image.sh (see the multi-export profile).
+      PUBLIC_RENDER_WORKER_IMAGE_DIGEST: ${PRESENTON_PUBLIC_WORKER_IMAGE_DIGEST:-}
+      PUBLIC_RENDER_WORKER_FONT_INVENTORY_DIGEST: ${PRESENTON_PUBLIC_WORKER_FONT_INVENTORY_DIGEST:-}
+    # Artifact store, provider pricing and other public-profile settings that
+    # svg generation/export need; optional so the base profile is unchanged.
+    env_file:
+      - path: ${PRESENTON_MULTI_PUBLIC_ENV_FILE:-.env.multi-public}
+        required: false
+
+  # ---------------------------------------------------------------------------
+  # `multi-export` profile (opt-in, together with `multi`): the export
+  # controller that claims export.pptx/export.pdf and runs every render/export
+  # job in a fresh sandbox container from the digest-pinned public worker image
+  # (PUBLIC_TRUSTED_WORKER_SANDBOX_BACKEND=container: non-root, read-only root,
+  # network none, cap-drop ALL, no-new-privileges, tmpfs, memory/pid limits,
+  # each proven from the runtime's own inspect output before any job runs).
+  #
+  #   REGISTRY=localhost:5005 scripts/build-public-worker-image.sh
+  #   docker compose --env-file .env --env-file .env.public-worker \
+  #     --profile multi --profile multi-export up --build
+  #
+  # The controller talks to the host Docker daemon, so the staging root is
+  # bind-mounted at the SAME absolute path in this container and on the host:
+  # the sandbox containers' bind sources are resolved by the host daemon.
+  # Mounting the Docker socket gives this container host-level control; run it
+  # only on a host dedicated to this deployment.
+  # ---------------------------------------------------------------------------
+  export:
+    profiles: ["multi-export"]
+    image: ${PRESENTON_MULTI_IMAGE:-presenton-multi:local}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    working_dir: /app/servers/fastapi
+    # The worker capability key is generated once into the shared app_data
+    # volume; each job receives a staged copy, never the controller's file.
+    command:
+      - sh
+      - -c
+      - >-
+        [ -s "$$PUBLIC_WORKER_CAPABILITY_KEY_FILE" ] ||
+        python -c "import os,sys;fd=os.open(sys.argv[1],os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600);os.write(fd,os.urandom(32))" "$$PUBLIC_WORKER_CAPABILITY_KEY_FILE";
+        exec python -m services.workspace_operation_worker
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9465/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    volumes:
+      - ./app_data:/app_data
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${PRESENTON_PUBLIC_WORKER_STAGING_ROOT:-/var/lib/presenton/worker-staging}:${PRESENTON_PUBLIC_WORKER_STAGING_ROOT:-/var/lib/presenton/worker-staging}
+    env_file:
+      - path: ${PRESENTON_MULTI_PUBLIC_ENV_FILE:-.env.multi-public}
+        required: false
+    environment:
+      <<: *presenton-env
+      MEM0_ENABLED: "false"
+      ENVIRONMENT: production
+      PUBLIC_DATABASE_PROCESS_ROLE: controller
+      DATABASE_URL: ""
+      PUBLIC_CONTROLLER_DATABASE_URL: postgresql+asyncpg://presenton_public_controller_login:${PRESENTON_MULTI_CONTROLLER_DB_PASSWORD:-}@postgres:5432/${PRESENTON_MULTI_POSTGRES_DB:-presenton}
+      MIGRATE_DATABASE_ON_STARTUP: "false"
+      CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE: postgresql-cluster
+      WORKSPACE_OPERATION_WORKER_MODE: external
+      # Export controller profile (services/public_worker_profiles.py).
+      PPT_PROCESS_PROFILE: ppt-core
+      WORKSPACE_OPERATION_EXTERNAL_CONTROLLER: export
+      PROVIDER_DURABLE_RUNTIME_REQUIRED: "true"
+      USER_CONFIG_PATH: /app_data/userConfig.json
+      NEXT_INTERNAL_URL: http://api
+      WORKSPACE_OPERATION_METRICS_HOST: 127.0.0.1
+      WORKSPACE_OPERATION_METRICS_PORT: "9465"
+      PUBLIC_TRUSTED_WORKER_SANDBOX_BACKEND: container
+      PUBLIC_TRUSTED_WORKER_CONTAINER_IMAGE: ${PRESENTON_PUBLIC_WORKER_IMAGE:-}
+      # The image's own non-root presenton-worker user (Dockerfile).
+      PUBLIC_TRUSTED_WORKER_CONTAINER_USER: "65532:65532"
+      PUBLIC_TRUSTED_WORKER_STAGING_ROOT: ${PRESENTON_PUBLIC_WORKER_STAGING_ROOT:-/var/lib/presenton/worker-staging}
+      PUBLIC_WORKER_NODE_ID: ${PRESENTON_PUBLIC_WORKER_NODE_ID:-export-1}
+      PUBLIC_WORKER_CAPABILITY_KEY_FILE: /app_data/public-worker-capability.key
+      # Executables at their paths inside the worker image.
+      PUBLIC_RENDER_WORKER_COMMAND_JSON: '["/opt/venv/bin/python","-m","workers.public_render_worker"]'
+      PUBLIC_EXPORT_WORKER_COMMAND_JSON: '["/opt/venv/bin/python","-m","workers.public_export_worker"]'
+      PUBLIC_RENDER_WORKER_IMAGE_DIGEST: ${PRESENTON_PUBLIC_WORKER_IMAGE_DIGEST:-}
+      PUBLIC_RENDER_WORKER_FONT_INVENTORY_DIGEST: ${PRESENTON_PUBLIC_WORKER_FONT_INVENTORY_DIGEST:-}
 
 volumes:
   presenton_root_node_modules:

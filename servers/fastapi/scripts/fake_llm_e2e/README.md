@@ -37,7 +37,7 @@ density-expansion path.
 
 ## Settings a real (non-fake) run also needs
 
-Found while building this harness; none of them is in `docker-compose.yml`:
+Found while building this harness. The base `docker-compose.yml` profiles carry none of them; the opt-in `multi-export` profile wires them (`docs/multi-process-compose-runbook-20260906.md` section 9):
 
 | Setting | Without it |
 |---|---|
