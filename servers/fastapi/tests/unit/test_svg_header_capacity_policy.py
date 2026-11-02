@@ -198,7 +198,7 @@ def test_defects_in_a_model_candidate_reject_only_that_candidate(reason):
 
 @pytest.mark.parametrize("reason", ["svg_common_header_field_dependency_invalid",
     "svg_common_header_canvas_mismatch", "svg_common_header_value_missing",
-    "svg_common_header_page_number_owned_by_master"])
+    "svg_common_header_page_number_owned_by_master", "svg_common_header_font_material_invalid"])
 def test_more_candidate_content_rejections_retire_the_candidate(reason):
     # A live Anthropic run failed a whole deck on field_dependency_invalid.
     _, plan, _, _, _ = _inputs()
@@ -208,8 +208,8 @@ def test_more_candidate_content_rejections_retire_the_candidate(reason):
 
 def test_design_rules_state_the_admitted_field_fonts():
     from services.svg_common_header_design_calls import DESIGN_RULES
-    assert 'exactly "Noto Sans KR" or "Pretendard"' in DESIGN_RULES
-    assert "font_weight\n400 or 700" in DESIGN_RULES
+    assert 'font_family is exactly "Noto Sans KR"' in DESIGN_RULES
+    assert "font_weight 400 or 700" in DESIGN_RULES
     assert "contains no field" in DESIGN_RULES
 
 
@@ -439,7 +439,7 @@ def test_candidate_schema_pins_the_operation_revision():
     candidate = schema["properties"]["candidates"]["items"]
     assert candidate["properties"]["revision"] == {"type": "integer", "enum": [2]}
     field = candidate["properties"]["fields"]["items"]["properties"]
-    assert field["font_family"]["enum"] == ["Noto Sans KR", "Pretendard"]
+    assert field["font_family"]["enum"] == ["Noto Sans KR"]
     assert field["font_weight"]["enum"] == [400, 700]
     unpinned = candidate_schema({})["properties"]["candidates"]["items"]["properties"]["revision"]
     assert unpinned == {"type": "integer", "minimum": 1}

@@ -94,10 +94,12 @@ def candidate_schema(payload=None):
     allowed_refs = payload.get("available_value_refs") if isinstance(payload, dict) else None
     value_ref = ({"type": "string", "enum": allowed_refs} if allowed_refs else text)
     # Header fields are measured with the trusted embedded faces only
-    # (svg_common_header._font): Pretendard and Noto Sans KR, both at 400/700.
-    # An open string/integer let the model pick e.g. weight 600, which failed
-    # the whole deck with svg_template_font_unsupported after the design call.
-    font_family = {"type": "string", "enum": ["Noto Sans KR", "Pretendard"]}
+    # (svg_common_header._font), at 400/700. An open string/integer let the
+    # model pick e.g. weight 600, which failed the whole deck with
+    # svg_template_font_unsupported after the design call. Only Noto Sans KR
+    # has a measured Chromium space advance (_CHROMIUM_SPACE_ADVANCE_EM_BY_FONT_DIGEST);
+    # a Pretendard field failed a live deck with svg_common_header_font_material_invalid.
+    font_family = {"type": "string", "enum": ["Noto Sans KR"]}
     font_weight = {"type": "integer", "enum": [400, 700]}
     field = _object({"node_id": text, "role": text, "value_ref": value_ref, "box": box,
         "font_family": font_family, "font_weight": font_weight, "font_size_px": number,
@@ -163,8 +165,8 @@ must be an empty text field with its node_id in fields: the server binds actual 
 measures glyph ink and wraps at most two lines. Fonts and sizes are uniform within each field.
 Dependent decoration is named explicitly and omitted with an absent optional field: each
 dependent_node_ids entry is the id of an existing non-text element that contains no field.
-Each field's font_family is exactly "Noto Sans KR" or "Pretendard" and its font_weight
-400 or 700; any other family or weight rejects the candidate. Return a
+Each field's font_family is exactly "Noto Sans KR" and its font_weight 400 or 700;
+any other family or weight rejects the candidate. Return a
 full-canvas SVG template containing only header elements and transparent remaining body; never
 author body content here. Give each candidate its own body_box with a physically readable
 body area and no overlap with header or existing furniture. No CSS, gradients, defs, clipping,

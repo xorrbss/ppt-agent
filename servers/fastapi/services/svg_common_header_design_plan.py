@@ -142,6 +142,8 @@ def known_header_design_rejection(plan, error):
         "svg_common_header_candidate_invalid", "svg_common_header_font_identity_invalid",
         "svg_template_font_unsupported", "svg_common_header_canvas_mismatch",
         "svg_common_header_value_missing", "svg_common_header_page_number_owned_by_master",
+        # A field face without a measured space advance (only Noto Sans KR has one).
+        "svg_common_header_font_material_invalid",
     }
 
 
