@@ -39,6 +39,27 @@ class FakeAsyncSession:
 
 
 class TestPresentationGenerationAPI:
+    def test_sync_route_refuses_svg_before_any_generation_work(self):
+        request = GeneratePresentationRequest(
+            content="Create a presentation about artificial intelligence",
+            n_slides=5,
+            language="English",
+        )
+        with patch(
+            "services.presentation_generation_pipeline.check_if_api_request_is_valid",
+            new=AsyncMock(),
+        ) as mock_validate, patch(
+            "services.presentation_generation_pipeline.generate_presentation_handler",
+            new=AsyncMock(),
+        ) as mock_handler:
+            with pytest.raises(HTTPException) as caught:
+                asyncio.run(generate_presentation_sync(_fake_request(), request, sql_session=FakeAsyncSession()))
+
+        assert caught.value.status_code == 422
+        assert caught.value.detail == "svg_generation_requires_async_route"
+        mock_validate.assert_not_awaited()
+        mock_handler.assert_not_awaited()
+
     def test_generate_presentation_export_as_pdf(self):
         request = GeneratePresentationRequest(
             content="Create a presentation about artificial intelligence and machine learning",
