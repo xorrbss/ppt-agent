@@ -12,6 +12,7 @@ since the SVG pptx is assembled in Python, not in a browser.
 
 from __future__ import annotations
 
+import re
 import zipfile
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -125,6 +126,35 @@ def trusted_export_font_faces(font_usage=None, *, font_manifest=None):
     return tuple(result)
 
 
+_TRUSTED_RUN_FAMILIES = (FONT_FAMILY, "Noto Sans KR")
+_SLIDE_TEXT_PART = re.compile(r"ppt/(slides/slide|charts/chart)[0-9]+\.xml")
+NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
+
+
+def ooxml_trusted_font_usage(target: Path) -> dict[str, set[int]]:
+    """Trusted families and weights the package's text runs actually name.
+
+    Without this the generic converter embedded only the historical Pretendard
+    faces, while ordinary SVG decks set their text in Noto Sans KR, so the
+    embedded faces did not cover the deck. Families outside the bundled,
+    embeddable set are left to the viewer, as before.
+    """
+
+    usage: dict[str, set[int]] = {}
+    with zipfile.ZipFile(target) as archive:
+        for name in archive.namelist():
+            if not _SLIDE_TEXT_PART.fullmatch(name):
+                continue
+            root = ET.fromstring(archive.read(name))
+            for properties in (*root.iter(f"{{{NS_A}}}rPr"), *root.iter(f"{{{NS_A}}}defRPr")):
+                latin = properties.find(f"{{{NS_A}}}latin")
+                family = None if latin is None else latin.get("typeface")
+                if family in _TRUSTED_RUN_FAMILIES:
+                    weight = 700 if properties.get("b") in {"1", "true"} else 400
+                    usage.setdefault(family, set()).add(weight)
+    return usage
+
+
 def export_font_faces(target: Path, font_usage=None, *, font_manifest=None, subset: bool = True):
     """The faces ``embed_trusted_fonts`` writes into ``target``: trusted, then subset.
 
@@ -199,4 +229,7 @@ def embed_trusted_fonts(
     return tuple(digests)
 
 
-__all__ = ["embed_trusted_fonts", "export_font_faces", "FONT_CONTENT_TYPE", "FONT_RELATIONSHIP_TYPE"]
+__all__ = [
+    "embed_trusted_fonts", "export_font_faces", "ooxml_trusted_font_usage",
+    "FONT_CONTENT_TYPE", "FONT_RELATIONSHIP_TYPE",
+]

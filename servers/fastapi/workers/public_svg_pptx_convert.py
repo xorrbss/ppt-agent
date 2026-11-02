@@ -162,11 +162,18 @@ def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
             deck, source_preservation, expected_image_digests
         )
     if font_embedding:
-        from services.svg_pptx_font_embedding import embed_trusted_fonts
+        from services.svg_pptx_font_embedding import embed_trusted_fonts, ooxml_trusted_font_usage
         from services.svg_trusted_fonts import FONT_FAMILY
+        if font_manifest is None and font_usage is None:
+            # Embed the trusted faces the slides actually use (ordinary decks
+            # use Noto Sans KR), falling back to the historical Pretendard set.
+            font_usage = ooxml_trusted_font_usage(target) or None
         digests = embed_trusted_fonts(target, font_manifest=font_manifest, font_usage=font_usage)
-        readback["fontEmbedding"] = {"embedded": True, "family": FONT_FAMILY if font_manifest is None else None,
-                                     "faceDigests": list(digests)}
+        families = (sorted(font_usage) if font_usage is not None and font_manifest is None
+                    else [FONT_FAMILY] if font_manifest is None else None)
+        readback["fontEmbedding"] = {"embedded": True,
+                                     "family": FONT_FAMILY if font_manifest is None and font_usage is None else None,
+                                     "families": families, "faceDigests": list(digests)}
     if fixed_text is not None:
         fixed_text.verify(target)
     if capture is not None:

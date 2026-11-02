@@ -77,3 +77,25 @@ def test_variable_noto_is_instantiated_per_slot(tmp_path, monkeypatch):
     cached = list((tmp_path / "cache").rglob("*.ttf"))
     assert cached
     assert subset_face(payload, weight=700, text=DECK_TEXT + BASELINE_TEXT) == bold
+
+
+def test_ooxml_usage_names_the_trusted_families_the_runs_use(tmp_path):
+    from pptx.util import Pt
+
+    from services.svg_pptx_font_embedding import ooxml_trusted_font_usage
+
+    deck = Presentation()
+    slide = deck.slides.add_slide(deck.slide_layouts[6])
+    box = slide.shapes.add_textbox(0, 0, Pt(400), Pt(80)).text_frame
+    regular = box.paragraphs[0].add_run()
+    regular.text, regular.font.name = "본문", NOTO
+    bold = box.add_paragraph().add_run()
+    bold.text, bold.font.name, bold.font.bold = "제목", NOTO, True
+    other = box.add_paragraph().add_run()
+    other.text, other.font.name = "system", "Arial"
+    target = tmp_path / "usage.pptx"
+    deck.save(str(target))
+
+    assert ooxml_trusted_font_usage(target) == {NOTO: {400, 700}}
+    faces = export_font_faces(target, ooxml_trusted_font_usage(target))
+    assert sorted((family, slot) for family, slot, _d, _p in faces) == [(NOTO, "bold"), (NOTO, "regular")]
