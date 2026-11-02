@@ -234,6 +234,45 @@ def probe_platform_isolation(*, platform: str | None = None) -> PlatformIsolatio
     )
 
 
+LINUX_LOCAL_DEVELOPMENT_ISOLATION_BACKEND = "linux-process-session-only"
+
+
+def linux_local_development_isolation_report() -> PlatformIsolationReport:
+    """Report what the Linux development launcher actually provides: nothing.
+
+    ``linux-local`` runs the worker as an ordinary child in its own process
+    session, owned by ``LinuxSessionProcessSupervisor``.  That gives operation
+    ownership of the tree, a wall-clock deadline and sampled memory/process
+    ceilings, and nothing else: no identity drop, network namespace, read-only
+    mounts or tmpfs quota.  Every control is therefore unsupported, the report
+    is never production eligible, and only the explicit development policy may
+    accept the gap (``SupervisedStdioWireTransport``).
+    """
+
+    reasons = {
+        IsolationControl.LOW_PRIVILEGE_IDENTITY: "the worker runs as the controller's own user",
+        IsolationControl.NETWORK_NONE: "no network namespace or outbound-deny policy is applied",
+        IsolationControl.ROOT_FILESYSTEM_READ_ONLY: "no read-only mount namespace is applied",
+        IsolationControl.STAGED_INPUTS_READ_ONLY: "staged inputs are ordinary files writable by the worker user",
+        IsolationControl.TEMPORARY_BYTES_BOUNDED: "no tmpfs or quota bounds the temporary directory",
+        IsolationControl.TEMPORARY_FILES_BOUNDED: "no tmpfs or quota bounds temporary file count",
+    }
+    return PlatformIsolationReport(
+        platform="posix",
+        backend=LINUX_LOCAL_DEVELOPMENT_ISOLATION_BACKEND,
+        resource_limits_supported=True,
+        resource_limits_reason=(
+            "process-session ownership with a wall-clock deadline and sampled "
+            "aggregate RSS/process-count ceilings; a process that leaves the "
+            "session escapes them"
+        ),
+        controls=tuple(
+            (control, EnforcementStatus.UNSUPPORTED, reasons[control])
+            for control in IsolationControl
+        ),
+    )
+
+
 def _is_descendant(path: pathlib.Path, root: pathlib.Path) -> bool:
     try:
         path.relative_to(root)
@@ -244,11 +283,13 @@ def _is_descendant(path: pathlib.Path, root: pathlib.Path) -> bool:
 
 __all__ = [
     "EnforcementStatus",
+    "LINUX_LOCAL_DEVELOPMENT_ISOLATION_BACKEND",
     "ISOLATION_ATTESTATION_SCHEMA",
     "IsolationControl",
     "IsolationPolicyError",
     "IsolationUnavailableError",
     "PlatformIsolationReport",
     "SandboxFilesystemSpec",
+    "linux_local_development_isolation_report",
     "probe_platform_isolation",
 ]

@@ -27,6 +27,21 @@ from utils.hashing import sha256_hex
 
 NETWORK_NONE_ATTESTATION = "nonroot-readonly-tmpfs-network-none"
 WINDOWS_LOCAL_DEVELOPMENT_ATTESTATION = "windows-job-object-local-development"
+LINUX_LOCAL_DEVELOPMENT_ATTESTATION = "linux-process-session-local-development"
+LOCAL_DEVELOPMENT_ATTESTATIONS = frozenset(
+    {WINDOWS_LOCAL_DEVELOPMENT_ATTESTATION, LINUX_LOCAL_DEVELOPMENT_ATTESTATION}
+)
+
+
+def local_development_attestation(source: Mapping[str, str]) -> str:
+    """Name the development boundary the configured local backend provides."""
+
+    backend = source.get("PUBLIC_TRUSTED_WORKER_SANDBOX_BACKEND", "").strip().lower()
+    return (
+        LINUX_LOCAL_DEVELOPMENT_ATTESTATION
+        if backend == "linux-local"
+        else WINDOWS_LOCAL_DEVELOPMENT_ATTESTATION
+    )
 MAX_JOB_BYTES = 2 * 1024 * 1024
 MAX_RESULT_BYTES = 16 * 1024 * 1024
 # Same bound as workers.public_worker_runtime; inside MAX_RESULT_BYTES (see there).
@@ -194,7 +209,7 @@ def worker_environment(
         {
             "PUBLIC_WORKER_ROLE": role,
             "PUBLIC_WORKER_OS_ISOLATION": (
-                WINDOWS_LOCAL_DEVELOPMENT_ATTESTATION
+                local_development_attestation(incoming)
                 if local_development
                 else NETWORK_NONE_ATTESTATION
             ),
@@ -410,6 +425,9 @@ __all__ = [
     "IsolatedWorkerResult",
     "NETWORK_NONE_ATTESTATION",
     "WINDOWS_LOCAL_DEVELOPMENT_ATTESTATION",
+    "LINUX_LOCAL_DEVELOPMENT_ATTESTATION",
+    "LOCAL_DEVELOPMENT_ATTESTATIONS",
+    "local_development_attestation",
     "execute_isolated_worker_job",
     "install_trusted_worker_dispatcher",
     "worker_command",

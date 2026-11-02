@@ -23,8 +23,9 @@ from services.isolated_worker_contracts import (
 )
 from services.isolated_worker_process import (
     MAX_JOB_BYTES,
+    LOCAL_DEVELOPMENT_ATTESTATIONS,
     NETWORK_NONE_ATTESTATION,
-    WINDOWS_LOCAL_DEVELOPMENT_ATTESTATION,
+    WINDOWS_LOCAL_DEVELOPMENT_ATTESTATION,  # noqa: F401 - addressed through this module by tests
 )
 from services.public_worker_profiles import (
     get_public_worker_profile,
@@ -177,7 +178,7 @@ async def run_worker(role: WorkerRole, executor: WorkerExecutor) -> int:
             isolation_attestation == NETWORK_NONE_ATTESTATION
             and not local_development
         ) or (
-            isolation_attestation == WINDOWS_LOCAL_DEVELOPMENT_ATTESTATION
+            isolation_attestation in LOCAL_DEVELOPMENT_ATTESTATIONS
             and local_development
         )
         if not isolation_is_valid:

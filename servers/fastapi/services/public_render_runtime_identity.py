@@ -28,6 +28,11 @@ PUBLIC_RENDER_WORKER_IMAGE_DIGEST_ENV = "PUBLIC_RENDER_WORKER_IMAGE_DIGEST"
 PUBLIC_RENDER_WORKER_FONT_DIGEST_ENV = "PUBLIC_RENDER_WORKER_FONT_INVENTORY_DIGEST"
 PUBLIC_RENDER_TEST_FONT_DIGEST_ENV = "PUBLIC_RENDER_TEST_FONT_INVENTORY_DIGEST"
 _FONT_FILE_SUFFIXES = frozenset({".otc", ".otf", ".ttc", ".ttf", ".woff", ".woff2"})
+# Development-only trusted-worker backends whose worker is launched on the
+# controller host, so the controller can observe the Chrome and font runtime the
+# worker renders with (services/trusted_executor/composition.py).
+OWNED_LOCAL_SANDBOX_BACKENDS = frozenset({"windows-local", "linux-local"})
+_LINUX_SYSTEM_FONT_ROOTS = ("/usr/share/fonts", "/usr/local/share/fonts")
 
 
 @lru_cache(maxsize=4096)
@@ -42,8 +47,34 @@ def _font_file_content_digest(path: str, size: int, mtime_ns: int) -> str:
     return digest.hexdigest()
 
 
+def _local_font_roots(source: Mapping[str, str]) -> list[tuple[str, pathlib.Path]]:
+    environment = os.environ
+    roots: list[tuple[str, pathlib.Path]] = []
+    if os.name == "nt":
+        windows_root = (source.get("WINDIR") or environment.get("WINDIR") or "").strip()
+        local_app_data = (
+            source.get("LOCALAPPDATA") or environment.get("LOCALAPPDATA") or ""
+        ).strip()
+        if windows_root:
+            roots.append(("system", pathlib.Path(windows_root) / "Fonts"))
+        if local_app_data:
+            roots.append(
+                ("user", pathlib.Path(local_app_data) / "Microsoft" / "Windows" / "Fonts")
+            )
+        return roots
+    for index, root in enumerate(_LINUX_SYSTEM_FONT_ROOTS):
+        roots.append(("system" if index == 0 else f"system-{index}", pathlib.Path(root)))
+    home = (source.get("HOME") or environment.get("HOME") or "").strip()
+    if home:
+        roots.append(("user", pathlib.Path(home) / ".local" / "share" / "fonts"))
+    return roots
+
+
 def _local_font_inventory_digest(source: Mapping[str, str]) -> str:
-    """Fingerprint system and per-user Windows fonts used by the owned worker.
+    """Fingerprint system and per-user fonts used by the owned local worker.
+
+    Windows reads ``%WINDIR%\\Fonts`` and the per-user font folder; Linux reads
+    the fontconfig system directories and ``~/.local/share/fonts``.
 
     File bytes are authoritative.  Size/mtime only key the process-local cache,
     so ordinary installs, removals, and updates invalidate the binding while
@@ -61,18 +92,7 @@ def _local_font_inventory_digest(source: Mapping[str, str]) -> str:
                 "public_render_local_font_inventory_unavailable"
             ) from error
 
-    environment = os.environ
-    roots: list[tuple[str, pathlib.Path]] = []
-    windows_root = (source.get("WINDIR") or environment.get("WINDIR") or "").strip()
-    local_app_data = (
-        source.get("LOCALAPPDATA") or environment.get("LOCALAPPDATA") or ""
-    ).strip()
-    if windows_root:
-        roots.append(("system", pathlib.Path(windows_root) / "Fonts"))
-    if local_app_data:
-        roots.append(
-            ("user", pathlib.Path(local_app_data) / "Microsoft" / "Windows" / "Fonts")
-        )
+    roots = _local_font_roots(source)
 
     inventory: list[tuple[str, str, int, int, str]] = []
     for root_label, root in roots:
@@ -132,8 +152,9 @@ def public_render_runtime_binding(
 ) -> dict[str, Any]:
     """Resolve the authority behind a reusable public render checkpoint.
 
-    The Windows owned-worker composition launches the child on the controller
-    host and is explicitly development-only. Its identity can therefore reuse
+    The owned local worker compositions (Windows Job Object or Linux process
+    session) launch the child on the controller host and are explicitly
+    development-only. Their identity can therefore reuse
     the controller-observed Chrome/asset contract, but it cannot claim a sealed
     system-font inventory. Any external/production worker must instead supply
     immutable image and font-inventory digests before a checkpoint lookup.
@@ -144,7 +165,7 @@ def public_render_runtime_binding(
     local_policy = source.get("PUBLIC_TRUSTED_WORKER_LOCAL_POLICY", "").strip().lower()
     runtime_tier = source.get("ENVIRONMENT", "production").strip().lower()
     owned_local = (
-        backend == "windows-local"
+        backend in OWNED_LOCAL_SANDBOX_BACKENDS
         and local_policy == "development"
         and runtime_tier in {"local", "development", "dev", "test"}
     )

@@ -13,6 +13,7 @@ import hashlib
 import os
 from pathlib import Path
 import shutil
+import sys
 import threading
 import uuid
 from collections.abc import Callable, Mapping, Sequence
@@ -22,7 +23,11 @@ import time
 from typing import BinaryIO, Protocol
 
 from services.isolated_worker_contracts import ArtifactRef, IsolatedWorkerJob
-from services.trusted_executor.isolation_policy import PlatformIsolationReport, SandboxFilesystemSpec
+from services.trusted_executor.isolation_policy import (
+    LINUX_LOCAL_DEVELOPMENT_ISOLATION_BACKEND,
+    PlatformIsolationReport,
+    SandboxFilesystemSpec,
+)
 from services.trusted_executor.process_supervisor import (
     OperationProcessSupervisor,
     ProcessDeadlineExceeded,
@@ -349,9 +354,16 @@ class SupervisedStdioWireTransport:
             ),
         )
         if self._allow_local_development_isolation_gap:
+            local_report_matches_host = (
+                (os.name == "nt" and self._isolation_report.backend == "windows-job-object-only")
+                or (
+                    sys.platform.startswith("linux")
+                    and self._isolation_report.backend == LINUX_LOCAL_DEVELOPMENT_ISOLATION_BACKEND
+                )
+            )
             if (
-                os.name != "nt"
-                or self._isolation_report.backend != "windows-job-object-only"
+                not local_report_matches_host
+                or self._isolation_report.production_eligible
                 or not self._isolation_report.resource_limits_supported
             ):
                 raise TrustedWorkerWireError("trusted_worker_local_development_policy_unavailable")
