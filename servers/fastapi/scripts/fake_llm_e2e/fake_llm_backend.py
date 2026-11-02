@@ -224,6 +224,18 @@ def main() -> None:
     # (worker dispatcher and settings) runs a real-provider smoke test.
     if os.environ.get("FAKE_LLM_CLIENTS", "1") != "0":
         llmai.get_client = lambda config=None, logger=None, **_kw: FakeClient(config, logger)
+    elif os.environ.get("FAKE_LLM_LOG_PROVIDER_ERRORS") == "1":
+        # The app records only bounded diagnostics for provider failures; for a
+        # smoke run, print the provider's own error message (never headers).
+        import llmai.anthropic.client as anthropic_client
+
+        original = anthropic_client.raise_llm_error
+
+        def logged(exc, *args, **kwargs):
+            print(f"[provider-error] {type(exc).__name__}: {str(exc)[:600]}", flush=True)
+            return original(exc, *args, **kwargs)
+
+        anthropic_client.raise_llm_error = logged
     import uvicorn
 
     uvicorn.run("api.main:app", host="127.0.0.1", port=int(os.environ.get("PORT", "8000")), log_level="warning")
