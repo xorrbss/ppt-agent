@@ -110,3 +110,10 @@ def test_embedding_keeps_package_parts_in_the_default_namespace(tmp_path):
         relationships = archive.read("ppt/_rels/presentation.xml.rels").decode("utf-8")
     assert "<Types xmlns=" in content_types and "<ct:" not in content_types
     assert "<Relationships xmlns=" in relationships and ":Relationship " not in relationships
+
+
+def test_font_normalization_leaves_unparseable_model_output_to_validation():
+    """A real run's malformed author output crashed the deck here as internal_defect."""
+    from services.svg_default_fonts import normalize_model_font_families
+
+    assert normalize_model_font_families("```svg\n<svg") == ("```svg\n<svg", [])
