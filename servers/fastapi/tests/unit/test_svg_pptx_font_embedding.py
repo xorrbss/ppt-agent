@@ -35,7 +35,7 @@ def test_embed_trusted_fonts_adds_parts_relationships_and_content_type(tmp_path)
     target = _blank_pptx(tmp_path)
     expected = read_trusted_pretendard_faces()
 
-    digests = embed_trusted_fonts(target)
+    digests = embed_trusted_fonts(target, subset=False)
 
     assert digests == tuple(digest for _weight, digest, _payload in expected)
 

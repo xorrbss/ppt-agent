@@ -1044,12 +1044,21 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
     quality_policy = command_context.get("quality_policy") or claim.request_payload.get("quality_policy")
     if quality_policy not in (None, "interactive-v1", "release-v1"):
         raise NonRetryableWorkspaceOperationError("svg_quality_policy_invalid")
-    font_embedding = bool(
+    requested_embedding = (
         command_context.get("font_embedding") is True
         or claim.request_payload.get("font_embedding") is True
     )
-    if font_embedding and fmt != "pptx":
+    if requested_embedding and fmt != "pptx":
         raise NonRetryableWorkspaceOperationError("svg_font_embedding_pptx_only")
+    # SVG text boxes are fixed-width and do not wrap, so a PowerPoint without
+    # the bundled faces substitutes a wider system font and the text overflows.
+    # Embedding (subset to the deck's glyphs) is therefore the PPTX default;
+    # an explicit ``font_embedding: false`` still opts out.
+    embedding_disabled = (
+        command_context.get("font_embedding") is False
+        or claim.request_payload.get("font_embedding") is False
+    )
+    font_embedding = fmt == "pptx" and (requested_embedding or not embedding_disabled)
     async with session_factory() as session:
         slides = (await session.execute(
             select(SlideModel).where(SlideModel.presentation == claim.presentation_id)

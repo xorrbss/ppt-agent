@@ -246,10 +246,10 @@ def _embed_verified_whole_page_fonts(target, font_usage=None):
     import zipfile
     from xml.etree import ElementTree as ET
     from services.svg_pptx_font_embedding import (
-        embed_trusted_fonts, trusted_export_font_faces, FONT_CONTENT_TYPE, FONT_RELATIONSHIP_TYPE,
+        embed_trusted_fonts, export_font_faces, FONT_CONTENT_TYPE, FONT_RELATIONSHIP_TYPE,
     )
 
-    faces = trusted_export_font_faces(font_usage)
+    faces = export_font_faces(target, font_usage)
     with zipfile.ZipFile(target) as archive:
         names = archive.namelist()
         if len(names) != len(set(names)):

@@ -125,15 +125,36 @@ def trusted_export_font_faces(font_usage=None, *, font_manifest=None):
     return tuple(result)
 
 
-def embed_trusted_fonts(target: Path, *, font_usage=None, font_manifest=None) -> tuple[str, ...]:
-    """Embed the bundled Pretendard faces into the pptx at ``target``, in place.
+def export_font_faces(target: Path, font_usage=None, *, font_manifest=None, subset: bool = True):
+    """The faces ``embed_trusted_fonts`` writes into ``target``: trusted, then subset.
 
-    The default preserves the historical Pretendard contract. Whole-page
-    callers supply actual OOXML font usage for Noto and the trusted fallback.
-    Returns each embedded face's digest for the export receipt to bind to.
+    Subsetting keeps only the glyphs the package's text uses (plus a small
+    baseline set; see ``services/svg_pptx_font_subset.py``), so embedding adds
+    hundreds of kilobytes instead of ~10 MB. The result depends only on the
+    trusted faces and the package text, which embedding does not change, so a
+    caller may compute it before embedding and compare.
     """
 
     faces = trusted_export_font_faces(font_usage, font_manifest=font_manifest)
+    if not subset:
+        return faces
+    from services.svg_pptx_font_subset import subset_faces, subset_text
+
+    return subset_faces(faces, text=subset_text(target))
+
+
+def embed_trusted_fonts(
+    target: Path, *, font_usage=None, font_manifest=None, subset: bool = True,
+) -> tuple[str, ...]:
+    """Embed the trusted faces into the pptx at ``target``, in place.
+
+    The default preserves the historical Pretendard contract. Whole-page
+    callers supply actual OOXML font usage for Noto and the trusted fallback.
+    Faces are subset to the package's glyphs unless ``subset`` is false.
+    Returns each embedded face's digest for the export receipt to bind to.
+    """
+
+    faces = export_font_faces(target, font_usage, font_manifest=font_manifest, subset=subset)
     with zipfile.ZipFile(target) as archive:
         entries = {name: archive.read(name) for name in archive.namelist()}
 
@@ -178,4 +199,4 @@ def embed_trusted_fonts(target: Path, *, font_usage=None, font_manifest=None) ->
     return tuple(digests)
 
 
-__all__ = ["embed_trusted_fonts", "FONT_CONTENT_TYPE", "FONT_RELATIONSHIP_TYPE"]
+__all__ = ["embed_trusted_fonts", "export_font_faces", "FONT_CONTENT_TYPE", "FONT_RELATIONSHIP_TYPE"]
