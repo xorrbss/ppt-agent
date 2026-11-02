@@ -92,16 +92,36 @@ def _sse(text_parts: list[str]) -> bytes:
     return "".join(f"event: {name}\ndata: {json.dumps(data)}\n\n" for name, data in events).encode()
 
 
+GRAMMAR_TOO_LARGE = {
+    "type": "error",
+    "error": {
+        "type": "invalid_request_error",
+        "message": "The compiled grammar is too large, which would cause performance issues. "
+        "Simplify your tool schemas or reduce the number of strict tools.",
+    },
+}
+
+
 class _Recorder:
-    def __init__(self, response_text: str = json.dumps(ANSWER), *, stream_parts: list[str] | None = None, stop: str = "end_turn"):
+    def __init__(
+        self,
+        response_text: str = json.dumps(ANSWER),
+        *,
+        stream_parts: list[str] | None = None,
+        stop: str = "end_turn",
+        reject_output_format: dict | None = None,
+    ):
         self.bodies: list[dict] = []
         self._text = response_text
         self._stream_parts = stream_parts
         self._stop = stop
+        self._reject_output_format = reject_output_format
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
         self.bodies.append(body)
+        if self._reject_output_format and "format" in (body.get("output_config") or {}):
+            return httpx.Response(400, json=self._reject_output_format)
         if body.get("stream"):
             return httpx.Response(200, content=_sse(self._stream_parts or [self._text]), headers={"content-type": "text/event-stream"})
         return httpx.Response(200, json=_message_json(self._text, model=body["model"], stop=self._stop))
@@ -109,7 +129,14 @@ class _Recorder:
 
 def _client(recorder: _Recorder, cls=RepositoryAnthropicClient):
     client = cls(config=AnthropicClientConfig(api_key="test-key"))
-    client._client = Anthropic(api_key="test-key", max_retries=0, http_client=httpx.Client(transport=httpx.MockTransport(recorder)))
+    # An explicit timeout, as provider_generate_call always sets one; with the
+    # SDK default a non-streaming max_tokens of 32768 is refused locally.
+    client._client = Anthropic(
+        api_key="test-key",
+        max_retries=0,
+        timeout=60.0,
+        http_client=httpx.Client(transport=httpx.MockTransport(recorder)),
+    )
     return client
 
 
@@ -376,9 +403,10 @@ def test_schema_over_the_documented_limits_is_refused():
     ],
 )
 def test_known_app_schemas_that_keep_the_forced_tool_path(module_name, model_name, reason):
-    # These two call sites cannot use native structured output as written, so
-    # they still fail on models that reject forced tool_choice. Pinned here so
-    # a schema change that fixes them is noticed and this list shrinks.
+    # These two call sites cannot use native structured output as written: they
+    # keep llmai's forced tool where it is accepted and take the unconstrained
+    # prompt-instructed path on models that reject forced tool_choice. Pinned
+    # here so a schema change that makes them native is noticed.
     import importlib
 
     from utils.schema_utils import prepare_schema_for_validation
@@ -387,3 +415,172 @@ def test_known_app_schemas_that_keep_the_forced_tool_path(module_name, model_nam
     schema = prepare_schema_for_validation(model.model_json_schema(), strict=False)
     with pytest.raises(NativeSchemaUnsupported, match=reason):
         native_output_schema(schema)
+
+
+# -- prompt-instructed JSON fallback -------------------------------------------
+
+
+def _assert_prompt_json_request(body: dict) -> None:
+    assert "format" not in (body.get("output_config") or {})
+    assert "tools" not in body and "tool_choice" not in body
+    assert body["system"].startswith("Return JSON.\n\nRespond with only a single JSON object")
+    # The full original schema, constraints included, is in the instruction.
+    assert '"maxLength": 40' in body["system"]
+
+
+def test_grammar_rejection_is_retried_once_with_the_schema_in_the_prompt(caplog):
+    recorder = _Recorder("```json\n" + json.dumps(ANSWER) + "\n```", reject_output_format=GRAMMAR_TOO_LARGE)
+    client = _client(recorder)
+    with caplog.at_level(logging.WARNING, logger="utils.anthropic_structured_output"):
+        first = client.generate(model="claude-sonnet-5-5", messages=_messages(), response_format=_structured("grammar_plan"))
+        second = client.generate(model="claude-sonnet-5-5", messages=_messages(), response_format=_structured("grammar_plan"))
+
+    assert first.content == ANSWER and second.content == ANSWER
+    native, fallback = recorder.bodies[:2]
+    assert native["output_config"]["format"]["type"] == "json_schema"
+    _assert_prompt_json_request(fallback)
+    assert len(recorder.bodies) == 4  # one native attempt and one retry per call
+    assert caplog.text.count("anthropic_structured_output_prompt_json name=grammar_plan reason=grammar_rejected") == 1
+
+
+def test_grammar_rejection_retry_keeps_the_authoring_effort():
+    recorder = _Recorder(json.dumps(ANSWER), reject_output_format=GRAMMAR_TOO_LARGE)
+    _client(recorder).generate(
+        model="claude-sonnet-5-5",
+        messages=_messages(),
+        response_format=_structured(),
+        extra_body={"output_config": {"effort": "medium"}},
+    )
+    assert recorder.bodies[0]["output_config"]["effort"] == "medium"
+    assert recorder.bodies[1]["output_config"] == {"effort": "medium"}
+
+
+def test_grammar_rejection_is_retried_in_a_stream():
+    recorder = _Recorder(stream_parts=["Here it is: ", json.dumps(ANSWER)], reject_output_format=GRAMMAR_TOO_LARGE)
+    events = list(
+        _client(recorder).generate(model="claude-opus-5-5", messages=_messages(), response_format=_structured(), stream=True)
+    )
+    assert len(recorder.bodies) == 2
+    _assert_prompt_json_request(recorder.bodies[1])
+    assert not [e for e in events if isinstance(e, ResponseStreamContentChunk)]
+    assert events[-1].content == ANSWER
+
+
+def test_other_bad_requests_are_not_retried():
+    other = {"type": "error", "error": {"type": "invalid_request_error", "message": "max_tokens: too large"}}
+    recorder = _Recorder(reject_output_format=other)
+    with pytest.raises(Exception) as raised:
+        _client(recorder).generate(model="claude-sonnet-5-5", messages=_messages(), response_format=_structured())
+    assert getattr(raised.value, "status_code", None) == 400
+    assert len(recorder.bodies) == 1
+
+
+def test_inexpressible_schema_uses_the_prompt_on_models_that_reject_forced_tools():
+    free_map = {
+        "type": "object",
+        "required": ["scores"],
+        "properties": {"scores": {"type": "object", "additionalProperties": {"type": "number"}}},
+    }
+    recorder = _Recorder('Sure. {"scores": {"a": 1}} Done.')
+    response = _client(recorder).generate(model="claude-fable-5-1", messages=_messages(), response_format=_structured("scores", free_map))
+    (body,) = recorder.bodies
+    assert "tools" not in body and "tool_choice" not in body and "output_config" not in body
+    assert '"additionalProperties": {"type": "number"}' in body["system"]
+    assert response.content == {"scores": {"a": 1}}
+
+
+def test_json_object_response_uses_the_prompt_on_models_that_reject_forced_tools():
+    recorder = _Recorder('{"ok": true}')
+    response = _client(recorder).generate(model="claude-opus-5-5", messages=[UserMessage(content="Go.")], response_format=JSONObjectResponse())
+    (body,) = recorder.bodies
+    assert "tool_choice" not in body
+    assert body["system"].startswith("Respond with only a single JSON object.")
+    assert response.content == {"ok": True}
+
+
+def test_unparseable_prompt_reply_stays_text_for_the_callers_parse_retry():
+    recorder = _Recorder("I cannot produce that.", reject_output_format=GRAMMAR_TOO_LARGE)
+    response = _client(recorder).generate(model="claude-sonnet-5-5", messages=_messages(), response_format=_structured())
+    assert response.content[0].text == "I cannot produce that."
+
+
+# -- output budget -------------------------------------------------------------
+
+
+@pytest.mark.parametrize("model", NEW_MODELS)
+def test_models_unknown_to_llmai_get_a_32k_default_output_budget(model):
+    recorder = _Recorder("hello")
+    _client(recorder).generate(model=model, messages=_messages())
+    assert recorder.bodies[0]["max_tokens"] == 32768
+    base = _Recorder("hello")
+    _client(base, cls=AnthropicClient).generate(model=model, messages=_messages())
+    assert base.bodies[0]["max_tokens"] == 8192  # llmai's fallback, for contrast
+
+
+def test_explicit_budgets_and_known_models_are_left_to_llmai():
+    recorder = _Recorder("hello")
+    client = _client(recorder)
+    client.generate(model="claude-sonnet-5-5", messages=_messages(), max_tokens=1000)
+    client.generate(model="claude-sonnet-5-5", messages=_messages(), max_output_tokens=2000)
+    client.generate(model="claude-sonnet-5-5", messages=_messages(), profile="fast")
+    client.generate(model="claude-sonnet-4-6", messages=_messages())
+    assert [body["max_tokens"] for body in recorder.bodies] == [1000, 2000, 4096, 32768]
+
+
+# -- disabled thinking -----------------------------------------------------------
+
+
+def _none_effort_kwargs(monkeypatch, model: str, **extra) -> dict:
+    from services.generation_core.authoring import author_slide
+
+    monkeypatch.setattr(author_slide, "get_llm_provider", lambda *a, **k: LLMProvider.ANTHROPIC)
+    kwargs = author_slide._apply_anthropic_authoring_reasoning(
+        {"model": model, "messages": _messages(), "max_tokens": 1024, **extra}, "none", model=model
+    )
+    assert kwargs["extra_body"] == {"thinking": {"type": "disabled"}}
+    return kwargs
+
+
+def test_none_effort_becomes_between_tools_on_sonnet_5_5(monkeypatch):
+    recorder = _Recorder("hello")
+    _client(recorder).generate(**_none_effort_kwargs(monkeypatch, "claude-sonnet-5-5"))
+    body = recorder.bodies[0]
+    assert body["thinking"] == {"type": "between_tools"}
+    assert "output_config" not in body
+
+
+@pytest.mark.parametrize("model", ["claude-opus-5-5", "claude-fable-5-1"])
+def test_none_effort_becomes_low_effort_adaptive_on_always_thinking_models(monkeypatch, model):
+    recorder = _Recorder()
+    response = _client(recorder).generate(**_none_effort_kwargs(monkeypatch, model, response_format=_structured()))
+    body = recorder.bodies[0]
+    assert body["thinking"] == {"type": "adaptive"}
+    assert body["output_config"] == {"effort": "low", "format": {"type": "json_schema", "schema": WIRE_SCHEMA}}
+    assert response.content == ANSWER
+
+
+def test_disabled_thinking_is_unchanged_on_models_that_accept_it(monkeypatch):
+    recorder = _Recorder("hello")
+    _client(recorder).generate(**_none_effort_kwargs(monkeypatch, "claude-sonnet-4-6"))
+    assert recorder.bodies[0]["thinking"] == {"type": "disabled"}
+
+
+def test_between_tools_is_not_sent_at_an_effort_it_rejects():
+    recorder = _Recorder("hello")
+    _client(recorder).generate(
+        model="claude-sonnet-5-5",
+        messages=_messages(),
+        max_tokens=1024,
+        extra_body={"thinking": {"type": "disabled"}, "output_config": {"effort": "max"}},
+    )
+    body = recorder.bodies[0]
+    assert body["thinking"] == {"type": "adaptive"}
+    assert body["output_config"] == {"effort": "max"}
+
+
+def test_llmai_disabled_reasoning_is_translated_too():
+    recorder = _Recorder("hello")
+    _client(recorder).generate(
+        model="claude-sonnet-5-5", messages=_messages(), max_tokens=1024, reasoning=ReasoningConfig(enabled=False)
+    )
+    assert recorder.bodies[0]["thinking"] == {"type": "between_tools"}
