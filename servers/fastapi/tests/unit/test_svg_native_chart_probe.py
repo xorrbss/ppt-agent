@@ -33,10 +33,16 @@ from services.document_canvas import canvas_physical_size
 
 VENDOR_ROOT = Path(__file__).resolve().parents[2] / "vendor" / "slide_master"
 SVG_NS = "http://www.w3.org/2000/svg"
-SCRATCH_DIR = Path(
-    r"C:\Users\ibiz\AppData\Local\Temp\claude\C--project-PPT-agent-wt-core-n1"
-    r"\02d06556-054e-4266-aac3-bcaa7d8b47e5\scratchpad\probe"
-)
+#: Where each test writes its probe files; ``_scratch_dir`` points it at the
+#: test's own temporary directory. (It used to be one developer's Windows
+#: scratchpad path, which on other machines created that literal path as a
+#: directory inside the repository.)
+SCRATCH_DIR = Path()
+
+
+@pytest.fixture(autouse=True)
+def _scratch_dir(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys.modules[__name__], "SCRATCH_DIR", tmp_path / "probe")
 CATEGORIES = ["1분기", "2분기", "3분기", "4분기"]
 
 
