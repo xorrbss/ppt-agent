@@ -1,6 +1,8 @@
 import math
 import re
 
+import dirtyjson
+
 from models.presentation_outline_model import PresentationOutlineModel
 
 
@@ -76,3 +78,43 @@ def get_no_of_outlines_to_generate_for_n_slides(
     else:
         return n_slides
 
+
+
+OUTLINE_PARSE_FAILED = "Failed to generate presentation outlines. Please try again."
+OUTLINE_SLIDE_COUNT_SHORT = (
+    "Failed to generate presentation outlines with requested "
+    "number of slides. Please try again."
+)
+
+
+class OutlineResponseError(ValueError):
+    """The outline model's streamed answer could not become the requested outline.
+
+    ``detail`` is the user-facing message; ``cause`` is the parse error, if any.
+    """
+
+    def __init__(self, detail: str, cause: Exception | None = None) -> None:
+        super().__init__(detail)
+        self.detail = detail
+        self.cause = cause
+
+
+def parse_outline_response(
+    text: str, n_slides_to_generate: int | None
+) -> PresentationOutlineModel:
+    """Parse a streamed outline answer and fit it to the requested slide count.
+
+    Shared by the SSE outline endpoint and the generation pipeline. Only
+    undershooting is fatal: overshooting by a slide or two is common and
+    recoverable, so the first ``n_slides_to_generate`` slides are kept.
+    """
+    try:
+        payload = dict(dirtyjson.loads(text))
+    except Exception as error:
+        raise OutlineResponseError(OUTLINE_PARSE_FAILED, error) from error
+    outline = PresentationOutlineModel(**payload)
+    if n_slides_to_generate is not None:
+        if len(outline.slides) < n_slides_to_generate:
+            raise OutlineResponseError(OUTLINE_SLIDE_COUNT_SHORT)
+        outline.slides = outline.slides[:n_slides_to_generate]
+    return outline
