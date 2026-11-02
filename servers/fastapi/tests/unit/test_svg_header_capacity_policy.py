@@ -188,6 +188,14 @@ def test_integrity_and_unbound_inputs_are_never_bounded_failures(reason):
     assert not policy.known_header_design_rejection(plan, ValueError(reason))
 
 
+@pytest.mark.parametrize("reason", ["svg_common_header_paint_outside_header",
+    "svg_common_header_text_overlap", "svg_template_font_unsupported"])
+def test_defects_in_a_model_candidate_reject_only_that_candidate(reason):
+    """A real Claude run failed the deck on paint outside the header band."""
+    _, plan, _, _, _ = _inputs()
+    assert policy.known_header_design_rejection(plan, ValueError(reason))
+
+
 @pytest.mark.parametrize("mode", ["reduced", "free"])
 def test_capacity_fallback_real_cas_replays_without_provider_spend(tmp_path, monkeypatch, mode):
     from test_authored_checkpoint_service import _checkpoint_database, _running_authored_job

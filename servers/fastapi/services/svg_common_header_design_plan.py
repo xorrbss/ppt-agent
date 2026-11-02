@@ -129,6 +129,18 @@ def known_header_design_rejection(plan, error):
         "svg_common_header_physical_readability_invalid", "svg_common_header_title_overflow",
         "svg_common_header_body_space_unresolved", "svg_common_header_brand_overlap",
         "svg_common_header_complexity_limit", "svg_common_header_field_invalid",
+        # Defects in the model's own candidate (its SVG, fields or fonts), found
+        # by prepare_common_header_v2. They reject that candidate, so a deck
+        # whose two candidates both fail takes the bounded fallback instead of
+        # failing outright; binding, digest and page-identity errors stay fatal.
+        "svg_common_header_paint_outside_header", "svg_common_header_text_overlap",
+        "svg_common_header_invisible_text", "svg_common_header_unbound_text",
+        "svg_common_header_field_fill_required", "svg_common_header_field_attributes_invalid",
+        "svg_common_header_field_dependency_invalid", "svg_common_header_element_id_invalid",
+        "svg_common_header_body_brand_overlap", "svg_common_header_asset_invalid",
+        "svg_common_header_asset_source_invalid", "svg_common_header_title_field_required",
+        "svg_common_header_candidate_invalid", "svg_common_header_font_identity_invalid",
+        "svg_template_font_unsupported",
     }
 
 
